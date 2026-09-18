@@ -68,7 +68,6 @@ const REGION_SECTIONS: RegionSection[] = [
 
 const HEADER_VALUES = [
   'Sucursal',
-  'Inversión',
   'Leads',
   'Visitantes totales',
   'Ventas digitales',
@@ -76,21 +75,22 @@ const HEADER_VALUES = [
   'Venta web',
   'Venta BTL',
   'Ventas totales',
+  'Lead → visita',
+  'Visita → venta digital',
+  'Lead → venta',
+  'Inversión',
   'Ingreso digital',
   'Ingreso web',
   'Ingreso BTL',
   'Ingreso total',
-  'Lead → visita',
-  'Visita → venta digital',
-  'Lead → venta',
   'Costo por lead (CPL)',
   'Costo por visita (CPT)',
   'Costo por venta (CAC)',
 ];
 
-const CURRENCY_COLUMNS = ['B', 'J', 'K', 'L', 'M', 'Q', 'R', 'S'];
-const PERCENT_COLUMNS = ['N', 'O', 'P'];
-const INTEGER_COLUMNS = ['C', 'D', 'E', 'F', 'G', 'H', 'I'];
+const CURRENCY_COLUMNS = ['L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S'];
+const PERCENT_COLUMNS = ['I', 'J', 'K'];
+const INTEGER_COLUMNS = ['B', 'C', 'D', 'E', 'F', 'G', 'H'];
 
 const CURRENCY_FORMAT = '$#,##0.00;[Red]-$#,##0.00';
 const INTEGER_FORMAT = '#,##0';
@@ -247,7 +247,6 @@ function configureWorksheet(worksheet: Worksheet): void {
 
   const widths = [
     28,
-    15,
     12,
     13,
     18,
@@ -255,13 +254,14 @@ function configureWorksheet(worksheet: Worksheet): void {
     12,
     12,
     14,
+    16,
+    19,
+    12.2,
+    15,
     14.2,
     17,
     14,
     14,
-    16,
-    19,
-    12.2,
     16,
     17,
     17,
@@ -413,65 +413,65 @@ function writeBranchRow(
   investment: number | null,
 ): void {
   worksheet.getCell(`A${rowNumber}`).value = branch.sucursal;
-  worksheet.getCell(`B${rowNumber}`).value = investment;
-  worksheet.getCell(`C${rowNumber}`).value = branch.leads_meta;
-  worksheet.getCell(`D${rowNumber}`).value = branch.visits_total;
-  worksheet.getCell(`E${rowNumber}`).value = branch.sales_digital;
-  worksheet.getCell(`F${rowNumber}`).value = branch.sales_digital_organic;
-  worksheet.getCell(`G${rowNumber}`).value = branch.sales_web;
-  worksheet.getCell(`H${rowNumber}`).value = branch.sales_btl;
+  worksheet.getCell(`B${rowNumber}`).value = branch.leads_meta;
+  worksheet.getCell(`C${rowNumber}`).value = branch.visits_total;
+  worksheet.getCell(`D${rowNumber}`).value = branch.sales_digital;
+  worksheet.getCell(`E${rowNumber}`).value = branch.sales_digital_organic;
+  worksheet.getCell(`F${rowNumber}`).value = branch.sales_web;
+  worksheet.getCell(`G${rowNumber}`).value = branch.sales_btl;
 
+  setFormulaCell(
+    worksheet,
+    `H${rowNumber}`,
+    `SUM(D${rowNumber}:G${rowNumber})`,
+    branch.sales_total,
+  );
   setFormulaCell(
     worksheet,
     `I${rowNumber}`,
-    `SUM(E${rowNumber}:H${rowNumber})`,
-    branch.sales_total,
-  );
-
-  worksheet.getCell(`J${rowNumber}`).value = branch.revenue_digital;
-  worksheet.getCell(`K${rowNumber}`).value = branch.revenue_web;
-  worksheet.getCell(`L${rowNumber}`).value = branch.revenue_btl;
-
-  setFormulaCell(
-    worksheet,
-    `M${rowNumber}`,
-    `SUM(J${rowNumber}:L${rowNumber})`,
-    branch.revenue_total,
-  );
-  setFormulaCell(
-    worksheet,
-    `N${rowNumber}`,
-    `IFERROR(D${rowNumber}/C${rowNumber},"")`,
+    `IFERROR(C${rowNumber}/B${rowNumber},"")`,
     branch.lead_to_visit_rate,
   );
   setFormulaCell(
     worksheet,
-    `O${rowNumber}`,
-    `IFERROR(E${rowNumber}/D${rowNumber},"")`,
+    `J${rowNumber}`,
+    `IFERROR(D${rowNumber}/C${rowNumber},"")`,
     branch.visit_to_digital_sale_rate,
   );
   setFormulaCell(
     worksheet,
-    `P${rowNumber}`,
-    `IFERROR(E${rowNumber}/C${rowNumber},"")`,
+    `K${rowNumber}`,
+    `IFERROR(D${rowNumber}/B${rowNumber},"")`,
     branch.lead_to_sale_rate,
+  );
+
+  worksheet.getCell(`L${rowNumber}`).value = investment;
+  worksheet.getCell(`M${rowNumber}`).value = branch.revenue_digital;
+  worksheet.getCell(`N${rowNumber}`).value = branch.revenue_web;
+  worksheet.getCell(`O${rowNumber}`).value = branch.revenue_btl;
+
+  setFormulaCell(
+    worksheet,
+    `P${rowNumber}`,
+    `SUM(M${rowNumber}:O${rowNumber})`,
+    branch.revenue_total,
   );
   setFormulaCell(
     worksheet,
     `Q${rowNumber}`,
-    `IF(OR(B${rowNumber}="",C${rowNumber}=0),"",B${rowNumber}/C${rowNumber})`,
+    `IF(OR(L${rowNumber}="",B${rowNumber}=0),"",L${rowNumber}/B${rowNumber})`,
     safeDivide(investment, branch.leads_meta),
   );
   setFormulaCell(
     worksheet,
     `R${rowNumber}`,
-    `IF(OR(B${rowNumber}="",D${rowNumber}=0),"",B${rowNumber}/D${rowNumber})`,
+    `IF(OR(L${rowNumber}="",C${rowNumber}=0),"",L${rowNumber}/C${rowNumber})`,
     safeDivide(investment, branch.visits_total),
   );
   setFormulaCell(
     worksheet,
     `S${rowNumber}`,
-    `IF(OR(B${rowNumber}="",E${rowNumber}+F${rowNumber}=0),"",B${rowNumber}/(E${rowNumber}+F${rowNumber}))`,
+    `IF(OR(L${rowNumber}="",D${rowNumber}+E${rowNumber}=0),"",L${rowNumber}/(D${rowNumber}+E${rowNumber}))`,
     safeDivide(
       investment,
       branch.sales_digital + branch.sales_digital_organic,
@@ -491,18 +491,18 @@ function writeSubtotalRow(
   worksheet.getCell(`A${rowNumber}`).value = 'SUBTOTAL REGIÓN';
 
   const results: Array<[string, number | null]> = [
-    ['B', totals.investment],
-    ['C', totals.leads],
-    ['D', totals.visitors],
-    ['E', totals.salesDigital],
-    ['F', totals.salesDigitalOrganic],
-    ['G', totals.salesWeb],
-    ['H', totals.salesBtl],
-    ['I', totals.salesTotal],
-    ['J', totals.revenueDigital],
-    ['K', totals.revenueWeb],
-    ['L', totals.revenueBtl],
-    ['M', totals.revenueTotal],
+    ['B', totals.leads],
+    ['C', totals.visitors],
+    ['D', totals.salesDigital],
+    ['E', totals.salesDigitalOrganic],
+    ['F', totals.salesWeb],
+    ['G', totals.salesBtl],
+    ['H', totals.salesTotal],
+    ['L', totals.investment],
+    ['M', totals.revenueDigital],
+    ['N', totals.revenueWeb],
+    ['O', totals.revenueBtl],
+    ['P', totals.revenueTotal],
   ];
 
   for (const [column, result] of results) {
@@ -536,7 +536,7 @@ function writeGrandTotalRow(
   worksheet.getCell(`A${rowNumber}`).value = 'TOTAL';
 
   if (grandInvestment !== null) {
-    worksheet.getCell(`B${rowNumber}`).value = grandInvestment;
+    worksheet.getCell(`L${rowNumber}`).value = grandInvestment;
   }
 
   const subtotalFormula = (column: string): string => {
@@ -547,17 +547,17 @@ function writeGrandTotalRow(
   };
 
   const results: Array<[string, number]> = [
-    ['C', totals.leads],
-    ['D', totals.visitors],
-    ['E', totals.salesDigital],
-    ['F', totals.salesDigitalOrganic],
-    ['G', totals.salesWeb],
-    ['H', totals.salesBtl],
-    ['I', totals.salesTotal],
-    ['J', totals.revenueDigital],
-    ['K', totals.revenueWeb],
-    ['L', totals.revenueBtl],
-    ['M', totals.revenueTotal],
+    ['B', totals.leads],
+    ['C', totals.visitors],
+    ['D', totals.salesDigital],
+    ['E', totals.salesDigitalOrganic],
+    ['F', totals.salesWeb],
+    ['G', totals.salesBtl],
+    ['H', totals.salesTotal],
+    ['M', totals.revenueDigital],
+    ['N', totals.revenueWeb],
+    ['O', totals.revenueBtl],
+    ['P', totals.revenueTotal],
   ];
 
   for (const [column, result] of results) {
@@ -611,7 +611,7 @@ function writeCommercialSummary(
   setFormulaCell(
     worksheet,
     `B${totalRow}`,
-    `I${sourceTotalRow}`,
+    `H${sourceTotalRow}`,
     totals.salesTotal,
   );
   worksheet.getCell(`E${totalRow}`).value = 'Meta digital (50%)';
@@ -626,7 +626,7 @@ function writeCommercialSummary(
   setFormulaCell(
     worksheet,
     `B${digitalRow}`,
-    `E${sourceTotalRow}+F${sourceTotalRow}`,
+    `D${sourceTotalRow}+E${sourceTotalRow}`,
     totals.salesDigital + totals.salesDigitalOrganic,
   );
   setFormulaCell(
@@ -669,7 +669,7 @@ function writeCommercialSummary(
   setFormulaCell(
     worksheet,
     `B${investmentRow}`,
-    `IF(B${sourceTotalRow}="","",B${sourceTotalRow})`,
+    `IF(L${sourceTotalRow}="","",L${sourceTotalRow})`,
     grandInvestment,
   );
 
@@ -751,38 +751,38 @@ function setRateAndCostFormulas(
 ): void {
   setFormulaCell(
     worksheet,
-    `N${rowNumber}`,
-    `IFERROR(D${rowNumber}/C${rowNumber},"")`,
+    `I${rowNumber}`,
+    `IFERROR(C${rowNumber}/B${rowNumber},"")`,
     safeDivide(totals.visitors, totals.leads),
   );
   setFormulaCell(
     worksheet,
-    `O${rowNumber}`,
-    `IFERROR(E${rowNumber}/D${rowNumber},"")`,
+    `J${rowNumber}`,
+    `IFERROR(D${rowNumber}/C${rowNumber},"")`,
     safeDivide(totals.salesDigital, totals.visitors),
   );
   setFormulaCell(
     worksheet,
-    `P${rowNumber}`,
-    `IFERROR(E${rowNumber}/C${rowNumber},"")`,
+    `K${rowNumber}`,
+    `IFERROR(D${rowNumber}/B${rowNumber},"")`,
     safeDivide(totals.salesDigital, totals.leads),
   );
   setFormulaCell(
     worksheet,
     `Q${rowNumber}`,
-    `IF(OR(B${rowNumber}="",C${rowNumber}=0),"",B${rowNumber}/C${rowNumber})`,
+    `IF(OR(L${rowNumber}="",B${rowNumber}=0),"",L${rowNumber}/B${rowNumber})`,
     safeDivide(investment, totals.leads),
   );
   setFormulaCell(
     worksheet,
     `R${rowNumber}`,
-    `IF(OR(B${rowNumber}="",D${rowNumber}=0),"",B${rowNumber}/D${rowNumber})`,
+    `IF(OR(L${rowNumber}="",C${rowNumber}=0),"",L${rowNumber}/C${rowNumber})`,
     safeDivide(investment, totals.visitors),
   );
   setFormulaCell(
     worksheet,
     `S${rowNumber}`,
-    `IF(OR(B${rowNumber}="",E${rowNumber}+F${rowNumber}=0),"",B${rowNumber}/(E${rowNumber}+F${rowNumber}))`,
+    `IF(OR(L${rowNumber}="",D${rowNumber}+E${rowNumber}=0),"",L${rowNumber}/(D${rowNumber}+E${rowNumber}))`,
     safeDivide(
       investment,
       totals.salesDigital + totals.salesDigitalOrganic,
@@ -797,7 +797,7 @@ function applyConditionalFormats(
   for (const range of ranges) {
     addCellRule(
       worksheet,
-      `N${range.firstRow}:N${range.lastRow}`,
+      `I${range.firstRow}:I${range.lastRow}`,
       'greaterThanOrEqual',
       0.15,
       COLORS.greenFill,
@@ -805,7 +805,7 @@ function applyConditionalFormats(
     );
     addCellRule(
       worksheet,
-      `O${range.firstRow}:O${range.lastRow}`,
+      `J${range.firstRow}:J${range.lastRow}`,
       'greaterThanOrEqual',
       0.30,
       COLORS.greenFill,
@@ -814,7 +814,7 @@ function applyConditionalFormats(
 
     addCellRule(
       worksheet,
-      `P${range.firstRow}:P${range.lastRow}`,
+      `K${range.firstRow}:K${range.lastRow}`,
       'lessThan',
       0.015,
       COLORS.redFill,
@@ -823,7 +823,7 @@ function applyConditionalFormats(
     );
     addCellRule(
       worksheet,
-      `P${range.firstRow}:P${range.lastRow}`,
+      `K${range.firstRow}:K${range.lastRow}`,
       'lessThan',
       0.033,
       COLORS.amberFill,
@@ -832,7 +832,7 @@ function applyConditionalFormats(
     );
     addCellRule(
       worksheet,
-      `P${range.firstRow}:P${range.lastRow}`,
+      `K${range.firstRow}:K${range.lastRow}`,
       'greaterThanOrEqual',
       0.033,
       COLORS.greenFill,
