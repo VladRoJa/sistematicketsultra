@@ -133,20 +133,20 @@
 
 .track-actions {
   display: flex;
-  gap: 10px;
+  gap: 7px;
   flex-wrap: wrap;
   align-items: end;
 }
 
 .primary-button,
 .secondary-button {
-  height: 38px;
-  min-width: 148px;
+  height: 34px;
+  min-width: 126px;
   border: none;
   border-radius: 10px;
-  padding: 0 14px;
-  font-size: 13px;
-  font-weight: 700;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 800;
   cursor: pointer;
   transition:
     transform 0.12s ease,
@@ -1255,12 +1255,12 @@
 
 .track-column-groups__button {
   min-width: auto;
-  height: 36px;
-  padding: 0 13px;
+  height: 32px;
+  padding: 0 11px;
   border: 1px solid var(--ultra-gray-200);
   background: var(--ultra-gray-50);
   color: var(--ultra-gray-700);
-  font-size: 12px;
+  font-size: 11px;
   box-shadow: none;
 }
 
@@ -1528,19 +1528,19 @@
 .track-excel-export-button {
   border: none;
   border-radius: 999px;
-  padding: 0.75rem 1.15rem;
+  padding: 0.48rem 0.85rem;
   background: linear-gradient(135deg, #e54525, #ff6a3d);
   color: #ffffff;
   font-weight: 800;
-  font-size: 0.82rem;
-  letter-spacing: 0.02em;
+  font-size: 0.75rem;
+  letter-spacing: 0.01em;
   cursor: pointer;
-  box-shadow: 0 10px 22px rgba(229, 69, 37, 0.28);
+  box-shadow: 0 8px 18px rgba(229, 69, 37, 0.24);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.45rem;
-  min-height: 42px;
+  gap: 0.35rem;
+  min-height: 34px;
   white-space: nowrap;
   transition:
     transform 140ms ease,
@@ -1565,7 +1565,7 @@
 }
 
 .track-excel-export-icon {
-  font-size: 1rem;
+  font-size: 0.85rem;
   line-height: 1;
 }
 
@@ -1583,11 +1583,11 @@
 
 .track-view-mode__button {
   border: 1px solid rgba(229, 69, 37, 0.18);
-  border-radius: 16px;
+  border-radius: 13px;
   background: var(--ultra-surface, #ffffff);
   color: var(--ultra-gray-700, #344054);
-  padding: 0.65rem 0.9rem;
-  min-width: 190px;
+  padding: 0.48rem 0.7rem;
+  min-width: 158px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -1615,12 +1615,12 @@
 }
 
 .track-view-mode__label {
-  font-size: 0.82rem;
+  font-size: 0.75rem;
   font-weight: 900;
 }
 
 .track-view-mode__description {
-  font-size: 0.7rem;
+  font-size: 0.64rem;
   font-weight: 800;
   opacity: 0.82;
 }
@@ -1641,10 +1641,10 @@
    ========================================================================== */
 
 .track-canonical-close-button {
-  min-height: 42px;
+  min-height: 34px;
   border: 1px solid rgba(229, 69, 37, 0.30);
   border-radius: 999px;
-  padding: 0.75rem 1.1rem;
+  padding: 0.48rem 0.85rem;
   background:
     linear-gradient(
       135deg,
@@ -1652,7 +1652,7 @@
       var(--ultra-charcoal, #111827)
     );
   color: #ffffff;
-  font-size: 0.82rem;
+  font-size: 0.75rem;
   font-weight: 900;
   letter-spacing: 0.01em;
   white-space: nowrap;
@@ -1763,19 +1763,19 @@
 .track-intelligence-button {
   border: 1px solid rgba(229, 69, 37, 0.24);
   border-radius: 999px;
-  padding: 0.75rem 1.15rem;
+  padding: 0.48rem 0.85rem;
   background: var(--ultra-orange-soft, #fff1ed);
   color: var(--ultra-orange, #e54525);
   font-weight: 900;
-  font-size: 0.82rem;
-  letter-spacing: 0.02em;
+  font-size: 0.75rem;
+  letter-spacing: 0.01em;
   cursor: pointer;
-  box-shadow: 0 8px 18px rgba(229, 69, 37, 0.12);
+  box-shadow: 0 7px 16px rgba(229, 69, 37, 0.11);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.45rem;
-  min-height: 42px;
+  gap: 0.35rem;
+  min-height: 34px;
   white-space: nowrap;
   transition:
     transform 140ms ease,
@@ -1797,7 +1797,7 @@
 }
 
 .track-intelligence-icon {
-  font-size: 1rem;
+  font-size: 0.85rem;
   line-height: 1;
 }
 
