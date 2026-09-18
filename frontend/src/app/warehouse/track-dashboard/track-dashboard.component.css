@@ -133,19 +133,19 @@
 
 .track-actions {
   display: flex;
-  gap: 7px;
+  gap: 5px;
   flex-wrap: wrap;
   align-items: end;
 }
 
 .primary-button,
 .secondary-button {
-  height: 34px;
-  min-width: 126px;
+  height: 26px;
+  min-width: 95px;
   border: none;
-  border-radius: 10px;
-  padding: 0 12px;
-  font-size: 12px;
+  border-radius: 8px;
+  padding: 0 9px;
+  font-size: 9px;
   font-weight: 800;
   cursor: pointer;
   transition:
@@ -756,7 +756,7 @@
 
 .track-form--topbar .primary-button,
 .track-form--topbar .secondary-button {
-  height: 34px;
+  height: 26px;
 }
 
 .track-form--topbar .track-actions {
@@ -1533,19 +1533,19 @@
 .track-excel-export-button {
   border: none;
   border-radius: 999px;
-  padding: 0.48rem 0.85rem;
+  padding: 0.36rem 0.64rem;
   background: linear-gradient(135deg, #e54525, #ff6a3d);
   color: #ffffff;
   font-weight: 800;
-  font-size: 0.75rem;
+  font-size: 0.56rem;
   letter-spacing: 0.01em;
   cursor: pointer;
-  box-shadow: 0 8px 18px rgba(229, 69, 37, 0.24);
+  box-shadow: 0 6px 14px rgba(229, 69, 37, 0.22);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
-  min-height: 34px;
+  gap: 0.26rem;
+  min-height: 26px;
   white-space: nowrap;
   transition:
     transform 140ms ease,
@@ -1570,7 +1570,7 @@
 }
 
 .track-excel-export-icon {
-  font-size: 0.85rem;
+  font-size: 0.65rem;
   line-height: 1;
 }
 
@@ -1646,10 +1646,10 @@
    ========================================================================== */
 
 .track-canonical-close-button {
-  min-height: 34px;
+  min-height: 26px;
   border: 1px solid rgba(229, 69, 37, 0.30);
   border-radius: 999px;
-  padding: 0.48rem 0.85rem;
+  padding: 0.36rem 0.64rem;
   background:
     linear-gradient(
       135deg,
@@ -1657,7 +1657,7 @@
       var(--ultra-charcoal, #111827)
     );
   color: #ffffff;
-  font-size: 0.75rem;
+  font-size: 0.56rem;
   font-weight: 900;
   letter-spacing: 0.01em;
   white-space: nowrap;
@@ -1768,19 +1768,19 @@
 .track-intelligence-button {
   border: 1px solid rgba(229, 69, 37, 0.24);
   border-radius: 999px;
-  padding: 0.48rem 0.85rem;
+  padding: 0.36rem 0.64rem;
   background: var(--ultra-orange-soft, #fff1ed);
   color: var(--ultra-orange, #e54525);
   font-weight: 900;
-  font-size: 0.75rem;
+  font-size: 0.56rem;
   letter-spacing: 0.01em;
   cursor: pointer;
-  box-shadow: 0 7px 16px rgba(229, 69, 37, 0.11);
+  box-shadow: 0 5px 12px rgba(229, 69, 37, 0.10);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
-  min-height: 34px;
+  gap: 0.26rem;
+  min-height: 26px;
   white-space: nowrap;
   transition:
     transform 140ms ease,
@@ -1802,7 +1802,7 @@
 }
 
 .track-intelligence-icon {
-  font-size: 0.85rem;
+  font-size: 0.65rem;
   line-height: 1;
 }
 
