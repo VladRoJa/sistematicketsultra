@@ -198,6 +198,7 @@ def get_marketing_sales_funnel_endpoint():
             month=month,
             access=access,
             cutoff_date=request.args.get("cutoff_date"),
+            cutoff_policy=request.args.get("cutoff_policy"),
         )
         result = funnel_build.payload
         funnel_ms = (perf_counter() - stage_started) * 1000

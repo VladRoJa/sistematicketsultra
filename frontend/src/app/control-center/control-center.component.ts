@@ -40,6 +40,7 @@ interface ControlMetricCard {
   title: string;
   value: string;
   supportingText: string;
+  freshnessText?: string;
   tone: ControlTone;
 }
 
@@ -134,9 +135,32 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
     return selected?.label || this.defaultScopeLabel(this.context?.effective_scope);
   }
 
+  get marketingFreshnessLabel(): string {
+    const sourceCutoff = this.marketingData?.selected_cutoff_date;
+
+    if (!sourceCutoff || sourceCutoff >= this.cutoffDate) {
+      return '';
+    }
+
+    const lagDays = this.daysBetweenIsoDates(
+      sourceCutoff,
+      this.cutoffDate,
+    );
+
+    if (lagDays <= 0) {
+      return '';
+    }
+
+    return (
+      `Corte ${this.formatShortIsoDate(sourceCutoff)} · `
+      + `${lagDays} día${lagDays === 1 ? '' : 's'} de atraso`
+    );
+  }
+
   get metricCards(): ControlMetricCard[] {
     const forecast = this.forecastData?.summary;
     const marketing = this.marketingOverview;
+    const marketingFreshness = this.marketingFreshnessLabel;
     const retention = this.retentionData?.summary;
     const maintenance = this.maintenanceOverview;
 
@@ -176,6 +200,7 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
         supportingText: marketing.leads === null
           ? 'Leads no disponibles para el alcance actual'
           : `${this.formatInteger(marketing.sales)} ventas digitales de ${this.formatInteger(marketing.leads)} leads`,
+        freshnessText: marketingFreshness || undefined,
         tone: conversion === null ? 'muted' : 'normal',
       },
       {
@@ -988,6 +1013,46 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+  }
+
+  private daysBetweenIsoDates(fromIso: string, toIso: string): number {
+    const from = this.isoDateToUtcTimestamp(fromIso);
+    const to = this.isoDateToUtcTimestamp(toIso);
+
+    if (from === null || to === null) {
+      return 0;
+    }
+
+    return Math.max(
+      0,
+      Math.round((to - from) / 86_400_000),
+    );
+  }
+
+  private formatShortIsoDate(isoDate: string): string {
+    const timestamp = this.isoDateToUtcTimestamp(isoDate);
+
+    if (timestamp === null) {
+      return isoDate;
+    }
+
+    return new Intl.DateTimeFormat('es-MX', {
+      day: 'numeric',
+      month: 'short',
+      timeZone: 'UTC',
+    })
+      .format(new Date(timestamp))
+      .replace('.', '');
+  }
+
+  private isoDateToUtcTimestamp(isoDate: string): number | null {
+    const [year, month, day] = isoDate.split('-').map(Number);
+
+    if (!year || !month || !day) {
+      return null;
+    }
+
+    return Date.UTC(year, month - 1, day);
   }
 
   private getTodayIsoDate(): string {

@@ -10,6 +10,10 @@ import {
   MarketingSalesFunnelSortDirection,
 } from './marketing-sales-funnel.models';
 
+export type MarketingSalesFunnelCutoffPolicy =
+  | 'exact'
+  | 'latest_available_at_or_before';
+
 
 @Injectable({
   providedIn: 'root',
@@ -23,10 +27,14 @@ export class MarketingSalesFunnelService {
     month: string,
     branchIds: number[] = [],
     cutoffDate?: string | null,
+    cutoffPolicy: MarketingSalesFunnelCutoffPolicy = 'exact',
   ): Observable<MarketingSalesFunnelResponse> {
     let params = new HttpParams().set('month', month);
     if (cutoffDate) {
       params = params.set('cutoff_date', cutoffDate);
+    }
+    if (cutoffPolicy !== 'exact') {
+      params = params.set('cutoff_policy', cutoffPolicy);
     }
     params = this.withBranchIds(params, branchIds);
 

@@ -61,6 +61,17 @@ from app.services.marketing_sales_funnel_service import (
 
 COMPLETED = "COMPLETED"
 
+FUNNEL_CUTOFF_POLICY_EXACT = "exact"
+FUNNEL_CUTOFF_POLICY_LATEST_AVAILABLE_AT_OR_BEFORE = (
+    "latest_available_at_or_before"
+)
+SUPPORTED_FUNNEL_CUTOFF_POLICIES = frozenset(
+    {
+        FUNNEL_CUTOFF_POLICY_EXACT,
+        FUNNEL_CUTOFF_POLICY_LATEST_AVAILABLE_AT_OR_BEFORE,
+    }
+)
+
 
 def _period_key(prefix: str, month_start: date) -> str:
     return f"{prefix}-{month_start.strftime('%Y-%m')}"
@@ -86,6 +97,21 @@ def parse_cutoff_date(
             "cutoff_date debe pertenecer al mes solicitado."
         )
     return parsed
+
+
+def parse_cutoff_policy(raw_value: Any) -> str:
+    policy = str(
+        raw_value or FUNNEL_CUTOFF_POLICY_EXACT
+    ).strip().lower()
+
+    if policy not in SUPPORTED_FUNNEL_CUTOFF_POLICIES:
+        raise MarketingInputValidationError(
+            "cutoff_policy inválido. Valores permitidos: "
+            + ", ".join(sorted(SUPPORTED_FUNNEL_CUTOFF_POLICIES))
+            + "."
+        )
+
+    return policy
 
 
 def _iventas_cutoff_dates(month_start: date) -> set[date]:
@@ -193,8 +219,11 @@ def resolve_funnel_cutoff(
     *,
     month_start: date,
     requested_cutoff: date | None,
+    cutoff_policy: str = FUNNEL_CUTOFF_POLICY_EXACT,
 ) -> tuple[date, tuple[date, ...]]:
+    policy = parse_cutoff_policy(cutoff_policy)
     available = list_available_funnel_cutoffs(month_start)
+
     if not available:
         raise MarketingInputValidationError(
             "No existe un corte completo y alineado para el mes solicitado."
@@ -203,11 +232,24 @@ def resolve_funnel_cutoff(
     if requested_cutoff is None:
         return available[0], available
 
-    if requested_cutoff not in set(available):
-        raise MarketingInputValidationError(
-            "El corte solicitado no está completo en todas las fuentes del Funnel."
+    if requested_cutoff in set(available):
+        return requested_cutoff, available
+
+    if policy == FUNNEL_CUTOFF_POLICY_LATEST_AVAILABLE_AT_OR_BEFORE:
+        fallback_cutoff = next(
+            (
+                available_cutoff
+                for available_cutoff in available
+                if available_cutoff <= requested_cutoff
+            ),
+            None,
         )
-    return requested_cutoff, available
+        if fallback_cutoff is not None:
+            return fallback_cutoff, available
+
+    raise MarketingInputValidationError(
+        "El corte solicitado no está completo en todas las fuentes del Funnel."
+    )
 
 
 def _select_exact_iventas_run(
@@ -458,6 +500,7 @@ def build_marketing_sales_funnel_at_cutoff(
     month: str,
     access: MarketingAccess,
     cutoff_date: Any = None,
+    cutoff_policy: Any = None,
 ) -> MarketingSalesFunnelBuildResult:
     month_start = parse_month(month)
     requested_cutoff = parse_cutoff_date(
@@ -467,6 +510,7 @@ def build_marketing_sales_funnel_at_cutoff(
     selected_cutoff, available_cutoffs = resolve_funnel_cutoff(
         month_start=month_start,
         requested_cutoff=requested_cutoff,
+        cutoff_policy=parse_cutoff_policy(cutoff_policy),
     )
 
     branches, branch_ids, scope = load_visible_marketing_branches(access)

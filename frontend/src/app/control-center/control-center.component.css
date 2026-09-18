@@ -187,6 +187,18 @@
   line-height: 1.35;
 }
 
+.metric-card__freshness {
+  justify-self: start;
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+  padding: 3px 6px;
+  color: #9a3412;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
 .control-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 330px;
