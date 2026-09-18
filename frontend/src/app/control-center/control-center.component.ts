@@ -327,7 +327,13 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
       const row = item.row;
       const title = row.key === 'bajas'
         ? 'Bajas proyectadas sobre límite'
-        : `${row.label} proyectado debajo de meta`;
+        : row.key === 'ingreso'
+          ? 'Ingresos proyectados debajo de meta'
+          : row.key === 'clientes_nuevos'
+            ? 'Venta nueva proyectada debajo de meta'
+            : row.key === 'reactivaciones'
+              ? 'Reactivaciones proyectadas debajo de meta'
+              : 'Tienda proyectada debajo de meta';
 
       items.push({
         metric: 'forecast',

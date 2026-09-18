@@ -135,7 +135,7 @@ def test_branch_scope_filters_before_aggregation(get_regional):
     assert branch["region_label"] == "Región 1"
     assert branch["metrics"]["ingreso"]["actual_mtd"] == "200"
     assert branch["metrics"]["ingreso"]["projected_close"] == "260"
-    assert branch["metrics"]["ingreso"]["projected_gap"] == "10"
+    assert branch["metrics"]["ingreso"]["projected_gap"] == "10.0"
 
 
 @patch(
