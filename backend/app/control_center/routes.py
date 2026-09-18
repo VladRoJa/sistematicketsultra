@@ -12,6 +12,9 @@ from app.control_center.access import (
     resolve_control_access,
     resolve_effective_scope,
 )
+from app.control_center.operational_forecast import (
+    build_control_operational_forecast,
+)
 from app.control_center.retention import build_retention_summary
 from app.models.user_model import UserORM
 
@@ -47,6 +50,15 @@ def _parse_cutoff_date():
         ) from exc
 
 
+def _parse_generation_mode() -> str:
+    generation_mode = str(
+        request.args.get("generation_mode") or "manual_preview"
+    ).strip()
+    if generation_mode not in {"manual_preview", "official_closed_day"}:
+        raise ControlValidationError("generation_mode inválido.")
+    return generation_mode
+
+
 def _resolve_request_context():
     cutoff_date = _parse_cutoff_date()
     user = _get_current_user()
@@ -61,14 +73,16 @@ def _resolve_request_context():
         region_key=request.args.get("region_key"),
         branch_id=request.args.get("branch_id"),
     )
-    return cutoff_date, access, effective_scope
+    return cutoff_date, user, access, effective_scope
 
 
 @control_center_bp.get("/context")
 @jwt_required()
 def get_control_context():
     try:
-        cutoff_date, access, effective_scope = _resolve_request_context()
+        cutoff_date, _user, access, effective_scope = (
+            _resolve_request_context()
+        )
 
         return jsonify(
             {
@@ -89,12 +103,10 @@ def get_control_context():
 @jwt_required()
 def get_control_retention():
     try:
-        cutoff_date, _access, effective_scope = _resolve_request_context()
-        generation_mode = str(
-            request.args.get("generation_mode") or "manual_preview"
-        ).strip()
-        if generation_mode not in {"manual_preview", "official_closed_day"}:
-            raise ControlValidationError("generation_mode inválido.")
+        cutoff_date, _user, _access, effective_scope = (
+            _resolve_request_context()
+        )
+        generation_mode = _parse_generation_mode()
 
         result = build_retention_summary(
             cutoff_date=cutoff_date,
@@ -113,6 +125,40 @@ def get_control_retention():
             {
                 "status": "error",
                 "message": "Falló la consulta de Retención para Control.",
+                "detail": str(exc),
+            }
+        ), 500
+
+
+@control_center_bp.get("/operational-forecast")
+@jwt_required()
+def get_control_operational_forecast():
+    try:
+        cutoff_date, user, _access, effective_scope = (
+            _resolve_request_context()
+        )
+        generation_mode = _parse_generation_mode()
+
+        result = build_control_operational_forecast(
+            user=user,
+            cutoff_date=cutoff_date,
+            effective_scope=effective_scope,
+            generation_mode=generation_mode,
+        )
+        result["contract_version"] = "control.operational_forecast.v1"
+        result["effective_scope"] = effective_scope.to_public_dict()
+        return jsonify(result), 200
+    except ControlAuthorizationError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 403
+    except ControlValidationError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        return jsonify(
+            {
+                "status": "error",
+                "message": (
+                    "Falló la consulta del Forecast Operativo para Control."
+                ),
                 "detail": str(exc),
             }
         ), 500

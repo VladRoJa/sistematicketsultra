@@ -21,6 +21,9 @@ import {
   ControlCenterService,
   ControlContextRequest,
   ControlContextResponse,
+  ControlOperationalForecastMetric,
+  ControlOperationalForecastMetricKey,
+  ControlOperationalForecastResponse,
   ControlRetentionResponse,
   ControlScope,
 } from './control-center.service';
@@ -71,6 +74,13 @@ interface MaintenanceOverview {
   tickets: MaintenancePlannerTicket[];
 }
 
+interface ControlOperationalForecastRow {
+  key: ControlOperationalForecastMetricKey;
+  label: string;
+  money: boolean;
+  metric: ControlOperationalForecastMetric;
+}
+
 @Component({
   selector: 'app-control-center',
   standalone: true,
@@ -91,6 +101,7 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
   context: ControlContextResponse | null = null;
   catalogs: TrackForecastCenterCatalogsResponse | null = null;
   forecastData: TrackForecastCenterResponse | null = null;
+  operationalForecastData: ControlOperationalForecastResponse | null = null;
   marketingData: MarketingSalesFunnelResponse | null = null;
   retentionData: ControlRetentionResponse | null = null;
   maintenanceData: MaintenancePlannerBoard | null = null;
@@ -155,6 +166,28 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
       `Corte ${this.formatShortIsoDate(sourceCutoff)} · `
       + `${lagDays} día${lagDays === 1 ? '' : 's'} de atraso`
     );
+  }
+
+  get operationalForecastRows(): ControlOperationalForecastRow[] {
+    const metrics = this.operationalForecastData?.summary.metrics;
+    if (!metrics) return [];
+
+    const config: Array<{
+      key: ControlOperationalForecastMetricKey;
+      label: string;
+      money: boolean;
+    }> = [
+      { key: 'ingreso', label: 'Ingresos', money: true },
+      { key: 'clientes_nuevos', label: 'Venta nueva', money: false },
+      { key: 'reactivaciones', label: 'Reactivaciones', money: false },
+      { key: 'bajas', label: 'Bajas', money: false },
+      { key: 'tienda', label: 'Tienda', money: true },
+    ];
+
+    return config.map((item) => ({
+      ...item,
+      metric: metrics[item.key],
+    }));
   }
 
   get metricCards(): ControlMetricCard[] {
@@ -450,6 +483,97 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
     }).format(value);
   }
 
+  formatOperationalForecastValue(
+    row: ControlOperationalForecastRow,
+    value: string | null,
+  ): string {
+    const numericValue = this.toFiniteNumber(value);
+    if (numericValue === null) return '—';
+
+    return row.money
+      ? this.formatCurrency(numericValue)
+      : this.formatInteger(numericValue);
+  }
+
+  formatOperationalForecastGap(
+    row: ControlOperationalForecastRow,
+  ): string {
+    const gap = this.toFiniteNumber(row.metric.projected_gap);
+    if (gap === null) return '—';
+
+    if (row.key === 'bajas') {
+      if (gap > 0) {
+        return `+${this.formatInteger(gap)} sobre límite`;
+      }
+      if (gap < 0) {
+        return `${this.formatInteger(Math.abs(gap))} de margen`;
+      }
+      return 'En límite';
+    }
+
+    if (row.money) {
+      return this.formatSignedCurrency(gap);
+    }
+
+    return this.formatSignedInteger(gap);
+  }
+
+  operationalForecastGapClass(
+    row: ControlOperationalForecastRow,
+  ): string {
+    const gap = this.toFiniteNumber(row.metric.projected_gap);
+
+    if (gap === null || row.metric.status !== 'available') {
+      return 'forecast-gap forecast-gap--muted';
+    }
+
+    const adverse = row.key === 'bajas'
+      ? gap > 0
+      : gap < 0;
+
+    return adverse
+      ? 'forecast-gap forecast-gap--attention'
+      : 'forecast-gap forecast-gap--good';
+  }
+
+  operationalForecastCoverageLabel(
+    row: ControlOperationalForecastRow,
+  ): string {
+    const coverage = row.metric.coverage;
+
+    if (
+      coverage.projected_available_branches
+      === coverage.total_branches
+    ) {
+      return '';
+    }
+
+    return (
+      `Cobertura ${coverage.projected_available_branches}/`
+      + `${coverage.total_branches} sucursales`
+    );
+  }
+
+  private formatSignedInteger(value: number): string {
+    const formatted = this.formatInteger(Math.abs(value));
+    return value > 0
+      ? `+${formatted}`
+      : value < 0
+        ? `-${formatted}`
+        : formatted;
+  }
+
+  private toFiniteNumber(
+    value: string | number | null | undefined,
+  ): number | null {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : null;
+  }
+
   private loadSources(): void {
     if (!this.context || !this.catalogs) return;
 
@@ -463,6 +587,12 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
 
     forkJoin({
       forecast: this.controlService.getForecast(forecastParams),
+      operationalForecast: this.controlService.getOperationalForecast(
+        {
+          ...scopeRequest,
+          cutoffDate: this.cutoffDate,
+        },
+      ),
       marketing: this.controlService.getMarketing(month, this.cutoffDate),
       retention: this.controlService.getRetention({
         ...scopeRequest,
@@ -472,8 +602,15 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
     })
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: ({ forecast, marketing, retention, maintenance }) => {
+        next: ({
+          forecast,
+          operationalForecast,
+          marketing,
+          retention,
+          maintenance,
+        }) => {
           this.forecastData = forecast;
+          this.operationalForecastData = operationalForecast;
           this.marketingData = marketing;
           this.retentionData = retention;
           this.maintenanceData = maintenance;
