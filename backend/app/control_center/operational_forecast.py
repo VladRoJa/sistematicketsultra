@@ -84,6 +84,7 @@ def build_control_operational_forecast(
                     "sucursal": branch.get("sucursal_name"),
                     "region_key": region.get("region_key"),
                     "region_label": region.get("region_label"),
+                    "metrics": forecast.get("metrics") or {},
                 }
             )
 
