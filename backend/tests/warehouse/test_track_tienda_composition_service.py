@@ -245,7 +245,7 @@ def test_product_family_classification_covers_known_remaining_items():
         descripcion="BEBIDA ENERGIZANTE GHOST 473 ML",
     ) == "Bebidas energéticas"
 
-    accessory_descriptions = (
+    merch_descriptions = (
         "PLAYERA ULTRA",
         "MORRALITO MESH",
         "MORRALITO ULTRA",
@@ -255,8 +255,130 @@ def test_product_family_classification_covers_known_remaining_items():
         "TRAVEL BAG",
     )
 
-    for description in accessory_descriptions:
+    for description in merch_descriptions:
         assert service._classify_product_family(
             clave_producto="999",
             descripcion=description,
-        ) == "Accesorios"
+        ) == "Merch"
+
+    assert service._classify_product_family(
+        clave_producto="999",
+        descripcion="TOALLA ULTRA",
+        precio_unitario=Decimal("35"),
+    ) == "Toalla chica"
+    assert service._classify_product_family(
+        clave_producto="999",
+        descripcion="TOALLA ULTRA",
+        precio_unitario=Decimal("40"),
+    ) == "Toalla chica"
+    assert service._classify_product_family(
+        clave_producto="999",
+        descripcion="TOALLA ULTRA",
+        precio_unitario=Decimal("100"),
+    ) == "Toalla grande"
+
+def test_towel_families_stay_separated_by_unit_price(monkeypatch):
+    resolved_version = SimpleNamespace(
+        id=124,
+        version_type="cierre_canonico",
+        status="success",
+        generated_at_utc=None,
+        finished_at_utc=None,
+    )
+
+    mart_query = _FakeQuery(
+        [
+            SimpleNamespace(
+                source_snapshot_id_tienda=88,
+                venta_tienda_real_mtd=Decimal("375.00"),
+                meta_venta_tienda_mes=Decimal("1000.00"),
+            )
+        ]
+    )
+
+    source_query = _FakeQuery(
+        [
+            _venta_row(
+                row_index=1,
+                clave_producto="T-01",
+                descripcion="TOALLA ULTRA",
+                total="35.00",
+            ),
+            _venta_row(
+                row_index=2,
+                clave_producto="T-02",
+                descripcion="TOALLA ULTRA",
+                total="40.00",
+            ),
+            _venta_row(
+                row_index=3,
+                clave_producto="T-03",
+                descripcion="TOALLA ULTRA",
+                total="100.00",
+            ),
+            _venta_row(
+                row_index=4,
+                clave_producto="M-01",
+                descripcion="PLAYERA ULTRA",
+                total="200.00",
+            ),
+        ]
+    )
+
+    monkeypatch.setattr(
+        service,
+        "resolve_effective_track_daily_version",
+        lambda **_kwargs: resolved_version,
+    )
+    monkeypatch.setattr(
+        service,
+        "TrackDailyMartORM",
+        SimpleNamespace(query=mart_query),
+    )
+    monkeypatch.setattr(
+        service,
+        "VentaTotalSnapshotRowORM",
+        SimpleNamespace(query=source_query),
+    )
+    monkeypatch.setattr(
+        service,
+        "resolve_track_branch_alias",
+        lambda **_kwargs: "VILLAS_DEL_REY",
+    )
+
+    result = service.build_track_tienda_composition(
+        track_date=date(2026, 9, 14),
+        generation_mode="official_closed_day",
+    )
+
+    families = {
+        item["familia"]: item["total"]
+        for item in result["composition"]
+    }
+    assert families == {
+        "Merch": 200.0,
+        "Toalla grande": 100.0,
+        "Toalla chica": 75.0,
+    }
+
+    products = {
+        (item["familia"], item["producto_canonico"]): item["total"]
+        for item in result["products"]
+    }
+    assert products[("Toalla chica", "TOALLA ULTRA")] == 75.0
+    assert products[("Toalla grande", "TOALLA ULTRA")] == 100.0
+
+    detail = service.build_track_tienda_composition(
+        track_date=date(2026, 9, 14),
+        generation_mode="official_closed_day",
+        include_operations=True,
+        familia="Toalla chica",
+        producto_canonico="TOALLA ULTRA",
+    )
+
+    assert detail["operation_count"] == 2
+    assert {
+        item["precio_unitario"]
+        for item in detail["operations"]
+    } == {35.0, 40.0}
+
