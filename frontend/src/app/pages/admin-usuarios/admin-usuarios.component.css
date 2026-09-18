@@ -155,6 +155,53 @@
   border-radius: 24px;
 }
 
+.user-mode-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 16px;
+  padding: 5px;
+  border: 1px solid rgba(229, 231, 235, 0.94);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+}
+
+.user-mode-switch__button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 11px;
+  padding: 8px 14px;
+  color: #6b7280;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+  transition:
+    color 0.14s ease,
+    background 0.14s ease,
+    box-shadow 0.14s ease,
+    transform 0.14s ease;
+}
+
+.user-mode-switch__button:hover {
+  color: #e54525;
+  background: rgba(229, 69, 37, 0.07);
+}
+
+.user-mode-switch__button--active {
+  color: #ffffff;
+  background: linear-gradient(135deg, #e54525, #c9361c);
+  box-shadow: 0 8px 18px rgba(229, 69, 37, 0.22);
+}
+
+.user-mode-switch__button--active:hover {
+  color: #ffffff;
+  background: linear-gradient(135deg, #e54525, #c9361c);
+  transform: translateY(-1px);
+}
+
 .panel-heading {
   display: flex;
   justify-content: space-between;
@@ -431,6 +478,15 @@
 
   .field-wide {
     grid-column: auto;
+  }
+
+  .user-mode-switch {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .user-mode-switch__button {
+    flex: 1 1 0;
   }
 
   .primary-action {

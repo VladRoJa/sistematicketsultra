@@ -601,7 +601,7 @@ private habilitarAdminUsuariosEnMenuSiAplica(): void {
   this.menuItems = [
     ...this.menuItems,
     {
-      label: 'Crear usuario',
+      label: 'Administrar usuarios',
       path: '/admin/usuarios',
     },
   ];

@@ -6,22 +6,43 @@
         Suite Ultra · Administración
       </div>
 
-      <h1>Crear usuario</h1>
+      <h1>Administrar usuarios</h1>
 
       <p>
-        Da de alta una nueva cuenta y define desde el inicio su rol,
-        sucursal y departamento dentro de Suite Ultra.
+        Da de alta nuevas cuentas o actualiza la contraseña de usuarios
+        existentes desde un mismo módulo de administración.
       </p>
     </div>
 
     <div class="hero-access">
       <span class="access-label">Acceso restringido</span>
       <strong>ADMICORP</strong>
-      <small>Alta exclusiva de usuarios</small>
+      <small>Altas y credenciales de usuarios</small>
     </div>
   </header>
 
+  <div class="user-mode-switch" role="tablist" aria-label="Acción de usuarios">
+    <button
+      type="button"
+      class="user-mode-switch__button"
+      [class.user-mode-switch__button--active]="modo === 'crear'"
+      (click)="cambiarModo('crear')"
+    >
+      Crear usuario
+    </button>
+
+    <button
+      type="button"
+      class="user-mode-switch__button"
+      [class.user-mode-switch__button--active]="modo === 'password'"
+      (click)="cambiarModo('password')"
+    >
+      Cambiar contraseña
+    </button>
+  </div>
+
   <form
+    *ngIf="modo === 'crear'"
     class="user-create-panel"
     [formGroup]="form"
     (ngSubmit)="crearUsuario()"
@@ -269,6 +290,196 @@
         [disabled]="form.invalid || guardando || cargandoCatalogos"
       >
         {{ guardando ? 'Creando usuario...' : 'Crear usuario' }}
+      </button>
+    </footer>
+  </form>
+
+  <form
+    *ngIf="modo === 'password'"
+    class="user-create-panel"
+    [formGroup]="passwordForm"
+    (ngSubmit)="cambiarPassword()"
+  >
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Credenciales</p>
+        <h2>Cambiar contraseña</h2>
+        <p>
+          Selecciona un usuario existente y asigna una nueva contraseña.
+          No se modificarán su rol, sucursal, departamento ni email.
+        </p>
+      </div>
+
+      <span class="status-pill" *ngIf="cargandoUsuarios">
+        Cargando usuarios...
+      </span>
+    </div>
+
+    <section class="form-section">
+      <div class="section-heading">
+        <span class="section-step">01</span>
+
+        <div>
+          <h3>Usuario</h3>
+          <p>Selecciona la cuenta cuya contraseña deseas actualizar.</p>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="field field-wide">
+          <label for="admin-password-user">Usuario *</label>
+
+          <select
+            id="admin-password-user"
+            formControlName="user_id"
+            [attr.disabled]="cargandoUsuarios ? true : null"
+          >
+            <option [ngValue]="null">Selecciona un usuario</option>
+
+            <option
+              *ngFor="let usuario of usuarios"
+              [ngValue]="usuario.id"
+            >
+              {{ usuario.username }} · {{ usuario.rol }}
+            </option>
+          </select>
+
+          <small>
+            El cambio se aplica únicamente a la cuenta seleccionada.
+          </small>
+
+          <span
+            class="field-error"
+            *ngIf="
+              passwordForm.get('user_id')?.touched &&
+              passwordForm.get('user_id')?.hasError('required')
+            "
+          >
+            Selecciona un usuario.
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <div class="section-heading">
+        <span class="section-step">02</span>
+
+        <div>
+          <h3>Nueva contraseña</h3>
+          <p>Captura y confirma la nueva credencial de acceso.</p>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="field">
+          <label for="admin-password-new">Nueva contraseña *</label>
+
+          <input
+            id="admin-password-new"
+            type="password"
+            formControlName="password"
+            autocomplete="new-password"
+            placeholder="Mínimo 6 caracteres"
+          />
+
+          <small>
+            Se almacenará protegida mediante hash en el backend.
+          </small>
+
+          <span
+            class="field-error"
+            *ngIf="
+              passwordForm.get('password')?.touched &&
+              passwordForm.get('password')?.hasError('required')
+            "
+          >
+            La nueva contraseña es obligatoria.
+          </span>
+
+          <span
+            class="field-error"
+            *ngIf="
+              passwordForm.get('password')?.touched &&
+              passwordForm.get('password')?.hasError('minlength')
+            "
+          >
+            La contraseña debe tener al menos 6 caracteres.
+          </span>
+        </div>
+
+        <div class="field">
+          <label for="admin-password-confirm">Confirmar contraseña *</label>
+
+          <input
+            id="admin-password-confirm"
+            type="password"
+            formControlName="password_confirm"
+            autocomplete="new-password"
+            placeholder="Repite la contraseña"
+          />
+
+          <small>
+            Debe coincidir exactamente con la nueva contraseña.
+          </small>
+
+          <span
+            class="field-error"
+            *ngIf="
+              passwordForm.get('password_confirm')?.touched &&
+              passwordForm.get('password_confirm')?.hasError('required')
+            "
+          >
+            Confirma la nueva contraseña.
+          </span>
+
+          <span
+            class="field-error"
+            *ngIf="
+              passwordForm.get('password_confirm')?.touched &&
+              passwordForm.hasError('passwordMismatch')
+            "
+          >
+            Las contraseñas no coinciden.
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <section class="security-strip">
+      <div class="security-icon">✓</div>
+
+      <div>
+        <strong>Cambio protegido</strong>
+        <p>
+          El backend vuelve a validar que la sesión pertenezca a ADMICORP
+          antes de aceptar cualquier cambio de contraseña.
+        </p>
+      </div>
+    </section>
+
+    <footer class="form-actions">
+      <div class="action-copy">
+        <strong>Actualizar contraseña</strong>
+        <span>
+          Verifica el usuario seleccionado antes de guardar.
+        </span>
+      </div>
+
+      <button
+        class="primary-action"
+        type="submit"
+        [disabled]="
+          passwordForm.invalid ||
+          guardandoPassword ||
+          cargandoUsuarios
+        "
+      >
+        {{
+          guardandoPassword
+            ? 'Actualizando contraseña...'
+            : 'Cambiar contraseña'
+        }}
       </button>
     </footer>
   </form>

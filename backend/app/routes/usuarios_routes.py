@@ -44,8 +44,8 @@ def _require_admicorp():
     if username != "ADMICORP":
         return jsonify({
             "error": "Forbidden",
-            "detail": "Solo ADMICORP puede crear usuarios.",
-            "code": "USER_CREATE_ADMICORP_ONLY",
+            "detail": "Solo ADMICORP puede administrar credenciales de usuarios.",
+            "code": "USER_CREDENTIALS_ADMICORP_ONLY",
         }), 403
 
     return None
@@ -147,7 +147,17 @@ def editar_usuario(user_id):
         u.username = data['username']
 
     if 'password' in data and data['password']:
-        u.password = generate_password_hash(data['password'])
+        password_forbidden = _require_admicorp()
+        if password_forbidden:
+            return password_forbidden
+
+        password = str(data['password'])
+        if len(password) < 6:
+            return jsonify({
+                "error": "La contraseña debe tener al menos 6 caracteres",
+            }), 400
+
+        u.password = generate_password_hash(password)
 
     if 'rol' in data:
         u.rol = data['rol']
