@@ -291,7 +291,7 @@ def test_bajas_forecast_formula_fails_closed_without_historical_reference():
     ) == "=NA()"
 
 
-def test_sensitized_forecast_sheet_uses_shared_operational_contract_and_info_support(
+def test_sensitized_forecast_matches_forecast_layout_and_keeps_formulas(
     monkeypatch,
 ):
     track_date = date(2026, 9, 18)
@@ -404,63 +404,120 @@ def test_sensitized_forecast_sheet_uses_shared_operational_contract_and_info_sup
     )
 
     legacy = workbook["Forecast"]
+    sensitized = workbook[service.SENSITIZED_FORECAST_SHEET]
+
     assert legacy["W4"].value == (
         "=IFERROR((T4/18)*12,0)+IFERROR((U4/18)*12,0)"
     )
 
-    sensitized = workbook[service.SENSITIZED_FORECAST_SHEET]
-    assert sensitized["C4"].value == "VILLAS DEL REY"
+    for address in (
+        "B1",
+        "C1",
+        "R1",
+        "V1",
+        "B3",
+        "C3",
+        "R3",
+        "V3",
+        "X3",
+        "Y3",
+        "AC3",
+        "AE3",
+        "AG3",
+        "AH3",
+        "AK3",
+        "AM3",
+        "AO3",
+        "AP3",
+        "AS3",
+        "AU3",
+        "AW3",
+        "AX3",
+        "AY3",
+        "BM3",
+        "BN3",
+        "BP3",
+        "BQ3",
+    ):
+        assert sensitized[address].value == legacy[address].value
 
-    assert sensitized["D4"].value == 800
-    assert sensitized["E4"].value == 1000
-    assert sensitized["F4"].value == 1200
-    assert sensitized["G4"].value == -200
+    assert {
+        str(value) for value in sensitized.merged_cells.ranges
+    } == {
+        str(value) for value in legacy.merged_cells.ranges
+    }
 
-    assert sensitized["H4"].value == 100
-    assert sensitized["I4"].value == 220
-    assert sensitized["J4"].value == 300
-    assert sensitized["K4"].value == -80
+    for helper_column in ("W", "AF", "AN", "AV", "BO"):
+        assert (
+            sensitized.column_dimensions[helper_column].hidden
+            == legacy.column_dimensions[helper_column].hidden
+            == True
+        )
 
-    assert sensitized["L4"].value == 200
-    assert sensitized["M4"].value == 296
-    assert sensitized["N4"].value == 400
-    assert sensitized["O4"].value == -104
+    assert sensitized["R4"].value == 1200
+    assert sensitized["T4"].value == 700
+    assert sensitized["U4"].value == 100
+    assert sensitized["V4"].value == "=T4+U4"
+    assert sensitized["X4"].value == "=IFERROR(Info!$P$12,NA())"
+    assert sensitized["W4"].value == "=IFERROR(X4-V4,NA())"
+    assert sensitized["Y4"].value == "=IFERROR(X4-R4,NA())"
 
-    assert sensitized["P4"].value == 50
-    assert sensitized["Q4"].value == 100
-    assert sensitized["R4"].value == 70
-    assert sensitized["S4"].value == 30
+    assert sensitized["AC4"].value == 300
+    assert sensitized["AE4"].value == 100
+    assert sensitized["AF4"].value == (
+        "=IFERROR(Info!$AG$4*Info!$AE$4,NA())"
+    )
+    assert sensitized["AG4"].value == "=AE4+AF4"
+    assert sensitized["AH4"].value == "=AG4-AC4"
 
-    assert sensitized["T4"].value == 3000
-    assert sensitized["U4"].value == 4200
-    assert sensitized["V4"].value == 5000
-    assert sensitized["W4"].value == -800
+    assert sensitized["AK4"].value == 400
+    assert sensitized["AM4"].value == 200
+    assert sensitized["AN4"].value == (
+        "=IFERROR(Info!$AI$4*Info!$AE$4,NA())"
+    )
+    assert sensitized["AO4"].value == "=AM4+AN4"
+    assert sensitized["AP4"].value == "=AO4-AK4"
+
+    assert sensitized["AS4"].value == 70
+    assert sensitized["AU4"].value == 50
+    assert sensitized["AV4"].value == (
+        "=IFERROR((AU4/Info!$F$35)-AU4,NA())"
+    )
+    assert sensitized["AW4"].value == "=AU4+AV4"
+    assert sensitized["AX4"].value == "=IFERROR(AW4/M4,0)"
+    assert sensitized["AY4"].value == "=AS4-AW4"
+
+    assert sensitized["BM4"].value == 5000
+    assert sensitized["BN4"].value == 3000
+    assert sensitized["BO4"].value == (
+        "=IFERROR(Info!$AK$4*Info!$AE$4,NA())"
+    )
+    assert sensitized["BP4"].value == "=BN4+BO4"
+    assert sensitized["BQ4"].value == "=BP4-BM4"
 
     total_row = next(
         row_idx
         for row_idx in range(1, sensitized.max_row + 1)
         if sensitized[f"C{row_idx}"].value == "TOTAL GENERAL"
     )
-    assert sensitized[f"E{total_row}"].value == 1000
-    assert sensitized[f"I{total_row}"].value == 220
-    assert sensitized[f"Q{total_row}"].value == 100
-    assert sensitized[f"U{total_row}"].value == 4200
+    assert str(sensitized[f"X{total_row}"].value).startswith("=SUM(")
+    assert str(sensitized[f"AG{total_row}"].value).startswith("=SUM(")
+    assert str(sensitized[f"AW{total_row}"].value).startswith("=SUM(")
+    assert str(sensitized[f"BP{total_row}"].value).startswith("=SUM(")
 
     info = workbook["Info"]
-    assert info["H2"].value == "Métodos del Forecast Sensibilizado"
-    assert info["H10"].value == (
-        "Soporte de forecast de ingresos por sucursal"
-    )
+
     assert info["H12"].value == "VILLAS DEL REY"
     assert info["J12"].value == "existing_stable_historical_pace"
     assert info["M12"].value == 0.8
-    assert info["M12"].number_format == service.PERCENT_FORMAT
+    assert info["P12"].value == "=IFERROR(L12/M12,NA())"
+    assert info["R12"].value == "=IFERROR(P12-Q12,NA())"
 
-    assert info["T2"].value == (
-        "Ventana reciente de deltas (7 días calendario)"
-    )
-    assert info["T4"].value == "VILLAS DEL REY"
-    assert info["U4"].value == "2026-09-12"
-    assert info["Y4"].value == 10
-    assert info["Z4"].value == 8
-    assert info["AA4"].value == 100
+    assert info["AD4"].value == "VILLAS DEL REY"
+    assert str(info["AE4"].value).startswith("=DAY(EOMONTH(DATE(")
+    assert str(info["AF4"].value).startswith("=COUNTIFS(")
+    assert "AVERAGEIFS(" in str(info["AG4"].value)
+    assert str(info["AH4"].value).startswith("=COUNTIFS(")
+    assert "AVERAGEIFS(" in str(info["AI4"].value)
+    assert str(info["AJ4"].value).startswith("=COUNTIFS(")
+    assert "AVERAGEIFS(" in str(info["AK4"].value)
