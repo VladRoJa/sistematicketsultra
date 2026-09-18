@@ -1370,7 +1370,7 @@ def _write_sensitized_forecast_data_row(
         {},
     ).get(desempeno_day)
     bajas_progress_reference = (
-        f"Info!$F$\${17 + desempeno_day}"
+        f"Info!$F${17 + desempeno_day}"
         if bajas_progress_point is not None
         else None
     )
@@ -1393,7 +1393,7 @@ def _write_sensitized_forecast_data_row(
     )
     worksheet[f"V{excel_row}"] = f"=T{excel_row}+U{excel_row}"
     worksheet[f"X{excel_row}"] = (
-        f"=IFERROR(Info!$P$\${income_info_row},NA())"
+        f"=IFERROR(Info!$P${income_info_row},NA())"
     )
     worksheet[f"W{excel_row}"] = (
         f"=IFERROR(X{excel_row}-V{excel_row},NA())"
@@ -1409,8 +1409,8 @@ def _write_sensitized_forecast_data_row(
         getattr(mart_row, "clientes_nuevos_real_mtd", None)
     )
     worksheet[f"AF{excel_row}"] = (
-        f"=IFERROR(Info!$AG$\${recent_info_row}"
-        f"*Info!$AE$\${recent_info_row},NA())"
+        f"=IFERROR(Info!$AG${recent_info_row}"
+        f"*Info!$AE${recent_info_row},NA())"
     )
     worksheet[f"AG{excel_row}"] = f"=AE{excel_row}+AF{excel_row}"
     worksheet[f"AH{excel_row}"] = f"=AG{excel_row}-AC{excel_row}"
@@ -1422,8 +1422,8 @@ def _write_sensitized_forecast_data_row(
         getattr(mart_row, "reactivaciones_real_mtd", None)
     )
     worksheet[f"AN{excel_row}"] = (
-        f"=IFERROR(Info!$AI$\${recent_info_row}"
-        f"*Info!$AE$\${recent_info_row},NA())"
+        f"=IFERROR(Info!$AI${recent_info_row}"
+        f"*Info!$AE${recent_info_row},NA())"
     )
     worksheet[f"AO{excel_row}"] = f"=AM{excel_row}+AN{excel_row}"
     worksheet[f"AP{excel_row}"] = f"=AO{excel_row}-AK{excel_row}"
@@ -1452,8 +1452,8 @@ def _write_sensitized_forecast_data_row(
         getattr(mart_row, "venta_tienda_real_mtd", None)
     )
     worksheet[f"BO{excel_row}"] = (
-        f"=IFERROR(Info!$AK$\${recent_info_row}"
-        f"*Info!$AE$\${recent_info_row},NA())"
+        f"=IFERROR(Info!$AK${recent_info_row}"
+        f"*Info!$AE${recent_info_row},NA())"
     )
     worksheet[f"BP{excel_row}"] = f"=BN{excel_row}+BO{excel_row}"
     worksheet[f"BQ{excel_row}"] = f"=BP{excel_row}-BM{excel_row}"
@@ -2618,7 +2618,7 @@ def _build_info_sheet(
                 column=column_idx,
             ).number_format = CURRENCY_FORMAT
 
-        recent_title_row = 2
+    recent_title_row = 2
     recent_header_row = 3
     worksheet.merge_cells(
         start_row=recent_title_row,
@@ -2796,17 +2796,17 @@ def _build_info_sheet(
         )
         for count_col, average_col, delta_col in metric_columns:
             worksheet[f"{count_col}{row_idx}"] = (
-                f'=COUNTIFS($T$4:$T$\${recent_last_row},$AD{row_idx},'
-                f'$X$4:$X$\${recent_last_row},"Sí",'
-                f'$\${delta_col}$4:$\${delta_col}$\${recent_last_row},"<>")'
+                f'=COUNTIFS($T$4:$T${recent_last_row},$AD{row_idx},'
+                f'$X$4:$X${recent_last_row},"Sí",'
+                f'${delta_col}$4:${delta_col}${recent_last_row},"<>")'
             )
             worksheet[f"{average_col}{row_idx}"] = (
                 f'=IF($AE{row_idx}=0,0,'
                 f'IF({count_col}{row_idx}>=3,'
                 f'AVERAGEIFS('
-                f'$\${delta_col}$4:$\${delta_col}$\${recent_last_row},'
-                f'$T$4:$T$\${recent_last_row},$AD{row_idx},'
-                f'$X$4:$X$\${recent_last_row},"Sí"),NA()))'
+                f'${delta_col}$4:${delta_col}${recent_last_row},'
+                f'$T$4:$T${recent_last_row},$AD{row_idx},'
+                f'$X$4:$X${recent_last_row},"Sí"),NA()))'
             )
 
         for column_idx in range(support_start_col, support_end_col + 1):
