@@ -1408,6 +1408,7 @@ def calculate_compact_branch_forecast(
             "label": branch.label,
             "cohort": branch.cohort,
             "region_key": branch.region_key,
+            "region_label": branch.region_label,
         },
         summary={
             "goal_month": goal_month if valid_goal else None,
@@ -1754,7 +1755,10 @@ def _build_breakdown(
             key = str(result.identity.get("region_key") or "")
             if not key:
                 continue
-            labels[key] = key
+            labels[key] = str(
+                result.identity.get("region_label")
+                or key
+            )
         else:
             raise ForecastCenterValidationError("breakdown inválido.")
         groups[key].append(result)
