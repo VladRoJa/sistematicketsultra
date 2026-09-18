@@ -21,6 +21,8 @@ import {
   ControlCenterService,
   ControlContextRequest,
   ControlContextResponse,
+  ControlHistoricalComparisonPeriod,
+  ControlHistoricalComparisonValue,
   ControlOperationalForecastMetric,
   ControlOperationalForecastMetricKey,
   ControlOperationalForecastResponse,
@@ -115,6 +117,18 @@ interface ControlWhereBar {
   tone: ControlVisualTone;
 }
 
+interface ControlHistoricalComparisonCard {
+  label: string;
+  mtdLabel: string;
+  mtdValue: string;
+  mtdDetail: string;
+  mtdTone: ControlVisualTone;
+  closeLabel: string;
+  closeValue: string;
+  closeDetail: string;
+  closeTone: ControlVisualTone;
+}
+
 interface ControlAttentionItem {
   metric: ControlMetricKey;
   forecastMetric?: ControlOperationalForecastMetricKey;
@@ -207,6 +221,10 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
     if (this.selectedMetric === 'forecast') {
       const row = this.selectedOperationalForecastRow;
       return `${row?.label || 'Ingresos'} · Forecast de cierre`;
+    }
+
+    if (this.selectedMetric === 'conversion') {
+      return 'Lead → venta';
     }
 
     return this.selectedMetricCard.title;
@@ -391,6 +409,29 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
     ];
   }
 
+  get operationalHistoricalComparisonCards(): ControlHistoricalComparisonCard[] {
+    const row = this.selectedOperationalForecastRow;
+    const comparisons = this.operationalForecastData
+      ?.historical_comparison.metrics[this.selectedForecastMetric];
+
+    if (!row || !comparisons) {
+      return [];
+    }
+
+    return [
+      this.buildHistoricalComparisonCard(
+        'Mes anterior',
+        comparisons.previous_month,
+        row,
+      ),
+      this.buildHistoricalComparisonCard(
+        'Año anterior',
+        comparisons.previous_year,
+        row,
+      ),
+    ];
+  }
+
   get operationalWhereBars(): ControlWhereBar[] {
     const row = this.selectedOperationalForecastRow;
     if (!row) return [];
@@ -489,11 +530,11 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
       },
       {
         key: 'conversion',
-        title: 'Lead → venta',
+        title: 'Conversión',
         value: this.formatPercent(conversion),
         supportingText: marketing.leads === null
-          ? 'Leads no disponibles para el alcance actual'
-          : `${this.formatInteger(marketing.sales)} ventas digitales de ${this.formatInteger(marketing.leads)} leads`,
+          ? 'Lead → venta · leads no disponibles para el alcance actual'
+          : `Lead → venta · ${this.formatInteger(marketing.sales)} ventas digitales de ${this.formatInteger(marketing.leads)} leads`,
         freshnessText: marketingFreshness || undefined,
         tone: conversion === null ? 'muted' : 'normal',
       },
@@ -1520,6 +1561,102 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
     const [year, month, day] = this.cutoffDate.split('-').map(Number);
     const lastDay = new Date(year, month, 0).getDate();
     return Math.max(lastDay - day, 0);
+  }
+
+  private buildHistoricalComparisonCard(
+    label: string,
+    period: ControlHistoricalComparisonPeriod,
+    row: ControlOperationalForecastRow,
+  ): ControlHistoricalComparisonCard {
+    const mtd = this.describeHistoricalComparison(
+      period.mtd,
+      row,
+    );
+    const close = this.describeHistoricalComparison(
+      period.close,
+      row,
+    );
+
+    return {
+      label,
+      mtdLabel: 'MTD homologado',
+      mtdValue: mtd.value,
+      mtdDetail: mtd.detail,
+      mtdTone: mtd.tone,
+      closeLabel: 'Forecast vs cierre',
+      closeValue: close.value,
+      closeDetail: close.detail,
+      closeTone: close.tone,
+    };
+  }
+
+  private describeHistoricalComparison(
+    comparison: ControlHistoricalComparisonValue,
+    row: ControlOperationalForecastRow,
+  ): {
+    value: string;
+    detail: string;
+    tone: ControlVisualTone;
+  } {
+    const ratio = this.toFiniteNumber(comparison.change_ratio);
+    const current = this.toFiniteNumber(comparison.current_comparable);
+    const historical = this.toFiniteNumber(comparison.historical);
+    const tone = this.historicalComparisonTone(row.key, ratio);
+    const coverage = (
+      `${comparison.comparable_branches}/`
+      + `${comparison.total_current_branches} sucursales comparables`
+    );
+    const dateLabel = this.formatShortIsoDate(
+      comparison.comparison_date,
+    );
+
+    if (comparison.status !== 'available') {
+      return {
+        value: 'N/D',
+        detail: `Sin corte comparable para ${dateLabel}`,
+        tone: 'neutral',
+      };
+    }
+
+    return {
+      value: this.formatSignedPercent(ratio),
+      detail: (
+        `${this.formatOperationalNumber(row, current)} vs `
+        + `${this.formatOperationalNumber(row, historical)} · `
+        + `${dateLabel} · ${coverage}`
+      ),
+      tone,
+    };
+  }
+
+  private historicalComparisonTone(
+    metricKey: ControlOperationalForecastMetricKey,
+    ratio: number | null,
+  ): ControlVisualTone {
+    if (ratio === null || ratio === 0) {
+      return 'neutral';
+    }
+
+    const favorable = metricKey === 'bajas'
+      ? ratio < 0
+      : ratio > 0;
+
+    return favorable ? 'good' : 'attention';
+  }
+
+  private formatSignedPercent(
+    value: number | null,
+  ): string {
+    if (value === null || !Number.isFinite(value)) {
+      return '—';
+    }
+
+    const formatted = this.formatPercent(Math.abs(value));
+    return value > 0
+      ? `+${formatted}`
+      : value < 0
+        ? `-${formatted}`
+        : formatted;
   }
 
   visualToneClass(tone: ControlVisualTone): string {
