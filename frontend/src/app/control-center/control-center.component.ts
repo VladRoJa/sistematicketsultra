@@ -508,7 +508,7 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
 
     const branches = this.filterMarketingBranches(dashboard.branches, scope);
     const leads = branches.reduce(
-      (total, branch) => total + branch.leads_iventas,
+      (total, branch) => total + branch.leads_meta,
       0,
     );
     const visits = branches.reduce(
@@ -731,15 +731,19 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
 
     if (this.selectedMetric === 'conversion') {
       return [...this.marketingOverview.branches]
+        .map((branch) => ({
+          branch,
+          leadToSaleRate: this.marketingBranchLeadToSaleRate(branch),
+        }))
         .sort((a, b) =>
-          (a.lead_to_sale_rate ?? Number.POSITIVE_INFINITY)
-          - (b.lead_to_sale_rate ?? Number.POSITIVE_INFINITY),
+          (a.leadToSaleRate ?? Number.POSITIVE_INFINITY)
+          - (b.leadToSaleRate ?? Number.POSITIVE_INFINITY),
         )
         .slice(0, 8)
-        .map((branch) => ({
+        .map(({ branch, leadToSaleRate }) => ({
           label: branch.sucursal,
-          value: this.formatPercent(branch.lead_to_sale_rate),
-          supportingText: `${this.formatInteger(branch.leads_iventas)} leads · ${this.formatInteger(branch.sales_digital)} ventas digitales`,
+          value: this.formatPercent(leadToSaleRate),
+          supportingText: `${this.formatInteger(branch.leads_meta)} leads · ${this.formatInteger(branch.sales_digital)} ventas digitales`,
         }));
     }
 
@@ -946,6 +950,14 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
       scopeType: 'BRANCH',
       branchId: scope.branch_ids[0] || null,
     };
+  }
+
+  private marketingBranchLeadToSaleRate(
+    branch: MarketingSalesFunnelBranch,
+  ): number | null {
+    return branch.leads_meta > 0
+      ? branch.sales_digital / branch.leads_meta
+      : null;
   }
 
   private filterMarketingBranches(
