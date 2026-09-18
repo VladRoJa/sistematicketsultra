@@ -132,6 +132,32 @@ export interface ControlOperationalForecastBranchMetric {
   };
 }
 
+export interface ControlHistoricalComparisonValue {
+  status: 'available' | 'unavailable';
+  comparison_date: string;
+  comparison_version: {
+    id: number;
+    version_type: string;
+    status: string;
+  } | null;
+  current_comparable: string | null;
+  historical: string | null;
+  delta: string | null;
+  change_ratio: string | null;
+  comparable_branches: number;
+  total_current_branches: number;
+}
+
+export interface ControlHistoricalComparisonPeriod {
+  mtd: ControlHistoricalComparisonValue;
+  close: ControlHistoricalComparisonValue;
+}
+
+export interface ControlHistoricalComparisonMetric {
+  previous_month: ControlHistoricalComparisonPeriod;
+  previous_year: ControlHistoricalComparisonPeriod;
+}
+
 export interface ControlOperationalForecastResponse {
   status: 'ok';
   contract_version: string;
@@ -149,6 +175,23 @@ export interface ControlOperationalForecastResponse {
     metrics: Record<
       ControlOperationalForecastMetricKey,
       ControlOperationalForecastMetric
+    >;
+  };
+  historical_comparison: {
+    method: 'common_branch_cohort_exact_day';
+    periods: {
+      previous_month: {
+        mtd_date: string;
+        close_date: string;
+      };
+      previous_year: {
+        mtd_date: string;
+        close_date: string;
+      };
+    };
+    metrics: Record<
+      ControlOperationalForecastMetricKey,
+      ControlHistoricalComparisonMetric
     >;
   };
   branches: Array<{
