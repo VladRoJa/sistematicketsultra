@@ -1186,3 +1186,13 @@
 }
 
 /* === FUNNEL EXECUTIVE EFFICIENCY END === */
+
+/* === SALE COMPOSITION KPI SIZE START === */
+.sale-composition .flow-origin-stack__heading > span,
+.sale-composition__group .flow-origin-card__value {
+  font-size: 30px;
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+/* === SALE COMPOSITION KPI SIZE END === */

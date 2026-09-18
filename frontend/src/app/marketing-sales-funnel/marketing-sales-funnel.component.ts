@@ -512,7 +512,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
         cssClass: 'summary-kpi--purple',
       },
       {
-        label: 'Leads iVentas',
+        label: 'Leads CRM',
         value: this.formatInteger(summary.leads_meta),
         supportingText: 'Leads canónicos identificados por iVentas',
         metric: 'leads_meta',
