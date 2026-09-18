@@ -17,6 +17,34 @@ def _mock_first_store_income_dates_bulk():
     ):
         yield
 
+
+@pytest.fixture(autouse=True)
+def _mock_bajas_historical_progress_curve():
+    points = {
+        day: {
+            "day": day,
+            "samples_count": 42,
+            "p25": Decimal("0.45"),
+            "median": Decimal("0.50"),
+            "p75": Decimal("0.55"),
+        }
+        for day in range(1, 32)
+    }
+
+    with patch.object(
+        service,
+        "build_bajas_historical_progress_curve",
+        return_value={
+            "status": "available",
+            "method": "chain_daily_median_share_of_month_close",
+            "target_month": date(2026, 8, 1),
+            "history_end_exclusive": date(2026, 8, 1),
+            "points": points,
+        },
+    ):
+        yield
+
+
 from app.track_alerts.services.track_regional_pacing_service import (
     CLIENTES_NUEVOS_WEEKDAY_WEIGHTS,
     calculate_expected_progress_ratio,
@@ -2029,21 +2057,25 @@ def test_regional_detail_attaches_bajas_projection_from_bulk_history():
     )
 
     assert branch_metric["projection"]["status"] == "available"
+    assert (
+        branch_metric["projection"]["method"]
+        == "chain_daily_median_share_of_month_close"
+    )
     assert Decimal(
-        branch_metric["projection"]["recent_daily_average"]
-    ) == Decimal("3")
+        branch_metric["projection"]["historical_progress_pct"]
+    ) == Decimal("50")
     assert Decimal(
         branch_metric["projection"]["projected_close"]
-    ) == Decimal("103")
+    ) == Decimal("80")
     assert Decimal(
         branch_metric["projection"]["projected_limit_usage_pct"]
-    ) == Decimal("103")
+    ) == Decimal("80")
     assert Decimal(
         branch_metric["projection"]["projected_excess_units"]
-    ) == Decimal("3")
+    ) == Decimal("0")
     assert Decimal(
         branch_metric["projection"]["projected_remaining_margin"]
-    ) == Decimal("0")
+    ) == Decimal("20")
 
     region_metric = (
         result["regions"][0]
@@ -2051,21 +2083,25 @@ def test_regional_detail_attaches_bajas_projection_from_bulk_history():
     )
 
     assert region_metric["projection"]["status"] == "available"
+    assert (
+        region_metric["projection"]["method"]
+        == "sum_branch_operational_forecasts"
+    )
     assert Decimal(
         region_metric["projection"]["projected_close"]
-    ) == Decimal("103")
+    ) == Decimal("80")
     assert Decimal(
         region_metric["projection"]["benchmark"]
     ) == Decimal("100")
     assert Decimal(
         region_metric["projection"]["projected_limit_usage_pct"]
-    ) == Decimal("103")
+    ) == Decimal("80")
     assert Decimal(
         region_metric["projection"]["projected_excess_units"]
-    ) == Decimal("3")
+    ) == Decimal("0")
     assert Decimal(
         region_metric["projection"]["projected_remaining_margin"]
-    ) == Decimal("0")
+    ) == Decimal("20")
 
     assert (
         "projected_compliance_pct"
@@ -2267,3 +2303,120 @@ def test_regional_income_projection_uses_linear_method_for_new_branch():
     ) == Decimal("958950.60")
     assert region_projection["available_branches"] == 1
     assert region_projection["unavailable_branches_count"] == 0
+
+
+def test_regional_detail_exposes_shared_forecast_contract_for_tienda():
+    track_date = date(2026, 8, 10)
+    resolved_version = SimpleNamespace(
+        id=910,
+        version_type="preview_operativo",
+        status="success",
+    )
+
+    mart = _mart_row(
+        clientes_actual=Decimal("40"),
+        bajas_actual=Decimal("40"),
+    )
+    mart.track_date = track_date
+    mart.track_daily_version_id = 910
+    mart.venta_tienda_real_mtd = Decimal("2000")
+    mart.meta_venta_tienda_mes = Decimal("5000")
+
+    branch = _branch(
+        branch_id=1,
+        canon="BRANCH_A",
+        name="Sucursal A",
+        order=1,
+    )
+    branch.sucursal.operational_status = (
+        service.SucursalOperationalStatus.ACTIVA
+    )
+
+    region = SimpleNamespace(
+        region_key="REGION_TEST",
+        region_label="Región Test",
+    )
+
+    history = [
+        {
+            "track_date": f"2026-08-{day:02d}",
+            "previous_track_date": f"2026-08-{day - 1:02d}",
+            "days_since_previous": 1,
+            "is_consecutive_previous_date": True,
+            "metrics": {
+                "clientes_nuevos": {"daily_delta": "4"},
+                "reactivaciones": {"daily_delta": "3"},
+                "domiciliados": {"daily_delta": "2"},
+                "bajas": {"daily_delta": "3"},
+                "tienda": {"daily_delta": "100"},
+            },
+        }
+        for day in range(4, 11)
+    ]
+
+    with patch.object(
+        service,
+        "resolve_effective_track_daily_version",
+        return_value=resolved_version,
+    ), patch.object(
+        service,
+        "_load_track_rows_with_region",
+        return_value=[(mart, branch, region)],
+    ), patch.object(
+        service,
+        "build_branch_income_projection_summary",
+        return_value={
+            "status": "available",
+            "method": "linear_mtd_pace",
+            "projected_close": "100000",
+        },
+    ), patch.object(
+        service,
+        "_load_branch_operational_histories_bulk",
+        return_value={
+            "BRANCH_A": {
+                "history": history,
+                "missing_dates": [],
+            },
+        },
+    ):
+        result = service.get_regional_operational_detail(
+            user=SimpleNamespace(
+                rol="ADMIN",
+                sucursal_id=None,
+            ),
+            track_date=track_date,
+            generation_mode="manual_preview",
+        )
+
+    branch_item = result["regions"][0]["branches"][0]
+    tienda_projection = branch_item["metrics"]["tienda"]["projection"]
+
+    assert tienda_projection["status"] == "available"
+    assert (
+        tienda_projection["method"]
+        == "recent_valid_daily_average_7_calendar_days"
+    )
+    assert Decimal(
+        tienda_projection["recent_daily_average"]
+    ) == Decimal("100")
+    assert Decimal(
+        tienda_projection["projected_close"]
+    ) == Decimal("4100")
+
+    shared_region = (
+        result["regions"][0]["summary"]["operational_forecast"]
+    )
+    shared_tienda = shared_region["metrics"]["tienda"]
+
+    assert shared_tienda["status"] == "available"
+    assert shared_tienda["actual_mtd"] == "2000"
+    assert shared_tienda["projected_close"] == "4100"
+    assert shared_tienda["benchmark"] == "5000"
+    assert shared_tienda["projected_gap"] == "-900"
+
+    legacy_tienda = (
+        result["regions"][0]["summary"]["metrics"]["tienda"]["projection"]
+    )
+    assert legacy_tienda["projected_close"] == "4100"
+    assert legacy_tienda["projected_gap_units"] == "-900"
