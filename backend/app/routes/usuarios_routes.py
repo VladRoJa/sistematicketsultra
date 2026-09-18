@@ -44,8 +44,8 @@ def _require_admicorp():
     if username != "ADMICORP":
         return jsonify({
             "error": "Forbidden",
-            "detail": "Solo ADMICORP puede crear usuarios.",
-            "code": "USER_CREATE_ADMICORP_ONLY",
+            "detail": "Solo ADMICORP puede administrar credenciales de usuarios.",
+            "code": "USER_CREDENTIALS_ADMICORP_ONLY",
         }), 403
 
     return None
