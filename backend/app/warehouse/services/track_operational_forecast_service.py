@@ -297,6 +297,12 @@ def _normalize_metric_forecast(
             if projected_gap is not None
             else None
         )
+        result["historical_progress_pct"] = projection.get(
+            "historical_progress_pct"
+        )
+        result["historical_samples_count"] = projection.get(
+            "historical_samples_count"
+        )
 
     return result
 
@@ -390,7 +396,7 @@ def build_branch_operational_forecast(
 
 
 def _complete_sum(values: Sequence[Decimal | None]) -> Decimal | None:
-    if any(value is None for value in values):
+    if not values or any(value is None for value in values):
         return None
     return sum(
         (value for value in values if value is not None),
