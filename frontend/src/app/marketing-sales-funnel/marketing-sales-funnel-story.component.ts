@@ -128,7 +128,7 @@ export class MarketingSalesFunnelStoryComponent {
     if (!summary) return null;
 
     return this.createNode(
-      'Leads iVentas',
+      'Leads CRM',
       summary.leads_meta,
       'Contactos que iniciaron conversación desde publicidad',
       'leads_meta',
@@ -160,7 +160,7 @@ export class MarketingSalesFunnelStoryComponent {
     return [
       {
         key: 'iventas',
-        label: 'iVentas',
+        label: 'CRM',
         value: this.formatInteger(summary.visits_iventas),
         metric: 'visits_iventas',
         icon: 'smartphone',
@@ -187,7 +187,7 @@ export class MarketingSalesFunnelStoryComponent {
       },
       {
         key: 'untraced',
-        label: 'Sin trazabilidad',
+        label: 'Organicas',
         value: this.formatInteger(summary.visits_not_iventas),
         metric: 'visits_not_iventas',
         icon: 'link_off',
