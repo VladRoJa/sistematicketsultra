@@ -73,3 +73,49 @@ def test_resolve_cutoff_rejects_incomplete_date(monkeypatch):
             month_start=date(2026, 9, 1),
             requested_cutoff=date(2026, 9, 15),
         )
+
+
+def test_resolve_cutoff_can_fallback_to_latest_complete_at_or_before(monkeypatch):
+    available = (
+        date(2026, 9, 19),
+        date(2026, 9, 17),
+        date(2026, 9, 16),
+    )
+    monkeypatch.setattr(
+        service,
+        "list_available_funnel_cutoffs",
+        lambda _month_start: available,
+    )
+
+    selected, options = service.resolve_funnel_cutoff(
+        month_start=date(2026, 9, 1),
+        requested_cutoff=date(2026, 9, 18),
+        cutoff_policy=(
+            service.FUNNEL_CUTOFF_POLICY_LATEST_AVAILABLE_AT_OR_BEFORE
+        ),
+    )
+
+    assert selected == date(2026, 9, 17)
+    assert options == available
+
+
+def test_resolve_cutoff_fallback_never_uses_future_date(monkeypatch):
+    monkeypatch.setattr(
+        service,
+        "list_available_funnel_cutoffs",
+        lambda _month_start: (date(2026, 9, 19),),
+    )
+
+    with pytest.raises(MarketingInputValidationError):
+        service.resolve_funnel_cutoff(
+            month_start=date(2026, 9, 1),
+            requested_cutoff=date(2026, 9, 18),
+            cutoff_policy=(
+                service.FUNNEL_CUTOFF_POLICY_LATEST_AVAILABLE_AT_OR_BEFORE
+            ),
+        )
+
+
+def test_parse_cutoff_policy_rejects_unknown_value():
+    with pytest.raises(MarketingInputValidationError):
+        service.parse_cutoff_policy("magic")
