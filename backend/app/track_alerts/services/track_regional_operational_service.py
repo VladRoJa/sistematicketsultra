@@ -33,9 +33,16 @@ from app.warehouse.services.track_daily_query_version_service import (
     resolve_effective_track_daily_version,
     resolve_preferred_track_daily_version,
 )
+from app.warehouse.services.track_bajas_forecast_service import (
+    build_bajas_historical_progress_curve,
+)
 from app.warehouse.services.track_forecast_service import (
     build_branch_income_projection_summary,
     load_first_store_income_dates_bulk,
+)
+from app.warehouse.services.track_operational_forecast_service import (
+    build_branch_operational_forecast,
+    build_operational_forecast_scope_summary,
 )
 
 
@@ -63,6 +70,23 @@ def _income_value(row: TrackDailyMartORM) -> Decimal | None:
         value = row.ingreso_real_mtd
 
     return _to_optional_decimal(value)
+
+
+def _source_business_day(
+    row: TrackDailyMartORM,
+    attribute_name: str,
+    track_date: date,
+) -> int:
+    value = getattr(row, attribute_name, None)
+
+    if (
+        isinstance(value, date)
+        and value.year == track_date.year
+        and value.month == track_date.month
+    ):
+        return max(1, min(value.day, track_date.day))
+
+    return max(1, track_date.day)
 
 
 def _complete_sum(values: Iterable[Any]) -> Decimal | None:
@@ -337,6 +361,7 @@ def _build_branch_operational_history(
         "reactivaciones",
         "domiciliados",
         "bajas",
+        "tienda",
     )
 
     for calendar_date in calendar_dates:
@@ -443,6 +468,118 @@ def _build_branch_operational_history(
         previous_point = point
 
     return history, missing_dates
+
+
+def _attach_branch_operational_forecast(
+    *,
+    branch_item: dict[str, Any],
+    history: list[dict[str, Any]],
+    track_date: date,
+    bajas_progress_curve: dict[str, Any],
+    bajas_cutoff_day: int,
+) -> dict[str, Any]:
+    metrics = branch_item["metrics"]
+    forecast = build_branch_operational_forecast(
+        track_date=track_date,
+        history=history,
+        income_actual_mtd=metrics["ingreso"].get("actual_mtd"),
+        income_monthly_target=metrics["ingreso"].get("monthly_target"),
+        income_projection=metrics["ingreso"].get("projection") or {},
+        clientes_nuevos_actual_mtd=(
+            metrics["clientes_nuevos"].get("actual_mtd")
+        ),
+        clientes_nuevos_monthly_target=(
+            metrics["clientes_nuevos"].get("monthly_target")
+        ),
+        reactivaciones_actual_mtd=(
+            metrics["reactivaciones"].get("actual_mtd")
+        ),
+        reactivaciones_monthly_target=(
+            metrics["reactivaciones"].get("monthly_target")
+        ),
+        bajas_actual_mtd=metrics["bajas"].get("actual_mtd"),
+        bajas_monthly_limit=metrics["bajas"].get("monthly_limit"),
+        bajas_progress_curve=bajas_progress_curve,
+        tienda_actual_mtd=metrics["tienda"].get("actual_mtd"),
+        tienda_monthly_target=metrics["tienda"].get("monthly_target"),
+        bajas_cutoff_day=bajas_cutoff_day,
+    )
+
+    for metric_key in (
+        "ingreso",
+        "clientes_nuevos",
+        "reactivaciones",
+        "bajas",
+        "tienda",
+    ):
+        metrics[metric_key]["projection"] = (
+            forecast["metrics"][metric_key]["projection"]
+        )
+
+    branch_item["operational_forecast"] = forecast
+    return branch_item
+
+
+def _scope_projection_for_legacy_metric(
+    *,
+    operational_forecast: dict[str, Any],
+    metric_key: str,
+) -> dict[str, Any]:
+    metric = operational_forecast["metrics"][metric_key]
+    coverage = metric["coverage"]
+    projection = {
+        "status": metric["status"],
+        "method": metric["method"],
+        "projected_close": metric["projected_close"],
+        "benchmark": metric["benchmark"],
+        "total_branches": coverage["total_branches"],
+        "available_branches": coverage["projected_available_branches"],
+        "unavailable_branches_count": (
+            coverage["unavailable_branches_count"]
+        ),
+    }
+
+    if metric_key == "bajas":
+        projection.update(
+            {
+                "projected_excess_units": metric.get(
+                    "projected_excess"
+                ),
+                "projected_remaining_margin": metric.get(
+                    "projected_remaining_margin"
+                ),
+                "projected_limit_usage_pct": metric.get(
+                    "projected_limit_usage_pct"
+                ),
+            }
+        )
+    else:
+        projection.update(
+            {
+                "projected_gap_units": metric.get("projected_gap"),
+                "projected_compliance_pct": metric.get(
+                    "projected_compliance_pct"
+                ),
+            }
+        )
+
+    if metric_key == "ingreso":
+        projection["quality_issue"] = (
+            None
+            if metric["status"] == "available"
+            else {
+                "code": "incomplete_regional_projection",
+                "message": (
+                    "No se proyecta el cierre regional porque "
+                    "una o más sucursales no tienen una "
+                    "proyección de ingreso disponible."
+                ),
+                "severity": "warning",
+            }
+        )
+
+    return projection
+
 
 def _attach_branch_operational_projection(
     *,
@@ -759,19 +896,27 @@ def _build_region_summary(
         ),
     )
 
-    metrics["clientes_nuevos"]["projection"] = (
-        _build_region_operational_projection_summary(
-            branch_items=branch_items,
-            metric_key="clientes_nuevos",
-        )
+    operational_forecast = build_operational_forecast_scope_summary(
+        [
+            branch["operational_forecast"]
+            for branch in branch_items
+            if branch.get("operational_forecast")
+        ]
     )
 
-    metrics["reactivaciones"]["projection"] = (
-        _build_region_operational_projection_summary(
-            branch_items=branch_items,
-            metric_key="reactivaciones",
+    for metric_key in (
+        "clientes_nuevos",
+        "reactivaciones",
+        "bajas",
+        "ingreso",
+        "tienda",
+    ):
+        metrics[metric_key]["projection"] = (
+            _scope_projection_for_legacy_metric(
+                operational_forecast=operational_forecast,
+                metric_key=metric_key,
+            )
         )
-    )
 
     metrics["domiciliados"]["projection"] = (
         _build_region_operational_projection_summary(
@@ -780,22 +925,10 @@ def _build_region_summary(
         )
     )
 
-    metrics["bajas"]["projection"] = (
-        _build_region_operational_projection_summary(
-            branch_items=branch_items,
-            metric_key="bajas",
-        )
-    )
-
-    metrics["ingreso"]["projection"] = (
-        _build_region_income_projection_summary(
-            branch_items
-        )
-    )
-
     return {
         "total_branches": len(rows),
         "metrics": metrics,
+        "operational_forecast": operational_forecast,
     }
 
 
@@ -1042,6 +1175,15 @@ def _business_rules() -> list[dict[str, str]]:
             ),
         },
         {
+            "key": "bajas_projection",
+            "label": "Forecast de Bajas",
+            "description": (
+                "El cierre proyectado usa la mediana histórica del "
+                "porcentaje del cierre mensual materializado al día de "
+                "corte, compartida con el Forecast oficial."
+            ),
+        },
+        {
             "key": "domiciliados_linear_pace",
             "label": "Ritmo de Domiciliados",
             "description": (
@@ -1066,9 +1208,13 @@ def _business_rules() -> list[dict[str, str]]:
             ),
         },
         {
-            "key": "tienda_no_curve",
-            "label": "Tienda",
-            "description": "Tienda muestra avance contra meta sin curva weekday ni forecast.",
+            "key": "tienda_projection",
+            "label": "Forecast de Tienda",
+            "description": (
+                "Tienda proyecta el cierre con el promedio de deltas "
+                "diarios válidos de los últimos 7 días calendario, con "
+                "un mínimo de 3 deltas válidos."
+            ),
         },
         {
             "key": "users_gap",
@@ -1132,6 +1278,9 @@ def get_regional_operational_detail(
     ]
 
     target_month = track_date.replace(day=1)
+    bajas_progress_curve = build_bajas_historical_progress_curve(
+        target_month=target_month,
+    )
     seen_branches: set[str] = set()
     rows_by_region: dict[str, list[_RegionalJoinedRow]] = {}
 
@@ -1264,43 +1413,27 @@ def get_regional_operational_detail(
                 )
             )
 
-            branch_item = _attach_branch_operational_projection(
+            branch_history = branch_history_bundle.get(
+                "history",
+                [],
+            )
+
+            branch_item = _attach_branch_operational_forecast(
                 branch_item=branch_item,
-                history=branch_history_bundle.get(
-                    "history",
-                    [],
+                history=branch_history,
+                track_date=track_date,
+                bajas_progress_curve=bajas_progress_curve,
+                bajas_cutoff_day=_source_business_day(
+                    row.mart,
+                    "source_business_date_desempeno",
+                    track_date,
                 ),
-                metric_key="clientes_nuevos",
-                cutoff_date=track_date,
             )
 
             branch_item = _attach_branch_operational_projection(
                 branch_item=branch_item,
-                history=branch_history_bundle.get(
-                    "history",
-                    [],
-                ),
-                metric_key="reactivaciones",
-                cutoff_date=track_date,
-            )
-
-            branch_item = _attach_branch_operational_projection(
-                branch_item=branch_item,
-                history=branch_history_bundle.get(
-                    "history",
-                    [],
-                ),
+                history=branch_history,
                 metric_key="domiciliados",
-                cutoff_date=track_date,
-            )
-
-            branch_item = _attach_branch_operational_projection(
-                branch_item=branch_item,
-                history=branch_history_bundle.get(
-                    "history",
-                    [],
-                ),
-                metric_key="bajas",
                 cutoff_date=track_date,
             )
 
