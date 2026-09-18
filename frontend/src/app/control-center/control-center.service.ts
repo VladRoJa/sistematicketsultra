@@ -125,6 +125,7 @@ export class ControlCenterService {
       month,
       [],
       cutoffDate,
+      'latest_available_at_or_before',
     );
   }
 
