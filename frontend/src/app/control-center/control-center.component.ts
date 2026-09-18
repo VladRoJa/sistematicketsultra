@@ -10,9 +10,9 @@ import {
   TrackForecastCenterResponse,
 } from '../services/track.service';
 import {
-  MarketingBranchMetrics,
-  MarketingDashboardResponse,
-} from '../marketing-conversion/marketing.models';
+  MarketingSalesFunnelBranch,
+  MarketingSalesFunnelResponse,
+} from '../marketing-sales-funnel/marketing-sales-funnel.models';
 import {
   MaintenancePlannerBoard,
   MaintenancePlannerTicket,
@@ -57,7 +57,7 @@ interface MarketingOverview {
   leadToVisitRate: number | null;
   visitToSaleRate: number | null;
   leadToSaleRate: number | null;
-  branches: MarketingBranchMetrics[];
+  branches: MarketingSalesFunnelBranch[];
 }
 
 interface MaintenanceOverview {
@@ -90,7 +90,7 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
   context: ControlContextResponse | null = null;
   catalogs: TrackForecastCenterCatalogsResponse | null = null;
   forecastData: TrackForecastCenterResponse | null = null;
-  marketingData: MarketingDashboardResponse | null = null;
+  marketingData: MarketingSalesFunnelResponse | null = null;
   retentionData: ControlRetentionResponse | null = null;
   maintenanceData: MaintenancePlannerBoard | null = null;
 
@@ -175,7 +175,7 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
         value: this.formatPercent(conversion),
         supportingText: marketing.leads === null
           ? 'Leads no disponibles para el alcance actual'
-          : `${this.formatInteger(marketing.sales)} ventas de ${this.formatInteger(marketing.leads)} leads`,
+          : `${this.formatInteger(marketing.sales)} ventas digitales de ${this.formatInteger(marketing.leads)} leads`,
         tone: conversion === null ? 'muted' : 'normal',
       },
       {
@@ -247,7 +247,7 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
       });
     }
 
-    if (this.marketingData?.data_quality.cohort_complete === false) {
+    if (this.marketingData?.data_quality.visit_conversion_cohort_complete === false) {
       items.push({
         metric: 'conversion',
         title: 'Cohorte comercial en curso',
@@ -377,7 +377,7 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
     }
 
     if (this.selectedMetric === 'conversion') {
-      void this.router.navigate(['/marketing-conversion']);
+      void this.router.navigate(['/marketing-conversion/venta-total']);
       return;
     }
 
@@ -438,7 +438,7 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
 
     forkJoin({
       forecast: this.controlService.getForecast(forecastParams),
-      marketing: this.controlService.getMarketing(month),
+      marketing: this.controlService.getMarketing(month, this.cutoffDate),
       retention: this.controlService.getRetention({
         ...scopeRequest,
         cutoffDate: this.cutoffDate,
@@ -467,6 +467,7 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
   private get marketingOverview(): MarketingOverview {
     const dashboard = this.marketingData;
     const scope = this.context?.effective_scope;
+
     if (!dashboard) {
       return {
         leads: null,
@@ -481,30 +482,20 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
     }
 
     const branches = this.filterMarketingBranches(dashboard.branches, scope);
-
-    if (scope?.type === 'GLOBAL') {
-      return {
-        leads: dashboard.summary.leads,
-        visits: dashboard.summary.visits,
-        sales: dashboard.summary.sales,
-        salesRevenue: dashboard.summary.sales_revenue,
-        leadToVisitRate: dashboard.summary.lead_to_visit_rate,
-        visitToSaleRate: dashboard.summary.visit_to_sale_rate,
-        leadToSaleRate: dashboard.summary.lead_to_sale_rate,
-        branches,
-      };
-    }
-
-    const leadsValues = branches
-      .map((branch) => branch.leads)
-      .filter((value): value is number => value !== null && value !== undefined);
-    const leads = leadsValues.length === branches.length
-      ? leadsValues.reduce((total, value) => total + value, 0)
-      : null;
-    const visits = branches.reduce((total, branch) => total + branch.visits, 0);
-    const sales = branches.reduce((total, branch) => total + branch.sales, 0);
+    const leads = branches.reduce(
+      (total, branch) => total + branch.leads_iventas,
+      0,
+    );
+    const visits = branches.reduce(
+      (total, branch) => total + branch.visits_total,
+      0,
+    );
+    const sales = branches.reduce(
+      (total, branch) => total + branch.sales_digital,
+      0,
+    );
     const salesRevenue = branches.reduce(
-      (total, branch) => total + branch.sales_revenue,
+      (total, branch) => total + branch.revenue_digital,
       0,
     );
 
@@ -513,9 +504,9 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
       visits,
       sales,
       salesRevenue,
-      leadToVisitRate: leads && leads > 0 ? visits / leads : null,
+      leadToVisitRate: leads > 0 ? visits / leads : null,
       visitToSaleRate: visits > 0 ? sales / visits : null,
-      leadToSaleRate: leads && leads > 0 ? sales / leads : null,
+      leadToSaleRate: leads > 0 ? sales / leads : null,
       branches,
     };
   }
@@ -605,9 +596,9 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
         return [
           { label: 'Lead → venta', value: this.formatPercent(marketing.leadToSaleRate) },
           { label: 'Lead → visita', value: this.formatPercent(marketing.leadToVisitRate) },
-          { label: 'Visita → venta', value: this.formatPercent(marketing.visitToSaleRate) },
-          { label: 'Leads', value: marketing.leads === null ? '—' : this.formatInteger(marketing.leads) },
-          { label: 'Ventas atribuidas', value: this.formatInteger(marketing.sales) },
+          { label: 'Visita → venta digital', value: this.formatPercent(marketing.visitToSaleRate) },
+          { label: 'Leads iVentas', value: marketing.leads === null ? '—' : this.formatInteger(marketing.leads) },
+          { label: 'Ventas digitales', value: this.formatInteger(marketing.sales) },
         ];
       case 'retention':
         return [
@@ -653,11 +644,11 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
         ];
       case 'conversion':
         return [
-          { label: 'Leads', value: marketing.leads === null ? '—' : this.formatInteger(marketing.leads) },
+          { label: 'Leads iVentas', value: marketing.leads === null ? '—' : this.formatInteger(marketing.leads) },
           { label: 'Visitas', value: this.formatInteger(marketing.visits) },
-          { label: 'Ventas', value: this.formatInteger(marketing.sales) },
+          { label: 'Ventas digitales', value: this.formatInteger(marketing.sales) },
           { label: 'Lead → visita', value: this.formatPercent(marketing.leadToVisitRate) },
-          { label: 'Visita → venta', value: this.formatPercent(marketing.visitToSaleRate) },
+          { label: 'Visita → venta digital', value: this.formatPercent(marketing.visitToSaleRate) },
         ];
       case 'retention':
         return [
@@ -723,7 +714,7 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
         .map((branch) => ({
           label: branch.sucursal,
           value: this.formatPercent(branch.lead_to_sale_rate),
-          supportingText: `${branch.leads === null ? '—' : this.formatInteger(branch.leads)} leads · ${this.formatInteger(branch.sales)} ventas`,
+          supportingText: `${this.formatInteger(branch.leads_iventas)} leads · ${this.formatInteger(branch.sales_digital)} ventas digitales`,
         }));
     }
 
@@ -767,10 +758,10 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
         ];
       case 'conversion':
         return [
-          { label: 'Módulo dueño', value: 'Marketing y Conversión' },
+          { label: 'Módulo dueño', value: 'Marketing / Funnel de Venta Nueva' },
           { label: 'Mes', value: this.marketingData?.month || this.cutoffDate.slice(0, 7) },
+          { label: 'Corte', value: this.marketingData?.selected_cutoff_date || this.cutoffDate },
           { label: 'Alcance', value: this.scopeLabel },
-          { label: 'Cohorte', value: this.marketingData?.cohort_mode || '—' },
         ];
       case 'retention':
         return [
@@ -933,14 +924,24 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
   }
 
   private filterMarketingBranches(
-    branches: MarketingBranchMetrics[],
+    branches: MarketingSalesFunnelBranch[],
     scope?: ControlScope | null,
-  ): MarketingBranchMetrics[] {
+  ): MarketingSalesFunnelBranch[] {
+    const operationalBranchIds = new Set(
+      (this.catalogs?.branches || []).map((branch) => branch.sucursal_id),
+    );
+
     if (!scope || scope.type === 'GLOBAL') {
-      return [...branches];
+      return branches.filter((branch) =>
+        operationalBranchIds.has(branch.sucursal_id),
+      );
     }
-    const allowed = new Set(scope.branch_ids);
-    return branches.filter((branch) => allowed.has(branch.sucursal_id));
+
+    const allowedScopeBranchIds = new Set(scope.branch_ids);
+    return branches.filter((branch) =>
+      operationalBranchIds.has(branch.sucursal_id)
+      && allowedScopeBranchIds.has(branch.sucursal_id),
+    );
   }
 
   private scopeContainsBranch(

@@ -10,9 +10,11 @@ import {
   TrackService,
 } from '../services/track.service';
 import {
-  MarketingDashboardResponse,
-} from '../marketing-conversion/marketing.models';
-import { MarketingService } from '../marketing-conversion/marketing.service';
+  MarketingSalesFunnelResponse,
+} from '../marketing-sales-funnel/marketing-sales-funnel.models';
+import {
+  MarketingSalesFunnelService,
+} from '../marketing-sales-funnel/marketing-sales-funnel.service';
 import {
   MaintenancePlannerBoard,
   MaintenancePlannerService,
@@ -84,7 +86,7 @@ export interface ControlRetentionResponse {
 export class ControlCenterService {
   private readonly http = inject(HttpClient);
   private readonly trackService = inject(TrackService);
-  private readonly marketingService = inject(MarketingService);
+  private readonly marketingSalesFunnelService = inject(MarketingSalesFunnelService);
   private readonly maintenancePlannerService = inject(MaintenancePlannerService);
   private readonly baseUrl = `${environment.apiUrl}/control`;
 
@@ -115,8 +117,15 @@ export class ControlCenterService {
     return this.trackService.getForecastCenter(params);
   }
 
-  getMarketing(month: string): Observable<MarketingDashboardResponse> {
-    return this.marketingService.getDashboard(month);
+  getMarketing(
+    month: string,
+    cutoffDate: string,
+  ): Observable<MarketingSalesFunnelResponse> {
+    return this.marketingSalesFunnelService.getDashboard(
+      month,
+      [],
+      cutoffDate,
+    );
   }
 
   getMaintenance(startDate: string, endDate: string): Observable<MaintenancePlannerBoard> {
