@@ -262,19 +262,20 @@
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(10, minmax(0, 1fr));
-  gap: 12px;
+  gap: 8px;
 }
 
 .summary-card {
   grid-column: span 2;
-  border-radius: 14px;
-  padding: 12px 14px;
+  border-radius: 12px;
+  padding: 8px 10px;
   border: 1px solid #e2e8f0;
   background: #ffffff;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.03);
+  justify-content: center;
+  gap: 3px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03);
 }
 
 .summary-card--compact {
@@ -284,19 +285,20 @@
 }
 
 .summary-card--compact .summary-card__value {
-  font-size: 15px;
+  font-size: 13px;
 }
 
 .summary-card__label {
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 10px;
+  line-height: 1.1;
+  font-weight: 800;
   color: #475569;
 }
 
 .summary-card__value {
-  font-size: 16px;
-  line-height: 1.1;
-  font-weight: 800;
+  font-size: 14px;
+  line-height: 1.05;
+  font-weight: 900;
   color: #0f172a;
 }
 
@@ -1191,7 +1193,7 @@
    ========================================================================== */
 
 .summary-grid {
-  gap: 12px;
+  gap: 8px;
 }
 
 .summary-card {
@@ -1203,7 +1205,7 @@
 
 .summary-card__label {
   color: var(--ultra-gray-600);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.04em;
