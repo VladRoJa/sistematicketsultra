@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from calendar import monthrange
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from decimal import Decimal
 from io import BytesIO
@@ -20,9 +20,18 @@ from app.warehouse.services.track_bajas_forecast_service import (
     BAJAS_FORECAST_METHOD,
     build_bajas_historical_progress_curve,
 )
+from app.models.warehouse import TrackDailyMartORM
+from app.warehouse.services.track_daily_query_version_service import (
+    resolve_preferred_track_daily_version,
+)
 from app.warehouse.services.track_forecast_service import (
     build_branch_income_projection_summary,
     load_first_store_income_dates_bulk,
+)
+from app.warehouse.services.track_operational_forecast_service import (
+    RECENT_DAILY_AVERAGE_METHOD,
+    build_branch_operational_forecast,
+    build_operational_forecast_scope_summary,
 )
 
 
@@ -231,6 +240,14 @@ FORECAST_BRANCH_GROUPS = [
     ],
 ]
 FORECAST_LEGACY_GROUP_COUNT = 4
+SENSITIZED_FORECAST_SHEET = "Forecast Sensibilizado"
+SENSITIZED_FORECAST_GROUPS = [
+    ("D2:G2", "Ingresos", ULTRA_ORANGE),
+    ("H2:K2", "Venta nueva", ULTRA_BLUE),
+    ("L2:O2", "Reactivaciones", ULTRA_BLUE),
+    ("P2:S2", "Bajas", ULTRA_ORANGE),
+    ("T2:W2", "Tienda", ULTRA_ORANGE),
+]
 FORECAST_SUM_COLUMNS = [
     "M",
     "R", "T", "U", "V", "W", "X", "Y",
@@ -351,6 +368,20 @@ def build_track_daily_mart_excel(
         bajas_progress_curve=bajas_progress_curve,
     )
 
+    sensitized_forecasts = _build_sensitized_forecast_inputs(
+        track_date=track_date,
+        resolved_version=resolved_version,
+        rows=ordered_rows,
+        bajas_progress_curve=bajas_progress_curve,
+    )
+
+    _build_sensitized_forecast_sheet(
+        workbook=workbook,
+        track_date=track_date,
+        resolved_version=resolved_version,
+        forecasts=sensitized_forecasts,
+    )
+
     _build_raw_sheet(
         workbook=workbook,
         track_date=track_date,
@@ -363,6 +394,7 @@ def build_track_daily_mart_excel(
         resolved_version=resolved_version,
         total_rows=len(ordered_rows),
         bajas_progress_curve=bajas_progress_curve,
+        sensitized_forecasts=sensitized_forecasts,
     )
 
     output = BytesIO()
@@ -1001,6 +1033,591 @@ def _set_number_format(
     for column_letter in column_letters:
         for row_idx in range(start_row, end_row + 1):
             worksheet[f"{column_letter}{row_idx}"].number_format = number_format
+
+
+
+def _to_decimal(value: Any) -> Decimal | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, Decimal):
+        return value
+    if isinstance(value, bool):
+        return Decimal(int(value))
+    try:
+        return Decimal(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _current_income_mtd(mart_row: Any) -> Decimal | None:
+    value = getattr(mart_row, "ingreso_real_total_mtd", None)
+    if value is None:
+        value = getattr(mart_row, "ingreso_real_mtd", None)
+    return _to_decimal(value)
+
+
+def _load_operational_forecast_histories_bulk(
+    *,
+    track_date: date,
+    current_version: Any,
+    sucursal_canons: Sequence[str],
+) -> dict[str, dict[str, Any]]:
+    target_month = track_date.replace(day=1)
+    calendar_dates = [
+        target_month + timedelta(days=offset)
+        for offset in range((track_date - target_month).days + 1)
+    ]
+
+    resolved_versions: dict[date, Any] = {}
+    for calendar_date in calendar_dates:
+        if calendar_date == track_date:
+            resolved_versions[calendar_date] = current_version
+            continue
+
+        version = resolve_preferred_track_daily_version(
+            track_date=calendar_date,
+        )
+        if version is not None:
+            resolved_versions[calendar_date] = version
+
+    normalized_branches = sorted(
+        {
+            _normalize_branch_key(value)
+            for value in sucursal_canons
+            if _normalize_branch_key(value)
+        }
+    )
+    version_ids = sorted(
+        {
+            int(version.id)
+            for version in resolved_versions.values()
+        }
+    )
+
+    rows_by_key: dict[tuple[str, int], TrackDailyMartORM] = {}
+    if normalized_branches and version_ids:
+        historical_rows = (
+            TrackDailyMartORM.query.filter(
+                TrackDailyMartORM.track_daily_version_id.in_(version_ids),
+                TrackDailyMartORM.sucursal_canon.in_(normalized_branches),
+            )
+            .all()
+        )
+
+        for row in historical_rows:
+            key = (
+                _normalize_branch_key(row.sucursal_canon),
+                int(row.track_daily_version_id),
+            )
+            if key in rows_by_key:
+                raise ValueError(
+                    "Forecast sensibilizado encontró una sucursal duplicada "
+                    f"en la versión Track {key[1]}: {key[0]}."
+                )
+            rows_by_key[key] = row
+
+    metric_attributes = {
+        "clientes_nuevos": "clientes_nuevos_real_mtd",
+        "reactivaciones": "reactivaciones_real_mtd",
+        "tienda": "venta_tienda_real_mtd",
+    }
+    result: dict[str, dict[str, Any]] = {}
+
+    for sucursal_canon in normalized_branches:
+        history: list[dict[str, Any]] = []
+        missing_dates: list[str] = []
+        previous_values: dict[str, Decimal | None] | None = None
+        previous_date: date | None = None
+
+        for calendar_date in calendar_dates:
+            version = resolved_versions.get(calendar_date)
+            row = (
+                rows_by_key.get((sucursal_canon, int(version.id)))
+                if version is not None
+                else None
+            )
+
+            if version is None or row is None:
+                missing_dates.append(calendar_date.isoformat())
+                continue
+
+            if getattr(row, "track_date", None) != calendar_date:
+                raise ValueError(
+                    "Forecast sensibilizado encontró una fila cuyo track_date "
+                    "no coincide con su versión efectiva."
+                )
+
+            row_target_month = getattr(row, "target_month", None)
+            if row_target_month is not None and row_target_month != target_month:
+                raise ValueError(
+                    "Forecast sensibilizado encontró una fila con target_month "
+                    "distinto al mes consultado."
+                )
+
+            current_values = {
+                metric_key: _to_decimal(getattr(row, attribute_name, None))
+                for metric_key, attribute_name in metric_attributes.items()
+            }
+            metrics: dict[str, dict[str, Any]] = {}
+
+            for metric_key, current_value in current_values.items():
+                previous_value = (
+                    previous_values.get(metric_key)
+                    if previous_values is not None
+                    else None
+                )
+                metrics[metric_key] = {
+                    "daily_delta": (
+                        str(current_value - previous_value)
+                        if (
+                            current_value is not None
+                            and previous_value is not None
+                        )
+                        else None
+                    )
+                }
+
+            days_since_previous = (
+                (calendar_date - previous_date).days
+                if previous_date is not None
+                else None
+            )
+            history.append(
+                {
+                    "track_date": calendar_date.isoformat(),
+                    "track_daily_version_id": int(version.id),
+                    "previous_track_date": (
+                        previous_date.isoformat()
+                        if previous_date is not None
+                        else None
+                    ),
+                    "days_since_previous": days_since_previous,
+                    "is_consecutive_previous_date": (
+                        days_since_previous == 1
+                    ),
+                    "metrics": metrics,
+                }
+            )
+            previous_values = current_values
+            previous_date = calendar_date
+
+        result[sucursal_canon] = {
+            "history": history,
+            "missing_dates": missing_dates,
+        }
+
+    return result
+
+
+def _build_sensitized_forecast_inputs(
+    *,
+    track_date: date,
+    resolved_version: Any,
+    rows: Sequence[Any],
+    bajas_progress_curve: dict[str, Any],
+) -> list[dict[str, Any]]:
+    normalized_canons = [
+        _normalize_branch_key(getattr(row, "sucursal_canon", ""))
+        for row in rows
+    ]
+    first_store_income_dates = load_first_store_income_dates_bulk(
+        normalized_canons
+    )
+    histories = _load_operational_forecast_histories_bulk(
+        track_date=track_date,
+        current_version=resolved_version,
+        sucursal_canons=normalized_canons,
+    )
+
+    result: list[dict[str, Any]] = []
+    for mart_row in rows:
+        sucursal_canon = _normalize_branch_key(
+            getattr(mart_row, "sucursal_canon", "")
+        )
+        current_income = _current_income_mtd(mart_row)
+        first_store_income_date = first_store_income_dates.get(
+            sucursal_canon
+        )
+        income_projection = build_branch_income_projection_summary(
+            sucursal_canon=sucursal_canon,
+            target_month=track_date.replace(day=1),
+            cutoff_day=track_date.day,
+            current_income_mtd=current_income,
+            first_store_income_date=first_store_income_date,
+        )
+        history_bundle = histories.get(
+            sucursal_canon,
+            {"history": [], "missing_dates": []},
+        )
+
+        forecast = build_branch_operational_forecast(
+            track_date=track_date,
+            history=history_bundle["history"],
+            income_actual_mtd=current_income,
+            income_monthly_target=getattr(
+                mart_row,
+                "meta_faycgo_mes",
+                None,
+            ),
+            income_projection=income_projection,
+            clientes_nuevos_actual_mtd=getattr(
+                mart_row,
+                "clientes_nuevos_real_mtd",
+                None,
+            ),
+            clientes_nuevos_monthly_target=getattr(
+                mart_row,
+                "meta_clientes_nuevos_mes",
+                None,
+            ),
+            reactivaciones_actual_mtd=getattr(
+                mart_row,
+                "reactivaciones_real_mtd",
+                None,
+            ),
+            reactivaciones_monthly_target=getattr(
+                mart_row,
+                "meta_reactivaciones_mes",
+                None,
+            ),
+            bajas_actual_mtd=getattr(
+                mart_row,
+                "bajas_reales_mtd",
+                None,
+            ),
+            bajas_monthly_limit=getattr(
+                mart_row,
+                "meta_bajas_mes",
+                None,
+            ),
+            bajas_progress_curve=bajas_progress_curve,
+            tienda_actual_mtd=getattr(
+                mart_row,
+                "venta_tienda_real_mtd",
+                None,
+            ),
+            tienda_monthly_target=getattr(
+                mart_row,
+                "meta_venta_tienda_mes",
+                None,
+            ),
+            bajas_cutoff_day=_forecast_source_day(
+                mart_row,
+                "source_business_date_desempeno",
+                track_date,
+            ),
+        )
+
+        result.append(
+            {
+                "sucursal_canon": sucursal_canon,
+                "sucursal": _format_branch_label(sucursal_canon),
+                "mart_row": mart_row,
+                "forecast": forecast,
+                "income_projection": income_projection,
+                "first_store_income_date": first_store_income_date,
+                "history": history_bundle["history"],
+                "missing_dates": history_bundle["missing_dates"],
+            }
+        )
+
+    return result
+
+
+def _forecast_metric_number(
+    forecast: dict[str, Any],
+    metric_key: str,
+    field_name: str,
+) -> float | int | None:
+    metric = (forecast.get("metrics") or {}).get(metric_key) or {}
+    value = metric.get(field_name)
+    return _to_number(_to_decimal(value))
+
+
+def _write_sensitized_forecast_row(
+    *,
+    worksheet: Worksheet,
+    excel_row: int,
+    index: int | None,
+    label: str,
+    forecast: dict[str, Any],
+) -> None:
+    worksheet[f"B{excel_row}"] = index
+    worksheet[f"C{excel_row}"] = label
+
+    metric_layout = (
+        ("ingreso", ("D", "E", "F", "G")),
+        ("clientes_nuevos", ("H", "I", "J", "K")),
+        ("reactivaciones", ("L", "M", "N", "O")),
+        ("bajas", ("P", "Q", "R", "S")),
+        ("tienda", ("T", "U", "V", "W")),
+    )
+
+    for metric_key, columns in metric_layout:
+        actual_col, projected_col, benchmark_col, gap_col = columns
+        worksheet[f"{actual_col}{excel_row}"] = _forecast_metric_number(
+            forecast,
+            metric_key,
+            "actual_mtd",
+        )
+        worksheet[f"{projected_col}{excel_row}"] = _forecast_metric_number(
+            forecast,
+            metric_key,
+            "projected_close",
+        )
+        worksheet[f"{benchmark_col}{excel_row}"] = _forecast_metric_number(
+            forecast,
+            metric_key,
+            "benchmark",
+        )
+        worksheet[f"{gap_col}{excel_row}"] = _forecast_metric_number(
+            forecast,
+            metric_key,
+            "projected_gap",
+        )
+
+
+def _build_sensitized_forecast_sheet(
+    *,
+    workbook: Workbook,
+    track_date: date,
+    resolved_version: Any,
+    forecasts: Sequence[dict[str, Any]],
+) -> None:
+    worksheet = workbook.create_sheet(SENSITIZED_FORECAST_SHEET, 1)
+    worksheet.sheet_view.showGridLines = False
+    worksheet.sheet_view.zoomScale = 85
+    worksheet.freeze_panes = "D4"
+
+    worksheet["B1"] = "Track"
+    worksheet["C1"] = SENSITIZED_FORECAST_SHEET
+    worksheet["D1"] = track_date.isoformat()
+    worksheet["F1"] = _format_version_update_label(resolved_version)
+
+    for merge_range, title, color in SENSITIZED_FORECAST_GROUPS:
+        worksheet.merge_cells(merge_range)
+        cell = worksheet[merge_range.split(":", 1)[0]]
+        cell.value = title
+        cell.fill = PatternFill("solid", fgColor=color)
+        cell.font = Font(color="FFFFFF", bold=True, size=9)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    headers = {
+        "B": "#",
+        "C": "Sucursal",
+        "D": "Real MTD",
+        "E": "Forecast cierre",
+        "F": "Meta",
+        "G": "Brecha proyectada",
+        "H": "Real MTD",
+        "I": "Forecast cierre",
+        "J": "Meta",
+        "K": "Brecha proyectada",
+        "L": "Real MTD",
+        "M": "Forecast cierre",
+        "N": "Meta",
+        "O": "Brecha proyectada",
+        "P": "Real MTD",
+        "Q": "Forecast cierre",
+        "R": "Límite",
+        "S": "Brecha proyectada",
+        "T": "Real MTD",
+        "U": "Forecast cierre",
+        "V": "Meta",
+        "W": "Brecha proyectada",
+    }
+    for column_letter, header in headers.items():
+        worksheet[f"{column_letter}3"] = header
+
+    row_idx = 4
+    for index, item in enumerate(forecasts, start=1):
+        _write_sensitized_forecast_row(
+            worksheet=worksheet,
+            excel_row=row_idx,
+            index=index,
+            label=item["sucursal"],
+            forecast=item["forecast"],
+        )
+        row_idx += 1
+
+    base_forecasts = [
+        item["forecast"]
+        for item in forecasts
+        if item["sucursal_canon"] in TRACK_BASE_BRANCHES
+    ]
+    new_forecasts = [
+        item["forecast"]
+        for item in forecasts
+        if item["sucursal_canon"] not in TRACK_BASE_BRANCHES
+    ]
+
+    row_idx += 1
+    summary_rows: list[int] = []
+    for label, branch_forecasts in (
+        ("Subtotales 21 GYMS", base_forecasts),
+        ("Subtotales Nuevos", new_forecasts),
+        (
+            "TOTAL GENERAL",
+            [item["forecast"] for item in forecasts],
+        ),
+    ):
+        summary = build_operational_forecast_scope_summary(
+            branch_forecasts
+        )
+        _write_sensitized_forecast_row(
+            worksheet=worksheet,
+            excel_row=row_idx,
+            index=None,
+            label=label,
+            forecast=summary,
+        )
+        summary_rows.append(row_idx)
+        row_idx += 1
+
+    last_row = row_idx - 1
+    thin_side = Side(style="thin", color="D9D9D9")
+    thin_border = Border(
+        left=thin_side,
+        right=thin_side,
+        top=thin_side,
+        bottom=thin_side,
+    )
+    header_fill = PatternFill("solid", fgColor=HEADER_DARK)
+
+    worksheet["B1"].font = Font(color=ULTRA_ORANGE, bold=True, size=11)
+    worksheet["C1"].font = Font(bold=True, size=11)
+    worksheet["F1"].font = Font(color=ULTRA_ORANGE, bold=True, size=9)
+
+    for column_letter in headers:
+        cell = worksheet[f"{column_letter}3"]
+        cell.fill = header_fill
+        cell.font = Font(color="FFFFFF", bold=True, size=8)
+        cell.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+            wrap_text=True,
+        )
+        cell.border = thin_border
+
+    for current_row in range(4, last_row + 1):
+        for column_idx in range(2, 24):
+            cell = worksheet.cell(row=current_row, column=column_idx)
+            cell.border = thin_border
+            cell.alignment = Alignment(
+                horizontal=(
+                    "left" if column_idx == 3 else "center"
+                ),
+                vertical="center",
+            )
+        worksheet[f"C{current_row}"].font = Font(
+            color="0F1F3A",
+            bold=True,
+            size=9,
+        )
+
+    for summary_row in summary_rows:
+        fill = (
+            PatternFill("solid", fgColor="FBE3DC")
+            if worksheet[f"C{summary_row}"].value == "TOTAL GENERAL"
+            else PatternFill("solid", fgColor="E5E7EB")
+        )
+        for column_idx in range(2, 24):
+            cell = worksheet.cell(row=summary_row, column=column_idx)
+            cell.fill = fill
+            cell.font = Font(color="111827", bold=True, size=9)
+
+    _set_number_format(
+        worksheet=worksheet,
+        column_letters=["D", "E", "F", "G", "T", "U", "V", "W"],
+        start_row=4,
+        end_row=last_row,
+        number_format=CURRENCY_FORMAT,
+    )
+    _set_number_format(
+        worksheet=worksheet,
+        column_letters=[
+            "B", "H", "I", "J", "K", "L", "M", "N", "O",
+            "P", "Q", "R", "S",
+        ],
+        start_row=4,
+        end_row=last_row,
+        number_format=INTEGER_FORMAT,
+    )
+
+    for gap_column in ("G", "K", "O", "W"):
+        cell_range = f"{gap_column}4:{gap_column}{last_row}"
+        worksheet.conditional_formatting.add(
+            cell_range,
+            CellIsRule(
+                operator="greaterThan",
+                formula=["0"],
+                fill=PatternFill("solid", fgColor=GOOD_FILL_COLOR),
+                font=Font(color=GOOD_FONT_COLOR, bold=True),
+            ),
+        )
+        worksheet.conditional_formatting.add(
+            cell_range,
+            CellIsRule(
+                operator="lessThan",
+                formula=["0"],
+                fill=PatternFill("solid", fgColor=BAD_FILL_COLOR),
+                font=Font(color=BAD_FONT_COLOR, bold=True),
+            ),
+        )
+
+    bajas_gap_range = f"S4:S{last_row}"
+    worksheet.conditional_formatting.add(
+        bajas_gap_range,
+        CellIsRule(
+            operator="greaterThan",
+            formula=["0"],
+            fill=PatternFill("solid", fgColor=BAD_FILL_COLOR),
+            font=Font(color=BAD_FONT_COLOR, bold=True),
+        ),
+    )
+    worksheet.conditional_formatting.add(
+        bajas_gap_range,
+        CellIsRule(
+            operator="lessThan",
+            formula=["0"],
+            fill=PatternFill("solid", fgColor=GOOD_FILL_COLOR),
+            font=Font(color=GOOD_FONT_COLOR, bold=True),
+        ),
+    )
+
+    widths = {
+        "B": 5,
+        "C": 22,
+        "D": 14,
+        "E": 15,
+        "F": 14,
+        "G": 16,
+        "H": 12,
+        "I": 14,
+        "J": 12,
+        "K": 16,
+        "L": 12,
+        "M": 14,
+        "N": 12,
+        "O": 16,
+        "P": 12,
+        "Q": 14,
+        "R": 12,
+        "S": 18,
+        "T": 14,
+        "U": 15,
+        "V": 14,
+        "W": 16,
+    }
+    for column_letter, width in widths.items():
+        worksheet.column_dimensions[column_letter].width = width
+
+    worksheet.row_dimensions[2].height = 22
+    worksheet.row_dimensions[3].height = 36
+    worksheet.page_setup.orientation = "landscape"
+    worksheet.page_setup.fitToWidth = 1
+    worksheet.page_setup.fitToHeight = 0
+    worksheet.sheet_properties.pageSetUpPr.fitToPage = True
 
 
 def _build_forecast_sheet(
@@ -1737,6 +2354,7 @@ def _build_info_sheet(
     resolved_version: Any,
     total_rows: int,
     bajas_progress_curve: dict[str, Any],
+    sensitized_forecasts: Sequence[dict[str, Any]] = (),
 ) -> None:
     worksheet = workbook.create_sheet("Info")
     worksheet.sheet_view.showGridLines = False
@@ -1767,6 +2385,14 @@ def _build_info_sheet(
     worksheet.append([
         "Forecast bajas - confianza inicial",
         "Días 1-5: baja confiabilidad histórica; desde día 6-7 el backtest mejora de forma material",
+    ])
+    worksheet.append([
+        "Forecast sensibilizado - contrato",
+        "Mismo motor backend que Seguimiento Regional y Centro de Control; Excel sólo presenta el resultado",
+    ])
+    worksheet.append([
+        "Forecast sensibilizado - agregación",
+        "El total es la suma de forecasts por sucursal; no se reproyecta el agregado",
     ])
 
     for cell in worksheet[1]:
@@ -1821,11 +2447,326 @@ def _build_info_sheet(
 
         worksheet.cell(row=row_idx, column=6).number_format = PERCENT_FORMAT
 
+    method_title_row = 2
+    method_header_row = 3
+    worksheet.merge_cells(
+        start_row=method_title_row,
+        start_column=8,
+        end_row=method_title_row,
+        end_column=11,
+    )
+    method_title = worksheet.cell(row=method_title_row, column=8)
+    method_title.value = "Métodos del Forecast Sensibilizado"
+    method_title.fill = PatternFill("solid", fgColor=ULTRA_BLUE)
+    method_title.font = Font(color="FFFFFF", bold=True)
+    method_title.alignment = Alignment(
+        horizontal="center",
+        vertical="center",
+    )
+
+    method_headers = ["Indicador", "Método", "Regla", "Soporte"]
+    for column_idx, header in enumerate(method_headers, start=8):
+        cell = worksheet.cell(
+            row=method_header_row,
+            column=column_idx,
+        )
+        cell.value = header
+        cell.fill = PatternFill("solid", fgColor=HEADER_DARK)
+        cell.font = Font(color="FFFFFF", bold=True)
+        cell.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+            wrap_text=True,
+        )
+        cell.border = thin_border
+
+    method_rows = [
+        [
+            "Ingresos",
+            "Por sucursal",
+            "<12 meses: lineal MTD; >=12 meses: avance histórico propio",
+            "Tabla de ingresos por sucursal",
+        ],
+        [
+            "Venta nueva",
+            RECENT_DAILY_AVERAGE_METHOD,
+            "Real MTD + promedio de deltas válidos x días restantes",
+            "Ventana reciente de 7 días",
+        ],
+        [
+            "Reactivaciones",
+            RECENT_DAILY_AVERAGE_METHOD,
+            "Real MTD + promedio de deltas válidos x días restantes",
+            "Ventana reciente de 7 días",
+        ],
+        [
+            "Bajas",
+            bajas_progress_curve.get("method", BAJAS_FORECAST_METHOD),
+            "Bajas MTD / mediana histórica del avance al día de corte",
+            "Curva histórica D:F",
+        ],
+        [
+            "Tienda",
+            RECENT_DAILY_AVERAGE_METHOD,
+            "Real MTD + promedio de deltas válidos x días restantes",
+            "Ventana reciente de 7 días",
+        ],
+    ]
+    for row_offset, values in enumerate(method_rows, start=4):
+        for column_idx, value in enumerate(values, start=8):
+            cell = worksheet.cell(
+                row=row_offset,
+                column=column_idx,
+            )
+            cell.value = value
+            cell.border = thin_border
+            cell.alignment = Alignment(
+                horizontal="left",
+                vertical="center",
+                wrap_text=True,
+            )
+
+    income_title_row = 10
+    income_header_row = 11
+    worksheet.merge_cells(
+        start_row=income_title_row,
+        start_column=8,
+        end_row=income_title_row,
+        end_column=18,
+    )
+    income_title = worksheet.cell(row=income_title_row, column=8)
+    income_title.value = "Soporte de forecast de ingresos por sucursal"
+    income_title.fill = PatternFill("solid", fgColor=ULTRA_ORANGE)
+    income_title.font = Font(color="FFFFFF", bold=True)
+    income_title.alignment = Alignment(
+        horizontal="center",
+        vertical="center",
+    )
+
+    income_headers = [
+        "Sucursal",
+        "Primer ingreso",
+        "Método",
+        "Status",
+        "Real MTD",
+        "Avance histórico",
+        "Meses históricos",
+        "Confianza",
+        "Forecast cierre",
+        "Meta",
+        "Brecha",
+    ]
+    for column_idx, header in enumerate(income_headers, start=8):
+        cell = worksheet.cell(
+            row=income_header_row,
+            column=column_idx,
+        )
+        cell.value = header
+        cell.fill = PatternFill("solid", fgColor=HEADER_DARK)
+        cell.font = Font(color="FFFFFF", bold=True)
+        cell.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+            wrap_text=True,
+        )
+        cell.border = thin_border
+
+    for row_offset, item in enumerate(
+        sensitized_forecasts,
+        start=income_header_row + 1,
+    ):
+        income_projection = item.get("income_projection") or {}
+        income_metric = (
+            item.get("forecast", {}).get("metrics", {}).get("ingreso")
+            or {}
+        )
+        progress_pct = _to_decimal(
+            income_projection.get(
+                "historical_progress_pct_at_cutoff"
+            )
+        )
+        progress_ratio = (
+            progress_pct / Decimal("100")
+            if progress_pct is not None
+            else None
+        )
+        values = [
+            item.get("sucursal"),
+            _serialize_cell_value(
+                item.get("first_store_income_date")
+            ),
+            income_projection.get("method"),
+            income_projection.get("status"),
+            _to_number(_to_decimal(income_metric.get("actual_mtd"))),
+            _to_number(progress_ratio),
+            income_projection.get("historical_months"),
+            income_projection.get("confidence"),
+            _to_number(
+                _to_decimal(income_metric.get("projected_close"))
+            ),
+            _to_number(_to_decimal(income_metric.get("benchmark"))),
+            _to_number(
+                _to_decimal(income_metric.get("projected_gap"))
+            ),
+        ]
+        for column_idx, value in enumerate(values, start=8):
+            cell = worksheet.cell(
+                row=row_offset,
+                column=column_idx,
+            )
+            cell.value = value
+            cell.border = thin_border
+            cell.alignment = Alignment(
+                horizontal="center",
+                vertical="center",
+                wrap_text=True,
+            )
+
+        worksheet.cell(
+            row=row_offset,
+            column=13,
+        ).number_format = PERCENT_FORMAT
+        for column_idx in (12, 16, 17, 18):
+            worksheet.cell(
+                row=row_offset,
+                column=column_idx,
+            ).number_format = CURRENCY_FORMAT
+
+    recent_title_row = 2
+    recent_header_row = 3
+    worksheet.merge_cells(
+        start_row=recent_title_row,
+        start_column=20,
+        end_row=recent_title_row,
+        end_column=27,
+    )
+    recent_title = worksheet.cell(row=recent_title_row, column=20)
+    recent_title.value = "Ventana reciente de deltas (7 días calendario)"
+    recent_title.fill = PatternFill("solid", fgColor=ULTRA_BLUE)
+    recent_title.font = Font(color="FFFFFF", bold=True)
+    recent_title.alignment = Alignment(
+        horizontal="center",
+        vertical="center",
+    )
+
+    recent_headers = [
+        "Sucursal",
+        "Fecha",
+        "Versión Track",
+        "Fecha previa",
+        "Consecutivo",
+        "Δ Venta nueva",
+        "Δ Reactivaciones",
+        "Δ Tienda",
+    ]
+    for column_idx, header in enumerate(recent_headers, start=20):
+        cell = worksheet.cell(
+            row=recent_header_row,
+            column=column_idx,
+        )
+        cell.value = header
+        cell.fill = PatternFill("solid", fgColor=HEADER_DARK)
+        cell.font = Font(color="FFFFFF", bold=True)
+        cell.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+            wrap_text=True,
+        )
+        cell.border = thin_border
+
+    recent_row = recent_header_row + 1
+    recent_window_start = track_date - timedelta(days=6)
+
+    for item in sensitized_forecasts:
+        for point in item.get("history") or []:
+            point_date = date.fromisoformat(
+                str(point["track_date"])
+            )
+            if (
+                point_date < recent_window_start
+                or point_date > track_date
+            ):
+                continue
+
+            metrics = point.get("metrics") or {}
+            values = [
+                item.get("sucursal"),
+                point.get("track_date"),
+                point.get("track_daily_version_id"),
+                point.get("previous_track_date"),
+                (
+                    "Sí"
+                    if point.get("is_consecutive_previous_date")
+                    else "No"
+                ),
+                _to_number(
+                    _to_decimal(
+                        (metrics.get("clientes_nuevos") or {}).get(
+                            "daily_delta"
+                        )
+                    )
+                ),
+                _to_number(
+                    _to_decimal(
+                        (metrics.get("reactivaciones") or {}).get(
+                            "daily_delta"
+                        )
+                    )
+                ),
+                _to_number(
+                    _to_decimal(
+                        (metrics.get("tienda") or {}).get(
+                            "daily_delta"
+                        )
+                    )
+                ),
+            ]
+            for column_idx, value in enumerate(values, start=20):
+                cell = worksheet.cell(
+                    row=recent_row,
+                    column=column_idx,
+                )
+                cell.value = value
+                cell.border = thin_border
+                cell.alignment = Alignment(
+                    horizontal="center",
+                    vertical="center",
+                    wrap_text=True,
+                )
+            worksheet.cell(
+                row=recent_row,
+                column=27,
+            ).number_format = CURRENCY_FORMAT
+            recent_row += 1
+
     worksheet.column_dimensions["A"].width = 34
     worksheet.column_dimensions["B"].width = 92
     worksheet.column_dimensions["D"].width = 10
     worksheet.column_dimensions["E"].width = 18
     worksheet.column_dimensions["F"].width = 20
+
+    for column_letter, width in {
+        "H": 22,
+        "I": 13,
+        "J": 28,
+        "K": 18,
+        "L": 16,
+        "M": 16,
+        "N": 14,
+        "O": 14,
+        "P": 16,
+        "Q": 16,
+        "R": 16,
+        "T": 22,
+        "U": 13,
+        "V": 13,
+        "W": 13,
+        "X": 12,
+        "Y": 14,
+        "Z": 16,
+        "AA": 14,
+    }.items():
+        worksheet.column_dimensions[column_letter].width = width
 
 
 def _to_number(value: Any) -> float | int | None:
