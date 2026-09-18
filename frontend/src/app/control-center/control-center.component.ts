@@ -1473,6 +1473,7 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
   ): number {
     if (
       value === null
+      || value === 0
       || !Number.isFinite(value)
       || !Number.isFinite(maxValue)
       || maxValue <= 0
