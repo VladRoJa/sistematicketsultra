@@ -147,7 +147,17 @@ def editar_usuario(user_id):
         u.username = data['username']
 
     if 'password' in data and data['password']:
-        u.password = generate_password_hash(data['password'])
+        password_forbidden = _require_admicorp()
+        if password_forbidden:
+            return password_forbidden
+
+        password = str(data['password'])
+        if len(password) < 6:
+            return jsonify({
+                "error": "La contraseña debe tener al menos 6 caracteres",
+            }), 400
+
+        u.password = generate_password_hash(password)
 
     if 'rol' in data:
         u.rol = data['rol']
