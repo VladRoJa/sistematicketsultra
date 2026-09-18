@@ -54,6 +54,7 @@ def _result(
     branch_id: int = 1,
     cohort: str = "legacy_21",
     region: str | None = "R1",
+    region_label: str | None = None,
     goal: Decimal | None = Decimal("100"),
     real: Decimal | None = Decimal("50"),
     expected: Decimal | None = Decimal("40"),
@@ -77,6 +78,9 @@ def _result(
             "label": canon.title(),
             "cohort": cohort,
             "region_key": region,
+            "region_label": (
+                region if region_label is None else region_label
+            ),
         },
         summary={
             "goal_month": goal,
@@ -828,6 +832,38 @@ class ForecastCenterAggregationTest(unittest.TestCase):
             "branch_historical_calendar_weights",
         )
 
+    def test_region_breakdown_uses_public_region_label(self):
+        results = [
+            _result(
+                "A",
+                region="TIJ_ROS_ENS",
+                region_label="Región Costa BC",
+                real=Decimal("10"),
+            ),
+            _result(
+                "B",
+                branch_id=2,
+                region="TIJ_ROS_ENS",
+                region_label="Región Costa BC",
+                real=Decimal("20"),
+            ),
+        ]
+        total = aggregate_forecast_center_results(results)
+
+        breakdown = _build_breakdown(
+            results=results,
+            dimension="region",
+            total_summary=total,
+        )
+
+        self.assertEqual(len(breakdown["items"]), 1)
+        self.assertEqual(breakdown["items"][0]["key"], "TIJ_ROS_ENS")
+        self.assertEqual(breakdown["items"][0]["label"], "Región Costa BC")
+        self.assertEqual(
+            breakdown["items"][0]["drilldown"],
+            {"scope": "region", "scope_id": "TIJ_ROS_ENS"},
+        )
+
     def test_method_coverage_counts_mixed_twenty_one_plus_four_universe(self):
         results = [
             _result(f"L{index}", branch_id=index)
@@ -1112,6 +1148,8 @@ class ForecastCenterCompactCalculationTest(unittest.TestCase):
                 track_daily_version_id=99,
             )
         query.assert_not_called()
+        self.assertEqual(result.identity["region_key"], "R1")
+        self.assertEqual(result.identity["region_label"], "R1")
         self.assertEqual(result.summary["real_mtd"], Decimal("50"))
         self.assertEqual(result.summary["goal_month"], Decimal("100"))
         self.assertIsNone(result.summary["projected_close"])
