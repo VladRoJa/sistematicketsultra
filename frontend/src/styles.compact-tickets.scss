@@ -62,28 +62,30 @@ body.suite-compact-review .tickets-scope-toggle__btn mat-icon {
 /* Corte anual */
 body.suite-compact-review .tickets-year-mini {
   height: 36px;
-  min-width: 225px;
+  min-width: 258px;
   padding: 3px 6px;
   border-radius: 10px;
-  gap: 6px;
+  gap: 8px;
 }
 
 body.suite-compact-review .tickets-year-mini__label {
-  min-width: 86px;
+  min-width: 128px;
   gap: 1px;
 }
 
 body.suite-compact-review .tickets-year-mini__label span {
   font-size: 7px;
   letter-spacing: 0.09em;
+  white-space: nowrap;
 }
 
 body.suite-compact-review .tickets-year-mini__label small {
   font-size: 7px;
+  white-space: nowrap;
 }
 
 body.suite-compact-review .tickets-year-mini__select {
-  width: 96px;
+  width: 104px;
 }
 
 body.suite-compact-review .tickets-year-mini__select .mat-mdc-text-field-wrapper,
