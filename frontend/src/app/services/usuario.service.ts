@@ -19,6 +19,23 @@ export interface CrearUsuarioResponse {
   id: number;
 }
 
+export interface UsuarioAdminOption {
+  id: number;
+  username: string;
+  rol: string;
+  sucursal_id: number | null;
+  department_id: number | null;
+  email?: string | null;
+}
+
+export interface CambiarPasswordUsuarioRequest {
+  password: string;
+}
+
+export interface UsuarioMutationResponse {
+  msg: string;
+}
+
 export interface SucursalUsuarioOption {
   sucursal_id: number;
   sucursal: string;
@@ -49,6 +66,20 @@ export class UsuarioService {
   }
   crearUsuario(payload: CrearUsuarioRequest): Observable<CrearUsuarioResponse> {
     return this.http.post<CrearUsuarioResponse>(this.apiUrl, payload);
+  }
+
+  listarUsuariosAdmin(): Observable<UsuarioAdminOption[]> {
+    return this.http.get<UsuarioAdminOption[]>(this.apiUrl);
+  }
+
+  cambiarPasswordUsuario(
+    userId: number,
+    payload: CambiarPasswordUsuarioRequest,
+  ): Observable<UsuarioMutationResponse> {
+    return this.http.put<UsuarioMutationResponse>(
+      `${this.apiUrl}/${userId}`,
+      payload,
+    );
   }
 
   getSucursales(): Observable<SucursalUsuarioOption[]> {
