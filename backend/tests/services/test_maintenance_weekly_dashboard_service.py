@@ -1,0 +1,229 @@
+from datetime import datetime, timezone
+from types import SimpleNamespace
+import unittest
+
+from app.services import maintenance_weekly_dashboard_service as service
+
+
+class MaintenanceWeeklyDashboardServiceTest(unittest.TestCase):
+    def _ticket(
+        self,
+        *,
+        ticket_id,
+        maintenance_type,
+        created,
+        original_program=None,
+        current_program=None,
+        original_due=None,
+        current_due=None,
+        validated=None,
+        finalized=None,
+    ):
+        return SimpleNamespace(
+            id=ticket_id,
+            tipo_mantenimiento=maintenance_type,
+            fecha_creacion=created,
+            fecha_programada_original=original_program,
+            fecha_programada_actual=current_program,
+            fecha_compromiso_original=original_due,
+            fecha_solucion=current_due,
+            fecha_validacion_cierre=validated,
+            fecha_finalizado=finalized,
+        )
+
+    def _dt(self, day):
+        return datetime(
+            2026,
+            9,
+            day,
+            18,
+            0,
+            tzinfo=timezone.utc,
+        )
+
+    def test_week_is_sunday_to_saturday(self):
+        windows = service._week_windows(
+            service.date(2026, 9, 23),
+            1,
+        )
+
+        self.assertEqual(
+            windows[0].start,
+            service.date(2026, 9, 20),
+        )
+        self.assertEqual(
+            windows[0].end,
+            service.date(2026, 9, 26),
+        )
+
+    def test_preventive_requires_manager_validation_for_strict_compliance(self):
+        week = service.WeekWindow(
+            start=service.date(2026, 9, 20),
+            end=service.date(2026, 9, 26),
+        )
+        executed_not_validated = self._ticket(
+            ticket_id=1,
+            maintenance_type="PREVENTIVO",
+            created=self._dt(18),
+            original_program=self._dt(21),
+            current_program=self._dt(21),
+            validated=None,
+            finalized=self._dt(21),
+        )
+        validated_late = self._ticket(
+            ticket_id=2,
+            maintenance_type="PREVENTIVO",
+            created=self._dt(18),
+            original_program=self._dt(22),
+            current_program=self._dt(29),
+            validated=self._dt(29),
+            finalized=self._dt(22),
+        )
+        validated_on_time = self._ticket(
+            ticket_id=3,
+            maintenance_type="PREVENTIVO",
+            created=self._dt(18),
+            original_program=self._dt(23),
+            current_program=self._dt(23),
+            validated=self._dt(24),
+            finalized=self._dt(23),
+        )
+
+        card = service._build_week_card(
+            week,
+            [
+                executed_not_validated,
+                validated_late,
+                validated_on_time,
+            ],
+            [],
+        )
+
+        self.assertEqual(card["preventive"]["programmed"]["count"], 3)
+        self.assertEqual(
+            card["preventive"]["validated_on_time"]["ticket_ids"],
+            [3],
+        )
+        self.assertEqual(
+            card["preventive"]["eventually_validated"]["count"],
+            2,
+        )
+        self.assertEqual(
+            card["preventive"]["reprogrammed"]["ticket_ids"],
+            [2],
+        )
+        self.assertEqual(
+            card["preventive"]["pending_now"]["ticket_ids"],
+            [1],
+        )
+        self.assertEqual(
+            card["preventive"]["strict_compliance_percent"],
+            33.33,
+        )
+        self.assertEqual(
+            card["preventive"]["current_progress_percent"],
+            66.67,
+        )
+
+    def test_corrective_uses_original_commitment_and_tracks_demand(self):
+        week = service.WeekWindow(
+            start=service.date(2026, 9, 20),
+            end=service.date(2026, 9, 26),
+        )
+        reprogrammed_on_time = self._ticket(
+            ticket_id=10,
+            maintenance_type="CORRECTIVO",
+            created=self._dt(20),
+            original_due=self._dt(22),
+            current_due=self._dt(29),
+            validated=self._dt(25),
+        )
+        demand_not_due_this_week = self._ticket(
+            ticket_id=11,
+            maintenance_type="CORRECTIVO",
+            created=self._dt(23),
+            original_due=self._dt(30),
+            current_due=self._dt(30),
+            validated=None,
+        )
+
+        card = service._build_week_card(
+            week,
+            [],
+            [reprogrammed_on_time, demand_not_due_this_week],
+        )
+
+        self.assertEqual(
+            card["corrective"]["due"]["ticket_ids"],
+            [10],
+        )
+        self.assertEqual(
+            card["corrective"]["validated_on_time"]["ticket_ids"],
+            [10],
+        )
+        self.assertEqual(
+            card["corrective"]["reprogrammed"]["ticket_ids"],
+            [10],
+        )
+        self.assertEqual(
+            set(card["corrective"]["demand"]["ticket_ids"]),
+            {10, 11},
+        )
+        self.assertEqual(
+            card["corrective"]["fulfillment_percent"],
+            100.0,
+        )
+
+    def test_backlog_is_historical_at_start_and_end_of_week(self):
+        week = service.WeekWindow(
+            start=service.date(2026, 9, 20),
+            end=service.date(2026, 9, 26),
+        )
+        carried_and_still_open = self._ticket(
+            ticket_id=20,
+            maintenance_type="CORRECTIVO",
+            created=self._dt(18),
+            original_due=self._dt(19),
+            current_due=self._dt(19),
+            validated=None,
+        )
+        carried_closed_midweek = self._ticket(
+            ticket_id=21,
+            maintenance_type="CORRECTIVO",
+            created=self._dt(18),
+            original_due=self._dt(20),
+            current_due=self._dt(20),
+            validated=self._dt(22),
+        )
+        new_open = self._ticket(
+            ticket_id=22,
+            maintenance_type="CORRECTIVO",
+            created=self._dt(23),
+            original_due=self._dt(24),
+            current_due=self._dt(24),
+            validated=None,
+        )
+
+        card = service._build_week_card(
+            week,
+            [],
+            [
+                carried_and_still_open,
+                carried_closed_midweek,
+                new_open,
+            ],
+        )
+
+        self.assertEqual(
+            set(card["backlog"]["start"]["ticket_ids"]),
+            {20, 21},
+        )
+        self.assertEqual(
+            set(card["backlog"]["end"]["ticket_ids"]),
+            {20, 22},
+        )
+        self.assertEqual(card["backlog"]["delta"], 0)
+
+
+if __name__ == "__main__":
+    unittest.main()
