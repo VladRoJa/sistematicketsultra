@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, switchMap } from 'rxjs';
 
 import { MantenimientoEquiposService } from '../services/mantenimiento-equipos.service';
+import { MaintenancePreventiveService } from '../services/maintenance-preventive.service';
 import { TicketService } from '../services/ticket.service';
 import { AsignarFechaPayload } from '../types/ticket';
 import { environment } from 'src/environments/environment';
@@ -97,6 +98,7 @@ export interface MaintenancePlannerBoard {
   permissions: {
     can_view: boolean;
     can_schedule: boolean;
+    can_reprogram: boolean;
     can_capture_diagnosis: boolean;
     can_request_closure: boolean;
   };
@@ -107,6 +109,7 @@ export class MaintenancePlannerService {
   private readonly http = inject(HttpClient);
   private readonly ticketService = inject(TicketService);
   private readonly mantenimientoEquiposService = inject(MantenimientoEquiposService);
+  private readonly maintenancePreventiveService = inject(MaintenancePreventiveService);
   private readonly baseUrl = `${environment.apiUrl}/maintenance-planner`;
 
   getBoard(filters: {
@@ -201,30 +204,37 @@ export class MaintenancePlannerService {
       .pipe(switchMap(() => schedule$()));
   }
 
-  /** Reprogramación por calendario/drag & drop: solo para compromisos existentes. */
+  /** Reprogramación auditada: usa catálogo y endpoint canónico de Mantenimiento. */
   reprogramCommitment(
     ticket: MaintenancePlannerTicket,
     dueDate: string,
-    reason: string,
+    reasonId: number,
+    comentario?: string | null,
   ): Observable<unknown> {
     this.assertReprogrammable(ticket);
-    return this.scheduleTicket(ticket.ticket_id, {
-      due_date: dueDate,
-      reason: String(reason || '').trim(),
-    });
+
+    return this.maintenancePreventiveService.reprogramMaintenanceTicket(
+      ticket.ticket_id,
+      {
+        nueva_fecha: dueDate,
+        reason_id: reasonId,
+        comentario: comentario || null,
+      },
+    );
   }
 
-  /** Reprogramación desde el modal compartido de Editar fecha solución. */
   reprogramCommitmentFromDate(
     ticket: MaintenancePlannerTicket,
     dueDate: Date,
-    reason: string,
+    reasonId: number,
+    comentario?: string | null,
   ): Observable<unknown> {
-    this.assertReprogrammable(ticket);
-    return this.scheduleTicket(ticket.ticket_id, {
-      due_date: this.toDateOnly(dueDate),
-      reason: String(reason || '').trim(),
-    });
+    return this.reprogramCommitment(
+      ticket,
+      this.toDateOnly(dueDate),
+      reasonId,
+      comentario,
+    );
   }
 
   /** Solicitud de cierre usando exactamente el endpoint de la pantalla de Tickets. */
