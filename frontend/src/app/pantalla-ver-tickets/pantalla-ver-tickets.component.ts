@@ -2090,6 +2090,7 @@ puedeEditarFechaSolucion(ticket: Ticket): boolean {
     'SUPER_ADMIN',
     'MANTENIMIENTO',
     'SR_MANTENIMIENTO',
+    'AUX_MANTENIMIENTO',
   ].includes(rol);
 }
 
