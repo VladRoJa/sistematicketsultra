@@ -69,6 +69,14 @@ from app.services.maintenance_weekly_dashboard_service import (
     build_weekly_dashboard,
     get_dashboard_context,
 )
+from app.services.maintenance_reprogram_service import (
+    MaintenanceReprogramError,
+    actualizar_motivo_reprogramacion,
+    crear_motivo_reprogramacion,
+    listar_motivos_reprogramacion,
+    reprogramar_ticket_mantenimiento,
+    serializar_motivo_reprogramacion,
+)
 
 
 maintenance_preventive_bp = Blueprint(
@@ -97,6 +105,8 @@ def _error_response(exc: Exception):
     if isinstance(exc, MaintenanceChecklistError):
         return jsonify({"mensaje": str(exc)}), exc.status_code
     if isinstance(exc, MaintenanceWeeklyDashboardError):
+        return jsonify({"mensaje": str(exc)}), exc.status_code
+    if isinstance(exc, MaintenanceReprogramError):
         return jsonify({"mensaje": str(exc)}), exc.status_code
     raise exc
 
@@ -130,6 +140,128 @@ def _batch_summary(batch) -> dict:
             1 for item in items if item.validation_status == "PENDIENTE"
         ),
     }
+
+
+@maintenance_preventive_bp.route(
+    "/reprogram-reasons",
+    methods=["GET"],
+)
+@jwt_required()
+def get_reprogram_reasons():
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    include_inactive = str(
+        request.args.get("include_inactive") or ""
+    ).strip().lower() in {"1", "true", "yes", "si", "sí"}
+
+    try:
+        return jsonify({
+            "reasons": listar_motivos_reprogramacion(
+                user,
+                include_inactive=include_inactive,
+            )
+        }), 200
+    except Exception as exc:
+        return _error_response(exc)
+
+
+@maintenance_preventive_bp.route(
+    "/reprogram-reasons",
+    methods=["POST"],
+)
+@jwt_required()
+def post_reprogram_reason():
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        reason = crear_motivo_reprogramacion(
+            user,
+            request.get_json(silent=True) or {},
+        )
+        db.session.commit()
+        return jsonify(
+            serializar_motivo_reprogramacion(reason)
+        ), 201
+    except Exception as exc:
+        db.session.rollback()
+        return _error_response(exc)
+
+
+@maintenance_preventive_bp.route(
+    "/reprogram-reasons/<int:reason_id>",
+    methods=["PUT"],
+)
+@jwt_required()
+def put_reprogram_reason(reason_id: int):
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        reason = actualizar_motivo_reprogramacion(
+            user,
+            reason_id,
+            request.get_json(silent=True) or {},
+        )
+        db.session.commit()
+        return jsonify(
+            serializar_motivo_reprogramacion(reason)
+        ), 200
+    except Exception as exc:
+        db.session.rollback()
+        return _error_response(exc)
+
+
+@maintenance_preventive_bp.route(
+    "/tickets/<int:ticket_id>/reprogram",
+    methods=["POST"],
+)
+@jwt_required()
+def post_reprogram_maintenance_ticket(ticket_id: int):
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        ticket = reprogramar_ticket_mantenimiento(
+            user,
+            ticket_id,
+            request.get_json(silent=True) or {},
+        )
+        db.session.commit()
+
+        return jsonify({
+            "mensaje": "Mantenimiento reprogramado.",
+            "ticket_id": int(ticket.id),
+            "tipo_mantenimiento": ticket.tipo_mantenimiento,
+            "fecha_compromiso_original": (
+                ticket.fecha_compromiso_original.isoformat()
+                if ticket.fecha_compromiso_original
+                else None
+            ),
+            "fecha_solucion": (
+                ticket.fecha_solucion.isoformat()
+                if ticket.fecha_solucion
+                else None
+            ),
+            "fecha_programada_original": (
+                ticket.fecha_programada_original.isoformat()
+                if ticket.fecha_programada_original
+                else None
+            ),
+            "fecha_programada_actual": (
+                ticket.fecha_programada_actual.isoformat()
+                if ticket.fecha_programada_actual
+                else None
+            ),
+        }), 200
+    except Exception as exc:
+        db.session.rollback()
+        return _error_response(exc)
 
 
 @maintenance_preventive_bp.route(
