@@ -12,8 +12,10 @@ from app.services.maintenance_preventive_service import (
     MaintenancePreventiveError,
     MaintenancePreventiveNotFoundError,
     MaintenancePreventiveStateError,
+    actualizar_renglon_lote,
     agregar_renglones_lote,
     crear_lote_preventivo,
+    eliminar_renglon_lote,
     listar_lotes_preventivos,
     obtener_lote_preventivo,
     serializar_lote,
@@ -148,6 +150,59 @@ def post_batch_items(batch_id: int):
         batch = obtener_lote_preventivo(batch_id, user)
         db.session.commit()
         return jsonify(serializar_lote(batch)), 201
+    except Exception as exc:
+        db.session.rollback()
+        return _error_response(exc)
+
+
+@maintenance_preventive_bp.route(
+    "/batches/<int:batch_id>/items/<int:item_id>",
+    methods=["PUT"],
+)
+@jwt_required()
+def put_batch_item(batch_id: int, item_id: int):
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    payload = request.get_json(silent=True) or {}
+
+    try:
+        item = actualizar_renglon_lote(
+            batch_id,
+            item_id,
+            user,
+            payload,
+        )
+        db.session.commit()
+        return jsonify(
+            {
+                "mensaje": "Renglón actualizado; requiere revalidación.",
+                "item": {
+                    "id": item.id,
+                    "validation_status": item.validation_status,
+                },
+            }
+        ), 200
+    except Exception as exc:
+        db.session.rollback()
+        return _error_response(exc)
+
+
+@maintenance_preventive_bp.route(
+    "/batches/<int:batch_id>/items/<int:item_id>",
+    methods=["DELETE"],
+)
+@jwt_required()
+def delete_batch_item(batch_id: int, item_id: int):
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        eliminar_renglon_lote(batch_id, item_id, user)
+        db.session.commit()
+        return jsonify({"mensaje": "Renglón eliminado."}), 200
     except Exception as exc:
         db.session.rollback()
         return _error_response(exc)
