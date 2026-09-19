@@ -327,7 +327,7 @@ def preparar_compromiso_estructurado(ticket_id, user, payload, now=None):
 
     _apply_spare_part(ticket, payload)
 
-    ticket.fecha_solucion = solution_date
+    ticket.asignar_fecha_compromiso(solution_date)
     ticket.estado = "en progreso"
     if not ticket.fecha_en_progreso:
         ticket.fecha_en_progreso = current_time
