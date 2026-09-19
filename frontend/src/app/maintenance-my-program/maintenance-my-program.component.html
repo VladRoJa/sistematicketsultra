@@ -1,0 +1,153 @@
+<section class="my-program-page">
+  <header class="my-program-header">
+    <div>
+      <span class="eyebrow">Mantenimiento · Mi programa</span>
+      <h1>Hola, {{ program?.personnel?.username || 'técnico' }}</h1>
+      <p *ngIf="program?.personnel?.crew">
+        {{ program?.personnel?.crew }}
+      </p>
+    </div>
+
+    <button
+      type="button"
+      class="refresh-button"
+      (click)="loadProgram()"
+      [disabled]="loading"
+    >
+      {{ loading ? 'Actualizando…' : 'Actualizar' }}
+    </button>
+  </header>
+
+  <div *ngIf="errorMessage" class="alert" role="alert">
+    {{ errorMessage }}
+  </div>
+
+  <ng-container *ngIf="program as current">
+    <section class="metric-grid">
+      <button
+        type="button"
+        class="metric-card"
+        [class.metric-card--active]="isSelected('today')"
+        (click)="selectView('today')"
+      >
+        <strong>{{ current.metrics.today }}</strong>
+        <span>Hoy</span>
+      </button>
+
+      <button
+        type="button"
+        class="metric-card"
+        [class.metric-card--active]="isSelected('week')"
+        (click)="selectView('week')"
+      >
+        <strong>{{ current.metrics.week }}</strong>
+        <span>Semana</span>
+      </button>
+
+      <button
+        type="button"
+        class="metric-card metric-card--danger"
+        [class.metric-card--active]="isSelected('overdue')"
+        (click)="selectView('overdue')"
+      >
+        <strong>{{ current.metrics.overdue }}</strong>
+        <span>Vencidos</span>
+      </button>
+
+      <button
+        type="button"
+        class="metric-card"
+        [class.metric-card--active]="isSelected('pending')"
+        (click)="selectView('pending')"
+      >
+        <strong>{{ current.metrics.pending_validation }}</strong>
+        <span>Por validar</span>
+      </button>
+    </section>
+
+    <section class="program-section">
+      <header class="section-heading">
+        <div>
+          <span class="eyebrow">Agenda personal</span>
+          <h2>{{ activeTitle }}</h2>
+        </div>
+        <span class="count-pill">{{ visibleItems.length }}</span>
+      </header>
+
+      <div class="program-list">
+        <article
+          *ngFor="let item of visibleItems; trackBy: trackItem"
+          class="work-card"
+          [class.work-card--overdue]="item.operational_status === 'VENCIDO'"
+          [class.work-card--pending]="item.operational_status === 'PENDIENTE_VALIDACION'"
+        >
+          <div class="work-card__top">
+            <span
+              class="type-pill"
+              [attr.data-type]="item.tipo_mantenimiento"
+            >
+              {{ typeLabel(item) }}
+            </span>
+
+            <span
+              class="status-pill"
+              [attr.data-status]="item.operational_status"
+            >
+              {{ statusLabel(item) }}
+            </span>
+          </div>
+
+          <div class="work-card__branch">
+            {{ item.sucursal }}
+          </div>
+
+          <h3>
+            {{ item.codigo_equipo || 'SIN CÓDIGO' }}
+            <span>· {{ item.equipo }}</span>
+          </h3>
+
+          <p class="work-card__activity">
+            {{ item.actividad }}
+          </p>
+
+          <div class="work-card__meta">
+            <span>{{ formatDate(item.fecha_trabajo) }}</span>
+            <span>Ticket #{{ item.ticket_id }}</span>
+          </div>
+
+          <div
+            *ngIf="item.problema_detectado"
+            class="work-card__note"
+          >
+            {{ item.problema_detectado }}
+          </div>
+
+          <div
+            *ngIf="item.necesita_refaccion"
+            class="work-card__warning"
+          >
+            Requiere refacción
+            <ng-container *ngIf="item.descripcion_refaccion">
+              · {{ item.descripcion_refaccion }}
+            </ng-container>
+          </div>
+
+          <div
+            *ngIf="item.operational_status !== 'PENDIENTE_VALIDACION'"
+            class="work-card__footer"
+          >
+            <span>La ejecución y bitácora se habilitan en la siguiente fase.</span>
+          </div>
+        </article>
+
+        <div *ngIf="visibleItems.length === 0" class="empty-state">
+          No tienes trabajos en esta vista.
+        </div>
+      </div>
+    </section>
+  </ng-container>
+
+  <div *ngIf="loading && !program" class="loading-state">
+    Cargando tu programa…
+  </div>
+</section>
