@@ -738,10 +738,11 @@ def get_dashboard_context(user) -> dict:
         else []
     )
 
-    region_ids = {
-        int(row.region_id)
+    branch_region_map = {
+        int(row.sucursal_id): int(row.region_id)
         for row in assignments
     }
+    region_ids = set(branch_region_map.values())
     regions = (
         SuiteRegionORM.query
         .filter(
@@ -791,6 +792,9 @@ def get_dashboard_context(user) -> dict:
             {
                 "id": int(branch.sucursal_id),
                 "nombre": str(branch.sucursal),
+                "region_id": branch_region_map.get(
+                    int(branch.sucursal_id)
+                ),
             }
             for branch in branches
         ],
