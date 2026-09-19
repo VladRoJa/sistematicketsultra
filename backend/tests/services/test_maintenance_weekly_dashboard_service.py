@@ -127,12 +127,12 @@ class MaintenanceWeeklyDashboardServiceTest(unittest.TestCase):
             66.67,
         )
 
-    def test_corrective_uses_original_commitment_and_tracks_demand(self):
+    def test_corrective_uses_exact_original_commitment_and_tracks_demand(self):
         week = service.WeekWindow(
             start=service.date(2026, 9, 20),
             end=service.date(2026, 9, 26),
         )
-        reprogrammed_on_time = self._ticket(
+        reprogrammed_but_late = self._ticket(
             ticket_id=10,
             maintenance_type="CORRECTIVO",
             created=self._dt(20),
@@ -148,20 +148,32 @@ class MaintenanceWeeklyDashboardServiceTest(unittest.TestCase):
             current_due=self._dt(30),
             validated=None,
         )
+        fulfilled_on_commitment = self._ticket(
+            ticket_id=12,
+            maintenance_type="CORRECTIVO",
+            created=self._dt(21),
+            original_due=self._dt(24),
+            current_due=self._dt(24),
+            validated=self._dt(24),
+        )
 
         card = service._build_week_card(
             week,
             [],
-            [reprogrammed_on_time, demand_not_due_this_week],
+            [
+                reprogrammed_but_late,
+                demand_not_due_this_week,
+                fulfilled_on_commitment,
+            ],
         )
 
         self.assertEqual(
-            card["corrective"]["due"]["ticket_ids"],
-            [10],
+            set(card["corrective"]["due"]["ticket_ids"]),
+            {10, 12},
         )
         self.assertEqual(
             card["corrective"]["validated_on_time"]["ticket_ids"],
-            [10],
+            [12],
         )
         self.assertEqual(
             card["corrective"]["reprogrammed"]["ticket_ids"],
@@ -169,11 +181,44 @@ class MaintenanceWeeklyDashboardServiceTest(unittest.TestCase):
         )
         self.assertEqual(
             set(card["corrective"]["demand"]["ticket_ids"]),
-            {10, 11},
+            {10, 11, 12},
         )
         self.assertEqual(
             card["corrective"]["fulfillment_percent"],
-            100.0,
+            50.0,
+        )
+
+    def test_reprogrammed_history_does_not_disappear_if_date_returns_to_original(self):
+        original = self._dt(22)
+        ticket = self._ticket(
+            ticket_id=13,
+            maintenance_type="CORRECTIVO",
+            created=self._dt(20),
+            original_due=original,
+            current_due=original,
+            validated=None,
+        )
+        ticket.historial_fechas = [
+            {
+                "evento": "reprogramacion_mantenimiento",
+                "fecha_anterior": original.isoformat(),
+                "fecha": self._dt(24).isoformat(),
+                "fechaCambio": self._dt(21).isoformat(),
+            },
+            {
+                "evento": "reprogramacion_mantenimiento",
+                "fecha_anterior": self._dt(24).isoformat(),
+                "fecha": original.isoformat(),
+                "fechaCambio": self._dt(22).isoformat(),
+            },
+        ]
+
+        self.assertTrue(
+            service._ticket_was_reprogrammed(
+                ticket,
+                service._corrective_original_due(ticket),
+                service._corrective_current_due(ticket),
+            )
         )
 
     def test_backlog_is_historical_at_start_and_end_of_week(self):
