@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from app.models.ticket_model import Ticket
 
@@ -109,6 +110,42 @@ class TicketMaintenanceContractTest(unittest.TestCase):
 
         self.assertEqual(ticket.fecha_compromiso_original, previous)
         self.assertEqual(ticket.fecha_solucion, new_due)
+
+    def test_manager_rejection_reprograms_preventive_without_touching_corrective_due(self):
+        from datetime import datetime, timezone
+
+        original = datetime(2026, 9, 20, 14, 0, tzinfo=timezone.utc)
+        current = datetime(2026, 9, 22, 14, 0, tzinfo=timezone.utc)
+        new_due = datetime(2026, 9, 27, 14, 0, tzinfo=timezone.utc)
+
+        ticket = Ticket(
+            descripcion="Preventivo",
+            username="mantenimiento",
+            sucursal_id=1000,
+            sucursal_id_destino=4,
+            departamento_id=1,
+            criticidad=1,
+            estado="por_validar",
+            estado_cierre="pendiente_creador",
+            tipo_mantenimiento="PREVENTIVO",
+            fecha_programada_original=original,
+            fecha_programada_actual=current,
+            fecha_solucion=None,
+            historial_fechas=[],
+        )
+
+        with patch("app.models.ticket_model.db.session.commit"):
+            ticket.rechazar_conformidad_creador(
+                motivo="Repetir lubricación",
+                nueva_fecha_compromiso=new_due,
+                actor_username="GERENTE",
+            )
+
+        self.assertEqual(ticket.fecha_programada_original, original)
+        self.assertEqual(ticket.fecha_programada_actual, new_due)
+        self.assertIsNone(ticket.fecha_solucion)
+        self.assertEqual(ticket.estado, "en progreso")
+        self.assertEqual(ticket.estado_cierre, "rechazado_por_gerente")
 
     def test_preventive_commitment_helper_does_not_reclassify(self):
         from datetime import datetime, timezone
