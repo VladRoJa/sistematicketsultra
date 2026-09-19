@@ -532,26 +532,30 @@ private habilitarProgramacionPreventivaEnMenu(): void {
     return;
   }
 
-  const preventiveItem = {
-    label: 'Programación preventiva',
-    path: '/main/programacion-preventiva',
-  };
+  const preventiveItems = [
+    {
+      label: 'Programación preventiva',
+      path: '/main/programacion-preventiva',
+    },
+    {
+      label: 'Cuadrillas y personal',
+      path: '/main/cuadrillas-mantenimiento',
+    },
+  ];
 
   const submenu = Array.isArray(ticketsMenu.submenu)
     ? ticketsMenu.submenu
     : [];
 
-  if (
-    submenu.some(
-      (item: { path: string }) => item.path === preventiveItem.path
-    )
-  ) {
-    return;
-  }
+  const existingPaths = new Set(
+    submenu.map((item: { path: string }) => item.path)
+  );
 
   ticketsMenu.submenu = [
     ...submenu,
-    preventiveItem,
+    ...preventiveItems.filter(
+      (item) => !existingPaths.has(item.path)
+    ),
   ];
 
   this.sincronizarMenuConRutaActual();
