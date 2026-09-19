@@ -550,7 +550,9 @@ class Ticket(db.Model):
                     str(self.origen_correctivo or "REACTIVO").strip().upper()
                 )
                 if self.fecha_compromiso_original is None:
-                    self.fecha_compromiso_original = nueva_fecha_compromiso
+                    self.fecha_compromiso_original = (
+                        self.fecha_solucion or nueva_fecha_compromiso
+                    )
 
         self.fecha_solucion = nueva_fecha_compromiso
         return nueva_fecha_compromiso
