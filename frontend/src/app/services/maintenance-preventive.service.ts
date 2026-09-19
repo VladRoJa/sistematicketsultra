@@ -150,6 +150,66 @@ export interface MaintenanceMyProgramItem {
   descripcion_refaccion: string | null;
 }
 
+export interface MaintenanceChecklistItem {
+  id: number;
+  item_key: string;
+  etiqueta: string;
+  orden: number;
+  requerido: boolean;
+  activo?: boolean;
+}
+
+export interface MaintenanceChecklistTemplate {
+  id: number;
+  template_key: string;
+  familia_equipo_id: number;
+  familia: string | null;
+  nombre: string;
+  actividad: string | null;
+  activo: boolean;
+  items: MaintenanceChecklistItem[];
+}
+
+export interface MaintenanceChecklistCatalog {
+  templates: MaintenanceChecklistTemplate[];
+  families: Array<{
+    id: number;
+    key: string;
+    nombre: string;
+  }>;
+}
+
+export interface MaintenanceWorkBitacora {
+  id: number;
+  ticket_id: number | null;
+  fecha: string;
+  resultado: string;
+  estado_encontrado: string | null;
+  notas: string | null;
+  checks: Record<string, string>;
+  hallazgo_detectado: boolean;
+  hallazgo_descripcion: string | null;
+  created_by_user_id: number | null;
+  created_at: string | null;
+}
+
+export interface MaintenanceWorkDetail {
+  ticket: {
+    id: number;
+    estado: string;
+    tipo_mantenimiento: string;
+    fecha_programada_actual: string | null;
+    sucursal_id: number | null;
+    sucursal: string;
+    inventario_id: number | null;
+    codigo_equipo: string | null;
+    equipo: string;
+    actividad: string;
+  };
+  checklist: MaintenanceChecklistTemplate | null;
+  bitacoras: MaintenanceWorkBitacora[];
+}
+
 export interface MaintenanceMyProgram {
   personnel: {
     id: number;
@@ -183,6 +243,135 @@ export class MaintenancePreventiveService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl =
     `${environment.apiUrl}/tickets/preventive-planning`;
+
+  getChecklistCatalog(): Observable<MaintenanceChecklistCatalog> {
+    return this.http.get<MaintenanceChecklistCatalog>(
+      `${this.baseUrl}/checklists`,
+    );
+  }
+
+  createChecklist(payload: {
+    familia_equipo_id: number;
+    nombre: string;
+    actividad?: string | null;
+    items?: Array<{
+      etiqueta: string;
+      requerido?: boolean;
+    }>;
+  }): Observable<MaintenanceChecklistTemplate> {
+    return this.http.post<MaintenanceChecklistTemplate>(
+      `${this.baseUrl}/checklists`,
+      payload,
+    );
+  }
+
+  updateChecklist(
+    templateId: number,
+    payload: Partial<{
+      nombre: string;
+      actividad: string | null;
+      activo: boolean;
+    }>,
+  ): Observable<MaintenanceChecklistTemplate> {
+    return this.http.put<MaintenanceChecklistTemplate>(
+      `${this.baseUrl}/checklists/${templateId}`,
+      payload,
+    );
+  }
+
+  addChecklistItem(
+    templateId: number,
+    payload: {
+      etiqueta: string;
+      requerido?: boolean;
+    },
+  ): Observable<MaintenanceChecklistItem> {
+    return this.http.post<MaintenanceChecklistItem>(
+      `${this.baseUrl}/checklists/${templateId}/items`,
+      payload,
+    );
+  }
+
+  updateChecklistItem(
+    templateId: number,
+    itemId: number,
+    payload: Partial<{
+      etiqueta: string;
+      orden: number;
+      requerido: boolean;
+      activo: boolean;
+    }>,
+  ): Observable<MaintenanceChecklistItem> {
+    return this.http.put<MaintenanceChecklistItem>(
+      `${this.baseUrl}/checklists/${templateId}/items/${itemId}`,
+      payload,
+    );
+  }
+
+  getWorkDetail(ticketId: number): Observable<MaintenanceWorkDetail> {
+    return this.http.get<MaintenanceWorkDetail>(
+      `${this.baseUrl}/my-program/${ticketId}`,
+    );
+  }
+
+  createWorkBitacora(
+    ticketId: number,
+    payload: {
+      estado_encontrado: 'BUENO' | 'REQUIERE_ATENCION' | 'FUERA_SERVICIO';
+      notas: string;
+      checks: Record<string, string>;
+      hallazgo_detectado: boolean;
+      hallazgo_descripcion?: string | null;
+      generar_correctivo?: boolean;
+      criticidad_correctivo?: number;
+    },
+  ): Observable<{
+    mensaje: string;
+    bitacora_id: number;
+    correctivo_id: number | null;
+  }> {
+    return this.http.post<{
+      mensaje: string;
+      bitacora_id: number;
+      correctivo_id: number | null;
+    }>(
+      `${this.baseUrl}/my-program/${ticketId}/bitacora`,
+      payload,
+    );
+  }
+
+  uploadWorkEvidence(
+    ticketId: number,
+    image: File,
+  ): Observable<{ mensaje: string; attachment_id: number }> {
+    const formData = new FormData();
+    formData.append('image', image, image.name);
+
+    return this.http.post<{
+      mensaje: string;
+      attachment_id: number;
+    }>(
+      `${this.baseUrl}/my-program/${ticketId}/evidence`,
+      formData,
+    );
+  }
+
+  completeWork(ticketId: number): Observable<{
+    mensaje: string;
+    ticket_id: number;
+    estado: string;
+    estado_cierre: string;
+  }> {
+    return this.http.post<{
+      mensaje: string;
+      ticket_id: number;
+      estado: string;
+      estado_cierre: string;
+    }>(
+      `${this.baseUrl}/my-program/${ticketId}/complete`,
+      {},
+    );
+  }
 
   getMyProgram(params?: {
     start_date?: string;
