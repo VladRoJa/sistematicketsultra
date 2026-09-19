@@ -43,6 +43,7 @@ from app.routes.marketing_sales_funnel_routes import marketing_sales_funnel_bp
 from app.routes.marketing_reactivation_outcome_routes import marketing_reactivation_outcome_bp
 from app.routes.marketing_campaign_delivery_routes import marketing_campaign_delivery_bp
 from app.routes.mantenimiento_equipos_routes import mantenimiento_equipos_bp
+from app.routes.maintenance_preventive_routes import maintenance_preventive_bp
 from app.maintenance_planner import maintenance_planner_bp
 from app.control_center import control_center_bp
 from app.utils.maintenance_ticket_update_guard import (
@@ -110,6 +111,10 @@ def create_app():
     app.register_blueprint(
         maintenance_planner_bp,
         url_prefix='/api/maintenance-planner',
+    )
+    app.register_blueprint(
+        maintenance_preventive_bp,
+        url_prefix='/api/tickets/preventive-planning',
     )
     app.register_blueprint(warehouse_bp, url_prefix='/api/warehouse')
     app.register_blueprint(
