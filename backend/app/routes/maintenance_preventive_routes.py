@@ -53,6 +53,16 @@ from app.services.ticket_attachment_service import (
 from app.services.ticket_attachment_image_service import (
     MAX_TICKET_ATTACHMENT_BYTES,
 )
+from app.services.maintenance_checklist_service import (
+    MaintenanceChecklistError,
+    actualizar_item_checklist,
+    actualizar_template_checklist,
+    agregar_item_checklist,
+    crear_template_checklist,
+    listar_catalogo_checklists,
+    serialize_item,
+    serialize_template,
+)
 
 
 maintenance_preventive_bp = Blueprint(
@@ -77,6 +87,8 @@ def _error_response(exc: Exception):
     if isinstance(exc, MaintenanceMyProgramError):
         return jsonify({"mensaje": str(exc)}), exc.status_code
     if isinstance(exc, MaintenanceExecutionError):
+        return jsonify({"mensaje": str(exc)}), exc.status_code
+    if isinstance(exc, MaintenanceChecklistError):
         return jsonify({"mensaje": str(exc)}), exc.status_code
     raise exc
 
@@ -110,6 +122,108 @@ def _batch_summary(batch) -> dict:
             1 for item in items if item.validation_status == "PENDIENTE"
         ),
     }
+
+
+@maintenance_preventive_bp.route("/checklists", methods=["GET"])
+@jwt_required()
+def get_checklists():
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        return jsonify(listar_catalogo_checklists(user)), 200
+    except Exception as exc:
+        return _error_response(exc)
+
+
+@maintenance_preventive_bp.route("/checklists", methods=["POST"])
+@jwt_required()
+def post_checklist():
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        template = crear_template_checklist(
+            user,
+            request.get_json(silent=True) or {},
+        )
+        db.session.commit()
+        return jsonify(serialize_template(template)), 201
+    except Exception as exc:
+        db.session.rollback()
+        return _error_response(exc)
+
+
+@maintenance_preventive_bp.route(
+    "/checklists/<int:template_id>",
+    methods=["PUT"],
+)
+@jwt_required()
+def put_checklist(template_id: int):
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        template = actualizar_template_checklist(
+            user,
+            template_id,
+            request.get_json(silent=True) or {},
+        )
+        db.session.commit()
+        return jsonify(serialize_template(template)), 200
+    except Exception as exc:
+        db.session.rollback()
+        return _error_response(exc)
+
+
+@maintenance_preventive_bp.route(
+    "/checklists/<int:template_id>/items",
+    methods=["POST"],
+)
+@jwt_required()
+def post_checklist_item(template_id: int):
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        item = agregar_item_checklist(
+            user,
+            template_id,
+            request.get_json(silent=True) or {},
+        )
+        db.session.commit()
+        return jsonify(serialize_item(item)), 201
+    except Exception as exc:
+        db.session.rollback()
+        return _error_response(exc)
+
+
+@maintenance_preventive_bp.route(
+    "/checklists/<int:template_id>/items/<int:item_id>",
+    methods=["PUT"],
+)
+@jwt_required()
+def put_checklist_item(template_id: int, item_id: int):
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        item = actualizar_item_checklist(
+            user,
+            template_id,
+            item_id,
+            request.get_json(silent=True) or {},
+        )
+        db.session.commit()
+        return jsonify(serialize_item(item)), 200
+    except Exception as exc:
+        db.session.rollback()
+        return _error_response(exc)
 
 
 @maintenance_preventive_bp.route(
