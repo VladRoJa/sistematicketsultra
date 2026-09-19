@@ -519,6 +519,49 @@ def _is_reprogrammed(
     )
 
 
+def _ticket_was_reprogrammed(
+    ticket: Ticket,
+    original: date | None,
+    current: date | None,
+) -> bool:
+    if _is_reprogrammed(original, current):
+        return True
+
+    if original is None:
+        return False
+
+    for item in (ticket.historial_fechas or []):
+        if not isinstance(item, dict):
+            continue
+
+        event = str(
+            item.get("evento")
+            or item.get("tipo")
+            or ""
+        ).strip().lower()
+
+        if event in {
+            "reprogramacion_mantenimiento",
+            "rechazo_cierre_gerente",
+        }:
+            return True
+
+        historical_due = _history_datetime(
+            item.get("fecha")
+            or item.get("fecha_nueva")
+            or item.get("fecha_solucion")
+        )
+        historical_date = _business_date(historical_due)
+
+        if (
+            historical_date is not None
+            and historical_date != original
+        ):
+            return True
+
+    return False
+
+
 def _build_week_card(
     week: WeekWindow,
     preventives: list[Ticket],
@@ -548,7 +591,8 @@ def _build_week_card(
     preventive_reprogrammed = [
         ticket
         for ticket in preventive_cohort
-        if _is_reprogrammed(
+        if _ticket_was_reprogrammed(
+            ticket,
             _preventive_original_date(ticket),
             _preventive_current_date(ticket),
         )
@@ -577,13 +621,16 @@ def _build_week_card(
         for ticket in corrective_due
         if (
             _validated_date(ticket) is not None
-            and _validated_date(ticket) <= week.end
+            and _corrective_original_due(ticket) is not None
+            and _validated_date(ticket)
+            <= _corrective_original_due(ticket)
         )
     ]
     corrective_reprogrammed = [
         ticket
         for ticket in corrective_due
-        if _is_reprogrammed(
+        if _ticket_was_reprogrammed(
+            ticket,
             _corrective_original_due(ticket),
             _corrective_current_due(ticket),
         )
