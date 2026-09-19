@@ -8,6 +8,7 @@ import {
   MaintenanceDashboardDrilldownTicket,
   MaintenanceDashboardWeek,
   MaintenancePreventiveService,
+  MaintenanceReprogramReason,
   MaintenanceWeeklyDashboard,
 } from '../services/maintenance-preventive.service';
 
@@ -38,8 +39,17 @@ export class MaintenanceWeeklyDashboardComponent implements OnInit {
   crewId: number | null = null;
   responsibleUserId: number | null = null;
 
+  reprogramReasons: MaintenanceReprogramReason[] = [];
+  reprogramTicketId: number | null = null;
+  reprogramDate = '';
+  reprogramReasonId: number | null = null;
+  reprogramComment = '';
+  reprogramSaving = false;
+  reprogramError = '';
+
   ngOnInit(): void {
     this.loadDashboard();
+    this.loadReprogramReasons();
   }
 
   get newestWeeks(): MaintenanceDashboardWeek[] {
@@ -80,6 +90,97 @@ export class MaintenanceWeeklyDashboardComponent implements OnInit {
     return rows.filter(
       (row) => row.crew_id === this.crewId,
     );
+  }
+
+  loadReprogramReasons(): void {
+    this.service.getReprogramReasons().subscribe({
+      next: (response) => {
+        this.reprogramReasons = response.reasons || [];
+      },
+      error: () => {
+        this.reprogramReasons = [];
+      },
+    });
+  }
+
+  canReprogram(ticket: MaintenanceDashboardDrilldownTicket): boolean {
+    const state = String(ticket.estado || '').trim().toLowerCase();
+    return (
+      this.reprogramReasons.length > 0
+      && (state === 'abierto' || state === 'en progreso')
+    );
+  }
+
+  openReprogram(ticket: MaintenanceDashboardDrilldownTicket): void {
+    if (!this.canReprogram(ticket)) {
+      return;
+    }
+
+    this.reprogramTicketId = ticket.id;
+    this.reprogramDate = '';
+    this.reprogramReasonId = null;
+    this.reprogramComment = '';
+    this.reprogramError = '';
+  }
+
+  cancelReprogram(): void {
+    this.reprogramTicketId = null;
+    this.reprogramDate = '';
+    this.reprogramReasonId = null;
+    this.reprogramComment = '';
+    this.reprogramError = '';
+    this.reprogramSaving = false;
+  }
+
+  selectedReprogramReason(): MaintenanceReprogramReason | null {
+    return this.reprogramReasons.find(
+      (row) => row.id === this.reprogramReasonId,
+    ) || null;
+  }
+
+  saveReprogram(): void {
+    if (
+      !this.reprogramTicketId
+      || !this.reprogramDate
+      || !this.reprogramReasonId
+    ) {
+      this.reprogramError = 'Selecciona nueva fecha y motivo.';
+      return;
+    }
+
+    const reason = this.selectedReprogramReason();
+    if (
+      reason?.requiere_comentario
+      && !this.reprogramComment.trim()
+    ) {
+      this.reprogramError = 'Este motivo requiere comentario.';
+      return;
+    }
+
+    this.reprogramSaving = true;
+    this.reprogramError = '';
+
+    this.service.reprogramMaintenanceTicket(
+      this.reprogramTicketId,
+      {
+        nueva_fecha: this.reprogramDate,
+        reason_id: this.reprogramReasonId,
+        comentario: this.reprogramComment.trim() || null,
+      },
+    ).subscribe({
+      next: () => {
+        this.reprogramSaving = false;
+        this.cancelReprogram();
+        this.loadDashboard();
+      },
+      error: (error) => {
+        this.reprogramSaving = false;
+        this.reprogramError =
+          error?.error?.mensaje
+          || error?.error?.detail
+          || 'No se pudo reprogramar el ticket.';
+      },
+    });
   }
 
   loadDashboard(): void {
@@ -177,6 +278,7 @@ export class MaintenanceWeeklyDashboardComponent implements OnInit {
   }
 
   closeDrilldown(): void {
+    this.cancelReprogram();
     this.drilldown = null;
     this.drilldownTitle = '';
     this.drilldownError = '';
@@ -184,11 +286,15 @@ export class MaintenanceWeeklyDashboardComponent implements OnInit {
   }
 
   openTicket(ticket: MaintenanceDashboardDrilldownTicket): void {
+    this.openTicketById(ticket.id);
+  }
+
+  openTicketById(ticketId: number): void {
     this.router.navigate(
       ['/main/ver-tickets'],
       {
         queryParams: {
-          ticket_id: ticket.id,
+          ticket_id: ticketId,
         },
       },
     );
