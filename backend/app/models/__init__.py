@@ -19,6 +19,10 @@ from .departamento_model import Departamento
 from .formulario_ticket import FormularioTicket, CampoFormulario
 from .pm_bitacora import PmBitacoraORM
 from .pm_validacion import PmValidacionORM
+from .maintenance_checklist import (
+    MaintenanceChecklistItemORM,
+    MaintenanceChecklistTemplateORM,
+)
 from .maintenance_preventive import (
     MaintenanceCrewORM,
     MaintenancePersonnelORM,
@@ -153,6 +157,8 @@ __all__ = [
     "CampoFormulario",
     "PmBitacoraORM",
     "PmValidacionORM",
+    "MaintenanceChecklistItemORM",
+    "MaintenanceChecklistTemplateORM",
     "MaintenanceCrewORM",
     "MaintenancePersonnelORM",
     "MaintenancePreventiveBatchORM",
