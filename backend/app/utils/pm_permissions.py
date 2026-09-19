@@ -40,6 +40,10 @@ PM_CONFIGURE_ROLES = PM_ADMIN_ROLES | {
     "SR_MANTENIMIENTO",
 }
 
+PM_REPROGRAM_ROLES = PM_CONFIGURE_ROLES | {
+    "AUX_MANTENIMIENTO",
+}
+
 
 @dataclass(frozen=True)
 class PmPermissionResult:
@@ -108,6 +112,14 @@ def can_pm_configure(user) -> bool:
     return _check_pm_role(user, PM_CONFIGURE_ROLES, "configure").allowed
 
 
+def can_pm_reprogram(user) -> bool:
+    return _check_pm_role(
+        user,
+        PM_REPROGRAM_ROLES,
+        "reprogram",
+    ).allowed
+
+
 def can_pm_admin(user) -> bool:
     return _check_pm_role(user, PM_ADMIN_ROLES, "admin").allowed
 
@@ -170,6 +182,26 @@ def require_pm_configure(user):
         {
             "error": "Forbidden",
             "detail": "No tienes permiso para configurar programación PM.",
+            "permission": result.to_dict(),
+        },
+        403,
+    )
+
+
+def require_pm_reprogram(user):
+    result = _check_pm_role(
+        user,
+        PM_REPROGRAM_ROLES,
+        "reprogram",
+    )
+
+    if result.allowed:
+        return None
+
+    return (
+        {
+            "error": "Forbidden",
+            "detail": "No tienes permiso para reprogramar mantenimiento.",
             "permission": result.to_dict(),
         },
         403,
