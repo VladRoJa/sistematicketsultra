@@ -18,6 +18,7 @@ from app.services.maintenance_preventive_service import (
     eliminar_renglon_lote,
     listar_lotes_preventivos,
     obtener_lote_preventivo,
+    publicar_lote_preventivo,
     serializar_lote,
     validar_lote_preventivo,
 )
@@ -203,6 +204,32 @@ def delete_batch_item(batch_id: int, item_id: int):
         eliminar_renglon_lote(batch_id, item_id, user)
         db.session.commit()
         return jsonify({"mensaje": "Renglón eliminado."}), 200
+    except Exception as exc:
+        db.session.rollback()
+        return _error_response(exc)
+
+
+@maintenance_preventive_bp.route(
+    "/batches/<int:batch_id>/publish",
+    methods=["POST"],
+)
+@jwt_required()
+def post_publish_batch(batch_id: int):
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        tickets = publicar_lote_preventivo(batch_id, user)
+        batch = obtener_lote_preventivo(batch_id, user)
+        db.session.commit()
+        return jsonify(
+            {
+                "mensaje": "Lote preventivo publicado.",
+                "ticket_ids": [ticket.id for ticket in tickets],
+                "batch": serializar_lote(batch),
+            }
+        ), 201
     except Exception as exc:
         db.session.rollback()
         return _error_response(exc)
