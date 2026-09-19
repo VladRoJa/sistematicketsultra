@@ -17,6 +17,10 @@ from app.models.maintenance_preventive import (
 )
 from app.models.sucursal_model import Sucursal
 from app.models.ticket_model import Ticket
+from app.utils.sucursal_audience import (
+    SUCURSAL_AUDIENCE_OPERATIONAL,
+    apply_selectable_sucursal_catalog,
+)
 from app.models.user_model import UserORM
 from app.utils.pm_permissions import can_pm_configure
 
@@ -201,6 +205,120 @@ def _assert_batch_manageable(user, batch: MaintenancePreventiveBatchORM) -> None
         raise MaintenancePreventiveAuthorizationError(
             "No tienes acceso de edición a este lote preventivo."
         )
+
+
+def listar_contexto_programacion(user) -> dict:
+    _assert_can_configure(user)
+
+    branch_query = apply_selectable_sucursal_catalog(
+        Sucursal.query,
+        audience=SUCURSAL_AUDIENCE_OPERATIONAL,
+    )
+
+    if _role(user) not in {
+        "ADMIN",
+        "ADMINISTRADOR",
+        "SUPER_ADMIN",
+        "MANTENIMIENTO",
+    }:
+        allowed = sorted(_allowed_branch_ids(user))
+        if not allowed:
+            branches = []
+        else:
+            branches = (
+                branch_query
+                .filter(Sucursal.sucursal_id.in_(allowed))
+                .order_by(Sucursal.sucursal.asc())
+                .all()
+            )
+    else:
+        branches = (
+            branch_query
+            .order_by(Sucursal.sucursal.asc())
+            .all()
+        )
+
+    responsables = (
+        UserORM.query
+        .filter(UserORM.department_id == MAINTENANCE_DEPARTMENT_ID)
+        .order_by(UserORM.username.asc())
+        .all()
+    )
+
+    return {
+        "sucursales": [
+            {
+                "id": int(branch.sucursal_id),
+                "nombre": str(branch.sucursal),
+                "is_demo": bool(getattr(branch, "is_demo", False)),
+            }
+            for branch in branches
+        ],
+        "responsables": [
+            {
+                "user_id": int(responsable.id),
+                "username": str(responsable.username),
+                "rol": str(responsable.rol or ""),
+            }
+            for responsable in responsables
+        ],
+    }
+
+
+def listar_equipos_programables(user, branch_id: int) -> list[dict]:
+    _assert_can_configure(user)
+
+    try:
+        branch_id = int(branch_id)
+    except (TypeError, ValueError) as exc:
+        raise MaintenancePreventiveError(
+            "branch_id inválido."
+        ) from exc
+
+    if not _can_manage_branch(user, branch_id):
+        raise MaintenancePreventiveAuthorizationError(
+            "No tienes acceso a esta sucursal."
+        )
+
+    rows = (
+        db.session.query(InventarioGeneral)
+        .join(
+            InventarioSucursal,
+            InventarioSucursal.inventario_id == InventarioGeneral.id,
+        )
+        .filter(
+            InventarioSucursal.sucursal_id == branch_id,
+            InventarioSucursal.stock > 0,
+            InventarioGeneral.codigo_interno.isnot(None),
+            func.lower(InventarioGeneral.tipo) == "aparatos",
+        )
+        .order_by(
+            InventarioGeneral.familia_equipo_id.asc().nullslast(),
+            InventarioGeneral.nombre.asc(),
+            InventarioGeneral.codigo_interno.asc(),
+        )
+        .all()
+    )
+
+    return [
+        {
+            "inventario_id": int(item.id),
+            "codigo_interno": str(item.codigo_interno),
+            "nombre": str(item.nombre or ""),
+            "marca": str(item.marca or ""),
+            "familia_equipo_id": item.familia_equipo_id,
+            "familia": (
+                {
+                    "id": int(item.familia_equipo.id),
+                    "key": str(item.familia_equipo.key),
+                    "nombre": str(item.familia_equipo.nombre),
+                }
+                if item.familia_equipo is not None
+                else None
+            ),
+        }
+        for item in rows
+    ]
 
 
 def obtener_lote_preventivo(
