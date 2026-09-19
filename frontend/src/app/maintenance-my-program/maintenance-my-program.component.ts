@@ -1,18 +1,23 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 
 import {
+  MaintenanceChecklistItem,
   MaintenanceMyProgram,
   MaintenanceMyProgramItem,
   MaintenancePreventiveService,
+  MaintenanceWorkDetail,
 } from '../services/maintenance-preventive.service';
 
 type ProgramView = 'today' | 'week' | 'overdue' | 'pending';
+type WorkSavingStep = 'bitacora' | 'evidence' | 'complete' | null;
+type FoundState = '' | 'BUENO' | 'REQUIERE_ATENCION' | 'FUERA_SERVICIO';
 
 @Component({
   selector: 'app-maintenance-my-program',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './maintenance-my-program.component.html',
   styleUrls: ['./maintenance-my-program.component.css'],
 })
@@ -23,6 +28,44 @@ export class MaintenanceMyProgramComponent implements OnInit {
   activeView: ProgramView = 'today';
   loading = false;
   errorMessage = '';
+
+  expandedTicketId: number | null = null;
+  workDetail: MaintenanceWorkDetail | null = null;
+  workLoading = false;
+  workSavingStep: WorkSavingStep = null;
+  workErrorMessage = '';
+  workSuccessMessage = '';
+
+  estadoEncontrado: FoundState = '';
+  notas = '';
+  hallazgoDetectado = false;
+  hallazgoDescripcion = '';
+  generarCorrectivo = false;
+  criticidadCorrectivo = 2;
+  checkValues: Record<string, string> = {};
+
+  evidenceFile: File | null = null;
+  bitacoraSaved = false;
+  evidenceSaved = false;
+  derivedCorrectiveId: number | null = null;
+
+  readonly foundStateOptions = [
+    { value: 'BUENO' as const, label: 'Bueno' },
+    {
+      value: 'REQUIERE_ATENCION' as const,
+      label: 'Requiere atención',
+    },
+    {
+      value: 'FUERA_SERVICIO' as const,
+      label: 'Fuera de servicio',
+    },
+  ];
+
+  readonly checkOptions = [
+    { value: 'OK', label: 'OK' },
+    { value: 'ATENCION', label: 'Atención' },
+    { value: 'NO_APLICA', label: 'N/A' },
+  ];
 
   ngOnInit(): void {
     this.loadProgram();
@@ -54,6 +97,48 @@ export class MaintenanceMyProgramComponent implements OnInit {
     return titles[this.activeView];
   }
 
+  get checklistItems(): MaintenanceChecklistItem[] {
+    return this.workDetail?.checklist?.items || [];
+  }
+
+  get hasChecklist(): boolean {
+    return this.checklistItems.length > 0;
+  }
+
+  get canSaveBitacora(): boolean {
+    if (
+      this.workSavingStep !== null
+      || this.bitacoraSaved
+      || !this.estadoEncontrado
+      || !this.notas.trim()
+    ) {
+      return false;
+    }
+
+    if (this.hallazgoDetectado && !this.hallazgoDescripcion.trim()) {
+      return false;
+    }
+
+    return this.requiredChecksComplete();
+  }
+
+  get canUploadEvidence(): boolean {
+    return Boolean(
+      this.bitacoraSaved
+      && !this.evidenceSaved
+      && this.evidenceFile
+      && this.workSavingStep === null,
+    );
+  }
+
+  get canCompleteWork(): boolean {
+    return Boolean(
+      this.bitacoraSaved
+      && this.evidenceSaved
+      && this.workSavingStep === null,
+    );
+  }
+
   loadProgram(): void {
     this.loading = true;
     this.errorMessage = '';
@@ -76,10 +161,201 @@ export class MaintenanceMyProgramComponent implements OnInit {
 
   selectView(view: ProgramView): void {
     this.activeView = view;
+    this.closeWork();
   }
 
   isSelected(view: ProgramView): boolean {
     return this.activeView === view;
+  }
+
+  isWorkExpanded(item: MaintenanceMyProgramItem): boolean {
+    return this.expandedTicketId === item.ticket_id;
+  }
+
+  canOpenWork(item: MaintenanceMyProgramItem): boolean {
+    return (
+      item.tipo_mantenimiento === 'PREVENTIVO'
+      && item.operational_status !== 'PENDIENTE_VALIDACION'
+    );
+  }
+
+  toggleWork(item: MaintenanceMyProgramItem): void {
+    if (!this.canOpenWork(item)) {
+      return;
+    }
+
+    if (this.expandedTicketId === item.ticket_id) {
+      this.closeWork();
+      return;
+    }
+
+    this.expandedTicketId = item.ticket_id;
+    this.loadWorkDetail(item.ticket_id);
+  }
+
+  closeWork(): void {
+    this.expandedTicketId = null;
+    this.workDetail = null;
+    this.workLoading = false;
+    this.resetWorkForm();
+  }
+
+  loadWorkDetail(ticketId: number): void {
+    this.workLoading = true;
+    this.workErrorMessage = '';
+    this.workSuccessMessage = '';
+    this.workDetail = null;
+
+    this.service.getWorkDetail(ticketId).subscribe({
+      next: (detail) => {
+        this.workDetail = detail;
+        this.workLoading = false;
+        this.hydrateWorkForm(detail);
+      },
+      error: (error) => {
+        this.workLoading = false;
+        this.workErrorMessage =
+          error?.error?.mensaje
+          || error?.error?.detail
+          || 'No se pudo cargar el preventivo.';
+      },
+    });
+  }
+
+  setCheckValue(itemKey: string, value: string): void {
+    this.checkValues = {
+      ...this.checkValues,
+      [itemKey]: value,
+    };
+  }
+
+  getCheckValue(itemKey: string): string {
+    return this.checkValues[itemKey] || '';
+  }
+
+  onHallazgoChanged(): void {
+    if (!this.hallazgoDetectado) {
+      this.hallazgoDescripcion = '';
+      this.generarCorrectivo = false;
+      this.criticidadCorrectivo = 2;
+    }
+  }
+
+  saveBitacora(): void {
+    if (
+      !this.expandedTicketId
+      || !this.canSaveBitacora
+      || !this.estadoEncontrado
+    ) {
+      return;
+    }
+
+    this.workSavingStep = 'bitacora';
+    this.workErrorMessage = '';
+    this.workSuccessMessage = '';
+
+    this.service.createWorkBitacora(
+      this.expandedTicketId,
+      {
+        estado_encontrado: this.estadoEncontrado,
+        notas: this.notas.trim(),
+        checks: { ...this.checkValues },
+        hallazgo_detectado: this.hallazgoDetectado,
+        hallazgo_descripcion:
+          this.hallazgoDescripcion.trim() || null,
+        generar_correctivo:
+          this.hallazgoDetectado && this.generarCorrectivo,
+        criticidad_correctivo:
+          this.hallazgoDetectado && this.generarCorrectivo
+            ? this.criticidadCorrectivo
+            : undefined,
+      },
+    ).subscribe({
+      next: (response) => {
+        this.workSavingStep = null;
+        this.bitacoraSaved = true;
+        this.derivedCorrectiveId = response.correctivo_id;
+        this.workSuccessMessage = response.correctivo_id
+          ? 'Bitácora guardada y correctivo generado #'
+            + String(response.correctivo_id)
+            + '.'
+          : 'Bitácora guardada.';
+        this.loadWorkDetail(this.expandedTicketId || 0);
+      },
+      error: (error) => {
+        this.workSavingStep = null;
+        this.workErrorMessage =
+          error?.error?.mensaje
+          || error?.error?.detail
+          || 'No se pudo guardar la bitácora.';
+      },
+    });
+  }
+
+  onEvidenceSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.evidenceFile = input.files?.[0] || null;
+    this.workErrorMessage = '';
+  }
+
+  uploadEvidence(): void {
+    if (
+      !this.expandedTicketId
+      || !this.evidenceFile
+      || !this.canUploadEvidence
+    ) {
+      return;
+    }
+
+    this.workSavingStep = 'evidence';
+    this.workErrorMessage = '';
+    this.workSuccessMessage = '';
+
+    this.service.uploadWorkEvidence(
+      this.expandedTicketId,
+      this.evidenceFile,
+    ).subscribe({
+      next: () => {
+        this.workSavingStep = null;
+        this.evidenceSaved = true;
+        this.evidenceFile = null;
+        this.workSuccessMessage = 'Evidencia guardada.';
+        this.loadWorkDetail(this.expandedTicketId || 0);
+      },
+      error: (error) => {
+        this.workSavingStep = null;
+        this.workErrorMessage =
+          error?.error?.mensaje
+          || error?.error?.detail
+          || 'No se pudo subir la evidencia.';
+      },
+    });
+  }
+
+  completeWork(): void {
+    if (!this.expandedTicketId || !this.canCompleteWork) {
+      return;
+    }
+
+    const ticketId = this.expandedTicketId;
+    this.workSavingStep = 'complete';
+    this.workErrorMessage = '';
+    this.workSuccessMessage = '';
+
+    this.service.completeWork(ticketId).subscribe({
+      next: () => {
+        this.workSavingStep = null;
+        this.closeWork();
+        this.loadProgram();
+      },
+      error: (error) => {
+        this.workSavingStep = null;
+        this.workErrorMessage =
+          error?.error?.mensaje
+          || error?.error?.detail
+          || 'No se pudo marcar el preventivo como realizado.';
+      },
+    });
   }
 
   statusLabel(item: MaintenanceMyProgramItem): string {
@@ -114,5 +390,51 @@ export class MaintenanceMyProgramComponent implements OnInit {
 
   trackItem(_: number, item: MaintenanceMyProgramItem): number {
     return item.ticket_id;
+  }
+
+  trackChecklistItem(_: number, item: MaintenanceChecklistItem): number {
+    return item.id;
+  }
+
+  private requiredChecksComplete(): boolean {
+    return this.checklistItems.every((item) => {
+      if (!item.requerido) return true;
+      return Boolean(this.checkValues[item.item_key]);
+    });
+  }
+
+  private hydrateWorkForm(detail: MaintenanceWorkDetail): void {
+    this.resetWorkForm();
+
+    const latest = detail.bitacoras[0];
+    if (latest) {
+      this.bitacoraSaved = true;
+      this.estadoEncontrado =
+        (latest.estado_encontrado || '') as FoundState;
+      this.notas = latest.notas || '';
+      this.hallazgoDetectado = latest.hallazgo_detectado;
+      this.hallazgoDescripcion =
+        latest.hallazgo_descripcion || '';
+      this.checkValues = { ...(latest.checks || {}) };
+    }
+
+    this.evidenceSaved = Boolean(detail.has_evidence);
+  }
+
+  private resetWorkForm(): void {
+    this.workErrorMessage = '';
+    this.workSuccessMessage = '';
+    this.workSavingStep = null;
+    this.estadoEncontrado = '';
+    this.notas = '';
+    this.hallazgoDetectado = false;
+    this.hallazgoDescripcion = '';
+    this.generarCorrectivo = false;
+    this.criticidadCorrectivo = 2;
+    this.checkValues = {};
+    this.evidenceFile = null;
+    this.bitacoraSaved = false;
+    this.evidenceSaved = false;
+    this.derivedCorrectiveId = null;
   }
 }
