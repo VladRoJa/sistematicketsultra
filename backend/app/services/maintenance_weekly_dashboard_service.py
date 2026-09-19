@@ -20,7 +20,7 @@ from app.models.suite_governance import (
 )
 from app.models.ticket_model import Ticket
 from app.models.user_model import UserORM
-from app.utils.pm_permissions import can_pm_view
+from app.utils.pm_permissions import can_pm_configure, can_pm_view
 from app.utils.sucursal_audience import (
     SUCURSAL_AUDIENCE_OPERATIONAL,
     apply_selectable_sucursal_catalog,
@@ -910,6 +910,9 @@ def get_dashboard_context(user) -> dict:
     ]
 
     return {
+        "permissions": {
+            "can_reprogram": bool(can_pm_configure(user)),
+        },
         "sucursales": [
             {
                 "id": int(branch.sucursal_id),
