@@ -207,6 +207,7 @@ export interface MaintenanceWorkDetail {
     actividad: string;
   };
   checklist: MaintenanceChecklistTemplate | null;
+  has_evidence: boolean;
   bitacoras: MaintenanceWorkBitacora[];
 }
 
