@@ -503,16 +503,26 @@ def schedule_ticket(ticket_id: int, user, *, due_date: str, reason: str) -> Tick
         ticket.fecha_en_progreso = now_utc
 
     history = list(ticket.historial_fechas or [])
-    already_logged = any(
-        isinstance(item, dict)
-        and str(item.get("origen") or "") == "maintenance_planner_v2"
-        and _parse_date(
-            str(item.get("fecha") or "")[:10],
-            "fecha",
-        ) == target_date
-        for item in history
-        if item.get("fecha")
-    )
+    already_logged = False
+
+    for item in history:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("origen") or "") != "maintenance_planner_v2":
+            continue
+
+        raw_date = str(item.get("fecha") or "").strip()
+        if not raw_date:
+            continue
+
+        try:
+            logged_date = date.fromisoformat(raw_date[:10])
+        except ValueError:
+            continue
+
+        if logged_date == target_date:
+            already_logged = True
+            break
 
     if not already_logged:
         history.append(
