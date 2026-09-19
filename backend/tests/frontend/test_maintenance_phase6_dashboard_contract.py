@@ -43,6 +43,12 @@ def test_dashboard_uses_canonical_weekly_cohorts():
     assert "current_progress_percent" in service
     assert "fulfillment_percent" in service
     assert '"delta": len(backlog_end) - len(backlog_start)' in service
+    assert "backlog_overdue_start" in service
+    assert "backlog_overdue_end" in service
+    assert "_corrective_due_as_of" in service
+    assert "demand_reactive" in service
+    assert "demand_detected_preventive" in service
+    assert "_aging_bucket" in service
 
 
 def test_preventive_validation_does_not_count_technician_finish_as_manager_validation():
@@ -80,6 +86,12 @@ def test_dashboard_component_uses_separate_files_and_clickable_metrics():
     assert "corrective.demand" in html
     assert "backlog.start" in html
     assert "backlog.end" in html
+    assert "backlog.overdue_start" in html
+    assert "backlog.overdue_end" in html
+    assert "corrective.demand_reactive" in html
+    assert "corrective.demand_detected_preventive" in html
+    assert "1–7 días" in html
+    assert "+30 días" in html
     assert "Abrir en Tickets" in html
 
 
