@@ -145,15 +145,25 @@
           <small>Criticidad {{ corrective.criticidad }}</small>
         </div>
 
-        <button
-          *ngIf="corrective.has_attachment"
-          type="button"
-          mat-icon-button
-          (click)="openEvidence(corrective.id)"
-          aria-label="Ver evidencia del correctivo"
-        >
-          <mat-icon>image</mat-icon>
-        </button>
+        <div class="corrective-actions">
+          <button
+            type="button"
+            class="corrective-open-button"
+            (click)="openTicket(corrective.id)"
+          >
+            Abrir ticket
+          </button>
+
+          <button
+            *ngIf="corrective.has_attachment"
+            type="button"
+            mat-icon-button
+            (click)="openEvidence(corrective.id)"
+            aria-label="Ver evidencia del correctivo"
+          >
+            <mat-icon>image</mat-icon>
+          </button>
+        </div>
       </article>
     </section>
 
