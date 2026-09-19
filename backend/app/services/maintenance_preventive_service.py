@@ -12,10 +12,16 @@ from sqlalchemy import func
 from app.extensions import db
 from app.models.inventario import InventarioGeneral, InventarioSucursal
 from app.models.maintenance_preventive import (
+    MaintenanceCrewORM,
+    MaintenancePersonnelORM,
     MaintenancePreventiveBatchORM,
     MaintenancePreventiveItemORM,
 )
 from app.models.sucursal_model import Sucursal
+from app.models.suite_governance import (
+    SuiteRegionORM,
+    SuiteSucursalRegionAssignmentORM,
+)
 from app.models.ticket_model import Ticket
 from app.utils.sucursal_audience import (
     SUCURSAL_AUDIENCE_OPERATIONAL,
@@ -207,6 +213,246 @@ def _assert_batch_manageable(user, batch: MaintenancePreventiveBatchORM) -> None
         )
 
 
+def listar_cuadrillas(user) -> list[dict]:
+    _assert_can_configure(user)
+
+    crews = (
+        MaintenanceCrewORM.query
+        .order_by(
+            MaintenanceCrewORM.activo.desc(),
+            MaintenanceCrewORM.nombre.asc(),
+        )
+        .all()
+    )
+
+    return [
+        {
+            "id": int(crew.id),
+            "nombre": str(crew.nombre),
+            "region_id": crew.region_id,
+            "region": (
+                str(crew.region.region_label)
+                if crew.region is not None
+                else None
+            ),
+            "activo": bool(crew.activo),
+        }
+        for crew in crews
+    ]
+
+
+def crear_cuadrilla(user, payload: dict) -> MaintenanceCrewORM:
+    _assert_can_configure(user)
+
+    nombre = _clean((payload or {}).get("nombre"))
+    if not nombre:
+        raise MaintenancePreventiveError("nombre es obligatorio.")
+
+    region_id = (payload or {}).get("region_id")
+    if region_id not in (None, ""):
+        try:
+            region_id = int(region_id)
+        except (TypeError, ValueError) as exc:
+            raise MaintenancePreventiveError("region_id inválido.") from exc
+
+        region = db.session.get(SuiteRegionORM, region_id)
+        if region is None or not bool(region.is_active):
+            raise MaintenancePreventiveError(
+                "La región indicada no existe o está inactiva."
+            )
+    else:
+        region_id = None
+
+    crew = MaintenanceCrewORM(
+        nombre=nombre,
+        region_id=region_id,
+        activo=True,
+    )
+    db.session.add(crew)
+    db.session.flush()
+    return crew
+
+
+def actualizar_cuadrilla(
+    crew_id: int,
+    user,
+    payload: dict,
+) -> MaintenanceCrewORM:
+    _assert_can_configure(user)
+
+    crew = db.session.get(MaintenanceCrewORM, int(crew_id))
+    if crew is None:
+        raise MaintenancePreventiveNotFoundError(
+            "Cuadrilla no encontrada."
+        )
+
+    if "nombre" in payload:
+        nombre = _clean(payload.get("nombre"))
+        if not nombre:
+            raise MaintenancePreventiveError("nombre es obligatorio.")
+        crew.nombre = nombre
+
+    if "region_id" in payload:
+        region_id = payload.get("region_id")
+        if region_id in (None, ""):
+            crew.region_id = None
+        else:
+            try:
+                region_id = int(region_id)
+            except (TypeError, ValueError) as exc:
+                raise MaintenancePreventiveError(
+                    "region_id inválido."
+                ) from exc
+
+            region = db.session.get(SuiteRegionORM, region_id)
+            if region is None or not bool(region.is_active):
+                raise MaintenancePreventiveError(
+                    "La región indicada no existe o está inactiva."
+                )
+            crew.region_id = region_id
+
+    if "activo" in payload:
+        crew.activo = bool(payload.get("activo"))
+
+    db.session.flush()
+    return crew
+
+
+def listar_personal_mantenimiento(user) -> dict:
+    _assert_can_configure(user)
+
+    personnel = (
+        MaintenancePersonnelORM.query
+        .order_by(
+            MaintenancePersonnelORM.activo.desc(),
+            MaintenancePersonnelORM.id.asc(),
+        )
+        .all()
+    )
+    candidates = (
+        UserORM.query
+        .filter(UserORM.department_id == MAINTENANCE_DEPARTMENT_ID)
+        .order_by(UserORM.username.asc())
+        .all()
+    )
+    regions = (
+        SuiteRegionORM.query
+        .filter(SuiteRegionORM.is_active.is_(True))
+        .order_by(SuiteRegionORM.region_label.asc())
+        .all()
+    )
+
+    return {
+        "personnel": [
+            {
+                "id": int(row.id),
+                "user_id": int(row.user.id),
+                "username": str(row.user.username),
+                "rol": str(row.user.rol or ""),
+                "crew_id": row.crew_id,
+                "crew": (
+                    str(row.crew.nombre) if row.crew is not None else None
+                ),
+                "region_id": (
+                    row.crew.region_id if row.crew is not None else None
+                ),
+                "activo": bool(row.activo),
+            }
+            for row in personnel
+        ],
+        "candidates": [
+            {
+                "user_id": int(candidate.id),
+                "username": str(candidate.username),
+                "rol": str(candidate.rol or ""),
+            }
+            for candidate in candidates
+        ],
+        "crews": listar_cuadrillas(user),
+        "regions": [
+            {
+                "id": int(region.id),
+                "key": str(region.region_key),
+                "label": str(region.region_label),
+            }
+            for region in regions
+        ],
+    }
+
+
+def guardar_personal_mantenimiento(
+    user,
+    payload: dict,
+    *,
+    personnel_id: int | None = None,
+) -> MaintenancePersonnelORM:
+    _assert_can_configure(user)
+
+    if personnel_id is None:
+        try:
+            user_id = int((payload or {}).get("user_id"))
+        except (TypeError, ValueError) as exc:
+            raise MaintenancePreventiveError("user_id inválido.") from exc
+
+        target_user = db.session.get(UserORM, user_id)
+        if target_user is None:
+            raise MaintenancePreventiveError("Usuario no encontrado.")
+        if int(target_user.department_id or 0) != MAINTENANCE_DEPARTMENT_ID:
+            raise MaintenancePreventiveError(
+                "El usuario no pertenece al departamento de Mantenimiento."
+            )
+
+        existing = (
+            MaintenancePersonnelORM.query
+            .filter(MaintenancePersonnelORM.user_id == user_id)
+            .first()
+        )
+        if existing is not None:
+            raise MaintenancePreventiveStateError(
+                "El usuario ya existe en el catálogo de personal."
+            )
+
+        row = MaintenancePersonnelORM(
+            user_id=user_id,
+            activo=True,
+        )
+        db.session.add(row)
+    else:
+        row = db.session.get(
+            MaintenancePersonnelORM,
+            int(personnel_id),
+        )
+        if row is None:
+            raise MaintenancePreventiveNotFoundError(
+                "Personal de Mantenimiento no encontrado."
+            )
+
+    if "crew_id" in payload:
+        crew_id = payload.get("crew_id")
+        if crew_id in (None, ""):
+            row.crew_id = None
+        else:
+            try:
+                crew_id = int(crew_id)
+            except (TypeError, ValueError) as exc:
+                raise MaintenancePreventiveError(
+                    "crew_id inválido."
+                ) from exc
+
+            crew = db.session.get(MaintenanceCrewORM, crew_id)
+            if crew is None or not bool(crew.activo):
+                raise MaintenancePreventiveError(
+                    "La cuadrilla indicada no existe o está inactiva."
+                )
+            row.crew_id = crew_id
+
+    if "activo" in payload:
+        row.activo = bool(payload.get("activo"))
+
+    db.session.flush()
+    return row
+
+
 def listar_contexto_programacion(user) -> dict:
     _assert_can_configure(user)
 
@@ -238,9 +484,16 @@ def listar_contexto_programacion(user) -> dict:
             .all()
         )
 
-    responsables = (
-        UserORM.query
-        .filter(UserORM.department_id == MAINTENANCE_DEPARTMENT_ID)
+    personnel_rows = (
+        MaintenancePersonnelORM.query
+        .join(
+            UserORM,
+            UserORM.id == MaintenancePersonnelORM.user_id,
+        )
+        .filter(
+            MaintenancePersonnelORM.activo.is_(True),
+            UserORM.department_id == MAINTENANCE_DEPARTMENT_ID,
+        )
         .order_by(UserORM.username.asc())
         .all()
     )
@@ -256,11 +509,23 @@ def listar_contexto_programacion(user) -> dict:
         ],
         "responsables": [
             {
-                "user_id": int(responsable.id),
-                "username": str(responsable.username),
-                "rol": str(responsable.rol or ""),
+                "personnel_id": int(personnel.id),
+                "user_id": int(personnel.user.id),
+                "username": str(personnel.user.username),
+                "rol": str(personnel.user.rol or ""),
+                "crew_id": personnel.crew_id,
+                "crew": (
+                    str(personnel.crew.nombre)
+                    if personnel.crew is not None
+                    else None
+                ),
+                "region_id": (
+                    personnel.crew.region_id
+                    if personnel.crew is not None
+                    else None
+                ),
             }
-            for responsable in responsables
+            for personnel in personnel_rows
         ],
     }
 
@@ -845,14 +1110,81 @@ def _equipo_asignado_a_sucursal(
     return row is not None
 
 
-def _validate_responsable_mantenimiento(user: UserORM | None) -> bool:
+def _active_personnel_for_user(
+    user: UserORM | None,
+) -> MaintenancePersonnelORM | None:
     if user is None:
-        return False
+        return None
+
+    return (
+        MaintenancePersonnelORM.query
+        .filter(
+            MaintenancePersonnelORM.user_id == int(user.id),
+            MaintenancePersonnelORM.activo.is_(True),
+        )
+        .first()
+    )
+
+
+def _validate_responsable_catalog(
+    user: UserORM | None,
+    *,
+    branch_id: int | None = None,
+) -> tuple[bool, str | None]:
+    if user is None:
+        return False, "Responsable inexistente en Suite."
 
     try:
-        return int(getattr(user, "department_id", 0) or 0) == 1
+        if int(getattr(user, "department_id", 0) or 0) != 1:
+            return (
+                False,
+                "El responsable no pertenece al departamento de Mantenimiento.",
+            )
     except (TypeError, ValueError):
-        return False
+        return (
+            False,
+            "El responsable no pertenece al departamento de Mantenimiento.",
+        )
+
+    personnel = _active_personnel_for_user(user)
+    if personnel is None:
+        return (
+            False,
+            "El responsable no está activo en el catálogo de personal de Mantenimiento.",
+        )
+
+    crew = personnel.crew
+    if (
+        branch_id is None
+        or crew is None
+        or not bool(crew.activo)
+        or crew.region_id is None
+    ):
+        return True, None
+
+    branch_assignment = (
+        SuiteSucursalRegionAssignmentORM.query
+        .filter(
+            SuiteSucursalRegionAssignmentORM.sucursal_id == int(branch_id),
+            SuiteSucursalRegionAssignmentORM.is_current.is_(True),
+        )
+        .order_by(SuiteSucursalRegionAssignmentORM.id.desc())
+        .first()
+    )
+
+    if branch_assignment is None:
+        return (
+            False,
+            "La sucursal no tiene una región operativa vigente.",
+        )
+
+    if int(branch_assignment.region_id) != int(crew.region_id):
+        return (
+            False,
+            "El responsable pertenece a una cuadrilla de otra región.",
+        )
+
+    return True, None
 
 
 def _item_duplicate_key(item: MaintenancePreventiveItemORM):
@@ -881,6 +1213,7 @@ def validar_item_borrador(
     resolve_equipo: Callable = _resolve_equipo_by_code,
     equipo_asignado: Callable = _equipo_asignado_a_sucursal,
     resolve_responsable: Callable = _resolve_responsable,
+    validate_responsable: Callable = _validate_responsable_catalog,
 ) -> list[str]:
     """Resuelve y valida un renglón sin borrarlo si contiene errores."""
 
@@ -935,10 +1268,18 @@ def validar_item_borrador(
             errors.append("Responsable inexistente en Suite.")
         else:
             errors.append("Responsable vacío.")
-    elif not _validate_responsable_mantenimiento(responsable):
-        errors.append("El responsable no pertenece al departamento de Mantenimiento.")
     else:
-        item.responsable_user_id = int(responsable.id)
+        valid_responsable, responsible_error = validate_responsable(
+            responsable,
+            branch_id=item.sucursal_id,
+        )
+        if not valid_responsable:
+            errors.append(
+                responsible_error
+                or "Responsable inválido para programación preventiva."
+            )
+        else:
+            item.responsable_user_id = int(responsable.id)
 
     parsed_date = _parse_programmed_date(item.fecha_programada_input)
     if parsed_date is None:
