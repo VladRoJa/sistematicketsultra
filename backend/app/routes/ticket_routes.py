@@ -254,14 +254,22 @@ def _puede_validar_cierre_gerente(user: UserORM, ticket: Ticket) -> bool:
     """
     Permiso específico para aceptar/rechazar tickets en por_validar.
 
-    - El creador puede validar su propio ticket sin depender de su rol.
     - Admin puede validar cualquier ticket.
     - Gerente puede validar tickets de su sucursal destino.
+    - En tickets no preventivos se conserva compatibilidad: el creador puede
+      validar su propio ticket.
+    - En PREVENTIVO el creador no obtiene permiso por ser creador; evita que
+      Mantenimiento programe/ejecute y valide su mismo trabajo.
     """
-    if _es_creador(user, ticket):
+    if _es_admin_para_validar_cierre(user):
         return True
 
-    if _es_admin_para_validar_cierre(user):
+    es_preventivo = (
+        str(getattr(ticket, "tipo_mantenimiento", "") or "").strip().upper()
+        == "PREVENTIVO"
+    )
+
+    if not es_preventivo and _es_creador(user, ticket):
         return True
 
     if not _es_gerente_para_validar_cierre(user):
