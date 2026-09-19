@@ -1,10 +1,11 @@
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from flask import Flask
 
 from app.routes.ticket_routes import (
+    _preventive_close_requirement_error,
     _puede_validar_cierre_gerente,
     cierre_gerente_desde_cero,
 )
@@ -76,6 +77,65 @@ class TicketPreventiveValidationPermissionsTest(unittest.TestCase):
                 self._ticket(tipo="CORRECTIVO", creator="CREADOR", branch=4),
             )
         )
+
+
+class TicketPreventiveCloseRequirementsTest(unittest.TestCase):
+    def _ticket(self):
+        return SimpleNamespace(
+            id=88,
+            tipo_mantenimiento="PREVENTIVO",
+        )
+
+    def _query(self, first_value):
+        query = MagicMock()
+        query.filter.return_value = query
+        query.first.return_value = first_value
+        return query
+
+    def test_preventive_requires_bitacora(self):
+        with patch(
+            "app.routes.ticket_routes.PmBitacoraORM.query",
+            self._query(None),
+        ):
+            message = _preventive_close_requirement_error(
+                self._ticket()
+            )
+
+        self.assertIn("bitácora", message)
+
+    def test_preventive_requires_active_evidence(self):
+        with (
+            patch(
+                "app.routes.ticket_routes.PmBitacoraORM.query",
+                self._query(SimpleNamespace(id=1)),
+            ),
+            patch(
+                "app.routes.ticket_routes.TicketAttachmentORM.query",
+                self._query(None),
+            ),
+        ):
+            message = _preventive_close_requirement_error(
+                self._ticket()
+            )
+
+        self.assertIn("evidencia", message)
+
+    def test_preventive_with_bitacora_and_evidence_is_ready(self):
+        with (
+            patch(
+                "app.routes.ticket_routes.PmBitacoraORM.query",
+                self._query(SimpleNamespace(id=1)),
+            ),
+            patch(
+                "app.routes.ticket_routes.TicketAttachmentORM.query",
+                self._query(SimpleNamespace(id=2)),
+            ),
+        ):
+            message = _preventive_close_requirement_error(
+                self._ticket()
+            )
+
+        self.assertIsNone(message)
 
 
 class TicketPreventiveCleanupCloseTest(unittest.TestCase):
