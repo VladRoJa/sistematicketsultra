@@ -358,7 +358,15 @@ def db_lower_assigned():
     return func.lower(Ticket.asignado_a)
 
 
-def _closure_date(ticket: Ticket) -> date | None:
+def _validated_date(ticket: Ticket) -> date | None:
+    if (
+        str(ticket.tipo_mantenimiento or "").strip().upper()
+        == "PREVENTIVO"
+    ):
+        # En preventivos fecha_finalizado es ejecución del técnico;
+        # el KPI oficial concluye únicamente con validación del gerente.
+        return _business_date(ticket.fecha_validacion_cierre)
+
     return _business_date(
         ticket.fecha_validacion_cierre
         or ticket.fecha_finalizado
@@ -459,14 +467,14 @@ def _build_week_card(
         ticket
         for ticket in preventive_cohort
         if (
-            _closure_date(ticket) is not None
-            and _closure_date(ticket) <= week.end
+            _validated_date(ticket) is not None
+            and _validated_date(ticket) <= week.end
         )
     ]
     preventive_eventually = [
         ticket
         for ticket in preventive_cohort
-        if _closure_date(ticket) is not None
+        if _validated_date(ticket) is not None
     ]
     preventive_reprogrammed = [
         ticket
@@ -484,7 +492,7 @@ def _build_week_card(
     preventive_pending_now = [
         ticket
         for ticket in preventive_cohort
-        if _closure_date(ticket) is None
+        if _validated_date(ticket) is None
     ]
 
     corrective_due = [
@@ -499,8 +507,8 @@ def _build_week_card(
         ticket
         for ticket in corrective_due
         if (
-            _closure_date(ticket) is not None
-            and _closure_date(ticket) <= week.end
+            _validated_date(ticket) is not None
+            and _validated_date(ticket) <= week.end
         )
     ]
     corrective_reprogrammed = [
@@ -519,7 +527,7 @@ def _build_week_card(
     corrective_pending_now = [
         ticket
         for ticket in corrective_due
-        if _closure_date(ticket) is None
+        if _validated_date(ticket) is None
     ]
     corrective_demand = [
         ticket
@@ -534,8 +542,8 @@ def _build_week_card(
             _created_date(ticket) is not None
             and _created_date(ticket) < week.start
             and (
-                _closure_date(ticket) is None
-                or _closure_date(ticket) >= week.start
+                _validated_date(ticket) is None
+                or _validated_date(ticket) >= week.start
             )
         )
     ]
@@ -546,8 +554,8 @@ def _build_week_card(
             _created_date(ticket) is not None
             and _created_date(ticket) <= week.end
             and (
-                _closure_date(ticket) is None
-                or _closure_date(ticket) > week.end
+                _validated_date(ticket) is None
+                or _validated_date(ticket) > week.end
             )
         )
     ]
