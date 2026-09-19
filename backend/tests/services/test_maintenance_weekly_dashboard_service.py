@@ -115,6 +115,18 @@ class MaintenanceWeeklyDashboardServiceTest(unittest.TestCase):
             [2],
         )
         self.assertEqual(
+            card["preventive"]["missed"]["ticket_ids"],
+            [1],
+        )
+        self.assertEqual(
+            (
+                card["preventive"]["validated_on_time"]["count"]
+                + card["preventive"]["reprogrammed"]["count"]
+                + card["preventive"]["missed"]["count"]
+            ),
+            card["preventive"]["programmed"]["count"],
+        )
+        self.assertEqual(
             card["preventive"]["pending_now"]["ticket_ids"],
             [1],
         )
@@ -178,6 +190,18 @@ class MaintenanceWeeklyDashboardServiceTest(unittest.TestCase):
         self.assertEqual(
             card["corrective"]["reprogrammed"]["ticket_ids"],
             [10],
+        )
+        self.assertEqual(
+            card["corrective"]["missed"]["ticket_ids"],
+            [],
+        )
+        self.assertEqual(
+            (
+                card["corrective"]["validated_on_time"]["count"]
+                + card["corrective"]["reprogrammed"]["count"]
+                + card["corrective"]["missed"]["count"]
+            ),
+            card["corrective"]["due"]["count"],
         )
         self.assertEqual(
             set(card["corrective"]["demand"]["ticket_ids"]),
