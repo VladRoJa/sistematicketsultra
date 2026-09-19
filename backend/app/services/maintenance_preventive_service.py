@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 from typing import Callable
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func
 
@@ -15,6 +16,7 @@ from app.models.maintenance_preventive import (
     MaintenancePreventiveItemORM,
 )
 from app.models.sucursal_model import Sucursal
+from app.models.ticket_model import Ticket
 from app.models.user_model import UserORM
 from app.utils.pm_permissions import can_pm_configure
 
@@ -406,6 +408,156 @@ def eliminar_renglon_lote(
 
     db.session.delete(item)
     db.session.flush()
+
+
+BUSINESS_TZ = ZoneInfo("America/Tijuana")
+MAINTENANCE_DEPARTMENT_ID = 1
+
+
+def _programmed_datetime_utc(programmed_date: date) -> datetime:
+    local_dt = datetime.combine(
+        programmed_date,
+        time(hour=7),
+        tzinfo=BUSINESS_TZ,
+    )
+    return local_dt.astimezone(timezone.utc)
+
+
+def _published_duplicate_exists(
+    item: MaintenancePreventiveItemORM,
+) -> bool:
+    candidates = (
+        MaintenancePreventiveItemORM.query
+        .filter(
+            MaintenancePreventiveItemORM.id != item.id,
+            MaintenancePreventiveItemORM.ticket_id.isnot(None),
+            MaintenancePreventiveItemORM.sucursal_id == item.sucursal_id,
+            MaintenancePreventiveItemORM.inventario_id == item.inventario_id,
+            MaintenancePreventiveItemORM.fecha_programada == item.fecha_programada,
+        )
+        .all()
+    )
+
+    activity_key = _normalize_key(item.actividad)
+    return any(
+        _normalize_key(candidate.actividad) == activity_key
+        for candidate in candidates
+    )
+
+
+def publicar_lote_preventivo(
+    batch_id: int,
+    user,
+) -> list[Ticket]:
+    batch = _get_batch(batch_id)
+    _assert_batch_manageable(user, batch)
+
+    if batch.status != "BORRADOR":
+        raise MaintenancePreventiveStateError(
+            "Solo se pueden publicar lotes en BORRADOR."
+        )
+
+    items = list(batch.items or [])
+    if not items:
+        raise MaintenancePreventiveStateError(
+            "El lote no contiene renglones para publicar."
+        )
+
+    not_valid = [
+        item
+        for item in items
+        if item.validation_status != "VALIDO"
+    ]
+    if not_valid:
+        raise MaintenancePreventiveStateError(
+            "El lote contiene renglones pendientes o con error; "
+            "debe validarse completamente antes de publicar."
+        )
+
+    created_tickets: list[Ticket] = []
+
+    for item in items:
+        if item.ticket_id is not None:
+            raise MaintenancePreventiveStateError(
+                "El lote contiene un renglón que ya generó ticket."
+            )
+
+        if (
+            item.sucursal_id is None
+            or item.inventario_id is None
+            or item.responsable_user_id is None
+            or item.fecha_programada is None
+            or not _clean(item.actividad)
+        ):
+            raise MaintenancePreventiveStateError(
+                "Un renglón marcado como válido no tiene resolución completa."
+            )
+
+        if not _can_manage_branch(user, item.sucursal_id):
+            raise MaintenancePreventiveAuthorizationError(
+                "El lote contiene una sucursal fuera de tu alcance."
+            )
+
+        if _published_duplicate_exists(item):
+            raise MaintenancePreventiveStateError(
+                "Ya existe un preventivo publicado para el mismo equipo, "
+                "sucursal, fecha y actividad."
+            )
+
+        inventory = db.session.get(
+            InventarioGeneral,
+            int(item.inventario_id),
+        )
+        responsible = db.session.get(
+            UserORM,
+            int(item.responsable_user_id),
+        )
+
+        if inventory is None or responsible is None:
+            raise MaintenancePreventiveStateError(
+                "El equipo o responsable dejó de existir antes de publicar."
+            )
+
+        programmed_at = _programmed_datetime_utc(item.fecha_programada)
+
+        ticket = Ticket.create_ticket(
+            descripcion=_clean(item.actividad),
+            username=str(user.username),
+            sucursal_id=int(user.sucursal_id),
+            sucursal_id_destino=int(item.sucursal_id),
+            departamento_id=MAINTENANCE_DEPARTMENT_ID,
+            criticidad=1,
+            clasificacion_id=None,
+            aparato_id=int(item.inventario_id),
+            problema_detectado=None,
+            necesita_refaccion=False,
+            descripcion_refaccion=None,
+            ubicacion=None,
+            equipo=getattr(inventory, "nombre", None),
+            estado="abierto",
+            requiere_aprobacion=False,
+            tipo_mantenimiento="PREVENTIVO",
+            fecha_programada_original=programmed_at,
+            fecha_programada_actual=programmed_at,
+            commit=False,
+        )
+
+        ticket.asignado_a = str(responsible.username)
+        ticket.familia_equipo_id = getattr(
+            inventory,
+            "familia_equipo_id",
+            None,
+        )
+
+        item.ticket_id = ticket.id
+        created_tickets.append(ticket)
+
+    batch.status = "PUBLICADO"
+    batch.published_by_user_id = int(user.id)
+    batch.published_at = datetime.now(timezone.utc)
+
+    db.session.flush()
+    return created_tickets
 
 
 def serializar_item(item: MaintenancePreventiveItemORM) -> dict:
