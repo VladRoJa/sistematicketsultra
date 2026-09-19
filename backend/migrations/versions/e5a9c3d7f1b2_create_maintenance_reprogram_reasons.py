@@ -39,8 +39,18 @@ def upgrade():
             server_default=sa.text("0"),
             nullable=False,
         ),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "key",
