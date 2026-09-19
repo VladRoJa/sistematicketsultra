@@ -91,6 +91,98 @@ def test_schedule_ticket_reuses_ticket_and_appends_traceable_history():
     flag_modified.assert_called_once_with(ticket, "historial_fechas")
 
 
+def test_schedule_ticket_rejects_existing_commitment_change():
+    current = datetime(
+        2026,
+        9,
+        15,
+        14,
+        0,
+        tzinfo=timezone.utc,
+    )
+    ticket = SimpleNamespace(
+        id=100,
+        estado="en progreso",
+        departamento_id=1,
+        fecha_solucion=current,
+        fecha_en_progreso=current,
+        fecha_compromiso_original=current,
+        tipo_mantenimiento="CORRECTIVO",
+        origen_correctivo="REACTIVO",
+        historial_fechas=[],
+    )
+    ticket.asignar_fecha_compromiso = lambda value: (
+        service.Ticket.asignar_fecha_compromiso(ticket, value)
+    )
+    user = SimpleNamespace(username="mantenimiento")
+
+    with patch.object(
+        service,
+        "_scoped_maintenance_ticket",
+        return_value=ticket,
+    ):
+        with pytest.raises(
+            service.MaintenancePlannerError,
+            match="reprogramación auditada",
+        ):
+            service.schedule_ticket(
+                100,
+                user,
+                due_date="2026-09-18",
+                reason="Texto libre",
+            )
+
+
+def test_schedule_ticket_allows_same_due_without_duplicate_history():
+    current = datetime(
+        2026,
+        9,
+        15,
+        14,
+        0,
+        tzinfo=timezone.utc,
+    )
+    ticket = SimpleNamespace(
+        id=101,
+        estado="en progreso",
+        departamento_id=1,
+        fecha_solucion=current,
+        fecha_en_progreso=current,
+        fecha_compromiso_original=current,
+        tipo_mantenimiento="CORRECTIVO",
+        origen_correctivo="REACTIVO",
+        historial_fechas=[
+            {
+                "fecha": "2026-09-15T14:00:00+00:00",
+                "origen": "maintenance_planner_v2",
+                "motivo": "Inicial",
+                "fechaCambio": "2026-09-14T18:00:00+00:00",
+            }
+        ],
+    )
+    ticket.asignar_fecha_compromiso = lambda value: (
+        service.Ticket.asignar_fecha_compromiso(ticket, value)
+    )
+    user = SimpleNamespace(username="mantenimiento")
+
+    with (
+        patch.object(
+            service,
+            "_scoped_maintenance_ticket",
+            return_value=ticket,
+        ),
+        patch.object(service, "flag_modified"),
+    ):
+        service.schedule_ticket(
+            101,
+            user,
+            due_date="2026-09-15",
+            reason="Replay",
+        )
+
+    assert len(ticket.historial_fechas) == 1
+
+
 def test_technical_sucursales_are_not_selectable():
     root = SimpleNamespace(sucursal_id=ROOT_BRANCH_ID)
     corporate = SimpleNamespace(sucursal_id=CORPORATE_BRANCH_ID)
