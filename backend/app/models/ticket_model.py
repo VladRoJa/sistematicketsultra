@@ -732,7 +732,26 @@ class Ticket(db.Model):
         self.fecha_finalizado = None
 
         if nueva_fecha_compromiso:
-            self.fecha_solucion = nueva_fecha_compromiso.astimezone(timezone.utc)
+            nueva_fecha_utc = nueva_fecha_compromiso.astimezone(timezone.utc)
+            tipo_mantenimiento = (
+                str(self.tipo_mantenimiento or "").strip().upper()
+            )
+
+            if tipo_mantenimiento == "PREVENTIVO":
+                if self.fecha_programada_original is None:
+                    self.fecha_programada_original = (
+                        self.fecha_programada_actual or nueva_fecha_utc
+                    )
+                self.fecha_programada_actual = nueva_fecha_utc
+            else:
+                if (
+                    int(self.departamento_id or 0) == 1
+                    and self.fecha_compromiso_original is None
+                ):
+                    self.fecha_compromiso_original = (
+                        self.fecha_solucion or nueva_fecha_utc
+                    )
+                self.fecha_solucion = nueva_fecha_utc
 
         self._agregar_evento_historial_cierre(
             evento="rechazo_cierre_gerente",
