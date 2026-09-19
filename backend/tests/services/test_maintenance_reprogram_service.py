@@ -191,6 +191,68 @@ class MaintenanceReprogramServiceTest(unittest.TestCase):
                     },
                 )
 
+    def test_auxiliary_can_reprogram_without_configuration_access(self):
+        user = SimpleNamespace(
+            id=11,
+            username="AUX_PM",
+            rol="AUX_MANTENIMIENTO",
+            sucursal_id=4,
+            sucursales_ids=[4],
+        )
+        ticket = SimpleNamespace(
+            id=750,
+            departamento_id=1,
+            tipo_mantenimiento="CORRECTIVO",
+            estado="en progreso",
+            sucursal_id=4,
+            sucursal_id_destino=4,
+            fecha_solucion=datetime(
+                2026, 9, 20, 14, 0, tzinfo=timezone.utc
+            ),
+            fecha_compromiso_original=datetime(
+                2026, 9, 20, 14, 0, tzinfo=timezone.utc
+            ),
+            historial_fechas=[],
+        )
+        reason = self._reason()
+
+        with (
+            patch.object(
+                service.db.session,
+                "get",
+                side_effect=[ticket, reason],
+            ),
+            patch.object(service.db.session, "flush"),
+            patch.object(service, "flag_modified"),
+        ):
+            result = service.reprogramar_ticket_mantenimiento(
+                user,
+                750,
+                {
+                    "nueva_fecha": "2026-09-22",
+                    "reason_id": 1,
+                },
+            )
+
+        self.assertIs(result, ticket)
+        self.assertEqual(
+            ticket.fecha_solucion.astimezone(
+                service.BUSINESS_TZ
+            ).date().isoformat(),
+            "2026-09-22",
+        )
+
+        with self.assertRaises(
+            service.MaintenanceReprogramAuthorizationError
+        ):
+            service.crear_motivo_reprogramacion(
+                user,
+                {
+                    "key": "NO_DEBERIA",
+                    "nombre": "No debería",
+                },
+            )
+
     def test_same_date_is_rejected(self):
         current = datetime(2026, 9, 20, 14, 0, tzinfo=timezone.utc)
         ticket = SimpleNamespace(
