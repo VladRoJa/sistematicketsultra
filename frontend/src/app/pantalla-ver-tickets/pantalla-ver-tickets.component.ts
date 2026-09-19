@@ -41,6 +41,11 @@ import { refrescarDespuesDeCambioFiltro } from './helpers/refrescarDespuesDeCamb
 import { AsignarFechaModalComponent } from './modals/asignar-fecha-modal.component';
 import { cambiarEstadoTicket } from './helpers/pantalla-ver-tickets.estado-ticket';
 import { EditarFechaSolucionModalComponent } from './modals/editar-fecha-solucion-modal.component';
+import {
+  MaintenanceReprogramDialogComponent,
+  MaintenanceReprogramDialogResult,
+} from '../maintenance-planner/maintenance-reprogram-dialog.component';
+import { MaintenancePreventiveService } from '../services/maintenance-preventive.service';
 import { CatalogoService } from '../services/catalogo.service';
 import { mostrarAlertaToast,solicitarMotivoRechazoCierre } from '../utils/alertas';
 import { SucursalesService } from '../services/sucursales.service';
@@ -340,6 +345,7 @@ export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
     private sucursalesService: SucursalesService,
     private authService: AuthService, 
     private mantenimientoEquiposService: MantenimientoEquiposService,
+    private maintenancePreventiveService: MaintenancePreventiveService,
     private route: ActivatedRoute,
     private router: Router,
   ) {}
@@ -2063,9 +2069,84 @@ onCancelarAsignarFecha() {
   this.ticketParaAsignarFecha = null;
 }
 
-abrirEditarFechaSolucion(ticket: Ticket) {
-  const estado = (ticket.estado ?? '').toString().trim().toLowerCase();
-  if (estado !== 'en progreso') return; // ✅ solo editable en progreso
+puedeEditarFechaSolucion(ticket: Ticket): boolean {
+  const estado = String(ticket?.estado || '').trim().toLowerCase();
+  if (estado !== 'en progreso' || !ticket?.fecha_solucion) {
+    return false;
+  }
+
+  if (Number(ticket.departamento_id) !== 1) {
+    return Boolean(this.puedeEditarTickets);
+  }
+
+  if (this.esPreventivo(ticket)) {
+    return false;
+  }
+
+  const rol = String(this.user?.rol || '').trim().toUpperCase();
+  return [
+    'ADMIN',
+    'ADMINISTRADOR',
+    'SUPER_ADMIN',
+    'MANTENIMIENTO',
+    'SR_MANTENIMIENTO',
+  ].includes(rol);
+}
+
+abrirEditarFechaSolucion(ticket: Ticket): void {
+  if (!this.puedeEditarFechaSolucion(ticket)) {
+    return;
+  }
+
+  if (Number(ticket.departamento_id) === 1) {
+    const dialogRef = this.dialog.open<
+      MaintenanceReprogramDialogComponent,
+      { fechaActual: string | null; fechaSugerida?: string | null },
+      MaintenanceReprogramDialogResult | undefined
+    >(MaintenanceReprogramDialogComponent, {
+      width: '560px',
+      maxWidth: '92vw',
+      data: { fechaActual: ticket.fecha_solucion || null },
+      autoFocus: false,
+      restoreFocus: false,
+    });
+
+    dialogRef.afterClosed().subscribe((result) => {
+      if (!result?.fecha || !result.reasonId) {
+        return;
+      }
+
+      const nuevaFecha = this.formatearFechaLocalMantenimiento(
+        result.fecha,
+      );
+
+      this.maintenancePreventiveService
+        .reprogramMaintenanceTicket(ticket.id, {
+          nueva_fecha: nuevaFecha,
+          reason_id: result.reasonId,
+          comentario: result.comentario,
+        })
+        .subscribe({
+          next: () => {
+            mostrarAlertaToast(
+              'Compromiso reprogramado correctamente.',
+              'success',
+            );
+            this.refrescarTicketsPreservandoFiltros();
+          },
+          error: (error) => {
+            mostrarAlertaToast(
+              error?.error?.mensaje
+              || error?.error?.detail
+              || 'No se pudo reprogramar el compromiso.',
+              'error',
+            );
+          },
+        });
+    });
+
+    return;
+  }
 
   const dialogRef = this.dialog.open(EditarFechaSolucionModalComponent, {
     width: '560px',
@@ -2075,9 +2156,21 @@ abrirEditarFechaSolucion(ticket: Ticket) {
 
   dialogRef.afterClosed().subscribe(result => {
     if (result && result.fecha && result.motivo) {
-      asignarFechaSolucionYEnProgreso(this, ticket, result.fecha, result.motivo);
+      asignarFechaSolucionYEnProgreso(
+        this,
+        ticket,
+        result.fecha,
+        result.motivo,
+      );
     }
   });
+}
+
+private formatearFechaLocalMantenimiento(fecha: Date): string {
+  const year = fecha.getFullYear();
+  const month = String(fecha.getMonth() + 1).padStart(2, '0');
+  const day = String(fecha.getDate()).padStart(2, '0');
+  return year + '-' + month + '-' + day;
 }
 
 getCodigoInternoEquipo(ticket: Ticket): string {
