@@ -106,7 +106,7 @@ def _assert_ticket_scope(user, ticket: Ticket) -> None:
 
 def _parse_date(value) -> date:
     if isinstance(value, datetime):
-        return value.astimezone(BUSINESS_TZ).date()
+        return _normalize_utc(value).astimezone(BUSINESS_TZ).date()
 
     if isinstance(value, date):
         return value
