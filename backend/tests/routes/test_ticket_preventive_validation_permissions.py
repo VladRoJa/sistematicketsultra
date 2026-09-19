@@ -1,7 +1,13 @@
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
-from app.routes.ticket_routes import _puede_validar_cierre_gerente
+from flask import Flask
+
+from app.routes.ticket_routes import (
+    _puede_validar_cierre_gerente,
+    cierre_gerente_desde_cero,
+)
 
 
 class TicketPreventiveValidationPermissionsTest(unittest.TestCase):
@@ -69,6 +75,54 @@ class TicketPreventiveValidationPermissionsTest(unittest.TestCase):
                 user,
                 self._ticket(tipo="CORRECTIVO", creator="CREADOR", branch=4),
             )
+        )
+
+
+class TicketPreventiveCleanupCloseTest(unittest.TestCase):
+    def test_preventive_cannot_use_manager_cleanup_close(self):
+        app = Flask(__name__)
+        ticket = SimpleNamespace(
+            id=77,
+            tipo_mantenimiento="PREVENTIVO",
+            estado="abierto",
+            fecha_finalizado=None,
+        )
+        user = SimpleNamespace(
+            id=1,
+            username="GERENTE",
+            rol="GERENTE",
+            sucursal_id=4,
+        )
+
+        with app.test_request_context(
+            "/api/tickets/cierre/gerente-desde-cero/77",
+            method="POST",
+            json={"motivo": "Limpieza"},
+        ):
+            with (
+                patch(
+                    "app.routes.ticket_routes.get_jwt_identity",
+                    return_value=1,
+                ),
+                patch(
+                    "app.routes.ticket_routes.UserORM.get_by_id",
+                    return_value=user,
+                ),
+                patch(
+                    "app.routes.ticket_routes.Ticket.query.get",
+                    return_value=ticket,
+                ),
+                patch(
+                    "app.routes.ticket_routes._puede_cerrar_ticket_desde_cero",
+                    return_value=True,
+                ),
+            ):
+                response, status = cierre_gerente_desde_cero.__wrapped__(77)
+
+        self.assertEqual(status, 400)
+        self.assertIn(
+            "preventivo",
+            response.get_json()["mensaje"].lower(),
         )
 
 
