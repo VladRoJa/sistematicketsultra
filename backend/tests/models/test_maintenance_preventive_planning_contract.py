@@ -1,12 +1,50 @@
 import unittest
 
 from app.models.maintenance_preventive import (
+    MaintenanceCrewORM,
+    MaintenancePersonnelORM,
     MaintenancePreventiveBatchORM,
     MaintenancePreventiveItemORM,
 )
 
 
 class MaintenancePreventivePlanningContractTest(unittest.TestCase):
+    def test_crew_and_personnel_contract(self):
+        crew_columns = MaintenanceCrewORM.__table__.c
+        personnel_columns = MaintenancePersonnelORM.__table__.c
+
+        self.assertTrue(
+            {"nombre", "region_id", "activo"}.issubset(
+                set(crew_columns.keys())
+            )
+        )
+        self.assertTrue(
+            {"user_id", "crew_id", "activo"}.issubset(
+                set(personnel_columns.keys())
+            )
+        )
+
+        crew_region_fk = list(crew_columns.region_id.foreign_keys)
+        self.assertEqual(len(crew_region_fk), 1)
+        self.assertEqual(
+            crew_region_fk[0].target_fullname,
+            "suite_regions.id",
+        )
+
+        personnel_user_fk = list(personnel_columns.user_id.foreign_keys)
+        self.assertEqual(len(personnel_user_fk), 1)
+        self.assertEqual(
+            personnel_user_fk[0].target_fullname,
+            "users.id",
+        )
+
+        personnel_crew_fk = list(personnel_columns.crew_id.foreign_keys)
+        self.assertEqual(len(personnel_crew_fk), 1)
+        self.assertEqual(
+            personnel_crew_fk[0].target_fullname,
+            "maintenance_crews.id",
+        )
+
     def test_batch_contract(self):
         columns = MaintenancePreventiveBatchORM.__table__.c
 
