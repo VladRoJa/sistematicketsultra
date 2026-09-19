@@ -371,6 +371,36 @@ class MaintenanceWeeklyDashboardServiceTest(unittest.TestCase):
             {40, 41},
         )
 
+    def test_reprogram_history_serializer_exposes_reason_and_new_date(self):
+        ticket = self._ticket(
+            ticket_id=50,
+            maintenance_type="CORRECTIVO",
+            created=self._dt(20),
+            original_due=self._dt(22),
+            current_due=self._dt(29),
+            validated=None,
+        )
+        ticket.historial_fechas = [
+            {
+                "evento": "reprogramacion_mantenimiento",
+                "fecha_anterior": self._dt(22).isoformat(),
+                "fecha": self._dt(29).isoformat(),
+                "motivo_key": "FALTA_TECNICO",
+                "motivo": "Falta de técnico",
+                "comentario": "Cobertura",
+                "cambiadoPor": "MANT_BOSS",
+                "fechaCambio": self._dt(21).isoformat(),
+            }
+        ]
+
+        rows = service._serialize_reprogram_history(ticket)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["motivo"], "Falta de técnico")
+        self.assertEqual(rows[0]["comentario"], "Cobertura")
+        self.assertEqual(rows[0]["actor"], "MANT_BOSS")
+        self.assertIn("2026-09-29", rows[0]["fecha_nueva"])
+
     def test_aging_bucket_contract(self):
         self.assertEqual(service._aging_bucket(1), "1_7")
         self.assertEqual(service._aging_bucket(7), "1_7")
