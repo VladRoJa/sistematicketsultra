@@ -825,6 +825,85 @@ def _build_week_card(
     }
 
 
+def _serialize_reprogram_history(ticket: Ticket) -> list[dict]:
+    maintenance_type = str(
+        ticket.tipo_mantenimiento or ""
+    ).strip().upper()
+    original = (
+        _preventive_original_date(ticket)
+        if maintenance_type == "PREVENTIVO"
+        else _corrective_original_due(ticket)
+    )
+
+    rows = []
+
+    for item in (ticket.historial_fechas or []):
+        if not isinstance(item, dict):
+            continue
+
+        event = str(
+            item.get("evento")
+            or item.get("tipo")
+            or ""
+        ).strip().lower()
+
+        new_raw = (
+            item.get("fecha_nueva")
+            or item.get("fecha")
+            or item.get("fecha_solucion")
+        )
+        new_dt = _history_datetime(new_raw)
+        new_date = _business_date(new_dt)
+
+        is_explicit = event in {
+            "reprogramacion_mantenimiento",
+            "rechazo_cierre_gerente",
+        }
+        has_previous = bool(
+            item.get("fecha_anterior")
+            or item.get("fecha_previa")
+        )
+        differs_from_original = (
+            original is not None
+            and new_date is not None
+            and new_date != original
+        )
+
+        if not (is_explicit or has_previous or differs_from_original):
+            continue
+
+        rows.append({
+            "evento": event or "reprogramacion",
+            "fecha_anterior": (
+                item.get("fecha_anterior")
+                or item.get("fecha_previa")
+            ),
+            "fecha_nueva": (
+                new_dt.isoformat()
+                if new_dt is not None
+                else new_raw
+            ),
+            "motivo_key": item.get("motivo_key"),
+            "motivo": item.get("motivo"),
+            "comentario": item.get("comentario"),
+            "actor": (
+                item.get("cambiadoPor")
+                or item.get("usuario")
+                or item.get("actor")
+            ),
+            "fecha_cambio": (
+                item.get("fechaCambio")
+                or item.get("fecha_cambio")
+            ),
+        })
+
+    rows.sort(
+        key=lambda row: str(row.get("fecha_cambio") or ""),
+        reverse=True,
+    )
+    return rows
+
+
 def _serialize_ticket_summary(ticket: Ticket) -> dict:
     branch = ticket.sucursal_destino or ticket.sucursal
     inventory = ticket.inventario
@@ -890,6 +969,7 @@ def _serialize_ticket_summary(ticket: Ticket) -> dict:
         "ticket_preventivo_origen_id": (
             ticket.ticket_preventivo_origen_id
         ),
+        "reprogramaciones": _serialize_reprogram_history(ticket),
     }
 
 
