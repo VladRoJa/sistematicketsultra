@@ -212,6 +212,37 @@ class MaintenanceWeeklyDashboardServiceTest(unittest.TestCase):
             50.0,
         )
 
+    def test_manager_rejection_without_date_change_is_not_reprogramming(self):
+        original = self._dt(22)
+        ticket = self._ticket(
+            ticket_id=14,
+            maintenance_type="CORRECTIVO",
+            created=self._dt(20),
+            original_due=original,
+            current_due=original,
+            validated=None,
+        )
+        ticket.historial_fechas = [
+            {
+                "evento": "rechazo_cierre_gerente",
+                "fecha": original.isoformat(),
+                "fechaCambio": self._dt(23).isoformat(),
+                "motivo": "Corregir evidencia",
+            }
+        ]
+
+        self.assertFalse(
+            service._ticket_was_reprogrammed(
+                ticket,
+                service._corrective_original_due(ticket),
+                service._corrective_current_due(ticket),
+            )
+        )
+        self.assertEqual(
+            service._serialize_reprogram_history(ticket),
+            [],
+        )
+
     def test_reprogrammed_history_does_not_disappear_if_date_returns_to_original(self):
         original = self._dt(22)
         ticket = self._ticket(
