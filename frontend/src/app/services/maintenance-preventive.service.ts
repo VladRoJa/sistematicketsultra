@@ -98,31 +98,31 @@ export interface PreventiveValidationSummary {
 export class MaintenancePreventiveService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl =
-    \`\${environment.apiUrl}/tickets/preventive-planning\`;
+    `${environment.apiUrl}/tickets/preventive-planning`;
 
   getContext(): Observable<PreventivePlanningContext> {
     return this.http.get<PreventivePlanningContext>(
-      \`\${this.baseUrl}/context\`,
+      `${this.baseUrl}/context`,
     );
   }
 
   getEquipment(branchId: number): Observable<{ equipos: PreventiveEquipment[] }> {
     const params = new HttpParams().set('branch_id', String(branchId));
     return this.http.get<{ equipos: PreventiveEquipment[] }>(
-      \`\${this.baseUrl}/equipment\`,
+      `${this.baseUrl}/equipment`,
       { params },
     );
   }
 
   listBatches(): Observable<{ batches: PreventiveBatchSummary[] }> {
     return this.http.get<{ batches: PreventiveBatchSummary[] }>(
-      \`\${this.baseUrl}/batches\`,
+      `${this.baseUrl}/batches`,
     );
   }
 
   getBatch(batchId: number): Observable<PreventiveBatch> {
     return this.http.get<PreventiveBatch>(
-      \`\${this.baseUrl}/batches/\${batchId}\`,
+      `${this.baseUrl}/batches/${batchId}`,
     );
   }
 
@@ -134,7 +134,7 @@ export class MaintenancePreventiveService {
     notes?: string | null;
   }): Observable<PreventiveBatch> {
     return this.http.post<PreventiveBatch>(
-      \`\${this.baseUrl}/batches\`,
+      `${this.baseUrl}/batches`,
       payload,
     );
   }
@@ -151,7 +151,7 @@ export class MaintenancePreventiveService {
     }>,
   ): Observable<PreventiveBatch> {
     return this.http.post<PreventiveBatch>(
-      \`\${this.baseUrl}/batches/\${batchId}/items\`,
+      `${this.baseUrl}/batches/${batchId}/items`,
       { items },
     );
   }
@@ -172,14 +172,14 @@ export class MaintenancePreventiveService {
       mensaje: string;
       item: { id: number; validation_status: string };
     }>(
-      \`\${this.baseUrl}/batches/\${batchId}/items/\${itemId}\`,
+      `${this.baseUrl}/batches/${batchId}/items/${itemId}`,
       payload,
     );
   }
 
   deleteItem(batchId: number, itemId: number): Observable<{ mensaje: string }> {
     return this.http.delete<{ mensaje: string }>(
-      \`\${this.baseUrl}/batches/\${batchId}/items/\${itemId}\`,
+      `${this.baseUrl}/batches/${batchId}/items/${itemId}`,
     );
   }
 
@@ -191,7 +191,7 @@ export class MaintenancePreventiveService {
       summary: PreventiveValidationSummary;
       batch: PreventiveBatch;
     }>(
-      \`\${this.baseUrl}/batches/\${batchId}/validate\`,
+      `${this.baseUrl}/batches/${batchId}/validate`,
       {},
     );
   }
@@ -206,7 +206,7 @@ export class MaintenancePreventiveService {
       ticket_ids: number[];
       batch: PreventiveBatch;
     }>(
-      \`\${this.baseUrl}/batches/\${batchId}/publish\`,
+      `${this.baseUrl}/batches/${batchId}/publish`,
       {},
     );
   }
@@ -243,14 +243,14 @@ export class MaintenancePreventiveService {
       summary: PreventiveValidationSummary;
       batch: PreventiveBatch;
     }>(
-      \`\${this.baseUrl}/imports\`,
+      `${this.baseUrl}/imports`,
       formData,
     );
   }
 
   downloadTemplate(): Observable<Blob> {
     return this.http.get(
-      \`\${this.baseUrl}/template\`,
+      `${this.baseUrl}/template`,
       { responseType: 'blob' },
     );
   }
