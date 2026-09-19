@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
+from dateutil import parser
 from sqlalchemy import and_, or_
 from zoneinfo import ZoneInfo
 
@@ -403,6 +404,74 @@ def _corrective_current_due(
     return _business_date(ticket.fecha_solucion)
 
 
+def _history_datetime(value) -> datetime | None:
+    if not value:
+        return None
+
+    try:
+        parsed = parser.isoparse(str(value))
+    except Exception:
+        return None
+
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+
+    return parsed.astimezone(timezone.utc)
+
+
+def _corrective_due_as_of(
+    ticket: Ticket,
+    as_of: date,
+) -> date | None:
+    original = _corrective_original_due(ticket)
+    if original is None:
+        return None
+
+    latest_due = original
+    latest_change: datetime | None = None
+
+    for item in (ticket.historial_fechas or []):
+        if not isinstance(item, dict):
+            continue
+
+        changed_at = _history_datetime(
+            item.get("fechaCambio")
+            or item.get("fecha_cambio")
+        )
+        due_at = _history_datetime(
+            item.get("fecha")
+            or item.get("fecha_solucion")
+        )
+
+        if changed_at is None or due_at is None:
+            continue
+
+        changed_business_date = _business_date(changed_at)
+        if (
+            changed_business_date is None
+            or changed_business_date > as_of
+        ):
+            continue
+
+        if latest_change is None or changed_at > latest_change:
+            latest_change = changed_at
+            latest_due = _business_date(due_at) or latest_due
+
+    return latest_due
+
+
+def _aging_bucket(days: int) -> str:
+    normalized = max(1, int(days))
+
+    if normalized <= 7:
+        return "1_7"
+    if normalized <= 14:
+        return "8_14"
+    if normalized <= 30:
+        return "15_30"
+    return "31_PLUS"
+
+
 def _created_date(ticket: Ticket) -> date | None:
     return _business_date(ticket.fecha_creacion)
 
@@ -534,6 +603,26 @@ def _build_week_card(
         for ticket in correctives
         if _in_window(_created_date(ticket), week)
     ]
+    corrective_demand_reactive = [
+        ticket
+        for ticket in corrective_demand
+        if (
+            str(ticket.origen_correctivo or "REACTIVO")
+            .strip()
+            .upper()
+            == "REACTIVO"
+        )
+    ]
+    corrective_demand_detected = [
+        ticket
+        for ticket in corrective_demand
+        if (
+            str(ticket.origen_correctivo or "")
+            .strip()
+            .upper()
+            == "DETECTADO_EN_PREVENTIVO"
+        )
+    ]
 
     backlog_start = [
         ticket
@@ -557,6 +646,27 @@ def _build_week_card(
                 _validated_date(ticket) is None
                 or _validated_date(ticket) > week.end
             )
+        )
+    ]
+
+    backlog_overdue_start = [
+        ticket
+        for ticket in backlog_start
+        if (
+            _corrective_due_as_of(ticket, week.start)
+            is not None
+            and _corrective_due_as_of(ticket, week.start)
+            < week.start
+        )
+    ]
+    backlog_overdue_end = [
+        ticket
+        for ticket in backlog_end
+        if (
+            _corrective_due_as_of(ticket, week.end)
+            is not None
+            and _corrective_due_as_of(ticket, week.end)
+            <= week.end
         )
     ]
 
@@ -629,6 +739,12 @@ def _build_week_card(
                 denominator=corrective_denominator,
             ),
             "demand": _metric(corrective_demand),
+            "demand_reactive": _metric(
+                corrective_demand_reactive
+            ),
+            "demand_detected_preventive": _metric(
+                corrective_demand_detected
+            ),
             "fulfillment_percent": (
                 round(
                     len(corrective_on_time)
@@ -644,6 +760,12 @@ def _build_week_card(
             "start": _metric(backlog_start),
             "end": _metric(backlog_end),
             "delta": len(backlog_end) - len(backlog_start),
+            "overdue_start": _metric(backlog_overdue_start),
+            "overdue_end": _metric(backlog_overdue_end),
+            "overdue_delta": (
+                len(backlog_overdue_end)
+                - len(backlog_overdue_start)
+            ),
         },
     }
 
@@ -909,8 +1031,12 @@ VALID_DRILLDOWN_METRICS = {
     "corrective.missed",
     "corrective.pending_now",
     "corrective.demand",
+    "corrective.demand_reactive",
+    "corrective.demand_detected_preventive",
     "backlog.start",
     "backlog.end",
+    "backlog.overdue_start",
+    "backlog.overdue_end",
 }
 
 
@@ -983,13 +1109,64 @@ def build_dashboard_drilldown(
         else []
     )
 
+    as_of = (
+        week.start
+        if metric == "backlog.overdue_start"
+        else week.end
+    )
+    aging = None
+    ticket_rows = []
+
+    for ticket in tickets:
+        row = _serialize_ticket_summary(ticket)
+
+        if metric in {
+            "backlog.overdue_start",
+            "backlog.overdue_end",
+        }:
+            due_as_of = _corrective_due_as_of(
+                ticket,
+                as_of,
+            )
+            overdue_days = (
+                max(1, (as_of - due_as_of).days)
+                if due_as_of is not None
+                else None
+            )
+            row["commitment_as_of"] = (
+                due_as_of.isoformat()
+                if due_as_of is not None
+                else None
+            )
+            row["overdue_days"] = overdue_days
+            row["aging_bucket"] = (
+                _aging_bucket(overdue_days)
+                if overdue_days is not None
+                else None
+            )
+
+        ticket_rows.append(row)
+
+    if metric in {
+        "backlog.overdue_start",
+        "backlog.overdue_end",
+    }:
+        aging = {
+            "1_7": 0,
+            "8_14": 0,
+            "15_30": 0,
+            "31_PLUS": 0,
+        }
+        for row in ticket_rows:
+            bucket = row.get("aging_bucket")
+            if bucket in aging:
+                aging[bucket] += 1
+
     return {
         "metric": metric,
         "week_start": week.start.isoformat(),
         "week_end": week.end.isoformat(),
         "count": len(tickets),
-        "tickets": [
-            _serialize_ticket_summary(ticket)
-            for ticket in tickets
-        ],
+        "aging": aging,
+        "tickets": ticket_rows,
     }
