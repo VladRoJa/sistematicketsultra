@@ -786,6 +786,19 @@
           </button>
 
           <button
+            *ngIf="ticket.ticket_preventivo_origen_id"
+            type="button"
+            mat-icon-button
+            class="btn-ticket-origin"
+            [matTooltip]="'Detectado en preventivo #' + ticket.ticket_preventivo_origen_id"
+            matTooltipShowDelay="500"
+            (click)="abrirTicketPreventivoOrigen(ticket, $event)"
+            aria-label="Abrir preventivo origen"
+          >
+            <mat-icon>link</mat-icon>
+          </button>
+
+          <button
             *ngIf="ticket.has_attachment"
             type="button"
             mat-icon-button
