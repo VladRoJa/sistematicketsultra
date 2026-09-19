@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request
+from io import BytesIO
+
+from flask import Blueprint, jsonify, request, send_file
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.extensions import db
@@ -14,6 +16,7 @@ from app.services.maintenance_preventive_service import (
     MaintenancePreventiveStateError,
     actualizar_renglon_lote,
     agregar_renglones_lote,
+    assert_import_hash_available,
     crear_lote_preventivo,
     eliminar_renglon_lote,
     listar_lotes_preventivos,
@@ -21,6 +24,11 @@ from app.services.maintenance_preventive_service import (
     publicar_lote_preventivo,
     serializar_lote,
     validar_lote_preventivo,
+)
+from app.services.maintenance_preventive_import_service import (
+    MAX_IMPORT_BYTES,
+    build_preventive_template_xlsx,
+    parse_preventive_import,
 )
 
 
@@ -75,6 +83,87 @@ def _batch_summary(batch) -> dict:
             1 for item in items if item.validation_status == "PENDIENTE"
         ),
     }
+
+
+@maintenance_preventive_bp.route("/template", methods=["GET"])
+@jwt_required()
+def get_template():
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        # El guard real se evalúa reutilizando la operación de listado.
+        listar_lotes_preventivos(user)
+        content = build_preventive_template_xlsx()
+        return send_file(
+            BytesIO(content),
+            mimetype=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+            as_attachment=True,
+            download_name="plantilla_programacion_preventiva.xlsx",
+        )
+    except Exception as exc:
+        return _error_response(exc)
+
+
+@maintenance_preventive_bp.route("/imports", methods=["POST"])
+@jwt_required()
+def post_import():
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    file = request.files.get("file")
+    if file is None:
+        return jsonify({"mensaje": "Debes adjuntar file."}), 400
+
+    try:
+        content = file.read(MAX_IMPORT_BYTES + 1)
+        parsed = parse_preventive_import(
+            filename=file.filename or "",
+            content=content,
+        )
+
+        assert_import_hash_available(parsed["sha256"])
+
+        batch = crear_lote_preventivo(
+            user,
+            {
+                "nombre": (
+                    request.form.get("nombre")
+                    or parsed["filename"]
+                ),
+                "source_type": "ARCHIVO",
+                "period_start": request.form.get("period_start"),
+                "period_end": request.form.get("period_end"),
+                "source_filename": parsed["filename"],
+                "source_sha256": parsed["sha256"],
+                "notes": request.form.get("notes"),
+            },
+        )
+
+        agregar_renglones_lote(
+            batch.id,
+            user,
+            parsed["rows"],
+        )
+
+        summary = validar_lote_preventivo(batch.id, user)
+
+        db.session.commit()
+
+        return jsonify(
+            {
+                "summary": summary,
+                "batch": serializar_lote(batch),
+            }
+        ), 201
+    except Exception as exc:
+        db.session.rollback()
+        return _error_response(exc)
 
 
 @maintenance_preventive_bp.route("/batches", methods=["GET"])
