@@ -13,6 +13,51 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class MaintenanceReprogramReasonORM(db.Model):
+    __tablename__ = "maintenance_reprogram_reasons"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    key = db.Column(db.String(80), nullable=False, unique=True)
+    nombre = db.Column(db.String(180), nullable=False)
+    requiere_comentario = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=False,
+        server_default=db.text("false"),
+    )
+    activo = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True,
+        server_default=db.text("true"),
+    )
+    orden = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+        server_default=db.text("0"),
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        onupdate=_utc_now,
+    )
+
+    __table_args__ = (
+        db.Index(
+            "ix_maintenance_reprogram_reasons_active_order",
+            "activo",
+            "orden",
+        ),
+    )
+
+
 class MaintenanceCrewORM(db.Model):
     __tablename__ = "maintenance_crews"
 
