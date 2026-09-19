@@ -67,6 +67,7 @@ from app.services.maintenance_weekly_dashboard_service import (
     MaintenanceWeeklyDashboardError,
     build_dashboard_drilldown,
     build_weekly_dashboard,
+    get_dashboard_context,
 )
 
 
@@ -129,6 +130,22 @@ def _batch_summary(batch) -> dict:
             1 for item in items if item.validation_status == "PENDIENTE"
         ),
     }
+
+
+@maintenance_preventive_bp.route(
+    "/dashboard/context",
+    methods=["GET"],
+)
+@jwt_required()
+def get_maintenance_dashboard_context():
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        return jsonify(get_dashboard_context(user)), 200
+    except Exception as exc:
+        return _error_response(exc)
 
 
 @maintenance_preventive_bp.route(
