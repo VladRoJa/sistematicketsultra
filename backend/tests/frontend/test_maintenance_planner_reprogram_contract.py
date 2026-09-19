@@ -92,7 +92,7 @@ def test_backend_planner_is_corrective_only_and_schedule_is_initial_only():
 
     assert 'Ticket.tipo_mantenimiento == "CORRECTIVO"' in backend
     assert "El ticket ya tiene compromiso. Usa la reprogramación" in backend
-    assert '"can_reprogram": can_pm_configure(user)' in backend
+    assert '"can_reprogram": can_pm_reprogram(user)' in backend
 
 
 def test_generic_ticket_commitment_changes_are_guarded():
@@ -112,3 +112,4 @@ def test_general_tickets_uses_catalog_dialog_for_maintenance_reprogramming():
     assert "reprogramMaintenanceTicket(ticket.id" in ts
     assert "puedeEditarFechaSolucion(ticket" in ts
     assert "'SR_MANTENIMIENTO'" in ts
+    assert "'AUX_MANTENIMIENTO'" in ts
