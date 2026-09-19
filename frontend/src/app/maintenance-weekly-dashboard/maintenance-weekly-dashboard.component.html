@@ -230,13 +230,91 @@
             </div>
           </div>
 
-          <button
-            type="button"
-            class="open-ticket-button"
-            (click)="openTicket(ticket)"
+          <div class="ticket-actions">
+            <button
+              *ngIf="ticket.ticket_preventivo_origen_id"
+              type="button"
+              class="origin-ticket-button"
+              (click)="openTicketById(ticket.ticket_preventivo_origen_id)"
+            >
+              Ver preventivo #{{ ticket.ticket_preventivo_origen_id }}
+            </button>
+
+            <button
+              *ngIf="canReprogram(ticket)"
+              type="button"
+              class="reprogram-button"
+              (click)="openReprogram(ticket)"
+            >
+              Reprogramar
+            </button>
+
+            <button
+              type="button"
+              class="open-ticket-button"
+              (click)="openTicket(ticket)"
+            >
+              Abrir en Tickets
+            </button>
+          </div>
+          <section
+            *ngIf="reprogramTicketId === ticket.id"
+            class="reprogram-panel"
           >
-            Abrir en Tickets
-          </button>
+            <label>
+              <span>Nueva fecha</span>
+              <input
+                type="date"
+                [(ngModel)]="reprogramDate"
+              />
+            </label>
+
+            <label>
+              <span>Motivo</span>
+              <select [(ngModel)]="reprogramReasonId">
+                <option [ngValue]="null">Selecciona</option>
+                <option
+                  *ngFor="let reason of reprogramReasons"
+                  [ngValue]="reason.id"
+                >
+                  {{ reason.nombre }}
+                </option>
+              </select>
+            </label>
+
+            <label class="reprogram-comment">
+              <span>Comentario</span>
+              <textarea
+                [(ngModel)]="reprogramComment"
+                rows="2"
+                placeholder="Detalle adicional si aplica"
+              ></textarea>
+            </label>
+
+            <div *ngIf="reprogramError" class="reprogram-error">
+              {{ reprogramError }}
+            </div>
+
+            <div class="reprogram-actions">
+              <button
+                type="button"
+                class="close-button"
+                (click)="cancelReprogram()"
+                [disabled]="reprogramSaving"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                class="reprogram-save-button"
+                (click)="saveReprogram()"
+                [disabled]="reprogramSaving"
+              >
+                {{ reprogramSaving ? 'Guardando…' : 'Guardar reprogramación' }}
+              </button>
+            </div>
+          </section>
         </article>
 
         <div *ngIf="detail.tickets.length === 0" class="panel-state">
