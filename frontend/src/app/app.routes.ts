@@ -85,6 +85,12 @@ export const routes: Routes = [
               import('./maintenance-checklist-config/maintenance-checklist-config.component')
                 .then(m => m.MaintenanceChecklistConfigComponent),
           },
+          {
+            path: 'panel-mantenimiento',
+            loadComponent: () =>
+              import('./maintenance-weekly-dashboard/maintenance-weekly-dashboard.component')
+                .then(m => m.MaintenanceWeeklyDashboardComponent),
+          },
         ],
       },
       {
