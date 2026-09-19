@@ -312,12 +312,73 @@
   text-overflow: ellipsis;
 }
 
+.origin-strip {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.origin-strip button {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: 9px;
+  background: var(--ultra-gray-50);
+  color: inherit;
+  padding: 7px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.origin-strip button:hover {
+  border-color: var(--ultra-blue);
+  background: var(--ultra-info-soft);
+}
+
+.origin-strip span {
+  color: var(--ultra-gray-500);
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.origin-strip strong {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.backlog-section {
+  padding: 10px 14px 12px;
+}
+
+.backlog-label {
+  margin-bottom: 5px;
+  color: var(--ultra-gray-500);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.backlog-label--overdue {
+  margin-top: 9px;
+  color: #92400e;
+}
+
 .backlog-block {
   display: grid;
   grid-template-columns: 1fr auto 1fr auto;
   gap: 8px;
   align-items: center;
-  padding: 11px 14px;
+  padding: 0;
+}
+
+.backlog-block--overdue button {
+  border-color: rgba(245, 158, 11, 0.28);
+  background: var(--ultra-warning-soft);
 }
 
 .backlog-block button {
@@ -364,6 +425,34 @@
   background: var(--ultra-surface);
   color: var(--ultra-gray-700);
   padding: 0 11px;
+}
+
+.aging-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  border-bottom: 1px solid var(--ultra-gray-200);
+  background: var(--ultra-gray-200);
+}
+
+.aging-strip > div {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  background: var(--ultra-warning-soft);
+  text-align: center;
+}
+
+.aging-strip span {
+  color: #92400e;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.aging-strip strong {
+  color: #92400e;
+  font-size: 15px;
+  font-weight: 900;
 }
 
 .drilldown-list {
@@ -519,6 +608,14 @@
   }
 
   .drilldown-ticket {
+    grid-template-columns: 1fr;
+  }
+
+  .aging-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .origin-strip {
     grid-template-columns: 1fr;
   }
 
