@@ -169,8 +169,6 @@ class MaintenancePreventiveItemORM(db.Model):
         db.Integer,
         db.ForeignKey("tickets.id", ondelete="RESTRICT"),
         nullable=True,
-        unique=True,
-        index=True,
     )
 
     created_at = db.Column(
@@ -203,6 +201,10 @@ class MaintenancePreventiveItemORM(db.Model):
             "batch_id",
             "source_row_number",
             name="uq_maintenance_preventive_items_batch_source_row",
+        ),
+        db.UniqueConstraint(
+            "ticket_id",
+            name="uq_maintenance_preventive_items_ticket_id",
         ),
         db.Index(
             "ix_maintenance_preventive_items_batch_validation",
