@@ -41,6 +41,18 @@ from app.services.maintenance_my_program_service import (
     MaintenanceMyProgramError,
     build_my_program,
 )
+from app.services.maintenance_execution_service import (
+    MaintenanceExecutionError,
+    complete_preventive,
+    create_preventive_bitacora,
+    get_work_detail,
+)
+from app.services.ticket_attachment_service import (
+    create_ticket_image_attachment,
+)
+from app.services.ticket_attachment_image_service import (
+    MAX_TICKET_ATTACHMENT_BYTES,
+)
 
 
 maintenance_preventive_bp = Blueprint(
@@ -63,6 +75,8 @@ def _error_response(exc: Exception):
     if isinstance(exc, MaintenancePreventiveError):
         return jsonify({"mensaje": str(exc)}), 400
     if isinstance(exc, MaintenanceMyProgramError):
+        return jsonify({"mensaje": str(exc)}), exc.status_code
+    if isinstance(exc, MaintenanceExecutionError):
         return jsonify({"mensaje": str(exc)}), exc.status_code
     raise exc
 
@@ -96,6 +110,125 @@ def _batch_summary(batch) -> dict:
             1 for item in items if item.validation_status == "PENDIENTE"
         ),
     }
+
+
+@maintenance_preventive_bp.route(
+    "/my-program/<int:ticket_id>",
+    methods=["GET"],
+)
+@jwt_required()
+def get_my_program_ticket(ticket_id: int):
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        return jsonify(get_work_detail(user, ticket_id)), 200
+    except Exception as exc:
+        return _error_response(exc)
+
+
+@maintenance_preventive_bp.route(
+    "/my-program/<int:ticket_id>/bitacora",
+    methods=["POST"],
+)
+@jwt_required()
+def post_my_program_bitacora(ticket_id: int):
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        result = create_preventive_bitacora(
+            user,
+            ticket_id,
+            request.get_json(silent=True) or {},
+        )
+        db.session.commit()
+
+        return jsonify({
+            "mensaje": "Bitácora preventiva guardada.",
+            "bitacora_id": result["bitacora"].id,
+            "correctivo_id": (
+                result["corrective"].id
+                if result["corrective"] is not None
+                else None
+            ),
+        }), 201
+    except Exception as exc:
+        db.session.rollback()
+        return _error_response(exc)
+
+
+@maintenance_preventive_bp.route(
+    "/my-program/<int:ticket_id>/evidence",
+    methods=["POST"],
+)
+@jwt_required()
+def post_my_program_evidence(ticket_id: int):
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    file = request.files.get("image")
+    if file is None:
+        return jsonify({"mensaje": "Debes adjuntar image."}), 400
+
+    try:
+        detail = get_work_detail(user, ticket_id)
+        if not detail["bitacoras"]:
+            return jsonify({
+                "mensaje": (
+                    "Guarda la bitácora antes de adjuntar evidencia."
+                )
+            }), 409
+
+        content = file.read(MAX_TICKET_ATTACHMENT_BYTES + 1)
+        if len(content) > MAX_TICKET_ATTACHMENT_BYTES:
+            return jsonify({
+                "mensaje": "La imagen excede el límite máximo de 15 MB."
+            }), 400
+
+        attachment = create_ticket_image_attachment(
+            ticket_id=ticket_id,
+            content=content,
+            original_filename=file.filename or "evidencia.jpg",
+            declared_mime_type=file.mimetype,
+        )
+
+        return jsonify({
+            "mensaje": "Evidencia guardada.",
+            "attachment_id": attachment.id,
+        }), 201
+    except ValueError as exc:
+        return jsonify({"mensaje": str(exc)}), 400
+    except Exception as exc:
+        return _error_response(exc)
+
+
+@maintenance_preventive_bp.route(
+    "/my-program/<int:ticket_id>/complete",
+    methods=["POST"],
+)
+@jwt_required()
+def post_my_program_complete(ticket_id: int):
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        ticket = complete_preventive(user, ticket_id)
+        db.session.commit()
+
+        return jsonify({
+            "mensaje": "Preventivo realizado; pendiente de validación.",
+            "ticket_id": ticket.id,
+            "estado": ticket.estado,
+            "estado_cierre": ticket.estado_cierre,
+        }), 200
+    except Exception as exc:
+        db.session.rollback()
+        return _error_response(exc)
 
 
 @maintenance_preventive_bp.route("/my-program", methods=["GET"])
