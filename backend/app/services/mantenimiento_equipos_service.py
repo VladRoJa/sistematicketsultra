@@ -311,6 +311,20 @@ def preparar_compromiso_estructurado(ticket_id, user, payload, now=None):
         raise MantenimientoEquiposError("motivo es obligatorio.")
 
     solution_date = _parse_solution_date(payload.get("fecha_solucion"))
+
+    if ticket.fecha_solucion is not None:
+        current_due = ticket.fecha_solucion
+        if current_due.tzinfo is None:
+            current_due = current_due.replace(tzinfo=timezone.utc)
+        else:
+            current_due = current_due.astimezone(timezone.utc)
+
+        if current_due.date() != solution_date.astimezone(timezone.utc).date():
+            raise MantenimientoEquiposError(
+                "El ticket ya tiene compromiso. Usa la reprogramación "
+                "auditada de Mantenimiento."
+            )
+
     current_time = now or datetime.now(timezone.utc)
     if current_time.tzinfo is None:
         current_time = current_time.replace(tzinfo=timezone.utc)
