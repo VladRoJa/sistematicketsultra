@@ -122,8 +122,8 @@ class MaintenancePreventivePlanningContractTest(unittest.TestCase):
             == "uq_maintenance_preventive_items_ticket_id"
         ]
 
-        self.assertTrue(ticket_column.index)
-        self.assertTrue(ticket_column.unique)
+        self.assertFalse(bool(ticket_column.index))
+        self.assertFalse(bool(ticket_column.unique))
         self.assertEqual(len(unique_constraints), 1)
 
 
