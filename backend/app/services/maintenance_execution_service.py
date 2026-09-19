@@ -165,6 +165,32 @@ def serialize_checklist(template: MaintenanceChecklistTemplateORM | None) -> dic
     }
 
 
+def _build_checklist_snapshot(
+    template: MaintenanceChecklistTemplateORM | None,
+) -> dict | None:
+    if template is None:
+        return None
+
+    return {
+        "template_id": int(template.id),
+        "template_key": str(template.template_key),
+        "nombre": str(template.nombre),
+        "familia_equipo_id": int(template.familia_equipo_id),
+        "actividad_key": template.actividad_key,
+        "items": [
+            {
+                "id": int(item.id),
+                "item_key": str(item.item_key),
+                "etiqueta": str(item.etiqueta),
+                "orden": int(item.orden or 0),
+                "requerido": bool(item.requerido),
+            }
+            for item in template.items
+            if bool(item.activo)
+        ],
+    }
+
+
 def _serialize_bitacora(bitacora: PmBitacoraORM) -> dict:
     return {
         "id": int(bitacora.id),
@@ -174,6 +200,7 @@ def _serialize_bitacora(bitacora: PmBitacoraORM) -> dict:
         "estado_encontrado": bitacora.estado_encontrado,
         "notas": bitacora.notas,
         "checks": bitacora.checks or {},
+        "checklist_snapshot": bitacora.checklist_snapshot,
         "hallazgo_detectado": bool(bitacora.hallazgo_detectado),
         "hallazgo_descripcion": bitacora.hallazgo_descripcion,
         "created_by_user_id": bitacora.created_by_user_id,
@@ -359,7 +386,9 @@ def create_preventive_bitacora(
             "Describe el trabajo realizado en notas."
         )
 
+    checklist_template = resolve_checklist(ticket)
     checks = _validated_checks(ticket, payload.get("checks") or {})
+    checklist_snapshot = _build_checklist_snapshot(checklist_template)
 
     hallazgo = bool(payload.get("hallazgo_detectado", False))
     hallazgo_description = str(
@@ -390,6 +419,7 @@ def create_preventive_bitacora(
         hallazgo_detectado=hallazgo,
         hallazgo_descripcion=hallazgo_description or None,
         checks=checks,
+        checklist_snapshot=checklist_snapshot,
     )
     db.session.add(bitacora)
     db.session.flush()
