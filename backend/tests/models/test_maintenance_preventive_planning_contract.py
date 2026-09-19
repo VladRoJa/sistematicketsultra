@@ -52,6 +52,10 @@ class MaintenancePreventivePlanningContractTest(unittest.TestCase):
             {
                 "batch_id",
                 "source_row_number",
+                "sucursal_input",
+                "codigo_equipo_input",
+                "responsable_input",
+                "fecha_programada_input",
                 "sucursal_id",
                 "inventario_id",
                 "responsable_user_id",
@@ -62,6 +66,13 @@ class MaintenancePreventivePlanningContractTest(unittest.TestCase):
                 "validation_errors",
                 "ticket_id",
             }.issubset(set(columns.keys()))
+        )
+
+        self.assertTrue(
+            columns.sucursal_id.nullable
+            and columns.inventario_id.nullable
+            and columns.fecha_programada.nullable
+            and columns.actividad.nullable
         )
 
         constraint_names = {
