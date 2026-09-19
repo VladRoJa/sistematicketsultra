@@ -40,6 +40,17 @@ class MaintenancePreventiveDraftValidationTest(unittest.TestCase):
             resolve_equipo=lambda _value: equipment,
             equipo_asignado=lambda _inventory_id, _branch_id: assigned,
             resolve_responsable=lambda _value: responsible,
+            validate_responsable=lambda user, branch_id=None: (
+                (
+                    int(getattr(user, "department_id", 0) or 0) == 1,
+                    None
+                    if int(getattr(user, "department_id", 0) or 0) == 1
+                    else (
+                        "El responsable no pertenece al departamento "
+                        "de Mantenimiento."
+                    ),
+                )
+            ),
         )
 
     def test_valid_row_resolves_operational_ids(self):
@@ -98,6 +109,31 @@ class MaintenancePreventiveDraftValidationTest(unittest.TestCase):
             "El código no corresponde a un equipo de Aparatos.",
             errors,
         )
+
+    def test_responsible_catalog_scope_error_is_preserved(self):
+        item = self._item()
+        branch = SimpleNamespace(sucursal_id=4)
+        equipment = SimpleNamespace(id=90, tipo="aparatos")
+        responsible = SimpleNamespace(id=20, department_id=1)
+
+        errors = validar_item_borrador(
+            item,
+            resolve_sucursal=lambda _value: branch,
+            resolve_equipo=lambda _value: equipment,
+            equipo_asignado=lambda *_args: True,
+            resolve_responsable=lambda _value: responsible,
+            validate_responsable=lambda _user, branch_id=None: (
+                False,
+                "El responsable pertenece a una cuadrilla de otra región.",
+            ),
+        )
+
+        self.assertIn(
+            "El responsable pertenece a una cuadrilla de otra región.",
+            errors,
+        )
+        self.assertIsNone(item.responsable_user_id)
+        self.assertEqual(item.validation_status, "ERROR")
 
     def test_duplicate_inside_same_batch_is_rejected(self):
         seen_keys = set()
