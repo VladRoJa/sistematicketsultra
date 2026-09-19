@@ -37,6 +37,10 @@ from app.services.maintenance_preventive_import_service import (
     build_preventive_template_xlsx,
     parse_preventive_import,
 )
+from app.services.maintenance_my_program_service import (
+    MaintenanceMyProgramError,
+    build_my_program,
+)
 
 
 maintenance_preventive_bp = Blueprint(
@@ -58,6 +62,8 @@ def _error_response(exc: Exception):
         return jsonify({"mensaje": str(exc)}), 409
     if isinstance(exc, MaintenancePreventiveError):
         return jsonify({"mensaje": str(exc)}), 400
+    if isinstance(exc, MaintenanceMyProgramError):
+        return jsonify({"mensaje": str(exc)}), exc.status_code
     raise exc
 
 
@@ -90,6 +96,25 @@ def _batch_summary(batch) -> dict:
             1 for item in items if item.validation_status == "PENDIENTE"
         ),
     }
+
+
+@maintenance_preventive_bp.route("/my-program", methods=["GET"])
+@jwt_required()
+def get_my_program():
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        return jsonify(
+            build_my_program(
+                user,
+                start_date=request.args.get("start_date"),
+                end_date=request.args.get("end_date"),
+            )
+        ), 200
+    except Exception as exc:
+        return _error_response(exc)
 
 
 @maintenance_preventive_bp.route("/crews", methods=["GET"])
