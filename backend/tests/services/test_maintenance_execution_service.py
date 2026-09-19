@@ -170,6 +170,34 @@ class MaintenanceExecutionServiceTest(unittest.TestCase):
             ):
                 service.complete_preventive(user, 500)
 
+    def test_manager_rejection_creates_new_attempt_boundary(self):
+        ticket = self._ticket()
+        ticket.historial_fechas = [
+            {
+                "evento": "rechazo_cierre_gerente",
+                "fechaCambio": "2026-09-20T18:00:00+00:00",
+            }
+        ]
+
+        boundary = service._last_manager_rejection_at(ticket)
+
+        self.assertEqual(
+            boundary,
+            datetime(2026, 9, 20, 18, 0, tzinfo=timezone.utc),
+        )
+        self.assertFalse(
+            service._after_attempt_boundary(
+                datetime(2026, 9, 20, 17, 59, tzinfo=timezone.utc),
+                boundary,
+            )
+        )
+        self.assertTrue(
+            service._after_attempt_boundary(
+                datetime(2026, 9, 20, 18, 1, tzinfo=timezone.utc),
+                boundary,
+            )
+        )
+
     def test_complete_requires_evidence(self):
         ticket = self._ticket()
         ticket.estado = "en progreso"
