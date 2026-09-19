@@ -29,6 +29,8 @@ class MaintenanceWeeklyDashboardServiceTest(unittest.TestCase):
             fecha_solucion=current_due,
             fecha_validacion_cierre=validated,
             fecha_finalizado=finalized,
+            historial_fechas=[],
+            origen_correctivo="REACTIVO",
         )
 
     def _dt(self, day):
@@ -223,6 +225,89 @@ class MaintenanceWeeklyDashboardServiceTest(unittest.TestCase):
             {20, 22},
         )
         self.assertEqual(card["backlog"]["delta"], 0)
+
+
+    def test_due_as_of_uses_only_reprogramming_known_by_that_week(self):
+        ticket = self._ticket(
+            ticket_id=30,
+            maintenance_type="CORRECTIVO",
+            created=self._dt(10),
+            original_due=self._dt(21),
+            current_due=self._dt(30),
+            validated=None,
+        )
+        ticket.historial_fechas = [
+            {
+                "fecha": self._dt(30).isoformat(),
+                "fechaCambio": self._dt(25).isoformat(),
+                "motivo": "Refacción pendiente",
+            }
+        ]
+
+        self.assertEqual(
+            service._corrective_due_as_of(
+                ticket,
+                service.date(2026, 9, 23),
+            ),
+            service.date(2026, 9, 21),
+        )
+        self.assertEqual(
+            service._corrective_due_as_of(
+                ticket,
+                service.date(2026, 9, 26),
+            ),
+            service.date(2026, 9, 30),
+        )
+
+    def test_overdue_backlog_and_origin_segmentation(self):
+        week = service.WeekWindow(
+            start=service.date(2026, 9, 20),
+            end=service.date(2026, 9, 26),
+        )
+
+        reactive = self._ticket(
+            ticket_id=40,
+            maintenance_type="CORRECTIVO",
+            created=self._dt(20),
+            original_due=self._dt(21),
+            current_due=self._dt(21),
+            validated=None,
+        )
+        detected = self._ticket(
+            ticket_id=41,
+            maintenance_type="CORRECTIVO",
+            created=self._dt(21),
+            original_due=self._dt(22),
+            current_due=self._dt(22),
+            validated=None,
+        )
+        detected.origen_correctivo = "DETECTADO_EN_PREVENTIVO"
+
+        card = service._build_week_card(
+            week,
+            [],
+            [reactive, detected],
+        )
+
+        self.assertEqual(
+            card["corrective"]["demand_reactive"]["ticket_ids"],
+            [40],
+        )
+        self.assertEqual(
+            card["corrective"]["demand_detected_preventive"]["ticket_ids"],
+            [41],
+        )
+        self.assertEqual(
+            set(card["backlog"]["overdue_end"]["ticket_ids"]),
+            {40, 41},
+        )
+
+    def test_aging_bucket_contract(self):
+        self.assertEqual(service._aging_bucket(1), "1_7")
+        self.assertEqual(service._aging_bucket(7), "1_7")
+        self.assertEqual(service._aging_bucket(8), "8_14")
+        self.assertEqual(service._aging_bucket(15), "15_30")
+        self.assertEqual(service._aging_bucket(31), "31_PLUS")
 
 
 if __name__ == "__main__":
