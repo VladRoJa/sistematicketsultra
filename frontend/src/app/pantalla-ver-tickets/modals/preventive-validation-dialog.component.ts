@@ -48,7 +48,6 @@ export class PreventiveValidationDialogComponent implements OnInit {
 
   rejectionMode = false;
   rejectionReason = '';
-  newProgramDate = '';
 
   constructor(
     @Inject(MAT_DIALOG_DATA)
@@ -151,7 +150,6 @@ export class PreventiveValidationDialogComponent implements OnInit {
   cancelReject(): void {
     this.rejectionMode = false;
     this.rejectionReason = '';
-    this.newProgramDate = '';
   }
 
   accept(): void {
@@ -186,14 +184,11 @@ export class PreventiveValidationDialogComponent implements OnInit {
     this.saving = true;
     this.errorMessage = '';
 
-    const newDateIso = this.toLocalMiddayIso(this.newProgramDate);
-
     this.ticketService
       .cierreRechazarCreador(
         this.detail.ticket.id,
         {
           motivo: this.rejectionReason.trim(),
-          nueva_fecha_solucion: newDateIso,
         },
       )
       .subscribe({
@@ -259,14 +254,4 @@ export class PreventiveValidationDialogComponent implements OnInit {
     return row.id;
   }
 
-  private toLocalMiddayIso(value: string): string | undefined {
-    const raw = String(value || '').trim();
-    if (!raw) return undefined;
-
-    const [year, month, day] = raw.split('-').map(Number);
-    if (!year || !month || !day) return undefined;
-
-    const local = new Date(year, month - 1, day, 12, 0, 0);
-    return local.toISOString();
-  }
 }
