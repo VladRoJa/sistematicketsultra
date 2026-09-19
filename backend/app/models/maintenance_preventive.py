@@ -13,6 +13,105 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class MaintenanceCrewORM(db.Model):
+    __tablename__ = "maintenance_crews"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    nombre = db.Column(db.String(160), nullable=False)
+    region_id = db.Column(
+        db.Integer,
+        db.ForeignKey("suite_regions.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    activo = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True,
+        server_default=db.text("true"),
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        onupdate=_utc_now,
+    )
+
+    region = db.relationship("SuiteRegionORM")
+    personnel = db.relationship(
+        "MaintenancePersonnelORM",
+        back_populates="crew",
+        order_by="MaintenancePersonnelORM.id",
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "nombre",
+            name="uq_maintenance_crews_nombre",
+        ),
+        db.Index(
+            "ix_maintenance_crews_activo_region",
+            "activo",
+            "region_id",
+        ),
+    )
+
+
+class MaintenancePersonnelORM(db.Model):
+    __tablename__ = "maintenance_personnel"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    crew_id = db.Column(
+        db.Integer,
+        db.ForeignKey("maintenance_crews.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    activo = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True,
+        server_default=db.text("true"),
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        onupdate=_utc_now,
+    )
+
+    user = db.relationship("UserORM", lazy="joined")
+    crew = db.relationship(
+        "MaintenanceCrewORM",
+        back_populates="personnel",
+    )
+
+    __table_args__ = (
+        db.Index(
+            "ix_maintenance_personnel_activo_crew",
+            "activo",
+            "crew_id",
+        ),
+    )
+
+
 class MaintenancePreventiveBatchORM(db.Model):
     __tablename__ = "maintenance_preventive_batches"
 
