@@ -86,6 +86,30 @@ class TicketMaintenanceContractTest(unittest.TestCase):
         self.assertEqual(ticket.fecha_compromiso_original, first)
         self.assertEqual(ticket.fecha_solucion, second)
 
+    def test_legacy_current_commitment_is_preserved_before_reprogramming(self):
+        from datetime import datetime, timezone
+
+        previous = datetime(2026, 9, 20, 14, 0, tzinfo=timezone.utc)
+        new_due = datetime(2026, 9, 27, 14, 0, tzinfo=timezone.utc)
+
+        ticket = Ticket(
+            descripcion="Legacy",
+            username="tester",
+            sucursal_id=1,
+            sucursal_id_destino=1,
+            departamento_id=1,
+            criticidad=1,
+            estado="en progreso",
+            fecha_solucion=previous,
+            tipo_mantenimiento="CORRECTIVO",
+            origen_correctivo="REACTIVO",
+        )
+
+        ticket.asignar_fecha_compromiso(new_due)
+
+        self.assertEqual(ticket.fecha_compromiso_original, previous)
+        self.assertEqual(ticket.fecha_solucion, new_due)
+
     def test_preventive_commitment_helper_does_not_reclassify(self):
         from datetime import datetime, timezone
 
