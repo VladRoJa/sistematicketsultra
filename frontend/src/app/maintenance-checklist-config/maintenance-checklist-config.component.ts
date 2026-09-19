@@ -7,6 +7,7 @@ import {
   MaintenanceChecklistItem,
   MaintenanceChecklistTemplate,
   MaintenancePreventiveService,
+  MaintenanceReprogramReason,
 } from '../services/maintenance-preventive.service';
 
 @Component({
@@ -31,6 +32,12 @@ export class MaintenanceChecklistConfigComponent implements OnInit {
 
   newItemByTemplate: Record<number, string> = {};
 
+  reprogramReasons: MaintenanceReprogramReason[] = [];
+  newReasonKey = '';
+  newReasonName = '';
+  newReasonRequiresComment = false;
+  newReasonOrder = 0;
+
   loading = false;
   saving = false;
   errorMessage = '';
@@ -38,6 +45,7 @@ export class MaintenanceChecklistConfigComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadCatalog();
+    this.loadReprogramReasons();
   }
 
   loadCatalog(): void {
@@ -54,6 +62,77 @@ export class MaintenanceChecklistConfigComponent implements OnInit {
         this.setError(error, 'No se pudieron cargar los checklists.');
       },
     });
+  }
+
+  loadReprogramReasons(): void {
+    this.service.getReprogramReasons(true).subscribe({
+      next: (response) => {
+        this.reprogramReasons = response.reasons || [];
+      },
+      error: (error) => {
+        this.setError(
+          error,
+          'No se pudieron cargar los motivos de reprogramación.',
+        );
+      },
+    });
+  }
+
+  createReprogramReason(): void {
+    if (!this.newReasonKey.trim() || !this.newReasonName.trim()) {
+      this.errorMessage = 'Escribe key y nombre del motivo.';
+      return;
+    }
+
+    this.saving = true;
+    this.clearMessages();
+
+    this.service.createReprogramReason({
+      key: this.newReasonKey.trim(),
+      nombre: this.newReasonName.trim(),
+      requiere_comentario: this.newReasonRequiresComment,
+      orden: this.newReasonOrder,
+    }).subscribe({
+      next: () => {
+        this.saving = false;
+        this.newReasonKey = '';
+        this.newReasonName = '';
+        this.newReasonRequiresComment = false;
+        this.newReasonOrder = 0;
+        this.successMessage = 'Motivo creado.';
+        this.loadReprogramReasons();
+      },
+      error: (error) => {
+        this.saving = false;
+        this.setError(error, 'No se pudo crear el motivo.');
+      },
+    });
+  }
+
+  saveReprogramReason(reason: MaintenanceReprogramReason): void {
+    this.saving = true;
+    this.clearMessages();
+
+    this.service.updateReprogramReason(reason.id, {
+      nombre: reason.nombre,
+      requiere_comentario: reason.requiere_comentario,
+      activo: reason.activo,
+      orden: reason.orden,
+    }).subscribe({
+      next: () => {
+        this.saving = false;
+        this.successMessage = 'Motivo actualizado.';
+        this.loadReprogramReasons();
+      },
+      error: (error) => {
+        this.saving = false;
+        this.setError(error, 'No se pudo actualizar el motivo.');
+      },
+    });
+  }
+
+  trackReason(_: number, reason: MaintenanceReprogramReason): number {
+    return reason.id;
   }
 
   createTemplate(): void {
