@@ -217,12 +217,6 @@ def upgrade():
         unique=False,
     )
     op.create_index(
-        "ix_maintenance_preventive_items_ticket_id",
-        "maintenance_preventive_items",
-        ["ticket_id"],
-        unique=True,
-    )
-    op.create_index(
         "ix_maintenance_preventive_items_batch_validation",
         "maintenance_preventive_items",
         ["batch_id", "validation_status"],
@@ -243,10 +237,6 @@ def downgrade():
     )
     op.drop_index(
         "ix_maintenance_preventive_items_batch_validation",
-        table_name="maintenance_preventive_items",
-    )
-    op.drop_index(
-        "ix_maintenance_preventive_items_ticket_id",
         table_name="maintenance_preventive_items",
     )
     op.drop_index(
