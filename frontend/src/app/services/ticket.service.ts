@@ -18,6 +18,67 @@ export interface TicketValidationSummary {
   severity: 'none' | 'normal' | 'warning' | 'critical';
 }
 
+export interface PreventiveValidationChecklistResponse {
+  item_key: string;
+  etiqueta: string;
+  orden: number;
+  requerido: boolean;
+  resultado: string | null;
+}
+
+export interface PreventiveValidationBitacora {
+  id: number;
+  fecha: string | null;
+  created_at: string | null;
+  created_by_user_id: number | null;
+  created_by_username: string | null;
+  resultado: string;
+  estado_encontrado: string | null;
+  notas: string | null;
+  hallazgo_detectado: boolean;
+  hallazgo_descripcion: string | null;
+  checklist: {
+    template_id: number | null;
+    template_key: string | null;
+    nombre: string | null;
+    actividad_key: string | null;
+    responses: PreventiveValidationChecklistResponse[];
+  } | null;
+}
+
+export interface PreventiveValidationDetail {
+  ticket: {
+    id: number;
+    estado: string;
+    estado_cierre: string | null;
+    tipo_mantenimiento: string;
+    asignado_a: string | null;
+    descripcion: string;
+    sucursal_id: number | null;
+    sucursal: string;
+    inventario_id: number | null;
+    codigo_equipo: string | null;
+    equipo: string;
+    fecha_programada_original: string | null;
+    fecha_programada_actual: string | null;
+    has_attachment: boolean;
+  };
+  requirements: {
+    has_bitacora: boolean;
+    has_evidence: boolean;
+    ready_to_validate: boolean;
+  };
+  bitacoras: PreventiveValidationBitacora[];
+  related_correctives: Array<{
+    id: number;
+    estado: string;
+    descripcion: string;
+    criticidad: number;
+    asignado_a: string | null;
+    has_attachment: boolean;
+  }>;
+}
+
 @Injectable({ providedIn: 'root' })
 export class TicketService {
   private apiUrl = `${environment.apiUrl}/tickets`;
@@ -205,6 +266,20 @@ getValidationSummary(): Observable<TicketValidationSummary> {
     }
     const headers = this.authJsonHeaders();
     return this.http.post<any>(`${this.apiUrl}/cierre/rechazar-jefe/${id}`, payload, { headers, withCredentials: true });
+  }
+
+  getPreventiveValidationDetail(
+    id: number
+  ): Observable<PreventiveValidationDetail> {
+    const token = localStorage.getItem('token');
+    if (!token) return throwError(() => new Error('NO_TOKEN'));
+
+    const headers = this.authJsonHeaders();
+
+    return this.http.get<PreventiveValidationDetail>(
+      `${this.apiUrl}/cierre/preventivo-detalle/${id}`,
+      { headers, withCredentials: true }
+    );
   }
 
   cierreAceptarCreador(id: number): Observable<any> {
