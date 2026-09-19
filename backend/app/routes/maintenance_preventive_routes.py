@@ -297,6 +297,13 @@ def post_my_program_evidence(ticket_id: int):
                 )
             }), 409
 
+        if detail["has_evidence"]:
+            return jsonify({
+                "mensaje": (
+                    "Este intento preventivo ya tiene evidencia adjunta."
+                )
+            }), 409
+
         content = file.read(MAX_TICKET_ATTACHMENT_BYTES + 1)
         if len(content) > MAX_TICKET_ATTACHMENT_BYTES:
             return jsonify({
@@ -308,6 +315,7 @@ def post_my_program_evidence(ticket_id: int):
             content=content,
             original_filename=file.filename or "evidencia.jpg",
             declared_mime_type=file.mimetype,
+            allow_additional=True,
         )
 
         return jsonify({
