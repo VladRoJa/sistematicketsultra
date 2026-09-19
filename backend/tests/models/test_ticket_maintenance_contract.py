@@ -62,6 +62,53 @@ class TicketMaintenanceContractTest(unittest.TestCase):
             }.issubset(index_names)
         )
 
+    def test_first_corrective_commitment_is_frozen(self):
+        from datetime import datetime, timezone
+
+        first = datetime(2026, 9, 20, 14, 0, tzinfo=timezone.utc)
+        second = datetime(2026, 9, 27, 14, 0, tzinfo=timezone.utc)
+
+        ticket = Ticket(
+            descripcion="Prueba",
+            username="tester",
+            sucursal_id=1,
+            sucursal_id_destino=1,
+            departamento_id=1,
+            criticidad=1,
+            estado="abierto",
+        )
+
+        ticket.asignar_fecha_compromiso(first)
+        ticket.asignar_fecha_compromiso(second)
+
+        self.assertEqual(ticket.tipo_mantenimiento, "CORRECTIVO")
+        self.assertEqual(ticket.origen_correctivo, "REACTIVO")
+        self.assertEqual(ticket.fecha_compromiso_original, first)
+        self.assertEqual(ticket.fecha_solucion, second)
+
+    def test_preventive_commitment_helper_does_not_reclassify(self):
+        from datetime import datetime, timezone
+
+        due = datetime(2026, 9, 20, 14, 0, tzinfo=timezone.utc)
+
+        ticket = Ticket(
+            descripcion="Prueba PM",
+            username="tester",
+            sucursal_id=1,
+            sucursal_id_destino=1,
+            departamento_id=1,
+            criticidad=1,
+            estado="abierto",
+            tipo_mantenimiento="PREVENTIVO",
+        )
+
+        ticket.asignar_fecha_compromiso(due)
+
+        self.assertEqual(ticket.tipo_mantenimiento, "PREVENTIVO")
+        self.assertIsNone(ticket.origen_correctivo)
+        self.assertIsNone(ticket.fecha_compromiso_original)
+        self.assertEqual(ticket.fecha_solucion, due)
+
 
 if __name__ == "__main__":
     unittest.main()
