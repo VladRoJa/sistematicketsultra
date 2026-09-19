@@ -70,8 +70,6 @@ class MaintenancePersonnelORM(db.Model):
         db.Integer,
         db.ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        unique=True,
-        index=True,
     )
     crew_id = db.Column(
         db.Integer,
@@ -104,6 +102,10 @@ class MaintenancePersonnelORM(db.Model):
     )
 
     __table_args__ = (
+        db.UniqueConstraint(
+            "user_id",
+            name="uq_maintenance_personnel_user_id",
+        ),
         db.Index(
             "ix_maintenance_personnel_activo_crew",
             "activo",
