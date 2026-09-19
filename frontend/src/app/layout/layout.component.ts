@@ -598,6 +598,10 @@ private habilitarProgramacionPreventivaEnMenu(): void {
       label: 'Cuadrillas y personal',
       path: '/main/cuadrillas-mantenimiento',
     },
+    {
+      label: 'Checklists preventivos',
+      path: '/main/checklists-mantenimiento',
+    },
   ];
 
   const submenu = Array.isArray(ticketsMenu.submenu)
