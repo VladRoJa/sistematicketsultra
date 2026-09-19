@@ -59,6 +59,10 @@ class PmBitacoraORM(db.Model):
 
     checks = db.Column(db.JSON, nullable=False, default=dict)
 
+    # Snapshot inmutable del procedimiento vigente al ejecutar. Evita que
+    # cambios futuros de etiquetas/orden reescriban visualmente el histórico.
+    checklist_snapshot = db.Column(db.JSON, nullable=True)
+
     created_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
