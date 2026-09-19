@@ -95,6 +95,9 @@ def test_dashboard_component_uses_separate_files_and_clickable_metrics():
     assert "1–7 días" in html
     assert "+30 días" in html
     assert "Abrir en Tickets" in html
+    assert "Última reprogramación" in html
+    assert "ticket.reprogramaciones[0].motivo" in html
+    assert "ticket.reprogramaciones[0].fecha_nueva" in html
 
 
 def test_dashboard_route_and_menu_are_backend_authorized():
