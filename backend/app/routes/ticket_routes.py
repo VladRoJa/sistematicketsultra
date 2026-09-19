@@ -45,6 +45,48 @@ ticket_bp = Blueprint('tickets', __name__, url_prefix='/api/tickets')
 # Helpers
 # ─────────────────────────────────────────────────────────────
 
+def _maintenance_commitment_change_error(
+    ticket: Ticket,
+    new_due: datetime,
+) -> str | None:
+    try:
+        is_maintenance = int(ticket.departamento_id or 0) == 1
+    except (TypeError, ValueError):
+        is_maintenance = False
+
+    if not is_maintenance:
+        return None
+
+    maintenance_type = str(
+        ticket.tipo_mantenimiento or "CORRECTIVO"
+    ).strip().upper()
+
+    if maintenance_type == "PREVENTIVO":
+        return (
+            "Los preventivos no usan fecha_solucion como programación. "
+            "Usa la programación preventiva."
+        )
+
+    current_due = ticket.fecha_solucion
+    if current_due is None:
+        return None
+
+    business_tz = pytz.timezone("America/Tijuana")
+
+    def business_date(value):
+        if value.tzinfo is None:
+            value = pytz.utc.localize(value)
+        return value.astimezone(business_tz).date()
+
+    if business_date(current_due) == business_date(new_due):
+        return None
+
+    return (
+        "El ticket ya tiene compromiso. Para cambiarlo usa la "
+        "reprogramación auditada de Mantenimiento."
+    )
+
+
 def _send_email_maybe_async(to_list, subject, html):
     """
     Envío de correo: si SMTP_SYNC_DEBUG=1 => envío SIN hilo (bloqueante),
@@ -1169,9 +1211,18 @@ def update_ticket_status(id):
         if fecha_solucion:
             try:
                 fecha_parsed = parser.isoparse(fecha_solucion)
-                ticket.asignar_fecha_compromiso(
-                    fecha_parsed.astimezone(timezone.utc)
+                if getattr(fecha_parsed, "tzinfo", None) is None:
+                    fecha_parsed = fecha_parsed.replace(
+                        tzinfo=timezone.utc
+                    )
+                due_utc = fecha_parsed.astimezone(timezone.utc)
+                commitment_error = _maintenance_commitment_change_error(
+                    ticket,
+                    due_utc,
                 )
+                if commitment_error:
+                    return jsonify({"mensaje": commitment_error}), 409
+                ticket.asignar_fecha_compromiso(due_utc)
             except Exception as e:
                 print(f"❌ Error parseando fecha_solucion: {e}")
 
@@ -2546,7 +2597,14 @@ def set_compromiso(ticket_id):
                 if getattr(dt, "tzinfo", None) is None:
                     # Si viene naive, asúmelo como UTC
                     dt = dt.replace(tzinfo=timezone.utc)
-                t.asignar_fecha_compromiso(dt.astimezone(timezone.utc))
+                due_utc = dt.astimezone(timezone.utc)
+                commitment_error = _maintenance_commitment_change_error(
+                    t,
+                    due_utc,
+                )
+                if commitment_error:
+                    return jsonify({"mensaje": commitment_error}), 409
+                t.asignar_fecha_compromiso(due_utc)
             except Exception as e:
                 return jsonify({"mensaje": f"Fecha de solución inválida: {e}"}), 400
 
