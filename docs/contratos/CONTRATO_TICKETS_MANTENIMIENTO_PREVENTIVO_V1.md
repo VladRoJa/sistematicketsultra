@@ -585,7 +585,38 @@ El técnico operativo no podrá reprogramar unilateralmente su propio trabajo.
 
 El gerente de sucursal tampoco deberá modificar la programación de mantenimiento salvo que tenga permiso explícito.
 
-## 24. Cohorte semanal preventiva
+## 24. Semana operativa canónica
+
+Para este módulo, toda semana operativa se define de forma obligatoria como:
+
+**domingo → sábado**
+
+Esta convención aplica de manera uniforme a:
+
+- programación preventiva;
+- cohortes preventivas;
+- cohortes correctivas;
+- panel semanal;
+- backlog histórico;
+- tendencias;
+- drill-downs;
+- filtros por semana;
+- snapshots históricos.
+
+No deberá utilizarse semana ISO lunes-domingo para estos indicadores.
+
+Ejemplo:
+
+```text
+Semana operativa
+Domingo 20/09/2026
+→
+Sábado 26/09/2026
+```
+
+La lógica existente del PM/Planner que ya trabaja domingo-sábado deberá conservarse como referencia canónica.
+
+## 25. Cohorte semanal preventiva
 
 La semana de origen del preventivo se determina por su:
 
@@ -593,7 +624,7 @@ La semana de origen del preventivo se determina por su:
 
 Un preventivo programado para Semana 39 continuará perteneciendo estadísticamente a Semana 39 aunque posteriormente se realice en Semana 40.
 
-## 25. Cohorte semanal correctiva
+## 26. Cohorte semanal correctiva
 
 La semana de origen del correctivo para medición de cumplimiento se determina por:
 
@@ -605,7 +636,7 @@ La pregunta que responde el indicador es:
 
 > ¿Qué correctivos debían quedar resueltos esta semana?
 
-## 26. Resultado histórico semanal
+## 27. Resultado histórico semanal
 
 Cada cohorte deberá distinguir:
 
@@ -627,7 +658,7 @@ Semana 39
 
 La reprogramación no deberá borrar la obligación original.
 
-## 27. Cumplimiento estricto
+## 28. Cumplimiento estricto
 
 Para preventivos:
 
@@ -647,7 +678,7 @@ correctivos comprometidos originalmente
 
 Una resolución tardía podrá actualizar el estado actual del ticket, pero no convertir retroactivamente un incumplimiento histórico en cumplimiento en tiempo.
 
-## 28. Estado actual vs resultado histórico
+## 29. Estado actual vs resultado histórico
 
 El sistema deberá distinguir:
 
@@ -671,7 +702,7 @@ Estado actual:
 33 / 35 ya concluidos
 ```
 
-## 29. Panel semanal
+## 30. Panel semanal
 
 Se agregará una vista analítica dentro del ecosistema de Tickets/Mantenimiento.
 
@@ -698,7 +729,7 @@ BACKLOG
 112 → 101
 ```
 
-## 30. Ventana histórica
+## 31. Ventana histórica
 
 Por defecto se visualizará una ventana manejable, por ejemplo:
 
@@ -709,7 +740,7 @@ En escritorio podrán distribuirse varias semanas por fila.
 
 No deberá convertirse en una tabla horizontal infinita.
 
-## 31. Tendencias
+## 32. Tendencias
 
 Además de los cuadrantes semanales se incluirá una lectura histórica.
 
@@ -728,7 +759,7 @@ Se deberán distinguir dos conceptos:
 
 No deberán mezclarse cantidades y porcentajes como si representaran el mismo fenómeno.
 
-## 32. Backlog
+## 33. Backlog
 
 Se distinguirán:
 
@@ -750,7 +781,7 @@ Backlog vencido:
 79 → 67
 ```
 
-## 33. Backlog histórico
+## 34. Backlog histórico
 
 El tablero deberá responder correctamente:
 
@@ -768,7 +799,7 @@ según resulte más seguro y eficiente después de revisar el modelo actual.
 
 La información histórica no deberá modificarse retroactivamente por cierres posteriores.
 
-## 34. Antigüedad del backlog
+## 35. Antigüedad del backlog
 
 En el drill-down del backlog vencido se deberá poder analizar:
 
@@ -779,7 +810,7 @@ En el drill-down del backlog vencido se deberá poder analizar:
 
 No es necesario mostrar esta distribución en el cuadrante principal.
 
-## 35. Correctivos recibidos
+## 36. Correctivos recibidos
 
 Además de los correctivos comprometidos en una semana se podrá mostrar el volumen de correctivos creados/recibidos durante esa semana.
 
@@ -795,7 +826,7 @@ de:
 
 Cuánto trabajo debía resolverse.
 
-## 36. Correctivos detectados preventivamente
+## 37. Correctivos detectados preventivamente
 
 Los correctivos deberán poder segmentarse por origen:
 
@@ -817,7 +848,7 @@ Esto permitirá analizar si el programa preventivo comienza a detectar fallas an
 
 Esta relación deberá interpretarse como señal operacional y no automáticamente como causalidad estadística.
 
-## 37. Filtros del panel
+## 38. Filtros del panel
 
 El mismo panel deberá soportar diferentes niveles:
 
@@ -839,7 +870,7 @@ El alcance permitido dependerá de los permisos del usuario.
 
 No se crearán dashboards distintos para cada rol si el mismo componente puede resolver el alcance mediante permisos y filtros.
 
-## 38. Drill-down
+## 39. Drill-down
 
 Todo indicador deberá llevar al detalle.
 
@@ -871,7 +902,7 @@ Principio:
 
 No deberán existir cifras importantes sin posibilidad de inspeccionar su origen.
 
-## 39. Alcance por rol
+## 40. Alcance por rol
 
 ### Dirección / lector global
 
@@ -906,7 +937,7 @@ Continúa utilizando la vista actual de Tickets y valida únicamente tickets den
 
 El backend será la fuente real de permisos.
 
-## 40. Mobile-first para ejecución
+## 41. Mobile-first para ejecución
 
 Las interfaces del técnico deberán cumplir:
 
@@ -921,7 +952,7 @@ Las interfaces del técnico deberán cumplir:
 
 La experiencia administrativa podrá priorizar escritorio.
 
-## 41. Auditoría
+## 42. Auditoría
 
 Deberá conservarse trazabilidad de:
 
@@ -941,7 +972,7 @@ Deberá conservarse trazabilidad de:
 
 Los datos históricos relevantes no deberán sobrescribirse.
 
-## 42. Integridad
+## 43. Integridad
 
 Debe evitarse:
 
@@ -954,7 +985,7 @@ Debe evitarse:
 - validar un trabajo propio cuando el flujo requiera gerente;
 - generar relaciones preventivo/correctivo mediante texto libre.
 
-## 43. Zona horaria
+## 44. Zona horaria
 
 Todos los cálculos operativos de semanas, cierres y compromiso deberán utilizar de manera consistente:
 
@@ -962,7 +993,7 @@ Todos los cálculos operativos de semanas, cierres y compromiso deberán utiliza
 
 Deberá evitarse mezclar fechas UTC directamente con fechas operativas sin conversión explícita.
 
-## 44. Cambios de base de datos
+## 45. Cambios de base de datos
 
 Cualquier campo, tabla o relación nueva deberá implementarse mediante migración Alembic.
 
@@ -982,7 +1013,7 @@ Entre las estructuras que probablemente serán necesarias se encuentran, sujeto 
 
 No se deberán crear tablas duplicadas si el modelo actual ya resuelve correctamente alguna de estas entidades.
 
-## 45. Arquitectura frontend
+## 46. Arquitectura frontend
 
 La funcionalidad permanecerá dentro del ecosistema de Tickets.
 
@@ -998,7 +1029,7 @@ El HTML contendrá únicamente estructura, bindings simples y llamadas a método
 
 La vista móvil del técnico y las vistas administrativas podrán compartir servicios, pero no deberán convertirse en un único componente gigante.
 
-## 46. Arquitectura backend
+## 47. Arquitectura backend
 
 El backend deberá centralizar:
 
@@ -1015,7 +1046,7 @@ El frontend no será responsable de imponer seguridad.
 
 Los endpoints deberán respetar JWT, sucursales y alcance del usuario.
 
-## 47. Compatibilidad con Tickets actuales
+## 48. Compatibilidad con Tickets actuales
 
 Los correctivos existentes deberán seguir funcionando.
 
@@ -1033,7 +1064,7 @@ El desarrollo no deberá romper:
 - filtros;
 - relaciones con inventario.
 
-## 48. Resultado esperado
+## 49. Resultado esperado
 
 Al terminar el desarrollo Suite deberá permitir responder preguntas como:
 
@@ -1052,7 +1083,7 @@ Al terminar el desarrollo Suite deberá permitir responder preguntas como:
 - ¿Qué región/sucursal/cuadrilla explica un resultado?
 - ¿Qué tickets forman cada indicador?
 
-## 49. Principio final
+## 50. Principio final
 
 El desarrollo no deberá convertirse únicamente en un calendario de mantenimiento.
 
