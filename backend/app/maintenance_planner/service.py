@@ -9,7 +9,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.sucursal_model import Sucursal
 from app.models.ticket_model import Ticket
-from app.utils.pm_permissions import can_pm_execute, can_pm_view
+from app.utils.pm_permissions import can_pm_configure, can_pm_execute, can_pm_view
 from app.utils.sucursal_audience import (
     SUCURSAL_AUDIENCE_ANALYTICAL,
     SUCURSAL_AUDIENCE_OPERATIONAL,
@@ -444,6 +444,7 @@ def build_planner_board(
         "permissions": {
             "can_view": True,
             "can_schedule": can_pm_execute(user),
+            "can_reprogram": can_pm_configure(user),
         },
     }
 
