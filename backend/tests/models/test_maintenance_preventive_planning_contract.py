@@ -1,5 +1,9 @@
 import unittest
 
+from app.models.maintenance_checklist import (
+    MaintenanceChecklistItemORM,
+    MaintenanceChecklistTemplateORM,
+)
 from app.models.maintenance_preventive import (
     MaintenanceCrewORM,
     MaintenancePersonnelORM,
@@ -9,6 +13,46 @@ from app.models.maintenance_preventive import (
 
 
 class MaintenancePreventivePlanningContractTest(unittest.TestCase):
+    def test_checklist_contract(self):
+        template_columns = MaintenanceChecklistTemplateORM.__table__.c
+        item_columns = MaintenanceChecklistItemORM.__table__.c
+
+        self.assertTrue(
+            {
+                "template_key",
+                "familia_equipo_id",
+                "nombre",
+                "actividad_key",
+                "activo",
+            }.issubset(set(template_columns.keys()))
+        )
+        self.assertTrue(
+            {
+                "template_id",
+                "item_key",
+                "etiqueta",
+                "orden",
+                "requerido",
+                "activo",
+            }.issubset(set(item_columns.keys()))
+        )
+
+        family_fk = list(
+            template_columns.familia_equipo_id.foreign_keys
+        )
+        self.assertEqual(len(family_fk), 1)
+        self.assertEqual(
+            family_fk[0].target_fullname,
+            "familia_equipo.id",
+        )
+
+        template_fk = list(item_columns.template_id.foreign_keys)
+        self.assertEqual(len(template_fk), 1)
+        self.assertEqual(
+            template_fk[0].target_fullname,
+            "maintenance_checklist_templates.id",
+        )
+
     def test_crew_and_personnel_contract(self):
         crew_columns = MaintenanceCrewORM.__table__.c
         personnel_columns = MaintenancePersonnelORM.__table__.c
