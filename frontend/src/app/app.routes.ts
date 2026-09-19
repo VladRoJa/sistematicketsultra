@@ -73,6 +73,12 @@ export const routes: Routes = [
               import('./maintenance-crew-config/maintenance-crew-config.component')
                 .then(m => m.MaintenanceCrewConfigComponent),
           },
+          {
+            path: 'mi-programa',
+            loadComponent: () =>
+              import('./maintenance-my-program/maintenance-my-program.component')
+                .then(m => m.MaintenanceMyProgramComponent),
+          },
         ],
       },
       {
