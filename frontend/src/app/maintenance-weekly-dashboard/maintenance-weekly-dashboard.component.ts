@@ -46,6 +46,18 @@ export class MaintenanceWeeklyDashboardComponent implements OnInit {
     return [...(this.dashboard?.weeks || [])].reverse();
   }
 
+  get visibleBranches() {
+    const branches = this.dashboard?.context?.sucursales || [];
+
+    if (!this.regionId) {
+      return branches;
+    }
+
+    return branches.filter(
+      (branch) => branch.region_id === this.regionId,
+    );
+  }
+
   get visibleCrews() {
     const crews = this.dashboard?.context?.cuadrillas || [];
 
@@ -100,12 +112,22 @@ export class MaintenanceWeeklyDashboardComponent implements OnInit {
 
   onRegionChanged(): void {
     if (
+      this.branchId
+      && !this.visibleBranches.some(
+        (branch) => branch.id === this.branchId,
+      )
+    ) {
+      this.branchId = null;
+    }
+
+    if (
       this.crewId
       && !this.visibleCrews.some((crew) => crew.id === this.crewId)
     ) {
       this.crewId = null;
       this.responsibleUserId = null;
     }
+
     this.loadDashboard();
   }
 
