@@ -2357,6 +2357,19 @@ def cierre_gerente_desde_cero(ticket_id):
 
         estado_actual = (t.estado or "").strip().lower()
 
+        if (
+            str(getattr(t, "tipo_mantenimiento", "") or "")
+            .strip()
+            .upper()
+            == "PREVENTIVO"
+        ):
+            return jsonify({
+                "mensaje": (
+                    "Un preventivo no puede cerrarse por limpieza. "
+                    "Debe pasar por ejecución y validación."
+                )
+            }), 400
+
         estados_permitidos = {"abierto", "en progreso"}
 
         if estado_actual not in estados_permitidos:
