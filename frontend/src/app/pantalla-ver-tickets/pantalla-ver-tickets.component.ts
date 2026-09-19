@@ -211,11 +211,16 @@ export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
   ocultarFinalizados: boolean = true;
   private readonly estadoQueryParamPorValidar = 'por_validar';
   private estadoFiltroDesdeQueryParam: string | null = null;
+  private ticketIdDesdeQueryParam: number | null = null;
   private queryParamsSubscription?: Subscription;
   private filtroEstadoQueryAplicado = false;
   private filtroEstadoQueryRetryId: ReturnType<typeof setTimeout> | null = null;
   private filtroEstadoQueryIntentos = 0;
   private readonly filtroEstadoQueryMaxIntentos = 30;
+  private filtroTicketQueryAplicado = false;
+  private filtroTicketQueryRetryId: ReturnType<typeof setTimeout> | null = null;
+  private filtroTicketQueryIntentos = 0;
+  private readonly filtroTicketQueryMaxIntentos = 30;
 
   // Temporales
   fechaCreacionTemp = { start: null as Date | null, end: null as Date | null };
@@ -403,6 +408,7 @@ async ngOnInit() {
 
   TicketInit.cargarTickets(this);
   this.programarAplicacionFiltroEstadoDesdeQueryParam();
+  this.programarAplicacionFiltroTicketDesdeQueryParam();
 
   // 🔁 Escuchar eventos de refresco desde el servicio
   this.refrescoService.refrescarTabla$.subscribe(() => {
@@ -420,6 +426,11 @@ ngOnDestroy(): void {
   if (this.filtroEstadoQueryRetryId) {
     clearTimeout(this.filtroEstadoQueryRetryId);
     this.filtroEstadoQueryRetryId = null;
+  }
+
+  if (this.filtroTicketQueryRetryId) {
+    clearTimeout(this.filtroTicketQueryRetryId);
+    this.filtroTicketQueryRetryId = null;
   }
 }
 
@@ -551,9 +562,36 @@ private limpiarEstadoQueryParam(): void {
   });
 }
 
+private limpiarTicketIdQueryParam(): void {
+  this.router.navigate([], {
+    relativeTo: this.route,
+    queryParams: {
+      ticket_id: null,
+    },
+    queryParamsHandling: 'merge',
+    replaceUrl: true,
+  });
+}
+
 private escucharFiltroEstadoDesdeQueryParams(): void {
   this.queryParamsSubscription = this.route.queryParamMap.subscribe((params) => {
     const estado = this.normalizarTextoFiltro(params.get('estado'));
+    const ticketIdRaw = Number(params.get('ticket_id'));
+
+    if (Number.isInteger(ticketIdRaw) && ticketIdRaw > 0) {
+      this.ticketIdDesdeQueryParam = ticketIdRaw;
+      this.filtroTicketQueryAplicado = false;
+      this.filtroTicketQueryIntentos = 0;
+
+      // El drill-down puede apuntar a tickets históricos/finalizados.
+      this.selectedTicketYear = 'all';
+      this.ocultarFinalizados = false;
+
+      this.programarAplicacionFiltroTicketDesdeQueryParam();
+    } else {
+      this.ticketIdDesdeQueryParam = null;
+      this.filtroTicketQueryAplicado = false;
+    }
 
     if (estado !== this.estadoQueryParamPorValidar) {
       this.estadoFiltroDesdeQueryParam = null;
@@ -586,6 +624,70 @@ private programarAplicacionFiltroEstadoDesdeQueryParam(): void {
     this.filtroEstadoQueryRetryId = null;
     this.aplicarFiltroEstadoDesdeQueryParamSiEsPosible();
   }, 100);
+}
+
+private programarAplicacionFiltroTicketDesdeQueryParam(): void {
+  if (!this.ticketIdDesdeQueryParam || this.filtroTicketQueryAplicado) {
+    return;
+  }
+
+  if (this.filtroTicketQueryRetryId) {
+    clearTimeout(this.filtroTicketQueryRetryId);
+  }
+
+  this.filtroTicketQueryRetryId = setTimeout(() => {
+    this.filtroTicketQueryRetryId = null;
+    this.aplicarFiltroTicketDesdeQueryParamSiEsPosible();
+  }, 100);
+}
+
+private aplicarFiltroTicketDesdeQueryParamSiEsPosible(): void {
+  const ticketId = this.ticketIdDesdeQueryParam;
+
+  if (!ticketId || this.filtroTicketQueryAplicado) {
+    return;
+  }
+
+  const tickets = Array.isArray(this.ticketsCompletos)
+    ? this.ticketsCompletos
+    : [];
+
+  if (!tickets.length) {
+    this.filtroTicketQueryIntentos += 1;
+
+    if (this.filtroTicketQueryIntentos <= this.filtroTicketQueryMaxIntentos) {
+      this.programarAplicacionFiltroTicketDesdeQueryParam();
+    }
+
+    return;
+  }
+
+  const ticket = tickets.find(
+    (row) => Number(row.id) === Number(ticketId)
+  );
+
+  if (!ticket) {
+    this.filtroTicketQueryIntentos += 1;
+
+    if (this.filtroTicketQueryIntentos <= this.filtroTicketQueryMaxIntentos) {
+      this.programarAplicacionFiltroTicketDesdeQueryParam();
+      return;
+    }
+
+    this.filtroTicketQueryAplicado = true;
+    this.limpiarTicketIdQueryParam();
+    mostrarAlertaToast(
+      `No se encontró el ticket #${ticketId} dentro de tu alcance.`,
+      'error'
+    );
+    return;
+  }
+
+  this.filtroTicketQueryAplicado = true;
+  this.filtroTicketQueryIntentos = 0;
+  this.filteredTickets = [ticket];
+  this.actualizarVistaTicketsFiltrados();
+  this.limpiarTicketIdQueryParam();
 }
 
 private aplicarFiltroEstadoDesdeQueryParamSiEsPosible(): void {
@@ -670,6 +772,7 @@ refrescarTicketsPreservandoFiltros(): void {
 
       this.changeDetectorRef.detectChanges();
       this.programarAplicacionFiltroEstadoDesdeQueryParam();
+      this.programarAplicacionFiltroTicketDesdeQueryParam();
     },
     error: (err) => {
       console.error('No se pudieron refrescar tickets después de la acción:', err);
