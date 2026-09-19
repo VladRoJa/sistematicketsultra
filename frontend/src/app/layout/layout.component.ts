@@ -424,6 +424,7 @@ const menuMantenimientoGerencial = [
   }
 
 this.habilitarControlEnMenuSiAplica(menuControl);
+this.habilitarProgramacionPreventivaEnMenu();
 this.habilitarMaintenancePlannerEnMenu();
 
 if (
@@ -516,6 +517,57 @@ private habilitarControlEnMenuSiAplica(menuControl: any): void {
         // El backend es la autoridad. Si responde 401/403 no se publica el menú.
       },
     });
+}
+
+private habilitarProgramacionPreventivaEnMenu(): void {
+  if (!this.puedeConfigurarProgramacionPreventivaPorRol()) {
+    return;
+  }
+
+  const ticketsMenu = this.menuItems.find(
+    (item) => item.label === 'Tickets'
+  );
+
+  if (!ticketsMenu) {
+    return;
+  }
+
+  const preventiveItem = {
+    label: 'Programación preventiva',
+    path: '/main/programacion-preventiva',
+  };
+
+  const submenu = Array.isArray(ticketsMenu.submenu)
+    ? ticketsMenu.submenu
+    : [];
+
+  if (
+    submenu.some(
+      (item: { path: string }) => item.path === preventiveItem.path
+    )
+  ) {
+    return;
+  }
+
+  ticketsMenu.submenu = [
+    ...submenu,
+    preventiveItem,
+  ];
+
+  this.sincronizarMenuConRutaActual();
+}
+
+private puedeConfigurarProgramacionPreventivaPorRol(): boolean {
+  const user = this.authService.getUser();
+  const rol = String(user?.rol ?? user?.role ?? '').trim().toUpperCase();
+
+  return [
+    'ADMIN',
+    'ADMINISTRADOR',
+    'SUPER_ADMIN',
+    'MANTENIMIENTO',
+    'SR_MANTENIMIENTO',
+  ].includes(rol);
 }
 
 private habilitarMaintenancePlannerEnMenu(): void {
