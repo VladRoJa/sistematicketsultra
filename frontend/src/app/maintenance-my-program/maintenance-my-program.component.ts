@@ -47,7 +47,6 @@ export class MaintenanceMyProgramComponent implements OnInit {
   evidenceFile: File | null = null;
   bitacoraSaved = false;
   evidenceSaved = false;
-  derivedCorrectiveId: number | null = null;
 
   readonly foundStateOptions = [
     { value: 'BUENO' as const, label: 'Bueno' },
@@ -242,10 +241,13 @@ export class MaintenanceMyProgramComponent implements OnInit {
   }
 
   saveBitacora(): void {
+    const ticketId = this.expandedTicketId;
+    const estadoEncontrado = this.estadoEncontrado;
+
     if (
-      !this.expandedTicketId
+      !ticketId
       || !this.canSaveBitacora
-      || !this.estadoEncontrado
+      || !estadoEncontrado
     ) {
       return;
     }
@@ -255,9 +257,9 @@ export class MaintenanceMyProgramComponent implements OnInit {
     this.workSuccessMessage = '';
 
     this.service.createWorkBitacora(
-      this.expandedTicketId,
+      ticketId,
       {
-        estado_encontrado: this.estadoEncontrado,
+        estado_encontrado: estadoEncontrado,
         notas: this.notas.trim(),
         checks: { ...this.checkValues },
         hallazgo_detectado: this.hallazgoDetectado,
@@ -274,7 +276,6 @@ export class MaintenanceMyProgramComponent implements OnInit {
       next: (response) => {
         this.workSavingStep = null;
         this.bitacoraSaved = true;
-        this.derivedCorrectiveId = response.correctivo_id;
         this.workSuccessMessage = response.correctivo_id
           ? 'Bitácora guardada y correctivo generado #'
             + String(response.correctivo_id)
@@ -433,6 +434,5 @@ export class MaintenanceMyProgramComponent implements OnInit {
     this.evidenceFile = null;
     this.bitacoraSaved = false;
     this.evidenceSaved = false;
-    this.derivedCorrectiveId = null;
   }
 }
