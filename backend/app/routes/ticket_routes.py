@@ -923,7 +923,9 @@ def update_ticket_status(id):
         if fecha_solucion:
             try:
                 fecha_parsed = parser.isoparse(fecha_solucion)
-                ticket.fecha_solucion = fecha_parsed.astimezone(timezone.utc)
+                ticket.asignar_fecha_compromiso(
+                    fecha_parsed.astimezone(timezone.utc)
+                )
             except Exception as e:
                 print(f"❌ Error parseando fecha_solucion: {e}")
 
@@ -2298,7 +2300,7 @@ def set_compromiso(ticket_id):
                 if getattr(dt, "tzinfo", None) is None:
                     # Si viene naive, asúmelo como UTC
                     dt = dt.replace(tzinfo=timezone.utc)
-                t.fecha_solucion = dt.astimezone(timezone.utc)
+                t.asignar_fecha_compromiso(dt.astimezone(timezone.utc))
             except Exception as e:
                 return jsonify({"mensaje": f"Fecha de solución inválida: {e}"}), 400
 
