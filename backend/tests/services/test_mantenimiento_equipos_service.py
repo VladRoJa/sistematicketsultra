@@ -163,6 +163,46 @@ class MantenimientoEquiposServiceTest(unittest.TestCase):
             ["Programación de reparación", "Compromiso inicial"],
         )
 
+    def test_diagnostico_no_reprograma_compromiso_existente(self):
+        self.ticket.fecha_solucion = datetime(
+            2026,
+            9,
+            1,
+            14,
+            0,
+            tzinfo=timezone.utc,
+        )
+        self.ticket.fecha_compromiso_original = self.ticket.fecha_solucion
+        self.ticket.tipo_mantenimiento = "CORRECTIVO"
+        self.ticket.origen_correctivo = "REACTIVO"
+
+        with self.assertRaisesRegex(
+            service.MantenimientoEquiposError,
+            "reprogramación auditada",
+        ):
+            self._prepare()
+
+    def test_diagnostico_permite_repetir_misma_fecha(self):
+        self.ticket.fecha_solucion = datetime(
+            2026,
+            9,
+            2,
+            14,
+            0,
+            tzinfo=timezone.utc,
+        )
+        self.ticket.fecha_compromiso_original = self.ticket.fecha_solucion
+        self.ticket.tipo_mantenimiento = "CORRECTIVO"
+        self.ticket.origen_correctivo = "REACTIVO"
+
+        result, _ = self._prepare()
+
+        self.assertIs(result, self.ticket)
+        self.assertEqual(
+            self.ticket.fecha_solucion.date().isoformat(),
+            "2026-09-02",
+        )
+
     def test_falla_de_otra_familia_es_rechazada(self):
         self.failure.familia_equipo_id = 8
 
