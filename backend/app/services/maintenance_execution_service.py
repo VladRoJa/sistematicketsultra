@@ -12,6 +12,7 @@ from app.models.maintenance_checklist import (
 )
 from app.models.pm_bitacora import PmBitacoraORM
 from app.models.ticket_model import Ticket
+from app.models.ticket_attachment import TicketAttachmentORM
 from app.services.maintenance_my_program_service import (
     MaintenanceMyProgramAuthorizationError,
     require_my_program_access,
@@ -198,6 +199,16 @@ def get_work_detail(user, ticket_id: int) -> dict:
     inventory = ticket.inventario
     branch = ticket.sucursal_destino or ticket.sucursal
 
+    has_evidence = (
+        TicketAttachmentORM.query
+        .filter(
+            TicketAttachmentORM.ticket_id == ticket.id,
+            TicketAttachmentORM.deleted_at.is_(None),
+        )
+        .first()
+        is not None
+    )
+
     return {
         "ticket": {
             "id": int(ticket.id),
@@ -230,6 +241,7 @@ def get_work_detail(user, ticket_id: int) -> dict:
             "actividad": ticket.descripcion,
         },
         "checklist": serialize_checklist(resolve_checklist(ticket)),
+        "has_evidence": has_evidence,
         "bitacoras": [
             _serialize_bitacora(bitacora)
             for bitacora in bitacoras
