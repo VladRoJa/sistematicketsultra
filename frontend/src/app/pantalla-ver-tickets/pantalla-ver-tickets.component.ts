@@ -2790,6 +2790,26 @@ abrirRevisionPreventivo(ticket: Ticket): void {
   });
 }
 
+abrirTicketPreventivoOrigen(
+  ticket: Ticket,
+  event?: Event,
+): void {
+  event?.stopPropagation();
+
+  const ticketId = Number(ticket?.ticket_preventivo_origen_id);
+  if (!Number.isInteger(ticketId) || ticketId <= 0) {
+    return;
+  }
+
+  this.router.navigate([], {
+    relativeTo: this.route,
+    queryParams: {
+      ticket_id: ticketId,
+    },
+    queryParamsHandling: 'merge',
+  });
+}
+
 esCreador(ticket: Ticket): boolean {
   if (!ticket) return false;
 
