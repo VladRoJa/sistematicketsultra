@@ -2883,16 +2883,12 @@ def cierre_rechazar_creador(ticket_id):
     nueva_compromiso = data.get("nueva_fecha_solucion")
     dt_new = None
 
-    if (
-        str(t.tipo_mantenimiento or "").strip().upper()
-        == "PREVENTIVO"
-        and nueva_compromiso
-    ):
+    if int(t.departamento_id or 0) == 1 and nueva_compromiso:
         return jsonify({
             "mensaje": (
-                "El gerente puede rechazar el preventivo, pero no "
-                "reprogramarlo desde la validación. Usa la acción "
-                "de reprogramación autorizada de Mantenimiento."
+                "El rechazo de un ticket de Mantenimiento no cambia "
+                "su programación/compromiso. Usa la reprogramación "
+                "auditada de Mantenimiento como acción separada."
             )
         }), 409
 
