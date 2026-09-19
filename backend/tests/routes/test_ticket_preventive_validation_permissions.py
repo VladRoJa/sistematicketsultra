@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 from flask import Flask
 
 from app.routes.ticket_routes import (
+    _maintenance_commitment_change_error,
     _preventive_close_requirement_error,
     _puede_validar_cierre_gerente,
     cierre_gerente_desde_cero,
@@ -77,6 +78,81 @@ class TicketPreventiveValidationPermissionsTest(unittest.TestCase):
                 self._ticket(tipo="CORRECTIVO", creator="CREADOR", branch=4),
             )
         )
+
+
+class TicketMaintenanceCommitmentGuardTest(unittest.TestCase):
+    def test_first_corrective_commitment_is_allowed(self):
+        ticket = SimpleNamespace(
+            departamento_id=1,
+            tipo_mantenimiento="CORRECTIVO",
+            fecha_solucion=None,
+        )
+        due = __import__("datetime").datetime(
+            2026,
+            9,
+            20,
+            14,
+            0,
+            tzinfo=__import__("datetime").timezone.utc,
+        )
+
+        self.assertIsNone(
+            _maintenance_commitment_change_error(ticket, due)
+        )
+
+    def test_existing_corrective_commitment_requires_audited_reprogram(self):
+        from datetime import datetime, timezone
+
+        ticket = SimpleNamespace(
+            departamento_id=1,
+            tipo_mantenimiento="CORRECTIVO",
+            fecha_solucion=datetime(
+                2026,
+                9,
+                20,
+                14,
+                0,
+                tzinfo=timezone.utc,
+            ),
+        )
+        new_due = datetime(
+            2026,
+            9,
+            27,
+            14,
+            0,
+            tzinfo=timezone.utc,
+        )
+
+        message = _maintenance_commitment_change_error(
+            ticket,
+            new_due,
+        )
+
+        self.assertIn("reprogramación auditada", message)
+
+    def test_preventive_rejects_fecha_solucion_semantics(self):
+        from datetime import datetime, timezone
+
+        ticket = SimpleNamespace(
+            departamento_id=1,
+            tipo_mantenimiento="PREVENTIVO",
+            fecha_solucion=None,
+        )
+
+        message = _maintenance_commitment_change_error(
+            ticket,
+            datetime(
+                2026,
+                9,
+                20,
+                14,
+                0,
+                tzinfo=timezone.utc,
+            ),
+        )
+
+        self.assertIn("preventivos", message.lower())
 
 
 class TicketPreventiveCloseRequirementsTest(unittest.TestCase):
