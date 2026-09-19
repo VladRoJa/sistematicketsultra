@@ -15,15 +15,20 @@ from app.services.maintenance_preventive_service import (
     MaintenancePreventiveNotFoundError,
     MaintenancePreventiveStateError,
     actualizar_renglon_lote,
+    actualizar_cuadrilla,
     agregar_renglones_lote,
     assert_import_hash_available,
+    crear_cuadrilla,
     crear_lote_preventivo,
     eliminar_renglon_lote,
     listar_contexto_programacion,
+    listar_cuadrillas,
     listar_equipos_programables,
     listar_lotes_preventivos,
+    listar_personal_mantenimiento,
     obtener_lote_preventivo,
     publicar_lote_preventivo,
+    guardar_personal_mantenimiento,
     serializar_lote,
     validar_lote_preventivo,
 )
@@ -85,6 +90,126 @@ def _batch_summary(batch) -> dict:
             1 for item in items if item.validation_status == "PENDIENTE"
         ),
     }
+
+
+@maintenance_preventive_bp.route("/crews", methods=["GET"])
+@jwt_required()
+def get_crews():
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        return jsonify({"crews": listar_cuadrillas(user)}), 200
+    except Exception as exc:
+        return _error_response(exc)
+
+
+@maintenance_preventive_bp.route("/crews", methods=["POST"])
+@jwt_required()
+def post_crew():
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        crew = crear_cuadrilla(
+            user,
+            request.get_json(silent=True) or {},
+        )
+        db.session.commit()
+        return jsonify({
+            "id": crew.id,
+            "nombre": crew.nombre,
+            "region_id": crew.region_id,
+            "activo": bool(crew.activo),
+        }), 201
+    except Exception as exc:
+        db.session.rollback()
+        return _error_response(exc)
+
+
+@maintenance_preventive_bp.route(
+    "/crews/<int:crew_id>",
+    methods=["PUT"],
+)
+@jwt_required()
+def put_crew(crew_id: int):
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        crew = actualizar_cuadrilla(
+            crew_id,
+            user,
+            request.get_json(silent=True) or {},
+        )
+        db.session.commit()
+        return jsonify({
+            "id": crew.id,
+            "nombre": crew.nombre,
+            "region_id": crew.region_id,
+            "activo": bool(crew.activo),
+        }), 200
+    except Exception as exc:
+        db.session.rollback()
+        return _error_response(exc)
+
+
+@maintenance_preventive_bp.route("/personnel", methods=["GET"])
+@jwt_required()
+def get_personnel():
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        return jsonify(listar_personal_mantenimiento(user)), 200
+    except Exception as exc:
+        return _error_response(exc)
+
+
+@maintenance_preventive_bp.route("/personnel", methods=["POST"])
+@jwt_required()
+def post_personnel():
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        row = guardar_personal_mantenimiento(
+            user,
+            request.get_json(silent=True) or {},
+        )
+        db.session.commit()
+        return jsonify({"id": row.id}), 201
+    except Exception as exc:
+        db.session.rollback()
+        return _error_response(exc)
+
+
+@maintenance_preventive_bp.route(
+    "/personnel/<int:personnel_id>",
+    methods=["PUT"],
+)
+@jwt_required()
+def put_personnel(personnel_id: int):
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        row = guardar_personal_mantenimiento(
+            user,
+            request.get_json(silent=True) or {},
+            personnel_id=personnel_id,
+        )
+        db.session.commit()
+        return jsonify({"id": row.id}), 200
+    except Exception as exc:
+        db.session.rollback()
+        return _error_response(exc)
 
 
 @maintenance_preventive_bp.route("/context", methods=["GET"])
