@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
+from dateutil import parser
 from sqlalchemy import func
 from app.extensions import db
 from app.models.maintenance_checklist import (
@@ -53,6 +54,62 @@ class MaintenanceExecutionStateError(MaintenanceExecutionError):
 
 def _normalize(value) -> str:
     return " ".join(str(value or "").strip().upper().split())
+
+
+def _to_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _last_manager_rejection_at(ticket: Ticket) -> datetime | None:
+    latest = None
+
+    for item in (ticket.historial_fechas or []):
+        if not isinstance(item, dict):
+            continue
+
+        event = str(
+            item.get("evento")
+            or item.get("tipo")
+            or ""
+        ).strip().lower()
+
+        if event != "rechazo_cierre_gerente":
+            continue
+
+        raw = (
+            item.get("fechaCambio")
+            or item.get("fecha_cambio")
+        )
+        if not raw:
+            continue
+
+        try:
+            parsed = parser.isoparse(str(raw))
+        except Exception:
+            continue
+
+        parsed_utc = _to_utc(parsed)
+        if parsed_utc is not None and (
+            latest is None or parsed_utc > latest
+        ):
+            latest = parsed_utc
+
+    return latest
+
+
+def _after_attempt_boundary(
+    created_at: datetime | None,
+    boundary: datetime | None,
+) -> bool:
+    if boundary is None:
+        return True
+
+    normalized = _to_utc(created_at)
+    return normalized is not None and normalized > boundary
 
 
 def _owned_ticket(user, ticket_id: int) -> Ticket:
@@ -216,25 +273,44 @@ def get_work_detail(user, ticket_id: int) -> dict:
     ticket = _owned_ticket(user, ticket_id)
     _require_preventive_active(ticket)
 
-    bitacoras = (
+    all_bitacoras = (
         PmBitacoraORM.query
         .filter(PmBitacoraORM.ticket_id == ticket.id)
         .order_by(PmBitacoraORM.created_at.desc(), PmBitacoraORM.id.desc())
         .all()
     )
 
+    attempt_boundary = _last_manager_rejection_at(ticket)
+    bitacoras = [
+        bitacora
+        for bitacora in all_bitacoras
+        if _after_attempt_boundary(
+            bitacora.created_at,
+            attempt_boundary,
+        )
+    ]
+    previous_bitacoras = [
+        bitacora
+        for bitacora in all_bitacoras
+        if bitacora not in bitacoras
+    ]
+
     inventory = ticket.inventario
     branch = ticket.sucursal_destino or ticket.sucursal
 
-    has_evidence = (
+    evidence_query = (
         TicketAttachmentORM.query
         .filter(
             TicketAttachmentORM.ticket_id == ticket.id,
             TicketAttachmentORM.deleted_at.is_(None),
         )
-        .first()
-        is not None
     )
+    if attempt_boundary is not None:
+        evidence_query = evidence_query.filter(
+            TicketAttachmentORM.created_at > attempt_boundary
+        )
+
+    has_evidence = evidence_query.first() is not None
 
     return {
         "ticket": {
@@ -269,9 +345,18 @@ def get_work_detail(user, ticket_id: int) -> dict:
         },
         "checklist": serialize_checklist(resolve_checklist(ticket)),
         "has_evidence": has_evidence,
+        "attempt_boundary": (
+            attempt_boundary.isoformat()
+            if attempt_boundary
+            else None
+        ),
         "bitacoras": [
             _serialize_bitacora(bitacora)
             for bitacora in bitacoras
+        ],
+        "previous_bitacoras": [
+            _serialize_bitacora(bitacora)
+            for bitacora in previous_bitacoras
         ],
     }
 
@@ -461,29 +546,44 @@ def complete_preventive(user, ticket_id: int) -> Ticket:
     ticket = _owned_ticket(user, ticket_id)
     _require_preventive_active(ticket)
 
-    latest = (
+    attempt_boundary = _last_manager_rejection_at(ticket)
+
+    bitacora_query = (
         PmBitacoraORM.query
         .filter(
             PmBitacoraORM.ticket_id == ticket.id,
             PmBitacoraORM.created_by_user_id == int(user.id),
         )
+    )
+    if attempt_boundary is not None:
+        bitacora_query = bitacora_query.filter(
+            PmBitacoraORM.created_at > attempt_boundary
+        )
+
+    latest = (
+        bitacora_query
         .order_by(PmBitacoraORM.created_at.desc(), PmBitacoraORM.id.desc())
         .first()
     )
     if latest is None:
         raise MaintenanceExecutionStateError(
-            "Debes guardar una bitácora antes de marcar realizado."
+            "Debes guardar una bitácora nueva para este intento "
+            "antes de marcar realizado."
         )
 
-    has_evidence = (
+    evidence_query = (
         TicketAttachmentORM.query
         .filter(
             TicketAttachmentORM.ticket_id == ticket.id,
             TicketAttachmentORM.deleted_at.is_(None),
         )
-        .first()
-        is not None
     )
+    if attempt_boundary is not None:
+        evidence_query = evidence_query.filter(
+            TicketAttachmentORM.created_at > attempt_boundary
+        )
+
+    has_evidence = evidence_query.first() is not None
     if not has_evidence:
         raise MaintenanceExecutionStateError(
             "Debes adjuntar evidencia antes de marcar realizado."
