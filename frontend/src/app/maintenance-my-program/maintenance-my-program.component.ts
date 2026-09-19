@@ -280,7 +280,6 @@ export class MaintenanceMyProgramComponent implements OnInit {
             + String(response.correctivo_id)
             + '.'
           : 'Bitácora guardada.';
-        this.loadWorkDetail(this.expandedTicketId || 0);
       },
       error: (error) => {
         this.workSavingStep = null;
@@ -320,7 +319,6 @@ export class MaintenanceMyProgramComponent implements OnInit {
         this.evidenceSaved = true;
         this.evidenceFile = null;
         this.workSuccessMessage = 'Evidencia guardada.';
-        this.loadWorkDetail(this.expandedTicketId || 0);
       },
       error: (error) => {
         this.workSavingStep = null;
