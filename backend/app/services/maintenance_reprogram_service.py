@@ -12,7 +12,7 @@ from app.models.maintenance_preventive import (
     MaintenanceReprogramReasonORM,
 )
 from app.models.ticket_model import Ticket
-from app.utils.pm_permissions import can_pm_configure
+from app.utils.pm_permissions import can_pm_configure, can_pm_reprogram
 
 
 BUSINESS_TZ = ZoneInfo("America/Tijuana")
@@ -57,6 +57,13 @@ def _clean(value) -> str:
 
 def _assert_can_configure(user) -> None:
     if not user or not can_pm_configure(user):
+        raise MaintenanceReprogramAuthorizationError(
+            "No tienes permiso para configurar motivos de reprogramación."
+        )
+
+
+def _assert_can_reprogram(user) -> None:
+    if not user or not can_pm_reprogram(user):
         raise MaintenanceReprogramAuthorizationError(
             "No tienes permiso para reprogramar mantenimiento."
         )
@@ -151,7 +158,10 @@ def listar_motivos_reprogramacion(
     *,
     include_inactive: bool = False,
 ) -> list[dict]:
-    _assert_can_configure(user)
+    if include_inactive:
+        _assert_can_configure(user)
+    else:
+        _assert_can_reprogram(user)
 
     query = MaintenanceReprogramReasonORM.query
 
@@ -268,7 +278,7 @@ def reprogramar_ticket_mantenimiento(
     ticket_id: int,
     payload: dict,
 ) -> Ticket:
-    _assert_can_configure(user)
+    _assert_can_reprogram(user)
 
     ticket = db.session.get(Ticket, int(ticket_id))
     if ticket is None:
