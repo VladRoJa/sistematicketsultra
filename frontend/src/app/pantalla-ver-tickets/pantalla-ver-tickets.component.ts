@@ -45,6 +45,10 @@ import { CatalogoService } from '../services/catalogo.service';
 import { mostrarAlertaToast,solicitarMotivoRechazoCierre } from '../utils/alertas';
 import { SucursalesService } from '../services/sucursales.service';
 import { EvidenciaPreviewComponent } from './modals/evidencia-preview.component';
+import {
+  PreventiveValidationDialogComponent,
+  PreventiveValidationDialogResult,
+} from './modals/preventive-validation-dialog.component';
 import { ModalCierreTicketComponent } from '../shared/modal-cierre-ticket/modal-cierre-ticket.component';
 import { buscarAncestroNivel, filtrarTicketsConFiltros } from '../utils/ticket-utils';
 import { MatSelectModule } from '@angular/material/select';
@@ -84,6 +88,13 @@ export interface Ticket {
   departamento_id: number;
   categoria: string | null;
   fecha_solucion?: string | null;
+  tipo_mantenimiento?: 'CORRECTIVO' | 'PREVENTIVO' | null;
+  origen_correctivo?: 'REACTIVO' | 'DETECTADO_EN_PREVENTIVO' | null;
+  fecha_compromiso_original?: string | null;
+  fecha_programada_original?: string | null;
+  fecha_programada_actual?: string | null;
+  fecha_validacion_cierre?: string | null;
+  ticket_preventivo_origen_id?: number | null;
   aparato_id?: number | null;
   subcategoria?: string | null;
   detalle?: string | null;
@@ -2630,6 +2641,52 @@ async rechazarCierre(ticket: Ticket): Promise<void> {
 }
 
 
+esPreventivo(ticket: Ticket): boolean {
+  return (
+    String(ticket?.tipo_mantenimiento || '')
+      .trim()
+      .toUpperCase()
+    === 'PREVENTIVO'
+  );
+}
+
+abrirRevisionPreventivo(ticket: Ticket): void {
+  if (!ticket?.id || !this.esPreventivo(ticket)) {
+    return;
+  }
+
+  const dialogRef = this.dialog.open<
+    PreventiveValidationDialogComponent,
+    { ticketId: number },
+    PreventiveValidationDialogResult | undefined
+  >(PreventiveValidationDialogComponent, {
+    data: { ticketId: ticket.id },
+    width: 'min(94vw, 920px)',
+    maxWidth: '94vw',
+    maxHeight: '92vh',
+    autoFocus: false,
+    restoreFocus: false,
+    panelClass: 'preventive-validation-dialog',
+  });
+
+  dialogRef.afterClosed().subscribe((result) => {
+    if (!result?.action) {
+      return;
+    }
+
+    const message = result.response?.mensaje
+      || (
+        result.action === 'accepted'
+          ? 'Preventivo validado.'
+          : 'Preventivo rechazado y reabierto.'
+      );
+
+    mostrarAlertaToast(message, 'success');
+    this.refrescarTicketsPreservandoFiltros();
+    this.refrescoService.emitirRefrescoResumenValidacionTickets();
+  });
+}
+
 esCreador(ticket: Ticket): boolean {
   if (!ticket) return false;
 
@@ -2690,7 +2747,12 @@ puedeMostrarBotonesValidarCierre(ticket: Ticket): boolean {
 
   if (!estaPendienteDeValidacion) return false;
 
-  if (this.esCreador(ticket)) return true;
+  if (
+    !this.esPreventivo(ticket)
+    && this.esCreador(ticket)
+  ) {
+    return true;
+  }
 
   if (this.esAdminParaValidarCierre()) return true;
 
