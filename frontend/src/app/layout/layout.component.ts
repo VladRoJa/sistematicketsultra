@@ -424,6 +424,7 @@ const menuMantenimientoGerencial = [
   }
 
 this.habilitarControlEnMenuSiAplica(menuControl);
+this.habilitarPanelMantenimientoEnMenu();
 this.habilitarProgramacionPreventivaEnMenu();
 this.habilitarMiProgramaEnMenu();
 this.habilitarMaintenancePlannerEnMenu();
@@ -516,6 +517,62 @@ private habilitarControlEnMenuSiAplica(menuControl: any): void {
       },
       error: () => {
         // El backend es la autoridad. Si responde 401/403 no se publica el menú.
+      },
+    });
+}
+
+private habilitarPanelMantenimientoEnMenu(): void {
+  const ticketsMenu = this.menuItems.find(
+    (item) => item.label === 'Tickets'
+  );
+
+  if (!ticketsMenu) {
+    return;
+  }
+
+  const dashboardItem = {
+    label: 'Panel de mantenimiento',
+    path: '/main/panel-mantenimiento',
+  };
+
+  const submenu = Array.isArray(ticketsMenu.submenu)
+    ? ticketsMenu.submenu
+    : [];
+
+  if (
+    submenu.some(
+      (item: { path: string }) => item.path === dashboardItem.path
+    )
+  ) {
+    return;
+  }
+
+  this.http
+    .get<any>(
+      `${environment.apiUrl}/tickets/preventive-planning/dashboard/context`
+    )
+    .subscribe({
+      next: () => {
+        const currentSubmenu = Array.isArray(ticketsMenu.submenu)
+          ? ticketsMenu.submenu
+          : [];
+
+        if (
+          currentSubmenu.some(
+            (item: { path: string }) => item.path === dashboardItem.path
+          )
+        ) {
+          return;
+        }
+
+        ticketsMenu.submenu = [
+          dashboardItem,
+          ...currentSubmenu,
+        ];
+        this.sincronizarMenuConRutaActual();
+      },
+      error: () => {
+        // El backend es autoridad: sin permiso el panel no se publica.
       },
     });
 }
