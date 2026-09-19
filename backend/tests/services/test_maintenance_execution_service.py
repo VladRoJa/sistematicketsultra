@@ -170,6 +170,39 @@ class MaintenanceExecutionServiceTest(unittest.TestCase):
             ):
                 service.complete_preventive(user, 500)
 
+    def test_complete_requires_evidence(self):
+        ticket = self._ticket()
+        ticket.estado = "en progreso"
+        user = self._user()
+
+        bitacora_query = MagicMock()
+        bitacora_query.filter.return_value = bitacora_query
+        bitacora_query.order_by.return_value = bitacora_query
+        bitacora_query.first.return_value = SimpleNamespace(id=900)
+
+        evidence_query = MagicMock()
+        evidence_query.filter.return_value = evidence_query
+        evidence_query.first.return_value = None
+
+        with (
+            patch.object(service, "_owned_ticket", return_value=ticket),
+            patch.object(
+                service.PmBitacoraORM,
+                "query",
+                bitacora_query,
+            ),
+            patch.object(
+                service.TicketAttachmentORM,
+                "query",
+                evidence_query,
+            ),
+        ):
+            with self.assertRaisesRegex(
+                service.MaintenanceExecutionStateError,
+                "evidencia",
+            ):
+                service.complete_preventive(user, 500)
+
     def test_complete_moves_ticket_to_existing_manager_validation_flow(self):
         ticket = self._ticket()
         ticket.estado = "en progreso"
@@ -185,12 +218,21 @@ class MaintenanceExecutionServiceTest(unittest.TestCase):
 
         ticket._agregar_evento_historial_cierre = record_history
 
+        evidence_query = MagicMock()
+        evidence_query.filter.return_value = evidence_query
+        evidence_query.first.return_value = SimpleNamespace(id=300)
+
         with (
             patch.object(service, "_owned_ticket", return_value=ticket),
             patch.object(
                 service.PmBitacoraORM,
                 "query",
                 query,
+            ),
+            patch.object(
+                service.TicketAttachmentORM,
+                "query",
+                evidence_query,
             ),
         ):
             result = service.complete_preventive(user, 500)
