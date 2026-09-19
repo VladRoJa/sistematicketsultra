@@ -34,6 +34,40 @@ export interface PreventivePlanningContext {
   responsables: PreventiveResponsible[];
 }
 
+export interface MaintenanceCrew {
+  id: number;
+  nombre: string;
+  region_id: number | null;
+  region: string | null;
+  activo: boolean;
+}
+
+export interface MaintenancePersonnel {
+  id: number;
+  user_id: number;
+  username: string;
+  rol: string;
+  crew_id: number | null;
+  crew: string | null;
+  region_id: number | null;
+  activo: boolean;
+}
+
+export interface MaintenancePersonnelCatalog {
+  personnel: MaintenancePersonnel[];
+  candidates: Array<{
+    user_id: number;
+    username: string;
+    rol: string;
+  }>;
+  crews: MaintenanceCrew[];
+  regions: Array<{
+    id: number;
+    key: string;
+    label: string;
+  }>;
+}
+
 export interface PreventiveDraftItem {
   id: number;
   batch_id: number;
@@ -99,6 +133,59 @@ export class MaintenancePreventiveService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl =
     `${environment.apiUrl}/tickets/preventive-planning`;
+
+  getPersonnelCatalog(): Observable<MaintenancePersonnelCatalog> {
+    return this.http.get<MaintenancePersonnelCatalog>(
+      `${this.baseUrl}/personnel`,
+    );
+  }
+
+  createCrew(payload: {
+    nombre: string;
+    region_id?: number | null;
+  }): Observable<MaintenanceCrew> {
+    return this.http.post<MaintenanceCrew>(
+      `${this.baseUrl}/crews`,
+      payload,
+    );
+  }
+
+  updateCrew(
+    crewId: number,
+    payload: Partial<{
+      nombre: string;
+      region_id: number | null;
+      activo: boolean;
+    }>,
+  ): Observable<MaintenanceCrew> {
+    return this.http.put<MaintenanceCrew>(
+      `${this.baseUrl}/crews/${crewId}`,
+      payload,
+    );
+  }
+
+  createPersonnel(payload: {
+    user_id: number;
+    crew_id?: number | null;
+  }): Observable<{ id: number }> {
+    return this.http.post<{ id: number }>(
+      `${this.baseUrl}/personnel`,
+      payload,
+    );
+  }
+
+  updatePersonnel(
+    personnelId: number,
+    payload: Partial<{
+      crew_id: number | null;
+      activo: boolean;
+    }>,
+  ): Observable<{ id: number }> {
+    return this.http.put<{ id: number }>(
+      `${this.baseUrl}/personnel/${personnelId}`,
+      payload,
+    );
+  }
 
   getContext(): Observable<PreventivePlanningContext> {
     return this.http.get<PreventivePlanningContext>(
