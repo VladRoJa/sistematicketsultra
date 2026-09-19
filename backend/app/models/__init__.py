@@ -26,6 +26,7 @@ from .maintenance_checklist import (
 from .maintenance_preventive import (
     MaintenanceCrewORM,
     MaintenancePersonnelORM,
+    MaintenanceReprogramReasonORM,
     MaintenancePreventiveBatchORM,
     MaintenancePreventiveItemORM,
 )
@@ -161,6 +162,7 @@ __all__ = [
     "MaintenanceChecklistTemplateORM",
     "MaintenanceCrewORM",
     "MaintenancePersonnelORM",
+    "MaintenanceReprogramReasonORM",
     "MaintenancePreventiveBatchORM",
     "MaintenancePreventiveItemORM",
     "WarehouseSourceORM",
