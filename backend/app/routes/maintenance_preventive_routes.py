@@ -19,6 +19,8 @@ from app.services.maintenance_preventive_service import (
     assert_import_hash_available,
     crear_lote_preventivo,
     eliminar_renglon_lote,
+    listar_contexto_programacion,
+    listar_equipos_programables,
     listar_lotes_preventivos,
     obtener_lote_preventivo,
     publicar_lote_preventivo,
@@ -83,6 +85,43 @@ def _batch_summary(batch) -> dict:
             1 for item in items if item.validation_status == "PENDIENTE"
         ),
     }
+
+
+@maintenance_preventive_bp.route("/context", methods=["GET"])
+@jwt_required()
+def get_context():
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        return jsonify(listar_contexto_programacion(user)), 200
+    except Exception as exc:
+        return _error_response(exc)
+
+
+@maintenance_preventive_bp.route("/equipment", methods=["GET"])
+@jwt_required()
+def get_equipment():
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    branch_id = request.args.get("branch_id", type=int)
+    if branch_id is None:
+        return jsonify({"mensaje": "branch_id es obligatorio."}), 400
+
+    try:
+        return jsonify(
+            {
+                "equipos": listar_equipos_programables(
+                    user,
+                    branch_id,
+                )
+            }
+        ), 200
+    except Exception as exc:
+        return _error_response(exc)
 
 
 @maintenance_preventive_bp.route("/template", methods=["GET"])
