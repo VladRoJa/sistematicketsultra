@@ -55,9 +55,16 @@ def test_schedule_ticket_reuses_ticket_and_appends_traceable_history():
     ticket = SimpleNamespace(
         id=99,
         estado="abierto",
+        departamento_id=1,
         fecha_solucion=None,
         fecha_en_progreso=None,
+        fecha_compromiso_original=None,
+        tipo_mantenimiento=None,
+        origen_correctivo=None,
         historial_fechas=[],
+    )
+    ticket.asignar_fecha_compromiso = lambda value: (
+        service.Ticket.asignar_fecha_compromiso(ticket, value)
     )
     user = SimpleNamespace(username="mantenimiento")
 
@@ -75,6 +82,9 @@ def test_schedule_ticket_reuses_ticket_and_appends_traceable_history():
     assert result is ticket
     assert ticket.estado == "en progreso"
     assert ticket.fecha_solucion is not None
+    assert ticket.fecha_compromiso_original == ticket.fecha_solucion
+    assert ticket.tipo_mantenimiento == "CORRECTIVO"
+    assert ticket.origen_correctivo == "REACTIVO"
     assert ticket.fecha_en_progreso is not None
     assert ticket.historial_fechas[-1]["motivo"] == "Acuerdo de junta"
     assert ticket.historial_fechas[-1]["origen"] == "maintenance_planner_v2"
