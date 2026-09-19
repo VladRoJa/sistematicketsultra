@@ -96,7 +96,13 @@ Con `TICKETS_PREVENTIVE_V1_ENABLED=false`:
 
 ## 7. Activar cutover
 
-Solo después del smoke test:
+Antes de activar el flag:
+
+- confirmar que no existan bitácoras PM legacy pendientes de validación que todavía requieran operación desde Calendario/Escritorio legacy;
+- resolverlas o documentar explícitamente su cierre por la ruta legacy antes de ocultar esas pantallas;
+- confirmar que los nuevos trabajos preventivos ya se estén creando únicamente como Tickets.
+
+Solo después del smoke test y de esa revisión:
 
 ```env
 TICKETS_PREVENTIVE_V1_ENABLED=true
