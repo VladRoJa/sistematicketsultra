@@ -61,7 +61,13 @@ class MantenimientoEquiposServiceTest(unittest.TestCase):
             refaccion_definida_por_jefe=False,
             fecha_solucion=None,
             fecha_en_progreso=None,
+            fecha_compromiso_original=None,
+            tipo_mantenimiento=None,
+            origen_correctivo=None,
             historial_fechas=[],
+        )
+        self.ticket.asignar_fecha_compromiso = lambda value: (
+            service.Ticket.asignar_fecha_compromiso(self.ticket, value)
         )
         self.payload = {
             "fecha_solucion": "2026-09-02T07:00:00-07:00",
@@ -110,6 +116,12 @@ class MantenimientoEquiposServiceTest(unittest.TestCase):
         self.assertEqual(self.ticket.falla_mantenimiento_id, 70)
         self.assertEqual(self.ticket.condicion_operativa, "NO_TRABAJA")
         self.assertEqual(self.ticket.estado, "en progreso")
+        self.assertEqual(self.ticket.tipo_mantenimiento, "CORRECTIVO")
+        self.assertEqual(self.ticket.origen_correctivo, "REACTIVO")
+        self.assertEqual(
+            self.ticket.fecha_compromiso_original,
+            self.ticket.fecha_solucion,
+        )
         self.assertEqual(self.ticket.descripcion_refaccion, "Banda")
         self.assertEqual(
             self.ticket.historial_fechas[0]["motivo"],
