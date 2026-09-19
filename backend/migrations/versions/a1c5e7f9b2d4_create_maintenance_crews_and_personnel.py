@@ -83,12 +83,6 @@ def upgrade():
         ),
     )
     op.create_index(
-        "ix_maintenance_personnel_user_id",
-        "maintenance_personnel",
-        ["user_id"],
-        unique=True,
-    )
-    op.create_index(
         "ix_maintenance_personnel_crew_id",
         "maintenance_personnel",
         ["crew_id"],
@@ -109,10 +103,6 @@ def downgrade():
     )
     op.drop_index(
         "ix_maintenance_personnel_crew_id",
-        table_name="maintenance_personnel",
-    )
-    op.drop_index(
-        "ix_maintenance_personnel_user_id",
         table_name="maintenance_personnel",
     )
     op.drop_table("maintenance_personnel")
