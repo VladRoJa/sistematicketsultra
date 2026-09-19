@@ -575,19 +575,6 @@ def _build_week_card(
             week,
         )
     ]
-    preventive_on_time = [
-        ticket
-        for ticket in preventive_cohort
-        if (
-            _validated_date(ticket) is not None
-            and _validated_date(ticket) <= week.end
-        )
-    ]
-    preventive_eventually = [
-        ticket
-        for ticket in preventive_cohort
-        if _validated_date(ticket) is not None
-    ]
     preventive_reprogrammed = [
         ticket
         for ticket in preventive_cohort
@@ -597,10 +584,27 @@ def _build_week_card(
             _preventive_current_date(ticket),
         )
     ]
+    preventive_on_time = [
+        ticket
+        for ticket in preventive_cohort
+        if (
+            ticket not in preventive_reprogrammed
+            and _validated_date(ticket) is not None
+            and _validated_date(ticket) <= week.end
+        )
+    ]
+    preventive_eventually = [
+        ticket
+        for ticket in preventive_cohort
+        if _validated_date(ticket) is not None
+    ]
     preventive_missed = [
         ticket
         for ticket in preventive_cohort
-        if ticket not in preventive_on_time
+        if (
+            ticket not in preventive_on_time
+            and ticket not in preventive_reprogrammed
+        )
     ]
     preventive_pending_now = [
         ticket
@@ -616,16 +620,6 @@ def _build_week_card(
             week,
         )
     ]
-    corrective_on_time = [
-        ticket
-        for ticket in corrective_due
-        if (
-            _validated_date(ticket) is not None
-            and _corrective_original_due(ticket) is not None
-            and _validated_date(ticket)
-            <= _corrective_original_due(ticket)
-        )
-    ]
     corrective_reprogrammed = [
         ticket
         for ticket in corrective_due
@@ -635,10 +629,24 @@ def _build_week_card(
             _corrective_current_due(ticket),
         )
     ]
+    corrective_on_time = [
+        ticket
+        for ticket in corrective_due
+        if (
+            ticket not in corrective_reprogrammed
+            and _validated_date(ticket) is not None
+            and _corrective_original_due(ticket) is not None
+            and _validated_date(ticket)
+            <= _corrective_original_due(ticket)
+        )
+    ]
     corrective_missed = [
         ticket
         for ticket in corrective_due
-        if ticket not in corrective_on_time
+        if (
+            ticket not in corrective_on_time
+            and ticket not in corrective_reprogrammed
+        )
     ]
     corrective_pending_now = [
         ticket
