@@ -300,6 +300,16 @@ export interface MaintenanceDashboardDrilldownTicket {
   commitment_as_of?: string | null;
   overdue_days?: number | null;
   aging_bucket?: string | null;
+  reprogramaciones: Array<{
+    evento: string;
+    fecha_anterior: string | null;
+    fecha_nueva: string | null;
+    motivo_key: string | null;
+    motivo: string | null;
+    comentario: string | null;
+    actor: string | null;
+    fecha_cambio: string | null;
+  }>;
 }
 
 export interface MaintenanceDashboardDrilldown {
