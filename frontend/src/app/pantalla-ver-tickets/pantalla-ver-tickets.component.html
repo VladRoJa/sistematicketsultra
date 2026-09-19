@@ -708,35 +708,49 @@
               <span>Cierre gerente</span>
             </button>
 
-            <!-- Botones de validación de cierre para GERENTE / ADMIN -->
+            <!-- Validación de cierre para GERENTE / ADMIN -->
             <div
               *ngIf="puedeMostrarBotonesValidarCierre(ticket)"
               class="acciones-validacion-cierre"
             >
-              <!-- Aceptar -->
-            <div class="ticket-validation-actions">
-              <button
-                type="button"
-                class="ticket-validation-button ticket-validation-button--approve"
-                (click)="aceptarCierre(ticket)"
-                aria-label="Aceptar cierre"
+              <div
+                *ngIf="esPreventivo(ticket); else validacionCorrectiva"
+                class="ticket-validation-actions"
               >
-                <mat-icon>check_circle</mat-icon>
-                <span>Aceptar</span>
-              </button>
+                <button
+                  type="button"
+                  class="ticket-validation-button ticket-validation-button--review"
+                  (click)="abrirRevisionPreventivo(ticket)"
+                  aria-label="Revisar preventivo antes de validar"
+                >
+                  <mat-icon>fact_check</mat-icon>
+                  <span>Revisar preventivo</span>
+                </button>
+              </div>
 
+              <ng-template #validacionCorrectiva>
+                <div class="ticket-validation-actions">
+                  <button
+                    type="button"
+                    class="ticket-validation-button ticket-validation-button--approve"
+                    (click)="aceptarCierre(ticket)"
+                    aria-label="Aceptar cierre"
+                  >
+                    <mat-icon>check_circle</mat-icon>
+                    <span>Aceptar</span>
+                  </button>
 
-                <!-- Rechazar -->
-              <button
-                type="button"
-                class="ticket-validation-button ticket-validation-button--reject"
-                (click)="rechazarCierre(ticket)"
-                aria-label="Rechazar cierre"
-              >
-                <mat-icon>cancel</mat-icon>
-                <span>Rechazar</span>
-              </button>
-            </div>
+                  <button
+                    type="button"
+                    class="ticket-validation-button ticket-validation-button--reject"
+                    (click)="rechazarCierre(ticket)"
+                    aria-label="Rechazar cierre"
+                  >
+                    <mat-icon>cancel</mat-icon>
+                    <span>Rechazar</span>
+                  </button>
+                </div>
+              </ng-template>
             </div>
           </td>
 
