@@ -130,12 +130,21 @@
           </div>
 
           <div class="trend-row">
-            <span>Δ backlog</span>
+            <span>Δ backlog total</span>
             <strong
               *ngFor="let week of current.weeks; trackBy: trackWeek"
               [ngClass]="backlogDeltaClass(week.backlog.delta)"
             >
               {{ backlogDeltaLabel(week.backlog.delta) }}
+            </strong>
+          </div>
+
+          <div class="trend-row">
+            <span>Backlog vencido cierre</span>
+            <strong
+              *ngFor="let week of current.weeks; trackBy: trackWeek"
+            >
+              {{ week.backlog.overdue_end.count }}
             </strong>
           </div>
         </div>
@@ -169,6 +178,25 @@
         {{ drilldownError }}
       </div>
 
+      <div *ngIf="drilldown?.aging as aging" class="aging-strip">
+        <div>
+          <span>1–7 días</span>
+          <strong>{{ aging['1_7'] }}</strong>
+        </div>
+        <div>
+          <span>8–14 días</span>
+          <strong>{{ aging['8_14'] }}</strong>
+        </div>
+        <div>
+          <span>15–30 días</span>
+          <strong>{{ aging['15_30'] }}</strong>
+        </div>
+        <div>
+          <span>+30 días</span>
+          <strong>{{ aging['31_PLUS'] }}</strong>
+        </div>
+      </div>
+
       <div *ngIf="drilldown as detail" class="drilldown-list">
         <article
           *ngFor="let ticket of detail.tickets; trackBy: trackTicket"
@@ -193,6 +221,12 @@
               <span>Estado: {{ ticket.estado }}</span>
               <span>Resp: {{ ticket.asignado_a || '—' }}</span>
               <span>Criticidad: {{ ticket.criticidad }}</span>
+              <span *ngIf="ticket.origen_correctivo">
+                Origen: {{ ticket.origen_correctivo }}
+              </span>
+              <span *ngIf="ticket.overdue_days">
+                Vencido: {{ ticket.overdue_days }} días
+              </span>
             </div>
           </div>
 
@@ -340,32 +374,83 @@
               <span>Pendientes hoy</span>
             </button>
           </div>
+
+          <div class="origin-strip">
+            <button
+              type="button"
+              (click)="openDrilldown(week, 'corrective.demand_reactive', 'Correctivos reactivos recibidos')"
+            >
+              <span>Reactivos</span>
+              <strong>{{ week.corrective.demand_reactive.count }}</strong>
+            </button>
+
+            <button
+              type="button"
+              (click)="openDrilldown(week, 'corrective.demand_detected_preventive', 'Correctivos detectados en preventivo')"
+            >
+              <span>Detectados en PM</span>
+              <strong>{{ week.corrective.demand_detected_preventive.count }}</strong>
+            </button>
+          </div>
         </section>
 
-        <section class="backlog-block">
-          <button
-            type="button"
-            (click)="openDrilldown(week, 'backlog.start', 'Backlog al inicio')"
-          >
-            <span>Inicio</span>
-            <strong>{{ week.backlog.start.count }}</strong>
-          </button>
+        <section class="backlog-section">
+          <div class="backlog-label">Backlog total</div>
 
-          <div class="backlog-arrow">→</div>
+          <div class="backlog-block">
+            <button
+              type="button"
+              (click)="openDrilldown(week, 'backlog.start', 'Backlog total al inicio')"
+            >
+              <span>Inicio</span>
+              <strong>{{ week.backlog.start.count }}</strong>
+            </button>
 
-          <button
-            type="button"
-            (click)="openDrilldown(week, 'backlog.end', 'Backlog al cierre')"
-          >
-            <span>Cierre</span>
-            <strong>{{ week.backlog.end.count }}</strong>
-          </button>
+            <div class="backlog-arrow">→</div>
 
-          <div
-            class="backlog-change"
-            [ngClass]="backlogDeltaClass(week.backlog.delta)"
-          >
-            {{ backlogDeltaLabel(week.backlog.delta) }}
+            <button
+              type="button"
+              (click)="openDrilldown(week, 'backlog.end', 'Backlog total al cierre')"
+            >
+              <span>Cierre</span>
+              <strong>{{ week.backlog.end.count }}</strong>
+            </button>
+
+            <div
+              class="backlog-change"
+              [ngClass]="backlogDeltaClass(week.backlog.delta)"
+            >
+              {{ backlogDeltaLabel(week.backlog.delta) }}
+            </div>
+          </div>
+
+          <div class="backlog-label backlog-label--overdue">Backlog vencido</div>
+
+          <div class="backlog-block backlog-block--overdue">
+            <button
+              type="button"
+              (click)="openDrilldown(week, 'backlog.overdue_start', 'Backlog vencido al inicio')"
+            >
+              <span>Inicio</span>
+              <strong>{{ week.backlog.overdue_start.count }}</strong>
+            </button>
+
+            <div class="backlog-arrow">→</div>
+
+            <button
+              type="button"
+              (click)="openDrilldown(week, 'backlog.overdue_end', 'Backlog vencido al cierre')"
+            >
+              <span>Cierre</span>
+              <strong>{{ week.backlog.overdue_end.count }}</strong>
+            </button>
+
+            <div
+              class="backlog-change"
+              [ngClass]="backlogDeltaClass(week.backlog.overdue_delta)"
+            >
+              {{ backlogDeltaLabel(week.backlog.overdue_delta) }}
+            </div>
           </div>
         </section>
       </article>
