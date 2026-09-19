@@ -301,6 +301,113 @@ def agregar_renglones_lote(
     return created
 
 
+def _get_item_in_batch(
+    batch: MaintenancePreventiveBatchORM,
+    item_id: int,
+) -> MaintenancePreventiveItemORM:
+    item = db.session.get(MaintenancePreventiveItemORM, int(item_id))
+    if item is None or int(item.batch_id) != int(batch.id):
+        raise MaintenancePreventiveNotFoundError(
+            "Renglón preventivo no encontrado en el lote."
+        )
+    return item
+
+
+def actualizar_renglon_lote(
+    batch_id: int,
+    item_id: int,
+    user,
+    payload: dict,
+) -> MaintenancePreventiveItemORM:
+    batch = _get_batch(batch_id)
+    _assert_batch_manageable(user, batch)
+
+    if batch.status != "BORRADOR":
+        raise MaintenancePreventiveStateError(
+            "Solo se pueden editar lotes en BORRADOR."
+        )
+
+    if not isinstance(payload, dict):
+        raise MaintenancePreventiveError("El cuerpo del renglón es inválido.")
+
+    item = _get_item_in_batch(batch, item_id)
+
+    if "sucursal" in payload or "sucursal_input" in payload or "sucursal_id" in payload:
+        sucursal_input = _clean(
+            payload.get("sucursal")
+            or payload.get("sucursal_input")
+            or payload.get("sucursal_id")
+        )
+        branch = _resolve_sucursal(sucursal_input)
+        if branch is not None and not _can_manage_branch(
+            user,
+            int(branch.sucursal_id),
+        ):
+            raise MaintenancePreventiveAuthorizationError(
+                f"No tienes acceso a la sucursal {sucursal_input}."
+            )
+        item.sucursal_input = sucursal_input or None
+
+    if "codigo_equipo" in payload or "codigo_equipo_input" in payload:
+        item.codigo_equipo_input = _clean(
+            payload.get("codigo_equipo")
+            or payload.get("codigo_equipo_input")
+        ) or None
+
+    if "responsable" in payload or "responsable_input" in payload:
+        item.responsable_input = _clean(
+            payload.get("responsable")
+            or payload.get("responsable_input")
+        ) or None
+
+    if "fecha_programada" in payload or "fecha_programada_input" in payload:
+        item.fecha_programada_input = _clean(
+            payload.get("fecha_programada")
+            or payload.get("fecha_programada_input")
+        ) or None
+
+    if "actividad" in payload:
+        item.actividad = _clean(payload.get("actividad")) or None
+
+    if "observaciones" in payload:
+        item.observaciones = _clean(payload.get("observaciones")) or None
+
+    # Cualquier corrección invalida la resolución previa.
+    item.sucursal_id = None
+    item.inventario_id = None
+    item.responsable_user_id = None
+    item.fecha_programada = None
+    item.validation_status = "PENDIENTE"
+    item.validation_errors = None
+
+    db.session.flush()
+    return item
+
+
+def eliminar_renglon_lote(
+    batch_id: int,
+    item_id: int,
+    user,
+) -> None:
+    batch = _get_batch(batch_id)
+    _assert_batch_manageable(user, batch)
+
+    if batch.status != "BORRADOR":
+        raise MaintenancePreventiveStateError(
+            "Solo se pueden editar lotes en BORRADOR."
+        )
+
+    item = _get_item_in_batch(batch, item_id)
+
+    if item.ticket_id is not None:
+        raise MaintenancePreventiveStateError(
+            "No se puede eliminar un renglón que ya generó ticket."
+        )
+
+    db.session.delete(item)
+    db.session.flush()
+
+
 def serializar_item(item: MaintenancePreventiveItemORM) -> dict:
     return {
         "id": item.id,
