@@ -428,6 +428,7 @@ this.habilitarPanelMantenimientoEnMenu();
 this.habilitarProgramacionPreventivaEnMenu();
 this.habilitarMiProgramaEnMenu();
 this.habilitarMaintenancePlannerEnMenu();
+this.aplicarTransicionPmLegacyEnMenu();
 
 if (
   this.puedeVerTrackDiarioPorRol() &&
@@ -690,6 +691,61 @@ private puedeConfigurarProgramacionPreventivaPorRol(): boolean {
     'MANTENIMIENTO',
     'SR_MANTENIMIENTO',
   ].includes(rol);
+}
+
+private aplicarTransicionPmLegacyEnMenu(): void {
+  this.http
+    .get<any>(`${environment.apiUrl}/pm/transition-state`)
+    .subscribe({
+      next: (state) => {
+        if (!state?.tickets_preventive_v1_enabled) {
+          return;
+        }
+
+        const mantenimientoMenu = this.menuItems.find(
+          (item) => item.label === 'Mantenimiento'
+        );
+
+        if (!mantenimientoMenu) {
+          return;
+        }
+
+        const allowedPaths = new Set([
+          '/maintenance-planner',
+          '/pm/consulta-historial',
+        ]);
+
+        const submenu = Array.isArray(mantenimientoMenu.submenu)
+          ? mantenimientoMenu.submenu
+          : [];
+
+        mantenimientoMenu.submenu = submenu
+          .filter(
+            (item: { path: string }) => allowedPaths.has(item.path)
+          )
+          .map((item: { label: string; path: string }) => (
+            item.path === '/pm/consulta-historial'
+              ? {
+                  ...item,
+                  label: 'Historial PM legacy',
+                }
+              : item
+          ));
+
+        const plannerExists = mantenimientoMenu.submenu.some(
+          (item: { path: string }) => item.path === '/maintenance-planner'
+        );
+
+        mantenimientoMenu.path = plannerExists
+          ? '/maintenance-planner'
+          : '/pm/consulta-historial';
+
+        this.sincronizarMenuConRutaActual();
+      },
+      error: () => {
+        // Fail-open visual: backend mantiene la autoridad sobre escrituras legacy.
+      },
+    });
 }
 
 private habilitarMaintenancePlannerEnMenu(): void {
