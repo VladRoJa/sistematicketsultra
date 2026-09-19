@@ -42,6 +42,8 @@ def test_dashboard_uses_canonical_weekly_cohorts():
     assert "strict_compliance_percent" in service
     assert "current_progress_percent" in service
     assert "fulfillment_percent" in service
+    assert "<= _corrective_original_due(ticket)" in service
+    assert "_ticket_was_reprogrammed" in service
     assert '"delta": len(backlog_end) - len(backlog_start)' in service
     assert "backlog_overdue_start" in service
     assert "backlog_overdue_end" in service
