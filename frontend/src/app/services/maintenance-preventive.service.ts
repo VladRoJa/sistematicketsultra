@@ -193,6 +193,105 @@ export interface MaintenanceWorkBitacora {
   created_at: string | null;
 }
 
+export interface MaintenanceDashboardMetric {
+  count: number;
+  ticket_ids: number[];
+  percent?: number;
+}
+
+export interface MaintenanceDashboardWeek {
+  week_number: number;
+  week_start: string;
+  week_end: string;
+  preventive: {
+    programmed: MaintenanceDashboardMetric;
+    validated_on_time: MaintenanceDashboardMetric;
+    eventually_validated: MaintenanceDashboardMetric;
+    reprogrammed: MaintenanceDashboardMetric;
+    missed: MaintenanceDashboardMetric;
+    pending_now: MaintenanceDashboardMetric;
+    strict_compliance_percent: number;
+    current_progress_percent: number;
+  };
+  corrective: {
+    due: MaintenanceDashboardMetric;
+    validated_on_time: MaintenanceDashboardMetric;
+    reprogrammed: MaintenanceDashboardMetric;
+    missed: MaintenanceDashboardMetric;
+    pending_now: MaintenanceDashboardMetric;
+    demand: MaintenanceDashboardMetric;
+    fulfillment_percent: number;
+  };
+  backlog: {
+    start: MaintenanceDashboardMetric;
+    end: MaintenanceDashboardMetric;
+    delta: number;
+  };
+}
+
+export interface MaintenanceWeeklyDashboard {
+  reference_date: string;
+  weeks: MaintenanceDashboardWeek[];
+  filters: {
+    region_id: number | null;
+    branch_id: number | null;
+    crew_id: number | null;
+    responsible_user_id: number | null;
+    branch_ids: number[];
+  };
+  context: {
+    sucursales: Array<{
+      id: number;
+      nombre: string;
+    }>;
+    regiones: Array<{
+      id: number;
+      key: string;
+      nombre: string;
+    }>;
+    cuadrillas: Array<{
+      id: number;
+      nombre: string;
+      region_id: number | null;
+    }>;
+    responsables: Array<{
+      user_id: number;
+      username: string;
+      crew_id: number | null;
+    }>;
+  };
+}
+
+export interface MaintenanceDashboardDrilldownTicket {
+  id: number;
+  tipo_mantenimiento: 'PREVENTIVO' | 'CORRECTIVO';
+  origen_correctivo: string | null;
+  estado: string;
+  estado_cierre: string | null;
+  descripcion: string;
+  criticidad: number;
+  asignado_a: string | null;
+  sucursal_id: number | null;
+  sucursal: string;
+  codigo_equipo: string | null;
+  equipo: string;
+  fecha_creacion: string | null;
+  fecha_programada_original: string | null;
+  fecha_programada_actual: string | null;
+  fecha_compromiso_original: string | null;
+  fecha_solucion: string | null;
+  fecha_validacion_cierre: string | null;
+  ticket_preventivo_origen_id: number | null;
+}
+
+export interface MaintenanceDashboardDrilldown {
+  metric: string;
+  week_start: string;
+  week_end: string;
+  count: number;
+  tickets: MaintenanceDashboardDrilldownTicket[];
+}
+
 export interface MaintenanceWorkDetail {
   ticket: {
     id: number;
@@ -244,6 +343,99 @@ export class MaintenancePreventiveService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl =
     `${environment.apiUrl}/tickets/preventive-planning`;
+
+  getWeeklyDashboard(params?: {
+    weeks?: number;
+    reference_date?: string;
+    region_id?: number | null;
+    branch_id?: number | null;
+    crew_id?: number | null;
+    responsible_user_id?: number | null;
+  }): Observable<MaintenanceWeeklyDashboard> {
+    let httpParams = new HttpParams();
+
+    if (params?.weeks) {
+      httpParams = httpParams.set('weeks', String(params.weeks));
+    }
+    if (params?.reference_date) {
+      httpParams = httpParams.set(
+        'reference_date',
+        params.reference_date,
+      );
+    }
+    if (params?.region_id) {
+      httpParams = httpParams.set(
+        'region_id',
+        String(params.region_id),
+      );
+    }
+    if (params?.branch_id) {
+      httpParams = httpParams.set(
+        'branch_id',
+        String(params.branch_id),
+      );
+    }
+    if (params?.crew_id) {
+      httpParams = httpParams.set(
+        'crew_id',
+        String(params.crew_id),
+      );
+    }
+    if (params?.responsible_user_id) {
+      httpParams = httpParams.set(
+        'responsible_user_id',
+        String(params.responsible_user_id),
+      );
+    }
+
+    return this.http.get<MaintenanceWeeklyDashboard>(
+      `${this.baseUrl}/dashboard/weekly`,
+      { params: httpParams },
+    );
+  }
+
+  getDashboardDrilldown(params: {
+    week_start: string;
+    metric: string;
+    region_id?: number | null;
+    branch_id?: number | null;
+    crew_id?: number | null;
+    responsible_user_id?: number | null;
+  }): Observable<MaintenanceDashboardDrilldown> {
+    let httpParams = new HttpParams()
+      .set('week_start', params.week_start)
+      .set('metric', params.metric);
+
+    if (params.region_id) {
+      httpParams = httpParams.set(
+        'region_id',
+        String(params.region_id),
+      );
+    }
+    if (params.branch_id) {
+      httpParams = httpParams.set(
+        'branch_id',
+        String(params.branch_id),
+      );
+    }
+    if (params.crew_id) {
+      httpParams = httpParams.set(
+        'crew_id',
+        String(params.crew_id),
+      );
+    }
+    if (params.responsible_user_id) {
+      httpParams = httpParams.set(
+        'responsible_user_id',
+        String(params.responsible_user_id),
+      );
+    }
+
+    return this.http.get<MaintenanceDashboardDrilldown>(
+      `${this.baseUrl}/dashboard/drilldown`,
+      { params: httpParams },
+    );
+  }
 
   getChecklistCatalog(): Observable<MaintenanceChecklistCatalog> {
     return this.http.get<MaintenanceChecklistCatalog>(
