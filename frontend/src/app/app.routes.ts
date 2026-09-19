@@ -79,6 +79,12 @@ export const routes: Routes = [
               import('./maintenance-my-program/maintenance-my-program.component')
                 .then(m => m.MaintenanceMyProgramComponent),
           },
+          {
+            path: 'checklists-mantenimiento',
+            loadComponent: () =>
+              import('./maintenance-checklist-config/maintenance-checklist-config.component')
+                .then(m => m.MaintenanceChecklistConfigComponent),
+          },
         ],
       },
       {
