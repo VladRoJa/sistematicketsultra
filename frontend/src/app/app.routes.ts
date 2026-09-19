@@ -61,6 +61,12 @@ export const routes: Routes = [
           { path: '', redirectTo: 'ver-tickets', pathMatch: 'full' },
           { path: 'crear-ticket', component: CrearTicketRefactorComponent },
           { path: 'ver-tickets', component: PantallaVerTicketsComponent },
+          {
+            path: 'programacion-preventiva',
+            loadComponent: () =>
+              import('./tickets-preventive-planning/tickets-preventive-planning.component')
+                .then(m => m.TicketsPreventivePlanningComponent),
+          },
         ],
       },
       {
