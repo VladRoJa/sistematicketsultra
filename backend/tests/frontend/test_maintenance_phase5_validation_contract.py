@@ -93,9 +93,13 @@ def test_backend_detail_uses_real_validation_permission_and_requirements():
     assert "ticket_preventivo_origen_id == ticket.id" in routes
 
 
-def test_manager_rejection_reprograms_preventive_current_date_only():
-    model = _read(TICKET_MODEL)
+def test_manager_rejection_does_not_expose_preventive_scheduling():
+    routes = _read(TICKET_ROUTES)
+    dialog_ts = _read(DIALOG_TS)
+    dialog_html = _read(DIALOG_HTML)
 
-    assert 'if tipo_mantenimiento == "PREVENTIVO":' in model
-    assert "self.fecha_programada_actual = nueva_fecha_utc" in model
-    assert "self.fecha_programada_original" in model
+    assert "El gerente puede rechazar el preventivo" in routes
+    assert "no reprogramarlo desde la validación" in routes
+    assert "newProgramDate" not in dialog_ts
+    assert "Nueva fecha programada" not in dialog_html
+    assert "nueva_fecha_solucion" not in dialog_ts
