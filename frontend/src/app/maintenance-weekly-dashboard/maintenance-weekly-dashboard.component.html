@@ -41,7 +41,7 @@
       <select [(ngModel)]="branchId" (ngModelChange)="loadDashboard()">
         <option [ngValue]="null">Todas</option>
         <option
-          *ngFor="let branch of current.context.sucursales"
+          *ngFor="let branch of visibleBranches"
           [ngValue]="branch.id"
         >
           {{ branch.nombre }}
