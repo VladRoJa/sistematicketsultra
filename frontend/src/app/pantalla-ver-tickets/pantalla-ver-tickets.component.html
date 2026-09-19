@@ -910,10 +910,7 @@
               {{ ticket.fecha_solucion | date:'dd/MM/yy' }}
 
               <button
-                *ngIf="
-                  puedeEditarTickets &&
-                  ((ticket.estado ?? '').toString().trim().toLowerCase() === 'en progreso')
-                "
+                *ngIf="puedeEditarFechaSolucion(ticket)"
                 mat-icon-button
                 class="boton-editar-fecha"
                 matTooltip="Editar fecha solución"
