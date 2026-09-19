@@ -6,8 +6,6 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func
-from sqlalchemy.orm.attributes import flag_modified
-
 from app.extensions import db
 from app.models.maintenance_checklist import (
     MaintenanceChecklistTemplateORM,
@@ -453,6 +451,5 @@ def complete_preventive(user, ticket_id: int) -> Ticket:
         estado_cierre_anterior=previous_close_state,
         estado_cierre_nuevo=ticket.estado_cierre,
     )
-    flag_modified(ticket, "historial_fechas")
 
     return ticket
