@@ -1,0 +1,201 @@
+<section class="checklist-page">
+  <header class="checklist-header">
+    <div>
+      <span class="eyebrow">Tickets · Mantenimiento</span>
+      <h1>Checklists preventivos</h1>
+      <p>
+        Configura procedimientos por familia y, opcionalmente, por actividad.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      class="button button--ghost"
+      (click)="loadCatalog()"
+      [disabled]="loading || saving"
+    >
+      Actualizar
+    </button>
+  </header>
+
+  <div *ngIf="errorMessage" class="alert alert--error">
+    {{ errorMessage }}
+  </div>
+  <div *ngIf="successMessage" class="alert alert--success">
+    {{ successMessage }}
+  </div>
+
+  <section class="panel create-panel">
+    <header class="panel__header">
+      <div>
+        <span class="eyebrow">Nueva plantilla</span>
+        <h2>Crear checklist</h2>
+      </div>
+    </header>
+
+    <div class="create-grid">
+      <label>
+        <span>Familia</span>
+        <select [(ngModel)]="familyId">
+          <option [ngValue]="null">Selecciona</option>
+          <option
+            *ngFor="let family of catalog.families"
+            [ngValue]="family.id"
+          >
+            {{ family.nombre }}
+          </option>
+        </select>
+      </label>
+
+      <label>
+        <span>Nombre</span>
+        <input
+          type="text"
+          [(ngModel)]="templateName"
+          placeholder="Ej. Preventivo general caminadoras"
+        />
+      </label>
+
+      <label>
+        <span>Actividad exacta</span>
+        <input
+          type="text"
+          [(ngModel)]="activity"
+          placeholder="Vacío = plantilla por defecto de la familia"
+        />
+      </label>
+
+      <label class="items-input">
+        <span>Ítems iniciales · uno por línea</span>
+        <textarea
+          [(ngModel)]="initialItemsText"
+          rows="6"
+          placeholder="Limpieza&#10;Lubricación&#10;Revisión de banda&#10;Prueba de funcionamiento"
+        ></textarea>
+      </label>
+    </div>
+
+    <div class="panel__footer">
+      <button
+        type="button"
+        class="button button--primary"
+        (click)="createTemplate()"
+        [disabled]="saving"
+      >
+        Crear checklist
+      </button>
+    </div>
+  </section>
+
+  <section class="templates">
+    <article
+      *ngFor="let template of catalog.templates; trackBy: trackTemplate"
+      class="panel template-card"
+    >
+      <header class="template-card__header">
+        <div>
+          <span class="eyebrow">{{ template.familia || 'Sin familia' }}</span>
+          <input
+            class="title-input"
+            type="text"
+            [(ngModel)]="template.nombre"
+          />
+        </div>
+
+        <label class="toggle">
+          <input type="checkbox" [(ngModel)]="template.activo" />
+          <span>Activa</span>
+        </label>
+      </header>
+
+      <div class="template-meta">
+        <label>
+          <span>Actividad</span>
+          <input
+            type="text"
+            [(ngModel)]="template.actividad"
+            placeholder="Por defecto de la familia"
+          />
+        </label>
+
+        <button
+          type="button"
+          class="text-button"
+          (click)="saveTemplate(template)"
+          [disabled]="saving"
+        >
+          Guardar plantilla
+        </button>
+      </div>
+
+      <div class="items-list">
+        <div
+          *ngFor="let item of template.items; trackBy: trackItem"
+          class="item-row"
+        >
+          <input
+            class="order-input"
+            type="number"
+            [(ngModel)]="item.orden"
+            aria-label="Orden"
+          />
+
+          <input
+            type="text"
+            [(ngModel)]="item.etiqueta"
+            aria-label="Etiqueta"
+          />
+
+          <label class="toggle">
+            <input
+              type="checkbox"
+              [(ngModel)]="item.requerido"
+            />
+            <span>Requerido</span>
+          </label>
+
+          <label class="toggle">
+            <input
+              type="checkbox"
+              [(ngModel)]="item.activo"
+            />
+            <span>Activo</span>
+          </label>
+
+          <button
+            type="button"
+            class="text-button"
+            (click)="saveItem(template, item)"
+            [disabled]="saving"
+          >
+            Guardar
+          </button>
+        </div>
+
+        <div class="new-item-row">
+          <input
+            type="text"
+            [(ngModel)]="newItemByTemplate[template.id]"
+            placeholder="Nuevo ítem"
+          />
+          <button
+            type="button"
+            class="button button--ghost"
+            (click)="addItem(template)"
+            [disabled]="saving"
+          >
+            Agregar ítem
+          </button>
+        </div>
+      </div>
+    </article>
+
+    <div *ngIf="!catalog.templates.length && !loading" class="empty-state">
+      Todavía no hay checklists configurados.
+    </div>
+  </section>
+
+  <div *ngIf="loading" class="loading-state">
+    Cargando checklists…
+  </div>
+</section>
