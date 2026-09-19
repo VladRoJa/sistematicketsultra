@@ -117,7 +117,11 @@ class TicketPreventiveCleanupCloseTest(unittest.TestCase):
                     return_value=True,
                 ),
             ):
-                response, status = cierre_gerente_desde_cero.__wrapped__(77)
+                response, status = (
+                    cierre_gerente_desde_cero
+                    .__wrapped__
+                    .__wrapped__(77)
+                )
 
         self.assertEqual(status, 400)
         self.assertIn(
