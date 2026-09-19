@@ -220,12 +220,17 @@ export interface MaintenanceDashboardWeek {
     missed: MaintenanceDashboardMetric;
     pending_now: MaintenanceDashboardMetric;
     demand: MaintenanceDashboardMetric;
+    demand_reactive: MaintenanceDashboardMetric;
+    demand_detected_preventive: MaintenanceDashboardMetric;
     fulfillment_percent: number;
   };
   backlog: {
     start: MaintenanceDashboardMetric;
     end: MaintenanceDashboardMetric;
     delta: number;
+    overdue_start: MaintenanceDashboardMetric;
+    overdue_end: MaintenanceDashboardMetric;
+    overdue_delta: number;
   };
 }
 
@@ -283,6 +288,9 @@ export interface MaintenanceDashboardDrilldownTicket {
   fecha_solucion: string | null;
   fecha_validacion_cierre: string | null;
   ticket_preventivo_origen_id: number | null;
+  commitment_as_of?: string | null;
+  overdue_days?: number | null;
+  aging_bucket?: string | null;
 }
 
 export interface MaintenanceDashboardDrilldown {
@@ -290,6 +298,12 @@ export interface MaintenanceDashboardDrilldown {
   week_start: string;
   week_end: string;
   count: number;
+  aging?: {
+    '1_7': number;
+    '8_14': number;
+    '15_30': number;
+    '31_PLUS': number;
+  } | null;
   tickets: MaintenanceDashboardDrilldownTicket[];
 }
 
