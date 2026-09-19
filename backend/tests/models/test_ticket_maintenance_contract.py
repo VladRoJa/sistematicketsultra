@@ -111,7 +111,7 @@ class TicketMaintenanceContractTest(unittest.TestCase):
         self.assertEqual(ticket.fecha_compromiso_original, previous)
         self.assertEqual(ticket.fecha_solucion, new_due)
 
-    def test_manager_rejection_reprograms_preventive_without_touching_corrective_due(self):
+    def test_rejection_helper_preserves_preventive_original_when_date_is_supplied(self):
         from datetime import datetime, timezone
 
         original = datetime(2026, 9, 20, 14, 0, tzinfo=timezone.utc)
@@ -138,7 +138,7 @@ class TicketMaintenanceContractTest(unittest.TestCase):
             ticket.rechazar_conformidad_creador(
                 motivo="Repetir lubricación",
                 nueva_fecha_compromiso=new_due,
-                actor_username="GERENTE",
+                actor_username="ADMIN_TEST",
             )
 
         self.assertEqual(ticket.fecha_programada_original, original)
