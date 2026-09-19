@@ -615,6 +615,33 @@
   color: var(--ultra-surface);
 }
 
+.ticket-reprogram-info {
+  display: grid;
+  gap: 2px;
+  margin-top: 6px;
+  border-left: 3px solid var(--ultra-orange);
+  background: var(--ultra-orange-soft);
+  padding: 6px 8px;
+}
+
+.ticket-reprogram-info span {
+  color: var(--ultra-orange);
+  font-size: 7px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.ticket-reprogram-info strong {
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.ticket-reprogram-info small {
+  color: var(--ultra-gray-600);
+  font-size: 8px;
+  font-weight: 700;
+}
+
 .open-ticket-button {
   min-height: 34px;
   border: 1px solid rgba(229, 69, 37, 0.28);
