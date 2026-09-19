@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Callable
+from uuid import uuid4
 
 from sqlalchemy import func
 
@@ -15,9 +16,14 @@ from app.models.maintenance_preventive import (
 )
 from app.models.sucursal_model import Sucursal
 from app.models.user_model import UserORM
+from app.utils.pm_permissions import can_pm_configure
 
 
 class MaintenancePreventiveError(ValueError):
+    pass
+
+
+class MaintenancePreventiveAuthorizationError(MaintenancePreventiveError):
     pass
 
 
@@ -35,6 +41,283 @@ def _clean(value) -> str:
 
 def _normalize_key(value) -> str:
     return " ".join(_clean(value).upper().split())
+
+
+def _role(user) -> str:
+    return _normalize_key(getattr(user, "rol", ""))
+
+
+def _assert_can_configure(user) -> None:
+    if not user or not can_pm_configure(user):
+        raise MaintenancePreventiveAuthorizationError(
+            "No tienes permiso para configurar programación preventiva."
+        )
+
+
+def _allowed_branch_ids(user) -> set[int]:
+    result: set[int] = set()
+
+    for value in (getattr(user, "sucursales_ids", None) or []):
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            continue
+        if parsed > 0:
+            result.add(parsed)
+
+    try:
+        primary = int(getattr(user, "sucursal_id", 0) or 0)
+    except (TypeError, ValueError):
+        primary = 0
+
+    if primary > 0:
+        result.add(primary)
+
+    return result
+
+
+def _can_manage_branch(user, branch_id: int) -> bool:
+    role = _role(user)
+
+    if role in {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN", "MANTENIMIENTO"}:
+        return True
+
+    try:
+        target = int(branch_id)
+    except (TypeError, ValueError):
+        return False
+
+    return target in _allowed_branch_ids(user)
+
+
+def _parse_optional_date(value, field_name: str) -> date | None:
+    if value in (None, ""):
+        return None
+
+    parsed = _parse_programmed_date(value)
+    if parsed is None:
+        raise MaintenancePreventiveError(
+            f"{field_name} debe tener formato YYYY-MM-DD."
+        )
+    return parsed
+
+
+def _batch_key() -> str:
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
+    return f"PM-{stamp}-{uuid4().hex[:8].upper()}"
+
+
+def crear_lote_preventivo(user, payload: dict) -> MaintenancePreventiveBatchORM:
+    _assert_can_configure(user)
+
+    if not isinstance(payload, dict):
+        raise MaintenancePreventiveError("El cuerpo del lote es inválido.")
+
+    nombre = _clean(payload.get("nombre"))
+    if not nombre:
+        raise MaintenancePreventiveError("nombre es obligatorio.")
+
+    source_type = _normalize_key(payload.get("source_type") or "MANUAL")
+    if source_type not in {"MANUAL", "ARCHIVO"}:
+        raise MaintenancePreventiveError(
+            "source_type debe ser MANUAL o ARCHIVO."
+        )
+
+    period_start = _parse_optional_date(
+        payload.get("period_start"),
+        "period_start",
+    )
+    period_end = _parse_optional_date(
+        payload.get("period_end"),
+        "period_end",
+    )
+
+    if period_start and period_end and period_start > period_end:
+        raise MaintenancePreventiveError(
+            "period_start no puede ser mayor que period_end."
+        )
+
+    batch = MaintenancePreventiveBatchORM(
+        batch_key=_batch_key(),
+        nombre=nombre,
+        source_type=source_type,
+        status="BORRADOR",
+        period_start=period_start,
+        period_end=period_end,
+        source_filename=_clean(payload.get("source_filename")) or None,
+        source_sha256=_clean(payload.get("source_sha256")) or None,
+        notes=_clean(payload.get("notes")) or None,
+        created_by_user_id=int(user.id),
+    )
+    db.session.add(batch)
+    db.session.flush()
+    return batch
+
+
+def _get_batch(batch_id: int) -> MaintenancePreventiveBatchORM:
+    batch = db.session.get(MaintenancePreventiveBatchORM, int(batch_id))
+    if batch is None:
+        raise MaintenancePreventiveNotFoundError(
+            "Lote preventivo no encontrado."
+        )
+    return batch
+
+
+def _assert_batch_manageable(user, batch: MaintenancePreventiveBatchORM) -> None:
+    _assert_can_configure(user)
+
+    role = _role(user)
+    if role in {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN", "MANTENIMIENTO"}:
+        return
+
+    if int(batch.created_by_user_id or 0) != int(user.id):
+        raise MaintenancePreventiveAuthorizationError(
+            "No tienes acceso de edición a este lote preventivo."
+        )
+
+
+def agregar_renglones_lote(
+    batch_id: int,
+    user,
+    rows: list[dict],
+) -> list[MaintenancePreventiveItemORM]:
+    batch = _get_batch(batch_id)
+    _assert_batch_manageable(user, batch)
+
+    if batch.status != "BORRADOR":
+        raise MaintenancePreventiveStateError(
+            "Solo se pueden editar lotes en BORRADOR."
+        )
+
+    if not isinstance(rows, list) or not rows:
+        raise MaintenancePreventiveError(
+            "items debe ser una lista no vacía."
+        )
+
+    existing_rows = [
+        int(item.source_row_number)
+        for item in (batch.items or [])
+        if item.source_row_number is not None
+    ]
+    next_row_number = max(existing_rows, default=0) + 1
+
+    created: list[MaintenancePreventiveItemORM] = []
+
+    for offset, raw_row in enumerate(rows):
+        if not isinstance(raw_row, dict):
+            raise MaintenancePreventiveError(
+                f"El renglón {offset + 1} es inválido."
+            )
+
+        source_row_number = raw_row.get("source_row_number")
+        try:
+            source_row_number = (
+                int(source_row_number)
+                if source_row_number is not None
+                else next_row_number + offset
+            )
+        except (TypeError, ValueError):
+            raise MaintenancePreventiveError(
+                f"source_row_number inválido en renglón {offset + 1}."
+            )
+
+        sucursal_input = _clean(
+            raw_row.get("sucursal")
+            or raw_row.get("sucursal_input")
+            or raw_row.get("sucursal_id")
+        )
+
+        # Si la sucursal ya es resoluble, el backend aplica scope antes de
+        # persistir. Una sucursal inexistente sí se guarda para que validación
+        # muestre el error correspondiente.
+        branch = _resolve_sucursal(sucursal_input)
+        if branch is not None and not _can_manage_branch(
+            user,
+            int(branch.sucursal_id),
+        ):
+            raise MaintenancePreventiveAuthorizationError(
+                f"No tienes acceso a la sucursal {sucursal_input}."
+            )
+
+        item = MaintenancePreventiveItemORM(
+            batch_id=batch.id,
+            source_row_number=source_row_number,
+            sucursal_input=sucursal_input or None,
+            codigo_equipo_input=_clean(
+                raw_row.get("codigo_equipo")
+                or raw_row.get("codigo_equipo_input")
+            ) or None,
+            responsable_input=_clean(
+                raw_row.get("responsable")
+                or raw_row.get("responsable_input")
+            ) or None,
+            fecha_programada_input=_clean(
+                raw_row.get("fecha_programada")
+                or raw_row.get("fecha_programada_input")
+            ) or None,
+            actividad=_clean(raw_row.get("actividad")) or None,
+            observaciones=_clean(raw_row.get("observaciones")) or None,
+            validation_status="PENDIENTE",
+            validation_errors=None,
+        )
+        db.session.add(item)
+        created.append(item)
+
+    db.session.flush()
+    return created
+
+
+def serializar_item(item: MaintenancePreventiveItemORM) -> dict:
+    return {
+        "id": item.id,
+        "batch_id": item.batch_id,
+        "source_row_number": item.source_row_number,
+        "sucursal_input": item.sucursal_input,
+        "codigo_equipo_input": item.codigo_equipo_input,
+        "responsable_input": item.responsable_input,
+        "fecha_programada_input": item.fecha_programada_input,
+        "sucursal_id": item.sucursal_id,
+        "inventario_id": item.inventario_id,
+        "responsable_user_id": item.responsable_user_id,
+        "fecha_programada": (
+            item.fecha_programada.isoformat()
+            if item.fecha_programada
+            else None
+        ),
+        "actividad": item.actividad,
+        "observaciones": item.observaciones,
+        "validation_status": item.validation_status,
+        "validation_errors": item.validation_errors or [],
+        "ticket_id": item.ticket_id,
+    }
+
+
+def serializar_lote(batch: MaintenancePreventiveBatchORM) -> dict:
+    return {
+        "id": batch.id,
+        "batch_key": batch.batch_key,
+        "nombre": batch.nombre,
+        "source_type": batch.source_type,
+        "status": batch.status,
+        "period_start": (
+            batch.period_start.isoformat() if batch.period_start else None
+        ),
+        "period_end": (
+            batch.period_end.isoformat() if batch.period_end else None
+        ),
+        "source_filename": batch.source_filename,
+        "source_sha256": batch.source_sha256,
+        "notes": batch.notes,
+        "created_by_user_id": batch.created_by_user_id,
+        "published_by_user_id": batch.published_by_user_id,
+        "published_at": (
+            batch.published_at.isoformat() if batch.published_at else None
+        ),
+        "items": [
+            serializar_item(item)
+            for item in (batch.items or [])
+        ],
+    }
 
 
 def _resolve_sucursal(value) -> Sucursal | None:
@@ -157,6 +440,7 @@ def validar_item_borrador(
     item: MaintenancePreventiveItemORM,
     *,
     seen_keys: set | None = None,
+    actor=None,
     resolve_sucursal: Callable = _resolve_sucursal,
     resolve_equipo: Callable = _resolve_equipo_by_code,
     equipo_asignado: Callable = _equipo_asignado_a_sucursal,
@@ -179,6 +463,11 @@ def validar_item_borrador(
         errors.append("Sucursal inexistente o vacía.")
     else:
         item.sucursal_id = int(sucursal.sucursal_id)
+        if actor is not None and not _can_manage_branch(
+            actor,
+            item.sucursal_id,
+        ):
+            errors.append("No tienes acceso a la sucursal indicada.")
 
     try:
         equipo = resolve_equipo(item.codigo_equipo_input)
@@ -240,12 +529,11 @@ def validar_item_borrador(
     return errors
 
 
-def validar_lote_preventivo(batch_id: int) -> dict:
-    batch = db.session.get(MaintenancePreventiveBatchORM, int(batch_id))
-    if batch is None:
-        raise MaintenancePreventiveNotFoundError(
-            "Lote preventivo no encontrado."
-        )
+def validar_lote_preventivo(batch_id: int, user=None) -> dict:
+    batch = _get_batch(batch_id)
+
+    if user is not None:
+        _assert_batch_manageable(user, batch)
 
     if batch.status != "BORRADOR":
         raise MaintenancePreventiveStateError(
@@ -266,6 +554,7 @@ def validar_lote_preventivo(batch_id: int) -> dict:
         errors = validar_item_borrador(
             item,
             seen_keys=seen_keys,
+            actor=user,
         )
         if errors:
             invalid += 1
