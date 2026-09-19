@@ -63,6 +63,11 @@ from app.services.maintenance_checklist_service import (
     serialize_item,
     serialize_template,
 )
+from app.services.maintenance_weekly_dashboard_service import (
+    MaintenanceWeeklyDashboardError,
+    build_dashboard_drilldown,
+    build_weekly_dashboard,
+)
 
 
 maintenance_preventive_bp = Blueprint(
@@ -89,6 +94,8 @@ def _error_response(exc: Exception):
     if isinstance(exc, MaintenanceExecutionError):
         return jsonify({"mensaje": str(exc)}), exc.status_code
     if isinstance(exc, MaintenanceChecklistError):
+        return jsonify({"mensaje": str(exc)}), exc.status_code
+    if isinstance(exc, MaintenanceWeeklyDashboardError):
         return jsonify({"mensaje": str(exc)}), exc.status_code
     raise exc
 
@@ -122,6 +129,72 @@ def _batch_summary(batch) -> dict:
             1 for item in items if item.validation_status == "PENDIENTE"
         ),
     }
+
+
+@maintenance_preventive_bp.route(
+    "/dashboard/weekly",
+    methods=["GET"],
+)
+@jwt_required()
+def get_weekly_dashboard():
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        return jsonify(
+            build_weekly_dashboard(
+                user,
+                weeks=request.args.get("weeks", default=8, type=int),
+                reference_date=request.args.get("reference_date"),
+                region_id=request.args.get("region_id", type=int),
+                branch_id=request.args.get("branch_id", type=int),
+                crew_id=request.args.get("crew_id", type=int),
+                responsible_user_id=request.args.get(
+                    "responsible_user_id",
+                    type=int,
+                ),
+            )
+        ), 200
+    except Exception as exc:
+        return _error_response(exc)
+
+
+@maintenance_preventive_bp.route(
+    "/dashboard/drilldown",
+    methods=["GET"],
+)
+@jwt_required()
+def get_weekly_dashboard_drilldown():
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    week_start = request.args.get("week_start")
+    metric = str(request.args.get("metric") or "").strip()
+
+    if not week_start or not metric:
+        return jsonify({
+            "mensaje": "week_start y metric son obligatorios."
+        }), 400
+
+    try:
+        return jsonify(
+            build_dashboard_drilldown(
+                user,
+                week_start=week_start,
+                metric=metric,
+                region_id=request.args.get("region_id", type=int),
+                branch_id=request.args.get("branch_id", type=int),
+                crew_id=request.args.get("crew_id", type=int),
+                responsible_user_id=request.args.get(
+                    "responsible_user_id",
+                    type=int,
+                ),
+            )
+        ), 200
+    except Exception as exc:
+        return _error_response(exc)
 
 
 @maintenance_preventive_bp.route("/checklists", methods=["GET"])
