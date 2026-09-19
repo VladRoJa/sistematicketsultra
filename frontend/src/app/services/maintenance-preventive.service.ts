@@ -243,6 +243,7 @@ export interface MaintenanceWeeklyDashboard {
     sucursales: Array<{
       id: number;
       nombre: string;
+      region_id: number | null;
     }>;
     regiones: Array<{
       id: number;
