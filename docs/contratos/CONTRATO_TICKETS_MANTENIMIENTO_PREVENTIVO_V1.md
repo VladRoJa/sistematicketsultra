@@ -3,7 +3,7 @@
 **Documento:** Contrato funcional-técnico  
 **Versión:** 1.0  
 **Fecha:** 18 de septiembre de 2026  
-**Estado:** Aprobado funcionalmente; pendiente de implementación
+**Estado:** Implementado en PR #655; pendiente de validación ejecutable, merge y despliegue
 
 ## 1. Objetivo
 
@@ -1092,3 +1092,35 @@ Debe funcionar como un sistema de:
 **planeación → ejecución → validación → trazabilidad → medición → explicación.**
 
 La finalidad es poder observar con evidencia si el mantenimiento preventivo se está ejecutando y si, con el tiempo, la operación correctiva y el backlog disminuyen.
+
+## 51. Estado de implementación V1
+
+La implementación correspondiente a este contrato se encuentra en la PR **#655** sobre la rama `feat/tickets-preventive-maintenance`.
+
+Se implementaron las siete fases funcionales:
+
+1. semántica canónica de mantenimiento en Tickets;
+2. programación manual y batch;
+3. cuadrillas, responsables y Mi programa mobile-first;
+4. bitácora, evidencia, checklist y correctivo derivado;
+5. validación del gerente integrada a Tickets;
+6. panel semanal, backlog histórico y drill-down;
+7. transición reversible del PM legacy.
+
+También quedaron cubiertos los requisitos transversales de:
+
+- reprogramación auditada para preventivos y correctivos;
+- catálogo configurable de motivos;
+- preservación de fecha original;
+- historial de reprogramaciones;
+- navegación preventiva ↔ correctiva;
+- backlog vencido histórico;
+- aging de backlog;
+- separación de correctivos reactivos y detectados preventivamente;
+- feature flag de cutover `TICKETS_PREVENTIVE_V1_ENABLED`.
+
+El procedimiento de activación y rollback se documenta en:
+
+`docs/contratos/ROLLOUT_TICKETS_MANTENIMIENTO_PREVENTIVO_V1.md`
+
+La PR permanece como draft hasta ejecutar las pruebas Python/Angular en un entorno con acceso al repositorio y realizar el smoke test previo al cutover.
