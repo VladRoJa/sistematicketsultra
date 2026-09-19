@@ -540,10 +540,7 @@ def _ticket_was_reprogrammed(
             or ""
         ).strip().lower()
 
-        if event in {
-            "reprogramacion_mantenimiento",
-            "rechazo_cierre_gerente",
-        }:
+        if event == "reprogramacion_mantenimiento":
             return True
 
         historical_due = _history_datetime(
@@ -855,10 +852,7 @@ def _serialize_reprogram_history(ticket: Ticket) -> list[dict]:
         new_dt = _history_datetime(new_raw)
         new_date = _business_date(new_dt)
 
-        is_explicit = event in {
-            "reprogramacion_mantenimiento",
-            "rechazo_cierre_gerente",
-        }
+        is_explicit = event == "reprogramacion_mantenimiento"
         has_previous = bool(
             item.get("fecha_anterior")
             or item.get("fecha_previa")
