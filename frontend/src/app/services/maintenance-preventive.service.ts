@@ -128,11 +128,80 @@ export interface PreventiveValidationSummary {
   publicable: boolean;
 }
 
+export interface MaintenanceMyProgramItem {
+  ticket_id: number;
+  tipo_mantenimiento: 'PREVENTIVO' | 'CORRECTIVO';
+  estado: string;
+  operational_status:
+    | 'HOY'
+    | 'PROGRAMADO'
+    | 'VENCIDO'
+    | 'PENDIENTE_VALIDACION'
+    | 'SIN_FECHA';
+  fecha_trabajo: string | null;
+  sucursal_id: number | null;
+  sucursal: string;
+  inventario_id: number | null;
+  codigo_equipo: string | null;
+  equipo: string;
+  actividad: string;
+  problema_detectado: string | null;
+  necesita_refaccion: boolean;
+  descripcion_refaccion: string | null;
+}
+
+export interface MaintenanceMyProgram {
+  personnel: {
+    id: number;
+    user_id: number;
+    username: string;
+    crew_id: number | null;
+    crew: string | null;
+    region_id: number | null;
+  };
+  window: {
+    start_date: string;
+    end_date: string;
+    today: string;
+  };
+  metrics: {
+    today: number;
+    week: number;
+    overdue: number;
+    pending_validation: number;
+    unscheduled: number;
+  };
+  today_items: MaintenanceMyProgramItem[];
+  week_items: MaintenanceMyProgramItem[];
+  overdue: MaintenanceMyProgramItem[];
+  pending_validation: MaintenanceMyProgramItem[];
+  unscheduled: MaintenanceMyProgramItem[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class MaintenancePreventiveService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl =
     `${environment.apiUrl}/tickets/preventive-planning`;
+
+  getMyProgram(params?: {
+    start_date?: string;
+    end_date?: string;
+  }): Observable<MaintenanceMyProgram> {
+    let httpParams = new HttpParams();
+
+    if (params?.start_date) {
+      httpParams = httpParams.set('start_date', params.start_date);
+    }
+    if (params?.end_date) {
+      httpParams = httpParams.set('end_date', params.end_date);
+    }
+
+    return this.http.get<MaintenanceMyProgram>(
+      `${this.baseUrl}/my-program`,
+      { params: httpParams },
+    );
+  }
 
   getPersonnelCatalog(): Observable<MaintenancePersonnelCatalog> {
     return this.http.get<MaintenancePersonnelCatalog>(
