@@ -484,7 +484,7 @@ def schedule_ticket(ticket_id: int, user, *, due_date: str, reason: str) -> Tick
     due_utc = local_due.astimezone(timezone.utc)
     now_utc = datetime.now(timezone.utc)
 
-    ticket.fecha_solucion = due_utc
+    ticket.asignar_fecha_compromiso(due_utc)
     if str(ticket.estado or "").strip().lower() == "abierto":
         ticket.estado = "en progreso"
     if ticket.fecha_en_progreso is None:
