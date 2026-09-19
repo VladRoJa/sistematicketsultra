@@ -238,5 +238,140 @@ class MaintenancePreventiveDraftOperationsTest(unittest.TestCase):
         fake_session.add.assert_not_called()
 
 
+class MaintenancePreventivePublishTest(unittest.TestCase):
+    def _user(self):
+        return SimpleNamespace(
+            id=10,
+            username="MANTENIMIENTO",
+            rol="MANTENIMIENTO",
+            sucursal_id=1000,
+            sucursales_ids=[],
+        )
+
+    def _valid_item(self):
+        return SimpleNamespace(
+            id=1,
+            validation_status="VALIDO",
+            ticket_id=None,
+            sucursal_id=4,
+            inventario_id=90,
+            responsable_user_id=20,
+            fecha_programada=date(2026, 9, 20),
+            actividad="Mantenimiento general",
+        )
+
+    def test_publish_requires_all_rows_valid(self):
+        batch = SimpleNamespace(
+            id=30,
+            status="BORRADOR",
+            created_by_user_id=10,
+            items=[
+                SimpleNamespace(validation_status="ERROR"),
+            ],
+        )
+
+        with patch.object(service, "_get_batch", return_value=batch):
+            with self.assertRaises(
+                service.MaintenancePreventiveStateError
+            ):
+                service.publicar_lote_preventivo(
+                    30,
+                    self._user(),
+                )
+
+    def test_publish_creates_preventive_ticket_and_links_item(self):
+        item = self._valid_item()
+        batch = SimpleNamespace(
+            id=30,
+            status="BORRADOR",
+            created_by_user_id=10,
+            items=[item],
+            published_by_user_id=None,
+            published_at=None,
+        )
+        inventory = SimpleNamespace(
+            id=90,
+            nombre="CAMINADORA",
+            familia_equipo_id=1,
+        )
+        responsible = SimpleNamespace(
+            id=20,
+            username="TECNICO_PM",
+        )
+        ticket = SimpleNamespace(
+            id=501,
+            asignado_a=None,
+            familia_equipo_id=None,
+        )
+        fake_session = MagicMock()
+
+        def fake_get(model, object_id):
+            if model is service.InventarioGeneral:
+                return inventory
+            if model is service.UserORM:
+                return responsible
+            return None
+
+        fake_session.get.side_effect = fake_get
+
+        with (
+            patch.object(service, "_get_batch", return_value=batch),
+            patch.object(
+                service,
+                "_published_duplicate_exists",
+                return_value=False,
+            ),
+            patch.object(
+                service,
+                "db",
+                SimpleNamespace(session=fake_session),
+            ),
+            patch.object(
+                service.Ticket,
+                "create_ticket",
+                return_value=ticket,
+            ) as create_ticket,
+        ):
+            tickets = service.publicar_lote_preventivo(
+                30,
+                self._user(),
+            )
+
+        self.assertEqual(tickets, [ticket])
+        self.assertEqual(item.ticket_id, 501)
+        self.assertEqual(ticket.asignado_a, "TECNICO_PM")
+        self.assertEqual(ticket.familia_equipo_id, 1)
+        self.assertEqual(batch.status, "PUBLICADO")
+        self.assertEqual(batch.published_by_user_id, 10)
+
+        kwargs = create_ticket.call_args.kwargs
+        self.assertEqual(kwargs["tipo_mantenimiento"], "PREVENTIVO")
+        self.assertEqual(kwargs["sucursal_id_destino"], 4)
+        self.assertEqual(kwargs["aparato_id"], 90)
+        self.assertFalse(kwargs["commit"])
+        self.assertEqual(
+            kwargs["fecha_programada_original"],
+            kwargs["fecha_programada_actual"],
+        )
+
+    def test_published_batch_cannot_publish_again(self):
+        batch = SimpleNamespace(
+            id=30,
+            status="PUBLICADO",
+            created_by_user_id=10,
+            items=[self._valid_item()],
+        )
+
+        with patch.object(service, "_get_batch", return_value=batch):
+            with self.assertRaisesRegex(
+                service.MaintenancePreventiveStateError,
+                "BORRADOR",
+            ):
+                service.publicar_lote_preventivo(
+                    30,
+                    self._user(),
+                )
+
+
 if __name__ == "__main__":
     unittest.main()
