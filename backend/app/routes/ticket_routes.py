@@ -556,9 +556,10 @@ def _get_ticket_attachment(ticket_id: int):
     return (
         TicketAttachmentORM.query
         .filter(
-            TicketAttachmentORM.ticket_id == ticket_id
+            TicketAttachmentORM.ticket_id == ticket_id,
+            TicketAttachmentORM.deleted_at.is_(None),
         )
-        .order_by(TicketAttachmentORM.id.asc())
+        .order_by(TicketAttachmentORM.id.desc())
         .first()
     )
 
