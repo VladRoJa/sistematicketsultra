@@ -845,6 +845,18 @@ td.col-descripcion {
   box-shadow: 0 8px 18px rgba(220, 38, 38, 0.20);
 }
 
+.ticket-validation-button--review {
+  width: 142px;
+  background: var(--ultra-info-soft);
+  color: var(--ultra-blue);
+  box-shadow: 0 6px 14px rgba(44, 69, 149, 0.14);
+}
+
+.ticket-validation-button--review:hover {
+  filter: brightness(0.98);
+  box-shadow: 0 8px 18px rgba(44, 69, 149, 0.20);
+}
+
 
 
 /* ==========================================================================
