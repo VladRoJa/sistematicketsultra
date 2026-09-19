@@ -109,6 +109,31 @@ def _batch_key() -> str:
     return f"PM-{stamp}-{uuid4().hex[:8].upper()}"
 
 
+def assert_import_hash_available(source_sha256: str) -> None:
+    sha = _clean(source_sha256).lower()
+    if not sha:
+        raise MaintenancePreventiveError(
+            "No se pudo calcular la huella del archivo."
+        )
+
+    existing = (
+        MaintenancePreventiveBatchORM.query
+        .filter(
+            func.lower(MaintenancePreventiveBatchORM.source_sha256) == sha,
+            MaintenancePreventiveBatchORM.status.in_(
+                ("BORRADOR", "PUBLICADO")
+            ),
+        )
+        .order_by(MaintenancePreventiveBatchORM.id.desc())
+        .first()
+    )
+
+    if existing is not None:
+        raise MaintenancePreventiveStateError(
+            "Este archivo ya fue cargado en un lote preventivo activo."
+        )
+
+
 def crear_lote_preventivo(user, payload: dict) -> MaintenancePreventiveBatchORM:
     _assert_can_configure(user)
 
