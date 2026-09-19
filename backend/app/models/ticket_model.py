@@ -32,7 +32,34 @@ class Ticket(db.Model):
     fecha_creacion = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     fecha_finalizado = db.Column(db.DateTime(timezone=True))
     fecha_en_progreso = db.Column(db.DateTime(timezone=True))
+    # Correctivos: fecha_solucion conserva el compromiso vigente por compatibilidad.
     fecha_solucion = db.Column(db.DateTime(timezone=True))
+
+    # Semántica canónica de mantenimiento.
+    # Nullable para no afectar tickets de otros departamentos.
+    tipo_mantenimiento = db.Column(db.String(20), nullable=True)
+    origen_correctivo = db.Column(db.String(30), nullable=True)
+
+    # Correctivos: el original nunca se sobrescribe; fecha_solucion es el vigente.
+    fecha_compromiso_original = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    # Preventivos: programación original y vigente viven separadas del compromiso correctivo.
+    fecha_programada_original = db.Column(db.DateTime(timezone=True), nullable=True)
+    fecha_programada_actual = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    # Momento real en que el gerente/admin valida el cierre.
+    fecha_validacion_cierre = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    # Si un correctivo nació de un preventivo, conserva relación estructural.
+    ticket_preventivo_origen_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            'tickets.id',
+            name='fk_tickets_ticket_preventivo_origen',
+            ondelete='SET NULL',
+        ),
+        nullable=True,
+    )
 
     # Historial flexible
     historial_fechas = db.Column(db.JSON)
@@ -112,6 +139,12 @@ class Ticket(db.Model):
     clasificacion = db.relationship('CatalogoClasificacion', backref='tickets')
     sucursal_destino = db.relationship('Sucursal', foreign_keys=[sucursal_id_destino], backref='tickets_destino')
     categoria_inventario = db.relationship('CategoriaInventario', foreign_keys=[categoria_inventario_id])
+    ticket_preventivo_origen = db.relationship(
+        'Ticket',
+        remote_side=[id],
+        foreign_keys=[ticket_preventivo_origen_id],
+        backref='correctivos_derivados',
+    )
 
     __table_args__ = (
         db.CheckConstraint(
@@ -119,8 +152,23 @@ class Ticket(db.Model):
             "OR condicion_operativa IN ('TRABAJA', 'NO_TRABAJA')",
             name='ck_tickets_condicion_operativa',
         ),
+        db.CheckConstraint(
+            "tipo_mantenimiento IS NULL "
+            "OR tipo_mantenimiento IN ('CORRECTIVO', 'PREVENTIVO')",
+            name='ck_tickets_tipo_mantenimiento',
+        ),
+        db.CheckConstraint(
+            "origen_correctivo IS NULL "
+            "OR origen_correctivo IN ('REACTIVO', 'DETECTADO_EN_PREVENTIVO')",
+            name='ck_tickets_origen_correctivo',
+        ),
         db.Index('ix_tickets_familia_equipo_id', 'familia_equipo_id'),
         db.Index('ix_tickets_falla_mantenimiento_id', 'falla_mantenimiento_id'),
+        db.Index('ix_tickets_tipo_mantenimiento', 'tipo_mantenimiento'),
+        db.Index('ix_tickets_fecha_compromiso_original', 'fecha_compromiso_original'),
+        db.Index('ix_tickets_fecha_programada_actual', 'fecha_programada_actual'),
+        db.Index('ix_tickets_fecha_validacion_cierre', 'fecha_validacion_cierre'),
+        db.Index('ix_tickets_ticket_preventivo_origen_id', 'ticket_preventivo_origen_id'),
     )
 
     # ─── Serialización ──────────────────────────
@@ -221,6 +269,14 @@ class Ticket(db.Model):
             'fecha_en_progreso': safe_dt_iso(self.fecha_en_progreso),
             'fecha_finalizado': safe_dt_iso(self.fecha_finalizado),
             'fecha_solucion':   safe_dt_iso(self.fecha_solucion),
+
+            'tipo_mantenimiento': self.tipo_mantenimiento,
+            'origen_correctivo': self.origen_correctivo,
+            'fecha_compromiso_original': safe_dt_iso(self.fecha_compromiso_original),
+            'fecha_programada_original': safe_dt_iso(self.fecha_programada_original),
+            'fecha_programada_actual': safe_dt_iso(self.fecha_programada_actual),
+            'fecha_validacion_cierre': safe_dt_iso(self.fecha_validacion_cierre),
+            'ticket_preventivo_origen_id': self.ticket_preventivo_origen_id,
 
             'sucursal_id': self.sucursal_id,
             'sucursal_id_destino': self.sucursal_id_destino,
