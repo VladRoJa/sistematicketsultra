@@ -1397,6 +1397,28 @@ td.col-descripcion {
   white-space: nowrap;
 }
 
+.btn-ticket-origin {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0;
+  border-radius: 999px;
+  color: var(--ultra-success);
+  background: var(--ultra-success-soft);
+}
+
+.btn-ticket-origin:hover {
+  color: #ffffff;
+  background: var(--ultra-success);
+}
+
+.btn-ticket-origin mat-icon {
+  width: 17px;
+  height: 17px;
+  font-size: 17px;
+  line-height: 17px;
+}
+
 .btn-codigo-equipo {
   width: 28px;
   height: 28px;
