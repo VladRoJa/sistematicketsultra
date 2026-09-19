@@ -125,16 +125,25 @@ class MaintenancePreventiveItemORM(db.Model):
 
     source_row_number = db.Column(db.Integer, nullable=True)
 
+    # Valores originales del borrador/importación. Permiten conservar filas
+    # inválidas para mostrarlas y corregirlas antes de publicar.
+    sucursal_input = db.Column(db.String(160), nullable=True)
+    codigo_equipo_input = db.Column(db.String(80), nullable=True)
+    responsable_input = db.Column(db.String(160), nullable=True)
+    fecha_programada_input = db.Column(db.String(40), nullable=True)
+
+    # IDs resueltos después de validar. Pueden ser NULL mientras el renglón
+    # permanece en borrador/error.
     sucursal_id = db.Column(
         db.Integer,
         db.ForeignKey("sucursales.sucursal_id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     inventario_id = db.Column(
         db.Integer,
         db.ForeignKey("inventario_general.id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     responsable_user_id = db.Column(
@@ -144,8 +153,8 @@ class MaintenancePreventiveItemORM(db.Model):
         index=True,
     )
 
-    fecha_programada = db.Column(db.Date, nullable=False, index=True)
-    actividad = db.Column(db.Text, nullable=False)
+    fecha_programada = db.Column(db.Date, nullable=True, index=True)
+    actividad = db.Column(db.Text, nullable=True)
     observaciones = db.Column(db.Text, nullable=True)
 
     validation_status = db.Column(
