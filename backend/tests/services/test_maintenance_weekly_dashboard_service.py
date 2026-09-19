@@ -58,6 +58,14 @@ class MaintenanceWeeklyDashboardServiceTest(unittest.TestCase):
             service.date(2026, 9, 26),
         )
 
+    def test_operational_week_number_uses_sunday_calendar(self):
+        self.assertEqual(
+            service._operational_week_number(
+                service.date(2026, 9, 20)
+            ),
+            39,
+        )
+
     def test_preventive_requires_manager_validation_for_strict_compliance(self):
         week = service.WeekWindow(
             start=service.date(2026, 9, 20),
