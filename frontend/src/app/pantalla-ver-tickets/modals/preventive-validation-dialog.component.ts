@@ -9,6 +9,7 @@ import {
 } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { Router } from '@angular/router';
 
 import {
   PreventiveValidationBitacora,
@@ -58,6 +59,7 @@ export class PreventiveValidationDialogComponent implements OnInit {
     >,
     private readonly dialog: MatDialog,
     private readonly ticketService: TicketService,
+    private readonly router: Router,
   ) {}
 
   ngOnInit(): void {
@@ -123,6 +125,22 @@ export class PreventiveValidationDialogComponent implements OnInit {
       restoreFocus: false,
       panelClass: 'dlg-evidencia',
     });
+  }
+
+  openTicket(ticketId: number): void {
+    if (!Number.isInteger(ticketId) || ticketId <= 0) {
+      return;
+    }
+
+    this.ref.close();
+    this.router.navigate(
+      ['/main/ver-tickets'],
+      {
+        queryParams: {
+          ticket_id: ticketId,
+        },
+      },
+    );
   }
 
   showRejectForm(): void {
