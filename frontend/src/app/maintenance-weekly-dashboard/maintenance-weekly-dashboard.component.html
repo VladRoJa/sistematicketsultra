@@ -228,6 +228,21 @@
                 Vencido: {{ ticket.overdue_days }} días
               </span>
             </div>
+
+            <div
+              *ngIf="ticket.reprogramaciones?.length"
+              class="ticket-reprogram-info"
+            >
+              <span>Última reprogramación</span>
+              <strong>
+                {{ ticket.reprogramaciones[0].motivo || 'Sin motivo' }}
+                ·
+                {{ formatDateTime(ticket.reprogramaciones[0].fecha_nueva) }}
+              </strong>
+              <small *ngIf="ticket.reprogramaciones[0].comentario">
+                {{ ticket.reprogramaciones[0].comentario }}
+              </small>
+            </div>
           </div>
 
           <div class="ticket-actions">
