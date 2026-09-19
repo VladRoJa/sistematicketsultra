@@ -61,6 +61,36 @@ export const routes: Routes = [
           { path: '', redirectTo: 'ver-tickets', pathMatch: 'full' },
           { path: 'crear-ticket', component: CrearTicketRefactorComponent },
           { path: 'ver-tickets', component: PantallaVerTicketsComponent },
+          {
+            path: 'programacion-preventiva',
+            loadComponent: () =>
+              import('./tickets-preventive-planning/tickets-preventive-planning.component')
+                .then(m => m.TicketsPreventivePlanningComponent),
+          },
+          {
+            path: 'cuadrillas-mantenimiento',
+            loadComponent: () =>
+              import('./maintenance-crew-config/maintenance-crew-config.component')
+                .then(m => m.MaintenanceCrewConfigComponent),
+          },
+          {
+            path: 'mi-programa',
+            loadComponent: () =>
+              import('./maintenance-my-program/maintenance-my-program.component')
+                .then(m => m.MaintenanceMyProgramComponent),
+          },
+          {
+            path: 'checklists-mantenimiento',
+            loadComponent: () =>
+              import('./maintenance-checklist-config/maintenance-checklist-config.component')
+                .then(m => m.MaintenanceChecklistConfigComponent),
+          },
+          {
+            path: 'panel-mantenimiento',
+            loadComponent: () =>
+              import('./maintenance-weekly-dashboard/maintenance-weekly-dashboard.component')
+                .then(m => m.MaintenanceWeeklyDashboardComponent),
+          },
         ],
       },
       {

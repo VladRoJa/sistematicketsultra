@@ -1,0 +1,74 @@
+<section class="reprogram-dialog">
+  <header>
+    <div>
+      <span class="eyebrow">Mantenimiento</span>
+      <h2>Reprogramar compromiso</h2>
+      <p>
+        La fecha original se conserva; este cambio quedará auditado.
+      </p>
+    </div>
+  </header>
+
+  <div *ngIf="errorMessage" class="alert">
+    {{ errorMessage }}
+  </div>
+
+  <label>
+    <span>Nueva fecha</span>
+    <input
+      type="date"
+      [(ngModel)]="nuevaFecha"
+      [disabled]="loading"
+    />
+  </label>
+
+  <label>
+    <span>Motivo</span>
+    <select
+      [(ngModel)]="selectedReasonId"
+      [disabled]="loading"
+    >
+      <option [ngValue]="null">Selecciona</option>
+      <option
+        *ngFor="let reason of reasons"
+        [ngValue]="reason.id"
+      >
+        {{ reason.nombre }}
+      </option>
+    </select>
+  </label>
+
+  <label>
+    <span>
+      Comentario
+      <ng-container *ngIf="selectedReason?.requiere_comentario">
+        · requerido
+      </ng-container>
+    </span>
+    <textarea
+      [(ngModel)]="comentario"
+      rows="3"
+      [disabled]="loading"
+      placeholder="Detalle adicional"
+    ></textarea>
+  </label>
+
+  <footer>
+    <button
+      type="button"
+      class="button button--ghost"
+      (click)="close()"
+    >
+      Cancelar
+    </button>
+
+    <button
+      type="button"
+      class="button button--primary"
+      (click)="save()"
+      [disabled]="!canSave"
+    >
+      Guardar reprogramación
+    </button>
+  </footer>
+</section>

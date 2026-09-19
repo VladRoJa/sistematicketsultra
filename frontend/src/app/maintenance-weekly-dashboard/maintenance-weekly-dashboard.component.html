@@ -1,0 +1,556 @@
+<section class="dashboard-page">
+  <header class="dashboard-header">
+    <div>
+      <span class="eyebrow">Tickets · Mantenimiento</span>
+      <h1>Control semanal</h1>
+      <p>
+        Cumplimiento preventivo, compromiso correctivo y evolución del backlog.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      class="refresh-button"
+      (click)="loadDashboard()"
+      [disabled]="loading"
+    >
+      {{ loading ? 'Actualizando…' : 'Actualizar' }}
+    </button>
+  </header>
+
+  <div *ngIf="errorMessage" class="alert alert--error">
+    {{ errorMessage }}
+  </div>
+
+  <section *ngIf="dashboard as current" class="filter-panel">
+    <label>
+      <span>Región</span>
+      <select [(ngModel)]="regionId" (ngModelChange)="onRegionChanged()">
+        <option [ngValue]="null">Todas</option>
+        <option
+          *ngFor="let region of current.context.regiones"
+          [ngValue]="region.id"
+        >
+          {{ region.nombre }}
+        </option>
+      </select>
+    </label>
+
+    <label>
+      <span>Sucursal</span>
+      <select [(ngModel)]="branchId" (ngModelChange)="loadDashboard()">
+        <option [ngValue]="null">Todas</option>
+        <option
+          *ngFor="let branch of visibleBranches"
+          [ngValue]="branch.id"
+        >
+          {{ branch.nombre }}
+        </option>
+      </select>
+    </label>
+
+    <label>
+      <span>Cuadrilla</span>
+      <select [(ngModel)]="crewId" (ngModelChange)="onCrewChanged()">
+        <option [ngValue]="null">Todas</option>
+        <option
+          *ngFor="let crew of visibleCrews"
+          [ngValue]="crew.id"
+        >
+          {{ crew.nombre }}
+        </option>
+      </select>
+    </label>
+
+    <label>
+      <span>Responsable</span>
+      <select
+        [(ngModel)]="responsibleUserId"
+        (ngModelChange)="loadDashboard()"
+      >
+        <option [ngValue]="null">Todos</option>
+        <option
+          *ngFor="let responsible of visibleResponsibles"
+          [ngValue]="responsible.user_id"
+        >
+          {{ responsible.username }}
+        </option>
+      </select>
+    </label>
+
+    <label>
+      <span>Semana de referencia</span>
+      <input
+        type="date"
+        [(ngModel)]="referenceDate"
+        (change)="loadDashboard()"
+      />
+    </label>
+
+    <label>
+      <span>Semanas</span>
+      <select [(ngModel)]="weeks" (ngModelChange)="loadDashboard()">
+        <option [ngValue]="4">4</option>
+        <option [ngValue]="8">8</option>
+        <option [ngValue]="12">12</option>
+      </select>
+    </label>
+  </section>
+
+  <ng-container *ngIf="dashboard as current">
+    <section class="trend-panel">
+      <header class="section-heading">
+        <div>
+          <span class="eyebrow">Tendencia</span>
+          <h2>{{ current.weeks.length }} semanas</h2>
+        </div>
+      </header>
+
+      <div class="trend-scroll">
+        <div class="trend-grid">
+          <div class="trend-row trend-row--header">
+            <span>Indicador</span>
+            <strong *ngFor="let week of current.weeks; trackBy: trackWeek">
+              S{{ week.week_number }}
+            </strong>
+          </div>
+
+          <div class="trend-row">
+            <span>Preventivo en tiempo</span>
+            <strong *ngFor="let week of current.weeks; trackBy: trackWeek">
+              {{ week.preventive.strict_compliance_percent | number:'1.0-1' }}%
+            </strong>
+          </div>
+
+          <div class="trend-row">
+            <span>Correctivo en tiempo</span>
+            <strong *ngFor="let week of current.weeks; trackBy: trackWeek">
+              {{ week.corrective.fulfillment_percent | number:'1.0-1' }}%
+            </strong>
+          </div>
+
+          <div class="trend-row">
+            <span>Δ backlog total</span>
+            <strong
+              *ngFor="let week of current.weeks; trackBy: trackWeek"
+              [ngClass]="backlogDeltaClass(week.backlog.delta)"
+            >
+              {{ backlogDeltaLabel(week.backlog.delta) }}
+            </strong>
+          </div>
+
+          <div class="trend-row">
+            <span>Backlog vencido cierre</span>
+            <strong
+              *ngFor="let week of current.weeks; trackBy: trackWeek"
+            >
+              {{ week.backlog.overdue_end.count }}
+            </strong>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section
+      *ngIf="drilldownLoading || drilldown || drilldownError"
+      class="drilldown-panel"
+    >
+      <header class="section-heading">
+        <div>
+          <span class="eyebrow">Drill-down</span>
+          <h2>{{ drilldownTitle || 'Detalle' }}</h2>
+        </div>
+
+        <button
+          type="button"
+          class="close-button"
+          (click)="closeDrilldown()"
+        >
+          Cerrar
+        </button>
+      </header>
+
+      <div *ngIf="drilldownLoading" class="panel-state">
+        Cargando tickets…
+      </div>
+
+      <div *ngIf="drilldownError" class="alert alert--error drilldown-alert">
+        {{ drilldownError }}
+      </div>
+
+      <div *ngIf="drilldown?.aging as aging" class="aging-strip">
+        <div>
+          <span>1–7 días</span>
+          <strong>{{ aging['1_7'] }}</strong>
+        </div>
+        <div>
+          <span>8–14 días</span>
+          <strong>{{ aging['8_14'] }}</strong>
+        </div>
+        <div>
+          <span>15–30 días</span>
+          <strong>{{ aging['15_30'] }}</strong>
+        </div>
+        <div>
+          <span>+30 días</span>
+          <strong>{{ aging['31_PLUS'] }}</strong>
+        </div>
+      </div>
+
+      <div *ngIf="drilldown as detail" class="drilldown-list">
+        <article
+          *ngFor="let ticket of detail.tickets; trackBy: trackTicket"
+          class="drilldown-ticket"
+        >
+          <div class="ticket-main">
+            <div class="ticket-topline">
+              <strong>#{{ ticket.id }} · {{ ticket.sucursal }}</strong>
+              <span [attr.data-type]="ticket.tipo_mantenimiento">
+                {{ ticket.tipo_mantenimiento }}
+              </span>
+            </div>
+
+            <h3>
+              {{ ticket.codigo_equipo || 'SIN CÓDIGO' }}
+              · {{ ticket.equipo }}
+            </h3>
+
+            <p>{{ ticket.descripcion }}</p>
+
+            <div class="ticket-meta">
+              <span>Estado: {{ ticket.estado }}</span>
+              <span>Resp: {{ ticket.asignado_a || '—' }}</span>
+              <span>Criticidad: {{ ticket.criticidad }}</span>
+              <span *ngIf="ticket.origen_correctivo">
+                Origen: {{ ticket.origen_correctivo }}
+              </span>
+              <span *ngIf="ticket.overdue_days">
+                Vencido: {{ ticket.overdue_days }} días
+              </span>
+            </div>
+
+            <div
+              *ngIf="ticket.reprogramaciones?.length"
+              class="ticket-reprogram-info"
+            >
+              <span>Última reprogramación</span>
+              <strong>
+                {{ ticket.reprogramaciones[0].motivo || 'Sin motivo' }}
+                ·
+                {{ formatDateTime(ticket.reprogramaciones[0].fecha_nueva) }}
+              </strong>
+              <small *ngIf="ticket.reprogramaciones[0].comentario">
+                {{ ticket.reprogramaciones[0].comentario }}
+              </small>
+            </div>
+          </div>
+
+          <div class="ticket-actions">
+            <button
+              *ngIf="ticket.ticket_preventivo_origen_id"
+              type="button"
+              class="origin-ticket-button"
+              (click)="openTicketById(ticket.ticket_preventivo_origen_id)"
+            >
+              Ver preventivo #{{ ticket.ticket_preventivo_origen_id }}
+            </button>
+
+            <button
+              *ngIf="canReprogram(ticket)"
+              type="button"
+              class="reprogram-button"
+              (click)="openReprogram(ticket)"
+            >
+              Reprogramar
+            </button>
+
+            <button
+              type="button"
+              class="open-ticket-button"
+              (click)="openTicket(ticket)"
+            >
+              Abrir en Tickets
+            </button>
+          </div>
+          <section
+            *ngIf="reprogramTicketId === ticket.id"
+            class="reprogram-panel"
+          >
+            <label>
+              <span>Nueva fecha</span>
+              <input
+                type="date"
+                [(ngModel)]="reprogramDate"
+              />
+            </label>
+
+            <label>
+              <span>Motivo</span>
+              <select [(ngModel)]="reprogramReasonId">
+                <option [ngValue]="null">Selecciona</option>
+                <option
+                  *ngFor="let reason of reprogramReasons"
+                  [ngValue]="reason.id"
+                >
+                  {{ reason.nombre }}
+                </option>
+              </select>
+            </label>
+
+            <label class="reprogram-comment">
+              <span>Comentario</span>
+              <textarea
+                [(ngModel)]="reprogramComment"
+                rows="2"
+                placeholder="Detalle adicional si aplica"
+              ></textarea>
+            </label>
+
+            <div *ngIf="reprogramError" class="reprogram-error">
+              {{ reprogramError }}
+            </div>
+
+            <div class="reprogram-actions">
+              <button
+                type="button"
+                class="close-button"
+                (click)="cancelReprogram()"
+                [disabled]="reprogramSaving"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                class="reprogram-save-button"
+                (click)="saveReprogram()"
+                [disabled]="reprogramSaving"
+              >
+                {{ reprogramSaving ? 'Guardando…' : 'Guardar reprogramación' }}
+              </button>
+            </div>
+          </section>
+        </article>
+
+        <div *ngIf="detail.tickets.length === 0" class="panel-state">
+          No hay tickets para esta métrica.
+        </div>
+      </div>
+    </section>
+
+    <section class="weeks-grid">
+      <article
+        *ngFor="let week of newestWeeks; trackBy: trackWeek"
+        class="week-card"
+      >
+        <header class="week-card__header">
+          <div>
+            <span class="eyebrow">Semana {{ week.week_number }}</span>
+            <h2>{{ formatRange(week) }}</h2>
+          </div>
+          <span
+            class="backlog-delta"
+            [ngClass]="backlogDeltaClass(week.backlog.delta)"
+          >
+            Backlog {{ backlogDeltaLabel(week.backlog.delta) }}
+          </span>
+        </header>
+
+        <section class="maintenance-block">
+          <div class="block-heading">
+            <div>
+              <span class="block-kicker">Preventivo</span>
+              <strong>
+                {{ week.preventive.strict_compliance_percent | number:'1.0-1' }}%
+              </strong>
+            </div>
+            <small>
+              Avance actual
+              {{ week.preventive.current_progress_percent | number:'1.0-1' }}%
+            </small>
+          </div>
+
+          <div class="metric-grid">
+            <button
+              type="button"
+              (click)="openDrilldown(week, 'preventive.programmed', 'Preventivos programados')"
+            >
+              <strong>{{ week.preventive.programmed.count }}</strong>
+              <span>Programados</span>
+            </button>
+
+            <button
+              type="button"
+              (click)="openDrilldown(week, 'preventive.validated_on_time', 'Preventivos validados en tiempo')"
+            >
+              <strong>{{ week.preventive.validated_on_time.count }}</strong>
+              <span>En tiempo</span>
+            </button>
+
+            <button
+              type="button"
+              (click)="openDrilldown(week, 'preventive.reprogrammed', 'Preventivos reprogramados')"
+            >
+              <strong>{{ week.preventive.reprogrammed.count }}</strong>
+              <span>Reprogramados</span>
+            </button>
+
+            <button
+              type="button"
+              (click)="openDrilldown(week, 'preventive.missed', 'Preventivos incumplidos en la semana')"
+            >
+              <strong>{{ week.preventive.missed.count }}</strong>
+              <span>Incumplidos</span>
+            </button>
+
+            <button
+              type="button"
+              (click)="openDrilldown(week, 'preventive.pending_now', 'Preventivos aún pendientes')"
+            >
+              <strong>{{ week.preventive.pending_now.count }}</strong>
+              <span>Pendientes hoy</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="maintenance-block maintenance-block--corrective">
+          <div class="block-heading">
+            <div>
+              <span class="block-kicker">Correctivo</span>
+              <strong>
+                {{ week.corrective.fulfillment_percent | number:'1.0-1' }}%
+              </strong>
+            </div>
+            <small>
+              {{ week.corrective.demand.count }} recibidos en la semana
+            </small>
+          </div>
+
+          <div class="metric-grid">
+            <button
+              type="button"
+              (click)="openDrilldown(week, 'corrective.due', 'Correctivos comprometidos')"
+            >
+              <strong>{{ week.corrective.due.count }}</strong>
+              <span>Comprometidos</span>
+            </button>
+
+            <button
+              type="button"
+              (click)="openDrilldown(week, 'corrective.validated_on_time', 'Correctivos resueltos en tiempo')"
+            >
+              <strong>{{ week.corrective.validated_on_time.count }}</strong>
+              <span>En tiempo</span>
+            </button>
+
+            <button
+              type="button"
+              (click)="openDrilldown(week, 'corrective.demand', 'Correctivos recibidos')"
+            >
+              <strong>{{ week.corrective.demand.count }}</strong>
+              <span>Recibidos</span>
+            </button>
+
+            <button
+              type="button"
+              (click)="openDrilldown(week, 'corrective.reprogrammed', 'Correctivos reprogramados')"
+            >
+              <strong>{{ week.corrective.reprogrammed.count }}</strong>
+              <span>Reprogramados</span>
+            </button>
+
+            <button
+              type="button"
+              (click)="openDrilldown(week, 'corrective.pending_now', 'Correctivos aún pendientes')"
+            >
+              <strong>{{ week.corrective.pending_now.count }}</strong>
+              <span>Pendientes hoy</span>
+            </button>
+          </div>
+
+          <div class="origin-strip">
+            <button
+              type="button"
+              (click)="openDrilldown(week, 'corrective.demand_reactive', 'Correctivos reactivos recibidos')"
+            >
+              <span>Reactivos</span>
+              <strong>{{ week.corrective.demand_reactive.count }}</strong>
+            </button>
+
+            <button
+              type="button"
+              (click)="openDrilldown(week, 'corrective.demand_detected_preventive', 'Correctivos detectados en preventivo')"
+            >
+              <span>Detectados en PM</span>
+              <strong>{{ week.corrective.demand_detected_preventive.count }}</strong>
+            </button>
+          </div>
+        </section>
+
+        <section class="backlog-section">
+          <div class="backlog-label">Backlog total</div>
+
+          <div class="backlog-block">
+            <button
+              type="button"
+              (click)="openDrilldown(week, 'backlog.start', 'Backlog total al inicio')"
+            >
+              <span>Inicio</span>
+              <strong>{{ week.backlog.start.count }}</strong>
+            </button>
+
+            <div class="backlog-arrow">→</div>
+
+            <button
+              type="button"
+              (click)="openDrilldown(week, 'backlog.end', 'Backlog total al cierre')"
+            >
+              <span>Cierre</span>
+              <strong>{{ week.backlog.end.count }}</strong>
+            </button>
+
+            <div
+              class="backlog-change"
+              [ngClass]="backlogDeltaClass(week.backlog.delta)"
+            >
+              {{ backlogDeltaLabel(week.backlog.delta) }}
+            </div>
+          </div>
+
+          <div class="backlog-label backlog-label--overdue">Backlog vencido</div>
+
+          <div class="backlog-block backlog-block--overdue">
+            <button
+              type="button"
+              (click)="openDrilldown(week, 'backlog.overdue_start', 'Backlog vencido al inicio')"
+            >
+              <span>Inicio</span>
+              <strong>{{ week.backlog.overdue_start.count }}</strong>
+            </button>
+
+            <div class="backlog-arrow">→</div>
+
+            <button
+              type="button"
+              (click)="openDrilldown(week, 'backlog.overdue_end', 'Backlog vencido al cierre')"
+            >
+              <span>Cierre</span>
+              <strong>{{ week.backlog.overdue_end.count }}</strong>
+            </button>
+
+            <div
+              class="backlog-change"
+              [ngClass]="backlogDeltaClass(week.backlog.overdue_delta)"
+            >
+              {{ backlogDeltaLabel(week.backlog.overdue_delta) }}
+            </div>
+          </div>
+        </section>
+      </article>
+    </section>
+  </ng-container>
+
+  <div *ngIf="loading && !dashboard" class="panel-state loading-state">
+    Cargando panel semanal…
+  </div>
+</section>

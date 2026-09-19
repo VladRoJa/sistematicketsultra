@@ -41,10 +41,19 @@ import { refrescarDespuesDeCambioFiltro } from './helpers/refrescarDespuesDeCamb
 import { AsignarFechaModalComponent } from './modals/asignar-fecha-modal.component';
 import { cambiarEstadoTicket } from './helpers/pantalla-ver-tickets.estado-ticket';
 import { EditarFechaSolucionModalComponent } from './modals/editar-fecha-solucion-modal.component';
+import {
+  MaintenanceReprogramDialogComponent,
+  MaintenanceReprogramDialogResult,
+} from '../maintenance-planner/maintenance-reprogram-dialog.component';
+import { MaintenancePreventiveService } from '../services/maintenance-preventive.service';
 import { CatalogoService } from '../services/catalogo.service';
 import { mostrarAlertaToast,solicitarMotivoRechazoCierre } from '../utils/alertas';
 import { SucursalesService } from '../services/sucursales.service';
 import { EvidenciaPreviewComponent } from './modals/evidencia-preview.component';
+import {
+  PreventiveValidationDialogComponent,
+  PreventiveValidationDialogResult,
+} from './modals/preventive-validation-dialog.component';
 import { ModalCierreTicketComponent } from '../shared/modal-cierre-ticket/modal-cierre-ticket.component';
 import { buscarAncestroNivel, filtrarTicketsConFiltros } from '../utils/ticket-utils';
 import { MatSelectModule } from '@angular/material/select';
@@ -84,6 +93,13 @@ export interface Ticket {
   departamento_id: number;
   categoria: string | null;
   fecha_solucion?: string | null;
+  tipo_mantenimiento?: 'CORRECTIVO' | 'PREVENTIVO' | null;
+  origen_correctivo?: 'REACTIVO' | 'DETECTADO_EN_PREVENTIVO' | null;
+  fecha_compromiso_original?: string | null;
+  fecha_programada_original?: string | null;
+  fecha_programada_actual?: string | null;
+  fecha_validacion_cierre?: string | null;
+  ticket_preventivo_origen_id?: number | null;
   aparato_id?: number | null;
   subcategoria?: string | null;
   detalle?: string | null;
@@ -200,11 +216,16 @@ export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
   ocultarFinalizados: boolean = true;
   private readonly estadoQueryParamPorValidar = 'por_validar';
   private estadoFiltroDesdeQueryParam: string | null = null;
+  private ticketIdDesdeQueryParam: number | null = null;
   private queryParamsSubscription?: Subscription;
   private filtroEstadoQueryAplicado = false;
   private filtroEstadoQueryRetryId: ReturnType<typeof setTimeout> | null = null;
   private filtroEstadoQueryIntentos = 0;
   private readonly filtroEstadoQueryMaxIntentos = 30;
+  private filtroTicketQueryAplicado = false;
+  private filtroTicketQueryRetryId: ReturnType<typeof setTimeout> | null = null;
+  private filtroTicketQueryIntentos = 0;
+  private readonly filtroTicketQueryMaxIntentos = 30;
 
   // Temporales
   fechaCreacionTemp = { start: null as Date | null, end: null as Date | null };
@@ -324,6 +345,7 @@ export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
     private sucursalesService: SucursalesService,
     private authService: AuthService, 
     private mantenimientoEquiposService: MantenimientoEquiposService,
+    private maintenancePreventiveService: MaintenancePreventiveService,
     private route: ActivatedRoute,
     private router: Router,
   ) {}
@@ -392,6 +414,7 @@ async ngOnInit() {
 
   TicketInit.cargarTickets(this);
   this.programarAplicacionFiltroEstadoDesdeQueryParam();
+  this.programarAplicacionFiltroTicketDesdeQueryParam();
 
   // 🔁 Escuchar eventos de refresco desde el servicio
   this.refrescoService.refrescarTabla$.subscribe(() => {
@@ -409,6 +432,11 @@ ngOnDestroy(): void {
   if (this.filtroEstadoQueryRetryId) {
     clearTimeout(this.filtroEstadoQueryRetryId);
     this.filtroEstadoQueryRetryId = null;
+  }
+
+  if (this.filtroTicketQueryRetryId) {
+    clearTimeout(this.filtroTicketQueryRetryId);
+    this.filtroTicketQueryRetryId = null;
   }
 }
 
@@ -540,9 +568,36 @@ private limpiarEstadoQueryParam(): void {
   });
 }
 
+private limpiarTicketIdQueryParam(): void {
+  this.router.navigate([], {
+    relativeTo: this.route,
+    queryParams: {
+      ticket_id: null,
+    },
+    queryParamsHandling: 'merge',
+    replaceUrl: true,
+  });
+}
+
 private escucharFiltroEstadoDesdeQueryParams(): void {
   this.queryParamsSubscription = this.route.queryParamMap.subscribe((params) => {
     const estado = this.normalizarTextoFiltro(params.get('estado'));
+    const ticketIdRaw = Number(params.get('ticket_id'));
+
+    if (Number.isInteger(ticketIdRaw) && ticketIdRaw > 0) {
+      this.ticketIdDesdeQueryParam = ticketIdRaw;
+      this.filtroTicketQueryAplicado = false;
+      this.filtroTicketQueryIntentos = 0;
+
+      // El drill-down puede apuntar a tickets históricos/finalizados.
+      this.selectedTicketYear = 'all';
+      this.ocultarFinalizados = false;
+
+      this.programarAplicacionFiltroTicketDesdeQueryParam();
+    } else {
+      this.ticketIdDesdeQueryParam = null;
+      this.filtroTicketQueryAplicado = false;
+    }
 
     if (estado !== this.estadoQueryParamPorValidar) {
       this.estadoFiltroDesdeQueryParam = null;
@@ -575,6 +630,70 @@ private programarAplicacionFiltroEstadoDesdeQueryParam(): void {
     this.filtroEstadoQueryRetryId = null;
     this.aplicarFiltroEstadoDesdeQueryParamSiEsPosible();
   }, 100);
+}
+
+private programarAplicacionFiltroTicketDesdeQueryParam(): void {
+  if (!this.ticketIdDesdeQueryParam || this.filtroTicketQueryAplicado) {
+    return;
+  }
+
+  if (this.filtroTicketQueryRetryId) {
+    clearTimeout(this.filtroTicketQueryRetryId);
+  }
+
+  this.filtroTicketQueryRetryId = setTimeout(() => {
+    this.filtroTicketQueryRetryId = null;
+    this.aplicarFiltroTicketDesdeQueryParamSiEsPosible();
+  }, 100);
+}
+
+private aplicarFiltroTicketDesdeQueryParamSiEsPosible(): void {
+  const ticketId = this.ticketIdDesdeQueryParam;
+
+  if (!ticketId || this.filtroTicketQueryAplicado) {
+    return;
+  }
+
+  const tickets = Array.isArray(this.ticketsCompletos)
+    ? this.ticketsCompletos
+    : [];
+
+  if (!tickets.length) {
+    this.filtroTicketQueryIntentos += 1;
+
+    if (this.filtroTicketQueryIntentos <= this.filtroTicketQueryMaxIntentos) {
+      this.programarAplicacionFiltroTicketDesdeQueryParam();
+    }
+
+    return;
+  }
+
+  const ticket = tickets.find(
+    (row) => Number(row.id) === Number(ticketId)
+  );
+
+  if (!ticket) {
+    this.filtroTicketQueryIntentos += 1;
+
+    if (this.filtroTicketQueryIntentos <= this.filtroTicketQueryMaxIntentos) {
+      this.programarAplicacionFiltroTicketDesdeQueryParam();
+      return;
+    }
+
+    this.filtroTicketQueryAplicado = true;
+    this.limpiarTicketIdQueryParam();
+    mostrarAlertaToast(
+      `No se encontró el ticket #${ticketId} dentro de tu alcance.`,
+      'error'
+    );
+    return;
+  }
+
+  this.filtroTicketQueryAplicado = true;
+  this.filtroTicketQueryIntentos = 0;
+  this.filteredTickets = [ticket];
+  this.actualizarVistaTicketsFiltrados();
+  this.limpiarTicketIdQueryParam();
 }
 
 private aplicarFiltroEstadoDesdeQueryParamSiEsPosible(): void {
@@ -659,6 +778,7 @@ refrescarTicketsPreservandoFiltros(): void {
 
       this.changeDetectorRef.detectChanges();
       this.programarAplicacionFiltroEstadoDesdeQueryParam();
+      this.programarAplicacionFiltroTicketDesdeQueryParam();
     },
     error: (err) => {
       console.error('No se pudieron refrescar tickets después de la acción:', err);
@@ -1949,9 +2069,85 @@ onCancelarAsignarFecha() {
   this.ticketParaAsignarFecha = null;
 }
 
-abrirEditarFechaSolucion(ticket: Ticket) {
-  const estado = (ticket.estado ?? '').toString().trim().toLowerCase();
-  if (estado !== 'en progreso') return; // ✅ solo editable en progreso
+puedeEditarFechaSolucion(ticket: Ticket): boolean {
+  const estado = String(ticket?.estado || '').trim().toLowerCase();
+  if (estado !== 'en progreso' || !ticket?.fecha_solucion) {
+    return false;
+  }
+
+  if (Number(ticket.departamento_id) !== 1) {
+    return Boolean(this.puedeEditarTickets);
+  }
+
+  if (this.esPreventivo(ticket)) {
+    return false;
+  }
+
+  const rol = String(this.user?.rol || '').trim().toUpperCase();
+  return [
+    'ADMIN',
+    'ADMINISTRADOR',
+    'SUPER_ADMIN',
+    'MANTENIMIENTO',
+    'SR_MANTENIMIENTO',
+    'AUX_MANTENIMIENTO',
+  ].includes(rol);
+}
+
+abrirEditarFechaSolucion(ticket: Ticket): void {
+  if (!this.puedeEditarFechaSolucion(ticket)) {
+    return;
+  }
+
+  if (Number(ticket.departamento_id) === 1) {
+    const dialogRef = this.dialog.open<
+      MaintenanceReprogramDialogComponent,
+      { fechaActual: string | null; fechaSugerida?: string | null },
+      MaintenanceReprogramDialogResult | undefined
+    >(MaintenanceReprogramDialogComponent, {
+      width: '560px',
+      maxWidth: '92vw',
+      data: { fechaActual: ticket.fecha_solucion || null },
+      autoFocus: false,
+      restoreFocus: false,
+    });
+
+    dialogRef.afterClosed().subscribe((result) => {
+      if (!result?.fecha || !result.reasonId) {
+        return;
+      }
+
+      const nuevaFecha = this.formatearFechaLocalMantenimiento(
+        result.fecha,
+      );
+
+      this.maintenancePreventiveService
+        .reprogramMaintenanceTicket(ticket.id, {
+          nueva_fecha: nuevaFecha,
+          reason_id: result.reasonId,
+          comentario: result.comentario,
+        })
+        .subscribe({
+          next: () => {
+            mostrarAlertaToast(
+              'Compromiso reprogramado correctamente.',
+              'success',
+            );
+            this.refrescarTicketsPreservandoFiltros();
+          },
+          error: (error) => {
+            mostrarAlertaToast(
+              error?.error?.mensaje
+              || error?.error?.detail
+              || 'No se pudo reprogramar el compromiso.',
+              'error',
+            );
+          },
+        });
+    });
+
+    return;
+  }
 
   const dialogRef = this.dialog.open(EditarFechaSolucionModalComponent, {
     width: '560px',
@@ -1961,9 +2157,21 @@ abrirEditarFechaSolucion(ticket: Ticket) {
 
   dialogRef.afterClosed().subscribe(result => {
     if (result && result.fecha && result.motivo) {
-      asignarFechaSolucionYEnProgreso(this, ticket, result.fecha, result.motivo);
+      asignarFechaSolucionYEnProgreso(
+        this,
+        ticket,
+        result.fecha,
+        result.motivo,
+      );
     }
   });
+}
+
+private formatearFechaLocalMantenimiento(fecha: Date): string {
+  const year = fecha.getFullYear();
+  const month = String(fecha.getMonth() + 1).padStart(2, '0');
+  const day = String(fecha.getDate()).padStart(2, '0');
+  return year + '-' + month + '-' + day;
 }
 
 getCodigoInternoEquipo(ticket: Ticket): string {
@@ -2630,6 +2838,72 @@ async rechazarCierre(ticket: Ticket): Promise<void> {
 }
 
 
+esPreventivo(ticket: Ticket): boolean {
+  return (
+    String(ticket?.tipo_mantenimiento || '')
+      .trim()
+      .toUpperCase()
+    === 'PREVENTIVO'
+  );
+}
+
+abrirRevisionPreventivo(ticket: Ticket): void {
+  if (!ticket?.id || !this.esPreventivo(ticket)) {
+    return;
+  }
+
+  const dialogRef = this.dialog.open<
+    PreventiveValidationDialogComponent,
+    { ticketId: number },
+    PreventiveValidationDialogResult | undefined
+  >(PreventiveValidationDialogComponent, {
+    data: { ticketId: ticket.id },
+    width: 'min(94vw, 920px)',
+    maxWidth: '94vw',
+    maxHeight: '92vh',
+    autoFocus: false,
+    restoreFocus: false,
+    panelClass: 'preventive-validation-dialog',
+  });
+
+  dialogRef.afterClosed().subscribe((result) => {
+    if (!result?.action) {
+      return;
+    }
+
+    const message = result.response?.mensaje
+      || (
+        result.action === 'accepted'
+          ? 'Preventivo validado.'
+          : 'Preventivo rechazado y reabierto.'
+      );
+
+    mostrarAlertaToast(message, 'success');
+    this.refrescarTicketsPreservandoFiltros();
+    this.refrescoService.emitirRefrescoResumenValidacionTickets();
+  });
+}
+
+abrirTicketPreventivoOrigen(
+  ticket: Ticket,
+  event?: Event,
+): void {
+  event?.stopPropagation();
+
+  const ticketId = Number(ticket?.ticket_preventivo_origen_id);
+  if (!Number.isInteger(ticketId) || ticketId <= 0) {
+    return;
+  }
+
+  this.router.navigate([], {
+    relativeTo: this.route,
+    queryParams: {
+      ticket_id: ticketId,
+    },
+    queryParamsHandling: 'merge',
+  });
+}
+
 esCreador(ticket: Ticket): boolean {
   if (!ticket) return false;
 
@@ -2690,7 +2964,12 @@ puedeMostrarBotonesValidarCierre(ticket: Ticket): boolean {
 
   if (!estaPendienteDeValidacion) return false;
 
-  if (this.esCreador(ticket)) return true;
+  if (
+    !this.esPreventivo(ticket)
+    && this.esCreador(ticket)
+  ) {
+    return true;
+  }
 
   if (this.esAdminParaValidarCierre()) return true;
 

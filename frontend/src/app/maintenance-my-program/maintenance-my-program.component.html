@@ -1,0 +1,389 @@
+<section class="my-program-page">
+  <header class="my-program-header">
+    <div>
+      <span class="eyebrow">Mantenimiento · Mi programa</span>
+      <h1>Hola, {{ program?.personnel?.username || 'técnico' }}</h1>
+      <p *ngIf="program?.personnel?.crew">
+        {{ program?.personnel?.crew }}
+      </p>
+    </div>
+
+    <button
+      type="button"
+      class="refresh-button"
+      (click)="loadProgram()"
+      [disabled]="loading"
+    >
+      {{ loading ? 'Actualizando…' : 'Actualizar' }}
+    </button>
+  </header>
+
+  <div *ngIf="errorMessage" class="alert" role="alert">
+    {{ errorMessage }}
+  </div>
+
+  <ng-container *ngIf="program as current">
+    <section class="metric-grid">
+      <button
+        type="button"
+        class="metric-card"
+        [class.metric-card--active]="isSelected('today')"
+        (click)="selectView('today')"
+      >
+        <strong>{{ current.metrics.today }}</strong>
+        <span>Hoy</span>
+      </button>
+
+      <button
+        type="button"
+        class="metric-card"
+        [class.metric-card--active]="isSelected('week')"
+        (click)="selectView('week')"
+      >
+        <strong>{{ current.metrics.week }}</strong>
+        <span>Semana</span>
+      </button>
+
+      <button
+        type="button"
+        class="metric-card metric-card--danger"
+        [class.metric-card--active]="isSelected('overdue')"
+        (click)="selectView('overdue')"
+      >
+        <strong>{{ current.metrics.overdue }}</strong>
+        <span>Vencidos</span>
+      </button>
+
+      <button
+        type="button"
+        class="metric-card"
+        [class.metric-card--active]="isSelected('pending')"
+        (click)="selectView('pending')"
+      >
+        <strong>{{ current.metrics.pending_validation }}</strong>
+        <span>Por validar</span>
+      </button>
+    </section>
+
+    <section class="program-section">
+      <header class="section-heading">
+        <div>
+          <span class="eyebrow">Agenda personal</span>
+          <h2>{{ activeTitle }}</h2>
+        </div>
+        <span class="count-pill">{{ visibleItems.length }}</span>
+      </header>
+
+      <div class="program-list">
+        <article
+          *ngFor="let item of visibleItems; trackBy: trackItem"
+          class="work-card"
+          [class.work-card--overdue]="item.operational_status === 'VENCIDO'"
+          [class.work-card--pending]="item.operational_status === 'PENDIENTE_VALIDACION'"
+          [class.work-card--expanded]="isWorkExpanded(item)"
+        >
+          <div class="work-card__top">
+            <span
+              class="type-pill"
+              [attr.data-type]="item.tipo_mantenimiento"
+            >
+              {{ typeLabel(item) }}
+            </span>
+
+            <span
+              class="status-pill"
+              [attr.data-status]="item.operational_status"
+            >
+              {{ statusLabel(item) }}
+            </span>
+          </div>
+
+          <div class="work-card__branch">
+            {{ item.sucursal }}
+          </div>
+
+          <h3>
+            {{ item.codigo_equipo || 'SIN CÓDIGO' }}
+            <span>· {{ item.equipo }}</span>
+          </h3>
+
+          <p class="work-card__activity">
+            {{ item.actividad }}
+          </p>
+
+          <div class="work-card__meta">
+            <span>{{ formatDate(item.fecha_trabajo) }}</span>
+            <span>Ticket #{{ item.ticket_id }}</span>
+          </div>
+
+          <div
+            *ngIf="item.problema_detectado"
+            class="work-card__note"
+          >
+            {{ item.problema_detectado }}
+          </div>
+
+          <div
+            *ngIf="item.necesita_refaccion"
+            class="work-card__warning"
+          >
+            Requiere refacción
+            <ng-container *ngIf="item.descripcion_refaccion">
+              · {{ item.descripcion_refaccion }}
+            </ng-container>
+          </div>
+
+          <button
+            *ngIf="canOpenWork(item)"
+            type="button"
+            class="work-action-button"
+            (click)="toggleWork(item)"
+          >
+            {{ isWorkExpanded(item) ? 'Cerrar trabajo' : 'Abrir preventivo' }}
+          </button>
+
+          <div
+            *ngIf="item.tipo_mantenimiento === 'CORRECTIVO'"
+            class="work-card__footer"
+          >
+            <span>
+              Correctivo visible en tu agenda. Su ejecución conserva el flujo actual de Tickets.
+            </span>
+          </div>
+
+          <div
+            *ngIf="item.operational_status === 'PENDIENTE_VALIDACION'"
+            class="work-card__footer work-card__footer--success"
+          >
+            <span>
+              Trabajo realizado. Pendiente de validación del gerente.
+            </span>
+          </div>
+
+          <section
+            *ngIf="isWorkExpanded(item)"
+            class="execution-panel"
+          >
+            <div *ngIf="workLoading" class="execution-loading">
+              Cargando preventivo…
+            </div>
+
+            <div *ngIf="workErrorMessage" class="execution-alert execution-alert--error">
+              {{ workErrorMessage }}
+            </div>
+
+            <div *ngIf="workSuccessMessage" class="execution-alert execution-alert--success">
+              {{ workSuccessMessage }}
+            </div>
+
+            <ng-container *ngIf="workDetail as detail">
+              <div class="execution-progress">
+                <div [class.step--done]="bitacoraSaved">
+                  <strong>1</strong>
+                  <span>Bitácora</span>
+                </div>
+                <div [class.step--done]="evidenceSaved">
+                  <strong>2</strong>
+                  <span>Evidencia</span>
+                </div>
+                <div>
+                  <strong>3</strong>
+                  <span>Realizado</span>
+                </div>
+              </div>
+
+              <section class="execution-block">
+                <header>
+                  <span class="execution-kicker">Paso 1</span>
+                  <h4>Bitácora preventiva</h4>
+                </header>
+
+                <label class="field">
+                  <span>Estado encontrado</span>
+                  <select
+                    [(ngModel)]="estadoEncontrado"
+                    [disabled]="bitacoraSaved"
+                  >
+                    <option value="">Selecciona</option>
+                    <option
+                      *ngFor="let option of foundStateOptions"
+                      [value]="option.value"
+                    >
+                      {{ option.label }}
+                    </option>
+                  </select>
+                </label>
+
+                <div *ngIf="hasChecklist" class="checklist-block">
+                  <div class="checklist-heading">
+                    <strong>{{ detail.checklist?.nombre }}</strong>
+                    <span>Completa los puntos requeridos.</span>
+                  </div>
+
+                  <div
+                    *ngFor="let check of checklistItems; trackBy: trackChecklistItem"
+                    class="checklist-item"
+                  >
+                    <div class="checklist-item__label">
+                      <span>{{ check.etiqueta }}</span>
+                      <small *ngIf="check.requerido">Requerido</small>
+                    </div>
+
+                    <div class="check-options">
+                      <button
+                        *ngFor="let option of checkOptions"
+                        type="button"
+                        [class.check-option--selected]="getCheckValue(check.item_key) === option.value"
+                        [disabled]="bitacoraSaved"
+                        (click)="setCheckValue(check.item_key, option.value)"
+                      >
+                        {{ option.label }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div *ngIf="!hasChecklist" class="no-checklist">
+                  Esta actividad no tiene checklist configurado. Captura la bitácora base.
+                </div>
+
+                <label class="field">
+                  <span>Trabajo realizado</span>
+                  <textarea
+                    [(ngModel)]="notas"
+                    rows="4"
+                    [disabled]="bitacoraSaved"
+                    placeholder="Describe brevemente qué se realizó."
+                  ></textarea>
+                </label>
+
+                <label class="switch-row">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="hallazgoDetectado"
+                    [disabled]="bitacoraSaved"
+                    (ngModelChange)="onHallazgoChanged()"
+                  />
+                  <span>Encontré una falla o condición que requiere atención</span>
+                </label>
+
+                <ng-container *ngIf="hallazgoDetectado">
+                  <label class="field">
+                    <span>Hallazgo</span>
+                    <textarea
+                      [(ngModel)]="hallazgoDescripcion"
+                      rows="3"
+                      [disabled]="bitacoraSaved"
+                      placeholder="Describe la falla encontrada."
+                    ></textarea>
+                  </label>
+
+                  <label class="switch-row">
+                    <input
+                      type="checkbox"
+                      [(ngModel)]="generarCorrectivo"
+                      [disabled]="bitacoraSaved"
+                    />
+                    <span>Generar ticket correctivo relacionado</span>
+                  </label>
+
+                  <label *ngIf="generarCorrectivo" class="field field--compact">
+                    <span>Criticidad del correctivo</span>
+                    <select
+                      [(ngModel)]="criticidadCorrectivo"
+                      [disabled]="bitacoraSaved"
+                    >
+                      <option [ngValue]="1">1 · Baja</option>
+                      <option [ngValue]="2">2 · Normal</option>
+                      <option [ngValue]="3">3 · Media</option>
+                      <option [ngValue]="4">4 · Alta</option>
+                      <option [ngValue]="5">5 · Crítica</option>
+                    </select>
+                  </label>
+                </ng-container>
+
+                <button
+                  type="button"
+                  class="execution-button execution-button--primary"
+                  (click)="saveBitacora()"
+                  [disabled]="!canSaveBitacora"
+                >
+                  <ng-container *ngIf="!bitacoraSaved">
+                    {{ workSavingStep === 'bitacora' ? 'Guardando…' : 'Guardar bitácora' }}
+                  </ng-container>
+                  <ng-container *ngIf="bitacoraSaved">
+                    Bitácora guardada
+                  </ng-container>
+                </button>
+              </section>
+
+              <section class="execution-block" [class.execution-block--locked]="!bitacoraSaved">
+                <header>
+                  <span class="execution-kicker">Paso 2</span>
+                  <h4>Evidencia</h4>
+                </header>
+
+                <div *ngIf="evidenceSaved" class="evidence-complete">
+                  Evidencia adjunta al ticket.
+                </div>
+
+                <ng-container *ngIf="!evidenceSaved">
+                  <label class="file-field">
+                    <span>Foto del trabajo</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      (change)="onEvidenceSelected($event)"
+                      [disabled]="!bitacoraSaved"
+                    />
+                    <small *ngIf="evidenceFile">
+                      {{ evidenceFile.name }}
+                    </small>
+                  </label>
+
+                  <button
+                    type="button"
+                    class="execution-button execution-button--secondary"
+                    (click)="uploadEvidence()"
+                    [disabled]="!canUploadEvidence"
+                  >
+                    {{ workSavingStep === 'evidence' ? 'Subiendo…' : 'Subir evidencia' }}
+                  </button>
+                </ng-container>
+              </section>
+
+              <section class="execution-block" [class.execution-block--locked]="!evidenceSaved">
+                <header>
+                  <span class="execution-kicker">Paso 3</span>
+                  <h4>Finalizar trabajo</h4>
+                </header>
+
+                <p class="execution-copy">
+                  Al marcar realizado, el ticket pasará a la bandeja actual de Tickets para validación del gerente.
+                </p>
+
+                <button
+                  type="button"
+                  class="execution-button execution-button--complete"
+                  (click)="completeWork()"
+                  [disabled]="!canCompleteWork"
+                >
+                  {{ workSavingStep === 'complete' ? 'Marcando…' : 'Marcar realizado' }}
+                </button>
+              </section>
+            </ng-container>
+          </section>
+        </article>
+
+        <div *ngIf="visibleItems.length === 0" class="empty-state">
+          No tienes trabajos en esta vista.
+        </div>
+      </div>
+    </section>
+  </ng-container>
+
+  <div *ngIf="loading && !program" class="loading-state">
+    Cargando tu programa…
+  </div>
+</section>

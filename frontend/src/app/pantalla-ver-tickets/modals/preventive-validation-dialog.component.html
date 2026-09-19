@@ -1,0 +1,243 @@
+<section class="preventive-review">
+  <header class="review-header">
+    <div>
+      <span class="eyebrow">Validación de mantenimiento</span>
+      <h2>Preventivo #{{ detail?.ticket?.id || data.ticketId }}</h2>
+      <p *ngIf="detail as current">
+        {{ current.ticket.sucursal }} ·
+        {{ current.ticket.codigo_equipo || 'SIN CÓDIGO' }} ·
+        {{ current.ticket.equipo }}
+      </p>
+    </div>
+
+    <button
+      type="button"
+      mat-icon-button
+      class="close-button"
+      (click)="close()"
+      aria-label="Cerrar"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </header>
+
+  <div *ngIf="loading" class="review-state">
+    Cargando detalle preventivo…
+  </div>
+
+  <div *ngIf="errorMessage" class="review-alert review-alert--error">
+    {{ errorMessage }}
+  </div>
+
+  <ng-container *ngIf="detail as current">
+    <section class="summary-grid">
+      <div>
+        <span>Responsable</span>
+        <strong>{{ current.ticket.asignado_a || '—' }}</strong>
+      </div>
+      <div>
+        <span>Programado original</span>
+        <strong>{{ formatDate(current.ticket.fecha_programada_original) }}</strong>
+      </div>
+      <div>
+        <span>Programado actual</span>
+        <strong>{{ formatDate(current.ticket.fecha_programada_actual) }}</strong>
+      </div>
+    </section>
+
+    <section class="requirements">
+      <div [class.requirement--ok]="current.requirements.has_bitacora">
+        <mat-icon>
+          {{ current.requirements.has_bitacora ? 'check_circle' : 'error' }}
+        </mat-icon>
+        <span>Bitácora</span>
+      </div>
+
+      <button
+        type="button"
+        [class.requirement--ok]="current.requirements.has_evidence"
+        [disabled]="!current.requirements.has_evidence"
+        (click)="openEvidence()"
+      >
+        <mat-icon>
+          {{ current.requirements.has_evidence ? 'image' : 'error' }}
+        </mat-icon>
+        <span>
+          {{ current.requirements.has_evidence ? 'Ver evidencia' : 'Sin evidencia' }}
+        </span>
+      </button>
+    </section>
+
+    <section *ngIf="latestBitacora as bitacora" class="review-card review-card--primary">
+      <header class="card-header">
+        <div>
+          <span class="eyebrow">Última ejecución</span>
+          <h3>Bitácora #{{ bitacora.id }}</h3>
+        </div>
+        <span class="result-pill">{{ bitacora.resultado }}</span>
+      </header>
+
+      <div class="bitacora-meta">
+        <span>
+          Técnico:
+          <strong>{{ bitacora.created_by_username || current.ticket.asignado_a || '—' }}</strong>
+        </span>
+        <span>
+          {{ formatDate(bitacora.created_at) }}
+        </span>
+      </div>
+
+      <div class="found-state">
+        <span>Estado encontrado</span>
+        <strong>{{ foundStateLabel(bitacora.estado_encontrado) }}</strong>
+      </div>
+
+      <div class="notes-block">
+        <span>Trabajo realizado</span>
+        <p>{{ bitacora.notas || '—' }}</p>
+      </div>
+
+      <div *ngIf="bitacora.checklist as checklist" class="checklist-review">
+        <header>
+          <span>Checklist</span>
+          <strong>{{ checklist.nombre || 'Procedimiento preventivo' }}</strong>
+        </header>
+
+        <div
+          *ngFor="let response of checklist.responses"
+          class="check-row"
+        >
+          <span>{{ response.etiqueta }}</span>
+          <strong [attr.data-result]="response.resultado">
+            {{ checkResultLabel(response.resultado) }}
+          </strong>
+        </div>
+      </div>
+
+      <div
+        *ngIf="bitacora.hallazgo_detectado"
+        class="finding-block"
+      >
+        <span>Hallazgo detectado</span>
+        <strong>{{ bitacora.hallazgo_descripcion || 'Sin descripción' }}</strong>
+      </div>
+    </section>
+
+    <section
+      *ngIf="current.related_correctives.length"
+      class="review-card"
+    >
+      <header class="card-header">
+        <div>
+          <span class="eyebrow">Derivados</span>
+          <h3>Correctivos generados</h3>
+        </div>
+        <span class="result-pill">{{ current.related_correctives.length }}</span>
+      </header>
+
+      <article
+        *ngFor="let corrective of current.related_correctives; trackBy: trackCorrective"
+        class="corrective-row"
+      >
+        <div>
+          <strong>#{{ corrective.id }} · {{ corrective.estado }}</strong>
+          <span>{{ corrective.descripcion }}</span>
+          <small>Criticidad {{ corrective.criticidad }}</small>
+        </div>
+
+        <div class="corrective-actions">
+          <button
+            type="button"
+            class="corrective-open-button"
+            (click)="openTicket(corrective.id)"
+          >
+            Abrir ticket
+          </button>
+
+          <button
+            *ngIf="corrective.has_attachment"
+            type="button"
+            mat-icon-button
+            (click)="openEvidence(corrective.id)"
+            aria-label="Ver evidencia del correctivo"
+          >
+            <mat-icon>image</mat-icon>
+          </button>
+        </div>
+      </article>
+    </section>
+
+    <details
+      *ngIf="previousBitacoras.length"
+      class="previous-attempts"
+    >
+      <summary>
+        Ver {{ previousBitacoras.length }} ejecución(es) anterior(es)
+      </summary>
+
+      <article
+        *ngFor="let bitacora of previousBitacoras; trackBy: trackBitacora"
+        class="previous-attempt"
+      >
+        <div>
+          <strong>Bitácora #{{ bitacora.id }}</strong>
+          <span>{{ formatDate(bitacora.created_at) }}</span>
+        </div>
+        <p>{{ bitacora.notas || 'Sin notas' }}</p>
+      </article>
+    </details>
+
+    <section *ngIf="rejectionMode" class="reject-panel">
+      <label>
+        <span>Motivo de rechazo</span>
+        <textarea
+          [(ngModel)]="rejectionReason"
+          rows="3"
+          placeholder="Indica qué debe corregirse."
+        ></textarea>
+      </label>
+
+      <div class="reject-actions">
+        <button
+          type="button"
+          mat-button
+          (click)="cancelReject()"
+          [disabled]="saving"
+        >
+          Cancelar
+        </button>
+
+        <button
+          type="button"
+          class="action-button action-button--reject"
+          (click)="reject()"
+          [disabled]="!canReject"
+        >
+          {{ saving ? 'Rechazando…' : 'Confirmar rechazo' }}
+        </button>
+      </div>
+    </section>
+
+    <footer class="review-actions" *ngIf="!rejectionMode">
+      <button
+        type="button"
+        class="action-button action-button--reject"
+        (click)="showRejectForm()"
+        [disabled]="saving"
+      >
+        <mat-icon>cancel</mat-icon>
+        Rechazar
+      </button>
+
+      <button
+        type="button"
+        class="action-button action-button--approve"
+        (click)="accept()"
+        [disabled]="!canAccept"
+      >
+        <mat-icon>check_circle</mat-icon>
+        {{ saving ? 'Validando…' : 'Aceptar preventivo' }}
+      </button>
+    </footer>
+  </ng-container>
+</section>

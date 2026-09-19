@@ -22,6 +22,7 @@ from app.services.ticket_attachment_retention_service import schedule_ticket_att
 from app.config import Config
 from app.models.ticket_model import Ticket
 from app.models.ticket_attachment import TicketAttachmentORM
+from app.models.pm_bitacora import PmBitacoraORM
 from app.models.user_model import UserORM
 from app.extensions import db
 from app.utils.error_handler import manejar_error
@@ -43,6 +44,48 @@ ticket_bp = Blueprint('tickets', __name__, url_prefix='/api/tickets')
 # ─────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────
+
+def _maintenance_commitment_change_error(
+    ticket: Ticket,
+    new_due: datetime,
+) -> str | None:
+    try:
+        is_maintenance = int(ticket.departamento_id or 0) == 1
+    except (TypeError, ValueError):
+        is_maintenance = False
+
+    if not is_maintenance:
+        return None
+
+    maintenance_type = str(
+        ticket.tipo_mantenimiento or "CORRECTIVO"
+    ).strip().upper()
+
+    if maintenance_type == "PREVENTIVO":
+        return (
+            "Los preventivos no usan fecha_solucion como programación. "
+            "Usa la programación preventiva."
+        )
+
+    current_due = ticket.fecha_solucion
+    if current_due is None:
+        return None
+
+    business_tz = pytz.timezone("America/Tijuana")
+
+    def business_date(value):
+        if value.tzinfo is None:
+            value = pytz.utc.localize(value)
+        return value.astimezone(business_tz).date()
+
+    if business_date(current_due) == business_date(new_due):
+        return None
+
+    return (
+        "El ticket ya tiene compromiso. Para cambiarlo usa la "
+        "reprogramación auditada de Mantenimiento."
+    )
+
 
 def _send_email_maybe_async(to_list, subject, html):
     """
@@ -254,14 +297,22 @@ def _puede_validar_cierre_gerente(user: UserORM, ticket: Ticket) -> bool:
     """
     Permiso específico para aceptar/rechazar tickets en por_validar.
 
-    - El creador puede validar su propio ticket sin depender de su rol.
     - Admin puede validar cualquier ticket.
     - Gerente puede validar tickets de su sucursal destino.
+    - En tickets no preventivos se conserva compatibilidad: el creador puede
+      validar su propio ticket.
+    - En PREVENTIVO el creador no obtiene permiso por ser creador; evita que
+      Mantenimiento programe/ejecute y valide su mismo trabajo.
     """
-    if _es_creador(user, ticket):
+    if _es_admin_para_validar_cierre(user):
         return True
 
-    if _es_admin_para_validar_cierre(user):
+    es_preventivo = (
+        str(getattr(ticket, "tipo_mantenimiento", "") or "").strip().upper()
+        == "PREVENTIVO"
+    )
+
+    if not es_preventivo and _es_creador(user, ticket):
         return True
 
     if not _es_gerente_para_validar_cierre(user):
@@ -547,9 +598,10 @@ def _get_ticket_attachment(ticket_id: int):
     return (
         TicketAttachmentORM.query
         .filter(
-            TicketAttachmentORM.ticket_id == ticket_id
+            TicketAttachmentORM.ticket_id == ticket_id,
+            TicketAttachmentORM.deleted_at.is_(None),
         )
-        .order_by(TicketAttachmentORM.id.asc())
+        .order_by(TicketAttachmentORM.id.desc())
         .first()
     )
 
@@ -584,6 +636,242 @@ def _attachment_metadata(attachment: TicketAttachmentORM) -> dict:
         "deleted_at": iso(attachment.deleted_at),
         "available": available,
     }
+
+
+def _preventive_close_requirement_error(ticket: Ticket) -> str | None:
+    if (
+        str(getattr(ticket, "tipo_mantenimiento", "") or "")
+        .strip()
+        .upper()
+        != "PREVENTIVO"
+    ):
+        return None
+
+    has_bitacora = (
+        PmBitacoraORM.query
+        .filter(PmBitacoraORM.ticket_id == ticket.id)
+        .first()
+        is not None
+    )
+    if not has_bitacora:
+        return (
+            "El preventivo no tiene bitácora de ejecución; "
+            "no puede validarse."
+        )
+
+    has_evidence = (
+        TicketAttachmentORM.query
+        .filter(
+            TicketAttachmentORM.ticket_id == ticket.id,
+            TicketAttachmentORM.deleted_at.is_(None),
+        )
+        .first()
+        is not None
+    )
+    if not has_evidence:
+        return (
+            "El preventivo no tiene evidencia activa; "
+            "no puede validarse."
+        )
+
+    return None
+
+
+def _serialize_preventive_bitacora_validation(
+    bitacora: PmBitacoraORM,
+    username_by_id: dict[int, str],
+) -> dict:
+    checks = bitacora.checks or {}
+    snapshot = bitacora.checklist_snapshot or {}
+    snapshot_items = snapshot.get("items") or []
+
+    responses = []
+    if snapshot_items:
+        for item in sorted(
+            snapshot_items,
+            key=lambda row: int(row.get("orden") or 0),
+        ):
+            item_key = str(item.get("item_key") or "")
+            responses.append({
+                "item_key": item_key,
+                "etiqueta": str(item.get("etiqueta") or item_key),
+                "orden": int(item.get("orden") or 0),
+                "requerido": bool(item.get("requerido")),
+                "resultado": checks.get(item_key),
+            })
+    else:
+        responses = [
+            {
+                "item_key": str(key),
+                "etiqueta": str(key),
+                "orden": index,
+                "requerido": False,
+                "resultado": value,
+            }
+            for index, (key, value) in enumerate(
+                checks.items(),
+                start=1,
+            )
+        ]
+
+    return {
+        "id": int(bitacora.id),
+        "fecha": bitacora.fecha.isoformat() if bitacora.fecha else None,
+        "created_at": (
+            bitacora.created_at.isoformat()
+            if bitacora.created_at
+            else None
+        ),
+        "created_by_user_id": bitacora.created_by_user_id,
+        "created_by_username": username_by_id.get(
+            int(bitacora.created_by_user_id)
+        ) if bitacora.created_by_user_id else None,
+        "resultado": bitacora.resultado,
+        "estado_encontrado": bitacora.estado_encontrado,
+        "notas": bitacora.notas,
+        "hallazgo_detectado": bool(bitacora.hallazgo_detectado),
+        "hallazgo_descripcion": bitacora.hallazgo_descripcion,
+        "checklist": {
+            "template_id": snapshot.get("template_id"),
+            "template_key": snapshot.get("template_key"),
+            "nombre": snapshot.get("nombre"),
+            "actividad_key": snapshot.get("actividad_key"),
+            "responses": responses,
+        } if snapshot or responses else None,
+    }
+
+
+@ticket_bp.route(
+    '/cierre/preventivo-detalle/<int:ticket_id>',
+    methods=['GET'],
+)
+@jwt_required()
+def cierre_preventivo_detalle(ticket_id):
+    user = UserORM.get_by_id(get_jwt_identity())
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado"}), 404
+
+    ticket = Ticket.query.get(ticket_id)
+    if not ticket:
+        return jsonify({"mensaje": "Ticket no encontrado"}), 404
+
+    if (
+        str(ticket.tipo_mantenimiento or "").strip().upper()
+        != "PREVENTIVO"
+    ):
+        return jsonify({
+            "mensaje": "El ticket no es preventivo."
+        }), 400
+
+    if not _puede_validar_cierre_gerente(user, ticket):
+        return jsonify({"mensaje": "No autorizado"}), 403
+
+    bitacoras = (
+        PmBitacoraORM.query
+        .filter(PmBitacoraORM.ticket_id == ticket.id)
+        .order_by(
+            PmBitacoraORM.created_at.desc(),
+            PmBitacoraORM.id.desc(),
+        )
+        .all()
+    )
+
+    user_ids = {
+        int(bitacora.created_by_user_id)
+        for bitacora in bitacoras
+        if bitacora.created_by_user_id is not None
+    }
+    username_by_id = {}
+    if user_ids:
+        users = UserORM.query.filter(UserORM.id.in_(user_ids)).all()
+        username_by_id = {
+            int(row.id): str(row.username)
+            for row in users
+        }
+
+    related_correctives = (
+        Ticket.query
+        .filter(
+            Ticket.ticket_preventivo_origen_id == ticket.id,
+            Ticket.tipo_mantenimiento == "CORRECTIVO",
+        )
+        .order_by(Ticket.id.asc())
+        .all()
+    )
+
+    active_attachment_ids = _get_ticket_ids_with_active_attachments(
+        [ticket.id] + [row.id for row in related_correctives]
+    )
+
+    inventory = ticket.inventario
+    branch = ticket.sucursal_destino or ticket.sucursal
+
+    return jsonify({
+        "ticket": {
+            "id": int(ticket.id),
+            "estado": ticket.estado,
+            "estado_cierre": ticket.estado_cierre,
+            "tipo_mantenimiento": ticket.tipo_mantenimiento,
+            "asignado_a": ticket.asignado_a,
+            "descripcion": ticket.descripcion,
+            "sucursal_id": (
+                ticket.sucursal_id_destino or ticket.sucursal_id
+            ),
+            "sucursal": (
+                getattr(branch, "sucursal", None)
+                or getattr(branch, "nombre", None)
+                or "Sin sucursal"
+            ),
+            "inventario_id": ticket.aparato_id,
+            "codigo_equipo": (
+                getattr(inventory, "codigo_interno", None)
+                if inventory is not None
+                else None
+            ),
+            "equipo": (
+                getattr(inventory, "nombre", None)
+                or ticket.equipo
+                or "Sin equipo"
+            ),
+            "fecha_programada_original": (
+                ticket.fecha_programada_original.isoformat()
+                if ticket.fecha_programada_original
+                else None
+            ),
+            "fecha_programada_actual": (
+                ticket.fecha_programada_actual.isoformat()
+                if ticket.fecha_programada_actual
+                else None
+            ),
+            "has_attachment": ticket.id in active_attachment_ids,
+        },
+        "requirements": {
+            "has_bitacora": bool(bitacoras),
+            "has_evidence": ticket.id in active_attachment_ids,
+            "ready_to_validate": (
+                bool(bitacoras)
+                and ticket.id in active_attachment_ids
+            ),
+        },
+        "bitacoras": [
+            _serialize_preventive_bitacora_validation(
+                bitacora,
+                username_by_id,
+            )
+            for bitacora in bitacoras
+        ],
+        "related_correctives": [
+            {
+                "id": int(row.id),
+                "estado": row.estado,
+                "descripcion": row.descripcion,
+                "criticidad": row.criticidad,
+                "asignado_a": row.asignado_a,
+                "has_attachment": row.id in active_attachment_ids,
+            }
+            for row in related_correctives
+        ],
+    }), 200
 
 
 @ticket_bp.route(
@@ -923,7 +1211,18 @@ def update_ticket_status(id):
         if fecha_solucion:
             try:
                 fecha_parsed = parser.isoparse(fecha_solucion)
-                ticket.fecha_solucion = fecha_parsed.astimezone(timezone.utc)
+                if getattr(fecha_parsed, "tzinfo", None) is None:
+                    fecha_parsed = fecha_parsed.replace(
+                        tzinfo=timezone.utc
+                    )
+                due_utc = fecha_parsed.astimezone(timezone.utc)
+                commitment_error = _maintenance_commitment_change_error(
+                    ticket,
+                    due_utc,
+                )
+                if commitment_error:
+                    return jsonify({"mensaje": commitment_error}), 409
+                ticket.asignar_fecha_compromiso(due_utc)
             except Exception as e:
                 print(f"❌ Error parseando fecha_solucion: {e}")
 
@@ -2298,7 +2597,14 @@ def set_compromiso(ticket_id):
                 if getattr(dt, "tzinfo", None) is None:
                     # Si viene naive, asúmelo como UTC
                     dt = dt.replace(tzinfo=timezone.utc)
-                t.fecha_solucion = dt.astimezone(timezone.utc)
+                due_utc = dt.astimezone(timezone.utc)
+                commitment_error = _maintenance_commitment_change_error(
+                    t,
+                    due_utc,
+                )
+                if commitment_error:
+                    return jsonify({"mensaje": commitment_error}), 409
+                t.asignar_fecha_compromiso(due_utc)
             except Exception as e:
                 return jsonify({"mensaje": f"Fecha de solución inválida: {e}"}), 400
 
@@ -2346,6 +2652,19 @@ def cierre_gerente_desde_cero(ticket_id):
             return jsonify({"mensaje": "No autorizado"}), 403
 
         estado_actual = (t.estado or "").strip().lower()
+
+        if (
+            str(getattr(t, "tipo_mantenimiento", "") or "")
+            .strip()
+            .upper()
+            == "PREVENTIVO"
+        ):
+            return jsonify({
+                "mensaje": (
+                    "Un preventivo no puede cerrarse por limpieza. "
+                    "Debe pasar por ejecución y validación."
+                )
+            }), 400
 
         estados_permitidos = {"abierto", "en progreso"}
 
@@ -2504,6 +2823,12 @@ def cierre_aceptar_creador(ticket_id):
             "mensaje": "Solo se pueden aceptar tickets en estado por_validar."
         }), 400
 
+    preventive_requirement_error = _preventive_close_requirement_error(t)
+    if preventive_requirement_error:
+        return jsonify({
+            "mensaje": preventive_requirement_error
+        }), 409
+
     finalized_at = datetime.now(timezone.utc)
 
     t.aceptar_conformidad_creador(commit=False)
@@ -2557,6 +2882,15 @@ def cierre_rechazar_creador(ticket_id):
 
     nueva_compromiso = data.get("nueva_fecha_solucion")
     dt_new = None
+
+    if int(t.departamento_id or 0) == 1 and nueva_compromiso:
+        return jsonify({
+            "mensaje": (
+                "El rechazo de un ticket de Mantenimiento no cambia "
+                "su programación/compromiso. Usa la reprogramación "
+                "auditada de Mantenimiento como acción separada."
+            )
+        }), 409
 
     if nueva_compromiso:
         try:

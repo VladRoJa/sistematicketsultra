@@ -28,6 +28,7 @@ services:
       - .env.docker
     environment:
       APP_ENV: "prod"
+      TICKETS_PREVENTIVE_V1_ENABLED: "${TICKETS_PREVENTIVE_V1_ENABLED:-false}"
       ROUTINE_CONTROL_ARTIFACT_DIR: "/app/runtime/routine-control/artifacts"
       TICKET_ATTACHMENT_DIR: "/app/runtime/ticket-attachments"
 
