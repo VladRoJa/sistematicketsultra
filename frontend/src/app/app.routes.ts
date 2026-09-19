@@ -67,6 +67,12 @@ export const routes: Routes = [
               import('./tickets-preventive-planning/tickets-preventive-planning.component')
                 .then(m => m.TicketsPreventivePlanningComponent),
           },
+          {
+            path: 'cuadrillas-mantenimiento',
+            loadComponent: () =>
+              import('./maintenance-crew-config/maintenance-crew-config.component')
+                .then(m => m.MaintenanceCrewConfigComponent),
+          },
         ],
       },
       {
