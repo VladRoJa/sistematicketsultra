@@ -114,7 +114,7 @@ export class PreventiveValidationDialogComponent implements OnInit {
     this.dialog.open(EvidenciaPreviewComponent, {
       data: {
         ticketId: id,
-        titulo: \`Ticket #\${id}\`,
+        titulo: `Ticket #${id}`,
       },
       width: 'min(90vw, 1100px)',
       maxWidth: '90vw',
