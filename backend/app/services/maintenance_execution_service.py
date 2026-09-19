@@ -445,6 +445,20 @@ def complete_preventive(user, ticket_id: int) -> Ticket:
             "Debes guardar una bitácora antes de marcar realizado."
         )
 
+    has_evidence = (
+        TicketAttachmentORM.query
+        .filter(
+            TicketAttachmentORM.ticket_id == ticket.id,
+            TicketAttachmentORM.deleted_at.is_(None),
+        )
+        .first()
+        is not None
+    )
+    if not has_evidence:
+        raise MaintenanceExecutionStateError(
+            "Debes adjuntar evidencia antes de marcar realizado."
+        )
+
     now = datetime.now(timezone.utc)
     previous_state = ticket.estado
     previous_close_state = ticket.estado_cierre
