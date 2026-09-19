@@ -170,6 +170,15 @@ export interface MaintenanceChecklistTemplate {
   items: MaintenanceChecklistItem[];
 }
 
+export interface MaintenanceReprogramReason {
+  id: number;
+  key: string;
+  nombre: string;
+  requiere_comentario: boolean;
+  activo: boolean;
+  orden: number;
+}
+
 export interface MaintenanceChecklistCatalog {
   templates: MaintenanceChecklistTemplate[];
   families: Array<{
@@ -358,6 +367,69 @@ export class MaintenancePreventiveService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl =
     `${environment.apiUrl}/tickets/preventive-planning`;
+
+  getReprogramReasons(
+    includeInactive = false,
+  ): Observable<{ reasons: MaintenanceReprogramReason[] }> {
+    let params = new HttpParams();
+    if (includeInactive) {
+      params = params.set('include_inactive', 'true');
+    }
+
+    return this.http.get<{ reasons: MaintenanceReprogramReason[] }>(
+      `${this.baseUrl}/reprogram-reasons`,
+      { params },
+    );
+  }
+
+  createReprogramReason(payload: {
+    key: string;
+    nombre: string;
+    requiere_comentario?: boolean;
+    orden?: number;
+  }): Observable<MaintenanceReprogramReason> {
+    return this.http.post<MaintenanceReprogramReason>(
+      `${this.baseUrl}/reprogram-reasons`,
+      payload,
+    );
+  }
+
+  updateReprogramReason(
+    reasonId: number,
+    payload: Partial<{
+      nombre: string;
+      requiere_comentario: boolean;
+      activo: boolean;
+      orden: number;
+    }>,
+  ): Observable<MaintenanceReprogramReason> {
+    return this.http.put<MaintenanceReprogramReason>(
+      `${this.baseUrl}/reprogram-reasons/${reasonId}`,
+      payload,
+    );
+  }
+
+  reprogramMaintenanceTicket(
+    ticketId: number,
+    payload: {
+      nueva_fecha: string;
+      reason_id: number;
+      comentario?: string | null;
+    },
+  ): Observable<{
+    mensaje: string;
+    ticket_id: number;
+    tipo_mantenimiento: string;
+    fecha_compromiso_original: string | null;
+    fecha_solucion: string | null;
+    fecha_programada_original: string | null;
+    fecha_programada_actual: string | null;
+  }> {
+    return this.http.post<any>(
+      `${this.baseUrl}/tickets/${ticketId}/reprogram`,
+      payload,
+    );
+  }
 
   getWeeklyDashboard(params?: {
     weeks?: number;
