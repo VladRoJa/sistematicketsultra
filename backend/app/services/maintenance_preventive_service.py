@@ -176,6 +176,40 @@ def _assert_batch_manageable(user, batch: MaintenancePreventiveBatchORM) -> None
         )
 
 
+def obtener_lote_preventivo(
+    batch_id: int,
+    user,
+) -> MaintenancePreventiveBatchORM:
+    batch = _get_batch(batch_id)
+    _assert_batch_manageable(user, batch)
+    return batch
+
+
+def listar_lotes_preventivos(user) -> list[MaintenancePreventiveBatchORM]:
+    _assert_can_configure(user)
+
+    query = MaintenancePreventiveBatchORM.query
+
+    if _role(user) not in {
+        "ADMIN",
+        "ADMINISTRADOR",
+        "SUPER_ADMIN",
+        "MANTENIMIENTO",
+    }:
+        query = query.filter(
+            MaintenancePreventiveBatchORM.created_by_user_id == int(user.id)
+        )
+
+    return (
+        query
+        .order_by(
+            MaintenancePreventiveBatchORM.created_at.desc(),
+            MaintenancePreventiveBatchORM.id.desc(),
+        )
+        .all()
+    )
+
+
 def agregar_renglones_lote(
     batch_id: int,
     user,
