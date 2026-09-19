@@ -373,6 +373,11 @@ class Ticket(db.Model):
                     aprobador_username: str | None = None,
                     aprobacion_fecha=None,
                     aprobacion_comentario: str | None = None,
+                    tipo_mantenimiento: str | None = None,
+                    origen_correctivo: str | None = None,
+                    fecha_programada_original=None,
+                    fecha_programada_actual=None,
+                    ticket_preventivo_origen_id: int | None = None,
                     commit: bool = True):
         # Sanitizar: si llega un número como texto, lo consideramos vacío (derivaremos la ruta)
         def _clean_text(v):
@@ -384,6 +389,39 @@ class Ticket(db.Model):
         categoria = _clean_text(categoria)
         subcategoria = _clean_text(subcategoria)
         detalle = _clean_text(detalle)
+
+        mantenimiento_tipo = (
+            str(tipo_mantenimiento or "").strip().upper() or None
+        )
+        mantenimiento_origen = (
+            str(origen_correctivo or "").strip().upper() or None
+        )
+
+        try:
+            es_mantenimiento = int(departamento_id) == 1
+        except (TypeError, ValueError):
+            es_mantenimiento = False
+
+        if es_mantenimiento:
+            mantenimiento_tipo = mantenimiento_tipo or "CORRECTIVO"
+            if mantenimiento_tipo not in {"CORRECTIVO", "PREVENTIVO"}:
+                raise ValueError("tipo_mantenimiento inválido.")
+
+            if mantenimiento_tipo == "CORRECTIVO":
+                mantenimiento_origen = mantenimiento_origen or "REACTIVO"
+                if mantenimiento_origen not in {
+                    "REACTIVO",
+                    "DETECTADO_EN_PREVENTIVO",
+                }:
+                    raise ValueError("origen_correctivo inválido.")
+            else:
+                mantenimiento_origen = None
+
+        if (
+            fecha_programada_original is not None
+            and fecha_programada_actual is None
+        ):
+            fecha_programada_actual = fecha_programada_original
 
         ticket = cls(
             descripcion=descripcion,
@@ -415,6 +453,12 @@ class Ticket(db.Model):
             aprobador_username=aprobador_username,
             aprobacion_fecha=aprobacion_fecha,
             aprobacion_comentario=aprobacion_comentario,
+
+            tipo_mantenimiento=mantenimiento_tipo,
+            origen_correctivo=mantenimiento_origen,
+            fecha_programada_original=fecha_programada_original,
+            fecha_programada_actual=fecha_programada_actual,
+            ticket_preventivo_origen_id=ticket_preventivo_origen_id,
         )
         db.session.add(ticket)
         db.session.flush()
@@ -471,6 +515,45 @@ class Ticket(db.Model):
             db.session.commit()
 
         return ticket
+
+    def asignar_fecha_compromiso(self, nueva_fecha_compromiso):
+        """Actualiza el compromiso vigente preservando el primero para analítica.
+
+        Para tickets de Mantenimiento existentes que aún no tengan semántica
+        explícita, conserva compatibilidad clasificándolos como correctivos
+        reactivos. Los preventivos no usan este campo como programación.
+        """
+        if nueva_fecha_compromiso is None:
+            raise ValueError("La fecha compromiso es obligatoria.")
+
+        if getattr(nueva_fecha_compromiso, "tzinfo", None) is None:
+            nueva_fecha_compromiso = nueva_fecha_compromiso.replace(
+                tzinfo=timezone.utc
+            )
+        else:
+            nueva_fecha_compromiso = nueva_fecha_compromiso.astimezone(
+                timezone.utc
+            )
+
+        try:
+            es_mantenimiento = int(self.departamento_id or 0) == 1
+        except (TypeError, ValueError):
+            es_mantenimiento = False
+
+        if es_mantenimiento:
+            self.tipo_mantenimiento = (
+                str(self.tipo_mantenimiento or "CORRECTIVO").strip().upper()
+            )
+
+            if self.tipo_mantenimiento == "CORRECTIVO":
+                self.origen_correctivo = (
+                    str(self.origen_correctivo or "REACTIVO").strip().upper()
+                )
+                if self.fecha_compromiso_original is None:
+                    self.fecha_compromiso_original = nueva_fecha_compromiso
+
+        self.fecha_solucion = nueva_fecha_compromiso
+        return nueva_fecha_compromiso
 
 
     # ───────────────────────────────────────────────────────────
@@ -604,17 +687,20 @@ class Ticket(db.Model):
 
 
     def aceptar_conformidad_creador(self, commit: bool = True):
-        """El creador confirma el cierre y el ticket pasa a 'finalizado'."""
+        """El gerente/admin confirma el cierre y el ticket pasa a finalizado."""
         from datetime import datetime, timezone
+
+        ahora = datetime.now(timezone.utc)
 
         self.estado_cierre = None
         self.motivo_rechazo_cierre = None
         self.estado = 'finalizado'
+        self.fecha_validacion_cierre = ahora
 
         # Si el jefe ya fijó fecha_finalizado antes, la respetamos.
         # Solo si viene vacío, la ponemos ahora.
         if not self.fecha_finalizado:
-            self.fecha_finalizado = datetime.now(timezone.utc)
+            self.fecha_finalizado = ahora
 
         if commit:
             db.session.commit()
