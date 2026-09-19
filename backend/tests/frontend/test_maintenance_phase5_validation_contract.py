@@ -98,8 +98,8 @@ def test_manager_rejection_does_not_expose_preventive_scheduling():
     dialog_ts = _read(DIALOG_TS)
     dialog_html = _read(DIALOG_HTML)
 
-    assert "El gerente puede rechazar el preventivo" in routes
-    assert "no reprogramarlo desde la validación" in routes
+    assert "El rechazo de un ticket de Mantenimiento no cambia" in routes
+    assert "reprogramación auditada de Mantenimiento" in routes
     assert "newProgramDate" not in dialog_ts
     assert "Nueva fecha programada" not in dialog_html
     assert "nueva_fecha_solucion" not in dialog_ts
