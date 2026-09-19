@@ -120,6 +120,12 @@ def _parse_date(value) -> date:
         ) from exc
 
 
+def _normalize_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def _date_to_utc(value: date) -> datetime:
     local = datetime.combine(
         value,
@@ -331,7 +337,7 @@ def reprogramar_ticket_mantenimiento(
             ticket.fecha_programada_original = previous_due
 
         if (
-            previous_due.astimezone(BUSINESS_TZ).date()
+            _normalize_utc(previous_due).astimezone(BUSINESS_TZ).date()
             == new_date
         ):
             raise MaintenanceReprogramStateError(
@@ -347,7 +353,7 @@ def reprogramar_ticket_mantenimiento(
             )
 
         if (
-            previous_due.astimezone(BUSINESS_TZ).date()
+            _normalize_utc(previous_due).astimezone(BUSINESS_TZ).date()
             == new_date
         ):
             raise MaintenanceReprogramStateError(
@@ -362,8 +368,8 @@ def reprogramar_ticket_mantenimiento(
         {
             "evento": "reprogramacion_mantenimiento",
             "tipo_mantenimiento": maintenance_type,
-            "fecha_anterior": previous_due.astimezone(
-                timezone.utc
+            "fecha_anterior": _normalize_utc(
+                previous_due
             ).isoformat(),
             "fecha": new_due_utc.isoformat(),
             "fecha_nueva": new_due_utc.isoformat(),
