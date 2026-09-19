@@ -87,6 +87,107 @@
     </div>
   </section>
 
+  <section class="panel reasons-panel">
+    <header class="panel__header">
+      <div>
+        <span class="eyebrow">Reprogramación</span>
+        <h2>Motivos configurables</h2>
+      </div>
+    </header>
+
+    <div class="reason-create-grid">
+      <label>
+        <span>Key</span>
+        <input
+          type="text"
+          [(ngModel)]="newReasonKey"
+          placeholder="Ej. FALTA_TECNICO"
+        />
+      </label>
+
+      <label>
+        <span>Nombre</span>
+        <input
+          type="text"
+          [(ngModel)]="newReasonName"
+          placeholder="Ej. Falta de técnico"
+        />
+      </label>
+
+      <label>
+        <span>Orden</span>
+        <input
+          type="number"
+          [(ngModel)]="newReasonOrder"
+        />
+      </label>
+
+      <label class="toggle reason-toggle">
+        <input
+          type="checkbox"
+          [(ngModel)]="newReasonRequiresComment"
+        />
+        <span>Requiere comentario</span>
+      </label>
+
+      <button
+        type="button"
+        class="button button--primary"
+        (click)="createReprogramReason()"
+        [disabled]="saving"
+      >
+        Agregar motivo
+      </button>
+    </div>
+
+    <div class="reason-list">
+      <div
+        *ngFor="let reason of reprogramReasons; trackBy: trackReason"
+        class="reason-row"
+      >
+        <code>{{ reason.key }}</code>
+
+        <input
+          type="text"
+          [(ngModel)]="reason.nombre"
+          aria-label="Nombre del motivo"
+        />
+
+        <input
+          class="order-input"
+          type="number"
+          [(ngModel)]="reason.orden"
+          aria-label="Orden del motivo"
+        />
+
+        <label class="toggle">
+          <input
+            type="checkbox"
+            [(ngModel)]="reason.requiere_comentario"
+          />
+          <span>Comentario</span>
+        </label>
+
+        <label class="toggle">
+          <input
+            type="checkbox"
+            [(ngModel)]="reason.activo"
+          />
+          <span>Activo</span>
+        </label>
+
+        <button
+          type="button"
+          class="text-button"
+          (click)="saveReprogramReason(reason)"
+          [disabled]="saving"
+        >
+          Guardar
+        </button>
+      </div>
+    </div>
+  </section>
+
   <section class="templates">
     <article
       *ngFor="let template of catalog.templates; trackBy: trackTemplate"
