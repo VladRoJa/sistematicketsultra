@@ -425,6 +425,7 @@ const menuMantenimientoGerencial = [
 
 this.habilitarControlEnMenuSiAplica(menuControl);
 this.habilitarProgramacionPreventivaEnMenu();
+this.habilitarMiProgramaEnMenu();
 this.habilitarMaintenancePlannerEnMenu();
 
 if (
@@ -515,6 +516,62 @@ private habilitarControlEnMenuSiAplica(menuControl: any): void {
       },
       error: () => {
         // El backend es la autoridad. Si responde 401/403 no se publica el menú.
+      },
+    });
+}
+
+private habilitarMiProgramaEnMenu(): void {
+  const ticketsMenu = this.menuItems.find(
+    (item) => item.label === 'Tickets'
+  );
+
+  if (!ticketsMenu) {
+    return;
+  }
+
+  const myProgramItem = {
+    label: 'Mi programa',
+    path: '/main/mi-programa',
+  };
+
+  const submenu = Array.isArray(ticketsMenu.submenu)
+    ? ticketsMenu.submenu
+    : [];
+
+  if (
+    submenu.some(
+      (item: { path: string }) => item.path === myProgramItem.path
+    )
+  ) {
+    return;
+  }
+
+  this.http
+    .get<any>(
+      `${environment.apiUrl}/tickets/preventive-planning/my-program`
+    )
+    .subscribe({
+      next: () => {
+        const currentSubmenu = Array.isArray(ticketsMenu.submenu)
+          ? ticketsMenu.submenu
+          : [];
+
+        if (
+          currentSubmenu.some(
+            (item: { path: string }) => item.path === myProgramItem.path
+          )
+        ) {
+          return;
+        }
+
+        ticketsMenu.submenu = [
+          ...currentSubmenu,
+          myProgramItem,
+        ];
+        this.sincronizarMenuConRutaActual();
+      },
+      error: () => {
+        // El backend es autoridad: 401/403 significa que Mi programa no se publica.
       },
     });
 }
