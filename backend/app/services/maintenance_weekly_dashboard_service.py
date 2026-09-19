@@ -107,6 +107,15 @@ def _sunday_for(reference: date) -> date:
     )
 
 
+def _operational_week_number(value: date) -> int:
+    first_day = date(value.year, 1, 1)
+    days_back_to_sunday = (first_day.weekday() + 1) % 7
+    year_start_sunday = first_day - timedelta(
+        days=days_back_to_sunday
+    )
+    return ((value - year_start_sunday).days // 7) + 1
+
+
 def _week_windows(
     reference: date,
     weeks: int,
@@ -726,7 +735,7 @@ def _build_week_card(
     corrective_denominator = len(corrective_due)
 
     return {
-        "week_number": int(week.end.isocalendar().week),
+        "week_number": _operational_week_number(week.start),
         "week_start": week.start.isoformat(),
         "week_end": week.end.isoformat(),
         "preventive": {
