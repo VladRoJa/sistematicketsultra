@@ -13,5 +13,7 @@ RUN npm run build -- --configuration=production --project=frontend-angular
 FROM nginx:1.25
 COPY --from=build /app/dist/frontend-angular /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY docker-entrypoint.d/40-cert-reload-watcher.sh /docker-entrypoint.d/40-cert-reload-watcher.sh
+RUN chmod +x /docker-entrypoint.d/40-cert-reload-watcher.sh
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
