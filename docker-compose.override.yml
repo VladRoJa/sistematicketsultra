@@ -1,0 +1,28 @@
+services:
+  frontend:
+    depends_on:
+      - backend
+      - certbot
+
+  certbot:
+    image: certbot/certbot:latest
+    restart: unless-stopped
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        trap 'exit 0' TERM INT
+        while :; do
+          if certbot renew --quiet; then
+            sleep 12h &
+          else
+            echo "Certbot renewal check failed; retrying in 5 minutes." >&2
+            sleep 5m &
+          fi
+          wait $$!
+        done
+    networks:
+      - backend-net
+    volumes:
+      - ./certbot/www:/var/www/certbot
+      - ./certbot/conf:/etc/letsencrypt
