@@ -79,7 +79,7 @@ def test_backend_requires_ticket_owned_bitacora_and_evidence():
     service = _read(EXECUTION_SERVICE)
 
     assert "func.lower(Ticket.asignado_a) == username.casefold()" in service
-    assert "Debes guardar una bitácora antes de marcar realizado." in service
+    assert "Debes guardar una bitácora nueva para este intento " in service
     assert "Debes adjuntar evidencia antes de marcar realizado." in service
     assert "DETECTADO_EN_PREVENTIVO" in service
     assert "ticket_preventivo_origen_id=preventive.id" in service
