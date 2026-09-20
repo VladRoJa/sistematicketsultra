@@ -173,47 +173,50 @@ class TicketPreventiveCloseRequirementsTest(unittest.TestCase):
         return query
 
     def test_preventive_requires_bitacora(self):
-        with patch(
-            "app.routes.ticket_routes.PmBitacoraORM.query",
-            self._query(None),
-        ):
-            message = _preventive_close_requirement_error(
-                self._ticket()
-            )
+        with self.app.app_context():
+            with patch(
+                "app.routes.ticket_routes.PmBitacoraORM.query",
+                self._query(None),
+            ):
+                message = _preventive_close_requirement_error(
+                    self._ticket()
+                )
 
         self.assertIn("bitácora", message)
 
     def test_preventive_requires_active_evidence(self):
-        with (
-            patch(
-                "app.routes.ticket_routes.PmBitacoraORM.query",
-                self._query(SimpleNamespace(id=1)),
-            ),
-            patch(
-                "app.routes.ticket_routes.TicketAttachmentORM.query",
-                self._query(None),
-            ),
-        ):
-            message = _preventive_close_requirement_error(
-                self._ticket()
-            )
+        with self.app.app_context():
+            with (
+                patch(
+                    "app.routes.ticket_routes.PmBitacoraORM.query",
+                    self._query(SimpleNamespace(id=1)),
+                ),
+                patch(
+                    "app.routes.ticket_routes.TicketAttachmentORM.query",
+                    self._query(None),
+                ),
+            ):
+                message = _preventive_close_requirement_error(
+                    self._ticket()
+                )
 
         self.assertIn("evidencia", message)
 
     def test_preventive_with_bitacora_and_evidence_is_ready(self):
-        with (
-            patch(
-                "app.routes.ticket_routes.PmBitacoraORM.query",
-                self._query(SimpleNamespace(id=1)),
-            ),
-            patch(
-                "app.routes.ticket_routes.TicketAttachmentORM.query",
-                self._query(SimpleNamespace(id=2)),
-            ),
-        ):
-            message = _preventive_close_requirement_error(
-                self._ticket()
-            )
+        with self.app.app_context():
+            with (
+                patch(
+                    "app.routes.ticket_routes.PmBitacoraORM.query",
+                    self._query(SimpleNamespace(id=1)),
+                ),
+                patch(
+                    "app.routes.ticket_routes.TicketAttachmentORM.query",
+                    self._query(SimpleNamespace(id=2)),
+                ),
+            ):
+                message = _preventive_close_requirement_error(
+                    self._ticket()
+                )
 
         self.assertIsNone(message)
 
