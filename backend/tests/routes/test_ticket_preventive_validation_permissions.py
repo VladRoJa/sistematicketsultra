@@ -255,7 +255,7 @@ class TicketPreventiveCleanupCloseTest(unittest.TestCase):
                     return_value=user,
                 ),
                 patch(
-                    "app.routes.ticket_routes.Ticket.query.get",
+                    "app.routes.ticket_routes.Ticket.query_class.get",
                     return_value=ticket,
                 ),
                 patch(
