@@ -199,7 +199,7 @@ class MaintenanceReprogramServiceTest(unittest.TestCase):
             sucursal_id=4,
             sucursales_ids=[4],
         )
-        ticket = SimpleNamespace(
+        ticket = Ticket(
             id=750,
             departamento_id=1,
             tipo_mantenimiento="CORRECTIVO",
