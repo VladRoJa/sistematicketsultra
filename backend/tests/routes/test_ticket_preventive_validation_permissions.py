@@ -2,7 +2,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import MagicMock, patch
 
-from flask import Flask
+from app import create_app
 
 from app.routes.ticket_routes import (
     _maintenance_commitment_change_error,
@@ -156,6 +156,10 @@ class TicketMaintenanceCommitmentGuardTest(unittest.TestCase):
 
 
 class TicketPreventiveCloseRequirementsTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = create_app()
+
     def _ticket(self):
         return SimpleNamespace(
             id=88,
@@ -215,8 +219,11 @@ class TicketPreventiveCloseRequirementsTest(unittest.TestCase):
 
 
 class TicketPreventiveCleanupCloseTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = create_app()
+
     def test_preventive_cannot_use_manager_cleanup_close(self):
-        app = Flask(__name__)
         ticket = SimpleNamespace(
             id=77,
             tipo_mantenimiento="PREVENTIVO",
@@ -230,7 +237,7 @@ class TicketPreventiveCleanupCloseTest(unittest.TestCase):
             sucursal_id=4,
         )
 
-        with app.test_request_context(
+        with self.app.test_request_context(
             "/api/tickets/cierre/gerente-desde-cero/77",
             method="POST",
             json={"motivo": "Limpieza"},
