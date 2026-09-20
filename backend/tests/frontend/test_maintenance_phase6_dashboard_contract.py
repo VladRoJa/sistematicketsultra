@@ -115,7 +115,9 @@ def test_dashboard_ticket_jump_is_resolved_by_tickets_query_param():
     dashboard_ts = _read(DASHBOARD_TS)
     tickets_ts = _read(TICKETS_TS)
 
-    assert "ticket_id: ticket.id" in dashboard_ts
+    assert "this.openTicketById(ticket.id)" in dashboard_ts
+    assert "openTicketById(ticketId: number): void" in dashboard_ts
+    assert "ticket_id: ticketId" in dashboard_ts
     assert "ticketIdDesdeQueryParam" in tickets_ts
     assert "programarAplicacionFiltroTicketDesdeQueryParam" in tickets_ts
     assert "Number(row.id) === Number(ticketId)" in tickets_ts
