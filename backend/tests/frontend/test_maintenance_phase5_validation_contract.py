@@ -54,7 +54,8 @@ def test_tickets_requires_review_for_preventive_validation():
     html = _read(TICKETS_HTML)
 
     assert "esPreventivo(ticket)" in ts
-    assert "abrirRevisionPreventivo(ticket)" in ts
+    assert "abrirRevisionPreventivo(ticket: Ticket): void" in ts
+    assert '(click)="abrirRevisionPreventivo(ticket)"' in html
     assert "!this.esPreventivo(ticket)" in ts
     assert "Revisar preventivo" in html
     assert "fact_check" in html
