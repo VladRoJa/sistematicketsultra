@@ -151,7 +151,7 @@ body.suite-compact-review .tickets-table-card {
 }
 
 body.suite-compact-review .tabla-tickets {
-  font-size: 8px;
+  font-size: 10px;
   line-height: 1.15;
 }
 
@@ -162,7 +162,7 @@ body.suite-compact-review .tabla-tickets td {
 
 body.suite-compact-review .tabla-tickets th {
   height: 30px;
-  font-size: 8px;
+  font-size: 10px;
 }
 
 body.suite-compact-review .tabla-tickets tbody td {
@@ -189,8 +189,8 @@ body.suite-compact-review .tabla-tickets .c-his { width: 82px; }
 
 /* Acciones por fila: eran el principal causante de filas gigantes. */
 body.suite-compact-review .td-acciones {
-  min-width: 90px !important;
-  width: 90px;
+  min-width: 96px !important;
+  width: 96px;
   padding-left: 4px !important;
   padding-right: 4px !important;
 }
@@ -207,12 +207,12 @@ body.suite-compact-review .td-acciones > div {
 }
 
 body.suite-compact-review .ticket-action {
-  width: 82px !important;
+  width: 88px !important;
   min-height: 19px !important;
   height: 19px;
   padding: 1px 5px !important;
   gap: 3px;
-  font-size: 7px !important;
+  font-size: 9px !important;
   line-height: 1 !important;
 }
 
