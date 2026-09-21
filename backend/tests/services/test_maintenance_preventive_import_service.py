@@ -59,6 +59,7 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
             }
             self.assertIn("list", validation_types)
             self.assertIn("date", validation_types)
+            self.assertIn("custom", validation_types)
 
             formulas = {
                 validation.formula1
@@ -74,6 +75,24 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
             self.assertIn(
                 '=INDIRECT(IFERROR(VLOOKUP($A2&"|"&$B2,MapaCodigos,2,FALSE),"ListaVacia"))',
                 formulas,
+            )
+
+            activity_validation = next(
+                validation
+                for validation in validations
+                if validation.type == "custom"
+            )
+            self.assertEqual(
+                activity_validation.formula1,
+                "=LEN(TRIM(E2))>0",
+            )
+            self.assertEqual(
+                activity_validation.promptTitle,
+                "Actividad preventiva",
+            )
+            self.assertIn(
+                "Obligatoria",
+                activity_validation.prompt,
             )
 
             catalogs = workbook["Catálogos"]
