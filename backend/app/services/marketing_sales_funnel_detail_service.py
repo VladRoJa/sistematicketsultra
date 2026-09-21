@@ -7,6 +7,7 @@ from typing import Any
 
 from app.models import MarketingIventasContactORM
 from app.models.warehouse import (
+    TrackBranchCatalogORM,
     VentaTotalSnapshotRowORM,
     VentasNuevosSociosDetalleSnapshotRowORM,
 )
@@ -40,6 +41,7 @@ from app.services.marketing_sales_funnel_service import (
 
 DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 100
+LEAD_GLOBAL_PURCHASE_WINDOW_DAYS = 60
 
 
 class MarketingSalesFunnelDetailValidationError(ValueError):
@@ -489,15 +491,67 @@ def _lead_followup_label(*, visited: bool, bought: bool) -> str:
     return "Sin visita / sin compra"
 
 
+def _iter_month_starts(start_date: date, end_date: date) -> tuple[date, ...]:
+    current = date(start_date.year, start_date.month, 1)
+    final = date(end_date.year, end_date.month, 1)
+    result: list[date] = []
+
+    while current <= final:
+        result.append(current)
+        if current.month == 12:
+            current = date(current.year + 1, 1, 1)
+        else:
+            current = date(current.year, current.month + 1, 1)
+
+    return tuple(result)
+
+
+def _load_global_marketing_branches() -> tuple[tuple[int, ...], dict[int, str]]:
+    rows = (
+        TrackBranchCatalogORM.query.filter(
+            TrackBranchCatalogORM.is_track_active.is_(True),
+            TrackBranchCatalogORM.sucursal_id.isnot(None),
+        )
+        .order_by(
+            TrackBranchCatalogORM.display_order.asc(),
+            TrackBranchCatalogORM.sucursal_id.asc(),
+        )
+        .all()
+    )
+
+    branch_ids: list[int] = []
+    branch_names: dict[int, str] = {}
+    seen: set[int] = set()
+
+    for row in rows:
+        branch_id = int(row.sucursal_id)
+        if branch_id not in seen:
+            seen.add(branch_id)
+            branch_ids.append(branch_id)
+
+        branch_names.setdefault(
+            branch_id,
+            (
+                str(row.sucursal.sucursal).strip()
+                if row.sucursal is not None
+                else str(row.track_label).strip()
+            ),
+        )
+
+    return tuple(branch_ids), branch_names
+
+
 def _enrich_lead_followup_rows(
     rows: list[dict[str, Any]],
     *,
     visits: Any,
     sales: Any,
+    global_branch_names: dict[int, str] | None = None,
+    visible_branch_ids: tuple[int, ...] | None = None,
     cutoff_date: date | None = None,
 ) -> list[dict[str, Any]]:
     visit_dates_by_identity: dict[tuple[int, str], list[date]] = {}
-    sale_dates_by_identity: dict[tuple[int, str], list[date]] = {}
+    sales_by_phone: dict[str, list[tuple[date, int]]] = {}
 
     for visit in visits or ():
         phone = str(getattr(visit, "phone", "") or "").strip()
@@ -510,13 +564,21 @@ def _enrich_lead_followup_rows(
         phone = str(getattr(sale, "phone", "") or "").strip()
         if not phone:
             continue
-        identity = (int(sale.branch_id), phone)
-        sale_dates_by_identity.setdefault(identity, []).append(sale.sale_date)
+        sales_by_phone.setdefault(phone, []).append(
+            (sale.sale_date, int(sale.branch_id))
+        )
 
     for values in visit_dates_by_identity.values():
         values.sort()
-    for values in sale_dates_by_identity.values():
-        values.sort()
+    for values in sales_by_phone.values():
+        values.sort(key=lambda item: (item[0], item[1]))
+
+    visible_ids = (
+        set(visible_branch_ids)
+        if visible_branch_ids is not None
+        else None
+    )
+    branch_names = global_branch_names or {}
 
     enriched: list[dict[str, Any]] = []
     for row in rows:
@@ -530,40 +592,71 @@ def _enrich_lead_followup_rows(
             lead_date = None
 
         visit_date: date | None = None
-        sale_date: date | None = None
+        global_sale_date: date | None = None
+        global_sale_branch_id: int | None = None
 
         if lead_date is not None and phone:
             branch_id = int(current["branch_id"])
             identity = (branch_id, phone)
-            window_end = lead_date + timedelta(days=MATCH_WINDOW_DAYS)
+
+            visit_window_end = lead_date + timedelta(days=MATCH_WINDOW_DAYS)
+            purchase_window_end = lead_date + timedelta(
+                days=LEAD_GLOBAL_PURCHASE_WINDOW_DAYS
+            )
             if cutoff_date is not None:
-                window_end = min(window_end, cutoff_date)
+                visit_window_end = min(visit_window_end, cutoff_date)
+                purchase_window_end = min(purchase_window_end, cutoff_date)
 
             visit_date = next(
                 (
                     event_date
                     for event_date in visit_dates_by_identity.get(identity, ())
-                    if lead_date <= event_date <= window_end
-                ),
-                None,
-            )
-            sale_date = next(
-                (
-                    event_date
-                    for event_date in sale_dates_by_identity.get(identity, ())
-                    if lead_date <= event_date <= window_end
+                    if lead_date <= event_date <= visit_window_end
                 ),
                 None,
             )
 
+            global_sale = next(
+                (
+                    (event_date, sale_branch_id)
+                    for event_date, sale_branch_id in sales_by_phone.get(
+                        phone,
+                        (),
+                    )
+                    if lead_date <= event_date <= purchase_window_end
+                ),
+                None,
+            )
+            if global_sale is not None:
+                global_sale_date, global_sale_branch_id = global_sale
+
         visited = visit_date is not None
-        bought = sale_date is not None
+        bought = global_sale_date is not None
+
+        purchase_branch: str | None = None
+        if global_sale_branch_id is not None:
+            if (
+                visible_ids is not None
+                and global_sale_branch_id not in visible_ids
+            ):
+                purchase_branch = "Otra sucursal Ultra"
+            else:
+                purchase_branch = branch_names.get(
+                    global_sale_branch_id,
+                    f"Sucursal #{global_sale_branch_id}",
+                )
+
         current.update(
             {
                 "visit_status": "Sí" if visited else "No",
                 "visit_date": visit_date.isoformat() if visit_date else None,
                 "purchase_status": "Sí" if bought else "No",
-                "sale_date": sale_date.isoformat() if sale_date else None,
+                "sale_date": (
+                    global_sale_date.isoformat()
+                    if global_sale_date is not None
+                    else None
+                ),
+                "purchase_branch": purchase_branch,
                 "followup_status": _lead_followup_label(
                     visited=visited,
                     bought=bought,
@@ -579,33 +672,63 @@ def _load_month_lead_followup_sources(
     *,
     month_start: date,
     branch_ids: tuple[int, ...],
-) -> tuple[Any, Any]:
-    venta_total_snapshot = _select_venta_total_snapshot(month_start)
-    venta_total_rows = (
-        VentaTotalSnapshotRowORM.query.filter_by(
-            snapshot_id=venta_total_snapshot.id
+) -> tuple[Any, Any, dict[int, str]]:
+    alias_map = _load_branch_alias_map()
+    month_end = _month_end(month_start)
+
+    visits: list[Any] = []
+    visit_horizon = month_end + timedelta(days=MATCH_WINDOW_DAYS)
+    for period_start in _iter_month_starts(month_start, visit_horizon):
+        venta_total_snapshot = _select_venta_total_snapshot(period_start)
+        if venta_total_snapshot is None:
+            continue
+        venta_total_rows = (
+            VentaTotalSnapshotRowORM.query.filter_by(
+                snapshot_id=venta_total_snapshot.id
+            )
+            .order_by(VentaTotalSnapshotRowORM.row_index.asc())
+            .all()
         )
-        .order_by(VentaTotalSnapshotRowORM.row_index.asc())
-        .all()
-        if venta_total_snapshot is not None
-        else []
-    )
-    visits = _load_visits(
-        venta_total_rows,
-        month_start,
-        branch_ids,
-        _load_branch_alias_map(),
-    )
+        visits.extend(
+            _load_visits(
+                venta_total_rows,
+                period_start,
+                branch_ids,
+                alias_map,
+            )
+        )
 
-    detail_snapshot = _select_new_sales_detail_snapshot(month_start)
-    sales = _load_new_sales(
-        snapshot=detail_snapshot,
-        venta_total_rows=venta_total_rows,
-        month_start=month_start,
-        branch_ids=branch_ids,
-    ).sales
+    global_branch_ids, global_branch_names = _load_global_marketing_branches()
+    sales: list[Any] = []
+    purchase_horizon = month_end + timedelta(
+        days=LEAD_GLOBAL_PURCHASE_WINDOW_DAYS
+    )
+    for period_start in _iter_month_starts(month_start, purchase_horizon):
+        detail_snapshot = _select_new_sales_detail_snapshot(period_start)
+        if detail_snapshot is None:
+            continue
 
-    return visits, sales
+        venta_total_snapshot = _select_venta_total_snapshot(period_start)
+        venta_total_rows = (
+            VentaTotalSnapshotRowORM.query.filter_by(
+                snapshot_id=venta_total_snapshot.id
+            )
+            .order_by(VentaTotalSnapshotRowORM.row_index.asc())
+            .all()
+            if venta_total_snapshot is not None
+            else []
+        )
+
+        sales.extend(
+            _load_new_sales(
+                snapshot=detail_snapshot,
+                venta_total_rows=venta_total_rows,
+                month_start=period_start,
+                branch_ids=global_branch_ids,
+            ).sales
+        )
+
+    return visits, sales, global_branch_names
 
 
 def _leads_meta_detail(
@@ -676,7 +799,7 @@ def _leads_meta_detail(
             }
         )
 
-    visits, sales = _load_month_lead_followup_sources(
+    visits, sales, global_branch_names = _load_month_lead_followup_sources(
         month_start=month_start,
         branch_ids=branch_ids,
     )
@@ -685,6 +808,8 @@ def _leads_meta_detail(
             result,
             visits=visits,
             sales=sales,
+            global_branch_names=global_branch_names,
+            visible_branch_ids=branch_ids,
         ),
         matched_count,
     )
