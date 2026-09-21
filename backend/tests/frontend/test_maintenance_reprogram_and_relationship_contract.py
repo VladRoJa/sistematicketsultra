@@ -132,7 +132,7 @@ def test_ticket_dashboard_and_excel_identify_maintenance_semantics():
     routes = _read(TICKET_ROUTES)
 
     assert "getEtiquetaTipoMantenimiento" in tickets_ts
-    assert "CORRECTIVO · DETECTADO EN PREVENTIVO" in tickets_ts
+    assert "return tipo === 'PREVENTIVO' ? 'PREVENTIVO' : null;" in tickets_ts
     assert "maintenance-ticket-badge" in tickets_html
     assert "maintenance-ticket-badge--preventive" in tickets_css
     assert '"Tipo mantenimiento"' in routes
