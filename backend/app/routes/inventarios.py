@@ -1370,20 +1370,25 @@ def importar_inventario():
     else:
         df = pd.read_excel(filepath)
 
+    def _excel_text(value):
+        if pd.isna(value):
+            return ''
+        return str(value).strip()
+
     agregados, errores = 0, 0
     for idx, row in df.iterrows():
         try:
             # Ajusta estos campos a los de tu modelo de inventario
             inv = InventarioGeneral(
-                nombre=str(row['nombre']).strip(),
-                descripcion=str(row['descripcion']).strip(),
-                tipo=str(row['tipo']).strip(),
-                marca=str(row['marca']).strip(),
-                proveedor=str(row['proveedor']).strip(),
-                categoria=str(row['categoria']).strip(),
-                unidad_medida=str(row['unidad_medida']).strip(),
-                grupo_muscular=str(row['grupo_muscular']).strip(),
-                codigo_interno=str(row['codigo_interno']).strip()
+                nombre=_excel_text(row['nombre']),
+                descripcion=_excel_text(row['descripcion']),
+                tipo=_excel_text(row['tipo']),
+                marca=_excel_text(row['marca']),
+                proveedor=_excel_text(row['proveedor']),
+                categoria=_excel_text(row['categoria']),
+                unidad_medida=_excel_text(row['unidad_medida']),
+                grupo_muscular=_excel_text(row['grupo_muscular']),
+                codigo_interno=_excel_text(row['codigo_interno'])
             )
             db.session.add(inv)
             agregados += 1

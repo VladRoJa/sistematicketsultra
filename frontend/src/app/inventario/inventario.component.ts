@@ -204,9 +204,18 @@ export class InventarioComponent implements OnInit {
         .filter(Boolean),
     ).size;
 
-    this.totalConCodigo = this.inventarios.filter(
-      (item) => String(item.codigo_interno || '').trim().length > 0,
+    this.totalConCodigo = this.inventarios.filter((item) =>
+      this.esCodigoInternoValido(item.codigo_interno),
     ).length;
+  }
+
+  private esCodigoInternoValido(value: any): boolean {
+    const codigo = String(value ?? '').trim().toLowerCase();
+    if (!codigo) {
+      return false;
+    }
+
+    return !new Set(['nan', 'n/a', 'na', 'none', 'null', '-']).has(codigo);
   }
 
   private normalizarBusqueda(value: any): string {
