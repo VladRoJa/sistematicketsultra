@@ -420,6 +420,8 @@ def obtener_inventario():
                     'categoria': categoria_res,
                     'subcategoria': subcat_res,
                     'unidad_medida': inv.unidad_medida,
+                    'unidad_compra': inv.unidad_compra,
+                    'factor_compra': inv.factor_compra,
                     'codigo_interno': inv.codigo_interno,
                     'no_equipo': inv.no_equipo,
                     'gasto_sem': inv.gasto_sem,
@@ -445,6 +447,7 @@ def obtener_inventario():
             categoria_res, subcat_res = _resolver_categoria(inv)
             data.append({
                 'id': inv.id,
+                'tipo': inv.tipo,
                 'nombre': inv.nombre,
                 'descripcion': inv.descripcion,
                 'marca': inv.marca,
@@ -452,6 +455,8 @@ def obtener_inventario():
                 'categoria': categoria_res,
                 'subcategoria': subcat_res,
                 'unidad_medida': inv.unidad_medida,
+                'unidad_compra': inv.unidad_compra,
+                'factor_compra': inv.factor_compra,
                 'codigo_interno': inv.codigo_interno,
                 'no_equipo': inv.no_equipo,
                 'gasto_sem': inv.gasto_sem,
