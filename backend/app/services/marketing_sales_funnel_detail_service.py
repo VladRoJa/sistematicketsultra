@@ -37,11 +37,14 @@ from app.services.marketing_sales_funnel_service import (
     _find_venta_total_enrichment,
     _load_visits,
     _match_iventas,
+    _merge_visits_with_direct_purchases,
     _meta_contact_keys,
     _month_end,
     _payment_local_date,
     _select_new_sales_detail_snapshot,
     _select_venta_total_snapshot,
+    _visit_source_label,
+    _visit_type_label,
 )
 
 
@@ -93,7 +96,7 @@ METRIC_TITLES = {
     "sales_btl": "Venta nueva · BTL",
     "revenue_total": "Ingreso de Venta Nueva",
     "revenue_iventas_meta": "Ingreso de Venta Nueva Meta Ads",
-    "visits_total": "Visitas comerciales detectadas",
+    "visits_total": "Visitas del funnel",
     "visits_iventas": "Visitas con match iVentas",
     "visits_iventas_meta": "Visitas con match iVentas / Meta",
     "visits_not_iventas": "Visitas sin match iVentas",
@@ -435,19 +438,28 @@ def _visits_detail(
     page_size: int,
 ) -> tuple[list[dict[str, Any]], int]:
     snapshot = _select_venta_total_snapshot(month_start)
-    if snapshot is None:
-        return [], 0
-
     rows = (
         VentaTotalSnapshotRowORM.query.filter_by(snapshot_id=snapshot.id)
         .order_by(VentaTotalSnapshotRowORM.row_index.asc())
         .all()
+        if snapshot is not None
+        else []
     )
-    visits = _load_visits(
+    registered_visits = _load_visits(
         rows,
         month_start,
         branch_ids,
         _load_branch_alias_map(),
+    )
+    sales = _load_new_sales(
+        snapshot=_select_new_sales_detail_snapshot(month_start),
+        venta_total_rows=rows,
+        month_start=month_start,
+        branch_ids=branch_ids,
+    ).sales
+    visits = _merge_visits_with_direct_purchases(
+        visits=registered_visits,
+        sales=sales,
     )
     evidence, _, _ = _load_iventas_data(month_start, branch_ids)
 
@@ -483,7 +495,8 @@ def _visits_detail(
                     if origin is not None
                     else "Sin match iVentas"
                 ),
-                "source": "Pase comercial en Venta Total",
+                "visit_type": _visit_type_label(visit),
+                "source": _visit_source_label(visit),
             }
         )
     return result, matched_count
