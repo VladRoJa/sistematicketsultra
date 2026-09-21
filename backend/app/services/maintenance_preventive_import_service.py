@@ -531,21 +531,15 @@ def build_preventive_template_xlsx(
         branch_validation.add("A2:A1001")
 
     if family_map_row > 2:
-        _add_named_list(
-            workbook,
-            name="MapaFamilias",
-            sheet_name=validations.title,
-            column="A",
-            start_row=2,
-            end_row=family_map_row - 1,
-        )
-        # MapaFamilias debe incluir dos columnas; se redefine directamente.
-        workbook.defined_names.delete("MapaFamilias")
         sheet_ref = validations.title.replace("'", "''")
         workbook.defined_names.add(
             DefinedName(
                 "MapaFamilias",
-                attr_text=("'" + sheet_ref + "'!$A$2:$B$" + str(family_map_row - 1)),
+                attr_text=(
+                    "'" + sheet_ref
+                    + "'!$A$2:$B$"
+                    + str(family_map_row - 1)
+                ),
             )
         )
         family_validation = DataValidation(
