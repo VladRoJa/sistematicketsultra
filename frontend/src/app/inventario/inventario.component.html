@@ -1,118 +1,364 @@
-<!-- src/app/inventario/inventario.component.html -->
+<section class="inventory-page">
+  <header class="page-hero">
+    <div class="page-hero__content">
+      <p class="page-hero__eyebrow">Suite Ultra · Inventario</p>
+      <h1>Inventario maestro</h1>
+      <p class="page-hero__subtitle">
+        Consulta y administra el catálogo central de productos, equipos y
+        dispositivos utilizados por las sucursales.
+      </p>
+    </div>
 
-<div class="flex items-center justify-between mb-4">
-  <h1 class="text-xl font-bold">Listado de Inventario</h1>
+    <div class="page-hero__summary">
+      <span class="page-hero__summary-label">Registros visibles</span>
+      <strong>{{ inventariosFiltrados.length }}</strong>
+      <small>de {{ inventarios.length }} en inventario</small>
+    </div>
+  </header>
 
+  <section class="inventory-toolbar-card">
+    <div class="inventory-toolbar">
+      <label class="search-box">
+        <span class="search-box__label">Buscar en inventario</span>
 
-  <div>
-    <button mat-raised-button color="primary" (click)="abrirDialogoImportar()">
-      <mat-icon>file_upload</mat-icon>
-      Importar archivo Excel
-    </button>
-    <input type="file" #fileInput hidden (change)="importarExcel($event)">
-    <button mat-raised-button color="primary" (click)="exportarInventario()">
-      <mat-icon>file_download</mat-icon>
-      Exportar archivo Excel
-    </button>
-    <button mat-raised-button color="primary" (click)="descargarPlantilla()">
-      <mat-icon>download</mat-icon>
-      Plantilla para importar
+        <span class="search-box__control">
+          <mat-icon>search</mat-icon>
+          <input
+            type="search"
+            [(ngModel)]="busquedaGlobal"
+            (ngModelChange)="aplicarBusquedaGlobal()"
+            placeholder="Nombre, marca, categoría, código..."
+            autocomplete="off"
+          />
+
+          <button
+            *ngIf="busquedaGlobal"
+            type="button"
+            class="search-box__clear"
+            (click)="limpiarBusquedaGlobal()"
+            aria-label="Limpiar búsqueda"
+          >
+            <mat-icon>close</mat-icon>
+          </button>
+        </span>
+      </label>
+
+      <div class="toolbar-actions">
+        <button
+          type="button"
+          class="toolbar-action toolbar-action--secondary"
+          (click)="descargarPlantilla()"
+          [disabled]="archivoProcesando"
+        >
+          <mat-icon>description</mat-icon>
+          <span>Plantilla</span>
+        </button>
+
+        <ng-container *ngIf="puedeAdministrarInventario">
+          <button
+            type="button"
+            class="toolbar-action toolbar-action--secondary"
+            (click)="abrirDialogoImportar()"
+            [disabled]="archivoProcesando"
+          >
+            <mat-icon>upload</mat-icon>
+            <span>Importar</span>
+          </button>
+
+          <button
+            type="button"
+            class="toolbar-action toolbar-action--secondary"
+            (click)="exportarInventario()"
+            [disabled]="archivoProcesando"
+          >
+            <mat-icon>download</mat-icon>
+            <span>Exportar</span>
+          </button>
+
+          <button
+            type="button"
+            class="toolbar-action toolbar-action--primary"
+            (click)="abrirDialogoAgregar()"
+            [disabled]="archivoProcesando"
+          >
+            <mat-icon>add</mat-icon>
+            <span>Agregar producto</span>
+          </button>
+        </ng-container>
+
+        <input
+          #fileInput
+          class="file-input"
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          (change)="importarExcel($event)"
+        />
+      </div>
+    </div>
+
+    <div class="inventory-toolbar__meta">
+      <span class="summary-chip">
+        <mat-icon>category</mat-icon>
+        {{ totalCategorias }} categorías
+      </span>
+
+      <span class="summary-chip">
+        <mat-icon>qr_code_2</mat-icon>
+        {{ totalConCodigo }} con código interno
+      </span>
+
+      <span class="summary-chip" *ngIf="cantidadFiltrosActivos > 0">
+        <mat-icon>filter_alt</mat-icon>
+        {{ cantidadFiltrosActivos }}
+        {{ cantidadFiltrosActivos === 1 ? 'filtro activo' : 'filtros activos' }}
+      </span>
+
+      <button
+        *ngIf="hayFiltrosAplicados"
+        type="button"
+        class="clear-filters"
+        (click)="limpiarTodosLosFiltros()"
+      >
+        Limpiar búsqueda y filtros
       </button>
-    <button mat-raised-button color="accent" (click)="abrirDialogoAgregar()">
-      <mat-icon>add</mat-icon>
-      Agregar producto
-    </button>
+    </div>
+  </section>
+
+  <div class="message-banner message-banner--error" *ngIf="error">
+    <span class="message-banner__icon">!</span>
+    <div>
+      <strong>No se pudo cargar el inventario</strong>
+      <p>{{ error }}</p>
+    </div>
   </div>
-</div>
 
-<mat-table [dataSource]="inventariosFiltrados" *ngIf="!loading && inventariosFiltrados.length > 0">
+  <section class="inventory-table-card">
+    <header class="table-heading">
+      <div>
+        <p class="table-heading__eyebrow">Catálogo central</p>
+        <h2>Productos y equipos</h2>
+        <p>
+          Usa los filtros de cada columna para acotar el listado sin perder el
+          contexto del inventario maestro.
+        </p>
+      </div>
 
-  <!-- Columna ID -->
-  <ng-container matColumnDef="id">
-    <mat-header-cell *matHeaderCellDef>ID</mat-header-cell>
-    <mat-cell *matCellDef="let elem">{{ elem.id }}</mat-cell>
-  </ng-container>
+      <span class="table-heading__status" *ngIf="archivoProcesando">
+        Procesando archivo...
+      </span>
+    </header>
 
-  <!-- Columnas filtrables -->
-  <ng-container *ngFor="let col of columnasFiltrables" [matColumnDef]="col">
-    <mat-header-cell *matHeaderCellDef [class.filtro-activo]="isFilterActive(col)">
-      <span>{{ col.replace('_', ' ') }}</span>
-      <button mat-icon-button
-        [matMenuTriggerFor]="filtroMenu"
-        (menuOpened)="abrirMenuFiltro(col)"
-        #menuTrigger="matMenuTrigger">
-        <mat-icon>filter_list</mat-icon>
+    <div class="loading-state" *ngIf="loading">
+      <mat-spinner diameter="34"></mat-spinner>
+      <strong>Cargando inventario...</strong>
+      <span>Consultando el catálogo disponible para tu alcance.</span>
+    </div>
+
+    <div
+      class="empty-state"
+      *ngIf="!loading && !error && inventariosFiltrados.length === 0"
+    >
+      <div class="empty-state__icon">
+        <mat-icon>inventory_2</mat-icon>
+      </div>
+      <h3>
+        {{ hayFiltrosAplicados ? 'No encontramos coincidencias' : 'No hay registros de inventario' }}
+      </h3>
+      <p>
+        {{
+          hayFiltrosAplicados
+            ? 'Prueba limpiando la búsqueda o los filtros de columnas.'
+            : 'Cuando existan productos en el inventario maestro aparecerán aquí.'
+        }}
+      </p>
+
+      <button
+        *ngIf="hayFiltrosAplicados"
+        type="button"
+        class="toolbar-action toolbar-action--secondary empty-state__action"
+        (click)="limpiarTodosLosFiltros()"
+      >
+        <mat-icon>filter_alt_off</mat-icon>
+        <span>Limpiar filtros</span>
       </button>
-    </mat-header-cell>
-    <mat-cell *matCellDef="let elem">{{ elem[col] }}</mat-cell>
-  </ng-container>
+    </div>
 
-  <!-- Acciones -->
-  <ng-container matColumnDef="acciones">
-    <mat-header-cell *matHeaderCellDef>Acciones</mat-header-cell>
-    <mat-cell *matCellDef="let elem">
-      <button mat-icon-button color="primary" (click)="abrirDialogoEditar(elem)">
-        <mat-icon>edit</mat-icon>
-      </button>
-      <button mat-icon-button color="warn" (click)="eliminarInventario(elem.id)">
-        <mat-icon>delete</mat-icon>
-      </button>
-    </mat-cell>
-  </ng-container>
+    <div
+      class="inventory-table-scroll"
+      *ngIf="!loading && inventariosFiltrados.length > 0"
+    >
+      <mat-table [dataSource]="inventariosFiltrados" class="inventory-table">
+        <ng-container matColumnDef="id">
+          <mat-header-cell *matHeaderCellDef class="inventory-col-id">
+            ID
+          </mat-header-cell>
+          <mat-cell *matCellDef="let elem" class="inventory-col-id">
+            {{ elem.id }}
+          </mat-cell>
+        </ng-container>
 
-  <mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></mat-header-row>
-  <mat-row *matRowDef="let row; columns: displayedColumns"></mat-row>
-</mat-table>
+        <ng-container
+          *ngFor="let col of columnasFiltrables"
+          [matColumnDef]="col"
+        >
+          <mat-header-cell
+            *matHeaderCellDef
+            class="inventory-header-cell"
+            [class.inventory-header-cell--active]="isFilterActive(col)"
+          >
+            <span>{{ obtenerEtiquetaColumna(col) }}</span>
 
-<!-- Menú de filtro Excel -->
-<mat-menu #filtroMenu="matMenu" [overlapTrigger]="false" class="menu-filtro-inventario">
+            <button
+              mat-icon-button
+              type="button"
+              class="column-filter-button"
+              [matMenuTriggerFor]="filtroMenu"
+              (menuOpened)="abrirMenuFiltro(col)"
+              #menuTrigger="matMenuTrigger"
+              [attr.aria-label]="'Filtrar ' + obtenerEtiquetaColumna(col)"
+            >
+              <mat-icon>
+                {{ isFilterActive(col) ? 'filter_alt' : 'filter_list' }}
+              </mat-icon>
+            </button>
+          </mat-header-cell>
+
+          <mat-cell
+            *matCellDef="let elem"
+            class="inventory-cell"
+            [class.inventory-cell--code]="col === 'codigo_interno'"
+          >
+            {{ mostrarValor(elem[col]) }}
+          </mat-cell>
+        </ng-container>
+
+        <ng-container matColumnDef="acciones">
+          <mat-header-cell *matHeaderCellDef class="inventory-col-actions">
+            Acciones
+          </mat-header-cell>
+
+          <mat-cell *matCellDef="let elem" class="inventory-col-actions">
+            <button
+              mat-icon-button
+              type="button"
+              class="row-action row-action--edit"
+              (click)="abrirDialogoEditar(elem)"
+              aria-label="Editar inventario"
+            >
+              <mat-icon>edit</mat-icon>
+            </button>
+
+            <button
+              mat-icon-button
+              type="button"
+              class="row-action row-action--delete"
+              (click)="eliminarInventario(elem.id)"
+              aria-label="Eliminar inventario"
+            >
+              <mat-icon>delete</mat-icon>
+            </button>
+          </mat-cell>
+        </ng-container>
+
+        <mat-header-row
+          *matHeaderRowDef="displayedColumns; sticky: true"
+        ></mat-header-row>
+        <mat-row *matRowDef="let row; columns: displayedColumns"></mat-row>
+      </mat-table>
+    </div>
+  </section>
+</section>
+
+<mat-menu
+  #filtroMenu="matMenu"
+  [overlapTrigger]="false"
+  class="menu-filtro-inventario"
+>
   <ng-template matMenuContent>
-    <div *ngIf="filtroColumnaActual" style="padding: 12px 18px; width: 230px;" (click)="$event.stopPropagation()">
-      <!-- Buscador dinámico -->
-      <mat-form-field appearance="fill" class="w-full">
-        <mat-label>Buscar</mat-label>
-        <input matInput
+    <div
+      *ngIf="filtroColumnaActual"
+      class="filter-menu"
+      (click)="$event.stopPropagation()"
+    >
+      <div class="filter-menu__heading">
+        <span>Filtrar por</span>
+        <strong>{{ obtenerEtiquetaColumna(filtroColumnaActual) }}</strong>
+      </div>
+
+      <mat-form-field appearance="outline" class="filter-menu__search">
+        <mat-label>Buscar valor</mat-label>
+        <input
+          matInput
           [(ngModel)]="filtros[filtroColumnaActual].texto"
-          (ngModelChange)="buscar(filtroColumnaActual, filtros[filtroColumnaActual].texto)"
-          autocomplete="off">
+          (ngModelChange)="
+            buscar(
+              filtroColumnaActual,
+              filtros[filtroColumnaActual].texto
+            )
+          "
+          autocomplete="off"
+        />
       </mat-form-field>
-      <!-- Seleccionar todos -->
+
       <mat-checkbox
+        class="filter-menu__select-all"
         [checked]="isTodoSeleccionado(filtroColumnaActual)"
-        (change)="seleccionarTodo(filtroColumnaActual, $event.checked); $event.stopPropagation();">
+        (change)="
+          seleccionarTodo(filtroColumnaActual, $event.checked);
+          $event.stopPropagation()
+        "
+      >
         Seleccionar todos
       </mat-checkbox>
-      <!-- Opciones dinámicas -->
-      <div class="max-h-32 overflow-y-auto my-2" (click)="$event.stopPropagation()">
+
+      <div
+        class="filter-menu__options"
+        (click)="$event.stopPropagation()"
+      >
         <mat-checkbox
-          *ngFor="let item of obtenerOpcionesVisibles(filtros[filtroColumnaActual]); let i = index"
+          *ngFor="
+            let item of obtenerOpcionesVisibles(
+              filtros[filtroColumnaActual]
+            );
+            let i = index
+          "
           [checked]="item.seleccionado"
-          (change)="alternarSeleccionIndividual(filtroColumnaActual, i, $event.checked); $event.stopPropagation();">
-          {{ item.valor }}
+          (change)="
+            alternarSeleccionIndividual(
+              filtroColumnaActual,
+              i,
+              $event.checked
+            );
+            $event.stopPropagation()
+          "
+        >
+          {{ item.valor || 'Sin valor' }}
         </mat-checkbox>
       </div>
-      <!-- Botones acción -->
-      <div class="flex justify-between mt-3">
-        <button mat-stroked-button color="primary"
-          (click)="aplicarFiltro(filtroColumnaActual); $event.stopPropagation();">Aplicar</button>
-        <button mat-button
-          (click)="limpiarFiltro(filtroColumnaActual); $event.stopPropagation();">Limpiar</button>
+
+      <div class="filter-menu__actions">
+        <button
+          type="button"
+          class="filter-menu__button filter-menu__button--secondary"
+          (click)="
+            limpiarFiltro(filtroColumnaActual);
+            $event.stopPropagation()
+          "
+        >
+          Limpiar
+        </button>
+
+        <button
+          type="button"
+          class="filter-menu__button filter-menu__button--primary"
+          (click)="
+            aplicarFiltro(filtroColumnaActual);
+            $event.stopPropagation()
+          "
+        >
+          Aplicar
+        </button>
       </div>
     </div>
   </ng-template>
 </mat-menu>
-
-<!-- Spinner de carga -->
-<div *ngIf="loading" class="flex justify-center items-center mt-8">
-  <mat-spinner diameter="40"></mat-spinner>
-</div>
-
-<!-- Sin registros -->
-<div *ngIf="!loading && inventariosFiltrados.length === 0" class="text-gray-500 text-center mt-8">
-  No hay registros de inventario.
-</div>
-
-<!-- Error -->
-<div *ngIf="!loading && error" class="text-red-500 text-center mt-8">
-  {{ error }}
-</div>
