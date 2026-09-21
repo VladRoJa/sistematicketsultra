@@ -10,6 +10,7 @@ from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.comments import Comment
+from openpyxl.formatting.rule import FormulaRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.workbook.defined_name import DefinedName
@@ -343,7 +344,10 @@ def build_preventive_template_xlsx(
     comments = {
         "A1": "Selecciona una sucursal del catálogo disponible.",
         "B1": "Selecciona una familia. La lista depende de la sucursal elegida.",
-        "C1": "Selecciona el código interno. La lista depende de sucursal y familia.",
+        "C1": (
+            "Selecciona el código interno. La lista depende de sucursal y familia. "
+            "Un mismo equipo no puede programarse dos veces para la misma fecha."
+        ),
         "D1": "Captura la fecha en formato dd/mm/aaaa.",
         "E1": "Describe el mantenimiento preventivo que se realizará.",
         "F1": "Selecciona un responsable activo del catálogo de Mantenimiento.",
@@ -630,6 +634,21 @@ def build_preventive_template_xlsx(
         responsible_validation.showErrorMessage = True
         sheet.add_data_validation(responsible_validation)
         responsible_validation.add("F2:F1001")
+
+    duplicate_fill = PatternFill("solid", fgColor="FDE2E2")
+    duplicate_formula = (
+        'AND($A2<>"",$C2<>"",$D2<>"",'
+        'COUNTIFS($A$2:$A$1001,$A2,'
+        '$C$2:$C$1001,$C2,'
+        '$D$2:$D$1001,$D2)>1)'
+    )
+    sheet.conditional_formatting.add(
+        "A2:G1001",
+        FormulaRule(
+            formula=[duplicate_formula],
+            fill=duplicate_fill,
+        ),
+    )
 
     sheet.row_dimensions[1].height = 26
 
