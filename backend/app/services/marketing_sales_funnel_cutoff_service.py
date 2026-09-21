@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from time import perf_counter
 from typing import Any, Iterable, Mapping
 
 from app.extensions import db
@@ -502,6 +503,9 @@ def build_marketing_sales_funnel_at_cutoff(
     cutoff_date: Any = None,
     cutoff_policy: Any = None,
 ) -> MarketingSalesFunnelBuildResult:
+    timings_ms: dict[str, float] = {}
+    stage_started = perf_counter()
+
     month_start = parse_month(month)
     requested_cutoff = parse_cutoff_date(
         month_start=month_start,
@@ -512,10 +516,14 @@ def build_marketing_sales_funnel_at_cutoff(
         requested_cutoff=requested_cutoff,
         cutoff_policy=parse_cutoff_policy(cutoff_policy),
     )
+    timings_ms["resolve_cutoff"] = (perf_counter() - stage_started) * 1000
 
+    stage_started = perf_counter()
     branches, branch_ids, scope = load_visible_marketing_branches(access)
     stats_by_branch = {branch_id: _BranchStats() for branch_id in branch_ids}
+    timings_ms["scope"] = (perf_counter() - stage_started) * 1000
 
+    stage_started = perf_counter()
     iventas_run = _select_exact_iventas_run(month_start, selected_cutoff)
     meta_run = _select_exact_meta_run(month_start, selected_cutoff)
     branch_metrics = _selected_iventas_branch_metrics(
@@ -535,14 +543,18 @@ def build_marketing_sales_funnel_at_cutoff(
             row.iventas_contacts_with_first_message
         )
         stats_by_branch[branch_id].leads_meta = int(row.meta_observed_leads)
+    timings_ms["iventas_metrics"] = (perf_counter() - stage_started) * 1000
 
+    stage_started = perf_counter()
     evidence, iventas_run_ids = _load_iventas_data_for_cutoff(
         month_start=month_start,
         cutoff_date=selected_cutoff,
         branch_ids=branch_ids,
         current_run=iventas_run,
     )
+    timings_ms["iventas_evidence"] = (perf_counter() - stage_started) * 1000
 
+    stage_started = perf_counter()
     alias_map = _load_branch_alias_map()
     venta_total_snapshot = _select_exact_venta_total_snapshot(
         month_start,
@@ -553,8 +565,10 @@ def build_marketing_sales_funnel_at_cutoff(
         selected_cutoff,
     )
     kpi_snapshot = _select_exact_kpi_snapshot(selected_cutoff)
+    timings_ms["snapshot_select"] = (perf_counter() - stage_started) * 1000
 
     limitations: list[str] = []
+    stage_started = perf_counter()
     venta_total_rows: list[VentaTotalSnapshotRowORM] = []
     visits = []
     if venta_total_snapshot is not None:
@@ -571,7 +585,9 @@ def build_marketing_sales_funnel_at_cutoff(
             branch_ids,
             alias_map,
         )
+    timings_ms["venta_total_visits"] = (perf_counter() - stage_started) * 1000
 
+    stage_started = perf_counter()
     sales_result = _load_new_sales(
         snapshot=sales_detail_snapshot,
         venta_total_rows=venta_total_rows,
@@ -579,7 +595,9 @@ def build_marketing_sales_funnel_at_cutoff(
         branch_ids=branch_ids,
     )
     sales = sales_result.sales
+    timings_ms["new_sales"] = (perf_counter() - stage_started) * 1000
 
+    stage_started = perf_counter()
     kpi_control = _load_kpi_new_sales_control(
         snapshot=kpi_snapshot,
         branch_ids=branch_ids,
@@ -600,7 +618,9 @@ def build_marketing_sales_funnel_at_cutoff(
             f"en el corte {selected_cutoff.isoformat()}: detalle={detail_total}, "
             f"KPI={kpi_control_total}, diferencia={reconciliation_difference}."
         )
+    timings_ms["kpi"] = (perf_counter() - stage_started) * 1000
 
+    stage_started = perf_counter()
     for visit in visits:
         stats = stats_by_branch[visit.branch_id]
         stats.visits_total += 1
@@ -674,7 +694,9 @@ def build_marketing_sales_funnel_at_cutoff(
 
         stats.origin_counts[origin] += 1
         stats.origin_revenue[origin] += sale.revenue
+    timings_ms["aggregate"] = (perf_counter() - stage_started) * 1000
 
+    stage_started = perf_counter()
     payload = _build_response(
         month_start=month_start,
         scope=scope,
@@ -690,7 +712,9 @@ def build_marketing_sales_funnel_at_cutoff(
         enriched_sales_count=sales_result.enriched_with_venta_total,
         limitations=limitations,
     )
+    timings_ms["build_response"] = (perf_counter() - stage_started) * 1000
 
+    stage_started = perf_counter()
     meta_data = _read_meta_investment_for_cutoff(
         meta_run=meta_run,
         iventas_run=iventas_run,
@@ -704,6 +728,9 @@ def build_marketing_sales_funnel_at_cutoff(
         branch_payload["investment"] = float(investment)
         total_investment += investment
     payload["summary"]["investment"] = float(total_investment)
+    timings_ms["meta"] = (perf_counter() - stage_started) * 1000
+
+    stage_started = perf_counter()
     payload["selected_cutoff_date"] = selected_cutoff.isoformat()
     payload["available_cutoff_dates"] = [
         value.isoformat() for value in available_cutoffs
@@ -729,4 +756,9 @@ def build_marketing_sales_funnel_at_cutoff(
         visits=tuple(visits),
         evidence=evidence,
     )
-    return MarketingSalesFunnelBuildResult(payload=payload, loaded=loaded)
+    timings_ms["finalize"] = (perf_counter() - stage_started) * 1000
+    return MarketingSalesFunnelBuildResult(
+        payload=payload,
+        loaded=loaded,
+        timings_ms=timings_ms,
+    )

@@ -131,6 +131,7 @@ class MarketingSalesFunnelLoadedData:
 class MarketingSalesFunnelBuildResult:
     payload: dict[str, Any]
     loaded: MarketingSalesFunnelLoadedData
+    timings_ms: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
