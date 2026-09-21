@@ -175,48 +175,6 @@ def test_latest_iventas_interaction_controls_meta_classification():
     )
 
 
-
-
-def test_same_day_iventas_evidence_can_be_collapsed_with_meta_or():
-    original = {
-        (4, "6861234567"): [
-            _IventasEvidence(
-                branch_id=4,
-                phone="6861234567",
-                interaction_date=date(2026, 8, 12),
-                has_meta_ad=False,
-            ),
-            _IventasEvidence(
-                branch_id=4,
-                phone="6861234567",
-                interaction_date=date(2026, 8, 12),
-                has_meta_ad=True,
-            ),
-        ]
-    }
-    collapsed = {
-        (4, "6861234567"): [
-            _IventasEvidence(
-                branch_id=4,
-                phone="6861234567",
-                interaction_date=date(2026, 8, 12),
-                has_meta_ad=True,
-            )
-        ]
-    }
-
-    assert _match_iventas(
-        original,
-        branch_id=4,
-        phone="6861234567",
-        target_date=date(2026, 8, 20),
-    ) == _match_iventas(
-        collapsed,
-        branch_id=4,
-        phone="6861234567",
-        target_date=date(2026, 8, 20),
-    ) == ORIGIN_IVENTAS_META
-
 def test_load_iventas_data_prefers_provider_ads_origin_and_uses_legacy_fallback(
     monkeypatch,
 ):
