@@ -147,10 +147,42 @@ class MaintenancePreventiveDraftValidationTest(unittest.TestCase):
         errors = self._validate(second, seen_keys=seen_keys)
 
         self.assertIn(
-            "Renglón duplicado dentro del mismo lote.",
+            "El equipo ya está programado para esa fecha "
+            "dentro del mismo lote.",
             errors,
         )
         self.assertEqual(second.validation_status, "ERROR")
+
+    def test_same_equipment_and_date_is_duplicate_even_if_activity_changes(self):
+        seen_keys = set()
+        first = self._item(actividad="Limpieza")
+        second = self._item(actividad="Lubricación")
+
+        self.assertEqual(
+            self._validate(first, seen_keys=seen_keys),
+            [],
+        )
+        errors = self._validate(second, seen_keys=seen_keys)
+
+        self.assertIn(
+            "El equipo ya está programado para esa fecha "
+            "dentro del mismo lote.",
+            errors,
+        )
+
+    def test_same_equipment_on_different_date_is_allowed(self):
+        seen_keys = set()
+        first = self._item(fecha_programada_input="27/09/2026")
+        second = self._item(fecha_programada_input="04/10/2026")
+
+        self.assertEqual(
+            self._validate(first, seen_keys=seen_keys),
+            [],
+        )
+        self.assertEqual(
+            self._validate(second, seen_keys=seen_keys),
+            [],
+        )
 
 
 class MaintenancePreventiveDraftOperationsTest(unittest.TestCase):
