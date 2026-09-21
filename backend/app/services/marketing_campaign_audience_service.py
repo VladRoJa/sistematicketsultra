@@ -11,7 +11,10 @@ from app.models.marketing import MarketingReactivationCampaignORM as Campaign
 from app.models.marketing import MarketingReactivationCampaignRecipientORM as Recipient
 from app.models.sucursal_model import Sucursal
 from app.models.suite_governance import SuiteRegionORM, SuiteSucursalRegionAssignmentORM
-from app.models.warehouse import VentasNuevosSociosDetalleSnapshotORM as NewSnapshot
+from app.models.warehouse import (
+    TrackBranchCatalogORM,
+    VentasNuevosSociosDetalleSnapshotORM as NewSnapshot,
+)
 from app.warehouse.services.socios_vencidos_current_status_resolver import normalize_socios_vencidos_branch_key as branch_key
 
 TZ = ZoneInfo("America/Tijuana")
@@ -60,17 +63,52 @@ def region_branches(*, region_id, today, session):
     ).all()
 
 
+def reactivation_branch_keys_by_sucursal_ids(*, sucursal_ids, session):
+    ids = tuple(sorted({int(value) for value in sucursal_ids if value is not None}))
+    if not ids:
+        return {}
+
+    rows = session.query(TrackBranchCatalogORM).filter(
+        TrackBranchCatalogORM.is_track_active.is_(True),
+        TrackBranchCatalogORM.sucursal_id.in_(ids),
+    ).all()
+    return {
+        int(row.sucursal_id): branch_key(row.track_label)
+        for row in rows
+        if row.sucursal_id is not None and branch_key(row.track_label) is not None
+    }
+
+
 def campaign_options(*, allowed_sucursal_keys, session, now):
     today = now.astimezone(TZ).date()
-    branches = [row for row in session.query(Sucursal).order_by(Sucursal.sucursal).all()
-                if allowed_sucursal_keys is None or branch_key(row.sucursal) in allowed_sucursal_keys]
-    keys = {branch_key(row.sucursal) for row in branches}
+    all_branches = session.query(Sucursal).order_by(Sucursal.sucursal).all()
+    key_by_sucursal_id = reactivation_branch_keys_by_sucursal_ids(
+        sucursal_ids=(row.sucursal_id for row in all_branches),
+        session=session,
+    )
+    branches = [
+        (row, key_by_sucursal_id.get(int(row.sucursal_id)))
+        for row in all_branches
+        if key_by_sucursal_id.get(int(row.sucursal_id)) is not None
+        and (
+            allowed_sucursal_keys is None
+            or key_by_sucursal_id[int(row.sucursal_id)] in allowed_sucursal_keys
+        )
+    ]
+    keys = {key for _, key in branches}
     regions = []
     for region in session.query(SuiteRegionORM).filter(SuiteRegionORM.is_active.is_(True)).order_by(SuiteRegionORM.region_label).all():
-        members = sorted({branch_key(row.sucursal) for row in region_branches(region_id=region.id, today=today, session=session)} & keys)
+        members = sorted({
+            key_by_sucursal_id.get(int(row.sucursal_id))
+            for row in region_branches(region_id=region.id, today=today, session=session)
+            if key_by_sucursal_id.get(int(row.sucursal_id)) is not None
+        } & keys)
         if members:
             regions.append({"id": region.id, "label": region.region_label, "branch_keys": members})
-    return {"branches": [{"key": branch_key(row.sucursal), "label": row.sucursal} for row in branches], "regions": regions}
+    return {
+        "branches": [{"key": key, "label": row.sucursal} for row, key in branches],
+        "regions": regions,
+    }
 
 
 def new_member_rows(*, today, session):
@@ -279,7 +317,17 @@ def prepare_v1_plan(*, filters, allowed_sucursal_keys, session, now, active_buil
     if region is not None:
         if not isinstance(region, int) or isinstance(region, bool) or region <= 0:
             raise service.MarketingReactivationValidationError("Región no válida.")
-        members = {branch_key(row.sucursal) for row in region_branches(region_id=region, today=today, session=session)}
+        region_rows = region_branches(
+            region_id=region,
+            today=today,
+            session=session,
+        )
+        members = set(
+            reactivation_branch_keys_by_sucursal_ids(
+                sucursal_ids=(row.sucursal_id for row in region_rows),
+                session=session,
+            ).values()
+        )
         if not members or (branch is not None and branch_key(branch) not in members):
             raise service.MarketingReactivationValidationError("La sucursal no pertenece a la región o la región no tiene sucursales vigentes.")
         scope = tuple(sorted(members if scope is None else members & set(scope)))
