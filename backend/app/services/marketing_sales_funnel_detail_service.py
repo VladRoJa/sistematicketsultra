@@ -677,7 +677,7 @@ def _enrich_lead_followup_rows(
 def _sql_normalized_phone(telefono_column: Any, lada_column: Any = None) -> Any:
     phone_digits = func.regexp_replace(
         func.coalesce(telefono_column, ""),
-        r"\\D",
+        r"\D",
         "",
         "g",
     )
@@ -708,7 +708,7 @@ def _sql_normalized_phone(telefono_column: Any, lada_column: Any = None) -> Any:
             func.coalesce(lada_column, ""),
             func.coalesce(telefono_column, ""),
         ),
-        r"\\D",
+        r"\D",
         "",
         "g",
     )
