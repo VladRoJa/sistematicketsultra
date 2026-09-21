@@ -24,6 +24,7 @@ from app.services.marketing_sales_funnel_detail_service import (
     VISIT_METRICS,
     MarketingSalesFunnelDetailValidationError,
     _branch_name_map,
+    _enrich_lead_followup_rows,
     _full_name,
     _normalize_metric,
     _normalize_optional_int,
@@ -257,6 +258,8 @@ def _lead_rows(
     branch_id_filter: int | None,
     iventas_run_id: int | None,
     meta_only: bool,
+    loaded: Any,
+    source: dict[str, Any],
 ) -> list[dict[str, Any]]:
     if iventas_run_id is None:
         return []
@@ -306,7 +309,20 @@ def _lead_rows(
                 ),
             }
         )
-    return rows
+    detail_snapshot = _selected_snapshot(source=source)
+    sales = _load_new_sales(
+        snapshot=detail_snapshot,
+        venta_total_rows=list(loaded.venta_total_rows or ()),
+        month_start=month_start,
+        branch_ids=branch_ids,
+    ).sales
+
+    return _enrich_lead_followup_rows(
+        rows,
+        visits=loaded.visits,
+        sales=sales,
+        cutoff_date=cutoff_date,
+    )
 
 
 def _normalized_visit_conversion_bundle(
@@ -452,6 +468,8 @@ def _resolve_detail_rows(
             branch_id_filter=branch_id_filter,
             iventas_run_id=_selected_iventas_run_id(source),
             meta_only=normalized_metric in LEAD_METRICS,
+            loaded=funnel_build.loaded,
+            source=source,
         )
         revenue_total = Decimal("0")
         title = (
