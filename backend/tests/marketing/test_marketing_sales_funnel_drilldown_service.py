@@ -101,3 +101,66 @@ def test_build_excel_workbook_contains_all_sales_rows():
     assert worksheet["A2"].value == "TEC MXL"
     assert worksheet["J2"].value == 899
     assert worksheet["A3"].value == "PASEO LA PAZ"
+
+
+def test_meta_leads_sort_accepts_followup_status_only_for_meta_metric():
+    assert _normalize_sort(
+        "followup_status",
+        "asc",
+        "leads",
+        "leads_meta",
+    ) == ("followup_status", "asc")
+
+    try:
+        _normalize_sort("followup_status", "asc", "leads")
+    except MarketingSalesFunnelDetailValidationError:
+        pass
+    else:
+        raise AssertionError(
+            "followup_status solo debe habilitarse para leads_meta"
+        )
+
+
+def test_meta_leads_export_includes_call_center_followup_columns():
+    output = _build_excel_workbook(
+        title="Leads Meta",
+        kind="leads",
+        metric="leads_meta",
+        rows=[
+            {
+                "branch": "TEC MXL",
+                "date": "2026-09-01",
+                "name": "Lead Uno",
+                "phone": "6861234567",
+                "followup_status": "Visita sin compra",
+                "visit_status": "Sí",
+                "visit_date": "2026-09-04",
+                "purchase_status": "No",
+                "sale_date": None,
+                "channel": "Ultragym Tecnologico",
+                "contact_id": "contact-1",
+            },
+        ],
+    )
+
+    workbook = load_workbook(output)
+    worksheet = workbook["Detalle"]
+    headers = [cell.value for cell in worksheet[1]]
+
+    assert headers == [
+        "Sucursal KPI",
+        "Fecha primer mensaje",
+        "Nombre",
+        "Teléfono",
+        "Seguimiento",
+        "Visitó",
+        "Fecha visita",
+        "Compró",
+        "Fecha compra",
+        "Canal",
+        "ID contacto",
+    ]
+    assert worksheet["E2"].value == "Visita sin compra"
+    assert worksheet["F2"].value == "Sí"
+    assert worksheet["H2"].value == "No"
+
