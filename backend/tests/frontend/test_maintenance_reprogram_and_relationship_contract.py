@@ -47,6 +47,18 @@ TICKETS_CSS = ROOT / (
     "frontend/src/app/pantalla-ver-tickets/"
     "pantalla-ver-tickets.component.css"
 )
+HISTORY_MODAL_TS = ROOT / (
+    "frontend/src/app/pantalla-ver-tickets/modals/"
+    "historial-fechas-modal.component.ts"
+)
+HISTORY_MODAL_HTML = ROOT / (
+    "frontend/src/app/pantalla-ver-tickets/modals/"
+    "historial-fechas-modal.component.html"
+)
+HISTORY_MODAL_CSS = ROOT / (
+    "frontend/src/app/pantalla-ver-tickets/modals/"
+    "historial-fechas-modal.component.scss"
+)
 TICKET_ROUTES = ROOT / "backend/app/routes/ticket_routes.py"
 VALIDATION_DIALOG_HTML = ROOT / (
     "frontend/src/app/pantalla-ver-tickets/modals/"
@@ -138,3 +150,16 @@ def test_ticket_dashboard_and_excel_identify_maintenance_semantics():
     assert '"Tipo mantenimiento"' in routes
     assert '"Origen correctivo"' in routes
     assert 'origen_correctivo_txt.replace("_", " ")' in routes
+
+
+def test_ticket_summary_marks_preventive_without_extra_summary_card():
+    modal_ts = _read(HISTORY_MODAL_TS)
+    modal_html = _read(HISTORY_MODAL_HTML)
+    modal_css = _read(HISTORY_MODAL_CSS)
+
+    assert "esPreventivo()" in modal_ts
+    assert '*ngIf="esPreventivo()"' in modal_html
+    assert "maintenance-type-chip" in modal_html
+    assert "PREVENTIVO" in modal_html
+    assert ".hero-status-stack" in modal_css
+    assert ".maintenance-type-chip" in modal_css
