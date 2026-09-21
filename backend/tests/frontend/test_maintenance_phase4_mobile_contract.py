@@ -46,6 +46,7 @@ def test_mobile_execution_keeps_logic_in_ts_and_uses_separate_files():
 
 
 def test_mobile_execution_has_guided_three_step_flow():
+    ts = _read(PROGRAM_TS)
     html = _read(PROGRAM_HTML)
     css = _read(PROGRAM_CSS)
 
@@ -54,10 +55,19 @@ def test_mobile_execution_has_guided_three_step_flow():
     assert "Marcar realizado" in html
     assert "Generar ticket correctivo relacionado" in html
     assert "capture=\"environment\"" in html
+    assert "En celular puedes tomar una foto o elegirla de la galería." in html
+    assert "Volver a mi programa" in html
+    assert "mobile-execution-cta" in html
+    assert "execution-complete-summary" in html
+    assert "bitacoraHelpText" in ts
+    assert "evidenceHelpText" in ts
+    assert "completeHelpText" in ts
+    assert "runMobilePrimaryAction" in ts
     assert "check-options" in html
     assert "execution-progress" in css
     assert "execution-button--complete" in css
-    assert "@media (max-width: 360px)" in css
+    assert "@media (max-width: 520px)" in css
+    assert "position: sticky" in css
 
 
 def test_frontend_service_exposes_execution_actions():
