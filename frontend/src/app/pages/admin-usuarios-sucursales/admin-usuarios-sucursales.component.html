@@ -186,7 +186,11 @@
             {{ cantidadSeleccionadas === 1 ? 'sucursal seleccionada' : 'sucursales seleccionadas' }}
           </strong>
           <span>
-            Guardar reemplaza el alcance actual del usuario por esta selección.
+            {{
+              hayCambios
+                ? 'Hay cambios pendientes por guardar.'
+                : 'La selección coincide con el alcance guardado.'
+            }}
           </span>
         </div>
 
@@ -194,7 +198,12 @@
           type="button"
           class="primary-action"
           (click)="aplicar()"
-          [disabled]="saving || loadingAsignacion || loadingSucursales"
+          [disabled]="
+            saving ||
+            loadingAsignacion ||
+            loadingSucursales ||
+            !hayCambios
+          "
         >
           {{ saving ? 'Guardando...' : 'Guardar visibilidad' }}
         </button>
