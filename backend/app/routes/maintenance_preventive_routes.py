@@ -759,9 +759,36 @@ def get_template():
         return jsonify({"mensaje": "Usuario no encontrado."}), 401
 
     try:
-        # El guard real se evalúa reutilizando la operación de listado.
-        listar_lotes_preventivos(user)
-        content = build_preventive_template_xlsx()
+        context = listar_contexto_programacion(user)
+
+        equipment_catalog: list[dict] = []
+        for branch in context.get("sucursales", []):
+            branch_id = int(branch["id"])
+            branch_name = str(branch["nombre"])
+
+            for equipment in listar_equipos_programables(
+                user,
+                branch_id,
+            ):
+                family = equipment.get("familia") or {}
+                equipment_catalog.append({
+                    "sucursal": branch_name,
+                    "codigo_interno": equipment.get("codigo_interno"),
+                    "nombre": equipment.get("nombre"),
+                    "familia": family.get("nombre"),
+                })
+
+        content = build_preventive_template_xlsx(
+            sucursales=[
+                row["nombre"]
+                for row in context.get("sucursales", [])
+            ],
+            responsables=[
+                row["username"]
+                for row in context.get("responsables", [])
+            ],
+            equipos=equipment_catalog,
+        )
         return send_file(
             BytesIO(content),
             mimetype=(
