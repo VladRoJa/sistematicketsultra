@@ -144,7 +144,7 @@ export class MarketingSalesFunnelStoryComponent {
     return this.createNode(
       'Visitas',
       summary.visits_total,
-      'Universo total de visitas identificadas en Venta Total',
+      'Visitas registradas y compras directas de Venta Nueva',
       'visits_total',
       'storefront',
       'orange',

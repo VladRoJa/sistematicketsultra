@@ -14,6 +14,7 @@ from app.services.marketing_visit_conversion_service import (
     VisitConversionRow,
     _build_attribution_visits_from_rows,
     _metric_matches,
+    _serialize_detail_row,
     _serialize_metrics,
 )
 
@@ -224,6 +225,61 @@ def test_summary_from_loaded_data_reuses_funnel_rows_and_evidence(monkeypatch):
     assert result["summary"]["visits_iventas_not_bought"] == 0
     assert result["summary"]["iventas_visit_conversion_rate"] == 1
     assert result["data_quality"]["visit_conversion_sales_snapshot_ids"] == [77]
+
+
+def test_direct_purchase_without_crm_is_a_bought_untraced_visit(monkeypatch):
+    loaded = MarketingSalesFunnelLoadedData(
+        month_start=date(2026, 9, 1),
+        branch_ids=(4,),
+        venta_total_rows=None,
+        alias_map={},
+        visits=(
+            _CommercialVisit(
+                event_key="direct_purchase:4:6869999999",
+                branch_id=4,
+                visit_date=date(2026, 9, 10),
+                phone="6869999999",
+                kind=visit_conversion_service.VISIT_KIND_DIRECT_PURCHASE,
+                sale_key="id_socio:999",
+                sale_member_id="999",
+                sale_revenue=Decimal("699"),
+            ),
+        ),
+        evidence={},
+    )
+    monkeypatch.setattr(
+        visit_conversion_service,
+        "_load_attribution_sales",
+        lambda **_: (_ for _ in ()).throw(
+            AssertionError("Compra directa no necesita reconciliar otra venta")
+        ),
+    )
+
+    result = (
+        visit_conversion_service.build_visit_conversion_summary_from_loaded_data(
+            loaded=loaded,
+        )
+    )
+
+    assert result["summary"]["visits_not_iventas_bought"] == 1
+    assert result["summary"]["visits_not_iventas_not_bought"] == 0
+
+
+def test_direct_purchase_detail_uses_business_friendly_label():
+    row = VisitConversionRow(
+        event_key="direct_purchase:4:6869999999",
+        branch_id=4,
+        visit_date=date(2026, 9, 10),
+        phone="6869999999",
+        origin=None,
+        sale=_sale(),
+        visit_kind=visit_conversion_service.VISIT_KIND_DIRECT_PURCHASE,
+    )
+
+    detail = _serialize_detail_row(row, {4: "Tec Mexicali"})
+
+    assert detail["visit_type"] == "Compra directa"
+    assert detail["source"] == "Venta Nueva sin pase registrado"
 
 
 def test_summary_from_loaded_data_preserves_missing_venta_total(monkeypatch):

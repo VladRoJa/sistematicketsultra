@@ -146,6 +146,7 @@ export interface MarketingSalesFunnelDetailRow {
   id_order?: string | null;
   payment_place?: string | null;
   source?: string | null;
+  visit_type?: string | null;
   contact_id?: string | null;
   channel?: string | null;
   followup_status?: string | null;

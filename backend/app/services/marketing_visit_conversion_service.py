@@ -36,13 +36,17 @@ from app.services.marketing_sales_funnel_service import (
     ORIGIN_IVENTAS_META,
     ORIGIN_IVENTAS_OTHER,
     ORIGIN_LABELS,
+    VISIT_KIND_DIRECT_PURCHASE,
     MarketingSalesFunnelLoadedData,
     _load_branch_alias_map,
     _load_iventas_data,
+    _load_new_sales,
     _load_visits,
     _match_iventas,
+    _merge_visits_with_direct_purchases,
     _normalize_text,
     _parse_row_date,
+    _select_new_sales_detail_snapshot,
     _select_venta_total_snapshot,
     _to_decimal,
 )
@@ -79,6 +83,7 @@ class VisitConversionRow:
     phone: str | None
     origin: str | None
     sale: SaleRecord | None
+    visit_kind: str = "REGISTERED"
 
     @property
     def is_iventas(self) -> bool:
@@ -137,6 +142,7 @@ def _normalize_sort(
         "date",
         "phone",
         "origin",
+        "visit_type",
         "conversion_status",
         "sale_date",
         "sale_member_id",
@@ -245,45 +251,59 @@ def _build_bundle_from_loaded_data(
     loaded: MarketingSalesFunnelLoadedData,
     today: date | None = None,
 ) -> VisitConversionBundle:
-    if loaded.venta_total_rows is None:
+    has_direct_purchase = any(
+        visit.kind == VISIT_KIND_DIRECT_PURCHASE
+        for visit in loaded.visits
+    )
+    if loaded.venta_total_rows is None and not has_direct_purchase:
         return VisitConversionBundle(
             rows=(),
             sales_snapshot_ids=(),
             cohort_complete=False,
         )
 
-    attribution_visits = _build_attribution_visits_from_rows(
-        rows=list(loaded.venta_total_rows),
-        month_start=loaded.month_start,
-        branch_ids=loaded.branch_ids,
-        alias_map=loaded.alias_map,
+    attribution_visits = (
+        _build_attribution_visits_from_rows(
+            rows=list(loaded.venta_total_rows),
+            month_start=loaded.month_start,
+            branch_ids=loaded.branch_ids,
+            alias_map=loaded.alias_map,
+        )
+        if loaded.venta_total_rows is not None
+        else []
     )
     attribution_window_end = _month_end(loaded.month_start) + timedelta(
         days=MATCH_WINDOW_DAYS
     )
-    attribution_sales_result = _load_attribution_sales(
-        window_start=loaded.month_start,
-        window_end=attribution_window_end,
-        branch_ids=loaded.branch_ids,
-    )
-    attributions = reconcile_visit_sales(
-        visits=attribution_visits,
-        sales=attribution_sales_result.sales,
-    )
 
     first_sale_by_identity: dict[tuple[int, str], SaleRecord] = {}
-    for attribution in sorted(
-        attributions,
-        key=lambda item: (
-            item.sale.payment_date,
-            item.sale.sale_key,
-        ),
-    ):
-        identity = (
-            int(attribution.visit.branch_id),
-            str(attribution.visit.phone),
+    sales_snapshot_ids: tuple[int, ...] = ()
+    if attribution_visits:
+        attribution_sales_result = _load_attribution_sales(
+            window_start=loaded.month_start,
+            window_end=attribution_window_end,
+            branch_ids=loaded.branch_ids,
         )
-        first_sale_by_identity.setdefault(identity, attribution.sale)
+        sales_snapshot_ids = tuple(
+            int(snapshot_id)
+            for snapshot_id in attribution_sales_result.snapshot_ids
+        )
+        attributions = reconcile_visit_sales(
+            visits=attribution_visits,
+            sales=attribution_sales_result.sales,
+        )
+        for attribution in sorted(
+            attributions,
+            key=lambda item: (
+                item.sale.payment_date,
+                item.sale.sale_key,
+            ),
+        ):
+            identity = (
+                int(attribution.visit.branch_id),
+                str(attribution.visit.phone),
+            )
+            first_sale_by_identity.setdefault(identity, attribution.sale)
 
     result: list[VisitConversionRow] = []
     for visit in loaded.visits:
@@ -293,11 +313,26 @@ def _build_bundle_from_loaded_data(
             visit.phone,
             visit.visit_date,
         )
-        sale = (
-            first_sale_by_identity.get((visit.branch_id, visit.phone))
-            if visit.phone is not None
-            else None
-        )
+        if (
+            visit.kind == VISIT_KIND_DIRECT_PURCHASE
+            and visit.phone is not None
+            and visit.sale_key is not None
+        ):
+            sale = SaleRecord(
+                sale_key=visit.sale_key,
+                branch_id=visit.branch_id,
+                payment_date=visit.visit_date,
+                phone=visit.phone,
+                member_id=visit.sale_member_id,
+                revenue=visit.sale_revenue or Decimal("0"),
+            )
+        else:
+            sale = (
+                first_sale_by_identity.get((visit.branch_id, visit.phone))
+                if visit.phone is not None
+                else None
+            )
+
         result.append(
             VisitConversionRow(
                 event_key=visit.event_key,
@@ -306,16 +341,14 @@ def _build_bundle_from_loaded_data(
                 phone=visit.phone,
                 origin=origin,
                 sale=sale,
+                visit_kind=visit.kind,
             )
         )
 
     normalized_today = today or date.today()
     return VisitConversionBundle(
         rows=tuple(result),
-        sales_snapshot_ids=tuple(
-            int(snapshot_id)
-            for snapshot_id in attribution_sales_result.snapshot_ids
-        ),
+        sales_snapshot_ids=sales_snapshot_ids,
         cohort_complete=normalized_today >= attribution_window_end,
     )
 
@@ -327,31 +360,40 @@ def _build_bundle(
     today: date | None = None,
 ) -> VisitConversionBundle:
     snapshot = _select_venta_total_snapshot(month_start)
-    if snapshot is None:
-        return VisitConversionBundle(
-            rows=(),
-            sales_snapshot_ids=(),
-            cohort_complete=False,
-        )
-
     venta_total_rows = (
         VentaTotalSnapshotRowORM.query.filter_by(snapshot_id=snapshot.id)
         .order_by(VentaTotalSnapshotRowORM.row_index.asc())
         .all()
+        if snapshot is not None
+        else []
     )
     alias_map = _load_branch_alias_map()
-    visits = _load_visits(
+    registered_visits = _load_visits(
         venta_total_rows,
         month_start,
         branch_ids,
         alias_map,
+    )
+    sales = _load_new_sales(
+        snapshot=_select_new_sales_detail_snapshot(month_start),
+        venta_total_rows=venta_total_rows,
+        month_start=month_start,
+        branch_ids=branch_ids,
+    ).sales
+    visits = _merge_visits_with_direct_purchases(
+        visits=registered_visits,
+        sales=sales,
     )
     evidence, _, _ = _load_iventas_data(month_start, branch_ids)
 
     loaded = MarketingSalesFunnelLoadedData(
         month_start=month_start,
         branch_ids=branch_ids,
-        venta_total_rows=tuple(venta_total_rows),
+        venta_total_rows=(
+            tuple(venta_total_rows)
+            if snapshot is not None
+            else None
+        ),
         alias_map=alias_map,
         visits=tuple(visits),
         evidence=evidence,
@@ -489,7 +531,16 @@ def _serialize_detail_row(
             if row.origin is not None
             else "Sin match iVentas"
         ),
-        "source": "Pase comercial en Venta Total",
+        "visit_type": (
+            "Compra directa"
+            if row.visit_kind == VISIT_KIND_DIRECT_PURCHASE
+            else "Visita registrada"
+        ),
+        "source": (
+            "Venta Nueva sin pase registrado"
+            if row.visit_kind == VISIT_KIND_DIRECT_PURCHASE
+            else "Pase comercial en Venta Total"
+        ),
         "conversion_status": "Compró" if sale is not None else "No compró",
         "sale_date": sale.payment_date.isoformat() if sale is not None else None,
         "sale_member_id": sale.member_id if sale is not None else None,
@@ -649,6 +700,7 @@ def build_visit_conversion_export(
         ("date", "Fecha visita"),
         ("phone", "Teléfono"),
         ("origin", "Trazabilidad"),
+        ("visit_type", "Tipo"),
         ("conversion_status", "Conversión"),
         ("sale_date", "Fecha venta"),
         ("sale_member_id", "ID socio"),
