@@ -450,6 +450,17 @@ ticketYearOptions = [
 
 selectedDepartmentScope: 'all' | 'mantenimiento' | 'sistemas' = 'all';
 
+selectedMaintenanceType: 'all' | 'CORRECTIVO' | 'PREVENTIVO' = 'all';
+
+maintenanceTypeOptions: Array<{
+  value: 'all' | 'CORRECTIVO' | 'PREVENTIVO';
+  label: string;
+}> = [
+  { value: 'all', label: 'Todos' },
+  { value: 'CORRECTIVO', label: 'Correctivos' },
+  { value: 'PREVENTIVO', label: 'Preventivos' },
+];
+
 departmentScopeOptions: Array<{
   value: 'all' | 'mantenimiento' | 'sistemas';
   label: string;
@@ -472,9 +483,64 @@ onDepartmentScopeChanged(scope: 'all' | 'mantenimiento' | 'sistemas'): void {
   }
 
   this.selectedDepartmentScope = scope;
-  this.page = 1;
 
+  if (
+    scope !== 'mantenimiento'
+    && !this.esRolOperativoMantenimiento()
+  ) {
+    this.selectedMaintenanceType = 'all';
+  }
+
+  this.page = 1;
   TicketInit.cargarTickets(this);
+}
+
+onMaintenanceTypeChanged(
+  type: 'all' | 'CORRECTIVO' | 'PREVENTIVO'
+): void {
+  if (this.selectedMaintenanceType === type) {
+    return;
+  }
+
+  this.selectedMaintenanceType = type;
+  this.page = 1;
+  TicketInit.cargarTickets(this);
+}
+
+isMaintenanceTypeActive(
+  type: 'all' | 'CORRECTIVO' | 'PREVENTIVO'
+): boolean {
+  return this.selectedMaintenanceType === type;
+}
+
+private esRolOperativoMantenimiento(): boolean {
+  const rol = String(this.user?.rol || '').trim().toUpperCase();
+  return [
+    'MANTENIMIENTO',
+    'SR_MANTENIMIENTO',
+    'AUX_MANTENIMIENTO',
+  ].includes(rol);
+}
+
+get puedeMostrarFiltroTipoMantenimiento(): boolean {
+  return (
+    this.esRolOperativoMantenimiento()
+    || this.selectedDepartmentScope === 'mantenimiento'
+  );
+}
+
+getSelectedMaintenanceTypeForBackend():
+  | 'PREVENTIVO'
+  | 'CORRECTIVO'
+  | null {
+  if (
+    !this.puedeMostrarFiltroTipoMantenimiento
+    || this.selectedMaintenanceType === 'all'
+  ) {
+    return null;
+  }
+
+  return this.selectedMaintenanceType;
 }
 
 isDepartmentScopeActive(scope: 'all' | 'mantenimiento' | 'sistemas'): boolean {
@@ -729,7 +795,15 @@ private aplicarFiltroEstadoDesdeQueryParamSiEsPosible(): void {
 refrescarTicketsPreservandoFiltros(): void {
   const pageActual = this.page;
 
-  this.ticketService.getTickets(1000, 0, this.selectedTicketYear).subscribe({
+  const departamentoScopeId = this.getSelectedDepartmentScopeId();
+  const tipoMantenimiento = this.getSelectedMaintenanceTypeForBackend();
+
+  this.ticketService.getTicketsConFiltros({
+    year: this.selectedTicketYear,
+    ...(departamentoScopeId ? { departamento_id: departamentoScopeId } : {}),
+    ...(tipoMantenimiento ? { tipo_mantenimiento: tipoMantenimiento } : {}),
+    no_paging: true,
+  }).subscribe({
     next: (data: any) => {
     const ticketsProcesados = (data?.tickets || []).map((ticket: Ticket) => {
       const clasificacionId = Number(ticket.clasificacion_id);
