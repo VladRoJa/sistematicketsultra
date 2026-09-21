@@ -106,7 +106,7 @@ class TicketMaintenanceTypeFilterTest(unittest.TestCase):
         )
         self.assertIn(
             "PREVENTIVO",
-            str(args[1]),
+            args[1].compile().params.values(),
         )
 
     def test_corrective_filter_keeps_legacy_nulls_in_maintenance(self):
@@ -129,7 +129,7 @@ class TicketMaintenanceTypeFilterTest(unittest.TestCase):
         )
         self.assertIn(
             "CORRECTIVO",
-            str(args[1]),
+            args[1].compile().params.values(),
         )
         self.assertIn(
             "IS NULL",
