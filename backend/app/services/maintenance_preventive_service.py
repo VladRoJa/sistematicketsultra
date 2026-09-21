@@ -705,6 +705,7 @@ def agregar_renglones_lote(
             validation_errors=None,
         )
         db.session.add(item)
+        batch.items.append(item)
         created.append(item)
 
     db.session.flush()
