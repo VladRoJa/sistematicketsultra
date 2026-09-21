@@ -1088,10 +1088,13 @@ def _parse_programmed_date(value) -> date | None:
     if not raw:
         return None
 
-    try:
-        return date.fromisoformat(raw)
-    except ValueError:
-        return None
+    for date_format in ("%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(raw, date_format).date()
+        except ValueError:
+            continue
+
+    return None
 
 
 def _equipo_asignado_a_sucursal(
@@ -1284,7 +1287,7 @@ def validar_item_borrador(
     parsed_date = _parse_programmed_date(item.fecha_programada_input)
     if parsed_date is None:
         errors.append(
-            "Fecha programada inválida; se requiere formato YYYY-MM-DD."
+            "Fecha programada inválida; usa formato DD/MM/AAAA."
         )
     else:
         item.fecha_programada = parsed_date
