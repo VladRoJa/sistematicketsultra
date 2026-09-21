@@ -481,6 +481,133 @@ def _visits_detail(
     return result, matched_count
 
 
+def _lead_followup_label(*, visited: bool, bought: bool) -> str:
+    if bought:
+        return "Ya compró"
+    if visited:
+        return "Visita sin compra"
+    return "Sin visita / sin compra"
+
+
+def _enrich_lead_followup_rows(
+    rows: list[dict[str, Any]],
+    *,
+    visits: Any,
+    sales: Any,
+    cutoff_date: date | None = None,
+) -> list[dict[str, Any]]:
+    visit_dates_by_identity: dict[tuple[int, str], list[date]] = {}
+    sale_dates_by_identity: dict[tuple[int, str], list[date]] = {}
+
+    for visit in visits or ():
+        phone = str(getattr(visit, "phone", "") or "").strip()
+        if not phone:
+            continue
+        identity = (int(visit.branch_id), phone)
+        visit_dates_by_identity.setdefault(identity, []).append(visit.visit_date)
+
+    for sale in sales or ():
+        phone = str(getattr(sale, "phone", "") or "").strip()
+        if not phone:
+            continue
+        identity = (int(sale.branch_id), phone)
+        sale_dates_by_identity.setdefault(identity, []).append(sale.sale_date)
+
+    for values in visit_dates_by_identity.values():
+        values.sort()
+    for values in sale_dates_by_identity.values():
+        values.sort()
+
+    enriched: list[dict[str, Any]] = []
+    for row in rows:
+        current = dict(row)
+        phone = str(current.get("phone") or "").strip()
+        raw_date = str(current.get("date") or "").strip()
+
+        try:
+            lead_date = date.fromisoformat(raw_date)
+        except ValueError:
+            lead_date = None
+
+        visit_date: date | None = None
+        sale_date: date | None = None
+
+        if lead_date is not None and phone:
+            branch_id = int(current["branch_id"])
+            identity = (branch_id, phone)
+            window_end = lead_date + timedelta(days=MATCH_WINDOW_DAYS)
+            if cutoff_date is not None:
+                window_end = min(window_end, cutoff_date)
+
+            visit_date = next(
+                (
+                    event_date
+                    for event_date in visit_dates_by_identity.get(identity, ())
+                    if lead_date <= event_date <= window_end
+                ),
+                None,
+            )
+            sale_date = next(
+                (
+                    event_date
+                    for event_date in sale_dates_by_identity.get(identity, ())
+                    if lead_date <= event_date <= window_end
+                ),
+                None,
+            )
+
+        visited = visit_date is not None
+        bought = sale_date is not None
+        current.update(
+            {
+                "visit_status": "Sí" if visited else "No",
+                "visit_date": visit_date.isoformat() if visit_date else None,
+                "purchase_status": "Sí" if bought else "No",
+                "sale_date": sale_date.isoformat() if sale_date else None,
+                "followup_status": _lead_followup_label(
+                    visited=visited,
+                    bought=bought,
+                ),
+            }
+        )
+        enriched.append(current)
+
+    return enriched
+
+
+def _load_month_lead_followup_sources(
+    *,
+    month_start: date,
+    branch_ids: tuple[int, ...],
+) -> tuple[Any, Any]:
+    venta_total_snapshot = _select_venta_total_snapshot(month_start)
+    venta_total_rows = (
+        VentaTotalSnapshotRowORM.query.filter_by(
+            snapshot_id=venta_total_snapshot.id
+        )
+        .order_by(VentaTotalSnapshotRowORM.row_index.asc())
+        .all()
+        if venta_total_snapshot is not None
+        else []
+    )
+    visits = _load_visits(
+        venta_total_rows,
+        month_start,
+        branch_ids,
+        _load_branch_alias_map(),
+    )
+
+    detail_snapshot = _select_new_sales_detail_snapshot(month_start)
+    sales = _load_new_sales(
+        snapshot=detail_snapshot,
+        venta_total_rows=venta_total_rows,
+        month_start=month_start,
+        branch_ids=branch_ids,
+    ).sales
+
+    return visits, sales
+
+
 def _leads_meta_detail(
     *,
     month_start: date,
@@ -549,7 +676,18 @@ def _leads_meta_detail(
             }
         )
 
-    return result, matched_count
+    visits, sales = _load_month_lead_followup_sources(
+        month_start=month_start,
+        branch_ids=branch_ids,
+    )
+    return (
+        _enrich_lead_followup_rows(
+            result,
+            visits=visits,
+            sales=sales,
+        ),
+        matched_count,
+    )
 
 
 def build_marketing_sales_funnel_detail(
