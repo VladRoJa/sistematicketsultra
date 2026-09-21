@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import {
@@ -23,6 +23,12 @@ type FoundState = '' | 'BUENO' | 'REQUIERE_ATENCION' | 'FUERA_SERVICIO';
 })
 export class MaintenanceMyProgramComponent implements OnInit {
   private readonly service = inject(MaintenancePreventiveService);
+
+  @ViewChild('cameraInput')
+  private cameraInput?: ElementRef<HTMLInputElement>;
+
+  @ViewChild('galleryInput')
+  private galleryInput?: ElementRef<HTMLInputElement>;
 
   program: MaintenanceMyProgram | null = null;
   activeView: ProgramView = 'today';
@@ -422,6 +428,22 @@ export class MaintenanceMyProgramComponent implements OnInit {
     }
 
     this.completeWork();
+  }
+
+  openCamera(): void {
+    if (!this.bitacoraSaved || this.evidenceSaved) {
+      return;
+    }
+
+    this.cameraInput?.nativeElement.click();
+  }
+
+  openGallery(): void {
+    if (!this.bitacoraSaved || this.evidenceSaved) {
+      return;
+    }
+
+    this.galleryInput?.nativeElement.click();
   }
 
   onEvidenceSelected(event: Event): void {
