@@ -56,6 +56,7 @@ SORTABLE_FIELDS_BY_KIND: dict[str, frozenset[str]] = {
             "date",
             "phone",
             "origin",
+            "visit_type",
             "source",
         }
     ),
@@ -112,6 +113,7 @@ EXPORT_COLUMNS_BY_KIND: dict[str, tuple[tuple[str, str], ...]] = {
         ("date", "Fecha"),
         ("phone", "Teléfono"),
         ("origin", "Origen"),
+        ("visit_type", "Tipo"),
         ("source", "Fuente"),
     ),
     "leads": (
