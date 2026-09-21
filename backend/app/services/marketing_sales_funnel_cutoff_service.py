@@ -416,6 +416,10 @@ def _load_iventas_data_for_cutoff(
             MarketingIventasContactORM.sync_run_id.in_(run_ids),
             MarketingIventasContactORM.sucursal_id.in_(branch_ids),
             MarketingIventasContactORM.first_message_at_utc.isnot(None),
+            MarketingIventasContactORM.first_message_date_local
+            >= lookback_start,
+            MarketingIventasContactORM.first_message_date_local
+            <= cutoff_date,
             MarketingIventasContactORM.phone_mx10.isnot(None),
         )
         .all()
