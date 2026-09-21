@@ -59,7 +59,8 @@ def test_mobile_execution_has_guided_three_step_flow():
     assert "Elegir de galería" in html
     assert "Adjuntar evidencia" in html
     assert "(recomendado)" in html
-    assert "evidenceRequested = false" in ts
+    assert "Continuarás sin evidencia" in ts
+    assert "evidenceRequested = true" in ts
     assert "openCamera()" in ts
     assert "openGallery()" in ts
     assert "Volver a mi programa" in html
