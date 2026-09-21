@@ -6,8 +6,6 @@ from decimal import Decimal
 from time import perf_counter
 from typing import Any, Iterable, Mapping
 
-from sqlalchemy import and_, case, func
-
 from app.extensions import db
 from app.models import (
     MarketingIventasContactORM,
@@ -413,27 +411,13 @@ def _load_iventas_data_for_cutoff(
         .exists()
     )
 
-    has_meta_expression = case(
-        (
-            MarketingIventasContactORM.is_from_ads.is_(True),
-            True,
-        ),
-        (
-            and_(
-                MarketingIventasContactORM.is_from_ads.is_(None),
-                meta_tag_exists,
-            ),
-            True,
-        ),
-        else_=False,
-    )
-
     contacts = (
         db.session.query(
             MarketingIventasContactORM.sucursal_id,
             MarketingIventasContactORM.phone_mx10,
             MarketingIventasContactORM.first_message_date_local,
-            func.bool_or(has_meta_expression).label("has_meta"),
+            MarketingIventasContactORM.is_from_ads,
+            meta_tag_exists.label("legacy_has_meta"),
         )
         .filter(
             MarketingIventasContactORM.sync_run_id.in_(run_ids),
@@ -444,11 +428,6 @@ def _load_iventas_data_for_cutoff(
             MarketingIventasContactORM.first_message_date_local
             <= cutoff_date,
             MarketingIventasContactORM.phone_mx10.isnot(None),
-        )
-        .group_by(
-            MarketingIventasContactORM.sucursal_id,
-            MarketingIventasContactORM.phone_mx10,
-            MarketingIventasContactORM.first_message_date_local,
         )
         .all()
     )
@@ -469,12 +448,19 @@ def _load_iventas_data_for_cutoff(
         ):
             continue
         branch_id = int(contact.sucursal_id)
+        has_meta = (
+            contact.is_from_ads is True
+            or (
+                contact.is_from_ads is None
+                and bool(contact.legacy_has_meta)
+            )
+        )
         evidence[(branch_id, phone)].append(
             _IventasEvidence(
                 branch_id=branch_id,
                 phone=phone,
                 interaction_date=interaction_date,
-                has_meta_ad=bool(contact.has_meta),
+                has_meta_ad=has_meta,
             )
         )
 
