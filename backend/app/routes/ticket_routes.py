@@ -51,14 +51,18 @@ def _apply_maintenance_type_filter(query, raw_value):
         return query
 
     if raw == "PREVENTIVO":
-        return query.filter(Ticket.tipo_mantenimiento == "PREVENTIVO")
+        return query.filter(
+            Ticket.departamento_id == 1,
+            Ticket.tipo_mantenimiento == "PREVENTIVO",
+        )
 
     if raw == "CORRECTIVO":
         return query.filter(
+            Ticket.departamento_id == 1,
             or_(
                 Ticket.tipo_mantenimiento == "CORRECTIVO",
                 Ticket.tipo_mantenimiento.is_(None),
-            )
+            ),
         )
 
     raise ValueError(
