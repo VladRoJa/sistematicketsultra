@@ -423,7 +423,7 @@
 
                 <small
                   class="execution-help"
-                  [class.execution-help--ready]="evidenceSaved || !evidenceRequested || canUploadEvidence"
+                  [class.execution-help--ready]="evidenceSaved || canUploadEvidence"
                   aria-live="polite"
                 >
                   {{ evidenceHelpText }}
