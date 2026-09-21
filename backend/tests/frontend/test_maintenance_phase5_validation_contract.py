@@ -76,6 +76,16 @@ def test_preventive_review_contains_operational_evidence():
     assert "Confirmar rechazo" in html
 
 
+def test_preventive_review_does_not_treat_findings_as_failed_work():
+    dialog_ts = _read(DIALOG_TS)
+    dialog_html = _read(DIALOG_HTML)
+
+    assert "executionOutcomeLabel" in dialog_ts
+    assert "'CON HALLAZGO'" in dialog_ts
+    assert "'SIN HALLAZGO'" in dialog_ts
+    assert "{{ bitacora.resultado }}" not in dialog_html
+
+
 def test_ticket_service_exposes_validation_detail_endpoint():
     service = _read(TICKET_SERVICE)
 
