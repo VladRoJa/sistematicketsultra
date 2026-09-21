@@ -184,7 +184,7 @@
                 </div>
                 <div [class.step--done]="evidenceSaved">
                   <strong>2</strong>
-                  <span>Evidencia</span>
+                  <span>Evidencia opcional</span>
                 </div>
                 <div>
                   <strong>3</strong>
@@ -342,15 +342,25 @@
 
               <section class="execution-block" [class.execution-block--locked]="!bitacoraSaved">
                 <header>
-                  <span class="execution-kicker">Paso 2</span>
+                  <span class="execution-kicker">Paso 2 · opcional</span>
                   <h4>Evidencia</h4>
                 </header>
+
+                <label class="switch-row">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="evidenceRequested"
+                    [disabled]="!bitacoraSaved || evidenceSaved"
+                    (ngModelChange)="onEvidencePreferenceChanged()"
+                  />
+                  <span>Adjuntar evidencia <strong>(recomendado)</strong></span>
+                </label>
 
                 <div *ngIf="evidenceSaved" class="evidence-complete">
                   Evidencia adjunta al ticket.
                 </div>
 
-                <ng-container *ngIf="!evidenceSaved">
+                <ng-container *ngIf="evidenceRequested && !evidenceSaved">
                   <div class="file-field">
                     <span>Foto del trabajo</span>
 
@@ -413,14 +423,17 @@
 
                 <small
                   class="execution-help"
-                  [class.execution-help--ready]="canUploadEvidence || evidenceSaved"
+                  [class.execution-help--ready]="evidenceSaved || !evidenceRequested || canUploadEvidence"
                   aria-live="polite"
                 >
                   {{ evidenceHelpText }}
                 </small>
               </section>
 
-              <section class="execution-block" [class.execution-block--locked]="!evidenceSaved">
+              <section
+                class="execution-block"
+                [class.execution-block--locked]="!bitacoraSaved || (evidenceRequested && !evidenceSaved)"
+              >
                 <header>
                   <span class="execution-kicker">Paso 3</span>
                   <h4>Finalizar trabajo</h4>
@@ -454,8 +467,8 @@
                   type="button"
                   class="execution-button"
                   [class.execution-button--primary]="!bitacoraSaved"
-                  [class.execution-button--secondary]="bitacoraSaved && !evidenceSaved"
-                  [class.execution-button--complete]="evidenceSaved"
+                  [class.execution-button--secondary]="bitacoraSaved && evidenceRequested && !evidenceSaved"
+                  [class.execution-button--complete]="bitacoraSaved && (!evidenceRequested || evidenceSaved)"
                   (click)="runMobilePrimaryAction()"
                   [disabled]="!canRunMobilePrimaryAction"
                 >
