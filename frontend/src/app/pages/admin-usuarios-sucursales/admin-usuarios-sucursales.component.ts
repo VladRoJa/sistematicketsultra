@@ -1,13 +1,28 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule } from '@angular/forms';
+import {
+  FormBuilder,
+  FormGroup,
+  FormsModule,
+  ReactiveFormsModule,
+} from '@angular/forms';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
 import { environment } from 'src/environments/environment';
 
 import { AdminUsuariosService } from '../../services/admin-usuarios.service';
 
-type UsuarioOption = { id: number; username: string; rol: string; sucursal_id: number };
+type UsuarioOption = {
+  id: number;
+  username: string;
+  rol: string;
+  sucursal_id: number;
+};
+
+type SucursalOption = {
+  id: number;
+  nombre: string;
+};
 
 @Component({
   selector: 'app-admin-usuarios-sucursales',
@@ -16,34 +31,29 @@ type UsuarioOption = { id: number; username: string; rol: string; sucursal_id: n
   templateUrl: './admin-usuarios-sucursales.component.html',
 })
 export class AdminUsuariosSucursalesComponent implements OnInit {
-  // ─────────────────────────────────────────────────────────────
-  // Form
-  // ─────────────────────────────────────────────────────────────
   form: FormGroup;
 
-  // ─────────────────────────────────────────────────────────────
-  // Estado del componente
-  // ─────────────────────────────────────────────────────────────
   userId: number | null = null;
+  username: string | null = null;
+  userRole: string | null = null;
+  userSucursalId: number | null = null;
 
-  loading = false;
+  loadingUsuarios = false;
+  loadingSucursales = false;
+  loadingAsignacion = false;
+  saving = false;
+
   errorMsg: string | null = null;
   okMsg: string | null = null;
 
-  // Catálogo de sucursales para dibujar checkboxes/lista
-  sucursales: Array<{ id: number; nombre: string }> = [];
-
-  // UI: nombre del usuario seleccionado por route :userId
-  public username: string | null = null;
-  
-  // Base URL API (según environment)
-  private readonly API_BASE_URL = environment.apiUrl;
-
-  // (Opcional, si tienes UI para buscar/navegar entre usuarios)
+  sucursales: SucursalOption[] = [];
   usuarios: UsuarioOption[] = [];
   usuariosFiltrados: UsuarioOption[] = [];
+
   busquedaUsuario = '';
   selectedUserIdForNav: number | null = null;
+
+  private readonly API_BASE_URL = environment.apiUrl;
 
   constructor(
     private readonly fb: FormBuilder,
@@ -53,70 +63,87 @@ export class AdminUsuariosSucursalesComponent implements OnInit {
     private readonly router: Router,
   ) {
     this.form = this.fb.group({
-      // Lista de IDs seleccionados
       sucursales_ids: this.fb.control<number[]>([]),
     });
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // Lifecycle
-  // ─────────────────────────────────────────────────────────────
-ngOnInit(): void {
-  /**
-   * Reacciona a cambios de route :userId
-   * Ej: /admin-usuarios-sucursales/123
-   */
-  this.route.paramMap.subscribe((params) => {
-    const raw = params.get('userId');
+  ngOnInit(): void {
+    this.cargarUsuarios();
+    this.cargarCatalogoSucursales();
 
-    // Reset mensajes por cada navegación
-    this.errorMsg = null;
-    this.okMsg = null;
+    this.route.paramMap.subscribe((params) => {
+      const raw = params.get('userId');
 
-    // ✅ Caso 1: ruta SIN userId -> modo entrada (NO es error)
-    if (!raw) {
-      this.userId = null;
-      this.username = null;
+      this.errorMsg = null;
+      this.okMsg = null;
 
-      this.cargarUsuarios();
-
-      // (Opcional) precargar catálogo para que la pantalla no se vea vacía
-      if (this.sucursales.length === 0) {
-        this.cargarCatalogoSucursales();
+      if (!raw) {
+        this.userId = null;
+        this.username = null;
+        this.userRole = null;
+        this.userSucursalId = null;
+        this.selectedUserIdForNav = null;
+        this.form.patchValue({ sucursales_ids: [] });
+        return;
       }
-      return;
-    }
 
-    // ✅ Caso 2: ruta CON userId -> validar
-    const userId = Number(raw);
-    if (Number.isNaN(userId) || userId <= 0) {
-      this.userId = null;
-      this.username = null;
-      this.errorMsg = 'Ruta inválida: userId no es numérico';
-      return;
-    }
+      const userId = Number(raw);
+      if (Number.isNaN(userId) || userId <= 0) {
+        this.userId = null;
+        this.username = null;
+        this.userRole = null;
+        this.userSucursalId = null;
+        this.selectedUserIdForNav = null;
+        this.form.patchValue({ sucursales_ids: [] });
+        this.errorMsg = 'El usuario indicado en la URL no es válido.';
+        return;
+      }
 
-    // Set de user seleccionado
-    this.userId = userId;
+      this.userId = userId;
+      this.selectedUserIdForNav = userId;
 
-    // 1) Cargar usuario (solo username para UI)
-    this.cargarUsuario();
+      this.cargarUsuario();
+      this.cargarSucursalesAsignadas();
+    });
+  }
 
-    // 2) Cargar catálogo de sucursales solo si no está cargado
-    if (this.sucursales.length === 0) {
-      this.cargarCatalogoSucursales();
-    }
+  get loading(): boolean {
+    return (
+      this.loadingUsuarios ||
+      this.loadingSucursales ||
+      this.loadingAsignacion ||
+      this.saving
+    );
+  }
 
-    // 3) Cargar sucursales asignadas al usuario
-    this.cargarSucursalesAsignadas();
-  });
-}
-
-  // ─────────────────────────────────────────────────────────────
-  // Helpers para UI de selección
-  // ─────────────────────────────────────────────────────────────
   get selectedIds(): number[] {
     return (this.form.value.sucursales_ids ?? []) as number[];
+  }
+
+  get cantidadSeleccionadas(): number {
+    return this.selectedIds.length;
+  }
+
+  get usuarioSeleccionado(): UsuarioOption | null {
+    if (this.userId === null) {
+      return null;
+    }
+
+    return this.usuarios.find((usuario) => usuario.id === this.userId) ?? null;
+  }
+
+  get nombreSucursalBase(): string {
+    const sucursalId =
+      this.usuarioSeleccionado?.sucursal_id ?? this.userSucursalId;
+
+    if (sucursalId === null || sucursalId === undefined) {
+      return 'Sin sucursal base';
+    }
+
+    return (
+      this.sucursales.find((sucursal) => sucursal.id === sucursalId)?.nombre ??
+      `Sucursal #${sucursalId}`
+    );
   }
 
   isSucursalSeleccionada(id: number): boolean {
@@ -124,27 +151,40 @@ ngOnInit(): void {
   }
 
   toggleSucursal(id: number): void {
+    this.okMsg = null;
+
     const next = this.isSucursalSeleccionada(id)
-      ? this.selectedIds.filter((x) => x !== id)
+      ? this.selectedIds.filter((sucursalId) => sucursalId !== id)
       : [...this.selectedIds, id];
 
     this.form.patchValue({ sucursales_ids: next });
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // Data loading
-  // ─────────────────────────────────────────────────────────────
-  /**
-   * Catálogo de sucursales (para mostrar checkboxes)
-   */
+  seleccionarTodasSucursales(): void {
+    this.okMsg = null;
+    this.form.patchValue({
+      sucursales_ids: this.sucursales.map((sucursal) => sucursal.id),
+    });
+  }
+
+  limpiarSucursales(): void {
+    this.okMsg = null;
+    this.form.patchValue({ sucursales_ids: [] });
+  }
+
+  trackBySucursal(_: number, sucursal: SucursalOption): number {
+    return sucursal.id;
+  }
+
+  trackByUsuario(_: number, usuario: UsuarioOption): number {
+    return usuario.id;
+  }
+
   private cargarCatalogoSucursales(): void {
-    this.loading = true;
-    this.errorMsg = null;
+    this.loadingSucursales = true;
 
     const params = new HttpParams().set('audience', 'operational');
 
-    // Administración de usuarios sí soporta la sucursal DEMO para poder
-    // asignar usuarios de prueba de forma explícita.
     this.http
       .get<Array<{ sucursal_id: number; sucursal: string }>>(
         `${this.API_BASE_URL}/sucursales/listar`,
@@ -152,96 +192,103 @@ ngOnInit(): void {
       )
       .subscribe({
         next: (rows) => {
-          this.sucursales = (rows ?? []).map((r) => ({
-            id: Number(r.sucursal_id),
-            nombre: String(r.sucursal),
-          }));
-          this.loading = false;
+          this.sucursales = (rows ?? [])
+            .map((row) => ({
+              id: Number(row.sucursal_id),
+              nombre: String(row.sucursal),
+            }))
+            .sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+          this.loadingSucursales = false;
         },
         error: (err) => {
-          this.loading = false;
-          this.errorMsg = err?.error?.mensaje ?? 'Error al cargar catálogo de sucursales';
+          this.loadingSucursales = false;
+          this.errorMsg =
+            err?.error?.mensaje ?? 'Error al cargar catálogo de sucursales';
         },
       });
   }
 
-  /**
-   * Trae sucursales asignadas del usuario y las pone en el form
-   */
   cargarSucursalesAsignadas(): void {
     if (this.userId === null) {
-      this.errorMsg = 'No hay userId seleccionado';
       return;
     }
 
-    this.loading = true;
+    this.loadingAsignacion = true;
     this.errorMsg = null;
     this.okMsg = null;
 
     this.adminUsuariosService.getSucursalesDeUsuario(this.userId).subscribe({
       next: (resp) => {
-        this.form.patchValue({ sucursales_ids: resp.sucursales_ids ?? [] });
-        this.loading = false;
+        this.form.patchValue({
+          sucursales_ids: resp.sucursales_ids ?? [],
+        });
+        this.loadingAsignacion = false;
       },
       error: (err) => {
-        this.loading = false;
-        this.errorMsg = err?.error?.mensaje ?? 'Error al cargar sucursales del usuario';
+        this.form.patchValue({ sucursales_ids: [] });
+        this.loadingAsignacion = false;
+        this.errorMsg =
+          err?.error?.mensaje ??
+          'No se pudieron cargar las sucursales del usuario seleccionado';
       },
     });
   }
 
-  /**
-   * Trae datos del usuario seleccionado (por ahora solo username)
-   */
   private cargarUsuario(): void {
     if (this.userId === null) {
-      this.username = null;
       return;
     }
 
-    // Aquí usamos API_BASE_URL (para que quede consistente con env)
     this.http
-      .get<{ id: number; username: string; rol: string; sucursal_id: number }>(
-        `${this.API_BASE_URL}/usuarios/${this.userId}`,
-      )
+      .get<UsuarioOption>(`${this.API_BASE_URL}/usuarios/${this.userId}`)
       .subscribe({
-        next: (u) => {
-          this.username = u?.username ?? null;
+        next: (usuario) => {
+          this.username = usuario?.username ?? null;
+          this.userRole = usuario?.rol ?? null;
+          this.userSucursalId = Number(usuario?.sucursal_id) || null;
         },
         error: () => {
           this.username = null;
+          this.userRole = null;
+          this.userSucursalId = null;
         },
       });
   }
 
   private cargarUsuarios(): void {
-    this.loading = true;
-    this.errorMsg = null;
+    this.loadingUsuarios = true;
 
     this.http.get<UsuarioOption[]>(`${this.API_BASE_URL}/usuarios`).subscribe({
       next: (rows) => {
-        this.usuarios = rows ?? [];
-        this.usuariosFiltrados = [...this.usuarios];
-        this.loading = false;
+        this.usuarios = [...(rows ?? [])].sort((a, b) =>
+          a.username.localeCompare(b.username),
+        );
+        this.aplicarFiltroUsuarios();
+
+        const seleccionado = this.usuarioSeleccionado;
+        if (seleccionado) {
+          this.username = seleccionado.username;
+          this.userRole = seleccionado.rol;
+          this.userSucursalId = seleccionado.sucursal_id;
+        }
+
+        this.loadingUsuarios = false;
       },
       error: (err) => {
-        this.loading = false;
-        this.errorMsg = err?.error?.mensaje ?? 'Error al cargar usuarios';
+        this.loadingUsuarios = false;
+        this.errorMsg =
+          err?.error?.mensaje ?? 'Error al cargar la lista de usuarios';
       },
     });
   }
 
-  
-  // ─────────────────────────────────────────────────────────────
-  // Actions
-  // ─────────────────────────────────────────────────────────────
   aplicar(): void {
-    if (this.userId === null) {
-      this.errorMsg = 'No hay userId seleccionado';
+    if (this.userId === null || this.saving) {
       return;
     }
 
-    this.loading = true;
+    this.saving = true;
     this.errorMsg = null;
     this.okMsg = null;
 
@@ -251,42 +298,46 @@ ngOnInit(): void {
       })
       .subscribe({
         next: (resp) => {
-          this.form.patchValue({ sucursales_ids: resp.sucursales_ids ?? [] });
-          this.loading = false;
-          this.okMsg = 'Cambios guardados';
+          this.form.patchValue({
+            sucursales_ids: resp.sucursales_ids ?? [],
+          });
+          this.saving = false;
+          this.okMsg = 'Visibilidad de sucursales actualizada correctamente.';
         },
         error: (err) => {
-          this.loading = false;
-          this.errorMsg = err?.error?.mensaje ?? 'Error al guardar sucursales';
+          this.saving = false;
+          this.errorMsg =
+            err?.error?.mensaje ?? 'Error al guardar sucursales';
         },
       });
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // (Opcional) Filtro de usuarios y navegación
-  // ─────────────────────────────────────────────────────────────
   aplicarFiltroUsuarios(): void {
-    const q = (this.busquedaUsuario || '').trim().toLowerCase();
+    const query = (this.busquedaUsuario || '').trim().toLowerCase();
 
-    if (!q) {
+    if (!query) {
       this.usuariosFiltrados = [...this.usuarios];
       return;
     }
 
-    this.usuariosFiltrados = this.usuarios.filter((u) => {
+    this.usuariosFiltrados = this.usuarios.filter((usuario) => {
       return (
-        u.username.toLowerCase().includes(q) ||
-        u.rol.toLowerCase().includes(q) ||
-        String(u.sucursal_id).includes(q) ||
-        String(u.id).includes(q)
+        usuario.username.toLowerCase().includes(query) ||
+        usuario.rol.toLowerCase().includes(query) ||
+        String(usuario.sucursal_id).includes(query) ||
+        String(usuario.id).includes(query)
       );
     });
   }
 
   irAUsuarioSeleccionado(): void {
-    if (!this.selectedUserIdForNav) return;
+    const userId = Number(this.selectedUserIdForNav);
 
-    // Con hash routing, Angular lo resuelve
-    this.router.navigate(['admin-usuarios-sucursales', this.selectedUserIdForNav]);
+    if (!Number.isFinite(userId) || userId <= 0) {
+      this.router.navigate(['admin-usuarios-sucursales']);
+      return;
+    }
+
+    this.router.navigate(['admin-usuarios-sucursales', userId]);
   }
 }
