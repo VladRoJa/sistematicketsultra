@@ -90,12 +90,12 @@ class MaintenancePreventiveDraftValidationTest(unittest.TestCase):
         self.assertIsNone(item.responsable_user_id)
 
     def test_invalid_date_is_preserved_as_error(self):
-        item = self._item(fecha_programada_input="20/09/2026")
+        item = self._item(fecha_programada_input="20/13/2026")
 
         errors = self._validate(item)
 
         self.assertIn(
-            "Fecha programada inválida; se requiere formato YYYY-MM-DD.",
+            "Fecha programada inválida; usa formato DD/MM/AAAA.",
             errors,
         )
         self.assertIsNone(item.fecha_programada)
@@ -228,7 +228,58 @@ class MaintenancePreventiveDraftOperationsTest(unittest.TestCase):
         self.assertEqual(item.codigo_equipo_input, "04CC01")
         self.assertIsNone(item.sucursal_id)
         self.assertIsNone(item.inventario_id)
+        self.assertEqual(batch.items, [item])
         fake_session.add.assert_called_once_with(item)
+
+    def test_add_then_validate_same_transaction_sees_new_rows(self):
+        fake_session = MagicMock()
+        batch = SimpleNamespace(
+            id=30,
+            status="BORRADOR",
+            items=[],
+            created_by_user_id=10,
+        )
+        user = self._user(role="SR_MANTENIMIENTO", branches=[4])
+        branch = SimpleNamespace(sucursal_id=4)
+
+        with (
+            patch.object(service, "_get_batch", return_value=batch),
+            patch.object(service, "_resolve_sucursal", return_value=branch),
+            patch.object(
+                service,
+                "db",
+                SimpleNamespace(session=fake_session),
+            ),
+        ):
+            created = service.agregar_renglones_lote(
+                30,
+                user,
+                [
+                    {
+                        "sucursal": "VILLAS DEL REY",
+                        "codigo_equipo": "04CC01",
+                        "responsable": "TECNICO_PM",
+                        "fecha_programada": "26/09/2026",
+                        "actividad": "Mantenimiento general",
+                    }
+                ],
+            )
+
+            with patch.object(
+                service,
+                "validar_item_borrador",
+                return_value=[],
+            ):
+                summary = service.validar_lote_preventivo(
+                    30,
+                    user,
+                )
+
+        self.assertEqual(batch.items, created)
+        self.assertEqual(summary["total"], 1)
+        self.assertEqual(summary["validos"], 1)
+        self.assertEqual(summary["errores"], 0)
+        self.assertTrue(summary["publicable"])
 
     def test_regional_cannot_add_resolvable_row_outside_scope(self):
         fake_session = MagicMock()
