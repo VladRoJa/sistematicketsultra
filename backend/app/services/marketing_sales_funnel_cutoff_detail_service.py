@@ -15,7 +15,12 @@ from app.services.marketing_access import MarketingAccess
 from app.services.marketing_dashboard_service import load_visible_marketing_branches
 from app.services.marketing_inputs_service import parse_month
 from app.services.marketing_sales_funnel_cutoff_service import (
+    _select_exact_iventas_run,
+    _select_exact_new_sales_snapshot,
+    _select_exact_venta_total_snapshot,
     build_marketing_sales_funnel_at_cutoff,
+    parse_cutoff_date,
+    resolve_funnel_cutoff,
 )
 from app.services.marketing_sales_funnel_detail_service import (
     LEAD_METRICS,
@@ -26,7 +31,10 @@ from app.services.marketing_sales_funnel_detail_service import (
     _branch_name_map,
     _enrich_lead_followup_rows,
     _full_name,
+    _lead_candidate_phones,
     _load_global_marketing_branches,
+    _load_targeted_purchase_events,
+    _load_targeted_venta_total_rows,
     _normalize_metric,
     _normalize_optional_int,
     _normalize_pagination,
@@ -47,7 +55,9 @@ from app.services.marketing_sales_funnel_service import (
     ORIGIN_LABELS,
     _classify_sale_category,
     _classify_survey,
+    _load_branch_alias_map,
     _load_new_sales,
+    _load_visits,
     _match_iventas,
     _meta_contact_keys,
 )
@@ -332,6 +342,308 @@ def _lead_rows(
     )
 
 
+LEADS_META_DERIVED_SORT_FIELDS = frozenset(
+    {
+        "followup_status",
+        "visit_status",
+        "visit_date",
+        "purchase_status",
+        "sale_date",
+        "purchase_branch",
+    }
+)
+
+
+def _lead_contact_rows(
+    *,
+    month_start: date,
+    cutoff_date: date,
+    branch_ids: tuple[int, ...],
+    branch_names: dict[int, str],
+    branch_id_filter: int | None,
+    iventas_run_id: int,
+    meta_only: bool,
+) -> list[dict[str, Any]]:
+    meta_keys = _meta_contact_keys((iventas_run_id,)) if meta_only else set()
+    contacts = (
+        MarketingIventasContactORM.query.filter(
+            MarketingIventasContactORM.sync_run_id == iventas_run_id,
+            MarketingIventasContactORM.sucursal_id.in_(branch_ids),
+            MarketingIventasContactORM.first_message_at_utc.isnot(None),
+        )
+        .order_by(
+            MarketingIventasContactORM.first_message_at_local.asc(),
+            MarketingIventasContactORM.id.asc(),
+        )
+        .all()
+    )
+
+    rows: list[dict[str, Any]] = []
+    for contact in contacts:
+        branch_id = int(contact.sucursal_id)
+        if branch_id_filter is not None and branch_id != branch_id_filter:
+            continue
+        if meta_only and (iventas_run_id, int(contact.id)) not in meta_keys:
+            continue
+
+        contact_date = contact.first_message_date_local
+        if contact_date is None:
+            continue
+        if contact_date < month_start or contact_date > cutoff_date:
+            continue
+
+        rows.append(
+            {
+                "branch_id": branch_id,
+                "branch": branch_names.get(branch_id, ""),
+                "date": contact_date.isoformat(),
+                "name": str(contact.name or "").strip() or None,
+                "phone": str(contact.phone_mx10 or "").strip() or None,
+                "contact_id": str(contact.contact_id or "").strip() or None,
+                "channel": str(contact.channel_name or "").strip() or None,
+                "origin_key": ORIGIN_IVENTAS_META if meta_only else "IVENTAS",
+                "origin": (
+                    ORIGIN_LABELS[ORIGIN_IVENTAS_META]
+                    if meta_only
+                    else "iVentas"
+                ),
+            }
+        )
+
+    return rows
+
+
+def _resolve_leads_meta_cutoff_base(
+    *,
+    month: str,
+    cutoff_date: Any,
+    access: MarketingAccess,
+    branch_id: Any,
+) -> dict[str, Any]:
+    month_start = parse_month(month)
+    branches, branch_ids, scope = load_visible_marketing_branches(access)
+    branch_id_filter = _normalize_optional_int(
+        branch_id,
+        field_name="branch_id",
+    )
+    if branch_id_filter is not None and branch_id_filter not in set(branch_ids):
+        raise MarketingSalesFunnelDetailValidationError(
+            "La sucursal solicitada no pertenece al alcance del usuario."
+        )
+
+    requested_cutoff = parse_cutoff_date(
+        month_start=month_start,
+        raw_value=cutoff_date,
+    )
+    selected_cutoff, _ = resolve_funnel_cutoff(
+        month_start=month_start,
+        requested_cutoff=requested_cutoff,
+    )
+    iventas_run = _select_exact_iventas_run(
+        month_start,
+        selected_cutoff,
+    )
+    branch_names = _branch_name_map(branches)
+    rows = _lead_contact_rows(
+        month_start=month_start,
+        cutoff_date=selected_cutoff,
+        branch_ids=branch_ids,
+        branch_names=branch_names,
+        branch_id_filter=branch_id_filter,
+        iventas_run_id=int(iventas_run.id),
+        meta_only=True,
+    )
+
+    title = METRIC_TITLES["leads_meta"]
+    if branch_id_filter is not None:
+        title = f"{title} · {branch_names.get(branch_id_filter, branch_id_filter)}"
+
+    return {
+        "month": month_start.strftime("%Y-%m"),
+        "month_start": month_start,
+        "cutoff_date": selected_cutoff.isoformat(),
+        "selected_cutoff": selected_cutoff,
+        "scope": scope,
+        "metric": "leads_meta",
+        "origin": None,
+        "kind": "leads",
+        "title": title,
+        "branch_id": branch_id_filter,
+        "branch_ids": branch_ids,
+        "branch_names": branch_names,
+        "count": len(rows),
+        "revenue_total": Decimal("0"),
+        "rows": rows,
+    }
+
+
+def _enrich_leads_meta_cutoff_rows(
+    *,
+    base: dict[str, Any],
+    rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not rows:
+        return []
+
+    month_start = base["month_start"]
+    selected_cutoff = base["selected_cutoff"]
+    branch_ids = base["branch_ids"]
+    candidate_phones = _lead_candidate_phones(rows)
+
+    venta_total_snapshot = _select_exact_venta_total_snapshot(
+        month_start,
+        selected_cutoff,
+    )
+    venta_total_rows = _load_targeted_venta_total_rows(
+        month_start=month_start,
+        candidate_phones=candidate_phones,
+        snapshot=venta_total_snapshot,
+    )
+    visits = _load_visits(
+        venta_total_rows,
+        month_start,
+        branch_ids,
+        _load_branch_alias_map(),
+    )
+
+    global_branch_ids, global_branch_names = _load_global_marketing_branches()
+    sales_snapshot = _select_exact_new_sales_snapshot(
+        month_start,
+        selected_cutoff,
+    )
+    sales = _load_targeted_purchase_events(
+        month_start=month_start,
+        candidate_phones=candidate_phones,
+        branch_ids=global_branch_ids,
+        venta_total_rows=venta_total_rows,
+        snapshot=sales_snapshot,
+    )
+
+    return _enrich_lead_followup_rows(
+        rows,
+        visits=visits,
+        sales=sales,
+        global_branch_names=global_branch_names,
+        visible_branch_ids=branch_ids,
+        cutoff_date=selected_cutoff,
+    )
+
+
+def _public_leads_meta_cutoff_base(base: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in base.items()
+        if key
+        not in {
+            "month_start",
+            "selected_cutoff",
+            "branch_ids",
+            "branch_names",
+        }
+    }
+
+
+def _build_leads_meta_cutoff_detail_fast(
+    *,
+    month: str,
+    cutoff_date: Any,
+    access: MarketingAccess,
+    branch_id: Any,
+    page: Any,
+    page_size: Any,
+    sort_by: Any,
+    sort_dir: Any,
+) -> dict[str, Any]:
+    normalized_page, normalized_page_size = _normalize_pagination(
+        page,
+        page_size,
+    )
+    base = _resolve_leads_meta_cutoff_base(
+        month=month,
+        cutoff_date=cutoff_date,
+        access=access,
+        branch_id=branch_id,
+    )
+    normalized_sort_by, normalized_sort_dir = _normalize_detail_sort(
+        metric="leads_meta",
+        kind="leads",
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+    )
+
+    rows = list(base["rows"])
+    count = len(rows)
+    start = (normalized_page - 1) * normalized_page_size
+    end = start + normalized_page_size
+    total_pages = max(1, (count + normalized_page_size - 1) // normalized_page_size)
+
+    if normalized_sort_by in LEADS_META_DERIVED_SORT_FIELDS:
+        rows = _enrich_leads_meta_cutoff_rows(base=base, rows=rows)
+        rows = _sort_rows(rows, normalized_sort_by, normalized_sort_dir)
+        page_rows = rows[start:end]
+    else:
+        rows = _sort_rows(rows, normalized_sort_by, normalized_sort_dir)
+        page_rows = _enrich_leads_meta_cutoff_rows(
+            base=base,
+            rows=rows[start:end],
+        )
+
+    return {
+        **_public_leads_meta_cutoff_base(base),
+        "revenue_total": 0.0,
+        "page": normalized_page,
+        "page_size": normalized_page_size,
+        "total_pages": total_pages,
+        "sort_by": normalized_sort_by,
+        "sort_dir": normalized_sort_dir,
+        "rows": page_rows,
+    }
+
+
+def _build_leads_meta_cutoff_export_fast(
+    *,
+    month: str,
+    cutoff_date: Any,
+    access: MarketingAccess,
+    branch_id: Any,
+    sort_by: Any,
+    sort_dir: Any,
+) -> tuple[BytesIO, str]:
+    base = _resolve_leads_meta_cutoff_base(
+        month=month,
+        cutoff_date=cutoff_date,
+        access=access,
+        branch_id=branch_id,
+    )
+    normalized_sort_by, normalized_sort_dir = _normalize_detail_sort(
+        metric="leads_meta",
+        kind="leads",
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+    )
+    rows = _enrich_leads_meta_cutoff_rows(
+        base=base,
+        rows=list(base["rows"]),
+    )
+    rows = _sort_rows(rows, normalized_sort_by, normalized_sort_dir)
+
+    output = _build_excel_workbook(
+        title=base["title"],
+        kind="leads",
+        rows=rows,
+        metric="leads_meta",
+    )
+    parts = [
+        "funnel_venta_nueva",
+        _safe_filename_segment(base["month"]),
+        f"corte_{_safe_filename_segment(base['cutoff_date'])}",
+        "leads_meta",
+    ]
+    if base["branch_id"] is not None:
+        parts.append(f"sucursal_{base['branch_id']}")
+    return output, "_".join(parts) + ".xlsx"
+
+
 def _normalized_visit_conversion_bundle(
     *,
     loaded: Any,
@@ -531,6 +843,18 @@ def build_marketing_sales_funnel_cutoff_detail(
     sort_by: Any = None,
     sort_dir: Any = None,
 ) -> dict[str, Any]:
+    if str(metric or "").strip() == "leads_meta":
+        return _build_leads_meta_cutoff_detail_fast(
+            month=month,
+            cutoff_date=cutoff_date,
+            access=access,
+            branch_id=branch_id,
+            page=page,
+            page_size=page_size,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+        )
+
     normalized_page, normalized_page_size = _normalize_pagination(page, page_size)
     detail = _resolve_detail_rows(
         month=month,
@@ -579,6 +903,16 @@ def build_marketing_sales_funnel_cutoff_export(
     sort_by: Any = None,
     sort_dir: Any = None,
 ) -> tuple[BytesIO, str]:
+    if str(metric or "").strip() == "leads_meta":
+        return _build_leads_meta_cutoff_export_fast(
+            month=month,
+            cutoff_date=cutoff_date,
+            access=access,
+            branch_id=branch_id,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+        )
+
     detail = _resolve_detail_rows(
         month=month,
         cutoff_date=cutoff_date,
