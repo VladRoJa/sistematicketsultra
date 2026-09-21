@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
@@ -354,6 +355,63 @@ def test_drilldown_sale_filters_follow_same_attribution_hierarchy():
         phone=None,
         origin=ORIGIN_REFERRAL,
     )
+
+
+def test_direct_purchase_visit_is_added_once_without_duplicating_registered_visit():
+    registered = [
+        marketing_sales_funnel_service._CommercialVisit(
+            event_key="visit:registered",
+            branch_id=4,
+            visit_date=date(2026, 9, 4),
+            phone="6861111111",
+        )
+    ]
+    sales = [
+        marketing_sales_funnel_service._CommercialSale(
+            sale_key="id_socio:200",
+            branch_id=4,
+            sale_date=date(2026, 9, 5),
+            phone="6862222222",
+            revenue=Decimal("499"),
+            survey_raw=None,
+            api_raw=None,
+            member_id="200",
+        ),
+        marketing_sales_funnel_service._CommercialSale(
+            sale_key="id_socio:201",
+            branch_id=4,
+            sale_date=date(2026, 9, 6),
+            phone="6862222222",
+            revenue=Decimal("499"),
+            survey_raw=None,
+            api_raw=None,
+            member_id="201",
+        ),
+        marketing_sales_funnel_service._CommercialSale(
+            sale_key="id_socio:100",
+            branch_id=4,
+            sale_date=date(2026, 9, 7),
+            phone="6861111111",
+            revenue=Decimal("499"),
+            survey_raw=None,
+            api_raw=None,
+            member_id="100",
+        ),
+    ]
+
+    visits = marketing_sales_funnel_service._merge_visits_with_direct_purchases(
+        visits=registered,
+        sales=sales,
+    )
+
+    assert len(visits) == 2
+    direct = next(row for row in visits if row.phone == "6862222222")
+    assert direct.kind == marketing_sales_funnel_service.VISIT_KIND_DIRECT_PURCHASE
+    assert direct.visit_date == date(2026, 9, 5)
+    assert direct.sale_key == "id_socio:200"
+    assert direct.sale_member_id == "200"
+    assert direct.sale_revenue == Decimal("499")
+    assert sum(row.phone == "6861111111" for row in visits) == 1
 
 
 def test_drilldown_visit_filters_do_not_treat_unmatched_as_iventas():
