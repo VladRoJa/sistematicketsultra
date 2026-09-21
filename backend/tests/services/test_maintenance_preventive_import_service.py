@@ -89,16 +89,16 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
         )
         workbook = load_workbook(io.BytesIO(content))
         sheet = workbook["Programacion preventiva"]
-        sheet.append(
-            [
-                "Paseo 2000",
-                "09CBRLF03",
-                "25/09/2026",
-                "Mantenimiento general",
-                "SR_MANT_TIJ",
-                "",
-            ]
-        )
+        values = [
+            "Paseo 2000",
+            "09CBRLF03",
+            "25/09/2026",
+            "Mantenimiento general",
+            "SR_MANT_TIJ",
+            "",
+        ]
+        for column, value in enumerate(values, start=1):
+            sheet.cell(row=2, column=column, value=value)
 
         stream = io.BytesIO()
         workbook.save(stream)
