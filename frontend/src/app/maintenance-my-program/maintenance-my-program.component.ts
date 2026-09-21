@@ -47,6 +47,7 @@ export class MaintenanceMyProgramComponent implements OnInit {
   evidenceFile: File | null = null;
   bitacoraSaved = false;
   evidenceSaved = false;
+  showSavedBitacora = false;
 
   readonly foundStateOptions = [
     { value: 'BUENO' as const, label: 'Bueno' },
@@ -136,6 +137,111 @@ export class MaintenanceMyProgramComponent implements OnInit {
       && this.evidenceSaved
       && this.workSavingStep === null,
     );
+  }
+
+  get bitacoraHelpText(): string {
+    if (this.bitacoraSaved) {
+      return 'Bitácora guardada.';
+    }
+
+    const missing: string[] = [];
+
+    if (!this.estadoEncontrado) {
+      missing.push('estado encontrado');
+    }
+    if (!this.notas.trim()) {
+      missing.push('trabajo realizado');
+    }
+    if (!this.requiredChecksComplete()) {
+      missing.push('checklist requerido');
+    }
+    if (this.hallazgoDetectado && !this.hallazgoDescripcion.trim()) {
+      missing.push('describir el hallazgo');
+    }
+
+    if (!missing.length) {
+      return 'Listo para guardar la bitácora.';
+    }
+
+    return (
+      (missing.length === 1 ? 'Falta: ' : 'Faltan: ')
+      + missing.join(', ')
+      + '.'
+    );
+  }
+
+  get evidenceHelpText(): string {
+    if (this.evidenceSaved) {
+      return 'Evidencia guardada.';
+    }
+    if (!this.bitacoraSaved) {
+      return 'Primero guarda la bitácora.';
+    }
+    if (!this.evidenceFile) {
+      return 'Toma o selecciona una foto del trabajo.';
+    }
+    return 'Foto lista para subir.';
+  }
+
+  get completeHelpText(): string {
+    if (!this.bitacoraSaved) {
+      return 'Primero guarda la bitácora.';
+    }
+    if (!this.evidenceSaved) {
+      return 'Falta subir evidencia.';
+    }
+    return 'Listo para enviar a validación del gerente.';
+  }
+
+  get foundStateLabel(): string {
+    return (
+      this.foundStateOptions.find(
+        (option) => option.value === this.estadoEncontrado,
+      )?.label
+      || 'Sin estado'
+    );
+  }
+
+  get bitacoraSummaryText(): string {
+    return this.hallazgoDetectado
+      ? this.foundStateLabel + ' · Hallazgo registrado'
+      : this.foundStateLabel + ' · Sin hallazgo';
+  }
+
+  get mobilePrimaryActionLabel(): string {
+    if (!this.bitacoraSaved) {
+      return this.workSavingStep === 'bitacora'
+        ? 'Guardando…'
+        : 'Guardar bitácora';
+    }
+    if (!this.evidenceSaved) {
+      return this.workSavingStep === 'evidence'
+        ? 'Subiendo…'
+        : 'Subir evidencia';
+    }
+    return this.workSavingStep === 'complete'
+      ? 'Marcando…'
+      : 'Marcar realizado';
+  }
+
+  get mobilePrimaryActionHelpText(): string {
+    if (!this.bitacoraSaved) {
+      return this.bitacoraHelpText;
+    }
+    if (!this.evidenceSaved) {
+      return this.evidenceHelpText;
+    }
+    return this.completeHelpText;
+  }
+
+  get canRunMobilePrimaryAction(): boolean {
+    if (!this.bitacoraSaved) {
+      return this.canSaveBitacora;
+    }
+    if (!this.evidenceSaved) {
+      return this.canUploadEvidence;
+    }
+    return this.canCompleteWork;
   }
 
   loadProgram(): void {
@@ -276,6 +382,7 @@ export class MaintenanceMyProgramComponent implements OnInit {
       next: (response) => {
         this.workSavingStep = null;
         this.bitacoraSaved = true;
+        this.showSavedBitacora = false;
         this.workSuccessMessage = response.correctivo_id
           ? 'Bitácora guardada y correctivo generado #'
             + String(response.correctivo_id)
@@ -290,6 +397,31 @@ export class MaintenanceMyProgramComponent implements OnInit {
           || 'No se pudo guardar la bitácora.';
       },
     });
+  }
+
+  toggleSavedBitacora(): void {
+    if (!this.bitacoraSaved) {
+      return;
+    }
+    this.showSavedBitacora = !this.showSavedBitacora;
+  }
+
+  runMobilePrimaryAction(): void {
+    if (!this.canRunMobilePrimaryAction) {
+      return;
+    }
+
+    if (!this.bitacoraSaved) {
+      this.saveBitacora();
+      return;
+    }
+
+    if (!this.evidenceSaved) {
+      this.uploadEvidence();
+      return;
+    }
+
+    this.completeWork();
   }
 
   onEvidenceSelected(event: Event): void {
@@ -434,5 +566,6 @@ export class MaintenanceMyProgramComponent implements OnInit {
     this.evidenceFile = null;
     this.bitacoraSaved = false;
     this.evidenceSaved = false;
+    this.showSavedBitacora = false;
   }
 }
