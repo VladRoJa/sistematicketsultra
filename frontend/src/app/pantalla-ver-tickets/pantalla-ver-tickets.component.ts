@@ -2847,6 +2847,49 @@ esPreventivo(ticket: Ticket): boolean {
   );
 }
 
+getEtiquetaTipoMantenimiento(ticket: Ticket): string | null {
+  const tipo = String(ticket?.tipo_mantenimiento || '')
+    .trim()
+    .toUpperCase();
+
+  if (tipo === 'PREVENTIVO') {
+    return 'PREVENTIVO';
+  }
+
+  if (tipo === 'CORRECTIVO') {
+    const origen = String(ticket?.origen_correctivo || '')
+      .trim()
+      .toUpperCase();
+
+    if (origen === 'DETECTADO_EN_PREVENTIVO') {
+      return 'CORRECTIVO · DETECTADO EN PREVENTIVO';
+    }
+
+    return 'CORRECTIVO · REACTIVO';
+  }
+
+  return null;
+}
+
+getClaseTipoMantenimiento(ticket: Ticket): string {
+  const tipo = String(ticket?.tipo_mantenimiento || '')
+    .trim()
+    .toUpperCase();
+  const origen = String(ticket?.origen_correctivo || '')
+    .trim()
+    .toUpperCase();
+
+  if (tipo === 'PREVENTIVO') {
+    return 'maintenance-ticket-badge--preventive';
+  }
+
+  if (tipo === 'CORRECTIVO' && origen === 'DETECTADO_EN_PREVENTIVO') {
+    return 'maintenance-ticket-badge--derived';
+  }
+
+  return 'maintenance-ticket-badge--corrective';
+}
+
 abrirRevisionPreventivo(ticket: Ticket): void {
   if (!ticket?.id || !this.esPreventivo(ticket)) {
     return;
