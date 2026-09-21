@@ -139,7 +139,7 @@
             class="work-action-button"
             (click)="toggleWork(item)"
           >
-            {{ isWorkExpanded(item) ? 'Cerrar trabajo' : 'Abrir preventivo' }}
+            {{ isWorkExpanded(item) ? 'Volver a mi programa' : 'Abrir preventivo' }}
           </button>
 
           <div
@@ -198,6 +198,24 @@
                   <h4>Bitácora preventiva</h4>
                 </header>
 
+                <div
+                  *ngIf="bitacoraSaved"
+                  class="execution-complete-summary"
+                >
+                  <div>
+                    <strong>{{ bitacoraSummaryText }}</strong>
+                    <span>{{ notas }}</span>
+                  </div>
+                  <button
+                    type="button"
+                    class="execution-summary-toggle"
+                    (click)="toggleSavedBitacora()"
+                  >
+                    {{ showSavedBitacora ? 'Ocultar detalle' : 'Ver detalle' }}
+                  </button>
+                </div>
+
+                <ng-container *ngIf="!bitacoraSaved || showSavedBitacora">
                 <label class="field">
                   <span>Estado encontrado</span>
                   <select
@@ -303,18 +321,23 @@
                 </ng-container>
 
                 <button
+                  *ngIf="!bitacoraSaved"
                   type="button"
-                  class="execution-button execution-button--primary"
+                  class="execution-button execution-button--primary execution-step-button"
                   (click)="saveBitacora()"
                   [disabled]="!canSaveBitacora"
                 >
-                  <ng-container *ngIf="!bitacoraSaved">
-                    {{ workSavingStep === 'bitacora' ? 'Guardando…' : 'Guardar bitácora' }}
-                  </ng-container>
-                  <ng-container *ngIf="bitacoraSaved">
-                    Bitácora guardada
-                  </ng-container>
+                  {{ workSavingStep === 'bitacora' ? 'Guardando…' : 'Guardar bitácora' }}
                 </button>
+                </ng-container>
+
+                <small
+                  class="execution-help"
+                  [class.execution-help--ready]="canSaveBitacora || bitacoraSaved"
+                  aria-live="polite"
+                >
+                  {{ bitacoraHelpText }}
+                </small>
               </section>
 
               <section class="execution-block" [class.execution-block--locked]="!bitacoraSaved">
@@ -337,6 +360,9 @@
                       (change)="onEvidenceSelected($event)"
                       [disabled]="!bitacoraSaved"
                     />
+                    <small *ngIf="!evidenceFile" class="file-field__hint">
+                      En celular puedes tomar una foto o elegirla de la galería.
+                    </small>
                     <small *ngIf="evidenceFile">
                       {{ evidenceFile.name }}
                     </small>
@@ -344,13 +370,21 @@
 
                   <button
                     type="button"
-                    class="execution-button execution-button--secondary"
+                    class="execution-button execution-button--secondary execution-step-button"
                     (click)="uploadEvidence()"
                     [disabled]="!canUploadEvidence"
                   >
                     {{ workSavingStep === 'evidence' ? 'Subiendo…' : 'Subir evidencia' }}
                   </button>
                 </ng-container>
+
+                <small
+                  class="execution-help"
+                  [class.execution-help--ready]="canUploadEvidence || evidenceSaved"
+                  aria-live="polite"
+                >
+                  {{ evidenceHelpText }}
+                </small>
               </section>
 
               <section class="execution-block" [class.execution-block--locked]="!evidenceSaved">
@@ -365,13 +399,36 @@
 
                 <button
                   type="button"
-                  class="execution-button execution-button--complete"
+                  class="execution-button execution-button--complete execution-step-button"
                   (click)="completeWork()"
                   [disabled]="!canCompleteWork"
                 >
                   {{ workSavingStep === 'complete' ? 'Marcando…' : 'Marcar realizado' }}
                 </button>
+
+                <small
+                  class="execution-help"
+                  [class.execution-help--ready]="canCompleteWork"
+                  aria-live="polite"
+                >
+                  {{ completeHelpText }}
+                </small>
               </section>
+
+              <div class="mobile-execution-cta">
+                <span>{{ mobilePrimaryActionHelpText }}</span>
+                <button
+                  type="button"
+                  class="execution-button"
+                  [class.execution-button--primary]="!bitacoraSaved"
+                  [class.execution-button--secondary]="bitacoraSaved && !evidenceSaved"
+                  [class.execution-button--complete]="evidenceSaved"
+                  (click)="runMobilePrimaryAction()"
+                  [disabled]="!canRunMobilePrimaryAction"
+                >
+                  {{ mobilePrimaryActionLabel }}
+                </button>
+              </div>
             </ng-container>
           </section>
         </article>
