@@ -414,6 +414,45 @@ def test_direct_purchase_visit_is_added_once_without_duplicating_registered_visi
     assert sum(row.phone == "6861111111" for row in visits) == 1
 
 
+def test_direct_purchase_with_meta_lead_counts_as_crm_visit():
+    sale = marketing_sales_funnel_service._CommercialSale(
+        sale_key="id_socio:250",
+        branch_id=4,
+        sale_date=date(2026, 9, 8),
+        phone="6862500000",
+        revenue=Decimal("599"),
+        survey_raw=None,
+        api_raw="IVENTAS",
+        member_id="250",
+    )
+    visits = marketing_sales_funnel_service._merge_visits_with_direct_purchases(
+        visits=[],
+        sales=[sale],
+    )
+    stats = {4: marketing_sales_funnel_service._BranchStats()}
+    evidence = {
+        (4, "6862500000"): [
+            _IventasEvidence(
+                branch_id=4,
+                phone="6862500000",
+                interaction_date=date(2026, 9, 3),
+                has_meta_ad=True,
+            )
+        ]
+    }
+
+    marketing_sales_funnel_service._accumulate_visit_stats(
+        visits=visits,
+        evidence=evidence,
+        stats_by_branch=stats,
+    )
+
+    assert stats[4].visits_total == 1
+    assert stats[4].visits_iventas == 1
+    assert stats[4].visits_iventas_meta == 1
+    assert stats[4].visits_not_iventas == 0
+
+
 def test_direct_purchase_without_crm_counts_as_untraced_visit():
     sale = marketing_sales_funnel_service._CommercialSale(
         sale_key="id_socio:300",
