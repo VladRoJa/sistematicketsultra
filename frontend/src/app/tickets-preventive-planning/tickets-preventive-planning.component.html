@@ -365,7 +365,10 @@
           </header>
 
           <div class="draft-table-wrap" *ngIf="batch.items.length; else noRows">
-            <table class="draft-table">
+            <table
+              class="draft-table"
+              [class.draft-table--published]="batch.status === 'PUBLICADO'"
+            >
               <thead>
                 <tr>
                   <th>Fila</th>
