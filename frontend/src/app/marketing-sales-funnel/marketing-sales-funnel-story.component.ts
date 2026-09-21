@@ -120,7 +120,7 @@ export class MarketingSalesFunnelStoryComponent {
       return '';
     }
 
-    return `Dos recorridos convergen en ${this.formatInteger(summary.sales_iventas)} ventas iVentas; las ${this.formatInteger(summary.sales_not_iventas)} restantes continúan por clasificación de origen.`;
+    return `El CRM aporta ${this.formatInteger(summary.sales_iventas)} ventas; las ${this.formatInteger(summary.sales_not_iventas)} restantes continúan fuera del CRM por clasificación de origen.`;
   }
 
   get leadsNode(): FunnelNodeView | null {
@@ -129,9 +129,9 @@ export class MarketingSalesFunnelStoryComponent {
 
     return this.createNode(
       'Leads CRM',
-      summary.leads_meta,
-      'Contactos que iniciaron conversación desde publicidad',
-      'leads_meta',
+      summary.leads_iventas,
+      'Contactos que iniciaron conversación en el CRM',
+      'leads_iventas',
       'person',
       'orange',
     );
@@ -220,7 +220,7 @@ export class MarketingSalesFunnelStoryComponent {
     if (!summary) return null;
 
     return this.createNode(
-      'Visitas iVentas',
+      'Visitas CRM',
       summary.visits_iventas,
       '',
       'visits_iventas',
@@ -234,7 +234,7 @@ export class MarketingSalesFunnelStoryComponent {
     if (!summary) return null;
 
     return this.createNode(
-      'Visitas sin trazabilidad',
+      'Visitas fuera CRM',
       summary.visits_not_iventas,
       '',
       'visits_not_iventas',
@@ -301,7 +301,7 @@ export class MarketingSalesFunnelStoryComponent {
     if (!summary) return null;
 
     return this.createNode(
-      'Ventas iVentas',
+      'Ventas CRM',
       summary.sales_iventas,
       `${this.formatPercent(summary.sales_total > 0 ? summary.sales_iventas / summary.sales_total : null)} de Venta Nueva · punto de unión`,
       'sales_iventas',
@@ -329,9 +329,9 @@ export class MarketingSalesFunnelStoryComponent {
     if (!summary) return null;
 
     return this.createNode(
-      'iVentas sin ads',
+      'CRM sin publicidad',
       summary.sales_iventas_other,
-      'iVentas no reportó origen publicitario',
+      'Ventas CRM sin origen publicitario identificado',
       'origin',
       'eco',
       'orange',
@@ -344,7 +344,7 @@ export class MarketingSalesFunnelStoryComponent {
     if (!summary) return null;
 
     return this.createNode(
-      'Sin Match iVentas',
+      'Fuera CRM',
       summary.sales_not_iventas,
       `${this.formatPercent(summary.sales_total > 0 ? summary.sales_not_iventas / summary.sales_total : null)} de Venta Nueva`,
       'sales_not_iventas',
@@ -361,23 +361,23 @@ export class MarketingSalesFunnelStoryComponent {
 
     return [
       {
-        label: 'Lead → Visita iVentas',
+        label: 'Lead CRM → Visita CRM',
         value: this.formatPercent(
-          summary.leads_meta > 0
-            ? summary.visits_iventas / summary.leads_meta
+          summary.leads_iventas > 0
+            ? summary.visits_iventas / summary.leads_iventas
             : null,
         ),
       },
       {
-        label: 'Visita iVentas → Compra',
+        label: 'Visita CRM → Compra',
         value: this.formatPercent(summary.iventas_visit_conversion_rate),
       },
       {
-        label: 'Visita sin trazabilidad → Compra',
+        label: 'Visita fuera CRM → Compra',
         value: this.formatPercent(summary.not_iventas_visit_conversion_rate),
       },
       {
-        label: 'Venta Nueva → Venta iVentas',
+        label: 'Venta Nueva → Venta CRM',
         value: this.formatPercent(summary.iventas_sale_share),
       },
     ];
