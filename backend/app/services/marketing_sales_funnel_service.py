@@ -570,6 +570,22 @@ def _merge_visits_with_direct_purchases(
     )
 
 
+def _visit_type_label(visit: _CommercialVisit) -> str:
+    return (
+        "Compra directa"
+        if visit.kind == VISIT_KIND_DIRECT_PURCHASE
+        else "Visita registrada"
+    )
+
+
+def _visit_source_label(visit: _CommercialVisit) -> str:
+    return (
+        "Venta Nueva sin pase registrado"
+        if visit.kind == VISIT_KIND_DIRECT_PURCHASE
+        else "Pase comercial en Venta Total"
+    )
+
+
 def _merge_venta_total_enrichment(
     current: _VentaTotalEnrichment | None,
     row: Any,
