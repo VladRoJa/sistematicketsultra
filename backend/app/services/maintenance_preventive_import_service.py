@@ -26,6 +26,7 @@ TEMPLATE_HEADERS = (
     "Actividad",
     "Responsable",
     "Observaciones",
+    "Validación",
 )
 
 REQUIRED_IMPORT_HEADERS = (
@@ -326,7 +327,7 @@ def build_preventive_template_xlsx(
     sheet.title = "Programacion preventiva"
     sheet.sheet_view.showGridLines = False
     sheet.freeze_panes = "A2"
-    sheet.auto_filter.ref = "A1:G1001"
+    sheet.auto_filter.ref = "A1:H1001"
 
     header_fill = PatternFill("solid", fgColor="E54525")
     header_font = Font(color="FFFFFF", bold=True)
@@ -352,6 +353,10 @@ def build_preventive_template_xlsx(
         "E1": "Describe el mantenimiento preventivo que se realizará.",
         "F1": "Selecciona un responsable activo del catálogo de Mantenimiento.",
         "G1": "Campo opcional para notas de programación.",
+        "H1": (
+            "Columna automática. Si aparece ⚠ DUPLICADO, corrige "
+            "el código o la fecha antes de cargar el archivo."
+        ),
     }
     for cell_ref, message in comments.items():
         sheet[cell_ref].comment = Comment(message, "Suite Ultra")
@@ -364,6 +369,7 @@ def build_preventive_template_xlsx(
         "E": 42,
         "F": 26,
         "G": 42,
+        "H": 18,
     }
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
@@ -377,6 +383,26 @@ def build_preventive_template_xlsx(
                 wrap_text=(column in {5, 7}),
             )
         sheet.cell(row=row, column=4).number_format = "dd/mm/yyyy"
+        sheet.cell(
+            row=row,
+            column=8,
+            value=(
+                '=IF(OR(A' + str(row) + '="",C' + str(row)
+                + '="",D' + str(row) + '=""),"",'
+                + 'IF(COUNTIFS($A$2:$A$1001,A' + str(row)
+                + ',$C$2:$C$1001,C' + str(row)
+                + ',$D$2:$D$1001,D' + str(row)
+                + ')>1,"⚠ DUPLICADO",""))'
+            ),
+        )
+        sheet.cell(row=row, column=8).font = Font(
+            color="B91C1C",
+            bold=True,
+        )
+        sheet.cell(row=row, column=8).alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+        )
 
     branch_values = _clean_catalog_values(sucursales)
     responsible_values = _clean_catalog_values(responsables)
@@ -635,20 +661,21 @@ def build_preventive_template_xlsx(
         sheet.add_data_validation(responsible_validation)
         responsible_validation.add("F2:F1001")
 
-    duplicate_fill = PatternFill("solid", fgColor="FDE2E2")
-    duplicate_formula = (
-        'AND($A2<>"",$C2<>"",$D2<>"",'
-        'COUNTIFS($A$2:$A$1001,$A2,'
-        '$C$2:$C$1001,$C2,'
-        '$D$2:$D$1001,$D2)>1)'
-    )
+    duplicate_fill = PatternFill("solid", fgColor="FFC7CE")
+    duplicate_font = Font(color="9C0006", bold=True)
     sheet.conditional_formatting.add(
-        "A2:G1001",
+        "A2:H1001",
         FormulaRule(
-            formula=[duplicate_formula],
+            formula=['$H2="⚠ DUPLICADO"'],
             fill=duplicate_fill,
+            font=duplicate_font,
+            stopIfTrue=True,
         ),
     )
+
+    workbook.calculation.calcMode = "auto"
+    workbook.calculation.fullCalcOnLoad = True
+    workbook.calculation.forceFullCalc = True
 
     sheet.row_dimensions[1].height = 26
 
