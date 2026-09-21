@@ -29,6 +29,7 @@ type SucursalOption = {
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, FormsModule],
   templateUrl: './admin-usuarios-sucursales.component.html',
+  styleUrls: ['./admin-usuarios-sucursales.component.css'],
 })
 export class AdminUsuariosSucursalesComponent implements OnInit {
   form: FormGroup;
@@ -122,6 +123,10 @@ export class AdminUsuariosSucursalesComponent implements OnInit {
 
   get cantidadSeleccionadas(): number {
     return this.selectedIds.length;
+  }
+
+  get inicialUsuario(): string {
+    return (this.username || '?').charAt(0).toUpperCase();
   }
 
   get usuarioSeleccionado(): UsuarioOption | null {
