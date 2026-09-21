@@ -1497,3 +1497,35 @@ td.col-descripcion {
   line-height: 17px;
   margin-right: 6px;
 }
+
+
+.maintenance-ticket-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 5px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  white-space: normal;
+}
+
+.maintenance-ticket-badge--preventive {
+  background: var(--ultra-orange-soft);
+  color: var(--ultra-orange);
+}
+
+.maintenance-ticket-badge--corrective {
+  background: var(--ultra-gray-100);
+  color: var(--ultra-gray-700);
+}
+
+.maintenance-ticket-badge--derived {
+  background: var(--ultra-success-soft);
+  color: var(--ultra-success);
+}
