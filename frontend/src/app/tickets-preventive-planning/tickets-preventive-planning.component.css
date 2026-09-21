@@ -73,8 +73,8 @@
 .creation-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 12px;
+  margin-bottom: 14px;
 }
 
 .workspace {
@@ -100,7 +100,31 @@
 }
 
 .creation-grid .panel {
-  padding-bottom: 18px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 12px 14px;
+  overflow: visible;
+}
+
+.creation-grid .panel__header {
+  align-self: center;
+  min-width: 118px;
+  padding: 0;
+  border-bottom: 0;
+  background: transparent;
+}
+
+.creation-grid .panel__eyebrow {
+  margin-bottom: 2px;
+  font-size: 9px;
+}
+
+.creation-grid .panel h2 {
+  font-size: 15px;
+  line-height: 1.15;
+  white-space: nowrap;
 }
 
 .panel__header {
@@ -124,8 +148,12 @@
 .creation-grid .form-grid,
 .creation-grid .upload-box,
 .creation-grid > .panel > .button {
-  margin-left: 18px;
-  margin-right: 18px;
+  margin: 0;
+}
+
+.creation-grid > .panel > .button {
+  align-self: end;
+  white-space: nowrap;
 }
 
 .form-grid {
@@ -134,9 +162,8 @@
 }
 
 .form-grid--batch {
-  grid-template-columns: minmax(180px, 1fr) 150px 150px;
-  margin-top: 18px;
-  margin-bottom: 14px;
+  grid-template-columns: minmax(150px, 1fr) 118px 118px;
+  gap: 8px;
 }
 
 label {
@@ -221,19 +248,27 @@ select:focus {
 
 .upload-box {
   display: grid;
-  gap: 8px;
-  margin-top: 18px;
-  margin-bottom: 14px;
-  padding: 14px;
-  border: 1px dashed var(--ultra-gray-300);
-  border-radius: 12px;
-  background: var(--ultra-gray-50);
+  gap: 3px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.upload-box input[type='file'] {
+  min-width: 0;
+  min-height: 40px;
+  padding: 5px 7px;
 }
 
 .upload-box small {
-  color: var(--ultra-gray-600);
-  line-height: 1.4;
+  overflow: hidden;
+  color: var(--ultra-gray-500);
+  font-size: 8px;
   font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .alert {
@@ -619,6 +654,12 @@ select:focus {
   }
 }
 
+@media (max-width: 1180px) {
+  .creation-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 900px) {
   .creation-grid,
   .workspace {
@@ -643,6 +684,19 @@ select:focus {
 }
 
 @media (max-width: 620px) {
+  .creation-grid .panel {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .creation-grid .panel__header {
+    min-width: 0;
+  }
+
+  .creation-grid .panel h2 {
+    white-space: normal;
+  }
+
   .preventive-page {
     padding: 10px;
   }
