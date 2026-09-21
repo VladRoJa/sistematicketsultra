@@ -171,8 +171,8 @@
             </tr>
             <tr class="branch-performance-table__columns">
               <th class="group-start">Inversión</th>
-              <th>Leads</th>
-              <th>Visitas</th>
+              <th>Leads CRM</th>
+              <th>Visitas CRM</th>
 
               <th class="group-start">Venta digital</th>
               <th>Orgánica digital</th>
@@ -247,15 +247,15 @@
               <td class="metric-cell metric-cell--summary metric-cell--group-start">
                 <div class="compact-metric-stack">
                   <span>
-                    <small>Lead → visita</small>
+                    <small>Lead CRM → visita</small>
                     <strong>{{ branchTotals.lead_to_visit_display }}</strong>
                   </span>
                   <span>
-                    <small>Visita → venta</small>
-                    <strong>{{ branchTotals.visit_to_digital_sale_display }}</strong>
+                    <small>Visita CRM → venta</small>
+                    <strong>{{ branchTotals.visit_to_sale_display }}</strong>
                   </span>
                   <span>
-                    <small>Lead → venta</small>
+                    <small>Lead CRM → venta</small>
                     <strong>{{ branchTotals.lead_to_sale_display }}</strong>
                   </span>
                 </div>
@@ -291,9 +291,9 @@
                 <button
                   class="table-detail-link table-detail-link--strong"
                   type="button"
-                  (click)="openBranchDetail('leads_meta', row)"
+                  (click)="openBranchDetail('leads_iventas', row)"
                 >
-                  {{ row.leads_meta_display }}
+                  {{ row.leads_crm_display }}
                 </button>
               </td>
 
@@ -301,9 +301,9 @@
                 <button
                   class="table-detail-link table-detail-link--strong"
                   type="button"
-                  (click)="openBranchDetail('visits_total', row)"
+                  (click)="openBranchDetail('visits_iventas', row)"
                 >
-                  {{ row.visits_total_display }}
+                  {{ row.visits_crm_display }}
                 </button>
               </td>
 
@@ -370,15 +370,15 @@
               <td class="metric-cell metric-cell--summary metric-cell--group-start">
                 <div class="compact-metric-stack" aria-label="Conversiones del club">
                   <span>
-                    <small>Lead → visita</small>
+                    <small>Lead CRM → visita</small>
                     <strong>{{ row.lead_to_visit_display }}</strong>
                   </span>
                   <span>
-                    <small>Visita → venta</small>
-                    <strong>{{ row.visit_to_digital_sale_display }}</strong>
+                    <small>Visita CRM → venta</small>
+                    <strong>{{ row.visit_to_sale_display }}</strong>
                   </span>
                   <span>
-                    <small>Lead → venta</small>
+                    <small>Lead CRM → venta</small>
                     <strong>{{ row.lead_to_sale_display }}</strong>
                   </span>
                 </div>
