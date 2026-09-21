@@ -43,6 +43,11 @@ TICKETS_HTML = ROOT / (
     "frontend/src/app/pantalla-ver-tickets/"
     "pantalla-ver-tickets.component.html"
 )
+TICKETS_CSS = ROOT / (
+    "frontend/src/app/pantalla-ver-tickets/"
+    "pantalla-ver-tickets.component.css"
+)
+TICKET_ROUTES = ROOT / "backend/app/routes/ticket_routes.py"
 VALIDATION_DIALOG_HTML = ROOT / (
     "frontend/src/app/pantalla-ver-tickets/modals/"
     "preventive-validation-dialog.component.html"
@@ -118,3 +123,18 @@ def test_preventive_corrective_relation_is_navigable_in_both_directions():
     assert "abrirTicketPreventivoOrigen" in tickets_ts
     assert "ticket.ticket_preventivo_origen_id" in tickets_html
     assert "Abrir ticket" in validation
+
+
+def test_ticket_dashboard_and_excel_identify_maintenance_semantics():
+    tickets_ts = _read(TICKETS_TS)
+    tickets_html = _read(TICKETS_HTML)
+    tickets_css = _read(TICKETS_CSS)
+    routes = _read(TICKET_ROUTES)
+
+    assert "getEtiquetaTipoMantenimiento" in tickets_ts
+    assert "CORRECTIVO · DETECTADO EN PREVENTIVO" in tickets_ts
+    assert "maintenance-ticket-badge" in tickets_html
+    assert "maintenance-ticket-badge--preventive" in tickets_css
+    assert '"Tipo mantenimiento"' in routes
+    assert '"Origen correctivo"' in routes
+    assert 'origen_correctivo_txt.replace("_", " ")' in routes
