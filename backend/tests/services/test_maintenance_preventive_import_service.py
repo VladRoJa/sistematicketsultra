@@ -145,7 +145,7 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
             )
 
             conditional_ranges = {
-                str(rule_range)
+                str(rule_range.sqref)
                 for rule_range in sheet.conditional_formatting
             }
             self.assertIn("A2:H1001", conditional_ranges)
@@ -275,6 +275,7 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
                 "Actividad",
                 "Responsable",
                 "Observaciones",
+                "Validación",
             ),
         )
 
