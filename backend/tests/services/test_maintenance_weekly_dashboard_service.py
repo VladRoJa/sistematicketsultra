@@ -43,6 +43,30 @@ class MaintenanceWeeklyDashboardServiceTest(unittest.TestCase):
             tzinfo=timezone.utc,
         )
 
+    def test_explicit_branch_scope_does_not_add_primary_branch(self):
+        user = SimpleNamespace(
+            rol="SR_MANTENIMIENTO",
+            sucursal_id=99,
+            sucursales_ids=[8, 10, 7],
+        )
+
+        self.assertEqual(
+            service._assigned_branch_ids(user),
+            {7, 8, 10},
+        )
+
+    def test_primary_branch_is_legacy_fallback_without_explicit_scope(self):
+        user = SimpleNamespace(
+            rol="SR_MANTENIMIENTO",
+            sucursal_id=99,
+            sucursales_ids=[],
+        )
+
+        self.assertEqual(
+            service._assigned_branch_ids(user),
+            {99},
+        )
+
     def test_week_is_sunday_to_saturday(self):
         windows = service._week_windows(
             service.date(2026, 9, 23),
