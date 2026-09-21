@@ -240,6 +240,13 @@ body.suite-compact-review .crear-ticket-page .mat-mdc-select-value {
   padding: 2px 0 !important;
 }
 
+body.suite-compact-review .crear-ticket-page .mat-mdc-select-placeholder,
+body.suite-compact-review .crear-ticket-page .mat-mdc-input-element::placeholder {
+  color: #667085 !important;
+  opacity: 1;
+  font-weight: 600;
+}
+
 body.suite-compact-review .crear-ticket-page .mat-mdc-floating-label,
 body.suite-compact-review .crear-ticket-page .mdc-floating-label {
   font-size: 11px !important;
