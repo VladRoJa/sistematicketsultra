@@ -290,8 +290,9 @@ export class MarketingSalesFunnelDetailDialogComponent implements OnInit {
           { key: 'followup_status', label: 'Seguimiento', widthClass: 'wide' },
           { key: 'visit_status', label: 'Visitó', widthClass: 'compact' },
           { key: 'visit_date', label: 'Fecha visita', widthClass: 'compact' },
-          { key: 'purchase_status', label: 'Compró', widthClass: 'compact' },
+          { key: 'purchase_status', label: 'Compró en Ultra (60d)', widthClass: 'medium' },
           { key: 'sale_date', label: 'Fecha compra', widthClass: 'compact' },
+          { key: 'purchase_branch', label: 'Sucursal compra', widthClass: 'medium' },
           { key: 'channel', label: 'Canal', widthClass: 'medium' },
           { key: 'contact_id', label: 'ID contacto', widthClass: 'medium' },
         ];
