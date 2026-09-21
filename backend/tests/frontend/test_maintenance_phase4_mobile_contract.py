@@ -57,6 +57,9 @@ def test_mobile_execution_has_guided_three_step_flow():
     assert "capture=\"environment\"" in html
     assert "Tomar foto" in html
     assert "Elegir de galería" in html
+    assert "Adjuntar evidencia" in html
+    assert "(recomendado)" in html
+    assert "evidenceRequested = false" in ts
     assert "openCamera()" in ts
     assert "openGallery()" in ts
     assert "Volver a mi programa" in html
@@ -88,12 +91,12 @@ def test_frontend_service_exposes_execution_actions():
         assert fragment in service
 
 
-def test_backend_requires_ticket_owned_bitacora_and_evidence():
+def test_backend_requires_owned_bitacora_but_evidence_is_optional():
     service = _read(EXECUTION_SERVICE)
 
     assert "func.lower(Ticket.asignado_a) == username.casefold()" in service
     assert "Debes guardar una bitácora nueva para este intento " in service
-    assert "Debes adjuntar evidencia antes de marcar realizado." in service
+    assert "Debes adjuntar evidencia antes de marcar realizado." not in service
     assert "DETECTADO_EN_PREVENTIVO" in service
     assert "ticket_preventivo_origen_id=preventive.id" in service
 
