@@ -51,7 +51,7 @@ export class MaintenanceMyProgramComponent implements OnInit {
   checkValues: Record<string, string> = {};
 
   evidenceFile: File | null = null;
-  evidenceRequested = false;
+  evidenceRequested = true;
   bitacoraSaved = false;
   evidenceSaved = false;
   showSavedBitacora = false;
@@ -186,7 +186,7 @@ export class MaintenanceMyProgramComponent implements OnInit {
       return 'Primero guarda la bitácora.';
     }
     if (!this.evidenceRequested) {
-      return 'Evidencia opcional. Actívala si deseas adjuntar una foto.';
+      return 'Continuarás sin evidencia. Puedes marcar realizado cuando la bitácora esté lista.';
     }
     if (!this.evidenceFile) {
       return 'Toma o selecciona una foto del trabajo.';
@@ -591,7 +591,7 @@ export class MaintenanceMyProgramComponent implements OnInit {
     }
 
     this.evidenceSaved = Boolean(detail.has_evidence);
-    this.evidenceRequested = this.evidenceSaved;
+    this.evidenceRequested = true;
   }
 
   private resetWorkForm(): void {
@@ -606,7 +606,7 @@ export class MaintenanceMyProgramComponent implements OnInit {
     this.criticidadCorrectivo = 2;
     this.checkValues = {};
     this.evidenceFile = null;
-    this.evidenceRequested = false;
+    this.evidenceRequested = true;
     this.bitacoraSaved = false;
     this.evidenceSaved = false;
     this.showSavedBitacora = false;
