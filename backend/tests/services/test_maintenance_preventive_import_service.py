@@ -30,7 +30,15 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
         try:
             self.assertEqual(
                 workbook.sheetnames,
-                ["Programacion preventiva", "Catálogos"],
+                [
+                    "Programacion preventiva",
+                    "Catálogos",
+                    "Validaciones",
+                ],
+            )
+            self.assertEqual(
+                workbook["Validaciones"].sheet_state,
+                "hidden",
             )
 
             sheet = workbook["Programacion preventiva"]
@@ -39,7 +47,7 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
                 TEMPLATE_HEADERS,
             )
             self.assertIsNone(sheet["A2"].value)
-            self.assertEqual(sheet["C2"].number_format, "dd/mm/yyyy")
+            self.assertEqual(sheet["D2"].number_format, "dd/mm/yyyy")
             self.assertEqual(sheet.freeze_panes, "A2")
 
             validations = list(
@@ -57,18 +65,28 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
                 for validation in validations
                 if validation.type == "list"
             }
-            self.assertEqual(
+            self.assertIn("=CatalogoSucursales", formulas)
+            self.assertIn("=CatalogoResponsables", formulas)
+            self.assertIn(
+                '=INDIRECT(IFERROR(VLOOKUP($A2,MapaFamilias,2,FALSE),"ListaVacia"))',
                 formulas,
-                {"=CatalogoSucursales", "=CatalogoResponsables"},
+            )
+            self.assertIn(
+                '=INDIRECT(IFERROR(VLOOKUP($A2&"|"&$B2,MapaCodigos,2,FALSE),"ListaVacia"))',
+                formulas,
             )
 
             catalogs = workbook["Catálogos"]
             self.assertEqual(catalogs["A2"].value, "Paseo 2000")
             self.assertEqual(catalogs["B2"].value, "SR_MANT_TIJ")
             self.assertEqual(catalogs["D2"].value, "Paseo 2000")
-            self.assertEqual(catalogs["E2"].value, "09CBRLF03")
             self.assertEqual(
-                catalogs["F2"].value,
+                catalogs["E2"].value,
+                "Bicicleta Recumbente",
+            )
+            self.assertEqual(catalogs["F2"].value, "09CBRLF03")
+            self.assertEqual(
+                catalogs["G2"].value,
                 "Bicicleta Recumbente",
             )
             self.assertIn(
@@ -78,6 +96,20 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
             self.assertIn(
                 "CatalogoResponsables",
                 workbook.defined_names,
+            )
+            self.assertIn("MapaFamilias", workbook.defined_names)
+            self.assertIn("MapaCodigos", workbook.defined_names)
+            self.assertTrue(
+                any(
+                    name.startswith("Familias_")
+                    for name in workbook.defined_names
+                )
+            )
+            self.assertTrue(
+                any(
+                    name.startswith("Codigos_")
+                    for name in workbook.defined_names
+                )
             )
         finally:
             workbook.close()
@@ -91,6 +123,7 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
         sheet = workbook["Programacion preventiva"]
         values = [
             "Paseo 2000",
+            "Bicicleta Recumbente",
             "09CBRLF03",
             "25/09/2026",
             "Mantenimiento general",
@@ -189,6 +222,7 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
             TEMPLATE_HEADERS,
             (
                 "Sucursal",
+                "Familia",
                 "Código equipo",
                 "Fecha programada",
                 "Actividad",
