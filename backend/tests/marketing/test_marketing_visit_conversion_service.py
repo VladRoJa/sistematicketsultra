@@ -14,6 +14,7 @@ from app.services.marketing_visit_conversion_service import (
     VisitConversionRow,
     _build_attribution_visits_from_rows,
     _metric_matches,
+    _serialize_detail_row,
     _serialize_metrics,
 )
 
@@ -262,6 +263,23 @@ def test_direct_purchase_without_crm_is_a_bought_untraced_visit(monkeypatch):
 
     assert result["summary"]["visits_not_iventas_bought"] == 1
     assert result["summary"]["visits_not_iventas_not_bought"] == 0
+
+
+def test_direct_purchase_detail_uses_business_friendly_label():
+    row = VisitConversionRow(
+        event_key="direct_purchase:4:6869999999",
+        branch_id=4,
+        visit_date=date(2026, 9, 10),
+        phone="6869999999",
+        origin=None,
+        sale=_sale(),
+        visit_kind=visit_conversion_service.VISIT_KIND_DIRECT_PURCHASE,
+    )
+
+    detail = _serialize_detail_row(row, {4: "Tec Mexicali"})
+
+    assert detail["visit_type"] == "Compra directa"
+    assert detail["source"] == "Venta Nueva sin pase registrado"
 
 
 def test_summary_from_loaded_data_preserves_missing_venta_total(monkeypatch):
