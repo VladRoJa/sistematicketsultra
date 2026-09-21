@@ -120,6 +120,7 @@ export class TicketService {
     estado?: string;
     departamento_id?: number;
     criticidad?: number;
+    tipo_mantenimiento?: 'PREVENTIVO' | 'CORRECTIVO';
     year?: string;
     no_paging?: boolean;
     limit?: number;
@@ -130,6 +131,9 @@ export class TicketService {
     if (filters.estado) params = params.set('estado', filters.estado);
     if (filters.departamento_id !== undefined) params = params.set('departamento_id', String(filters.departamento_id));
     if (filters.criticidad !== undefined) params = params.set('criticidad', String(filters.criticidad));
+    if (filters.tipo_mantenimiento) {
+      params = params.set('tipo_mantenimiento', filters.tipo_mantenimiento);
+    }
 
     if (filters.no_paging) {
       params = params.set('no_paging', 'true');
@@ -163,6 +167,9 @@ getValidationSummary(): Observable<TicketValidationSummary> {
     if (filtros.estado) params = params.set('estado', filtros.estado);
     if (filtros.departamento_id) params = params.set('departamento_id', filtros.departamento_id);
     if (filtros.criticidad) params = params.set('criticidad', filtros.criticidad);
+    if (filtros.tipo_mantenimiento) {
+      params = params.set('tipo_mantenimiento', filtros.tipo_mantenimiento);
+    }
     if (filtros.username) params = params.set('username', filtros.username);
     if (filtros.fechaDesde) params = params.set('fecha_desde', filtros.fechaDesde);
     if (filtros.fechaHasta) params = params.set('fecha_hasta', filtros.fechaHasta);
