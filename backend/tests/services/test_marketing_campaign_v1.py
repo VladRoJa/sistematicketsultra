@@ -116,7 +116,16 @@ def test_new_members_deduplicate_invalid_and_scope(monkeypatch):
 
 
 def test_region_intersects_permissions_and_rejects_wrong_branch(monkeypatch):
-    monkeypatch.setattr(audience, "region_branches", lambda **k: [NS(sucursal="CENTRO"), NS(sucursal="NORTE")])
+    monkeypatch.setattr(
+        audience,
+        "region_branches",
+        lambda **k: [NS(sucursal_id=1), NS(sucursal_id=2)],
+    )
+    monkeypatch.setattr(
+        audience,
+        "reactivation_branch_keys_by_sucursal_ids",
+        lambda **k: {1: "CENTRO", 2: "NORTE"},
+    )
     monkeypatch.setattr(audience, "exported_counts", lambda *a, **k: {})
     calls = {}
     def active(**kwargs):
@@ -223,7 +232,12 @@ def test_postgres_export_policy_uses_one_shared_transaction_lock():
 def test_region_catalog_uses_current_assignments_and_user_scope():
     engine = create_engine("sqlite://")
     metadata = MetaData()
-    for model in (audience.Sucursal, audience.SuiteRegionORM, audience.SuiteSucursalRegionAssignmentORM):
+    for model in (
+        audience.Sucursal,
+        audience.SuiteRegionORM,
+        audience.SuiteSucursalRegionAssignmentORM,
+        audience.TrackBranchCatalogORM,
+    ):
         model.__table__.to_metadata(metadata)
     metadata.create_all(engine)
     try:
@@ -242,6 +256,13 @@ def test_region_catalog_uses_current_assignments_and_user_scope():
             ], 1):
                 session.add(audience.Sucursal(sucursal_id=index, serie=str(index), sucursal=name,
                                              estado="BC", municipio="Tijuana", direccion="Test"))
+                session.add(audience.TrackBranchCatalogORM(
+                    sucursal_canon=f"BRANCH_{index}",
+                    sucursal_id=index,
+                    track_label=name,
+                    display_order=index,
+                    is_track_active=True,
+                ))
                 session.add(audience.SuiteSucursalRegionAssignmentORM(
                     sucursal_id=index, region_id=region, is_current=current, valid_from=start, valid_to=end))
             session.commit()
@@ -250,6 +271,65 @@ def test_region_catalog_uses_current_assignments_and_user_scope():
             options = audience.campaign_options(allowed_sucursal_keys=("CENTRO",), session=session, now=NOW)
             assert options == {"branches": [{"key": "CENTRO", "label": "CENTRO"}],
                                "regions": [{"id": 1, "label": "Región", "branch_keys": ["CENTRO"]}]}
+    finally:
+        engine.dispose()
+
+
+def test_campaign_options_uses_track_label_key_and_excludes_uncatalogued_branches():
+    engine = create_engine("sqlite://")
+    metadata = MetaData()
+    for model in (
+        audience.Sucursal,
+        audience.SuiteRegionORM,
+        audience.SuiteSucursalRegionAssignmentORM,
+        audience.TrackBranchCatalogORM,
+    ):
+        model.__table__.to_metadata(metadata)
+    metadata.create_all(engine)
+    try:
+        with Session(engine) as session:
+            session.add_all([
+                audience.Sucursal(
+                    sucursal_id=12,
+                    serie="12",
+                    sucursal="Carrousel tijuana",
+                    estado="BC",
+                    municipio="Tijuana",
+                    direccion="Test",
+                ),
+                audience.Sucursal(
+                    sucursal_id=100,
+                    serie="100",
+                    sucursal="Corporativo",
+                    estado="BC",
+                    municipio="Tijuana",
+                    direccion="Test",
+                ),
+                audience.TrackBranchCatalogORM(
+                    sucursal_canon="CARROUSEL_TJ",
+                    sucursal_id=12,
+                    track_label="CARROUSEL TJ",
+                    display_order=12,
+                    is_track_active=True,
+                ),
+            ])
+            session.commit()
+
+            options = audience.campaign_options(
+                allowed_sucursal_keys=None,
+                session=session,
+                now=NOW,
+            )
+
+            assert options == {
+                "branches": [
+                    {
+                        "key": "CARROUSEL TJ",
+                        "label": "Carrousel tijuana",
+                    }
+                ],
+                "regions": [],
+            }
     finally:
         engine.dispose()
 
