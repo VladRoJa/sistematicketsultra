@@ -60,6 +60,8 @@ from app.services.marketing_sales_funnel_service import (
     _load_visits,
     _match_iventas,
     _meta_contact_keys,
+    _visit_source_label,
+    _visit_type_label,
 )
 from app.services.marketing_visit_conversion_service import (
     VISIT_CONVERSION_METRICS,
@@ -254,7 +256,8 @@ def _visit_rows(
                     if origin is not None
                     else "Sin match iVentas"
                 ),
-                "source": "Pase comercial en Venta Total",
+                "visit_type": _visit_type_label(visit),
+                "source": _visit_source_label(visit),
             }
         )
     return rows
