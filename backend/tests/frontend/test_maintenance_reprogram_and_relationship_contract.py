@@ -47,6 +47,15 @@ TICKETS_CSS = ROOT / (
     "frontend/src/app/pantalla-ver-tickets/"
     "pantalla-ver-tickets.component.css"
 )
+TICKET_SERVICE = ROOT / "frontend/src/app/services/ticket.service.ts"
+TICKETS_INIT = ROOT / (
+    "frontend/src/app/pantalla-ver-tickets/helpers/"
+    "pantalla-ver-tickets.init.ts"
+)
+TICKETS_FILTERS = ROOT / (
+    "frontend/src/app/pantalla-ver-tickets/helpers/"
+    "pantalla-ver-tickets.filtros.ts"
+)
 HISTORY_MODAL_TS = ROOT / (
     "frontend/src/app/pantalla-ver-tickets/modals/"
     "historial-fechas-modal.component.ts"
@@ -163,3 +172,33 @@ def test_ticket_summary_marks_preventive_without_extra_summary_card():
     assert "PREVENTIVO" in modal_html
     assert ".hero-status-stack" in modal_css
     assert ".maintenance-type-chip" in modal_css
+
+
+def test_tickets_can_filter_and_export_maintenance_type():
+    tickets_ts = _read(TICKETS_TS)
+    tickets_html = _read(TICKETS_HTML)
+    tickets_css = _read(TICKETS_CSS)
+    ticket_service = _read(TICKET_SERVICE)
+    tickets_init = _read(TICKETS_INIT)
+    tickets_filters = _read(TICKETS_FILTERS)
+    routes = _read(TICKET_ROUTES)
+
+    assert "selectedMaintenanceType" in tickets_ts
+    assert "maintenanceTypeOptions" in tickets_ts
+    assert "onMaintenanceTypeChanged" in tickets_ts
+    assert "getSelectedMaintenanceTypeForBackend" in tickets_ts
+    assert "puedeMostrarFiltroTipoMantenimiento" in tickets_ts
+
+    assert "tickets-maintenance-type-toggle" in tickets_html
+    assert "Correctivos" in tickets_ts
+    assert "Preventivos" in tickets_ts
+    assert ".tickets-maintenance-type-toggle__btn--active" in tickets_css
+
+    assert "tipo_mantenimiento" in ticket_service
+    assert "tipo_mantenimiento: tipoMantenimiento" in tickets_init
+    assert "filtros.tipo_mantenimiento = tipoMantenimiento" in tickets_filters
+    assert "filtros.departamento_id = departamentoScopeId" in tickets_filters
+
+    assert "def _apply_maintenance_type_filter" in routes
+    assert "tipo_mantenimiento = request.args.get('tipo_mantenimiento')" in routes
+    assert "Ticket.departamento_id == 1" in routes
