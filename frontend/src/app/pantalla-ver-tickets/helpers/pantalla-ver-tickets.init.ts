@@ -82,10 +82,12 @@ export function cargarTickets(component: PantallaVerTicketsComponent): void {
   component.loading = true;
 
   const departamentoScopeId = component.getSelectedDepartmentScopeId();
+  const tipoMantenimiento = component.getSelectedMaintenanceTypeForBackend();
 
   const ticketsRequest$ = component.ticketService.getTicketsConFiltros({
     year: component.selectedTicketYear,
     ...(departamentoScopeId ? { departamento_id: departamentoScopeId } : {}),
+    ...(tipoMantenimiento ? { tipo_mantenimiento: tipoMantenimiento } : {}),
     no_paging: true,
   });
 
