@@ -49,7 +49,11 @@
           class="w-full"
         >
           <mat-label>Sucursal destino</mat-label>
-          <mat-select formControlName="sucursal_id" required>
+          <mat-select
+            formControlName="sucursal_id"
+            placeholder="Selecciona una sucursal"
+            required
+          >
             <mat-option
               *ngFor="let s of listaSucursales"
               [value]="s.sucursal_id"
@@ -68,13 +72,14 @@
               <mat-select
                 [formControl]="nivel.control"
                 [disabled]="nivel.loading"
+                [placeholder]="getPlaceholderNivel(nivel)"
               >
                 <!-- Placeholder cuando no hay opciones -->
                 <mat-option
                   *ngIf="!nivel.loading && (!nivel.opciones || !nivel.opciones.length)"
                   [disabled]="true"
                 >
-                  (sin opciones)
+                  No hay opciones disponibles
                 </mat-option>
 
                 <!-- Opciones reales -->
@@ -142,9 +147,14 @@
             <textarea
               matInput
               formControlName="descripcion_general"
+              placeholder="Describe qué sucede y agrega los datos que ayuden a resolverlo"
               rows="3"
             >
             </textarea>
+
+            <mat-hint>
+              Indica qué ocurre, dónde sucede y cualquier dato relevante.
+            </mat-hint>
 
             <mat-error
               *ngIf="form.get('descripcion_general')?.touched && form.get('descripcion_general')?.invalid"
@@ -239,11 +249,18 @@
         <!-- Criticidad -->
         <mat-form-field appearance="fill" class="w-full">
           <mat-label>Nivel de criticidad*</mat-label>
-          <mat-select formControlName="criticidad">
+          <mat-select
+            formControlName="criticidad"
+            placeholder="Selecciona un nivel de prioridad"
+          >
             <mat-option *ngFor="let n of [1,2,3,4,5]" [value]="n">
               Nivel {{ n }}
             </mat-option>
           </mat-select>
+
+          <mat-hint>
+            Elige la prioridad operativa que corresponde a la solicitud.
+          </mat-hint>
 
           <mat-error *ngIf="form.get('criticidad')?.touched && form.get('criticidad')?.invalid">
             Selecciona criticidad
