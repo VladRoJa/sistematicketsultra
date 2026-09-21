@@ -45,6 +45,27 @@ ticket_bp = Blueprint('tickets', __name__, url_prefix='/api/tickets')
 # Helpers
 # ─────────────────────────────────────────────────────────────
 
+def _apply_maintenance_type_filter(query, raw_value):
+    raw = str(raw_value or "").strip().upper()
+    if not raw:
+        return query
+
+    if raw == "PREVENTIVO":
+        return query.filter(Ticket.tipo_mantenimiento == "PREVENTIVO")
+
+    if raw == "CORRECTIVO":
+        return query.filter(
+            or_(
+                Ticket.tipo_mantenimiento == "CORRECTIVO",
+                Ticket.tipo_mantenimiento.is_(None),
+            )
+        )
+
+    raise ValueError(
+        "tipo_mantenimiento debe ser PREVENTIVO o CORRECTIVO."
+    )
+
+
 def _maintenance_commitment_change_error(
     ticket: Ticket,
     new_due: datetime,
@@ -1057,6 +1078,7 @@ def list_tickets_with_filters():
         estado          = request.args.get('estado')
         departamento_id = request.args.get('departamento_id')
         criticidad      = request.args.get('criticidad')
+        tipo_mantenimiento = request.args.get('tipo_mantenimiento')
         no_paging       = request.args.get('no_paging', default='false').lower() == 'true'
         limit           = request.args.get('limit', default=15, type=int)
         offset          = request.args.get('offset', default=0, type=int)
@@ -1088,6 +1110,14 @@ def list_tickets_with_filters():
             except (TypeError, ValueError):
                 return jsonify({"mensaje": "criticidad inválida"}), 400
             query = query.filter_by(criticidad=criticidad_int)
+
+        try:
+            query = _apply_maintenance_type_filter(
+                query,
+                tipo_mantenimiento,
+            )
+        except ValueError as exc:
+            return jsonify({"mensaje": str(exc)}), 400
 
         total_tickets = query.count()
         if not no_paging:
@@ -1347,6 +1377,7 @@ def export_excel():
         detalles       = request.args.getlist('detalle')
         descripciones  = request.args.getlist('descripcion')
         inventarios    = request.args.getlist('inventario')
+        tipo_mantenimiento = request.args.get('tipo_mantenimiento')
 
         fecha_desde      = request.args.get('fecha_desde')
         fecha_hasta      = request.args.get('fecha_hasta')
@@ -1375,6 +1406,14 @@ def export_excel():
             query = query.filter(Ticket.criticidad.in_([int(c) for c in criticidades]))
         if usernames:
             query = query.filter(Ticket.username.in_(usernames))
+
+        try:
+            query = _apply_maintenance_type_filter(
+                query,
+                tipo_mantenimiento,
+            )
+        except ValueError as exc:
+            return jsonify({"mensaje": str(exc)}), 400
 
         from sqlalchemy import or_
         def filtrar_con_null(campo, valores):
