@@ -3,7 +3,10 @@ from __future__ import annotations
 from calendar import monthrange
 from datetime import date, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 from typing import Any
+
+from sqlalchemy import and_, case, func
 
 from app.models import MarketingIventasContactORM
 from app.models.warehouse import (
@@ -14,6 +17,7 @@ from app.models.warehouse import (
 from app.services.marketing_access import MarketingAccess
 from app.services.marketing_dashboard_service import load_visible_marketing_branches
 from app.services.marketing_inputs_service import parse_month
+from app.services.marketing_phone import normalize_member_phone, normalize_phone
 from app.services.marketing_sales_funnel_service import (
     MATCH_WINDOW_DAYS,
     ORIGIN_IVENTAS_META,
@@ -23,12 +27,14 @@ from app.services.marketing_sales_funnel_service import (
     SALE_CATEGORY_DIGITAL,
     SALE_CATEGORY_DIGITAL_ORGANIC,
     SALE_CATEGORY_WEB,
+    _build_venta_total_enrichment,
     _canonical_runs_for_window,
     _classify_sale_category,
     _classify_survey,
     _load_branch_alias_map,
     _load_iventas_data,
     _load_new_sales,
+    _find_venta_total_enrichment,
     _load_visits,
     _match_iventas,
     _meta_contact_keys,
@@ -668,64 +674,289 @@ def _enrich_lead_followup_rows(
     return enriched
 
 
+def _sql_normalized_phone(telefono_column: Any, lada_column: Any = None) -> Any:
+    phone_digits = func.regexp_replace(
+        func.coalesce(telefono_column, ""),
+        r"\\D",
+        "",
+        "g",
+    )
+    direct_phone = case(
+        (func.length(phone_digits) == 10, phone_digits),
+        (
+            and_(
+                func.length(phone_digits) == 12,
+                func.left(phone_digits, 2) == "52",
+            ),
+            func.right(phone_digits, 10),
+        ),
+        (
+            and_(
+                func.length(phone_digits) == 13,
+                func.left(phone_digits, 3) == "521",
+            ),
+            func.right(phone_digits, 10),
+        ),
+        else_=None,
+    )
+
+    if lada_column is None:
+        return direct_phone
+
+    combined_digits = func.regexp_replace(
+        func.concat(
+            func.coalesce(lada_column, ""),
+            func.coalesce(telefono_column, ""),
+        ),
+        r"\\D",
+        "",
+        "g",
+    )
+    combined_phone = case(
+        (func.length(combined_digits) == 10, combined_digits),
+        (
+            and_(
+                func.length(combined_digits) == 12,
+                func.left(combined_digits, 2) == "52",
+            ),
+            func.right(combined_digits, 10),
+        ),
+        (
+            and_(
+                func.length(combined_digits) == 13,
+                func.left(combined_digits, 3) == "521",
+            ),
+            func.right(combined_digits, 10),
+        ),
+        else_=None,
+    )
+    return func.coalesce(direct_phone, combined_phone)
+
+
+def _lead_candidate_phones(rows: list[dict[str, Any]]) -> tuple[str, ...]:
+    return tuple(
+        sorted(
+            {
+                str(row.get("phone") or "").strip()
+                for row in rows
+                if str(row.get("phone") or "").strip()
+            }
+        )
+    )
+
+
+def _load_targeted_venta_total_rows(
+    *,
+    month_start: date,
+    candidate_phones: tuple[str, ...],
+) -> list[VentaTotalSnapshotRowORM]:
+    if not candidate_phones:
+        return []
+
+    snapshot = _select_venta_total_snapshot(month_start)
+    if snapshot is None:
+        return []
+
+    base_query = VentaTotalSnapshotRowORM.query.filter(
+        VentaTotalSnapshotRowORM.snapshot_id == snapshot.id,
+    )
+
+    exact_rows = base_query.filter(
+        VentaTotalSnapshotRowORM.telefono.in_(candidate_phones),
+    ).all()
+
+    matched_phones = {
+        phone
+        for row in exact_rows
+        if (phone := normalize_phone(row.telefono)) is not None
+    }
+    remaining = tuple(
+        phone for phone in candidate_phones if phone not in matched_phones
+    )
+
+    if not remaining:
+        return exact_rows
+
+    normalized_phone = _sql_normalized_phone(
+        VentaTotalSnapshotRowORM.telefono,
+    )
+    normalized_rows = base_query.filter(
+        normalized_phone.in_(remaining),
+    ).all()
+
+    by_id = {int(row.id): row for row in exact_rows}
+    for row in normalized_rows:
+        by_id.setdefault(int(row.id), row)
+    return list(by_id.values())
+
+
+def _load_targeted_purchase_events(
+    *,
+    month_start: date,
+    candidate_phones: tuple[str, ...],
+    branch_ids: tuple[int, ...],
+    venta_total_rows: list[VentaTotalSnapshotRowORM],
+) -> list[Any]:
+    if not candidate_phones or not branch_ids:
+        return []
+
+    snapshot = _select_new_sales_detail_snapshot(month_start)
+    if snapshot is None:
+        return []
+
+    base_query = VentasNuevosSociosDetalleSnapshotRowORM.query.filter(
+        VentasNuevosSociosDetalleSnapshotRowORM.snapshot_id == snapshot.id,
+        VentasNuevosSociosDetalleSnapshotRowORM.sucursal_id.in_(branch_ids),
+    )
+
+    exact_rows = base_query.filter(
+        VentasNuevosSociosDetalleSnapshotRowORM.telefono.in_(
+            candidate_phones
+        ),
+    ).all()
+
+    matched_phones = {
+        phone
+        for row in exact_rows
+        if (
+            phone := normalize_member_phone(
+                lada=row.lada,
+                telefono=row.telefono,
+            )
+        )
+        is not None
+    }
+    remaining = tuple(
+        phone for phone in candidate_phones if phone not in matched_phones
+    )
+
+    normalized_rows: list[Any] = []
+    if remaining:
+        normalized_phone = _sql_normalized_phone(
+            VentasNuevosSociosDetalleSnapshotRowORM.telefono,
+            VentasNuevosSociosDetalleSnapshotRowORM.lada,
+        )
+        normalized_rows = base_query.filter(
+            normalized_phone.in_(remaining),
+        ).all()
+
+    by_folio, by_pin_date = _build_venta_total_enrichment(
+        venta_total_rows,
+        month_start,
+    )
+
+    enrichment_rows: list[Any] = []
+    folios = tuple(by_folio.keys())
+    pins = tuple({pin for pin, _ in by_pin_date.keys()})
+    if folios:
+        enrichment_rows.extend(
+            base_query.filter(
+                VentasNuevosSociosDetalleSnapshotRowORM.id_folio.in_(folios),
+            ).all()
+        )
+    if pins:
+        enrichment_rows.extend(
+            base_query.filter(
+                VentasNuevosSociosDetalleSnapshotRowORM.pin.in_(pins),
+            ).all()
+        )
+
+    candidates: dict[int, Any] = {}
+    for row in [*exact_rows, *normalized_rows, *enrichment_rows]:
+        candidates.setdefault(int(row.id), row)
+
+    allowed_phones = set(candidate_phones)
+    events: dict[tuple[str, date, int], Any] = {}
+
+    for row in candidates.values():
+        try:
+            payment_date = _payment_local_date(row.fecha_pago_at)
+        except ValueError:
+            continue
+        if payment_date.replace(day=1) != month_start:
+            continue
+
+        phone = normalize_member_phone(
+            lada=row.lada,
+            telefono=row.telefono,
+        )
+        if phone is None:
+            enrichment = _find_venta_total_enrichment(
+                by_folio=by_folio,
+                by_pin_date=by_pin_date,
+                folio=row.id_folio,
+                pin=row.pin,
+                payment_date=payment_date,
+            )
+            phone = enrichment.phone if enrichment is not None else None
+
+        if phone is None or phone not in allowed_phones:
+            continue
+
+        branch_id = int(row.sucursal_id)
+        key = (phone, payment_date, branch_id)
+        events.setdefault(
+            key,
+            SimpleNamespace(
+                phone=phone,
+                sale_date=payment_date,
+                branch_id=branch_id,
+            ),
+        )
+
+    return list(events.values())
+
+
 def _load_month_lead_followup_sources(
     *,
     month_start: date,
     branch_ids: tuple[int, ...],
+    lead_rows: list[dict[str, Any]],
 ) -> tuple[Any, Any, dict[int, str]]:
+    candidate_phones = _lead_candidate_phones(lead_rows)
+    global_branch_ids, global_branch_names = _load_global_marketing_branches()
+
+    if not candidate_phones:
+        return [], [], global_branch_names
+
     alias_map = _load_branch_alias_map()
     month_end = _month_end(month_start)
+    venta_total_cache: dict[date, list[VentaTotalSnapshotRowORM]] = {}
+
+    def targeted_venta_total(period_start: date) -> list[VentaTotalSnapshotRowORM]:
+        rows = venta_total_cache.get(period_start)
+        if rows is None:
+            rows = _load_targeted_venta_total_rows(
+                month_start=period_start,
+                candidate_phones=candidate_phones,
+            )
+            venta_total_cache[period_start] = rows
+        return rows
 
     visits: list[Any] = []
     visit_horizon = month_end + timedelta(days=MATCH_WINDOW_DAYS)
     for period_start in _iter_month_starts(month_start, visit_horizon):
-        venta_total_snapshot = _select_venta_total_snapshot(period_start)
-        if venta_total_snapshot is None:
-            continue
-        venta_total_rows = (
-            VentaTotalSnapshotRowORM.query.filter_by(
-                snapshot_id=venta_total_snapshot.id
-            )
-            .order_by(VentaTotalSnapshotRowORM.row_index.asc())
-            .all()
-        )
         visits.extend(
             _load_visits(
-                venta_total_rows,
+                targeted_venta_total(period_start),
                 period_start,
                 branch_ids,
                 alias_map,
             )
         )
 
-    global_branch_ids, global_branch_names = _load_global_marketing_branches()
     sales: list[Any] = []
     purchase_horizon = month_end + timedelta(
         days=LEAD_GLOBAL_PURCHASE_WINDOW_DAYS
     )
     for period_start in _iter_month_starts(month_start, purchase_horizon):
-        detail_snapshot = _select_new_sales_detail_snapshot(period_start)
-        if detail_snapshot is None:
-            continue
-
-        venta_total_snapshot = _select_venta_total_snapshot(period_start)
-        venta_total_rows = (
-            VentaTotalSnapshotRowORM.query.filter_by(
-                snapshot_id=venta_total_snapshot.id
-            )
-            .order_by(VentaTotalSnapshotRowORM.row_index.asc())
-            .all()
-            if venta_total_snapshot is not None
-            else []
-        )
-
         sales.extend(
-            _load_new_sales(
-                snapshot=detail_snapshot,
-                venta_total_rows=venta_total_rows,
+            _load_targeted_purchase_events(
                 month_start=period_start,
+                candidate_phones=candidate_phones,
                 branch_ids=global_branch_ids,
-            ).sales
+                venta_total_rows=targeted_venta_total(period_start),
+            )
         )
 
     return visits, sales, global_branch_names
@@ -802,6 +1033,7 @@ def _leads_meta_detail(
     visits, sales, global_branch_names = _load_month_lead_followup_sources(
         month_start=month_start,
         branch_ids=branch_ids,
+        lead_rows=result,
     )
     return (
         _enrich_lead_followup_rows(
