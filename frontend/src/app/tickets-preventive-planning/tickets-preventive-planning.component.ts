@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 
 import {
   MaintenancePreventiveService,
@@ -11,6 +12,7 @@ import {
   PreventiveEquipment,
   PreventivePlanningContext,
 } from '../services/maintenance-preventive.service';
+import { DialogoConfirmacionComponent } from '../shared/dialogo-confirmacion/dialogo-confirmacion.component';
 
 interface PreventiveFamilyOption {
   id: number;
@@ -21,12 +23,13 @@ interface PreventiveFamilyOption {
 @Component({
   selector: 'app-tickets-preventive-planning',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MatDialogModule],
   templateUrl: './tickets-preventive-planning.component.html',
   styleUrls: ['./tickets-preventive-planning.component.css'],
 })
 export class TicketsPreventivePlanningComponent implements OnInit {
   private readonly preventiveService = inject(MaintenancePreventiveService);
+  private readonly dialog = inject(MatDialog);
 
   context: PreventivePlanningContext = {
     sucursales: [],
@@ -415,29 +418,48 @@ export class TicketsPreventivePlanningComponent implements OnInit {
   publishSelectedBatch(): void {
     if (!this.selectedBatch || !this.canPublish) return;
 
-    const confirmed = window.confirm(
-      'Se crearán '
-      + String(this.selectedBatch.items.length)
-      + ' tickets preventivos. ¿Publicar lote?',
-    );
-    if (!confirmed) return;
+    const batchId = this.selectedBatch.id;
+    const itemCount = this.selectedBatch.items.length;
 
-    this.saving = true;
-    this.clearMessages();
+    const dialogRef = this.dialog.open(DialogoConfirmacionComponent, {
+      data: {
+        titulo: 'Publicar preventivos',
+        mensaje:
+          'Se crearán '
+          + String(itemCount)
+          + (itemCount === 1
+            ? ' ticket preventivo. '
+            : ' tickets preventivos. ')
+          + 'Después de publicar, el lote ya no podrá editarse.',
+        textoAceptar: 'Publicar',
+        textoCancelar: 'Cancelar',
+      },
+      autoFocus: false,
+      restoreFocus: true,
+    });
 
-    this.preventiveService.publishBatch(this.selectedBatch.id).subscribe({
-      next: (response) => {
-        this.selectedBatch = response.batch;
-        this.saving = false;
-        this.successMessage =
-          'Lote publicado. Tickets generados: '
-          + response.ticket_ids.join(', ');
-        this.loadBatches();
-      },
-      error: (error) => {
-        this.saving = false;
-        this.setError(error, 'No se pudo publicar el lote.');
-      },
+    dialogRef.afterClosed().subscribe((confirmed) => {
+      if (!confirmed) {
+        return;
+      }
+
+      this.saving = true;
+      this.clearMessages();
+
+      this.preventiveService.publishBatch(batchId).subscribe({
+        next: (response) => {
+          this.selectedBatch = response.batch;
+          this.saving = false;
+          this.successMessage =
+            'Lote publicado. Tickets generados: '
+            + response.ticket_ids.join(', ');
+          this.loadBatches();
+        },
+        error: (error) => {
+          this.saving = false;
+          this.setError(error, 'No se pudo publicar el lote.');
+        },
+      });
     });
   }
 
