@@ -125,6 +125,10 @@ export class AdminUsuariosSucursalesComponent implements OnInit {
     return this.selectedIds.length;
   }
 
+  get hayCambios(): boolean {
+    return this.form.dirty;
+  }
+
   get inicialUsuario(): string {
     return (this.username || '?').charAt(0).toUpperCase();
   }
@@ -163,6 +167,7 @@ export class AdminUsuariosSucursalesComponent implements OnInit {
       : [...this.selectedIds, id];
 
     this.form.patchValue({ sucursales_ids: next });
+    this.form.markAsDirty();
   }
 
   seleccionarTodasSucursales(): void {
@@ -170,11 +175,13 @@ export class AdminUsuariosSucursalesComponent implements OnInit {
     this.form.patchValue({
       sucursales_ids: this.sucursales.map((sucursal) => sucursal.id),
     });
+    this.form.markAsDirty();
   }
 
   limpiarSucursales(): void {
     this.okMsg = null;
     this.form.patchValue({ sucursales_ids: [] });
+    this.form.markAsDirty();
   }
 
   trackBySucursal(_: number, sucursal: SucursalOption): number {
@@ -228,6 +235,7 @@ export class AdminUsuariosSucursalesComponent implements OnInit {
         this.form.patchValue({
           sucursales_ids: resp.sucursales_ids ?? [],
         });
+        this.form.markAsPristine();
         this.loadingAsignacion = false;
       },
       error: (err) => {
@@ -306,6 +314,7 @@ export class AdminUsuariosSucursalesComponent implements OnInit {
           this.form.patchValue({
             sucursales_ids: resp.sucursales_ids ?? [],
           });
+          this.form.markAsPristine();
           this.saving = false;
           this.okMsg = 'Visibilidad de sucursales actualizada correctamente.';
         },
