@@ -60,10 +60,10 @@
         (click)="openEvidence()"
       >
         <mat-icon>
-          {{ current.requirements.has_evidence ? 'image' : 'error' }}
+          {{ current.requirements.has_evidence ? 'image' : 'image_not_supported' }}
         </mat-icon>
         <span>
-          {{ current.requirements.has_evidence ? 'Ver evidencia' : 'Sin evidencia' }}
+          {{ current.requirements.has_evidence ? 'Ver evidencia' : 'Sin evidencia · opcional' }}
         </span>
       </button>
     </section>
