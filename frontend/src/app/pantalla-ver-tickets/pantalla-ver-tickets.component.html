@@ -865,6 +865,14 @@
               </ng-container>
             </div>
 
+            <span
+              *ngIf="getEtiquetaTipoMantenimiento(ticket) as maintenanceLabel"
+              class="maintenance-ticket-badge"
+              [ngClass]="getClaseTipoMantenimiento(ticket)"
+            >
+              {{ maintenanceLabel }}
+            </span>
+
             <button
               mat-icon-button
               class="desc-more"
