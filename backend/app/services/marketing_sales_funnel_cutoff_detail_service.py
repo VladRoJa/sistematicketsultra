@@ -26,6 +26,7 @@ from app.services.marketing_sales_funnel_detail_service import (
     _branch_name_map,
     _enrich_lead_followup_rows,
     _full_name,
+    _load_global_marketing_branches,
     _normalize_metric,
     _normalize_optional_int,
     _normalize_pagination,
@@ -313,17 +314,20 @@ def _lead_rows(
         return rows
 
     detail_snapshot = _selected_snapshot(source=source)
+    global_branch_ids, global_branch_names = _load_global_marketing_branches()
     sales = _load_new_sales(
         snapshot=detail_snapshot,
         venta_total_rows=list(loaded.venta_total_rows or ()),
         month_start=month_start,
-        branch_ids=branch_ids,
+        branch_ids=global_branch_ids,
     ).sales
 
     return _enrich_lead_followup_rows(
         rows,
         visits=loaded.visits,
         sales=sales,
+        global_branch_names=global_branch_names,
+        visible_branch_ids=branch_ids,
         cutoff_date=cutoff_date,
     )
 
