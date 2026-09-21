@@ -131,19 +131,32 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
                 )
             )
 
+            self.assertEqual(
+                sheet["H1"].value,
+                "Validación",
+            )
+            self.assertIn(
+                "COUNTIFS",
+                sheet["H2"].value,
+            )
+            self.assertIn(
+                "DUPLICADO",
+                sheet["H2"].value,
+            )
+
             conditional_ranges = {
                 str(rule_range)
                 for rule_range in sheet.conditional_formatting
             }
-            self.assertIn("A2:G1001", conditional_ranges)
+            self.assertIn("A2:H1001", conditional_ranges)
 
             duplicate_rules = list(
-                sheet.conditional_formatting["A2:G1001"]
+                sheet.conditional_formatting["A2:H1001"]
             )
             self.assertEqual(len(duplicate_rules), 1)
-            self.assertIn(
-                "COUNTIFS",
+            self.assertEqual(
                 duplicate_rules[0].formula[0],
+                '$H2="⚠ DUPLICADO"',
             )
         finally:
             workbook.close()
