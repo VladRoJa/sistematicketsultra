@@ -47,6 +47,7 @@ from app.services.marketing_sales_funnel_service import (
     MarketingSalesFunnelLoadedData,
     _BranchStats,
     _IventasEvidence,
+    _accumulate_visit_stats,
     _build_response,
     _classify_sale_category,
     _classify_survey,
@@ -55,6 +56,7 @@ from app.services.marketing_sales_funnel_service import (
     _load_new_sales,
     _load_visits,
     _match_iventas,
+    _merge_visits_with_direct_purchases,
     _month_end,
 )
 
@@ -559,7 +561,7 @@ def build_marketing_sales_funnel_at_cutoff(
 
     limitations: list[str] = []
     venta_total_rows: list[VentaTotalSnapshotRowORM] = []
-    visits = []
+    registered_visits = []
     if venta_total_snapshot is not None:
         venta_total_rows = (
             db.session.query(
@@ -582,7 +584,7 @@ def build_marketing_sales_funnel_at_cutoff(
             .order_by(VentaTotalSnapshotRowORM.row_index.asc())
             .all()
         )
-        visits = _load_visits(
+        registered_visits = _load_visits(
             venta_total_rows,
             month_start,
             branch_ids,
@@ -596,6 +598,10 @@ def build_marketing_sales_funnel_at_cutoff(
         branch_ids=branch_ids,
     )
     sales = sales_result.sales
+    visits = _merge_visits_with_direct_purchases(
+        visits=registered_visits,
+        sales=sales,
+    )
 
     kpi_control = _load_kpi_new_sales_control(
         snapshot=kpi_snapshot,
@@ -618,27 +624,11 @@ def build_marketing_sales_funnel_at_cutoff(
             f"KPI={kpi_control_total}, diferencia={reconciliation_difference}."
         )
 
-    for visit in visits:
-        stats = stats_by_branch[visit.branch_id]
-        stats.visits_total += 1
-        if visit.phone is None:
-            stats.visits_unmatchable += 1
-            stats.visits_not_iventas += 1
-            continue
-        origin = _match_iventas(
-            evidence,
-            visit.branch_id,
-            visit.phone,
-            visit.visit_date,
-        )
-        if origin == ORIGIN_IVENTAS_META:
-            stats.visits_iventas += 1
-            stats.visits_iventas_meta += 1
-        elif origin == ORIGIN_IVENTAS_OTHER:
-            stats.visits_iventas += 1
-            stats.visits_iventas_other += 1
-        else:
-            stats.visits_not_iventas += 1
+    _accumulate_visit_stats(
+        visits=visits,
+        evidence=evidence,
+        stats_by_branch=stats_by_branch,
+    )
 
     for sale in sales:
         stats = stats_by_branch[sale.branch_id]
