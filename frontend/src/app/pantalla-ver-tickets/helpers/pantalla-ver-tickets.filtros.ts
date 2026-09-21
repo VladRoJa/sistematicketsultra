@@ -499,5 +499,12 @@ export function obtenerFiltrosActivosParaBackend(
   if (pIni) filtros.fecha_prog_desde = pIni;
   if (pFin) filtros.fecha_prog_hasta = pFin;
 
+  const tipoMantenimiento =
+    component.getSelectedMaintenanceTypeForBackend?.();
+
+  if (tipoMantenimiento) {
+    filtros.tipo_mantenimiento = tipoMantenimiento;
+  }
+
   return filtros;
 }
