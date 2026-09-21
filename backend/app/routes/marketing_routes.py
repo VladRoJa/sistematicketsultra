@@ -15,6 +15,9 @@ from app.services.marketing_access import (
     MarketingAuthorizationError,
     resolve_marketing_access,
 )
+from app.services.marketing_campaign_audience_service import (
+    reactivation_branch_keys_by_sucursal_ids,
+)
 from app.services.marketing_dashboard_service import (
     build_marketing_attribution_detail,
     build_marketing_dashboard,
@@ -51,11 +54,6 @@ from app.services.marketing_reactivation_service import (
     mark_marketing_reactivation_campaign_sent,
     preview_marketing_reactivation_campaign,
 )
-from app.warehouse.services.socios_vencidos_current_status_resolver import (
-    normalize_socios_vencidos_branch_key,
-)
-
-
 marketing_bp = Blueprint("marketing", __name__)
 
 
@@ -92,18 +90,11 @@ def _reactivation_allowed_sucursal_keys(access) -> tuple[str, ...] | None:
     if access.is_global:
         return None
     visible_branches, _, _ = load_visible_marketing_branches(access)
-    keys = tuple(
-        sorted(
-            {
-                key
-                for key in (
-                    normalize_socios_vencidos_branch_key(branch.name)
-                    for branch in visible_branches
-                )
-                if key is not None
-            }
-        )
+    key_by_sucursal_id = reactivation_branch_keys_by_sucursal_ids(
+        sucursal_ids=(branch.sucursal_id for branch in visible_branches),
+        session=db.session,
     )
+    keys = tuple(sorted(set(key_by_sucursal_id.values())))
     if not keys:
         raise MarketingAuthorizationError(
             "No hay sucursales de Reactivación dentro del alcance del usuario."
