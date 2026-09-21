@@ -473,7 +473,7 @@ El gerente utilizará la vista actual de escritorio para:
 
 - revisar el ticket;
 - consultar bitácora;
-- revisar evidencia;
+- revisar evidencia cuando exista;
 - validar;
 - rechazar.
 
@@ -483,7 +483,7 @@ La adaptación requerida será únicamente permitir consultar dentro del detalle
 
 - checklist preventivo;
 - bitácora;
-- evidencia;
+- evidencia cuando exista;
 - hallazgos;
 - correctivos relacionados.
 
