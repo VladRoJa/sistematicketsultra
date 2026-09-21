@@ -148,6 +148,11 @@ export interface MarketingSalesFunnelDetailRow {
   source?: string | null;
   contact_id?: string | null;
   channel?: string | null;
+  followup_status?: string | null;
+  visit_status?: string | null;
+  visit_date?: string | null;
+  purchase_status?: string | null;
+  purchase_branch?: string | null;
   conversion_status?: string | null;
   sale_date?: string | null;
   sale_member_id?: string | null;

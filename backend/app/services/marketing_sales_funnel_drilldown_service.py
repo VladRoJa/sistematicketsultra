@@ -71,6 +71,23 @@ SORTABLE_FIELDS_BY_KIND: dict[str, frozenset[str]] = {
     ),
 }
 
+LEADS_META_SORTABLE_FIELDS = frozenset(
+    {
+        "branch",
+        "date",
+        "name",
+        "phone",
+        "followup_status",
+        "visit_status",
+        "visit_date",
+        "purchase_status",
+        "sale_date",
+        "purchase_branch",
+        "channel",
+        "contact_id",
+    }
+)
+
 EXPORT_COLUMNS_BY_KIND: dict[str, tuple[tuple[str, str], ...]] = {
     "sales": (
         ("branch", "Sucursal KPI"),
@@ -107,11 +124,27 @@ EXPORT_COLUMNS_BY_KIND: dict[str, tuple[tuple[str, str], ...]] = {
     ),
 }
 
+LEADS_META_EXPORT_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("branch", "Sucursal KPI"),
+    ("date", "Fecha primer mensaje"),
+    ("name", "Nombre"),
+    ("phone", "Teléfono"),
+    ("followup_status", "Seguimiento"),
+    ("visit_status", "Visitó"),
+    ("visit_date", "Fecha visita"),
+    ("purchase_status", "Compró en Ultra (60d)"),
+    ("sale_date", "Fecha compra"),
+    ("purchase_branch", "Sucursal compra"),
+    ("channel", "Canal"),
+    ("contact_id", "ID contacto"),
+)
+
 
 def _normalize_sort(
     sort_by: Any,
     sort_dir: Any,
     kind: str,
+    metric: str | None = None,
 ) -> tuple[str | None, str]:
     normalized_sort_by = str(sort_by or "").strip() or None
     normalized_sort_dir = str(sort_dir or "asc").strip().lower() or "asc"
@@ -122,7 +155,11 @@ def _normalize_sort(
         )
 
     if normalized_sort_by is not None:
-        allowed = SORTABLE_FIELDS_BY_KIND.get(kind, frozenset())
+        allowed = (
+            LEADS_META_SORTABLE_FIELDS
+            if metric == "leads_meta"
+            else SORTABLE_FIELDS_BY_KIND.get(kind, frozenset())
+        )
         if normalized_sort_by not in allowed:
             raise MarketingSalesFunnelDetailValidationError(
                 f"sort_by no soportado para detalle {kind}."
@@ -300,6 +337,7 @@ def build_marketing_sales_funnel_drilldown(
             None,
             sort_dir,
             detail["kind"],
+            detail["metric"],
         )
         return {
             **detail,
@@ -318,6 +356,7 @@ def build_marketing_sales_funnel_drilldown(
         requested_sort_by,
         sort_dir,
         detail["kind"],
+        detail["metric"],
     )
 
     rows = _sort_rows(
@@ -368,8 +407,13 @@ def _build_excel_workbook(
     title: str,
     kind: str,
     rows: list[dict[str, Any]],
+    metric: str | None = None,
 ) -> BytesIO:
-    columns = EXPORT_COLUMNS_BY_KIND[kind]
+    columns = (
+        LEADS_META_EXPORT_COLUMNS
+        if metric == "leads_meta"
+        else EXPORT_COLUMNS_BY_KIND[kind]
+    )
     workbook = Workbook()
     worksheet = workbook.active
     worksheet.title = "Detalle"
@@ -446,6 +490,7 @@ def build_marketing_sales_funnel_drilldown_export(
         sort_by,
         sort_dir,
         detail["kind"],
+        detail["metric"],
     )
     rows = _sort_rows(
         detail["rows"],
@@ -457,6 +502,7 @@ def build_marketing_sales_funnel_drilldown_export(
         title=detail["title"],
         kind=detail["kind"],
         rows=rows,
+        metric=detail["metric"],
     )
 
     filename_parts = [

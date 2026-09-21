@@ -48,7 +48,12 @@
     </div>
 
     <div *ngIf="detail" class="audit-table-wrap">
-      <table mat-table [dataSource]="rows" class="audit-table">
+      <table
+        mat-table
+        [dataSource]="rows"
+        class="audit-table"
+        [class.audit-table--lead-followup]="detail.metric === 'leads_meta'"
+      >
         <ng-container
           *ngFor="let column of columns"
           [matColumnDef]="column.key"
