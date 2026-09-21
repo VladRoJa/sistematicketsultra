@@ -114,15 +114,51 @@ export class TicketsPreventivePlanningComponent implements OnInit {
     return this.selectedEquipmentIds.size;
   }
 
+  get missingManualRequirements(): string[] {
+    const missing: string[] = [];
+
+    if (!this.selectedBranch) {
+      missing.push('sucursal');
+    }
+    if (this.selectedEquipmentIds.size === 0) {
+      missing.push('al menos un equipo');
+    }
+    if (!this.responsibleUsername) {
+      missing.push('responsable');
+    }
+    if (!this.programmedDate) {
+      missing.push('fecha programada');
+    }
+    if (!this.activity.trim()) {
+      missing.push('actividad');
+    }
+
+    return missing;
+  }
+
+  get manualAddHelpText(): string {
+    const missing = this.missingManualRequirements;
+
+    if (missing.length === 0) {
+      return (
+        'Listo para agregar '
+        + String(this.selectedEquipmentCount)
+        + (this.selectedEquipmentCount === 1 ? ' preventivo.' : ' preventivos.')
+      );
+    }
+
+    return (
+      (missing.length === 1 ? 'Falta: ' : 'Faltan: ')
+      + missing.join(', ')
+      + '.'
+    );
+  }
+
   get canAddManualItems(): boolean {
     return Boolean(
       this.selectedBatch
       && this.selectedBatch.status === 'BORRADOR'
-      && this.selectedBranch
-      && this.selectedEquipmentIds.size > 0
-      && this.responsibleUsername
-      && this.programmedDate
-      && this.activity.trim(),
+      && this.missingManualRequirements.length === 0
     );
   }
 
