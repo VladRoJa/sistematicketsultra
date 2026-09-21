@@ -263,6 +263,7 @@ export class MarketingSalesFunnelDetailDialogComponent implements OnInit {
           { key: 'date', label: 'Fecha visita', widthClass: 'compact' },
           { key: 'phone', label: 'Teléfono', widthClass: 'compact' },
           { key: 'origin', label: 'Trazabilidad', widthClass: 'medium' },
+          { key: 'visit_type', label: 'Tipo', widthClass: 'medium' },
           { key: 'conversion_status', label: 'Conversión', widthClass: 'compact' },
           { key: 'sale_date', label: 'Fecha venta', widthClass: 'compact' },
           { key: 'sale_member_id', label: 'ID socio', widthClass: 'compact' },
@@ -276,6 +277,7 @@ export class MarketingSalesFunnelDetailDialogComponent implements OnInit {
         { key: 'date', label: 'Fecha', widthClass: 'compact' },
         { key: 'phone', label: 'Teléfono', widthClass: 'compact' },
         { key: 'origin', label: 'Origen', widthClass: 'medium' },
+        { key: 'visit_type', label: 'Tipo', widthClass: 'medium' },
         { key: 'source', label: 'Fuente', widthClass: 'wide' },
       ];
     }
