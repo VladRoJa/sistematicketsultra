@@ -88,7 +88,7 @@ def _normalize_detail_sort(
 ) -> tuple[str | None, str]:
     if metric in VISIT_CONVERSION_METRICS:
         return _normalize_visit_conversion_sort(sort_by, sort_dir)
-    return _normalize_sort(sort_by, sort_dir, kind)
+    return _normalize_sort(sort_by, sort_dir, kind, metric)
 
 
 def _sales_rows(
@@ -309,6 +309,9 @@ def _lead_rows(
                 ),
             }
         )
+    if not meta_only:
+        return rows
+
     detail_snapshot = _selected_snapshot(source=source)
     sales = _load_new_sales(
         snapshot=detail_snapshot,
@@ -601,6 +604,7 @@ def build_marketing_sales_funnel_cutoff_export(
         title=detail["title"],
         kind=detail["kind"],
         rows=rows,
+        metric=detail["metric"],
     )
     parts = [
         "funnel_venta_nueva",
