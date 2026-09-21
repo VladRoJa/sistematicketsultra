@@ -951,6 +951,37 @@ def _match_iventas(
     return ORIGIN_IVENTAS_OTHER
 
 
+def _accumulate_visit_stats(
+    *,
+    visits: list[_CommercialVisit] | tuple[_CommercialVisit, ...],
+    evidence: dict[tuple[int, str], list[_IventasEvidence]],
+    stats_by_branch: dict[int, _BranchStats],
+) -> None:
+    for visit in visits:
+        stats = stats_by_branch[visit.branch_id]
+        stats.visits_total += 1
+
+        if visit.phone is None:
+            stats.visits_unmatchable += 1
+            stats.visits_not_iventas += 1
+            continue
+
+        origin = _match_iventas(
+            evidence,
+            visit.branch_id,
+            visit.phone,
+            visit.visit_date,
+        )
+        if origin == ORIGIN_IVENTAS_META:
+            stats.visits_iventas += 1
+            stats.visits_iventas_meta += 1
+        elif origin == ORIGIN_IVENTAS_OTHER:
+            stats.visits_iventas += 1
+            stats.visits_iventas_other += 1
+        else:
+            stats.visits_not_iventas += 1
+
+
 def _serialize_origin_breakdown(
     stats: _BranchStats,
 ) -> list[dict[str, Any]]:
@@ -1176,11 +1207,12 @@ def build_marketing_sales_funnel_with_loaded_data(
 
     venta_total_snapshot = _select_venta_total_snapshot(month_start)
     venta_total_rows: list[VentaTotalSnapshotRowORM] = []
-    visits: list[_CommercialVisit] = []
+    registered_visits: list[_CommercialVisit] = []
     if venta_total_snapshot is None:
         limitations.append(
             "No existe snapshot canónico de Venta Total para el mes; "
-            "no hay visitas ni encuesta de respaldo."
+            "no hay visitas registradas ni encuesta de respaldo. "
+            "Las compras directas aún pueden contabilizarse desde Venta Nueva."
         )
     else:
         venta_total_rows = (
@@ -1190,7 +1222,7 @@ def build_marketing_sales_funnel_with_loaded_data(
             .order_by(VentaTotalSnapshotRowORM.row_index.asc())
             .all()
         )
-        visits = _load_visits(
+        registered_visits = _load_visits(
             venta_total_rows,
             month_start,
             branch_ids,
@@ -1211,6 +1243,10 @@ def build_marketing_sales_funnel_with_loaded_data(
         branch_ids=branch_ids,
     )
     sales = sales_result.sales
+    visits = _merge_visits_with_direct_purchases(
+        visits=registered_visits,
+        sales=sales,
+    )
 
     kpi_snapshot = _select_kpi_desempeno_snapshot(
         month_start,
@@ -1255,29 +1291,11 @@ def build_marketing_sales_funnel_with_loaded_data(
             "Revisar diferencia de hora/corte antes de interpretar el gap."
         )
 
-    for visit in visits:
-        stats = stats_by_branch[visit.branch_id]
-        stats.visits_total += 1
-
-        if visit.phone is None:
-            stats.visits_unmatchable += 1
-            stats.visits_not_iventas += 1
-            continue
-
-        origin = _match_iventas(
-            evidence,
-            visit.branch_id,
-            visit.phone,
-            visit.visit_date,
-        )
-        if origin == ORIGIN_IVENTAS_META:
-            stats.visits_iventas += 1
-            stats.visits_iventas_meta += 1
-        elif origin == ORIGIN_IVENTAS_OTHER:
-            stats.visits_iventas += 1
-            stats.visits_iventas_other += 1
-        else:
-            stats.visits_not_iventas += 1
+    _accumulate_visit_stats(
+        visits=visits,
+        evidence=evidence,
+        stats_by_branch=stats_by_branch,
+    )
 
     for sale in sales:
         stats = stats_by_branch[sale.branch_id]
