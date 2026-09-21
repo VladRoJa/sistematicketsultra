@@ -369,10 +369,12 @@ def _load_iventas_data_for_cutoff(
     cutoff_date: date,
     branch_ids: tuple[int, ...],
     current_run: MarketingIventasSyncRunORM,
+    timings_ms: dict[str, float] | None = None,
 ) -> tuple[
     dict[tuple[int, str], list[_IventasEvidence]],
     tuple[int, ...],
 ]:
+    stage_started = perf_counter()
     lookback_start = month_start - timedelta(days=MATCH_WINDOW_DAYS)
     previous_runs = (
         MarketingIventasSyncRunORM.query.filter(
@@ -387,11 +389,16 @@ def _load_iventas_data_for_cutoff(
     )
     runs = [*previous_runs, current_run]
     run_ids = tuple(dict.fromkeys(int(run.id) for run in runs))
+    if timings_ms is not None:
+        timings_ms["iventas_evidence_runs"] = (
+            perf_counter() - stage_started
+        ) * 1000
 
     evidence: dict[tuple[int, str], list[_IventasEvidence]] = defaultdict(list)
     if not run_ids or not branch_ids:
         return evidence, run_ids
 
+    stage_started = perf_counter()
     meta_tag_exists = (
         db.session.query(MarketingIventasContactTagORM.id)
         .filter(
@@ -424,7 +431,12 @@ def _load_iventas_data_for_cutoff(
         )
         .all()
     )
+    if timings_ms is not None:
+        timings_ms["iventas_evidence_contacts_query"] = (
+            perf_counter() - stage_started
+        ) * 1000
 
+    stage_started = perf_counter()
     for contact in contacts:
         interaction_date = contact.first_message_date_local
         phone = str(contact.phone_mx10 or "").strip()
@@ -454,6 +466,10 @@ def _load_iventas_data_for_cutoff(
 
     for rows in evidence.values():
         rows.sort(key=lambda item: (item.interaction_date, item.has_meta_ad))
+    if timings_ms is not None:
+        timings_ms["iventas_evidence_assemble"] = (
+            perf_counter() - stage_started
+        ) * 1000
     return evidence, run_ids
 
 
@@ -555,6 +571,7 @@ def build_marketing_sales_funnel_at_cutoff(
         cutoff_date=selected_cutoff,
         branch_ids=branch_ids,
         current_run=iventas_run,
+        timings_ms=timings_ms,
     )
     timings_ms["iventas_evidence"] = (perf_counter() - stage_started) * 1000
 
