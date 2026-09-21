@@ -135,8 +135,9 @@ def test_meta_leads_export_includes_call_center_followup_columns():
                 "followup_status": "Visita sin compra",
                 "visit_status": "Sí",
                 "visit_date": "2026-09-04",
-                "purchase_status": "No",
-                "sale_date": None,
+                "purchase_status": "Sí",
+                "sale_date": "2026-09-08",
+                "purchase_branch": "Tecnológico",
                 "channel": "Ultragym Tecnologico",
                 "contact_id": "contact-1",
             },
@@ -155,12 +156,15 @@ def test_meta_leads_export_includes_call_center_followup_columns():
         "Seguimiento",
         "Visitó",
         "Fecha visita",
-        "Compró",
+        "Compró en Ultra (60d)",
         "Fecha compra",
+        "Sucursal compra",
         "Canal",
         "ID contacto",
     ]
     assert worksheet["E2"].value == "Visita sin compra"
     assert worksheet["F2"].value == "Sí"
-    assert worksheet["H2"].value == "No"
+    assert worksheet["H2"].value == "Sí"
+    assert worksheet["I2"].value == "2026-09-08"
+    assert worksheet["J2"].value == "Tecnológico"
 
