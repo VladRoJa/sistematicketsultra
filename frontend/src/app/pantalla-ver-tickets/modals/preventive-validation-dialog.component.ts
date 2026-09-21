@@ -228,6 +228,14 @@ export class PreventiveValidationDialogComponent implements OnInit {
     }).format(date);
   }
 
+  executionOutcomeLabel(
+    bitacora: PreventiveValidationBitacora,
+  ): string {
+    return bitacora.hallazgo_detectado
+      ? 'CON HALLAZGO'
+      : 'SIN HALLAZGO';
+  }
+
   foundStateLabel(value: string | null | undefined): string {
     const labels: Record<string, string> = {
       BUENO: 'Bueno',
