@@ -573,8 +573,22 @@ def build_marketing_sales_funnel_at_cutoff(
     visits = []
     if venta_total_snapshot is not None:
         venta_total_rows = (
-            VentaTotalSnapshotRowORM.query.filter_by(
-                snapshot_id=venta_total_snapshot.id
+            db.session.query(
+                VentaTotalSnapshotRowORM.fecha,
+                VentaTotalSnapshotRowORM.sucursal,
+                VentaTotalSnapshotRowORM.folio,
+                VentaTotalSnapshotRowORM.descripcion,
+                VentaTotalSnapshotRowORM.total,
+                VentaTotalSnapshotRowORM.estatus,
+                VentaTotalSnapshotRowORM.id_orden,
+                VentaTotalSnapshotRowORM.encuesta,
+                VentaTotalSnapshotRowORM.pin,
+                VentaTotalSnapshotRowORM.telefono,
+                VentaTotalSnapshotRowORM.api,
+            )
+            .filter(
+                VentaTotalSnapshotRowORM.snapshot_id
+                == venta_total_snapshot.id
             )
             .order_by(VentaTotalSnapshotRowORM.row_index.asc())
             .all()
