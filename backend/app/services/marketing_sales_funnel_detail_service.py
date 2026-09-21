@@ -749,11 +749,12 @@ def _load_targeted_venta_total_rows(
     *,
     month_start: date,
     candidate_phones: tuple[str, ...],
+    snapshot: Any = None,
 ) -> list[VentaTotalSnapshotRowORM]:
     if not candidate_phones:
         return []
 
-    snapshot = _select_venta_total_snapshot(month_start)
+    snapshot = snapshot or _select_venta_total_snapshot(month_start)
     if snapshot is None:
         return []
 
@@ -796,11 +797,12 @@ def _load_targeted_purchase_events(
     candidate_phones: tuple[str, ...],
     branch_ids: tuple[int, ...],
     venta_total_rows: list[VentaTotalSnapshotRowORM],
+    snapshot: Any = None,
 ) -> list[Any]:
     if not candidate_phones or not branch_ids:
         return []
 
-    snapshot = _select_new_sales_detail_snapshot(month_start)
+    snapshot = snapshot or _select_new_sales_detail_snapshot(month_start)
     if snapshot is None:
         return []
 
