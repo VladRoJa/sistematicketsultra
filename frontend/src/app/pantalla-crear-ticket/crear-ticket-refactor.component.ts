@@ -82,6 +82,7 @@ export class CrearTicketRefactorComponent implements OnInit, OnDestroy {
     nivel_2:        'Categoría',
     nivel_3:        'Subcategoría',
     nivel_4:        'Detalle',
+    nivel_5:        'Especificación',
     descripcion_general: 'Descripción',
     descripcion_aparato: 'Descripción del problema',
     descripcion:    'Descripción del problema',
@@ -108,6 +109,36 @@ export class CrearTicketRefactorComponent implements OnInit, OnDestroy {
   private reqTokenByNivel: Record<number, number> = {};
   private readonly ID_CAT_DISPOSITIVOS = 2;
   trackByNivel = (_: number, n: { nivel: number }) => n.nivel;
+
+  getPlaceholderNivel(nivel: { etiqueta: string; loading: boolean }): string {
+    if (nivel.loading) return 'Cargando opciones...';
+
+    const etiqueta = (nivel.etiqueta || 'opción').trim();
+    return `Selecciona ${etiqueta.charAt(0).toLowerCase()}${etiqueta.slice(1)}`;
+  }
+
+  private resolverEtiquetaNivelSiguiente(
+    nivelActual: number,
+    nivelNombre?: string | null,
+  ): string {
+    const etiquetaCatalogo = (nivelNombre || '').trim();
+
+    if (
+      etiquetaCatalogo &&
+      this._norm(etiquetaCatalogo) !== 'siguiente nivel'
+    ) {
+      return etiquetaCatalogo;
+    }
+
+    const etiquetasFallback: Record<number, string> = {
+      2: 'Categoría',
+      3: 'Subcategoría',
+      4: 'Detalle',
+      5: 'Especificación',
+    };
+
+    return etiquetasFallback[nivelActual + 1] || 'Clasificación';
+  }
 
 
 
@@ -450,7 +481,10 @@ this.subs.push(
             nivel === 1 && this._norm(seleccionActual?.nombre) === 'mantenimiento';
           const etiquetaSig = esSelectorMantenimiento
             ? 'Tipo de mantenimiento'
-            : (hijos[0]?.nivel_nombre || 'Siguiente nivel');
+            : this.resolverEtiquetaNivelSiguiente(
+                nivel,
+                hijos[0]?.nivel_nombre,
+              );
           this.cargarNivel(nivel + 1, val, etiquetaSig);
         } else {
           const nextName = `nivel_${nivel + 1}`;
