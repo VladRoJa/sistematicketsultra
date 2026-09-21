@@ -209,19 +209,21 @@ class MaintenanceExecutionServiceTest(unittest.TestCase):
             )
         )
 
-    def test_complete_requires_evidence(self):
+    def test_complete_allows_missing_optional_evidence(self):
         ticket = self._ticket()
         ticket.estado = "en progreso"
         user = self._user()
 
+        bitacora = SimpleNamespace(id=900)
         bitacora_query = MagicMock()
         bitacora_query.filter.return_value = bitacora_query
         bitacora_query.order_by.return_value = bitacora_query
-        bitacora_query.first.return_value = SimpleNamespace(id=900)
+        bitacora_query.first.return_value = bitacora
 
-        evidence_query = MagicMock()
-        evidence_query.filter.return_value = evidence_query
-        evidence_query.first.return_value = None
+        def record_history(**kwargs):
+            ticket.historial_fechas.append(kwargs)
+
+        ticket._agregar_evento_historial_cierre = record_history
 
         with self.app.app_context():
             with (
@@ -231,17 +233,12 @@ class MaintenanceExecutionServiceTest(unittest.TestCase):
                     "query",
                     bitacora_query,
                 ),
-                patch.object(
-                    service.TicketAttachmentORM,
-                    "query",
-                    evidence_query,
-                ),
             ):
-                with self.assertRaisesRegex(
-                    service.MaintenanceExecutionStateError,
-                    "evidencia",
-                ):
-                    service.complete_preventive(user, 500)
+                result = service.complete_preventive(user, 500)
+
+        self.assertIs(result, ticket)
+        self.assertEqual(ticket.estado, "por_validar")
+        self.assertEqual(ticket.estado_cierre, "pendiente_creador")
 
     def test_complete_moves_ticket_to_existing_manager_validation_flow(self):
         ticket = self._ticket()
@@ -258,10 +255,6 @@ class MaintenanceExecutionServiceTest(unittest.TestCase):
 
         ticket._agregar_evento_historial_cierre = record_history
 
-        evidence_query = MagicMock()
-        evidence_query.filter.return_value = evidence_query
-        evidence_query.first.return_value = SimpleNamespace(id=300)
-
         with self.app.app_context():
             with (
                 patch.object(service, "_owned_ticket", return_value=ticket),
@@ -269,11 +262,6 @@ class MaintenanceExecutionServiceTest(unittest.TestCase):
                     service.PmBitacoraORM,
                     "query",
                     query,
-                ),
-                patch.object(
-                    service.TicketAttachmentORM,
-                    "query",
-                    evidence_query,
                 ),
             ):
                 result = service.complete_preventive(user, 500)
