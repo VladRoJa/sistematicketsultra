@@ -206,19 +206,31 @@ Si el código existe pero pertenece a una sucursal distinta de la indicada, debe
 
 Se proporcionará una plantilla de carga preventiva.
 
-Campos mínimos:
+Campos de la plantilla oficial:
 
 - Sucursal.
+- Familia, como selector auxiliar de captura.
 - Código de equipo.
 - Fecha programada.
 - Actividad.
 - Responsable.
 - Observaciones, opcional.
 
+La captura asistida seguirá la dependencia:
+
+```text
+Sucursal
+    ↓
+Familia disponible en esa sucursal
+    ↓
+Código de equipo disponible en esa sucursal y familia
+```
+
+La familia de la plantilla **no será fuente de verdad ni dato operativo autoritativo**. Su función será únicamente facilitar la selección del código de equipo. Suite deberá resolver y validar nuevamente la familia real a partir del código de equipo al procesar el lote.
+
 No deberán solicitarse al usuario:
 
 - IDs internos;
-- familia;
 - categoría interna;
 - semana;
 - mes;
@@ -229,7 +241,7 @@ No deberán solicitarse al usuario:
 
 Suite derivará dichos valores.
 
-La familia deberá obtenerse desde el código del equipo.
+La plantilla podrá incluir catálogos y listas dependientes como ayuda de captura, pero la validación final seguirá siendo responsabilidad del backend.
 
 La carga no generará tickets inmediatamente.
 
