@@ -659,21 +659,6 @@ def _preventive_close_requirement_error(ticket: Ticket) -> str | None:
             "no puede validarse."
         )
 
-    has_evidence = (
-        TicketAttachmentORM.query
-        .filter(
-            TicketAttachmentORM.ticket_id == ticket.id,
-            TicketAttachmentORM.deleted_at.is_(None),
-        )
-        .first()
-        is not None
-    )
-    if not has_evidence:
-        return (
-            "El preventivo no tiene evidencia activa; "
-            "no puede validarse."
-        )
-
     return None
 
 
@@ -848,10 +833,7 @@ def cierre_preventivo_detalle(ticket_id):
         "requirements": {
             "has_bitacora": bool(bitacoras),
             "has_evidence": ticket.id in active_attachment_ids,
-            "ready_to_validate": (
-                bool(bitacoras)
-                and ticket.id in active_attachment_ids
-            ),
+            "ready_to_validate": bool(bitacoras),
         },
         "bitacoras": [
             _serialize_preventive_bitacora_validation(
