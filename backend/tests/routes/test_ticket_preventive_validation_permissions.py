@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 from app import create_app
 
 from app.routes.ticket_routes import (
+    _apply_maintenance_type_filter,
     _maintenance_commitment_change_error,
     _preventive_close_requirement_error,
     _puede_validar_cierre_gerente,
@@ -78,6 +79,72 @@ class TicketPreventiveValidationPermissionsTest(unittest.TestCase):
                 self._ticket(tipo="CORRECTIVO", creator="CREADOR", branch=4),
             )
         )
+
+
+class TicketMaintenanceTypeFilterTest(unittest.TestCase):
+    def test_preventive_filter_applies_maintenance_scope(self):
+        query = MagicMock()
+        query.filter.return_value = query
+
+        result = _apply_maintenance_type_filter(
+            query,
+            "preventivo",
+        )
+
+        self.assertIs(result, query)
+        query.filter.assert_called_once()
+
+        args = query.filter.call_args.args
+        self.assertEqual(len(args), 2)
+        self.assertIn(
+            "tickets.departamento_id",
+            str(args[0]),
+        )
+        self.assertIn(
+            "tickets.tipo_mantenimiento",
+            str(args[1]),
+        )
+        self.assertIn(
+            "PREVENTIVO",
+            str(args[1]),
+        )
+
+    def test_corrective_filter_keeps_legacy_nulls_in_maintenance(self):
+        query = MagicMock()
+        query.filter.return_value = query
+
+        result = _apply_maintenance_type_filter(
+            query,
+            "CORRECTIVO",
+        )
+
+        self.assertIs(result, query)
+        query.filter.assert_called_once()
+
+        args = query.filter.call_args.args
+        self.assertEqual(len(args), 2)
+        self.assertIn(
+            "tickets.departamento_id",
+            str(args[0]),
+        )
+        self.assertIn(
+            "CORRECTIVO",
+            str(args[1]),
+        )
+        self.assertIn(
+            "IS NULL",
+            str(args[1]).upper(),
+        )
+
+    def test_invalid_maintenance_type_is_rejected(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "PREVENTIVO o CORRECTIVO",
+        ):
+            _apply_maintenance_type_filter(
+                MagicMock(),
+                "OTRO",
+            )
 
 
 class TicketMaintenanceCommitmentGuardTest(unittest.TestCase):
