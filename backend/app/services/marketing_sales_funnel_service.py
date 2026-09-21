@@ -47,6 +47,9 @@ CANCELLED_STATUS_TERMS = (
     "ANULADA",
 )
 
+VISIT_KIND_REGISTERED = "REGISTERED"
+VISIT_KIND_DIRECT_PURCHASE = "DIRECT_PURCHASE"
+
 ORIGIN_IVENTAS_META = "IVENTAS_META"
 ORIGIN_IVENTAS_OTHER = "IVENTAS_OTHER"
 ORIGIN_SOCIAL_UNTRACED = "SOCIAL_UNTRACED"
@@ -91,6 +94,10 @@ class _CommercialVisit:
     branch_id: int
     visit_date: date
     phone: str | None
+    kind: str = VISIT_KIND_REGISTERED
+    sale_key: str | None = None
+    sale_member_id: str | None = None
+    sale_revenue: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -102,6 +109,7 @@ class _CommercialSale:
     revenue: Decimal
     survey_raw: str | None
     api_raw: str | None
+    member_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -478,7 +486,12 @@ def _load_visits(
         key = _visit_key(row, branch_id, visit_date, phone)
         events.setdefault(
             key,
-            _CommercialVisit(key, branch_id, visit_date, phone),
+            _CommercialVisit(
+                event_key=key,
+                branch_id=branch_id,
+                visit_date=visit_date,
+                phone=phone,
+            ),
         )
 
     with_phone: dict[tuple[int, str], _CommercialVisit] = {}
@@ -499,6 +512,62 @@ def _load_visits(
             with_phone.setdefault((event.branch_id, event.phone), event)
 
     return [*with_phone.values(), *without_phone.values()]
+
+
+def _merge_visits_with_direct_purchases(
+    *,
+    visits: list[_CommercialVisit] | tuple[_CommercialVisit, ...],
+    sales: list[_CommercialSale] | tuple[_CommercialSale, ...],
+) -> list[_CommercialVisit]:
+    result = list(visits)
+    identities_with_visit = {
+        (visit.branch_id, visit.phone)
+        for visit in visits
+        if visit.phone is not None
+    }
+    direct_identities: set[tuple[int, str]] = set()
+
+    for sale in sorted(
+        sales,
+        key=lambda item: (
+            item.sale_date,
+            item.branch_id,
+            item.phone or "",
+            item.sale_key,
+        ),
+    ):
+        if sale.phone is None:
+            continue
+
+        identity = (sale.branch_id, sale.phone)
+        if identity in identities_with_visit or identity in direct_identities:
+            continue
+
+        direct_identities.add(identity)
+        result.append(
+            _CommercialVisit(
+                event_key=(
+                    f"direct_purchase:{sale.branch_id}:{sale.phone}"
+                ),
+                branch_id=sale.branch_id,
+                visit_date=sale.sale_date,
+                phone=sale.phone,
+                kind=VISIT_KIND_DIRECT_PURCHASE,
+                sale_key=sale.sale_key,
+                sale_member_id=sale.member_id,
+                sale_revenue=sale.revenue,
+            )
+        )
+
+    return sorted(
+        result,
+        key=lambda item: (
+            item.visit_date,
+            item.branch_id,
+            item.phone or "",
+            item.event_key,
+        ),
+    )
 
 
 def _merge_venta_total_enrichment(
@@ -678,6 +747,7 @@ def _load_new_sales(
                 if enrichment is not None
                 else None
             ),
+            member_id=member_id or None,
         )
         sales_by_key.setdefault(sale_key, sale)
 
