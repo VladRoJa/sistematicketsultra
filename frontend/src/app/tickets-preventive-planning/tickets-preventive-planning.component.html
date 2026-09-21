@@ -313,6 +313,7 @@
               *ngFor="let item of filteredEquipment; trackBy: trackEquipment"
               class="equipment-option"
               [class.equipment-option--selected]="isEquipmentSelected(item.inventario_id)"
+              [title]="item.codigo_interno + ' · ' + item.nombre + (item.marca ? ' · ' + item.marca : '')"
             >
               <input
                 type="checkbox"
@@ -336,6 +337,14 @@
           </div>
 
           <div class="manual-footer">
+            <span
+              class="manual-footer__status"
+              [class.manual-footer__status--ready]="canAddManualItems"
+              aria-live="polite"
+            >
+              {{ manualAddHelpText }}
+            </span>
+
             <button
               type="button"
               class="button button--primary"
