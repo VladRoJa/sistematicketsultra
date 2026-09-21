@@ -835,7 +835,7 @@ def _programmed_datetime_utc(programmed_date: date) -> datetime:
 def _published_duplicate_exists(
     item: MaintenancePreventiveItemORM,
 ) -> bool:
-    candidates = (
+    return (
         MaintenancePreventiveItemORM.query
         .filter(
             MaintenancePreventiveItemORM.id != item.id,
@@ -844,13 +844,8 @@ def _published_duplicate_exists(
             MaintenancePreventiveItemORM.inventario_id == item.inventario_id,
             MaintenancePreventiveItemORM.fecha_programada == item.fecha_programada,
         )
-        .all()
-    )
-
-    activity_key = _normalize_key(item.actividad)
-    return any(
-        _normalize_key(candidate.actividad) == activity_key
-        for candidate in candidates
+        .first()
+        is not None
     )
 
 
@@ -909,8 +904,8 @@ def publicar_lote_preventivo(
 
         if _published_duplicate_exists(item):
             raise MaintenancePreventiveStateError(
-                "Ya existe un preventivo publicado para el mismo equipo, "
-                "sucursal, fecha y actividad."
+                "Ya existe un preventivo publicado para el mismo equipo "
+                "y fecha."
             )
 
         inventory = db.session.get(
@@ -1196,7 +1191,6 @@ def _item_duplicate_key(item: MaintenancePreventiveItemORM):
         item.sucursal_id is None
         or item.inventario_id is None
         or item.fecha_programada is None
-        or not _clean(item.actividad)
     ):
         return None
 
@@ -1204,7 +1198,6 @@ def _item_duplicate_key(item: MaintenancePreventiveItemORM):
         int(item.sucursal_id),
         int(item.inventario_id),
         item.fecha_programada.isoformat(),
-        _normalize_key(item.actividad),
     )
 
 
@@ -1300,7 +1293,10 @@ def validar_item_borrador(
     duplicate_key = _item_duplicate_key(item)
     if duplicate_key is not None:
         if duplicate_key in seen_keys:
-            errors.append("Renglón duplicado dentro del mismo lote.")
+            errors.append(
+                "El equipo ya está programado para esa fecha "
+                "dentro del mismo lote."
+            )
         else:
             seen_keys.add(duplicate_key)
 
