@@ -81,7 +81,7 @@ interface VisitBranchView {
 interface FunnelExecutiveSummaryView {
   investment_display: string;
   lead_to_visit_display: string;
-  visit_to_digital_sale_display: string;
+  visit_to_sale_display: string;
   lead_to_sale_display: string;
   cpl_display: string;
   cpt_display: string;
