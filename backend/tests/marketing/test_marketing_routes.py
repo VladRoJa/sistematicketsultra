@@ -421,12 +421,12 @@ class TestMarketingRoutes:
         assert "page" not in kwargs
         assert "sort" not in kwargs
 
-    def test_reactivation_candidates_applies_existing_branch_scope(self):
+    def test_reactivation_candidates_applies_catalog_branch_scope(self):
         manager = SimpleNamespace(
             id=2,
             rol="GERENTE",
-            sucursal_id=7,
-            sucursales_ids=[7],
+            sucursal_id=12,
+            sucursales_ids=[12],
         )
         with (
             patch(
@@ -435,8 +435,22 @@ class TestMarketingRoutes:
             ),
             patch(
                 "app.routes.marketing_routes.load_visible_marketing_branches",
-                return_value=([SimpleNamespace(name="Sucursal Álamo")], (7,), {}),
+                return_value=(
+                    [
+                        SimpleNamespace(
+                            sucursal_id=12,
+                            name="Carrousel tijuana",
+                        )
+                    ],
+                    (12,),
+                    {},
+                ),
             ),
+            patch(
+                "app.routes.marketing_routes."
+                "reactivation_branch_keys_by_sucursal_ids",
+                return_value={12: "CARROUSEL TJ"},
+            ) as branch_keys,
             patch(
                 "app.routes.marketing_routes.build_marketing_reactivation_candidates",
                 return_value={"rows": []},
@@ -451,8 +465,11 @@ class TestMarketingRoutes:
 
         assert response.status_code == 200
         assert candidate_service.call_args.kwargs["allowed_sucursal_keys"] == (
-            "SUCURSAL ALAMO",
+            "CARROUSEL TJ",
         )
+        assert tuple(
+            branch_keys.call_args.kwargs["sucursal_ids"]
+        ) == (12,)
 
     def test_reactivation_candidates_returns_400_for_query_validation(self):
         with (
