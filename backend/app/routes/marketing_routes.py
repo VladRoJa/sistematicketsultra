@@ -54,6 +54,8 @@ from app.services.marketing_reactivation_service import (
     mark_marketing_reactivation_campaign_sent,
     preview_marketing_reactivation_campaign,
 )
+
+
 marketing_bp = Blueprint("marketing", __name__)
 
 
