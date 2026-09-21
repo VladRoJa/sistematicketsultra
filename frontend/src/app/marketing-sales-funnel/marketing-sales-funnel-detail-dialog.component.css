@@ -126,6 +126,10 @@
   table-layout: fixed;
 }
 
+.audit-table.audit-table--lead-followup {
+  min-width: 1540px;
+}
+
 .audit-table th.mat-mdc-header-cell {
   height: 48px;
   padding: 0;
