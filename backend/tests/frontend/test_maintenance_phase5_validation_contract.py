@@ -91,7 +91,16 @@ def test_backend_detail_uses_real_validation_permission_and_requirements():
     assert "_preventive_close_requirement_error(t)" in routes
     assert "PmBitacoraORM.ticket_id == ticket.id" in routes
     assert "TicketAttachmentORM.deleted_at.is_(None)" in routes
+    assert '"ready_to_validate": bool(bitacoras)' in routes
+    assert "El preventivo no tiene evidencia activa" not in routes
     assert "ticket_preventivo_origen_id == ticket.id" in routes
+
+
+def test_manager_review_marks_evidence_as_optional():
+    dialog_html = _read(DIALOG_HTML)
+
+    assert "Sin evidencia · opcional" in dialog_html
+    assert "image_not_supported" in dialog_html
 
 
 def test_manager_rejection_does_not_expose_preventive_scheduling():
