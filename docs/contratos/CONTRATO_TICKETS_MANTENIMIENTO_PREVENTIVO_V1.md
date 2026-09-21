@@ -391,11 +391,12 @@ La bitácora incluirá:
 - estado encontrado;
 - trabajo realizado;
 - observaciones;
-- evidencia;
 - checklist;
 - hallazgos;
 - fecha/hora;
 - usuario responsable.
+
+La evidencia fotográfica será opcional y recomendada. La bitácora será obligatoria para marcar el preventivo como realizado. La ausencia de evidencia no bloqueará el envío a validación ni la validación del gerente. La interfaz del técnico iniciará con la captura de evidencia desactivada; si el técnico decide adjuntarla, deberá completar la subida antes de marcar realizado.
 
 ## 14. Checklist por familia
 
