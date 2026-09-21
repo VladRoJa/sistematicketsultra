@@ -1,70 +1,224 @@
-<!-- admin-usuarios-sucursales.component.html -->
+<section class="branch-access-page">
+  <header class="page-hero">
+    <div class="page-hero__content">
+      <p class="page-hero__eyebrow">Suite Ultra · Administración</p>
+      <h1>Visibilidad de sucursales</h1>
+      <p class="page-hero__subtitle">
+        Define qué sucursales puede consultar cada usuario dentro de los módulos
+        que respetan su alcance operativo.
+      </p>
+    </div>
 
+    <div class="page-hero__summary">
+      <span class="page-hero__summary-label">Alcance actual</span>
+      <strong>{{ cantidadSeleccionadas }}</strong>
+      <small>
+        {{ cantidadSeleccionadas === 1 ? 'sucursal visible' : 'sucursales visibles' }}
+      </small>
+    </div>
+  </header>
 
-<h2>Admin: Sucursales por usuario</h2>
+  <section class="user-selector-card">
+    <div class="section-heading">
+      <span class="section-heading__step">01</span>
 
-<div *ngIf="loading">Cargando...</div>
+      <div>
+        <p class="section-heading__eyebrow">Usuario</p>
+        <h2>Selecciona la cuenta a configurar</h2>
+        <p>
+          Puedes buscar por usuario, rol, sucursal base o ID.
+        </p>
+      </div>
 
-<hr />
+      <span class="loading-pill" *ngIf="loadingUsuarios">
+        Cargando usuarios...
+      </span>
+    </div>
 
-<div *ngIf="userId === null" style="margin: 8px 0;">
-  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-    <label style="font-weight:600;">Selecciona usuario:</label>
+    <div class="user-selector-grid">
+      <label class="field">
+        <span>Buscar usuario</span>
+        <input
+          type="search"
+          [(ngModel)]="busquedaUsuario"
+          (input)="aplicarFiltroUsuarios()"
+          placeholder="Ej. gerente, sistemas, 24..."
+          autocomplete="off"
+        />
+        <small>
+          {{ usuariosFiltrados.length }} de {{ usuarios.length }} usuarios
+        </small>
+      </label>
 
-    <input
-      type="text"
-      placeholder="Buscar (username/rol/sucursal/id)"
-      [(ngModel)]="busquedaUsuario"
-      (input)="aplicarFiltroUsuarios()"
-      style="min-width: 240px;"
-    />
+      <label class="field">
+        <span>Usuario *</span>
+        <select
+          [(ngModel)]="selectedUserIdForNav"
+          (change)="irAUsuarioSeleccionado()"
+          [disabled]="loadingUsuarios"
+        >
+          <option [ngValue]="null">Selecciona un usuario</option>
 
-    <select
-      [(ngModel)]="selectedUserIdForNav"
-      style="min-width: 260px;"
-    >
-      <option [ngValue]="null">— Selecciona —</option>
-      <option *ngFor="let u of usuariosFiltrados" [ngValue]="u.id">
-        {{ u.username }} ({{ u.rol }}) — suc {{ u.sucursal_id }} — id {{ u.id }}
-      </option>
-    </select>
+          <option
+            *ngFor="let usuario of usuariosFiltrados; trackBy: trackByUsuario"
+            [ngValue]="usuario.id"
+          >
+            {{ usuario.username }} · {{ usuario.rol }} · ID {{ usuario.id }}
+          </option>
+        </select>
+        <small>Al cambiar de usuario se carga su alcance guardado.</small>
+      </label>
+    </div>
+  </section>
 
-    <button (click)="irAUsuarioSeleccionado()" [disabled]="!selectedUserIdForNav">
-      Ir
-    </button>
+  <div class="message-banner message-banner--error" *ngIf="errorMsg">
+    <span class="message-banner__icon">!</span>
+    <div>
+      <strong>No se pudo completar la operación</strong>
+      <p>{{ errorMsg }}</p>
+    </div>
   </div>
 
-  <small *ngIf="usuariosFiltrados.length === 0">No hay usuarios para mostrar.</small>
-</div>
+  <div class="message-banner message-banner--success" *ngIf="okMsg">
+    <span class="message-banner__icon">✓</span>
+    <div>
+      <strong>Cambios guardados</strong>
+      <p>{{ okMsg }}</p>
+    </div>
+  </div>
 
-<div *ngIf="errorMsg" style="color: red; margin: 8px 0;">
-  {{ errorMsg }}
-</div>
+  <ng-container *ngIf="userId !== null && username; else emptySelection">
+    <section class="selected-user-card">
+      <div class="selected-user-card__identity">
+        <span class="selected-user-card__avatar">
+          {{ inicialUsuario }}
+        </span>
 
-<div *ngIf="okMsg" style="color: green; margin: 8px 0;">
-  {{ okMsg }}
-</div>
+        <div>
+          <span class="selected-user-card__label">Configurando usuario</span>
+          <h2>{{ username }}</h2>
 
-<hr />
+          <div class="selected-user-card__meta">
+            <span>{{ userRole || 'Sin rol' }}</span>
+            <span>ID {{ userId }}</span>
+            <span>{{ nombreSucursalBase }}</span>
+          </div>
+        </div>
+      </div>
 
-<div *ngIf="userId !== null">
-  <p><b>UserId:</b> {{ userId }}</p>
-  <p><b>Usuario:</b> {{ username || '—' }}</p>
+      <div class="selected-user-card__counter">
+        <strong>{{ cantidadSeleccionadas }}</strong>
+        <span>de {{ sucursales.length }} sucursales</span>
+      </div>
+    </section>
 
-  <ul>
-    <li *ngFor="let s of sucursales">
-      <label>
-        <input
-          type="checkbox"
-          [checked]="isSucursalSeleccionada(s.id)"
-          (change)="toggleSucursal(s.id)"
-        />
-        {{ s.nombre }} ({{ s.id }})
-      </label>
-    </li>
-  </ul>
+    <section class="branches-panel">
+      <div class="section-heading branches-panel__heading">
+        <span class="section-heading__step">02</span>
 
-  <button type="button" (click)="aplicar()" [disabled]="loading">
-    Aplicar
-  </button>
-</div>
+        <div>
+          <p class="section-heading__eyebrow">Alcance operativo</p>
+          <h2>Sucursales visibles</h2>
+          <p>
+            Marca únicamente las sucursales que este usuario debe poder consultar.
+          </p>
+        </div>
+
+        <div class="branches-panel__quick-actions">
+          <button
+            type="button"
+            class="secondary-action"
+            (click)="seleccionarTodasSucursales()"
+            [disabled]="loadingSucursales || saving"
+          >
+            Seleccionar todas
+          </button>
+
+          <button
+            type="button"
+            class="secondary-action secondary-action--muted"
+            (click)="limpiarSucursales()"
+            [disabled]="loadingSucursales || saving || cantidadSeleccionadas === 0"
+          >
+            Limpiar
+          </button>
+        </div>
+      </div>
+
+      <div class="branches-loading" *ngIf="loadingSucursales || loadingAsignacion">
+        Cargando alcance de sucursales...
+      </div>
+
+      <div
+        class="branches-grid"
+        *ngIf="!loadingSucursales && !loadingAsignacion"
+      >
+        <label
+          class="branch-option"
+          *ngFor="let sucursal of sucursales; trackBy: trackBySucursal"
+          [class.branch-option--selected]="isSucursalSeleccionada(sucursal.id)"
+        >
+          <input
+            type="checkbox"
+            [checked]="isSucursalSeleccionada(sucursal.id)"
+            (change)="toggleSucursal(sucursal.id)"
+            [disabled]="saving"
+          />
+
+          <span class="branch-option__check" aria-hidden="true">✓</span>
+
+          <span class="branch-option__copy">
+            <strong>{{ sucursal.nombre }}</strong>
+            <small>
+              ID {{ sucursal.id }}
+              <ng-container *ngIf="sucursal.id === userSucursalId">
+                · Sucursal base
+              </ng-container>
+            </small>
+          </span>
+        </label>
+      </div>
+
+      <footer class="branches-panel__footer">
+        <div class="branches-panel__footer-copy">
+          <strong>
+            {{ cantidadSeleccionadas }}
+            {{ cantidadSeleccionadas === 1 ? 'sucursal seleccionada' : 'sucursales seleccionadas' }}
+          </strong>
+          <span>
+            {{
+              hayCambios
+                ? 'Hay cambios pendientes por guardar.'
+                : 'La selección coincide con el alcance guardado.'
+            }}
+          </span>
+        </div>
+
+        <button
+          type="button"
+          class="primary-action"
+          (click)="aplicar()"
+          [disabled]="
+            saving ||
+            loadingAsignacion ||
+            loadingSucursales ||
+            !hayCambios
+          "
+        >
+          {{ saving ? 'Guardando...' : 'Guardar visibilidad' }}
+        </button>
+      </footer>
+    </section>
+  </ng-container>
+
+  <ng-template #emptySelection>
+    <section class="empty-state">
+      <div class="empty-state__icon">⌖</div>
+      <h2>Selecciona un usuario</h2>
+      <p>
+        Elige una cuenta en el selector superior para consultar y modificar
+        las sucursales que puede visualizar.
+      </p>
+    </section>
+  </ng-template>
+</section>
