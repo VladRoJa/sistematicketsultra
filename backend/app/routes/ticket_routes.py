@@ -1533,6 +1533,7 @@ def export_excel():
             "Departamento", "Categoría", "Subcategoria", "Detalle",
             "Problema Detectado", "Refacción", "Descripción Refacción",
             "Costo solución", "Notas cierre",
+            "Tipo mantenimiento", "Origen correctivo",
         ]
         ws.append(headers)
 
@@ -1575,6 +1576,8 @@ def export_excel():
             "AA": 32,  # Desc refacción
             "AB": 14,  # Costo
             "AC": 40,  # Notas
+            "AD": 20,  # Tipo mantenimiento
+            "AE": 28,  # Origen correctivo
         }
         for col, width in fixed_widths.items():
             ws.column_dimensions[col].width = width
@@ -1636,6 +1639,20 @@ def export_excel():
             estado_txt = (t.get("estado") or "").strip()
             estado_cierre_txt = (t.get("estado_cierre") or "").strip() if isinstance(t.get("estado_cierre"), str) else (ticket.estado_cierre or None)
 
+            tipo_mantenimiento_txt = str(
+                t.get("tipo_mantenimiento") or ""
+            ).strip().upper()
+            if not tipo_mantenimiento_txt:
+                tipo_mantenimiento_txt = "—"
+
+            origen_correctivo_txt = str(
+                t.get("origen_correctivo") or ""
+            ).strip().upper()
+            if origen_correctivo_txt:
+                origen_correctivo_txt = origen_correctivo_txt.replace("_", " ")
+            else:
+                origen_correctivo_txt = "—"
+
             # “Por validar” aging (días desde solicitud de cierre)
             dias_por_validar = ""
             if estado_txt == "por_validar":
@@ -1680,6 +1697,8 @@ def export_excel():
                 t.get("descripcion_refaccion"),
                 float(ticket.costo_solucion) if ticket.costo_solucion is not None else None,
                 ticket.notas_cierre,
+                tipo_mantenimiento_txt,
+                origen_correctivo_txt,
             ]
             ws.append(row)
 
