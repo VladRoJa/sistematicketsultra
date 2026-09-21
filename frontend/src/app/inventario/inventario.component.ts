@@ -1,24 +1,39 @@
-//frontend\src\app\inventario\inventario.component.ts
-
-import { Component, OnInit, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MatTableModule } from '@angular/material/table';
-import { MatButtonModule } from '@angular/material/button';
-import { MatDialog } from '@angular/material/dialog';
-import { InventarioService } from '../services/inventario.service';
-import { MatDialogModule } from '@angular/material/dialog';
-import { MatIconModule } from '@angular/material/icon';
-import { MatMenuModule, MatMenuTrigger } from '@angular/material/menu';
-import { DialogoConfirmacionComponent } from '../shared/dialogo-confirmacion/dialogo-confirmacion.component';
-import { DialogoInventarioComponent } from './dialogo-inventario/dialogo-inventario.component';
-import { mostrarAlertaToast } from 'src/app/utils/alertas';
-import { Inventario } from '../models/inventario.model';
-import { MatCheckboxModule } from '@angular/material/checkbox';
-import { inicializarFiltros, obtenerOpcionesVisibles, alternarSeleccionTemporal, confirmarSeleccion, filtrarTabla, FiltroColumna} from 'src/app/utils/tabla-filtros.helper';
+import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
+import { MatInputModule } from '@angular/material/input';
+import { MatMenuModule, MatMenuTrigger } from '@angular/material/menu';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTableModule } from '@angular/material/table';
 
+import { SessionService } from '../core/auth/session.service';
+import { Inventario } from '../models/inventario.model';
+import { InventarioService } from '../services/inventario.service';
+import { DialogoConfirmacionComponent } from '../shared/dialogo-confirmacion/dialogo-confirmacion.component';
+import {
+  FiltroColumna,
+  alternarSeleccionTemporal,
+  confirmarSeleccion,
+  filtrarTabla,
+  inicializarFiltros,
+  obtenerOpcionesVisibles,
+} from 'src/app/utils/tabla-filtros.helper';
+import { mostrarAlertaToast } from 'src/app/utils/alertas';
+import { DialogoInventarioComponent } from './dialogo-inventario/dialogo-inventario.component';
 
-
+const INVENTORY_GLOBAL_WRITE_ROLES = new Set([
+  'ADMIN',
+  'ADMINISTRADOR',
+  'SUPER_ADMIN',
+  'MANTENIMIENTO',
+  'SISTEMAS',
+  'TECNICO',
+]);
 
 @Component({
   selector: 'app-inventario',
@@ -27,104 +42,237 @@ import { FormsModule } from '@angular/forms';
   styleUrls: ['./inventario.component.css'],
   imports: [
     CommonModule,
-    MatTableModule,
+    FormsModule,
     MatButtonModule,
-    MatDialogModule,
-    MatIconModule,
-    MatMenuModule,
     MatCheckboxModule,
+    MatDialogModule,
+    MatFormFieldModule,
+    MatIconModule,
+    MatInputModule,
+    MatMenuModule,
+    MatProgressSpinnerModule,
+    MatTableModule,
     DialogoConfirmacionComponent,
     DialogoInventarioComponent,
-    FormsModule
-  ]
+  ],
 })
 export class InventarioComponent implements OnInit {
   inventarios: Inventario[] = [];
   inventariosFiltrados: Inventario[] = [];
   filtros: Record<string, FiltroColumna> = {};
-  columnasFiltrables = [
-    'nombre', 'descripcion', 'marca', 'proveedor',
-    'categoria', 'unidad', 'grupo_muscular', 'codigo_interno','subcategoria', 
-  ];
-  filtroColumnaActual: string | null = null;
 
-  displayedColumns: string[] = [
-    'id',
-    ...[
-      'nombre', 'descripcion', 'marca', 'proveedor',
-      'categoria', 'unidad', 'grupo_muscular', 'codigo_interno','subcategoria', 
-    ],
-    'acciones'
+  readonly columnasFiltrables = [
+    'nombre',
+    'descripcion',
+    'marca',
+    'proveedor',
+    'categoria',
+    'unidad',
+    'grupo_muscular',
+    'codigo_interno',
+    'subcategoria',
   ];
+
+  readonly etiquetasColumnas: Record<string, string> = {
+    nombre: 'Nombre',
+    descripcion: 'Descripción',
+    marca: 'Marca',
+    proveedor: 'Proveedor',
+    categoria: 'Categoría',
+    unidad: 'Unidad',
+    grupo_muscular: 'Grupo muscular',
+    codigo_interno: 'Código interno',
+    subcategoria: 'Subcategoría',
+  };
+
+  readonly camposBusquedaGlobal = [
+    'id',
+    'tipo',
+    'nombre',
+    'descripcion',
+    'marca',
+    'proveedor',
+    'categoria',
+    'subcategoria',
+    'unidad',
+    'grupo_muscular',
+    'codigo_interno',
+  ];
+
+  filtroColumnaActual: string | null = null;
+  displayedColumns: string[] = [];
 
   loading = false;
+  archivoProcesando = false;
   error: string | null = null;
+  busquedaGlobal = '';
+  puedeAdministrarInventario = false;
+  totalCategorias = 0;
+  totalConCodigo = 0;
 
-  @ViewChild('menuTrigger', { static: false }) menuTrigger!: MatMenuTrigger;
-  @ViewChild('fileInput') fileInput!: ElementRef<HTMLInputElement>;
+  @ViewChild('menuTrigger', { static: false }) menuTrigger?: MatMenuTrigger;
+  @ViewChild('fileInput') fileInput?: ElementRef<HTMLInputElement>;
 
   constructor(
     private inventarioService: InventarioService,
-    private dialog: MatDialog
-  ) { }
+    private dialog: MatDialog,
+    private session: SessionService,
+  ) {}
 
   ngOnInit(): void {
+    this.configurarPermisos();
     this.cargarInventario();
+  }
+
+  get cantidadFiltrosActivos(): number {
+    return this.columnasFiltrables.filter((col) => this.isFilterActive(col)).length;
+  }
+
+  get hayFiltrosAplicados(): boolean {
+    return this.cantidadFiltrosActivos > 0 || this.busquedaGlobal.trim().length > 0;
+  }
+
+  private configurarPermisos(): void {
+    const rol = String(this.session.getRol() || '').trim().toUpperCase();
+    this.puedeAdministrarInventario = INVENTORY_GLOBAL_WRITE_ROLES.has(rol);
+    this.actualizarColumnasVisibles();
+  }
+
+  private actualizarColumnasVisibles(): void {
+    this.displayedColumns = [
+      'id',
+      ...this.columnasFiltrables,
+      ...(this.puedeAdministrarInventario ? ['acciones'] : []),
+    ];
   }
 
   cargarInventario(): void {
     this.loading = true;
     this.error = null;
+
     this.inventarioService.obtenerInventario().subscribe({
-    next: data => {
-      // Normalizamos para mostrar categoria/subcategoria desde el catálogo cuando exista
-      const normalizados = data.map((it: any) => {
-        // posibles formas que puede venir del backend:
-        // - it.categoria_inventario = { nombre: string, subcategoria: string }
-        // - it.categoria_inventario_nombre / it.subcategoria_inventario
-        // - it.categoria (legacy)
-        // - it.tipo (legacy)
-        const catNombre =
-          it?.categoria_inventario?.nombre ??
-          it?.categoria_inventario_nombre ??
-          it?.categoria ??
-          it?.tipo ??
-          '';
+      next: (data) => {
+        const normalizados: Inventario[] = data.map((it: any) => {
+          const categoria =
+            it?.categoria_inventario?.nombre ??
+            it?.categoria_inventario_nombre ??
+            it?.categoria ??
+            it?.tipo ??
+            '';
 
-        const subcatNombre =
-          it?.categoria_inventario?.subcategoria ??
-          it?.subcategoria_inventario ??
-          it?.subcategoria ??
-          'N/A';
+          const subcategoria =
+            it?.categoria_inventario?.subcategoria ??
+            it?.subcategoria_inventario ??
+            it?.subcategoria ??
+            '';
 
-        return {
-          ...it,
-          categoria: catNombre,
-          subcategoria: subcatNombre,
-        };
-      });
+          const unidad = it?.unidad_medida ?? it?.unidad ?? '';
 
-      this.inventarios = normalizados.sort((a: any, b: any) => a.id - b.id);
-      this.filtros = inicializarFiltros(this.inventarios, this.columnasFiltrables);
-      this.inventariosFiltrados = [...this.inventarios];
-      this.loading = false;
-    },
+          return {
+            ...it,
+            categoria,
+            subcategoria,
+            unidad,
+            unidad_medida: it?.unidad_medida ?? unidad,
+          };
+        });
 
-      error: err => {
-        this.error = 'Error al cargar inventario';
+        this.inventarios = normalizados.sort((a, b) => a.id - b.id);
+        this.filtros = inicializarFiltros(
+          this.inventarios,
+          this.columnasFiltrables,
+        );
+        this.actualizarResumen();
+        this.refrescarVista();
         this.loading = false;
-        console.error(this.error, err);
-      }
+      },
+      error: (err) => {
+        this.error =
+          err?.error?.detail ||
+          err?.error?.error ||
+          'No se pudo cargar el inventario.';
+        this.loading = false;
+        console.error('Error al cargar inventario', err);
+      },
     });
   }
 
+  private actualizarResumen(): void {
+    this.totalCategorias = new Set(
+      this.inventarios
+        .map((item) => String(item.categoria || '').trim())
+        .filter(Boolean),
+    ).size;
+
+    this.totalConCodigo = this.inventarios.filter(
+      (item) => String(item.codigo_interno || '').trim().length > 0,
+    ).length;
+  }
+
+  private normalizarBusqueda(value: any): string {
+    return String(value ?? '').trim().toLowerCase();
+  }
+
+  private refrescarVista(): void {
+    const filtradosPorColumnas = filtrarTabla(this.inventarios, this.filtros);
+    const termino = this.normalizarBusqueda(this.busquedaGlobal);
+
+    if (!termino) {
+      this.inventariosFiltrados = filtradosPorColumnas;
+      return;
+    }
+
+    this.inventariosFiltrados = filtradosPorColumnas.filter((item) =>
+      this.camposBusquedaGlobal.some((campo) =>
+        this.normalizarBusqueda(item[campo]).includes(termino),
+      ),
+    );
+  }
+
+  aplicarBusquedaGlobal(): void {
+    this.refrescarVista();
+  }
+
+  limpiarBusquedaGlobal(): void {
+    if (!this.busquedaGlobal) {
+      return;
+    }
+
+    this.busquedaGlobal = '';
+    this.refrescarVista();
+  }
+
+  limpiarTodosLosFiltros(): void {
+    this.busquedaGlobal = '';
+    this.filtros = inicializarFiltros(
+      this.inventarios,
+      this.columnasFiltrables,
+    );
+    this.filtroColumnaActual = null;
+    this.refrescarVista();
+  }
+
+  obtenerEtiquetaColumna(col: string): string {
+    return this.etiquetasColumnas[col] || col;
+  }
+
+  mostrarValor(value: any): string {
+    const texto = String(value ?? '').trim();
+    return texto || '—';
+  }
+
   abrirDialogoAgregar(): void {
+    if (!this.puedeAdministrarInventario) {
+      return;
+    }
+
     const dialogRef = this.dialog.open(DialogoInventarioComponent, {
-      width: '460px',
-      data: { modo: 'crear' }
+      width: '620px',
+      maxWidth: '94vw',
+      data: { modo: 'crear' },
     });
 
-    dialogRef.afterClosed().subscribe(resultado => {
+    dialogRef.afterClosed().subscribe((resultado) => {
       if (resultado?.status === 'creado') {
         this.cargarInventario();
         mostrarAlertaToast('Inventario agregado correctamente.');
@@ -133,12 +281,17 @@ export class InventarioComponent implements OnInit {
   }
 
   abrirDialogoEditar(item: Inventario): void {
+    if (!this.puedeAdministrarInventario) {
+      return;
+    }
+
     const dialogRef = this.dialog.open(DialogoInventarioComponent, {
-      width: '460px',
-      data: { modo: 'editar', item }
+      width: '620px',
+      maxWidth: '94vw',
+      data: { modo: 'editar', item },
     });
 
-    dialogRef.afterClosed().subscribe(resultado => {
+    dialogRef.afterClosed().subscribe((resultado) => {
       if (resultado?.status === 'actualizado') {
         this.cargarInventario();
         mostrarAlertaToast('Inventario actualizado correctamente.');
@@ -147,73 +300,88 @@ export class InventarioComponent implements OnInit {
   }
 
   eliminarInventario(id: number): void {
+    if (!this.puedeAdministrarInventario) {
+      return;
+    }
+
     const dialogRef = this.dialog.open(DialogoConfirmacionComponent, {
       data: {
         titulo: 'Eliminar inventario',
         mensaje: '¿Seguro que quieres eliminar este registro?',
         textoAceptar: 'Sí, eliminar',
-        textoCancelar: 'Cancelar'
-      }
+        textoCancelar: 'Cancelar',
+      },
     });
 
-    dialogRef.afterClosed().subscribe(result => {
-      if (result) {
-        this.loading = true;
-        this.inventarioService.eliminarInventario(id).subscribe({
-          next: () => {
-            mostrarAlertaToast('Inventario eliminado correctamente.');
-            this.cargarInventario();
-          },
-          error: err => {
-            let mensaje = err?.error?.error || 'No se pudo eliminar el inventario.';
-            if (mensaje.includes('movimientos registrados')) {
-              mensaje = 'No puedes eliminar este inventario porque tiene movimientos asociados. Elimina primero sus movimientos si es necesario.';
-            }
-            mostrarAlertaToast(mensaje, 'error');
-            this.loading = false;
-            console.error('Error al eliminar inventario', err);
-          }
-        });
+    dialogRef.afterClosed().subscribe((result) => {
+      if (!result) {
+        return;
       }
+
+      this.loading = true;
+      this.inventarioService.eliminarInventario(id).subscribe({
+        next: () => {
+          mostrarAlertaToast('Inventario eliminado correctamente.');
+          this.cargarInventario();
+        },
+        error: (err) => {
+          let mensaje =
+            err?.error?.detail ||
+            err?.error?.error ||
+            'No se pudo eliminar el inventario.';
+
+          if (mensaje.includes('movimientos registrados')) {
+            mensaje =
+              'No puedes eliminar este inventario porque tiene movimientos asociados.';
+          }
+
+          mostrarAlertaToast(mensaje, 'error');
+          this.loading = false;
+          console.error('Error al eliminar inventario', err);
+        },
+      });
     });
   }
 
-  // -------- Filtros Excel ---------
-  abrirMenuFiltro(col: string) {
+  abrirMenuFiltro(col: string): void {
     this.filtroColumnaActual = col;
   }
 
-  buscar(col: string, texto: string) {
+  buscar(col: string, texto: string): void {
     this.filtros[col].texto = texto;
   }
 
-  seleccionarTodo(col: string, valor: boolean) {
+  seleccionarTodo(col: string, valor: boolean): void {
     alternarSeleccionTemporal(this.filtros[col], valor);
   }
 
-  alternarSeleccionIndividual(col: string, i: number, valor: boolean) {
+  alternarSeleccionIndividual(col: string, i: number, valor: boolean): void {
     this.filtros[col].temporales[i].seleccionado = valor;
   }
 
-  aplicarFiltro(col: string) {
+  aplicarFiltro(col: string): void {
     confirmarSeleccion(this.filtros[col]);
     this.inventariosFiltrados = filtrarTabla(this.inventarios, this.filtros);
     this.actualizarOpcionesDeFiltros();
-    this.menuTrigger.closeMenu();
+    this.refrescarVista();
+    this.menuTrigger?.closeMenu();
   }
 
-  limpiarFiltro(col: string) {
-    this.filtros[col].opciones.forEach(op => op.seleccionado = true);
+  limpiarFiltro(col: string): void {
+    this.filtros[col].opciones.forEach((op) => (op.seleccionado = true));
     this.filtros[col].texto = '';
-    this.filtros[col].temporales = this.filtros[col].opciones.map(o => ({ ...o }));
+    this.filtros[col].temporales = this.filtros[col].opciones.map((op) => ({
+      ...op,
+    }));
     this.inventariosFiltrados = filtrarTabla(this.inventarios, this.filtros);
     this.actualizarOpcionesDeFiltros();
-    this.menuTrigger.closeMenu();
+    this.refrescarVista();
+    this.menuTrigger?.closeMenu();
   }
 
   isTodoSeleccionado(col: string): boolean {
     const visibles = obtenerOpcionesVisibles(this.filtros[col]);
-    return visibles.length > 0 && visibles.every(item => item.seleccionado);
+    return visibles.length > 0 && visibles.every((item) => item.seleccionado);
   }
 
   obtenerOpcionesVisibles(filtro: FiltroColumna) {
@@ -221,71 +389,135 @@ export class InventarioComponent implements OnInit {
   }
 
   isFilterActive(col: string): boolean {
-    // Retorna true si hay algún filtro aplicado (no todos seleccionados)
-    return this.filtros[col]?.opciones.some(o => !o.seleccionado);
+    return Boolean(
+      this.filtros[col]?.opciones.some((op) => !op.seleccionado),
+    );
   }
 
-    actualizarOpcionesDeFiltros() {
-    // Recorre cada columna y recalcula los valores posibles basados en los datos filtrados actuales
+  actualizarOpcionesDeFiltros(): void {
     for (const col of this.columnasFiltrables) {
-      const valoresUnicos = Array.from(new Set(this.inventariosFiltrados.map(row => String(row[col] ?? '')).filter(x => x !== '')));
-      // Preserva selección de los que ya estaban seleccionados
-      this.filtros[col].opciones = valoresUnicos.map(valor => {
-        // Si ya existe en opciones y estaba seleccionado, mantenlo seleccionado
-        const ya = this.filtros[col].opciones.find(o => o.valor === valor);
-        return { valor, seleccionado: ya ? ya.seleccionado : true };
+      const valoresUnicos = Array.from(
+        new Set(
+          this.inventariosFiltrados
+            .map((row) => String(row[col] ?? ''))
+            .filter((value) => value !== ''),
+        ),
+      );
+
+      this.filtros[col].opciones = valoresUnicos.map((valor) => {
+        const existente = this.filtros[col].opciones.find(
+          (op) => op.valor === valor,
+        );
+        return {
+          valor,
+          seleccionado: existente ? existente.seleccionado : true,
+        };
       });
-      this.filtros[col].temporales = this.filtros[col].opciones.map(o => ({ ...o }));
-      // Si hay texto en buscador, filtra temporales:
+
+      this.filtros[col].temporales = this.filtros[col].opciones.map((op) => ({
+        ...op,
+      }));
+
       if (this.filtros[col].texto) {
         const texto = this.filtros[col].texto.toLowerCase();
-        this.filtros[col].temporales = this.filtros[col].temporales.filter(o => o.valor.toLowerCase().includes(texto));
+        this.filtros[col].temporales = this.filtros[col].temporales.filter(
+          (op) => op.valor.toLowerCase().includes(texto),
+        );
       }
     }
   }
 
-abrirDialogoImportar() {
-this.fileInput.nativeElement.click();
-}
-
-importarExcel(event: Event) {
-  const input = event.target as HTMLInputElement;
-  if (!input.files || input.files.length === 0) return;
-  const archivo = input.files[0];
-  this.inventarioService.importarInventario(archivo).subscribe({
-    next: res => {
-      mostrarAlertaToast('Inventario importado correctamente');
-      this.cargarInventario(); // O el método que uses para refrescar la tabla
-    },
-    error: err => {
-      mostrarAlertaToast('Error al importar inventario', 'error');
+  abrirDialogoImportar(): void {
+    if (!this.puedeAdministrarInventario || this.archivoProcesando) {
+      return;
     }
-  });
-  input.value = '';
-}
 
-descargarPlantilla() {
-  this.inventarioService.descargarPlantilla().subscribe(blob => {
+    this.fileInput?.nativeElement.click();
+  }
+
+  importarExcel(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (
+      !this.puedeAdministrarInventario ||
+      !input.files ||
+      input.files.length === 0
+    ) {
+      return;
+    }
+
+    const archivo = input.files[0];
+    this.archivoProcesando = true;
+
+    this.inventarioService.importarInventario(archivo).subscribe({
+      next: (res) => {
+        mostrarAlertaToast(
+          res?.message || 'Inventario importado correctamente.',
+        );
+        this.archivoProcesando = false;
+        input.value = '';
+        this.cargarInventario();
+      },
+      error: (err) => {
+        mostrarAlertaToast(
+          err?.error?.detail ||
+            err?.error?.error ||
+            err?.error?.message ||
+            'Error al importar inventario.',
+          'error',
+        );
+        this.archivoProcesando = false;
+        input.value = '';
+      },
+    });
+  }
+
+  descargarPlantilla(): void {
+    if (this.archivoProcesando) {
+      return;
+    }
+
+    this.archivoProcesando = true;
+    this.inventarioService.descargarPlantilla().subscribe({
+      next: (blob) => {
+        this.descargarBlob(blob, 'plantilla_inventario.xlsx');
+        this.archivoProcesando = false;
+      },
+      error: () => {
+        mostrarAlertaToast('No se pudo descargar la plantilla.', 'error');
+        this.archivoProcesando = false;
+      },
+    });
+  }
+
+  exportarInventario(): void {
+    if (!this.puedeAdministrarInventario || this.archivoProcesando) {
+      return;
+    }
+
+    this.archivoProcesando = true;
+    this.inventarioService.exportarInventario().subscribe({
+      next: (blob) => {
+        this.descargarBlob(blob, 'inventario.xlsx');
+        this.archivoProcesando = false;
+      },
+      error: (err) => {
+        mostrarAlertaToast(
+          err?.error?.detail ||
+            err?.error?.error ||
+            'No se pudo exportar el inventario.',
+          'error',
+        );
+        this.archivoProcesando = false;
+      },
+    });
+  }
+
+  private descargarBlob(blob: Blob, filename: string): void {
     const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'plantilla_inventario.xlsx';
-    a.click();
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
     window.URL.revokeObjectURL(url);
-  });
-}
-
-exportarInventario() {
-  this.inventarioService.exportarInventario().subscribe(blob => {
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'inventario.xlsx';
-    a.click();
-    window.URL.revokeObjectURL(url);
-  });
-}
-
-
-
+  }
 }

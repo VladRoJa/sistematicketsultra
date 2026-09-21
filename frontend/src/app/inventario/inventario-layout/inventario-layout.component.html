@@ -1,8 +1,44 @@
-<!-- src/app/inventario/inventario-layout/inventario-layout.component.html -->
+<section class="inventory-shell">
+  <nav class="inventory-nav" aria-label="Navegación de inventario">
+    <a
+      class="inventory-nav__item"
+      routerLink="/inventario"
+      routerLinkActive="inventory-nav__item--active"
+      [routerLinkActiveOptions]="{ exact: true }"
+    >
+      <mat-icon>inventory_2</mat-icon>
+      <span>Inventario maestro</span>
+    </a>
 
-<mat-card class="layout-card">
+    <a
+      class="inventory-nav__item"
+      routerLink="/inventario/movimientos"
+      routerLinkActive="inventory-nav__item--active"
+    >
+      <mat-icon>swap_horiz</mat-icon>
+      <span>Movimientos</span>
+    </a>
 
-  <div class="contenido">
+    <a
+      class="inventory-nav__item"
+      routerLink="/inventario/existencias"
+      routerLinkActive="inventory-nav__item--active"
+    >
+      <mat-icon>warehouse</mat-icon>
+      <span>Existencias</span>
+    </a>
+
+    <a
+      class="inventory-nav__item"
+      routerLink="/inventario/reportes"
+      routerLinkActive="inventory-nav__item--active"
+    >
+      <mat-icon>assessment</mat-icon>
+      <span>Reportes</span>
+    </a>
+  </nav>
+
+  <div class="inventory-shell__content">
     <router-outlet></router-outlet>
   </div>
-</mat-card>
+</section>
