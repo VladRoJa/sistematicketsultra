@@ -592,6 +592,25 @@ def build_preventive_template_xlsx(
     sheet.add_data_validation(date_validation)
     date_validation.add("D2:D1001")
 
+    activity_validation = DataValidation(
+        type="custom",
+        formula1="=LEN(TRIM(E2))>0",
+        allow_blank=False,
+    )
+    activity_validation.error = (
+        "La actividad es obligatoria. Describe el trabajo preventivo."
+    )
+    activity_validation.errorTitle = "Actividad obligatoria"
+    activity_validation.prompt = (
+        "Obligatoria. Describe el trabajo a realizar. "
+        "Ej.: Mantenimiento preventivo general."
+    )
+    activity_validation.promptTitle = "Actividad preventiva"
+    activity_validation.showErrorMessage = True
+    activity_validation.showInputMessage = True
+    sheet.add_data_validation(activity_validation)
+    activity_validation.add("E2:E1001")
+
     if responsible_values:
         _add_named_list(
             workbook,
