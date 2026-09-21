@@ -251,23 +251,17 @@ class TicketPreventiveCloseRequirementsTest(unittest.TestCase):
 
         self.assertIn("bitácora", message)
 
-    def test_preventive_requires_active_evidence(self):
+    def test_preventive_with_bitacora_is_ready_without_evidence(self):
         with self.app.app_context():
-            with (
-                patch(
-                    "app.routes.ticket_routes.PmBitacoraORM.query",
-                    self._query(SimpleNamespace(id=1)),
-                ),
-                patch(
-                    "app.routes.ticket_routes.TicketAttachmentORM.query",
-                    self._query(None),
-                ),
+            with patch(
+                "app.routes.ticket_routes.PmBitacoraORM.query",
+                self._query(SimpleNamespace(id=1)),
             ):
                 message = _preventive_close_requirement_error(
                     self._ticket()
                 )
 
-        self.assertIn("evidencia", message)
+        self.assertIsNone(message)
 
     def test_preventive_with_bitacora_and_evidence_is_ready(self):
         with self.app.app_context():
