@@ -351,22 +351,55 @@
                 </div>
 
                 <ng-container *ngIf="!evidenceSaved">
-                  <label class="file-field">
+                  <div class="file-field">
                     <span>Foto del trabajo</span>
+
                     <input
+                      #cameraInput
+                      class="evidence-native-input"
                       type="file"
                       accept="image/*"
                       capture="environment"
                       (change)="onEvidenceSelected($event)"
                       [disabled]="!bitacoraSaved"
                     />
+
+                    <input
+                      #galleryInput
+                      class="evidence-native-input"
+                      type="file"
+                      accept="image/*"
+                      (change)="onEvidenceSelected($event)"
+                      [disabled]="!bitacoraSaved"
+                    />
+
+                    <div class="evidence-source-actions">
+                      <button
+                        type="button"
+                        class="evidence-source-button evidence-source-button--camera"
+                        (click)="openCamera()"
+                        [disabled]="!bitacoraSaved"
+                      >
+                        Tomar foto
+                      </button>
+
+                      <button
+                        type="button"
+                        class="evidence-source-button"
+                        (click)="openGallery()"
+                        [disabled]="!bitacoraSaved"
+                      >
+                        Elegir de galería
+                      </button>
+                    </div>
+
                     <small *ngIf="!evidenceFile" class="file-field__hint">
-                      En celular puedes tomar una foto o elegirla de la galería.
+                      Usa la cámara trasera o selecciona una imagen existente.
                     </small>
                     <small *ngIf="evidenceFile">
                       {{ evidenceFile.name }}
                     </small>
-                  </label>
+                  </div>
 
                   <button
                     type="button"
