@@ -34,6 +34,25 @@
   </button>
 </div>
 
+<div
+  class="tickets-maintenance-type-toggle"
+  *ngIf="puedeMostrarFiltroTipoMantenimiento"
+>
+  <span class="tickets-maintenance-type-toggle__label">Mantenimiento</span>
+
+  <div class="tickets-maintenance-type-toggle__options">
+    <button
+      type="button"
+      class="tickets-maintenance-type-toggle__btn"
+      *ngFor="let option of maintenanceTypeOptions"
+      [class.tickets-maintenance-type-toggle__btn--active]="isMaintenanceTypeActive(option.value)"
+      (click)="onMaintenanceTypeChanged(option.value)"
+    >
+      {{ option.label }}
+    </button>
+  </div>
+</div>
+
 <div class="tickets-year-toolbar">
   <div class="tickets-year-toolbar__content">
 <div class="tickets-year-mini">
