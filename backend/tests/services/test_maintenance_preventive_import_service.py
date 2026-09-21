@@ -130,6 +130,21 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
                     for name in workbook.defined_names
                 )
             )
+
+            conditional_ranges = {
+                str(rule_range)
+                for rule_range in sheet.conditional_formatting
+            }
+            self.assertIn("A2:G1001", conditional_ranges)
+
+            duplicate_rules = list(
+                sheet.conditional_formatting["A2:G1001"]
+            )
+            self.assertEqual(len(duplicate_rules), 1)
+            self.assertIn(
+                "COUNTIFS",
+                duplicate_rules[0].formula[0],
+            )
         finally:
             workbook.close()
 
