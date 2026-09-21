@@ -55,7 +55,10 @@ def test_mobile_execution_has_guided_three_step_flow():
     assert "Marcar realizado" in html
     assert "Generar ticket correctivo relacionado" in html
     assert "capture=\"environment\"" in html
-    assert "En celular puedes tomar una foto o elegirla de la galería." in html
+    assert "Tomar foto" in html
+    assert "Elegir de galería" in html
+    assert "openCamera()" in ts
+    assert "openGallery()" in ts
     assert "Volver a mi programa" in html
     assert "mobile-execution-cta" in html
     assert "execution-complete-summary" in html
