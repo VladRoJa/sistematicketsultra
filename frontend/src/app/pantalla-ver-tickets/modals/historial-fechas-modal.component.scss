@@ -128,6 +128,12 @@
    Suite Ultra UI v1 - Chip de estado del ticket
    ========================================================================== */
 
+.hero-status-stack {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+
 .estado-chip {
   display: inline-flex;
   align-items: center;
@@ -139,6 +145,21 @@
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+}
+
+.maintenance-type-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ultra-orange-soft);
+  color: var(--ultra-orange);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  line-height: 1.35;
 }
 
 .estado-abierto {
