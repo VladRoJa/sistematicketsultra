@@ -147,14 +147,21 @@ def _all_selectable_branches() -> list[Sucursal]:
 
 def _assigned_branch_ids(user) -> set[int]:
     result: set[int] = set()
+    explicit_branch_ids = (
+        getattr(user, "sucursales_ids", None) or []
+    )
+    has_explicit_scope = bool(explicit_branch_ids)
 
-    for value in (getattr(user, "sucursales_ids", None) or []):
+    for value in explicit_branch_ids:
         try:
             parsed = int(value)
         except (TypeError, ValueError):
             continue
         if parsed > 0 and parsed not in TECHNICAL_BRANCH_IDS:
             result.add(parsed)
+
+    if has_explicit_scope:
+        return result
 
     try:
         primary = int(getattr(user, "sucursal_id", 0) or 0)
