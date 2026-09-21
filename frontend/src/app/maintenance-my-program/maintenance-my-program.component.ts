@@ -51,6 +51,7 @@ export class MaintenanceMyProgramComponent implements OnInit {
   checkValues: Record<string, string> = {};
 
   evidenceFile: File | null = null;
+  evidenceRequested = false;
   bitacoraSaved = false;
   evidenceSaved = false;
   showSavedBitacora = false;
@@ -131,6 +132,7 @@ export class MaintenanceMyProgramComponent implements OnInit {
   get canUploadEvidence(): boolean {
     return Boolean(
       this.bitacoraSaved
+      && this.evidenceRequested
       && !this.evidenceSaved
       && this.evidenceFile
       && this.workSavingStep === null,
@@ -140,7 +142,7 @@ export class MaintenanceMyProgramComponent implements OnInit {
   get canCompleteWork(): boolean {
     return Boolean(
       this.bitacoraSaved
-      && this.evidenceSaved
+      && (!this.evidenceRequested || this.evidenceSaved)
       && this.workSavingStep === null,
     );
   }
@@ -183,6 +185,9 @@ export class MaintenanceMyProgramComponent implements OnInit {
     if (!this.bitacoraSaved) {
       return 'Primero guarda la bitácora.';
     }
+    if (!this.evidenceRequested) {
+      return 'Evidencia opcional. Actívala si deseas adjuntar una foto.';
+    }
     if (!this.evidenceFile) {
       return 'Toma o selecciona una foto del trabajo.';
     }
@@ -193,8 +198,8 @@ export class MaintenanceMyProgramComponent implements OnInit {
     if (!this.bitacoraSaved) {
       return 'Primero guarda la bitácora.';
     }
-    if (!this.evidenceSaved) {
-      return 'Falta subir evidencia.';
+    if (this.evidenceRequested && !this.evidenceSaved) {
+      return 'Falta subir la evidencia seleccionada.';
     }
     return 'Listo para enviar a validación del gerente.';
   }
@@ -220,7 +225,7 @@ export class MaintenanceMyProgramComponent implements OnInit {
         ? 'Guardando…'
         : 'Guardar bitácora';
     }
-    if (!this.evidenceSaved) {
+    if (this.evidenceRequested && !this.evidenceSaved) {
       return this.workSavingStep === 'evidence'
         ? 'Subiendo…'
         : 'Subir evidencia';
@@ -234,7 +239,7 @@ export class MaintenanceMyProgramComponent implements OnInit {
     if (!this.bitacoraSaved) {
       return this.bitacoraHelpText;
     }
-    if (!this.evidenceSaved) {
+    if (this.evidenceRequested && !this.evidenceSaved) {
       return this.evidenceHelpText;
     }
     return this.completeHelpText;
@@ -244,7 +249,7 @@ export class MaintenanceMyProgramComponent implements OnInit {
     if (!this.bitacoraSaved) {
       return this.canSaveBitacora;
     }
-    if (!this.evidenceSaved) {
+    if (this.evidenceRequested && !this.evidenceSaved) {
       return this.canUploadEvidence;
     }
     return this.canCompleteWork;
@@ -422,7 +427,7 @@ export class MaintenanceMyProgramComponent implements OnInit {
       return;
     }
 
-    if (!this.evidenceSaved) {
+    if (this.evidenceRequested && !this.evidenceSaved) {
       this.uploadEvidence();
       return;
     }
@@ -430,8 +435,18 @@ export class MaintenanceMyProgramComponent implements OnInit {
     this.completeWork();
   }
 
+  onEvidencePreferenceChanged(): void {
+    if (!this.evidenceRequested) {
+      this.evidenceFile = null;
+    }
+  }
+
   openCamera(): void {
-    if (!this.bitacoraSaved || this.evidenceSaved) {
+    if (
+      !this.bitacoraSaved
+      || !this.evidenceRequested
+      || this.evidenceSaved
+    ) {
       return;
     }
 
@@ -439,7 +454,11 @@ export class MaintenanceMyProgramComponent implements OnInit {
   }
 
   openGallery(): void {
-    if (!this.bitacoraSaved || this.evidenceSaved) {
+    if (
+      !this.bitacoraSaved
+      || !this.evidenceRequested
+      || this.evidenceSaved
+    ) {
       return;
     }
 
@@ -572,6 +591,7 @@ export class MaintenanceMyProgramComponent implements OnInit {
     }
 
     this.evidenceSaved = Boolean(detail.has_evidence);
+    this.evidenceRequested = this.evidenceSaved;
   }
 
   private resetWorkForm(): void {
@@ -586,6 +606,7 @@ export class MaintenanceMyProgramComponent implements OnInit {
     this.criticidadCorrectivo = 2;
     this.checkValues = {};
     this.evidenceFile = null;
+    this.evidenceRequested = false;
     this.bitacoraSaved = false;
     this.evidenceSaved = false;
     this.showSavedBitacora = false;
