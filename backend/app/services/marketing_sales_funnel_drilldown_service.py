@@ -82,6 +82,7 @@ LEADS_META_SORTABLE_FIELDS = frozenset(
         "visit_date",
         "purchase_status",
         "sale_date",
+        "purchase_branch",
         "channel",
         "contact_id",
     }
@@ -131,8 +132,9 @@ LEADS_META_EXPORT_COLUMNS: tuple[tuple[str, str], ...] = (
     ("followup_status", "Seguimiento"),
     ("visit_status", "Visitó"),
     ("visit_date", "Fecha visita"),
-    ("purchase_status", "Compró"),
+    ("purchase_status", "Compró en Ultra (60d)"),
     ("sale_date", "Fecha compra"),
+    ("purchase_branch", "Sucursal compra"),
     ("channel", "Canal"),
     ("contact_id", "ID contacto"),
 )
