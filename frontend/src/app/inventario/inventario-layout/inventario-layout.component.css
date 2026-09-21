@@ -1,10 +1,93 @@
-.tab-buttons {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 16px;
+:host {
+  display: block;
+  min-height: 100%;
 }
 
-.active-tab {
-  background-color: #ff4081 !important;
-  color: white !important;
+.inventory-shell {
+  min-height: calc(100vh - 56px);
+  padding: 16px;
+  box-sizing: border-box;
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(229, 69, 37, 0.07),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at top right,
+      rgba(44, 69, 149, 0.07),
+      transparent 32%
+    ),
+    #f5f7fb;
+}
+
+.inventory-nav,
+.inventory-shell__content {
+  width: min(1680px, 100%);
+  margin-inline: auto;
+}
+
+.inventory-nav {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 6px;
+  box-sizing: border-box;
+  overflow-x: auto;
+  border: 1px solid rgba(228, 231, 236, 0.95);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+  scrollbar-width: thin;
+}
+
+.inventory-nav__item {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 7px 12px;
+  border-radius: 11px;
+  color: #667085;
+  text-decoration: none;
+  font-size: 11px;
+  font-weight: 900;
+  transition:
+    color 0.14s ease,
+    background 0.14s ease,
+    box-shadow 0.14s ease;
+}
+
+.inventory-nav__item mat-icon {
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
+}
+
+.inventory-nav__item:hover {
+  color: #1d2939;
+  background: #f2f4f7;
+}
+
+.inventory-nav__item--active {
+  color: #ffffff;
+  background: linear-gradient(135deg, #e54525, #c9361c);
+  box-shadow: 0 8px 18px rgba(229, 69, 37, 0.22);
+}
+
+@media (max-width: 720px) {
+  .inventory-shell {
+    padding: 10px;
+  }
+
+  .inventory-nav {
+    margin-bottom: 10px;
+    border-radius: 14px;
+  }
+
+  .inventory-nav__item {
+    min-height: 36px;
+    padding-inline: 10px;
+  }
 }
