@@ -366,28 +366,6 @@
     min-height: 40px;
   }
 
-  .execution-panel {
-    gap: 8px;
-    margin-top: 0;
-    padding-bottom: 76px;
-    padding-top: 8px;
-  }
-
-  .execution-progress > div {
-    gap: 3px;
-    padding: 7px 4px;
-  }
-
-  .execution-progress strong {
-    width: 22px;
-    height: 22px;
-  }
-
-  .execution-block {
-    gap: 9px;
-    padding: 10px;
-  }
-
   .execution-step-button {
     display: none;
   }
@@ -916,5 +894,30 @@
 @media (min-width: 521px) {
   .mobile-execution-cta {
     display: none;
+  }
+}
+
+
+@media (max-width: 520px) {
+  .execution-panel {
+    gap: 8px;
+    margin-top: 0;
+    padding-bottom: 76px;
+    padding-top: 8px;
+  }
+
+  .execution-progress > div {
+    gap: 3px;
+    padding: 7px 4px;
+  }
+
+  .execution-progress strong {
+    width: 22px;
+    height: 22px;
+  }
+
+  .execution-block {
+    gap: 9px;
+    padding: 10px;
   }
 }
