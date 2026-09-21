@@ -242,15 +242,10 @@ def get_marketing_sales_funnel_endpoint():
 
         response = jsonify(result)
         total_ms = (perf_counter() - request_started) * 1000
-        funnel_stage_timings = tuple(
-            f"funnel_{name};dur={duration_ms:.1f}"
-            for name, duration_ms in funnel_build.timings_ms.items()
-        )
         response.headers["Server-Timing"] = ", ".join(
             (
                 f"access;dur={access_ms:.1f}",
                 f"funnel;dur={funnel_ms:.1f}",
-                *funnel_stage_timings,
                 f"branch_scope;dur={branch_scope_ms:.1f}",
                 f"leads;dur={leads_ms:.1f}",
                 f"visit_conversion;dur={conversion_ms:.1f}",
