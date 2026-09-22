@@ -18,6 +18,7 @@ from app.models.ticket_model import Ticket
 BUSINESS_TZ = ZoneInfo("America/Tijuana")
 MAINTENANCE_DEPARTMENT_ID = 1
 ACTIVE_STATES = {"abierto", "en progreso", "por_validar"}
+DAILY_CAPACITY_MINUTES = 9 * 60
 
 
 class MaintenanceMyProgramError(Exception):
@@ -325,6 +326,82 @@ def _serialize_ticket(ticket: Ticket, today: date) -> dict:
     }
 
 
+def _build_workload(items: list[dict]) -> dict:
+    by_date: dict[str, dict] = {}
+    total_estimated = 0
+    total_projected = 0
+    total_unestimated = 0
+
+    for item in items:
+        if item.get("operational_status") == "PENDIENTE_VALIDACION":
+            continue
+
+        work_date = item.get("fecha_trabajo")
+        if not work_date:
+            continue
+
+        day = by_date.setdefault(
+            work_date,
+            {
+                "date": work_date,
+                "estimated_minutes": 0,
+                "capacity_minutes": DAILY_CAPACITY_MINUTES,
+                "item_count": 0,
+                "projected_count": 0,
+                "unestimated_count": 0,
+            },
+        )
+        day["item_count"] += 1
+
+        if item.get("item_kind") == "RECURRENCE_PROJECTION":
+            day["projected_count"] += 1
+
+        raw_duration = item.get("estimated_duration_minutes")
+        try:
+            duration = int(raw_duration)
+        except (TypeError, ValueError):
+            duration = 0
+
+        if duration <= 0:
+            day["unestimated_count"] += 1
+            total_unestimated += 1
+            continue
+
+        day["estimated_minutes"] += duration
+        total_estimated += duration
+
+        if item.get("item_kind") == "RECURRENCE_PROJECTION":
+            total_projected += duration
+
+    days = []
+    for day in sorted(by_date.values(), key=lambda row: row["date"]):
+        estimated = int(day["estimated_minutes"])
+        capacity = int(day["capacity_minutes"])
+        over_minutes = max(0, estimated - capacity)
+        utilization = round((estimated / capacity) * 100, 1) if capacity else 0
+
+        days.append(
+            {
+                **day,
+                "utilization_percent": utilization,
+                "over_capacity": over_minutes > 0,
+                "over_minutes": over_minutes,
+            }
+        )
+
+    return {
+        "reference_daily_capacity_minutes": DAILY_CAPACITY_MINUTES,
+        "estimated_minutes": total_estimated,
+        "projected_minutes": total_projected,
+        "unestimated_count": total_unestimated,
+        "scheduled_days": len(days),
+        "overloaded_days": sum(
+            1 for day in days if day["over_capacity"]
+        ),
+        "days": days,
+    }
+
+
 def build_my_program(
     user,
     *,
@@ -443,6 +520,7 @@ def build_my_program(
             "pending_validation": len(pending_validation),
             "unscheduled": len(unscheduled),
         },
+        "workload": _build_workload(week_items),
         "today_items": sorted(today_items, key=sort_key),
         "week_items": sorted(week_items, key=sort_key),
         "projected_items": sorted(projected_items, key=sort_key),
