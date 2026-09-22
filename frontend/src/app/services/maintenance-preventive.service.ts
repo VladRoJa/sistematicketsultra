@@ -16,6 +16,13 @@ export interface PreventiveResponsible {
   rol: string;
 }
 
+export interface PreventiveBuildingClassification {
+  id: number;
+  nombre: string;
+  label: string;
+  nivel: number;
+}
+
 export interface PreventiveEquipment {
   inventario_id: number;
   codigo_interno: string;
@@ -32,6 +39,7 @@ export interface PreventiveEquipment {
 export interface PreventivePlanningContext {
   sucursales: PreventiveBranch[];
   responsables: PreventiveResponsible[];
+  building_classifications: PreventiveBuildingClassification[];
 }
 
 export interface MaintenanceCrew {
@@ -72,14 +80,19 @@ export interface PreventiveDraftItem {
   id: number;
   batch_id: number;
   source_row_number: number | null;
+  target_type_input: string | null;
   sucursal_input: string | null;
   codigo_equipo_input: string | null;
+  building_classification_input: string | null;
   responsable_input: string | null;
   fecha_programada_input: string | null;
   repeat_enabled_input: string | null;
   repeat_interval_workdays_input: string | null;
+  target_type: 'EQUIPO' | 'EDIFICIO' | null;
   sucursal_id: number | null;
   inventario_id: number | null;
+  building_classification_id: number | null;
+  building_classification: PreventiveBuildingClassification | null;
   responsable_user_id: number | null;
   fecha_programada: string | null;
   repeat_enabled: boolean;
@@ -783,8 +796,10 @@ export class MaintenancePreventiveService {
   addItems(
     batchId: number,
     items: Array<{
+      target_type?: 'EQUIPO' | 'EDIFICIO';
       sucursal: string;
-      codigo_equipo: string;
+      codigo_equipo?: string | null;
+      building_classification_id?: number | null;
       responsable: string;
       fecha_programada: string;
       repeat_enabled?: boolean;
@@ -803,8 +818,10 @@ export class MaintenancePreventiveService {
     batchId: number,
     itemId: number,
     payload: Partial<{
+      target_type: 'EQUIPO' | 'EDIFICIO' | string;
       sucursal: string;
-      codigo_equipo: string;
+      codigo_equipo: string | null;
+      building_classification_id: number | string | null;
       responsable: string;
       fecha_programada: string;
       repeat_enabled: boolean | string;
