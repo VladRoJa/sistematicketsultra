@@ -27,6 +27,7 @@ from app.services.maintenance_preventive_service import (
     listar_lotes_preventivos,
     listar_personal_mantenimiento,
     obtener_lote_preventivo,
+    previsualizar_capacidad_programacion,
     publicar_lote_preventivo,
     guardar_personal_mantenimiento,
     serializar_lote,
@@ -1021,6 +1022,27 @@ def post_publish_batch(batch_id: int):
         ), 201
     except Exception as exc:
         db.session.rollback()
+        return _error_response(exc)
+
+
+@maintenance_preventive_bp.route(
+    "/batches/<int:batch_id>/capacity-preview",
+    methods=["POST"],
+)
+@jwt_required()
+def post_batch_capacity_preview(batch_id: int):
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        preview = previsualizar_capacidad_programacion(
+            batch_id,
+            user,
+            request.get_json(silent=True) or {},
+        )
+        return jsonify(preview), 200
+    except Exception as exc:
         return _error_response(exc)
 
 
