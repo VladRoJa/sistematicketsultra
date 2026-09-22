@@ -610,6 +610,59 @@ class MaintenancePreventiveMaterializationTest(unittest.TestCase):
         )
         self.assertEqual(occurrences[0].ticket_id, 601)
 
+    def test_materialize_uses_responsible_when_creator_no_longer_exists(self):
+        schedule = self._schedule()
+        inventory = SimpleNamespace(
+            id=90,
+            nombre="CAMINADORA",
+            familia_equipo_id=1,
+        )
+        responsible = SimpleNamespace(
+            id=20,
+            username="TECNICO_PM",
+            sucursal_id=4,
+        )
+        ticket = SimpleNamespace(
+            id=603,
+            asignado_a=None,
+            familia_equipo_id=None,
+        )
+        fake_session = MagicMock()
+
+        def fake_get(model, object_id):
+            if model is service.InventarioGeneral:
+                return inventory
+            if model is service.UserORM and int(object_id) == 20:
+                return responsible
+            if model is service.UserORM and int(object_id) == 10:
+                return None
+            return None
+
+        fake_session.get.side_effect = fake_get
+
+        with (
+            patch.object(
+                service,
+                "db",
+                SimpleNamespace(session=fake_session),
+            ),
+            patch.object(
+                service.Ticket,
+                "create_ticket",
+                return_value=ticket,
+            ) as create_ticket,
+        ):
+            result = service.materializar_programacion_recurrente(
+                schedule,
+                through_date=date(2026, 9, 21),
+                occurrence_lookup=lambda *_args: None,
+            )
+
+        self.assertTrue(result["generated"])
+        kwargs = create_ticket.call_args.kwargs
+        self.assertEqual(kwargs["username"], "TECNICO_PM")
+        self.assertEqual(kwargs["sucursal_id"], 4)
+
     def test_materialize_building_schedule_creates_classified_ticket(self):
         schedule = self._schedule(
             target_type="EDIFICIO",
