@@ -29,6 +29,7 @@ from .maintenance_preventive import (
     MaintenanceReprogramReasonORM,
     MaintenancePreventiveBatchORM,
     MaintenancePreventiveItemORM,
+    MaintenancePreventiveScheduleORM,
 )
 from .warehouse import (
     WarehouseSourceORM,
@@ -165,6 +166,7 @@ __all__ = [
     "MaintenanceReprogramReasonORM",
     "MaintenancePreventiveBatchORM",
     "MaintenancePreventiveItemORM",
+    "MaintenancePreventiveScheduleORM",
     "WarehouseSourceORM",
     "WarehouseFamilyORM",
     "WarehouseOperationalRoleORM",
