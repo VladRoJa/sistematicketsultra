@@ -178,6 +178,28 @@ export interface MaintenanceMyProgramItem {
   estimated_duration_minutes: number | null;
 }
 
+export interface MaintenanceMyProgramWorkloadDay {
+  date: string;
+  estimated_minutes: number;
+  capacity_minutes: number;
+  item_count: number;
+  projected_count: number;
+  unestimated_count: number;
+  utilization_percent: number;
+  over_capacity: boolean;
+  over_minutes: number;
+}
+
+export interface MaintenanceMyProgramWorkload {
+  reference_daily_capacity_minutes: number;
+  estimated_minutes: number;
+  projected_minutes: number;
+  unestimated_count: number;
+  scheduled_days: number;
+  overloaded_days: number;
+  days: MaintenanceMyProgramWorkloadDay[];
+}
+
 export interface MaintenanceChecklistItem {
   id: number;
   item_key: string;
@@ -397,6 +419,7 @@ export interface MaintenanceMyProgram {
     pending_validation: number;
     unscheduled: number;
   };
+  workload: MaintenanceMyProgramWorkload;
   today_items: MaintenanceMyProgramItem[];
   week_items: MaintenanceMyProgramItem[];
   projected_items: MaintenanceMyProgramItem[];
