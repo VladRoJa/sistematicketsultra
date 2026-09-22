@@ -293,7 +293,7 @@ class MaintenancePreventiveDraftValidationTest(unittest.TestCase):
         errors = self._validate(second, seen_keys=seen_keys)
 
         self.assertIn(
-            "El equipo ya está programado para esa fecha "
+            "El mismo objetivo ya está programado para esa fecha "
             "dentro del mismo lote.",
             errors,
         )
@@ -311,7 +311,7 @@ class MaintenancePreventiveDraftValidationTest(unittest.TestCase):
         errors = self._validate(second, seen_keys=seen_keys)
 
         self.assertIn(
-            "El equipo ya está programado para esa fecha "
+            "El mismo objetivo ya está programado para esa fecha "
             "dentro del mismo lote.",
             errors,
         )
