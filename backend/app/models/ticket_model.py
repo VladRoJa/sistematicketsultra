@@ -40,6 +40,7 @@ class Ticket(db.Model):
     tipo_mantenimiento = db.Column(db.String(20), nullable=True)
     origen_correctivo = db.Column(db.String(30), nullable=True)
     maintenance_target_type = db.Column(db.String(20), nullable=True)
+    maintenance_estimated_minutes = db.Column(db.Integer, nullable=True)
 
     # Correctivos: el original nunca se sobrescribe; fecha_solucion es el vigente.
     fecha_compromiso_original = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -169,6 +170,11 @@ class Ticket(db.Model):
             name='ck_tickets_maintenance_target_type',
         ),
         db.CheckConstraint(
+            "maintenance_estimated_minutes IS NULL "
+            "OR maintenance_estimated_minutes > 0",
+            name='ck_tickets_maintenance_estimated_minutes',
+        ),
+        db.CheckConstraint(
             "maintenance_target_type IS NULL OR "
             "(maintenance_target_type = 'EQUIPO' "
             "AND aparato_id IS NOT NULL) OR "
@@ -292,6 +298,7 @@ class Ticket(db.Model):
             'tipo_mantenimiento': self.tipo_mantenimiento,
             'origen_correctivo': self.origen_correctivo,
             'maintenance_target_type': self.maintenance_target_type,
+            'maintenance_estimated_minutes': self.maintenance_estimated_minutes,
             'fecha_compromiso_original': safe_dt_iso(self.fecha_compromiso_original),
             'fecha_programada_original': safe_dt_iso(self.fecha_programada_original),
             'fecha_programada_actual': safe_dt_iso(self.fecha_programada_actual),
@@ -396,6 +403,7 @@ class Ticket(db.Model):
                     tipo_mantenimiento: str | None = None,
                     origen_correctivo: str | None = None,
                     maintenance_target_type: str | None = None,
+                    maintenance_estimated_minutes: int | None = None,
                     fecha_programada_original=None,
                     fecha_programada_actual=None,
                     ticket_preventivo_origen_id: int | None = None,
@@ -420,6 +428,20 @@ class Ticket(db.Model):
         mantenimiento_objetivo = (
             str(maintenance_target_type or "").strip().upper() or None
         )
+
+        if maintenance_estimated_minutes in (None, ""):
+            mantenimiento_duracion = None
+        else:
+            try:
+                mantenimiento_duracion = int(maintenance_estimated_minutes)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    "maintenance_estimated_minutes inválido."
+                ) from exc
+            if mantenimiento_duracion <= 0:
+                raise ValueError(
+                    "maintenance_estimated_minutes debe ser mayor a cero."
+                )
 
         try:
             es_mantenimiento = int(departamento_id) == 1
@@ -506,6 +528,7 @@ class Ticket(db.Model):
             tipo_mantenimiento=mantenimiento_tipo,
             origen_correctivo=mantenimiento_origen,
             maintenance_target_type=mantenimiento_objetivo,
+            maintenance_estimated_minutes=mantenimiento_duracion,
             fecha_programada_original=fecha_programada_original,
             fecha_programada_actual=fecha_programada_actual,
             ticket_preventivo_origen_id=ticket_preventivo_origen_id,
