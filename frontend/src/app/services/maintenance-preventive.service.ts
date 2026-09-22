@@ -301,6 +301,7 @@ export interface MaintenanceWeeklyDashboard {
 export interface MaintenanceDashboardDrilldownTicket {
   id: number;
   tipo_mantenimiento: 'PREVENTIVO' | 'CORRECTIVO';
+  maintenance_target_type: 'EQUIPO' | 'EDIFICIO' | null;
   origen_correctivo: string | null;
   estado: string;
   estado_cierre: string | null;
