@@ -159,30 +159,34 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
             )
             self.assertEqual(
                 sheet["L1"].value,
+                "Duración estimada (min)",
+            )
+            self.assertEqual(
+                sheet["M1"].value,
                 "Validación",
             )
             self.assertIn(
                 "COUNTIFS",
-                sheet["L2"].value,
+                sheet["M2"].value,
             )
             self.assertIn(
                 "DUPLICADO",
-                sheet["L2"].value,
+                sheet["M2"].value,
             )
 
             conditional_ranges = {
                 str(rule_range.sqref)
                 for rule_range in sheet.conditional_formatting
             }
-            self.assertIn("A2:L1001", conditional_ranges)
+            self.assertIn("A2:M1001", conditional_ranges)
 
             duplicate_rules = list(
-                sheet.conditional_formatting["A2:L1001"]
+                sheet.conditional_formatting["A2:M1001"]
             )
             self.assertEqual(len(duplicate_rules), 1)
             self.assertEqual(
                 duplicate_rules[0].formula[0],
-                '$L2="⚠ DUPLICADO"',
+                '$M2="⚠ DUPLICADO"',
             )
         finally:
             workbook.close()
@@ -230,6 +234,9 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
             parsed["rows"][0]["repeat_interval_workdays"],
             "5",
         )
+        self.assertIsNone(
+            parsed["rows"][0]["estimated_duration_minutes"]
+        )
 
     def test_csv_accepts_accented_official_headers(self):
         csv_content = (
@@ -252,6 +259,24 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
         self.assertEqual(
             parsed["rows"][0]["fecha_programada"],
             "2026-09-20",
+        )
+
+    def test_csv_accepts_optional_estimated_duration_header(self):
+        csv_content = (
+            "Sucursal,Código equipo,Fecha programada,Actividad,"
+            "Responsable,Duración estimada (min)\n"
+            "VILLAS DEL REY,04CC01,21/09/2026,"
+            "Mantenimiento general,TECNICO_PM,45\n"
+        ).encode("utf-8")
+
+        parsed = parse_preventive_import(
+            filename="preventivos_duracion.csv",
+            content=csv_content,
+        )
+
+        self.assertEqual(
+            parsed["rows"][0]["estimated_duration_minutes"],
+            "45",
         )
 
     def test_csv_accepts_optional_recurrence_headers(self):
@@ -355,6 +380,7 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
                 "Observaciones",
                 "Tipo",
                 "Clasificación edificio",
+                "Duración estimada (min)",
                 "Validación",
             ),
         )
