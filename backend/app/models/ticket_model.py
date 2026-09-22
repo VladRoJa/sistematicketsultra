@@ -39,6 +39,16 @@ class Ticket(db.Model):
     # Nullable para no afectar tickets de otros departamentos.
     tipo_mantenimiento = db.Column(db.String(20), nullable=True)
     origen_correctivo = db.Column(db.String(30), nullable=True)
+    maintenance_target_type = db.Column(db.String(20), nullable=True)
+    maintenance_building_element_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            'maintenance_building_elements.id',
+            name='fk_tickets_maintenance_building_element',
+            ondelete='RESTRICT',
+        ),
+        nullable=True,
+    )
 
     # Correctivos: el original nunca se sobrescribe; fecha_solucion es el vigente.
     fecha_compromiso_original = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -131,6 +141,10 @@ class Ticket(db.Model):
     usuario = db.relationship('UserORM', foreign_keys=[username])
     sucursal = db.relationship('Sucursal', backref='tickets', foreign_keys=[sucursal_id])
     inventario = db.relationship('InventarioGeneral', foreign_keys=[aparato_id])
+    maintenance_building_element = db.relationship(
+        'MaintenanceBuildingElementORM',
+        foreign_keys=[maintenance_building_element_id],
+    )
     familia_equipo = db.relationship('FamiliaEquipoORM', foreign_keys=[familia_equipo_id])
     falla_mantenimiento = db.relationship(
         'FallaMantenimientoORM',
@@ -162,9 +176,32 @@ class Ticket(db.Model):
             "OR origen_correctivo IN ('REACTIVO', 'DETECTADO_EN_PREVENTIVO')",
             name='ck_tickets_origen_correctivo',
         ),
+        db.CheckConstraint(
+            "maintenance_target_type IS NULL "
+            "OR maintenance_target_type IN ('EQUIPO', 'EDIFICIO')",
+            name='ck_tickets_maintenance_target_type',
+        ),
+        db.CheckConstraint(
+            "maintenance_target_type IS NULL OR "
+            "(maintenance_target_type = 'EQUIPO' "
+            "AND aparato_id IS NOT NULL "
+            "AND maintenance_building_element_id IS NULL) OR "
+            "(maintenance_target_type = 'EDIFICIO' "
+            "AND aparato_id IS NULL "
+            "AND maintenance_building_element_id IS NOT NULL)",
+            name='ck_tickets_maintenance_target_reference',
+        ),
         db.Index('ix_tickets_familia_equipo_id', 'familia_equipo_id'),
         db.Index('ix_tickets_falla_mantenimiento_id', 'falla_mantenimiento_id'),
         db.Index('ix_tickets_tipo_mantenimiento', 'tipo_mantenimiento'),
+        db.Index(
+            'ix_tickets_maintenance_target_type',
+            'maintenance_target_type',
+        ),
+        db.Index(
+            'ix_tickets_maintenance_building_element_id',
+            'maintenance_building_element_id',
+        ),
         db.Index('ix_tickets_fecha_compromiso_original', 'fecha_compromiso_original'),
         db.Index('ix_tickets_fecha_programada_actual', 'fecha_programada_actual'),
         db.Index('ix_tickets_fecha_validacion_cierre', 'fecha_validacion_cierre'),
@@ -272,6 +309,20 @@ class Ticket(db.Model):
 
             'tipo_mantenimiento': self.tipo_mantenimiento,
             'origen_correctivo': self.origen_correctivo,
+            'maintenance_target_type': self.maintenance_target_type,
+            'maintenance_building_element_id': (
+                self.maintenance_building_element_id
+            ),
+            'maintenance_building_element': (
+                {
+                    'id': self.maintenance_building_element.id,
+                    'key': self.maintenance_building_element.key,
+                    'categoria': self.maintenance_building_element.categoria,
+                    'nombre': self.maintenance_building_element.nombre,
+                }
+                if self.maintenance_building_element
+                else None
+            ),
             'fecha_compromiso_original': safe_dt_iso(self.fecha_compromiso_original),
             'fecha_programada_original': safe_dt_iso(self.fecha_programada_original),
             'fecha_programada_actual': safe_dt_iso(self.fecha_programada_actual),
@@ -375,6 +426,8 @@ class Ticket(db.Model):
                     aprobacion_comentario: str | None = None,
                     tipo_mantenimiento: str | None = None,
                     origen_correctivo: str | None = None,
+                    maintenance_target_type: str | None = None,
+                    maintenance_building_element_id: int | None = None,
                     fecha_programada_original=None,
                     fecha_programada_actual=None,
                     ticket_preventivo_origen_id: int | None = None,
@@ -396,6 +449,9 @@ class Ticket(db.Model):
         mantenimiento_origen = (
             str(origen_correctivo or "").strip().upper() or None
         )
+        mantenimiento_objetivo = (
+            str(maintenance_target_type or "").strip().upper() or None
+        )
 
         try:
             es_mantenimiento = int(departamento_id) == 1
@@ -416,6 +472,39 @@ class Ticket(db.Model):
                     raise ValueError("origen_correctivo inválido.")
             else:
                 mantenimiento_origen = None
+
+            if mantenimiento_objetivo is None:
+                if aparato_id is not None:
+                    mantenimiento_objetivo = "EQUIPO"
+                elif maintenance_building_element_id is not None:
+                    mantenimiento_objetivo = "EDIFICIO"
+
+            if mantenimiento_objetivo not in {
+                None,
+                "EQUIPO",
+                "EDIFICIO",
+            }:
+                raise ValueError("maintenance_target_type inválido.")
+
+            if mantenimiento_objetivo == "EQUIPO":
+                if (
+                    aparato_id is None
+                    or maintenance_building_element_id is not None
+                ):
+                    raise ValueError(
+                        "El objetivo EQUIPO requiere aparato_id y no "
+                        "permite elemento de edificio."
+                    )
+
+            if mantenimiento_objetivo == "EDIFICIO":
+                if (
+                    maintenance_building_element_id is None
+                    or aparato_id is not None
+                ):
+                    raise ValueError(
+                        "El objetivo EDIFICIO requiere un elemento de "
+                        "edificio y no permite aparato_id."
+                    )
 
         if (
             fecha_programada_original is not None
@@ -456,6 +545,10 @@ class Ticket(db.Model):
 
             tipo_mantenimiento=mantenimiento_tipo,
             origen_correctivo=mantenimiento_origen,
+            maintenance_target_type=mantenimiento_objetivo,
+            maintenance_building_element_id=(
+                maintenance_building_element_id
+            ),
             fecha_programada_original=fecha_programada_original,
             fecha_programada_actual=fecha_programada_actual,
             ticket_preventivo_origen_id=ticket_preventivo_origen_id,
