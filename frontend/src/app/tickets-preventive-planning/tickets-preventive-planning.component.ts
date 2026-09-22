@@ -56,6 +56,9 @@ export class TicketsPreventivePlanningComponent implements OnInit {
   programmedDate = '';
   activity = '';
   observations = '';
+  repeatEnabled = false;
+  repeatIntervalWorkdays = 20;
+  readonly repeatIntervalOptions = [5, 10, 15, 20, 30, 60, 90];
 
   importFile: File | null = null;
 
@@ -134,6 +137,16 @@ export class TicketsPreventivePlanningComponent implements OnInit {
     }
     if (!this.activity.trim()) {
       missing.push('actividad');
+    }
+    if (this.repeatEnabled && this.repeatIntervalWorkdays <= 0) {
+      missing.push('intervalo de repetición');
+    }
+    if (
+      this.repeatEnabled
+      && this.programmedDate
+      && !this.isBusinessDate(this.programmedDate)
+    ) {
+      missing.push('fecha inicial de lunes a viernes');
     }
 
     return missing;
@@ -364,6 +377,10 @@ export class TicketsPreventivePlanningComponent implements OnInit {
       codigo_equipo: item.codigo_interno,
       responsable: this.responsibleUsername,
       fecha_programada: this.programmedDate,
+      repeat_enabled: this.repeatEnabled,
+      repeat_interval_workdays: this.repeatEnabled
+        ? this.repeatIntervalWorkdays
+        : null,
       actividad: this.activity.trim(),
       observaciones: this.observations.trim() || null,
     }));
@@ -479,6 +496,9 @@ export class TicketsPreventivePlanningComponent implements OnInit {
         codigo_equipo: item.codigo_equipo_input || '',
         responsable: item.responsable_input || '',
         fecha_programada: item.fecha_programada_input || '',
+        repeat_enabled: item.repeat_enabled_input || '',
+        repeat_interval_workdays:
+          item.repeat_interval_workdays_input || null,
         actividad: item.actividad || '',
         observaciones: item.observaciones || null,
       },
@@ -583,6 +603,36 @@ export class TicketsPreventivePlanningComponent implements OnInit {
     });
   }
 
+  onRepeatEnabledChange(): void {
+    if (this.repeatEnabled && this.repeatIntervalWorkdays <= 0) {
+      this.repeatIntervalWorkdays = 20;
+    }
+  }
+
+  isItemRecurringInput(item: PreventiveDraftItem): boolean {
+    const value = this.normalize(item.repeat_enabled_input || '');
+    return value === 'si' || value === 'true' || value === '1';
+  }
+
+  onItemRepeatInputChange(item: PreventiveDraftItem): void {
+    if (!this.isItemRecurringInput(item)) {
+      item.repeat_interval_workdays_input = null;
+    }
+  }
+
+  itemRecurrenceLabel(item: PreventiveDraftItem): string {
+    if (!item.repeat_enabled) {
+      return 'Una vez';
+    }
+
+    const interval = item.repeat_interval_workdays;
+    if (!interval) {
+      return 'Recurrente';
+    }
+
+    return 'Cada ' + String(interval) + ' días hábiles';
+  }
+
   itemStatusLabel(item: PreventiveDraftItem): string {
     const labels = {
       PENDIENTE: 'Pendiente',
@@ -602,6 +652,18 @@ export class TicketsPreventivePlanningComponent implements OnInit {
 
   trackItem(_: number, item: PreventiveDraftItem): number {
     return item.id;
+  }
+
+  private isBusinessDate(value: string): boolean {
+    const parts = value.split('-').map((part) => Number(part));
+    if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) {
+      return false;
+    }
+
+    const [year, month, day] = parts;
+    const parsed = new Date(year, month - 1, day);
+    const weekday = parsed.getDay();
+    return weekday >= 1 && weekday <= 5;
   }
 
   private clearMessages(): void {
