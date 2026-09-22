@@ -22,7 +22,23 @@ class PmBitacoraORM(db.Model):
     inventario_id = db.Column(
         db.Integer,
         db.ForeignKey("inventario_general.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+
+    target_type = db.Column(
+        db.String(20),
         nullable=False,
+        default="EQUIPO",
+        server_default="EQUIPO",
+    )
+    building_element_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            "maintenance_building_elements.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=True,
         index=True,
     )
 
@@ -74,6 +90,10 @@ class PmBitacoraORM(db.Model):
         foreign_keys=[ticket_id],
         backref="pm_bitacoras_ticket",
     )
+    building_element = db.relationship(
+        "MaintenanceBuildingElementORM",
+        foreign_keys=[building_element_id],
+    )
 
     __table_args__ = (
         db.CheckConstraint(
@@ -88,6 +108,17 @@ class PmBitacoraORM(db.Model):
             "estado_encontrado IS NULL OR estado_encontrado IN "
             "('BUENO', 'REQUIERE_ATENCION', 'FUERA_SERVICIO')",
             name="ck_pm_bitacoras_estado_encontrado",
+        ),
+        db.CheckConstraint(
+            "target_type IN ('EQUIPO', 'EDIFICIO')",
+            name="ck_pm_bitacoras_target_type",
+        ),
+        db.CheckConstraint(
+            "((target_type = 'EQUIPO' AND inventario_id IS NOT NULL "
+            "AND building_element_id IS NULL) OR "
+            "(target_type = 'EDIFICIO' AND inventario_id IS NULL "
+            "AND building_element_id IS NOT NULL))",
+            name="ck_pm_bitacoras_target_reference",
         ),
         db.Index(
             "ix_pm_bitacoras_ticket_created",
