@@ -53,6 +53,25 @@ marketing_sales_funnel_bp = Blueprint(
 )
 
 
+VISIT_MODE_ADJUSTED = "adjusted"
+VISIT_MODE_REGISTERED_ONLY = "registered_only"
+
+
+def _include_direct_purchases_from_request() -> bool:
+    value = str(
+        request.args.get("visit_mode") or VISIT_MODE_ADJUSTED
+    ).strip().lower()
+
+    if value == VISIT_MODE_ADJUSTED:
+        return True
+    if value == VISIT_MODE_REGISTERED_ONLY:
+        return False
+
+    raise MarketingSalesFunnelDetailValidationError(
+        "visit_mode debe ser adjusted o registered_only."
+    )
+
+
 def _resolve_request_access():
     try:
         user_id = int(get_jwt_identity())
@@ -194,11 +213,13 @@ def get_marketing_sales_funnel_endpoint():
         access_ms = (perf_counter() - stage_started) * 1000
 
         stage_started = perf_counter()
+        include_direct_purchases = _include_direct_purchases_from_request()
         funnel_build = build_marketing_sales_funnel_at_cutoff(
             month=month,
             access=access,
             cutoff_date=request.args.get("cutoff_date"),
             cutoff_policy=request.args.get("cutoff_policy"),
+            include_direct_purchases=include_direct_purchases,
         )
         result = funnel_build.payload
         funnel_ms = (perf_counter() - stage_started) * 1000
@@ -284,6 +305,7 @@ def get_marketing_sales_funnel_detail_endpoint():
         month = request.args.get("month", "")
         cutoff_date = request.args.get("cutoff_date")
         metric = request.args.get("metric", "")
+        include_direct_purchases = _include_direct_purchases_from_request()
 
         if cutoff_date:
             result = build_marketing_sales_funnel_cutoff_detail(
@@ -297,6 +319,7 @@ def get_marketing_sales_funnel_detail_endpoint():
                 page_size=request.args.get("page_size"),
                 sort_by=request.args.get("sort_by"),
                 sort_dir=request.args.get("sort_dir"),
+                include_direct_purchases=include_direct_purchases,
             )
         elif metric == "leads_iventas":
             result = build_monthly_iventas_leads_detail(
@@ -360,6 +383,7 @@ def export_marketing_sales_funnel_detail_endpoint():
         month = request.args.get("month", "")
         cutoff_date = request.args.get("cutoff_date")
         metric = request.args.get("metric", "")
+        include_direct_purchases = _include_direct_purchases_from_request()
 
         if cutoff_date:
             output, filename = build_marketing_sales_funnel_cutoff_export(
@@ -371,6 +395,7 @@ def export_marketing_sales_funnel_detail_endpoint():
                 origin=request.args.get("origin"),
                 sort_by=request.args.get("sort_by"),
                 sort_dir=request.args.get("sort_dir"),
+                include_direct_purchases=include_direct_purchases,
             )
         elif metric == "leads_iventas":
             output, filename = build_monthly_iventas_leads_export(
