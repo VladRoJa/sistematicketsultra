@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from types import SimpleNamespace
 import unittest
 from unittest.mock import MagicMock, patch
@@ -638,6 +638,118 @@ class MaintenancePreventiveBatchPeriodTest(unittest.TestCase):
             "La fecha programada debe estar dentro del periodo del lote "
             "(22/09/2026–27/09/2026).",
             item.validation_errors,
+        )
+
+
+class MaintenancePreventiveCapacityPreviewTest(unittest.TestCase):
+    def test_capacity_preview_combines_real_projection_draft_and_proposed(self):
+        target_date = date(2026, 9, 30)
+
+        tickets = [
+            SimpleNamespace(
+                tipo_mantenimiento="PREVENTIVO",
+                fecha_programada_actual=datetime(
+                    2026,
+                    9,
+                    30,
+                    14,
+                    0,
+                    tzinfo=timezone.utc,
+                ),
+                fecha_programada_original=None,
+                fecha_solucion=None,
+                maintenance_estimated_minutes=120,
+            ),
+        ]
+        schedules = [
+            SimpleNamespace(
+                active=True,
+                next_scheduled_date=date(2026, 9, 23),
+                repeat_interval_workdays=5,
+                estimated_duration_minutes=60,
+            ),
+        ]
+        draft_items = [
+            SimpleNamespace(
+                ticket_id=None,
+                responsable_input="sr_mant_tij",
+                fecha_programada_input="2026-09-30",
+                estimated_duration_minutes=60,
+                estimated_duration_minutes_input="60",
+            ),
+        ]
+
+        preview = service._build_capacity_preview(
+            tickets=tickets,
+            schedules=schedules,
+            draft_items=draft_items,
+            target_date=target_date,
+            responsible_username="SR_MANT_TIJ",
+            proposed_duration_minutes=180,
+            proposed_count=2,
+        )
+
+        self.assertEqual(preview["tickets"]["minutes"], 120)
+        self.assertEqual(preview["projections"]["minutes"], 60)
+        self.assertEqual(preview["draft"]["minutes"], 60)
+        self.assertEqual(preview["existing_minutes"], 240)
+        self.assertEqual(preview["proposed"]["minutes"], 360)
+        self.assertEqual(preview["resulting_minutes"], 600)
+        self.assertTrue(preview["over_capacity"])
+        self.assertEqual(preview["over_minutes"], 60)
+        self.assertEqual(preview["utilization_percent"], 111.1)
+
+    def test_capacity_preview_tracks_unestimated_work_without_inventing_time(self):
+        target_date = date(2026, 9, 30)
+
+        preview = service._build_capacity_preview(
+            tickets=[
+                SimpleNamespace(
+                    tipo_mantenimiento="PREVENTIVO",
+                    fecha_programada_actual=datetime(
+                        2026,
+                        9,
+                        30,
+                        14,
+                        0,
+                        tzinfo=timezone.utc,
+                    ),
+                    fecha_programada_original=None,
+                    fecha_solucion=None,
+                    maintenance_estimated_minutes=None,
+                ),
+            ],
+            schedules=[],
+            draft_items=[],
+            target_date=target_date,
+            responsible_username="SR_MANT_TIJ",
+            proposed_duration_minutes=60,
+            proposed_count=1,
+        )
+
+        self.assertEqual(preview["existing_minutes"], 0)
+        self.assertEqual(preview["existing_unestimated_count"], 1)
+        self.assertEqual(preview["resulting_minutes"], 60)
+        self.assertFalse(preview["over_capacity"])
+
+    def test_capacity_projection_respects_workday_recurrence(self):
+        schedule = SimpleNamespace(
+            active=True,
+            next_scheduled_date=date(2026, 9, 23),
+            repeat_interval_workdays=5,
+        )
+
+        self.assertTrue(
+            service._schedule_projects_on_date(
+                schedule,
+                date(2026, 9, 30),
+            )
+        )
+        self.assertFalse(
+            service._schedule_projects_on_date(
+                schedule,
+                date(2026, 10, 1),
+            )
         )
 
 
