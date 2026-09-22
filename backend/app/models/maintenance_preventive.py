@@ -58,53 +58,6 @@ class MaintenanceReprogramReasonORM(db.Model):
     )
 
 
-class MaintenanceBuildingElementORM(db.Model):
-    __tablename__ = "maintenance_building_elements"
-
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    key = db.Column(db.String(80), nullable=False, unique=True)
-    categoria = db.Column(db.String(100), nullable=False)
-    nombre = db.Column(db.String(160), nullable=False)
-    descripcion = db.Column(db.Text, nullable=True)
-    activo = db.Column(
-        db.Boolean,
-        nullable=False,
-        default=True,
-        server_default=db.text("true"),
-    )
-    orden = db.Column(
-        db.Integer,
-        nullable=False,
-        default=0,
-        server_default=db.text("0"),
-    )
-    created_at = db.Column(
-        db.DateTime(timezone=True),
-        nullable=False,
-        default=_utc_now,
-    )
-    updated_at = db.Column(
-        db.DateTime(timezone=True),
-        nullable=False,
-        default=_utc_now,
-        onupdate=_utc_now,
-    )
-
-    __table_args__ = (
-        db.UniqueConstraint(
-            "categoria",
-            "nombre",
-            name="uq_maintenance_building_elements_category_name",
-        ),
-        db.Index(
-            "ix_maintenance_building_elements_active_order",
-            "activo",
-            "orden",
-            "categoria",
-        ),
-    )
-
-
 class MaintenanceCrewORM(db.Model):
     __tablename__ = "maintenance_crews"
 
@@ -324,10 +277,10 @@ class MaintenancePreventiveScheduleORM(db.Model):
         nullable=True,
         index=True,
     )
-    building_element_id = db.Column(
+    building_classification_id = db.Column(
         db.Integer,
         db.ForeignKey(
-            "maintenance_building_elements.id",
+            "catalogo_clasificacion.id",
             ondelete="RESTRICT",
         ),
         nullable=True,
@@ -370,7 +323,7 @@ class MaintenancePreventiveScheduleORM(db.Model):
 
     sucursal = db.relationship("Sucursal")
     inventario = db.relationship("InventarioGeneral")
-    building_element = db.relationship("MaintenanceBuildingElementORM")
+    building_classification = db.relationship("CatalogoClasificacion")
     responsable_user = db.relationship(
         "UserORM",
         foreign_keys=[responsable_user_id],
@@ -403,9 +356,9 @@ class MaintenancePreventiveScheduleORM(db.Model):
         ),
         db.CheckConstraint(
             "((target_type = 'EQUIPO' AND inventario_id IS NOT NULL "
-            "AND building_element_id IS NULL) OR "
+            "AND building_classification_id IS NULL) OR "
             "(target_type = 'EDIFICIO' AND inventario_id IS NULL "
-            "AND building_element_id IS NOT NULL))",
+            "AND building_classification_id IS NOT NULL))",
             name="ck_maintenance_preventive_schedules_target_reference",
         ),
         db.Index(
@@ -482,7 +435,10 @@ class MaintenancePreventiveItemORM(db.Model):
     target_type_input = db.Column(db.String(20), nullable=True)
     sucursal_input = db.Column(db.String(160), nullable=True)
     codigo_equipo_input = db.Column(db.String(80), nullable=True)
-    building_element_input = db.Column(db.String(160), nullable=True)
+    building_classification_input = db.Column(
+        db.String(240),
+        nullable=True,
+    )
     responsable_input = db.Column(db.String(160), nullable=True)
     fecha_programada_input = db.Column(db.String(40), nullable=True)
     repeat_enabled_input = db.Column(db.String(20), nullable=True)
@@ -506,10 +462,10 @@ class MaintenancePreventiveItemORM(db.Model):
         nullable=True,
         index=True,
     )
-    building_element_id = db.Column(
+    building_classification_id = db.Column(
         db.Integer,
         db.ForeignKey(
-            "maintenance_building_elements.id",
+            "catalogo_clasificacion.id",
             ondelete="RESTRICT",
         ),
         nullable=True,
@@ -600,9 +556,9 @@ class MaintenancePreventiveItemORM(db.Model):
         db.CheckConstraint(
             "(validation_status <> 'VALIDO') OR "
             "((target_type = 'EQUIPO' AND inventario_id IS NOT NULL "
-            "AND building_element_id IS NULL) OR "
+            "AND building_classification_id IS NULL) OR "
             "(target_type = 'EDIFICIO' AND inventario_id IS NULL "
-            "AND building_element_id IS NOT NULL))",
+            "AND building_classification_id IS NOT NULL))",
             name="ck_maintenance_preventive_items_target_reference",
         ),
         db.UniqueConstraint(
