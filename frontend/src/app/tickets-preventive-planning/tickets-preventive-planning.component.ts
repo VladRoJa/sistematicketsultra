@@ -586,26 +586,43 @@ export class TicketsPreventivePlanningComponent implements OnInit {
       return;
     }
 
-    const confirmed = window.confirm(
-      '¿Eliminar este renglón del borrador?',
-    );
-    if (!confirmed) return;
-
     const batchId = this.selectedBatch.id;
-    this.saving = true;
-    this.clearMessages();
+    const targetLabel = this.itemTargetLabel(item);
 
-    this.preventiveService.deleteItem(batchId, item.id).subscribe({
-      next: () => {
-        this.saving = false;
-        this.successMessage = 'Renglón eliminado.';
-        this.selectBatch(batchId);
-        this.loadBatches();
+    const dialogRef = this.dialog.open(DialogoConfirmacionComponent, {
+      data: {
+        titulo: 'Eliminar renglón',
+        mensaje:
+          'Se eliminará '
+          + targetLabel
+          + ' de este borrador. Esta acción no afecta tickets ya publicados.',
+        textoAceptar: 'Eliminar',
+        textoCancelar: 'Cancelar',
       },
-      error: (error) => {
-        this.saving = false;
-        this.setError(error, 'No se pudo eliminar el renglón.');
-      },
+      autoFocus: false,
+      restoreFocus: true,
+    });
+
+    dialogRef.afterClosed().subscribe((confirmed) => {
+      if (!confirmed) {
+        return;
+      }
+
+      this.saving = true;
+      this.clearMessages();
+
+      this.preventiveService.deleteItem(batchId, item.id).subscribe({
+        next: () => {
+          this.saving = false;
+          this.successMessage = 'Renglón eliminado.';
+          this.selectBatch(batchId);
+          this.loadBatches();
+        },
+        error: (error) => {
+          this.saving = false;
+          this.setError(error, 'No se pudo eliminar el renglón.');
+        },
+      });
     });
   }
 
