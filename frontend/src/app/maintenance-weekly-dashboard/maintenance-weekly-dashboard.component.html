@@ -211,8 +211,15 @@
             </div>
 
             <h3>
-              {{ ticket.codigo_equipo || 'SIN CÓDIGO' }}
-              · {{ ticket.equipo }}
+              <ng-container
+                *ngIf="ticket.maintenance_target_type === 'EDIFICIO'; else dashboardEquipmentTarget"
+              >
+                EDIFICIO · {{ ticket.equipo }}
+              </ng-container>
+              <ng-template #dashboardEquipmentTarget>
+                {{ ticket.codigo_equipo || 'SIN CÓDIGO' }}
+                · {{ ticket.equipo }}
+              </ng-template>
             </h3>
 
             <p>{{ ticket.descripcion }}</p>
