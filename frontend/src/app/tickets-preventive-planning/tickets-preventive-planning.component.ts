@@ -34,6 +34,7 @@ export class TicketsPreventivePlanningComponent implements OnInit {
   context: PreventivePlanningContext = {
     sucursales: [],
     responsables: [],
+    building_classifications: [],
   };
   batches: PreventiveBatchSummary[] = [];
   selectedBatch: PreventiveBatch | null = null;
@@ -48,8 +49,10 @@ export class TicketsPreventivePlanningComponent implements OnInit {
   periodStart = '';
   periodEnd = '';
 
+  targetType: 'EQUIPO' | 'EDIFICIO' = 'EQUIPO';
   branchId: number | null = null;
   familyId: number | null = null;
+  buildingClassificationId: number | null = null;
   equipmentSearch = '';
   selectedEquipmentIds = new Set<number>();
   responsibleUsername = '';
@@ -72,6 +75,28 @@ export class TicketsPreventivePlanningComponent implements OnInit {
         (branch) => branch.id === this.branchId,
       ) || null
     );
+  }
+
+  get isManualEquipment(): boolean {
+    return this.targetType === 'EQUIPO';
+  }
+
+  get isManualBuilding(): boolean {
+    return this.targetType === 'EDIFICIO';
+  }
+
+  get selectedBuildingClassification() {
+    return (
+      this.context.building_classifications.find(
+        (item) => item.id === this.buildingClassificationId,
+      ) || null
+    );
+  }
+
+  get manualTargetCount(): number {
+    return this.isManualBuilding
+      ? (this.selectedBuildingClassification ? 1 : 0)
+      : this.selectedEquipmentCount;
   }
 
   get familyOptions(): PreventiveFamilyOption[] {
@@ -126,8 +151,17 @@ export class TicketsPreventivePlanningComponent implements OnInit {
     if (!this.selectedBranch) {
       missing.push('sucursal');
     }
-    if (this.selectedEquipmentIds.size === 0) {
+    if (
+      this.isManualEquipment
+      && this.selectedEquipmentIds.size === 0
+    ) {
       missing.push('al menos un equipo');
+    }
+    if (
+      this.isManualBuilding
+      && !this.selectedBuildingClassification
+    ) {
+      missing.push('clasificación de edificio');
     }
     if (!this.responsibleUsername) {
       missing.push('responsable');
@@ -158,8 +192,8 @@ export class TicketsPreventivePlanningComponent implements OnInit {
     if (missing.length === 0) {
       return (
         'Listo para agregar '
-        + String(this.selectedEquipmentCount)
-        + (this.selectedEquipmentCount === 1 ? ' preventivo.' : ' preventivos.')
+        + String(this.manualTargetCount)
+        + (this.manualTargetCount === 1 ? ' preventivo.' : ' preventivos.')
       );
     }
 
@@ -340,6 +374,19 @@ export class TicketsPreventivePlanningComponent implements OnInit {
     });
   }
 
+  onTargetTypeChange(): void {
+    this.clearMessages();
+
+    if (this.isManualBuilding) {
+      this.familyId = null;
+      this.equipmentSearch = '';
+      this.clearEquipmentSelection();
+      return;
+    }
+
+    this.buildingClassificationId = null;
+  }
+
   toggleEquipment(inventoryId: number, checked: boolean): void {
     if (checked) {
       this.selectedEquipmentIds.add(inventoryId);
@@ -364,17 +411,13 @@ export class TicketsPreventivePlanningComponent implements OnInit {
 
   addSelectedEquipment(): void {
     if (!this.canAddManualItems || !this.selectedBatch || !this.selectedBranch) {
-      this.errorMessage = 'Completa sucursal, equipos, responsable, fecha y actividad.';
+      this.errorMessage =
+        'Completa sucursal, objetivo, responsable, fecha y actividad.';
       return;
     }
 
-    const selected = this.equipment.filter((item) =>
-      this.selectedEquipmentIds.has(item.inventario_id),
-    );
-
-    const items = selected.map((item) => ({
-      sucursal: this.selectedBranch?.nombre || '',
-      codigo_equipo: item.codigo_interno,
+    const common = {
+      sucursal: this.selectedBranch.nombre,
       responsable: this.responsibleUsername,
       fecha_programada: this.programmedDate,
       repeat_enabled: this.repeatEnabled,
@@ -383,7 +426,26 @@ export class TicketsPreventivePlanningComponent implements OnInit {
         : null,
       actividad: this.activity.trim(),
       observaciones: this.observations.trim() || null,
-    }));
+    };
+
+    const items = this.isManualEquipment
+      ? this.equipment
+        .filter((item) =>
+          this.selectedEquipmentIds.has(item.inventario_id)
+        )
+        .map((item) => ({
+          ...common,
+          target_type: 'EQUIPO' as const,
+          codigo_equipo: item.codigo_interno,
+          building_classification_id: null,
+        }))
+      : [{
+          ...common,
+          target_type: 'EDIFICIO' as const,
+          codigo_equipo: null,
+          building_classification_id:
+            this.selectedBuildingClassification?.id || null,
+        }];
 
     this.saving = true;
     this.clearMessages();
@@ -492,8 +554,11 @@ export class TicketsPreventivePlanningComponent implements OnInit {
       this.selectedBatch.id,
       item.id,
       {
+        target_type: item.target_type_input || 'EQUIPO',
         sucursal: item.sucursal_input || '',
-        codigo_equipo: item.codigo_equipo_input || '',
+        codigo_equipo: item.codigo_equipo_input || null,
+        building_classification_id:
+          item.building_classification_input || null,
         responsable: item.responsable_input || '',
         fecha_programada: item.fecha_programada_input || '',
         repeat_enabled: item.repeat_enabled_input || '',
@@ -601,6 +666,30 @@ export class TicketsPreventivePlanningComponent implements OnInit {
         this.setError(error, 'No se pudo descargar la plantilla.');
       },
     });
+  }
+
+  isItemBuilding(item: PreventiveDraftItem): boolean {
+    return this.normalize(item.target_type_input || 'EQUIPO')
+      === 'edificio';
+  }
+
+  onItemTargetTypeChange(item: PreventiveDraftItem): void {
+    if (this.isItemBuilding(item)) {
+      item.codigo_equipo_input = null;
+      return;
+    }
+
+    item.building_classification_input = null;
+  }
+
+  itemTargetLabel(item: PreventiveDraftItem): string {
+    if (item.target_type === 'EDIFICIO') {
+      return item.building_classification?.label
+        || item.building_classification_input
+        || 'Edificio';
+    }
+
+    return item.codigo_equipo_input || 'Equipo';
   }
 
   onRepeatEnabledChange(): void {
