@@ -61,7 +61,9 @@ export class TicketsPreventivePlanningComponent implements OnInit {
   observations = '';
   repeatEnabled = false;
   repeatIntervalWorkdays = 20;
+  estimatedDurationMinutes: number | null = null;
   readonly repeatIntervalOptions = [5, 10, 15, 20, 30, 60, 90];
+  readonly durationOptions = [15, 30, 45, 60, 90, 120, 180, 240];
 
   importFile: File | null = null;
 
@@ -171,6 +173,12 @@ export class TicketsPreventivePlanningComponent implements OnInit {
     }
     if (!this.activity.trim()) {
       missing.push('actividad');
+    }
+    if (
+      this.estimatedDurationMinutes === null
+      || this.estimatedDurationMinutes <= 0
+    ) {
+      missing.push('duración estimada');
     }
     if (this.repeatEnabled && this.repeatIntervalWorkdays <= 0) {
       missing.push('intervalo de repetición');
@@ -424,6 +432,7 @@ export class TicketsPreventivePlanningComponent implements OnInit {
       repeat_interval_workdays: this.repeatEnabled
         ? this.repeatIntervalWorkdays
         : null,
+      estimated_duration_minutes: this.estimatedDurationMinutes,
       actividad: this.activity.trim(),
       observaciones: this.observations.trim() || null,
     };
@@ -564,6 +573,8 @@ export class TicketsPreventivePlanningComponent implements OnInit {
         repeat_enabled: item.repeat_enabled_input || '',
         repeat_interval_workdays:
           item.repeat_interval_workdays_input || null,
+        estimated_duration_minutes:
+          item.estimated_duration_minutes_input || null,
         actividad: item.actividad || '',
         observaciones: item.observaciones || null,
       },
@@ -729,6 +740,29 @@ export class TicketsPreventivePlanningComponent implements OnInit {
     if (!this.isItemRecurringInput(item)) {
       item.repeat_interval_workdays_input = null;
     }
+  }
+
+  durationLabel(minutes: number | string | null | undefined): string {
+    if (minutes === null || minutes === undefined || minutes === '') {
+      return 'Sin duración';
+    }
+
+    const parsed = Number(minutes);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return 'Sin duración';
+    }
+
+    const hours = Math.floor(parsed / 60);
+    const remainingMinutes = parsed % 60;
+
+    if (hours === 0) {
+      return String(parsed) + ' min';
+    }
+    if (remainingMinutes === 0) {
+      return String(hours) + ' h';
+    }
+
+    return String(hours) + ' h ' + String(remainingMinutes) + ' min';
   }
 
   itemRecurrenceLabel(item: PreventiveDraftItem): string {
