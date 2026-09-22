@@ -1110,18 +1110,32 @@ def _programmed_datetime_utc(programmed_date: date) -> datetime:
 def _published_duplicate_exists(
     item: MaintenancePreventiveItemORM,
 ) -> bool:
-    return (
-        MaintenancePreventiveItemORM.query
-        .filter(
-            MaintenancePreventiveItemORM.id != item.id,
-            MaintenancePreventiveItemORM.ticket_id.isnot(None),
-            MaintenancePreventiveItemORM.sucursal_id == item.sucursal_id,
-            MaintenancePreventiveItemORM.inventario_id == item.inventario_id,
-            MaintenancePreventiveItemORM.fecha_programada == item.fecha_programada,
-        )
-        .first()
-        is not None
+    target_type = _normalize_key(
+        getattr(item, "target_type", None) or "EQUIPO"
     )
+
+    query = MaintenancePreventiveItemORM.query.filter(
+        MaintenancePreventiveItemORM.id != item.id,
+        MaintenancePreventiveItemORM.ticket_id.isnot(None),
+        MaintenancePreventiveItemORM.sucursal_id == item.sucursal_id,
+        MaintenancePreventiveItemORM.fecha_programada == item.fecha_programada,
+        MaintenancePreventiveItemORM.target_type == target_type,
+    )
+
+    if target_type == "EQUIPO":
+        query = query.filter(
+            MaintenancePreventiveItemORM.inventario_id
+            == item.inventario_id
+        )
+    elif target_type == "EDIFICIO":
+        query = query.filter(
+            MaintenancePreventiveItemORM.building_classification_id
+            == item.building_classification_id
+        )
+    else:
+        return False
+
+    return query.first() is not None
 
 
 def publicar_lote_preventivo(
@@ -1161,15 +1175,29 @@ def publicar_lote_preventivo(
                 "El lote contiene un renglón que ya generó ticket."
             )
 
+        target_type = _normalize_key(
+            getattr(item, "target_type", None)
+        )
         if (
             item.sucursal_id is None
-            or item.inventario_id is None
             or item.responsable_user_id is None
             or item.fecha_programada is None
             or not _clean(item.actividad)
+            or target_type not in {"EQUIPO", "EDIFICIO"}
         ):
             raise MaintenancePreventiveStateError(
                 "Un renglón marcado como válido no tiene resolución completa."
+            )
+
+        if (
+            target_type == "EQUIPO"
+            and item.inventario_id is None
+        ) or (
+            target_type == "EDIFICIO"
+            and item.building_classification_id is None
+        ):
+            raise MaintenancePreventiveStateError(
+                "Un renglón marcado como válido no tiene objetivo resuelto."
             )
 
         if not _can_manage_branch(user, item.sucursal_id):
@@ -1179,22 +1207,51 @@ def publicar_lote_preventivo(
 
         if _published_duplicate_exists(item):
             raise MaintenancePreventiveStateError(
-                "Ya existe un preventivo publicado para el mismo equipo "
+                "Ya existe un preventivo publicado para el mismo objetivo "
                 "y fecha."
             )
 
-        inventory = db.session.get(
-            InventarioGeneral,
-            int(item.inventario_id),
-        )
         responsible = db.session.get(
             UserORM,
             int(item.responsable_user_id),
         )
-
-        if inventory is None or responsible is None:
+        if responsible is None:
             raise MaintenancePreventiveStateError(
-                "El equipo o responsable dejó de existir antes de publicar."
+                "El responsable dejó de existir antes de publicar."
+            )
+
+        inventory = None
+        building = None
+
+        if target_type == "EQUIPO":
+            inventory = db.session.get(
+                InventarioGeneral,
+                int(item.inventario_id),
+            )
+            if inventory is None:
+                raise MaintenancePreventiveStateError(
+                    "El equipo dejó de existir antes de publicar."
+                )
+            ticket_classification_id = None
+            ticket_inventory_id = int(item.inventario_id)
+            ticket_equipment_label = getattr(
+                inventory,
+                "nombre",
+                None,
+            )
+        else:
+            building = db.session.get(
+                CatalogoClasificacion,
+                int(item.building_classification_id),
+            )
+            if not _is_building_classification(building):
+                raise MaintenancePreventiveStateError(
+                    "La clasificación de Edificio dejó de ser válida."
+                )
+            ticket_classification_id = int(building.id)
+            ticket_inventory_id = None
+            ticket_equipment_label = _building_classification_label(
+                building
             )
 
         programmed_at = _programmed_datetime_utc(item.fecha_programada)
@@ -1206,27 +1263,29 @@ def publicar_lote_preventivo(
             sucursal_id_destino=int(item.sucursal_id),
             departamento_id=MAINTENANCE_DEPARTMENT_ID,
             criticidad=1,
-            clasificacion_id=None,
-            aparato_id=int(item.inventario_id),
+            clasificacion_id=ticket_classification_id,
+            aparato_id=ticket_inventory_id,
             problema_detectado=None,
             necesita_refaccion=False,
             descripcion_refaccion=None,
             ubicacion=None,
-            equipo=getattr(inventory, "nombre", None),
+            equipo=ticket_equipment_label,
             estado="abierto",
             requiere_aprobacion=False,
             tipo_mantenimiento="PREVENTIVO",
+            maintenance_target_type=target_type,
             fecha_programada_original=programmed_at,
             fecha_programada_actual=programmed_at,
             commit=False,
         )
 
         ticket.asignado_a = str(responsible.username)
-        ticket.familia_equipo_id = getattr(
-            inventory,
-            "familia_equipo_id",
-            None,
-        )
+        if inventory is not None:
+            ticket.familia_equipo_id = getattr(
+                inventory,
+                "familia_equipo_id",
+                None,
+            )
 
         item.ticket_id = ticket.id
 
@@ -1245,9 +1304,18 @@ def publicar_lote_preventivo(
 
             schedule = MaintenancePreventiveScheduleORM(
                 schedule_key=_schedule_key(),
-                target_type="EQUIPO",
+                target_type=target_type,
                 sucursal_id=int(item.sucursal_id),
-                inventario_id=int(item.inventario_id),
+                inventario_id=(
+                    int(item.inventario_id)
+                    if target_type == "EQUIPO"
+                    else None
+                ),
+                building_classification_id=(
+                    int(item.building_classification_id)
+                    if target_type == "EDIFICIO"
+                    else None
+                ),
                 responsable_user_id=int(item.responsable_user_id),
                 actividad=_clean(item.actividad),
                 observaciones=_clean(item.observaciones) or None,
@@ -1348,19 +1416,39 @@ def materializar_programacion_recurrente(
         }
 
     target_type = _normalize_key(schedule.target_type or "EQUIPO")
-    if target_type != "EQUIPO":
+    if target_type not in {"EQUIPO", "EDIFICIO"}:
         raise MaintenancePreventiveStateError(
-            "La materialización automática todavía requiere objetivo EQUIPO."
+            "La programación recurrente tiene un tipo de objetivo inválido."
         )
 
-    inventory = db.session.get(
-        InventarioGeneral,
-        int(schedule.inventario_id or 0),
-    )
-    if inventory is None:
-        raise MaintenancePreventiveStateError(
-            "El equipo de la programación recurrente no existe."
+    inventory = None
+    building = None
+
+    if target_type == "EQUIPO":
+        inventory = db.session.get(
+            InventarioGeneral,
+            int(schedule.inventario_id or 0),
         )
+        if inventory is None:
+            raise MaintenancePreventiveStateError(
+                "El equipo de la programación recurrente no existe."
+            )
+        ticket_classification_id = None
+        ticket_inventory_id = int(schedule.inventario_id)
+        ticket_equipment_label = getattr(inventory, "nombre", None)
+    else:
+        building = db.session.get(
+            CatalogoClasificacion,
+            int(schedule.building_classification_id or 0),
+        )
+        if not _is_building_classification(building):
+            raise MaintenancePreventiveStateError(
+                "La clasificación de Edificio de la programación "
+                "recurrente ya no es válida."
+            )
+        ticket_classification_id = int(building.id)
+        ticket_inventory_id = None
+        ticket_equipment_label = _building_classification_label(building)
 
     responsible = db.session.get(
         UserORM,
@@ -1398,26 +1486,28 @@ def materializar_programacion_recurrente(
         sucursal_id_destino=int(schedule.sucursal_id),
         departamento_id=MAINTENANCE_DEPARTMENT_ID,
         criticidad=1,
-        clasificacion_id=None,
-        aparato_id=int(schedule.inventario_id),
+        clasificacion_id=ticket_classification_id,
+        aparato_id=ticket_inventory_id,
         problema_detectado=None,
         necesita_refaccion=False,
         descripcion_refaccion=None,
         ubicacion=None,
-        equipo=getattr(inventory, "nombre", None),
+        equipo=ticket_equipment_label,
         estado="abierto",
         requiere_aprobacion=False,
         tipo_mantenimiento="PREVENTIVO",
+        maintenance_target_type=target_type,
         fecha_programada_original=programmed_at,
         fecha_programada_actual=programmed_at,
         commit=False,
     )
     ticket.asignado_a = str(responsible.username)
-    ticket.familia_equipo_id = getattr(
-        inventory,
-        "familia_equipo_id",
-        None,
-    )
+    if inventory is not None:
+        ticket.familia_equipo_id = getattr(
+            inventory,
+            "familia_equipo_id",
+            None,
+        )
 
     occurrence = MaintenancePreventiveOccurrenceORM(
         schedule_id=int(schedule.id),
