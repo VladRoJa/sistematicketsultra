@@ -1,0 +1,307 @@
+<section class="trace-story" aria-labelledby="trace-story-title">
+  <div class="flow-board" aria-label="Diagrama de trazabilidad de iVentas y Venta Nueva">
+    <aside
+      *ngIf="executiveSummary as efficiency"
+      class="flow-efficiency-card"
+      aria-label="Resumen de eficiencia comercial"
+    >
+      <div class="flow-efficiency-card__header">
+        <div>
+          <span class="flow-efficiency-card__eyebrow">Eficiencia comercial</span>
+          <strong>Resumen de inversión</strong>
+        </div>
+
+        <div class="flow-efficiency-card__investment">
+          <span>Inversión</span>
+          <strong>{{ efficiency.investment_display }}</strong>
+        </div>
+      </div>
+
+      <div class="flow-efficiency-card__grid">
+        <section>
+          <h3>Conversión</h3>
+
+          <div class="flow-efficiency-card__metric">
+            <span>Lead → visita</span>
+            <strong>{{ efficiency.lead_to_visit_display }}</strong>
+          </div>
+
+          <div class="flow-efficiency-card__metric">
+            <span>Visita → venta</span>
+            <strong>{{ efficiency.visit_to_digital_sale_display }}</strong>
+          </div>
+
+          <div class="flow-efficiency-card__metric">
+            <span>Lead → venta</span>
+            <strong>{{ efficiency.lead_to_sale_display }}</strong>
+          </div>
+        </section>
+
+        <section>
+          <h3>Costos</h3>
+
+          <div class="flow-efficiency-card__metric">
+            <span>CPL</span>
+            <strong>{{ efficiency.cpl_display }}</strong>
+          </div>
+
+          <div class="flow-efficiency-card__metric">
+            <span>CPT</span>
+            <strong>{{ efficiency.cpt_display }}</strong>
+          </div>
+
+          <div class="flow-efficiency-card__metric">
+            <span>CAC</span>
+            <strong>{{ efficiency.cac_display }}</strong>
+          </div>
+        </section>
+      </div>
+    </aside>
+    <svg
+      class="flow-board__connectors"
+      viewBox="0 0 1200 700"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <defs>
+        <linearGradient id="ribbon-orange" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#f0522d" stop-opacity="0.68"></stop>
+          <stop offset="100%" stop-color="#ff9b79" stop-opacity="0.72"></stop>
+        </linearGradient>
+        <linearGradient id="ribbon-gray" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#6b819d" stop-opacity="0.66"></stop>
+          <stop offset="100%" stop-color="#a7b6c8" stop-opacity="0.74"></stop>
+        </linearGradient>
+      </defs>
+
+      <g class="flow-ribbons">
+        <path
+          *ngFor="let ribbon of flowRibbons"
+          class="flow-ribbon"
+          [class.flow-ribbon--gray]="ribbon.tone === 'gray'"
+          [attr.d]="ribbon.d"
+          [attr.fill-opacity]="ribbon.opacity"
+        ></path>
+      </g>
+    </svg>
+
+    <button *ngIf="leadsNode as node" type="button" class="flow-card flow-card--leads" (click)="openNode(node)">
+      <mat-icon>{{ node.icon }}</mat-icon>
+      <span class="flow-card__label">{{ node.label }}</span>
+      <strong>{{ node.value }}</strong>
+      <small>{{ node.support }}</small>
+      <span class="flow-card__action">Ver filas <mat-icon>open_in_new</mat-icon></span>
+    </button>
+
+    <article *ngIf="visitsTotalNode as visitsTotal" class="flow-card flow-card--visits-hierarchy">
+      <button
+        type="button"
+        class="flow-card__visits-total"
+        (click)="openNode(visitsTotal)"
+      >
+        <mat-icon>{{ visitsTotal.icon }}</mat-icon>
+        <span class="flow-card__label">{{ visitsTotal.label }}</span>
+        <strong>{{ visitsTotal.value }}</strong>
+        <small>{{ visitsTotal.support }}</small>
+        <span class="flow-card__action">
+          Ver filas
+          <mat-icon>open_in_new</mat-icon>
+        </span>
+      </button>
+
+      <div class="flow-card__visit-branches">
+        <section
+          *ngFor="let branch of visitBranches"
+          class="flow-card__visit-branch"
+          [class.flow-card__visit-branch--gray]="branch.tone === 'gray'"
+        >
+          <button
+            type="button"
+            class="flow-card__visit-branch-main"
+            (click)="openMetric(branch.metric)"
+          >
+            <mat-icon>{{ branch.icon }}</mat-icon>
+            <span>{{ branch.label }}</span>
+            <div class="flow-card__visit-number">
+              <strong>{{ branch.value }}</strong>
+              <span class="flow-card__visit-percent">{{ branch.share }}</span>
+            </div>
+            <small>
+              Ver filas
+              <mat-icon>open_in_new</mat-icon>
+            </small>
+          </button>
+
+          <div class="flow-card__visit-results">
+            <button
+              type="button"
+              class="flow-card__visit-result flow-card__visit-result--bought"
+              (click)="openMetric(branch.boughtMetric)"
+            >
+              <mat-icon>shopping_cart</mat-icon>
+              <small>Compraron</small>
+              <div class="flow-card__visit-number">
+                <strong>{{ branch.bought }}</strong>
+                <span class="flow-card__visit-percent">{{ branch.boughtShare }}</span>
+              </div>
+              <span class="flow-card__visit-action">
+                Ver filas
+                <mat-icon>open_in_new</mat-icon>
+              </span>
+            </button>
+
+            <button
+              type="button"
+              class="flow-card__visit-result flow-card__visit-result--not-bought"
+              (click)="openMetric(branch.notBoughtMetric)"
+            >
+              <mat-icon>remove_shopping_cart</mat-icon>
+              <small>No compraron</small>
+              <div class="flow-card__visit-number">
+                <strong>{{ branch.notBought }}</strong>
+                <span class="flow-card__visit-percent">{{ branch.notBoughtShare }}</span>
+              </div>
+              <span class="flow-card__visit-action">
+                Ver filas
+                <mat-icon>open_in_new</mat-icon>
+              </span>
+            </button>
+          </div>
+        </section>
+      </div>
+    </article>
+
+    <section
+  *ngIf="saleComposition as composition"
+  class="flow-origin-stack sale-composition"
+  aria-labelledby="flow-origin-stack-title"
+>
+  <div class="flow-origin-stack__heading">
+    <div>
+      <p>Venta nueva</p>
+      <h3 id="flow-origin-stack-title">Composición de venta</h3>
+    </div>
+    <span>{{ composition.total }}</span>
+  </div>
+
+  <div class="flow-origin-stack__list sale-composition__list">
+
+    <!-- DIGITAL -->
+    <button
+      type="button"
+      class="flow-origin-card sale-composition__group sale-composition__group--digital"
+      (click)="openMetric(composition.digitalMetric)"
+    >
+      <span class="flow-origin-card__icon">
+        <mat-icon>campaign</mat-icon>
+      </span>
+
+      <span class="flow-origin-card__copy">
+        <strong>Digital</strong>
+        <small>Venta digital + orgánica digital</small>
+      </span>
+
+      <span class="flow-origin-card__value">
+        {{ composition.digitalTotal }}
+      </span>
+      <span class="flow-origin-card__share">
+        {{ composition.digitalShare }}
+      </span>
+    </button>
+
+    <div class="sale-composition__children">
+      <button
+        *ngFor="let row of composition.digitalChildren"
+        type="button"
+        class="sale-composition__child sale-composition__child--digital"
+        (click)="openMetric(row.metric)"
+      >
+        <span class="sale-composition__child-icon">
+          <mat-icon>{{ row.icon }}</mat-icon>
+        </span>
+
+        <span class="sale-composition__child-label">
+          {{ row.label }}
+        </span>
+
+        <strong class="sale-composition__child-value">
+          {{ row.value }}
+        </strong>
+      </button>
+    </div>
+
+    <!-- WEB -->
+    <button
+      type="button"
+      class="flow-origin-card sale-composition__group sale-composition__group--web"
+      (click)="openMetric(composition.webMetric)"
+    >
+      <span class="flow-origin-card__icon">
+        <mat-icon>language</mat-icon>
+      </span>
+
+      <span class="flow-origin-card__copy">
+        <strong>Venta web</strong>
+        <small>Venta identificada como canal web</small>
+      </span>
+
+      <span class="flow-origin-card__value">
+        {{ composition.webTotal }}
+      </span>
+      <span class="flow-origin-card__share">
+        {{ composition.webShare }}
+      </span>
+    </button>
+
+    <!-- BTL -->
+    <button
+      type="button"
+      class="flow-origin-card sale-composition__group sale-composition__group--btl"
+      (click)="openMetric(composition.btlMetric)"
+    >
+      <span class="flow-origin-card__icon">
+        <mat-icon>storefront</mat-icon>
+      </span>
+
+      <span class="flow-origin-card__copy">
+        <strong>BTL</strong>
+        <small>Desglose por encuesta</small>
+      </span>
+
+      <span class="flow-origin-card__value">
+        {{ composition.btlTotal }}
+      </span>
+      <span class="flow-origin-card__share">
+        {{ composition.btlShare }}
+      </span>
+    </button>
+
+    <div class="sale-composition__children sale-composition__children--btl">
+      <button
+        *ngFor="let row of composition.btlOrigins"
+        type="button"
+        class="sale-composition__child sale-composition__child--btl"
+        (click)="openBtlOrigin(row)"
+      >
+        <span class="sale-composition__child-icon">
+          <mat-icon>{{ row.icon }}</mat-icon>
+        </span>
+
+        <span class="sale-composition__child-label">
+          {{ row.displayLabel }}
+        </span>
+
+        <strong class="sale-composition__child-value">
+          {{ row.salesDisplay }}
+        </strong>
+
+        <small class="sale-composition__child-share">
+          {{ row.shareDisplay }} de BTL
+        </small>
+      </button>
+    </div>
+
+  </div>
+</section>
+  </div>
+</section>
