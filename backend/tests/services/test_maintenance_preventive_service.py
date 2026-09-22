@@ -137,6 +137,42 @@ class MaintenancePreventiveDraftValidationTest(unittest.TestCase):
         self.assertEqual(item.responsable_user_id, 20)
         self.assertEqual(item.fecha_programada, date(2026, 9, 20))
 
+    def test_revalidating_valid_row_marks_pending_before_resolver_queries(self):
+        item = self._item(
+            target_type="EQUIPO",
+            sucursal_id=4,
+            inventario_id=90,
+            responsable_user_id=20,
+            fecha_programada=date(2026, 9, 20),
+            validation_status="VALIDO",
+        )
+
+        def resolve_sucursal(_value):
+            self.assertEqual(item.validation_status, "PENDIENTE")
+            self.assertIsNone(item.target_type)
+            self.assertIsNone(item.inventario_id)
+            return SimpleNamespace(sucursal_id=4)
+
+        errors = validar_item_borrador(
+            item,
+            resolve_sucursal=resolve_sucursal,
+            resolve_equipo=lambda _value: SimpleNamespace(
+                id=90,
+                tipo="aparatos",
+            ),
+            equipo_asignado=lambda *_args: True,
+            resolve_responsable=lambda _value: SimpleNamespace(
+                id=20,
+                department_id=1,
+            ),
+            validate_responsable=lambda *_args, **_kwargs: (True, None),
+        )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(item.validation_status, "VALIDO")
+        self.assertEqual(item.target_type, "EQUIPO")
+        self.assertEqual(item.inventario_id, 90)
+
     def test_building_row_resolves_official_classification(self):
         item = self._item(
             target_type_input="EDIFICIO",
