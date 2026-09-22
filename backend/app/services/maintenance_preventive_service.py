@@ -1146,6 +1146,285 @@ def eliminar_renglon_lote(
 
 BUSINESS_TZ = ZoneInfo("America/Tijuana")
 MAINTENANCE_DEPARTMENT_ID = 1
+DAILY_CAPACITY_MINUTES = 9 * 60
+
+
+def _capacity_business_date(value: datetime | None) -> date | None:
+    if value is None:
+        return None
+
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+
+    return value.astimezone(BUSINESS_TZ).date()
+
+
+def _ticket_capacity_date(ticket: Ticket) -> date | None:
+    maintenance_type = _normalize_key(
+        getattr(ticket, "tipo_mantenimiento", None) or "CORRECTIVO"
+    )
+
+    if maintenance_type == "PREVENTIVO":
+        return _capacity_business_date(
+            getattr(ticket, "fecha_programada_actual", None)
+            or getattr(ticket, "fecha_programada_original", None)
+        )
+
+    return _capacity_business_date(
+        getattr(ticket, "fecha_solucion", None)
+    )
+
+
+def _schedule_projects_on_date(
+    schedule: MaintenancePreventiveScheduleORM,
+    target_date: date,
+) -> bool:
+    if not bool(getattr(schedule, "active", False)):
+        return False
+
+    current = getattr(schedule, "next_scheduled_date", None)
+    if current is None or current > target_date:
+        return False
+
+    interval = _parse_workday_interval(
+        getattr(schedule, "repeat_interval_workdays", None)
+    )
+    if interval is None:
+        return False
+
+    while current < target_date:
+        current = add_workdays(current, interval)
+
+    return current == target_date
+
+
+def _capacity_duration(value) -> int | None:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+
+    return parsed if parsed > 0 else None
+
+
+def _build_capacity_preview(
+    *,
+    tickets: list,
+    schedules: list,
+    draft_items: list,
+    target_date: date,
+    responsible_username: str,
+    proposed_duration_minutes: int,
+    proposed_count: int,
+) -> dict:
+    buckets = {
+        "tickets": {"count": 0, "minutes": 0, "unestimated_count": 0},
+        "projections": {"count": 0, "minutes": 0, "unestimated_count": 0},
+        "draft": {"count": 0, "minutes": 0, "unestimated_count": 0},
+    }
+
+    for ticket in tickets:
+        if _ticket_capacity_date(ticket) != target_date:
+            continue
+
+        bucket = buckets["tickets"]
+        bucket["count"] += 1
+        duration = _capacity_duration(
+            getattr(ticket, "maintenance_estimated_minutes", None)
+        )
+        if duration is None:
+            bucket["unestimated_count"] += 1
+        else:
+            bucket["minutes"] += duration
+
+    for schedule in schedules:
+        if not _schedule_projects_on_date(schedule, target_date):
+            continue
+
+        bucket = buckets["projections"]
+        bucket["count"] += 1
+        duration = _capacity_duration(
+            getattr(schedule, "estimated_duration_minutes", None)
+        )
+        if duration is None:
+            bucket["unestimated_count"] += 1
+        else:
+            bucket["minutes"] += duration
+
+    responsible_key = responsible_username.casefold()
+    for item in draft_items:
+        if getattr(item, "ticket_id", None) is not None:
+            continue
+
+        item_responsible = _clean(
+            getattr(item, "responsable_input", None)
+        ).casefold()
+        if item_responsible != responsible_key:
+            continue
+
+        item_date = _parse_programmed_date(
+            getattr(item, "fecha_programada_input", None)
+        )
+        if item_date != target_date:
+            continue
+
+        bucket = buckets["draft"]
+        bucket["count"] += 1
+
+        duration = _capacity_duration(
+            getattr(item, "estimated_duration_minutes", None)
+            or getattr(
+                item,
+                "estimated_duration_minutes_input",
+                None,
+            )
+        )
+        if duration is None:
+            bucket["unestimated_count"] += 1
+        else:
+            bucket["minutes"] += duration
+
+    existing_minutes = sum(
+        int(bucket["minutes"])
+        for bucket in buckets.values()
+    )
+    existing_unestimated_count = sum(
+        int(bucket["unestimated_count"])
+        for bucket in buckets.values()
+    )
+    proposed_minutes = (
+        int(proposed_duration_minutes) * int(proposed_count)
+    )
+    resulting_minutes = existing_minutes + proposed_minutes
+    over_minutes = max(
+        0,
+        resulting_minutes - DAILY_CAPACITY_MINUTES,
+    )
+
+    return {
+        "responsable": responsible_username,
+        "date": target_date.isoformat(),
+        "capacity_minutes": DAILY_CAPACITY_MINUTES,
+        "tickets": buckets["tickets"],
+        "projections": buckets["projections"],
+        "draft": buckets["draft"],
+        "existing_minutes": existing_minutes,
+        "existing_unestimated_count": existing_unestimated_count,
+        "proposed": {
+            "count": int(proposed_count),
+            "duration_minutes_each": int(proposed_duration_minutes),
+            "minutes": proposed_minutes,
+        },
+        "resulting_minutes": resulting_minutes,
+        "available_before_minutes": max(
+            0,
+            DAILY_CAPACITY_MINUTES - existing_minutes,
+        ),
+        "remaining_after_minutes": max(
+            0,
+            DAILY_CAPACITY_MINUTES - resulting_minutes,
+        ),
+        "over_capacity": over_minutes > 0,
+        "over_minutes": over_minutes,
+        "utilization_percent": round(
+            (resulting_minutes / DAILY_CAPACITY_MINUTES) * 100,
+            1,
+        ),
+    }
+
+
+def previsualizar_capacidad_programacion(
+    batch_id: int,
+    user,
+    payload: dict,
+) -> dict:
+    batch = _get_batch(batch_id)
+    _assert_batch_manageable(user, batch)
+
+    if batch.status != "BORRADOR":
+        raise MaintenancePreventiveStateError(
+            "La capacidad solo se puede previsualizar en lotes BORRADOR."
+        )
+
+    if not isinstance(payload, dict):
+        raise MaintenancePreventiveError(
+            "El cuerpo del preview de capacidad es inválido."
+        )
+
+    responsible_username = _clean(
+        payload.get("responsable")
+        or payload.get("responsible_username")
+    )
+    responsible = _resolve_responsable(responsible_username)
+    valid_responsible, responsible_error = (
+        _validate_responsable_catalog(responsible)
+    )
+    if not valid_responsible or responsible is None:
+        raise MaintenancePreventiveError(
+            responsible_error or "Responsable inválido."
+        )
+
+    target_date = _parse_programmed_date(
+        payload.get("fecha_programada")
+        or payload.get("scheduled_date")
+    )
+    if target_date is None:
+        raise MaintenancePreventiveError(
+            "fecha_programada debe tener formato YYYY-MM-DD."
+        )
+
+    proposed_duration = _parse_estimated_duration_minutes(
+        payload.get("estimated_duration_minutes")
+    )
+    if proposed_duration is None:
+        raise MaintenancePreventiveError(
+            "estimated_duration_minutes es obligatorio."
+        )
+
+    try:
+        proposed_count = int(payload.get("item_count") or 1)
+    except (TypeError, ValueError) as exc:
+        raise MaintenancePreventiveError(
+            "item_count debe ser un entero positivo."
+        ) from exc
+
+    if proposed_count <= 0:
+        raise MaintenancePreventiveError(
+            "item_count debe ser mayor a cero."
+        )
+
+    active_tickets = (
+        Ticket.query
+        .filter(
+            Ticket.departamento_id == MAINTENANCE_DEPARTMENT_ID,
+            Ticket.estado.in_(("abierto", "en progreso")),
+            func.lower(Ticket.asignado_a)
+            == responsible_username.casefold(),
+        )
+        .all()
+    )
+
+    schedules = (
+        MaintenancePreventiveScheduleORM.query
+        .filter(
+            MaintenancePreventiveScheduleORM.active.is_(True),
+            MaintenancePreventiveScheduleORM.responsable_user_id
+            == int(responsible.id),
+            MaintenancePreventiveScheduleORM.next_scheduled_date
+            <= target_date,
+        )
+        .all()
+    )
+
+    return _build_capacity_preview(
+        tickets=active_tickets,
+        schedules=schedules,
+        draft_items=list(batch.items or []),
+        target_date=target_date,
+        responsible_username=responsible_username,
+        proposed_duration_minutes=proposed_duration,
+        proposed_count=proposed_count,
+    )
 
 
 def _programmed_datetime_utc(programmed_date: date) -> datetime:
