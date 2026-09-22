@@ -58,6 +58,53 @@ class MaintenanceReprogramReasonORM(db.Model):
     )
 
 
+class MaintenanceBuildingElementORM(db.Model):
+    __tablename__ = "maintenance_building_elements"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    key = db.Column(db.String(80), nullable=False, unique=True)
+    categoria = db.Column(db.String(100), nullable=False)
+    nombre = db.Column(db.String(160), nullable=False)
+    descripcion = db.Column(db.Text, nullable=True)
+    activo = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True,
+        server_default=db.text("true"),
+    )
+    orden = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+        server_default=db.text("0"),
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        onupdate=_utc_now,
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "categoria",
+            "nombre",
+            name="uq_maintenance_building_elements_category_name",
+        ),
+        db.Index(
+            "ix_maintenance_building_elements_active_order",
+            "activo",
+            "orden",
+            "categoria",
+        ),
+    )
+
+
 class MaintenanceCrewORM(db.Model):
     __tablename__ = "maintenance_crews"
 
@@ -277,6 +324,15 @@ class MaintenancePreventiveScheduleORM(db.Model):
         nullable=True,
         index=True,
     )
+    building_element_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            "maintenance_building_elements.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=True,
+        index=True,
+    )
     responsable_user_id = db.Column(
         db.Integer,
         db.ForeignKey("users.id", ondelete="SET NULL"),
@@ -314,6 +370,7 @@ class MaintenancePreventiveScheduleORM(db.Model):
 
     sucursal = db.relationship("Sucursal")
     inventario = db.relationship("InventarioGeneral")
+    building_element = db.relationship("MaintenanceBuildingElementORM")
     responsable_user = db.relationship(
         "UserORM",
         foreign_keys=[responsable_user_id],
@@ -345,8 +402,11 @@ class MaintenancePreventiveScheduleORM(db.Model):
             name="ck_maintenance_preventive_schedules_interval",
         ),
         db.CheckConstraint(
-            "target_type <> 'EQUIPO' OR inventario_id IS NOT NULL",
-            name="ck_maintenance_preventive_schedules_equipment_target",
+            "((target_type = 'EQUIPO' AND inventario_id IS NOT NULL "
+            "AND building_element_id IS NULL) OR "
+            "(target_type = 'EDIFICIO' AND inventario_id IS NULL "
+            "AND building_element_id IS NOT NULL))",
+            name="ck_maintenance_preventive_schedules_target_reference",
         ),
         db.Index(
             "ix_maintenance_preventive_schedules_active_next",
@@ -419,8 +479,10 @@ class MaintenancePreventiveItemORM(db.Model):
 
     # Valores originales del borrador/importación. Permiten conservar filas
     # inválidas para mostrarlas y corregirlas antes de publicar.
+    target_type_input = db.Column(db.String(20), nullable=True)
     sucursal_input = db.Column(db.String(160), nullable=True)
     codigo_equipo_input = db.Column(db.String(80), nullable=True)
+    building_element_input = db.Column(db.String(160), nullable=True)
     responsable_input = db.Column(db.String(160), nullable=True)
     fecha_programada_input = db.Column(db.String(40), nullable=True)
     repeat_enabled_input = db.Column(db.String(20), nullable=True)
@@ -431,6 +493,7 @@ class MaintenancePreventiveItemORM(db.Model):
 
     # IDs resueltos después de validar. Pueden ser NULL mientras el renglón
     # permanece en borrador/error.
+    target_type = db.Column(db.String(20), nullable=True)
     sucursal_id = db.Column(
         db.Integer,
         db.ForeignKey("sucursales.sucursal_id", ondelete="RESTRICT"),
@@ -440,6 +503,15 @@ class MaintenancePreventiveItemORM(db.Model):
     inventario_id = db.Column(
         db.Integer,
         db.ForeignKey("inventario_general.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    building_element_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            "maintenance_building_elements.id",
+            ondelete="RESTRICT",
+        ),
         nullable=True,
         index=True,
     )
@@ -502,6 +574,7 @@ class MaintenancePreventiveItemORM(db.Model):
     )
     sucursal = db.relationship("Sucursal")
     inventario = db.relationship("InventarioGeneral")
+    building_element = db.relationship("MaintenanceBuildingElementORM")
     responsable_user = db.relationship("UserORM")
     ticket = db.relationship("Ticket")
     schedule = db.relationship(
@@ -519,6 +592,18 @@ class MaintenancePreventiveItemORM(db.Model):
             "((repeat_enabled = false AND repeat_interval_workdays IS NULL) "
             "OR (repeat_enabled = true AND repeat_interval_workdays > 0))",
             name="ck_maintenance_preventive_items_recurrence",
+        ),
+        db.CheckConstraint(
+            "target_type IS NULL OR target_type IN ('EQUIPO', 'EDIFICIO')",
+            name="ck_maintenance_preventive_items_target_type",
+        ),
+        db.CheckConstraint(
+            "(validation_status <> 'VALIDO') OR "
+            "((target_type = 'EQUIPO' AND inventario_id IS NOT NULL "
+            "AND building_element_id IS NULL) OR "
+            "(target_type = 'EDIFICIO' AND inventario_id IS NULL "
+            "AND building_element_id IS NOT NULL))",
+            name="ck_maintenance_preventive_items_target_reference",
         ),
         db.UniqueConstraint(
             "batch_id",
