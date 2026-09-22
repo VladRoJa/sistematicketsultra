@@ -788,6 +788,13 @@ def get_template():
                 for row in context.get("responsables", [])
             ],
             equipos=equipment_catalog,
+            building_classifications=[
+                row["label"]
+                for row in context.get(
+                    "building_classifications",
+                    [],
+                )
+            ],
         )
         return send_file(
             BytesIO(content),
