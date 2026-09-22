@@ -6,6 +6,29 @@ from app.services.marketing_inputs_service import MarketingInputValidationError
 from app.services import marketing_sales_funnel_cutoff_service as service
 
 
+def test_registered_only_mode_keeps_only_real_visits(monkeypatch):
+    registered = [object()]
+    sales = [object()]
+
+    def fail_if_adjusted(**_kwargs):
+        raise AssertionError("registered_only no debe crear visitas ajustadas")
+
+    monkeypatch.setattr(
+        service,
+        "_merge_visits_with_direct_purchases",
+        fail_if_adjusted,
+    )
+
+    result = service._resolve_visits_for_mode(
+        registered_visits=registered,
+        sales=sales,
+        include_direct_purchases=False,
+    )
+
+    assert result == registered
+    assert result is not registered
+
+
 def test_parse_cutoff_date_requires_same_month():
     month_start = date(2026, 9, 1)
 
