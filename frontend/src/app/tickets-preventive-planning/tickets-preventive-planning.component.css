@@ -599,81 +599,91 @@ select:focus {
   text-align: left;
 }
 
-/* BORRADOR: Fila / Sucursal / Código / Fecha / Actividad / Responsable / Estado / Acciones */
+/* BORRADOR: Fila / Sucursal / Código / Fecha / Actividad / Responsable / Repetición / Estado / Acciones */
 .draft-table th:nth-child(1),
 .draft-table td:nth-child(1) {
-  width: 5%;
+  width: 4%;
 }
 
 .draft-table th:nth-child(2),
 .draft-table td:nth-child(2) {
-  width: 13%;
+  width: 11%;
 }
 
 .draft-table th:nth-child(3),
 .draft-table td:nth-child(3) {
-  width: 12%;
+  width: 10%;
 }
 
 .draft-table th:nth-child(4),
 .draft-table td:nth-child(4) {
-  width: 12%;
+  width: 10%;
 }
 
 .draft-table th:nth-child(5),
 .draft-table td:nth-child(5) {
-  width: 23%;
+  width: 19%;
 }
 
 .draft-table th:nth-child(6),
 .draft-table td:nth-child(6) {
-  width: 13%;
+  width: 11%;
 }
 
 .draft-table th:nth-child(7),
 .draft-table td:nth-child(7) {
-  width: 12%;
+  width: 13%;
 }
 
 .draft-table th:nth-child(8),
 .draft-table td:nth-child(8) {
+  width: 12%;
+}
+
+.draft-table th:nth-child(9),
+.draft-table td:nth-child(9) {
   width: 10%;
 }
 
 /* PUBLICADO ya no tiene Acciones, así que redistribuye ese espacio. */
 .draft-table--published th:nth-child(1),
 .draft-table--published td:nth-child(1) {
-  width: 5%;
+  width: 4%;
 }
 
 .draft-table--published th:nth-child(2),
 .draft-table--published td:nth-child(2) {
-  width: 13%;
+  width: 12%;
 }
 
 .draft-table--published th:nth-child(3),
 .draft-table--published td:nth-child(3) {
-  width: 14%;
+  width: 11%;
 }
 
 .draft-table--published th:nth-child(4),
 .draft-table--published td:nth-child(4) {
-  width: 12%;
+  width: 10%;
 }
 
 .draft-table--published th:nth-child(5),
 .draft-table--published td:nth-child(5) {
-  width: 31%;
+  width: 25%;
 }
 
 .draft-table--published th:nth-child(6),
 .draft-table--published td:nth-child(6) {
-  width: 15%;
+  width: 12%;
 }
 
 .draft-table--published th:nth-child(7),
 .draft-table--published td:nth-child(7) {
-  width: 10%;
+  width: 14%;
+}
+
+.draft-table--published th:nth-child(8),
+.draft-table--published td:nth-child(8) {
+  width: 12%;
 }
 
 .draft-table th {
@@ -701,6 +711,19 @@ select:focus {
   min-height: 34px;
   font-size: 10px;
 }
+
+.recurrence-cell {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.recurrence-cell input,
+.recurrence-cell select {
+  min-height: 30px;
+  padding: 5px 7px;
+}
+
 
 .draft-table td small {
   display: inline-block;
