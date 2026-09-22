@@ -8,7 +8,10 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import func
 
-from app.models.maintenance_preventive import MaintenancePersonnelORM
+from app.models.maintenance_preventive import (
+    MaintenancePersonnelORM,
+    MaintenancePreventiveScheduleORM,
+)
 from app.models.ticket_model import Ticket
 
 
@@ -143,6 +146,110 @@ def _branch_name(ticket: Ticket) -> str:
     )
 
 
+def _add_workdays(start_date: date, workdays: int) -> date:
+    result = start_date
+    remaining = int(workdays)
+
+    while remaining > 0:
+        result += timedelta(days=1)
+        if result.weekday() < 5:
+            remaining -= 1
+
+    return result
+
+
+def _projection_dates(
+    schedule: MaintenancePreventiveScheduleORM,
+    window: ProgramWindow,
+    today: date,
+) -> list[date]:
+    if not bool(getattr(schedule, "active", False)):
+        return []
+
+    next_date = getattr(schedule, "next_scheduled_date", None)
+    try:
+        interval = int(
+            getattr(schedule, "repeat_interval_workdays", 0) or 0
+        )
+    except (TypeError, ValueError):
+        return []
+
+    if next_date is None or interval <= 0:
+        return []
+
+    lower_bound = max(window.start, today)
+    current = next_date
+
+    while current < lower_bound:
+        current = _add_workdays(current, interval)
+
+    projected: list[date] = []
+    while current <= window.end:
+        projected.append(current)
+        current = _add_workdays(current, interval)
+
+    return projected
+
+
+def _schedule_branch_name(
+    schedule: MaintenancePreventiveScheduleORM,
+) -> str:
+    branch = getattr(schedule, "sucursal", None)
+    return str(
+        getattr(branch, "sucursal", None)
+        or getattr(branch, "nombre", None)
+        or "Sin sucursal"
+    )
+
+
+def _serialize_projection(
+    schedule: MaintenancePreventiveScheduleORM,
+    scheduled_date: date,
+) -> dict:
+    target_type = str(
+        getattr(schedule, "target_type", None) or "EQUIPO"
+    ).strip().upper()
+    inventory = getattr(schedule, "inventario", None)
+    building = getattr(schedule, "building_classification", None)
+
+    if target_type == "EQUIPO":
+        equipment_label = (
+            getattr(inventory, "nombre", None)
+            or "Sin equipo"
+        )
+        equipment_code = getattr(inventory, "codigo_interno", None)
+    else:
+        equipment_label = (
+            getattr(building, "nombre", None)
+            or "Edificio"
+        )
+        equipment_code = None
+
+    return {
+        "item_kind": "RECURRENCE_PROJECTION",
+        "ticket_id": None,
+        "schedule_id": int(schedule.id),
+        "tipo_mantenimiento": "PREVENTIVO",
+        "estado": "PREVISTO",
+        "operational_status": "PREVISTO",
+        "fecha_trabajo": scheduled_date.isoformat(),
+        "sucursal_id": int(schedule.sucursal_id),
+        "sucursal": _schedule_branch_name(schedule),
+        "target_type": target_type,
+        "clasificacion_id": schedule.building_classification_id,
+        "inventario_id": schedule.inventario_id,
+        "codigo_equipo": equipment_code,
+        "equipo": equipment_label,
+        "actividad": schedule.actividad,
+        "problema_detectado": None,
+        "necesita_refaccion": False,
+        "descripcion_refaccion": None,
+        "repeat_interval_workdays": int(
+            schedule.repeat_interval_workdays
+        ),
+    }
+
+
 def _serialize_ticket(ticket: Ticket, today: date) -> dict:
     work_date = _ticket_work_date(ticket)
     maintenance_type = (
@@ -164,7 +271,9 @@ def _serialize_ticket(ticket: Ticket, today: date) -> dict:
     inventory = ticket.inventario
 
     return {
+        "item_kind": "TICKET",
         "ticket_id": int(ticket.id),
+        "schedule_id": None,
         "tipo_mantenimiento": maintenance_type,
         "estado": ticket.estado,
         "operational_status": operational_status,
@@ -202,6 +311,7 @@ def _serialize_ticket(ticket: Ticket, today: date) -> dict:
         "problema_detectado": ticket.problema_detectado,
         "necesita_refaccion": bool(ticket.necesita_refaccion),
         "descripcion_refaccion": ticket.descripcion_refaccion,
+        "repeat_interval_workdays": None,
     }
 
 
@@ -234,6 +344,32 @@ def build_my_program(
 
     rows = [_serialize_ticket(ticket, today) for ticket in tickets]
 
+    schedules = (
+        MaintenancePreventiveScheduleORM.query
+        .filter(
+            MaintenancePreventiveScheduleORM.active.is_(True),
+            MaintenancePreventiveScheduleORM.responsable_user_id
+            == int(user.id),
+            MaintenancePreventiveScheduleORM.next_scheduled_date
+            <= window.end,
+        )
+        .order_by(
+            MaintenancePreventiveScheduleORM.next_scheduled_date.asc(),
+            MaintenancePreventiveScheduleORM.id.asc(),
+        )
+        .all()
+    )
+
+    projected_items = [
+        _serialize_projection(schedule, projected_date)
+        for schedule in schedules
+        for projected_date in _projection_dates(
+            schedule,
+            window,
+            today,
+        )
+    ]
+
     today_items = [
         row
         for row in rows
@@ -247,7 +383,7 @@ def build_my_program(
         and window.start.isoformat()
         <= row["fecha_trabajo"]
         <= window.end.isoformat()
-    ]
+    ] + projected_items
     overdue = [
         row for row in rows if row["operational_status"] == "VENCIDO"
     ]
@@ -263,7 +399,8 @@ def build_my_program(
     sort_key = lambda row: (
         row["fecha_trabajo"] or "9999-12-31",
         row["sucursal"],
-        row["ticket_id"],
+        1 if row.get("item_kind") == "RECURRENCE_PROJECTION" else 0,
+        row.get("ticket_id") or row.get("schedule_id") or 0,
     )
 
     return {
@@ -291,12 +428,14 @@ def build_my_program(
         "metrics": {
             "today": len(today_items),
             "week": len(week_items),
+            "projected": len(projected_items),
             "overdue": len(overdue),
             "pending_validation": len(pending_validation),
             "unscheduled": len(unscheduled),
         },
         "today_items": sorted(today_items, key=sort_key),
         "week_items": sorted(week_items, key=sort_key),
+        "projected_items": sorted(projected_items, key=sort_key),
         "overdue": sorted(overdue, key=sort_key),
         "pending_validation": sorted(
             pending_validation,
