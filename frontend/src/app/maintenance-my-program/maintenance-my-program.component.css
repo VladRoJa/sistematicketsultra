@@ -240,6 +240,15 @@
   border-left-color: var(--ultra-blue);
 }
 
+.work-card--projection {
+  border-style: dashed;
+  border-left-style: solid;
+  border-left-color: var(--ultra-gray-300);
+  background: var(--ultra-gray-50);
+  box-shadow: none;
+  opacity: 0.68;
+}
+
 .work-card__top,
 .work-card__meta {
   display: flex;
@@ -282,6 +291,11 @@
 .status-pill[data-status='PENDIENTE_VALIDACION'] {
   background: var(--ultra-info-soft);
   color: var(--ultra-blue);
+}
+
+.status-pill[data-status='PREVISTO'] {
+  background: var(--ultra-gray-100);
+  color: var(--ultra-gray-600);
 }
 
 .work-card__branch {
@@ -342,6 +356,22 @@
   border-radius: 0;
   padding: 8px 0 0;
   color: var(--ultra-gray-500);
+}
+
+.work-card__footer--projection {
+  display: grid;
+  gap: 2px;
+}
+
+.work-card__footer--projection span {
+  color: var(--ultra-gray-700);
+  font-weight: 900;
+}
+
+.work-card__footer--projection small {
+  color: var(--ultra-gray-500);
+  font-size: 9px;
+  font-weight: 700;
 }
 
 .alert,
