@@ -25,6 +25,8 @@ TEMPLATE_HEADERS = (
     "Fecha programada",
     "Actividad",
     "Responsable",
+    "Se repite",
+    "Cada N días hábiles",
     "Observaciones",
     "Validación",
 )
@@ -63,6 +65,10 @@ HEADER_MAP = {
     "fecha programada": "fecha_programada",
     "actividad": "actividad",
     "responsable": "responsable",
+    "se repite": "repeat_enabled",
+    "repetir": "repeat_enabled",
+    "cada n dias habiles": "repeat_interval_workdays",
+    "dias habiles": "repeat_interval_workdays",
     "observaciones": "observaciones",
 }
 
@@ -141,6 +147,8 @@ def _build_rows(raw_rows, columns: dict[int, str], *, start_row: int):
             "fecha_programada": None,
             "actividad": None,
             "responsable": None,
+            "repeat_enabled": None,
+            "repeat_interval_workdays": None,
             "observaciones": None,
         }
 
@@ -327,7 +335,7 @@ def build_preventive_template_xlsx(
     sheet.title = "Programacion preventiva"
     sheet.sheet_view.showGridLines = False
     sheet.freeze_panes = "A2"
-    sheet.auto_filter.ref = "A1:H1001"
+    sheet.auto_filter.ref = "A1:J1001"
 
     header_fill = PatternFill("solid", fgColor="E54525")
     header_font = Font(color="FFFFFF", bold=True)
@@ -352,8 +360,13 @@ def build_preventive_template_xlsx(
         "D1": "Captura la fecha en formato dd/mm/aaaa.",
         "E1": "Describe el mantenimiento preventivo que se realizará.",
         "F1": "Selecciona un responsable activo del catálogo de Mantenimiento.",
-        "G1": "Campo opcional para notas de programación.",
+        "G1": "Selecciona Sí si este mantenimiento debe repetirse.",
         "H1": (
+            "Si Se repite es Sí, captura cada cuántos días hábiles "
+            "(lunes a viernes) debe repetirse."
+        ),
+        "I1": "Campo opcional para notas de programación.",
+        "J1": (
             "Columna automática. Si aparece ⚠ DUPLICADO, corrige "
             "el código o la fecha antes de cargar el archivo."
         ),
@@ -368,8 +381,10 @@ def build_preventive_template_xlsx(
         "D": 18,
         "E": 42,
         "F": 26,
-        "G": 42,
-        "H": 18,
+        "G": 14,
+        "H": 22,
+        "I": 42,
+        "J": 18,
     }
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
@@ -380,12 +395,12 @@ def build_preventive_template_xlsx(
             cell.border = input_border
             cell.alignment = Alignment(
                 vertical="top",
-                wrap_text=(column in {5, 7}),
+                wrap_text=(column in {5, 9}),
             )
         sheet.cell(row=row, column=4).number_format = "dd/mm/yyyy"
         sheet.cell(
             row=row,
-            column=8,
+            column=10,
             value=(
                 '=IF(OR(A' + str(row) + '="",C' + str(row)
                 + '="",D' + str(row) + '=""),"",'
@@ -395,11 +410,11 @@ def build_preventive_template_xlsx(
                 + ')>1,"⚠ DUPLICADO",""))'
             ),
         )
-        sheet.cell(row=row, column=8).font = Font(
+        sheet.cell(row=row, column=10).font = Font(
             color="B91C1C",
             bold=True,
         )
-        sheet.cell(row=row, column=8).alignment = Alignment(
+        sheet.cell(row=row, column=10).alignment = Alignment(
             horizontal="center",
             vertical="center",
         )
@@ -661,12 +676,49 @@ def build_preventive_template_xlsx(
         sheet.add_data_validation(responsible_validation)
         responsible_validation.add("F2:F1001")
 
+    repeat_validation = DataValidation(
+        type="list",
+        formula1='"No,Sí"',
+        allow_blank=True,
+    )
+    repeat_validation.error = "Selecciona Sí o No."
+    repeat_validation.errorTitle = "Repetición inválida"
+    repeat_validation.prompt = (
+        "Sí = genera una programación recurrente. "
+        "No o vacío = preventivo de una sola fecha."
+    )
+    repeat_validation.promptTitle = "Se repite"
+    repeat_validation.showErrorMessage = True
+    repeat_validation.showInputMessage = True
+    sheet.add_data_validation(repeat_validation)
+    repeat_validation.add("G2:G1001")
+
+    interval_validation = DataValidation(
+        type="whole",
+        operator="greaterThan",
+        formula1="0",
+        allow_blank=True,
+    )
+    interval_validation.error = (
+        "Captura un número entero mayor a cero."
+    )
+    interval_validation.errorTitle = "Intervalo inválido"
+    interval_validation.prompt = (
+        "Solo aplica cuando Se repite = Sí. "
+        "Se cuentan únicamente lunes a viernes."
+    )
+    interval_validation.promptTitle = "Días hábiles"
+    interval_validation.showErrorMessage = True
+    interval_validation.showInputMessage = True
+    sheet.add_data_validation(interval_validation)
+    interval_validation.add("H2:H1001")
+
     duplicate_fill = PatternFill("solid", fgColor="FFC7CE")
     duplicate_font = Font(color="9C0006", bold=True)
     sheet.conditional_formatting.add(
-        "A2:H1001",
+        "A2:J1001",
         FormulaRule(
-            formula=['$H2="⚠ DUPLICADO"'],
+            formula=['$J2="⚠ DUPLICADO"'],
             fill=duplicate_fill,
             font=duplicate_font,
             stopIfTrue=True,
