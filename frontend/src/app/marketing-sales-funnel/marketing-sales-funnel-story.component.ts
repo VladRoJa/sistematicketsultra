@@ -129,9 +129,9 @@ export class MarketingSalesFunnelStoryComponent {
 
     return this.createNode(
       'Leads CRM',
-      summary.leads_iventas,
-      'Contactos que iniciaron conversación en el CRM',
-      'leads_iventas',
+      summary.leads_meta,
+      'Primer mensaje con origen publicitario identificado',
+      'leads_meta',
       'person',
       'orange',
     );
@@ -166,8 +166,8 @@ export class MarketingSalesFunnelStoryComponent {
         icon: 'smartphone',
         tone: 'orange',
         share: this.formatPercent(
-          summary.visits_total > 0
-            ? summary.visits_iventas / summary.visits_total
+          summary.leads_meta > 0
+            ? summary.visits_iventas_meta / summary.leads_meta
             : null,
         ),
         bought: this.formatInteger(summary.visits_iventas_bought),
@@ -363,14 +363,18 @@ export class MarketingSalesFunnelStoryComponent {
       {
         label: 'Lead CRM → Visita CRM',
         value: this.formatPercent(
-          summary.leads_iventas > 0
-            ? summary.visits_iventas / summary.leads_iventas
+          summary.leads_meta > 0
+            ? summary.visits_iventas_meta / summary.leads_meta
             : null,
         ),
       },
       {
         label: 'Visita CRM → Compra',
-        value: this.formatPercent(summary.iventas_visit_conversion_rate),
+        value: this.formatPercent(
+          summary.visits_iventas_meta > 0
+            ? summary.sales_iventas_meta / summary.visits_iventas_meta
+            : null,
+        ),
       },
       {
         label: 'Visita fuera CRM → Compra',
@@ -389,8 +393,8 @@ export class MarketingSalesFunnelStoryComponent {
       return [];
     }
 
-    const leads = summary.leads_iventas;
-    const visits = summary.visits_iventas;
+    const leads = summary.leads_meta;
+    const visits = summary.visits_iventas_meta;
     const visitsIventasBought = summary.visits_iventas_bought;
     const visitsNotIventasBought = summary.visits_not_iventas_bought;
     const salesIventas = summary.sales_iventas;

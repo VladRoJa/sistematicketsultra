@@ -514,7 +514,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
       {
         label: 'Leads CRM',
         value: this.formatInteger(summary.leads_meta),
-        supportingText: 'Leads canónicos identificados por iVentas',
+        supportingText: 'Primer mensaje con origen publicitario identificado',
         metric: 'leads_meta',
         icon: 'phone_in_talk',
         cssClass: 'summary-kpi--blue',
@@ -524,7 +524,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
           : '—',
       },
       {
-        label: 'Ventas iVentas',
+        label: 'Ventas CRM',
         value: this.formatInteger(summary.sales_iventas),
         supportingText: `${this.formatPercent(summary.iventas_sale_share)} de Venta Nueva`,
         metric: 'sales_iventas',
@@ -555,7 +555,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
       {
         label: 'Orgánico',
         value: this.formatInteger(summary.sales_iventas_other),
-        supportingText: 'Ventas iVentas sin evidencia Meta',
+        supportingText: 'Ventas CRM sin origen publicitario identificado',
         metric: 'sales_iventas_other',
         icon: 'eco',
         cssClass: 'summary-kpi--green',
@@ -589,20 +589,20 @@ export class MarketingSalesFunnelComponent implements OnInit {
     );
 
     const leadToVisit = (
-      summary.leads_iventas > 0
-        ? summary.visits_iventas / summary.leads_iventas
+      summary.leads_meta > 0
+        ? summary.visits_iventas_meta / summary.leads_meta
         : null
     );
 
     const visitToSale = (
-      summary.visits_iventas > 0
-        ? summary.sales_iventas / summary.visits_iventas
+      summary.visits_iventas_meta > 0
+        ? summary.sales_iventas_meta / summary.visits_iventas_meta
         : null
     );
 
     const leadToSale = (
-      summary.leads_iventas > 0
-        ? summary.sales_iventas / summary.leads_iventas
+      summary.leads_meta > 0
+        ? summary.sales_iventas_meta / summary.leads_meta
         : null
     );
 
@@ -626,8 +626,8 @@ export class MarketingSalesFunnelComponent implements OnInit {
 
     return {
       investment_display: this.formatOptionalCurrency(investment),
-      leads_display: this.formatInteger(summary.leads_iventas),
-      visits_display: this.formatInteger(summary.visits_iventas),
+      leads_display: this.formatInteger(summary.leads_meta),
+      visits_display: this.formatInteger(summary.visits_iventas_meta),
       sales_digital_display: this.formatInteger(summary.sales_digital),
       sales_digital_organic_display: this.formatInteger(
         summary.sales_digital_organic,
@@ -676,26 +676,26 @@ export class MarketingSalesFunnelComponent implements OnInit {
         : null
     );
     const leadToVisit = (
-      branch.leads_iventas > 0
-        ? branch.visits_iventas / branch.leads_iventas
+      branch.leads_meta > 0
+        ? branch.visits_iventas_meta / branch.leads_meta
         : null
     );
     const visitToSale = (
-      branch.visits_iventas > 0
-        ? branch.sales_iventas / branch.visits_iventas
+      branch.visits_iventas_meta > 0
+        ? branch.sales_iventas_meta / branch.visits_iventas_meta
         : null
     );
     const leadToSale = (
-      branch.leads_iventas > 0
-        ? branch.sales_iventas / branch.leads_iventas
+      branch.leads_meta > 0
+        ? branch.sales_iventas_meta / branch.leads_meta
         : null
     );
 
     return {
       ...branch,
       investment_display: this.formatOptionalCurrency(investment),
-      leads_crm_display: this.formatInteger(branch.leads_iventas),
-      visits_crm_display: this.formatInteger(branch.visits_iventas),
+      leads_crm_display: this.formatInteger(branch.leads_meta),
+      visits_crm_display: this.formatInteger(branch.visits_iventas_meta),
       sales_digital_display: this.formatInteger(branch.sales_digital),
       sales_digital_organic_display: this.formatInteger(
         branch.sales_digital_organic,
