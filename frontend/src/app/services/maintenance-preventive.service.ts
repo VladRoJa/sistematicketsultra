@@ -149,6 +149,34 @@ export interface PreventiveValidationSummary {
   publicable: boolean;
 }
 
+export interface PreventiveCapacityBucket {
+  count: number;
+  minutes: number;
+  unestimated_count: number;
+}
+
+export interface PreventiveCapacityPreview {
+  responsable: string;
+  date: string;
+  capacity_minutes: number;
+  tickets: PreventiveCapacityBucket;
+  projections: PreventiveCapacityBucket;
+  draft: PreventiveCapacityBucket;
+  existing_minutes: number;
+  existing_unestimated_count: number;
+  proposed: {
+    count: number;
+    duration_minutes_each: number;
+    minutes: number;
+  };
+  resulting_minutes: number;
+  available_before_minutes: number;
+  remaining_after_minutes: number;
+  over_capacity: boolean;
+  over_minutes: number;
+  utilization_percent: number;
+}
+
 export interface MaintenanceMyProgramItem {
   item_kind: 'TICKET' | 'RECURRENCE_PROJECTION';
   ticket_id: number | null;
@@ -826,6 +854,21 @@ export class MaintenancePreventiveService {
   }): Observable<PreventiveBatch> {
     return this.http.post<PreventiveBatch>(
       `${this.baseUrl}/batches`,
+      payload,
+    );
+  }
+
+  previewCapacity(
+    batchId: number,
+    payload: {
+      responsable: string;
+      fecha_programada: string;
+      estimated_duration_minutes: number;
+      item_count: number;
+    },
+  ): Observable<PreventiveCapacityPreview> {
+    return this.http.post<PreventiveCapacityPreview>(
+      `${this.baseUrl}/batches/${batchId}/capacity-preview`,
       payload,
     );
   }
