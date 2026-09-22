@@ -6,6 +6,7 @@ import {
   MaintenanceChecklistItem,
   MaintenanceMyProgram,
   MaintenanceMyProgramItem,
+  MaintenanceMyProgramWorkloadDay,
   MaintenancePreventiveService,
   MaintenanceWorkDetail,
 } from '../services/maintenance-preventive.service';
@@ -609,6 +610,24 @@ export class MaintenanceMyProgramComponent implements OnInit {
     return item.tipo_mantenimiento === 'PREVENTIVO'
       ? 'Preventivo'
       : 'Correctivo';
+  }
+
+  workloadMinutesLabel(minutes: number): string {
+    return this.durationLabel(minutes) || '0 min';
+  }
+
+  workloadProgress(day: MaintenanceMyProgramWorkloadDay): number {
+    return Math.min(100, Math.max(0, day.utilization_percent));
+  }
+
+  workloadStatus(day: MaintenanceMyProgramWorkloadDay): string {
+    if (day.over_capacity) {
+      return 'Sobrecarga';
+    }
+    if (day.estimated_minutes >= day.capacity_minutes) {
+      return 'Capacidad completa';
+    }
+    return 'Disponible';
   }
 
   durationLabel(minutes: number | null | undefined): string {
