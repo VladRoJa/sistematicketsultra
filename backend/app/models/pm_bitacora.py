@@ -32,10 +32,10 @@ class PmBitacoraORM(db.Model):
         default="EQUIPO",
         server_default="EQUIPO",
     )
-    building_element_id = db.Column(
+    clasificacion_id = db.Column(
         db.Integer,
         db.ForeignKey(
-            "maintenance_building_elements.id",
+            "catalogo_clasificacion.id",
             ondelete="RESTRICT",
         ),
         nullable=True,
@@ -90,9 +90,9 @@ class PmBitacoraORM(db.Model):
         foreign_keys=[ticket_id],
         backref="pm_bitacoras_ticket",
     )
-    building_element = db.relationship(
-        "MaintenanceBuildingElementORM",
-        foreign_keys=[building_element_id],
+    clasificacion = db.relationship(
+        "CatalogoClasificacion",
+        foreign_keys=[clasificacion_id],
     )
 
     __table_args__ = (
@@ -115,9 +115,9 @@ class PmBitacoraORM(db.Model):
         ),
         db.CheckConstraint(
             "((target_type = 'EQUIPO' AND inventario_id IS NOT NULL "
-            "AND building_element_id IS NULL) OR "
+            "AND clasificacion_id IS NULL) OR "
             "(target_type = 'EDIFICIO' AND inventario_id IS NULL "
-            "AND building_element_id IS NOT NULL))",
+            "AND clasificacion_id IS NOT NULL))",
             name="ck_pm_bitacoras_target_reference",
         ),
         db.Index(
