@@ -260,7 +260,10 @@
 
             <label *ngIf="isManualBuilding" class="control-wide">
               <span>Clasificación edificio</span>
-              <select [(ngModel)]="buildingClassificationId">
+              <select
+                [(ngModel)]="buildingClassificationId"
+                (ngModelChange)="onBuildingClassificationChange()"
+              >
                 <option [ngValue]="null">Selecciona</option>
                 <option
                   *ngFor="let classification of context.building_classifications"
@@ -273,7 +276,10 @@
 
             <label>
               <span>Responsable</span>
-              <select [(ngModel)]="responsibleUsername">
+              <select
+                [(ngModel)]="responsibleUsername"
+                (ngModelChange)="onCapacityInputChange()"
+              >
                 <option value="">Selecciona</option>
                 <option
                   *ngFor="let responsible of context.responsables"
@@ -289,6 +295,7 @@
               <input
                 type="date"
                 [(ngModel)]="programmedDate"
+                (ngModelChange)="onCapacityInputChange()"
                 [attr.min]="batch.period_start || null"
                 [attr.max]="batch.period_end || null"
               />
@@ -322,7 +329,10 @@
 
             <label>
               <span>Duración estimada</span>
-              <select [(ngModel)]="estimatedDurationMinutes">
+              <select
+                [(ngModel)]="estimatedDurationMinutes"
+                (ngModelChange)="onCapacityInputChange()"
+              >
                 <option [ngValue]="null">Selecciona</option>
                 <option
                   *ngFor="let minutes of durationOptions"
@@ -403,6 +413,87 @@
               Selecciona una sucursal para cargar sus equipos.
             </div>
           </div>
+
+          <section
+            *ngIf="capacityPreviewLoading || capacityPreview || capacityPreviewError"
+            class="capacity-preview"
+            [class.capacity-preview--danger]="capacityPreview?.over_capacity"
+            [class.capacity-preview--warning]="
+              !capacityPreview?.over_capacity
+              && (capacityPreview?.existing_unestimated_count || 0) > 0
+            "
+            aria-live="polite"
+          >
+            <ng-container *ngIf="capacityPreviewLoading">
+              <span class="capacity-preview__eyebrow">Capacidad del día</span>
+              <strong>Calculando carga…</strong>
+            </ng-container>
+
+            <ng-container *ngIf="!capacityPreviewLoading && capacityPreview as preview">
+              <div class="capacity-preview__main">
+                <div>
+                  <span class="capacity-preview__eyebrow">
+                    Capacidad · {{ preview.responsable }}
+                  </span>
+                  <strong>{{ capacitySummary(preview) }}</strong>
+                </div>
+
+                <span
+                  class="capacity-preview__badge"
+                  [class.capacity-preview__badge--danger]="preview.over_capacity"
+                  [class.capacity-preview__badge--warning]="
+                    !preview.over_capacity
+                    && preview.existing_unestimated_count > 0
+                  "
+                >
+                  <ng-container *ngIf="preview.over_capacity; else capacityAvailable">
+                    Exceso {{ durationLabel(preview.over_minutes) }}
+                  </ng-container>
+                  <ng-template #capacityAvailable>
+                    <ng-container
+                      *ngIf="preview.existing_unestimated_count > 0; else capacityOk"
+                    >
+                      Carga incompleta
+                    </ng-container>
+                  </ng-template>
+                  <ng-template #capacityOk>
+                    Quedan {{ durationLabel(preview.remaining_after_minutes) }}
+                  </ng-template>
+                </span>
+              </div>
+
+              <div class="capacity-preview__detail">
+                <span>
+                  {{ preview.tickets.count }} tickets reales
+                </span>
+                <span>
+                  {{ preview.projections.count }} previstos
+                </span>
+                <span>
+                  {{ preview.draft.count }} ya en este lote
+                </span>
+                <span>
+                  + {{ preview.proposed.count }}
+                  {{ preview.proposed.count === 1 ? 'nuevo' : 'nuevos' }}
+                </span>
+              </div>
+
+              <small *ngIf="preview.existing_unestimated_count > 0">
+                Hay {{ preview.existing_unestimated_count }}
+                {{ preview.existing_unestimated_count === 1
+                  ? 'trabajo sin duración; la carga real puede ser mayor.'
+                  : 'trabajos sin duración; la carga real puede ser mayor.' }}
+              </small>
+
+              <small *ngIf="preview.over_capacity">
+                Puedes agregarlo, pero el responsable quedará arriba de la referencia de 9 h.
+              </small>
+            </ng-container>
+
+            <small *ngIf="!capacityPreviewLoading && capacityPreviewError">
+              {{ capacityPreviewError }}
+            </small>
+          </section>
 
           <div class="manual-footer">
             <span
