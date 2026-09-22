@@ -160,6 +160,8 @@ export interface MaintenanceMyProgramItem {
   fecha_trabajo: string | null;
   sucursal_id: number | null;
   sucursal: string;
+  target_type: 'EQUIPO' | 'EDIFICIO' | null;
+  clasificacion_id: number | null;
   inventario_id: number | null;
   codigo_equipo: string | null;
   equipo: string;
@@ -353,6 +355,8 @@ export interface MaintenanceWorkDetail {
     fecha_programada_actual: string | null;
     sucursal_id: number | null;
     sucursal: string;
+    target_type: 'EQUIPO' | 'EDIFICIO';
+    clasificacion_id: number | null;
     inventario_id: number | null;
     codigo_equipo: string | null;
     equipo: string;
