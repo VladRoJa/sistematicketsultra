@@ -500,6 +500,21 @@ def _read_meta_investment_for_cutoff(
     )
 
 
+def _resolve_visits_for_mode(
+    *,
+    registered_visits,
+    sales,
+    include_direct_purchases: bool,
+):
+    if not include_direct_purchases:
+        return list(registered_visits)
+
+    return _merge_visits_with_direct_purchases(
+        visits=registered_visits,
+        sales=sales,
+    )
+
+
 def build_marketing_sales_funnel_at_cutoff(
     *,
     month: str,
@@ -599,13 +614,10 @@ def build_marketing_sales_funnel_at_cutoff(
         branch_ids=branch_ids,
     )
     sales = sales_result.sales
-    visits = (
-        _merge_visits_with_direct_purchases(
-            visits=registered_visits,
-            sales=sales,
-        )
-        if include_direct_purchases
-        else list(registered_visits)
+    visits = _resolve_visits_for_mode(
+        registered_visits=registered_visits,
+        sales=sales,
+        include_direct_purchases=include_direct_purchases,
     )
 
     kpi_control = _load_kpi_new_sales_control(
