@@ -155,7 +155,12 @@
           </p>
 
           <div class="work-card__meta">
-            <span>{{ formatDate(item.fecha_trabajo) }}</span>
+            <span>
+              {{ formatDate(item.fecha_trabajo) }}
+              <ng-container *ngIf="item.estimated_duration_minutes">
+                · {{ durationLabel(item.estimated_duration_minutes) }}
+              </ng-container>
+            </span>
             <span *ngIf="item.ticket_id !== null; else projectedMeta">
               Ticket #{{ item.ticket_id }}
             </span>
