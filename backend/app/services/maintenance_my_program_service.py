@@ -247,6 +247,11 @@ def _serialize_projection(
         "repeat_interval_workdays": int(
             schedule.repeat_interval_workdays
         ),
+        "estimated_duration_minutes": getattr(
+            schedule,
+            "estimated_duration_minutes",
+            None,
+        ),
     }
 
 
@@ -312,6 +317,11 @@ def _serialize_ticket(ticket: Ticket, today: date) -> dict:
         "necesita_refaccion": bool(ticket.necesita_refaccion),
         "descripcion_refaccion": ticket.descripcion_refaccion,
         "repeat_interval_workdays": None,
+        "estimated_duration_minutes": getattr(
+            ticket,
+            "maintenance_estimated_minutes",
+            None,
+        ),
     }
 
 
