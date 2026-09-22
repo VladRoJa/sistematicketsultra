@@ -423,6 +423,11 @@ class MaintenancePreventiveItemORM(db.Model):
     codigo_equipo_input = db.Column(db.String(80), nullable=True)
     responsable_input = db.Column(db.String(160), nullable=True)
     fecha_programada_input = db.Column(db.String(40), nullable=True)
+    repeat_enabled_input = db.Column(db.String(20), nullable=True)
+    repeat_interval_workdays_input = db.Column(
+        db.String(20),
+        nullable=True,
+    )
 
     # IDs resueltos después de validar. Pueden ser NULL mientras el renglón
     # permanece en borrador/error.
