@@ -34,6 +34,8 @@ export class MaintenanceMyProgramComponent implements OnInit {
   activeView: ProgramView = 'today';
   loading = false;
   errorMessage = '';
+  selectedWeekStart: string | null = null;
+  selectedWeekEnd: string | null = null;
 
   expandedTicketId: number | null = null;
   workDetail: MaintenanceWorkDetail | null = null;
@@ -97,11 +99,28 @@ export class MaintenanceMyProgramComponent implements OnInit {
   get activeTitle(): string {
     const titles: Record<ProgramView, string> = {
       today: 'Hoy',
-      week: 'Esta semana',
+      week: this.isCurrentWeek ? 'Esta semana' : 'Semana seleccionada',
       overdue: 'Vencidos',
       pending: 'Pendientes de validación',
     };
     return titles[this.activeView];
+  }
+
+  get weekRangeLabel(): string {
+    if (!this.program) return '';
+
+    return (
+      this.formatRangeDate(this.program.window.start_date)
+      + ' – '
+      + this.formatRangeDate(this.program.window.end_date)
+    );
+  }
+
+  get isCurrentWeek(): boolean {
+    if (!this.program) return false;
+
+    const { start_date, end_date, today } = this.program.window;
+    return today >= start_date && today <= end_date;
   }
 
   get checklistItems(): MaintenanceChecklistItem[] {
@@ -259,9 +278,20 @@ export class MaintenanceMyProgramComponent implements OnInit {
     this.loading = true;
     this.errorMessage = '';
 
-    this.service.getMyProgram().subscribe({
+    const params = (
+      this.selectedWeekStart && this.selectedWeekEnd
+        ? {
+            start_date: this.selectedWeekStart,
+            end_date: this.selectedWeekEnd,
+          }
+        : undefined
+    );
+
+    this.service.getMyProgram(params).subscribe({
       next: (program) => {
         this.program = program;
+        this.selectedWeekStart = program.window.start_date;
+        this.selectedWeekEnd = program.window.end_date;
         this.loading = false;
       },
       error: (error) => {
@@ -273,6 +303,30 @@ export class MaintenanceMyProgramComponent implements OnInit {
           || 'No se pudo cargar tu programa.';
       },
     });
+  }
+
+  navigateWeek(offset: -1 | 1): void {
+    const start = this.selectedWeekStart || this.program?.window.start_date;
+    if (!start || this.loading) return;
+
+    this.selectedWeekStart = this.shiftIsoDate(start, offset * 7);
+    this.selectedWeekEnd = this.shiftIsoDate(
+      this.selectedWeekStart,
+      6,
+    );
+    this.activeView = 'week';
+    this.closeWork();
+    this.loadProgram();
+  }
+
+  goToCurrentWeek(): void {
+    if (this.loading || this.isCurrentWeek) return;
+
+    this.selectedWeekStart = null;
+    this.selectedWeekEnd = null;
+    this.activeView = 'week';
+    this.closeWork();
+    this.loadProgram();
   }
 
   selectView(view: ProgramView): void {
@@ -558,6 +612,34 @@ export class MaintenanceMyProgramComponent implements OnInit {
       day: 'numeric',
       month: 'short',
     }).format(date);
+  }
+
+  private formatRangeDate(value: string): string {
+    const [year, month, day] = value.split('-').map(Number);
+    const date = new Date(year, (month || 1) - 1, day || 1, 12, 0, 0);
+
+    return new Intl.DateTimeFormat('es-MX', {
+      day: 'numeric',
+      month: 'short',
+    }).format(date);
+  }
+
+  private shiftIsoDate(value: string, days: number): string {
+    const [year, month, day] = value.split('-').map(Number);
+    const date = new Date(
+      year,
+      (month || 1) - 1,
+      (day || 1) + days,
+      12,
+      0,
+      0,
+    );
+
+    const shiftedYear = date.getFullYear();
+    const shiftedMonth = String(date.getMonth() + 1).padStart(2, '0');
+    const shiftedDay = String(date.getDate()).padStart(2, '0');
+
+    return `${shiftedYear}-${shiftedMonth}-${shiftedDay}`;
   }
 
   trackItem(_: number, item: MaintenanceMyProgramItem): number {
