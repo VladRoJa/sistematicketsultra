@@ -607,8 +607,19 @@ def listar_clasificaciones_edificio() -> list[CatalogoClasificacion]:
         if _is_building_classification(row)
     ]
 
+    parent_ids = {
+        int(row.parent_id)
+        for row in building_rows
+        if row.parent_id is not None
+    }
+    leaf_rows = [
+        row
+        for row in building_rows
+        if int(row.id) not in parent_ids
+    ]
+
     return sorted(
-        building_rows,
+        leaf_rows,
         key=lambda row: tuple(
             _normalize_key(getattr(node, "nombre", ""))
             for node in _classification_path(row)[2:]
