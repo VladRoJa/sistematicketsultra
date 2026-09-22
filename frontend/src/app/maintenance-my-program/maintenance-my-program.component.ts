@@ -338,19 +338,28 @@ export class MaintenanceMyProgramComponent implements OnInit {
     return this.activeView === view;
   }
 
+  isProjection(item: MaintenanceMyProgramItem): boolean {
+    return item.item_kind === 'RECURRENCE_PROJECTION';
+  }
+
   isWorkExpanded(item: MaintenanceMyProgramItem): boolean {
-    return this.expandedTicketId === item.ticket_id;
+    return (
+      item.ticket_id !== null
+      && this.expandedTicketId === item.ticket_id
+    );
   }
 
   canOpenWork(item: MaintenanceMyProgramItem): boolean {
     return (
-      item.tipo_mantenimiento === 'PREVENTIVO'
+      item.item_kind === 'TICKET'
+      && item.ticket_id !== null
+      && item.tipo_mantenimiento === 'PREVENTIVO'
       && item.operational_status !== 'PENDIENTE_VALIDACION'
     );
   }
 
   toggleWork(item: MaintenanceMyProgramItem): void {
-    if (!this.canOpenWork(item)) {
+    if (!this.canOpenWork(item) || item.ticket_id === null) {
       return;
     }
 
@@ -591,6 +600,7 @@ export class MaintenanceMyProgramComponent implements OnInit {
       VENCIDO: 'Vencido',
       PENDIENTE_VALIDACION: 'Por validar',
       SIN_FECHA: 'Sin fecha',
+      PREVISTO: 'Previsto',
     };
     return labels[item.operational_status] || item.operational_status;
   }
@@ -599,6 +609,13 @@ export class MaintenanceMyProgramComponent implements OnInit {
     return item.tipo_mantenimiento === 'PREVENTIVO'
       ? 'Preventivo'
       : 'Correctivo';
+  }
+
+  recurrenceLabel(item: MaintenanceMyProgramItem): string {
+    const interval = item.repeat_interval_workdays;
+    return interval
+      ? 'Recurrente · cada ' + String(interval) + ' días hábiles'
+      : 'Recurrente';
   }
 
   formatDate(value: string | null): string {
@@ -642,8 +659,17 @@ export class MaintenanceMyProgramComponent implements OnInit {
     return `${shiftedYear}-${shiftedMonth}-${shiftedDay}`;
   }
 
-  trackItem(_: number, item: MaintenanceMyProgramItem): number {
-    return item.ticket_id;
+  trackItem(_: number, item: MaintenanceMyProgramItem): string {
+    if (item.item_kind === 'RECURRENCE_PROJECTION') {
+      return (
+        'schedule-'
+        + String(item.schedule_id || 0)
+        + '-'
+        + String(item.fecha_trabajo || '')
+      );
+    }
+
+    return 'ticket-' + String(item.ticket_id || 0);
   }
 
   trackChecklistItem(_: number, item: MaintenanceChecklistItem): number {
