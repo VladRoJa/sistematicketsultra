@@ -9,6 +9,7 @@ from app.models.maintenance_preventive import (
     MaintenancePersonnelORM,
     MaintenancePreventiveBatchORM,
     MaintenancePreventiveItemORM,
+    MaintenancePreventiveScheduleORM,
 )
 
 
@@ -142,6 +143,9 @@ class MaintenancePreventivePlanningContractTest(unittest.TestCase):
                 "inventario_id",
                 "responsable_user_id",
                 "fecha_programada",
+                "repeat_enabled",
+                "repeat_interval_workdays",
+                "schedule_id",
                 "actividad",
                 "observaciones",
                 "validation_status",
@@ -171,6 +175,61 @@ class MaintenancePreventivePlanningContractTest(unittest.TestCase):
             "uq_maintenance_preventive_items_batch_source_row",
             constraint_names,
         )
+        self.assertIn(
+            "ck_maintenance_preventive_items_recurrence",
+            constraint_names,
+        )
+
+    def test_recurrence_schedule_contract(self):
+        columns = MaintenancePreventiveScheduleORM.__table__.c
+
+        self.assertTrue(
+            {
+                "schedule_key",
+                "target_type",
+                "sucursal_id",
+                "inventario_id",
+                "responsable_user_id",
+                "actividad",
+                "observaciones",
+                "repeat_interval_workdays",
+                "start_date",
+                "next_scheduled_date",
+                "active",
+                "created_by_user_id",
+            }.issubset(set(columns.keys()))
+        )
+
+        constraint_names = {
+            constraint.name
+            for constraint in MaintenancePreventiveScheduleORM.__table__.constraints
+            if constraint.name
+        }
+
+        self.assertIn(
+            "ck_maintenance_preventive_schedules_target_type",
+            constraint_names,
+        )
+        self.assertIn(
+            "ck_maintenance_preventive_schedules_interval",
+            constraint_names,
+        )
+        self.assertIn(
+            "ck_maintenance_preventive_schedules_equipment_target",
+            constraint_names,
+        )
+
+        expected_targets = {
+            "sucursal_id": "sucursales.sucursal_id",
+            "inventario_id": "inventario_general.id",
+            "responsable_user_id": "users.id",
+            "created_by_user_id": "users.id",
+        }
+        for column_name, target in expected_targets.items():
+            with self.subTest(column=column_name):
+                foreign_keys = list(columns[column_name].foreign_keys)
+                self.assertEqual(len(foreign_keys), 1)
+                self.assertEqual(foreign_keys[0].target_fullname, target)
 
     def test_item_points_to_operational_entities(self):
         expected_targets = {
@@ -179,6 +238,7 @@ class MaintenancePreventivePlanningContractTest(unittest.TestCase):
             "inventario_id": "inventario_general.id",
             "responsable_user_id": "users.id",
             "ticket_id": "tickets.id",
+            "schedule_id": "maintenance_preventive_schedules.id",
         }
 
         for column_name, target in expected_targets.items():
