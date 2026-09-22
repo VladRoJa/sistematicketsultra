@@ -1355,15 +1355,22 @@ def serializar_item(item: MaintenancePreventiveItemORM) -> dict:
         "codigo_equipo_input": item.codigo_equipo_input,
         "responsable_input": item.responsable_input,
         "fecha_programada_input": item.fecha_programada_input,
-        "repeat_enabled_input": getattr(
-            item,
-            "repeat_enabled_input",
-            None,
+        "repeat_enabled_input": (
+            getattr(item, "repeat_enabled_input", None)
+            or (
+                "SI"
+                if bool(getattr(item, "repeat_enabled", False))
+                else "NO"
+            )
         ),
-        "repeat_interval_workdays_input": getattr(
-            item,
-            "repeat_interval_workdays_input",
-            None,
+        "repeat_interval_workdays_input": (
+            getattr(item, "repeat_interval_workdays_input", None)
+            or (
+                str(item.repeat_interval_workdays)
+                if getattr(item, "repeat_interval_workdays", None)
+                is not None
+                else None
+            )
         ),
         "sucursal_id": item.sucursal_id,
         "inventario_id": item.inventario_id,
