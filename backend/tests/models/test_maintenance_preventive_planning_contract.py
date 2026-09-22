@@ -144,6 +144,8 @@ class MaintenancePreventivePlanningContractTest(unittest.TestCase):
                 "inventario_id",
                 "responsable_user_id",
                 "fecha_programada",
+                "repeat_enabled_input",
+                "repeat_interval_workdays_input",
                 "repeat_enabled",
                 "repeat_interval_workdays",
                 "schedule_id",
