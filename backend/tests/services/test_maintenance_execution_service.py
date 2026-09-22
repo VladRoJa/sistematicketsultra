@@ -16,6 +16,7 @@ class MaintenanceExecutionServiceTest(unittest.TestCase):
         return SimpleNamespace(
             id=500,
             tipo_mantenimiento="PREVENTIVO",
+            maintenance_target_type="EQUIPO",
             estado="abierto",
             estado_cierre=None,
             fecha_en_progreso=None,
@@ -28,6 +29,7 @@ class MaintenanceExecutionServiceTest(unittest.TestCase):
                 nombre="Caminadora",
             ),
             aparato_id=90,
+            clasificacion_id=None,
             sucursal_id=1000,
             sucursal_id_destino=4,
             sucursal_destino=SimpleNamespace(sucursal="VILLAS DEL REY"),
@@ -106,6 +108,50 @@ class MaintenanceExecutionServiceTest(unittest.TestCase):
                         "NO_EXISTE": "OK",
                     },
                 )
+
+    def test_building_preventive_bitacora_uses_classification_target(self):
+        ticket = self._ticket()
+        ticket.maintenance_target_type = "EDIFICIO"
+        ticket.aparato_id = None
+        ticket.inventario = None
+        ticket.familia_equipo_id = None
+        ticket.clasificacion_id = 321
+        ticket.equipo = "Baños"
+        user = self._user()
+        fake_session = MagicMock()
+
+        with (
+            patch.object(service, "_owned_ticket", return_value=ticket),
+            patch.object(
+                service,
+                "resolve_checklist",
+                return_value=None,
+            ),
+            patch.object(
+                service,
+                "_validated_checks",
+                return_value={},
+            ),
+            patch.object(
+                service,
+                "db",
+                SimpleNamespace(session=fake_session),
+            ),
+        ):
+            result = service.create_preventive_bitacora(
+                user,
+                500,
+                {
+                    "estado_encontrado": "BUENO",
+                    "notas": "Revisión de edificio completada.",
+                    "checks": {},
+                },
+            )
+
+        bitacora = result["bitacora"]
+        self.assertEqual(bitacora.target_type, "EDIFICIO")
+        self.assertIsNone(bitacora.inventario_id)
+        self.assertEqual(bitacora.clasificacion_id, 321)
 
     def test_hallazgo_can_generate_linked_corrective(self):
         ticket = self._ticket()
