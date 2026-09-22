@@ -327,6 +327,13 @@ class MaintenancePreventiveScheduleORM(db.Model):
         back_populates="schedule",
         order_by="MaintenancePreventiveItemORM.id",
     )
+    occurrences = db.relationship(
+        "MaintenancePreventiveOccurrenceORM",
+        back_populates="schedule",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="MaintenancePreventiveOccurrenceORM.scheduled_date",
+    )
 
     __table_args__ = (
         db.CheckConstraint(
@@ -345,6 +352,50 @@ class MaintenancePreventiveScheduleORM(db.Model):
             "ix_maintenance_preventive_schedules_active_next",
             "active",
             "next_scheduled_date",
+        ),
+    )
+
+
+class MaintenancePreventiveOccurrenceORM(db.Model):
+    __tablename__ = "maintenance_preventive_occurrences"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    schedule_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "maintenance_preventive_schedules.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+        index=True,
+    )
+    scheduled_date = db.Column(db.Date, nullable=False, index=True)
+    ticket_id = db.Column(
+        db.Integer,
+        db.ForeignKey("tickets.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    generated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+    )
+
+    schedule = db.relationship(
+        "MaintenancePreventiveScheduleORM",
+        back_populates="occurrences",
+    )
+    ticket = db.relationship("Ticket")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "schedule_id",
+            "scheduled_date",
+            name="uq_maintenance_preventive_occurrences_schedule_date",
+        ),
+        db.UniqueConstraint(
+            "ticket_id",
+            name="uq_maintenance_preventive_occurrences_ticket_id",
         ),
     )
 
