@@ -88,7 +88,7 @@ export interface PreventiveDraftItem {
   fecha_programada_input: string | null;
   repeat_enabled_input: string | null;
   repeat_interval_workdays_input: string | null;
-  estimated_duration_minutes_input: string | null;
+  estimated_duration_minutes_input: string | number | null;
   target_type: 'EQUIPO' | 'EDIFICIO' | null;
   sucursal_id: number | null;
   inventario_id: number | null;
