@@ -81,7 +81,7 @@
           (change)="onImportFileSelected($event)"
         />
         <small>
-          Columnas: Sucursal, Familia, Código equipo, Fecha programada (dd/mm/aaaa), Actividad, Responsable, Se repite, Cada N días hábiles y Observaciones. Validación se calcula automáticamente.
+          Columnas: Sucursal, Familia, Código equipo, Fecha programada, Actividad, Responsable, repetición, Observaciones, Tipo, Clasificación edificio y Duración estimada (min). Validación se calcula automáticamente.
         </small>
       </div>
 
@@ -315,6 +315,19 @@
               </select>
             </label>
 
+            <label>
+              <span>Duración estimada</span>
+              <select [(ngModel)]="estimatedDurationMinutes">
+                <option [ngValue]="null">Selecciona</option>
+                <option
+                  *ngFor="let minutes of durationOptions"
+                  [ngValue]="minutes"
+                >
+                  {{ durationLabel(minutes) }}
+                </option>
+              </select>
+            </label>
+
             <label class="control-wide">
               <span>Actividad</span>
               <input
@@ -507,12 +520,30 @@
                   </td>
 
                   <td>
-                    <input
+                    <div
                       *ngIf="batch.status === 'BORRADOR'; else activityRead"
-                      type="text"
-                      [(ngModel)]="item.actividad"
-                    />
-                    <ng-template #activityRead>{{ item.actividad || '—' }}</ng-template>
+                      class="activity-cell"
+                    >
+                      <input
+                        type="text"
+                        [(ngModel)]="item.actividad"
+                        placeholder="Actividad"
+                      />
+                      <input
+                        type="number"
+                        min="1"
+                        step="15"
+                        inputmode="numeric"
+                        [(ngModel)]="item.estimated_duration_minutes_input"
+                        placeholder="Duración (min)"
+                      />
+                    </div>
+                    <ng-template #activityRead>
+                      <span>{{ item.actividad || '—' }}</span>
+                      <small>
+                        {{ durationLabel(item.estimated_duration_minutes) }}
+                      </small>
+                    </ng-template>
                   </td>
 
                   <td>
