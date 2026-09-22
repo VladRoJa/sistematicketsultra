@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import func
 
 from app.extensions import db
+from app.models.catalogos import CatalogoClasificacion
 from app.models.inventario import InventarioGeneral, InventarioSucursal
 from app.models.maintenance_preventive import (
     MaintenanceCrewORM,
@@ -526,6 +527,128 @@ def guardar_personal_mantenimiento(
     return row
 
 
+def _classification_path(
+    classification: CatalogoClasificacion | None,
+) -> list[CatalogoClasificacion]:
+    path: list[CatalogoClasificacion] = []
+    current = classification
+    visited: set[int] = set()
+
+    while current is not None:
+        try:
+            current_id = int(current.id)
+        except (TypeError, ValueError):
+            break
+
+        if current_id in visited:
+            break
+
+        visited.add(current_id)
+        path.insert(0, current)
+        current = getattr(current, "padre", None)
+
+    return path
+
+
+def _is_building_classification(
+    classification: CatalogoClasificacion | None,
+) -> bool:
+    if classification is None:
+        return False
+
+    if not bool(getattr(classification, "activo", False)):
+        return False
+
+    try:
+        if int(classification.departamento_id) != MAINTENANCE_DEPARTMENT_ID:
+            return False
+    except (TypeError, ValueError):
+        return False
+
+    path = _classification_path(classification)
+    normalized = [
+        _normalize_key(getattr(node, "nombre", ""))
+        for node in path
+    ]
+
+    return (
+        len(normalized) >= 3
+        and normalized[0] == "MANTENIMIENTO"
+        and normalized[1] == "EDIFICIO"
+    )
+
+
+def _building_classification_label(
+    classification: CatalogoClasificacion,
+) -> str:
+    path = _classification_path(classification)
+    labels = [
+        _clean(getattr(node, "nombre", ""))
+        for node in path[2:]
+        if _clean(getattr(node, "nombre", ""))
+    ]
+    return " > ".join(labels)
+
+
+def listar_clasificaciones_edificio() -> list[CatalogoClasificacion]:
+    rows = (
+        CatalogoClasificacion.query
+        .filter(
+            CatalogoClasificacion.departamento_id
+            == MAINTENANCE_DEPARTMENT_ID,
+            CatalogoClasificacion.activo.is_(True),
+        )
+        .order_by(
+            CatalogoClasificacion.nivel.asc(),
+            CatalogoClasificacion.nombre.asc(),
+            CatalogoClasificacion.id.asc(),
+        )
+        .all()
+    )
+
+    return [
+        row
+        for row in rows
+        if _is_building_classification(row)
+    ]
+
+
+def _resolve_building_classification(
+    value,
+) -> CatalogoClasificacion | None:
+    raw = _clean(value)
+    if not raw:
+        return None
+
+    if raw.isdigit():
+        row = db.session.get(CatalogoClasificacion, int(raw))
+        return row if _is_building_classification(row) else None
+
+    normalized = _normalize_key(raw)
+    matches: list[CatalogoClasificacion] = []
+
+    for row in listar_clasificaciones_edificio():
+        path_label = _building_classification_label(row)
+        full_path = " > ".join(
+            _clean(getattr(node, "nombre", ""))
+            for node in _classification_path(row)
+        )
+        candidates = {
+            _normalize_key(getattr(row, "nombre", "")),
+            _normalize_key(path_label),
+            _normalize_key(full_path),
+        }
+        if normalized in candidates:
+            matches.append(row)
+
+    if len(matches) > 1:
+        raise MaintenancePreventiveError(
+            "La clasificación de Edificio es ambigua; usa su ID o jerarquía."
+        )
+
+    return matches[0] if matches else None
+
+
 def listar_contexto_programacion(user) -> dict:
     _assert_can_configure(user)
 
@@ -579,6 +702,15 @@ def listar_contexto_programacion(user) -> dict:
                 "is_demo": bool(getattr(branch, "is_demo", False)),
             }
             for branch in branches
+        ],
+        "building_classifications": [
+            {
+                "id": int(classification.id),
+                "nombre": str(classification.nombre),
+                "label": _building_classification_label(classification),
+                "nivel": int(classification.nivel or 0),
+            }
+            for classification in listar_clasificaciones_edificio()
         ],
         "responsables": [
             {
