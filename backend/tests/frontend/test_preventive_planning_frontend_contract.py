@@ -94,6 +94,10 @@ def test_admin_view_supports_equipment_building_and_batch_actions():
     assert "estimatedDurationMinutes" in ts
     assert "durationOptions" in ts
     assert "estimated_duration_minutes" in _read(SERVICE_TS)
+    assert '[attr.min]="batch.period_start || null"' in html
+    assert '[attr.max]="batch.period_end || null"' in html
+    assert html.count('[attr.min]="batch.period_start || null"') == 2
+    assert html.count('[attr.max]="batch.period_end || null"') == 2
 
 
 def test_backend_blueprint_is_registered_inside_tickets_namespace():
