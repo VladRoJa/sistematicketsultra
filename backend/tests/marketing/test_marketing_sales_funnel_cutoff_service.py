@@ -29,6 +29,15 @@ def test_registered_only_mode_keeps_only_real_visits(monkeypatch):
     assert result is not registered
 
 
+def test_cutoff_venta_total_rows_include_payment_method():
+    keys = {
+        column.key
+        for column in service.VENTA_TOTAL_CUTOFF_ROW_COLUMNS
+    }
+
+    assert "forma_pago" in keys
+
+
 def test_parse_cutoff_date_requires_same_month():
     month_start = date(2026, 9, 1)
 
