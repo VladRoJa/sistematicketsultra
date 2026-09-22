@@ -389,7 +389,7 @@ export class MarketingSalesFunnelStoryComponent {
       return [];
     }
 
-    const leads = summary.leads_meta;
+    const leads = summary.leads_iventas;
     const visits = summary.visits_iventas;
     const visitsIventasBought = summary.visits_iventas_bought;
     const visitsNotIventasBought = summary.visits_not_iventas_bought;
