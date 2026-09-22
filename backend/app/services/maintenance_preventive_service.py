@@ -1468,11 +1468,18 @@ def materializar_programacion_recurrente(
 
     creator_username = (
         _clean(getattr(creator, "username", None))
-        or "SISTEMA_PM"
+        or _clean(getattr(responsible, "username", None))
     )
+    if not creator_username:
+        raise MaintenancePreventiveStateError(
+            "La programación recurrente no tiene un usuario válido "
+            "para crear el ticket."
+        )
+
     try:
         creator_branch_id = int(
             getattr(creator, "sucursal_id", None)
+            or getattr(responsible, "sucursal_id", None)
             or schedule.sucursal_id
         )
     except (TypeError, ValueError):
