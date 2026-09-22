@@ -103,8 +103,14 @@
           </div>
 
           <h3>
-            {{ item.codigo_equipo || 'SIN CÓDIGO' }}
-            <span>· {{ item.equipo }}</span>
+            <ng-container *ngIf="item.target_type === 'EDIFICIO'; else equipmentTitle">
+              EDIFICIO
+              <span>· {{ item.equipo }}</span>
+            </ng-container>
+            <ng-template #equipmentTitle>
+              {{ item.codigo_equipo || 'SIN CÓDIGO' }}
+              <span>· {{ item.equipo }}</span>
+            </ng-template>
           </h3>
 
           <p class="work-card__activity">
