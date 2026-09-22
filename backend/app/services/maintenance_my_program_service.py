@@ -173,6 +173,19 @@ def _serialize_ticket(ticket: Ticket, today: date) -> dict:
             ticket.sucursal_id_destino or ticket.sucursal_id
         ),
         "sucursal": _branch_name(ticket),
+        "target_type": (
+            str(getattr(ticket, "maintenance_target_type", None) or "")
+            .strip()
+            .upper()
+            or (
+                "EQUIPO"
+                if ticket.aparato_id is not None
+                else "EDIFICIO"
+                if ticket.clasificacion_id is not None
+                else None
+            )
+        ),
+        "clasificacion_id": ticket.clasificacion_id,
         "inventario_id": ticket.aparato_id,
         "codigo_equipo": (
             getattr(inventory, "codigo_interno", None)
