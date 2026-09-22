@@ -126,6 +126,12 @@ def _schedule_key() -> str:
     return f"PMR-{stamp}-{uuid4().hex[:10].upper()}"
 
 
+def _repeat_enabled_input(value) -> str | None:
+    if isinstance(value, bool):
+        return "SI" if value else "NO"
+    return _clean(value) or None
+
+
 def _parse_repeat_enabled(value) -> bool:
     if isinstance(value, bool):
         return value
@@ -766,16 +772,18 @@ def agregar_renglones_lote(
                 raw_row.get("fecha_programada")
                 or raw_row.get("fecha_programada_input")
             ) or None,
-            repeat_enabled=_parse_repeat_enabled(
+            repeat_enabled_input=_repeat_enabled_input(
                 raw_row.get("repeat_enabled")
                 if "repeat_enabled" in raw_row
                 else raw_row.get("se_repite")
             ),
-            repeat_interval_workdays=_parse_workday_interval(
+            repeat_interval_workdays_input=_clean(
                 raw_row.get("repeat_interval_workdays")
                 if "repeat_interval_workdays" in raw_row
                 else raw_row.get("cada_dias_habiles")
-            ),
+            ) or None,
+            repeat_enabled=False,
+            repeat_interval_workdays=None,
             actividad=_clean(raw_row.get("actividad")) or None,
             observaciones=_clean(raw_row.get("observaciones")) or None,
             validation_status="PENDIENTE",
@@ -855,7 +863,7 @@ def actualizar_renglon_lote(
         ) or None
 
     if "repeat_enabled" in payload or "se_repite" in payload:
-        item.repeat_enabled = _parse_repeat_enabled(
+        item.repeat_enabled_input = _repeat_enabled_input(
             payload.get("repeat_enabled")
             if "repeat_enabled" in payload
             else payload.get("se_repite")
@@ -865,14 +873,12 @@ def actualizar_renglon_lote(
         "repeat_interval_workdays" in payload
         or "cada_dias_habiles" in payload
     ):
-        item.repeat_interval_workdays = _parse_workday_interval(
+        item.repeat_interval_workdays_input = _clean(
             payload.get("repeat_interval_workdays")
             if "repeat_interval_workdays" in payload
             else payload.get("cada_dias_habiles")
-        )
+        ) or None
 
-    if not bool(item.repeat_enabled):
-        item.repeat_interval_workdays = None
 
     if "actividad" in payload:
         item.actividad = _clean(payload.get("actividad")) or None
@@ -885,6 +891,8 @@ def actualizar_renglon_lote(
     item.inventario_id = None
     item.responsable_user_id = None
     item.fecha_programada = None
+    item.repeat_enabled = False
+    item.repeat_interval_workdays = None
     item.validation_status = "PENDIENTE"
     item.validation_errors = None
 
@@ -1347,6 +1355,16 @@ def serializar_item(item: MaintenancePreventiveItemORM) -> dict:
         "codigo_equipo_input": item.codigo_equipo_input,
         "responsable_input": item.responsable_input,
         "fecha_programada_input": item.fecha_programada_input,
+        "repeat_enabled_input": getattr(
+            item,
+            "repeat_enabled_input",
+            None,
+        ),
+        "repeat_interval_workdays_input": getattr(
+            item,
+            "repeat_interval_workdays_input",
+            None,
+        ),
         "sucursal_id": item.sucursal_id,
         "inventario_id": item.inventario_id,
         "responsable_user_id": item.responsable_user_id,
@@ -1675,12 +1693,38 @@ def validar_item_borrador(
     else:
         item.fecha_programada = parsed_date
 
-    repeat_enabled = bool(getattr(item, "repeat_enabled", False))
-    interval = getattr(item, "repeat_interval_workdays", None)
+    raw_repeat = getattr(item, "repeat_enabled_input", None)
+    if raw_repeat in (None, ""):
+        repeat_enabled = bool(
+            getattr(item, "repeat_enabled", False)
+        )
+        repeat_input_valid = True
+    else:
+        try:
+            repeat_enabled = _parse_repeat_enabled(raw_repeat)
+            repeat_input_valid = True
+        except MaintenancePreventiveError:
+            repeat_enabled = False
+            repeat_input_valid = False
+            errors.append("Se repite debe ser Sí o No.")
+
+    item.repeat_enabled = repeat_enabled
+
+    interval_input = getattr(
+        item,
+        "repeat_interval_workdays_input",
+        None,
+    )
+    if interval_input in (None, ""):
+        interval_input = getattr(
+            item,
+            "repeat_interval_workdays",
+            None,
+        )
 
     if repeat_enabled:
         try:
-            interval = _parse_workday_interval(interval)
+            interval = _parse_workday_interval(interval_input)
         except MaintenancePreventiveError:
             interval = None
             errors.append(
@@ -1699,6 +1743,11 @@ def validar_item_borrador(
 
         item.repeat_interval_workdays = interval
     else:
+        if repeat_input_valid and _clean(interval_input):
+            errors.append(
+                "El intervalo de días hábiles solo aplica cuando "
+                "Se repite es Sí."
+            )
         item.repeat_interval_workdays = None
 
     item.actividad = _clean(item.actividad) or None
