@@ -74,6 +74,15 @@ from app.services.marketing_visit_conversion_service import (
     _serialize_summary as _serialize_visit_conversion_summary,
 )
 
+ORIGINAL_VISIT_EXPORT_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("branch", "Sucursal KPI"),
+    ("date", "Fecha"),
+    ("phone", "Teléfono"),
+    ("origin", "Origen"),
+    ("source", "Fuente"),
+)
+
+
 
 def _selected_snapshot(
     *,
@@ -952,6 +961,14 @@ def build_marketing_sales_funnel_cutoff_export(
         kind=detail["kind"],
         rows=rows,
         metric=detail["metric"],
+        columns_override=(
+            ORIGINAL_VISIT_EXPORT_COLUMNS
+            if (
+                not include_direct_purchases
+                and detail["kind"] == "visits"
+            )
+            else None
+        ),
     )
     parts = [
         "funnel_venta_nueva",
