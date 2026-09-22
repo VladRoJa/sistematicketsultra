@@ -58,28 +58,30 @@ def _plan(rows):
     }
 
 
-def test_bcn_base_candidate_requires_domiciliated_positive_debt_and_safe_identity():
+def test_bcn_base_candidate_requires_domiciliated_minimum_debt_and_safe_identity():
     eligible = _decision(1, adeudo="1250.50")
-    no_debt = _decision(2, adeudo="0.00")
-    negative_debt = _decision(3, adeudo="-10.00")
+    equal_threshold = _decision(2, adeudo="999.00")
+    below_threshold = _decision(3, adeudo="998.99")
+    no_debt = _decision(4, adeudo="0.00")
+    negative_debt = _decision(5, adeudo="-10.00")
     active = _decision(
-        4,
-        adeudo="900.00",
+        6,
+        adeudo="1200.00",
         status="EXCLUDED_ACTIVE",
         reason="ACTIVE_CONFIRMED",
         campaign_eligibility="EXCLUDED_ACTIVE",
         eligibility_reason="ACTIVE_CONFIRMED",
     )
     identity_review = _decision(
-        5,
-        adeudo="500.00",
+        7,
+        adeudo="1500.00",
         status="REVIEW_ACTIVE_MATCH",
         reason="ACTIVE_REVIEW",
         campaign_eligibility="REVIEW",
         eligibility_reason="REVIEW_IDENTITY",
     )
     reactivate = _decision(
-        6,
+        8,
         group="REACTIVATE",
         adeudo="2000.00",
         campaign_eligibility="ELIGIBLE",
@@ -87,6 +89,8 @@ def test_bcn_base_candidate_requires_domiciliated_positive_debt_and_safe_identit
     )
 
     assert audience._is_bcn_base_candidate(eligible) is True
+    assert audience._is_bcn_base_candidate(equal_threshold) is True
+    assert audience._is_bcn_base_candidate(below_threshold) is False
     assert audience._is_bcn_base_candidate(no_debt) is False
     assert audience._is_bcn_base_candidate(negative_debt) is False
     assert audience._is_bcn_base_candidate(active) is False
@@ -96,9 +100,9 @@ def test_bcn_base_candidate_requires_domiciliated_positive_debt_and_safe_identit
 
 def test_breakdown_counts_bcn_as_subset_of_domiciliated_flow():
     plan = _plan([
-        _decision(1, adeudo="100.00"),
+        _decision(1, adeudo="999.00"),
         _decision(2, adeudo="0.00"),
-        _decision(3, adeudo="50.00"),
+        _decision(3, adeudo="1250.00"),
         _decision(
             4,
             group="EXCLUDE",
@@ -116,15 +120,15 @@ def test_breakdown_counts_bcn_as_subset_of_domiciliated_flow():
 
 def test_bcn_selector_keeps_only_positive_debt_unique_valid_phones():
     plan = _plan([
-        _decision(1, phone="6861000001", adeudo="100.00"),
-        _decision(2, phone="6861000001", adeudo="200.00"),
-        _decision(3, phone=None, adeudo="300.00"),
-        _decision(4, phone="6861000004", adeudo="0.00"),
+        _decision(1, phone="6861000001", adeudo="999.00"),
+        _decision(2, phone="6861000001", adeudo="1500.00"),
+        _decision(3, phone=None, adeudo="1200.00"),
+        _decision(4, phone="6861000004", adeudo="549.00"),
         _decision(
             5,
             group="REACTIVATE",
             phone="6861000005",
-            adeudo="999.00",
+            adeudo="2000.00",
             campaign_eligibility="ELIGIBLE",
             eligibility_reason=None,
         ),
@@ -156,8 +160,8 @@ def test_bcn_template_reuses_expired_engine_with_explicit_day_range(monkeypatch)
     def expired(**kwargs):
         calls.update(kwargs)
         return _plan([
-            _decision(1, phone="6861000001", adeudo="450.00"),
-            _decision(2, phone="6861000002", adeudo="0.00"),
+            _decision(1, phone="6861000001", adeudo="999.00"),
+            _decision(2, phone="6861000002", adeudo="549.00"),
         ])
 
     result = audience.prepare_v1_plan(
