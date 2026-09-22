@@ -921,6 +921,19 @@ def _serialize_ticket_summary(ticket: Ticket) -> dict:
     return {
         "id": int(ticket.id),
         "tipo_mantenimiento": ticket.tipo_mantenimiento,
+        "maintenance_target_type": (
+            str(
+                getattr(ticket, "maintenance_target_type", None)
+                or ""
+            ).strip().upper()
+            or (
+                "EQUIPO"
+                if ticket.aparato_id is not None
+                else "EDIFICIO"
+                if ticket.clasificacion_id is not None
+                else None
+            )
+        ),
         "origen_correctivo": ticket.origen_correctivo,
         "estado": ticket.estado,
         "estado_cierre": ticket.estado_cierre,
