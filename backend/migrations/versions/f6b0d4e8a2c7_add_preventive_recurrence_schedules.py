@@ -129,6 +129,53 @@ def upgrade():
         unique=False,
     )
 
+
+    op.create_table(
+        "maintenance_preventive_occurrences",
+        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
+        sa.Column("schedule_id", sa.BigInteger(), nullable=False),
+        sa.Column("scheduled_date", sa.Date(), nullable=False),
+        sa.Column("ticket_id", sa.Integer(), nullable=False),
+        sa.Column(
+            "generated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["schedule_id"],
+            ["maintenance_preventive_schedules.id"],
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["ticket_id"],
+            ["tickets.id"],
+            ondelete="RESTRICT",
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint(
+            "schedule_id",
+            "scheduled_date",
+            name="uq_maintenance_preventive_occurrences_schedule_date",
+        ),
+        sa.UniqueConstraint(
+            "ticket_id",
+            name="uq_maintenance_preventive_occurrences_ticket_id",
+        ),
+    )
+    op.create_index(
+        "ix_maintenance_preventive_occurrences_schedule_id",
+        "maintenance_preventive_occurrences",
+        ["schedule_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_maintenance_preventive_occurrences_scheduled_date",
+        "maintenance_preventive_occurrences",
+        ["scheduled_date"],
+        unique=False,
+    )
+
     op.add_column(
         "maintenance_preventive_items",
         sa.Column(
@@ -169,6 +216,16 @@ def upgrade():
 
 
 def downgrade():
+    op.drop_index(
+        "ix_maintenance_preventive_occurrences_scheduled_date",
+        table_name="maintenance_preventive_occurrences",
+    )
+    op.drop_index(
+        "ix_maintenance_preventive_occurrences_schedule_id",
+        table_name="maintenance_preventive_occurrences",
+    )
+    op.drop_table("maintenance_preventive_occurrences")
+
     op.drop_constraint(
         "ck_maintenance_preventive_items_recurrence",
         "maintenance_preventive_items",
