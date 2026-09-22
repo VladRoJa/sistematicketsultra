@@ -101,6 +101,98 @@
       </button>
     </nav>
 
+    <section class="workload-panel" aria-label="Carga de trabajo semanal">
+      <header class="workload-panel__header">
+        <div>
+          <span class="eyebrow">Carga estimada</span>
+          <strong>
+            {{ workloadMinutesLabel(current.workload.estimated_minutes) }}
+          </strong>
+        </div>
+
+        <span
+          class="workload-panel__status"
+          [class.workload-panel__status--danger]="current.workload.overloaded_days > 0"
+        >
+          <ng-container *ngIf="current.workload.overloaded_days > 0; else workloadOk">
+            {{ current.workload.overloaded_days }}
+            {{ current.workload.overloaded_days === 1 ? 'día sobrecargado' : 'días sobrecargados' }}
+          </ng-container>
+          <ng-template #workloadOk>Sin sobrecarga</ng-template>
+        </span>
+      </header>
+
+      <div class="workload-summary">
+        <span>
+          {{ current.workload.scheduled_days }}
+          {{ current.workload.scheduled_days === 1 ? 'día con trabajo' : 'días con trabajo' }}
+        </span>
+        <span *ngIf="current.workload.projected_minutes > 0">
+          {{ workloadMinutesLabel(current.workload.projected_minutes) }} previstos
+        </span>
+        <span *ngIf="current.workload.unestimated_count > 0">
+          {{ current.workload.unestimated_count }} sin estimar
+        </span>
+        <span>Referencia diaria: 9 h</span>
+      </div>
+
+      <div
+        *ngIf="current.workload.days.length; else noWorkload"
+        class="workload-days"
+      >
+        <article
+          *ngFor="let day of current.workload.days"
+          class="workload-day"
+          [class.workload-day--over]="day.over_capacity"
+        >
+          <div class="workload-day__top">
+            <div>
+              <strong>{{ formatDate(day.date) }}</strong>
+              <span>
+                {{ workloadMinutesLabel(day.estimated_minutes) }}
+                / {{ workloadMinutesLabel(day.capacity_minutes) }}
+              </span>
+            </div>
+
+            <span
+              class="workload-day__status"
+              [class.workload-day__status--over]="day.over_capacity"
+            >
+              {{ workloadStatus(day) }}
+            </span>
+          </div>
+
+          <progress
+            class="workload-day__progress"
+            max="100"
+            [value]="workloadProgress(day)"
+          ></progress>
+
+          <div class="workload-day__meta">
+            <span>
+              {{ day.item_count }}
+              {{ day.item_count === 1 ? 'actividad' : 'actividades' }}
+            </span>
+            <span *ngIf="day.projected_count > 0">
+              {{ day.projected_count }} previstas
+            </span>
+            <span *ngIf="day.unestimated_count > 0">
+              {{ day.unestimated_count }} sin duración
+            </span>
+            <strong *ngIf="day.over_capacity">
+              +{{ workloadMinutesLabel(day.over_minutes) }}
+            </strong>
+          </div>
+        </article>
+      </div>
+
+      <ng-template #noWorkload>
+        <div class="workload-empty">
+          No hay carga estimada en esta semana.
+        </div>
+      </ng-template>
+    </section>
+
     <section class="program-section">
       <header class="section-heading">
         <div>
