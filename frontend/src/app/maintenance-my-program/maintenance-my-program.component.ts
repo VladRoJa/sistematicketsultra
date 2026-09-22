@@ -611,6 +611,22 @@ export class MaintenanceMyProgramComponent implements OnInit {
       : 'Correctivo';
   }
 
+  durationLabel(minutes: number | null | undefined): string {
+    if (!minutes || minutes <= 0) return '';
+
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+
+    if (hours === 0) {
+      return String(minutes) + ' min';
+    }
+    if (remainingMinutes === 0) {
+      return String(hours) + ' h';
+    }
+
+    return String(hours) + ' h ' + String(remainingMinutes) + ' min';
+  }
+
   recurrenceLabel(item: MaintenanceMyProgramItem): string {
     const interval = item.repeat_interval_workdays;
     return interval
