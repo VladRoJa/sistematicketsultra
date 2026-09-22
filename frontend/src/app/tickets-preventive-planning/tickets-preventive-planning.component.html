@@ -205,9 +205,9 @@
           <header class="panel__header">
             <div>
               <span class="panel__eyebrow">Agregar preventivos</span>
-              <h2>Selección por familia</h2>
+              <h2>Objetivo preventivo</h2>
             </div>
-            <span class="count-pill">{{ selectedEquipmentCount }} seleccionados</span>
+            <span class="count-pill">{{ manualTargetCount }} seleccionados</span>
           </header>
 
           <div class="manual-controls">
@@ -225,6 +225,17 @@
             </label>
 
             <label>
+              <span>Tipo</span>
+              <select
+                [(ngModel)]="targetType"
+                (ngModelChange)="onTargetTypeChange()"
+              >
+                <option value="EQUIPO">Equipo</option>
+                <option value="EDIFICIO">Edificio</option>
+              </select>
+            </label>
+
+            <label *ngIf="isManualEquipment">
               <span>Familia</span>
               <select [(ngModel)]="familyId" [disabled]="!branchId">
                 <option [ngValue]="null">Todas</option>
@@ -237,7 +248,7 @@
               </select>
             </label>
 
-            <label>
+            <label *ngIf="isManualEquipment">
               <span>Buscar equipo</span>
               <input
                 type="search"
@@ -245,6 +256,19 @@
                 placeholder="Código, equipo, marca..."
                 [disabled]="!branchId"
               />
+            </label>
+
+            <label *ngIf="isManualBuilding" class="control-wide">
+              <span>Clasificación edificio</span>
+              <select [(ngModel)]="buildingClassificationId">
+                <option [ngValue]="null">Selecciona</option>
+                <option
+                  *ngFor="let classification of context.building_classifications"
+                  [ngValue]="classification.id"
+                >
+                  {{ classification.label }}
+                </option>
+              </select>
             </label>
 
             <label>
@@ -310,7 +334,7 @@
             </label>
           </div>
 
-          <div class="equipment-toolbar">
+          <div class="equipment-toolbar" *ngIf="isManualEquipment">
             <span>
               {{ filteredEquipment.length }} equipos visibles
             </span>
@@ -334,7 +358,7 @@
             </div>
           </div>
 
-          <div class="equipment-grid">
+          <div class="equipment-grid" *ngIf="isManualEquipment">
             <label
               *ngFor="let item of filteredEquipment; trackBy: trackEquipment"
               class="equipment-option"
@@ -377,7 +401,7 @@
               (click)="addSelectedEquipment()"
               [disabled]="!canAddManualItems || saving"
             >
-              Agregar {{ selectedEquipmentCount }} preventivos
+              Agregar {{ manualTargetCount }} preventivos
             </button>
           </div>
         </section>
@@ -399,7 +423,7 @@
                 <tr>
                   <th>Fila</th>
                   <th>Sucursal</th>
-                  <th>Código equipo</th>
+                  <th>Objetivo</th>
                   <th>Fecha</th>
                   <th>Actividad</th>
                   <th>Responsable</th>
@@ -433,12 +457,44 @@
                   </td>
 
                   <td>
-                    <input
-                      *ngIf="batch.status === 'BORRADOR'; else codeRead"
-                      type="text"
-                      [(ngModel)]="item.codigo_equipo_input"
-                    />
-                    <ng-template #codeRead>{{ item.codigo_equipo_input || '—' }}</ng-template>
+                    <div
+                      *ngIf="batch.status === 'BORRADOR'; else targetRead"
+                      class="target-cell"
+                    >
+                      <select
+                        [(ngModel)]="item.target_type_input"
+                        (ngModelChange)="onItemTargetTypeChange(item)"
+                      >
+                        <option value="EQUIPO">Equipo</option>
+                        <option value="EDIFICIO">Edificio</option>
+                      </select>
+
+                      <input
+                        *ngIf="!isItemBuilding(item)"
+                        type="text"
+                        [(ngModel)]="item.codigo_equipo_input"
+                        placeholder="Código"
+                      />
+
+                      <select
+                        *ngIf="isItemBuilding(item)"
+                        [(ngModel)]="item.building_classification_input"
+                      >
+                        <option value="">Selecciona</option>
+                        <option
+                          *ngFor="let classification of context.building_classifications"
+                          [value]="classification.id"
+                        >
+                          {{ classification.label }}
+                        </option>
+                      </select>
+                    </div>
+                    <ng-template #targetRead>
+                      <strong class="target-read-type">
+                        {{ item.target_type === 'EDIFICIO' ? 'Edificio' : 'Equipo' }}
+                      </strong>
+                      <small>{{ itemTargetLabel(item) }}</small>
+                    </ng-template>
                   </td>
 
                   <td>
