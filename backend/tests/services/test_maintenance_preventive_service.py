@@ -33,8 +33,10 @@ class MaintenancePreventiveWorkdayRecurrenceTest(unittest.TestCase):
 class MaintenancePreventiveDraftValidationTest(unittest.TestCase):
     def _item(self, **overrides):
         values = {
+            "target_type_input": "EQUIPO",
             "sucursal_input": "VILLAS DEL REY",
             "codigo_equipo_input": "04CC01",
+            "building_classification_input": None,
             "responsable_input": "TECNICO_PM",
             "fecha_programada_input": "2026-09-20",
             "actividad": "Mantenimiento general",
@@ -61,6 +63,10 @@ class MaintenancePreventiveDraftValidationTest(unittest.TestCase):
             resolve_sucursal=lambda _value: branch,
             resolve_equipo=lambda _value: equipment,
             equipo_asignado=lambda _inventory_id, _branch_id: assigned,
+            resolve_building=lambda _value: SimpleNamespace(
+                id=321,
+                nombre="Baños",
+            ),
             resolve_responsable=lambda _value: responsible,
             validate_responsable=lambda user, branch_id=None: (
                 (
@@ -84,9 +90,25 @@ class MaintenancePreventiveDraftValidationTest(unittest.TestCase):
         self.assertEqual(item.validation_status, "VALIDO")
         self.assertIsNone(item.validation_errors)
         self.assertEqual(item.sucursal_id, 4)
+        self.assertEqual(item.target_type, "EQUIPO")
         self.assertEqual(item.inventario_id, 90)
+        self.assertIsNone(item.building_classification_id)
         self.assertEqual(item.responsable_user_id, 20)
         self.assertEqual(item.fecha_programada, date(2026, 9, 20))
+
+    def test_building_row_resolves_official_classification(self):
+        item = self._item(
+            target_type_input="EDIFICIO",
+            codigo_equipo_input=None,
+            building_classification_input="321",
+        )
+
+        errors = self._validate(item)
+
+        self.assertEqual(errors, [])
+        self.assertEqual(item.target_type, "EDIFICIO")
+        self.assertIsNone(item.inventario_id)
+        self.assertEqual(item.building_classification_id, 321)
 
     def test_recurring_row_accepts_weekday_and_positive_interval(self):
         item = self._item(
@@ -448,6 +470,7 @@ class MaintenancePreventiveMaterializationTest(unittest.TestCase):
             "target_type": "EQUIPO",
             "sucursal_id": 4,
             "inventario_id": 90,
+            "building_classification_id": None,
             "responsable_user_id": 20,
             "created_by_user_id": 10,
             "actividad": "Mantenimiento general",
@@ -546,6 +569,71 @@ class MaintenancePreventiveMaterializationTest(unittest.TestCase):
         )
         self.assertEqual(occurrences[0].ticket_id, 601)
 
+    def test_materialize_building_schedule_creates_classified_ticket(self):
+        schedule = self._schedule(
+            target_type="EDIFICIO",
+            inventario_id=None,
+            building_classification_id=321,
+        )
+        building = SimpleNamespace(id=321, nombre="Baños")
+        responsible = SimpleNamespace(id=20, username="TECNICO_PM")
+        creator = SimpleNamespace(
+            id=10,
+            username="MANTENIMIENTO",
+            sucursal_id=1000,
+        )
+        ticket = SimpleNamespace(
+            id=602,
+            asignado_a=None,
+            familia_equipo_id=None,
+        )
+        fake_session = MagicMock()
+
+        def fake_get(model, object_id):
+            if model is service.CatalogoClasificacion:
+                return building
+            if model is service.UserORM and int(object_id) == 20:
+                return responsible
+            if model is service.UserORM and int(object_id) == 10:
+                return creator
+            return None
+
+        fake_session.get.side_effect = fake_get
+
+        with (
+            patch.object(
+                service,
+                "_is_building_classification",
+                return_value=True,
+            ),
+            patch.object(
+                service,
+                "_building_classification_label",
+                return_value="Baños",
+            ),
+            patch.object(
+                service,
+                "db",
+                SimpleNamespace(session=fake_session),
+            ),
+            patch.object(
+                service.Ticket,
+                "create_ticket",
+                return_value=ticket,
+            ) as create_ticket,
+        ):
+            result = service.materializar_programacion_recurrente(
+                schedule,
+                through_date=date(2026, 9, 21),
+                occurrence_lookup=lambda *_args: None,
+            )
+
+        self.assertTrue(result["generated"])
+        kwargs = create_ticket.call_args.kwargs
+        self.assertEqual(kwargs["maintenance_target_type"], "EDIFICIO")
+        self.assertEqual(kwargs["clasificacion_id"], 321)
+        self.assertIsNone(kwargs["aparato_id"])
+
     def test_materialize_existing_occurrence_is_idempotent(self):
         schedule = self._schedule()
         existing = SimpleNamespace(ticket_id=555)
@@ -608,8 +696,10 @@ class MaintenancePreventivePublishTest(unittest.TestCase):
             id=1,
             validation_status="VALIDO",
             ticket_id=None,
+            target_type="EQUIPO",
             sucursal_id=4,
             inventario_id=90,
+            building_classification_id=None,
             responsable_user_id=20,
             fecha_programada=date(2026, 9, 20),
             repeat_enabled=False,
@@ -712,6 +802,78 @@ class MaintenancePreventivePublishTest(unittest.TestCase):
             kwargs["fecha_programada_original"],
             kwargs["fecha_programada_actual"],
         )
+
+    def test_publish_building_item_creates_classified_preventive(self):
+        item = self._valid_item()
+        item.target_type = "EDIFICIO"
+        item.inventario_id = None
+        item.building_classification_id = 321
+
+        batch = SimpleNamespace(
+            id=30,
+            status="BORRADOR",
+            created_by_user_id=10,
+            items=[item],
+            published_by_user_id=None,
+            published_at=None,
+        )
+        building = SimpleNamespace(id=321, nombre="Baños")
+        responsible = SimpleNamespace(id=20, username="TECNICO_PM")
+        ticket = SimpleNamespace(
+            id=502,
+            asignado_a=None,
+            familia_equipo_id=None,
+        )
+        fake_session = MagicMock()
+
+        def fake_get(model, object_id):
+            if model is service.CatalogoClasificacion:
+                return building
+            if model is service.UserORM:
+                return responsible
+            return None
+
+        fake_session.get.side_effect = fake_get
+
+        with (
+            patch.object(service, "_get_batch", return_value=batch),
+            patch.object(
+                service,
+                "_published_duplicate_exists",
+                return_value=False,
+            ),
+            patch.object(
+                service,
+                "_is_building_classification",
+                return_value=True,
+            ),
+            patch.object(
+                service,
+                "_building_classification_label",
+                return_value="Baños",
+            ),
+            patch.object(
+                service,
+                "db",
+                SimpleNamespace(session=fake_session),
+            ),
+            patch.object(
+                service.Ticket,
+                "create_ticket",
+                return_value=ticket,
+            ) as create_ticket,
+        ):
+            tickets = service.publicar_lote_preventivo(
+                30,
+                self._user(),
+            )
+
+        self.assertEqual(tickets, [ticket])
+        kwargs = create_ticket.call_args.kwargs
+        self.assertEqual(kwargs["maintenance_target_type"], "EDIFICIO")
+        self.assertEqual(kwargs["clasificacion_id"], 321)
+        self.assertIsNone(kwargs["aparato_id"])
+        self.assertEqual(kwargs["equipo"], "Baños")
 
     def test_publish_recurring_item_creates_schedule_and_first_occurrence(self):
         item = self._valid_item()
