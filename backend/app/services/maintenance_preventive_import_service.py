@@ -28,12 +28,13 @@ TEMPLATE_HEADERS = (
     "Se repite",
     "Cada N días hábiles",
     "Observaciones",
+    "Tipo",
+    "Clasificación edificio",
     "Validación",
 )
 
 REQUIRED_IMPORT_HEADERS = (
     "Sucursal",
-    "Código equipo",
     "Fecha programada",
     "Actividad",
     "Responsable",
@@ -70,6 +71,10 @@ HEADER_MAP = {
     "cada n dias habiles": "repeat_interval_workdays",
     "dias habiles": "repeat_interval_workdays",
     "observaciones": "observaciones",
+    "tipo": "target_type",
+    "tipo objetivo": "target_type",
+    "clasificacion edificio": "building_classification",
+    "clasificacion de edificio": "building_classification",
 }
 
 
@@ -150,6 +155,8 @@ def _build_rows(raw_rows, columns: dict[int, str], *, start_row: int):
             "repeat_enabled": None,
             "repeat_interval_workdays": None,
             "observaciones": None,
+            "target_type": None,
+            "building_classification": None,
         }
 
         for column_index, field in columns.items():
@@ -329,13 +336,14 @@ def build_preventive_template_xlsx(
     sucursales: list[str] | None = None,
     responsables: list[str] | None = None,
     equipos: list[dict] | None = None,
+    building_classifications: list[str] | None = None,
 ) -> bytes:
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "Programacion preventiva"
     sheet.sheet_view.showGridLines = False
     sheet.freeze_panes = "A2"
-    sheet.auto_filter.ref = "A1:J1001"
+    sheet.auto_filter.ref = "A1:L1001"
 
     header_fill = PatternFill("solid", fgColor="E54525")
     header_font = Font(color="FFFFFF", bold=True)
@@ -367,8 +375,16 @@ def build_preventive_template_xlsx(
         ),
         "I1": "Campo opcional para notas de programación.",
         "J1": (
+            "Equipo o Edificio. Si queda vacío, se interpreta como Equipo "
+            "para conservar compatibilidad con plantillas anteriores."
+        ),
+        "K1": (
+            "Solo para Edificio. Selecciona una clasificación del árbol "
+            "oficial de Mantenimiento > Edificio."
+        ),
+        "L1": (
             "Columna automática. Si aparece ⚠ DUPLICADO, corrige "
-            "el código o la fecha antes de cargar el archivo."
+            "el objetivo o la fecha antes de cargar el archivo."
         ),
     }
     for cell_ref, message in comments.items():
@@ -384,7 +400,9 @@ def build_preventive_template_xlsx(
         "G": 14,
         "H": 22,
         "I": 42,
-        "J": 18,
+        "J": 16,
+        "K": 34,
+        "L": 18,
     }
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
@@ -395,32 +413,39 @@ def build_preventive_template_xlsx(
             cell.border = input_border
             cell.alignment = Alignment(
                 vertical="top",
-                wrap_text=(column in {5, 9}),
+                wrap_text=(column in {5, 9, 11}),
             )
         sheet.cell(row=row, column=4).number_format = "dd/mm/yyyy"
         sheet.cell(
             row=row,
-            column=10,
+            column=12,
             value=(
-                '=IF(OR(A' + str(row) + '="",C' + str(row)
-                + '="",D' + str(row) + '=""),"",'
+                '=IF(OR(A' + str(row) + '="",D' + str(row) + '=""),"",'
+                + 'IF(UPPER(J' + str(row) + ')="EDIFICIO",'
+                + 'IF(K' + str(row) + '="","",'
+                + 'IF(COUNTIFS($A$2:$A$1001,A' + str(row)
+                + ',$K$2:$K$1001,K' + str(row)
+                + ',$D$2:$D$1001,D' + str(row)
+                + ',$J$2:$J$1001,"Edificio")>1,"⚠ DUPLICADO","")),'
+                + 'IF(C' + str(row) + '="","",'
                 + 'IF(COUNTIFS($A$2:$A$1001,A' + str(row)
                 + ',$C$2:$C$1001,C' + str(row)
                 + ',$D$2:$D$1001,D' + str(row)
-                + ')>1,"⚠ DUPLICADO",""))'
+                + ')>1,"⚠ DUPLICADO",""))))'
             ),
         )
-        sheet.cell(row=row, column=10).font = Font(
+        sheet.cell(row=row, column=12).font = Font(
             color="B91C1C",
             bold=True,
         )
-        sheet.cell(row=row, column=10).alignment = Alignment(
+        sheet.cell(row=row, column=12).alignment = Alignment(
             horizontal="center",
             vertical="center",
         )
 
     branch_values = _clean_catalog_values(sucursales)
     responsible_values = _clean_catalog_values(responsables)
+    building_values = _clean_catalog_values(building_classifications)
     equipment_rows = list(equipos or [])
     equipment_tree = _equipment_catalog_tree(equipment_rows)
 
@@ -435,6 +460,7 @@ def build_preventive_template_xlsx(
         "Familia",
         "Código equipo",
         "Equipo",
+        "Clasificaciones edificio",
     ])
 
     for cell in catalogs[1]:
@@ -449,6 +475,7 @@ def build_preventive_template_xlsx(
         len(branch_values),
         len(responsible_values),
         len(equipment_rows),
+        len(building_values),
         1,
     )
     for index in range(max_catalog_rows):
@@ -463,6 +490,12 @@ def build_preventive_template_xlsx(
             catalogs.cell(row=row_number, column=5, value=str(equipment.get("familia") or "") or "Sin familia")
             catalogs.cell(row=row_number, column=6, value=str(equipment.get("codigo_interno") or ""))
             catalogs.cell(row=row_number, column=7, value=str(equipment.get("nombre") or ""))
+        if index < len(building_values):
+            catalogs.cell(
+                row=row_number,
+                column=8,
+                value=building_values[index],
+            )
 
     catalog_widths = {
         "A": 28,
@@ -472,6 +505,7 @@ def build_preventive_template_xlsx(
         "E": 28,
         "F": 22,
         "G": 34,
+        "H": 38,
     }
     for column, width in catalog_widths.items():
         catalogs.column_dimensions[column].width = width
@@ -592,7 +626,7 @@ def build_preventive_template_xlsx(
             formula1=(
                 '=INDIRECT(IFERROR(VLOOKUP($A2,MapaFamilias,2,FALSE),"ListaVacia"))'
             ),
-            allow_blank=False,
+            allow_blank=True,
         )
         family_validation.error = "Selecciona primero una sucursal y luego una familia válida."
         family_validation.errorTitle = "Familia inválida"
@@ -613,7 +647,7 @@ def build_preventive_template_xlsx(
             formula1=(
                 '=INDIRECT(IFERROR(VLOOKUP($A2&"|"&$B2,MapaCodigos,2,FALSE),"ListaVacia"))'
             ),
-            allow_blank=False,
+            allow_blank=True,
         )
         code_validation.error = "Selecciona una familia para cargar los códigos disponibles."
         code_validation.errorTitle = "Código inválido"
@@ -676,6 +710,45 @@ def build_preventive_template_xlsx(
         sheet.add_data_validation(responsible_validation)
         responsible_validation.add("F2:F1001")
 
+    target_validation = DataValidation(
+        type="list",
+        formula1='"Equipo,Edificio"',
+        allow_blank=True,
+    )
+    target_validation.error = "Selecciona Equipo o Edificio."
+    target_validation.errorTitle = "Tipo inválido"
+    target_validation.prompt = (
+        "Vacío se interpreta como Equipo. Para Edificio deja Familia y "
+        "Código equipo vacíos y selecciona una clasificación."
+    )
+    target_validation.promptTitle = "Tipo de preventivo"
+    target_validation.showErrorMessage = True
+    target_validation.showInputMessage = True
+    sheet.add_data_validation(target_validation)
+    target_validation.add("J2:J1001")
+
+    if building_values:
+        _add_named_list(
+            workbook,
+            name="CatalogoEdificio",
+            sheet_name=catalogs.title,
+            column="H",
+            start_row=2,
+            end_row=len(building_values) + 1,
+        )
+        building_validation = DataValidation(
+            type="list",
+            formula1="=CatalogoEdificio",
+            allow_blank=True,
+        )
+        building_validation.error = (
+            "Selecciona una clasificación de Edificio incluida en el catálogo."
+        )
+        building_validation.errorTitle = "Clasificación inválida"
+        building_validation.showErrorMessage = True
+        sheet.add_data_validation(building_validation)
+        building_validation.add("K2:K1001")
+
     repeat_validation = DataValidation(
         type="list",
         formula1='"No,Sí"',
@@ -716,9 +789,9 @@ def build_preventive_template_xlsx(
     duplicate_fill = PatternFill("solid", fgColor="FFC7CE")
     duplicate_font = Font(color="9C0006", bold=True)
     sheet.conditional_formatting.add(
-        "A2:J1001",
+        "A2:L1001",
         FormulaRule(
-            formula=['$J2="⚠ DUPLICADO"'],
+            formula=['$L2="⚠ DUPLICADO"'],
             fill=duplicate_fill,
             font=duplicate_font,
             stopIfTrue=True,
