@@ -1842,8 +1842,10 @@ def validar_item_borrador(
 
     # Cada nueva validación parte de los datos de entrada; evita conservar IDs
     # viejos después de corregir una fila.
+    item.target_type = None
     item.sucursal_id = None
     item.inventario_id = None
+    item.building_classification_id = None
     item.responsable_user_id = None
     item.fecha_programada = None
 
