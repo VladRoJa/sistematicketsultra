@@ -152,8 +152,10 @@ class MaintenancePreventivePlanningContractTest(unittest.TestCase):
                 "fecha_programada",
                 "repeat_enabled_input",
                 "repeat_interval_workdays_input",
+                "estimated_duration_minutes_input",
                 "repeat_enabled",
                 "repeat_interval_workdays",
+                "estimated_duration_minutes",
                 "schedule_id",
                 "actividad",
                 "observaciones",
@@ -192,6 +194,11 @@ class MaintenancePreventivePlanningContractTest(unittest.TestCase):
             "ck_maintenance_preventive_items_target_type",
             constraint_names,
         )
+
+        self.assertIn(
+            "ck_maintenance_preventive_items_estimated_duration",
+            constraint_names,
+        )
         self.assertIn(
             "ck_maintenance_preventive_items_target_reference",
             constraint_names,
@@ -211,6 +218,7 @@ class MaintenancePreventivePlanningContractTest(unittest.TestCase):
                 "actividad",
                 "observaciones",
                 "repeat_interval_workdays",
+                "estimated_duration_minutes",
                 "start_date",
                 "next_scheduled_date",
                 "active",
@@ -230,6 +238,11 @@ class MaintenancePreventivePlanningContractTest(unittest.TestCase):
         )
         self.assertIn(
             "ck_maintenance_preventive_schedules_interval",
+            constraint_names,
+        )
+
+        self.assertIn(
+            "ck_maintenance_preventive_schedules_estimated_duration",
             constraint_names,
         )
         self.assertIn(
@@ -323,6 +336,11 @@ class MaintenancePreventivePlanningContractTest(unittest.TestCase):
         }
         self.assertIn(
             "ck_tickets_maintenance_target_type",
+            constraint_names,
+        )
+
+        self.assertIn(
+            "ck_tickets_maintenance_estimated_minutes",
             constraint_names,
         )
         self.assertIn(
