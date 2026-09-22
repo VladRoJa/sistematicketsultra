@@ -563,6 +563,84 @@ class MaintenancePreventiveDraftOperationsTest(unittest.TestCase):
         fake_session.add.assert_not_called()
 
 
+class MaintenancePreventiveBatchPeriodTest(unittest.TestCase):
+    def test_batch_period_accepts_inclusive_boundaries(self):
+        batch = SimpleNamespace(
+            period_start=date(2026, 9, 22),
+            period_end=date(2026, 9, 27),
+        )
+
+        self.assertIsNone(
+            service._batch_period_error(
+                SimpleNamespace(fecha_programada=date(2026, 9, 22)),
+                batch,
+            )
+        )
+        self.assertIsNone(
+            service._batch_period_error(
+                SimpleNamespace(fecha_programada=date(2026, 9, 27)),
+                batch,
+            )
+        )
+
+    def test_batch_period_rejects_date_after_end(self):
+        batch = SimpleNamespace(
+            period_start=date(2026, 9, 22),
+            period_end=date(2026, 9, 27),
+        )
+
+        error = service._batch_period_error(
+            SimpleNamespace(fecha_programada=date(2026, 9, 29)),
+            batch,
+        )
+
+        self.assertEqual(
+            error,
+            "La fecha programada debe estar dentro del periodo del lote "
+            "(22/09/2026–27/09/2026).",
+        )
+
+    def test_batch_validation_marks_out_of_range_row_as_error(self):
+        item = SimpleNamespace(
+            fecha_programada=date(2026, 9, 29),
+            validation_status="VALIDO",
+            validation_errors=None,
+        )
+        batch = SimpleNamespace(
+            id=30,
+            status="BORRADOR",
+            period_start=date(2026, 9, 22),
+            period_end=date(2026, 9, 27),
+            items=[item],
+        )
+        fake_session = MagicMock()
+
+        with (
+            patch.object(service, "_get_batch", return_value=batch),
+            patch.object(
+                service,
+                "validar_item_borrador",
+                return_value=[],
+            ),
+            patch.object(
+                service,
+                "db",
+                SimpleNamespace(session=fake_session),
+            ),
+        ):
+            summary = service.validar_lote_preventivo(30)
+
+        self.assertEqual(summary["validos"], 0)
+        self.assertEqual(summary["errores"], 1)
+        self.assertFalse(summary["publicable"])
+        self.assertEqual(item.validation_status, "ERROR")
+        self.assertIn(
+            "La fecha programada debe estar dentro del periodo del lote "
+            "(22/09/2026–27/09/2026).",
+            item.validation_errors,
+        )
+
+
 class MaintenancePreventiveMaterializationTest(unittest.TestCase):
     def _schedule(self, **overrides):
         values = {
