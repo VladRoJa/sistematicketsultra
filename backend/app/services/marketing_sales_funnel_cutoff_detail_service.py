@@ -74,6 +74,15 @@ from app.services.marketing_visit_conversion_service import (
     _serialize_summary as _serialize_visit_conversion_summary,
 )
 
+ORIGINAL_VISIT_EXPORT_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("branch", "Sucursal KPI"),
+    ("date", "Fecha"),
+    ("phone", "Teléfono"),
+    ("origin", "Origen"),
+    ("source", "Fuente"),
+)
+
+
 
 def _selected_snapshot(
     *,
@@ -711,6 +720,7 @@ def _resolve_detail_rows(
     metric: str,
     branch_id: Any,
     origin: str | None,
+    include_direct_purchases: bool = True,
 ) -> dict[str, Any]:
     month_start = parse_month(month)
     normalized_metric = str(metric or "").strip()
@@ -739,6 +749,7 @@ def _resolve_detail_rows(
         month=month,
         access=access,
         cutoff_date=cutoff_date,
+        include_direct_purchases=include_direct_purchases,
     )
     selected_cutoff = date.fromisoformat(
         funnel_build.payload["selected_cutoff_date"]
@@ -845,6 +856,7 @@ def build_marketing_sales_funnel_cutoff_detail(
     page_size: Any = None,
     sort_by: Any = None,
     sort_dir: Any = None,
+    include_direct_purchases: bool = True,
 ) -> dict[str, Any]:
     if str(metric or "").strip() == "leads_meta":
         return _build_leads_meta_cutoff_detail_fast(
@@ -866,6 +878,7 @@ def build_marketing_sales_funnel_cutoff_detail(
         metric=metric,
         branch_id=branch_id,
         origin=origin,
+        include_direct_purchases=include_direct_purchases,
     )
     normalized_sort_by, normalized_sort_dir = _normalize_detail_sort(
         metric=detail["metric"],
@@ -905,6 +918,7 @@ def build_marketing_sales_funnel_cutoff_export(
     origin: str | None = None,
     sort_by: Any = None,
     sort_dir: Any = None,
+    include_direct_purchases: bool = True,
 ) -> tuple[BytesIO, str]:
     if str(metric or "").strip() == "leads_meta":
         return _build_leads_meta_cutoff_export_fast(
@@ -923,6 +937,7 @@ def build_marketing_sales_funnel_cutoff_export(
         metric=metric,
         branch_id=branch_id,
         origin=origin,
+        include_direct_purchases=include_direct_purchases,
     )
     normalized_sort_by, normalized_sort_dir = _normalize_detail_sort(
         metric=detail["metric"],
@@ -946,6 +961,14 @@ def build_marketing_sales_funnel_cutoff_export(
         kind=detail["kind"],
         rows=rows,
         metric=detail["metric"],
+        columns_override=(
+            ORIGINAL_VISIT_EXPORT_COLUMNS
+            if (
+                not include_direct_purchases
+                and detail["kind"] == "visits"
+            )
+            else None
+        ),
     )
     parts = [
         "funnel_venta_nueva",

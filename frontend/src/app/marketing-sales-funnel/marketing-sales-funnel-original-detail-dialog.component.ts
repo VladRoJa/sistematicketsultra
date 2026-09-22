@@ -1,0 +1,361 @@
+import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, OnInit, inject } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
+import {
+  MAT_DIALOG_DATA,
+  MatDialogModule,
+  MatDialogRef,
+} from '@angular/material/dialog';
+import { MatIconModule } from '@angular/material/icon';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTableModule } from '@angular/material/table';
+import { MatTooltipModule } from '@angular/material/tooltip';
+
+import {
+  MarketingSalesFunnelDetailKind,
+  MarketingSalesFunnelDetailResponse,
+  MarketingSalesFunnelDetailRow,
+  MarketingSalesFunnelSortDirection,
+} from './marketing-sales-funnel.models';
+import { MarketingSalesFunnelOriginalService } from './marketing-sales-funnel-original.service';
+
+
+export interface MarketingSalesFunnelDetailDialogData {
+  month: string;
+  cutoffDate?: string | null;
+  metric: string;
+  branchId?: number;
+  branchIds?: number[];
+  origin?: string;
+}
+
+interface DetailColumn {
+  key: string;
+  label: string;
+  widthClass: 'compact' | 'medium' | 'wide' | 'xwide';
+}
+
+
+@Component({
+  selector: 'app-marketing-sales-funnel-original-detail-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatButtonModule,
+    MatDialogModule,
+    MatIconModule,
+    MatProgressSpinnerModule,
+    MatTableModule,
+    MatTooltipModule,
+  ],
+  templateUrl: './marketing-sales-funnel-detail-dialog.component.html',
+  styleUrls: ['./marketing-sales-funnel-detail-dialog.component.css'],
+})
+export class MarketingSalesFunnelOriginalDetailDialogComponent implements OnInit {
+  private readonly service = inject(MarketingSalesFunnelOriginalService);
+  private readonly dialogRef = inject(
+    MatDialogRef<MarketingSalesFunnelOriginalDetailDialogComponent>,
+  );
+  readonly data = inject<MarketingSalesFunnelDetailDialogData>(MAT_DIALOG_DATA);
+
+  readonly pageSize = 50;
+
+  detail: MarketingSalesFunnelDetailResponse | null = null;
+  rows: MarketingSalesFunnelDetailRow[] = [];
+  columns: DetailColumn[] = [];
+  displayedColumns: string[] = [];
+
+  loading = true;
+  exporting = false;
+  errorMessage = '';
+  sortBy: string | undefined;
+  sortDir: MarketingSalesFunnelSortDirection = 'asc';
+
+  ngOnInit(): void {
+    this.loadPage(1);
+  }
+
+  get canGoPrevious(): boolean {
+    return Boolean(this.detail && this.detail.page > 1 && !this.loading);
+  }
+
+  get canGoNext(): boolean {
+    return Boolean(
+      this.detail
+      && this.detail.page < this.detail.total_pages
+      && !this.loading,
+    );
+  }
+
+  get rangeLabel(): string {
+    if (!this.detail || this.detail.count === 0) {
+      return '0 registros';
+    }
+
+    const start = (this.detail.page - 1) * this.detail.page_size + 1;
+    const end = Math.min(
+      this.detail.page * this.detail.page_size,
+      this.detail.count,
+    );
+    return `${this.formatInteger(start)}–${this.formatInteger(end)} de ${this.formatInteger(this.detail.count)}`;
+  }
+
+  get activeSortLabel(): string {
+    if (!this.sortBy) {
+      return '';
+    }
+    return this.columns.find((column) => column.key === this.sortBy)?.label || this.sortBy;
+  }
+
+  get activeSortDirectionLabel(): string {
+    return this.sortDir === 'asc' ? 'ascendente' : 'descendente';
+  }
+
+  close(): void {
+    this.dialogRef.close();
+  }
+
+  goToPage(page: number): void {
+    if (
+      !this.detail
+      || this.loading
+      || page < 1
+      || page > this.detail.total_pages
+      || page === this.detail.page
+    ) {
+      return;
+    }
+
+    this.loadPage(page);
+  }
+
+  toggleSort(column: string): void {
+    if (this.loading) {
+      return;
+    }
+
+    if (this.sortBy === column) {
+      this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortBy = column;
+      this.sortDir = 'asc';
+    }
+
+    this.loadPage(1);
+  }
+
+  sortIcon(column: string): string {
+    if (this.sortBy !== column) {
+      return 'unfold_more';
+    }
+    return this.sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward';
+  }
+
+  sortTooltip(column: DetailColumn): string {
+    if (this.sortBy !== column.key) {
+      return `Ordenar por ${column.label}`;
+    }
+    return this.sortDir === 'asc'
+      ? `Orden ascendente por ${column.label}. Clic para descendente.`
+      : `Orden descendente por ${column.label}. Clic para ascendente.`;
+  }
+
+  formatCell(row: MarketingSalesFunnelDetailRow, column: string): string {
+    const value = row[column as keyof MarketingSalesFunnelDetailRow];
+    if (value === null || value === undefined || value === '') {
+      return '—';
+    }
+    if (column === 'revenue' || column === 'sale_revenue') {
+      return this.formatCurrency(Number(value));
+    }
+    return String(value);
+  }
+
+  formatCurrency(value: number): string {
+    return new Intl.NumberFormat('es-MX', {
+      style: 'currency',
+      currency: 'MXN',
+      maximumFractionDigits: 0,
+    }).format(value || 0);
+  }
+
+  exportExcel(): void {
+    if (this.exporting || !this.detail) {
+      return;
+    }
+
+    this.exporting = true;
+    this.errorMessage = '';
+
+    this.service
+      .exportDetail(
+        this.data.month,
+        this.data.metric,
+        this.data.branchId,
+        this.data.origin,
+        this.sortBy,
+        this.sortDir,
+        this.data.branchIds || [],
+        this.data.cutoffDate,
+      )
+      .subscribe({
+        next: (blob) => {
+          this.exporting = false;
+          const url = URL.createObjectURL(blob);
+          const anchor = document.createElement('a');
+          anchor.href = url;
+          anchor.download = this.exportFilename();
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 0);
+        },
+        error: (error: HttpErrorResponse) => {
+          this.exporting = false;
+          this.errorMessage = this.resolveError(error, true);
+        },
+      });
+  }
+
+  private loadPage(page: number): void {
+    this.loading = true;
+    this.errorMessage = '';
+
+    this.service
+      .getDetail(
+        this.data.month,
+        this.data.metric,
+        this.data.branchId,
+        this.data.origin,
+        page,
+        this.pageSize,
+        this.sortBy,
+        this.sortDir,
+        this.data.branchIds || [],
+        this.data.cutoffDate,
+      )
+      .subscribe({
+        next: (detail) => {
+          this.loading = false;
+          this.detail = detail;
+          this.rows = detail.rows;
+          this.sortBy = detail.sort_by || undefined;
+          this.sortDir = detail.sort_dir || 'asc';
+          this.columns = this.resolveColumns(detail.kind, detail.metric);
+          this.displayedColumns = this.columns.map((column) => column.key);
+        },
+        error: (error: HttpErrorResponse) => {
+          this.loading = false;
+          this.errorMessage = this.resolveError(error, false);
+        },
+      });
+  }
+
+  private resolveColumns(
+    kind: MarketingSalesFunnelDetailKind,
+    metric: string,
+  ): DetailColumn[] {
+    if (kind === 'visits') {
+      if (this.isVisitConversionMetric(metric)) {
+        return [
+          { key: 'branch', label: 'Sucursal KPI', widthClass: 'medium' },
+          { key: 'date', label: 'Fecha visita', widthClass: 'compact' },
+          { key: 'phone', label: 'Teléfono', widthClass: 'compact' },
+          { key: 'origin', label: 'Trazabilidad', widthClass: 'medium' },
+          { key: 'conversion_status', label: 'Conversión', widthClass: 'compact' },
+          { key: 'sale_date', label: 'Fecha venta', widthClass: 'compact' },
+          { key: 'sale_member_id', label: 'ID socio', widthClass: 'compact' },
+          { key: 'sale_revenue', label: 'Ingreso venta', widthClass: 'compact' },
+          { key: 'source', label: 'Fuente', widthClass: 'wide' },
+        ];
+      }
+
+      return [
+        { key: 'branch', label: 'Sucursal KPI', widthClass: 'medium' },
+        { key: 'date', label: 'Fecha', widthClass: 'compact' },
+        { key: 'phone', label: 'Teléfono', widthClass: 'compact' },
+        { key: 'origin', label: 'Origen', widthClass: 'medium' },
+        { key: 'source', label: 'Fuente', widthClass: 'wide' },
+      ];
+    }
+
+    if (kind === 'leads') {
+      if (metric === 'leads_meta') {
+        return [
+          { key: 'branch', label: 'Sucursal KPI', widthClass: 'medium' },
+          { key: 'date', label: 'Fecha lead', widthClass: 'compact' },
+          { key: 'name', label: 'Nombre', widthClass: 'wide' },
+          { key: 'phone', label: 'Teléfono', widthClass: 'compact' },
+          { key: 'followup_status', label: 'Seguimiento', widthClass: 'wide' },
+          { key: 'visit_status', label: 'Visitó', widthClass: 'compact' },
+          { key: 'visit_date', label: 'Fecha visita', widthClass: 'compact' },
+          { key: 'purchase_status', label: 'Compró en Ultra (60d)', widthClass: 'medium' },
+          { key: 'sale_date', label: 'Fecha compra', widthClass: 'compact' },
+          { key: 'purchase_branch', label: 'Sucursal compra', widthClass: 'medium' },
+          { key: 'channel', label: 'Canal', widthClass: 'medium' },
+          { key: 'contact_id', label: 'ID contacto', widthClass: 'medium' },
+        ];
+      }
+
+      return [
+        { key: 'branch', label: 'Sucursal KPI', widthClass: 'medium' },
+        { key: 'date', label: 'Fecha', widthClass: 'compact' },
+        { key: 'name', label: 'Nombre', widthClass: 'wide' },
+        { key: 'phone', label: 'Teléfono', widthClass: 'compact' },
+        { key: 'channel', label: 'Canal', widthClass: 'medium' },
+        { key: 'contact_id', label: 'ID contacto', widthClass: 'medium' },
+      ];
+    }
+
+    return [
+      { key: 'branch', label: 'Sucursal KPI', widthClass: 'medium' },
+      { key: 'date', label: 'Fecha', widthClass: 'compact' },
+      { key: 'name', label: 'Nombre', widthClass: 'xwide' },
+      { key: 'pin', label: 'PIN', widthClass: 'compact' },
+      { key: 'phone', label: 'Teléfono', widthClass: 'compact' },
+      { key: 'tariff', label: 'Tarifa', widthClass: 'xwide' },
+      { key: 'revenue', label: 'Ingreso', widthClass: 'compact' },
+      { key: 'origin', label: 'Origen', widthClass: 'medium' },
+      { key: 'survey', label: 'Encuesta', widthClass: 'medium' },
+      { key: 'transaction_branch', label: 'Sucursal cobro', widthClass: 'medium' },
+    ];
+  }
+
+  private isVisitConversionMetric(metric: string): boolean {
+    return [
+      'visits_iventas_bought',
+      'visits_iventas_not_bought',
+      'visits_not_iventas_bought',
+      'visits_not_iventas_not_bought',
+    ].includes(metric);
+  }
+
+  private exportFilename(): string {
+    const metric = this.data.metric.replace(/[^A-Za-z0-9_-]+/g, '_');
+    const branch = this.data.branchId !== undefined
+      ? `_sucursal_${this.data.branchId}`
+      : '';
+    const cutoff = this.data.cutoffDate ? `_corte_${this.data.cutoffDate}` : '';
+    return `funnel_venta_nueva_${this.data.month}${cutoff}_${metric}${branch}.xlsx`;
+  }
+
+  private formatInteger(value: number): string {
+    return new Intl.NumberFormat('es-MX', {
+      maximumFractionDigits: 0,
+    }).format(value || 0);
+  }
+
+  private resolveError(error: HttpErrorResponse, exportRequest: boolean): string {
+    const backendMessage = error.error?.message;
+    if (typeof backendMessage === 'string' && backendMessage.trim()) {
+      return backendMessage.trim();
+    }
+    if (error.status === 0) {
+      return 'No fue posible conectar con el backend.';
+    }
+    return exportRequest
+      ? 'No fue posible exportar el detalle a Excel.'
+      : 'No fue posible cargar el detalle del indicador.';
+  }
+}

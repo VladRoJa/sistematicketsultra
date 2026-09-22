@@ -410,8 +410,9 @@ def _build_excel_workbook(
     kind: str,
     rows: list[dict[str, Any]],
     metric: str | None = None,
+    columns_override: tuple[tuple[str, str], ...] | None = None,
 ) -> BytesIO:
-    columns = (
+    columns = columns_override or (
         LEADS_META_EXPORT_COLUMNS
         if metric == "leads_meta"
         else EXPORT_COLUMNS_BY_KIND[kind]

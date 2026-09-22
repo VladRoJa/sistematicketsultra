@@ -180,6 +180,13 @@ export const routes: Routes = [
             .then(m => m.MarketingSalesFunnelComponent),
       },
       {
+        path: 'marketing-conversion/venta-total-original',
+        canActivate: [MarketingSalesFunnelAccessGuard],
+        loadComponent: () =>
+          import('./marketing-sales-funnel/marketing-sales-funnel-original.component')
+            .then(m => m.MarketingSalesFunnelOriginalComponent),
+      },
+      {
         path: 'marketing/reactivation',
         loadComponent: () =>
           import('./marketing-reactivation/marketing-reactivation-page.component')
