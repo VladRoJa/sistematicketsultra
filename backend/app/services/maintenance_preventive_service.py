@@ -1612,25 +1612,34 @@ def serializar_item(item: MaintenancePreventiveItemORM) -> dict:
         "batch_id": item.batch_id,
         "source_row_number": item.source_row_number,
         "target_type_input": (
-            getattr(item, "target_type_input", None)
-            or getattr(item, "target_type", None)
+            getattr(item, "target_type", None)
+            or getattr(item, "target_type_input", None)
             or "EQUIPO"
         ),
         "sucursal_input": item.sucursal_input,
         "codigo_equipo_input": item.codigo_equipo_input,
-        "building_classification_input": getattr(
-            item,
-            "building_classification_input",
-            None,
+        "building_classification_input": (
+            str(item.building_classification_id)
+            if getattr(item, "building_classification_id", None)
+            is not None
+            else getattr(
+                item,
+                "building_classification_input",
+                None,
+            )
         ),
         "responsable_input": item.responsable_input,
         "fecha_programada_input": item.fecha_programada_input,
         "repeat_enabled_input": (
-            getattr(item, "repeat_enabled_input", None)
-            or (
+            (
                 "SI"
                 if bool(getattr(item, "repeat_enabled", False))
                 else "NO"
+            )
+            if getattr(item, "validation_status", None) == "VALIDO"
+            else (
+                getattr(item, "repeat_enabled_input", None)
+                or "NO"
             )
         ),
         "repeat_interval_workdays_input": (
