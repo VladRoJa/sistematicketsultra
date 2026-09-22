@@ -81,7 +81,7 @@
           (change)="onImportFileSelected($event)"
         />
         <small>
-          Columnas: Sucursal, Familia, Código equipo, Fecha programada (dd/mm/aaaa), Actividad, Responsable y Observaciones. Validación se calcula automáticamente.
+          Columnas: Sucursal, Familia, Código equipo, Fecha programada (dd/mm/aaaa), Actividad, Responsable, Se repite, Cada N días hábiles y Observaciones. Validación se calcula automáticamente.
         </small>
       </div>
 
@@ -265,6 +265,32 @@
               <input type="date" [(ngModel)]="programmedDate" />
             </label>
 
+            <label>
+              <span>Se repite</span>
+              <select
+                [(ngModel)]="repeatEnabled"
+                (ngModelChange)="onRepeatEnabledChange()"
+              >
+                <option [ngValue]="false">No</option>
+                <option [ngValue]="true">Sí</option>
+              </select>
+            </label>
+
+            <label>
+              <span>Cada N días hábiles</span>
+              <select
+                [(ngModel)]="repeatIntervalWorkdays"
+                [disabled]="!repeatEnabled"
+              >
+                <option
+                  *ngFor="let interval of repeatIntervalOptions"
+                  [ngValue]="interval"
+                >
+                  Cada {{ interval }} días hábiles
+                </option>
+              </select>
+            </label>
+
             <label class="control-wide">
               <span>Actividad</span>
               <input
@@ -377,6 +403,7 @@
                   <th>Fecha</th>
                   <th>Actividad</th>
                   <th>Responsable</th>
+                  <th>Repetición</th>
                   <th>Estado</th>
                   <th *ngIf="batch.status === 'BORRADOR'">Acciones</th>
                 </tr>
@@ -446,6 +473,35 @@
                       </option>
                     </select>
                     <ng-template #responsibleRead>{{ item.responsable_input || '—' }}</ng-template>
+                  </td>
+
+                  <td>
+                    <div
+                      *ngIf="batch.status === 'BORRADOR'; else recurrenceRead"
+                      class="recurrence-cell"
+                    >
+                      <select
+                        [(ngModel)]="item.repeat_enabled_input"
+                        (ngModelChange)="onItemRepeatInputChange(item)"
+                      >
+                        <option value="">No</option>
+                        <option value="NO">No</option>
+                        <option value="SI">Sí</option>
+                      </select>
+                      <input
+                        type="text"
+                        inputmode="numeric"
+                        [(ngModel)]="item.repeat_interval_workdays_input"
+                        [disabled]="!isItemRecurringInput(item)"
+                        placeholder="Días"
+                      />
+                    </div>
+                    <ng-template #recurrenceRead>
+                      <span>{{ itemRecurrenceLabel(item) }}</span>
+                      <small *ngIf="item.next_scheduled_date">
+                        Próximo: {{ item.next_scheduled_date }}
+                      </small>
+                    </ng-template>
                   </td>
 
                   <td>
