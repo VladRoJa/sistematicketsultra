@@ -9,6 +9,7 @@ from app.models.maintenance_preventive import (
     MaintenancePersonnelORM,
     MaintenancePreventiveBatchORM,
     MaintenancePreventiveItemORM,
+    MaintenancePreventiveOccurrenceORM,
     MaintenancePreventiveScheduleORM,
 )
 
@@ -230,6 +231,42 @@ class MaintenancePreventivePlanningContractTest(unittest.TestCase):
                 foreign_keys = list(columns[column_name].foreign_keys)
                 self.assertEqual(len(foreign_keys), 1)
                 self.assertEqual(foreign_keys[0].target_fullname, target)
+
+    def test_recurrence_occurrence_contract(self):
+        columns = MaintenancePreventiveOccurrenceORM.__table__.c
+
+        self.assertTrue(
+            {
+                "schedule_id",
+                "scheduled_date",
+                "ticket_id",
+                "generated_at",
+            }.issubset(set(columns.keys()))
+        )
+
+        expected_targets = {
+            "schedule_id": "maintenance_preventive_schedules.id",
+            "ticket_id": "tickets.id",
+        }
+        for column_name, target in expected_targets.items():
+            with self.subTest(column=column_name):
+                foreign_keys = list(columns[column_name].foreign_keys)
+                self.assertEqual(len(foreign_keys), 1)
+                self.assertEqual(foreign_keys[0].target_fullname, target)
+
+        constraint_names = {
+            constraint.name
+            for constraint in MaintenancePreventiveOccurrenceORM.__table__.constraints
+            if constraint.name
+        }
+        self.assertIn(
+            "uq_maintenance_preventive_occurrences_schedule_date",
+            constraint_names,
+        )
+        self.assertIn(
+            "uq_maintenance_preventive_occurrences_ticket_id",
+            constraint_names,
+        )
 
     def test_item_points_to_operational_entities(self):
         expected_targets = {
