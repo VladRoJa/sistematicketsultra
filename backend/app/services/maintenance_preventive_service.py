@@ -2247,6 +2247,44 @@ def validar_item_borrador(
     return errors
 
 
+def _batch_period_error(
+    item: MaintenancePreventiveItemORM,
+    batch: MaintenancePreventiveBatchORM,
+) -> str | None:
+    programmed_date = getattr(item, "fecha_programada", None)
+    if programmed_date is None:
+        return None
+
+    period_start = getattr(batch, "period_start", None)
+    period_end = getattr(batch, "period_end", None)
+
+    if period_start is not None and programmed_date < period_start:
+        if period_end is not None:
+            return (
+                "La fecha programada debe estar dentro del periodo del lote "
+                f"({period_start.strftime('%d/%m/%Y')}–"
+                f"{period_end.strftime('%d/%m/%Y')})."
+            )
+        return (
+            "La fecha programada no puede ser anterior al inicio del lote "
+            f"({period_start.strftime('%d/%m/%Y')})."
+        )
+
+    if period_end is not None and programmed_date > period_end:
+        if period_start is not None:
+            return (
+                "La fecha programada debe estar dentro del periodo del lote "
+                f"({period_start.strftime('%d/%m/%Y')}–"
+                f"{period_end.strftime('%d/%m/%Y')})."
+            )
+        return (
+            "La fecha programada no puede ser posterior al fin del lote "
+            f"({period_end.strftime('%d/%m/%Y')})."
+        )
+
+    return None
+
+
 def validar_lote_preventivo(batch_id: int, user=None) -> dict:
     batch = _get_batch(batch_id)
 
@@ -2274,6 +2312,13 @@ def validar_lote_preventivo(batch_id: int, user=None) -> dict:
             seen_keys=seen_keys,
             actor=user,
         )
+
+        period_error = _batch_period_error(item, batch)
+        if period_error:
+            errors.append(period_error)
+            item.validation_errors = errors
+            item.validation_status = "ERROR"
+
         if errors:
             invalid += 1
         else:
