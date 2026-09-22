@@ -141,6 +141,7 @@ services:
       - .env.docker
     environment:
       APP_ENV: "prod"
+      TICKETS_PREVENTIVE_V1_ENABLED: "${TICKETS_PREVENTIVE_V1_ENABLED:-false}"
       MAINTENANCE_PREVENTIVE_SCHEDULER_ENABLED: "true"
       MAINTENANCE_PREVENTIVE_SCHEDULER_TZ: "America/Tijuana"
       MAINTENANCE_PREVENTIVE_RUN_TIME: "00:10"
