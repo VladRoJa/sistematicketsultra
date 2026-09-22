@@ -210,6 +210,7 @@ def upgrade():
     op.create_check_constraint(
         "ck_maintenance_preventive_items_recurrence",
         "maintenance_preventive_items",
+        "(validation_status <> 'VALIDO') OR "
         "((repeat_enabled = false AND repeat_interval_workdays IS NULL) "
         "OR (repeat_enabled = true AND repeat_interval_workdays > 0))",
     )
