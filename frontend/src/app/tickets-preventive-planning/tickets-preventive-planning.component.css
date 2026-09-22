@@ -713,7 +713,8 @@ select:focus {
 }
 
 .target-cell,
-.recurrence-cell {
+.recurrence-cell,
+.activity-cell {
   display: grid;
   gap: 4px;
   min-width: 0;
@@ -729,7 +730,9 @@ select:focus {
 .target-cell input,
 .target-cell select,
 .recurrence-cell input,
-.recurrence-cell select {
+.recurrence-cell select,
+.activity-cell input,
+.activity-cell select {
   min-height: 30px;
   padding: 5px 7px;
 }
