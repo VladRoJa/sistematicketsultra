@@ -295,6 +295,7 @@ class MaintenancePreventiveScheduleORM(db.Model):
     actividad = db.Column(db.Text, nullable=False)
     observaciones = db.Column(db.Text, nullable=True)
     repeat_interval_workdays = db.Column(db.Integer, nullable=False)
+    estimated_duration_minutes = db.Column(db.Integer, nullable=True)
     start_date = db.Column(db.Date, nullable=False)
     next_scheduled_date = db.Column(db.Date, nullable=False, index=True)
     active = db.Column(
@@ -353,6 +354,11 @@ class MaintenancePreventiveScheduleORM(db.Model):
         db.CheckConstraint(
             "repeat_interval_workdays > 0",
             name="ck_maintenance_preventive_schedules_interval",
+        ),
+        db.CheckConstraint(
+            "estimated_duration_minutes IS NULL "
+            "OR estimated_duration_minutes > 0",
+            name="ck_maintenance_preventive_schedules_estimated_duration",
         ),
         db.CheckConstraint(
             "((target_type = 'EQUIPO' AND inventario_id IS NOT NULL "
@@ -446,6 +452,10 @@ class MaintenancePreventiveItemORM(db.Model):
         db.String(20),
         nullable=True,
     )
+    estimated_duration_minutes_input = db.Column(
+        db.String(20),
+        nullable=True,
+    )
 
     # IDs resueltos después de validar. Pueden ser NULL mientras el renglón
     # permanece en borrador/error.
@@ -486,6 +496,7 @@ class MaintenancePreventiveItemORM(db.Model):
         server_default=db.text("false"),
     )
     repeat_interval_workdays = db.Column(db.Integer, nullable=True)
+    estimated_duration_minutes = db.Column(db.Integer, nullable=True)
     schedule_id = db.Column(
         db.BigInteger,
         db.ForeignKey(
@@ -552,6 +563,11 @@ class MaintenancePreventiveItemORM(db.Model):
         db.CheckConstraint(
             "target_type IS NULL OR target_type IN ('EQUIPO', 'EDIFICIO')",
             name="ck_maintenance_preventive_items_target_type",
+        ),
+        db.CheckConstraint(
+            "estimated_duration_minutes IS NULL "
+            "OR estimated_duration_minutes > 0",
+            name="ck_maintenance_preventive_items_estimated_duration",
         ),
         db.CheckConstraint(
             "(validation_status <> 'VALIDO') OR "
