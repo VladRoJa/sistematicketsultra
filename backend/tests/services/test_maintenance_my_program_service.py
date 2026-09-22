@@ -134,6 +134,7 @@ class MaintenanceMyProgramServiceTest(unittest.TestCase):
             building_classification_id=None,
             actividad="Mantenimiento recurrente",
             repeat_interval_workdays=5,
+            estimated_duration_minutes=45,
             sucursal=SimpleNamespace(sucursal="Papalote Tijuana"),
             inventario=SimpleNamespace(
                 codigo_interno="13CESLE01",
@@ -153,6 +154,7 @@ class MaintenanceMyProgramServiceTest(unittest.TestCase):
         self.assertEqual(payload["fecha_trabajo"], "2026-09-30")
         self.assertEqual(payload["codigo_equipo"], "13CESLE01")
         self.assertEqual(payload["repeat_interval_workdays"], 5)
+        self.assertEqual(payload["estimated_duration_minutes"], 45)
 
 
 if __name__ == "__main__":
