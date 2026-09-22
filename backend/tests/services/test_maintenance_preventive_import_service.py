@@ -60,6 +60,7 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
             self.assertIn("list", validation_types)
             self.assertIn("date", validation_types)
             self.assertIn("custom", validation_types)
+            self.assertIn("whole", validation_types)
 
             formulas = {
                 validation.formula1
@@ -68,6 +69,7 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
             }
             self.assertIn("=CatalogoSucursales", formulas)
             self.assertIn("=CatalogoResponsables", formulas)
+            self.assertIn('"No,Sí"', formulas)
             self.assertIn(
                 '=INDIRECT(IFERROR(VLOOKUP($A2,MapaFamilias,2,FALSE),"ListaVacia"))',
                 formulas,
@@ -132,31 +134,39 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
             )
 
             self.assertEqual(
+                sheet["G1"].value,
+                "Se repite",
+            )
+            self.assertEqual(
                 sheet["H1"].value,
+                "Cada N días hábiles",
+            )
+            self.assertEqual(
+                sheet["J1"].value,
                 "Validación",
             )
             self.assertIn(
                 "COUNTIFS",
-                sheet["H2"].value,
+                sheet["J2"].value,
             )
             self.assertIn(
                 "DUPLICADO",
-                sheet["H2"].value,
+                sheet["J2"].value,
             )
 
             conditional_ranges = {
                 str(rule_range.sqref)
                 for rule_range in sheet.conditional_formatting
             }
-            self.assertIn("A2:H1001", conditional_ranges)
+            self.assertIn("A2:J1001", conditional_ranges)
 
             duplicate_rules = list(
-                sheet.conditional_formatting["A2:H1001"]
+                sheet.conditional_formatting["A2:J1001"]
             )
             self.assertEqual(len(duplicate_rules), 1)
             self.assertEqual(
                 duplicate_rules[0].formula[0],
-                '$H2="⚠ DUPLICADO"',
+                '$J2="⚠ DUPLICADO"',
             )
         finally:
             workbook.close()
@@ -175,6 +185,8 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
             "25/09/2026",
             "Mantenimiento general",
             "SR_MANT_TIJ",
+            "Sí",
+            5,
             "",
         ]
         for column, value in enumerate(values, start=1):
@@ -193,6 +205,14 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
         self.assertEqual(
             parsed["rows"][0]["fecha_programada"],
             "2026-09-25",
+        )
+        self.assertEqual(
+            parsed["rows"][0]["repeat_enabled"],
+            "Sí",
+        )
+        self.assertEqual(
+            parsed["rows"][0]["repeat_interval_workdays"],
+            "5",
         )
 
     def test_csv_accepts_accented_official_headers(self):
@@ -217,6 +237,24 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
             parsed["rows"][0]["fecha_programada"],
             "2026-09-20",
         )
+
+    def test_csv_accepts_optional_recurrence_headers(self):
+        csv_content = (
+            "Sucursal,Código equipo,Fecha programada,Actividad,"
+            "Responsable,Se repite,Cada N días hábiles,Observaciones\n"
+            "VILLAS DEL REY,04CC01,21/09/2026,"
+            "Mantenimiento general,TECNICO_PM,Sí,10,Recurrente\n"
+        ).encode("utf-8")
+
+        parsed = parse_preventive_import(
+            filename="preventivos_recurrentes.csv",
+            content=csv_content,
+        )
+
+        row = parsed["rows"][0]
+        self.assertEqual(row["repeat_enabled"], "Sí")
+        self.assertEqual(row["repeat_interval_workdays"], "10")
+        self.assertEqual(row["fecha_programada"], "2026-09-21")
 
     def test_missing_required_header_is_rejected(self):
         workbook = Workbook()
@@ -274,6 +312,8 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
                 "Fecha programada",
                 "Actividad",
                 "Responsable",
+                "Se repite",
+                "Cada N días hábiles",
                 "Observaciones",
                 "Validación",
             ),
