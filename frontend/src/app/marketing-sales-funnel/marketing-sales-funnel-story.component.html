@@ -1,5 +1,5 @@
 <section class="trace-story" aria-labelledby="trace-story-title">
-  <div class="flow-board" aria-label="Diagrama de trazabilidad de iVentas y Venta Nueva">
+  <div class="flow-board" aria-label="Diagrama de trazabilidad del CRM y Venta Nueva">
     <aside
       *ngIf="executiveSummary as efficiency"
       class="flow-efficiency-card"
@@ -22,17 +22,17 @@
           <h3>Conversión</h3>
 
           <div class="flow-efficiency-card__metric">
-            <span>Lead → visita</span>
+            <span>Lead CRM → visita</span>
             <strong>{{ efficiency.lead_to_visit_display }}</strong>
           </div>
 
           <div class="flow-efficiency-card__metric">
-            <span>Visita → venta</span>
-            <strong>{{ efficiency.visit_to_digital_sale_display }}</strong>
+            <span>Visita CRM → venta</span>
+            <strong>{{ efficiency.visit_to_sale_display }}</strong>
           </div>
 
           <div class="flow-efficiency-card__metric">
-            <span>Lead → venta</span>
+            <span>Lead CRM → venta</span>
             <strong>{{ efficiency.lead_to_sale_display }}</strong>
           </div>
         </section>

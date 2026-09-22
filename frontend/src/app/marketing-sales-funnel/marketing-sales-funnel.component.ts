@@ -57,8 +57,8 @@ interface SummaryCard {
 
 interface SalesFunnelBranchView extends MarketingSalesFunnelBranch {
   investment_display: string;
-  leads_meta_display: string;
-  visits_total_display: string;
+  leads_crm_display: string;
+  visits_crm_display: string;
   sales_digital_display: string;
   sales_digital_organic_display: string;
   sales_web_display: string;
@@ -69,7 +69,7 @@ interface SalesFunnelBranchView extends MarketingSalesFunnelBranch {
   revenue_btl_display: string;
   revenue_total_display: string;
   lead_to_visit_display: string;
-  visit_to_digital_sale_display: string;
+  visit_to_sale_display: string;
   lead_to_sale_display: string;
   cpl_display: string;
   cpt_display: string;
@@ -90,7 +90,7 @@ interface SalesFunnelBranchTotalsView {
   revenue_btl_display: string;
   revenue_total_display: string;
   lead_to_visit_display: string;
-  visit_to_digital_sale_display: string;
+  visit_to_sale_display: string;
   lead_to_sale_display: string;
   cpl_display: string;
   cpt_display: string;
@@ -589,20 +589,20 @@ export class MarketingSalesFunnelComponent implements OnInit {
     );
 
     const leadToVisit = (
-      summary.leads_meta > 0
-        ? summary.visits_total / summary.leads_meta
+      summary.leads_iventas > 0
+        ? summary.visits_iventas / summary.leads_iventas
         : null
     );
 
-    const visitToDigitalSale = (
-      summary.visits_total > 0
-        ? summary.sales_digital / summary.visits_total
+    const visitToSale = (
+      summary.visits_iventas > 0
+        ? summary.sales_iventas / summary.visits_iventas
         : null
     );
 
     const leadToSale = (
-      summary.leads_meta > 0
-        ? summary.sales_digital / summary.leads_meta
+      summary.leads_iventas > 0
+        ? summary.sales_iventas / summary.leads_iventas
         : null
     );
 
@@ -626,8 +626,8 @@ export class MarketingSalesFunnelComponent implements OnInit {
 
     return {
       investment_display: this.formatOptionalCurrency(investment),
-      leads_display: this.formatInteger(summary.leads_meta),
-      visits_display: this.formatInteger(summary.visits_total),
+      leads_display: this.formatInteger(summary.leads_iventas),
+      visits_display: this.formatInteger(summary.visits_iventas),
       sales_digital_display: this.formatInteger(summary.sales_digital),
       sales_digital_organic_display: this.formatInteger(
         summary.sales_digital_organic,
@@ -640,7 +640,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
       revenue_btl_display: this.formatCurrency(summary.revenue_btl),
       revenue_total_display: this.formatCurrency(summary.revenue_total),
       lead_to_visit_display: this.formatPercent(leadToVisit),
-      visit_to_digital_sale_display: this.formatPercent(visitToDigitalSale),
+      visit_to_sale_display: this.formatPercent(visitToSale),
       lead_to_sale_display: this.formatPercent(leadToSale),
       cpl_display: this.formatOptionalCurrency(cpl),
       cpt_display: this.formatOptionalCurrency(cpt),
@@ -676,21 +676,26 @@ export class MarketingSalesFunnelComponent implements OnInit {
         : null
     );
     const leadToVisit = (
-      branch.leads_meta > 0
-        ? branch.visits_total / branch.leads_meta
+      branch.leads_iventas > 0
+        ? branch.visits_iventas / branch.leads_iventas
+        : null
+    );
+    const visitToSale = (
+      branch.visits_iventas > 0
+        ? branch.sales_iventas / branch.visits_iventas
         : null
     );
     const leadToSale = (
-      branch.leads_meta > 0
-        ? branch.sales_digital / branch.leads_meta
+      branch.leads_iventas > 0
+        ? branch.sales_iventas / branch.leads_iventas
         : null
     );
 
     return {
       ...branch,
       investment_display: this.formatOptionalCurrency(investment),
-      leads_meta_display: this.formatInteger(branch.leads_meta),
-      visits_total_display: this.formatInteger(branch.visits_total),
+      leads_crm_display: this.formatInteger(branch.leads_iventas),
+      visits_crm_display: this.formatInteger(branch.visits_iventas),
       sales_digital_display: this.formatInteger(branch.sales_digital),
       sales_digital_organic_display: this.formatInteger(
         branch.sales_digital_organic,
@@ -703,9 +708,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
       revenue_btl_display: this.formatCurrency(branch.revenue_btl),
       revenue_total_display: this.formatCurrency(branch.revenue_total),
       lead_to_visit_display: this.formatPercent(leadToVisit),
-      visit_to_digital_sale_display: this.formatPercent(
-        branch.visit_to_digital_sale_rate,
-      ),
+      visit_to_sale_display: this.formatPercent(visitToSale),
       lead_to_sale_display: this.formatPercent(leadToSale),
       cpl_display: this.formatOptionalCurrency(cpl),
       cpt_display: this.formatOptionalCurrency(cpt),
