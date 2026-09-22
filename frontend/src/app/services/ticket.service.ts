@@ -52,6 +52,7 @@ export interface PreventiveValidationDetail {
     estado: string;
     estado_cierre: string | null;
     tipo_mantenimiento: string;
+    maintenance_target_type: 'EQUIPO' | 'EDIFICIO' | null;
     asignado_a: string | null;
     descripcion: string;
     sucursal_id: number | null;
