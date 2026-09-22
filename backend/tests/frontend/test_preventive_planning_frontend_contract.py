@@ -90,6 +90,10 @@ def test_admin_view_supports_equipment_building_and_batch_actions():
     assert "Validar lote" in html
     assert "Publicar {{ batch.items.length }} preventivos" in html
     assert "Cargar y validar" in html
+    assert "Duración estimada" in html
+    assert "estimatedDurationMinutes" in ts
+    assert "durationOptions" in ts
+    assert "estimated_duration_minutes" in _read(SERVICE_TS)
 
 
 def test_backend_blueprint_is_registered_inside_tickets_namespace():
