@@ -75,6 +75,22 @@ SUPPORTED_FUNNEL_CUTOFF_POLICIES = frozenset(
 )
 
 
+VENTA_TOTAL_CUTOFF_ROW_COLUMNS = (
+    VentaTotalSnapshotRowORM.fecha,
+    VentaTotalSnapshotRowORM.sucursal,
+    VentaTotalSnapshotRowORM.folio,
+    VentaTotalSnapshotRowORM.descripcion,
+    VentaTotalSnapshotRowORM.total,
+    VentaTotalSnapshotRowORM.forma_pago,
+    VentaTotalSnapshotRowORM.estatus,
+    VentaTotalSnapshotRowORM.id_orden,
+    VentaTotalSnapshotRowORM.encuesta,
+    VentaTotalSnapshotRowORM.pin,
+    VentaTotalSnapshotRowORM.telefono,
+    VentaTotalSnapshotRowORM.api,
+)
+
+
 def _period_key(prefix: str, month_start: date) -> str:
     return f"{prefix}-{month_start.strftime('%Y-%m')}"
 
@@ -581,18 +597,7 @@ def build_marketing_sales_funnel_at_cutoff(
     if venta_total_snapshot is not None:
         venta_total_rows = (
             db.session.query(
-                VentaTotalSnapshotRowORM.fecha,
-                VentaTotalSnapshotRowORM.sucursal,
-                VentaTotalSnapshotRowORM.folio,
-                VentaTotalSnapshotRowORM.descripcion,
-                VentaTotalSnapshotRowORM.total,
-                VentaTotalSnapshotRowORM.forma_pago,
-                VentaTotalSnapshotRowORM.estatus,
-                VentaTotalSnapshotRowORM.id_orden,
-                VentaTotalSnapshotRowORM.encuesta,
-                VentaTotalSnapshotRowORM.pin,
-                VentaTotalSnapshotRowORM.telefono,
-                VentaTotalSnapshotRowORM.api,
+                *VENTA_TOTAL_CUTOFF_ROW_COLUMNS
             )
             .filter(
                 VentaTotalSnapshotRowORM.snapshot_id
