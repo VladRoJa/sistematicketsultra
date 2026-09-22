@@ -91,8 +91,8 @@ class MaintenancePreventiveDraftValidationTest(unittest.TestCase):
     def test_recurring_row_accepts_weekday_and_positive_interval(self):
         item = self._item(
             fecha_programada_input="2026-09-21",
-            repeat_enabled=True,
-            repeat_interval_workdays=5,
+            repeat_enabled_input="Sí",
+            repeat_interval_workdays_input="5",
         )
 
         errors = self._validate(item)
@@ -101,6 +101,23 @@ class MaintenancePreventiveDraftValidationTest(unittest.TestCase):
         self.assertEqual(item.fecha_programada, date(2026, 9, 21))
         self.assertTrue(item.repeat_enabled)
         self.assertEqual(item.repeat_interval_workdays, 5)
+
+    def test_invalid_repeat_input_is_preserved_as_row_error(self):
+        item = self._item(
+            fecha_programada_input="2026-09-21",
+            repeat_enabled_input="QUIZA",
+            repeat_interval_workdays_input="ABC",
+        )
+
+        errors = self._validate(item)
+
+        self.assertIn("Se repite debe ser Sí o No.", errors)
+        self.assertEqual(item.validation_status, "ERROR")
+        self.assertEqual(item.repeat_enabled_input, "QUIZA")
+        self.assertEqual(
+            item.repeat_interval_workdays_input,
+            "ABC",
+        )
 
     def test_recurring_row_rejects_weekend_start(self):
         item = self._item(
