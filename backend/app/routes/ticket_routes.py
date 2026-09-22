@@ -822,6 +822,19 @@ def cierre_preventivo_detalle(ticket_id):
             "estado": ticket.estado,
             "estado_cierre": ticket.estado_cierre,
             "tipo_mantenimiento": ticket.tipo_mantenimiento,
+            "maintenance_target_type": (
+                str(
+                    getattr(ticket, "maintenance_target_type", None)
+                    or ""
+                ).strip().upper()
+                or (
+                    "EQUIPO"
+                    if ticket.aparato_id is not None
+                    else "EDIFICIO"
+                    if ticket.clasificacion_id is not None
+                    else None
+                )
+            ),
             "asignado_a": ticket.asignado_a,
             "descripcion": ticket.descripcion,
             "sucursal_id": (
