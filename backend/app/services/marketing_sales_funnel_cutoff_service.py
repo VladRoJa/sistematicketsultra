@@ -586,6 +586,7 @@ def build_marketing_sales_funnel_at_cutoff(
                 VentaTotalSnapshotRowORM.folio,
                 VentaTotalSnapshotRowORM.descripcion,
                 VentaTotalSnapshotRowORM.total,
+                VentaTotalSnapshotRowORM.forma_pago,
                 VentaTotalSnapshotRowORM.estatus,
                 VentaTotalSnapshotRowORM.id_orden,
                 VentaTotalSnapshotRowORM.encuesta,
