@@ -65,6 +65,42 @@
       </button>
     </section>
 
+    <nav class="week-navigation" aria-label="Navegación por semanas">
+      <button
+        type="button"
+        class="week-navigation__arrow"
+        (click)="navigateWeek(-1)"
+        [disabled]="loading"
+        aria-label="Semana anterior"
+      >
+        ←
+      </button>
+
+      <div class="week-navigation__range">
+        <span>Semana visible</span>
+        <strong>{{ weekRangeLabel }}</strong>
+      </div>
+
+      <button
+        type="button"
+        class="week-navigation__current"
+        (click)="goToCurrentWeek()"
+        [disabled]="loading || isCurrentWeek"
+      >
+        Semana actual
+      </button>
+
+      <button
+        type="button"
+        class="week-navigation__arrow"
+        (click)="navigateWeek(1)"
+        [disabled]="loading"
+        aria-label="Semana siguiente"
+      >
+        →
+      </button>
+    </nav>
+
     <section class="program-section">
       <header class="section-heading">
         <div>
