@@ -254,6 +254,101 @@ class MaintenancePreventiveBatchORM(db.Model):
     )
 
 
+class MaintenancePreventiveScheduleORM(db.Model):
+    __tablename__ = "maintenance_preventive_schedules"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    schedule_key = db.Column(db.String(80), nullable=False, unique=True)
+    target_type = db.Column(
+        db.String(20),
+        nullable=False,
+        default="EQUIPO",
+        server_default="EQUIPO",
+    )
+    sucursal_id = db.Column(
+        db.Integer,
+        db.ForeignKey("sucursales.sucursal_id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    inventario_id = db.Column(
+        db.Integer,
+        db.ForeignKey("inventario_general.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    responsable_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    actividad = db.Column(db.Text, nullable=False)
+    observaciones = db.Column(db.Text, nullable=True)
+    repeat_interval_workdays = db.Column(db.Integer, nullable=False)
+    start_date = db.Column(db.Date, nullable=False)
+    next_scheduled_date = db.Column(db.Date, nullable=False, index=True)
+    active = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True,
+        server_default=db.text("true"),
+    )
+    created_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        onupdate=_utc_now,
+    )
+
+    sucursal = db.relationship("Sucursal")
+    inventario = db.relationship("InventarioGeneral")
+    responsable_user = db.relationship(
+        "UserORM",
+        foreign_keys=[responsable_user_id],
+    )
+    created_by_user = db.relationship(
+        "UserORM",
+        foreign_keys=[created_by_user_id],
+    )
+    items = db.relationship(
+        "MaintenancePreventiveItemORM",
+        back_populates="schedule",
+        order_by="MaintenancePreventiveItemORM.id",
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "target_type IN ('EQUIPO', 'EDIFICIO')",
+            name="ck_maintenance_preventive_schedules_target_type",
+        ),
+        db.CheckConstraint(
+            "repeat_interval_workdays > 0",
+            name="ck_maintenance_preventive_schedules_interval",
+        ),
+        db.CheckConstraint(
+            "target_type <> 'EQUIPO' OR inventario_id IS NOT NULL",
+            name="ck_maintenance_preventive_schedules_equipment_target",
+        ),
+        db.Index(
+            "ix_maintenance_preventive_schedules_active_next",
+            "active",
+            "next_scheduled_date",
+        ),
+    )
+
+
 class MaintenancePreventiveItemORM(db.Model):
     __tablename__ = "maintenance_preventive_items"
 
@@ -300,6 +395,22 @@ class MaintenancePreventiveItemORM(db.Model):
     )
 
     fecha_programada = db.Column(db.Date, nullable=True, index=True)
+    repeat_enabled = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=False,
+        server_default=db.text("false"),
+    )
+    repeat_interval_workdays = db.Column(db.Integer, nullable=True)
+    schedule_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "maintenance_preventive_schedules.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
     actividad = db.Column(db.Text, nullable=True)
     observaciones = db.Column(db.Text, nullable=True)
 
@@ -337,11 +448,20 @@ class MaintenancePreventiveItemORM(db.Model):
     inventario = db.relationship("InventarioGeneral")
     responsable_user = db.relationship("UserORM")
     ticket = db.relationship("Ticket")
+    schedule = db.relationship(
+        "MaintenancePreventiveScheduleORM",
+        back_populates="items",
+    )
 
     __table_args__ = (
         db.CheckConstraint(
             "validation_status IN ('PENDIENTE', 'VALIDO', 'ERROR')",
             name="ck_maintenance_preventive_items_validation_status",
+        ),
+        db.CheckConstraint(
+            "((repeat_enabled = false AND repeat_interval_workdays IS NULL) "
+            "OR (repeat_enabled = true AND repeat_interval_workdays > 0))",
+            name="ck_maintenance_preventive_items_recurrence",
         ),
         db.UniqueConstraint(
             "batch_id",
