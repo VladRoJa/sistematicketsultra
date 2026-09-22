@@ -1137,3 +1137,158 @@ El procedimiento de activación y rollback se documenta en:
 `docs/contratos/ROLLOUT_TICKETS_MANTENIMIENTO_PREVENTIVO_V1.md`
 
 La PR permanece como draft hasta ejecutar las pruebas Python/Angular en un entorno con acceso al repositorio y realizar el smoke test previo al cutover.
+
+
+## 52. Extensión V1.1 — Recurrencia y objetivos de Edificio
+
+La programación preventiva soportará dos tipos de objetivo estructurados:
+
+```text
+EQUIPO
+EDIFICIO
+```
+
+### Equipo
+
+Un preventivo de `EQUIPO` deberá conservar la referencia a
+`inventario_general.id` y continuará utilizando el código interno, familia y
+checklist por familia cuando exista.
+
+### Edificio
+
+Un preventivo de `EDIFICIO` no inventará un equipo de Inventario.
+
+La fuente única del objetivo será el árbol existente:
+
+```text
+catalogo_clasificacion
+Mantenimiento
+└── Edificio
+    └── ...
+```
+
+Únicamente serán válidos nodos activos descendientes reales de
+`Mantenimiento → Edificio`. No se creará un catálogo paralelo.
+
+El Ticket conservará:
+
+- `maintenance_target_type = EDIFICIO`;
+- `clasificacion_id` con el nodo oficial;
+- `aparato_id = NULL`.
+
+La bitácora conservará el mismo tipo de objetivo y la misma clasificación.
+Si durante un preventivo de Edificio se genera un correctivo, dicho correctivo
+heredará el objetivo de Edificio y la clasificación del preventivo origen.
+
+## 53. Recurrencia preventiva
+
+La recurrencia se expresará en **días hábiles**, contando únicamente:
+
+```text
+lunes
+martes
+miércoles
+jueves
+viernes
+```
+
+Sábado y domingo no incrementan el contador.
+
+Una programación recurrente deberá conservar:
+
+- tipo y referencia del objetivo;
+- sucursal;
+- responsable;
+- actividad;
+- observaciones;
+- fecha inicial;
+- intervalo en días hábiles;
+- próxima fecha programada;
+- estado activo.
+
+Cada fecha materializada será una ocurrencia auditable y generará su propio
+Ticket. No se reutilizará el Ticket anterior.
+
+La próxima fecha se calculará desde la fecha que correspondía a la serie, no
+desde la fecha de cierre real del Ticket. Por lo tanto, una ejecución tardía no
+desplazará silenciosamente la cadencia original.
+
+La combinación:
+
+```text
+schedule_id + scheduled_date
+```
+
+será única para evitar generación duplicada.
+
+## 54. Worker de recurrencia
+
+La materialización recurrente se ejecutará fuera de Gunicorn mediante:
+
+```text
+python -m app.services.maintenance_preventive_scheduler_worker
+```
+
+El worker:
+
+- utilizará `America/Tijuana`;
+- correrá bajo el profile Docker `scheduler`;
+- respetará `TICKETS_PREVENTIVE_V1_ENABLED`;
+- hará `db.session.remove()` en cada ciclo;
+- generará como máximo una ocurrencia pendiente por serie y ejecución;
+- utilizará bloqueo de filas para evitar carreras entre workers;
+- hará rollback y reintentará ante errores de ejecución.
+
+El horario será configurable y su valor inicial será 00:10.
+
+## 55. Batch e importación V1.1
+
+La programación manual y la plantilla oficial compartirán el mismo contrato.
+
+Las columnas adicionales serán:
+
+- `Tipo`: Equipo o Edificio;
+- `Clasificación edificio`: solo para Edificio;
+- `Se repite`: Sí/No;
+- `Cada N días hábiles`: intervalo positivo cuando se repite.
+
+Por compatibilidad:
+
+- una fila sin `Tipo` se interpreta como Equipo;
+- las plantillas anteriores continúan siendo válidas;
+- `Código equipo` deja de ser obligatorio a nivel de encabezado, pero sí es
+  obligatorio para una fila de Equipo;
+- `Clasificación edificio` es obligatoria para una fila de Edificio;
+- Equipo y Edificio no pueden mezclarse dentro del mismo renglón.
+
+Las filas inválidas deberán conservar sus valores originales para poder
+corregirse antes de publicar.
+
+## 56. Mi programa V1.1
+
+La vista del técnico deberá identificar el objetivo sin asumir que todos los
+trabajos tienen código de equipo.
+
+Ejemplos:
+
+```text
+EQUIPO
+04CC01 · Caminadora
+```
+
+```text
+EDIFICIO
+Baños > Mingitorios
+```
+
+Ambos objetivos utilizarán el mismo flujo:
+
+```text
+programación
+→ Ticket
+→ Mi programa
+→ bitácora
+→ validación
+→ historial
+```
+
