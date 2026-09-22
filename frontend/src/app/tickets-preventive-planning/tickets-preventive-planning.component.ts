@@ -8,6 +8,7 @@ import {
   PreventiveBatch,
   PreventiveBatchSummary,
   PreventiveBranch,
+  PreventiveCapacityPreview,
   PreventiveDraftItem,
   PreventiveEquipment,
   PreventivePlanningContext,
@@ -62,6 +63,10 @@ export class TicketsPreventivePlanningComponent implements OnInit {
   repeatEnabled = false;
   repeatIntervalWorkdays = 20;
   estimatedDurationMinutes: number | null = null;
+  capacityPreview: PreventiveCapacityPreview | null = null;
+  capacityPreviewLoading = false;
+  capacityPreviewError = '';
+  private capacityPreviewRequestId = 0;
   readonly repeatIntervalOptions = [5, 10, 15, 20, 30, 60, 90];
   readonly durationOptions = [15, 30, 45, 60, 90, 120, 180, 240];
 
@@ -318,6 +323,10 @@ export class TicketsPreventivePlanningComponent implements OnInit {
     this.preventiveService.getBatch(batchId).subscribe({
       next: (batch) => {
         this.selectedBatch = batch;
+        this.capacityPreview = null;
+        this.capacityPreviewError = '';
+        this.capacityPreviewLoading = false;
+        this.capacityPreviewRequestId += 1;
         this.loading = false;
       },
       error: (error) => {
@@ -362,6 +371,7 @@ export class TicketsPreventivePlanningComponent implements OnInit {
     this.equipmentSearch = '';
     this.selectedEquipmentIds.clear();
     this.equipment = [];
+    this.refreshCapacityPreview();
 
     if (!this.branchId) {
       return;
@@ -389,10 +399,20 @@ export class TicketsPreventivePlanningComponent implements OnInit {
       this.familyId = null;
       this.equipmentSearch = '';
       this.clearEquipmentSelection();
+      this.refreshCapacityPreview();
       return;
     }
 
     this.buildingClassificationId = null;
+    this.refreshCapacityPreview();
+  }
+
+  onBuildingClassificationChange(): void {
+    this.refreshCapacityPreview();
+  }
+
+  onCapacityInputChange(): void {
+    this.refreshCapacityPreview();
   }
 
   toggleEquipment(inventoryId: number, checked: boolean): void {
@@ -401,6 +421,7 @@ export class TicketsPreventivePlanningComponent implements OnInit {
     } else {
       this.selectedEquipmentIds.delete(inventoryId);
     }
+    this.refreshCapacityPreview();
   }
 
   isEquipmentSelected(inventoryId: number): boolean {
@@ -411,10 +432,12 @@ export class TicketsPreventivePlanningComponent implements OnInit {
     for (const item of this.filteredEquipment) {
       this.selectedEquipmentIds.add(item.inventario_id);
     }
+    this.refreshCapacityPreview();
   }
 
   clearEquipmentSelection(): void {
     this.selectedEquipmentIds.clear();
+    this.refreshCapacityPreview();
   }
 
   addSelectedEquipment(): void {
@@ -740,6 +763,66 @@ export class TicketsPreventivePlanningComponent implements OnInit {
     if (!this.isItemRecurringInput(item)) {
       item.repeat_interval_workdays_input = null;
     }
+  }
+
+  refreshCapacityPreview(): void {
+    const batch = this.selectedBatch;
+    const duration = this.estimatedDurationMinutes;
+    const itemCount = this.manualTargetCount;
+
+    if (
+      !batch
+      || batch.status !== 'BORRADOR'
+      || !this.responsibleUsername
+      || !this.programmedDate
+      || duration === null
+      || duration <= 0
+      || itemCount <= 0
+    ) {
+      this.capacityPreviewRequestId += 1;
+      this.capacityPreview = null;
+      this.capacityPreviewError = '';
+      this.capacityPreviewLoading = false;
+      return;
+    }
+
+    const requestId = ++this.capacityPreviewRequestId;
+    this.capacityPreviewLoading = true;
+    this.capacityPreviewError = '';
+
+    this.preventiveService.previewCapacity(batch.id, {
+      responsable: this.responsibleUsername,
+      fecha_programada: this.programmedDate,
+      estimated_duration_minutes: duration,
+      item_count: itemCount,
+    }).subscribe({
+      next: (preview) => {
+        if (requestId !== this.capacityPreviewRequestId) return;
+        this.capacityPreview = preview;
+        this.capacityPreviewLoading = false;
+      },
+      error: (error) => {
+        if (requestId !== this.capacityPreviewRequestId) return;
+        this.capacityPreview = null;
+        this.capacityPreviewLoading = false;
+        this.capacityPreviewError =
+          error?.error?.mensaje
+          || error?.error?.detail
+          || 'No se pudo calcular la capacidad.';
+      },
+    });
+  }
+
+  capacitySummary(preview: PreventiveCapacityPreview): string {
+    return (
+      this.durationLabel(preview.existing_minutes)
+      + ' actuales + '
+      + this.durationLabel(preview.proposed.minutes)
+      + ' nuevas = '
+      + this.durationLabel(preview.resulting_minutes)
+      + ' / '
+      + this.durationLabel(preview.capacity_minutes)
+    );
   }
 
   durationLabel(minutes: number | string | null | undefined): string {
