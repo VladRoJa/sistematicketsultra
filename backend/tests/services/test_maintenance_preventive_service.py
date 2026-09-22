@@ -3,9 +3,31 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import MagicMock, patch
 
-from app.models.maintenance_preventive import MaintenancePreventiveItemORM
+from app.models.maintenance_preventive import (
+    MaintenancePreventiveItemORM,
+    MaintenancePreventiveOccurrenceORM,
+    MaintenancePreventiveScheduleORM,
+)
 from app.services import maintenance_preventive_service as service
 from app.services.maintenance_preventive_service import validar_item_borrador
+
+
+class MaintenancePreventiveWorkdayRecurrenceTest(unittest.TestCase):
+    def test_add_workdays_skips_weekend(self):
+        self.assertEqual(
+            service.add_workdays(date(2026, 9, 18), 1),
+            date(2026, 9, 21),
+        )
+
+    def test_add_five_workdays_keeps_weekday_cadence(self):
+        self.assertEqual(
+            service.add_workdays(date(2026, 9, 18), 5),
+            date(2026, 9, 25),
+        )
+
+    def test_add_workdays_rejects_non_positive_interval(self):
+        with self.assertRaises(service.MaintenancePreventiveError):
+            service.add_workdays(date(2026, 9, 18), 0)
 
 
 class MaintenancePreventiveDraftValidationTest(unittest.TestCase):
@@ -65,6 +87,50 @@ class MaintenancePreventiveDraftValidationTest(unittest.TestCase):
         self.assertEqual(item.inventario_id, 90)
         self.assertEqual(item.responsable_user_id, 20)
         self.assertEqual(item.fecha_programada, date(2026, 9, 20))
+
+    def test_recurring_row_accepts_weekday_and_positive_interval(self):
+        item = self._item(
+            fecha_programada_input="2026-09-21",
+            repeat_enabled=True,
+            repeat_interval_workdays=5,
+        )
+
+        errors = self._validate(item)
+
+        self.assertEqual(errors, [])
+        self.assertEqual(item.fecha_programada, date(2026, 9, 21))
+        self.assertTrue(item.repeat_enabled)
+        self.assertEqual(item.repeat_interval_workdays, 5)
+
+    def test_recurring_row_rejects_weekend_start(self):
+        item = self._item(
+            fecha_programada_input="2026-09-20",
+            repeat_enabled=True,
+            repeat_interval_workdays=5,
+        )
+
+        errors = self._validate(item)
+
+        self.assertIn(
+            "La fecha inicial de un preventivo recurrente debe ser "
+            "de lunes a viernes.",
+            errors,
+        )
+
+    def test_recurring_row_requires_positive_workday_interval(self):
+        item = self._item(
+            fecha_programada_input="2026-09-21",
+            repeat_enabled=True,
+            repeat_interval_workdays=None,
+        )
+
+        errors = self._validate(item)
+
+        self.assertIn(
+            "La repetición requiere un intervalo de días hábiles "
+            "mayor a cero.",
+            errors,
+        )
 
     def test_wrong_branch_is_kept_as_error(self):
         item = self._item()
@@ -376,7 +442,11 @@ class MaintenancePreventivePublishTest(unittest.TestCase):
             inventario_id=90,
             responsable_user_id=20,
             fecha_programada=date(2026, 9, 20),
+            repeat_enabled=False,
+            repeat_interval_workdays=None,
+            schedule_id=None,
             actividad="Mantenimiento general",
+            observaciones=None,
         )
 
     def test_publish_requires_all_rows_valid(self):
@@ -472,6 +542,98 @@ class MaintenancePreventivePublishTest(unittest.TestCase):
             kwargs["fecha_programada_original"],
             kwargs["fecha_programada_actual"],
         )
+
+    def test_publish_recurring_item_creates_schedule_and_first_occurrence(self):
+        item = self._valid_item()
+        item.fecha_programada = date(2026, 9, 21)
+        item.repeat_enabled = True
+        item.repeat_interval_workdays = 5
+
+        batch = SimpleNamespace(
+            id=30,
+            status="BORRADOR",
+            created_by_user_id=10,
+            items=[item],
+            published_by_user_id=None,
+            published_at=None,
+        )
+        inventory = SimpleNamespace(
+            id=90,
+            nombre="CAMINADORA",
+            familia_equipo_id=1,
+        )
+        responsible = SimpleNamespace(
+            id=20,
+            username="TECNICO_PM",
+        )
+        ticket = SimpleNamespace(
+            id=501,
+            asignado_a=None,
+            familia_equipo_id=None,
+        )
+        fake_session = MagicMock()
+
+        def fake_get(model, object_id):
+            if model is service.InventarioGeneral:
+                return inventory
+            if model is service.UserORM:
+                return responsible
+            return None
+
+        fake_session.get.side_effect = fake_get
+
+        with (
+            patch.object(service, "_get_batch", return_value=batch),
+            patch.object(
+                service,
+                "_published_duplicate_exists",
+                return_value=False,
+            ),
+            patch.object(
+                service,
+                "db",
+                SimpleNamespace(session=fake_session),
+            ),
+            patch.object(
+                service.Ticket,
+                "create_ticket",
+                return_value=ticket,
+            ),
+        ):
+            tickets = service.publicar_lote_preventivo(
+                30,
+                self._user(),
+            )
+
+        self.assertEqual(tickets, [ticket])
+        self.assertIsInstance(
+            item.schedule,
+            MaintenancePreventiveScheduleORM,
+        )
+        self.assertEqual(item.schedule.start_date, date(2026, 9, 21))
+        self.assertEqual(
+            item.schedule.next_scheduled_date,
+            date(2026, 9, 28),
+        )
+        self.assertEqual(item.schedule.repeat_interval_workdays, 5)
+
+        added = [
+            call.args[0]
+            for call in fake_session.add.call_args_list
+            if call.args
+        ]
+        occurrences = [
+            value
+            for value in added
+            if isinstance(value, MaintenancePreventiveOccurrenceORM)
+        ]
+        self.assertEqual(len(occurrences), 1)
+        self.assertEqual(
+            occurrences[0].scheduled_date,
+            date(2026, 9, 21),
+        )
+        self.assertEqual(occurrences[0].ticket_id, 501)
+        self.assertIs(occurrences[0].schedule, item.schedule)
 
     def test_published_batch_cannot_publish_again(self):
         batch = SimpleNamespace(
