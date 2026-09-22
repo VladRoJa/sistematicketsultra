@@ -270,6 +270,9 @@ def _serialize_bitacora(bitacora: PmBitacoraORM) -> dict:
     return {
         "id": int(bitacora.id),
         "ticket_id": bitacora.ticket_id,
+        "target_type": getattr(bitacora, "target_type", "EQUIPO"),
+        "inventario_id": bitacora.inventario_id,
+        "clasificacion_id": getattr(bitacora, "clasificacion_id", None),
         "fecha": bitacora.fecha.isoformat(),
         "resultado": bitacora.resultado,
         "estado_encontrado": bitacora.estado_encontrado,
@@ -348,6 +351,8 @@ def get_work_detail(user, ticket_id: int) -> dict:
                 or getattr(branch, "nombre", None)
                 or "Sin sucursal"
             ),
+            "target_type": _maintenance_target_type(ticket),
+            "clasificacion_id": ticket.clasificacion_id,
             "inventario_id": ticket.aparato_id,
             "codigo_equipo": (
                 getattr(inventory, "codigo_interno", None)
