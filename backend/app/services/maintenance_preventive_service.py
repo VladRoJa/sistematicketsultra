@@ -1963,7 +1963,7 @@ def validar_item_borrador(
     # Cada nueva validación parte de los datos de entrada; evita conservar IDs
     # viejos después de corregir una fila. Marcamos PENDIENTE antes de limpiar
     # la resolución previa para que cualquier autoflush provocado por las
-    # consultas de resolución no persista un estado VALID0 sin objetivo.
+    # consultas de resolución no persista un estado VALIDO sin objetivo.
     item.validation_status = "PENDIENTE"
     item.validation_errors = None
     item.target_type = None
