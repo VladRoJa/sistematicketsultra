@@ -54,6 +54,8 @@ La cadena V1 agrega, en orden:
 - checklists;
 - snapshot de checklist;
 - catálogo de motivos de reprogramación.
+- recurrencia preventiva y ocurrencias auditables;
+- objetivos preventivos de Edificio reutilizando `catalogo_clasificacion`.
 
 ## 5. Smoke test con cutover apagado
 
@@ -92,7 +94,11 @@ Con `TICKETS_PREVENTIVE_V1_ENABLED=false`:
 13. revisar **Panel de mantenimiento**;
 14. comprobar drill-down;
 15. comprobar reprogramación con motivo;
-16. si se genera hallazgo, validar navegación preventivo ↔ correctivo.
+16. si se genera hallazgo, validar navegación preventivo ↔ correctivo;
+17. crear un preventivo recurrente de Equipo y confirmar su próxima fecha hábil;
+18. crear un preventivo de Edificio y confirmar que no tenga `aparato_id`;
+19. ejecutar el preventivo de Edificio desde **Mi programa** y guardar bitácora;
+20. generar un correctivo desde ese preventivo y confirmar que conserva la clasificación de Edificio.
 
 ## 7. Activar cutover
 
@@ -115,6 +121,18 @@ docker compose up -d --build backend
 ```
 
 No requiere nueva migración.
+
+Levantar también el worker de recurrencia:
+
+```bash
+docker compose --profile scheduler up -d --build maintenance-preventive-scheduler
+```
+
+Validar que permanezca activo:
+
+```bash
+docker compose --profile scheduler ps maintenance-preventive-scheduler
+```
 
 ## 8. Verificar estado de transición
 
@@ -174,3 +192,7 @@ Durante los primeros días revisar:
 - backlog correctivo total/vencido;
 - correctivos `REACTIVO` vs `DETECTADO_EN_PREVENTIVO`;
 - errores 409 provenientes de rutas PM legacy, que indicarían usuarios o enlaces aún intentando operar la interfaz anterior.
+- series recurrentes con `next_scheduled_date` vencida;
+- duplicados de ocurrencia por `schedule_id + scheduled_date`;
+- preventivos de Edificio sin clasificación o con clasificación inactiva;
+- salud y logs de `maintenance-preventive-scheduler`.
