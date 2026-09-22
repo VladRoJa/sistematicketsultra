@@ -737,6 +737,38 @@ select:focus {
   padding: 5px 7px;
 }
 
+.activity-duration {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  color: var(--ultra-gray-500);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.activity-duration__control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  color: var(--ultra-gray-600);
+}
+
+.activity-duration__control input {
+  width: 64px !important;
+  min-height: 28px !important;
+  text-align: center;
+}
+
+.activity-duration-read {
+  display: block !important;
+  margin-top: 3px;
+  color: var(--ultra-gray-500);
+  font-weight: 800;
+}
+
 
 .draft-table td small {
   display: inline-block;
