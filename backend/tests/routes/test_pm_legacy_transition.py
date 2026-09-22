@@ -141,6 +141,12 @@ class PmLegacyTransitionContractTest(unittest.TestCase):
 
         assert "TICKETS_PREVENTIVE_V1_ENABLED" in compose
         assert ":-false" in compose
+        assert "maintenance-preventive-scheduler:" in compose
+        assert (
+            "python -m app.services."
+            "maintenance_preventive_scheduler_worker"
+        ) in compose
+        assert compose.count("TICKETS_PREVENTIVE_V1_ENABLED") >= 2
 
 
 if __name__ == "__main__":
