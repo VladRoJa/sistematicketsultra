@@ -611,7 +611,12 @@ export class TicketsPreventivePlanningComponent implements OnInit {
 
   isItemRecurringInput(item: PreventiveDraftItem): boolean {
     const value = this.normalize(item.repeat_enabled_input || '');
-    return value === 'si' || value === 'true' || value === '1';
+    return (
+      value === 'si'
+      || value === 'sí'
+      || value === 'true'
+      || value === '1'
+    );
   }
 
   onItemRepeatInputChange(item: PreventiveDraftItem): void {
