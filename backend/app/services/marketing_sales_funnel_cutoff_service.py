@@ -506,6 +506,7 @@ def build_marketing_sales_funnel_at_cutoff(
     access: MarketingAccess,
     cutoff_date: Any = None,
     cutoff_policy: Any = None,
+    include_direct_purchases: bool = True,
 ) -> MarketingSalesFunnelBuildResult:
     month_start = parse_month(month)
     requested_cutoff = parse_cutoff_date(
@@ -598,9 +599,13 @@ def build_marketing_sales_funnel_at_cutoff(
         branch_ids=branch_ids,
     )
     sales = sales_result.sales
-    visits = _merge_visits_with_direct_purchases(
-        visits=registered_visits,
-        sales=sales,
+    visits = (
+        _merge_visits_with_direct_purchases(
+            visits=registered_visits,
+            sales=sales,
+        )
+        if include_direct_purchases
+        else list(registered_visits)
     )
 
     kpi_control = _load_kpi_new_sales_control(
