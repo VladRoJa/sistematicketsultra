@@ -2101,6 +2101,8 @@ def validar_item_borrador(
             interval = _parse_workday_interval(interval_input)
         except MaintenancePreventiveError:
             interval = None
+
+        if interval is None:
             errors.append(
                 "La repetición requiere un intervalo de días hábiles "
                 "mayor a cero."
