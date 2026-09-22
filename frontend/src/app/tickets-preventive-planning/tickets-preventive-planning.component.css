@@ -599,7 +599,7 @@ select:focus {
   text-align: left;
 }
 
-/* BORRADOR: Fila / Sucursal / Código / Fecha / Actividad / Responsable / Repetición / Estado / Acciones */
+/* BORRADOR: Fila / Sucursal / Objetivo / Fecha / Actividad / Responsable / Repetición / Estado / Acciones */
 .draft-table th:nth-child(1),
 .draft-table td:nth-child(1) {
   width: 4%;
@@ -712,12 +712,22 @@ select:focus {
   font-size: 10px;
 }
 
+.target-cell,
 .recurrence-cell {
   display: grid;
   gap: 4px;
   min-width: 0;
 }
 
+.target-read-type {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.target-cell input,
+.target-cell select,
 .recurrence-cell input,
 .recurrence-cell select {
   min-height: 30px;
