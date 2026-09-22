@@ -891,10 +891,22 @@ def agregar_renglones_lote(
         item = MaintenancePreventiveItemORM(
             batch_id=batch.id,
             source_row_number=source_row_number,
+            target_type_input=_clean(
+                raw_row.get("target_type")
+                or raw_row.get("tipo_objetivo")
+                or raw_row.get("tipo")
+                or "EQUIPO"
+            ) or "EQUIPO",
             sucursal_input=sucursal_input or None,
             codigo_equipo_input=_clean(
                 raw_row.get("codigo_equipo")
                 or raw_row.get("codigo_equipo_input")
+            ) or None,
+            building_classification_input=_clean(
+                raw_row.get("building_classification")
+                or raw_row.get("building_classification_id")
+                or raw_row.get("clasificacion_edificio")
+                or raw_row.get("clasificacion_edificio_id")
             ) or None,
             responsable_input=_clean(
                 raw_row.get("responsable")
@@ -960,6 +972,17 @@ def actualizar_renglon_lote(
 
     item = _get_item_in_batch(batch, item_id)
 
+    if (
+        "target_type" in payload
+        or "tipo_objetivo" in payload
+        or "tipo" in payload
+    ):
+        item.target_type_input = _clean(
+            payload.get("target_type")
+            or payload.get("tipo_objetivo")
+            or payload.get("tipo")
+        ) or None
+
     if "sucursal" in payload or "sucursal_input" in payload or "sucursal_id" in payload:
         sucursal_input = _clean(
             payload.get("sucursal")
@@ -980,6 +1003,19 @@ def actualizar_renglon_lote(
         item.codigo_equipo_input = _clean(
             payload.get("codigo_equipo")
             or payload.get("codigo_equipo_input")
+        ) or None
+
+    if (
+        "building_classification" in payload
+        or "building_classification_id" in payload
+        or "clasificacion_edificio" in payload
+        or "clasificacion_edificio_id" in payload
+    ):
+        item.building_classification_input = _clean(
+            payload.get("building_classification")
+            or payload.get("building_classification_id")
+            or payload.get("clasificacion_edificio")
+            or payload.get("clasificacion_edificio_id")
         ) or None
 
     if "responsable" in payload or "responsable_input" in payload:
@@ -1019,8 +1055,10 @@ def actualizar_renglon_lote(
         item.observaciones = _clean(payload.get("observaciones")) or None
 
     # Cualquier corrección invalida la resolución previa.
+    item.target_type = None
     item.sucursal_id = None
     item.inventario_id = None
+    item.building_classification_id = None
     item.responsable_user_id = None
     item.fecha_programada = None
     item.repeat_enabled = False
@@ -1483,8 +1521,18 @@ def serializar_item(item: MaintenancePreventiveItemORM) -> dict:
         "id": item.id,
         "batch_id": item.batch_id,
         "source_row_number": item.source_row_number,
+        "target_type_input": (
+            getattr(item, "target_type_input", None)
+            or getattr(item, "target_type", None)
+            or "EQUIPO"
+        ),
         "sucursal_input": item.sucursal_input,
         "codigo_equipo_input": item.codigo_equipo_input,
+        "building_classification_input": getattr(
+            item,
+            "building_classification_input",
+            None,
+        ),
         "responsable_input": item.responsable_input,
         "fecha_programada_input": item.fecha_programada_input,
         "repeat_enabled_input": (
@@ -1504,8 +1552,25 @@ def serializar_item(item: MaintenancePreventiveItemORM) -> dict:
                 else None
             )
         ),
+        "target_type": getattr(item, "target_type", None),
         "sucursal_id": item.sucursal_id,
         "inventario_id": item.inventario_id,
+        "building_classification_id": getattr(
+            item,
+            "building_classification_id",
+            None,
+        ),
+        "building_classification": (
+            {
+                "id": int(item.building_classification.id),
+                "nombre": str(item.building_classification.nombre),
+                "label": _building_classification_label(
+                    item.building_classification
+                ),
+            }
+            if getattr(item, "building_classification", None) is not None
+            else None
+        ),
         "responsable_user_id": item.responsable_user_id,
         "fecha_programada": (
             item.fecha_programada.isoformat()
@@ -1733,16 +1798,27 @@ def _validate_responsable_catalog(
 
 
 def _item_duplicate_key(item: MaintenancePreventiveItemORM):
-    if (
-        item.sucursal_id is None
-        or item.inventario_id is None
-        or item.fecha_programada is None
-    ):
+    if item.sucursal_id is None or item.fecha_programada is None:
+        return None
+
+    target_type = _normalize_key(
+        getattr(item, "target_type", None) or "EQUIPO"
+    )
+
+    if target_type == "EQUIPO":
+        target_id = getattr(item, "inventario_id", None)
+    elif target_type == "EDIFICIO":
+        target_id = getattr(item, "building_classification_id", None)
+    else:
+        return None
+
+    if target_id is None:
         return None
 
     return (
         int(item.sucursal_id),
-        int(item.inventario_id),
+        target_type,
+        int(target_id),
         item.fecha_programada.isoformat(),
     )
 
@@ -1755,6 +1831,7 @@ def validar_item_borrador(
     resolve_sucursal: Callable = _resolve_sucursal,
     resolve_equipo: Callable = _resolve_equipo_by_code,
     equipo_asignado: Callable = _equipo_asignado_a_sucursal,
+    resolve_building: Callable = _resolve_building_classification,
     resolve_responsable: Callable = _resolve_responsable,
     validate_responsable: Callable = _validate_responsable_catalog,
 ) -> list[str]:
@@ -1781,29 +1858,79 @@ def validar_item_borrador(
         ):
             errors.append("No tienes acceso a la sucursal indicada.")
 
-    try:
-        equipo = resolve_equipo(item.codigo_equipo_input)
-    except MaintenancePreventiveError as exc:
-        equipo = None
-        errors.append(str(exc))
+    raw_target_type = _normalize_key(
+        getattr(item, "target_type_input", None) or "EQUIPO"
+    )
+    target_aliases = {
+        "EQUIPO": "EQUIPO",
+        "APARATO": "EQUIPO",
+        "APARATOS": "EQUIPO",
+        "EDIFICIO": "EDIFICIO",
+    }
+    target_type = target_aliases.get(raw_target_type)
 
-    if equipo is None:
-        if _clean(item.codigo_equipo_input):
-            if not any("duplicado" in error.lower() for error in errors):
-                errors.append("Código de equipo inexistente.")
-        else:
-            errors.append("Código de equipo vacío.")
+    if target_type is None:
+        errors.append("Tipo debe ser Equipo o Edificio.")
     else:
-        item.inventario_id = int(equipo.id)
+        item.target_type = target_type
 
-        if _normalize_key(getattr(equipo, "tipo", "")) != "APARATOS":
-            errors.append("El código no corresponde a un equipo de Aparatos.")
-
-    if item.sucursal_id is not None and item.inventario_id is not None:
-        if not equipo_asignado(item.inventario_id, item.sucursal_id):
+    if target_type == "EQUIPO":
+        if _clean(getattr(item, "building_classification_input", None)):
             errors.append(
-                "El equipo no está asignado actualmente a la sucursal indicada."
+                "La clasificación de Edificio no aplica a un preventivo de Equipo."
             )
+
+        try:
+            equipo = resolve_equipo(item.codigo_equipo_input)
+        except MaintenancePreventiveError as exc:
+            equipo = None
+            errors.append(str(exc))
+
+        if equipo is None:
+            if _clean(item.codigo_equipo_input):
+                if not any("duplicado" in error.lower() for error in errors):
+                    errors.append("Código de equipo inexistente.")
+            else:
+                errors.append("Código de equipo vacío.")
+        else:
+            item.inventario_id = int(equipo.id)
+
+            if _normalize_key(getattr(equipo, "tipo", "")) != "APARATOS":
+                errors.append(
+                    "El código no corresponde a un equipo de Aparatos."
+                )
+
+        if item.sucursal_id is not None and item.inventario_id is not None:
+            if not equipo_asignado(item.inventario_id, item.sucursal_id):
+                errors.append(
+                    "El equipo no está asignado actualmente a la sucursal indicada."
+                )
+
+    elif target_type == "EDIFICIO":
+        if _clean(item.codigo_equipo_input):
+            errors.append(
+                "Código equipo no aplica a un preventivo de Edificio."
+            )
+
+        try:
+            building = resolve_building(
+                getattr(item, "building_classification_input", None)
+            )
+        except MaintenancePreventiveError as exc:
+            building = None
+            errors.append(str(exc))
+
+        if building is None:
+            if _clean(
+                getattr(item, "building_classification_input", None)
+            ):
+                errors.append(
+                    "Clasificación de Edificio inexistente o inválida."
+                )
+            else:
+                errors.append("Clasificación de Edificio vacía.")
+        else:
+            item.building_classification_id = int(building.id)
 
     responsable = resolve_responsable(item.responsable_input)
     if responsable is None:
@@ -1897,7 +2024,7 @@ def validar_item_borrador(
     if duplicate_key is not None:
         if duplicate_key in seen_keys:
             errors.append(
-                "El equipo ya está programado para esa fecha "
+                "El mismo objetivo ya está programado para esa fecha "
                 "dentro del mismo lote."
             )
         else:
