@@ -598,19 +598,22 @@ def listar_clasificaciones_edificio() -> list[CatalogoClasificacion]:
             == MAINTENANCE_DEPARTMENT_ID,
             CatalogoClasificacion.activo.is_(True),
         )
-        .order_by(
-            CatalogoClasificacion.nivel.asc(),
-            CatalogoClasificacion.nombre.asc(),
-            CatalogoClasificacion.id.asc(),
-        )
         .all()
     )
 
-    return [
+    building_rows = [
         row
         for row in rows
         if _is_building_classification(row)
     ]
+
+    return sorted(
+        building_rows,
+        key=lambda row: tuple(
+            _normalize_key(getattr(node, "nombre", ""))
+            for node in _classification_path(row)[2:]
+        ),
+    )
 
 
 def _resolve_building_classification(
