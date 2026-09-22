@@ -1102,6 +1102,242 @@ def publicar_lote_preventivo(
     return created_tickets
 
 
+def _find_schedule_occurrence(
+    schedule_id: int,
+    scheduled_date: date,
+) -> MaintenancePreventiveOccurrenceORM | None:
+    return (
+        MaintenancePreventiveOccurrenceORM.query
+        .filter(
+            MaintenancePreventiveOccurrenceORM.schedule_id
+            == int(schedule_id),
+            MaintenancePreventiveOccurrenceORM.scheduled_date
+            == scheduled_date,
+        )
+        .first()
+    )
+
+
+def materializar_programacion_recurrente(
+    schedule: MaintenancePreventiveScheduleORM,
+    *,
+    through_date: date,
+    occurrence_lookup: Callable = _find_schedule_occurrence,
+) -> dict:
+    """Genera como máximo una ocurrencia pendiente de una programación."""
+    if schedule is None or not bool(schedule.active):
+        return {
+            "generated": False,
+            "reason": "inactive",
+            "ticket_id": None,
+        }
+
+    due_date = schedule.next_scheduled_date
+    if due_date is None or due_date > through_date:
+        return {
+            "generated": False,
+            "reason": "not_due",
+            "ticket_id": None,
+        }
+
+    interval = _parse_workday_interval(
+        schedule.repeat_interval_workdays
+    )
+    if interval is None:
+        raise MaintenancePreventiveStateError(
+            "La programación recurrente no tiene intervalo válido."
+        )
+
+    if due_date.weekday() >= 5:
+        raise MaintenancePreventiveStateError(
+            "La próxima fecha recurrente debe ser de lunes a viernes."
+        )
+
+    existing = occurrence_lookup(int(schedule.id), due_date)
+    if existing is not None:
+        schedule.next_scheduled_date = add_workdays(
+            due_date,
+            interval,
+        )
+        return {
+            "generated": False,
+            "reason": "already_exists",
+            "ticket_id": existing.ticket_id,
+            "scheduled_date": due_date.isoformat(),
+            "next_scheduled_date": (
+                schedule.next_scheduled_date.isoformat()
+            ),
+        }
+
+    target_type = _normalize_key(schedule.target_type or "EQUIPO")
+    if target_type != "EQUIPO":
+        raise MaintenancePreventiveStateError(
+            "La materialización automática todavía requiere objetivo EQUIPO."
+        )
+
+    inventory = db.session.get(
+        InventarioGeneral,
+        int(schedule.inventario_id or 0),
+    )
+    if inventory is None:
+        raise MaintenancePreventiveStateError(
+            "El equipo de la programación recurrente no existe."
+        )
+
+    responsible = db.session.get(
+        UserORM,
+        int(schedule.responsable_user_id or 0),
+    )
+    if responsible is None:
+        raise MaintenancePreventiveStateError(
+            "El responsable de la programación recurrente no existe."
+        )
+
+    creator = None
+    if schedule.created_by_user_id is not None:
+        creator = db.session.get(
+            UserORM,
+            int(schedule.created_by_user_id),
+        )
+
+    creator_username = (
+        _clean(getattr(creator, "username", None))
+        or "SISTEMA_PM"
+    )
+    try:
+        creator_branch_id = int(
+            getattr(creator, "sucursal_id", None)
+            or schedule.sucursal_id
+        )
+    except (TypeError, ValueError):
+        creator_branch_id = int(schedule.sucursal_id)
+
+    programmed_at = _programmed_datetime_utc(due_date)
+    ticket = Ticket.create_ticket(
+        descripcion=_clean(schedule.actividad),
+        username=creator_username,
+        sucursal_id=creator_branch_id,
+        sucursal_id_destino=int(schedule.sucursal_id),
+        departamento_id=MAINTENANCE_DEPARTMENT_ID,
+        criticidad=1,
+        clasificacion_id=None,
+        aparato_id=int(schedule.inventario_id),
+        problema_detectado=None,
+        necesita_refaccion=False,
+        descripcion_refaccion=None,
+        ubicacion=None,
+        equipo=getattr(inventory, "nombre", None),
+        estado="abierto",
+        requiere_aprobacion=False,
+        tipo_mantenimiento="PREVENTIVO",
+        fecha_programada_original=programmed_at,
+        fecha_programada_actual=programmed_at,
+        commit=False,
+    )
+    ticket.asignado_a = str(responsible.username)
+    ticket.familia_equipo_id = getattr(
+        inventory,
+        "familia_equipo_id",
+        None,
+    )
+
+    occurrence = MaintenancePreventiveOccurrenceORM(
+        schedule_id=int(schedule.id),
+        scheduled_date=due_date,
+        ticket_id=int(ticket.id),
+    )
+    db.session.add(occurrence)
+
+    schedule.next_scheduled_date = add_workdays(
+        due_date,
+        interval,
+    )
+
+    return {
+        "generated": True,
+        "reason": "generated",
+        "ticket_id": int(ticket.id),
+        "scheduled_date": due_date.isoformat(),
+        "next_scheduled_date": schedule.next_scheduled_date.isoformat(),
+    }
+
+
+def materializar_programaciones_recurrentes(
+    *,
+    through_date: date | None = None,
+    limit: int = 500,
+) -> dict:
+    """Materializa una sola ocurrencia por serie activa y ejecución."""
+    target_date = through_date or datetime.now(BUSINESS_TZ).date()
+
+    try:
+        row_limit = int(limit)
+    except (TypeError, ValueError) as exc:
+        raise MaintenancePreventiveError(
+            "limit debe ser un entero positivo."
+        ) from exc
+    if row_limit <= 0:
+        raise MaintenancePreventiveError(
+            "limit debe ser mayor a cero."
+        )
+
+    schedules = (
+        MaintenancePreventiveScheduleORM.query
+        .filter(
+            MaintenancePreventiveScheduleORM.active.is_(True),
+            MaintenancePreventiveScheduleORM.next_scheduled_date
+            <= target_date,
+        )
+        .order_by(
+            MaintenancePreventiveScheduleORM.next_scheduled_date.asc(),
+            MaintenancePreventiveScheduleORM.id.asc(),
+        )
+        .limit(row_limit)
+        .with_for_update(skip_locked=True)
+        .all()
+    )
+
+    generated = 0
+    existing = 0
+    errors: list[dict] = []
+    results: list[dict] = []
+
+    for schedule in schedules:
+        try:
+            result = materializar_programacion_recurrente(
+                schedule,
+                through_date=target_date,
+            )
+            results.append(
+                {
+                    "schedule_id": int(schedule.id),
+                    **result,
+                }
+            )
+            if result.get("generated"):
+                generated += 1
+            elif result.get("reason") == "already_exists":
+                existing += 1
+        except MaintenancePreventiveError as exc:
+            errors.append(
+                {
+                    "schedule_id": int(schedule.id),
+                    "error": str(exc),
+                }
+            )
+
+    db.session.flush()
+
+    return {
+        "through_date": target_date.isoformat(),
+        "considered": len(schedules),
+        "generated": generated,
+        "already_existing": existing,
+        "errors": errors,
+        "results": results,
+    }
+
+
 def serializar_item(item: MaintenancePreventiveItemORM) -> dict:
     return {
         "id": item.id,
