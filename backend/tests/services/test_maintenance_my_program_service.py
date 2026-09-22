@@ -125,6 +125,85 @@ class MaintenanceMyProgramServiceTest(unittest.TestCase):
 
         self.assertEqual(projected, [])
 
+    def test_workload_sums_real_and_projected_minutes(self):
+        workload = service._build_workload(
+            [
+                {
+                    "item_kind": "TICKET",
+                    "operational_status": "PROGRAMADO",
+                    "fecha_trabajo": "2026-09-30",
+                    "estimated_duration_minutes": 60,
+                },
+                {
+                    "item_kind": "RECURRENCE_PROJECTION",
+                    "operational_status": "PREVISTO",
+                    "fecha_trabajo": "2026-09-30",
+                    "estimated_duration_minutes": 45,
+                },
+                {
+                    "item_kind": "TICKET",
+                    "operational_status": "PROGRAMADO",
+                    "fecha_trabajo": "2026-10-01",
+                    "estimated_duration_minutes": 345,
+                },
+            ]
+        )
+
+        self.assertEqual(workload["estimated_minutes"], 450)
+        self.assertEqual(workload["projected_minutes"], 45)
+        self.assertEqual(workload["scheduled_days"], 2)
+        self.assertEqual(workload["unestimated_count"], 0)
+        self.assertEqual(workload["overloaded_days"], 0)
+
+    def test_workload_marks_daily_overload_against_nine_hours(self):
+        workload = service._build_workload(
+            [
+                {
+                    "item_kind": "TICKET",
+                    "operational_status": "PROGRAMADO",
+                    "fecha_trabajo": "2026-09-30",
+                    "estimated_duration_minutes": 600,
+                },
+                {
+                    "item_kind": "RECURRENCE_PROJECTION",
+                    "operational_status": "PREVISTO",
+                    "fecha_trabajo": "2026-09-30",
+                    "estimated_duration_minutes": 30,
+                },
+            ]
+        )
+
+        day = workload["days"][0]
+        self.assertEqual(day["estimated_minutes"], 630)
+        self.assertEqual(day["capacity_minutes"], 540)
+        self.assertTrue(day["over_capacity"])
+        self.assertEqual(day["over_minutes"], 90)
+        self.assertEqual(day["utilization_percent"], 116.7)
+        self.assertEqual(workload["overloaded_days"], 1)
+
+    def test_workload_counts_items_without_duration_separately(self):
+        workload = service._build_workload(
+            [
+                {
+                    "item_kind": "TICKET",
+                    "operational_status": "PROGRAMADO",
+                    "fecha_trabajo": "2026-09-30",
+                    "estimated_duration_minutes": None,
+                },
+                {
+                    "item_kind": "TICKET",
+                    "operational_status": "PENDIENTE_VALIDACION",
+                    "fecha_trabajo": "2026-09-30",
+                    "estimated_duration_minutes": 120,
+                },
+            ]
+        )
+
+        self.assertEqual(workload["estimated_minutes"], 0)
+        self.assertEqual(workload["unestimated_count"], 1)
+        self.assertEqual(workload["days"][0]["unestimated_count"], 1)
+        self.assertEqual(workload["days"][0]["item_count"], 1)
+
     def test_projection_serialization_has_no_ticket(self):
         schedule = SimpleNamespace(
             id=91,
