@@ -178,6 +178,18 @@ def upgrade():
 
     op.add_column(
         "maintenance_preventive_items",
+        sa.Column("repeat_enabled_input", sa.String(length=20), nullable=True),
+    )
+    op.add_column(
+        "maintenance_preventive_items",
+        sa.Column(
+            "repeat_interval_workdays_input",
+            sa.String(length=20),
+            nullable=True,
+        ),
+    )
+    op.add_column(
+        "maintenance_preventive_items",
         sa.Column(
             "repeat_enabled",
             sa.Boolean(),
@@ -245,6 +257,14 @@ def downgrade():
     op.drop_column(
         "maintenance_preventive_items",
         "repeat_interval_workdays",
+    )
+    op.drop_column(
+        "maintenance_preventive_items",
+        "repeat_interval_workdays_input",
+    )
+    op.drop_column(
+        "maintenance_preventive_items",
+        "repeat_enabled_input",
     )
     op.drop_column("maintenance_preventive_items", "repeat_enabled")
 
