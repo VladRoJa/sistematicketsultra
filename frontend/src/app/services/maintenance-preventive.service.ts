@@ -88,6 +88,7 @@ export interface PreventiveDraftItem {
   fecha_programada_input: string | null;
   repeat_enabled_input: string | null;
   repeat_interval_workdays_input: string | null;
+  estimated_duration_minutes_input: string | null;
   target_type: 'EQUIPO' | 'EDIFICIO' | null;
   sucursal_id: number | null;
   inventario_id: number | null;
@@ -97,6 +98,7 @@ export interface PreventiveDraftItem {
   fecha_programada: string | null;
   repeat_enabled: boolean;
   repeat_interval_workdays: number | null;
+  estimated_duration_minutes: number | null;
   schedule_id: number | null;
   next_scheduled_date: string | null;
   actividad: string | null;
@@ -173,6 +175,7 @@ export interface MaintenanceMyProgramItem {
   necesita_refaccion: boolean;
   descripcion_refaccion: string | null;
   repeat_interval_workdays: number | null;
+  estimated_duration_minutes: number | null;
 }
 
 export interface MaintenanceChecklistItem {
@@ -815,6 +818,7 @@ export class MaintenancePreventiveService {
       fecha_programada: string;
       repeat_enabled?: boolean;
       repeat_interval_workdays?: number | null;
+      estimated_duration_minutes?: number | null;
       actividad: string;
       observaciones?: string | null;
     }>,
@@ -837,6 +841,7 @@ export class MaintenancePreventiveService {
       fecha_programada: string;
       repeat_enabled: boolean | string;
       repeat_interval_workdays: number | string | null;
+      estimated_duration_minutes: number | string | null;
       actividad: string;
       observaciones: string | null;
     }>,
