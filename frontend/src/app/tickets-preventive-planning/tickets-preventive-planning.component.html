@@ -286,7 +286,12 @@
 
             <label>
               <span>Fecha programada</span>
-              <input type="date" [(ngModel)]="programmedDate" />
+              <input
+                type="date"
+                [(ngModel)]="programmedDate"
+                [attr.min]="batch.period_start || null"
+                [attr.max]="batch.period_end || null"
+              />
             </label>
 
             <label>
@@ -515,6 +520,8 @@
                       *ngIf="batch.status === 'BORRADOR'; else dateRead"
                       type="date"
                       [(ngModel)]="item.fecha_programada_input"
+                      [attr.min]="batch.period_start || null"
+                      [attr.max]="batch.period_end || null"
                     />
                     <ng-template #dateRead>{{ item.fecha_programada_input || '—' }}</ng-template>
                   </td>
