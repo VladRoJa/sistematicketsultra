@@ -5,8 +5,15 @@
       <h2>Preventivo #{{ detail?.ticket?.id || data.ticketId }}</h2>
       <p *ngIf="detail as current">
         {{ current.ticket.sucursal }} ·
-        {{ current.ticket.codigo_equipo || 'SIN CÓDIGO' }} ·
-        {{ current.ticket.equipo }}
+        <ng-container
+          *ngIf="current.ticket.maintenance_target_type === 'EDIFICIO'; else validationEquipmentTarget"
+        >
+          EDIFICIO · {{ current.ticket.equipo }}
+        </ng-container>
+        <ng-template #validationEquipmentTarget>
+          {{ current.ticket.codigo_equipo || 'SIN CÓDIGO' }} ·
+          {{ current.ticket.equipo }}
+        </ng-template>
       </p>
     </div>
 
