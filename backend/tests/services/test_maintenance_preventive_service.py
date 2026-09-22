@@ -423,6 +423,159 @@ class MaintenancePreventiveDraftOperationsTest(unittest.TestCase):
         fake_session.add.assert_not_called()
 
 
+class MaintenancePreventiveMaterializationTest(unittest.TestCase):
+    def _schedule(self, **overrides):
+        values = {
+            "id": 70,
+            "active": True,
+            "target_type": "EQUIPO",
+            "sucursal_id": 4,
+            "inventario_id": 90,
+            "responsable_user_id": 20,
+            "created_by_user_id": 10,
+            "actividad": "Mantenimiento general",
+            "observaciones": None,
+            "repeat_interval_workdays": 5,
+            "next_scheduled_date": date(2026, 9, 21),
+        }
+        values.update(overrides)
+        return SimpleNamespace(**values)
+
+    def test_materialize_generates_ticket_and_advances_from_due_date(self):
+        schedule = self._schedule()
+        inventory = SimpleNamespace(
+            id=90,
+            nombre="CAMINADORA",
+            familia_equipo_id=1,
+        )
+        responsible = SimpleNamespace(
+            id=20,
+            username="TECNICO_PM",
+        )
+        creator = SimpleNamespace(
+            id=10,
+            username="MANTENIMIENTO",
+            sucursal_id=1000,
+        )
+        ticket = SimpleNamespace(
+            id=601,
+            asignado_a=None,
+            familia_equipo_id=None,
+        )
+        fake_session = MagicMock()
+
+        def fake_get(model, object_id):
+            if model is service.InventarioGeneral:
+                return inventory
+            if model is service.UserORM and int(object_id) == 20:
+                return responsible
+            if model is service.UserORM and int(object_id) == 10:
+                return creator
+            return None
+
+        fake_session.get.side_effect = fake_get
+
+        with (
+            patch.object(
+                service,
+                "db",
+                SimpleNamespace(session=fake_session),
+            ),
+            patch.object(
+                service.Ticket,
+                "create_ticket",
+                return_value=ticket,
+            ) as create_ticket,
+        ):
+            result = service.materializar_programacion_recurrente(
+                schedule,
+                through_date=date(2026, 9, 21),
+                occurrence_lookup=lambda *_args: None,
+            )
+
+        self.assertTrue(result["generated"])
+        self.assertEqual(result["ticket_id"], 601)
+        self.assertEqual(
+            schedule.next_scheduled_date,
+            date(2026, 9, 28),
+        )
+        self.assertEqual(ticket.asignado_a, "TECNICO_PM")
+        self.assertEqual(ticket.familia_equipo_id, 1)
+
+        kwargs = create_ticket.call_args.kwargs
+        self.assertEqual(kwargs["username"], "MANTENIMIENTO")
+        self.assertEqual(kwargs["sucursal_id_destino"], 4)
+        self.assertEqual(kwargs["aparato_id"], 90)
+        self.assertEqual(
+            kwargs["fecha_programada_original"],
+            kwargs["fecha_programada_actual"],
+        )
+
+        added = [
+            call.args[0]
+            for call in fake_session.add.call_args_list
+            if call.args
+        ]
+        occurrences = [
+            value
+            for value in added
+            if isinstance(value, MaintenancePreventiveOccurrenceORM)
+        ]
+        self.assertEqual(len(occurrences), 1)
+        self.assertEqual(occurrences[0].schedule_id, 70)
+        self.assertEqual(
+            occurrences[0].scheduled_date,
+            date(2026, 9, 21),
+        )
+        self.assertEqual(occurrences[0].ticket_id, 601)
+
+    def test_materialize_existing_occurrence_is_idempotent(self):
+        schedule = self._schedule()
+        existing = SimpleNamespace(ticket_id=555)
+
+        with patch.object(
+            service.Ticket,
+            "create_ticket",
+        ) as create_ticket:
+            result = service.materializar_programacion_recurrente(
+                schedule,
+                through_date=date(2026, 9, 21),
+                occurrence_lookup=lambda *_args: existing,
+            )
+
+        create_ticket.assert_not_called()
+        self.assertFalse(result["generated"])
+        self.assertEqual(result["reason"], "already_exists")
+        self.assertEqual(result["ticket_id"], 555)
+        self.assertEqual(
+            schedule.next_scheduled_date,
+            date(2026, 9, 28),
+        )
+
+    def test_materialize_not_due_does_nothing(self):
+        schedule = self._schedule(
+            next_scheduled_date=date(2026, 9, 22),
+        )
+
+        with patch.object(
+            service.Ticket,
+            "create_ticket",
+        ) as create_ticket:
+            result = service.materializar_programacion_recurrente(
+                schedule,
+                through_date=date(2026, 9, 21),
+                occurrence_lookup=lambda *_args: None,
+            )
+
+        create_ticket.assert_not_called()
+        self.assertFalse(result["generated"])
+        self.assertEqual(result["reason"], "not_due")
+        self.assertEqual(
+            schedule.next_scheduled_date,
+            date(2026, 9, 22),
+        )
+
+
 class MaintenancePreventivePublishTest(unittest.TestCase):
     def _user(self):
         return SimpleNamespace(
