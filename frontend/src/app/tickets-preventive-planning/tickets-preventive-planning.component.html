@@ -536,18 +536,25 @@
                         [(ngModel)]="item.actividad"
                         placeholder="Actividad"
                       />
-                      <input
-                        type="number"
-                        min="1"
-                        step="15"
-                        inputmode="numeric"
-                        [(ngModel)]="item.estimated_duration_minutes_input"
-                        placeholder="Duración (min)"
-                      />
+                      <div class="activity-duration">
+                        <span>Duración estimada</span>
+                        <div class="activity-duration__control">
+                          <input
+                            type="number"
+                            min="1"
+                            step="15"
+                            inputmode="numeric"
+                            [(ngModel)]="item.estimated_duration_minutes_input"
+                            aria-label="Duración estimada en minutos"
+                          />
+                          <span>min</span>
+                        </div>
+                      </div>
                     </div>
                     <ng-template #activityRead>
                       <span>{{ item.actividad || '—' }}</span>
-                      <small>
+                      <small class="activity-duration-read">
+                        Duración estimada ·
                         {{ durationLabel(item.estimated_duration_minutes) }}
                       </small>
                     </ng-template>
