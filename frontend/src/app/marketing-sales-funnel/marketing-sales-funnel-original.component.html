@@ -1,0 +1,464 @@
+<main class="marketing-page funnel-story-page">
+  <header class="page-header story-page-header">
+    <div class="page-heading">
+      <p class="eyebrow">Marketing y Conversión</p>
+      <h1>Funnel de Venta Nueva</h1>
+      <p class="page-subtitle">
+        Del interés al socio. Visualiza cómo se compone la Venta Nueva y qué tan trazable es cada venta.
+      </p>
+    </div>
+
+    <div class="page-actions funnel-scope-controls">
+      <mat-form-field
+        appearance="fill"
+        subscriptSizing="dynamic"
+        class="month-field"
+      >
+        <mat-label>Mes</mat-label>
+        <mat-select
+          [formControl]="monthControl"
+          aria-label="Mes del Funnel de Venta Nueva"
+        >
+          <mat-option
+            *ngFor="let option of monthOptions"
+            [value]="option.value"
+          >
+            {{ option.label }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field
+        appearance="fill"
+        subscriptSizing="dynamic"
+        class="month-field"
+      >
+        <mat-label>Corte</mat-label>
+        <mat-select
+          [formControl]="cutoffControl"
+          aria-label="Corte del Funnel de Venta Nueva"
+        >
+          <mat-option
+            *ngFor="let option of cutoffOptions"
+            [value]="option.value"
+          >
+            {{ option.label }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field
+        appearance="fill"
+        subscriptSizing="dynamic"
+        class="scope-field"
+      >
+        <mat-label>Región</mat-label>
+        <mat-select
+          [formControl]="regionControl"
+          aria-label="Región del Funnel de Venta Nueva"
+        >
+          <mat-option [value]="null">Todas las regiones</mat-option>
+          <mat-option
+            *ngFor="let region of regionOptions"
+            [value]="region.id"
+          >
+            {{ region.label }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field
+        appearance="fill"
+        subscriptSizing="dynamic"
+        class="scope-field"
+      >
+        <mat-label>Sucursal</mat-label>
+        <mat-select
+          [formControl]="branchControl"
+          aria-label="Sucursal del Funnel de Venta Nueva"
+        >
+          <mat-option [value]="null">Todas las sucursales</mat-option>
+          <mat-option
+            *ngFor="let option of branchOptions"
+            [value]="option.sucursal_id"
+          >
+            {{ option.sucursal }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <button
+        mat-flat-button
+        class="refresh-action"
+        type="button"
+        [disabled]="refreshDisabled"
+        (click)="refreshDashboard()"
+      >
+        <mat-icon>refresh</mat-icon>
+        Actualizar
+      </button>
+    </div>
+  </header>
+
+  <section *ngIf="loading" class="state-panel" aria-live="polite">
+    <mat-spinner diameter="36"></mat-spinner>
+    <p>Cargando Funnel de Venta Nueva…</p>
+  </section>
+
+  <section
+    *ngIf="!loading && errorMessage"
+    class="state-panel state-panel--error"
+    role="alert"
+  >
+    <mat-icon>error_outline</mat-icon>
+    <div>
+      <h2>No se pudo cargar el dashboard</h2>
+      <p>{{ errorMessage }}</p>
+      <button mat-stroked-button type="button" (click)="refreshDashboard()">
+        Reintentar
+      </button>
+    </div>
+  </section>
+
+  <ng-container *ngIf="showDashboard">
+    <app-marketing-sales-funnel-original-story
+      [month]="selectedMonth"
+      [cutoffDate]="dashboard?.selected_cutoff_date || null"
+      [summary]="dashboard?.summary"
+      [reconciliationLabel]="reconciliationLabel"
+      [branchIds]="activeScopeBranchIds"
+      [executiveSummary]="branchTotals"
+    ></app-marketing-sales-funnel-original-story>
+
+    <section class="branch-panel" aria-labelledby="branch-table-title">
+      <div class="branch-panel__heading">
+        <div>
+          <p class="section-kicker">Detalle por sucursal</p>
+          <h2 id="branch-table-title">Venta Nueva por canal y eficiencia</h2>
+          <p>
+            Una sola lectura por club: adquisición, clasificación de la venta,
+            ingreso total y eficiencia comercial. El desglose completo vive en Excel.
+          </p>
+        </div>
+
+        <button
+          mat-stroked-button
+          class="branch-export-action"
+          type="button"
+          [disabled]="!hasBranches"
+          (click)="exportBranchTable()"
+        >
+          <mat-icon>download</mat-icon>
+          Exportar Excel
+        </button>
+      </div>
+
+      <p *ngIf="!hasBranches" class="empty-message">
+        No hay sucursales disponibles para el alcance seleccionado.
+      </p>
+
+      <div *ngIf="hasBranches" class="branch-table-wrap branch-table-wrap--complete">
+        <table class="branch-performance-table">
+          <thead>
+            <tr class="branch-performance-table__groups">
+              <th class="branch-sticky-column branch-sticky-column--header" rowspan="2">
+                Sucursal
+              </th>
+              <th colspan="3">Adquisición</th>
+              <th colspan="5">Venta nueva</th>
+              <th colspan="4">Resultado</th>
+              <th colspan="2">Eficiencia</th>
+            </tr>
+            <tr class="branch-performance-table__columns">
+              <th class="group-start">Inversión</th>
+              <th>Leads</th>
+              <th>Visitas</th>
+
+              <th class="group-start">Venta digital</th>
+              <th>Orgánica digital</th>
+              <th>Web</th>
+              <th>BTL</th>
+              <th>Total</th>
+
+              <th class="group-start">Ingreso digital</th>
+              <th>Ingreso web</th>
+              <th>Ingreso BTL</th>
+              <th>Ingreso total</th>
+
+              <th class="group-start">Conversión</th>
+              <th>Costos</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            <tr *ngIf="branchTotals" class="branch-total-row">
+              <td class="branch-sticky-column branch-name-cell">
+                TOTAL
+              </td>
+
+              <td class="metric-cell metric-cell--money metric-cell--group-start">
+                <strong>{{ branchTotals.investment_display }}</strong>
+              </td>
+
+              <td class="metric-cell">
+                <strong>{{ branchTotals.leads_display }}</strong>
+              </td>
+
+              <td class="metric-cell">
+                <strong>{{ branchTotals.visits_display }}</strong>
+              </td>
+
+              <td class="metric-cell metric-cell--digital metric-cell--group-start">
+                <strong>{{ branchTotals.sales_digital_display }}</strong>
+              </td>
+
+              <td class="metric-cell metric-cell--digital-soft">
+                <strong>{{ branchTotals.sales_digital_organic_display }}</strong>
+              </td>
+
+              <td class="metric-cell">
+                <strong>{{ branchTotals.sales_web_display }}</strong>
+              </td>
+
+              <td class="metric-cell">
+                <strong>{{ branchTotals.sales_btl_display }}</strong>
+              </td>
+
+              <td class="metric-cell metric-cell--total">
+                <strong>{{ branchTotals.sales_total_display }}</strong>
+              </td>
+
+              <td class="metric-cell metric-cell--money metric-cell--group-start">
+                <strong>{{ branchTotals.revenue_digital_display }}</strong>
+              </td>
+
+              <td class="metric-cell metric-cell--money">
+                <strong>{{ branchTotals.revenue_web_display }}</strong>
+              </td>
+
+              <td class="metric-cell metric-cell--money">
+                <strong>{{ branchTotals.revenue_btl_display }}</strong>
+              </td>
+
+              <td class="metric-cell metric-cell--money metric-cell--total">
+                <strong>{{ branchTotals.revenue_total_display }}</strong>
+              </td>
+
+              <td class="metric-cell metric-cell--summary metric-cell--group-start">
+                <div class="compact-metric-stack">
+                  <span>
+                    <small>Lead → visita</small>
+                    <strong>{{ branchTotals.lead_to_visit_display }}</strong>
+                  </span>
+                  <span>
+                    <small>Visita → venta</small>
+                    <strong>{{ branchTotals.visit_to_digital_sale_display }}</strong>
+                  </span>
+                  <span>
+                    <small>Lead → venta</small>
+                    <strong>{{ branchTotals.lead_to_sale_display }}</strong>
+                  </span>
+                </div>
+              </td>
+
+              <td class="metric-cell metric-cell--summary metric-cell--money">
+                <div class="compact-metric-stack">
+                  <span>
+                    <small>CPL</small>
+                    <strong>{{ branchTotals.cpl_display }}</strong>
+                  </span>
+                  <span>
+                    <small>CPT</small>
+                    <strong>{{ branchTotals.cpt_display }}</strong>
+                  </span>
+                  <span>
+                    <small>CAC</small>
+                    <strong>{{ branchTotals.cac_display }}</strong>
+                  </span>
+                </div>
+              </td>
+            </tr>
+            <tr *ngFor="let row of branchRows">
+              <td class="branch-sticky-column branch-name-cell">
+                {{ row.sucursal }}
+              </td>
+
+              <td class="metric-cell metric-cell--money metric-cell--group-start">
+                <strong>{{ row.investment_display }}</strong>
+              </td>
+
+              <td class="metric-cell">
+                <button
+                  class="table-detail-link table-detail-link--strong"
+                  type="button"
+                  (click)="openBranchDetail('leads_meta', row)"
+                >
+                  {{ row.leads_meta_display }}
+                </button>
+              </td>
+
+              <td class="metric-cell">
+                <button
+                  class="table-detail-link table-detail-link--strong"
+                  type="button"
+                  (click)="openBranchDetail('visits_total', row)"
+                >
+                  {{ row.visits_total_display }}
+                </button>
+              </td>
+
+              <td class="metric-cell metric-cell--digital metric-cell--group-start">
+                <button
+                  class="table-detail-link table-detail-link--strong"
+                  type="button"
+                  (click)="openBranchDetail('sales_iventas', row)"
+                >
+                  {{ row.sales_digital_display }}
+                </button>
+              </td>
+
+              <td class="metric-cell metric-cell--digital-soft">
+                <button
+                  class="table-detail-link"
+                  type="button"
+                  (click)="openDetail('sales_not_iventas', row.sucursal_id, 'SOCIAL_UNTRACED')"
+                >
+                  {{ row.sales_digital_organic_display }}
+                </button>
+              </td>
+
+              <td class="metric-cell">
+                {{ row.sales_web_display }}
+              </td>
+
+              <td class="metric-cell">
+                {{ row.sales_btl_display }}
+              </td>
+
+              <td class="metric-cell metric-cell--total">
+                <button
+                  class="table-detail-link table-detail-link--strong"
+                  type="button"
+                  (click)="openBranchDetail('sales_total', row)"
+                >
+                  {{ row.sales_total_display }}
+                </button>
+              </td>
+
+              <td class="metric-cell metric-cell--money metric-cell--group-start">
+                {{ row.revenue_digital_display }}
+              </td>
+
+              <td class="metric-cell metric-cell--money">
+                {{ row.revenue_web_display }}
+              </td>
+
+              <td class="metric-cell metric-cell--money">
+                {{ row.revenue_btl_display }}
+              </td>
+
+              <td class="metric-cell metric-cell--money metric-cell--total">
+                <button
+                  class="table-detail-link table-detail-link--money"
+                  type="button"
+                  (click)="openBranchDetail('revenue_total', row)"
+                >
+                  {{ row.revenue_total_display }}
+                </button>
+              </td>
+
+              <td class="metric-cell metric-cell--summary metric-cell--group-start">
+                <div class="compact-metric-stack" aria-label="Conversiones del club">
+                  <span>
+                    <small>Lead → visita</small>
+                    <strong>{{ row.lead_to_visit_display }}</strong>
+                  </span>
+                  <span>
+                    <small>Visita → venta</small>
+                    <strong>{{ row.visit_to_digital_sale_display }}</strong>
+                  </span>
+                  <span>
+                    <small>Lead → venta</small>
+                    <strong>{{ row.lead_to_sale_display }}</strong>
+                  </span>
+                </div>
+              </td>
+
+              <td class="metric-cell metric-cell--summary metric-cell--money">
+                <div class="compact-metric-stack" aria-label="Costos del club">
+                  <span>
+                    <small>CPL</small>
+                    <strong>{{ row.cpl_display }}</strong>
+                  </span>
+                  <span>
+                    <small>CPT</small>
+                    <strong>{{ row.cpt_display }}</strong>
+                  </span>
+                  <span>
+                    <small>CAC</small>
+                    <strong>{{ row.cac_display }}</strong>
+                  </span>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <details class="quality-section story-quality">
+      <summary class="section-heading">
+        <div>
+          <p class="section-kicker">Confiabilidad</p>
+          <h2 id="quality-title">Fuentes y reglas</h2>
+          <p>Ver cortes, fuentes y consideraciones del cálculo.</p>
+        </div>
+        <span class="row-detail-action">
+          Ver / ocultar <mat-icon>unfold_more</mat-icon>
+        </span>
+      </summary>
+
+      <div class="quality-layout" aria-labelledby="quality-title">
+        <dl class="quality-modes quality-modes--three">
+          <div>
+            <dt>Corte seleccionado</dt>
+            <dd>{{ dashboard?.selected_cutoff_date ? (dashboard?.selected_cutoff_date | date:'dd MMM yyyy':'UTC':'es-MX') : '—' }}</dd>
+          </div>
+          <div>
+            <dt>Corte Nuevos Socios</dt>
+            <dd>{{ newSalesCutoffLabel }}</dd>
+          </div>
+          <div>
+            <dt>Corte KPI Desempeño</dt>
+            <dd>{{ kpiCutoffLabel }}</dd>
+          </div>
+          <div>
+            <dt>Corte Venta Total</dt>
+            <dd>{{ ventaTotalCutoffLabel }}</dd>
+          </div>
+          <div>
+            <dt>Ventana iVentas</dt>
+            <dd>{{ matchWindowLabel }}</dd>
+          </div>
+          <div>
+            <dt>Fuente de Venta Nueva</dt>
+            <dd>{{ dashboard?.data_quality?.new_sale_rule }}</dd>
+          </div>
+          <div>
+            <dt>Rol de Venta Total</dt>
+            <dd>{{ dashboard?.data_quality?.venta_total_role || 'Enriquecimiento transaccional' }}</dd>
+          </div>
+        </dl>
+
+        <div *ngIf="hasLimitations" class="limitations">
+          <h3><mat-icon>info</mat-icon> Consideraciones</h3>
+          <ul>
+            <li *ngFor="let limitation of dashboard?.data_quality?.limitations">
+              {{ limitation }}
+            </li>
+          </ul>
+        </div>
+      </div>
+    </details>
+  </ng-container>
+</main>
