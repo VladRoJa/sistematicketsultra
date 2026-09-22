@@ -76,10 +76,16 @@ export interface PreventiveDraftItem {
   codigo_equipo_input: string | null;
   responsable_input: string | null;
   fecha_programada_input: string | null;
+  repeat_enabled_input: string | null;
+  repeat_interval_workdays_input: string | null;
   sucursal_id: number | null;
   inventario_id: number | null;
   responsable_user_id: number | null;
   fecha_programada: string | null;
+  repeat_enabled: boolean;
+  repeat_interval_workdays: number | null;
+  schedule_id: number | null;
+  next_scheduled_date: string | null;
   actividad: string | null;
   observaciones: string | null;
   validation_status: 'PENDIENTE' | 'VALIDO' | 'ERROR';
@@ -781,6 +787,8 @@ export class MaintenancePreventiveService {
       codigo_equipo: string;
       responsable: string;
       fecha_programada: string;
+      repeat_enabled?: boolean;
+      repeat_interval_workdays?: number | null;
       actividad: string;
       observaciones?: string | null;
     }>,
@@ -799,6 +807,8 @@ export class MaintenancePreventiveService {
       codigo_equipo: string;
       responsable: string;
       fecha_programada: string;
+      repeat_enabled: boolean | string;
+      repeat_interval_workdays: number | string | null;
       actividad: string;
       observaciones: string | null;
     }>,
