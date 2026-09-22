@@ -80,6 +80,7 @@ class MaintenancePreventiveDraftValidationTest(unittest.TestCase):
             "building_classification_input": None,
             "responsable_input": "TECNICO_PM",
             "fecha_programada_input": "2026-09-20",
+            "estimated_duration_minutes_input": None,
             "actividad": "Mantenimiento general",
         }
         values.update(overrides)
@@ -136,6 +137,29 @@ class MaintenancePreventiveDraftValidationTest(unittest.TestCase):
         self.assertIsNone(item.building_classification_id)
         self.assertEqual(item.responsable_user_id, 20)
         self.assertEqual(item.fecha_programada, date(2026, 9, 20))
+
+    def test_valid_estimated_duration_is_resolved(self):
+        item = self._item(estimated_duration_minutes_input="45")
+
+        errors = self._validate(item)
+
+        self.assertEqual(errors, [])
+        self.assertEqual(item.estimated_duration_minutes, 45)
+
+    def test_invalid_estimated_duration_is_preserved_as_row_error(self):
+        item = self._item(estimated_duration_minutes_input="casi una hora")
+
+        errors = self._validate(item)
+
+        self.assertIn(
+            "La duración estimada debe ser un número entero mayor a cero.",
+            errors,
+        )
+        self.assertIsNone(item.estimated_duration_minutes)
+        self.assertEqual(
+            item.estimated_duration_minutes_input,
+            "casi una hora",
+        )
 
     def test_revalidating_valid_row_marks_pending_before_resolver_queries(self):
         item = self._item(
@@ -553,6 +577,7 @@ class MaintenancePreventiveMaterializationTest(unittest.TestCase):
             "actividad": "Mantenimiento general",
             "observaciones": None,
             "repeat_interval_workdays": 5,
+            "estimated_duration_minutes": 45,
             "next_scheduled_date": date(2026, 9, 21),
         }
         values.update(overrides)
@@ -623,6 +648,7 @@ class MaintenancePreventiveMaterializationTest(unittest.TestCase):
         self.assertEqual(kwargs["username"], "MANTENIMIENTO")
         self.assertEqual(kwargs["sucursal_id_destino"], 4)
         self.assertEqual(kwargs["aparato_id"], 90)
+        self.assertEqual(kwargs["maintenance_estimated_minutes"], 45)
         self.assertEqual(
             kwargs["fecha_programada_original"],
             kwargs["fecha_programada_actual"],
@@ -834,6 +860,7 @@ class MaintenancePreventivePublishTest(unittest.TestCase):
             fecha_programada=date(2026, 9, 20),
             repeat_enabled=False,
             repeat_interval_workdays=None,
+            estimated_duration_minutes=45,
             schedule_id=None,
             actividad="Mantenimiento general",
             observaciones=None,
@@ -927,6 +954,7 @@ class MaintenancePreventivePublishTest(unittest.TestCase):
         self.assertEqual(kwargs["tipo_mantenimiento"], "PREVENTIVO")
         self.assertEqual(kwargs["sucursal_id_destino"], 4)
         self.assertEqual(kwargs["aparato_id"], 90)
+        self.assertEqual(kwargs["maintenance_estimated_minutes"], 45)
         self.assertFalse(kwargs["commit"])
         self.assertEqual(
             kwargs["fecha_programada_original"],
@@ -1078,6 +1106,7 @@ class MaintenancePreventivePublishTest(unittest.TestCase):
             date(2026, 9, 28),
         )
         self.assertEqual(item.schedule.repeat_interval_workdays, 5)
+        self.assertEqual(item.schedule.estimated_duration_minutes, 45)
 
         added = [
             call.args[0]
