@@ -116,6 +116,7 @@
           class="work-card"
           [class.work-card--overdue]="item.operational_status === 'VENCIDO'"
           [class.work-card--pending]="item.operational_status === 'PENDIENTE_VALIDACION'"
+          [class.work-card--projection]="isProjection(item)"
           [class.work-card--expanded]="isWorkExpanded(item)"
         >
           <div class="work-card__top">
@@ -155,7 +156,12 @@
 
           <div class="work-card__meta">
             <span>{{ formatDate(item.fecha_trabajo) }}</span>
-            <span>Ticket #{{ item.ticket_id }}</span>
+            <span *ngIf="item.ticket_id !== null; else projectedMeta">
+              Ticket #{{ item.ticket_id }}
+            </span>
+            <ng-template #projectedMeta>
+              <span>Sin ticket · previsto</span>
+            </ng-template>
           </div>
 
           <div
@@ -173,6 +179,16 @@
             <ng-container *ngIf="item.descripcion_refaccion">
               · {{ item.descripcion_refaccion }}
             </ng-container>
+          </div>
+
+          <div
+            *ngIf="isProjection(item)"
+            class="work-card__footer work-card__footer--projection"
+          >
+            <span>{{ recurrenceLabel(item) }}</span>
+            <small>
+              Se generará como ticket cuando llegue su fecha programada.
+            </small>
           </div>
 
           <button
