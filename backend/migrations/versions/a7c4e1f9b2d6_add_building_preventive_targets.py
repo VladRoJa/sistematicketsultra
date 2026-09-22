@@ -224,17 +224,30 @@ def downgrade():
     # de edificio, el downgrade debe detenerse antes de restaurar NOT NULL.
     op.execute(
         """
-        DO $$
+        DO $
         BEGIN
             IF EXISTS (
                 SELECT 1
+                FROM maintenance_preventive_schedules
+                WHERE target_type = 'EDIFICIO'
+            ) OR EXISTS (
+                SELECT 1
+                FROM maintenance_preventive_items
+                WHERE target_type = 'EDIFICIO'
+            ) OR EXISTS (
+                SELECT 1
+                FROM tickets
+                WHERE maintenance_target_type = 'EDIFICIO'
+            ) OR EXISTS (
+                SELECT 1
                 FROM pm_bitacoras
-                WHERE inventario_id IS NULL
+                WHERE target_type = 'EDIFICIO'
+                   OR inventario_id IS NULL
             ) THEN
                 RAISE EXCEPTION
-                    'No se puede revertir: existen bitácoras PM de Edificio.';
+                    'No se puede revertir: existen datos PM de Edificio.';
             END IF;
-        END $$;
+        END $;
         """
     )
 
