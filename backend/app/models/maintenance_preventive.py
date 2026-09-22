@@ -510,6 +510,7 @@ class MaintenancePreventiveItemORM(db.Model):
             name="ck_maintenance_preventive_items_validation_status",
         ),
         db.CheckConstraint(
+            "(validation_status <> 'VALIDO') OR "
             "((repeat_enabled = false AND repeat_interval_workdays IS NULL) "
             "OR (repeat_enabled = true AND repeat_interval_workdays > 0))",
             name="ck_maintenance_preventive_items_recurrence",
