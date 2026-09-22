@@ -12,6 +12,47 @@ from app.services import maintenance_preventive_service as service
 from app.services.maintenance_preventive_service import validar_item_borrador
 
 
+class MaintenancePreventiveSerializationTest(unittest.TestCase):
+    def test_resolved_import_values_are_normalized_for_edit_controls(self):
+        item = MaintenancePreventiveItemORM(
+            target_type_input="Edificio",
+            target_type="EDIFICIO",
+            building_classification_input="Baños > Mingitorios",
+            building_classification_id=321,
+            repeat_enabled_input="Sí",
+            repeat_enabled=True,
+            repeat_interval_workdays_input="20",
+            repeat_interval_workdays=20,
+            validation_status="VALIDO",
+        )
+
+        payload = service.serializar_item(item)
+
+        self.assertEqual(payload["target_type_input"], "EDIFICIO")
+        self.assertEqual(
+            payload["building_classification_input"],
+            "321",
+        )
+        self.assertEqual(payload["repeat_enabled_input"], "SI")
+
+    def test_invalid_raw_values_are_preserved_for_correction(self):
+        item = MaintenancePreventiveItemORM(
+            target_type_input="OTRO",
+            building_classification_input="Texto inválido",
+            repeat_enabled_input="QUIZA",
+            validation_status="ERROR",
+        )
+
+        payload = service.serializar_item(item)
+
+        self.assertEqual(payload["target_type_input"], "OTRO")
+        self.assertEqual(
+            payload["building_classification_input"],
+            "Texto inválido",
+        )
+        self.assertEqual(payload["repeat_enabled_input"], "QUIZA")
+
+
 class MaintenancePreventiveWorkdayRecurrenceTest(unittest.TestCase):
     def test_add_workdays_skips_weekend(self):
         self.assertEqual(
