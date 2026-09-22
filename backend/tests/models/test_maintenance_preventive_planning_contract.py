@@ -4,6 +4,8 @@ from app.models.maintenance_checklist import (
     MaintenanceChecklistItemORM,
     MaintenanceChecklistTemplateORM,
 )
+from app.models.pm_bitacora import PmBitacoraORM
+from app.models.ticket_model import Ticket
 from app.models.maintenance_preventive import (
     MaintenanceCrewORM,
     MaintenancePersonnelORM,
@@ -136,12 +138,16 @@ class MaintenancePreventivePlanningContractTest(unittest.TestCase):
             {
                 "batch_id",
                 "source_row_number",
+                "target_type_input",
                 "sucursal_input",
                 "codigo_equipo_input",
+                "building_classification_input",
                 "responsable_input",
                 "fecha_programada_input",
+                "target_type",
                 "sucursal_id",
                 "inventario_id",
+                "building_classification_id",
                 "responsable_user_id",
                 "fecha_programada",
                 "repeat_enabled_input",
@@ -182,6 +188,14 @@ class MaintenancePreventivePlanningContractTest(unittest.TestCase):
             "ck_maintenance_preventive_items_recurrence",
             constraint_names,
         )
+        self.assertIn(
+            "ck_maintenance_preventive_items_target_type",
+            constraint_names,
+        )
+        self.assertIn(
+            "ck_maintenance_preventive_items_target_reference",
+            constraint_names,
+        )
 
     def test_recurrence_schedule_contract(self):
         columns = MaintenancePreventiveScheduleORM.__table__.c
@@ -192,6 +206,7 @@ class MaintenancePreventivePlanningContractTest(unittest.TestCase):
                 "target_type",
                 "sucursal_id",
                 "inventario_id",
+                "building_classification_id",
                 "responsable_user_id",
                 "actividad",
                 "observaciones",
@@ -218,13 +233,14 @@ class MaintenancePreventivePlanningContractTest(unittest.TestCase):
             constraint_names,
         )
         self.assertIn(
-            "ck_maintenance_preventive_schedules_equipment_target",
+            "ck_maintenance_preventive_schedules_target_reference",
             constraint_names,
         )
 
         expected_targets = {
             "sucursal_id": "sucursales.sucursal_id",
             "inventario_id": "inventario_general.id",
+            "building_classification_id": "catalogo_clasificacion.id",
             "responsable_user_id": "users.id",
             "created_by_user_id": "users.id",
         }
@@ -275,6 +291,7 @@ class MaintenancePreventivePlanningContractTest(unittest.TestCase):
             "batch_id": "maintenance_preventive_batches.id",
             "sucursal_id": "sucursales.sucursal_id",
             "inventario_id": "inventario_general.id",
+            "building_classification_id": "catalogo_clasificacion.id",
             "responsable_user_id": "users.id",
             "ticket_id": "tickets.id",
             "schedule_id": "maintenance_preventive_schedules.id",
@@ -292,6 +309,62 @@ class MaintenancePreventivePlanningContractTest(unittest.TestCase):
                     foreign_keys[0].target_fullname,
                     target,
                 )
+
+    def test_ticket_maintenance_target_contract(self):
+        columns = Ticket.__table__.c
+
+        self.assertIn("maintenance_target_type", columns.keys())
+        self.assertTrue(columns.maintenance_target_type.nullable)
+
+        constraint_names = {
+            constraint.name
+            for constraint in Ticket.__table__.constraints
+            if constraint.name
+        }
+        self.assertIn(
+            "ck_tickets_maintenance_target_type",
+            constraint_names,
+        )
+        self.assertIn(
+            "ck_tickets_maintenance_target_reference",
+            constraint_names,
+        )
+
+    def test_pm_bitacora_supports_equipment_and_building_targets(self):
+        columns = PmBitacoraORM.__table__.c
+
+        self.assertTrue(
+            {
+                "inventario_id",
+                "target_type",
+                "clasificacion_id",
+            }.issubset(set(columns.keys()))
+        )
+        self.assertTrue(columns.inventario_id.nullable)
+        self.assertFalse(columns.target_type.nullable)
+
+        classification_fk = list(
+            columns.clasificacion_id.foreign_keys
+        )
+        self.assertEqual(len(classification_fk), 1)
+        self.assertEqual(
+            classification_fk[0].target_fullname,
+            "catalogo_clasificacion.id",
+        )
+
+        constraint_names = {
+            constraint.name
+            for constraint in PmBitacoraORM.__table__.constraints
+            if constraint.name
+        }
+        self.assertIn(
+            "ck_pm_bitacoras_target_type",
+            constraint_names,
+        )
+        self.assertIn(
+            "ck_pm_bitacoras_target_reference",
+            constraint_names,
+        )
 
     def test_ticket_link_is_one_to_one_from_planning_item(self):
         ticket_column = MaintenancePreventiveItemORM.__table__.c.ticket_id
