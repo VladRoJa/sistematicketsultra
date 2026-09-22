@@ -530,7 +530,7 @@ class MaintenancePreventiveItemORM(db.Model):
     )
     sucursal = db.relationship("Sucursal")
     inventario = db.relationship("InventarioGeneral")
-    building_element = db.relationship("MaintenanceBuildingElementORM")
+    building_classification = db.relationship("CatalogoClasificacion")
     responsable_user = db.relationship("UserORM")
     ticket = db.relationship("Ticket")
     schedule = db.relationship(
