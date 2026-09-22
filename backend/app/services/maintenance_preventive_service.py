@@ -167,6 +167,25 @@ def _parse_workday_interval(value) -> int | None:
     return parsed
 
 
+def _parse_estimated_duration_minutes(value) -> int | None:
+    if value in (None, ""):
+        return None
+
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise MaintenancePreventiveError(
+            "estimated_duration_minutes debe ser un entero positivo."
+        ) from exc
+
+    if parsed <= 0:
+        raise MaintenancePreventiveError(
+            "estimated_duration_minutes debe ser mayor a cero."
+        )
+
+    return parsed
+
+
 def add_workdays(start_date: date, workdays: int) -> date:
     """Suma días hábiles contando únicamente lunes a viernes."""
     if not isinstance(start_date, date):
@@ -940,8 +959,14 @@ def agregar_renglones_lote(
                 if "repeat_interval_workdays" in raw_row
                 else raw_row.get("cada_dias_habiles")
             ) or None,
+            estimated_duration_minutes_input=_clean(
+                raw_row.get("estimated_duration_minutes")
+                or raw_row.get("duracion_estimada_minutos")
+                or raw_row.get("duracion_estimada")
+            ) or None,
             repeat_enabled=False,
             repeat_interval_workdays=None,
+            estimated_duration_minutes=None,
             actividad=_clean(raw_row.get("actividad")) or None,
             observaciones=_clean(raw_row.get("observaciones")) or None,
             validation_status="PENDIENTE",
@@ -1061,6 +1086,16 @@ def actualizar_renglon_lote(
             else payload.get("cada_dias_habiles")
         ) or None
 
+    if (
+        "estimated_duration_minutes" in payload
+        or "duracion_estimada_minutos" in payload
+        or "duracion_estimada" in payload
+    ):
+        item.estimated_duration_minutes_input = _clean(
+            payload.get("estimated_duration_minutes")
+            or payload.get("duracion_estimada_minutos")
+            or payload.get("duracion_estimada")
+        ) or None
 
     if "actividad" in payload:
         item.actividad = _clean(payload.get("actividad")) or None
@@ -1077,6 +1112,7 @@ def actualizar_renglon_lote(
     item.fecha_programada = None
     item.repeat_enabled = False
     item.repeat_interval_workdays = None
+    item.estimated_duration_minutes = None
     item.validation_status = "PENDIENTE"
     item.validation_errors = None
 
@@ -1288,6 +1324,11 @@ def publicar_lote_preventivo(
             requiere_aprobacion=False,
             tipo_mantenimiento="PREVENTIVO",
             maintenance_target_type=target_type,
+            maintenance_estimated_minutes=getattr(
+                item,
+                "estimated_duration_minutes",
+                None,
+            ),
             fecha_programada_original=programmed_at,
             fecha_programada_actual=programmed_at,
             commit=False,
@@ -1334,6 +1375,11 @@ def publicar_lote_preventivo(
                 actividad=_clean(item.actividad),
                 observaciones=_clean(item.observaciones) or None,
                 repeat_interval_workdays=interval,
+                estimated_duration_minutes=getattr(
+                    item,
+                    "estimated_duration_minutes",
+                    None,
+                ),
                 start_date=item.fecha_programada,
                 next_scheduled_date=add_workdays(
                     item.fecha_programada,
@@ -1518,6 +1564,11 @@ def materializar_programacion_recurrente(
         requiere_aprobacion=False,
         tipo_mantenimiento="PREVENTIVO",
         maintenance_target_type=target_type,
+        maintenance_estimated_minutes=getattr(
+            schedule,
+            "estimated_duration_minutes",
+            None,
+        ),
         fecha_programada_original=programmed_at,
         fecha_programada_actual=programmed_at,
         commit=False,
@@ -1672,6 +1723,17 @@ def serializar_item(item: MaintenancePreventiveItemORM) -> dict:
                 else None
             )
         ),
+        "estimated_duration_minutes_input": (
+            str(item.estimated_duration_minutes)
+            if getattr(item, "validation_status", None) == "VALIDO"
+            and getattr(item, "estimated_duration_minutes", None)
+            is not None
+            else getattr(
+                item,
+                "estimated_duration_minutes_input",
+                None,
+            )
+        ),
         "target_type": getattr(item, "target_type", None),
         "sucursal_id": item.sucursal_id,
         "inventario_id": item.inventario_id,
@@ -1703,6 +1765,11 @@ def serializar_item(item: MaintenancePreventiveItemORM) -> dict:
         "repeat_interval_workdays": getattr(
             item,
             "repeat_interval_workdays",
+            None,
+        ),
+        "estimated_duration_minutes": getattr(
+            item,
+            "estimated_duration_minutes",
             None,
         ),
         "schedule_id": getattr(item, "schedule_id", None),
@@ -1972,6 +2039,7 @@ def validar_item_borrador(
     item.building_classification_id = None
     item.responsable_user_id = None
     item.fecha_programada = None
+    item.estimated_duration_minutes = None
 
     sucursal = resolve_sucursal(item.sucursal_input)
     if sucursal is None:
@@ -2143,6 +2211,21 @@ def validar_item_borrador(
                 "Se repite es Sí."
             )
         item.repeat_interval_workdays = None
+
+    duration_input = getattr(
+        item,
+        "estimated_duration_minutes_input",
+        None,
+    )
+    try:
+        item.estimated_duration_minutes = (
+            _parse_estimated_duration_minutes(duration_input)
+        )
+    except MaintenancePreventiveError:
+        item.estimated_duration_minutes = None
+        errors.append(
+            "La duración estimada debe ser un número entero mayor a cero."
+        )
 
     item.actividad = _clean(item.actividad) or None
     if item.actividad is None:
