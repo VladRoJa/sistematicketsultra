@@ -43,7 +43,7 @@ def test_my_program_workload_contract_is_typed_and_visible():
     assert "current.workload.estimated_minutes" in html
     assert "current.workload.days" in html
     assert "<progress" in html
-    assert "[value]="workloadProgress(day)"" in html
+    assert '[value]="workloadProgress(day)"' in html
     assert "[style." not in html
 
     assert ".workload-panel" in css
