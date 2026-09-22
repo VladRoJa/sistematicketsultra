@@ -24,6 +24,10 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
                     "familia": "Bicicleta Recumbente",
                 }
             ],
+            building_classifications=[
+                "Baños > Mingitorios",
+                "Instalaciones > Hidráulica",
+            ],
         )
 
         workbook = load_workbook(io.BytesIO(content))
@@ -70,6 +74,8 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
             self.assertIn("=CatalogoSucursales", formulas)
             self.assertIn("=CatalogoResponsables", formulas)
             self.assertIn('"No,Sí"', formulas)
+            self.assertIn('"Equipo,Edificio"', formulas)
+            self.assertIn("=CatalogoEdificio", formulas)
             self.assertIn(
                 '=INDIRECT(IFERROR(VLOOKUP($A2,MapaFamilias,2,FALSE),"ListaVacia"))',
                 formulas,
@@ -110,6 +116,10 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
                 catalogs["G2"].value,
                 "Bicicleta Recumbente",
             )
+            self.assertEqual(
+                catalogs["H2"].value,
+                "Baños > Mingitorios",
+            )
             self.assertIn(
                 "CatalogoSucursales",
                 workbook.defined_names,
@@ -120,6 +130,7 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
             )
             self.assertIn("MapaFamilias", workbook.defined_names)
             self.assertIn("MapaCodigos", workbook.defined_names)
+            self.assertIn("CatalogoEdificio", workbook.defined_names)
             self.assertTrue(
                 any(
                     name.startswith("Familias_")
@@ -141,32 +152,37 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
                 sheet["H1"].value,
                 "Cada N días hábiles",
             )
+            self.assertEqual(sheet["J1"].value, "Tipo")
             self.assertEqual(
-                sheet["J1"].value,
+                sheet["K1"].value,
+                "Clasificación edificio",
+            )
+            self.assertEqual(
+                sheet["L1"].value,
                 "Validación",
             )
             self.assertIn(
                 "COUNTIFS",
-                sheet["J2"].value,
+                sheet["L2"].value,
             )
             self.assertIn(
                 "DUPLICADO",
-                sheet["J2"].value,
+                sheet["L2"].value,
             )
 
             conditional_ranges = {
                 str(rule_range.sqref)
                 for rule_range in sheet.conditional_formatting
             }
-            self.assertIn("A2:J1001", conditional_ranges)
+            self.assertIn("A2:L1001", conditional_ranges)
 
             duplicate_rules = list(
-                sheet.conditional_formatting["A2:J1001"]
+                sheet.conditional_formatting["A2:L1001"]
             )
             self.assertEqual(len(duplicate_rules), 1)
             self.assertEqual(
                 duplicate_rules[0].formula[0],
-                '$J2="⚠ DUPLICADO"',
+                '$L2="⚠ DUPLICADO"',
             )
         finally:
             workbook.close()
@@ -256,6 +272,28 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
         self.assertEqual(row["repeat_interval_workdays"], "10")
         self.assertEqual(row["fecha_programada"], "2026-09-21")
 
+    def test_csv_accepts_building_target_without_equipment_code(self):
+        csv_content = (
+            "Sucursal,Fecha programada,Actividad,Responsable,"
+            "Tipo,Clasificación edificio,Se repite,"
+            "Cada N días hábiles\n"
+            "VILLAS DEL REY,21/09/2026,Revisión de baños,"
+            "TECNICO_PM,Edificio,Baños > Mingitorios,Sí,20\n"
+        ).encode("utf-8")
+
+        parsed = parse_preventive_import(
+            filename="preventivos_edificio.csv",
+            content=csv_content,
+        )
+
+        row = parsed["rows"][0]
+        self.assertIsNone(row["codigo_equipo"])
+        self.assertEqual(row["target_type"], "Edificio")
+        self.assertEqual(
+            row["building_classification"],
+            "Baños > Mingitorios",
+        )
+
     def test_missing_required_header_is_rejected(self):
         workbook = Workbook()
         sheet = workbook.active
@@ -315,6 +353,8 @@ class MaintenancePreventiveImportServiceTest(unittest.TestCase):
                 "Se repite",
                 "Cada N días hábiles",
                 "Observaciones",
+                "Tipo",
+                "Clasificación edificio",
                 "Validación",
             ),
         )
