@@ -72,13 +72,21 @@ def test_frontend_service_uses_canonical_preventive_api():
         assert endpoint in service
 
 
-def test_admin_view_supports_manual_family_selection_and_batch_actions():
+def test_admin_view_supports_equipment_building_and_batch_actions():
     html = _read(COMPONENT_HTML)
+    ts = _read(COMPONENT_TS)
 
-    assert "Selección por familia" in html
+    assert "Objetivo preventivo" in html
+    assert "targetType" in html
+    assert "EQUIPO" in html
+    assert "EDIFICIO" in html
+    assert "buildingClassificationId" in html
+    assert "context.building_classifications" in html
     assert "familyOptions" in html
-    assert "selectedEquipmentCount" in html
-    assert "Agregar {{ selectedEquipmentCount }} preventivos" in html
+    assert "manualTargetCount" in html
+    assert "Agregar {{ manualTargetCount }} preventivos" in html
+    assert "isManualEquipment" in ts
+    assert "isManualBuilding" in ts
     assert "Validar lote" in html
     assert "Publicar {{ batch.items.length }} preventivos" in html
     assert "Cargar y validar" in html
