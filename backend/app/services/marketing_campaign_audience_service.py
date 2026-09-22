@@ -19,6 +19,7 @@ from app.warehouse.services.socios_vencidos_current_status_resolver import norma
 
 TZ = ZoneInfo("America/Tijuana")
 DOMICILIATED_GROUP = "DOMICILIATED_FLOW"
+BCN_MINIMUM_DEBT = Decimal("999.00")
 WEEKLY_FREQUENCY_EXCLUDE = "EXCLUDE"
 WEEKLY_FREQUENCY_KEEP = "KEEP"
 WEEKLY_FREQUENCY_ACTIONS = {WEEKLY_FREQUENCY_EXCLUDE, WEEKLY_FREQUENCY_KEEP}
@@ -201,12 +202,12 @@ def _filter_custom_active_expiration(plan, *, date_from, date_to):
     plan["summary"]["eligible"] = len(filtered)
 
 
-def _has_positive_debt(row):
+def _has_bcn_eligible_debt(row):
     raw = row.get("adeudo")
     if raw is None:
         return False
     try:
-        return Decimal(str(raw)) > 0
+        return Decimal(str(raw)) >= BCN_MINIMUM_DEBT
     except (InvalidOperation, ValueError):
         return False
 
@@ -215,7 +216,7 @@ def _is_bcn_base_candidate(row):
     return (
         row.get("tarifa_group") == DOMICILIATED_GROUP
         and row.get("eligibility_reason") == "TARIFF_DOMICILIATED_FLOW"
-        and _has_positive_debt(row)
+        and _has_bcn_eligible_debt(row)
     )
 
 
