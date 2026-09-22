@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Callable
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -16,6 +16,8 @@ from app.models.maintenance_preventive import (
     MaintenancePersonnelORM,
     MaintenancePreventiveBatchORM,
     MaintenancePreventiveItemORM,
+    MaintenancePreventiveOccurrenceORM,
+    MaintenancePreventiveScheduleORM,
 )
 from app.models.sucursal_model import Sucursal
 from app.models.suite_governance import (
@@ -117,6 +119,71 @@ def _parse_optional_date(value, field_name: str) -> date | None:
 def _batch_key() -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
     return f"PM-{stamp}-{uuid4().hex[:8].upper()}"
+
+
+def _schedule_key() -> str:
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
+    return f"PMR-{stamp}-{uuid4().hex[:10].upper()}"
+
+
+def _parse_repeat_enabled(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value in (None, ""):
+        return False
+
+    normalized = _normalize_key(value)
+    if normalized in {"1", "TRUE", "SI", "SÍ", "YES"}:
+        return True
+    if normalized in {"0", "FALSE", "NO"}:
+        return False
+
+    raise MaintenancePreventiveError(
+        "repeat_enabled debe ser verdadero o falso."
+    )
+
+
+def _parse_workday_interval(value) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise MaintenancePreventiveError(
+            "repeat_interval_workdays debe ser un entero positivo."
+        ) from exc
+
+    if parsed <= 0:
+        raise MaintenancePreventiveError(
+            "repeat_interval_workdays debe ser mayor a cero."
+        )
+    return parsed
+
+
+def add_workdays(start_date: date, workdays: int) -> date:
+    """Suma días hábiles contando únicamente lunes a viernes."""
+    if not isinstance(start_date, date):
+        raise MaintenancePreventiveError("start_date debe ser una fecha.")
+
+    try:
+        remaining = int(workdays)
+    except (TypeError, ValueError) as exc:
+        raise MaintenancePreventiveError(
+            "workdays debe ser un entero positivo."
+        ) from exc
+
+    if remaining <= 0:
+        raise MaintenancePreventiveError(
+            "workdays debe ser mayor a cero."
+        )
+
+    result = start_date
+    while remaining:
+        result += timedelta(days=1)
+        if result.weekday() < 5:
+            remaining -= 1
+
+    return result
 
 
 def assert_import_hash_available(source_sha256: str) -> None:
@@ -699,6 +766,16 @@ def agregar_renglones_lote(
                 raw_row.get("fecha_programada")
                 or raw_row.get("fecha_programada_input")
             ) or None,
+            repeat_enabled=_parse_repeat_enabled(
+                raw_row.get("repeat_enabled")
+                if "repeat_enabled" in raw_row
+                else raw_row.get("se_repite")
+            ),
+            repeat_interval_workdays=_parse_workday_interval(
+                raw_row.get("repeat_interval_workdays")
+                if "repeat_interval_workdays" in raw_row
+                else raw_row.get("cada_dias_habiles")
+            ),
             actividad=_clean(raw_row.get("actividad")) or None,
             observaciones=_clean(raw_row.get("observaciones")) or None,
             validation_status="PENDIENTE",
@@ -776,6 +853,26 @@ def actualizar_renglon_lote(
             payload.get("fecha_programada")
             or payload.get("fecha_programada_input")
         ) or None
+
+    if "repeat_enabled" in payload or "se_repite" in payload:
+        item.repeat_enabled = _parse_repeat_enabled(
+            payload.get("repeat_enabled")
+            if "repeat_enabled" in payload
+            else payload.get("se_repite")
+        )
+
+    if (
+        "repeat_interval_workdays" in payload
+        or "cada_dias_habiles" in payload
+    ):
+        item.repeat_interval_workdays = _parse_workday_interval(
+            payload.get("repeat_interval_workdays")
+            if "repeat_interval_workdays" in payload
+            else payload.get("cada_dias_habiles")
+        )
+
+    if not bool(item.repeat_enabled):
+        item.repeat_interval_workdays = None
 
     if "actividad" in payload:
         item.actividad = _clean(payload.get("actividad")) or None
@@ -954,6 +1051,47 @@ def publicar_lote_preventivo(
         )
 
         item.ticket_id = ticket.id
+
+        if bool(getattr(item, "repeat_enabled", False)):
+            interval = _parse_workday_interval(
+                getattr(item, "repeat_interval_workdays", None)
+            )
+            if interval is None:
+                raise MaintenancePreventiveStateError(
+                    "Un preventivo recurrente no tiene intervalo válido."
+                )
+            if item.fecha_programada.weekday() >= 5:
+                raise MaintenancePreventiveStateError(
+                    "La fecha inicial recurrente debe ser de lunes a viernes."
+                )
+
+            schedule = MaintenancePreventiveScheduleORM(
+                schedule_key=_schedule_key(),
+                target_type="EQUIPO",
+                sucursal_id=int(item.sucursal_id),
+                inventario_id=int(item.inventario_id),
+                responsable_user_id=int(item.responsable_user_id),
+                actividad=_clean(item.actividad),
+                observaciones=_clean(item.observaciones) or None,
+                repeat_interval_workdays=interval,
+                start_date=item.fecha_programada,
+                next_scheduled_date=add_workdays(
+                    item.fecha_programada,
+                    interval,
+                ),
+                active=True,
+                created_by_user_id=int(user.id),
+            )
+            db.session.add(schedule)
+            item.schedule = schedule
+
+            occurrence = MaintenancePreventiveOccurrenceORM(
+                schedule=schedule,
+                scheduled_date=item.fecha_programada,
+                ticket_id=ticket.id,
+            )
+            db.session.add(occurrence)
+
         created_tickets.append(ticket)
 
     batch.status = "PUBLICADO"
@@ -979,6 +1117,21 @@ def serializar_item(item: MaintenancePreventiveItemORM) -> dict:
         "fecha_programada": (
             item.fecha_programada.isoformat()
             if item.fecha_programada
+            else None
+        ),
+        "repeat_enabled": bool(
+            getattr(item, "repeat_enabled", False)
+        ),
+        "repeat_interval_workdays": getattr(
+            item,
+            "repeat_interval_workdays",
+            None,
+        ),
+        "schedule_id": getattr(item, "schedule_id", None),
+        "next_scheduled_date": (
+            item.schedule.next_scheduled_date.isoformat()
+            if getattr(item, "schedule", None) is not None
+            and item.schedule.next_scheduled_date is not None
             else None
         ),
         "actividad": item.actividad,
@@ -1285,6 +1438,32 @@ def validar_item_borrador(
         )
     else:
         item.fecha_programada = parsed_date
+
+    repeat_enabled = bool(getattr(item, "repeat_enabled", False))
+    interval = getattr(item, "repeat_interval_workdays", None)
+
+    if repeat_enabled:
+        try:
+            interval = _parse_workday_interval(interval)
+        except MaintenancePreventiveError:
+            interval = None
+            errors.append(
+                "La repetición requiere un intervalo de días hábiles "
+                "mayor a cero."
+            )
+
+        if (
+            item.fecha_programada is not None
+            and item.fecha_programada.weekday() >= 5
+        ):
+            errors.append(
+                "La fecha inicial de un preventivo recurrente debe ser "
+                "de lunes a viernes."
+            )
+
+        item.repeat_interval_workdays = interval
+    else:
+        item.repeat_interval_workdays = None
 
     item.actividad = _clean(item.actividad) or None
     if item.actividad is None:
