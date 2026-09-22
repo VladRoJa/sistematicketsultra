@@ -148,7 +148,9 @@ export interface PreventiveValidationSummary {
 }
 
 export interface MaintenanceMyProgramItem {
-  ticket_id: number;
+  item_kind: 'TICKET' | 'RECURRENCE_PROJECTION';
+  ticket_id: number | null;
+  schedule_id: number | null;
   tipo_mantenimiento: 'PREVENTIVO' | 'CORRECTIVO';
   estado: string;
   operational_status:
@@ -156,7 +158,8 @@ export interface MaintenanceMyProgramItem {
     | 'PROGRAMADO'
     | 'VENCIDO'
     | 'PENDIENTE_VALIDACION'
-    | 'SIN_FECHA';
+    | 'SIN_FECHA'
+    | 'PREVISTO';
   fecha_trabajo: string | null;
   sucursal_id: number | null;
   sucursal: string;
@@ -169,6 +172,7 @@ export interface MaintenanceMyProgramItem {
   problema_detectado: string | null;
   necesita_refaccion: boolean;
   descripcion_refaccion: string | null;
+  repeat_interval_workdays: number | null;
 }
 
 export interface MaintenanceChecklistItem {
@@ -385,12 +389,14 @@ export interface MaintenanceMyProgram {
   metrics: {
     today: number;
     week: number;
+    projected: number;
     overdue: number;
     pending_validation: number;
     unscheduled: number;
   };
   today_items: MaintenanceMyProgramItem[];
   week_items: MaintenanceMyProgramItem[];
+  projected_items: MaintenanceMyProgramItem[];
   overdue: MaintenanceMyProgramItem[];
   pending_validation: MaintenanceMyProgramItem[];
   unscheduled: MaintenanceMyProgramItem[];
