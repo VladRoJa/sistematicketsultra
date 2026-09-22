@@ -30,6 +30,7 @@ TEMPLATE_HEADERS = (
     "Observaciones",
     "Tipo",
     "Clasificación edificio",
+    "Duración estimada (min)",
     "Validación",
 )
 
@@ -75,6 +76,9 @@ HEADER_MAP = {
     "tipo objetivo": "target_type",
     "clasificacion edificio": "building_classification",
     "clasificacion de edificio": "building_classification",
+    "duracion estimada (min)": "estimated_duration_minutes",
+    "duracion estimada": "estimated_duration_minutes",
+    "duracion minutos": "estimated_duration_minutes",
 }
 
 
@@ -157,6 +161,7 @@ def _build_rows(raw_rows, columns: dict[int, str], *, start_row: int):
             "observaciones": None,
             "target_type": None,
             "building_classification": None,
+            "estimated_duration_minutes": None,
         }
 
         for column_index, field in columns.items():
@@ -343,7 +348,7 @@ def build_preventive_template_xlsx(
     sheet.title = "Programacion preventiva"
     sheet.sheet_view.showGridLines = False
     sheet.freeze_panes = "A2"
-    sheet.auto_filter.ref = "A1:L1001"
+    sheet.auto_filter.ref = "A1:M1001"
 
     header_fill = PatternFill("solid", fgColor="E54525")
     header_font = Font(color="FFFFFF", bold=True)
@@ -383,6 +388,10 @@ def build_preventive_template_xlsx(
             "oficial de Mantenimiento > Edificio."
         ),
         "L1": (
+            "Duración estimada del trabajo en minutos. "
+            "Ej.: 30, 45, 60, 90. Déjala vacía si aún no está definida."
+        ),
+        "M1": (
             "Columna automática. Si aparece ⚠ DUPLICADO, corrige "
             "el objetivo o la fecha antes de cargar el archivo."
         ),
@@ -402,7 +411,8 @@ def build_preventive_template_xlsx(
         "I": 42,
         "J": 16,
         "K": 34,
-        "L": 18,
+        "L": 24,
+        "M": 18,
     }
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
@@ -413,12 +423,12 @@ def build_preventive_template_xlsx(
             cell.border = input_border
             cell.alignment = Alignment(
                 vertical="top",
-                wrap_text=(column in {5, 9, 11}),
+                wrap_text=(column in {5, 9, 11, 12}),
             )
         sheet.cell(row=row, column=4).number_format = "dd/mm/yyyy"
         sheet.cell(
             row=row,
-            column=12,
+            column=13,
             value=(
                 '=IF(OR(A' + str(row) + '="",D' + str(row) + '=""),"",'
                 + 'IF(UPPER(J' + str(row) + ')="EDIFICIO",'
@@ -434,11 +444,11 @@ def build_preventive_template_xlsx(
                 + ')>1,"⚠ DUPLICADO",""))))'
             ),
         )
-        sheet.cell(row=row, column=12).font = Font(
+        sheet.cell(row=row, column=13).font = Font(
             color="B91C1C",
             bold=True,
         )
-        sheet.cell(row=row, column=12).alignment = Alignment(
+        sheet.cell(row=row, column=13).alignment = Alignment(
             horizontal="center",
             vertical="center",
         )
@@ -786,12 +796,31 @@ def build_preventive_template_xlsx(
     sheet.add_data_validation(interval_validation)
     interval_validation.add("H2:H1001")
 
+    duration_validation = DataValidation(
+        type="whole",
+        operator="greaterThan",
+        formula1="0",
+        allow_blank=True,
+    )
+    duration_validation.error = (
+        "Captura una duración estimada entera mayor a cero."
+    )
+    duration_validation.errorTitle = "Duración inválida"
+    duration_validation.prompt = (
+        "Tiempo estimado del trabajo en minutos. Ej.: 30, 45, 60, 90."
+    )
+    duration_validation.promptTitle = "Duración estimada"
+    duration_validation.showErrorMessage = True
+    duration_validation.showInputMessage = True
+    sheet.add_data_validation(duration_validation)
+    duration_validation.add("L2:L1001")
+
     duplicate_fill = PatternFill("solid", fgColor="FFC7CE")
     duplicate_font = Font(color="9C0006", bold=True)
     sheet.conditional_formatting.add(
-        "A2:L1001",
+        "A2:M1001",
         FormulaRule(
-            formula=['$L2="⚠ DUPLICADO"'],
+            formula=['$M2="⚠ DUPLICADO"'],
             fill=duplicate_fill,
             font=duplicate_font,
             stopIfTrue=True,
