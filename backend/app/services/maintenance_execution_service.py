@@ -56,6 +56,24 @@ def _normalize(value) -> str:
     return " ".join(str(value or "").strip().upper().split())
 
 
+def _maintenance_target_type(ticket: Ticket) -> str:
+    explicit = _normalize(
+        getattr(ticket, "maintenance_target_type", None)
+    )
+    if explicit in {"EQUIPO", "EDIFICIO"}:
+        return explicit
+
+    if getattr(ticket, "aparato_id", None) is not None:
+        return "EQUIPO"
+
+    if getattr(ticket, "clasificacion_id", None) is not None:
+        return "EDIFICIO"
+
+    raise MaintenanceExecutionStateError(
+        "El preventivo no tiene un objetivo de mantenimiento asociado."
+    )
+
+
 def _to_utc(value: datetime | None) -> datetime | None:
     if value is None:
         return None
@@ -418,6 +436,8 @@ def _create_derived_corrective(
     description: str,
     criticidad: int,
 ) -> Ticket:
+    target_type = _maintenance_target_type(preventive)
+
     corrective = Ticket.create_ticket(
         descripcion=description,
         username=str(user.username),
@@ -427,8 +447,16 @@ def _create_derived_corrective(
         ),
         departamento_id=MAINTENANCE_DEPARTMENT_ID,
         criticidad=criticidad,
-        clasificacion_id=None,
-        aparato_id=preventive.aparato_id,
+        clasificacion_id=(
+            preventive.clasificacion_id
+            if target_type == "EDIFICIO"
+            else None
+        ),
+        aparato_id=(
+            preventive.aparato_id
+            if target_type == "EQUIPO"
+            else None
+        ),
         problema_detectado=description,
         necesita_refaccion=False,
         descripcion_refaccion=None,
@@ -438,10 +466,12 @@ def _create_derived_corrective(
         requiere_aprobacion=False,
         tipo_mantenimiento="CORRECTIVO",
         origen_correctivo="DETECTADO_EN_PREVENTIVO",
+        maintenance_target_type=target_type,
         ticket_preventivo_origen_id=preventive.id,
         commit=False,
     )
-    corrective.familia_equipo_id = preventive.familia_equipo_id
+    if target_type == "EQUIPO":
+        corrective.familia_equipo_id = preventive.familia_equipo_id
     return corrective
 
 
@@ -486,14 +516,31 @@ def create_preventive_bitacora(
         )
 
     branch_id = int(ticket.sucursal_id_destino or ticket.sucursal_id)
-    if ticket.aparato_id is None:
+    target_type = _maintenance_target_type(ticket)
+
+    if target_type == "EQUIPO" and ticket.aparato_id is None:
         raise MaintenanceExecutionStateError(
-            "El preventivo no tiene equipo de Inventario asociado."
+            "El preventivo de Equipo no tiene Inventario asociado."
+        )
+
+    if target_type == "EDIFICIO" and ticket.clasificacion_id is None:
+        raise MaintenanceExecutionStateError(
+            "El preventivo de Edificio no tiene clasificación asociada."
         )
 
     bitacora = PmBitacoraORM(
         ticket_id=int(ticket.id),
-        inventario_id=int(ticket.aparato_id),
+        inventario_id=(
+            int(ticket.aparato_id)
+            if target_type == "EQUIPO"
+            else None
+        ),
+        target_type=target_type,
+        clasificacion_id=(
+            int(ticket.clasificacion_id)
+            if target_type == "EDIFICIO"
+            else None
+        ),
         sucursal_id=branch_id,
         created_by_user_id=int(user.id),
         fecha=datetime.now(BUSINESS_TZ).date(),
