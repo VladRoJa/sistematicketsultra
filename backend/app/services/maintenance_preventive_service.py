@@ -1446,6 +1446,7 @@ def _batch_capacity_days(
     tickets_by_responsible: dict[str, list],
     schedules_by_responsible: dict[str, list],
     valid_responsibles: set[str],
+    candidate_responsibles: set[str] | None = None,
 ) -> list[dict]:
     participants_by_date: dict[date, set[str]] = {}
 
@@ -1472,7 +1473,8 @@ def _batch_capacity_days(
 
     while current <= period_end:
         responsible_names = sorted(
-            participants_by_date.get(current, set()),
+            set(candidate_responsibles or set())
+            | participants_by_date.get(current, set()),
             key=str.casefold,
         )
         responsible_rows: list[dict] = []
@@ -1488,6 +1490,14 @@ def _batch_capacity_days(
                 proposed_duration_minutes=0,
                 proposed_count=0,
             )
+            work_count = (
+                int(preview["tickets"]["count"])
+                + int(preview["projections"]["count"])
+                + int(preview["draft"]["count"])
+            )
+            if work_count <= 0:
+                continue
+
             responsible_rows.append(
                 {
                     "username": responsible,
@@ -1594,22 +1604,38 @@ def resumir_capacidad_lote(
         }
 
     draft_items = list(batch.items or [])
-    responsible_names = {
+    draft_responsible_names = {
         _clean(getattr(item, "responsable_input", None))
         for item in draft_items
         if _clean(getattr(item, "responsable_input", None))
     }
 
-    resolved_users: dict[str, UserORM] = {}
-    for username in responsible_names:
-        resolved = _resolve_responsable(username)
-        if resolved is not None:
-            resolved_users[username.casefold()] = resolved
-
-    responsible_keys = set(
-        username.casefold()
-        for username in responsible_names
+    personnel_rows = (
+        MaintenancePersonnelORM.query
+        .join(
+            UserORM,
+            UserORM.id == MaintenancePersonnelORM.user_id,
+        )
+        .filter(
+            MaintenancePersonnelORM.activo.is_(True),
+            UserORM.department_id == MAINTENANCE_DEPARTMENT_ID,
+        )
+        .order_by(UserORM.username.asc())
+        .all()
     )
+
+    resolved_users: dict[str, UserORM] = {
+        str(personnel.user.username).casefold(): personnel.user
+        for personnel in personnel_rows
+    }
+    candidate_responsibles = {
+        str(personnel.user.username)
+        for personnel in personnel_rows
+    } | draft_responsible_names
+    responsible_keys = {
+        username.casefold()
+        for username in candidate_responsibles
+    }
 
     tickets_by_responsible: dict[str, list] = {
         key: [] for key in responsible_keys
@@ -1667,6 +1693,7 @@ def resumir_capacidad_lote(
         tickets_by_responsible=tickets_by_responsible,
         schedules_by_responsible=schedules_by_responsible,
         valid_responsibles=set(resolved_users),
+        candidate_responsibles=candidate_responsibles,
     )
 
     return {
