@@ -54,3 +54,25 @@ def test_manager_self_scheduled_appointment_skips_email_notification():
 
     assert '"SKIPPED_SELF_SCHEDULED" if access.is_manager else "FAILED"' in routes
     assert "if not access.is_manager:" in routes
+
+def test_manager_contact_detail_is_scoped_to_own_cases_and_links():
+    routes = _read(ROUTES)
+
+    assert "def _scope_contact_detail_for_manager(detail, actor, access):" in routes
+    assert 'detail["cases"] = cases' in routes
+    assert 'detail["interactions"] = [' in routes
+    assert 'detail["appointments"] = [' in routes
+    assert 'detail["links"] = [' in routes
+    assert "allowed_source_refs" in routes
+
+
+def test_manager_still_cannot_use_operator_admin_actions():
+    routes = _read(ROUTES)
+
+    assert "Esta acción está reservada para operadores de Contact Center." in routes
+    assert "def post_contact():" in routes
+    assert "def get_duplicates():" in routes
+    assert "def post_merge_contacts():" in routes
+    assert "def post_assign_case(case_id: int):" in routes
+    assert "def post_verify_purchase(appointment_id: int):" in routes
+
