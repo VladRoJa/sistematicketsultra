@@ -29,6 +29,7 @@ from app.services.maintenance_preventive_service import (
     obtener_lote_preventivo,
     previsualizar_capacidad_programacion,
     publicar_lote_preventivo,
+    resumir_capacidad_lote,
     guardar_personal_mantenimiento,
     serializar_lote,
     validar_lote_preventivo,
@@ -1022,6 +1023,24 @@ def post_publish_batch(batch_id: int):
         ), 201
     except Exception as exc:
         db.session.rollback()
+        return _error_response(exc)
+
+
+@maintenance_preventive_bp.route(
+    "/batches/<int:batch_id>/capacity-summary",
+    methods=["GET"],
+)
+@jwt_required()
+def get_batch_capacity_summary(batch_id: int):
+    user = _current_user()
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado."}), 401
+
+    try:
+        return jsonify(
+            resumir_capacidad_lote(batch_id, user)
+        ), 200
+    except Exception as exc:
         return _error_response(exc)
 
 
