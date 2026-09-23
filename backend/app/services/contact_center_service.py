@@ -598,7 +598,12 @@ def create_appointment(
     *,
     is_supervisor: bool,
 ) -> ContactCenterAppointmentORM:
-    case = ContactCenterCaseORM.query.get(case_id)
+    case = (
+        ContactCenterCaseORM.query
+        .filter(ContactCenterCaseORM.id == case_id)
+        .with_for_update()
+        .first()
+    )
     if case is None:
         raise ContactCenterNotFoundError("Caso no encontrado.")
     if not is_supervisor and case.assigned_user_id != actor.id:
@@ -607,6 +612,21 @@ def create_appointment(
         )
     if case.status == "CLOSED":
         raise ContactCenterValidationError("El caso ya está cerrado.")
+
+    existing_appointment = (
+        ContactCenterAppointmentORM.query
+        .filter(
+            ContactCenterAppointmentORM.case_id == case.id,
+            ContactCenterAppointmentORM.status == "SCHEDULED",
+        )
+        .order_by(ContactCenterAppointmentORM.scheduled_at.asc())
+        .first()
+    )
+    if existing_appointment is not None:
+        raise ContactCenterValidationError(
+            "Este caso ya tiene una cita programada. "
+            "Usa Reagendar para cambiar la fecha o sucursal."
+        )
 
     try:
         branch_id = int(payload.get("sucursal_id"))

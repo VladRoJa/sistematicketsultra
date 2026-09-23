@@ -302,7 +302,10 @@
           </div>
         </section>
 
-        <section class="detail-section detail-section--appointment" *ngIf="activeCase">
+        <section
+          class="detail-section detail-section--appointment"
+          *ngIf="activeCase && !activeScheduledAppointment"
+        >
           <div class="section-title">
             <div><h3>Agendar cita</h3><p>Elige a qué sucursal asistirá.</p></div>
             <mat-icon>event_available</mat-icon>
@@ -341,6 +344,40 @@
             >
               <mat-icon>event</mat-icon>
               {{ savingAppointment ? 'Agendando…' : 'Crear cita' }}
+            </button>
+          </div>
+        </section>
+
+        <section
+          class="detail-section detail-section--appointment"
+          *ngIf="activeCase && activeScheduledAppointment as scheduledAppointment"
+        >
+          <div class="section-title">
+            <div>
+              <h3>Cita programada</h3>
+              <p>Este caso ya tiene una cita activa. Para cambiarla usa Reagendar.</p>
+            </div>
+            <mat-icon>event_available</mat-icon>
+          </div>
+
+          <article class="appointment-mini">
+            <div>
+              <strong>{{ formatDateTime(scheduledAppointment.scheduled_at) }}</strong>
+              <span>{{ branchName(scheduledAppointment.sucursal) }}</span>
+            </div>
+            <span class="status-pill">
+              {{ appointmentStatusLabel(scheduledAppointment) }}
+            </span>
+          </article>
+
+          <div class="section-actions">
+            <button
+              type="button"
+              class="primary-button primary-button--compact"
+              (click)="manageActiveAppointment()"
+            >
+              <mat-icon>edit_calendar</mat-icon>
+              Gestionar cita
             </button>
           </div>
         </section>

@@ -153,6 +153,15 @@ export class ContactCenterComponent implements OnInit {
     return this.interactionOutcome === 'CALL_BACK';
   }
 
+  get activeScheduledAppointment(): ContactCenterAppointment | null {
+    return (
+      this.selectedContact?.appointments.find(
+        (row) => row.status === 'SCHEDULED',
+      )
+      ?? null
+    );
+  }
+
   setTab(tab: ContactCenterTab): void {
     this.activeTab = tab;
     this.clearFeedback();
@@ -306,6 +315,14 @@ export class ContactCenterComponent implements OnInit {
     if (!currentCase) {
       this.showFeedback(
         'Este contacto no tiene un caso activo.',
+        'ERROR',
+      );
+      return;
+    }
+
+    if (this.activeScheduledAppointment) {
+      this.showFeedback(
+        'Este caso ya tiene una cita programada. Usa Gestionar cita para reagendarla.',
         'ERROR',
       );
       return;
@@ -508,6 +525,15 @@ export class ContactCenterComponent implements OnInit {
       ),
     );
     this.loadAppointments();
+  }
+
+  manageActiveAppointment(): void {
+    const appointment = this.activeScheduledAppointment;
+    if (!appointment) {
+      return;
+    }
+
+    this.appointmentAction(appointment);
   }
 
   appointmentAction(appointment: ContactCenterAppointment): void {
