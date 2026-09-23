@@ -852,11 +852,24 @@ def list_crm_candidates(month: str) -> dict[str, Any]:
     rows = db.session.execute(statement).mappings().all()
 
     existing_links = {
-        str(value[0])
-        for value in db.session.query(ContactCenterContactLinkORM.source_key)
+        str(row.source_key): int(row.contact_id)
+        for row in ContactCenterContactLinkORM.query
         .filter(ContactCenterContactLinkORM.source_type == "IVENTAS_CONTACT")
         .all()
     }
+    linked_contact_ids = tuple(sorted(set(existing_links.values())))
+    active_contact_ids = set()
+    if linked_contact_ids:
+        active_contact_ids = {
+            int(value[0])
+            for value in db.session.query(ContactCenterCaseORM.contact_id)
+            .filter(
+                ContactCenterCaseORM.contact_id.in_(linked_contact_ids),
+                ContactCenterCaseORM.status != "CLOSED",
+            )
+            .distinct()
+            .all()
+        }
     branch_names = {
         int(branch.sucursal_id): str(branch.sucursal)
         for branch in Sucursal.query.filter(Sucursal.sucursal_id.in_(branch_ids)).all()
@@ -877,6 +890,12 @@ def list_crm_candidates(month: str) -> dict[str, Any]:
             "channel_name": _clean_text(row.get("channel_name")),
             "channel_platform": _clean_text(row.get("channel_platform")),
             "already_in_contact_center": source_key in existing_links,
+            "contact_center_contact_id": existing_links.get(source_key),
+            "has_active_case": (
+                existing_links.get(source_key) in active_contact_ids
+                if source_key in existing_links
+                else False
+            ),
         })
         if len(result) >= 500:
             break
@@ -891,6 +910,8 @@ def list_crm_candidates(month: str) -> dict[str, Any]:
 def import_crm_candidate(
     contact_row_id: int,
     actor: UserORM,
+    *,
+    target_contact_id: int | None = None,
 ) -> tuple[ContactCenterContactORM, ContactCenterCaseORM]:
     source = MarketingIventasContactORM.query.get(contact_row_id)
     if source is None:
@@ -914,19 +935,61 @@ def import_crm_candidate(
         source_type="IVENTAS_CONTACT",
         source_key=source_key,
     ).first()
+
+    contact = None
     if existing_link is not None:
         contact = ContactCenterContactORM.query.get(existing_link.contact_id)
+    elif target_contact_id is not None:
+        contact = ContactCenterContactORM.query.get(target_contact_id)
+        if (
+            contact is None
+            or not contact.is_active
+            or contact.merged_into_contact_id is not None
+        ):
+            raise ContactCenterValidationError(
+                "El contacto seleccionado ya no está disponible."
+            )
+
+        db.session.add(
+            ContactCenterContactLinkORM(
+                contact_id=contact.id,
+                source_type="IVENTAS_CONTACT",
+                source_key=source_key,
+                source_row_id=source.id,
+                source_metadata_json={
+                    "sync_run_id": int(source.sync_run_id),
+                    "contact_id": str(source.contact_id),
+                    "branch_code": str(source.branch_code),
+                },
+            )
+        )
+        db.session.flush()
+
+    if contact is not None:
         active_case = (
             ContactCenterCaseORM.query
             .filter(
-                ContactCenterCaseORM.contact_id == existing_link.contact_id,
+                ContactCenterCaseORM.contact_id == contact.id,
                 ContactCenterCaseORM.status != "CLOSED",
             )
             .order_by(ContactCenterCaseORM.updated_at.desc())
             .first()
         )
-        if contact is not None and active_case is not None:
+        if active_case is not None:
             return contact, active_case
+
+        case = ContactCenterCaseORM(
+            contact_id=contact.id,
+            source_type="CRM",
+            source_ref=source_key,
+            sucursal_id=source.sucursal_id,
+            assigned_user_id=actor.id,
+            status="NEW",
+            created_by_user_id=actor.id,
+        )
+        db.session.add(case)
+        db.session.flush()
+        return contact, case
 
     phone = source.phone_mx10 or source.phone_digits or source.phone_raw
     duplicates = find_duplicate_contacts(phone=phone)
