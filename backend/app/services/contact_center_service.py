@@ -843,6 +843,162 @@ def list_appointments(
     return result
 
 
+def _contact_center_crm_link_state() -> tuple[dict[str, int], set[int]]:
+    existing_links = {
+        str(row.source_key): int(row.contact_id)
+        for row in ContactCenterContactLinkORM.query
+        .filter(ContactCenterContactLinkORM.source_type == "IVENTAS_CONTACT")
+        .all()
+    }
+    linked_contact_ids = tuple(sorted(set(existing_links.values())))
+    active_contact_ids: set[int] = set()
+    if linked_contact_ids:
+        active_contact_ids = {
+            int(value[0])
+            for value in db.session.query(ContactCenterCaseORM.contact_id)
+            .filter(
+                ContactCenterCaseORM.contact_id.in_(linked_contact_ids),
+                ContactCenterCaseORM.status != "CLOSED",
+            )
+            .distinct()
+            .all()
+        }
+
+    return existing_links, active_contact_ids
+
+
+def _serialize_crm_candidate(
+    row: Any,
+    *,
+    branch_names: dict[int, str],
+    existing_links: dict[str, int],
+    active_contact_ids: set[int],
+) -> dict[str, Any]:
+    branch_id = int(row["sucursal_id"])
+    source_key = f"{branch_id}:{str(row['contact_id'])}"
+    linked_contact_id = existing_links.get(source_key)
+
+    return {
+        "contact_row_id": int(row["contact_row_id"]),
+        "source_key": source_key,
+        "sucursal_id": branch_id,
+        "sucursal": branch_names.get(branch_id),
+        "contact_id": str(row["contact_id"]),
+        "name": _clean_text(row.get("name")),
+        "phone": _clean_text(
+            row.get("phone_mx10") or row.get("phone_digits")
+        ),
+        "first_message_at_local": _iso(row.get("first_message_at_local")),
+        "channel_name": _clean_text(row.get("channel_name")),
+        "channel_platform": _clean_text(row.get("channel_platform")),
+        "already_in_contact_center": source_key in existing_links,
+        "contact_center_contact_id": linked_contact_id,
+        "has_active_case": (
+            linked_contact_id in active_contact_ids
+            if linked_contact_id is not None
+            else False
+        ),
+    }
+
+
+def search_crm_candidates_by_phone(phone: object) -> dict[str, Any]:
+    normalized_phone = normalize_phone(phone)
+    if not normalized_phone or len(normalized_phone) != 10:
+        raise ContactCenterValidationError(
+            "Ingresa un teléfono mexicano válido de 10 dígitos."
+        )
+
+    run_branch_rows = (
+        db.session.query(
+            MarketingIventasSyncRunORM.id.label("sync_run_id"),
+            MarketingIventasSyncRunORM.date_to,
+            MarketingIventasContactORM.sucursal_id,
+        )
+        .join(
+            MarketingIventasContactORM,
+            MarketingIventasContactORM.sync_run_id
+            == MarketingIventasSyncRunORM.id,
+        )
+        .filter(
+            MarketingIventasSyncRunORM.is_canonical.is_(True),
+            MarketingIventasSyncRunORM.status == "COMPLETED",
+            MarketingIventasContactORM.phone_mx10 == normalized_phone,
+        )
+        .distinct()
+        .order_by(
+            MarketingIventasSyncRunORM.date_to.desc(),
+            MarketingIventasSyncRunORM.id.desc(),
+        )
+        .all()
+    )
+
+    if not run_branch_rows:
+        return {
+            "period_key": "HISTORICO",
+            "sync_run_id": None,
+            "rows": [],
+        }
+
+    branches_by_run: dict[int, set[int]] = defaultdict(set)
+    ordered_run_ids: list[int] = []
+    seen_run_ids: set[int] = set()
+    all_branch_ids: set[int] = set()
+
+    for item in run_branch_rows:
+        run_id = int(item.sync_run_id)
+        branch_id = int(item.sucursal_id)
+        branches_by_run[run_id].add(branch_id)
+        all_branch_ids.add(branch_id)
+        if run_id not in seen_run_ids:
+            ordered_run_ids.append(run_id)
+            seen_run_ids.add(run_id)
+
+    branch_names = {
+        int(branch.sucursal_id): str(branch.sucursal)
+        for branch in Sucursal.query
+        .filter(Sucursal.sucursal_id.in_(tuple(sorted(all_branch_ids))))
+        .all()
+    }
+    existing_links, active_contact_ids = _contact_center_crm_link_state()
+
+    result: list[dict[str, Any]] = []
+    seen_source_keys: set[str] = set()
+
+    for run_id in ordered_run_ids:
+        statement = build_marketing_lead_contacts_statement(
+            iventas_sync_run_id=run_id,
+            branch_ids=tuple(sorted(branches_by_run[run_id])),
+        ).where(
+            MarketingIventasContactORM.phone_mx10 == normalized_phone
+        )
+        rows = db.session.execute(statement).mappings().all()
+
+        # Los runs se recorren de más reciente a más antiguo. Al deduplicar
+        # por sucursal + contact_id conservamos la evidencia canónica más reciente.
+        for row in reversed(rows):
+            source_key = (
+                f"{int(row['sucursal_id'])}:{str(row['contact_id'])}"
+            )
+            if source_key in seen_source_keys:
+                continue
+
+            seen_source_keys.add(source_key)
+            result.append(
+                _serialize_crm_candidate(
+                    row,
+                    branch_names=branch_names,
+                    existing_links=existing_links,
+                    active_contact_ids=active_contact_ids,
+                )
+            )
+
+    return {
+        "period_key": "HISTORICO",
+        "sync_run_id": None,
+        "rows": result,
+    }
+
+
 def list_crm_candidates(month: str) -> dict[str, Any]:
     raw_month = str(month or "").strip()
     try:
@@ -888,25 +1044,7 @@ def list_crm_candidates(month: str) -> dict[str, Any]:
     )
     rows = db.session.execute(statement).mappings().all()
 
-    existing_links = {
-        str(row.source_key): int(row.contact_id)
-        for row in ContactCenterContactLinkORM.query
-        .filter(ContactCenterContactLinkORM.source_type == "IVENTAS_CONTACT")
-        .all()
-    }
-    linked_contact_ids = tuple(sorted(set(existing_links.values())))
-    active_contact_ids = set()
-    if linked_contact_ids:
-        active_contact_ids = {
-            int(value[0])
-            for value in db.session.query(ContactCenterCaseORM.contact_id)
-            .filter(
-                ContactCenterCaseORM.contact_id.in_(linked_contact_ids),
-                ContactCenterCaseORM.status != "CLOSED",
-            )
-            .distinct()
-            .all()
-        }
+    existing_links, active_contact_ids = _contact_center_crm_link_state()
     branch_names = {
         int(branch.sucursal_id): str(branch.sucursal)
         for branch in Sucursal.query.filter(Sucursal.sucursal_id.in_(branch_ids)).all()
@@ -914,26 +1052,14 @@ def list_crm_candidates(month: str) -> dict[str, Any]:
 
     result = []
     for row in reversed(rows):
-        source_key = f"{int(row['sucursal_id'])}:{str(row['contact_id'])}"
-        result.append({
-            "contact_row_id": int(row["contact_row_id"]),
-            "source_key": source_key,
-            "sucursal_id": int(row["sucursal_id"]),
-            "sucursal": branch_names.get(int(row["sucursal_id"])),
-            "contact_id": str(row["contact_id"]),
-            "name": _clean_text(row.get("name")),
-            "phone": _clean_text(row.get("phone_mx10") or row.get("phone_digits")),
-            "first_message_at_local": _iso(row.get("first_message_at_local")),
-            "channel_name": _clean_text(row.get("channel_name")),
-            "channel_platform": _clean_text(row.get("channel_platform")),
-            "already_in_contact_center": source_key in existing_links,
-            "contact_center_contact_id": existing_links.get(source_key),
-            "has_active_case": (
-                existing_links.get(source_key) in active_contact_ids
-                if source_key in existing_links
-                else False
-            ),
-        })
+        result.append(
+            _serialize_crm_candidate(
+                row,
+                branch_names=branch_names,
+                existing_links=existing_links,
+                active_contact_ids=active_contact_ids,
+            )
+        )
         if len(result) >= 500:
             break
 
