@@ -377,13 +377,22 @@ def list_contacts(
     *,
     actor: UserORM,
     is_supervisor: bool,
+    include_all_assignees: bool = False,
+    allowed_branch_ids: tuple[int, ...] | None = None,
     status: str | None = None,
     source_type: str | None = None,
     query_text: str | None = None,
 ) -> list[dict[str, Any]]:
     cases_query = ContactCenterCaseORM.query
 
-    if not is_supervisor:
+    if allowed_branch_ids is not None:
+        if not allowed_branch_ids:
+            return []
+        cases_query = cases_query.filter(
+            ContactCenterCaseORM.sucursal_id.in_(allowed_branch_ids)
+        )
+
+    if not is_supervisor and not include_all_assignees:
         cases_query = cases_query.filter(
             ContactCenterCaseORM.assigned_user_id == actor.id
         )
@@ -519,9 +528,9 @@ def assign_case(
         )
 
     assigned_user = UserORM.get_by_id(assigned_user_id)
-    if not has_contact_center_access(assigned_user):
+    if not has_contact_center_operator_access(assigned_user):
         raise ContactCenterValidationError(
-            "El usuario seleccionado no tiene acceso a Contact Center."
+            "El usuario seleccionado no tiene acceso operativo a Contact Center."
         )
 
     case.assigned_user_id = assigned_user_id
