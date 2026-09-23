@@ -131,3 +131,10 @@ def test_contact_center_crm_phone_search_is_global_not_month_scoped():
     assert "else {" in service
     assert "params = params.set('month', month)" in service
 
+def test_contact_center_portfolio_can_filter_closed_contacts():
+    component_html = _read(COMPONENT_HTML)
+
+    assert '<option value="CLOSED">Cerrado</option>' in component_html
+    assert "{{ contacts.length }} contactos</p>" in component_html
+    assert "{{ contacts.length }} contactos activos</p>" not in component_html
+

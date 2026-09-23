@@ -128,6 +128,7 @@
             <option value="IN_PROGRESS">En seguimiento</option>
             <option value="FOLLOW_UP">Volver a llamar</option>
             <option value="APPOINTMENT">Con cita</option>
+            <option value="CLOSED">Cerrado</option>
           </select>
         </label>
 
@@ -163,7 +164,7 @@
         <div class="panel-heading">
           <div>
             <h2>Mi cartera</h2>
-            <p>{{ contacts.length }} contactos activos</p>
+            <p>{{ contacts.length }} contactos</p>
           </div>
           <span class="mini-chip">{{ isSupervisor ? 'Vista global' : 'Asignados a mí' }}</span>
         </div>

@@ -105,8 +105,7 @@ def _assert_contact_access(detail, actor, access) -> None:
         return
 
     assigned = any(
-        case.get("status") != "CLOSED"
-        and int(case.get("assigned_user", {}).get("id") or 0) == int(actor.id)
+        int(case.get("assigned_user", {}).get("id") or 0) == int(actor.id)
         for case in detail.get("cases", [])
         if isinstance(case.get("assigned_user"), dict)
     )
@@ -636,20 +635,26 @@ def get_report():
         date_to=date_to,
     )
 
+    active_contacts = [
+        row
+        for row in contacts
+        if str(row.get("case", {}).get("status") or "") != "CLOSED"
+    ]
+
     status_counts = {
         "NEW": 0,
         "IN_PROGRESS": 0,
         "FOLLOW_UP": 0,
         "APPOINTMENT": 0,
     }
-    for row in contacts:
+    for row in active_contacts:
         status = str(row.get("case", {}).get("status") or "")
         if status in status_counts:
             status_counts[status] += 1
 
     return jsonify({
         "summary": {
-            "active_cases": len(contacts),
+            "active_cases": len(active_contacts),
             "new": status_counts["NEW"],
             "in_progress": status_counts["IN_PROGRESS"],
             "follow_up": status_counts["FOLLOW_UP"],

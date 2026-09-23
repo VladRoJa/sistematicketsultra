@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import case as sql_case, func, or_, select
 
 from app.extensions import db
 from app.models.contact_center import (
@@ -381,29 +381,27 @@ def list_contacts(
     source_type: str | None = None,
     query_text: str | None = None,
 ) -> list[dict[str, Any]]:
-    active_cases = (
-        ContactCenterCaseORM.query
-        .filter(ContactCenterCaseORM.status != "CLOSED")
-    )
+    cases_query = ContactCenterCaseORM.query
+
     if not is_supervisor:
-        active_cases = active_cases.filter(
+        cases_query = cases_query.filter(
             ContactCenterCaseORM.assigned_user_id == actor.id
         )
 
     normalized_status = str(status or "").strip().upper()
     if normalized_status:
-        active_cases = active_cases.filter(
+        cases_query = cases_query.filter(
             ContactCenterCaseORM.status == normalized_status
         )
 
     normalized_source = str(source_type or "").strip().upper()
     if normalized_source:
-        active_cases = active_cases.filter(
+        cases_query = cases_query.filter(
             ContactCenterCaseORM.source_type == normalized_source
         )
 
     rows = (
-        active_cases
+        cases_query
         .join(
             ContactCenterContactORM,
             ContactCenterContactORM.id == ContactCenterCaseORM.contact_id,
@@ -413,6 +411,10 @@ def list_contacts(
             ContactCenterContactORM.merged_into_contact_id.is_(None),
         )
         .order_by(
+            sql_case(
+                (ContactCenterCaseORM.status == "CLOSED", 1),
+                else_=0,
+            ).asc(),
             ContactCenterCaseORM.next_action_at.asc().nullslast(),
             ContactCenterCaseORM.updated_at.desc(),
         )
@@ -421,8 +423,14 @@ def list_contacts(
 
     needle = str(query_text or "").strip().casefold()
     result = []
-    for case in rows:
-        contact = case.contact
+    seen_contact_ids: set[int] = set()
+
+    for case_row in rows:
+        contact = case_row.contact
+        contact_id = int(contact.id)
+        if contact_id in seen_contact_ids:
+            continue
+
         if needle:
             haystack = " ".join([
                 str(contact.display_name or ""),
@@ -433,8 +441,9 @@ def list_contacts(
             if needle not in haystack:
                 continue
 
+        seen_contact_ids.add(contact_id)
         payload = serialize_contact(contact)
-        payload["case"] = serialize_case(case)
+        payload["case"] = serialize_case(case_row)
         result.append(payload)
 
     return result
