@@ -340,9 +340,9 @@ def create_contact_with_case(
         raise ContactCenterValidationError("Agente asignado inválido.") from exc
 
     assigned_user = UserORM.get_by_id(assigned_user_id)
-    if not has_contact_center_access(assigned_user):
+    if not has_contact_center_operator_access(assigned_user):
         raise ContactCenterValidationError(
-            "El agente seleccionado no tiene acceso a Contact Center."
+            "El agente seleccionado no tiene acceso operativo a Contact Center."
         )
 
     case = ContactCenterCaseORM(
