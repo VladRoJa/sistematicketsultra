@@ -87,3 +87,15 @@ def test_contact_center_v1_exposes_portfolio_crm_and_appointment_calendar():
     assert "getCrmCandidates(" in service
     assert "getAppointments(" in service
     assert "getReport(" in service
+
+def test_contact_center_hides_new_appointment_when_one_is_active():
+    component_ts = _read(COMPONENT_TS)
+    component_html = _read(COMPONENT_HTML)
+
+    assert "get activeScheduledAppointment()" in component_ts
+    assert "row.status === 'SCHEDULED'" in component_ts
+    assert "manageActiveAppointment()" in component_ts
+    assert "activeCase && !activeScheduledAppointment" in component_html
+    assert "Este caso ya tiene una cita activa." in component_html
+    assert "Gestionar cita" in component_html
+
