@@ -944,7 +944,7 @@ export class ContactCenterComponent implements OnInit {
 
   private datePart(
     parts: Intl.DateTimeFormatPart[],
-    type: Intl.DateTimeFormatPartTypes,
+    type: 'year' | 'month' | 'day',
   ): string {
     return parts.find((part) => part.type === type)?.value ?? '';
   }
