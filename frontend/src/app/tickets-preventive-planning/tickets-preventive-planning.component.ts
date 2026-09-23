@@ -9,6 +9,8 @@ import {
   PreventiveBatchSummary,
   PreventiveBranch,
   PreventiveCapacityPreview,
+  PreventiveBatchCapacityDay,
+  PreventiveBatchCapacitySummary,
   PreventiveDraftItem,
   PreventiveEquipment,
   PreventivePlanningContext,
@@ -64,6 +66,10 @@ export class TicketsPreventivePlanningComponent implements OnInit {
   repeatIntervalWorkdays = 20;
   estimatedDurationMinutes: number | null = null;
   capacityPreview: PreventiveCapacityPreview | null = null;
+  batchCapacitySummary: PreventiveBatchCapacitySummary | null = null;
+  batchCapacityLoading = false;
+  batchCapacityError = '';
+  private batchCapacityRequestId = 0;
   capacityPreviewLoading = false;
   capacityPreviewError = '';
   private capacityPreviewRequestId = 0;
@@ -328,6 +334,7 @@ export class TicketsPreventivePlanningComponent implements OnInit {
         this.capacityPreviewLoading = false;
         this.capacityPreviewRequestId += 1;
         this.loading = false;
+        this.loadBatchCapacitySummary(batch.id);
       },
       error: (error) => {
         this.loading = false;
@@ -492,6 +499,7 @@ export class TicketsPreventivePlanningComponent implements OnInit {
         this.successMessage =
           String(items.length) + ' preventivos agregados al borrador.';
         this.clearEquipmentSelection();
+        this.loadBatchCapacitySummary(batch.id);
         this.loadBatches();
       },
       error: (error) => {
@@ -564,6 +572,7 @@ export class TicketsPreventivePlanningComponent implements OnInit {
           this.successMessage =
             'Lote publicado. Tickets generados: '
             + response.ticket_ids.join(', ');
+          this.loadBatchCapacitySummary(response.batch.id);
           this.loadBatches();
         },
         error: (error) => {
@@ -763,6 +772,118 @@ export class TicketsPreventivePlanningComponent implements OnInit {
     if (!this.isItemRecurringInput(item)) {
       item.repeat_interval_workdays_input = null;
     }
+  }
+
+  loadBatchCapacitySummary(batchId?: number): void {
+    const resolvedBatchId = batchId || this.selectedBatch?.id;
+    if (!resolvedBatchId) {
+      this.batchCapacityRequestId += 1;
+      this.batchCapacitySummary = null;
+      this.batchCapacityError = '';
+      this.batchCapacityLoading = false;
+      return;
+    }
+
+    const requestId = ++this.batchCapacityRequestId;
+    this.batchCapacityLoading = true;
+    this.batchCapacityError = '';
+
+    this.preventiveService
+      .getBatchCapacitySummary(resolvedBatchId)
+      .subscribe({
+        next: (summary) => {
+          if (requestId !== this.batchCapacityRequestId) return;
+          this.batchCapacitySummary = summary;
+          this.batchCapacityLoading = false;
+        },
+        error: (error) => {
+          if (requestId !== this.batchCapacityRequestId) return;
+          this.batchCapacitySummary = null;
+          this.batchCapacityLoading = false;
+          this.batchCapacityError =
+            error?.error?.mensaje
+            || error?.error?.detail
+            || 'No se pudo cargar la capacidad del lote.';
+        },
+      });
+  }
+
+  batchCapacityDayClass(day: PreventiveBatchCapacityDay): string {
+    return 'batch-capacity-day--' + day.status.toLowerCase();
+  }
+
+  batchCapacityDayDate(value: string): string {
+    const parts = value.split('-').map((part) => Number(part));
+    if (
+      parts.length !== 3
+      || parts.some((part) => !Number.isFinite(part))
+    ) {
+      return value;
+    }
+
+    const [year, month, day] = parts;
+    const parsed = new Date(year, month - 1, day, 12, 0, 0);
+    const weekday = new Intl.DateTimeFormat('es-MX', {
+      weekday: 'short',
+    }).format(parsed).replace('.', '');
+
+    return weekday + ' ' + String(day);
+  }
+
+  batchCapacityDayStatus(day: PreventiveBatchCapacityDay): string {
+    const labels = {
+      EMPTY: 'Sin carga',
+      AVAILABLE: 'Disponible',
+      INCOMPLETE: 'Incompleto',
+      OVERLOADED: 'Sobrecarga',
+    };
+    return labels[day.status] || day.status;
+  }
+
+  batchCapacityDayLoad(day: PreventiveBatchCapacityDay): string {
+    if (day.status === 'EMPTY') {
+      return 'Sin trabajos del lote';
+    }
+
+    if (day.responsible_count === 1) {
+      return (
+        this.durationLabel(day.estimated_minutes)
+        + ' / '
+        + this.durationLabel(day.capacity_minutes)
+      );
+    }
+
+    return (
+      String(day.responsible_count)
+      + ' técnicos · '
+      + this.durationLabel(day.estimated_minutes)
+    );
+  }
+
+  batchCapacityDayMeta(day: PreventiveBatchCapacityDay): string {
+    if (day.status === 'OVERLOADED') {
+      return (
+        String(day.overloaded_responsible_count)
+        + (day.overloaded_responsible_count === 1
+          ? ' técnico excedido'
+          : ' técnicos excedidos')
+      );
+    }
+
+    if (day.status === 'INCOMPLETE') {
+      const pending = day.unestimated_count
+        + day.unresolved_responsible_count;
+      return String(pending) + ' dato' + (pending === 1 ? ' pendiente' : 's pendientes');
+    }
+
+    if (day.status === 'EMPTY') {
+      return '—';
+    }
+
+    return (
+      String(day.responsible_count)
+      + (day.responsible_count === 1 ? ' técnico' : ' técnicos')
+    );
   }
 
   refreshCapacityPreview(): void {
