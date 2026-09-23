@@ -138,3 +138,14 @@ def test_contact_center_portfolio_can_filter_closed_contacts():
     assert "{{ contacts.length }} contactos</p>" in component_html
     assert "{{ contacts.length }} contactos activos</p>" not in component_html
 
+def test_contact_center_calendar_history_is_read_only():
+    component_ts = _read(COMPONENT_TS)
+    component_html = _read(COMPONENT_HTML)
+
+    assert "if (appointment.status !== 'SCHEDULED')" in component_ts
+    assert "[disabled]=\"appointment.status !== 'SCHEDULED'\"" in component_html
+    assert (
+        "[class.calendar-event--readonly]=\"appointment.status !== 'SCHEDULED'\""
+        in component_html
+    )
+
