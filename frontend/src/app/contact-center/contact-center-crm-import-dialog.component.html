@@ -1,0 +1,65 @@
+<div class="dialog-shell">
+  <div class="dialog-header">
+    <div>
+      <p class="eyebrow">CRM / FUNNEL</p>
+      <h2>Agregar a cartera</h2>
+      <p class="subtitle">
+        Confirma cómo quieres identificar a este contacto dentro de Contact Center.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      class="icon-button"
+      (click)="close()"
+      aria-label="Cerrar"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <div class="contact-summary">
+    <div>
+      <span>Teléfono</span>
+      <strong>{{ data.candidate.phone || 'Sin teléfono' }}</strong>
+    </div>
+    <div>
+      <span>Sucursal</span>
+      <strong>{{ data.candidate.sucursal || 'Sin sucursal' }}</strong>
+    </div>
+  </div>
+
+  <label class="field">
+    <span>Nombre en cartera *</span>
+    <input
+      type="text"
+      [(ngModel)]="displayName"
+      (keyup.enter)="save()"
+      placeholder="Nombre del contacto"
+      autofocus
+    />
+    <small>
+      Puedes corregir aquí el nombre con el que se registró originalmente en WhatsApp.
+    </small>
+  </label>
+
+  <div class="dialog-actions">
+    <button
+      type="button"
+      class="button button--ghost"
+      (click)="close()"
+    >
+      Cancelar
+    </button>
+
+    <button
+      type="button"
+      class="button button--primary"
+      [disabled]="!canSave()"
+      (click)="save()"
+    >
+      <mat-icon>person_add</mat-icon>
+      Agregar a cartera
+    </button>
+  </div>
+</div>
