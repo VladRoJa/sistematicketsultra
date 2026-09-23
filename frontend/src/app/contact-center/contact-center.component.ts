@@ -594,6 +594,10 @@ export class ContactCenterComponent implements OnInit {
   }
 
   crmActionLabel(row: ContactCenterCrmCandidate): string {
+    if (row.phone_match_ambiguous) {
+      return 'Revisar';
+    }
+
     if (row.already_in_contact_center && row.has_active_case) {
       if (
         this.isManager
@@ -615,6 +619,21 @@ export class ContactCenterComponent implements OnInit {
       && row.has_active_case
       && row.active_case_assigned_user_id !== this.access?.user.id
     );
+  }
+
+  crmStatusLabel(row: ContactCenterCrmCandidate): string {
+    if (row.phone_match_ambiguous) {
+      return 'Revisar coincidencia';
+    }
+    if (row.has_active_case) {
+      return 'Caso activo';
+    }
+    if (row.already_in_contact_center) {
+      return row.matched_by_phone
+        ? 'Ya en cartera'
+        : 'Contacto existente';
+    }
+    return 'Disponible';
   }
 
   canOperateAppointment(
