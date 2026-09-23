@@ -215,13 +215,23 @@ def serialize_appointment(row: ContactCenterAppointmentORM) -> dict[str, Any]:
     }
 
 
-def list_branches() -> list[dict[str, Any]]:
-    rows = (
-        Sucursal.query
-        .filter(
-            Sucursal.operational_status == SucursalOperationalStatus.ACTIVA,
-            Sucursal.is_demo.is_(False),
+def list_branches(
+    allowed_branch_ids: tuple[int, ...] | None = None,
+) -> list[dict[str, Any]]:
+    query = Sucursal.query.filter(
+        Sucursal.operational_status == SucursalOperationalStatus.ACTIVA,
+        Sucursal.is_demo.is_(False),
+    )
+
+    if allowed_branch_ids is not None:
+        if not allowed_branch_ids:
+            return []
+        query = query.filter(
+            Sucursal.sucursal_id.in_(allowed_branch_ids)
         )
+
+    rows = (
+        query
         .order_by(
             Sucursal.orden_apertura.asc().nullslast(),
             Sucursal.sucursal.asc(),
@@ -787,12 +797,19 @@ def list_appointments(
     *,
     actor: UserORM,
     is_supervisor: bool,
+    allowed_branch_ids: tuple[int, ...] | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
 ) -> list[dict[str, Any]]:
     query = ContactCenterAppointmentORM.query
 
-    if not is_supervisor:
+    if allowed_branch_ids is not None:
+        if not allowed_branch_ids:
+            return []
+        query = query.filter(
+            ContactCenterAppointmentORM.sucursal_id.in_(allowed_branch_ids)
+        )
+    elif not is_supervisor:
         query = (
             query
             .join(
@@ -1198,39 +1215,3 @@ def verify_appointment_purchase(
             continue
 
         transaction_key = str(
-            row.id_orden or row.folio or f"row:{row.id}"
-        ).strip()
-        grouped[transaction_key].append((row, row_date))
-
-    if not grouped:
-        appointment.purchase_verification_status = "NOT_FOUND_YET"
-        return appointment
-
-    if len(grouped) > 1:
-        appointment.purchase_verification_status = "REVIEW"
-        return appointment
-
-    transaction_rows = next(iter(grouped.values()))
-    first_row, first_date = transaction_rows[0]
-    total = sum(
-        (Decimal(str(row.total or 0)) for row, _ in transaction_rows),
-        Decimal("0"),
-    )
-    descriptions = [
-        str(row.descripcion or "").strip()
-        for row, _ in transaction_rows
-        if str(row.descripcion or "").strip()
-    ]
-
-    appointment.purchase_verification_status = "VERIFIED"
-    appointment.venta_total_snapshot_id = int(snapshot.id)
-    appointment.venta_total_snapshot_row_id = int(first_row.id)
-    appointment.verified_purchase_at = datetime.combine(
-        first_date,
-        datetime.min.time(),
-        tzinfo=BUSINESS_TZ,
-    ).astimezone(timezone.utc)
-    appointment.verified_amount = total
-    appointment.verified_tariff = descriptions[0] if descriptions else None
-    appointment.updated_at = _now_utc()
-    return appointment
