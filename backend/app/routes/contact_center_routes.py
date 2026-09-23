@@ -347,7 +347,10 @@ def post_assign_case(case_id: int):
 @jwt_required()
 def post_interaction(case_id: int):
     actor, access = _context()
-    _assert_operator_access(access)
+    case = ContactCenterCaseORM.query.get(case_id)
+    if case is None:
+        raise ContactCenterNotFoundError("Caso no encontrado.")
+    _assert_case_access(case, actor, access)
     payload = request.get_json(silent=True) or {}
 
     try:
@@ -369,8 +372,21 @@ def post_interaction(case_id: int):
 @jwt_required()
 def post_appointment(case_id: int):
     actor, access = _context()
-    _assert_operator_access(access)
+    case = ContactCenterCaseORM.query.get(case_id)
+    if case is None:
+        raise ContactCenterNotFoundError("Caso no encontrado.")
+    _assert_case_access(case, actor, access)
     payload = request.get_json(silent=True) or {}
+
+    if access.is_manager:
+        try:
+            target_branch_id = int(payload.get("sucursal_id"))
+        except (TypeError, ValueError) as exc:
+            raise ContactCenterValidationError("Sucursal inválida.") from exc
+        if target_branch_id not in set(access.allowed_branch_ids):
+            raise ContactCenterAuthorizationError(
+                "Sólo puedes agendar citas en tus sucursales autorizadas."
+            )
 
     try:
         appointment = create_appointment(
@@ -426,6 +442,7 @@ def get_appointments():
     rows = list_appointments(
         actor=actor,
         is_supervisor=access.is_supervisor,
+        include_all_assignees=not access.is_manager,
         allowed_branch_ids=(
             access.allowed_branch_ids
             if access.is_manager
@@ -628,17 +645,20 @@ def get_report():
     date_from = _parse_date_arg("date_from")
     date_to = _parse_date_arg("date_to")
 
-    contacts = (
-        []
-        if access.is_manager
-        else list_contacts(
-            actor=actor,
-            is_supervisor=access.is_supervisor,
-        )
+    contacts = list_contacts(
+        actor=actor,
+        is_supervisor=access.is_supervisor,
+        include_all_assignees=not access.is_manager,
+        allowed_branch_ids=(
+            access.allowed_branch_ids
+            if access.is_manager
+            else None
+        ),
     )
     appointments = list_appointments(
         actor=actor,
         is_supervisor=access.is_supervisor,
+        include_all_assignees=not access.is_manager,
         allowed_branch_ids=(
             access.allowed_branch_ids
             if access.is_manager
