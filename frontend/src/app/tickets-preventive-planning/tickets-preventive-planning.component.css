@@ -161,6 +161,97 @@
   font-size: 10px;
 }
 
+.batch-summary__identity {
+  flex: 0 1 260px;
+  min-width: 180px;
+}
+
+.batch-capacity-strip {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 1px 2px 2px;
+  scrollbar-width: thin;
+}
+
+.batch-capacity-strip--loading {
+  align-items: center;
+  justify-content: center;
+  color: var(--ultra-gray-500);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.batch-capacity-day {
+  display: grid;
+  flex: 0 0 112px;
+  min-width: 112px;
+  gap: 1px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: 10px;
+  background: var(--ultra-surface);
+  padding: 7px 8px;
+}
+
+.batch-capacity-day__date,
+.batch-capacity-day__status,
+.batch-capacity-day small {
+  color: var(--ultra-gray-600);
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.batch-capacity-day__date {
+  text-transform: capitalize;
+}
+
+.batch-capacity-day strong {
+  overflow: hidden;
+  color: var(--ultra-gray-900);
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batch-capacity-day__status {
+  font-weight: 900;
+}
+
+.batch-capacity-day--available {
+  border-color: rgba(22, 163, 74, 0.24);
+  background: var(--ultra-success-soft);
+}
+
+.batch-capacity-day--available .batch-capacity-day__status {
+  color: var(--ultra-success);
+}
+
+.batch-capacity-day--incomplete {
+  border-color: rgba(234, 88, 12, 0.28);
+  background: var(--ultra-orange-soft);
+}
+
+.batch-capacity-day--incomplete .batch-capacity-day__status {
+  color: var(--ultra-orange);
+}
+
+.batch-capacity-day--overloaded {
+  border-color: rgba(220, 38, 38, 0.28);
+  background: var(--ultra-danger-soft);
+}
+
+.batch-capacity-day--overloaded .batch-capacity-day__status {
+  color: var(--ultra-danger);
+}
+
+.batch-capacity-day--empty {
+  background: var(--ultra-gray-50);
+}
+
 .panel h2 {
   font-size: 18px;
 }
