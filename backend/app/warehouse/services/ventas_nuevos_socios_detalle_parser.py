@@ -512,10 +512,12 @@ def _parse_source_row(
         field_name="Lada",
     )
 
-    telefono = _required_text(
-        row.get("Telefono"),
-        field_name="Telefono",
-    )
+    telefono = _optional_text(
+        row.get("Telefono")
+    ) or ""
+
+    if not telefono:
+        quality_flags.append("TELEFONO_MISSING")
 
     fecha_nacimiento, birth_flag = _parse_birth_date(
         row.get("FechaNacimiento")
