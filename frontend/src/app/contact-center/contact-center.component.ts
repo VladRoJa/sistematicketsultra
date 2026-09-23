@@ -547,6 +547,11 @@ export class ContactCenterComponent implements OnInit {
   }
 
   importCrmCandidate(row: ContactCenterCrmCandidate): void {
+    if (row.phone_match_ambiguous) {
+      this.importCrmCandidateIntoContact(row, null, null);
+      return;
+    }
+
     if (
       row.already_in_contact_center
       && row.has_active_case
