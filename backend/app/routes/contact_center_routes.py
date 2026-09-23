@@ -84,7 +84,7 @@ def _context():
 def _assert_operator_access(access) -> None:
     if access.is_manager:
         raise ContactCenterAuthorizationError(
-            "El acceso de gerente está limitado a citas de su sucursal."
+            "Esta acción está reservada para operadores de Contact Center."
         )
 
 
@@ -101,13 +101,18 @@ def _parse_date_arg(name: str) -> date | None:
 
 
 def _assert_contact_access(detail, actor, access) -> None:
-    if access.is_supervisor:
+    if access.is_supervisor or not access.is_manager:
         return
 
+    allowed_branch_ids = set(access.allowed_branch_ids)
     assigned = any(
         int(case.get("assigned_user", {}).get("id") or 0) == int(actor.id)
+        and int(case.get("sucursal", {}).get("id") or 0) in allowed_branch_ids
         for case in detail.get("cases", [])
-        if isinstance(case.get("assigned_user"), dict)
+        if (
+            isinstance(case.get("assigned_user"), dict)
+            and isinstance(case.get("sucursal"), dict)
+        )
     )
     if not assigned:
         raise ContactCenterAuthorizationError(
@@ -118,9 +123,18 @@ def _assert_contact_access(detail, actor, access) -> None:
 def _assert_case_access(case: ContactCenterCaseORM, actor, access) -> None:
     if access.is_supervisor:
         return
+
     if int(case.assigned_user_id or 0) != int(actor.id):
         raise ContactCenterAuthorizationError(
             "El caso no pertenece a tu cartera."
+        )
+
+    if (
+        access.is_manager
+        and int(case.sucursal_id or 0) not in set(access.allowed_branch_ids)
+    ):
+        raise ContactCenterAuthorizationError(
+            "El caso no pertenece a una sucursal autorizada."
         )
 
 
@@ -174,10 +188,15 @@ def get_lookups():
 @jwt_required()
 def get_contacts():
     actor, access = _context()
-    _assert_operator_access(access)
     rows = list_contacts(
         actor=actor,
         is_supervisor=access.is_supervisor,
+        include_all_assignees=not access.is_manager,
+        allowed_branch_ids=(
+            access.allowed_branch_ids
+            if access.is_manager
+            else None
+        ),
         status=request.args.get("status"),
         source_type=request.args.get("source_type"),
         query_text=request.args.get("q"),
@@ -246,7 +265,6 @@ def get_duplicates():
 @jwt_required()
 def get_contact(contact_id: int):
     actor, access = _context()
-    _assert_operator_access(access)
     detail = get_contact_detail(contact_id)
     _assert_contact_access(detail, actor, access)
     return jsonify(detail), 200
