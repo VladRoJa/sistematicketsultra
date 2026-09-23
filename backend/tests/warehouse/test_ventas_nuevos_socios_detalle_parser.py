@@ -123,6 +123,23 @@ def test_blank_amounts_and_birth_sentinel_are_quality_flags():
     )
 
 
+def test_blank_phone_is_quality_flag_not_rejection():
+    row = _base_row()
+    row["Telefono"] = ""
+
+    result = parse_ventas_nuevos_socios_detalle_xlsx(
+        file_bytes=_xlsx_bytes([row]),
+        branch_resolver=lambda _: 7,
+    )
+
+    assert result.row_count == 1
+    assert result.row_count_valid == 1
+    assert result.row_count_rejected == 0
+    assert result.rows[0].telefono == ""
+    assert "TELEFONO_MISSING" in result.rows[0].quality_flags
+    assert result.quality_flag_counts["TELEFONO_MISSING"] == 1
+
+
 def test_duplicate_id_socio_rejects_second_row():
     first_row = _base_row()
 
