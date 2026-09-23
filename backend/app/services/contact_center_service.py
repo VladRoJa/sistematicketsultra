@@ -975,11 +975,10 @@ def _serialize_crm_candidate(
     source_key = f"{branch_id}:{str(row['contact_id'])}"
     source_link_contact_id = existing_links.get(source_key)
 
-    phone = str(
+    phone = normalize_phone(
         row.get("phone_mx10")
         or row.get("phone_digits")
-        or ""
-    ).strip()
+    ) or ""
     phone_matches = phone_contact_ids.get(phone, tuple())
 
     phone_match_ambiguous = (
