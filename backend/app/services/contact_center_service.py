@@ -719,10 +719,22 @@ def reschedule_appointment(
 
 def list_appointments(
     *,
+    actor: UserORM,
+    is_supervisor: bool,
     date_from: date | None = None,
     date_to: date | None = None,
 ) -> list[dict[str, Any]]:
     query = ContactCenterAppointmentORM.query
+
+    if not is_supervisor:
+        query = (
+            query
+            .join(
+                ContactCenterCaseORM,
+                ContactCenterCaseORM.id == ContactCenterAppointmentORM.case_id,
+            )
+            .filter(ContactCenterCaseORM.assigned_user_id == actor.id)
+        )
     if date_from is not None:
         start = datetime.combine(
             date_from,
