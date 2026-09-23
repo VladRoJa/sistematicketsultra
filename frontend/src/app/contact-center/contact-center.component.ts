@@ -152,10 +152,60 @@ export class ContactCenterComponent implements OnInit {
   }
 
   get activeCase(): ContactCenterCase | null {
-    return (
-      this.selectedContact?.cases.find((row) => row.status !== 'CLOSED')
-      ?? null
+    const activeCases = (
+      this.selectedContact?.cases.filter(
+        (row) => row.status !== 'CLOSED',
+      )
+      ?? []
     );
+
+    const currentUserId = this.access?.user.id;
+    if (currentUserId) {
+      const ownCase = activeCases.find(
+        (row) => row.assigned_user?.id === currentUserId,
+      );
+      if (ownCase) {
+        return ownCase;
+      }
+    }
+
+    return activeCases[0] ?? null;
+  }
+
+  get canOperateActiveCase(): boolean {
+    if (this.isSupervisor) {
+      return true;
+    }
+
+    return Boolean(
+      this.activeCase
+      && this.access
+      && this.activeCase.assigned_user?.id === this.access.user.id
+    );
+  }
+
+  get showPortfolioAgentColumn(): boolean {
+    return !this.isManager;
+  }
+
+  get portfolioTitle(): string {
+    return this.isManager ? 'Mi cartera' : 'Cartera compartida';
+  }
+
+  get portfolioScopeLabel(): string {
+    if (this.isSupervisor) {
+      return 'Vista global';
+    }
+    if (this.isManager) {
+      return 'Asignados a mí';
+    }
+    return 'Vista compartida';
+  }
+
+  get activeAppointmentHelpText(): string {
+    return this.isManager
+      ? 'Registra el resultado cuando la cita sea atendida.'
+      : 'Este caso ya tiene una cita activa. Para cambiarla usa Reagendar.';
   }
 
   get needsFollowUpDate(): boolean {
@@ -172,10 +222,6 @@ export class ContactCenterComponent implements OnInit {
   }
 
   setTab(tab: ContactCenterTab): void {
-    if (this.isManager && tab !== 'APPOINTMENTS') {
-      return;
-    }
-
     this.activeTab = tab;
     this.clearFeedback();
 
@@ -364,9 +410,11 @@ export class ContactCenterComponent implements OnInit {
         this.loadAppointments();
         this.loadReport();
 
-        const message = response.notification.queued
-          ? 'Cita creada. La notificación por correo quedó en proceso.'
-          : 'Cita creada. No se encontró correo de gerente para notificar.';
+        const message = this.isManager
+          ? 'Cita creada y agregada a tu agenda.'
+          : response.notification.queued
+            ? 'Cita creada. La notificación por correo quedó en proceso.'
+            : 'Cita creada. No se encontró correo de gerente para notificar.';
         this.showFeedback(message, 'SUCCESS');
       },
       error: (error) => {
@@ -503,6 +551,13 @@ export class ContactCenterComponent implements OnInit {
       && row.has_active_case
       && row.contact_center_contact_id
     ) {
+      if (
+        this.isManager
+        && row.active_case_assigned_user_id !== this.access?.user.id
+      ) {
+        return;
+      }
+
       this.activeTab = 'PORTFOLIO';
       this.openContact(row.contact_center_contact_id);
       return;
@@ -539,12 +594,39 @@ export class ContactCenterComponent implements OnInit {
 
   crmActionLabel(row: ContactCenterCrmCandidate): string {
     if (row.already_in_contact_center && row.has_active_case) {
+      if (
+        this.isManager
+        && row.active_case_assigned_user_id !== this.access?.user.id
+      ) {
+        return 'En atención';
+      }
       return 'Abrir';
     }
     if (row.already_in_contact_center) {
       return 'Nuevo caso';
     }
     return 'Agregar';
+  }
+
+  crmActionDisabled(row: ContactCenterCrmCandidate): boolean {
+    return Boolean(
+      this.isManager
+      && row.has_active_case
+      && row.active_case_assigned_user_id !== this.access?.user.id
+    );
+  }
+
+  canOperateAppointment(
+    appointment: ContactCenterAppointment,
+  ): boolean {
+    if (this.isSupervisor || this.isManager) {
+      return true;
+    }
+
+    return Boolean(
+      this.access
+      && appointment.case?.assigned_user?.id === this.access.user.id
+    );
   }
 
   loadAppointments(): void {
@@ -596,7 +678,10 @@ export class ContactCenterComponent implements OnInit {
   }
 
   appointmentAction(appointment: ContactCenterAppointment): void {
-    if (appointment.status !== 'SCHEDULED') {
+    if (
+      appointment.status !== 'SCHEDULED'
+      || !this.canOperateAppointment(appointment)
+    ) {
       return;
     }
 
@@ -818,9 +903,6 @@ export class ContactCenterComponent implements OnInit {
     this.contactCenter.getAccess().subscribe({
       next: (access) => {
         this.access = access;
-        if (access.is_manager) {
-          this.activeTab = 'APPOINTMENTS';
-        }
         this.loadLookups();
       },
       error: (error) => {
@@ -836,9 +918,7 @@ export class ContactCenterComponent implements OnInit {
     this.contactCenter.getLookups().subscribe({
       next: (lookups) => {
         this.lookups = lookups;
-        if (!this.isManager) {
-          this.loadPortfolio();
-        }
+        this.loadPortfolio();
         this.loadAppointments();
       },
       error: (error) => {
