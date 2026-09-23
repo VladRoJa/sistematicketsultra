@@ -44,6 +44,8 @@ export interface ContactCenterAccess {
   allowed: boolean;
   user: ContactCenterUserRef;
   is_supervisor: boolean;
+  is_manager: boolean;
+  allowed_branch_ids: number[];
 }
 
 export interface ContactCenterCase {
