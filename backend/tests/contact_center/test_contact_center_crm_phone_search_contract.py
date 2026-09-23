@@ -21,7 +21,8 @@ def test_crm_phone_search_has_priority_over_month_filter():
     )
 
     assert phone_index < month_index
-    assert "search_crm_candidates_by_phone(phone)" in routes
+    assert "search_crm_candidates_by_phone(" in routes
+    assert "allowed_branch_ids=branch_scope" in routes
 
 
 def test_crm_phone_search_uses_canonical_funnel_semantics():
@@ -47,3 +48,10 @@ def test_crm_phone_search_deduplicates_by_branch_and_contact_identity():
     assert "seen_source_keys: set[str] = set()" in service
     assert "if source_key in seen_source_keys:" in service
     assert "seen_source_keys.add(source_key)" in service
+
+def test_crm_phone_search_can_be_scoped_by_manager_branches():
+    service = _read(SERVICE)
+
+    assert "allowed_branch_ids: tuple[int, ...] | None = None" in service
+    assert "MarketingIventasContactORM.sucursal_id.in_(allowed_branch_ids)" in service
+
