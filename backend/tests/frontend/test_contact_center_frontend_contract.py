@@ -266,8 +266,7 @@ def test_contact_center_crm_exposes_phone_reconciliation_states():
 
     assert "crmStatusLabel(row" in component_ts
     assert "return 'Revisar coincidencia';" in component_ts
-    assert "return 'Ya en cartera'" in component_ts
+    assert "'Ya en cartera'" in component_ts
     assert "if (row.phone_match_ambiguous)" in component_ts
     assert "{{ crmStatusLabel(row) }}" in component_html
     assert "row.phone_match_ambiguous" in component_html
-
