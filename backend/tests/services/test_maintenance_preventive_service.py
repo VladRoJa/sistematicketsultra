@@ -753,6 +753,137 @@ class MaintenancePreventiveCapacityPreviewTest(unittest.TestCase):
         )
 
 
+class MaintenancePreventiveBatchCapacitySummaryTest(unittest.TestCase):
+    def test_batch_days_do_not_merge_two_technicians_into_false_overload(self):
+        target_date = date(2026, 9, 23)
+        draft_items = [
+            SimpleNamespace(
+                ticket_id=None,
+                responsable_input="TEC_A",
+                fecha_programada=target_date,
+                fecha_programada_input="2026-09-23",
+                estimated_duration_minutes=480,
+                estimated_duration_minutes_input="480",
+            ),
+            SimpleNamespace(
+                ticket_id=None,
+                responsable_input="TEC_B",
+                fecha_programada=target_date,
+                fecha_programada_input="2026-09-23",
+                estimated_duration_minutes=480,
+                estimated_duration_minutes_input="480",
+            ),
+        ]
+
+        days = service._batch_capacity_days(
+            period_start=target_date,
+            period_end=target_date,
+            draft_items=draft_items,
+            tickets_by_responsible={
+                "tec_a": [],
+                "tec_b": [],
+            },
+            schedules_by_responsible={
+                "tec_a": [],
+                "tec_b": [],
+            },
+            valid_responsibles={"tec_a", "tec_b"},
+        )
+
+        day = days[0]
+        self.assertEqual(day["estimated_minutes"], 960)
+        self.assertEqual(day["capacity_minutes"], 1080)
+        self.assertEqual(day["responsible_count"], 2)
+        self.assertEqual(day["overloaded_responsible_count"], 0)
+        self.assertEqual(day["status"], "AVAILABLE")
+
+    def test_batch_day_is_overloaded_when_one_technician_exceeds_capacity(self):
+        target_date = date(2026, 9, 23)
+        draft_items = [
+            SimpleNamespace(
+                ticket_id=None,
+                responsable_input="TEC_A",
+                fecha_programada=target_date,
+                fecha_programada_input="2026-09-23",
+                estimated_duration_minutes=600,
+                estimated_duration_minutes_input="600",
+            ),
+            SimpleNamespace(
+                ticket_id=None,
+                responsable_input="TEC_B",
+                fecha_programada=target_date,
+                fecha_programada_input="2026-09-23",
+                estimated_duration_minutes=60,
+                estimated_duration_minutes_input="60",
+            ),
+        ]
+
+        days = service._batch_capacity_days(
+            period_start=target_date,
+            period_end=target_date,
+            draft_items=draft_items,
+            tickets_by_responsible={
+                "tec_a": [],
+                "tec_b": [],
+            },
+            schedules_by_responsible={
+                "tec_a": [],
+                "tec_b": [],
+            },
+            valid_responsibles={"tec_a", "tec_b"},
+        )
+
+        day = days[0]
+        self.assertEqual(day["responsible_count"], 2)
+        self.assertEqual(day["overloaded_responsible_count"], 1)
+        self.assertEqual(day["over_minutes"], 60)
+        self.assertEqual(day["status"], "OVERLOADED")
+
+    def test_batch_day_marks_incomplete_when_duration_is_missing(self):
+        target_date = date(2026, 9, 23)
+        draft_items = [
+            SimpleNamespace(
+                ticket_id=None,
+                responsable_input="TEC_A",
+                fecha_programada=target_date,
+                fecha_programada_input="2026-09-23",
+                estimated_duration_minutes=None,
+                estimated_duration_minutes_input=None,
+            ),
+        ]
+
+        days = service._batch_capacity_days(
+            period_start=target_date,
+            period_end=target_date,
+            draft_items=draft_items,
+            tickets_by_responsible={"tec_a": []},
+            schedules_by_responsible={"tec_a": []},
+            valid_responsibles={"tec_a"},
+        )
+
+        day = days[0]
+        self.assertEqual(day["unestimated_count"], 1)
+        self.assertEqual(day["status"], "INCOMPLETE")
+
+    def test_batch_summary_includes_empty_days_in_period(self):
+        days = service._batch_capacity_days(
+            period_start=date(2026, 9, 22),
+            period_end=date(2026, 9, 24),
+            draft_items=[],
+            tickets_by_responsible={},
+            schedules_by_responsible={},
+            valid_responsibles=set(),
+        )
+
+        self.assertEqual(
+            [day["date"] for day in days],
+            ["2026-09-22", "2026-09-23", "2026-09-24"],
+        )
+        self.assertTrue(
+            all(day["status"] == "EMPTY" for day in days)
+        )
+
+
 class MaintenancePreventiveMaterializationTest(unittest.TestCase):
     def _schedule(self, **overrides):
         values = {
