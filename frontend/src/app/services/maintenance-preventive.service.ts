@@ -155,6 +155,45 @@ export interface PreventiveCapacityBucket {
   unestimated_count: number;
 }
 
+export interface PreventiveBatchCapacityResponsible {
+  username: string;
+  valid_responsible: boolean;
+  estimated_minutes: number;
+  capacity_minutes: number;
+  unestimated_count: number;
+  over_capacity: boolean;
+  over_minutes: number;
+  utilization_percent: number;
+  tickets: PreventiveCapacityBucket;
+  projections: PreventiveCapacityBucket;
+  draft: PreventiveCapacityBucket;
+}
+
+export interface PreventiveBatchCapacityDay {
+  date: string;
+  status: 'EMPTY' | 'AVAILABLE' | 'INCOMPLETE' | 'OVERLOADED';
+  responsible_count: number;
+  overloaded_responsible_count: number;
+  unresolved_responsible_count: number;
+  estimated_minutes: number;
+  capacity_minutes: number;
+  unestimated_count: number;
+  over_minutes: number;
+  utilization_percent: number;
+  responsibles: PreventiveBatchCapacityResponsible[];
+}
+
+export interface PreventiveBatchCapacitySummary {
+  batch_id: number;
+  period_start: string | null;
+  period_end: string | null;
+  period_defined: boolean;
+  reference_daily_capacity_minutes: number;
+  overloaded_days?: number;
+  incomplete_days?: number;
+  days: PreventiveBatchCapacityDay[];
+}
+
 export interface PreventiveCapacityPreview {
   responsable: string;
   date: string;
@@ -855,6 +894,14 @@ export class MaintenancePreventiveService {
     return this.http.post<PreventiveBatch>(
       `${this.baseUrl}/batches`,
       payload,
+    );
+  }
+
+  getBatchCapacitySummary(
+    batchId: number,
+  ): Observable<PreventiveBatchCapacitySummary> {
+    return this.http.get<PreventiveBatchCapacitySummary>(
+      `${this.baseUrl}/batches/${batchId}/capacity-summary`,
     );
   }
 
