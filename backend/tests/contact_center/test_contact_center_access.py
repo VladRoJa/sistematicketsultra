@@ -60,6 +60,19 @@ def test_sandra_profile_has_contact_center_access():
     assert access.is_supervisor is False
 
 
+def test_candy_username_has_same_operator_access_as_sandra():
+    user = _user(username="Candy", role="USUARIO")
+
+    assert has_contact_center_access(user) is True
+    assert has_contact_center_operator_access(user) is True
+
+    access = resolve_contact_center_access(user)
+
+    assert access.username == "CANDY"
+    assert access.is_supervisor is False
+    assert access.is_manager is False
+
+
 def test_other_users_are_rejected():
     user = _user(username="otro", role="ADMINISTRADOR")
 
