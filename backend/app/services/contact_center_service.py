@@ -1151,7 +1151,7 @@ def verify_appointment_purchase(
 
     digits_expr = func.regexp_replace(
         VentaTotalSnapshotRowORM.telefono,
-        r"\D",
+        "[^0-9]",
         "",
         "g",
     )
