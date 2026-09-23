@@ -817,6 +817,7 @@ def list_appointments(
     *,
     actor: UserORM,
     is_supervisor: bool,
+    include_all_assignees: bool = False,
     allowed_branch_ids: tuple[int, ...] | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
@@ -829,7 +830,7 @@ def list_appointments(
         query = query.filter(
             ContactCenterAppointmentORM.sucursal_id.in_(allowed_branch_ids)
         )
-    elif not is_supervisor:
+    elif not is_supervisor and not include_all_assignees:
         query = (
             query
             .join(
