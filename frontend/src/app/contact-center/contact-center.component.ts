@@ -142,6 +142,10 @@ export class ContactCenterComponent implements OnInit {
     return Boolean(this.access?.is_supervisor);
   }
 
+  get isManager(): boolean {
+    return Boolean(this.access?.is_manager);
+  }
+
   get activeCase(): ContactCenterCase | null {
     return (
       this.selectedContact?.cases.find((row) => row.status !== 'CLOSED')
@@ -163,6 +167,10 @@ export class ContactCenterComponent implements OnInit {
   }
 
   setTab(tab: ContactCenterTab): void {
+    if (this.isManager && tab !== 'APPOINTMENTS') {
+      return;
+    }
+
     this.activeTab = tab;
     this.clearFeedback();
 
@@ -176,7 +184,7 @@ export class ContactCenterComponent implements OnInit {
   }
 
   openNewContact(): void {
-    if (!this.access) {
+    if (!this.access || this.isManager) {
       return;
     }
 
@@ -582,6 +590,10 @@ export class ContactCenterComponent implements OnInit {
   }
 
   openAppointmentContact(appointment: ContactCenterAppointment): void {
+    if (this.isManager) {
+      return;
+    }
+
     this.activeTab = 'PORTFOLIO';
     this.openContact(appointment.contact_id);
   }
@@ -728,6 +740,9 @@ export class ContactCenterComponent implements OnInit {
     this.contactCenter.getAccess().subscribe({
       next: (access) => {
         this.access = access;
+        if (access.is_manager) {
+          this.activeTab = 'APPOINTMENTS';
+        }
         this.loadLookups();
       },
       error: (error) => {
@@ -743,7 +758,9 @@ export class ContactCenterComponent implements OnInit {
     this.contactCenter.getLookups().subscribe({
       next: (lookups) => {
         this.lookups = lookups;
-        this.loadPortfolio();
+        if (!this.isManager) {
+          this.loadPortfolio();
+        }
         this.loadAppointments();
       },
       error: (error) => {
@@ -903,8 +920,10 @@ export class ContactCenterComponent implements OnInit {
     ).subscribe({
       next: () => {
         this.loadAppointments();
-        this.loadPortfolio();
-        this.refreshSelectedContactIfMatches(appointment.contact_id);
+        if (!this.isManager) {
+          this.loadPortfolio();
+          this.refreshSelectedContactIfMatches(appointment.contact_id);
+        }
         this.showFeedback('Cita cerrada.', 'SUCCESS');
       },
       error: (error) => {
@@ -931,8 +950,10 @@ export class ContactCenterComponent implements OnInit {
     ).subscribe({
       next: () => {
         this.loadAppointments();
-        this.loadPortfolio();
-        this.refreshSelectedContactIfMatches(appointment.contact_id);
+        if (!this.isManager) {
+          this.loadPortfolio();
+          this.refreshSelectedContactIfMatches(appointment.contact_id);
+        }
         this.showFeedback(
           'Cita reagendada y nueva notificación preparada.',
           'SUCCESS',

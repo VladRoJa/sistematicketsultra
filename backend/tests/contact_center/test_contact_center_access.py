@@ -5,15 +5,25 @@ import pytest
 from app.utils.contact_center_access import (
     ContactCenterAuthorizationError,
     has_contact_center_access,
+    has_contact_center_operator_access,
     resolve_contact_center_access,
 )
 
 
-def _user(*, user_id=1, username="usuario", role="USUARIO"):
+def _user(
+    *,
+    user_id=1,
+    username="usuario",
+    role="USUARIO",
+    sucursal_id=None,
+    sucursales_ids=None,
+):
     return SimpleNamespace(
         id=user_id,
         username=username,
         rol=role,
+        sucursal_id=sucursal_id,
+        sucursales_ids=sucursales_ids or [],
     )
 
 
@@ -57,3 +67,33 @@ def test_other_users_are_rejected():
 
     with pytest.raises(ContactCenterAuthorizationError):
         resolve_contact_center_access(user)
+
+def test_villas_manager_has_pilot_access_but_is_not_operator():
+    user = _user(
+        username="GEREVREY",
+        role="GERENTE",
+        sucursal_id=1,
+    )
+
+    assert has_contact_center_access(user) is True
+    assert has_contact_center_operator_access(user) is False
+
+    access = resolve_contact_center_access(user)
+
+    assert access.is_supervisor is False
+    assert access.is_manager is True
+    assert access.allowed_branch_ids == (1,)
+
+
+def test_manager_outside_villas_pilot_is_rejected():
+    user = _user(
+        username="GEREVVER",
+        role="GERENTE",
+        sucursal_id=2,
+    )
+
+    assert has_contact_center_access(user) is False
+
+    with pytest.raises(ContactCenterAuthorizationError):
+        resolve_contact_center_access(user)
+

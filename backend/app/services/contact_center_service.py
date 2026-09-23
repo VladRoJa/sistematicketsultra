@@ -32,7 +32,7 @@ from app.services.marketing_leads_detail_service import (
 )
 from app.services.marketing_phone import normalize_phone
 from app.services.marketing_sales_funnel_service import _parse_row_date
-from app.utils.contact_center_access import has_contact_center_access
+from app.utils.contact_center_access import has_contact_center_operator_access
 
 
 BUSINESS_TZ = ZoneInfo("America/Tijuana")
@@ -215,13 +215,23 @@ def serialize_appointment(row: ContactCenterAppointmentORM) -> dict[str, Any]:
     }
 
 
-def list_branches() -> list[dict[str, Any]]:
-    rows = (
-        Sucursal.query
-        .filter(
-            Sucursal.operational_status == SucursalOperationalStatus.ACTIVA,
-            Sucursal.is_demo.is_(False),
+def list_branches(
+    allowed_branch_ids: tuple[int, ...] | None = None,
+) -> list[dict[str, Any]]:
+    query = Sucursal.query.filter(
+        Sucursal.operational_status == SucursalOperationalStatus.ACTIVA,
+        Sucursal.is_demo.is_(False),
+    )
+
+    if allowed_branch_ids is not None:
+        if not allowed_branch_ids:
+            return []
+        query = query.filter(
+            Sucursal.sucursal_id.in_(allowed_branch_ids)
         )
+
+    rows = (
+        query
         .order_by(
             Sucursal.orden_apertura.asc().nullslast(),
             Sucursal.sucursal.asc(),
@@ -236,7 +246,7 @@ def list_agents() -> list[dict[str, Any]]:
     return [
         _user_payload(row)
         for row in rows
-        if has_contact_center_access(row)
+        if has_contact_center_operator_access(row)
     ]
 
 
@@ -787,12 +797,19 @@ def list_appointments(
     *,
     actor: UserORM,
     is_supervisor: bool,
+    allowed_branch_ids: tuple[int, ...] | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
 ) -> list[dict[str, Any]]:
     query = ContactCenterAppointmentORM.query
 
-    if not is_supervisor:
+    if allowed_branch_ids is not None:
+        if not allowed_branch_ids:
+            return []
+        query = query.filter(
+            ContactCenterAppointmentORM.sucursal_id.in_(allowed_branch_ids)
+        )
+    elif not is_supervisor:
         query = (
             query
             .join(

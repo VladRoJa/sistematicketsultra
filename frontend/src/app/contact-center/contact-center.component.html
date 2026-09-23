@@ -9,9 +9,20 @@
     <div class="cc-header__actions">
       <span class="access-chip" *ngIf="access">
         <mat-icon>verified_user</mat-icon>
-        {{ isSupervisor ? 'Supervisor' : 'Agente' }} · {{ access.user.username }}
+        {{
+          isSupervisor
+            ? 'Supervisor'
+            : isManager
+              ? 'Gerente'
+              : 'Agente'
+        }} · {{ access.user.username }}
       </span>
-      <button type="button" class="primary-button" (click)="openNewContact()">
+      <button
+        type="button"
+        class="primary-button"
+        *ngIf="!isManager"
+        (click)="openNewContact()"
+      >
         <mat-icon>person_add</mat-icon>
         Nuevo contacto
       </button>
@@ -29,12 +40,12 @@
   </div>
 
   <section class="summary-grid">
-    <article class="summary-card">
+    <article class="summary-card" *ngIf="!isManager">
       <span>Casos activos</span>
       <strong>{{ reportSummary.active_cases }}</strong>
       <small>cartera actual</small>
     </article>
-    <article class="summary-card">
+    <article class="summary-card" *ngIf="!isManager">
       <span>Por seguimiento</span>
       <strong>{{ reportSummary.follow_up }}</strong>
       <small>requieren próxima acción</small>
@@ -64,6 +75,7 @@
   <nav class="cc-tabs">
     <button
       type="button"
+      *ngIf="!isManager"
       [class.cc-tabs__item--active]="activeTab === 'PORTFOLIO'"
       (click)="setTab('PORTFOLIO')"
     >
@@ -72,6 +84,7 @@
     </button>
     <button
       type="button"
+      *ngIf="!isManager"
       [class.cc-tabs__item--active]="activeTab === 'CRM'"
       (click)="setTab('CRM')"
     >
@@ -570,9 +583,17 @@
             <tr *ngFor="let appointment of appointments" [class.row--alert]="appointment.closure_pending">
               <td><strong>{{ formatDateTime(appointment.scheduled_at) }}</strong></td>
               <td>
-                <button type="button" class="link-button" (click)="openAppointmentContact(appointment)">
+                <button
+                  type="button"
+                  class="link-button"
+                  *ngIf="!isManager; else managerContactLabel"
+                  (click)="openAppointmentContact(appointment)"
+                >
                   {{ contactName(appointment.contact) }}
                 </button>
+                <ng-template #managerContactLabel>
+                  <strong>{{ contactName(appointment.contact) }}</strong>
+                </ng-template>
                 <small>{{ contactPhone(appointment.contact) }}</small>
               </td>
               <td>{{ branchName(appointment.sucursal) }}</td>
@@ -606,7 +627,11 @@
                 <button
                   type="button"
                   class="small-button"
-                  *ngIf="appointment.purchase_reported && appointment.purchase_verification_status !== 'VERIFIED'"
+                  *ngIf="
+                    !isManager
+                    && appointment.purchase_reported
+                    && appointment.purchase_verification_status !== 'VERIFIED'
+                  "
                   (click)="verifyPurchase(appointment)"
                 >
                   Validar compra
