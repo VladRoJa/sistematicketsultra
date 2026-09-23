@@ -435,7 +435,13 @@
               <td>{{ row.channel_name || row.channel_platform || '—' }}</td>
               <td>
                 <span class="status-pill" [class.status-pill--appointment]="row.already_in_contact_center">
-                  {{ row.already_in_contact_center ? 'Ya en cartera' : 'Disponible' }}
+                  {{
+                    row.has_active_case
+                      ? 'Caso activo'
+                      : row.already_in_contact_center
+                        ? 'Contacto existente'
+                        : 'Disponible'
+                  }}
                 </span>
               </td>
               <td class="table-action-cell">
@@ -443,10 +449,17 @@
                   type="button"
                   class="small-button small-button--primary"
                   (click)="importCrmCandidate(row)"
-                  [disabled]="row.already_in_contact_center"
                 >
-                  <mat-icon>add</mat-icon>
-                  Agregar
+                  <mat-icon>
+                    {{
+                      row.has_active_case
+                        ? 'open_in_new'
+                        : row.already_in_contact_center
+                          ? 'add_task'
+                          : 'add'
+                    }}
+                  </mat-icon>
+                  {{ crmActionLabel(row) }}
                 </button>
               </td>
             </tr>
