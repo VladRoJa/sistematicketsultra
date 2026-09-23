@@ -1139,7 +1139,7 @@ El caso deberá conservar suficiente referencia para volver desde Contact Center
 
 ## 24. Reactivaciones y campañas
 
-Contact Center podrá recibir casos originados desde campañas/reac­tivaciones.
+Contact Center podrá recibir casos originados desde campañas/reactivaciones.
 
 La creación del caso no modifica las reglas de atribución definidas en:
 
