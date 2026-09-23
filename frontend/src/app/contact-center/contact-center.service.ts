@@ -228,13 +228,20 @@ export class ContactCenterService {
     );
   }
 
-  importCrmCandidate(contactRowId: number): Observable<{
+  importCrmCandidate(
+    contactRowId: number,
+    targetContactId?: number | null,
+  ): Observable<{
     contact: ContactCenterContact;
     case: any;
   }> {
+    const payload = targetContactId
+      ? { contact_id: targetContactId }
+      : {};
+
     return this.http.post<any>(
       `${this.apiUrl}/crm-candidates/${contactRowId}/import`,
-      {},
+      payload,
     );
   }
 
