@@ -253,11 +253,23 @@ def get_contacts():
 @jwt_required()
 def post_contact():
     actor, access = _context()
-    _assert_operator_access(access)
     payload = request.get_json(silent=True) or {}
 
     try:
-        contact, case = create_contact_with_case(payload, actor)
+        contact, case = create_contact_with_case(
+            payload,
+            actor,
+            forced_assigned_user_id=(
+                int(actor.id)
+                if access.is_manager
+                else None
+            ),
+            allowed_branch_ids=(
+                access.allowed_branch_ids
+                if access.is_manager
+                else None
+            ),
+        )
         db.session.commit()
     except (
         ContactCenterDuplicateError,
