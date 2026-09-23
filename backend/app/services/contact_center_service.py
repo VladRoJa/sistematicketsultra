@@ -922,14 +922,18 @@ def _serialize_crm_candidate(
     }
 
 
-def search_crm_candidates_by_phone(phone: object) -> dict[str, Any]:
+def search_crm_candidates_by_phone(
+    phone: object,
+    *,
+    allowed_branch_ids: tuple[int, ...] | None = None,
+) -> dict[str, Any]:
     normalized_phone = normalize_phone(phone)
     if not normalized_phone or len(normalized_phone) != 10:
         raise ContactCenterValidationError(
             "Ingresa un teléfono mexicano válido de 10 dígitos."
         )
 
-    run_branch_rows = (
+    run_branch_query = (
         db.session.query(
             MarketingIventasSyncRunORM.id.label("sync_run_id"),
             MarketingIventasSyncRunORM.date_to,
@@ -945,6 +949,21 @@ def search_crm_candidates_by_phone(phone: object) -> dict[str, Any]:
             MarketingIventasSyncRunORM.status == "COMPLETED",
             MarketingIventasContactORM.phone_mx10 == normalized_phone,
         )
+    )
+
+    if allowed_branch_ids is not None:
+        if not allowed_branch_ids:
+            return {
+                "period_key": "HISTORICO",
+                "sync_run_id": None,
+                "rows": [],
+            }
+        run_branch_query = run_branch_query.filter(
+            MarketingIventasContactORM.sucursal_id.in_(allowed_branch_ids)
+        )
+
+    run_branch_rows = (
+        run_branch_query
         .distinct()
         .order_by(
             MarketingIventasSyncRunORM.date_to.desc(),
@@ -1020,7 +1039,11 @@ def search_crm_candidates_by_phone(phone: object) -> dict[str, Any]:
     }
 
 
-def list_crm_candidates(month: str) -> dict[str, Any]:
+def list_crm_candidates(
+    month: str,
+    *,
+    allowed_branch_ids: tuple[int, ...] | None = None,
+) -> dict[str, Any]:
     raw_month = str(month or "").strip()
     try:
         month_start = date.fromisoformat(f"{raw_month}-01")
@@ -1045,12 +1068,24 @@ def list_crm_candidates(month: str) -> dict[str, Any]:
             "rows": [],
         }
 
+    branch_query = (
+        db.session.query(MarketingIventasContactORM.sucursal_id)
+        .filter(MarketingIventasContactORM.sync_run_id == run.id)
+    )
+    if allowed_branch_ids is not None:
+        if not allowed_branch_ids:
+            return {
+                "period_key": period_key,
+                "sync_run_id": int(run.id),
+                "rows": [],
+            }
+        branch_query = branch_query.filter(
+            MarketingIventasContactORM.sucursal_id.in_(allowed_branch_ids)
+        )
+
     branch_ids = tuple(
         row[0]
-        for row in db.session.query(MarketingIventasContactORM.sucursal_id)
-        .filter(MarketingIventasContactORM.sync_run_id == run.id)
-        .distinct()
-        .all()
+        for row in branch_query.distinct().all()
     )
     if not branch_ids:
         return {
@@ -1097,10 +1132,19 @@ def import_crm_candidate(
     *,
     target_contact_id: int | None = None,
     display_name: str | None = None,
+    allowed_branch_ids: tuple[int, ...] | None = None,
 ) -> tuple[ContactCenterContactORM, ContactCenterCaseORM]:
     source = MarketingIventasContactORM.query.get(contact_row_id)
     if source is None:
         raise ContactCenterNotFoundError("Contacto CRM no encontrado.")
+
+    if (
+        allowed_branch_ids is not None
+        and int(source.sucursal_id) not in set(allowed_branch_ids)
+    ):
+        raise ContactCenterValidationError(
+            "El lead CRM no pertenece a una sucursal autorizada."
+        )
 
     confirmed_display_name = _clean_text(display_name)
     if confirmed_display_name and len(confirmed_display_name) > 255:
