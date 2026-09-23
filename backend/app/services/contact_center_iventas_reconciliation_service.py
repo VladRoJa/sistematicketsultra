@@ -154,7 +154,6 @@ def reconcile_contact_center_iventas_run(
                 source_metadata_json={
                     "sync_run_id": int(sync_run_id),
                     "contact_id": str(row["contact_id"]),
-                    "branch_code": str(row.get("branch_code") or ""),
                     "matched_by": "PHONE_MX10",
                 },
             )
