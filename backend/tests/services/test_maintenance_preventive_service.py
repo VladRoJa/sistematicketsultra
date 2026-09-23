@@ -865,6 +865,48 @@ class MaintenancePreventiveBatchCapacitySummaryTest(unittest.TestCase):
         self.assertEqual(day["unestimated_count"], 1)
         self.assertEqual(day["status"], "INCOMPLETE")
 
+    def test_batch_summary_sees_existing_work_before_draft_has_rows(self):
+        target_date = date(2026, 9, 23)
+
+        days = service._batch_capacity_days(
+            period_start=target_date,
+            period_end=target_date,
+            draft_items=[],
+            tickets_by_responsible={
+                "sr_mant_tij": [
+                    SimpleNamespace(
+                        tipo_mantenimiento="PREVENTIVO",
+                        fecha_programada_actual=datetime(
+                            2026,
+                            9,
+                            23,
+                            14,
+                            0,
+                            tzinfo=timezone.utc,
+                        ),
+                        fecha_programada_original=None,
+                        fecha_solucion=None,
+                        maintenance_estimated_minutes=480,
+                    )
+                ],
+            },
+            schedules_by_responsible={
+                "sr_mant_tij": [],
+            },
+            valid_responsibles={"sr_mant_tij"},
+            candidate_responsibles={"SR_MANT_TIJ"},
+        )
+
+        day = days[0]
+        self.assertEqual(day["status"], "AVAILABLE")
+        self.assertEqual(day["responsible_count"], 1)
+        self.assertEqual(day["estimated_minutes"], 480)
+        self.assertEqual(day["capacity_minutes"], 540)
+        self.assertEqual(
+            day["responsibles"][0]["username"],
+            "SR_MANT_TIJ",
+        )
+
     def test_batch_summary_includes_empty_days_in_period(self):
         days = service._batch_capacity_days(
             period_start=date(2026, 9, 22),
