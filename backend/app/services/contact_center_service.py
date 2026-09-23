@@ -726,13 +726,15 @@ def close_appointment(
         appointment.purchase_reported_at = now
         appointment.purchase_reported_by_user_id = actor.id
         appointment.purchase_verification_status = "REPORTED_PENDING"
+
+    if outcome == "NO_SHOW":
+        case.status = "IN_PROGRESS"
+        case.closed_at = None
+        case.closed_by_user_id = None
+    else:
         case.status = "CLOSED"
         case.closed_at = now
         case.closed_by_user_id = actor.id
-    elif outcome == "NO_SHOW":
-        case.status = "FOLLOW_UP"
-    else:
-        case.status = "IN_PROGRESS"
 
     db.session.flush()
     return appointment
