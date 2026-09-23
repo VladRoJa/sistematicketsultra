@@ -21,6 +21,7 @@ import { TicketService, TicketValidationSummary } from '../services/ticket.servi
 import { Subscription } from 'rxjs';
 import { RefrescoService } from '../services/refresco.service';
 import { canAccessTrackRegionalOperational } from '../warehouse/track-intelligence-regional-operational/track-regional-operational-access.guard';
+import { canAccessContactCenter } from '../contact-center/contact-center-access.guard';
 
 @Component({
   selector: 'app-layout',
@@ -56,6 +57,7 @@ export class LayoutComponent implements OnInit, AfterViewInit, OnDestroy {
 private readonly mainMenuPriority: string[] = [
   'Control',
   'Tickets',
+  'Contact Center',
   'Mantenimiento',
   'Inventario',
   'Track',
@@ -153,6 +155,14 @@ ngOnInit(): void {
     path: '/control',
     submenu: [
       { label: 'Centro de Control', path: '/control' },
+    ],
+  };
+
+  const menuContactCenter = {
+    label: 'Contact Center',
+    path: '/contact-center',
+    submenu: [
+      { label: 'Operación Contact Center', path: '/contact-center' },
     ],
   };
 
@@ -430,6 +440,7 @@ const menuMantenimientoGerencial = [
   }
 
 this.habilitarControlEnMenuSiAplica(menuControl);
+this.habilitarContactCenterEnMenuSiAplica(menuContactCenter);
 this.habilitarMaintenancePlannerEnMenu();
 
 if (
@@ -516,6 +527,41 @@ private habilitarControlEnMenuSiAplica(menuControl: any): void {
         }
 
         this.menuItems = [menuControl, ...this.menuItems];
+        this.sincronizarMenuConRutaActual();
+      },
+      error: () => {
+        // El backend es la autoridad. Si responde 401/403 no se publica el menú.
+      },
+    });
+}
+
+private habilitarContactCenterEnMenuSiAplica(menuContactCenter: any): void {
+  const user = this.session.getUser();
+
+  if (!canAccessContactCenter(user)) {
+    return;
+  }
+
+  if (this.menuItems.some((item) => item.label === 'Contact Center')) {
+    return;
+  }
+
+  this.http
+    .get<any>(`${environment.apiUrl}/contact-center/access`)
+    .subscribe({
+      next: (response) => {
+        if (!response?.allowed) {
+          return;
+        }
+
+        if (this.menuItems.some((item) => item.label === 'Contact Center')) {
+          return;
+        }
+
+        this.menuItems = [
+          ...this.menuItems,
+          menuContactCenter,
+        ];
         this.sincronizarMenuConRutaActual();
       },
       error: () => {
@@ -1393,6 +1439,7 @@ getMenuIcon(label: string): string {
     permisos: 'admin_panel_settings',
     'control de rutinas': 'assignment_turned_in',
     'marketing y conversión': 'campaign',
+    'contact center': 'support_agent',
   };
 
   return iconsByLabel[normalizedLabel] || 'apps';
@@ -1419,6 +1466,10 @@ getSubmenuIcon(label: string): string {
 
   if (normalizedLabel.includes('track')) {
     return 'monitoring';
+  }
+
+  if (normalizedLabel.includes('contact center')) {
+    return 'support_agent';
   }
 
   if (normalizedLabel.includes('marketing')) {
@@ -1513,6 +1564,10 @@ getSubmenuDescription(label: string): string {
 
   if (normalizedLabel.includes('track')) {
     return 'Consulta indicadores diarios, metas y avance por club.';
+  }
+
+  if (normalizedLabel.includes('contact center')) {
+    return 'Trabaja cartera, seguimientos y citas comerciales.';
   }
 
   if (normalizedLabel.includes('marketing')) {
