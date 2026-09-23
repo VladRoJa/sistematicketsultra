@@ -120,6 +120,41 @@ def _assert_contact_access(detail, actor, access) -> None:
         )
 
 
+def _scope_contact_detail_for_manager(detail, actor, access):
+    if not access.is_manager:
+        return detail
+
+    allowed_branch_ids = set(access.allowed_branch_ids)
+    cases = [
+        case
+        for case in detail.get("cases", [])
+        if (
+            isinstance(case.get("assigned_user"), dict)
+            and isinstance(case.get("sucursal"), dict)
+            and int(case["assigned_user"].get("id") or 0) == int(actor.id)
+            and int(case["sucursal"].get("id") or 0) in allowed_branch_ids
+        )
+    ]
+    allowed_case_ids = {
+        int(case.get("id") or 0)
+        for case in cases
+        if case.get("id") is not None
+    }
+
+    detail["cases"] = cases
+    detail["interactions"] = [
+        row
+        for row in detail.get("interactions", [])
+        if int(row.get("case_id") or 0) in allowed_case_ids
+    ]
+    detail["appointments"] = [
+        row
+        for row in detail.get("appointments", [])
+        if int(row.get("case_id") or 0) in allowed_case_ids
+    ]
+    return detail
+
+
 def _assert_case_access(case: ContactCenterCaseORM, actor, access) -> None:
     if access.is_supervisor:
         return
@@ -267,6 +302,7 @@ def get_contact(contact_id: int):
     actor, access = _context()
     detail = get_contact_detail(contact_id)
     _assert_contact_access(detail, actor, access)
+    detail = _scope_contact_detail_for_manager(detail, actor, access)
     return jsonify(detail), 200
 
 
