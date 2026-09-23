@@ -106,6 +106,15 @@ class _FakeSession:
         )
 
 
+def test_repository_allows_blank_phone():
+    row = _parsed_row()
+    row["telefono"] = ""
+
+    normalized = repository._normalize_row(row)
+
+    assert normalized["telefono"] == ""
+
+
 def test_persist_new_snapshot(
     monkeypatch: pytest.MonkeyPatch,
 ):
