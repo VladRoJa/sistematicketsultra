@@ -479,6 +479,52 @@ def get_contact_detail(contact_id: int) -> dict[str, Any]:
     return payload
 
 
+def assign_case(
+    case_id: int,
+    assigned_user_id: int,
+    actor: UserORM,
+    *,
+    is_supervisor: bool,
+) -> ContactCenterCaseORM:
+    if not is_supervisor:
+        raise ContactCenterValidationError(
+            "Sólo el supervisor puede reasignar casos."
+        )
+
+    case = ContactCenterCaseORM.query.get(case_id)
+    if case is None:
+        raise ContactCenterNotFoundError("Caso no encontrado.")
+    if case.status == "CLOSED":
+        raise ContactCenterValidationError(
+            "No se puede reasignar un caso cerrado."
+        )
+
+    assigned_user = UserORM.get_by_id(assigned_user_id)
+    if not has_contact_center_access(assigned_user):
+        raise ContactCenterValidationError(
+            "El usuario seleccionado no tiene acceso a Contact Center."
+        )
+
+    case.assigned_user_id = assigned_user_id
+    case.updated_at = _now_utc()
+
+    db.session.add(
+        ContactCenterInteractionORM(
+            case_id=case.id,
+            contact_id=case.contact_id,
+            interaction_type="SYSTEM",
+            outcome="NOTE",
+            comment=(
+                f"Caso asignado a {assigned_user.username} "
+                f"por {actor.username}."
+            ),
+            created_by_user_id=actor.id,
+        )
+    )
+    db.session.flush()
+    return case
+
+
 def add_interaction(
     case_id: int,
     payload: dict[str, Any],
