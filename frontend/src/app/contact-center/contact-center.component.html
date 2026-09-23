@@ -40,12 +40,12 @@
   </div>
 
   <section class="summary-grid">
-    <article class="summary-card" *ngIf="!isManager">
+    <article class="summary-card">
       <span>Casos activos</span>
       <strong>{{ reportSummary.active_cases }}</strong>
       <small>cartera actual</small>
     </article>
-    <article class="summary-card" *ngIf="!isManager">
+    <article class="summary-card">
       <span>Por seguimiento</span>
       <strong>{{ reportSummary.follow_up }}</strong>
       <small>requieren próxima acción</small>
@@ -75,7 +75,6 @@
   <nav class="cc-tabs">
     <button
       type="button"
-      *ngIf="!isManager"
       [class.cc-tabs__item--active]="activeTab === 'PORTFOLIO'"
       (click)="setTab('PORTFOLIO')"
     >
@@ -84,7 +83,6 @@
     </button>
     <button
       type="button"
-      *ngIf="!isManager"
       [class.cc-tabs__item--active]="activeTab === 'CRM'"
       (click)="setTab('CRM')"
     >
@@ -163,10 +161,10 @@
       <section class="panel-card portfolio-panel">
         <div class="panel-heading">
           <div>
-            <h2>Mi cartera</h2>
+            <h2>{{ portfolioTitle }}</h2>
             <p>{{ contacts.length }} contactos</p>
           </div>
-          <span class="mini-chip">{{ isSupervisor ? 'Vista global' : 'Asignados a mí' }}</span>
+          <span class="mini-chip">{{ portfolioScopeLabel }}</span>
         </div>
 
         <div class="table-wrap">
@@ -178,7 +176,7 @@
                 <th>Sucursal</th>
                 <th>Estado</th>
                 <th>Próxima acción</th>
-                <th *ngIf="isSupervisor">Agente</th>
+                <th *ngIf="showPortfolioAgentColumn">Agente</th>
               </tr>
             </thead>
             <tbody>
@@ -203,10 +201,10 @@
                   </span>
                 </td>
                 <td>{{ formatDateTime(contact.case?.next_action_at) }}</td>
-                <td *ngIf="isSupervisor">{{ contact.case?.assigned_user?.username || 'Sin asignar' }}</td>
+                <td *ngIf="showPortfolioAgentColumn">{{ contact.case?.assigned_user?.username || 'Sin asignar' }}</td>
               </tr>
               <tr *ngIf="!contacts.length && !loadingPortfolio">
-                <td class="empty-cell" [attr.colspan]="isSupervisor ? 6 : 5">
+                <td class="empty-cell" [attr.colspan]="showPortfolioAgentColumn ? 6 : 5">
                   <mat-icon>inbox</mat-icon>
                   <strong>No hay contactos con estos filtros.</strong>
                   <span>Agrega uno manualmente o trae leads desde CRM / Funnel.</span>
@@ -239,7 +237,18 @@
           <div><span>Siguiente</span><strong>{{ formatDateTime(activeCase?.next_action_at) }}</strong></div>
         </div>
 
-        <div class="detail-toolbar">
+        <div
+          class="detail-readonly"
+          *ngIf="activeCase && !canOperateActiveCase"
+        >
+          <mat-icon>visibility</mat-icon>
+          <span>
+            Solo lectura · asignado a
+            {{ activeCase.assigned_user?.username || 'otro usuario' }}
+          </span>
+        </div>
+
+        <div class="detail-toolbar" *ngIf="!isManager">
           <button type="button" class="small-button" (click)="reviewDuplicates()">
             <mat-icon>content_copy</mat-icon>
             Revisar duplicados
@@ -267,7 +276,7 @@
           </div>
         </section>
 
-        <section class="detail-section" *ngIf="activeCase">
+        <section class="detail-section" *ngIf="activeCase && canOperateActiveCase">
           <div class="section-title">
             <div><h3>Registrar seguimiento</h3><p>Una acción rápida, sin perder historial.</p></div>
           </div>
@@ -318,7 +327,7 @@
 
         <section
           class="detail-section detail-section--appointment"
-          *ngIf="activeCase && !activeScheduledAppointment"
+          *ngIf="activeCase && canOperateActiveCase && !activeScheduledAppointment"
         >
           <div class="section-title">
             <div><h3>Agendar cita</h3><p>Elige a qué sucursal asistirá.</p></div>
@@ -364,12 +373,12 @@
 
         <section
           class="detail-section detail-section--appointment"
-          *ngIf="activeCase && activeScheduledAppointment as scheduledAppointment"
+          *ngIf="activeCase && canOperateActiveCase && activeScheduledAppointment as scheduledAppointment"
         >
           <div class="section-title">
             <div>
               <h3>Cita programada</h3>
-              <p>Este caso ya tiene una cita activa. Para cambiarla usa Reagendar.</p>
+              <p>{{ activeAppointmentHelpText }}</p>
             </div>
             <mat-icon>event_available</mat-icon>
           </div>
@@ -538,6 +547,7 @@
                   type="button"
                   class="small-button small-button--primary"
                   (click)="importCrmCandidate(row)"
+                  [disabled]="crmActionDisabled(row)"
                 >
                   <mat-icon>
                     {{
@@ -670,7 +680,10 @@
                 <button
                   type="button"
                   class="small-button"
-                  *ngIf="appointment.status === 'SCHEDULED'"
+                  *ngIf="
+                    appointment.status === 'SCHEDULED'
+                    && canOperateAppointment(appointment)
+                  "
                   (click)="appointmentAction(appointment)"
                 >
                   {{ isManager ? 'Registrar resultado' : 'Cerrar / reagendar' }}
@@ -680,6 +693,7 @@
                   class="small-button"
                   *ngIf="
                     !isManager
+                    && canOperateAppointment(appointment)
                     && appointment.purchase_reported
                     && appointment.purchase_verification_status !== 'VERIFIED'
                   "
@@ -718,8 +732,14 @@
               *ngFor="let appointment of cell.appointments"
               [class.calendar-event--pending]="appointment.closure_pending"
               [class.calendar-event--closed]="appointment.status === 'CLOSED'"
-              [class.calendar-event--readonly]="appointment.status !== 'SCHEDULED'"
-              [disabled]="appointment.status !== 'SCHEDULED'"
+              [class.calendar-event--readonly]="
+                appointment.status !== 'SCHEDULED'
+                || !canOperateAppointment(appointment)
+              "
+              [disabled]="
+                appointment.status !== 'SCHEDULED'
+                || !canOperateAppointment(appointment)
+              "
               (click)="appointmentAction(appointment)"
             >
               <span class="calendar-event__time">{{ formatTime(appointment.scheduled_at) }}</span>

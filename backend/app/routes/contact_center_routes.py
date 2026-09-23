@@ -84,7 +84,7 @@ def _context():
 def _assert_operator_access(access) -> None:
     if access.is_manager:
         raise ContactCenterAuthorizationError(
-            "El acceso de gerente está limitado a citas de su sucursal."
+            "Esta acción está reservada para operadores de Contact Center."
         )
 
 
@@ -101,13 +101,18 @@ def _parse_date_arg(name: str) -> date | None:
 
 
 def _assert_contact_access(detail, actor, access) -> None:
-    if access.is_supervisor:
+    if access.is_supervisor or not access.is_manager:
         return
 
+    allowed_branch_ids = set(access.allowed_branch_ids)
     assigned = any(
         int(case.get("assigned_user", {}).get("id") or 0) == int(actor.id)
+        and int(case.get("sucursal", {}).get("id") or 0) in allowed_branch_ids
         for case in detail.get("cases", [])
-        if isinstance(case.get("assigned_user"), dict)
+        if (
+            isinstance(case.get("assigned_user"), dict)
+            and isinstance(case.get("sucursal"), dict)
+        )
     )
     if not assigned:
         raise ContactCenterAuthorizationError(
@@ -115,12 +120,66 @@ def _assert_contact_access(detail, actor, access) -> None:
         )
 
 
+def _scope_contact_detail_for_manager(detail, actor, access):
+    if not access.is_manager:
+        return detail
+
+    allowed_branch_ids = set(access.allowed_branch_ids)
+    cases = [
+        case
+        for case in detail.get("cases", [])
+        if (
+            isinstance(case.get("assigned_user"), dict)
+            and isinstance(case.get("sucursal"), dict)
+            and int(case["assigned_user"].get("id") or 0) == int(actor.id)
+            and int(case["sucursal"].get("id") or 0) in allowed_branch_ids
+        )
+    ]
+    allowed_case_ids = {
+        int(case.get("id") or 0)
+        for case in cases
+        if case.get("id") is not None
+    }
+    allowed_source_refs = {
+        str(case.get("source_ref"))
+        for case in cases
+        if case.get("source_ref")
+    }
+
+    detail["cases"] = cases
+    detail["interactions"] = [
+        row
+        for row in detail.get("interactions", [])
+        if int(row.get("case_id") or 0) in allowed_case_ids
+    ]
+    detail["appointments"] = [
+        row
+        for row in detail.get("appointments", [])
+        if int(row.get("case_id") or 0) in allowed_case_ids
+    ]
+    detail["links"] = [
+        row
+        for row in detail.get("links", [])
+        if str(row.get("source_key") or "") in allowed_source_refs
+    ]
+    return detail
+
+
 def _assert_case_access(case: ContactCenterCaseORM, actor, access) -> None:
     if access.is_supervisor:
         return
+
     if int(case.assigned_user_id or 0) != int(actor.id):
         raise ContactCenterAuthorizationError(
             "El caso no pertenece a tu cartera."
+        )
+
+    if (
+        access.is_manager
+        and int(case.sucursal_id or 0) not in set(access.allowed_branch_ids)
+    ):
+        raise ContactCenterAuthorizationError(
+            "El caso no pertenece a una sucursal autorizada."
         )
 
 
@@ -174,10 +233,15 @@ def get_lookups():
 @jwt_required()
 def get_contacts():
     actor, access = _context()
-    _assert_operator_access(access)
     rows = list_contacts(
         actor=actor,
         is_supervisor=access.is_supervisor,
+        include_all_assignees=not access.is_manager,
+        allowed_branch_ids=(
+            access.allowed_branch_ids
+            if access.is_manager
+            else None
+        ),
         status=request.args.get("status"),
         source_type=request.args.get("source_type"),
         query_text=request.args.get("q"),
@@ -246,9 +310,9 @@ def get_duplicates():
 @jwt_required()
 def get_contact(contact_id: int):
     actor, access = _context()
-    _assert_operator_access(access)
     detail = get_contact_detail(contact_id)
     _assert_contact_access(detail, actor, access)
+    detail = _scope_contact_detail_for_manager(detail, actor, access)
     return jsonify(detail), 200
 
 
@@ -329,7 +393,10 @@ def post_assign_case(case_id: int):
 @jwt_required()
 def post_interaction(case_id: int):
     actor, access = _context()
-    _assert_operator_access(access)
+    case = ContactCenterCaseORM.query.get(case_id)
+    if case is None:
+        raise ContactCenterNotFoundError("Caso no encontrado.")
+    _assert_case_access(case, actor, access)
     payload = request.get_json(silent=True) or {}
 
     try:
@@ -351,8 +418,21 @@ def post_interaction(case_id: int):
 @jwt_required()
 def post_appointment(case_id: int):
     actor, access = _context()
-    _assert_operator_access(access)
+    case = ContactCenterCaseORM.query.get(case_id)
+    if case is None:
+        raise ContactCenterNotFoundError("Caso no encontrado.")
+    _assert_case_access(case, actor, access)
     payload = request.get_json(silent=True) or {}
+
+    if access.is_manager:
+        try:
+            target_branch_id = int(payload.get("sucursal_id"))
+        except (TypeError, ValueError) as exc:
+            raise ContactCenterValidationError("Sucursal inválida.") from exc
+        if target_branch_id not in set(access.allowed_branch_ids):
+            raise ContactCenterAuthorizationError(
+                "Sólo puedes agendar citas en tus sucursales autorizadas."
+            )
 
     try:
         appointment = create_appointment(
@@ -375,18 +455,19 @@ def post_appointment(case_id: int):
     notification = {
         "queued": False,
         "recipients": [],
-        "status": "FAILED",
+        "status": "SKIPPED_SELF_SCHEDULED" if access.is_manager else "FAILED",
     }
-    try:
-        notification = queue_appointment_created_notification(
-            appointment
-        )
-    except Exception:
-        db.session.rollback()
-        current_app.logger.exception(
-            "La cita %s se creó pero falló la preparación del correo.",
-            appointment.id,
-        )
+    if not access.is_manager:
+        try:
+            notification = queue_appointment_created_notification(
+                appointment
+            )
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception(
+                "La cita %s se creó pero falló la preparación del correo.",
+                appointment.id,
+            )
 
     return jsonify({
         "appointment": serialize_appointment(appointment),
@@ -408,6 +489,7 @@ def get_appointments():
     rows = list_appointments(
         actor=actor,
         is_supervisor=access.is_supervisor,
+        include_all_assignees=not access.is_manager,
         allowed_branch_ids=(
             access.allowed_branch_ids
             if access.is_manager
@@ -539,16 +621,30 @@ def post_verify_purchase(appointment_id: int):
 @jwt_required()
 def get_crm_candidates():
     _, access = _context()
-    _assert_operator_access(access)
+    branch_scope = (
+        access.allowed_branch_ids
+        if access.is_manager
+        else None
+    )
 
     phone = str(request.args.get("phone") or "").strip()
     if phone:
-        return jsonify(search_crm_candidates_by_phone(phone)), 200
+        return jsonify(
+            search_crm_candidates_by_phone(
+                phone,
+                allowed_branch_ids=branch_scope,
+            )
+        ), 200
 
     month = str(request.args.get("month") or "").strip()
     if not month:
         month = datetime.now(BUSINESS_TZ).strftime("%Y-%m")
-    return jsonify(list_crm_candidates(month)), 200
+    return jsonify(
+        list_crm_candidates(
+            month,
+            allowed_branch_ids=branch_scope,
+        )
+    ), 200
 
 
 @contact_center_bp.post(
@@ -557,7 +653,6 @@ def get_crm_candidates():
 @jwt_required()
 def post_import_crm_candidate(contact_row_id: int):
     actor, access = _context()
-    _assert_operator_access(access)
     payload = request.get_json(silent=True) or {}
 
     target_contact_id = payload.get("contact_id")
@@ -577,6 +672,11 @@ def post_import_crm_candidate(contact_row_id: int):
             actor,
             target_contact_id=target_contact_id,
             display_name=payload.get("display_name"),
+            allowed_branch_ids=(
+                access.allowed_branch_ids
+                if access.is_manager
+                else None
+            ),
         )
 
         if (
@@ -610,17 +710,20 @@ def get_report():
     date_from = _parse_date_arg("date_from")
     date_to = _parse_date_arg("date_to")
 
-    contacts = (
-        []
-        if access.is_manager
-        else list_contacts(
-            actor=actor,
-            is_supervisor=access.is_supervisor,
-        )
+    contacts = list_contacts(
+        actor=actor,
+        is_supervisor=access.is_supervisor,
+        include_all_assignees=not access.is_manager,
+        allowed_branch_ids=(
+            access.allowed_branch_ids
+            if access.is_manager
+            else None
+        ),
     )
     appointments = list_appointments(
         actor=actor,
         is_supervisor=access.is_supervisor,
+        include_all_assignees=not access.is_manager,
         allowed_branch_ids=(
             access.allowed_branch_ids
             if access.is_manager

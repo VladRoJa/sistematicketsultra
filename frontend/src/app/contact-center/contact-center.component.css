@@ -651,6 +651,27 @@
   white-space: nowrap;
 }
 
+.detail-readonly {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  border: 1px solid #dbe2ea;
+  border-radius: 8px;
+  padding: 7px 9px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.detail-readonly mat-icon {
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
+  color: #64748b;
+}
+
 .detail-toolbar {
   justify-content: flex-end;
   margin-top: 8px;

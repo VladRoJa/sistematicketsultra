@@ -153,6 +153,7 @@ export interface ContactCenterCrmCandidate {
   already_in_contact_center: boolean;
   contact_center_contact_id: number | null;
   has_active_case: boolean;
+  active_case_assigned_user_id: number | null;
 }
 
 export interface ContactCenterCrmCandidatesResponse {

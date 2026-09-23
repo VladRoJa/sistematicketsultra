@@ -377,13 +377,22 @@ def list_contacts(
     *,
     actor: UserORM,
     is_supervisor: bool,
+    include_all_assignees: bool = False,
+    allowed_branch_ids: tuple[int, ...] | None = None,
     status: str | None = None,
     source_type: str | None = None,
     query_text: str | None = None,
 ) -> list[dict[str, Any]]:
     cases_query = ContactCenterCaseORM.query
 
-    if not is_supervisor:
+    if allowed_branch_ids is not None:
+        if not allowed_branch_ids:
+            return []
+        cases_query = cases_query.filter(
+            ContactCenterCaseORM.sucursal_id.in_(allowed_branch_ids)
+        )
+
+    if not is_supervisor and not include_all_assignees:
         cases_query = cases_query.filter(
             ContactCenterCaseORM.assigned_user_id == actor.id
         )
@@ -519,9 +528,9 @@ def assign_case(
         )
 
     assigned_user = UserORM.get_by_id(assigned_user_id)
-    if not has_contact_center_access(assigned_user):
+    if not has_contact_center_operator_access(assigned_user):
         raise ContactCenterValidationError(
-            "El usuario seleccionado no tiene acceso a Contact Center."
+            "El usuario seleccionado no tiene acceso operativo a Contact Center."
         )
 
     case.assigned_user_id = assigned_user_id
@@ -808,6 +817,7 @@ def list_appointments(
     *,
     actor: UserORM,
     is_supervisor: bool,
+    include_all_assignees: bool = False,
     allowed_branch_ids: tuple[int, ...] | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
@@ -820,7 +830,7 @@ def list_appointments(
         query = query.filter(
             ContactCenterAppointmentORM.sucursal_id.in_(allowed_branch_ids)
         )
-    elif not is_supervisor:
+    elif not is_supervisor and not include_all_assignees:
         query = (
             query
             .join(
@@ -854,7 +864,10 @@ def list_appointments(
     return result
 
 
-def _contact_center_crm_link_state() -> tuple[dict[str, int], set[int]]:
+def _contact_center_crm_link_state() -> tuple[
+    dict[str, int],
+    dict[int, int | None],
+]:
     existing_links = {
         str(row.source_key): int(row.contact_id)
         for row in ContactCenterContactLinkORM.query
@@ -862,20 +875,31 @@ def _contact_center_crm_link_state() -> tuple[dict[str, int], set[int]]:
         .all()
     }
     linked_contact_ids = tuple(sorted(set(existing_links.values())))
-    active_contact_ids: set[int] = set()
+    active_case_owner_ids: dict[int, int | None] = {}
     if linked_contact_ids:
-        active_contact_ids = {
-            int(value[0])
-            for value in db.session.query(ContactCenterCaseORM.contact_id)
+        rows = (
+            db.session.query(
+                ContactCenterCaseORM.contact_id,
+                ContactCenterCaseORM.assigned_user_id,
+            )
             .filter(
                 ContactCenterCaseORM.contact_id.in_(linked_contact_ids),
                 ContactCenterCaseORM.status != "CLOSED",
             )
-            .distinct()
+            .order_by(ContactCenterCaseORM.updated_at.desc())
             .all()
-        }
+        )
+        for contact_id, assigned_user_id in rows:
+            active_case_owner_ids.setdefault(
+                int(contact_id),
+                (
+                    int(assigned_user_id)
+                    if assigned_user_id is not None
+                    else None
+                ),
+            )
 
-    return existing_links, active_contact_ids
+    return existing_links, active_case_owner_ids
 
 
 def _serialize_crm_candidate(
@@ -883,7 +907,7 @@ def _serialize_crm_candidate(
     *,
     branch_names: dict[int, str],
     existing_links: dict[str, int],
-    active_contact_ids: set[int],
+    active_case_owner_ids: dict[int, int | None],
 ) -> dict[str, Any]:
     branch_id = int(row["sucursal_id"])
     source_key = f"{branch_id}:{str(row['contact_id'])}"
@@ -905,21 +929,30 @@ def _serialize_crm_candidate(
         "already_in_contact_center": source_key in existing_links,
         "contact_center_contact_id": linked_contact_id,
         "has_active_case": (
-            linked_contact_id in active_contact_ids
+            linked_contact_id in active_case_owner_ids
             if linked_contact_id is not None
             else False
+        ),
+        "active_case_assigned_user_id": (
+            active_case_owner_ids.get(linked_contact_id)
+            if linked_contact_id is not None
+            else None
         ),
     }
 
 
-def search_crm_candidates_by_phone(phone: object) -> dict[str, Any]:
+def search_crm_candidates_by_phone(
+    phone: object,
+    *,
+    allowed_branch_ids: tuple[int, ...] | None = None,
+) -> dict[str, Any]:
     normalized_phone = normalize_phone(phone)
     if not normalized_phone or len(normalized_phone) != 10:
         raise ContactCenterValidationError(
             "Ingresa un teléfono mexicano válido de 10 dígitos."
         )
 
-    run_branch_rows = (
+    run_branch_query = (
         db.session.query(
             MarketingIventasSyncRunORM.id.label("sync_run_id"),
             MarketingIventasSyncRunORM.date_to,
@@ -935,6 +968,21 @@ def search_crm_candidates_by_phone(phone: object) -> dict[str, Any]:
             MarketingIventasSyncRunORM.status == "COMPLETED",
             MarketingIventasContactORM.phone_mx10 == normalized_phone,
         )
+    )
+
+    if allowed_branch_ids is not None:
+        if not allowed_branch_ids:
+            return {
+                "period_key": "HISTORICO",
+                "sync_run_id": None,
+                "rows": [],
+            }
+        run_branch_query = run_branch_query.filter(
+            MarketingIventasContactORM.sucursal_id.in_(allowed_branch_ids)
+        )
+
+    run_branch_rows = (
+        run_branch_query
         .distinct()
         .order_by(
             MarketingIventasSyncRunORM.date_to.desc(),
@@ -970,7 +1018,7 @@ def search_crm_candidates_by_phone(phone: object) -> dict[str, Any]:
         .filter(Sucursal.sucursal_id.in_(tuple(sorted(all_branch_ids))))
         .all()
     }
-    existing_links, active_contact_ids = _contact_center_crm_link_state()
+    existing_links, active_case_owner_ids = _contact_center_crm_link_state()
 
     result: list[dict[str, Any]] = []
     seen_source_keys: set[str] = set()
@@ -999,7 +1047,7 @@ def search_crm_candidates_by_phone(phone: object) -> dict[str, Any]:
                     row,
                     branch_names=branch_names,
                     existing_links=existing_links,
-                    active_contact_ids=active_contact_ids,
+                    active_case_owner_ids=active_case_owner_ids,
                 )
             )
 
@@ -1010,7 +1058,11 @@ def search_crm_candidates_by_phone(phone: object) -> dict[str, Any]:
     }
 
 
-def list_crm_candidates(month: str) -> dict[str, Any]:
+def list_crm_candidates(
+    month: str,
+    *,
+    allowed_branch_ids: tuple[int, ...] | None = None,
+) -> dict[str, Any]:
     raw_month = str(month or "").strip()
     try:
         month_start = date.fromisoformat(f"{raw_month}-01")
@@ -1035,12 +1087,24 @@ def list_crm_candidates(month: str) -> dict[str, Any]:
             "rows": [],
         }
 
+    branch_query = (
+        db.session.query(MarketingIventasContactORM.sucursal_id)
+        .filter(MarketingIventasContactORM.sync_run_id == run.id)
+    )
+    if allowed_branch_ids is not None:
+        if not allowed_branch_ids:
+            return {
+                "period_key": period_key,
+                "sync_run_id": int(run.id),
+                "rows": [],
+            }
+        branch_query = branch_query.filter(
+            MarketingIventasContactORM.sucursal_id.in_(allowed_branch_ids)
+        )
+
     branch_ids = tuple(
         row[0]
-        for row in db.session.query(MarketingIventasContactORM.sucursal_id)
-        .filter(MarketingIventasContactORM.sync_run_id == run.id)
-        .distinct()
-        .all()
+        for row in branch_query.distinct().all()
     )
     if not branch_ids:
         return {
@@ -1055,7 +1119,7 @@ def list_crm_candidates(month: str) -> dict[str, Any]:
     )
     rows = db.session.execute(statement).mappings().all()
 
-    existing_links, active_contact_ids = _contact_center_crm_link_state()
+    existing_links, active_case_owner_ids = _contact_center_crm_link_state()
     branch_names = {
         int(branch.sucursal_id): str(branch.sucursal)
         for branch in Sucursal.query.filter(Sucursal.sucursal_id.in_(branch_ids)).all()
@@ -1068,7 +1132,7 @@ def list_crm_candidates(month: str) -> dict[str, Any]:
                 row,
                 branch_names=branch_names,
                 existing_links=existing_links,
-                active_contact_ids=active_contact_ids,
+                active_case_owner_ids=active_case_owner_ids,
             )
         )
         if len(result) >= 500:
@@ -1087,10 +1151,19 @@ def import_crm_candidate(
     *,
     target_contact_id: int | None = None,
     display_name: str | None = None,
+    allowed_branch_ids: tuple[int, ...] | None = None,
 ) -> tuple[ContactCenterContactORM, ContactCenterCaseORM]:
     source = MarketingIventasContactORM.query.get(contact_row_id)
     if source is None:
         raise ContactCenterNotFoundError("Contacto CRM no encontrado.")
+
+    if (
+        allowed_branch_ids is not None
+        and int(source.sucursal_id) not in set(allowed_branch_ids)
+    ):
+        raise ContactCenterValidationError(
+            "El lead CRM no pertenece a una sucursal autorizada."
+        )
 
     confirmed_display_name = _clean_text(display_name)
     if confirmed_display_name and len(confirmed_display_name) > 255:
