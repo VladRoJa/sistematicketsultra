@@ -1427,6 +1427,264 @@ def previsualizar_capacidad_programacion(
     )
 
 
+def _batch_item_capacity_date(
+    item: MaintenancePreventiveItemORM,
+) -> date | None:
+    return (
+        getattr(item, "fecha_programada", None)
+        or _parse_programmed_date(
+            getattr(item, "fecha_programada_input", None)
+        )
+    )
+
+
+def _batch_capacity_days(
+    *,
+    period_start: date,
+    period_end: date,
+    draft_items: list,
+    tickets_by_responsible: dict[str, list],
+    schedules_by_responsible: dict[str, list],
+    valid_responsibles: set[str],
+) -> list[dict]:
+    participants_by_date: dict[date, set[str]] = {}
+
+    for item in draft_items:
+        item_date = _batch_item_capacity_date(item)
+        responsible = _clean(
+            getattr(item, "responsable_input", None)
+        )
+
+        if (
+            item_date is None
+            or item_date < period_start
+            or item_date > period_end
+            or not responsible
+        ):
+            continue
+
+        participants_by_date.setdefault(item_date, set()).add(
+            responsible
+        )
+
+    days: list[dict] = []
+    current = period_start
+
+    while current <= period_end:
+        responsible_names = sorted(
+            participants_by_date.get(current, set()),
+            key=str.casefold,
+        )
+        responsible_rows: list[dict] = []
+
+        for responsible in responsible_names:
+            key = responsible.casefold()
+            preview = _build_capacity_preview(
+                tickets=tickets_by_responsible.get(key, []),
+                schedules=schedules_by_responsible.get(key, []),
+                draft_items=draft_items,
+                target_date=current,
+                responsible_username=responsible,
+                proposed_duration_minutes=0,
+                proposed_count=0,
+            )
+            responsible_rows.append(
+                {
+                    "username": responsible,
+                    "valid_responsible": key in valid_responsibles,
+                    "estimated_minutes": preview["resulting_minutes"],
+                    "capacity_minutes": preview["capacity_minutes"],
+                    "unestimated_count": (
+                        preview["existing_unestimated_count"]
+                    ),
+                    "over_capacity": preview["over_capacity"],
+                    "over_minutes": preview["over_minutes"],
+                    "utilization_percent": (
+                        preview["utilization_percent"]
+                    ),
+                    "tickets": preview["tickets"],
+                    "projections": preview["projections"],
+                    "draft": preview["draft"],
+                }
+            )
+
+        estimated_minutes = sum(
+            int(row["estimated_minutes"])
+            for row in responsible_rows
+        )
+        capacity_minutes = (
+            DAILY_CAPACITY_MINUTES * len(responsible_rows)
+        )
+        unestimated_count = sum(
+            int(row["unestimated_count"])
+            for row in responsible_rows
+        )
+        overloaded_count = sum(
+            1 for row in responsible_rows if row["over_capacity"]
+        )
+        unresolved_count = sum(
+            1 for row in responsible_rows
+            if not row["valid_responsible"]
+        )
+        over_minutes = sum(
+            int(row["over_minutes"])
+            for row in responsible_rows
+        )
+
+        if not responsible_rows:
+            status = "EMPTY"
+        elif overloaded_count:
+            status = "OVERLOADED"
+        elif unestimated_count or unresolved_count:
+            status = "INCOMPLETE"
+        else:
+            status = "AVAILABLE"
+
+        days.append(
+            {
+                "date": current.isoformat(),
+                "status": status,
+                "responsible_count": len(responsible_rows),
+                "overloaded_responsible_count": overloaded_count,
+                "unresolved_responsible_count": unresolved_count,
+                "estimated_minutes": estimated_minutes,
+                "capacity_minutes": capacity_minutes,
+                "unestimated_count": unestimated_count,
+                "over_minutes": over_minutes,
+                "utilization_percent": (
+                    round(
+                        (estimated_minutes / capacity_minutes) * 100,
+                        1,
+                    )
+                    if capacity_minutes
+                    else 0
+                ),
+                "responsibles": responsible_rows,
+            }
+        )
+        current += timedelta(days=1)
+
+    return days
+
+
+def resumir_capacidad_lote(
+    batch_id: int,
+    user,
+) -> dict:
+    batch = _get_batch(batch_id)
+    _assert_batch_manageable(user, batch)
+
+    period_start = getattr(batch, "period_start", None)
+    period_end = getattr(batch, "period_end", None)
+
+    if period_start is None or period_end is None:
+        return {
+            "batch_id": int(batch.id),
+            "period_start": (
+                period_start.isoformat() if period_start else None
+            ),
+            "period_end": (
+                period_end.isoformat() if period_end else None
+            ),
+            "period_defined": False,
+            "reference_daily_capacity_minutes": (
+                DAILY_CAPACITY_MINUTES
+            ),
+            "days": [],
+        }
+
+    draft_items = list(batch.items or [])
+    responsible_names = {
+        _clean(getattr(item, "responsable_input", None))
+        for item in draft_items
+        if _clean(getattr(item, "responsable_input", None))
+    }
+
+    resolved_users: dict[str, UserORM] = {}
+    for username in responsible_names:
+        resolved = _resolve_responsable(username)
+        if resolved is not None:
+            resolved_users[username.casefold()] = resolved
+
+    responsible_keys = set(
+        username.casefold()
+        for username in responsible_names
+    )
+
+    tickets_by_responsible: dict[str, list] = {
+        key: [] for key in responsible_keys
+    }
+    if responsible_keys:
+        tickets = (
+            Ticket.query
+            .filter(
+                Ticket.departamento_id == MAINTENANCE_DEPARTMENT_ID,
+                Ticket.estado.in_(("abierto", "en progreso")),
+                func.lower(Ticket.asignado_a).in_(
+                    sorted(responsible_keys)
+                ),
+            )
+            .all()
+        )
+        for ticket in tickets:
+            key = _clean(
+                getattr(ticket, "asignado_a", None)
+            ).casefold()
+            if key in tickets_by_responsible:
+                tickets_by_responsible[key].append(ticket)
+
+    schedules_by_responsible: dict[str, list] = {
+        key: [] for key in responsible_keys
+    }
+    user_id_to_key = {
+        int(resolved.id): key
+        for key, resolved in resolved_users.items()
+    }
+    if user_id_to_key:
+        schedules = (
+            MaintenancePreventiveScheduleORM.query
+            .filter(
+                MaintenancePreventiveScheduleORM.active.is_(True),
+                MaintenancePreventiveScheduleORM.responsable_user_id.in_(
+                    sorted(user_id_to_key)
+                ),
+                MaintenancePreventiveScheduleORM.next_scheduled_date
+                <= period_end,
+            )
+            .all()
+        )
+        for schedule in schedules:
+            key = user_id_to_key.get(
+                int(schedule.responsable_user_id)
+            )
+            if key is not None:
+                schedules_by_responsible[key].append(schedule)
+
+    days = _batch_capacity_days(
+        period_start=period_start,
+        period_end=period_end,
+        draft_items=draft_items,
+        tickets_by_responsible=tickets_by_responsible,
+        schedules_by_responsible=schedules_by_responsible,
+        valid_responsibles=set(resolved_users),
+    )
+
+    return {
+        "batch_id": int(batch.id),
+        "period_start": period_start.isoformat(),
+        "period_end": period_end.isoformat(),
+        "period_defined": True,
+        "reference_daily_capacity_minutes": DAILY_CAPACITY_MINUTES,
+        "overloaded_days": sum(
+            1 for day in days if day["status"] == "OVERLOADED"
+        ),
+        "incomplete_days": sum(
+            1 for day in days if day["status"] == "INCOMPLETE"
+        ),
+        "days": days,
+    }
+
+
 def _programmed_datetime_utc(programmed_date: date) -> datetime:
     local_dt = datetime.combine(
         programmed_date,
