@@ -362,9 +362,11 @@ def _normalize_row(
             row.get("lada"),
             field_name="lada",
         ),
-        "telefono": _ensure_required_text(
-            row.get("telefono"),
-            field_name="telefono",
+        "telefono": (
+            _ensure_optional_text(
+                row.get("telefono")
+            )
+            or ""
         ),
         "domicilio": _ensure_optional_text(
             row.get("domicilio")
