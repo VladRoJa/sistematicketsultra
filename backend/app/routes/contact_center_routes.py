@@ -140,6 +140,11 @@ def _scope_contact_detail_for_manager(detail, actor, access):
         for case in cases
         if case.get("id") is not None
     }
+    allowed_source_refs = {
+        str(case.get("source_ref"))
+        for case in cases
+        if case.get("source_ref")
+    }
 
     detail["cases"] = cases
     detail["interactions"] = [
@@ -151,6 +156,11 @@ def _scope_contact_detail_for_manager(detail, actor, access):
         row
         for row in detail.get("appointments", [])
         if int(row.get("case_id") or 0) in allowed_case_ids
+    ]
+    detail["links"] = [
+        row
+        for row in detail.get("links", [])
+        if str(row.get("source_key") or "") in allowed_source_refs
     ]
     return detail
 
