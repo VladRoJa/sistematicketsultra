@@ -69,6 +69,7 @@ def test_frontend_service_uses_canonical_preventive_api():
         "/validate",
         "/publish",
         "/capacity-preview",
+        "/capacity-summary",
     ):
         assert endpoint in service
 
@@ -101,6 +102,14 @@ def test_admin_view_supports_equipment_building_and_batch_actions():
     assert "capacity-preview--danger" in html
     assert "Exceso" in html
     assert "previewCapacity" in _read(SERVICE_TS)
+    assert "getBatchCapacitySummary" in _read(SERVICE_TS)
+    assert "batchCapacitySummary" in ts
+    assert "loadBatchCapacitySummary" in ts
+    assert "batchCapacityDayStatus" in ts
+    assert "batchCapacityDayLoad" in ts
+    assert "batch-capacity-strip" in html
+    assert "batch-capacity-day" in html
+    assert "[ngClass]="batchCapacityDayClass(day)"" in html
     assert "estimated_duration_minutes" in _read(SERVICE_TS)
     assert '[attr.min]="batch.period_start || null"' in html
     assert '[attr.max]="batch.period_end || null"' in html
@@ -119,6 +128,7 @@ def test_backend_blueprint_is_registered_inside_tickets_namespace():
     assert '"/equipment"' in routes
     assert '"/batches/<int:batch_id>/publish"' in routes
     assert '"/batches/<int:batch_id>/capacity-preview"' in routes
+    assert '"/batches/<int:batch_id>/capacity-summary"' in routes
 
     assert "maintenance_preventive_bp" in app_factory
     assert "/api/tickets/preventive-planning" in app_factory
