@@ -922,14 +922,10 @@ export class ContactCenterComponent implements OnInit {
       day: '2-digit',
     }).formatToParts(parsed);
 
-    const values = new Map(
-      parts.map((part) => [part.type, part.value]),
-    );
-
     return [
-      values.get('year'),
-      values.get('month'),
-      values.get('day'),
+      this.datePart(parts, 'year'),
+      this.datePart(parts, 'month'),
+      this.datePart(parts, 'day'),
     ].join('-');
   }
 
@@ -940,11 +936,17 @@ export class ContactCenterComponent implements OnInit {
       year: 'numeric',
       month: '2-digit',
     }).formatToParts(now);
-    const values = new Map(
-      parts.map((part) => [part.type, part.value]),
-    );
+    return [
+      this.datePart(parts, 'year'),
+      this.datePart(parts, 'month'),
+    ].join('-');
+  }
 
-    return `${values.get('year')}-${values.get('month')}`;
+  private datePart(
+    parts: Intl.DateTimeFormatPart[],
+    type: Intl.DateTimeFormatPartTypes,
+  ): string {
+    return parts.find((part) => part.type === type)?.value ?? '';
   }
 
   private firstDayOfBusinessMonth(): Date {
