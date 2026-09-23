@@ -16,9 +16,26 @@ CONTACT_CENTER_INITIAL_ROLES = frozenset({
     "SANDRA",
 })
 
-# Piloto gerencial inicial. Villas del Rey es sucursal_id=1.
-# Cuando el piloto se valide, este alcance puede ampliarse de forma explícita.
-CONTACT_CENTER_MANAGER_PILOT_BRANCH_IDS = frozenset({1})
+# Rollout gerencial inicial:
+# - Villas del Rey se conserva como sucursal piloto validada.
+# - Región Costa BC (antes Tijuana / Rosarito / Ensenada):
+#   7 Pabellón Rosarito
+#   8 Misión Ensenada
+#   9 Paseo 2000
+#   10 Loma Bonita
+#   11 Santa Fe
+#   12 Carrousel Tijuana
+#   13 Papalote Tijuana
+CONTACT_CENTER_MANAGER_ALLOWED_BRANCH_IDS = frozenset({
+    1,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+})
 
 
 class ContactCenterAuthorizationError(PermissionError):
@@ -65,7 +82,7 @@ def _manager_allowed_branch_ids(user: UserORM) -> tuple[int, ...]:
     return tuple(
         branch_id
         for branch_id in _user_branch_ids(user)
-        if branch_id in CONTACT_CENTER_MANAGER_PILOT_BRANCH_IDS
+        if branch_id in CONTACT_CENTER_MANAGER_ALLOWED_BRANCH_IDS
     )
 
 
