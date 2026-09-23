@@ -448,39 +448,27 @@ export class ContactCenterComponent implements OnInit {
   }
 
   importCrmCandidate(row: ContactCenterCrmCandidate): void {
-    if (row.already_in_contact_center) {
+    if (
+      row.already_in_contact_center
+      && row.has_active_case
+      && row.contact_center_contact_id
+    ) {
+      this.activeTab = 'PORTFOLIO';
+      this.openContact(row.contact_center_contact_id);
       return;
     }
 
-    this.contactCenter.importCrmCandidate(
-      row.contact_row_id,
-    ).subscribe({
-      next: (response) => {
-        row.already_in_contact_center = true;
-        this.loadPortfolio();
-        this.openContact(response.contact.id);
-        this.activeTab = 'PORTFOLIO';
-        this.showFeedback(
-          'Lead agregado a la cartera de Contact Center.',
-          'SUCCESS',
-        );
-      },
-      error: (error) => {
-        if (
-          error?.status === 409
-          && Array.isArray(error?.error?.duplicates)
-          && error.error.duplicates.length
-        ) {
-          this.openCrmDuplicateReview(error.error.duplicates);
-          return;
-        }
+    this.importCrmCandidateIntoContact(row, null);
+  }
 
-        this.showApiError(
-          error,
-          'No se pudo agregar el lead a la cartera.',
-        );
-      },
-    });
+  crmActionLabel(row: ContactCenterCrmCandidate): string {
+    if (row.already_in_contact_center && row.has_active_case) {
+      return 'Abrir';
+    }
+    if (row.already_in_contact_center) {
+      return 'Nuevo caso';
+    }
+    return 'Agregar';
   }
 
   loadAppointments(): void {
@@ -778,20 +766,96 @@ export class ContactCenterComponent implements OnInit {
     this.appointmentNotes = '';
   }
 
+  private importCrmCandidateIntoContact(
+    row: ContactCenterCrmCandidate,
+    targetContactId: number | null,
+  ): void {
+    this.contactCenter.importCrmCandidate(
+      row.contact_row_id,
+      targetContactId,
+    ).subscribe({
+      next: (response) => {
+        row.already_in_contact_center = true;
+        row.contact_center_contact_id = response.contact.id;
+        row.has_active_case = true;
+        this.loadPortfolio();
+        this.activeTab = 'PORTFOLIO';
+        this.openContact(response.contact.id);
+        this.showFeedback(
+          targetContactId
+            ? 'Lead vinculado al contacto existente y caso listo para seguimiento.'
+            : 'Lead agregado a la cartera de Contact Center.',
+          'SUCCESS',
+        );
+      },
+      error: (error) => {
+        if (
+          error?.status === 409
+          && Array.isArray(error?.error?.duplicates)
+          && error.error.duplicates.length
+        ) {
+          this.openCrmDuplicateReview(
+            row,
+            error.error.duplicates,
+          );
+          return;
+        }
+
+        this.showApiError(
+          error,
+          'No se pudo agregar el lead a la cartera.',
+        );
+      },
+    });
+  }
+
   private openCrmDuplicateReview(
+    row: ContactCenterCrmCandidate,
     duplicates: ContactCenterContact[],
   ): void {
-    const first = duplicates[0];
-    if (!first) {
+    if (!duplicates.length) {
       return;
     }
 
-    this.activeTab = 'PORTFOLIO';
-    this.openContact(first.id);
-    this.showFeedback(
-      'Ese lead coincide con un contacto existente. Se abrió para revisión.',
-      'INFO',
+    const branch = this.lookups.branches.find(
+      (item) => item.id === row.sucursal_id,
+    ) ?? null;
+
+    const crmContact: ContactCenterContact = {
+      id: 0,
+      display_name: row.name,
+      primary_phone_raw: row.phone || '',
+      phone_mx10: row.phone,
+      email: null,
+      preferred_sucursal: branch,
+      is_active: true,
+      merged_into_contact_id: null,
+      created_at: row.first_message_at_local || '',
+      updated_at: row.first_message_at_local || '',
+    };
+
+    const ref = this.dialog.open(
+      ContactCenterDuplicateDialogComponent,
+      {
+        maxWidth: '96vw',
+        data: {
+          baseContact: crmContact,
+          candidates: duplicates,
+          canMerge: false,
+        },
+      },
     );
+
+    ref.afterClosed().subscribe((result) => {
+      if (!result?.contactId) {
+        return;
+      }
+
+      this.importCrmCandidateIntoContact(
+        row,
+        Number(result.contactId),
+      );
+    });
   }
 
   private closeAppointment(
