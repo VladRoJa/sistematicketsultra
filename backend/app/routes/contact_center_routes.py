@@ -409,18 +409,19 @@ def post_appointment(case_id: int):
     notification = {
         "queued": False,
         "recipients": [],
-        "status": "FAILED",
+        "status": "SKIPPED_SELF_SCHEDULED" if access.is_manager else "FAILED",
     }
-    try:
-        notification = queue_appointment_created_notification(
-            appointment
-        )
-    except Exception:
-        db.session.rollback()
-        current_app.logger.exception(
-            "La cita %s se creó pero falló la preparación del correo.",
-            appointment.id,
-        )
+    if not access.is_manager:
+        try:
+            notification = queue_appointment_created_notification(
+                appointment
+            )
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception(
+                "La cita %s se creó pero falló la preparación del correo.",
+                appointment.id,
+            )
 
     return jsonify({
         "appointment": serialize_appointment(appointment),
