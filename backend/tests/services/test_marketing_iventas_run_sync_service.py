@@ -128,6 +128,18 @@ def _install_common_mocks(
         lambda **kwargs: _stored_counters(),
     )
 
+    monkeypatch.setattr(
+        service,
+        "reconcile_contact_center_iventas_run",
+        lambda **kwargs: SimpleNamespace(
+            leads_scanned=0,
+            links_created=0,
+            already_linked=0,
+            no_contact_match=0,
+            ambiguous_contact_match=0,
+        ),
+    )
+
 
 def _capture_finalize(
     monkeypatch,
@@ -261,6 +273,13 @@ def test_completed_can_disable_canonicalization(
         lambda **kwargs: None,
     )
 
+    reconciliation_calls = []
+    monkeypatch.setattr(
+        service,
+        "reconcile_contact_center_iventas_run",
+        lambda **kwargs: reconciliation_calls.append(kwargs),
+    )
+
     result = service.sync_iventas_full_run(
         period_key="2026-08",
         date_from=date(
@@ -284,6 +303,7 @@ def test_completed_can_disable_canonicalization(
     assert finalize_calls[0][
         "make_canonical"
     ] is False
+    assert reconciliation_calls == []
 
 
 def test_partial_continues_after_operational_failure(
@@ -775,3 +795,83 @@ def test_requires_exactly_26_active_iventas_aliases():
         service._load_active_iventas_branch_codes(
             session=FakeAliasSession(),
         )
+
+def test_completed_canonical_run_reconciles_contact_center(
+    monkeypatch,
+):
+    session = FakeSession()
+    _install_common_mocks(monkeypatch)
+    _capture_finalize(monkeypatch)
+    monkeypatch.setattr(
+        service,
+        "sync_iventas_branch_pages",
+        lambda **kwargs: None,
+    )
+
+    calls = []
+
+    def fake_reconcile(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            leads_scanned=5,
+            links_created=2,
+            already_linked=1,
+            no_contact_match=1,
+            ambiguous_contact_match=1,
+        )
+
+    monkeypatch.setattr(
+        service,
+        "reconcile_contact_center_iventas_run",
+        fake_reconcile,
+    )
+
+    result = service.sync_iventas_full_run(
+        period_key="2026-08",
+        date_from=date(2026, 8, 1),
+        date_to=date(2026, 8, 11),
+        client=object(),
+        session=session,
+    )
+
+    assert result.status == "COMPLETED"
+    assert result.is_canonical is True
+    assert len(calls) == 1
+    assert calls[0]["sync_run_id"] == 101
+    assert calls[0]["session"] is session
+    assert session.rollback_count == 0
+
+
+def test_reconciliation_failure_does_not_fail_canonical_sync(
+    monkeypatch,
+):
+    session = FakeSession()
+    _install_common_mocks(monkeypatch)
+    _capture_finalize(monkeypatch)
+    monkeypatch.setattr(
+        service,
+        "sync_iventas_branch_pages",
+        lambda **kwargs: None,
+    )
+
+    def fail_reconcile(**kwargs):
+        raise RuntimeError("fallo reconciliacion")
+
+    monkeypatch.setattr(
+        service,
+        "reconcile_contact_center_iventas_run",
+        fail_reconcile,
+    )
+
+    result = service.sync_iventas_full_run(
+        period_key="2026-08",
+        date_from=date(2026, 8, 1),
+        date_to=date(2026, 8, 11),
+        client=object(),
+        session=session,
+    )
+
+    assert result.status == "COMPLETED"
+    assert result.is_canonical is True
+    assert session.rollback_count == 1
+
