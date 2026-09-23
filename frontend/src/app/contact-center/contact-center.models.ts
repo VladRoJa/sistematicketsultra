@@ -149,6 +149,8 @@ export interface ContactCenterCrmCandidate {
   channel_name: string | null;
   channel_platform: string | null;
   already_in_contact_center: boolean;
+  contact_center_contact_id: number | null;
+  has_active_case: boolean;
 }
 
 export interface ContactCenterCrmCandidatesResponse {
