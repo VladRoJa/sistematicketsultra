@@ -33,17 +33,19 @@ def test_contact_center_route_is_guarded_and_lazy_loaded():
     assert "import('./contact-center/contact-center.component')" in routes
 
 
-def test_contact_center_initial_frontend_access_is_narrow():
+def test_contact_center_frontend_access_keeps_villas_manager_pilot_narrow():
     guard = _read(ACCESS_GUARD)
 
     assert "'ADMICORP'" in guard
     assert "'SANDRA'" in guard
     assert "CONTACT_CENTER_INITIAL_ROLES" in guard
     assert "CONTACT_CENTER_INITIAL_USERS" in guard
+    assert "CONTACT_CENTER_MANAGER_PILOT_BRANCH_IDS" in guard
+    assert "role === 'GERENTE'" in guard
+    assert "CONTACT_CENTER_MANAGER_PILOT_BRANCH_IDS.has(branchId)" in guard
 
-    # No abrir el rollout por roles administrativos genéricos.
+    # No abrir el rollout por roles administrativos/globales genéricos.
     assert "'ADMINISTRADOR'" not in guard
-    assert "'GERENTE'" not in guard
     assert "'LECTOR_GLOBAL'" not in guard
 
 
@@ -98,4 +100,16 @@ def test_contact_center_hides_new_appointment_when_one_is_active():
     assert "activeCase && !activeScheduledAppointment" in component_html
     assert "Este caso ya tiene una cita activa." in component_html
     assert "Gestionar cita" in component_html
+
+def test_contact_center_manager_ui_is_appointments_only():
+    component_ts = _read(COMPONENT_TS)
+    component_html = _read(COMPONENT_HTML)
+
+    assert "get isManager()" in component_ts
+    assert "this.activeTab = 'APPOINTMENTS'" in component_ts
+    assert "if (this.isManager && tab !== 'APPOINTMENTS')" in component_ts
+    assert '*ngIf="!isManager"' in component_html
+    assert "Gerente" in component_html
+    assert "!isManager" in component_html
+    assert "Validar compra" in component_html
 
