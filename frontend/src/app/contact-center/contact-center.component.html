@@ -297,3 +297,455 @@
                 </option>
               </select>
             </label>
+            <label class="field field--wide" *ngIf="needsFollowUpDate">
+              <span>Volver a llamar</span>
+              <input type="datetime-local" [(ngModel)]="interactionNextAction" />
+            </label>
+            <label class="field field--wide">
+              <span>Comentario</span>
+              <textarea
+                rows="2"
+                [(ngModel)]="interactionComment"
+                placeholder="Qué pasó o qué debe saber quien continúe el caso."
+              ></textarea>
+            </label>
+          </div>
+
+          <div class="section-actions">
+            <button
+              type="button"
+              class="primary-button primary-button--compact"
+              (click)="submitInteraction()"
+              [disabled]="savingInteraction"
+            >
+              <mat-icon>save</mat-icon>
+              {{ savingInteraction ? 'Guardando…' : 'Guardar seguimiento' }}
+            </button>
+          </div>
+        </section>
+
+        <section
+          class="detail-section detail-section--appointment"
+          *ngIf="activeCase && canOperateActiveCase && !activeScheduledAppointment"
+        >
+          <div class="section-title">
+            <div><h3>Agendar cita</h3><p>Elige a qué sucursal asistirá.</p></div>
+            <mat-icon>event_available</mat-icon>
+          </div>
+
+          <div class="compact-grid">
+            <label class="field">
+              <span>Sucursal *</span>
+              <select [(ngModel)]="appointmentBranchId">
+                <option [ngValue]="null">Selecciona</option>
+                <option *ngFor="let branch of lookups.branches" [ngValue]="branch.id">
+                  {{ branch.name }}
+                </option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Fecha y hora *</span>
+              <input type="datetime-local" [(ngModel)]="appointmentScheduledAt" />
+            </label>
+            <label class="field field--wide">
+              <span>Comentario para sucursal</span>
+              <textarea
+                rows="2"
+                [(ngModel)]="appointmentNotes"
+                placeholder="Promoción, interés o contexto útil."
+              ></textarea>
+            </label>
+          </div>
+
+          <div class="section-actions">
+            <button
+              type="button"
+              class="primary-button primary-button--compact"
+              (click)="scheduleAppointment()"
+              [disabled]="savingAppointment"
+            >
+              <mat-icon>event</mat-icon>
+              {{ savingAppointment ? 'Agendando…' : 'Crear cita' }}
+            </button>
+          </div>
+        </section>
+
+        <section
+          class="detail-section detail-section--appointment"
+          *ngIf="activeCase && canOperateActiveCase && activeScheduledAppointment as scheduledAppointment"
+        >
+          <div class="section-title">
+            <div>
+              <h3>Cita programada</h3>
+              <p>{{ activeAppointmentHelpText }}</p>
+            </div>
+            <mat-icon>event_available</mat-icon>
+          </div>
+
+          <article class="appointment-mini">
+            <div>
+              <strong>{{ formatDateTime(scheduledAppointment.scheduled_at) }}</strong>
+              <span>{{ branchName(scheduledAppointment.sucursal) }}</span>
+            </div>
+            <span class="status-pill">
+              {{ appointmentStatusLabel(scheduledAppointment) }}
+            </span>
+          </article>
+
+          <div class="section-actions">
+            <button
+              type="button"
+              class="primary-button primary-button--compact"
+              (click)="manageActiveAppointment()"
+            >
+              <mat-icon>edit_calendar</mat-icon>
+              Gestionar cita
+            </button>
+          </div>
+        </section>
+
+        <section class="detail-section">
+          <div class="section-title">
+            <div><h3>Historial</h3><p>Bitácora completa del contacto.</p></div>
+          </div>
+
+          <div class="timeline" *ngIf="selectedContact.interactions.length; else noHistory">
+            <article class="timeline-item" *ngFor="let interaction of selectedContact.interactions">
+              <div class="timeline-dot"></div>
+              <div class="timeline-content">
+                <div class="timeline-heading">
+                  <strong>{{ interactionLabel(interaction.outcome) }}</strong>
+                  <span>{{ formatDateTime(interaction.created_at) }}</span>
+                </div>
+                <p *ngIf="interaction.comment">{{ interaction.comment }}</p>
+                <small>
+                  {{ interaction.created_by_user?.username || 'Suite' }}
+                  <ng-container *ngIf="interaction.next_action_at">
+                    · siguiente: {{ formatDateTime(interaction.next_action_at) }}
+                  </ng-container>
+                </small>
+              </div>
+            </article>
+          </div>
+
+          <ng-template #noHistory>
+            <div class="empty-inline">Todavía no hay interacciones registradas.</div>
+          </ng-template>
+        </section>
+
+        <section class="detail-section" *ngIf="selectedContact.appointments.length">
+          <div class="section-title">
+            <div><h3>Citas</h3><p>Historial de compromisos con sucursal.</p></div>
+          </div>
+          <div class="appointment-stack">
+            <article class="appointment-mini" *ngFor="let appointment of selectedContact.appointments">
+              <div>
+                <strong>{{ formatDateTime(appointment.scheduled_at) }}</strong>
+                <span>{{ branchName(appointment.sucursal) }}</span>
+              </div>
+              <span class="status-pill">{{ appointmentStatusLabel(appointment) }}</span>
+            </article>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </ng-container>
+
+  <ng-container *ngIf="activeTab === 'CRM'">
+    <section class="toolbar-card">
+      <div class="toolbar-fields">
+        <label class="toolbar-field">
+          <span>Mes</span>
+          <input type="month" [(ngModel)]="crmMonth" />
+        </label>
+
+        <label class="toolbar-field toolbar-field--search">
+          <span>Buscar teléfono · todo el histórico</span>
+          <div class="search-control">
+            <mat-icon>search</mat-icon>
+            <input
+              type="tel"
+              inputmode="tel"
+              [(ngModel)]="crmPhoneSearch"
+              (keyup.enter)="searchCrmByPhone()"
+              placeholder="Ej. 6861234567 · Enter para buscar"
+            />
+          </div>
+        </label>
+
+        <div class="toolbar-copy">
+          <strong>Leads CRM del Funnel</strong>
+          <span>
+            El mes sirve para navegar el corte. La búsqueda por teléfono revisa todo el histórico.
+          </span>
+        </div>
+      </div>
+
+      <div class="toolbar-actions">
+        <button
+          type="button"
+          class="secondary-button"
+          *ngIf="crmSearchMode === 'PHONE'"
+          (click)="clearCrmPhoneSearch()"
+          [disabled]="loadingCrm"
+        >
+          Limpiar búsqueda
+        </button>
+
+        <button
+          type="button"
+          class="primary-button"
+          (click)="loadCrmCandidates()"
+          [disabled]="loadingCrm"
+        >
+          <mat-icon>sync</mat-icon>
+          {{ loadingCrm ? 'Cargando…' : 'Cargar leads' }}
+        </button>
+      </div>
+    </section>
+
+    <section class="panel-card">
+      <div class="panel-heading">
+        <div>
+          <h2>CRM / Funnel</h2>
+          <p>{{ crmResultsDescription() }}</p>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="cc-table cc-table--crm">
+          <thead>
+            <tr>
+              <th>Contacto</th>
+              <th>Sucursal</th>
+              <th>Primer mensaje</th>
+              <th>Canal</th>
+              <th>Estado CC</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of crmCandidates">
+              <td><strong>{{ row.name || 'Sin nombre' }}</strong><small>{{ row.phone || 'Sin teléfono' }}</small></td>
+              <td>{{ row.sucursal || '—' }}</td>
+              <td>{{ formatDateTime(row.first_message_at_local) }}</td>
+              <td>{{ row.channel_name || row.channel_platform || '—' }}</td>
+              <td>
+                <span
+                  class="status-pill"
+                  [class.status-pill--appointment]="row.already_in_contact_center"
+                  [class.status-pill--danger]="row.phone_match_ambiguous"
+                >
+                  {{ crmStatusLabel(row) }}
+                </span>
+              </td>
+              <td class="table-action-cell">
+                <button
+                  type="button"
+                  class="small-button small-button--primary"
+                  (click)="importCrmCandidate(row)"
+                  [disabled]="crmActionDisabled(row)"
+                >
+                  <mat-icon>
+                    {{
+                      row.has_active_case
+                        ? 'open_in_new'
+                        : row.already_in_contact_center
+                          ? 'add_task'
+                          : 'add'
+                    }}
+                  </mat-icon>
+                  {{ crmActionLabel(row) }}
+                </button>
+              </td>
+            </tr>
+            <tr *ngIf="!crmCandidates.length && !loadingCrm">
+              <td class="empty-cell" colspan="6">
+                <mat-icon>filter_alt_off</mat-icon>
+                <strong>
+                  {{
+                    crmSearchMode === 'PHONE'
+                      ? 'No se encontró ese teléfono como lead del Funnel.'
+                      : 'No hay leads cargados para mostrar.'
+                  }}
+                </strong>
+                <span>
+                  {{
+                    crmSearchMode === 'PHONE'
+                      ? 'La búsqueda revisó todo el histórico CRM canónico.'
+                      : 'Selecciona el mes y carga el corte CRM.'
+                  }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </ng-container>
+
+  <ng-container *ngIf="activeTab === 'APPOINTMENTS'">
+    <section class="toolbar-card appointment-toolbar">
+      <div class="calendar-navigation">
+        <button type="button" class="icon-button" (click)="moveCalendarMonth(-1)" aria-label="Mes anterior">
+          <mat-icon>chevron_left</mat-icon>
+        </button>
+        <strong>{{ calendarMonthLabel() }}</strong>
+        <button type="button" class="icon-button" (click)="moveCalendarMonth(1)" aria-label="Mes siguiente">
+          <mat-icon>chevron_right</mat-icon>
+        </button>
+      </div>
+
+      <div class="view-toggle">
+        <button
+          type="button"
+          [class.view-toggle__item--active]="appointmentView === 'TABLE'"
+          (click)="setAppointmentView('TABLE')"
+        >
+          <mat-icon>table_rows</mat-icon>
+          Tabla
+        </button>
+        <button
+          type="button"
+          [class.view-toggle__item--active]="appointmentView === 'CALENDAR'"
+          (click)="setAppointmentView('CALENDAR')"
+        >
+          <mat-icon>calendar_month</mat-icon>
+          Calendario
+        </button>
+      </div>
+    </section>
+
+    <section class="panel-card" *ngIf="appointmentView === 'TABLE'">
+      <div class="panel-heading">
+        <div>
+          <h2>Citas</h2>
+          <p>{{ appointments.length }} citas · {{ reportSummary.closure_pending }} pendientes de cierre</p>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="cc-table cc-table--appointments">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Contacto</th>
+              <th>Sucursal</th>
+              <th>Estado</th>
+              <th>Resultado</th>
+              <th>Compra</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let appointment of appointments" [class.row--alert]="appointment.closure_pending">
+              <td><strong>{{ formatDateTime(appointment.scheduled_at) }}</strong></td>
+              <td>
+                <button
+                  type="button"
+                  class="link-button"
+                  *ngIf="!isManager; else managerContactLabel"
+                  (click)="openAppointmentContact(appointment)"
+                >
+                  {{ contactName(appointment.contact) }}
+                </button>
+                <ng-template #managerContactLabel>
+                  <strong>{{ contactName(appointment.contact) }}</strong>
+                </ng-template>
+                <small>{{ contactPhone(appointment.contact) }}</small>
+              </td>
+              <td>{{ branchName(appointment.sucursal) }}</td>
+              <td>
+                <span class="status-pill" [class.status-pill--danger]="appointment.closure_pending">
+                  {{ appointmentStatusLabel(appointment) }}
+                </span>
+              </td>
+              <td>{{ appointmentOutcomeLabel(appointment.outcome) }}</td>
+              <td>
+                <span
+                  class="purchase-pill"
+                  [class.purchase-pill--verified]="purchaseClass(appointment) === 'verified'"
+                  [class.purchase-pill--pending]="purchaseClass(appointment) === 'pending'"
+                >
+                  {{ purchaseLabel(appointment) }}
+                </span>
+                <small *ngIf="appointment.verified_amount !== null">
+                  MXN {{ appointment.verified_amount | number:'1.2-2' }}
+                </small>
+              </td>
+              <td class="table-action-cell">
+                <button
+                  type="button"
+                  class="small-button"
+                  *ngIf="
+                    appointment.status === 'SCHEDULED'
+                    && canOperateAppointment(appointment)
+                  "
+                  (click)="appointmentAction(appointment)"
+                >
+                  {{ isManager ? 'Registrar resultado' : 'Cerrar / reagendar' }}
+                </button>
+                <button
+                  type="button"
+                  class="small-button"
+                  *ngIf="
+                    !isManager
+                    && canOperateAppointment(appointment)
+                    && appointment.purchase_reported
+                    && appointment.purchase_verification_status !== 'VERIFIED'
+                  "
+                  (click)="verifyPurchase(appointment)"
+                >
+                  Validar compra
+                </button>
+              </td>
+            </tr>
+            <tr *ngIf="!appointments.length && !loadingAppointments">
+              <td class="empty-cell" colspan="7">
+                <mat-icon>event_busy</mat-icon>
+                <strong>No hay citas en este mes.</strong>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel-card calendar-card" *ngIf="appointmentView === 'CALENDAR'">
+      <div class="calendar-weekdays">
+        <span *ngFor="let day of weekDays">{{ day }}</span>
+      </div>
+      <div class="calendar-grid">
+        <article
+          class="calendar-cell"
+          *ngFor="let cell of calendarCells"
+          [class.calendar-cell--muted]="!cell.currentMonth"
+        >
+          <span class="calendar-day">{{ cell.day }}</span>
+          <div class="calendar-events">
+            <button
+              type="button"
+              class="calendar-event"
+              *ngFor="let appointment of cell.appointments"
+              [class.calendar-event--pending]="appointment.closure_pending"
+              [class.calendar-event--closed]="appointment.status === 'CLOSED'"
+              [class.calendar-event--readonly]="
+                appointment.status !== 'SCHEDULED'
+                || !canOperateAppointment(appointment)
+              "
+              [disabled]="
+                appointment.status !== 'SCHEDULED'
+                || !canOperateAppointment(appointment)
+              "
+              (click)="appointmentAction(appointment)"
+            >
+              <span class="calendar-event__time">{{ formatTime(appointment.scheduled_at) }}</span>
+              <strong>{{ contactName(appointment.contact) }}</strong>
+              <small>{{ branchName(appointment.sucursal) }}</small>
+            </button>
+          </div>
+        </article>
+      </div>
+    </section>
+  </ng-container>
+</div>
