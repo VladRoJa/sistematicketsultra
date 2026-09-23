@@ -241,13 +241,22 @@ export class ContactCenterService {
   importCrmCandidate(
     contactRowId: number,
     targetContactId?: number | null,
+    displayName?: string | null,
   ): Observable<{
     contact: ContactCenterContact;
     case: any;
   }> {
-    const payload = targetContactId
-      ? { contact_id: targetContactId }
-      : {};
+    const payload: {
+      contact_id?: number;
+      display_name?: string;
+    } = {};
+
+    if (targetContactId) {
+      payload.contact_id = targetContactId;
+    }
+    if (displayName?.trim()) {
+      payload.display_name = displayName.trim();
+    }
 
     return this.http.post<any>(
       `${this.apiUrl}/crm-candidates/${contactRowId}/import`,

@@ -1086,10 +1086,17 @@ def import_crm_candidate(
     actor: UserORM,
     *,
     target_contact_id: int | None = None,
+    display_name: str | None = None,
 ) -> tuple[ContactCenterContactORM, ContactCenterCaseORM]:
     source = MarketingIventasContactORM.query.get(contact_row_id)
     if source is None:
         raise ContactCenterNotFoundError("Contacto CRM no encontrado.")
+
+    confirmed_display_name = _clean_text(display_name)
+    if confirmed_display_name and len(confirmed_display_name) > 255:
+        raise ContactCenterValidationError(
+            "El nombre del contacto no puede superar 255 caracteres."
+        )
 
     statement = build_marketing_lead_contacts_statement(
         iventas_sync_run_id=int(source.sync_run_id),
@@ -1171,7 +1178,7 @@ def import_crm_candidate(
         raise ContactCenterDuplicateError(duplicates)
 
     contact = ContactCenterContactORM(
-        display_name=_clean_text(source.name),
+        display_name=confirmed_display_name or _clean_text(source.name),
         primary_phone_raw=str(source.phone_raw or phone or ""),
         phone_mx10=normalize_phone(phone),
         preferred_sucursal_id=source.sucursal_id,

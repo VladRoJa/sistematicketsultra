@@ -460,7 +460,7 @@
               inputmode="tel"
               [(ngModel)]="crmPhoneSearch"
               (keyup.enter)="searchCrmByPhone()"
-              placeholder="Ej. 6861234567"
+              placeholder="Ej. 6861234567 · Enter para buscar"
             />
           </div>
         </label>
@@ -482,16 +482,6 @@
           [disabled]="loadingCrm"
         >
           Limpiar búsqueda
-        </button>
-
-        <button
-          type="button"
-          class="secondary-button"
-          (click)="searchCrmByPhone()"
-          [disabled]="loadingCrm || !crmPhoneSearch.trim()"
-        >
-          <mat-icon>search</mat-icon>
-          Buscar teléfono
         </button>
 
         <button

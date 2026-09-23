@@ -25,6 +25,9 @@ import {
   ContactCenterDuplicateDialogComponent,
 } from './contact-center-duplicate-dialog.component';
 import {
+  ContactCenterCrmImportDialogComponent,
+} from './contact-center-crm-import-dialog.component';
+import {
   ContactCenterNewContactDialogComponent,
 } from './contact-center-new-contact-dialog.component';
 import { ContactCenterService } from './contact-center.service';
@@ -505,7 +508,33 @@ export class ContactCenterComponent implements OnInit {
       return;
     }
 
-    this.importCrmCandidateIntoContact(row, null);
+    if (row.already_in_contact_center) {
+      this.importCrmCandidateIntoContact(row, null, null);
+      return;
+    }
+
+    const ref = this.dialog.open(
+      ContactCenterCrmImportDialogComponent,
+      {
+        maxWidth: '96vw',
+        data: {
+          candidate: row,
+        },
+      },
+    );
+
+    ref.afterClosed().subscribe((result) => {
+      const displayName = String(result?.displayName || '').trim();
+      if (!displayName) {
+        return;
+      }
+
+      this.importCrmCandidateIntoContact(
+        row,
+        null,
+        displayName,
+      );
+    });
   }
 
   crmActionLabel(row: ContactCenterCrmCandidate): string {
@@ -861,10 +890,12 @@ export class ContactCenterComponent implements OnInit {
   private importCrmCandidateIntoContact(
     row: ContactCenterCrmCandidate,
     targetContactId: number | null,
+    displayName: string | null,
   ): void {
     this.contactCenter.importCrmCandidate(
       row.contact_row_id,
       targetContactId,
+      displayName,
     ).subscribe({
       next: (response) => {
         row.already_in_contact_center = true;
@@ -889,6 +920,7 @@ export class ContactCenterComponent implements OnInit {
           this.openCrmDuplicateReview(
             row,
             error.error.duplicates,
+            displayName,
           );
           return;
         }
@@ -904,6 +936,7 @@ export class ContactCenterComponent implements OnInit {
   private openCrmDuplicateReview(
     row: ContactCenterCrmCandidate,
     duplicates: ContactCenterContact[],
+    displayName: string | null,
   ): void {
     if (!duplicates.length) {
       return;
@@ -946,6 +979,7 @@ export class ContactCenterComponent implements OnInit {
       this.importCrmCandidateIntoContact(
         row,
         Number(result.contactId),
+        displayName,
       );
     });
   }

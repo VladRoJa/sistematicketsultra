@@ -25,6 +25,12 @@ APPOINTMENT_DIALOG_TS = REPOSITORY_ROOT / (
 APPOINTMENT_DIALOG_HTML = REPOSITORY_ROOT / (
     "frontend/src/app/contact-center/contact-center-appointment-dialog.component.html"
 )
+CRM_IMPORT_DIALOG_TS = REPOSITORY_ROOT / (
+    "frontend/src/app/contact-center/contact-center-crm-import-dialog.component.ts"
+)
+CRM_IMPORT_DIALOG_HTML = REPOSITORY_ROOT / (
+    "frontend/src/app/contact-center/contact-center-crm-import-dialog.component.html"
+)
 
 
 def _read(path: Path) -> str:
@@ -170,3 +176,29 @@ def test_contact_center_manager_cannot_reschedule_from_dialog():
     assert '*ngIf="data.canReschedule"' in dialog_html
     assert "*ngIf=\"action === 'RESCHEDULE' && data.canReschedule\"" in dialog_html
     assert "isManager ? 'Registrar resultado' : 'Cerrar / reagendar'" in component_html
+
+def test_contact_center_crm_add_confirms_name_before_import():
+    component_ts = _read(COMPONENT_TS)
+    dialog_ts = _read(CRM_IMPORT_DIALOG_TS)
+    dialog_html = _read(CRM_IMPORT_DIALOG_HTML)
+    service = _read(SERVICE_TS)
+
+    assert "ContactCenterCrmImportDialogComponent" in component_ts
+    assert "if (row.already_in_contact_center)" in component_ts
+    assert "displayName" in component_ts
+    assert "display_name?: string" in service
+    assert "payload.display_name = displayName.trim()" in service
+
+    assert "Nombre en cartera *" in dialog_html
+    assert "maxlength=\"255\"" in dialog_html
+    assert "Agregar a cartera" in dialog_html
+    assert "this.displayName = String(data.candidate.name || '').trim()" in dialog_ts
+
+
+def test_contact_center_crm_keeps_single_phone_search_control():
+    component_html = _read(COMPONENT_HTML)
+
+    assert "(keyup.enter)=\"searchCrmByPhone()\"" in component_html
+    assert "(click)=\"searchCrmByPhone()\"" not in component_html
+    assert "Enter para buscar" in component_html
+

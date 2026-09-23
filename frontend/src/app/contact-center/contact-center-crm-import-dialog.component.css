@@ -1,0 +1,147 @@
+.dialog-shell {
+  width: min(520px, 92vw);
+  padding: 18px;
+  color: #0f172a;
+  background: #fff;
+}
+
+.dialog-header,
+.dialog-actions,
+.contact-summary {
+  display: flex;
+  align-items: center;
+}
+
+.dialog-header {
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.eyebrow {
+  margin: 0 0 3px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .15em;
+  color: #4f46e5;
+}
+
+h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.subtitle {
+  margin: 4px 0 0;
+  max-width: 420px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.icon-button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #dbe2ea;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.contact-summary {
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 11px 12px;
+  border: 1px solid #dbe2ea;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.contact-summary > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.contact-summary span,
+.field span {
+  display: block;
+  margin-bottom: 4px;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.contact-summary strong {
+  display: block;
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.field input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 10px 11px;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 14px;
+}
+
+.field small {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.dialog-actions {
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.button--ghost {
+  border-color: #cbd5e1;
+  background: #fff;
+  color: #334155;
+}
+
+.button--primary {
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.button:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
+@media (max-width: 520px) {
+  .contact-summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

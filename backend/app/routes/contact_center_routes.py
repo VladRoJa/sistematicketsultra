@@ -576,6 +576,7 @@ def post_import_crm_candidate(contact_row_id: int):
             contact_row_id,
             actor,
             target_contact_id=target_contact_id,
+            display_name=payload.get("display_name"),
         )
 
         if (
