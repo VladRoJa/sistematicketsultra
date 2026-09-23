@@ -96,7 +96,8 @@ def test_contact_center_v1_exposes_portfolio_crm_and_appointment_calendar():
     assert "type AppointmentView = 'TABLE' | 'CALENDAR'" in component_ts
     assert "calendarCells" in component_ts
 
-    assert "Mi cartera" in component_html
+    assert "{{ portfolioTitle }}" in component_html
+    assert "return this.isManager ? 'Mi cartera' : 'Cartera compartida';" in component_ts
     assert "CRM / Funnel" in component_html
     assert "Citas" in component_html
     assert "calendar-grid" in component_html
@@ -113,20 +114,23 @@ def test_contact_center_hides_new_appointment_when_one_is_active():
     assert "get activeScheduledAppointment()" in component_ts
     assert "row.status === 'SCHEDULED'" in component_ts
     assert "manageActiveAppointment()" in component_ts
-    assert "activeCase && !activeScheduledAppointment" in component_html
-    assert "Este caso ya tiene una cita activa." in component_html
+    assert "activeCase && canOperateActiveCase && !activeScheduledAppointment" in component_html
+    assert "activeAppointmentHelpText" in component_html
     assert "Gestionar cita" in component_html
 
-def test_contact_center_manager_ui_is_appointments_only():
+def test_contact_center_manager_ui_has_mini_portfolio_crm_and_appointments():
     component_ts = _read(COMPONENT_TS)
     component_html = _read(COMPONENT_HTML)
 
     assert "get isManager()" in component_ts
-    assert "this.activeTab = 'APPOINTMENTS'" in component_ts
-    assert "if (this.isManager && tab !== 'APPOINTMENTS')" in component_ts
-    assert '*ngIf="!isManager"' in component_html
+    assert "this.activeTab = tab" in component_ts
+    assert "this.activeTab = 'APPOINTMENTS'" not in component_ts
+    assert "if (this.isManager && tab !== 'APPOINTMENTS')" not in component_ts
+    assert "return this.isManager ? 'Mi cartera' : 'Cartera compartida';" in component_ts
+    assert "return 'Asignados a mí';" in component_ts
+    assert "CRM / Funnel" in component_html
+    assert "Citas" in component_html
     assert "Gerente" in component_html
-    assert "!isManager" in component_html
     assert "Validar compra" in component_html
 
 def test_contact_center_crm_phone_search_is_global_not_month_scoped():
@@ -154,16 +158,15 @@ def test_contact_center_portfolio_can_filter_closed_contacts():
     assert "{{ contacts.length }} contactos</p>" in component_html
     assert "{{ contacts.length }} contactos activos</p>" not in component_html
 
-def test_contact_center_calendar_history_is_read_only():
+def test_contact_center_calendar_history_and_foreign_cases_are_read_only():
     component_ts = _read(COMPONENT_TS)
     component_html = _read(COMPONENT_HTML)
 
-    assert "if (appointment.status !== 'SCHEDULED')" in component_ts
-    assert "[disabled]=\"appointment.status !== 'SCHEDULED'\"" in component_html
-    assert (
-        "[class.calendar-event--readonly]=\"appointment.status !== 'SCHEDULED'\""
-        in component_html
-    )
+    assert "appointment.status !== 'SCHEDULED'" in component_ts
+    assert "!this.canOperateAppointment(appointment)" in component_ts
+    assert "!canOperateAppointment(appointment)" in component_html
+    assert "[disabled]=" in component_html
+    assert "[class.calendar-event--readonly]=" in component_html
 
 def test_contact_center_manager_cannot_reschedule_from_dialog():
     component_ts = _read(COMPONENT_TS)
@@ -201,4 +204,36 @@ def test_contact_center_crm_keeps_single_phone_search_control():
     assert "(keyup.enter)=\"searchCrmByPhone()\"" in component_html
     assert "(click)=\"searchCrmByPhone()\"" not in component_html
     assert "Enter para buscar" in component_html
+
+def test_contact_center_shared_operator_view_is_read_only_for_foreign_cases():
+    component_ts = _read(COMPONENT_TS)
+    component_html = _read(COMPONENT_HTML)
+    component_css = _read(COMPONENT_CSS)
+
+    assert "get canOperateActiveCase()" in component_ts
+    assert "return 'Vista compartida';" in component_ts
+    assert "showPortfolioAgentColumn" in component_ts
+    assert "activeCase && !canOperateActiveCase" in component_html
+    assert "Solo lectura · asignado a" in component_html
+    assert "activeCase && canOperateActiveCase" in component_html
+    assert ".detail-readonly" in component_css
+
+
+def test_contact_center_manager_crm_does_not_take_foreign_active_case():
+    component_ts = _read(COMPONENT_TS)
+    component_html = _read(COMPONENT_HTML)
+
+    assert "active_case_assigned_user_id" in component_ts
+    assert "return 'En atención';" in component_ts
+    assert "crmActionDisabled(row)" in component_ts
+    assert '[disabled]="crmActionDisabled(row)"' in component_html
+
+
+def test_contact_center_shared_appointments_only_show_actions_when_allowed():
+    component_ts = _read(COMPONENT_TS)
+    component_html = _read(COMPONENT_HTML)
+
+    assert "canOperateAppointment(" in component_ts
+    assert "appointment.case?.assigned_user?.id === this.access.user.id" in component_ts
+    assert "&& canOperateAppointment(appointment)" in component_html
 
