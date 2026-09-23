@@ -15,6 +15,7 @@ CONTACT_CENTER_INITIAL_USERS = frozenset({
 
 CONTACT_CENTER_INITIAL_ROLES = frozenset({
     "SANDRA",
+    "CANDY",
 })
 
 # Rollout gerencial inicial:
