@@ -110,6 +110,7 @@ def queue_appointment_created_notification(
     body = _render_appointment_html(appointment)
     app = current_app._get_current_object()
     notification_id = int(notification.id)
+    appointment_id = int(appointment.id)
 
     def _send() -> None:
         with app.app_context():
@@ -126,7 +127,7 @@ def queue_appointment_created_notification(
                 row.error = str(exc)[:2000]
                 app.logger.exception(
                     "No se pudo enviar notificación de cita Contact Center %s",
-                    appointment.id,
+                    appointment_id,
                 )
             finally:
                 db.session.commit()
