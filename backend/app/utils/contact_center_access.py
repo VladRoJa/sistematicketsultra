@@ -69,7 +69,7 @@ def _manager_allowed_branch_ids(user: UserORM) -> tuple[int, ...]:
     )
 
 
-def has_contact_center_access(user: UserORM | None) -> bool:
+def has_contact_center_operator_access(user: UserORM | None) -> bool:
     if user is None:
         return False
 
@@ -79,6 +79,15 @@ def has_contact_center_access(user: UserORM | None) -> bool:
     return (
         username in CONTACT_CENTER_INITIAL_USERS
         or role in CONTACT_CENTER_INITIAL_ROLES
+    )
+
+
+def has_contact_center_access(user: UserORM | None) -> bool:
+    if user is None:
+        return False
+
+    return (
+        has_contact_center_operator_access(user)
         or bool(_manager_allowed_branch_ids(user))
     )
 
