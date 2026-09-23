@@ -29,8 +29,8 @@ def test_manager_is_blocked_from_contact_center_operator_endpoints():
     assert "def post_interaction(case_id: int):" in routes
 
 
-def test_manager_cannot_reschedule_to_another_branch():
+def test_manager_cannot_reschedule_appointments():
     routes = _read(ROUTES)
 
-    assert "No puedes mover la cita a otra sucursal." in routes
-    assert "target_branch_id not in set(access.allowed_branch_ids)" in routes
+    assert "def post_reschedule_appointment(appointment_id: int):" in routes
+    assert "Los gerentes sólo pueden registrar el resultado de la cita." in routes
