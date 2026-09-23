@@ -471,18 +471,12 @@ def post_reschedule_appointment(appointment_id: int):
         raise ContactCenterNotFoundError("Cita no encontrada.")
     _assert_appointment_access(appointment, actor, access)
 
-    payload = request.get_json(silent=True) or {}
-
     if access.is_manager:
-        raw_branch_id = payload.get("sucursal_id") or appointment.sucursal_id
-        try:
-            target_branch_id = int(raw_branch_id)
-        except (TypeError, ValueError) as exc:
-            raise ContactCenterValidationError("Sucursal inválida.") from exc
-        if target_branch_id not in set(access.allowed_branch_ids):
-            raise ContactCenterAuthorizationError(
-                "No puedes mover la cita a otra sucursal."
-            )
+        raise ContactCenterAuthorizationError(
+            "Los gerentes sólo pueden registrar el resultado de la cita."
+        )
+
+    payload = request.get_json(silent=True) or {}
 
     try:
         replacement = reschedule_appointment(

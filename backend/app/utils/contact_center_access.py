@@ -10,10 +10,12 @@ from app.models.user_model import UserORM
 CONTACT_CENTER_INITIAL_USERS = frozenset({
     "ADMICORP",
     "SANDRA",
+    "CANDY",
 })
 
 CONTACT_CENTER_INITIAL_ROLES = frozenset({
     "SANDRA",
+    "CANDY",
 })
 
 # Rollout gerencial inicial:

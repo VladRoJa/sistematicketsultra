@@ -19,6 +19,12 @@ COMPONENT_CSS = REPOSITORY_ROOT / (
 SERVICE_TS = REPOSITORY_ROOT / (
     "frontend/src/app/contact-center/contact-center.service.ts"
 )
+APPOINTMENT_DIALOG_TS = REPOSITORY_ROOT / (
+    "frontend/src/app/contact-center/contact-center-appointment-dialog.component.ts"
+)
+APPOINTMENT_DIALOG_HTML = REPOSITORY_ROOT / (
+    "frontend/src/app/contact-center/contact-center-appointment-dialog.component.html"
+)
 
 
 def _read(path: Path) -> str:
@@ -38,6 +44,7 @@ def test_contact_center_frontend_access_covers_villas_and_costa_bc_managers():
 
     assert "'ADMICORP'" in guard
     assert "'SANDRA'" in guard
+    assert "'CANDY'" in guard
     assert "CONTACT_CENTER_INITIAL_ROLES" in guard
     assert "CONTACT_CENTER_INITIAL_USERS" in guard
     assert "CONTACT_CENTER_MANAGER_ALLOWED_BRANCH_IDS" in guard
@@ -151,3 +158,15 @@ def test_contact_center_calendar_history_is_read_only():
         "[class.calendar-event--readonly]=\"appointment.status !== 'SCHEDULED'\""
         in component_html
     )
+
+def test_contact_center_manager_cannot_reschedule_from_dialog():
+    component_ts = _read(COMPONENT_TS)
+    dialog_ts = _read(APPOINTMENT_DIALOG_TS)
+    dialog_html = _read(APPOINTMENT_DIALOG_HTML)
+
+    assert "canReschedule: !this.isManager" in component_ts
+    assert "canReschedule: boolean" in dialog_ts
+    assert "if (!this.data.canReschedule)" in dialog_ts
+    assert '*ngIf="data.canReschedule"' in dialog_html
+    assert "*ngIf=\"action === 'RESCHEDULE' && data.canReschedule\"" in dialog_html
+    assert "isManager ? 'Registrar resultado' : 'Cerrar / reagendar'" in component_html

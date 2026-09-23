@@ -683,7 +683,7 @@
                   *ngIf="appointment.status === 'SCHEDULED'"
                   (click)="appointmentAction(appointment)"
                 >
-                  Cerrar / reagendar
+                  {{ isManager ? 'Registrar resultado' : 'Cerrar / reagendar' }}
                 </button>
                 <button
                   type="button"

@@ -4,7 +4,11 @@
       <p class="eyebrow">CITA</p>
       <h2>Registrar resultado</h2>
       <p class="subtitle">
-        La cita debe quedar cerrada o reagendada, nunca desaparecer.
+        {{
+          data.canReschedule
+            ? 'La cita debe quedar cerrada o reagendada, nunca desaparecer.'
+            : 'Registra el resultado de la cita para cerrar el seguimiento en sucursal.'
+        }}
       </p>
     </div>
 
@@ -28,6 +32,7 @@
     </button>
     <button
       type="button"
+      *ngIf="data.canReschedule"
       [class.action-toggle__button--active]="action === 'RESCHEDULE'"
       (click)="action = 'RESCHEDULE'"
     >
@@ -63,7 +68,7 @@
 
   <div
     class="form-grid"
-    *ngIf="action === 'RESCHEDULE'"
+    *ngIf="action === 'RESCHEDULE' && data.canReschedule"
   >
     <label class="field">
       <span>Nueva fecha y hora</span>

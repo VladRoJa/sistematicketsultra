@@ -7,10 +7,12 @@ import { SessionService } from '../core/auth/session.service';
 const CONTACT_CENTER_INITIAL_USERS = new Set([
   'ADMICORP',
   'SANDRA',
+  'CANDY',
 ]);
 
 const CONTACT_CENTER_INITIAL_ROLES = new Set([
   'SANDRA',
+  'CANDY',
 ]);
 
 const CONTACT_CENTER_MANAGER_ALLOWED_BRANCH_IDS = new Set([
