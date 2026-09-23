@@ -18,6 +18,7 @@ import {
 export interface ContactCenterAppointmentDialogData {
   appointment: ContactCenterAppointment;
   branches: ContactCenterBranch[];
+  canReschedule: boolean;
 }
 
 
@@ -76,6 +77,10 @@ export class ContactCenterAppointmentDialogComponent {
 
   submit(): void {
     if (this.action === 'RESCHEDULE') {
+      if (!this.data.canReschedule) {
+        return;
+      }
+
       if (!this.scheduledAt || !this.sucursalId) {
         return;
       }
@@ -108,7 +113,11 @@ export class ContactCenterAppointmentDialogComponent {
 
   canSubmit(): boolean {
     if (this.action === 'RESCHEDULE') {
-      return Boolean(this.scheduledAt && this.sucursalId);
+      return Boolean(
+        this.data.canReschedule
+        && this.scheduledAt
+        && this.sucursalId
+      );
     }
     return Boolean(this.outcome);
   }
