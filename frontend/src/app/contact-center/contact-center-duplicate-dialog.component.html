@@ -1,0 +1,150 @@
+<div class="dialog-shell">
+  <div class="dialog-header">
+    <div>
+      <p class="eyebrow">IDENTIDAD</p>
+      <h2>Posibles duplicados</h2>
+      <p class="subtitle">
+        Compara la información antes de decidir si son la misma persona.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      class="icon-button"
+      (click)="close()"
+      aria-label="Cerrar"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <div class="candidate-strip">
+    <button
+      type="button"
+      class="candidate-chip"
+      *ngFor="let contact of data.candidates"
+      [class.candidate-chip--active]="contact.id === selectedCandidateId"
+      (click)="selectCandidate(contact.id)"
+    >
+      {{ contactName(contact) }} · {{ contactPhone(contact) }}
+    </button>
+  </div>
+
+  <ng-container *ngIf="candidate as duplicate">
+    <div class="compare-grid">
+      <section class="contact-card">
+        <span class="contact-card__badge">Contacto actual</span>
+        <strong>{{ contactName(data.baseContact) }}</strong>
+        <small>{{ contactPhone(data.baseContact) }}</small>
+        <small>{{ contactEmail(data.baseContact) }}</small>
+        <small>{{ contactBranch(data.baseContact) }}</small>
+      </section>
+
+      <section class="contact-card">
+        <span class="contact-card__badge">Posible duplicado</span>
+        <strong>{{ contactName(duplicate) }}</strong>
+        <small>{{ contactPhone(duplicate) }}</small>
+        <small>{{ contactEmail(duplicate) }}</small>
+        <small>{{ contactBranch(duplicate) }}</small>
+      </section>
+    </div>
+
+    <div
+      class="merge-box"
+      *ngIf="data.canMerge"
+    >
+      <div class="merge-heading">
+        <mat-icon>merge_type</mat-icon>
+        <div>
+          <strong>Unificar contactos</strong>
+          <small>El historial, casos y citas se conservarán.</small>
+        </div>
+      </div>
+
+      <label class="field">
+        <span>Registro principal</span>
+        <select [(ngModel)]="survivorSide">
+          <option value="BASE">Conservar contacto actual</option>
+          <option value="CANDIDATE">Conservar posible duplicado</option>
+        </select>
+      </label>
+
+      <div class="resolution-grid">
+        <label class="field">
+          <span>Nombre final</span>
+          <select [(ngModel)]="nameSource">
+            <option value="BASE">
+              Actual · {{ contactName(data.baseContact) }}
+            </option>
+            <option value="CANDIDATE">
+              Duplicado · {{ contactName(duplicate) }}
+            </option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Teléfono final</span>
+          <select [(ngModel)]="phoneSource">
+            <option value="BASE">
+              Actual · {{ contactPhone(data.baseContact) }}
+            </option>
+            <option value="CANDIDATE">
+              Duplicado · {{ contactPhone(duplicate) }}
+            </option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Correo final</span>
+          <select [(ngModel)]="emailSource">
+            <option value="BASE">
+              Actual · {{ contactEmail(data.baseContact) }}
+            </option>
+            <option value="CANDIDATE">
+              Duplicado · {{ contactEmail(duplicate) }}
+            </option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Sucursal final</span>
+          <select [(ngModel)]="branchSource">
+            <option value="BASE">
+              Actual · {{ contactBranch(data.baseContact) }}
+            </option>
+            <option value="CANDIDATE">
+              Duplicado · {{ contactBranch(duplicate) }}
+            </option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div
+      class="feedback"
+      *ngIf="errorMessage"
+    >
+      {{ errorMessage }}
+    </div>
+
+    <div class="dialog-actions">
+      <button
+        type="button"
+        class="button button--ghost"
+        (click)="openCandidate()"
+      >
+        Abrir duplicado
+      </button>
+
+      <button
+        type="button"
+        class="button button--primary"
+        *ngIf="data.canMerge"
+        [disabled]="merging"
+        (click)="merge()"
+      >
+        {{ merging ? 'Unificando…' : 'Unificar' }}
+      </button>
+    </div>
+  </ng-container>
+</div>
