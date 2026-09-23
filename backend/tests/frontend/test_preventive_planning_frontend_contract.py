@@ -109,7 +109,7 @@ def test_admin_view_supports_equipment_building_and_batch_actions():
     assert "batchCapacityDayLoad" in ts
     assert "batch-capacity-strip" in html
     assert "batch-capacity-day" in html
-    assert "[ngClass]="batchCapacityDayClass(day)"" in html
+    assert '[ngClass]="batchCapacityDayClass(day)"' in html
     assert "estimated_duration_minutes" in _read(SERVICE_TS)
     assert '[attr.min]="batch.period_start || null"' in html
     assert '[attr.max]="batch.period_end || null"' in html
