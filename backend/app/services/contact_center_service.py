@@ -288,6 +288,9 @@ def find_duplicate_contacts(
 def create_contact_with_case(
     payload: dict[str, Any],
     actor: UserORM,
+    *,
+    forced_assigned_user_id: int | None = None,
+    allowed_branch_ids: tuple[int, ...] | None = None,
 ) -> tuple[ContactCenterContactORM, ContactCenterCaseORM]:
     raw_phone = _clean_text(payload.get("phone"))
     if raw_phone is None:
@@ -321,6 +324,16 @@ def create_contact_with_case(
         if branch is None:
             raise ContactCenterValidationError("Sucursal no encontrada.")
 
+    if allowed_branch_ids is not None:
+        if branch is None:
+            raise ContactCenterValidationError(
+                "Selecciona una sucursal autorizada."
+            )
+        if int(branch_id) not in set(allowed_branch_ids):
+            raise ContactCenterValidationError(
+                "Sólo puedes crear contactos para tus sucursales autorizadas."
+            )
+
     contact = ContactCenterContactORM(
         display_name=_clean_text(payload.get("name")),
         primary_phone_raw=raw_phone,
@@ -333,17 +346,33 @@ def create_contact_with_case(
     db.session.add(contact)
     db.session.flush()
 
-    assigned_user_id = payload.get("assigned_user_id") or actor.id
-    try:
-        assigned_user_id = int(assigned_user_id)
-    except (TypeError, ValueError) as exc:
-        raise ContactCenterValidationError("Agente asignado inválido.") from exc
+    if forced_assigned_user_id is not None:
+        try:
+            assigned_user_id = int(forced_assigned_user_id)
+        except (TypeError, ValueError) as exc:
+            raise ContactCenterValidationError(
+                "Agente asignado inválido."
+            ) from exc
 
-    assigned_user = UserORM.get_by_id(assigned_user_id)
-    if not has_contact_center_operator_access(assigned_user):
-        raise ContactCenterValidationError(
-            "El agente seleccionado no tiene acceso operativo a Contact Center."
-        )
+        if assigned_user_id != int(actor.id):
+            raise ContactCenterValidationError(
+                "La asignación forzada debe corresponder al usuario actual."
+            )
+        assigned_user = actor
+    else:
+        assigned_user_id = payload.get("assigned_user_id") or actor.id
+        try:
+            assigned_user_id = int(assigned_user_id)
+        except (TypeError, ValueError) as exc:
+            raise ContactCenterValidationError(
+                "Agente asignado inválido."
+            ) from exc
+
+        assigned_user = UserORM.get_by_id(assigned_user_id)
+        if not has_contact_center_operator_access(assigned_user):
+            raise ContactCenterValidationError(
+                "El agente seleccionado no tiene acceso operativo a Contact Center."
+            )
 
     case = ContactCenterCaseORM(
         contact_id=contact.id,
