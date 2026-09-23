@@ -574,16 +574,30 @@ def post_verify_purchase(appointment_id: int):
 @jwt_required()
 def get_crm_candidates():
     _, access = _context()
-    _assert_operator_access(access)
+    branch_scope = (
+        access.allowed_branch_ids
+        if access.is_manager
+        else None
+    )
 
     phone = str(request.args.get("phone") or "").strip()
     if phone:
-        return jsonify(search_crm_candidates_by_phone(phone)), 200
+        return jsonify(
+            search_crm_candidates_by_phone(
+                phone,
+                allowed_branch_ids=branch_scope,
+            )
+        ), 200
 
     month = str(request.args.get("month") or "").strip()
     if not month:
         month = datetime.now(BUSINESS_TZ).strftime("%Y-%m")
-    return jsonify(list_crm_candidates(month)), 200
+    return jsonify(
+        list_crm_candidates(
+            month,
+            allowed_branch_ids=branch_scope,
+        )
+    ), 200
 
 
 @contact_center_bp.post(
@@ -592,7 +606,6 @@ def get_crm_candidates():
 @jwt_required()
 def post_import_crm_candidate(contact_row_id: int):
     actor, access = _context()
-    _assert_operator_access(access)
     payload = request.get_json(silent=True) or {}
 
     target_contact_id = payload.get("contact_id")
@@ -612,6 +625,11 @@ def post_import_crm_candidate(contact_row_id: int):
             actor,
             target_contact_id=target_contact_id,
             display_name=payload.get("display_name"),
+            allowed_branch_ids=(
+                access.allowed_branch_ids
+                if access.is_manager
+                else None
+            ),
         )
 
         if (
