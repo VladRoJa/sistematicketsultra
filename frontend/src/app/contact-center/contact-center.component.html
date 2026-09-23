@@ -693,6 +693,7 @@
                   class="small-button"
                   *ngIf="
                     !isManager
+                    && canOperateAppointment(appointment)
                     && appointment.purchase_reported
                     && appointment.purchase_verification_status !== 'VERIFIED'
                   "
