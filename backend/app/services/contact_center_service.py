@@ -1224,6 +1224,7 @@ def list_crm_candidates(
                 row,
                 branch_names=branch_names,
                 existing_links=existing_links,
+                phone_contact_ids=phone_contact_ids,
                 active_case_owner_ids=active_case_owner_ids,
             )
         )
@@ -1306,10 +1307,54 @@ def import_crm_candidate(
                     "sync_run_id": int(source.sync_run_id),
                     "contact_id": str(source.contact_id),
                     "branch_code": str(source.branch_code),
+                    "matched_by": "USER_CONFIRMED",
                 },
             )
         )
         db.session.flush()
+    else:
+        phone = normalize_phone(
+            source.phone_mx10
+            or source.phone_digits
+            or source.phone_raw
+        )
+        exact_phone_matches = []
+        if phone:
+            exact_phone_matches = (
+                ContactCenterContactORM.query
+                .filter(
+                    ContactCenterContactORM.is_active.is_(True),
+                    ContactCenterContactORM.merged_into_contact_id.is_(None),
+                    ContactCenterContactORM.phone_mx10 == phone,
+                )
+                .order_by(ContactCenterContactORM.updated_at.desc())
+                .all()
+            )
+
+        if len(exact_phone_matches) == 1:
+            contact = exact_phone_matches[0]
+            db.session.add(
+                ContactCenterContactLinkORM(
+                    contact_id=contact.id,
+                    source_type="IVENTAS_CONTACT",
+                    source_key=source_key,
+                    source_row_id=source.id,
+                    source_metadata_json={
+                        "sync_run_id": int(source.sync_run_id),
+                        "contact_id": str(source.contact_id),
+                        "branch_code": str(source.branch_code),
+                        "matched_by": "PHONE_MX10",
+                    },
+                )
+            )
+            db.session.flush()
+        elif len(exact_phone_matches) > 1:
+            raise ContactCenterDuplicateError(
+                [
+                    serialize_contact(row)
+                    for row in exact_phone_matches[:20]
+                ]
+            )
 
     if contact is not None:
         active_case = (
