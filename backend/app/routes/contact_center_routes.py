@@ -506,18 +506,41 @@ def get_crm_candidates():
 )
 @jwt_required()
 def post_import_crm_candidate(contact_row_id: int):
-    actor, _ = _context()
+    actor, access = _context()
+    payload = request.get_json(silent=True) or {}
+
+    target_contact_id = payload.get("contact_id")
+    if target_contact_id not in (None, ""):
+        try:
+            target_contact_id = int(target_contact_id)
+        except (TypeError, ValueError) as exc:
+            raise ContactCenterValidationError(
+                "contact_id inválido."
+            ) from exc
+    else:
+        target_contact_id = None
 
     try:
         contact, case = import_crm_candidate(
             contact_row_id,
             actor,
+            target_contact_id=target_contact_id,
         )
+
+        if (
+            not access.is_supervisor
+            and int(case.assigned_user_id or 0) != int(actor.id)
+        ):
+            raise ContactCenterAuthorizationError(
+                "Ese contacto ya tiene un caso activo asignado a otro agente."
+            )
+
         db.session.commit()
     except (
         ContactCenterDuplicateError,
         ContactCenterValidationError,
         ContactCenterNotFoundError,
+        ContactCenterAuthorizationError,
     ):
         db.session.rollback()
         raise
