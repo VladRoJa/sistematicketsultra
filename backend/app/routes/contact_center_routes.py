@@ -105,8 +105,7 @@ def _assert_contact_access(detail, actor, access) -> None:
         return
 
     assigned = any(
-        case.get("status") != "CLOSED"
-        and int(case.get("assigned_user", {}).get("id") or 0) == int(actor.id)
+        int(case.get("assigned_user", {}).get("id") or 0) == int(actor.id)
         for case in detail.get("cases", [])
         if isinstance(case.get("assigned_user"), dict)
     )
