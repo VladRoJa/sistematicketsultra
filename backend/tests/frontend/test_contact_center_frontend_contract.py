@@ -113,3 +113,21 @@ def test_contact_center_manager_ui_is_appointments_only():
     assert "!isManager" in component_html
     assert "Validar compra" in component_html
 
+def test_contact_center_crm_phone_search_is_global_not_month_scoped():
+    component_ts = _read(COMPONENT_TS)
+    component_html = _read(COMPONENT_HTML)
+    service = _read(SERVICE_TS)
+
+    assert "crmPhoneSearch" in component_ts
+    assert "searchCrmByPhone()" in component_ts
+    assert "crmSearchMode: 'MONTH' | 'PHONE'" in component_ts
+    assert "Buscar teléfono · todo el histórico" in component_html
+    assert "La búsqueda por teléfono revisa todo el histórico." in component_html
+    assert "(keyup.enter)=\"searchCrmByPhone()\"" in component_html
+
+    assert "phone?: string" in service
+    assert "if (phone?.trim())" in service
+    assert "params = params.set('phone', phone.trim())" in service
+    assert "else {" in service
+    assert "params = params.set('month', month)" in service
+
