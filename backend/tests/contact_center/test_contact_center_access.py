@@ -68,7 +68,7 @@ def test_other_users_are_rejected():
     with pytest.raises(ContactCenterAuthorizationError):
         resolve_contact_center_access(user)
 
-def test_villas_manager_has_pilot_access_but_is_not_operator():
+def test_villas_manager_keeps_access_but_is_not_operator():
     user = _user(
         username="GEREVREY",
         role="GERENTE",
@@ -85,7 +85,25 @@ def test_villas_manager_has_pilot_access_but_is_not_operator():
     assert access.allowed_branch_ids == (1,)
 
 
-def test_manager_outside_villas_pilot_is_rejected():
+@pytest.mark.parametrize("branch_id", [7, 8, 9, 10, 11, 12, 13])
+def test_costa_bc_managers_have_appointment_access(branch_id):
+    user = _user(
+        username=f"GERE{branch_id}",
+        role="GERENTE",
+        sucursal_id=branch_id,
+    )
+
+    assert has_contact_center_access(user) is True
+    assert has_contact_center_operator_access(user) is False
+
+    access = resolve_contact_center_access(user)
+
+    assert access.is_supervisor is False
+    assert access.is_manager is True
+    assert access.allowed_branch_ids == (branch_id,)
+
+
+def test_manager_outside_rollout_is_rejected():
     user = _user(
         username="GEREVVER",
         role="GERENTE",
@@ -96,4 +114,3 @@ def test_manager_outside_villas_pilot_is_rejected():
 
     with pytest.raises(ContactCenterAuthorizationError):
         resolve_contact_center_access(user)
-

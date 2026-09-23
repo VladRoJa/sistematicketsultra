@@ -13,8 +13,15 @@ const CONTACT_CENTER_INITIAL_ROLES = new Set([
   'SANDRA',
 ]);
 
-const CONTACT_CENTER_MANAGER_PILOT_BRANCH_IDS = new Set([
+const CONTACT_CENTER_MANAGER_ALLOWED_BRANCH_IDS = new Set([
   1,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
 ]);
 
 
@@ -45,7 +52,7 @@ export function canAccessContactCenter(user: unknown): boolean {
   const managerPilotAccess = (
     role === 'GERENTE'
     && [...branchIds].some(
-      (branchId) => CONTACT_CENTER_MANAGER_PILOT_BRANCH_IDS.has(branchId),
+      (branchId) => CONTACT_CENTER_MANAGER_ALLOWED_BRANCH_IDS.has(branchId),
     )
   );
 
