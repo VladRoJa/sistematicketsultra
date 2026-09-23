@@ -578,6 +578,7 @@ export class ContactCenterComponent implements OnInit {
         data: {
           appointment,
           branches: this.lookups.branches,
+          canReschedule: !this.isManager,
         },
       },
     );
