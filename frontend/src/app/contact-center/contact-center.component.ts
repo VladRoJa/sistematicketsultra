@@ -235,7 +235,7 @@ export class ContactCenterComponent implements OnInit {
   }
 
   openNewContact(): void {
-    if (!this.access || this.isManager) {
+    if (!this.access) {
       return;
     }
 
@@ -247,6 +247,7 @@ export class ContactCenterComponent implements OnInit {
           branches: this.lookups.branches,
           agents: this.lookups.agents,
           isSupervisor: this.isSupervisor,
+          isManager: this.isManager,
           currentUserId: this.access.user.id,
         },
       },
