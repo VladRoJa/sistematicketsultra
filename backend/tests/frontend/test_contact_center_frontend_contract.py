@@ -33,20 +33,23 @@ def test_contact_center_route_is_guarded_and_lazy_loaded():
     assert "import('./contact-center/contact-center.component')" in routes
 
 
-def test_contact_center_frontend_access_keeps_villas_manager_pilot_narrow():
+def test_contact_center_frontend_access_covers_villas_and_costa_bc_managers():
     guard = _read(ACCESS_GUARD)
 
     assert "'ADMICORP'" in guard
     assert "'SANDRA'" in guard
     assert "CONTACT_CENTER_INITIAL_ROLES" in guard
     assert "CONTACT_CENTER_INITIAL_USERS" in guard
-    assert "CONTACT_CENTER_MANAGER_PILOT_BRANCH_IDS" in guard
+    assert "CONTACT_CENTER_MANAGER_ALLOWED_BRANCH_IDS" in guard
     assert "role === 'GERENTE'" in guard
-    assert "CONTACT_CENTER_MANAGER_PILOT_BRANCH_IDS.has(branchId)" in guard
+    assert "CONTACT_CENTER_MANAGER_ALLOWED_BRANCH_IDS.has(branchId)" in guard
 
     # No abrir el rollout por roles administrativos/globales genéricos.
     assert "'ADMINISTRADOR'" not in guard
     assert "'LECTOR_GLOBAL'" not in guard
+
+    for branch_id in (1, 7, 8, 9, 10, 11, 12, 13):
+        assert f"  {branch_id}," in guard
 
 
 def test_contact_center_menu_waits_for_backend_access_confirmation():
@@ -148,4 +151,3 @@ def test_contact_center_calendar_history_is_read_only():
         "[class.calendar-event--readonly]=\"appointment.status !== 'SCHEDULED'\""
         in component_html
     )
-
