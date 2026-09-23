@@ -31,6 +31,12 @@ CRM_IMPORT_DIALOG_TS = REPOSITORY_ROOT / (
 CRM_IMPORT_DIALOG_HTML = REPOSITORY_ROOT / (
     "frontend/src/app/contact-center/contact-center-crm-import-dialog.component.html"
 )
+NEW_CONTACT_DIALOG_TS = REPOSITORY_ROOT / (
+    "frontend/src/app/contact-center/contact-center-new-contact-dialog.component.ts"
+)
+NEW_CONTACT_DIALOG_HTML = REPOSITORY_ROOT / (
+    "frontend/src/app/contact-center/contact-center-new-contact-dialog.component.html"
+)
 
 
 def _read(path: Path) -> str:
@@ -237,3 +243,31 @@ def test_contact_center_shared_appointments_only_show_actions_when_allowed():
     assert "appointment.case?.assigned_user?.id === this.access.user.id" in component_ts
     assert "&& canOperateAppointment(appointment)" in component_html
     assert "appointment.purchase_reported" in component_html
+
+def test_contact_center_manager_can_create_manual_contact_with_required_branch():
+    component_ts = _read(COMPONENT_TS)
+    component_html = _read(COMPONENT_HTML)
+    dialog_ts = _read(NEW_CONTACT_DIALOG_TS)
+    dialog_html = _read(NEW_CONTACT_DIALOG_HTML)
+
+    assert "if (!this.access || this.isManager)" not in component_ts
+    assert "isManager: this.isManager" in component_ts
+    assert '(click)="openNewContact()"' in component_html
+
+    assert "isManager: boolean" in dialog_ts
+    assert "this.data.isManager && !this.sucursalId" in dialog_ts
+    assert "Selecciona una sucursal." in dialog_ts
+    assert "data.isManager ? ' *' : ''" in dialog_html
+
+
+def test_contact_center_crm_exposes_phone_reconciliation_states():
+    component_ts = _read(COMPONENT_TS)
+    component_html = _read(COMPONENT_HTML)
+
+    assert "crmStatusLabel(row" in component_ts
+    assert "return 'Revisar coincidencia';" in component_ts
+    assert "return 'Ya en cartera'" in component_ts
+    assert "if (row.phone_match_ambiguous)" in component_ts
+    assert "{{ crmStatusLabel(row) }}" in component_html
+    assert "row.phone_match_ambiguous" in component_html
+
