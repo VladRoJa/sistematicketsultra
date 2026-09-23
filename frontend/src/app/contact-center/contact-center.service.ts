@@ -220,8 +220,18 @@ export class ContactCenterService {
     );
   }
 
-  getCrmCandidates(month: string): Observable<ContactCenterCrmCandidatesResponse> {
-    const params = new HttpParams().set('month', month);
+  getCrmCandidates(
+    month: string,
+    phone?: string,
+  ): Observable<ContactCenterCrmCandidatesResponse> {
+    let params = new HttpParams();
+
+    if (phone?.trim()) {
+      params = params.set('phone', phone.trim());
+    } else {
+      params = params.set('month', month);
+    }
+
     return this.http.get<ContactCenterCrmCandidatesResponse>(
       `${this.apiUrl}/crm-candidates`,
       { params },

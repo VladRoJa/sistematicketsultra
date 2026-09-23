@@ -449,20 +449,68 @@
           <span>Mes</span>
           <input type="month" [(ngModel)]="crmMonth" />
         </label>
+
+        <label class="toolbar-field toolbar-field--search">
+          <span>Buscar teléfono · todo el histórico</span>
+          <div class="search-control">
+            <mat-icon>search</mat-icon>
+            <input
+              type="tel"
+              inputmode="tel"
+              [(ngModel)]="crmPhoneSearch"
+              (keyup.enter)="searchCrmByPhone()"
+              placeholder="Ej. 6861234567"
+            />
+          </div>
+        </label>
+
         <div class="toolbar-copy">
           <strong>Leads CRM del Funnel</strong>
-          <span>Sólo contactos que cumplen la semántica canónica del Funnel.</span>
+          <span>
+            El mes sirve para navegar el corte. La búsqueda por teléfono revisa todo el histórico.
+          </span>
         </div>
       </div>
-      <button type="button" class="primary-button" (click)="loadCrmCandidates()" [disabled]="loadingCrm">
-        <mat-icon>sync</mat-icon>
-        {{ loadingCrm ? 'Cargando…' : 'Cargar leads' }}
-      </button>
+
+      <div class="toolbar-actions">
+        <button
+          type="button"
+          class="secondary-button"
+          *ngIf="crmSearchMode === 'PHONE'"
+          (click)="clearCrmPhoneSearch()"
+          [disabled]="loadingCrm"
+        >
+          Limpiar búsqueda
+        </button>
+
+        <button
+          type="button"
+          class="secondary-button"
+          (click)="searchCrmByPhone()"
+          [disabled]="loadingCrm || !crmPhoneSearch.trim()"
+        >
+          <mat-icon>search</mat-icon>
+          Buscar teléfono
+        </button>
+
+        <button
+          type="button"
+          class="primary-button"
+          (click)="loadCrmCandidates()"
+          [disabled]="loadingCrm"
+        >
+          <mat-icon>sync</mat-icon>
+          {{ loadingCrm ? 'Cargando…' : 'Cargar leads' }}
+        </button>
+      </div>
     </section>
 
     <section class="panel-card">
       <div class="panel-heading">
-        <div><h2>CRM / Funnel</h2><p>{{ crmCandidates.length }} contactos disponibles en el corte.</p></div>
+        <div>
+          <h2>CRM / Funnel</h2>
+          <p>{{ crmResultsDescription() }}</p>
+        </div>
       </div>
 
       <div class="table-wrap">
@@ -516,8 +564,20 @@
             <tr *ngIf="!crmCandidates.length && !loadingCrm">
               <td class="empty-cell" colspan="6">
                 <mat-icon>filter_alt_off</mat-icon>
-                <strong>No hay leads cargados para mostrar.</strong>
-                <span>Selecciona el mes y carga el corte CRM.</span>
+                <strong>
+                  {{
+                    crmSearchMode === 'PHONE'
+                      ? 'No se encontró ese teléfono como lead del Funnel.'
+                      : 'No hay leads cargados para mostrar.'
+                  }}
+                </strong>
+                <span>
+                  {{
+                    crmSearchMode === 'PHONE'
+                      ? 'La búsqueda revisó todo el histórico CRM canónico.'
+                      : 'Selecciona el mes y carga el corte CRM.'
+                  }}
+                </span>
               </td>
             </tr>
           </tbody>

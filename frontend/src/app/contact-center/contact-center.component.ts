@@ -98,6 +98,8 @@ export class ContactCenterComponent implements OnInit {
   selectedAssignedUserId: number | null = null;
 
   crmMonth = this.currentBusinessMonth();
+  crmPhoneSearch = '';
+  crmSearchMode: 'MONTH' | 'PHONE' = 'MONTH';
   calendarCursor = this.firstDayOfBusinessMonth();
 
   feedbackMessage = '';
@@ -456,20 +458,40 @@ export class ContactCenterComponent implements OnInit {
   }
 
   loadCrmCandidates(): void {
-    this.loadingCrm = true;
-    this.contactCenter.getCrmCandidates(this.crmMonth).subscribe({
-      next: (response) => {
-        this.crmCandidates = response.rows;
-        this.loadingCrm = false;
-      },
-      error: (error) => {
-        this.loadingCrm = false;
-        this.showApiError(
-          error,
-          'No se pudieron cargar los leads del CRM.',
-        );
-      },
-    });
+    this.crmSearchMode = 'MONTH';
+    this.loadCrmCandidatesRequest();
+  }
+
+  searchCrmByPhone(): void {
+    const phone = this.crmPhoneSearch.trim();
+    if (!phone) {
+      this.showFeedback(
+        'Ingresa un teléfono para buscar en todo el histórico CRM.',
+        'ERROR',
+      );
+      return;
+    }
+
+    this.crmSearchMode = 'PHONE';
+    this.loadCrmCandidatesRequest(phone);
+  }
+
+  clearCrmPhoneSearch(): void {
+    this.crmPhoneSearch = '';
+    this.crmSearchMode = 'MONTH';
+    this.loadCrmCandidates();
+  }
+
+  crmResultsDescription(): string {
+    if (this.crmSearchMode === 'PHONE') {
+      return (
+        `${this.crmCandidates.length} coincidencia`
+        + (this.crmCandidates.length === 1 ? '' : 's')
+        + ' en todo el histórico CRM.'
+      );
+    }
+
+    return `${this.crmCandidates.length} contactos disponibles en el corte.`;
   }
 
   importCrmCandidate(row: ContactCenterCrmCandidate): void {
@@ -734,6 +756,28 @@ export class ContactCenterComponent implements OnInit {
 
   branchName(branch: ContactCenterBranch | null | undefined): string {
     return branch?.name || 'Sin sucursal';
+  }
+
+  private loadCrmCandidatesRequest(phone?: string): void {
+    this.loadingCrm = true;
+    this.contactCenter.getCrmCandidates(
+      this.crmMonth,
+      phone,
+    ).subscribe({
+      next: (response) => {
+        this.crmCandidates = response.rows;
+        this.loadingCrm = false;
+      },
+      error: (error) => {
+        this.loadingCrm = false;
+        this.showApiError(
+          error,
+          phone
+            ? 'No se pudo buscar el teléfono en el histórico CRM.'
+            : 'No se pudieron cargar los leads del CRM.',
+        );
+      },
+    });
   }
 
   private loadAccess(): void {

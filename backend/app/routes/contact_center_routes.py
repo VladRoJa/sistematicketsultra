@@ -30,6 +30,7 @@ from app.services.contact_center_service import (
     list_crm_candidates,
     merge_contacts,
     reschedule_appointment,
+    search_crm_candidates_by_phone,
     serialize_appointment,
     serialize_case,
     serialize_contact,
@@ -546,6 +547,11 @@ def post_verify_purchase(appointment_id: int):
 def get_crm_candidates():
     _, access = _context()
     _assert_operator_access(access)
+
+    phone = str(request.args.get("phone") or "").strip()
+    if phone:
+        return jsonify(search_crm_candidates_by_phone(phone)), 200
+
     month = str(request.args.get("month") or "").strip()
     if not month:
         month = datetime.now(BUSINESS_TZ).strftime("%Y-%m")
