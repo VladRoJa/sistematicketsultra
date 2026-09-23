@@ -567,6 +567,10 @@ export class ContactCenterComponent implements OnInit {
   }
 
   appointmentAction(appointment: ContactCenterAppointment): void {
+    if (appointment.status !== 'SCHEDULED') {
+      return;
+    }
+
     const ref = this.dialog.open(
       ContactCenterAppointmentDialogComponent,
       {

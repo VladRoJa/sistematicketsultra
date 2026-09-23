@@ -728,6 +728,8 @@
               *ngFor="let appointment of cell.appointments"
               [class.calendar-event--pending]="appointment.closure_pending"
               [class.calendar-event--closed]="appointment.status === 'CLOSED'"
+              [class.calendar-event--readonly]="appointment.status !== 'SCHEDULED'"
+              [disabled]="appointment.status !== 'SCHEDULED'"
               (click)="appointmentAction(appointment)"
             >
               <span class="calendar-event__time">{{ formatTime(appointment.scheduled_at) }}</span>

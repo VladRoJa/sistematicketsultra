@@ -982,6 +982,14 @@
   color: #166534;
 }
 
+.calendar-event--readonly {
+  cursor: default;
+}
+
+.calendar-event--readonly:disabled {
+  opacity: 1;
+}
+
 @media (max-width: 1180px) {
   .summary-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
