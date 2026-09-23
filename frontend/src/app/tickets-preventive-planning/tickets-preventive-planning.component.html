@@ -141,7 +141,7 @@
       <ng-container *ngIf="selectedBatch as batch; else noBatchSelected">
         <section class="panel batch-summary">
           <header class="panel__header panel__header--summary">
-            <div>
+            <div class="batch-summary__identity">
               <span class="panel__eyebrow">{{ batch.batch_key }}</span>
               <h2>{{ batch.nombre }}</h2>
               <p>
@@ -150,6 +150,38 @@
                   · {{ batch.period_start || '—' }} → {{ batch.period_end || '—' }}
                 </ng-container>
               </p>
+            </div>
+
+            <div
+              *ngIf="batchCapacityLoading"
+              class="batch-capacity-strip batch-capacity-strip--loading"
+            >
+              Calculando capacidad…
+            </div>
+
+            <div
+              *ngIf="
+                !batchCapacityLoading
+                && batchCapacitySummary?.period_defined
+                && batchCapacitySummary?.days?.length
+              "
+              class="batch-capacity-strip"
+              aria-label="Capacidad diaria del lote"
+            >
+              <article
+                *ngFor="let day of batchCapacitySummary?.days"
+                class="batch-capacity-day"
+                [ngClass]="batchCapacityDayClass(day)"
+              >
+                <span class="batch-capacity-day__date">
+                  {{ batchCapacityDayDate(day.date) }}
+                </span>
+                <strong>{{ batchCapacityDayLoad(day) }}</strong>
+                <span class="batch-capacity-day__status">
+                  {{ batchCapacityDayStatus(day) }}
+                </span>
+                <small>{{ batchCapacityDayMeta(day) }}</small>
+              </article>
             </div>
 
             <span class="status-pill status-pill--large" [attr.data-status]="batch.status">
