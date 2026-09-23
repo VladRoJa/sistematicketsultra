@@ -1,0 +1,116 @@
+<div class="dialog-shell">
+  <div class="dialog-header">
+    <div>
+      <p class="eyebrow">CITA</p>
+      <h2>Registrar resultado</h2>
+      <p class="subtitle">
+        La cita debe quedar cerrada o reagendada, nunca desaparecer.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      class="icon-button"
+      (click)="close()"
+      aria-label="Cerrar"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <div class="action-toggle">
+    <button
+      type="button"
+      [class.action-toggle__button--active]="action === 'CLOSE'"
+      (click)="action = 'CLOSE'"
+    >
+      Cerrar cita
+    </button>
+    <button
+      type="button"
+      [class.action-toggle__button--active]="action === 'RESCHEDULE'"
+      (click)="action = 'RESCHEDULE'"
+    >
+      Reagendar
+    </button>
+  </div>
+
+  <div
+    class="form-grid"
+    *ngIf="action === 'CLOSE'"
+  >
+    <label class="field">
+      <span>¿Qué ocurrió?</span>
+      <select [(ngModel)]="outcome">
+        <option
+          *ngFor="let item of outcomes"
+          [ngValue]="item.value"
+        >
+          {{ item.label }}
+        </option>
+      </select>
+    </label>
+
+    <label class="field">
+      <span>Comentario</span>
+      <textarea
+        rows="3"
+        [(ngModel)]="notes"
+        placeholder="Opcional"
+      ></textarea>
+    </label>
+  </div>
+
+  <div
+    class="form-grid"
+    *ngIf="action === 'RESCHEDULE'"
+  >
+    <label class="field">
+      <span>Nueva fecha y hora</span>
+      <input
+        type="datetime-local"
+        [(ngModel)]="scheduledAt"
+      />
+    </label>
+
+    <label class="field">
+      <span>Sucursal</span>
+      <select [(ngModel)]="sucursalId">
+        <option
+          *ngFor="let branch of data.branches"
+          [ngValue]="branch.id"
+        >
+          {{ branch.name }}
+        </option>
+      </select>
+    </label>
+
+    <label class="field">
+      <span>Comentario</span>
+      <textarea
+        rows="3"
+        [(ngModel)]="notes"
+        placeholder="Motivo o nueva indicación"
+      ></textarea>
+    </label>
+  </div>
+
+  <div class="dialog-actions">
+    <button
+      type="button"
+      class="button button--ghost"
+      (click)="close()"
+    >
+      Cancelar
+    </button>
+
+    <button
+      type="button"
+      class="button button--primary"
+      [disabled]="!canSubmit()"
+      (click)="submit()"
+    >
+      {{ submitLabel() }}
+    </button>
+  </div>
+</div>

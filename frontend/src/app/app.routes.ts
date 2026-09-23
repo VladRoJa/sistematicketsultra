@@ -25,6 +25,7 @@ import { CommercialPromotionsComponent } from './warehouse/commercial-promotions
 import { trackRegionalOperationalAccessGuard } from './warehouse/track-intelligence-regional-operational/track-regional-operational-access.guard';
 import { trackTiendaCompositionAccessGuard } from './warehouse/track-tienda-composition/track-tienda-composition-access.guard';
 import { MarketingSalesFunnelAccessGuard } from './marketing-sales-funnel/marketing-sales-funnel-access.guard';
+import { contactCenterAccessGuard } from './contact-center/contact-center-access.guard';
 
 
 
@@ -164,6 +165,13 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./warehouse/track-tienda-composition/track-tienda-composition.component')
             .then(m => m.TrackTiendaCompositionComponent),
+      },
+      {
+        path: 'contact-center',
+        canActivate: [contactCenterAccessGuard],
+        loadComponent: () =>
+          import('./contact-center/contact-center.component')
+            .then(m => m.ContactCenterComponent),
       },
       {
         path: 'marketing-conversion',

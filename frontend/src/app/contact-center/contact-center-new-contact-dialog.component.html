@@ -1,0 +1,149 @@
+<div class="dialog-shell">
+  <div class="dialog-header">
+    <div>
+      <p class="eyebrow">CONTACT CENTER</p>
+      <h2>Nuevo contacto</h2>
+      <p class="subtitle">Captura sólo lo necesario para iniciar el seguimiento.</p>
+    </div>
+
+    <button
+      type="button"
+      class="icon-button"
+      (click)="cancel()"
+      aria-label="Cerrar"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <div class="form-grid">
+    <label class="field field--wide">
+      <span>Nombre</span>
+      <input
+        type="text"
+        [(ngModel)]="name"
+        placeholder="Nombre del contacto"
+      />
+    </label>
+
+    <label class="field">
+      <span>Teléfono *</span>
+      <input
+        type="tel"
+        [(ngModel)]="phone"
+        placeholder="686 000 0000"
+      />
+    </label>
+
+    <label class="field">
+      <span>Correo</span>
+      <input
+        type="email"
+        [(ngModel)]="email"
+        placeholder="correo@ejemplo.com"
+      />
+    </label>
+
+    <label class="field">
+      <span>Origen</span>
+      <select [(ngModel)]="sourceType">
+        <option
+          *ngFor="let source of sources"
+          [ngValue]="source.value"
+        >
+          {{ source.label }}
+        </option>
+      </select>
+    </label>
+
+    <label class="field">
+      <span>Sucursal de interés</span>
+      <select [(ngModel)]="sucursalId">
+        <option [ngValue]="null">Sin definir</option>
+        <option
+          *ngFor="let branch of data.branches"
+          [ngValue]="branch.id"
+        >
+          {{ branch.name }}
+        </option>
+      </select>
+    </label>
+
+    <label
+      class="field"
+      *ngIf="data.isSupervisor"
+    >
+      <span>Asignar a</span>
+      <select [(ngModel)]="assignedUserId">
+        <option
+          *ngFor="let agent of data.agents"
+          [ngValue]="agent.id"
+        >
+          {{ agent.username }}
+        </option>
+      </select>
+    </label>
+
+    <label class="field field--wide">
+      <span>Comentario inicial</span>
+      <textarea
+        rows="3"
+        [(ngModel)]="comment"
+        placeholder="Qué necesita, por qué escribió o qué hay que hacer después."
+      ></textarea>
+    </label>
+  </div>
+
+  <div
+    class="feedback"
+    *ngIf="errorMessage"
+  >
+    {{ errorMessage }}
+  </div>
+
+  <div
+    class="duplicate-list"
+    *ngIf="duplicates.length"
+  >
+    <div class="duplicate-title">
+      <mat-icon>content_copy</mat-icon>
+      <strong>Posibles duplicados</strong>
+    </div>
+
+    <button
+      type="button"
+      class="duplicate-row"
+      *ngFor="let contact of duplicates"
+      (click)="openExisting(contact)"
+    >
+      <span>
+        <strong>{{ contact.display_name || 'Sin nombre' }}</strong>
+        <small>{{ contact.phone_mx10 || contact.primary_phone_raw }}</small>
+      </span>
+      <span>
+        <small>{{ branchName(contact) }}</small>
+        <mat-icon>arrow_forward</mat-icon>
+      </span>
+    </button>
+  </div>
+
+  <div class="dialog-actions">
+    <button
+      type="button"
+      class="button button--ghost"
+      (click)="cancel()"
+      [disabled]="saving"
+    >
+      Cancelar
+    </button>
+
+    <button
+      type="button"
+      class="button button--primary"
+      (click)="save()"
+      [disabled]="saving"
+    >
+      {{ saving ? 'Guardando…' : 'Crear contacto' }}
+    </button>
+  </div>
+</div>
