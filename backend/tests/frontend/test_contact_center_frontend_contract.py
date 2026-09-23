@@ -236,4 +236,7 @@ def test_contact_center_shared_appointments_only_show_actions_when_allowed():
     assert "canOperateAppointment(" in component_ts
     assert "appointment.case?.assigned_user?.id === this.access.user.id" in component_ts
     assert "&& canOperateAppointment(appointment)" in component_html
-
+    assert (
+        "!isManager\n                    && canOperateAppointment(appointment)"
+        in component_html
+    )
