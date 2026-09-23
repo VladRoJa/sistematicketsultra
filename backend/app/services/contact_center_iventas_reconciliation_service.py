@@ -93,29 +93,20 @@ def reconcile_contact_center_iventas_run(
     )
     lead_rows = session_value.execute(statement).mappings().all()
 
-    phones = {
-        str(row.get("phone_mx10") or "").strip()
-        for row in lead_rows
-        if str(row.get("phone_mx10") or "").strip()
-    }
-
     contacts_by_phone: dict[str, list[ContactCenterContactORM]] = {}
-    if phones:
-        contacts = (
-            session_value.query(ContactCenterContactORM)
-            .filter(
-                ContactCenterContactORM.is_active.is_(True),
-                ContactCenterContactORM.merged_into_contact_id.is_(None),
-                ContactCenterContactORM.phone_mx10.in_(
-                    tuple(sorted(phones))
-                ),
-            )
-            .all()
+    contacts = (
+        session_value.query(ContactCenterContactORM)
+        .filter(
+            ContactCenterContactORM.is_active.is_(True),
+            ContactCenterContactORM.merged_into_contact_id.is_(None),
+            ContactCenterContactORM.phone_mx10.isnot(None),
         )
-        for contact in contacts:
-            phone = str(contact.phone_mx10 or "").strip()
-            if phone:
-                contacts_by_phone.setdefault(phone, []).append(contact)
+        .all()
+    )
+    for contact in contacts:
+        phone = str(contact.phone_mx10 or "").strip()
+        if phone:
+            contacts_by_phone.setdefault(phone, []).append(contact)
 
     existing_links = {
         str(row.source_key): int(row.contact_id)
