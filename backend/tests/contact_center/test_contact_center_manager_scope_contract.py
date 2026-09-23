@@ -66,13 +66,15 @@ def test_manager_contact_detail_is_scoped_to_own_cases_and_links():
     assert "allowed_source_refs" in routes
 
 
-def test_manager_still_cannot_use_operator_admin_actions():
+def test_manager_manual_create_is_restricted_but_admin_actions_stay_blocked():
     routes = _read(ROUTES)
 
-    assert "Esta acción está reservada para operadores de Contact Center." in routes
     assert "def post_contact():" in routes
+    assert "forced_assigned_user_id=(" in routes
+    assert "access.allowed_branch_ids" in routes
+
+    assert "Esta acción está reservada para operadores de Contact Center." in routes
     assert "def get_duplicates():" in routes
     assert "def post_merge_contacts():" in routes
     assert "def post_assign_case(case_id: int):" in routes
     assert "def post_verify_purchase(appointment_id: int):" in routes
-
