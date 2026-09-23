@@ -169,4 +169,4 @@ def test_contact_center_manager_cannot_reschedule_from_dialog():
     assert "if (!this.data.canReschedule)" in dialog_ts
     assert '*ngIf="data.canReschedule"' in dialog_html
     assert "*ngIf=\"action === 'RESCHEDULE' && data.canReschedule\"" in dialog_html
-
+    assert "isManager ? 'Registrar resultado' : 'Cerrar / reagendar'" in component_html
