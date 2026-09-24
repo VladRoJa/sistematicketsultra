@@ -67,3 +67,37 @@ def test_both_funnel_stories_do_not_fake_missing_crm_history():
         assert "metric: value === null ? '' : metric" in source
         assert "summary.sales_digital === null" in source
         assert "return [];" in source
+
+
+def test_shared_funnel_consumers_preserve_historical_nulls():
+    control_center = (
+        REPO_ROOT
+        / "frontend"
+        / "src"
+        / "app"
+        / "control-center"
+        / "control-center.component.ts"
+    ).read_text(encoding="utf-8")
+    export_source = _read("marketing-sales-funnel-table-export.ts")
+
+    assert "sales: number | null;" in control_center
+    assert "const crmAvailable = branches.every(" in control_center
+    assert "historico CRM no disponible" in control_center
+
+    assert "leads: number | null;" in export_source
+    assert "salesDigital: number | null;" in export_source
+    assert "function sumNullableBranchMetric(" in export_source
+    assert "function sumAvailable(" in export_source
+    assert "branch.sales_digital + branch.sales_digital_organic" not in export_source
+
+
+def test_historical_branch_drilldowns_are_blocked_in_typescript():
+    for name in (
+        "marketing-sales-funnel.component.ts",
+        "marketing-sales-funnel-original.component.ts",
+    ):
+        source = _read(name)
+
+        assert "private isBranchMetricAvailable(" in source
+        assert "return row.leads_meta !== null;" in source
+        assert "return row.sales_iventas !== null;" in source
