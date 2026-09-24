@@ -120,6 +120,13 @@ export class MarketingSalesFunnelStoryComponent {
       return '';
     }
 
+    if (
+      summary.sales_iventas === null
+      || summary.sales_not_iventas === null
+    ) {
+      return 'Sin histórico CRM disponible para este periodo; se conservan visitas, Venta Nueva y clasificaciones disponibles en Venta Total.';
+    }
+
     return `El CRM aporta ${this.formatInteger(summary.sales_iventas)} ventas; las ${this.formatInteger(summary.sales_not_iventas)} restantes continúan fuera del CRM por clasificación de origen.`;
   }
 
@@ -166,23 +173,20 @@ export class MarketingSalesFunnelStoryComponent {
         icon: 'smartphone',
         tone: 'orange',
         share: this.formatPercent(
-          summary.leads_meta > 0
-            ? summary.visits_iventas_meta / summary.leads_meta
-            : null,
+          this.safeRatio(summary.visits_iventas_meta, summary.leads_meta),
         ),
         bought: this.formatInteger(summary.visits_iventas_bought),
         boughtMetric: 'visits_iventas_bought',
         boughtShare: this.formatPercent(
-          summary.visits_iventas > 0
-            ? summary.visits_iventas_bought / summary.visits_iventas
-            : null,
+          this.safeRatio(summary.visits_iventas_bought, summary.visits_iventas),
         ),
         notBought: this.formatInteger(summary.visits_iventas_not_bought),
         notBoughtMetric: 'visits_iventas_not_bought',
         notBoughtShare: this.formatPercent(
-          summary.visits_iventas > 0
-            ? summary.visits_iventas_not_bought / summary.visits_iventas
-            : null,
+          this.safeRatio(
+            summary.visits_iventas_not_bought,
+            summary.visits_iventas,
+          ),
         ),
       },
       {
@@ -193,23 +197,23 @@ export class MarketingSalesFunnelStoryComponent {
         icon: 'link_off',
         tone: 'gray',
         share: this.formatPercent(
-          summary.visits_total > 0
-            ? summary.visits_not_iventas / summary.visits_total
-            : null,
+          this.safeRatio(summary.visits_not_iventas, summary.visits_total),
         ),
         bought: this.formatInteger(summary.visits_not_iventas_bought),
         boughtMetric: 'visits_not_iventas_bought',
         boughtShare: this.formatPercent(
-          summary.visits_not_iventas > 0
-            ? summary.visits_not_iventas_bought / summary.visits_not_iventas
-            : null,
+          this.safeRatio(
+            summary.visits_not_iventas_bought,
+            summary.visits_not_iventas,
+          ),
         ),
         notBought: this.formatInteger(summary.visits_not_iventas_not_bought),
         notBoughtMetric: 'visits_not_iventas_not_bought',
         notBoughtShare: this.formatPercent(
-          summary.visits_not_iventas > 0
-            ? summary.visits_not_iventas_not_bought / summary.visits_not_iventas
-            : null,
+          this.safeRatio(
+            summary.visits_not_iventas_not_bought,
+            summary.visits_not_iventas,
+          ),
         ),
       },
     ];
@@ -254,7 +258,7 @@ export class MarketingSalesFunnelStoryComponent {
         key: 'digital',
         label: 'Venta digital',
         value: this.formatInteger(summary.sales_digital),
-        metric: 'sales_digital',
+        metric: summary.sales_digital === null ? '' : 'sales_digital',
       },
       {
         key: 'organic',
@@ -303,7 +307,7 @@ export class MarketingSalesFunnelStoryComponent {
     return this.createNode(
       'Ventas CRM',
       summary.sales_iventas,
-      `${this.formatPercent(summary.sales_total > 0 ? summary.sales_iventas / summary.sales_total : null)} de Venta Nueva · punto de unión`,
+      `${this.formatPercent(this.safeRatio(summary.sales_iventas, summary.sales_total))} de Venta Nueva · punto de unión`,
       'sales_iventas',
       'leaderboard',
       'orange',
@@ -317,7 +321,7 @@ export class MarketingSalesFunnelStoryComponent {
     return this.createNode(
       'Venta por publicaciones',
       summary.sales_iventas_meta,
-      `${this.formatPercent(summary.sales_total > 0 ? summary.sales_iventas_meta / summary.sales_total : null)} del total`,
+      `${this.formatPercent(this.safeRatio(summary.sales_iventas_meta, summary.sales_total))} del total`,
       'sales_iventas_meta',
       'campaign',
       'orange',
@@ -346,7 +350,7 @@ export class MarketingSalesFunnelStoryComponent {
     return this.createNode(
       'Fuera CRM',
       summary.sales_not_iventas,
-      `${this.formatPercent(summary.sales_total > 0 ? summary.sales_not_iventas / summary.sales_total : null)} de Venta Nueva`,
+      `${this.formatPercent(this.safeRatio(summary.sales_not_iventas, summary.sales_total))} de Venta Nueva`,
       'sales_not_iventas',
       'person',
       'gray',
@@ -363,17 +367,16 @@ export class MarketingSalesFunnelStoryComponent {
       {
         label: 'Lead CRM → Visita CRM',
         value: this.formatPercent(
-          summary.leads_meta > 0
-            ? summary.visits_iventas_meta / summary.leads_meta
-            : null,
+          this.safeRatio(summary.visits_iventas_meta, summary.leads_meta),
         ),
       },
       {
         label: 'Visita CRM → Compra',
         value: this.formatPercent(
-          summary.visits_iventas_meta > 0
-            ? summary.sales_iventas_meta / summary.visits_iventas_meta
-            : null,
+          this.safeRatio(
+            summary.sales_iventas_meta,
+            summary.visits_iventas_meta,
+          ),
         ),
       },
       {
@@ -390,6 +393,21 @@ export class MarketingSalesFunnelStoryComponent {
   get flowRibbons(): FlowRibbonView[] {
     const summary = this.summary;
     if (!summary) {
+      return [];
+    }
+
+    if (
+      summary.leads_meta === null
+      || summary.visits_iventas === null
+      || summary.visits_iventas_meta === null
+      || summary.visits_not_iventas === null
+      || summary.visits_iventas_bought === null
+      || summary.visits_not_iventas_bought === null
+      || summary.sales_iventas === null
+      || summary.sales_not_iventas === null
+      || summary.sales_iventas_meta === null
+      || summary.sales_iventas_other === null
+    ) {
       return [];
     }
 
@@ -423,9 +441,7 @@ export class MarketingSalesFunnelStoryComponent {
         targetThickness: this.ribbonThickness(visits, leadReference, 14, 70),
         tone: 'orange',
         share: this.formatPercent(
-          summary.visits_total > 0
-            ? summary.visits_iventas / summary.visits_total
-            : null,
+          this.safeRatio(summary.visits_iventas, summary.visits_total),
         ),
         opacity: 0.20,
       }),
@@ -449,9 +465,7 @@ export class MarketingSalesFunnelStoryComponent {
         ),
         tone: 'orange',
         share: this.formatPercent(
-          summary.visits_total > 0
-            ? summary.visits_iventas / summary.visits_total
-            : null,
+          this.safeRatio(summary.visits_iventas, summary.visits_total),
         ),
         opacity: 0.24,
       }),
@@ -465,9 +479,7 @@ export class MarketingSalesFunnelStoryComponent {
         targetThickness: this.ribbonThickness(salesIventas, salesReference, 18, 72),
         tone: 'orange',
         share: this.formatPercent(
-          summary.visits_total > 0
-            ? summary.visits_iventas / summary.visits_total
-            : null,
+          this.safeRatio(summary.visits_iventas, summary.visits_total),
         ),
         opacity: 0.24,
       }),
@@ -481,9 +493,7 @@ export class MarketingSalesFunnelStoryComponent {
         targetThickness: this.ribbonThickness(salesFallback, salesReference, 18, 72),
         tone: 'gray',
         share: this.formatPercent(
-          summary.visits_total > 0
-            ? summary.visits_not_iventas / summary.visits_total
-            : null,
+          this.safeRatio(summary.visits_not_iventas, summary.visits_total),
         ),
         opacity: 0.24,
       }),
@@ -507,9 +517,7 @@ export class MarketingSalesFunnelStoryComponent {
         ),
         tone: 'gray',
         share: this.formatPercent(
-          summary.visits_total > 0
-            ? summary.visits_not_iventas / summary.visits_total
-            : null,
+          this.safeRatio(summary.visits_not_iventas, summary.visits_total),
         ),
         opacity: 0.24,
       }),
@@ -523,9 +531,7 @@ export class MarketingSalesFunnelStoryComponent {
         targetThickness: this.ribbonThickness(salesFallback, salesReference, 18, 44),
         tone: 'gray',
         share: this.formatPercent(
-          summary.visits_total > 0
-            ? summary.visits_not_iventas / summary.visits_total
-            : null,
+          this.safeRatio(summary.visits_not_iventas, summary.visits_total),
         ),
         opacity: 0.18,
       }),
@@ -539,9 +545,7 @@ export class MarketingSalesFunnelStoryComponent {
         targetThickness: this.ribbonThickness(publications, outputReference, 14, 58),
         tone: 'orange',
         share: this.formatPercent(
-          summary.visits_total > 0
-            ? summary.visits_iventas / summary.visits_total
-            : null,
+          this.safeRatio(summary.visits_iventas, summary.visits_total),
         ),
         opacity: 0.22,
       }),
@@ -555,9 +559,7 @@ export class MarketingSalesFunnelStoryComponent {
         targetThickness: this.ribbonThickness(organic, outputReference, 14, 58),
         tone: 'orange',
         share: this.formatPercent(
-          summary.visits_total > 0
-            ? summary.visits_iventas / summary.visits_total
-            : null,
+          this.safeRatio(summary.visits_iventas, summary.visits_total),
         ),
         opacity: 0.22,
       }),
@@ -571,8 +573,11 @@ export class MarketingSalesFunnelStoryComponent {
       return null;
     }
 
-    const digitalTotal =
-      summary.sales_digital + summary.sales_digital_organic;
+    const digitalTotal = (
+      summary.sales_digital === null
+        ? null
+        : summary.sales_digital + summary.sales_digital_organic
+    );
 
     const btlOrigins = (summary.btl_origin_breakdown ?? [])
       .filter((origin) => origin.sales > 0)
@@ -594,17 +599,15 @@ export class MarketingSalesFunnelStoryComponent {
       totalMetric: 'sales_total',
       digitalTotal: this.formatInteger(digitalTotal),
       digitalShare: this.formatPercent(
-        summary.sales_total > 0
-          ? digitalTotal / summary.sales_total
-          : null,
+        this.safeRatio(digitalTotal, summary.sales_total),
       ),
-      digitalMetric: 'sales_digital_total',
+      digitalMetric: digitalTotal === null ? '' : 'sales_digital_total',
       digitalChildren: [
         {
           label: 'Digital',
           value: this.formatInteger(summary.sales_digital),
           icon: 'ads_click',
-          metric: 'sales_digital',
+          metric: summary.sales_digital === null ? '' : 'sales_digital',
         },
         {
           label: 'Orgánica digital',
@@ -647,9 +650,7 @@ export class MarketingSalesFunnelStoryComponent {
         displayLabel: this.resolveOriginLabel(origin),
         salesDisplay: this.formatInteger(origin.sales),
         shareDisplay: this.formatPercent(
-          summary.sales_not_iventas > 0
-            ? origin.sales / summary.sales_not_iventas
-            : null,
+          this.safeRatio(origin.sales, summary.sales_not_iventas),
         ),
         icon: this.resolveOriginIcon(origin.key),
       }))
@@ -673,10 +674,29 @@ export class MarketingSalesFunnelStoryComponent {
     this.openDetail('btl_origin', origin.key);
   }
 
-  formatInteger(value: number): string {
+  private safeRatio(
+    numerator: number | null | undefined,
+    denominator: number | null | undefined,
+  ): number | null {
+    if (
+      numerator === null
+      || numerator === undefined
+      || denominator === null
+      || denominator === undefined
+      || denominator <= 0
+    ) {
+      return null;
+    }
+    return numerator / denominator;
+  }
+
+  formatInteger(value: number | null | undefined): string {
+    if (value === null || value === undefined) {
+      return '—';
+    }
     return new Intl.NumberFormat('es-MX', {
       maximumFractionDigits: 0,
-    }).format(value || 0);
+    }).format(value);
   }
 
   formatPercent(value: number | null | undefined): string {
@@ -693,7 +713,7 @@ export class MarketingSalesFunnelStoryComponent {
 
   private createNode(
     label: string,
-    value: number,
+    value: number | null,
     support: string,
     metric: string,
     icon: string,
@@ -704,7 +724,7 @@ export class MarketingSalesFunnelStoryComponent {
       label,
       value: this.formatInteger(value),
       support,
-      metric,
+      metric: value === null ? '' : metric,
       icon,
       tone,
       origin,
