@@ -383,7 +383,26 @@ export class MarketingSalesFunnelOriginalComponent implements OnInit {
   }
 
   openBranchDetail(metric: string, row: SalesFunnelBranchView): void {
+    if (!this.isBranchMetricAvailable(metric, row)) {
+      return;
+    }
     this.openDetail(metric, row.sucursal_id);
+  }
+
+  private isBranchMetricAvailable(
+    metric: string,
+    row: SalesFunnelBranchView,
+  ): boolean {
+    if (metric === 'leads_meta') {
+      return row.leads_meta !== null;
+    }
+    if (metric === 'visits_iventas_meta') {
+      return row.visits_iventas_meta !== null;
+    }
+    if (metric === 'sales_iventas') {
+      return row.sales_iventas !== null;
+    }
+    return true;
   }
 
   formatCurrency(value: number | null | undefined): string {
