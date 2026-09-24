@@ -383,7 +383,26 @@ export class MarketingSalesFunnelOriginalComponent implements OnInit {
   }
 
   openBranchDetail(metric: string, row: SalesFunnelBranchView): void {
+    if (!this.isBranchMetricAvailable(metric, row)) {
+      return;
+    }
     this.openDetail(metric, row.sucursal_id);
+  }
+
+  private isBranchMetricAvailable(
+    metric: string,
+    row: SalesFunnelBranchView,
+  ): boolean {
+    if (metric === 'leads_meta') {
+      return row.leads_meta !== null;
+    }
+    if (metric === 'visits_iventas_meta') {
+      return row.visits_iventas_meta !== null;
+    }
+    if (metric === 'sales_iventas') {
+      return row.sales_iventas !== null;
+    }
+    return true;
   }
 
   formatCurrency(value: number | null | undefined): string {
@@ -485,27 +504,23 @@ export class MarketingSalesFunnelOriginalComponent implements OnInit {
 
   private buildSummaryCards(summary: MarketingSalesFunnelMetrics): SummaryCard[] {
     const investment = this.resolveIventasCost();
-
-    const costPerLead = (
-      investment !== null
-      && summary.leads_meta > 0
-    )
-      ? investment / summary.leads_meta
-      : null;
-
-    const costPerSale = (
-      investment !== null
-      && summary.sales_iventas > 0
-    )
-      ? investment / summary.sales_iventas
-      : null;
+    const costPerLead = this.safeRatio(investment, summary.leads_meta);
+    const costPerSale = this.safeRatio(investment, summary.sales_iventas);
+    const publicationCostPerSale = this.safeRatio(
+      investment,
+      summary.sales_iventas_meta,
+    );
 
     return [
       {
         label: 'Inversión',
         value: investment !== null
           ? this.formatCurrency(investment)
-          : 'Sin corte',
+          : (
+              this.dashboard?.data_quality.crm_history_available === false
+                ? '—'
+                : 'Sin corte'
+            ),
         supportingText: 'Inversión del alcance',
         metric: null,
         icon: 'account_balance_wallet',
@@ -515,7 +530,7 @@ export class MarketingSalesFunnelOriginalComponent implements OnInit {
         label: 'Leads CRM',
         value: this.formatInteger(summary.leads_meta),
         supportingText: 'Leads canónicos identificados por iVentas',
-        metric: 'leads_meta',
+        metric: summary.leads_meta === null ? null : 'leads_meta',
         icon: 'phone_in_talk',
         cssClass: 'summary-kpi--blue',
         secondaryLabel: 'Costo por lead',
@@ -527,7 +542,7 @@ export class MarketingSalesFunnelOriginalComponent implements OnInit {
         label: 'Ventas iVentas',
         value: this.formatInteger(summary.sales_iventas),
         supportingText: `${this.formatPercent(summary.iventas_sale_share)} de Venta Nueva`,
-        metric: 'sales_iventas',
+        metric: summary.sales_iventas === null ? null : 'sales_iventas',
         icon: 'point_of_sale',
         cssClass: 'summary-kpi--orange',
         secondaryLabel: 'Costo por venta',
@@ -539,24 +554,23 @@ export class MarketingSalesFunnelOriginalComponent implements OnInit {
         label: 'Venta por publicaciones',
         value: this.formatInteger(summary.sales_iventas_meta),
         supportingText: 'Ventas trazadas a publicidad',
-        metric: 'sales_iventas_meta',
+        metric: summary.sales_iventas_meta === null
+          ? null
+          : 'sales_iventas_meta',
         icon: 'campaign',
         cssClass: 'summary-kpi--orange',
         secondaryLabel: 'Costo por venta',
-        secondaryValue: (
-          investment !== null
-          && summary.sales_iventas_meta > 0
-        )
-          ? this.formatCurrency(
-              investment / summary.sales_iventas_meta,
-            )
+        secondaryValue: publicationCostPerSale !== null
+          ? this.formatCurrency(publicationCostPerSale)
           : '—',
       },
       {
         label: 'Orgánico',
         value: this.formatInteger(summary.sales_iventas_other),
         supportingText: 'Ventas iVentas sin evidencia Meta',
-        metric: 'sales_iventas_other',
+        metric: summary.sales_iventas_other === null
+          ? null
+          : 'sales_iventas_other',
         icon: 'eco',
         cssClass: 'summary-kpi--green',
         secondaryLabel: 'Inversión plantillas',
@@ -584,45 +598,25 @@ export class MarketingSalesFunnelOriginalComponent implements OnInit {
   ): SalesFunnelBranchTotalsView {
     const investment = this.resolveIventasCost();
 
-    const digitalSalesForCac = (
-      summary.sales_digital + summary.sales_digital_organic
+    const digitalSalesForCac = this.sumAvailable(
+      summary.sales_digital,
+      summary.sales_digital_organic,
     );
-
-    const leadToVisit = (
-      summary.leads_meta > 0
-        ? summary.visits_total / summary.leads_meta
-        : null
+    const leadToVisit = this.safeRatio(
+      summary.visits_total,
+      summary.leads_meta,
     );
-
-    const visitToDigitalSale = (
-      summary.visits_total > 0
-        ? summary.sales_digital / summary.visits_total
-        : null
+    const visitToDigitalSale = this.safeRatio(
+      summary.sales_digital,
+      summary.visits_total,
     );
-
-    const leadToSale = (
-      summary.leads_meta > 0
-        ? summary.sales_digital / summary.leads_meta
-        : null
+    const leadToSale = this.safeRatio(
+      summary.sales_digital,
+      summary.leads_meta,
     );
-
-    const cpl = (
-      investment !== null && summary.leads_meta > 0
-        ? investment / summary.leads_meta
-        : null
-    );
-
-    const cpt = (
-      investment !== null && summary.visits_total > 0
-        ? investment / summary.visits_total
-        : null
-    );
-
-    const cac = (
-      investment !== null && digitalSalesForCac > 0
-        ? investment / digitalSalesForCac
-        : null
-    );
+    const cpl = this.safeRatio(investment, summary.leads_meta);
+    const cpt = this.safeRatio(investment, summary.visits_total);
+    const cac = this.safeRatio(investment, digitalSalesForCac);
 
     return {
       investment_display: this.formatOptionalCurrency(investment),
@@ -657,33 +651,20 @@ export class MarketingSalesFunnelOriginalComponent implements OnInit {
 
   private buildBranchView(branch: MarketingSalesFunnelBranch): SalesFunnelBranchView {
     const investment = this.resolveBranchInvestment(branch.sucursal_id);
-    const cpl = (
-      investment !== null && branch.leads_meta > 0
-        ? investment / branch.leads_meta
-        : null
+    const cpl = this.safeRatio(investment, branch.leads_meta);
+    const cpt = this.safeRatio(investment, branch.visits_total);
+    const digitalSalesForCac = this.sumAvailable(
+      branch.sales_digital,
+      branch.sales_digital_organic,
     );
-    const cpt = (
-      investment !== null && branch.visits_total > 0
-        ? investment / branch.visits_total
-        : null
+    const cac = this.safeRatio(investment, digitalSalesForCac);
+    const leadToVisit = this.safeRatio(
+      branch.visits_total,
+      branch.leads_meta,
     );
-    const digitalSalesForCac = (
-      branch.sales_digital + branch.sales_digital_organic
-    );
-    const cac = (
-      investment !== null && digitalSalesForCac > 0
-        ? investment / digitalSalesForCac
-        : null
-    );
-    const leadToVisit = (
-      branch.leads_meta > 0
-        ? branch.visits_total / branch.leads_meta
-        : null
-    );
-    const leadToSale = (
-      branch.leads_meta > 0
-        ? branch.sales_digital / branch.leads_meta
-        : null
+    const leadToSale = this.safeRatio(
+      branch.sales_digital,
+      branch.leads_meta,
     );
 
     return {
@@ -717,10 +698,44 @@ export class MarketingSalesFunnelOriginalComponent implements OnInit {
     return value === null ? '—' : this.formatCurrency(value);
   }
 
-  private formatInteger(value: number): string {
+  private safeRatio(
+    numerator: number | null | undefined,
+    denominator: number | null | undefined,
+  ): number | null {
+    if (
+      numerator === null
+      || numerator === undefined
+      || denominator === null
+      || denominator === undefined
+      || denominator <= 0
+    ) {
+      return null;
+    }
+    return numerator / denominator;
+  }
+
+  private sumAvailable(
+    left: number | null | undefined,
+    right: number | null | undefined,
+  ): number | null {
+    if (
+      left === null
+      || left === undefined
+      || right === null
+      || right === undefined
+    ) {
+      return null;
+    }
+    return left + right;
+  }
+
+  private formatInteger(value: number | null | undefined): string {
+    if (value === null || value === undefined) {
+      return '—';
+    }
     return new Intl.NumberFormat('es-MX', {
       maximumFractionDigits: 0,
-    }).format(value || 0);
+    }).format(value);
   }
 
   private formatPercent(value: number | null): string {
@@ -752,7 +767,7 @@ export class MarketingSalesFunnelOriginalComponent implements OnInit {
   }
 
   private buildMonthOptions(): Array<{ value: string; label: string }> {
-    const firstMonth = new Date(2026, 6, 1);
+    const firstMonth = new Date(2026, 0, 1);
     const currentMonth = new Date();
     const formatter = new Intl.DateTimeFormat('es-MX', {
       month: 'long',

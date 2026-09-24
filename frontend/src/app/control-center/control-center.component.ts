@@ -58,7 +58,7 @@ interface ControlDetailRow {
 interface MarketingOverview {
   leads: number | null;
   visits: number;
-  sales: number;
+  sales: number | null;
   salesRevenue: number;
   leadToVisitRate: number | null;
   visitToSaleRate: number | null;
@@ -532,8 +532,10 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
         key: 'conversion',
         title: 'Conversión',
         value: this.formatPercent(conversion),
-        supportingText: marketing.leads === null
-          ? 'Lead → venta · leads no disponibles para el alcance actual'
+        supportingText: (
+          marketing.leads === null || marketing.sales === null
+        )
+          ? 'Lead → venta · histórico CRM no disponible para el alcance actual'
           : `Lead → venta · ${this.formatInteger(marketing.sales)} ventas digitales de ${this.formatInteger(marketing.leads)} leads`,
         freshnessText: marketingFreshness || undefined,
         tone: conversion === null ? 'muted' : 'normal',
@@ -1042,18 +1044,28 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
     }
 
     const branches = this.filterMarketingBranches(dashboard.branches, scope);
-    const leads = branches.reduce(
-      (total, branch) => total + branch.leads_meta,
-      0,
+    const crmAvailable = branches.every(
+      (branch) => (
+        branch.leads_meta !== null
+        && branch.sales_digital !== null
+      ),
     );
+    const leads = crmAvailable
+      ? branches.reduce(
+          (total, branch) => total + (branch.leads_meta ?? 0),
+          0,
+        )
+      : null;
     const visits = branches.reduce(
       (total, branch) => total + branch.visits_total,
       0,
     );
-    const sales = branches.reduce(
-      (total, branch) => total + branch.sales_digital,
-      0,
-    );
+    const sales = crmAvailable
+      ? branches.reduce(
+          (total, branch) => total + (branch.sales_digital ?? 0),
+          0,
+        )
+      : null;
     const salesRevenue = branches.reduce(
       (total, branch) => total + branch.revenue_digital,
       0,
@@ -1064,9 +1076,21 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
       visits,
       sales,
       salesRevenue,
-      leadToVisitRate: leads > 0 ? visits / leads : null,
-      visitToSaleRate: visits > 0 ? sales / visits : null,
-      leadToSaleRate: leads > 0 ? sales / leads : null,
+      leadToVisitRate: (
+        leads !== null && leads > 0
+          ? visits / leads
+          : null
+      ),
+      visitToSaleRate: (
+        sales !== null && visits > 0
+          ? sales / visits
+          : null
+      ),
+      leadToSaleRate: (
+        leads !== null && sales !== null && leads > 0
+          ? sales / leads
+          : null
+      ),
       branches,
     };
   }
@@ -1140,7 +1164,7 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
           { label: 'Lead → visita', value: this.formatPercent(marketing.leadToVisitRate) },
           { label: 'Visita → venta digital', value: this.formatPercent(marketing.visitToSaleRate) },
           { label: 'Leads iVentas', value: marketing.leads === null ? '—' : this.formatInteger(marketing.leads) },
-          { label: 'Ventas digitales', value: this.formatInteger(marketing.sales) },
+          { label: 'Ventas digitales', value: marketing.sales === null ? '—' : this.formatInteger(marketing.sales) },
         ];
       case 'retention':
         return [
@@ -1171,7 +1195,7 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
         return [
           { label: 'Leads iVentas', value: marketing.leads === null ? '—' : this.formatInteger(marketing.leads) },
           { label: 'Visitas', value: this.formatInteger(marketing.visits) },
-          { label: 'Ventas digitales', value: this.formatInteger(marketing.sales) },
+          { label: 'Ventas digitales', value: marketing.sales === null ? '—' : this.formatInteger(marketing.sales) },
           { label: 'Lead → visita', value: this.formatPercent(marketing.leadToVisitRate) },
           { label: 'Visita → venta digital', value: this.formatPercent(marketing.visitToSaleRate) },
         ];
@@ -1829,9 +1853,14 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
   private marketingBranchLeadToSaleRate(
     branch: MarketingSalesFunnelBranch,
   ): number | null {
-    return branch.leads_meta > 0
-      ? branch.sales_digital / branch.leads_meta
-      : null;
+    if (
+      branch.leads_meta === null
+      || branch.sales_digital === null
+      || branch.leads_meta <= 0
+    ) {
+      return null;
+    }
+    return branch.sales_digital / branch.leads_meta;
   }
 
   private filterMarketingBranches(
