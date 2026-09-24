@@ -62,6 +62,37 @@ from app.services.marketing_sales_funnel_service import (
 
 
 COMPLETED = "COMPLETED"
+CRM_HISTORY_START_MONTH = date(2026, 7, 1)
+CRM_HISTORY_LIMITATION = (
+    "Sin histórico CRM disponible para este periodo; "
+    "las métricas dependientes de CRM e inversión Meta no están disponibles."
+)
+CRM_DEPENDENT_PAYLOAD_FIELDS = frozenset(
+    {
+        "iventas_contacts",
+        "leads_iventas",
+        "leads_meta",
+        "visits_iventas",
+        "visits_iventas_meta",
+        "visits_iventas_other",
+        "visits_not_iventas",
+        "sales_iventas",
+        "sales_iventas_meta",
+        "sales_iventas_other",
+        "sales_not_iventas",
+        "revenue_iventas",
+        "revenue_iventas_meta",
+        "revenue_iventas_other",
+        "revenue_not_iventas",
+        "lead_to_visit_rate",
+        "lead_to_sale_rate",
+        "meta_lead_to_visit_rate",
+        "meta_visit_to_sale_rate",
+        "meta_lead_to_sale_rate",
+        "iventas_visit_share",
+        "iventas_sale_share",
+    }
+)
 
 FUNNEL_CUTOFF_POLICY_EXACT = "exact"
 FUNNEL_CUTOFF_POLICY_LATEST_AVAILABLE_AT_OR_BEFORE = (
@@ -218,14 +249,29 @@ def _kpi_cutoff_dates(month_start: date) -> set[date]:
     return {row[0] for row in rows if row[0] is not None}
 
 
-def list_available_funnel_cutoffs(month_start: date) -> tuple[date, ...]:
-    sources = (
-        _iventas_cutoff_dates(month_start),
-        _meta_cutoff_dates(month_start),
+def _crm_history_available(month_start: date) -> bool:
+    return month_start >= CRM_HISTORY_START_MONTH
+
+
+def _cutoff_source_dates(month_start: date) -> tuple[set[date], ...]:
+    operational_sources = (
         _venta_total_cutoff_dates(month_start),
         _new_sales_cutoff_dates(month_start),
         _kpi_cutoff_dates(month_start),
     )
+
+    if not _crm_history_available(month_start):
+        return operational_sources
+
+    return (
+        _iventas_cutoff_dates(month_start),
+        _meta_cutoff_dates(month_start),
+        *operational_sources,
+    )
+
+
+def list_available_funnel_cutoffs(month_start: date) -> tuple[date, ...]:
+    sources = _cutoff_source_dates(month_start)
     if any(not values for values in sources):
         return ()
 
@@ -531,6 +577,36 @@ def _resolve_visits_for_mode(
     )
 
 
+def _apply_crm_history_availability(
+    *,
+    payload: dict[str, Any],
+    crm_history_available: bool,
+) -> None:
+    data_quality = payload["data_quality"]
+    data_quality["crm_history_available"] = crm_history_available
+    data_quality["crm_dependent_metrics_available"] = crm_history_available
+    data_quality["meta_available"] = crm_history_available
+    data_quality["crm_history_start_month"] = (
+        CRM_HISTORY_START_MONTH.strftime("%Y-%m")
+    )
+
+    if crm_history_available:
+        return
+
+    for container in [payload["summary"], *payload["branches"]]:
+        for field_name in CRM_DEPENDENT_PAYLOAD_FIELDS:
+            if field_name in container:
+                container[field_name] = None
+        container["investment"] = None
+
+    data_quality["match_mode"] = None
+    data_quality["commercial_classification_rule"] = (
+        "Venta Total API/encuesta > fallback BTL; "
+        "sin cruce CRM histórico."
+    )
+    data_quality["survey_fallback_only_after_no_iventas_match"] = None
+
+
 def build_marketing_sales_funnel_at_cutoff(
     *,
     month: str,
@@ -540,6 +616,7 @@ def build_marketing_sales_funnel_at_cutoff(
     include_direct_purchases: bool = True,
 ) -> MarketingSalesFunnelBuildResult:
     month_start = parse_month(month)
+    crm_history_available = _crm_history_available(month_start)
     requested_cutoff = parse_cutoff_date(
         month_start=month_start,
         raw_value=cutoff_date,
@@ -552,33 +629,46 @@ def build_marketing_sales_funnel_at_cutoff(
 
     branches, branch_ids, scope = load_visible_marketing_branches(access)
     stats_by_branch = {branch_id: _BranchStats() for branch_id in branch_ids}
+    limitations: list[str] = []
 
-    iventas_run = _select_exact_iventas_run(month_start, selected_cutoff)
-    meta_run = _select_exact_meta_run(month_start, selected_cutoff)
-    branch_metrics = _selected_iventas_branch_metrics(
-        run=iventas_run,
-        month_start=month_start,
-    )
-    metrics_by_branch = {
-        int(row.sucursal_id): row
-        for row in branch_metrics
-    }
-    for branch_id in branch_ids:
-        row = metrics_by_branch.get(branch_id)
-        if row is None:
-            continue
-        stats_by_branch[branch_id].iventas_contacts = int(row.iventas_contacts)
-        stats_by_branch[branch_id].leads_iventas = int(
-            row.iventas_contacts_with_first_message
+    iventas_run: MarketingIventasSyncRunORM | None = None
+    meta_run: MarketingMetaSyncRunORM | None = None
+    evidence: dict[tuple[int, str], list[_IventasEvidence]] = defaultdict(list)
+    iventas_run_ids: tuple[int, ...] = ()
+
+    if crm_history_available:
+        iventas_run = _select_exact_iventas_run(month_start, selected_cutoff)
+        meta_run = _select_exact_meta_run(month_start, selected_cutoff)
+        branch_metrics = _selected_iventas_branch_metrics(
+            run=iventas_run,
+            month_start=month_start,
         )
-        stats_by_branch[branch_id].leads_meta = int(row.meta_observed_leads)
+        metrics_by_branch = {
+            int(row.sucursal_id): row
+            for row in branch_metrics
+        }
+        for branch_id in branch_ids:
+            row = metrics_by_branch.get(branch_id)
+            if row is None:
+                continue
+            stats_by_branch[branch_id].iventas_contacts = int(
+                row.iventas_contacts
+            )
+            stats_by_branch[branch_id].leads_iventas = int(
+                row.iventas_contacts_with_first_message
+            )
+            stats_by_branch[branch_id].leads_meta = int(
+                row.meta_observed_leads
+            )
 
-    evidence, iventas_run_ids = _load_iventas_data_for_cutoff(
-        month_start=month_start,
-        cutoff_date=selected_cutoff,
-        branch_ids=branch_ids,
-        current_run=iventas_run,
-    )
+        evidence, iventas_run_ids = _load_iventas_data_for_cutoff(
+            month_start=month_start,
+            cutoff_date=selected_cutoff,
+            branch_ids=branch_ids,
+            current_run=iventas_run,
+        )
+    else:
+        limitations.append(CRM_HISTORY_LIMITATION)
 
     alias_map = _load_branch_alias_map()
     venta_total_snapshot = _select_exact_venta_total_snapshot(
@@ -591,7 +681,6 @@ def build_marketing_sales_funnel_at_cutoff(
     )
     kpi_snapshot = _select_exact_kpi_snapshot(selected_cutoff)
 
-    limitations: list[str] = []
     venta_total_rows: list[VentaTotalSnapshotRowORM] = []
     registered_visits = []
     if venta_total_snapshot is not None:
@@ -721,31 +810,59 @@ def build_marketing_sales_funnel_at_cutoff(
         limitations=limitations,
     )
 
-    meta_data = _read_meta_investment_for_cutoff(
-        meta_run=meta_run,
-        iventas_run=iventas_run,
-    )
-    total_investment = Decimal("0")
-    for branch_payload in payload["branches"]:
-        investment = meta_data.branch_spend.get(
-            int(branch_payload["sucursal_id"]),
-            Decimal("0"),
+    if crm_history_available:
+        if meta_run is None or iventas_run is None:
+            raise RuntimeError(
+                "El modo CRM requiere runs iVentas y Meta seleccionados."
+            )
+        meta_data = _read_meta_investment_for_cutoff(
+            meta_run=meta_run,
+            iventas_run=iventas_run,
         )
-        branch_payload["investment"] = float(investment)
-        total_investment += investment
-    payload["summary"]["investment"] = float(total_investment)
+        total_investment = Decimal("0")
+        for branch_payload in payload["branches"]:
+            investment = meta_data.branch_spend.get(
+                int(branch_payload["sucursal_id"]),
+                Decimal("0"),
+            )
+            branch_payload["investment"] = float(investment)
+            total_investment += investment
+        payload["summary"]["investment"] = float(total_investment)
+    else:
+        for branch_payload in payload["branches"]:
+            branch_payload["investment"] = None
+        payload["summary"]["investment"] = None
 
     payload["selected_cutoff_date"] = selected_cutoff.isoformat()
     payload["available_cutoff_dates"] = [
         value.isoformat() for value in available_cutoffs
     ]
-    payload["source"].update(
-        {
-            "iventas_sync_run_id": int(iventas_run.id),
-            "meta_sync_run_id": int(meta_run.id),
-            "meta_date_from": meta_run.date_from.isoformat(),
-            "meta_date_to": meta_run.date_to.isoformat(),
-        }
+    if crm_history_available:
+        if meta_run is None or iventas_run is None:
+            raise RuntimeError(
+                "El modo CRM requiere runs iVentas y Meta seleccionados."
+            )
+        payload["source"].update(
+            {
+                "iventas_sync_run_id": int(iventas_run.id),
+                "meta_sync_run_id": int(meta_run.id),
+                "meta_date_from": meta_run.date_from.isoformat(),
+                "meta_date_to": meta_run.date_to.isoformat(),
+            }
+        )
+    else:
+        payload["source"].update(
+            {
+                "iventas_sync_run_id": None,
+                "meta_sync_run_id": None,
+                "meta_date_from": None,
+                "meta_date_to": None,
+            }
+        )
+
+    _apply_crm_history_availability(
+        payload=payload,
+        crm_history_available=crm_history_available,
     )
 
     loaded = MarketingSalesFunnelLoadedData(
