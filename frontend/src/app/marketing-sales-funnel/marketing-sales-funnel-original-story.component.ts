@@ -169,19 +169,23 @@ export class MarketingSalesFunnelOriginalStoryComponent {
         key: 'iventas',
         label: 'CRM',
         value: this.formatInteger(summary.visits_iventas),
-        metric: 'visits_iventas',
+        metric: summary.visits_iventas === null ? '' : 'visits_iventas',
         icon: 'smartphone',
         tone: 'orange',
         share: this.formatPercent(
           this.safeRatio(summary.visits_iventas, summary.visits_total),
         ),
         bought: this.formatInteger(summary.visits_iventas_bought),
-        boughtMetric: 'visits_iventas_bought',
+        boughtMetric: summary.visits_iventas_bought === null
+          ? ''
+          : 'visits_iventas_bought',
         boughtShare: this.formatPercent(
           this.safeRatio(summary.visits_iventas_bought, summary.visits_iventas),
         ),
         notBought: this.formatInteger(summary.visits_iventas_not_bought),
-        notBoughtMetric: 'visits_iventas_not_bought',
+        notBoughtMetric: summary.visits_iventas_not_bought === null
+          ? ''
+          : 'visits_iventas_not_bought',
         notBoughtShare: this.formatPercent(
           this.safeRatio(
             summary.visits_iventas_not_bought,
@@ -193,14 +197,18 @@ export class MarketingSalesFunnelOriginalStoryComponent {
         key: 'untraced',
         label: 'Organicas',
         value: this.formatInteger(summary.visits_not_iventas),
-        metric: 'visits_not_iventas',
+        metric: summary.visits_not_iventas === null
+          ? ''
+          : 'visits_not_iventas',
         icon: 'link_off',
         tone: 'gray',
         share: this.formatPercent(
           this.safeRatio(summary.visits_not_iventas, summary.visits_total),
         ),
         bought: this.formatInteger(summary.visits_not_iventas_bought),
-        boughtMetric: 'visits_not_iventas_bought',
+        boughtMetric: summary.visits_not_iventas_bought === null
+          ? ''
+          : 'visits_not_iventas_bought',
         boughtShare: this.formatPercent(
           this.safeRatio(
             summary.visits_not_iventas_bought,
@@ -208,7 +216,9 @@ export class MarketingSalesFunnelOriginalStoryComponent {
           ),
         ),
         notBought: this.formatInteger(summary.visits_not_iventas_not_bought),
-        notBoughtMetric: 'visits_not_iventas_not_bought',
+        notBoughtMetric: summary.visits_not_iventas_not_bought === null
+          ? ''
+          : 'visits_not_iventas_not_bought',
         notBoughtShare: this.formatPercent(
           this.safeRatio(
             summary.visits_not_iventas_not_bought,
