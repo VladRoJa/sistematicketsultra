@@ -56,6 +56,46 @@ marketing_sales_funnel_bp = Blueprint(
 VISIT_MODE_ADJUSTED = "adjusted"
 VISIT_MODE_REGISTERED_ONLY = "registered_only"
 
+HISTORICAL_CRM_VISIT_CONVERSION_FIELDS = (
+    "visits_iventas_bought",
+    "visits_iventas_not_bought",
+    "visits_not_iventas_bought",
+    "visits_not_iventas_not_bought",
+    "iventas_visit_conversion_rate",
+    "not_iventas_visit_conversion_rate",
+)
+
+
+def _apply_unavailable_crm_visit_conversion(
+    result: dict[str, object],
+) -> None:
+    summary = result.get("summary")
+    branches = result.get("branches")
+    data_quality = result.get("data_quality")
+
+    containers: list[dict[str, object]] = []
+    if isinstance(summary, dict):
+        containers.append(summary)
+    if isinstance(branches, list):
+        containers.extend(
+            branch
+            for branch in branches
+            if isinstance(branch, dict)
+        )
+
+    for container in containers:
+        for field_name in HISTORICAL_CRM_VISIT_CONVERSION_FIELDS:
+            container[field_name] = None
+
+    if isinstance(data_quality, dict):
+        data_quality.update(
+            {
+                "visit_conversion_mode": None,
+                "visit_conversion_cohort_complete": None,
+                "visit_conversion_sales_snapshot_ids": [],
+            }
+        )
+
 
 def _include_direct_purchases_from_request() -> bool:
     value = str(
@@ -231,31 +271,34 @@ def get_marketing_sales_funnel_endpoint():
         leads_ms = 0.0
 
         stage_started = perf_counter()
-        visit_conversion = build_visit_conversion_summary_at_cutoff(
-            loaded=funnel_build.loaded,
-            cutoff_date=result["selected_cutoff_date"],
-        )
-        conversion_ms = (perf_counter() - stage_started) * 1000
+        if result["data_quality"].get("crm_history_available", True):
+            visit_conversion = build_visit_conversion_summary_at_cutoff(
+                loaded=funnel_build.loaded,
+                cutoff_date=result["selected_cutoff_date"],
+            )
 
-        result["summary"].update(visit_conversion["summary"])
-        conversion_by_branch = visit_conversion["branches"]
-        for branch_payload in result["branches"]:
-            branch_payload.update(
-                conversion_by_branch.get(
-                    int(branch_payload["sucursal_id"]),
-                    {},
+            result["summary"].update(visit_conversion["summary"])
+            conversion_by_branch = visit_conversion["branches"]
+            for branch_payload in result["branches"]:
+                branch_payload.update(
+                    conversion_by_branch.get(
+                        int(branch_payload["sucursal_id"]),
+                        {},
+                    )
                 )
+            result["data_quality"].update(
+                visit_conversion["data_quality"]
             )
-        result["data_quality"].update(
-            visit_conversion["data_quality"]
-        )
-        if not visit_conversion["data_quality"][
-            "visit_conversion_cohort_complete"
-        ]:
-            result["data_quality"]["limitations"].append(
-                "La conversión de visitas sigue abierta: una visita del mes "
-                "puede comprar hasta 30 días después."
-            )
+            if not visit_conversion["data_quality"][
+                "visit_conversion_cohort_complete"
+            ]:
+                result["data_quality"]["limitations"].append(
+                    "La conversión de visitas sigue abierta: una visita del mes "
+                    "puede comprar hasta 30 días después."
+                )
+        else:
+            _apply_unavailable_crm_visit_conversion(result)
+        conversion_ms = (perf_counter() - stage_started) * 1000
 
         stage_started = perf_counter()
         result["scope_options"] = _load_scope_options(base_access)
