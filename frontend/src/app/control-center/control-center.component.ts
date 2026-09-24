@@ -58,7 +58,7 @@ interface ControlDetailRow {
 interface MarketingOverview {
   leads: number | null;
   visits: number;
-  sales: number;
+  sales: number | null;
   salesRevenue: number;
   leadToVisitRate: number | null;
   visitToSaleRate: number | null;
