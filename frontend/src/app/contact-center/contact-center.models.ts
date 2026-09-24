@@ -152,6 +152,9 @@ export interface ContactCenterCrmCandidate {
   channel_platform: string | null;
   already_in_contact_center: boolean;
   contact_center_contact_id: number | null;
+  crm_linked: boolean;
+  matched_by_phone: boolean;
+  phone_match_ambiguous: boolean;
   has_active_case: boolean;
   active_case_assigned_user_id: number | null;
 }

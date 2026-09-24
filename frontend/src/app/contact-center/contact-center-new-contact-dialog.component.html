@@ -57,9 +57,11 @@
     </label>
 
     <label class="field">
-      <span>Sucursal de interés</span>
+      <span>Sucursal de interés{{ data.isManager ? ' *' : '' }}</span>
       <select [(ngModel)]="sucursalId">
-        <option [ngValue]="null">Sin definir</option>
+        <option [ngValue]="null">
+          {{ data.isManager ? 'Selecciona' : 'Sin definir' }}
+        </option>
         <option
           *ngFor="let branch of data.branches"
           [ngValue]="branch.id"

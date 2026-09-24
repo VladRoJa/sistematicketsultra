@@ -20,7 +20,6 @@
       <button
         type="button"
         class="primary-button"
-        *ngIf="!isManager"
         (click)="openNewContact()"
       >
         <mat-icon>person_add</mat-icon>
@@ -532,14 +531,12 @@
               <td>{{ formatDateTime(row.first_message_at_local) }}</td>
               <td>{{ row.channel_name || row.channel_platform || '—' }}</td>
               <td>
-                <span class="status-pill" [class.status-pill--appointment]="row.already_in_contact_center">
-                  {{
-                    row.has_active_case
-                      ? 'Caso activo'
-                      : row.already_in_contact_center
-                        ? 'Contacto existente'
-                        : 'Disponible'
-                  }}
+                <span
+                  class="status-pill"
+                  [class.status-pill--appointment]="row.already_in_contact_center"
+                  [class.status-pill--danger]="row.phone_match_ambiguous"
+                >
+                  {{ crmStatusLabel(row) }}
                 </span>
               </td>
               <td class="table-action-cell">

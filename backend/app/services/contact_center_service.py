@@ -288,6 +288,9 @@ def find_duplicate_contacts(
 def create_contact_with_case(
     payload: dict[str, Any],
     actor: UserORM,
+    *,
+    forced_assigned_user_id: int | None = None,
+    allowed_branch_ids: tuple[int, ...] | None = None,
 ) -> tuple[ContactCenterContactORM, ContactCenterCaseORM]:
     raw_phone = _clean_text(payload.get("phone"))
     if raw_phone is None:
@@ -321,6 +324,16 @@ def create_contact_with_case(
         if branch is None:
             raise ContactCenterValidationError("Sucursal no encontrada.")
 
+    if allowed_branch_ids is not None:
+        if branch is None:
+            raise ContactCenterValidationError(
+                "Selecciona una sucursal autorizada."
+            )
+        if int(branch_id) not in set(allowed_branch_ids):
+            raise ContactCenterValidationError(
+                "Sólo puedes crear contactos para tus sucursales autorizadas."
+            )
+
     contact = ContactCenterContactORM(
         display_name=_clean_text(payload.get("name")),
         primary_phone_raw=raw_phone,
@@ -333,17 +346,33 @@ def create_contact_with_case(
     db.session.add(contact)
     db.session.flush()
 
-    assigned_user_id = payload.get("assigned_user_id") or actor.id
-    try:
-        assigned_user_id = int(assigned_user_id)
-    except (TypeError, ValueError) as exc:
-        raise ContactCenterValidationError("Agente asignado inválido.") from exc
+    if forced_assigned_user_id is not None:
+        try:
+            assigned_user_id = int(forced_assigned_user_id)
+        except (TypeError, ValueError) as exc:
+            raise ContactCenterValidationError(
+                "Agente asignado inválido."
+            ) from exc
 
-    assigned_user = UserORM.get_by_id(assigned_user_id)
-    if not has_contact_center_operator_access(assigned_user):
-        raise ContactCenterValidationError(
-            "El agente seleccionado no tiene acceso operativo a Contact Center."
-        )
+        if assigned_user_id != int(actor.id):
+            raise ContactCenterValidationError(
+                "La asignación forzada debe corresponder al usuario actual."
+            )
+        assigned_user = actor
+    else:
+        assigned_user_id = payload.get("assigned_user_id") or actor.id
+        try:
+            assigned_user_id = int(assigned_user_id)
+        except (TypeError, ValueError) as exc:
+            raise ContactCenterValidationError(
+                "Agente asignado inválido."
+            ) from exc
+
+        assigned_user = UserORM.get_by_id(assigned_user_id)
+        if not has_contact_center_operator_access(assigned_user):
+            raise ContactCenterValidationError(
+                "El agente seleccionado no tiene acceso operativo a Contact Center."
+            )
 
     case = ContactCenterCaseORM(
         contact_id=contact.id,
@@ -866,6 +895,7 @@ def list_appointments(
 
 def _contact_center_crm_link_state() -> tuple[
     dict[str, int],
+    dict[str, tuple[int, ...]],
     dict[int, int | None],
 ]:
     existing_links = {
@@ -874,16 +904,43 @@ def _contact_center_crm_link_state() -> tuple[
         .filter(ContactCenterContactLinkORM.source_type == "IVENTAS_CONTACT")
         .all()
     }
-    linked_contact_ids = tuple(sorted(set(existing_links.values())))
+
+    active_contacts = (
+        ContactCenterContactORM.query
+        .filter(
+            ContactCenterContactORM.is_active.is_(True),
+            ContactCenterContactORM.merged_into_contact_id.is_(None),
+            ContactCenterContactORM.phone_mx10.isnot(None),
+        )
+        .all()
+    )
+
+    contact_ids_by_phone: dict[str, list[int]] = defaultdict(list)
+    active_contact_ids: list[int] = []
+    for contact in active_contacts:
+        contact_id = int(contact.id)
+        phone = str(contact.phone_mx10 or "").strip()
+        if not phone:
+            continue
+        contact_ids_by_phone[phone].append(contact_id)
+        active_contact_ids.append(contact_id)
+
+    phone_contact_ids = {
+        phone: tuple(sorted(contact_ids))
+        for phone, contact_ids in contact_ids_by_phone.items()
+    }
+
     active_case_owner_ids: dict[int, int | None] = {}
-    if linked_contact_ids:
+    if active_contact_ids:
         rows = (
             db.session.query(
                 ContactCenterCaseORM.contact_id,
                 ContactCenterCaseORM.assigned_user_id,
             )
             .filter(
-                ContactCenterCaseORM.contact_id.in_(linked_contact_ids),
+                ContactCenterCaseORM.contact_id.in_(
+                    tuple(sorted(set(active_contact_ids)))
+                ),
                 ContactCenterCaseORM.status != "CLOSED",
             )
             .order_by(ContactCenterCaseORM.updated_at.desc())
@@ -899,7 +956,11 @@ def _contact_center_crm_link_state() -> tuple[
                 ),
             )
 
-    return existing_links, active_case_owner_ids
+    return (
+        existing_links,
+        phone_contact_ids,
+        active_case_owner_ids,
+    )
 
 
 def _serialize_crm_candidate(
@@ -907,11 +968,29 @@ def _serialize_crm_candidate(
     *,
     branch_names: dict[int, str],
     existing_links: dict[str, int],
+    phone_contact_ids: dict[str, tuple[int, ...]],
     active_case_owner_ids: dict[int, int | None],
 ) -> dict[str, Any]:
     branch_id = int(row["sucursal_id"])
     source_key = f"{branch_id}:{str(row['contact_id'])}"
-    linked_contact_id = existing_links.get(source_key)
+    source_link_contact_id = existing_links.get(source_key)
+
+    phone = normalize_phone(
+        row.get("phone_mx10")
+        or row.get("phone_digits")
+    ) or ""
+    phone_matches = phone_contact_ids.get(phone, tuple())
+
+    phone_match_ambiguous = (
+        source_link_contact_id is None
+        and len(phone_matches) > 1
+    )
+    resolved_contact_id = source_link_contact_id
+    matched_by_phone = False
+
+    if resolved_contact_id is None and len(phone_matches) == 1:
+        resolved_contact_id = int(phone_matches[0])
+        matched_by_phone = True
 
     return {
         "contact_row_id": int(row["contact_row_id"]),
@@ -926,16 +1005,19 @@ def _serialize_crm_candidate(
         "first_message_at_local": _iso(row.get("first_message_at_local")),
         "channel_name": _clean_text(row.get("channel_name")),
         "channel_platform": _clean_text(row.get("channel_platform")),
-        "already_in_contact_center": source_key in existing_links,
-        "contact_center_contact_id": linked_contact_id,
+        "already_in_contact_center": resolved_contact_id is not None,
+        "contact_center_contact_id": resolved_contact_id,
+        "crm_linked": source_link_contact_id is not None,
+        "matched_by_phone": matched_by_phone,
+        "phone_match_ambiguous": phone_match_ambiguous,
         "has_active_case": (
-            linked_contact_id in active_case_owner_ids
-            if linked_contact_id is not None
+            resolved_contact_id in active_case_owner_ids
+            if resolved_contact_id is not None
             else False
         ),
         "active_case_assigned_user_id": (
-            active_case_owner_ids.get(linked_contact_id)
-            if linked_contact_id is not None
+            active_case_owner_ids.get(resolved_contact_id)
+            if resolved_contact_id is not None
             else None
         ),
     }
@@ -1018,7 +1100,11 @@ def search_crm_candidates_by_phone(
         .filter(Sucursal.sucursal_id.in_(tuple(sorted(all_branch_ids))))
         .all()
     }
-    existing_links, active_case_owner_ids = _contact_center_crm_link_state()
+    (
+        existing_links,
+        phone_contact_ids,
+        active_case_owner_ids,
+    ) = _contact_center_crm_link_state()
 
     result: list[dict[str, Any]] = []
     seen_source_keys: set[str] = set()
@@ -1047,6 +1133,7 @@ def search_crm_candidates_by_phone(
                     row,
                     branch_names=branch_names,
                     existing_links=existing_links,
+                    phone_contact_ids=phone_contact_ids,
                     active_case_owner_ids=active_case_owner_ids,
                 )
             )
@@ -1119,7 +1206,11 @@ def list_crm_candidates(
     )
     rows = db.session.execute(statement).mappings().all()
 
-    existing_links, active_case_owner_ids = _contact_center_crm_link_state()
+    (
+        existing_links,
+        phone_contact_ids,
+        active_case_owner_ids,
+    ) = _contact_center_crm_link_state()
     branch_names = {
         int(branch.sucursal_id): str(branch.sucursal)
         for branch in Sucursal.query.filter(Sucursal.sucursal_id.in_(branch_ids)).all()
@@ -1132,6 +1223,7 @@ def list_crm_candidates(
                 row,
                 branch_names=branch_names,
                 existing_links=existing_links,
+                phone_contact_ids=phone_contact_ids,
                 active_case_owner_ids=active_case_owner_ids,
             )
         )
@@ -1214,10 +1306,54 @@ def import_crm_candidate(
                     "sync_run_id": int(source.sync_run_id),
                     "contact_id": str(source.contact_id),
                     "branch_code": str(source.branch_code),
+                    "matched_by": "USER_CONFIRMED",
                 },
             )
         )
         db.session.flush()
+    else:
+        phone = normalize_phone(
+            source.phone_mx10
+            or source.phone_digits
+            or source.phone_raw
+        )
+        exact_phone_matches = []
+        if phone:
+            exact_phone_matches = (
+                ContactCenterContactORM.query
+                .filter(
+                    ContactCenterContactORM.is_active.is_(True),
+                    ContactCenterContactORM.merged_into_contact_id.is_(None),
+                    ContactCenterContactORM.phone_mx10 == phone,
+                )
+                .order_by(ContactCenterContactORM.updated_at.desc())
+                .all()
+            )
+
+        if len(exact_phone_matches) == 1:
+            contact = exact_phone_matches[0]
+            db.session.add(
+                ContactCenterContactLinkORM(
+                    contact_id=contact.id,
+                    source_type="IVENTAS_CONTACT",
+                    source_key=source_key,
+                    source_row_id=source.id,
+                    source_metadata_json={
+                        "sync_run_id": int(source.sync_run_id),
+                        "contact_id": str(source.contact_id),
+                        "branch_code": str(source.branch_code),
+                        "matched_by": "PHONE_MX10",
+                    },
+                )
+            )
+            db.session.flush()
+        elif len(exact_phone_matches) > 1:
+            raise ContactCenterDuplicateError(
+                [
+                    serialize_contact(row)
+                    for row in exact_phone_matches[:20]
+                ]
+            )
 
     if contact is not None:
         active_case = (

@@ -22,6 +22,7 @@ export interface ContactCenterNewContactDialogData {
   branches: ContactCenterBranch[];
   agents: ContactCenterUserRef[];
   isSupervisor: boolean;
+  isManager: boolean;
   currentUserId: number;
 }
 
@@ -76,6 +77,11 @@ export class ContactCenterNewContactDialogComponent {
     const phone = this.phone.trim();
     if (!phone) {
       this.errorMessage = 'Captura un teléfono.';
+      return;
+    }
+
+    if (this.data.isManager && !this.sucursalId) {
+      this.errorMessage = 'Selecciona una sucursal.';
       return;
     }
 

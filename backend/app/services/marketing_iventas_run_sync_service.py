@@ -62,6 +62,9 @@ from app.services.marketing_iventas_run_lifecycle_service import (
 from app.services.marketing_iventas_service import (
     build_iventas_utc_period,
 )
+from app.services.contact_center_iventas_reconciliation_service import (
+    reconcile_contact_center_iventas_run,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -818,6 +821,33 @@ def sync_iventas_full_run(
         finished_at=finished_at,
         session=session_value,
     )
+
+    if (
+        finalized.status == SYNC_STATUS_COMPLETED
+        and finalized.is_canonical
+    ):
+        try:
+            reconciliation = reconcile_contact_center_iventas_run(
+                sync_run_id=sync_run_id,
+                session=session_value,
+            )
+            logger.info(
+                "Contact Center iVentas reconciliation "
+                "run=%s scanned=%s created=%s already=%s "
+                "no_match=%s ambiguous=%s",
+                sync_run_id,
+                reconciliation.leads_scanned,
+                reconciliation.links_created,
+                reconciliation.already_linked,
+                reconciliation.no_contact_match,
+                reconciliation.ambiguous_contact_match,
+            )
+        except Exception:
+            session_value.rollback()
+            logger.exception(
+                "Contact Center iVentas reconciliation failed run=%s",
+                sync_run_id,
+            )
 
     failures = tuple(
         sorted(
