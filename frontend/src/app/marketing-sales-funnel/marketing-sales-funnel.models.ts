@@ -15,40 +15,40 @@ export interface MarketingSalesFunnelScopeOption {
 export interface MarketingSalesFunnelMetrics {
   investment?: number | null;
 
-  iventas_contacts: number;
-  leads_iventas: number;
-  leads_meta: number;
+  iventas_contacts: number | null;
+  leads_iventas: number | null;
+  leads_meta: number | null;
 
   visits_total: number;
-  visits_iventas: number;
-  visits_iventas_meta: number;
-  visits_iventas_other: number;
-  visits_not_iventas: number;
+  visits_iventas: number | null;
+  visits_iventas_meta: number | null;
+  visits_iventas_other: number | null;
+  visits_not_iventas: number | null;
   visits_unmatchable: number;
-  visits_iventas_bought: number;
-  visits_iventas_not_bought: number;
-  visits_not_iventas_bought: number;
-  visits_not_iventas_not_bought: number;
+  visits_iventas_bought: number | null;
+  visits_iventas_not_bought: number | null;
+  visits_not_iventas_bought: number | null;
+  visits_not_iventas_not_bought: number | null;
   iventas_visit_conversion_rate: number | null;
   not_iventas_visit_conversion_rate: number | null;
 
   sales_total: number;
-  sales_iventas: number;
-  sales_iventas_meta: number;
-  sales_iventas_other: number;
-  sales_not_iventas: number;
+  sales_iventas: number | null;
+  sales_iventas_meta: number | null;
+  sales_iventas_other: number | null;
+  sales_not_iventas: number | null;
   sales_without_valid_phone: number;
 
-  sales_digital: number;
+  sales_digital: number | null;
   sales_digital_organic: number;
   sales_web: number;
   sales_btl: number;
 
   revenue_total: number;
-  revenue_iventas: number;
-  revenue_iventas_meta: number;
-  revenue_iventas_other: number;
-  revenue_not_iventas: number;
+  revenue_iventas: number | null;
+  revenue_iventas_meta: number | null;
+  revenue_iventas_other: number | null;
+  revenue_not_iventas: number | null;
 
   revenue_digital: number;
   revenue_web: number;
@@ -102,11 +102,15 @@ export interface MarketingSalesFunnelQuality {
   venta_total_enriched_sales?: number;
   new_sale_rule: string;
   venta_total_role?: string;
-  match_mode: string;
+  crm_history_available?: boolean;
+  crm_dependent_metrics_available?: boolean;
+  meta_available?: boolean;
+  crm_history_start_month?: string;
+  match_mode: string | null;
   commercial_classification_rule?: string;
-  survey_fallback_only_after_no_iventas_match: boolean;
-  visit_conversion_mode?: string;
-  visit_conversion_cohort_complete?: boolean;
+  survey_fallback_only_after_no_iventas_match: boolean | null;
+  visit_conversion_mode?: string | null;
+  visit_conversion_cohort_complete?: boolean | null;
   visit_conversion_sales_snapshot_ids?: number[];
   limitations: string[];
 }
