@@ -82,7 +82,7 @@ def test_shared_funnel_consumers_preserve_historical_nulls():
 
     assert "sales: number | null;" in control_center
     assert "const crmAvailable = branches.every(" in control_center
-    assert "historico CRM no disponible" in control_center
+    assert "histórico CRM no disponible" in control_center
 
     assert "leads: number | null;" in export_source
     assert "salesDigital: number | null;" in export_source
