@@ -20,9 +20,9 @@ interface FunnelBranchExportOptions {
 
 interface ExportTotals {
   investment: number | null;
-  leads: number;
+  leads: number | null;
   visitors: number;
-  salesDigital: number;
+  salesDigital: number | null;
   salesDigitalOrganic: number;
   salesWeb: number;
   salesBtl: number;
@@ -459,7 +459,7 @@ function writeBranchRow(
   setFormulaCell(
     worksheet,
     `Q${rowNumber}`,
-    `IF(OR(L${rowNumber}="",B${rowNumber}=0),"",L${rowNumber}/B${rowNumber})`,
+    `IF(OR(L${rowNumber}="",B${rowNumber}="",B${rowNumber}=0),"",L${rowNumber}/B${rowNumber})`,
     safeDivide(investment, branch.leads_meta),
   );
   setFormulaCell(
@@ -471,10 +471,13 @@ function writeBranchRow(
   setFormulaCell(
     worksheet,
     `S${rowNumber}`,
-    `IF(OR(L${rowNumber}="",D${rowNumber}+E${rowNumber}=0),"",L${rowNumber}/(D${rowNumber}+E${rowNumber}))`,
+    `IF(OR(L${rowNumber}="",D${rowNumber}="",D${rowNumber}+E${rowNumber}=0),"",L${rowNumber}/(D${rowNumber}+E${rowNumber}))`,
     safeDivide(
       investment,
-      branch.sales_digital + branch.sales_digital_organic,
+      sumAvailable(
+        branch.sales_digital,
+        branch.sales_digital_organic,
+      ),
     ),
   );
 
@@ -506,10 +509,13 @@ function writeSubtotalRow(
   ];
 
   for (const [column, result] of results) {
+    const range = `${column}${firstDataRow}:${column}${lastDataRow}`;
     setFormulaCell(
       worksheet,
       `${column}${rowNumber}`,
-      `SUM(${column}${firstDataRow}:${column}${lastDataRow})`,
+      result === null
+        ? `IF(COUNT(${range})=0,"",SUM(${range}))`
+        : `SUM(${range})`,
       result,
     );
   }
@@ -546,7 +552,7 @@ function writeGrandTotalRow(
     return subtotalRows.map((row) => `${column}${row}`).join('+');
   };
 
-  const results: Array<[string, number]> = [
+  const results: Array<[string, number | null]> = [
     ['B', totals.leads],
     ['C', totals.visitors],
     ['D', totals.salesDigital],
@@ -561,10 +567,17 @@ function writeGrandTotalRow(
   ];
 
   for (const [column, result] of results) {
+    const cells = subtotalRows.map((row) => `${column}${row}`);
     setFormulaCell(
       worksheet,
       `${column}${rowNumber}`,
-      subtotalFormula(column),
+      result === null
+        ? (
+            cells.length
+              ? `IF(COUNT(${cells.join(',')})=0,"",SUM(${cells.join(',')}))`
+              : '""'
+          )
+        : subtotalFormula(column),
       result,
     );
   }
@@ -622,47 +635,54 @@ function writeCommercialSummary(
     totals.salesTotal * 0.5,
   );
 
+  const digitalTotal = sumAvailable(
+    totals.salesDigital,
+    totals.salesDigitalOrganic,
+  );
+  const digitalGap = (
+    digitalTotal === null
+      ? null
+      : digitalTotal - totals.salesTotal * 0.5
+  );
+  const otherSales = (
+    digitalTotal === null
+      ? null
+      : totals.salesTotal - digitalTotal
+  );
+
   worksheet.getCell(`A${digitalRow}`).value = 'Ventas vía Digital';
   setFormulaCell(
     worksheet,
     `B${digitalRow}`,
-    `D${sourceTotalRow}+E${sourceTotalRow}`,
-    totals.salesDigital + totals.salesDigitalOrganic,
+    `IF(D${sourceTotalRow}="","",D${sourceTotalRow}+E${sourceTotalRow})`,
+    digitalTotal,
   );
   setFormulaCell(
     worksheet,
     `C${digitalRow}`,
-    `IFERROR(B${digitalRow}/B${totalRow},"")`,
-    safeDivide(
-      totals.salesDigital + totals.salesDigitalOrganic,
-      totals.salesTotal,
-    ),
+    `IF(B${digitalRow}="","",IFERROR(B${digitalRow}/B${totalRow},""))`,
+    safeDivide(digitalTotal, totals.salesTotal),
   );
   worksheet.getCell(`E${digitalRow}`).value = 'Brecha vs meta';
   setFormulaCell(
     worksheet,
     `F${digitalRow}`,
-    `B${digitalRow}-F${totalRow}`,
-    totals.salesDigital
-      + totals.salesDigitalOrganic
-      - totals.salesTotal * 0.5,
+    `IF(B${digitalRow}="","",B${digitalRow}-F${totalRow})`,
+    digitalGap,
   );
 
   worksheet.getCell(`A${otherRow}`).value = 'Ventas otros canales';
   setFormulaCell(
     worksheet,
     `B${otherRow}`,
-    `B${totalRow}-B${digitalRow}`,
-    totals.salesTotal - totals.salesDigital - totals.salesDigitalOrganic,
+    `IF(B${digitalRow}="","",B${totalRow}-B${digitalRow})`,
+    otherSales,
   );
   setFormulaCell(
     worksheet,
     `C${otherRow}`,
-    `IFERROR(B${otherRow}/B${totalRow},"")`,
-    safeDivide(
-      totals.salesTotal - totals.salesDigital - totals.salesDigitalOrganic,
-      totals.salesTotal,
-    ),
+    `IF(B${otherRow}="","",IFERROR(B${otherRow}/B${totalRow},""))`,
+    safeDivide(otherSales, totals.salesTotal),
   );
 
   worksheet.getCell(`A${investmentRow}`).value = 'Inversión';
@@ -752,19 +772,19 @@ function setRateAndCostFormulas(
   setFormulaCell(
     worksheet,
     `I${rowNumber}`,
-    `IFERROR(C${rowNumber}/B${rowNumber},"")`,
+    `IF(OR(B${rowNumber}="",B${rowNumber}=0),"",C${rowNumber}/B${rowNumber})`,
     safeDivide(totals.visitors, totals.leads),
   );
   setFormulaCell(
     worksheet,
     `J${rowNumber}`,
-    `IFERROR(D${rowNumber}/C${rowNumber},"")`,
+    `IF(OR(D${rowNumber}="",C${rowNumber}=0),"",D${rowNumber}/C${rowNumber})`,
     safeDivide(totals.salesDigital, totals.visitors),
   );
   setFormulaCell(
     worksheet,
     `K${rowNumber}`,
-    `IFERROR(D${rowNumber}/B${rowNumber},"")`,
+    `IF(OR(D${rowNumber}="",B${rowNumber}="",B${rowNumber}=0),"",D${rowNumber}/B${rowNumber})`,
     safeDivide(totals.salesDigital, totals.leads),
   );
   setFormulaCell(
@@ -785,7 +805,7 @@ function setRateAndCostFormulas(
     `IF(OR(L${rowNumber}="",D${rowNumber}+E${rowNumber}=0),"",L${rowNumber}/(D${rowNumber}+E${rowNumber}))`,
     safeDivide(
       investment,
-      totals.salesDigital + totals.salesDigitalOrganic,
+      sumAvailable(totals.salesDigital, totals.salesDigitalOrganic),
     ),
   );
 }
@@ -914,9 +934,12 @@ function buildTotals(
     investment: investments.length
       ? investments.reduce((sum, value) => sum + value, 0)
       : null,
-    leads: sumBranchMetric(branches, (branch) => branch.leads_meta),
+    leads: sumNullableBranchMetric(
+      branches,
+      (branch) => branch.leads_meta,
+    ),
     visitors: sumBranchMetric(branches, (branch) => branch.visits_total),
-    salesDigital: sumBranchMetric(
+    salesDigital: sumNullableBranchMetric(
       branches,
       (branch) => branch.sales_digital,
     ),
@@ -967,6 +990,30 @@ function sumBranchMetric(
   );
 }
 
+function sumNullableBranchMetric(
+  branches: MarketingSalesFunnelBranch[],
+  selector: (branch: MarketingSalesFunnelBranch) => number | null,
+): number | null {
+  const values = branches.map(selector);
+  if (values.some((value) => value === null)) {
+    return null;
+  }
+  return values.reduce(
+    (total, value) => total + (value ?? 0),
+    0,
+  );
+}
+
+function sumAvailable(
+  left: number | null,
+  right: number | null,
+): number | null {
+  if (left === null || right === null) {
+    return null;
+  }
+  return left + right;
+}
+
 function setFormulaCell(
   worksheet: Worksheet,
   address: string,
@@ -981,9 +1028,13 @@ function setFormulaCell(
 
 function safeDivide(
   numerator: number | null,
-  denominator: number,
+  denominator: number | null,
 ): number | null {
-  if (numerator === null || denominator <= 0) {
+  if (
+    numerator === null
+    || denominator === null
+    || denominator <= 0
+  ) {
     return null;
   }
 
