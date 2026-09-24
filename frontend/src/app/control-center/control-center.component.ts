@@ -532,8 +532,10 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
         key: 'conversion',
         title: 'Conversión',
         value: this.formatPercent(conversion),
-        supportingText: marketing.leads === null
-          ? 'Lead → venta · leads no disponibles para el alcance actual'
+        supportingText: (
+          marketing.leads === null || marketing.sales === null
+        )
+          ? 'Lead → venta · histórico CRM no disponible para el alcance actual'
           : `Lead → venta · ${this.formatInteger(marketing.sales)} ventas digitales de ${this.formatInteger(marketing.leads)} leads`,
         freshnessText: marketingFreshness || undefined,
         tone: conversion === null ? 'muted' : 'normal',
@@ -1193,7 +1195,7 @@ export class ControlCenterComponent implements OnInit, OnDestroy {
         return [
           { label: 'Leads iVentas', value: marketing.leads === null ? '—' : this.formatInteger(marketing.leads) },
           { label: 'Visitas', value: this.formatInteger(marketing.visits) },
-          { label: 'Ventas digitales', value: this.formatInteger(marketing.sales) },
+          { label: 'Ventas digitales', value: marketing.sales === null ? '—' : this.formatInteger(marketing.sales) },
           { label: 'Lead → visita', value: this.formatPercent(marketing.leadToVisitRate) },
           { label: 'Visita → venta digital', value: this.formatPercent(marketing.visitToSaleRate) },
         ];
