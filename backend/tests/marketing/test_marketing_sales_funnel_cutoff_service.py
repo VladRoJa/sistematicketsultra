@@ -135,6 +135,9 @@ def test_pre_crm_payload_masks_only_crm_dependent_metrics():
             "visits_total": 80,
             "sales_total": 45,
             "sales_digital": 20,
+            "sales_digital_organic": 7,
+            "sales_web": 3,
+            "visit_to_digital_sale_rate": 0.25,
             "total_visit_to_sale_rate": 0.5,
             "investment": 1500.0,
         },
@@ -146,6 +149,9 @@ def test_pre_crm_payload_masks_only_crm_dependent_metrics():
                 "visits_total": 8,
                 "sales_total": 4,
                 "sales_digital": 2,
+                "sales_digital_organic": 1,
+                "sales_web": 1,
+                "visit_to_digital_sale_rate": 0.25,
                 "investment": 100.0,
             }
         ],
@@ -163,19 +169,25 @@ def test_pre_crm_payload_masks_only_crm_dependent_metrics():
 
     assert payload["summary"]["leads_iventas"] is None
     assert payload["summary"]["sales_iventas"] is None
+    assert payload["summary"]["sales_digital"] is None
+    assert payload["summary"]["visit_to_digital_sale_rate"] is None
     assert payload["summary"]["revenue_iventas"] is None
     assert payload["summary"]["investment"] is None
     assert payload["branches"][0]["leads_iventas"] is None
     assert payload["branches"][0]["sales_iventas"] is None
+    assert payload["branches"][0]["sales_digital"] is None
+    assert payload["branches"][0]["visit_to_digital_sale_rate"] is None
     assert payload["branches"][0]["investment"] is None
 
     assert payload["summary"]["visits_total"] == 80
     assert payload["summary"]["sales_total"] == 45
-    assert payload["summary"]["sales_digital"] == 20
+    assert payload["summary"]["sales_digital_organic"] == 7
+    assert payload["summary"]["sales_web"] == 3
     assert payload["summary"]["total_visit_to_sale_rate"] == 0.5
     assert payload["branches"][0]["visits_total"] == 8
     assert payload["branches"][0]["sales_total"] == 4
-    assert payload["branches"][0]["sales_digital"] == 2
+    assert payload["branches"][0]["sales_digital_organic"] == 1
+    assert payload["branches"][0]["sales_web"] == 1
 
     quality = payload["data_quality"]
     assert quality["crm_history_available"] is False
