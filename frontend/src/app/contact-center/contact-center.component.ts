@@ -660,7 +660,6 @@ export class ContactCenterComponent implements OnInit {
     return Boolean(
       this.canOperateAppointment(appointment)
       && (appointment.status === 'CLOSED' || appointment.status === 'CANCELLED')
-      && appointment.status !== 'RESCHEDULED'
       && appointment.purchase_verification_status !== 'VERIFIED'
     );
   }
