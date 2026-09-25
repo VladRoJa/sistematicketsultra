@@ -428,6 +428,60 @@ class ContactCenterAppointmentORM(db.Model):
     )
 
 
+class ContactCenterAppointmentResultEventORM(db.Model):
+    __tablename__ = "contact_center_appointment_result_events"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    appointment_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("contact_center_appointments.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    previous_status = db.Column(db.String(20), nullable=True)
+    new_status = db.Column(db.String(20), nullable=False)
+    previous_outcome = db.Column(db.String(50), nullable=True)
+    new_outcome = db.Column(db.String(50), nullable=False)
+    previous_case_status = db.Column(db.String(30), nullable=True)
+    new_case_status = db.Column(db.String(30), nullable=False)
+    source = db.Column(db.String(30), nullable=False)
+    changed_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    venta_total_snapshot_id = db.Column(
+        db.Integer,
+        db.ForeignKey("venta_total_snapshots.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    venta_total_snapshot_row_id = db.Column(
+        db.Integer,
+        db.ForeignKey("venta_total_snapshot_rows.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    reason = db.Column(db.Text, nullable=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+    )
+
+    appointment = db.relationship("ContactCenterAppointmentORM")
+    changed_by_user = db.relationship("UserORM")
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "source IN ('MANUAL_CORRECTION', 'VENTA_TOTAL_AUTO')",
+            name="ck_contact_center_appt_result_event_source",
+        ),
+        db.Index(
+            "ix_contact_center_appt_result_event_appt_created",
+            "appointment_id",
+            "created_at",
+        ),
+    )
+
+
 class ContactCenterContactMergeEventORM(db.Model):
     __tablename__ = "contact_center_contact_merge_events"
 
