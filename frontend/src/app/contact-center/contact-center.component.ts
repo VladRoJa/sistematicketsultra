@@ -310,6 +310,7 @@ export class ContactCenterComponent implements OnInit {
         maxWidth: '96vw',
         maxHeight: '92vh',
         autoFocus: false,
+        disableClose: true,
         data: {
           contactId,
           access: this.access,
