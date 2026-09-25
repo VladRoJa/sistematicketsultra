@@ -18,6 +18,7 @@ from app.services.contact_center_service import (
     add_interaction,
     assign_case,
     close_appointment,
+    correct_appointment_result,
     create_appointment,
     create_contact_with_case,
     find_duplicate_contacts,
@@ -542,6 +543,49 @@ def post_close_appointment(appointment_id: int):
             db.session.rollback()
             current_app.logger.exception(
                 "La compra de la cita %s quedó reportada, "
+                "pero no pudo verificarse en Venta Total.",
+                appointment.id,
+            )
+            appointment = ContactCenterAppointmentORM.query.get(
+                appointment_id
+            )
+
+    return jsonify({
+        "appointment": serialize_appointment(appointment),
+    }), 200
+
+
+@contact_center_bp.post(
+    "/appointments/<int:appointment_id>/correct-result"
+)
+@jwt_required()
+def post_correct_appointment_result(appointment_id: int):
+    actor, access = _context()
+    appointment = ContactCenterAppointmentORM.query.get(appointment_id)
+    if appointment is None:
+        raise ContactCenterNotFoundError("Cita no encontrada.")
+    _assert_appointment_access(appointment, actor, access)
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        appointment = correct_appointment_result(
+            appointment_id,
+            payload,
+            actor,
+        )
+        db.session.commit()
+    except (ContactCenterValidationError, ContactCenterNotFoundError):
+        db.session.rollback()
+        raise
+
+    if appointment.purchase_reported:
+        try:
+            appointment = verify_appointment_purchase(appointment.id)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception(
+                "La corrección de la cita %s reportó compra, "
                 "pero no pudo verificarse en Venta Total.",
                 appointment.id,
             )
