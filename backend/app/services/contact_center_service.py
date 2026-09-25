@@ -1781,7 +1781,12 @@ def _resolve_appointment_purchase_match(
         .all()
     )
 
-    scheduled_local = appointment.scheduled_at.astimezone(BUSINESS_TZ)
+    purchase_not_before_local = (
+        appointment.created_at
+        if appointment.status == "SCHEDULED"
+        else appointment.scheduled_at
+    ).astimezone(BUSINESS_TZ)
+
     grouped: dict[
         str,
         list[tuple[VentaTotalSnapshotRowORM, datetime]],
@@ -1796,7 +1801,7 @@ def _resolve_appointment_purchase_match(
         transaction_local = _parse_venta_total_row_local_datetime(row)
         if transaction_local is None:
             continue
-        if transaction_local < scheduled_local:
+        if transaction_local < purchase_not_before_local:
             continue
 
         transaction_key = str(
@@ -2031,7 +2036,7 @@ def reconcile_contact_center_appointments_from_venta_total(
                 interaction_type="SYSTEM",
                 outcome="NOTE",
                 comment=(
-                    "Venta Total detectó una compra posterior a la cita "
+                    "Venta Total detectó una compra vinculada a la cita "
                     "y actualizó el resultado a Asistió y compró."
                 ),
                 created_by_user_id=None,

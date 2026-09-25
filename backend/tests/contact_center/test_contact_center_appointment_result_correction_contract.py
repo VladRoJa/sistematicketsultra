@@ -47,7 +47,7 @@ def test_closed_appointment_can_be_corrected_but_verified_purchase_cannot_be_dow
     assert "verify_appointment_purchase(appointment.id)" in routes
 
 
-def test_venta_total_match_requires_membership_valid_status_and_purchase_after_appointment_time():
+def test_venta_total_match_uses_creation_time_for_scheduled_appointments():
     service = _read(SERVICE)
 
     assert "def _is_membership_purchase_row(" in service
@@ -58,7 +58,11 @@ def test_venta_total_match_requires_membership_valid_status_and_purchase_after_a
 
     assert "_is_valid_status(row.estatus)" in service
     assert "_parse_venta_total_row_local_datetime(row)" in service
-    assert "if transaction_local < scheduled_local:" in service
+    assert "purchase_not_before_local = (" in service
+    assert 'appointment.status == "SCHEDULED"' in service
+    assert "appointment.created_at" in service
+    assert "else appointment.scheduled_at" in service
+    assert "if transaction_local < purchase_not_before_local:" in service
     assert '"%H:%M:%S"' in service
     assert '"%H:%M"' in service
 
