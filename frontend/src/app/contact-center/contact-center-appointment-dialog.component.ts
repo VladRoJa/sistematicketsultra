@@ -138,6 +138,14 @@ export class ContactCenterAppointmentDialogComponent {
         && this.sucursalId
       );
     }
+
+    if (this.data.correctionMode) {
+      return Boolean(
+        this.outcome
+        && this.outcome !== this.data.appointment.outcome
+      );
+    }
+
     return Boolean(this.outcome);
   }
 }
