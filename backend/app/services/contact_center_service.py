@@ -2006,3 +2006,38 @@ def reconcile_contact_center_appointments_from_venta_total(
             appointment,
             outcome="ATTENDED_PURCHASE_REPORTED",
             changed_by_user_id=None,
+            now=_now_utc(),
+        )
+        _apply_verified_purchase_match(appointment, match)
+
+        _record_appointment_result_event(
+            appointment,
+            previous_status=previous_status,
+            previous_outcome=previous_outcome,
+            previous_case_status=previous_case_status,
+            source="VENTA_TOTAL_AUTO",
+            venta_total_snapshot_id=int(match["snapshot_id"]),
+            venta_total_snapshot_row_id=int(match["snapshot_row_id"]),
+            reason=(
+                "Compra inequívoca detectada automáticamente "
+                "en Venta Total."
+            ),
+        )
+
+        db.session.add(
+            ContactCenterInteractionORM(
+                case_id=appointment.case_id,
+                contact_id=appointment.contact_id,
+                interaction_type="SYSTEM",
+                outcome="NOTE",
+                comment=(
+                    "Venta Total detectó una compra posterior a la cita "
+                    "y actualizó el resultado a Asistió y compró."
+                ),
+                created_by_user_id=None,
+            )
+        )
+        result["appointments_corrected"] += 1
+
+    db.session.commit()
+    return result
