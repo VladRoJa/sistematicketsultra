@@ -270,3 +270,38 @@ def test_contact_center_crm_exposes_phone_reconciliation_states():
     assert "if (row.phone_match_ambiguous)" in component_ts
     assert "{{ crmStatusLabel(row) }}" in component_html
     assert "row.phone_match_ambiguous" in component_html
+
+def test_contact_center_closed_appointment_has_explicit_result_correction_flow():
+    component_ts = _read(COMPONENT_TS)
+    component_html = _read(COMPONENT_HTML)
+    dialog_ts = _read(APPOINTMENT_DIALOG_TS)
+    dialog_html = _read(APPOINTMENT_DIALOG_HTML)
+    service = _read(SERVICE_TS)
+
+    assert "canCorrectAppointment(" in component_ts
+    assert "correctAppointmentResult(" in component_ts
+    assert "appointment.purchase_verification_status !== 'VERIFIED'" in component_ts
+    assert "correctionMode: true" in component_ts
+
+    assert "Corregir resultado" in component_html
+    assert '(click)="correctAppointmentResult(appointment)"' in component_html
+
+    assert "correctionMode?: boolean" in dialog_ts
+    assert "'CORRECT_RESULT'" in dialog_ts
+    assert "Guardar corrección" in dialog_ts
+    assert "El cambio quedará registrado en el historial de la cita." in dialog_html
+    assert '*ngIf="!data.correctionMode"' in dialog_html
+
+    assert "correctAppointmentResult(" in service
+    assert "/correct-result" in service
+
+
+def test_contact_center_calendar_history_remains_read_only_despite_table_correction():
+    component_ts = _read(COMPONENT_TS)
+    component_html = _read(COMPONENT_HTML)
+
+    assert "appointment.status !== 'SCHEDULED'" in component_ts
+    assert "[class.calendar-event--readonly]=" in component_html
+    assert "[disabled]=" in component_html
+    assert "(click)=\"appointmentAction(appointment)\"" in component_html
+
