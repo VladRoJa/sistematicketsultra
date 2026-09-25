@@ -61,7 +61,12 @@
         >
           {{ purchaseLabel(purchaseAppointment) }}
         </strong>
-        <small *ngIf="purchaseAppointment?.verified_amount !== null">
+        <small
+          *ngIf="
+            purchaseAppointment?.verified_amount !== null
+            && purchaseAppointment?.verified_amount !== undefined
+          "
+        >
           MXN {{ purchaseAppointment?.verified_amount | number:'1.2-2' }}
         </small>
       </article>
