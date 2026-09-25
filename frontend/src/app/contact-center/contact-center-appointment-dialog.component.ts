@@ -19,10 +19,11 @@ export interface ContactCenterAppointmentDialogData {
   appointment: ContactCenterAppointment;
   branches: ContactCenterBranch[];
   canReschedule: boolean;
+  correctionMode?: boolean;
 }
 
 
-type AppointmentAction = 'CLOSE' | 'RESCHEDULE';
+type AppointmentAction = 'CLOSE' | 'RESCHEDULE' | 'CORRECT_RESULT';
 
 
 @Component({
@@ -73,6 +74,18 @@ export class ContactCenterAppointmentDialogComponent {
     private readonly dialogRef: MatDialogRef<ContactCenterAppointmentDialogComponent>,
   ) {
     this.sucursalId = data.appointment.sucursal?.id ?? 0;
+
+    if (data.correctionMode) {
+      this.action = 'CORRECT_RESULT';
+      const currentOutcome = data.appointment.outcome;
+      if (
+        currentOutcome
+        && currentOutcome !== 'RESCHEDULED'
+        && this.outcomes.some((item) => item.value === currentOutcome)
+      ) {
+        this.outcome = currentOutcome;
+      }
+    }
   }
 
   submit(): void {
@@ -95,7 +108,9 @@ export class ContactCenterAppointmentDialogComponent {
     }
 
     this.dialogRef.close({
-      action: 'CLOSE',
+      action: this.data.correctionMode
+        ? 'CORRECT_RESULT'
+        : 'CLOSE',
       outcome: this.outcome,
       notes: this.notes.trim() || null,
     });
@@ -106,6 +121,10 @@ export class ContactCenterAppointmentDialogComponent {
   }
 
   submitLabel(): string {
+    if (this.data.correctionMode) {
+      return 'Guardar corrección';
+    }
+
     return this.action === 'RESCHEDULE'
       ? 'Reagendar cita'
       : 'Guardar cierre';
