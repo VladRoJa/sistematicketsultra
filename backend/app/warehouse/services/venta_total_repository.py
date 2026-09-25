@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, is_dataclass
 from datetime import date, datetime, timezone
+import logging
 from decimal import Decimal
 from typing import Any, Callable
 
@@ -19,10 +20,32 @@ from app.models.warehouse import (
 
 
 VENTA_TOTAL_REPORT_TYPE_KEY = "venta_total"
+logger = logging.getLogger(__name__)
 
 
 class VentaTotalRepositoryError(RuntimeError):
     """Error base del repository estructurado de Venta Total."""
+
+
+def _reconcile_contact_center_purchases_best_effort(
+    *,
+    snapshot_id: int,
+) -> None:
+    try:
+        from app.services.contact_center_service import (
+            reconcile_contact_center_appointments_from_venta_total,
+        )
+
+        reconcile_contact_center_appointments_from_venta_total(
+            snapshot_id=int(snapshot_id),
+        )
+    except Exception:
+        db.session.rollback()
+        logger.exception(
+            "Contact Center purchase reconciliation failed "
+            "after canonical Venta Total snapshot_id=%s",
+            snapshot_id,
+        )
 
 
 def register_venta_total_repository(app) -> None:
@@ -699,6 +722,14 @@ def persist_venta_total_snapshot(
             )
             
         db.session.commit()
+
+        if (
+            snapshot.is_canonical
+            and snapshot.snapshot_kind == "daily"
+        ):
+            _reconcile_contact_center_purchases_best_effort(
+                snapshot_id=int(snapshot.id),
+            )
 
         return {
             "status": "ingested",

@@ -190,6 +190,19 @@ export class ContactCenterService {
     );
   }
 
+  correctAppointmentResult(
+    appointmentId: number,
+    payload: {
+      outcome: Exclude<ContactCenterAppointmentOutcome, 'RESCHEDULED'>;
+      notes?: string | null;
+    },
+  ): Observable<{ appointment: ContactCenterAppointment }> {
+    return this.http.post<{ appointment: ContactCenterAppointment }>(
+      `${this.apiUrl}/appointments/${appointmentId}/correct-result`,
+      payload,
+    );
+  }
+
   rescheduleAppointment(
     appointmentId: number,
     payload: {

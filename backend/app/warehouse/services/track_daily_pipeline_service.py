@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+import logging
 from typing import Any
 
 from app.extensions import db
@@ -52,6 +53,8 @@ from app.warehouse.services.venta_total_repository import (
     promote_venta_total_snapshot_canonical,
 )
 
+logger = logging.getLogger(__name__)
+
 SUPPORTED_GENERATION_MODES = frozenset(
     {
         "official_closed_day",
@@ -61,6 +64,27 @@ SUPPORTED_GENERATION_MODES = frozenset(
 
 class TrackDailyPipelineServiceError(RuntimeError):
     """Error base del pipeline diario del Track."""
+
+
+def _reconcile_contact_center_purchases_best_effort(
+    *,
+    snapshot_id: int,
+) -> None:
+    try:
+        from app.services.contact_center_service import (
+            reconcile_contact_center_appointments_from_venta_total,
+        )
+
+        reconcile_contact_center_appointments_from_venta_total(
+            snapshot_id=int(snapshot_id),
+        )
+    except Exception:
+        db.session.rollback()
+        logger.exception(
+            "Contact Center purchase reconciliation failed "
+            "after Track canonical close snapshot_id=%s",
+            snapshot_id,
+        )
 
 
 def _ensure_date(value: Any, *, field_name: str) -> date:
@@ -687,6 +711,10 @@ def run_requested_track_canonical_close(
         )
 
         db.session.commit()
+
+        _reconcile_contact_center_purchases_best_effort(
+            snapshot_id=venta_total_snapshot_id,
+        )
 
         return {
             "status": "completed",

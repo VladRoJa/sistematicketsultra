@@ -654,6 +654,17 @@ export class ContactCenterComponent implements OnInit {
     );
   }
 
+  canCorrectAppointment(
+    appointment: ContactCenterAppointment,
+  ): boolean {
+    return Boolean(
+      this.canOperateAppointment(appointment)
+      && (appointment.status === 'CLOSED' || appointment.status === 'CANCELLED')
+      && appointment.status !== 'RESCHEDULED'
+      && appointment.purchase_verification_status !== 'VERIFIED'
+    );
+  }
+
   loadAppointments(): void {
     const range = this.calendarRange();
     this.loadingAppointments = true;
@@ -733,6 +744,59 @@ export class ContactCenterComponent implements OnInit {
       }
 
       this.closeAppointment(appointment, result);
+    });
+  }
+
+  correctAppointmentResult(
+    appointment: ContactCenterAppointment,
+  ): void {
+    if (!this.canCorrectAppointment(appointment)) {
+      return;
+    }
+
+    const ref = this.dialog.open(
+      ContactCenterAppointmentDialogComponent,
+      {
+        maxWidth: '96vw',
+        data: {
+          appointment,
+          branches: this.lookups.branches,
+          canReschedule: false,
+          correctionMode: true,
+        },
+      },
+    );
+
+    ref.afterClosed().subscribe((result) => {
+      if (result?.action !== 'CORRECT_RESULT') {
+        return;
+      }
+
+      this.contactCenter.correctAppointmentResult(
+        appointment.id,
+        {
+          outcome: result.outcome,
+          notes: result.notes,
+        },
+      ).subscribe({
+        next: () => {
+          this.loadAppointments();
+          this.loadPortfolio();
+          this.refreshSelectedContactIfMatches(
+            appointment.contact_id,
+          );
+          this.showFeedback(
+            'Resultado de la cita corregido.',
+            'SUCCESS',
+          );
+        },
+        error: (error) => {
+          this.showApiError(
+            error,
+            'No se pudo corregir el resultado de la cita.',
+          );
+        },
+      });
     });
   }
 

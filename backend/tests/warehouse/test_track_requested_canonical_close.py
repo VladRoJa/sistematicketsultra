@@ -251,6 +251,16 @@ def _install_common_dependencies(
         fake_refresh_mart,
     )
 
+    def fake_contact_center_reconciliation(*, snapshot_id):
+        assert snapshot_id == VENTA_TOTAL_SNAPSHOT_ID
+        events.append("cc_reconcile")
+
+    monkeypatch.setattr(
+        service,
+        "_reconcile_contact_center_purchases_best_effort",
+        fake_contact_center_reconciliation,
+    )
+
     return request_version, readiness_calls
 
 
@@ -339,6 +349,7 @@ def test_requested_canonical_close_promotes_only_after_mart(
         "promote_venta_total",
         "promote_track",
         "db_commit",
+        "cc_reconcile",
     ]
 
     assert result["status"] == "completed"
@@ -439,6 +450,7 @@ def test_requested_canonical_close_rolls_back_if_track_promotion_fails(
         )
 
     assert "db_commit" not in events
+    assert "cc_reconcile" not in events
 
     assert events[-4:] == [
         "promote_venta_total",
