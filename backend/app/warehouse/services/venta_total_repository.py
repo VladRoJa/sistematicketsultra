@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, is_dataclass
 from datetime import date, datetime, timezone
+import logging
 from decimal import Decimal
 from typing import Any, Callable
 
@@ -19,6 +20,7 @@ from app.models.warehouse import (
 
 
 VENTA_TOTAL_REPORT_TYPE_KEY = "venta_total"
+logger = logging.getLogger(__name__)
 
 
 class VentaTotalRepositoryError(RuntimeError):
@@ -699,6 +701,26 @@ def persist_venta_total_snapshot(
             )
             
         db.session.commit()
+
+        if (
+            snapshot.is_canonical
+            and snapshot.snapshot_kind == "daily"
+        ):
+            try:
+                from app.services.contact_center_service import (
+                    reconcile_contact_center_appointments_from_venta_total,
+                )
+
+                reconcile_contact_center_appointments_from_venta_total(
+                    snapshot_id=int(snapshot.id),
+                )
+            except Exception:
+                db.session.rollback()
+                logger.exception(
+                    "Contact Center purchase reconciliation failed "
+                    "after canonical Venta Total ingest snapshot_id=%s",
+                    snapshot.id,
+                )
 
         return {
             "status": "ingested",
