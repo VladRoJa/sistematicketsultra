@@ -27,6 +27,27 @@ class VentaTotalRepositoryError(RuntimeError):
     """Error base del repository estructurado de Venta Total."""
 
 
+def _reconcile_contact_center_purchases_best_effort(
+    *,
+    snapshot_id: int,
+) -> None:
+    try:
+        from app.services.contact_center_service import (
+            reconcile_contact_center_appointments_from_venta_total,
+        )
+
+        reconcile_contact_center_appointments_from_venta_total(
+            snapshot_id=int(snapshot_id),
+        )
+    except Exception:
+        db.session.rollback()
+        logger.exception(
+            "Contact Center purchase reconciliation failed "
+            "after canonical Venta Total snapshot_id=%s",
+            snapshot_id,
+        )
+
+
 def register_venta_total_repository(app) -> None:
     app.config["WAREHOUSE_VENTA_TOTAL_REPOSITORY"] = persist_venta_total_snapshot
 
@@ -706,21 +727,9 @@ def persist_venta_total_snapshot(
             snapshot.is_canonical
             and snapshot.snapshot_kind == "daily"
         ):
-            try:
-                from app.services.contact_center_service import (
-                    reconcile_contact_center_appointments_from_venta_total,
-                )
-
-                reconcile_contact_center_appointments_from_venta_total(
-                    snapshot_id=int(snapshot.id),
-                )
-            except Exception:
-                db.session.rollback()
-                logger.exception(
-                    "Contact Center purchase reconciliation failed "
-                    "after canonical Venta Total ingest snapshot_id=%s",
-                    snapshot.id,
-                )
+            _reconcile_contact_center_purchases_best_effort(
+                snapshot_id=int(snapshot.id),
+            )
 
         return {
             "status": "ingested",
