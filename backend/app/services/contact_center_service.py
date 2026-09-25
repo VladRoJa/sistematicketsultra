@@ -34,6 +34,7 @@ from app.services.marketing_leads_detail_service import (
 from app.services.marketing_phone import normalize_phone
 from app.services.marketing_sales_funnel_service import (
     _is_valid_status,
+    _normalize_text,
     _parse_row_date,
 )
 from app.utils.contact_center_access import has_contact_center_operator_access
@@ -62,6 +63,25 @@ CLOSED_CASE_OUTCOMES = frozenset({
     "WRONG_NUMBER",
     "DO_NOT_CONTACT",
 })
+
+MEMBERSHIP_PURCHASE_TERMS = (
+    "MEMBRESIA",
+    "MENSUAL",
+    "MENSUALIDAD",
+    "INSCRIPCION",
+    "DOMICILIADO",
+    "RECURRENTE",
+    "CONVENIO",
+    "TRIMESTRAL",
+    "TRIMESTRE",
+    "SEMESTRAL",
+    "SEMESTRE",
+    "ANUALIDAD",
+    "PRIMER PAGO",
+    "CUENTA NUEVA",
+    "NO FORZOSO",
+    "PLAN FAMILIAR",
+)
 
 
 class ContactCenterValidationError(ValueError):
@@ -1655,6 +1675,25 @@ def merge_contacts(
     return survivor
 
 
+def _is_membership_purchase_row(
+    row: VentaTotalSnapshotRowORM,
+) -> bool:
+    product_key = _normalize_text(row.clave_producto)
+    sale_type = _normalize_text(row.tipo)
+    description = _normalize_text(row.descripcion)
+
+    if product_key == "MEMBRESIA":
+        return True
+
+    if "MEMBRESIA" in sale_type:
+        return True
+
+    return any(
+        term in description
+        for term in MEMBERSHIP_PURCHASE_TERMS
+    )
+
+
 def _parse_venta_total_row_local_datetime(
     row: VentaTotalSnapshotRowORM,
 ) -> datetime | None:
@@ -1750,6 +1789,8 @@ def _resolve_appointment_purchase_match(
 
     for row in candidates:
         if not _is_valid_status(row.estatus):
+            continue
+        if not _is_membership_purchase_row(row):
             continue
 
         transaction_local = _parse_venta_total_row_local_datetime(row)
