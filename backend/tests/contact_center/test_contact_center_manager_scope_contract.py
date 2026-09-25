@@ -78,3 +78,11 @@ def test_manager_manual_create_is_restricted_but_admin_actions_stay_blocked():
     assert "def post_merge_contacts():" in routes
     assert "def post_assign_case(case_id: int):" in routes
     assert "def post_verify_purchase(appointment_id: int):" in routes
+
+def test_manager_can_correct_closed_appointment_result_with_branch_scope():
+    routes = _read(ROUTES)
+
+    assert "def post_correct_appointment_result(appointment_id: int):" in routes
+    assert "_assert_appointment_access(appointment, actor, access)" in routes
+    assert "correct_appointment_result(" in routes
+
