@@ -1,0 +1,310 @@
+<div class="contact-dialog">
+  <header class="contact-dialog__header">
+    <div>
+      <p class="dialog-kicker">FICHA</p>
+      <h2>{{ contactName(contact) }}</h2>
+      <div class="dialog-contact-line">
+        <span>{{ contactPhone(contact) }}</span>
+        <span *ngIf="contact?.email">{{ contact?.email }}</span>
+      </div>
+    </div>
+
+    <button
+      type="button"
+      class="icon-button"
+      (click)="close()"
+      aria-label="Cerrar ficha"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </header>
+
+  <div
+    class="feedback"
+    *ngIf="feedbackMessage"
+    [class.feedback--success]="feedbackKind === 'SUCCESS'"
+    [class.feedback--error]="feedbackKind === 'ERROR'"
+  >
+    <mat-icon>info</mat-icon>
+    <span>{{ feedbackMessage }}</span>
+  </div>
+
+  <div class="dialog-loading" *ngIf="loading && !contact">
+    <mat-icon>hourglass_top</mat-icon>
+    <span>Cargando ficha…</span>
+  </div>
+
+  <div class="contact-dialog__body" *ngIf="contact">
+    <section class="summary-grid">
+      <article>
+        <span>Origen</span>
+        <strong>{{ sourceLabel(displayCase?.source_type) }}</strong>
+      </article>
+      <article>
+        <span>Sucursal</span>
+        <strong>{{ branchName(displayCase?.sucursal) }}</strong>
+      </article>
+      <article>
+        <span>Estado</span>
+        <strong>{{ caseStatusLabel(displayCase?.status) }}</strong>
+      </article>
+      <article>
+        <span>Siguiente</span>
+        <strong>{{ formatDateTime(displayCase?.next_action_at) }}</strong>
+      </article>
+      <article class="summary-grid__purchase">
+        <span>Compra</span>
+        <strong
+          class="purchase-text"
+          [class.purchase-text--verified]="purchaseClass(purchaseAppointment) === 'verified'"
+          [class.purchase-text--pending]="purchaseClass(purchaseAppointment) === 'pending'"
+        >
+          {{ purchaseLabel(purchaseAppointment) }}
+        </strong>
+        <small *ngIf="purchaseAppointment?.verified_amount !== null">
+          MXN {{ purchaseAppointment?.verified_amount | number:'1.2-2' }}
+        </small>
+      </article>
+      <article>
+        <span>Venta Total</span>
+        <strong>{{ formatDateTime(purchaseAppointment?.verified_purchase_at) }}</strong>
+      </article>
+    </section>
+
+    <div
+      class="readonly-banner"
+      *ngIf="activeCase && !canOperateActiveCase"
+    >
+      <mat-icon>visibility</mat-icon>
+      <span>
+        Solo lectura · asignado a
+        {{ activeCase.assigned_user?.username || 'otro usuario' }}
+      </span>
+    </div>
+
+    <div class="detail-toolbar" *ngIf="!isManager">
+      <button type="button" class="small-button" (click)="reviewDuplicates()">
+        <mat-icon>content_copy</mat-icon>
+        Revisar duplicados
+      </button>
+    </div>
+
+    <section class="detail-section" *ngIf="isSupervisor && activeCase">
+      <div class="section-title">
+        <div>
+          <h3>Responsable</h3>
+          <p>Asignación de cartera.</p>
+        </div>
+      </div>
+
+      <div class="inline-form">
+        <select [(ngModel)]="selectedAssignedUserId">
+          <option *ngFor="let agent of data.lookups.agents" [ngValue]="agent.id">
+            {{ agent.username }}
+          </option>
+        </select>
+        <button
+          type="button"
+          class="small-button small-button--primary"
+          (click)="assignActiveCase()"
+          [disabled]="assigningCase || !selectedAssignedUserId"
+        >
+          {{ assigningCase ? 'Asignando…' : 'Asignar' }}
+        </button>
+      </div>
+    </section>
+
+    <section class="detail-section" *ngIf="activeCase && canOperateActiveCase">
+      <div class="section-title">
+        <div>
+          <h3>Registrar seguimiento</h3>
+          <p>Una acción rápida, sin perder historial.</p>
+        </div>
+      </div>
+
+      <div class="compact-grid">
+        <label class="field">
+          <span>Canal</span>
+          <select [(ngModel)]="interactionType">
+            <option value="CALL">Llamada</option>
+            <option value="MESSAGE">Mensaje</option>
+            <option value="NOTE">Nota</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Resultado</span>
+          <select [(ngModel)]="interactionOutcome">
+            <option *ngFor="let outcome of interactionOptions" [ngValue]="outcome.value">
+              {{ outcome.label }}
+            </option>
+          </select>
+        </label>
+
+        <label class="field field--wide" *ngIf="needsFollowUpDate">
+          <span>Volver a llamar</span>
+          <input type="datetime-local" [(ngModel)]="interactionNextAction" />
+        </label>
+
+        <label class="field field--wide">
+          <span>Comentario</span>
+          <textarea
+            rows="3"
+            [(ngModel)]="interactionComment"
+            placeholder="Qué pasó o qué debe saber quien continúe el caso."
+          ></textarea>
+        </label>
+      </div>
+
+      <div class="section-actions">
+        <button
+          type="button"
+          class="primary-button"
+          (click)="submitInteraction()"
+          [disabled]="savingInteraction"
+        >
+          <mat-icon>save</mat-icon>
+          {{ savingInteraction ? 'Guardando…' : 'Guardar seguimiento' }}
+        </button>
+      </div>
+    </section>
+
+    <section
+      class="detail-section appointment-section"
+      *ngIf="activeCase && canOperateActiveCase && !activeScheduledAppointment"
+    >
+      <div class="section-title">
+        <div>
+          <h3>Agendar cita</h3>
+          <p>Elige a qué sucursal asistirá.</p>
+        </div>
+        <mat-icon>event_available</mat-icon>
+      </div>
+
+      <div class="compact-grid">
+        <label class="field">
+          <span>Sucursal *</span>
+          <select [(ngModel)]="appointmentBranchId">
+            <option [ngValue]="null">Selecciona</option>
+            <option *ngFor="let branch of data.lookups.branches" [ngValue]="branch.id">
+              {{ branch.name }}
+            </option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Fecha y hora *</span>
+          <input type="datetime-local" [(ngModel)]="appointmentScheduledAt" />
+        </label>
+
+        <label class="field field--wide">
+          <span>Comentario para sucursal</span>
+          <textarea
+            rows="3"
+            [(ngModel)]="appointmentNotes"
+            placeholder="Promoción, interés o contexto útil."
+          ></textarea>
+        </label>
+      </div>
+
+      <div class="section-actions">
+        <button
+          type="button"
+          class="primary-button"
+          (click)="scheduleAppointment()"
+          [disabled]="savingAppointment"
+        >
+          <mat-icon>event</mat-icon>
+          {{ savingAppointment ? 'Agendando…' : 'Crear cita' }}
+        </button>
+      </div>
+    </section>
+
+    <section
+      class="detail-section appointment-section"
+      *ngIf="activeCase && canOperateActiveCase && activeScheduledAppointment as scheduledAppointment"
+    >
+      <div class="section-title">
+        <div>
+          <h3>Cita programada</h3>
+          <p>{{ activeAppointmentHelpText }}</p>
+        </div>
+        <mat-icon>event_available</mat-icon>
+      </div>
+
+      <article class="appointment-mini">
+        <div>
+          <strong>{{ formatDateTime(scheduledAppointment.scheduled_at) }}</strong>
+          <span>{{ branchName(scheduledAppointment.sucursal) }}</span>
+        </div>
+        <span class="status-pill">
+          {{ appointmentStatusLabel(scheduledAppointment) }}
+        </span>
+      </article>
+
+      <div class="section-actions">
+        <button
+          type="button"
+          class="primary-button"
+          (click)="manageActiveAppointment()"
+        >
+          <mat-icon>edit_calendar</mat-icon>
+          Gestionar cita
+        </button>
+      </div>
+    </section>
+
+    <section class="detail-section">
+      <div class="section-title">
+        <div>
+          <h3>Historial</h3>
+          <p>Bitácora completa del contacto.</p>
+        </div>
+      </div>
+
+      <div class="timeline" *ngIf="contact.interactions.length; else noHistory">
+        <article class="timeline-item" *ngFor="let interaction of contact.interactions">
+          <div class="timeline-dot"></div>
+          <div class="timeline-content">
+            <div class="timeline-heading">
+              <strong>{{ interactionLabel(interaction.outcome) }}</strong>
+              <span>{{ formatDateTime(interaction.created_at) }}</span>
+            </div>
+            <p *ngIf="interaction.comment">{{ interaction.comment }}</p>
+            <small>
+              {{ interaction.created_by_user?.username || 'Suite' }}
+              <ng-container *ngIf="interaction.next_action_at">
+                · siguiente: {{ formatDateTime(interaction.next_action_at) }}
+              </ng-container>
+            </small>
+          </div>
+        </article>
+      </div>
+
+      <ng-template #noHistory>
+        <div class="empty-inline">Todavía no hay interacciones registradas.</div>
+      </ng-template>
+    </section>
+
+    <section class="detail-section" *ngIf="contact.appointments.length">
+      <div class="section-title">
+        <div>
+          <h3>Citas</h3>
+          <p>Historial de compromisos con sucursal.</p>
+        </div>
+      </div>
+
+      <div class="appointment-stack">
+        <article class="appointment-mini" *ngFor="let appointment of contact.appointments">
+          <div>
+            <strong>{{ formatDateTime(appointment.scheduled_at) }}</strong>
+            <span>{{ branchName(appointment.sucursal) }}</span>
+          </div>
+          <span class="status-pill">
+            {{ appointmentStatusLabel(appointment) }}
+          </span>
+        </article>
+      </div>
+    </section>
+  </div>
+</div>
