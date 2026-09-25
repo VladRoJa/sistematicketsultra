@@ -688,6 +688,14 @@
                 <button
                   type="button"
                   class="small-button"
+                  *ngIf="canCorrectAppointment(appointment)"
+                  (click)="correctAppointmentResult(appointment)"
+                >
+                  Corregir resultado
+                </button>
+                <button
+                  type="button"
+                  class="small-button"
                   *ngIf="
                     !isManager
                     && canOperateAppointment(appointment)
