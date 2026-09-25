@@ -47,8 +47,14 @@ def test_closed_appointment_can_be_corrected_but_verified_purchase_cannot_be_dow
     assert "verify_appointment_purchase(appointment.id)" in routes
 
 
-def test_venta_total_match_requires_valid_status_and_purchase_after_appointment_time():
+def test_venta_total_match_requires_membership_valid_status_and_purchase_after_appointment_time():
     service = _read(SERVICE)
+
+    assert "def _is_membership_purchase_row(" in service
+    assert 'product_key == "MEMBRESIA"' in service
+    assert '"MEMBRESIA" in sale_type' in service
+    assert "MEMBERSHIP_PURCHASE_TERMS" in service
+    assert "if not _is_membership_purchase_row(row):" in service
 
     assert "_is_valid_status(row.estatus)" in service
     assert "_parse_venta_total_row_local_datetime(row)" in service
