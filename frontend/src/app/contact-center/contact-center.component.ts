@@ -844,6 +844,31 @@ export class ContactCenterComponent implements OnInit {
     return labels[String(status || '')] || String(status || '—');
   }
 
+  portfolioPurchaseLabel(contact: ContactCenterContact): string {
+    const summary = contact.purchase_summary;
+    if (!summary) {
+      return '—';
+    }
+    if (summary.purchase_verification_status === 'VERIFIED') {
+      return 'Compra validada';
+    }
+    if (summary.purchase_reported) {
+      return 'Compra reportada';
+    }
+    return '—';
+  }
+
+  portfolioPurchaseClass(contact: ContactCenterContact): string {
+    const summary = contact.purchase_summary;
+    if (summary?.purchase_verification_status === 'VERIFIED') {
+      return 'verified';
+    }
+    if (summary?.purchase_reported) {
+      return 'pending';
+    }
+    return 'neutral';
+  }
+
   interactionLabel(outcome: string): string {
     const labels: Record<string, string> = {
       NO_ANSWER: 'No contestó',
