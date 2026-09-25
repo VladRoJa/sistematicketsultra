@@ -1033,7 +1033,7 @@ def list_appointments(
         ).astimezone(timezone.utc)
         query = query.filter(ContactCenterAppointmentORM.scheduled_at <= end)
 
-    rows = query.order_by(ContactCenterAppointmentORM.scheduled_at.asc()).all()
+    rows = query.order_by(ContactCenterAppointmentORM.scheduled_at.desc()).all()
     result = []
     for row in rows:
         payload = serialize_appointment(row)
@@ -1672,15 +1672,18 @@ def _parse_venta_total_row_local_datetime(
         parsed_time = raw_time.time().replace(tzinfo=None)
     else:
         text_value = str(raw_time or "").strip()
-        for pattern in ("%H:%M:%S", "%H:%M", "%I:%M:%S %p", "%I:%M %p"):
-            try:
-                parsed_time = datetime.strptime(
-                    text_value,
-                    pattern,
-                ).time()
-                break
-            except ValueError:
-                continue
+        try:
+            parsed_time = time.fromisoformat(text_value)
+        except ValueError:
+            for pattern in ("%H:%M:%S", "%H:%M", "%I:%M:%S %p", "%I:%M %p"):
+                try:
+                    parsed_time = datetime.strptime(
+                        text_value,
+                        pattern,
+                    ).time()
+                    break
+                except ValueError:
+                    continue
 
     if parsed_time is None:
         return None
@@ -1784,19 +1787,36 @@ def _resolve_appointment_purchase_match(
         if str(row.descripcion or "").strip()
     ]
 
-    already_claimed = (
-        ContactCenterAppointmentORM.query
+    claimed_query = (
+        db.session.query(ContactCenterAppointmentORM.id)
+        .join(
+            VentaTotalSnapshotRowORM,
+            ContactCenterAppointmentORM.venta_total_snapshot_row_id
+            == VentaTotalSnapshotRowORM.id,
+        )
         .filter(
             ContactCenterAppointmentORM.id != appointment.id,
-            ContactCenterAppointmentORM.purchase_verification_status == "VERIFIED",
-            ContactCenterAppointmentORM.venta_total_snapshot_id
-            == int(snapshot_value.id),
-            ContactCenterAppointmentORM.venta_total_snapshot_row_id
-            == int(first_row.id),
+            ContactCenterAppointmentORM.purchase_verification_status
+            == "VERIFIED",
         )
-        .first()
     )
-    if already_claimed is not None:
+
+    normalized_order_id = str(first_row.id_orden or "").strip()
+    normalized_folio = str(first_row.folio or "").strip()
+    if normalized_order_id:
+        claimed_query = claimed_query.filter(
+            VentaTotalSnapshotRowORM.id_orden == normalized_order_id
+        )
+    elif normalized_folio:
+        claimed_query = claimed_query.filter(
+            VentaTotalSnapshotRowORM.folio == normalized_folio
+        )
+    else:
+        claimed_query = claimed_query.filter(
+            VentaTotalSnapshotRowORM.id == int(first_row.id)
+        )
+
+    if claimed_query.first() is not None:
         return {"status": "REVIEW"}
 
     return {
@@ -1883,8 +1903,16 @@ def reconcile_contact_center_appointments_from_venta_total(
                 ContactCenterAppointmentORM.status == "SCHEDULED",
                 and_(
                     ContactCenterAppointmentORM.status == "CLOSED",
-                    ContactCenterAppointmentORM.outcome.in_(
-                        ("NO_SHOW", "ATTENDED_NO_PURCHASE")
+                    or_(
+                        ContactCenterAppointmentORM.outcome.in_(
+                            ("NO_SHOW", "ATTENDED_NO_PURCHASE")
+                        ),
+                        and_(
+                            ContactCenterAppointmentORM.outcome
+                            == "ATTENDED_PURCHASE_REPORTED",
+                            ContactCenterAppointmentORM.purchase_verification_status
+                            != "VERIFIED",
+                        ),
                     ),
                 ),
             ),
@@ -1923,6 +1951,11 @@ def reconcile_contact_center_appointments_from_venta_total(
             result["review_required"] += 1
             continue
         used_transactions.add(transaction_identity)
+
+        if appointment.outcome == "ATTENDED_PURCHASE_REPORTED":
+            _apply_verified_purchase_match(appointment, match)
+            result["appointments_corrected"] += 1
+            continue
 
         previous_status = appointment.status
         previous_outcome = appointment.outcome
