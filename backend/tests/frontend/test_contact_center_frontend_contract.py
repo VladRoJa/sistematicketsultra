@@ -338,6 +338,7 @@ def test_contact_center_portfolio_opens_contact_detail_as_floating_dialog():
     assert "width: '920px'" in component_ts
     assert "maxWidth: '96vw'" in component_ts
     assert "maxHeight: '92vh'" in component_ts
+    assert "disableClose: true" in component_ts
     assert "(click)=\"openContact(contact.id)\"" in component_html
     assert '<aside class="panel-card detail-panel"' not in component_html
 
