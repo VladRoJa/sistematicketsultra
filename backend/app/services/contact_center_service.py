@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -11,6 +11,7 @@ from sqlalchemy import case as sql_case, func, or_, select
 from app.extensions import db
 from app.models.contact_center import (
     ContactCenterAppointmentORM,
+    ContactCenterAppointmentResultEventORM,
     ContactCenterCaseORM,
     ContactCenterContactLinkORM,
     ContactCenterContactMergeEventORM,
@@ -31,7 +32,10 @@ from app.services.marketing_leads_detail_service import (
     build_marketing_lead_contacts_statement,
 )
 from app.services.marketing_phone import normalize_phone
-from app.services.marketing_sales_funnel_service import _parse_row_date
+from app.services.marketing_sales_funnel_service import (
+    _is_valid_status,
+    _parse_row_date,
+)
 from app.utils.contact_center_access import has_contact_center_operator_access
 
 
@@ -730,6 +734,99 @@ def create_appointment(
     return appointment
 
 
+def _clear_appointment_purchase_state(
+    appointment: ContactCenterAppointmentORM,
+) -> None:
+    appointment.purchase_reported = False
+    appointment.purchase_reported_at = None
+    appointment.purchase_reported_by_user_id = None
+    appointment.purchase_verification_status = "NOT_REPORTED"
+    appointment.venta_total_snapshot_id = None
+    appointment.venta_total_snapshot_row_id = None
+    appointment.verified_purchase_at = None
+    appointment.verified_amount = None
+    appointment.verified_tariff = None
+
+
+def _apply_appointment_result(
+    appointment: ContactCenterAppointmentORM,
+    *,
+    outcome: str,
+    changed_by_user_id: int | None,
+    notes: str | None = None,
+    now: datetime | None = None,
+) -> None:
+    if outcome not in APPOINTMENT_OUTCOMES:
+        raise ContactCenterValidationError("Resultado de cita inválido.")
+
+    changed_at = now or _now_utc()
+
+    appointment.outcome = outcome
+    appointment.status = "CANCELLED" if outcome == "CANCELLED" else "CLOSED"
+    appointment.closed_by_user_id = changed_by_user_id
+    appointment.closed_at = changed_at
+    appointment.updated_at = changed_at
+
+    if notes:
+        appointment.notes = notes
+
+    if outcome == "ATTENDED_PURCHASE_REPORTED":
+        appointment.purchase_reported = True
+        appointment.purchase_reported_at = changed_at
+        appointment.purchase_reported_by_user_id = changed_by_user_id
+        appointment.purchase_verification_status = "REPORTED_PENDING"
+        appointment.venta_total_snapshot_id = None
+        appointment.venta_total_snapshot_row_id = None
+        appointment.verified_purchase_at = None
+        appointment.verified_amount = None
+        appointment.verified_tariff = None
+    else:
+        _clear_appointment_purchase_state(appointment)
+
+    case = appointment.case
+    case.next_action_at = None
+    case.updated_at = changed_at
+
+    if outcome == "NO_SHOW":
+        case.status = "IN_PROGRESS"
+        case.closed_at = None
+        case.closed_by_user_id = None
+    else:
+        case.status = "CLOSED"
+        case.closed_at = changed_at
+        case.closed_by_user_id = changed_by_user_id
+
+
+def _record_appointment_result_event(
+    appointment: ContactCenterAppointmentORM,
+    *,
+    previous_status: str | None,
+    previous_outcome: str | None,
+    previous_case_status: str | None,
+    source: str,
+    changed_by_user_id: int | None = None,
+    venta_total_snapshot_id: int | None = None,
+    venta_total_snapshot_row_id: int | None = None,
+    reason: str | None = None,
+) -> None:
+    db.session.add(
+        ContactCenterAppointmentResultEventORM(
+            appointment_id=appointment.id,
+            previous_status=previous_status,
+            new_status=appointment.status,
+            previous_outcome=previous_outcome,
+            new_outcome=appointment.outcome,
+            previous_case_status=previous_case_status,
+            new_case_status=appointment.case.status,
+            source=source,
+            changed_by_user_id=changed_by_user_id,
+            venta_total_snapshot_id=venta_total_snapshot_id,
+            venta_total_snapshot_row_id=venta_total_snapshot_row_id,
+            reason=_clean_text(reason),
+        )
+    )
+
+
 def close_appointment(
     appointment_id: int,
     payload: dict[str, Any],
@@ -744,39 +841,84 @@ def close_appointment(
         )
 
     outcome = str(payload.get("outcome") or "").strip().upper()
-    if outcome not in APPOINTMENT_OUTCOMES:
-        raise ContactCenterValidationError("Resultado de cita inválido.")
+    notes = _clean_text(payload.get("notes"))
 
-    now = _now_utc()
-    appointment.outcome = outcome
-    appointment.notes = _clean_text(payload.get("notes")) or appointment.notes
-    appointment.closed_by_user_id = actor.id
-    appointment.closed_at = now
-    appointment.updated_at = now
-    appointment.status = "CANCELLED" if outcome == "CANCELLED" else "CLOSED"
-
-    case = appointment.case
-    case.next_action_at = None
-    case.updated_at = now
-
-    if outcome == "ATTENDED_PURCHASE_REPORTED":
-        appointment.purchase_reported = True
-        appointment.purchase_reported_at = now
-        appointment.purchase_reported_by_user_id = actor.id
-        appointment.purchase_verification_status = "REPORTED_PENDING"
-
-    if outcome == "NO_SHOW":
-        case.status = "IN_PROGRESS"
-        case.closed_at = None
-        case.closed_by_user_id = None
-    else:
-        case.status = "CLOSED"
-        case.closed_at = now
-        case.closed_by_user_id = actor.id
-
+    _apply_appointment_result(
+        appointment,
+        outcome=outcome,
+        changed_by_user_id=int(actor.id),
+        notes=notes,
+    )
     db.session.flush()
     return appointment
 
+
+def correct_appointment_result(
+    appointment_id: int,
+    payload: dict[str, Any],
+    actor: UserORM,
+) -> ContactCenterAppointmentORM:
+    appointment = (
+        ContactCenterAppointmentORM.query
+        .filter_by(id=appointment_id)
+        .with_for_update()
+        .one_or_none()
+    )
+    if appointment is None:
+        raise ContactCenterNotFoundError("Cita no encontrada.")
+
+    if appointment.status not in {"CLOSED", "CANCELLED"}:
+        raise ContactCenterValidationError(
+            "Sólo se puede corregir el resultado de una cita ya cerrada."
+        )
+
+    outcome = str(payload.get("outcome") or "").strip().upper()
+    if outcome not in APPOINTMENT_OUTCOMES:
+        raise ContactCenterValidationError("Resultado de cita inválido.")
+
+    if outcome == appointment.outcome:
+        raise ContactCenterValidationError(
+            "Selecciona un resultado distinto al actual."
+        )
+
+    previous_status = appointment.status
+    previous_outcome = appointment.outcome
+    previous_case_status = appointment.case.status
+    reason = _clean_text(payload.get("notes"))
+
+    _apply_appointment_result(
+        appointment,
+        outcome=outcome,
+        changed_by_user_id=int(actor.id),
+        notes=reason,
+    )
+
+    _record_appointment_result_event(
+        appointment,
+        previous_status=previous_status,
+        previous_outcome=previous_outcome,
+        previous_case_status=previous_case_status,
+        source="MANUAL_CORRECTION",
+        changed_by_user_id=int(actor.id),
+        reason=reason,
+    )
+
+    db.session.add(
+        ContactCenterInteractionORM(
+            case_id=appointment.case_id,
+            contact_id=appointment.contact_id,
+            interaction_type="SYSTEM",
+            outcome="NOTE",
+            comment=(
+                "Resultado de cita corregido: "
+                f"{previous_outcome or 'SIN_RESULTADO'} -> {outcome}."
+            ),
+            created_by_user_id=actor.id,
+        )
+    )
+
+    db.session.flush()
+    return appointment
 
 def reschedule_appointment(
     appointment_id: int,
@@ -1505,6 +1647,158 @@ def merge_contacts(
     return survivor
 
 
+def _parse_venta_total_row_local_datetime(
+    row: VentaTotalSnapshotRowORM,
+) -> datetime | None:
+    try:
+        row_date = _parse_row_date(row.fecha)
+    except ValueError:
+        return None
+
+    raw_time = row.hora
+    parsed_time: time | None = None
+
+    if isinstance(raw_time, time):
+        parsed_time = raw_time.replace(tzinfo=None)
+    elif isinstance(raw_time, datetime):
+        parsed_time = raw_time.time().replace(tzinfo=None)
+    else:
+        text_value = str(raw_time or "").strip()
+        for pattern in ("%H:%M:%S", "%H:%M", "%I:%M:%S %p", "%I:%M %p"):
+            try:
+                parsed_time = datetime.strptime(
+                    text_value,
+                    pattern,
+                ).time()
+                break
+            except ValueError:
+                continue
+
+    if parsed_time is None:
+        return None
+
+    return datetime.combine(
+        row_date,
+        parsed_time,
+        tzinfo=BUSINESS_TZ,
+    )
+
+
+def _resolve_appointment_purchase_match(
+    appointment: ContactCenterAppointmentORM,
+    *,
+    snapshot: VentaTotalSnapshotORM | None = None,
+) -> dict[str, Any]:
+    contact = appointment.contact
+    phone = normalize_phone(
+        contact.phone_mx10 or contact.primary_phone_raw
+    )
+    if phone is None:
+        return {"status": "REVIEW"}
+
+    snapshot_value = snapshot
+    if snapshot_value is None:
+        snapshot_value = (
+            VentaTotalSnapshotORM.query
+            .filter(
+                VentaTotalSnapshotORM.report_type_key == "venta_total",
+                VentaTotalSnapshotORM.snapshot_kind == "daily",
+                VentaTotalSnapshotORM.is_canonical.is_(True),
+            )
+            .order_by(
+                VentaTotalSnapshotORM.business_date.desc(),
+                VentaTotalSnapshotORM.id.desc(),
+            )
+            .first()
+        )
+
+    if snapshot_value is None:
+        return {"status": "NOT_FOUND_YET"}
+
+    digits_expr = func.regexp_replace(
+        VentaTotalSnapshotRowORM.telefono,
+        "[^0-9]",
+        "",
+        "g",
+    )
+    candidates = (
+        VentaTotalSnapshotRowORM.query
+        .filter(
+            VentaTotalSnapshotRowORM.snapshot_id == snapshot_value.id,
+            func.right(digits_expr, 10) == phone,
+        )
+        .order_by(VentaTotalSnapshotRowORM.row_index.asc())
+        .all()
+    )
+
+    scheduled_local = appointment.scheduled_at.astimezone(BUSINESS_TZ)
+    grouped: dict[
+        str,
+        list[tuple[VentaTotalSnapshotRowORM, datetime]],
+    ] = defaultdict(list)
+
+    for row in candidates:
+        if not _is_valid_status(row.estatus):
+            continue
+
+        transaction_local = _parse_venta_total_row_local_datetime(row)
+        if transaction_local is None:
+            continue
+        if transaction_local < scheduled_local:
+            continue
+
+        transaction_key = str(
+            row.id_orden or row.folio or f"row:{row.id}"
+        ).strip()
+        grouped[transaction_key].append((row, transaction_local))
+
+    if not grouped:
+        return {"status": "NOT_FOUND_YET"}
+
+    if len(grouped) > 1:
+        return {"status": "REVIEW"}
+
+    transaction_rows = next(iter(grouped.values()))
+    first_row, first_datetime = min(
+        transaction_rows,
+        key=lambda item: item[1],
+    )
+    total = sum(
+        (
+            Decimal(str(row.total or 0))
+            for row, _ in transaction_rows
+        ),
+        Decimal("0"),
+    )
+    descriptions = [
+        str(row.descripcion or "").strip()
+        for row, _ in transaction_rows
+        if str(row.descripcion or "").strip()
+    ]
+
+    return {
+        "status": "VERIFIED",
+        "snapshot_id": int(snapshot_value.id),
+        "snapshot_row_id": int(first_row.id),
+        "purchase_at": first_datetime.astimezone(timezone.utc),
+        "amount": total,
+        "tariff": descriptions[0] if descriptions else None,
+    }
+
+
+def _apply_verified_purchase_match(
+    appointment: ContactCenterAppointmentORM,
+    match: dict[str, Any],
+) -> None:
+    appointment.purchase_verification_status = "VERIFIED"
+    appointment.venta_total_snapshot_id = int(match["snapshot_id"])
+    appointment.venta_total_snapshot_row_id = int(match["snapshot_row_id"])
+    appointment.verified_purchase_at = match["purchase_at"]
+    appointment.verified_amount = match["amount"]
+    appointment.verified_tariff = match["tariff"]
+    appointment.updated_at = _now_utc()
+
+
 def verify_appointment_purchase(
     appointment_id: int,
 ) -> ContactCenterAppointmentORM:
@@ -1516,91 +1810,123 @@ def verify_appointment_purchase(
             "La cita no tiene una compra reportada para validar."
         )
 
-    contact = appointment.contact
-    phone = normalize_phone(contact.phone_mx10 or contact.primary_phone_raw)
-    if phone is None:
-        appointment.purchase_verification_status = "REVIEW"
-        return appointment
+    match = _resolve_appointment_purchase_match(appointment)
+    appointment.purchase_verification_status = match["status"]
 
-    snapshot = (
-        VentaTotalSnapshotORM.query
-        .filter(
-            VentaTotalSnapshotORM.report_type_key == "venta_total",
-            VentaTotalSnapshotORM.snapshot_kind == "daily",
-            VentaTotalSnapshotORM.is_canonical.is_(True),
-        )
-        .order_by(
-            VentaTotalSnapshotORM.business_date.desc(),
-            VentaTotalSnapshotORM.id.desc(),
-        )
-        .first()
-    )
+    if match["status"] == "VERIFIED":
+        _apply_verified_purchase_match(appointment, match)
+
+    return appointment
+
+
+def reconcile_contact_center_appointments_from_venta_total(
+    *,
+    snapshot_id: int,
+) -> dict[str, int]:
+    snapshot = VentaTotalSnapshotORM.query.filter_by(
+        id=int(snapshot_id)
+    ).one_or_none()
     if snapshot is None:
-        appointment.purchase_verification_status = "NOT_FOUND_YET"
-        return appointment
-
-    digits_expr = func.regexp_replace(
-        VentaTotalSnapshotRowORM.telefono,
-        "[^0-9]",
-        "",
-        "g",
-    )
-    candidates = (
-        VentaTotalSnapshotRowORM.query
-        .filter(
-            VentaTotalSnapshotRowORM.snapshot_id == snapshot.id,
-            func.right(digits_expr, 10) == phone,
+        raise ContactCenterNotFoundError(
+            "Snapshot Venta Total no encontrado."
         )
-        .order_by(VentaTotalSnapshotRowORM.row_index.asc())
+    if (
+        snapshot.report_type_key != "venta_total"
+        or snapshot.snapshot_kind != "daily"
+        or not snapshot.is_canonical
+    ):
+        raise ContactCenterValidationError(
+            "La reconciliación requiere un snapshot canónico daily de Venta Total."
+        )
+
+    window_start_local = datetime.combine(
+        snapshot.business_date - timedelta(days=30),
+        time.min,
+        tzinfo=BUSINESS_TZ,
+    ).astimezone(timezone.utc)
+    window_end_local = datetime.combine(
+        snapshot.business_date + timedelta(days=1),
+        time.min,
+        tzinfo=BUSINESS_TZ,
+    ).astimezone(timezone.utc)
+
+    candidates = (
+        ContactCenterAppointmentORM.query
+        .filter(
+            ContactCenterAppointmentORM.scheduled_at >= window_start_local,
+            ContactCenterAppointmentORM.scheduled_at < window_end_local,
+            or_(
+                ContactCenterAppointmentORM.status == "SCHEDULED",
+                (
+                    (ContactCenterAppointmentORM.status == "CLOSED")
+                    & ContactCenterAppointmentORM.outcome.in_(
+                        ("NO_SHOW", "ATTENDED_NO_PURCHASE")
+                    )
+                ),
+            ),
+        )
+        .order_by(ContactCenterAppointmentORM.scheduled_at.asc())
         .all()
     )
 
-    appointment_local_date = appointment.scheduled_at.astimezone(
-        BUSINESS_TZ
-    ).date()
-    grouped: dict[str, list[tuple[VentaTotalSnapshotRowORM, date]]] = defaultdict(list)
-    for row in candidates:
-        try:
-            row_date = _parse_row_date(row.fecha)
-        except ValueError:
+    result = {
+        "appointments_scanned": 0,
+        "appointments_corrected": 0,
+        "review_required": 0,
+        "not_found": 0,
+    }
+
+    for appointment in candidates:
+        result["appointments_scanned"] += 1
+        match = _resolve_appointment_purchase_match(
+            appointment,
+            snapshot=snapshot,
+        )
+
+        if match["status"] == "REVIEW":
+            result["review_required"] += 1
             continue
-        if row_date < appointment_local_date:
+        if match["status"] != "VERIFIED":
+            result["not_found"] += 1
             continue
 
-        transaction_key = str(
-            row.id_orden or row.folio or f"row:{row.id}"
-        ).strip()
-        grouped[transaction_key].append((row, row_date))
+        previous_status = appointment.status
+        previous_outcome = appointment.outcome
+        previous_case_status = appointment.case.status
 
-    if not grouped:
-        appointment.purchase_verification_status = "NOT_FOUND_YET"
-        return appointment
+        _apply_appointment_result(
+            appointment,
+            outcome="ATTENDED_PURCHASE_REPORTED",
+            changed_by_user_id=None,
+            now=_now_utc(),
+        )
+        _apply_verified_purchase_match(appointment, match)
 
-    if len(grouped) > 1:
-        appointment.purchase_verification_status = "REVIEW"
-        return appointment
+        _record_appointment_result_event(
+            appointment,
+            previous_status=previous_status,
+            previous_outcome=previous_outcome,
+            previous_case_status=previous_case_status,
+            source="VENTA_TOTAL_AUTO",
+            venta_total_snapshot_id=int(match["snapshot_id"]),
+            venta_total_snapshot_row_id=int(match["snapshot_row_id"]),
+            reason="Compra inequívoca detectada automáticamente en Venta Total.",
+        )
 
-    transaction_rows = next(iter(grouped.values()))
-    first_row, first_date = transaction_rows[0]
-    total = sum(
-        (Decimal(str(row.total or 0)) for row, _ in transaction_rows),
-        Decimal("0"),
-    )
-    descriptions = [
-        str(row.descripcion or "").strip()
-        for row, _ in transaction_rows
-        if str(row.descripcion or "").strip()
-    ]
+        db.session.add(
+            ContactCenterInteractionORM(
+                case_id=appointment.case_id,
+                contact_id=appointment.contact_id,
+                interaction_type="SYSTEM",
+                outcome="NOTE",
+                comment=(
+                    "Venta Total detectó una compra posterior a la cita "
+                    "y actualizó el resultado a Asistió y compró."
+                ),
+                created_by_user_id=None,
+            )
+        )
+        result["appointments_corrected"] += 1
 
-    appointment.purchase_verification_status = "VERIFIED"
-    appointment.venta_total_snapshot_id = int(snapshot.id)
-    appointment.venta_total_snapshot_row_id = int(first_row.id)
-    appointment.verified_purchase_at = datetime.combine(
-        first_date,
-        datetime.min.time(),
-        tzinfo=BUSINESS_TZ,
-    ).astimezone(timezone.utc)
-    appointment.verified_amount = total
-    appointment.verified_tariff = descriptions[0] if descriptions else None
-    appointment.updated_at = _now_utc()
-    return appointment
+    db.session.commit()
+    return result
