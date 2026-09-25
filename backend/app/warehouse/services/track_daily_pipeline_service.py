@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+import logging
 from typing import Any
 
 from app.extensions import db
@@ -51,6 +52,8 @@ from app.warehouse.services.track_source_tienda_daily_service import (
 from app.warehouse.services.venta_total_repository import (
     promote_venta_total_snapshot_canonical,
 )
+
+logger = logging.getLogger(__name__)
 
 SUPPORTED_GENERATION_MODES = frozenset(
     {
@@ -687,6 +690,22 @@ def run_requested_track_canonical_close(
         )
 
         db.session.commit()
+
+        try:
+            from app.services.contact_center_service import (
+                reconcile_contact_center_appointments_from_venta_total,
+            )
+
+            reconcile_contact_center_appointments_from_venta_total(
+                snapshot_id=venta_total_snapshot_id,
+            )
+        except Exception:
+            db.session.rollback()
+            logger.exception(
+                "Contact Center purchase reconciliation failed "
+                "after Track canonical close snapshot_id=%s",
+                venta_total_snapshot_id,
+            )
 
         return {
             "status": "completed",
