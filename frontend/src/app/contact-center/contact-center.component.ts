@@ -25,6 +25,9 @@ import {
   ContactCenterDuplicateDialogComponent,
 } from './contact-center-duplicate-dialog.component';
 import {
+  ContactCenterContactDialogComponent,
+} from './contact-center-contact-dialog.component';
+import {
   ContactCenterCrmImportDialogComponent,
 } from './contact-center-crm-import-dialog.component';
 import {
@@ -296,28 +299,34 @@ export class ContactCenterComponent implements OnInit {
   }
 
   openContact(contactId: number): void {
-    this.loadingDetail = true;
+    if (!this.access) {
+      return;
+    }
 
-    this.contactCenter.getContact(contactId).subscribe({
-      next: (detail) => {
-        this.selectedContact = detail;
-        this.loadingDetail = false;
-        this.resetContactActions();
+    const ref = this.dialog.open(
+      ContactCenterContactDialogComponent,
+      {
+        width: '920px',
+        maxWidth: '96vw',
+        maxHeight: '92vh',
+        autoFocus: false,
+        disableClose: true,
+        data: {
+          contactId,
+          access: this.access,
+          lookups: this.lookups,
+        },
+      },
+    );
 
-        const currentCase = detail.cases.find(
-          (row) => row.status !== 'CLOSED',
-        );
-        this.selectedAssignedUserId =
-          currentCase?.assigned_user?.id ?? null;
-        this.appointmentBranchId =
-          currentCase?.sucursal?.id
-          ?? detail.preferred_sucursal?.id
-          ?? null;
-      },
-      error: (error) => {
-        this.loadingDetail = false;
-        this.showApiError(error, 'No se pudo abrir el contacto.');
-      },
+    ref.afterClosed().subscribe((result) => {
+      if (!result?.changed) {
+        return;
+      }
+
+      this.loadPortfolio();
+      this.loadAppointments();
+      this.loadReport();
     });
   }
 
