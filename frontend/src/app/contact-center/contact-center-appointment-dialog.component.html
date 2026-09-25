@@ -2,12 +2,16 @@
   <div class="dialog-header">
     <div>
       <p class="eyebrow">CITA</p>
-      <h2>Registrar resultado</h2>
+      <h2>
+        {{ data.correctionMode ? 'Corregir resultado' : 'Registrar resultado' }}
+      </h2>
       <p class="subtitle">
         {{
-          data.canReschedule
-            ? 'La cita debe quedar cerrada o reagendada, nunca desaparecer.'
-            : 'Registra el resultado de la cita para cerrar el seguimiento en sucursal.'
+          data.correctionMode
+            ? 'El cambio quedará registrado en el historial de la cita.'
+            : data.canReschedule
+              ? 'La cita debe quedar cerrada o reagendada, nunca desaparecer.'
+              : 'Registra el resultado de la cita para cerrar el seguimiento en sucursal.'
         }}
       </p>
     </div>
@@ -22,7 +26,7 @@
     </button>
   </div>
 
-  <div class="action-toggle">
+  <div class="action-toggle" *ngIf="!data.correctionMode">
     <button
       type="button"
       [class.action-toggle__button--active]="action === 'CLOSE'"
@@ -42,7 +46,7 @@
 
   <div
     class="form-grid"
-    *ngIf="action === 'CLOSE'"
+    *ngIf="action === 'CLOSE' || action === 'CORRECT_RESULT'"
   >
     <label class="field">
       <span>¿Qué ocurrió?</span>
@@ -57,11 +61,11 @@
     </label>
 
     <label class="field">
-      <span>Comentario</span>
+      <span>{{ data.correctionMode ? 'Motivo / comentario' : 'Comentario' }}</span>
       <textarea
         rows="3"
         [(ngModel)]="notes"
-        placeholder="Opcional"
+        [placeholder]="data.correctionMode ? 'Opcional · motivo de la corrección' : 'Opcional'"
       ></textarea>
     </label>
   </div>
