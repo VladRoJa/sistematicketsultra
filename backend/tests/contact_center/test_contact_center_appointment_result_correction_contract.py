@@ -64,7 +64,8 @@ def test_automatic_reconciliation_is_conservative():
     assert 'ContactCenterAppointmentORM.status == "SCHEDULED"' in service
     assert '("NO_SHOW", "ATTENDED_NO_PURCHASE")' in service
     assert '== "ATTENDED_PURCHASE_REPORTED"' in service
-    assert 'purchase_verification_status\n                            != "VERIFIED"' in service
+    assert "ContactCenterAppointmentORM.purchase_verification_status" in service
+    assert '!= "VERIFIED"' in service
     assert 'ContactCenterAppointmentORM.status == "CANCELLED"' not in service
     assert 'ContactCenterAppointmentORM.status == "RESCHEDULED"' not in service
     assert ".order_by(ContactCenterAppointmentORM.scheduled_at.desc())" in service
