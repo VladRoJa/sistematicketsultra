@@ -680,7 +680,7 @@ def create_appointment(
             ContactCenterAppointmentORM.case_id == case.id,
             ContactCenterAppointmentORM.status == "SCHEDULED",
         )
-        .order_by(ContactCenterAppointmentORM.scheduled_at.asc())
+        .order_by(ContactCenterAppointmentORM.scheduled_at.desc())
         .first()
     )
     if existing_appointment is not None:
@@ -1784,8 +1784,24 @@ def _resolve_appointment_purchase_match(
         if str(row.descripcion or "").strip()
     ]
 
+    already_claimed = (
+        ContactCenterAppointmentORM.query
+        .filter(
+            ContactCenterAppointmentORM.id != appointment.id,
+            ContactCenterAppointmentORM.purchase_verification_status == "VERIFIED",
+            ContactCenterAppointmentORM.venta_total_snapshot_id
+            == int(snapshot_value.id),
+            ContactCenterAppointmentORM.venta_total_snapshot_row_id
+            == int(first_row.id),
+        )
+        .first()
+    )
+    if already_claimed is not None:
+        return {"status": "REVIEW"}
+
     return {
         "status": "VERIFIED",
+        "transaction_key": next(iter(grouped.keys())),
         "snapshot_id": int(snapshot_value.id),
         "snapshot_row_id": int(first_row.id),
         "purchase_at": first_datetime.astimezone(timezone.utc),
@@ -1883,6 +1899,7 @@ def reconcile_contact_center_appointments_from_venta_total(
         "review_required": 0,
         "not_found": 0,
     }
+    used_transactions: set[tuple[int, str]] = set()
 
     for appointment in candidates:
         result["appointments_scanned"] += 1
@@ -1897,6 +1914,15 @@ def reconcile_contact_center_appointments_from_venta_total(
         if match["status"] != "VERIFIED":
             result["not_found"] += 1
             continue
+
+        transaction_identity = (
+            int(match["snapshot_id"]),
+            str(match["transaction_key"]),
+        )
+        if transaction_identity in used_transactions:
+            result["review_required"] += 1
+            continue
+        used_transactions.add(transaction_identity)
 
         previous_status = appointment.status
         previous_outcome = appointment.outcome
