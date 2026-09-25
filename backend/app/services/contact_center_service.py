@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import case as sql_case, func, or_, select
+from sqlalchemy import and_, case as sql_case, func, or_, select
 
 from app.extensions import db
 from app.models.contact_center import (
@@ -879,6 +879,14 @@ def correct_appointment_result(
     if outcome == appointment.outcome:
         raise ContactCenterValidationError(
             "Selecciona un resultado distinto al actual."
+        )
+
+    if (
+        appointment.purchase_verification_status == "VERIFIED"
+        and outcome != "ATTENDED_PURCHASE_REPORTED"
+    ):
+        raise ContactCenterValidationError(
+            "La cita ya tiene una compra validada por Venta Total."
         )
 
     previous_status = appointment.status
@@ -1857,11 +1865,11 @@ def reconcile_contact_center_appointments_from_venta_total(
             ContactCenterAppointmentORM.scheduled_at < window_end_local,
             or_(
                 ContactCenterAppointmentORM.status == "SCHEDULED",
-                (
-                    (ContactCenterAppointmentORM.status == "CLOSED")
-                    & ContactCenterAppointmentORM.outcome.in_(
+                and_(
+                    ContactCenterAppointmentORM.status == "CLOSED",
+                    ContactCenterAppointmentORM.outcome.in_(
                         ("NO_SHOW", "ATTENDED_NO_PURCHASE")
-                    )
+                    ),
                 ),
             ),
         )
@@ -1898,35 +1906,3 @@ def reconcile_contact_center_appointments_from_venta_total(
             appointment,
             outcome="ATTENDED_PURCHASE_REPORTED",
             changed_by_user_id=None,
-            now=_now_utc(),
-        )
-        _apply_verified_purchase_match(appointment, match)
-
-        _record_appointment_result_event(
-            appointment,
-            previous_status=previous_status,
-            previous_outcome=previous_outcome,
-            previous_case_status=previous_case_status,
-            source="VENTA_TOTAL_AUTO",
-            venta_total_snapshot_id=int(match["snapshot_id"]),
-            venta_total_snapshot_row_id=int(match["snapshot_row_id"]),
-            reason="Compra inequívoca detectada automáticamente en Venta Total.",
-        )
-
-        db.session.add(
-            ContactCenterInteractionORM(
-                case_id=appointment.case_id,
-                contact_id=appointment.contact_id,
-                interaction_type="SYSTEM",
-                outcome="NOTE",
-                comment=(
-                    "Venta Total detectó una compra posterior a la cita "
-                    "y actualizó el resultado a Asistió y compró."
-                ),
-                created_by_user_id=None,
-            )
-        )
-        result["appointments_corrected"] += 1
-
-    db.session.commit()
-    return result
