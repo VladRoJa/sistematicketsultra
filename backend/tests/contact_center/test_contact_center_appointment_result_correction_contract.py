@@ -63,9 +63,19 @@ def test_automatic_reconciliation_is_conservative():
     assert "def reconcile_contact_center_appointments_from_venta_total(" in service
     assert 'ContactCenterAppointmentORM.status == "SCHEDULED"' in service
     assert '("NO_SHOW", "ATTENDED_NO_PURCHASE")' in service
+    assert '== "ATTENDED_PURCHASE_REPORTED"' in service
+    assert 'purchase_verification_status\n                            != "VERIFIED"' in service
     assert 'ContactCenterAppointmentORM.status == "CANCELLED"' not in service
     assert 'ContactCenterAppointmentORM.status == "RESCHEDULED"' not in service
     assert ".order_by(ContactCenterAppointmentORM.scheduled_at.desc())" in service
+
+
+def test_reported_purchase_can_be_auto_verified_without_fake_result_correction():
+    service = _read(SERVICE)
+
+    assert 'if appointment.outcome == "ATTENDED_PURCHASE_REPORTED":' in service
+    assert "_apply_verified_purchase_match(appointment, match)" in service
+    assert 'source="VENTA_TOTAL_AUTO"' in service
 
 
 def test_one_venta_total_transaction_cannot_close_multiple_appointments():
