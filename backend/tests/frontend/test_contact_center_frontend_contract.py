@@ -305,3 +305,14 @@ def test_contact_center_calendar_history_remains_read_only_despite_table_correct
     assert "[disabled]=" in component_html
     assert "(click)=\"appointmentAction(appointment)\"" in component_html
 
+
+def test_contact_center_portfolio_shows_purchase_summary():
+    component_ts = _read(COMPONENT_TS)
+    component_html = _read(COMPONENT_HTML)
+
+    assert "portfolioPurchaseLabel(contact: ContactCenterContact)" in component_ts
+    assert "portfolioPurchaseClass(contact: ContactCenterContact)" in component_ts
+    assert "Compra validada" in component_ts
+    assert "<th>Compra</th>" in component_html
+    assert "{{ portfolioPurchaseLabel(contact) }}" in component_html
+    assert "contact.purchase_summary?.verified_amount" in component_html
