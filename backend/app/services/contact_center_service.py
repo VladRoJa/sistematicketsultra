@@ -1917,7 +1917,7 @@ def reconcile_contact_center_appointments_from_venta_total(
                 ),
             ),
         )
-        .order_by(ContactCenterAppointmentORM.scheduled_at.asc())
+        .order_by(ContactCenterAppointmentORM.scheduled_at.desc())
         .all()
     )
 
