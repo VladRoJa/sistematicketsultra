@@ -63,6 +63,20 @@ export interface ContactCenterCase {
   updated_at: string;
 }
 
+export interface ContactCenterPurchaseSummary {
+  appointment_id: number;
+  purchase_reported: boolean;
+  purchase_verification_status:
+    | 'NOT_REPORTED'
+    | 'REPORTED_PENDING'
+    | 'VERIFIED'
+    | 'REVIEW'
+    | 'NOT_FOUND_YET';
+  verified_purchase_at: string | null;
+  verified_amount: number | null;
+  verified_tariff: string | null;
+}
+
 export interface ContactCenterContact {
   id: number;
   display_name: string | null;
@@ -75,6 +89,7 @@ export interface ContactCenterContact {
   created_at: string;
   updated_at: string;
   case?: ContactCenterCase;
+  purchase_summary?: ContactCenterPurchaseSummary | null;
 }
 
 export interface ContactCenterInteraction {

@@ -239,6 +239,58 @@ def serialize_appointment(row: ContactCenterAppointmentORM) -> dict[str, Any]:
     }
 
 
+def _portfolio_purchase_summaries(
+    contact_ids: list[int],
+) -> dict[int, dict[str, Any]]:
+    if not contact_ids:
+        return {}
+
+    rows = (
+        ContactCenterAppointmentORM.query
+        .filter(
+            ContactCenterAppointmentORM.contact_id.in_(contact_ids),
+            or_(
+                ContactCenterAppointmentORM.purchase_reported.is_(True),
+                ContactCenterAppointmentORM.purchase_verification_status
+                == "VERIFIED",
+            ),
+        )
+        .order_by(
+            ContactCenterAppointmentORM.contact_id.asc(),
+            ContactCenterAppointmentORM.scheduled_at.desc(),
+        )
+        .all()
+    )
+
+    summaries: dict[int, dict[str, Any]] = {}
+
+    for row in rows:
+        contact_id = int(row.contact_id)
+        current = summaries.get(contact_id)
+        is_verified = row.purchase_verification_status == "VERIFIED"
+
+        if current is not None:
+            if current["purchase_verification_status"] == "VERIFIED":
+                continue
+            if not is_verified:
+                continue
+
+        summaries[contact_id] = {
+            "appointment_id": int(row.id),
+            "purchase_reported": bool(row.purchase_reported),
+            "purchase_verification_status": row.purchase_verification_status,
+            "verified_purchase_at": _iso(row.verified_purchase_at),
+            "verified_amount": (
+                float(row.verified_amount)
+                if row.verified_amount is not None
+                else None
+            ),
+            "verified_tariff": row.verified_tariff,
+        }
+
+    return summaries
+
+
 def list_branches(
     allowed_branch_ids: tuple[int, ...] | None = None,
 ) -> list[dict[str, Any]]:
@@ -484,7 +536,7 @@ def list_contacts(
     )
 
     needle = str(query_text or "").strip().casefold()
-    result = []
+    selected_case_rows: list[ContactCenterCaseORM] = []
     seen_contact_ids: set[int] = set()
 
     for case_row in rows:
@@ -504,8 +556,19 @@ def list_contacts(
                 continue
 
         seen_contact_ids.add(contact_id)
+        selected_case_rows.append(case_row)
+
+    purchase_summaries = _portfolio_purchase_summaries(
+        [int(row.contact_id) for row in selected_case_rows]
+    )
+
+    result = []
+    for case_row in selected_case_rows:
+        contact = case_row.contact
+        contact_id = int(contact.id)
         payload = serialize_contact(contact)
         payload["case"] = serialize_case(case_row)
+        payload["purchase_summary"] = purchase_summaries.get(contact_id)
         result.append(payload)
 
     return result
