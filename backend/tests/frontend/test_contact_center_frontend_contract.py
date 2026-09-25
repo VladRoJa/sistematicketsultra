@@ -16,6 +16,15 @@ COMPONENT_HTML = REPOSITORY_ROOT / (
 COMPONENT_CSS = REPOSITORY_ROOT / (
     "frontend/src/app/contact-center/contact-center.component.css"
 )
+CONTACT_DIALOG_TS = REPOSITORY_ROOT / (
+    "frontend/src/app/contact-center/contact-center-contact-dialog.component.ts"
+)
+CONTACT_DIALOG_HTML = REPOSITORY_ROOT / (
+    "frontend/src/app/contact-center/contact-center-contact-dialog.component.html"
+)
+CONTACT_DIALOG_CSS = REPOSITORY_ROOT / (
+    "frontend/src/app/contact-center/contact-center-contact-dialog.component.css"
+)
 SERVICE_TS = REPOSITORY_ROOT / (
     "frontend/src/app/contact-center/contact-center.service.ts"
 )
@@ -114,15 +123,15 @@ def test_contact_center_v1_exposes_portfolio_crm_and_appointment_calendar():
     assert "getReport(" in service
 
 def test_contact_center_hides_new_appointment_when_one_is_active():
-    component_ts = _read(COMPONENT_TS)
-    component_html = _read(COMPONENT_HTML)
+    dialog_ts = _read(CONTACT_DIALOG_TS)
+    dialog_html = _read(CONTACT_DIALOG_HTML)
 
-    assert "get activeScheduledAppointment()" in component_ts
-    assert "row.status === 'SCHEDULED'" in component_ts
-    assert "manageActiveAppointment()" in component_ts
-    assert "activeCase && canOperateActiveCase && !activeScheduledAppointment" in component_html
-    assert "activeAppointmentHelpText" in component_html
-    assert "Gestionar cita" in component_html
+    assert "get activeScheduledAppointment()" in dialog_ts
+    assert "row.status === 'SCHEDULED'" in dialog_ts
+    assert "manageActiveAppointment()" in dialog_ts
+    assert "activeCase && canOperateActiveCase && !activeScheduledAppointment" in dialog_html
+    assert "activeAppointmentHelpText" in dialog_html
+    assert "Gestionar cita" in dialog_html
 
 def test_contact_center_manager_ui_has_mini_portfolio_crm_and_appointments():
     component_ts = _read(COMPONENT_TS)
@@ -213,16 +222,17 @@ def test_contact_center_crm_keeps_single_phone_search_control():
 
 def test_contact_center_shared_operator_view_is_read_only_for_foreign_cases():
     component_ts = _read(COMPONENT_TS)
-    component_html = _read(COMPONENT_HTML)
-    component_css = _read(COMPONENT_CSS)
+    dialog_ts = _read(CONTACT_DIALOG_TS)
+    dialog_html = _read(CONTACT_DIALOG_HTML)
+    dialog_css = _read(CONTACT_DIALOG_CSS)
 
-    assert "get canOperateActiveCase()" in component_ts
+    assert "get canOperateActiveCase()" in dialog_ts
     assert "return 'Vista compartida';" in component_ts
     assert "showPortfolioAgentColumn" in component_ts
-    assert "activeCase && !canOperateActiveCase" in component_html
-    assert "Solo lectura · asignado a" in component_html
-    assert "activeCase && canOperateActiveCase" in component_html
-    assert ".detail-readonly" in component_css
+    assert "activeCase && !canOperateActiveCase" in dialog_html
+    assert "Solo lectura · asignado a" in dialog_html
+    assert "activeCase && canOperateActiveCase" in dialog_html
+    assert ".readonly-banner" in dialog_css
 
 
 def test_contact_center_manager_crm_does_not_take_foreign_active_case():
@@ -316,3 +326,27 @@ def test_contact_center_portfolio_shows_purchase_summary():
     assert "<th>Compra</th>" in component_html
     assert "{{ portfolioPurchaseLabel(contact) }}" in component_html
     assert "contact.purchase_summary?.verified_amount" in component_html
+
+def test_contact_center_portfolio_opens_contact_detail_as_floating_dialog():
+    component_ts = _read(COMPONENT_TS)
+    component_html = _read(COMPONENT_HTML)
+    dialog_ts = _read(CONTACT_DIALOG_TS)
+    dialog_html = _read(CONTACT_DIALOG_HTML)
+    dialog_css = _read(CONTACT_DIALOG_CSS)
+
+    assert "ContactCenterContactDialogComponent" in component_ts
+    assert "width: '920px'" in component_ts
+    assert "maxWidth: '96vw'" in component_ts
+    assert "maxHeight: '92vh'" in component_ts
+    assert "(click)=\"openContact(contact.id)\"" in component_html
+    assert '<aside class="panel-card detail-panel"' not in component_html
+
+    assert "templateUrl: './contact-center-contact-dialog.component.html'" in dialog_ts
+    assert "styleUrls: ['./contact-center-contact-dialog.component.css']" in dialog_ts
+    assert "get displayCase()" in dialog_ts
+    assert "get purchaseAppointment()" in dialog_ts
+    assert "Registrar seguimiento" in dialog_html
+    assert "Cita programada" in dialog_html
+    assert "Historial" in dialog_html
+    assert "Venta Total" in dialog_html
+    assert "@media (max-width: 640px)" in dialog_css
