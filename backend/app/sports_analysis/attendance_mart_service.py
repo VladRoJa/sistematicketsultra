@@ -295,11 +295,37 @@ def _build_intervals(
     for bucket_index in range(
         BUCKET_COUNT
     ):
+        bucket_start_seconds = (
+            bucket_index
+            * BUCKET_MINUTES
+            * 60
+        )
         bucket_end_seconds = (
             (bucket_index + 1)
             * BUCKET_MINUTES
             * 60
         )
+
+        # Eventos exactamente en el inicio pertenecen
+        # al nuevo intervalo. Aplicarlos antes de medir
+        # evita conservar una salida en el bucket siguiente.
+        while (
+            event_index
+            < len(occupancy_events)
+            and occupancy_events[
+                event_index
+            ][0]
+            <= bucket_start_seconds
+        ):
+            _, delta = occupancy_events[
+                event_index
+            ]
+            occupancy = max(
+                0,
+                occupancy + delta,
+            )
+            event_index += 1
+
         peak = occupancy
 
         while (
