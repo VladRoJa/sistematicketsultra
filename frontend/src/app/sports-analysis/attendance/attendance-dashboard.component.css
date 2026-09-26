@@ -187,7 +187,8 @@
 }
 
 .secondary-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  align-items: start;
 }
 
 .panel {
@@ -319,6 +320,10 @@
 .type-list {
   display: grid;
   gap: 10px;
+}
+
+.type-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .age-row {
@@ -499,6 +504,10 @@ td {
   .filters-grid,
   .kpi-grid,
   .secondary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .type-list {
     grid-template-columns: 1fr;
   }
 
