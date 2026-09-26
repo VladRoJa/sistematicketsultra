@@ -147,6 +147,22 @@ class TicketAttachmentServiceTest(unittest.TestCase):
         self.session.flush.assert_not_called()
         self.session.commit.assert_not_called()
 
+    def test_additional_attachment_can_be_opted_in(self):
+        self.mock_duplicate.return_value = True
+
+        attachment = service.create_ticket_image_attachment(
+            ticket_id=123,
+            content=self.content,
+            original_filename="reintento.png",
+            declared_mime_type="image/png",
+            allow_additional=True,
+        )
+
+        self.assertEqual(attachment.ticket_id, 123)
+        self.mock_duplicate.assert_not_called()
+        self.session.add.assert_called_once_with(attachment)
+        self.session.commit.assert_called_once_with()
+
     def test_database_flush_failure_does_not_write_file(self):
         self.session.flush.side_effect = RuntimeError(
             "simulated flush failure"

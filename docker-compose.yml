@@ -28,6 +28,7 @@ services:
       - .env.docker
     environment:
       APP_ENV: "prod"
+      TICKETS_PREVENTIVE_V1_ENABLED: "${TICKETS_PREVENTIVE_V1_ENABLED:-false}"
       ROUTINE_CONTROL_ARTIFACT_DIR: "/app/runtime/routine-control/artifacts"
       TICKET_ATTACHMENT_DIR: "/app/runtime/ticket-attachments"
 
@@ -130,6 +131,30 @@ services:
     profiles:
       - scheduler
 
+
+  maintenance-preventive-scheduler:
+    build:
+      context: ./backend
+    depends_on:
+      - db
+    env_file:
+      - .env.docker
+    environment:
+      APP_ENV: "prod"
+      TICKETS_PREVENTIVE_V1_ENABLED: "${TICKETS_PREVENTIVE_V1_ENABLED:-false}"
+      MAINTENANCE_PREVENTIVE_SCHEDULER_ENABLED: "true"
+      MAINTENANCE_PREVENTIVE_SCHEDULER_TZ: "America/Tijuana"
+      MAINTENANCE_PREVENTIVE_RUN_TIME: "00:10"
+      MAINTENANCE_PREVENTIVE_SCHEDULER_POLL_SECONDS: "60"
+      MAINTENANCE_PREVENTIVE_RETRY_MINUTES: "15"
+    command: python -m app.services.maintenance_preventive_scheduler_worker
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    networks:
+      - backend-net
+    profiles:
+      - scheduler
 
   ticket-attachment-cleanup:
     build:

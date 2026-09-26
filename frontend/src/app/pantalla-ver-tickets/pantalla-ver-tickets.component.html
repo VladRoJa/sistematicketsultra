@@ -34,6 +34,25 @@
   </button>
 </div>
 
+<div
+  class="tickets-maintenance-type-toggle"
+  *ngIf="puedeMostrarFiltroTipoMantenimiento"
+>
+  <span class="tickets-maintenance-type-toggle__label">Mantenimiento</span>
+
+  <div class="tickets-maintenance-type-toggle__options">
+    <button
+      type="button"
+      class="tickets-maintenance-type-toggle__btn"
+      *ngFor="let option of maintenanceTypeOptions"
+      [class.tickets-maintenance-type-toggle__btn--active]="isMaintenanceTypeActive(option.value)"
+      (click)="onMaintenanceTypeChanged(option.value)"
+    >
+      {{ option.label }}
+    </button>
+  </div>
+</div>
+
 <div class="tickets-year-toolbar">
   <div class="tickets-year-toolbar__content">
 <div class="tickets-year-mini">
@@ -708,35 +727,49 @@
               <span>Cierre gerente</span>
             </button>
 
-            <!-- Botones de validación de cierre para GERENTE / ADMIN -->
+            <!-- Validación de cierre para GERENTE / ADMIN -->
             <div
               *ngIf="puedeMostrarBotonesValidarCierre(ticket)"
               class="acciones-validacion-cierre"
             >
-              <!-- Aceptar -->
-            <div class="ticket-validation-actions">
-              <button
-                type="button"
-                class="ticket-validation-button ticket-validation-button--approve"
-                (click)="aceptarCierre(ticket)"
-                aria-label="Aceptar cierre"
+              <div
+                *ngIf="esPreventivo(ticket); else validacionCorrectiva"
+                class="ticket-validation-actions"
               >
-                <mat-icon>check_circle</mat-icon>
-                <span>Aceptar</span>
-              </button>
+                <button
+                  type="button"
+                  class="ticket-validation-button ticket-validation-button--review"
+                  (click)="abrirRevisionPreventivo(ticket)"
+                  aria-label="Revisar preventivo antes de validar"
+                >
+                  <mat-icon>fact_check</mat-icon>
+                  <span>Revisar preventivo</span>
+                </button>
+              </div>
 
+              <ng-template #validacionCorrectiva>
+                <div class="ticket-validation-actions">
+                  <button
+                    type="button"
+                    class="ticket-validation-button ticket-validation-button--approve"
+                    (click)="aceptarCierre(ticket)"
+                    aria-label="Aceptar cierre"
+                  >
+                    <mat-icon>check_circle</mat-icon>
+                    <span>Aceptar</span>
+                  </button>
 
-                <!-- Rechazar -->
-              <button
-                type="button"
-                class="ticket-validation-button ticket-validation-button--reject"
-                (click)="rechazarCierre(ticket)"
-                aria-label="Rechazar cierre"
-              >
-                <mat-icon>cancel</mat-icon>
-                <span>Rechazar</span>
-              </button>
-            </div>
+                  <button
+                    type="button"
+                    class="ticket-validation-button ticket-validation-button--reject"
+                    (click)="rechazarCierre(ticket)"
+                    aria-label="Rechazar cierre"
+                  >
+                    <mat-icon>cancel</mat-icon>
+                    <span>Rechazar</span>
+                  </button>
+                </div>
+              </ng-template>
             </div>
           </td>
 
@@ -769,6 +802,19 @@
             aria-label="Ver código del equipo"
           >
             <mat-icon>qr_code_2</mat-icon>
+          </button>
+
+          <button
+            *ngIf="ticket.ticket_preventivo_origen_id"
+            type="button"
+            mat-icon-button
+            class="btn-ticket-origin"
+            [matTooltip]="'Detectado en preventivo #' + ticket.ticket_preventivo_origen_id"
+            matTooltipShowDelay="500"
+            (click)="abrirTicketPreventivoOrigen(ticket, $event)"
+            aria-label="Abrir preventivo origen"
+          >
+            <mat-icon>link</mat-icon>
           </button>
 
           <button
@@ -838,6 +884,14 @@
               </ng-container>
             </div>
 
+            <span
+              *ngIf="getEtiquetaTipoMantenimiento(ticket) as maintenanceLabel"
+              class="maintenance-ticket-badge"
+              [ngClass]="getClaseTipoMantenimiento(ticket)"
+            >
+              {{ maintenanceLabel }}
+            </span>
+
             <button
               mat-icon-button
               class="desc-more"
@@ -883,10 +937,7 @@
               {{ ticket.fecha_solucion | date:'dd/MM/yy' }}
 
               <button
-                *ngIf="
-                  puedeEditarTickets &&
-                  ((ticket.estado ?? '').toString().trim().toLowerCase() === 'en progreso')
-                "
+                *ngIf="puedeEditarFechaSolucion(ticket)"
                 mat-icon-button
                 class="boton-editar-fecha"
                 matTooltip="Editar fecha solución"

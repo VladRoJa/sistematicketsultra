@@ -32,7 +32,36 @@ class Ticket(db.Model):
     fecha_creacion = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     fecha_finalizado = db.Column(db.DateTime(timezone=True))
     fecha_en_progreso = db.Column(db.DateTime(timezone=True))
+    # Correctivos: fecha_solucion conserva el compromiso vigente por compatibilidad.
     fecha_solucion = db.Column(db.DateTime(timezone=True))
+
+    # Semántica canónica de mantenimiento.
+    # Nullable para no afectar tickets de otros departamentos.
+    tipo_mantenimiento = db.Column(db.String(20), nullable=True)
+    origen_correctivo = db.Column(db.String(30), nullable=True)
+    maintenance_target_type = db.Column(db.String(20), nullable=True)
+    maintenance_estimated_minutes = db.Column(db.Integer, nullable=True)
+
+    # Correctivos: el original nunca se sobrescribe; fecha_solucion es el vigente.
+    fecha_compromiso_original = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    # Preventivos: programación original y vigente viven separadas del compromiso correctivo.
+    fecha_programada_original = db.Column(db.DateTime(timezone=True), nullable=True)
+    fecha_programada_actual = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    # Momento real en que el gerente/admin valida el cierre.
+    fecha_validacion_cierre = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    # Si un correctivo nació de un preventivo, conserva relación estructural.
+    ticket_preventivo_origen_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            'tickets.id',
+            name='fk_tickets_ticket_preventivo_origen',
+            ondelete='SET NULL',
+        ),
+        nullable=True,
+    )
 
     # Historial flexible
     historial_fechas = db.Column(db.JSON)
@@ -112,6 +141,12 @@ class Ticket(db.Model):
     clasificacion = db.relationship('CatalogoClasificacion', backref='tickets')
     sucursal_destino = db.relationship('Sucursal', foreign_keys=[sucursal_id_destino], backref='tickets_destino')
     categoria_inventario = db.relationship('CategoriaInventario', foreign_keys=[categoria_inventario_id])
+    ticket_preventivo_origen = db.relationship(
+        'Ticket',
+        remote_side=[id],
+        foreign_keys=[ticket_preventivo_origen_id],
+        backref='correctivos_derivados',
+    )
 
     __table_args__ = (
         db.CheckConstraint(
@@ -119,8 +154,46 @@ class Ticket(db.Model):
             "OR condicion_operativa IN ('TRABAJA', 'NO_TRABAJA')",
             name='ck_tickets_condicion_operativa',
         ),
+        db.CheckConstraint(
+            "tipo_mantenimiento IS NULL "
+            "OR tipo_mantenimiento IN ('CORRECTIVO', 'PREVENTIVO')",
+            name='ck_tickets_tipo_mantenimiento',
+        ),
+        db.CheckConstraint(
+            "origen_correctivo IS NULL "
+            "OR origen_correctivo IN ('REACTIVO', 'DETECTADO_EN_PREVENTIVO')",
+            name='ck_tickets_origen_correctivo',
+        ),
+        db.CheckConstraint(
+            "maintenance_target_type IS NULL "
+            "OR maintenance_target_type IN ('EQUIPO', 'EDIFICIO')",
+            name='ck_tickets_maintenance_target_type',
+        ),
+        db.CheckConstraint(
+            "maintenance_estimated_minutes IS NULL "
+            "OR maintenance_estimated_minutes > 0",
+            name='ck_tickets_maintenance_estimated_minutes',
+        ),
+        db.CheckConstraint(
+            "maintenance_target_type IS NULL OR "
+            "(maintenance_target_type = 'EQUIPO' "
+            "AND aparato_id IS NOT NULL) OR "
+            "(maintenance_target_type = 'EDIFICIO' "
+            "AND aparato_id IS NULL "
+            "AND clasificacion_id IS NOT NULL)",
+            name='ck_tickets_maintenance_target_reference',
+        ),
         db.Index('ix_tickets_familia_equipo_id', 'familia_equipo_id'),
         db.Index('ix_tickets_falla_mantenimiento_id', 'falla_mantenimiento_id'),
+        db.Index('ix_tickets_tipo_mantenimiento', 'tipo_mantenimiento'),
+        db.Index(
+            'ix_tickets_maintenance_target_type',
+            'maintenance_target_type',
+        ),
+        db.Index('ix_tickets_fecha_compromiso_original', 'fecha_compromiso_original'),
+        db.Index('ix_tickets_fecha_programada_actual', 'fecha_programada_actual'),
+        db.Index('ix_tickets_fecha_validacion_cierre', 'fecha_validacion_cierre'),
+        db.Index('ix_tickets_ticket_preventivo_origen_id', 'ticket_preventivo_origen_id'),
     )
 
     # ─── Serialización ──────────────────────────
@@ -222,6 +295,16 @@ class Ticket(db.Model):
             'fecha_finalizado': safe_dt_iso(self.fecha_finalizado),
             'fecha_solucion':   safe_dt_iso(self.fecha_solucion),
 
+            'tipo_mantenimiento': self.tipo_mantenimiento,
+            'origen_correctivo': self.origen_correctivo,
+            'maintenance_target_type': self.maintenance_target_type,
+            'maintenance_estimated_minutes': self.maintenance_estimated_minutes,
+            'fecha_compromiso_original': safe_dt_iso(self.fecha_compromiso_original),
+            'fecha_programada_original': safe_dt_iso(self.fecha_programada_original),
+            'fecha_programada_actual': safe_dt_iso(self.fecha_programada_actual),
+            'fecha_validacion_cierre': safe_dt_iso(self.fecha_validacion_cierre),
+            'ticket_preventivo_origen_id': self.ticket_preventivo_origen_id,
+
             'sucursal_id': self.sucursal_id,
             'sucursal_id_destino': self.sucursal_id_destino,
 
@@ -317,6 +400,13 @@ class Ticket(db.Model):
                     aprobador_username: str | None = None,
                     aprobacion_fecha=None,
                     aprobacion_comentario: str | None = None,
+                    tipo_mantenimiento: str | None = None,
+                    origen_correctivo: str | None = None,
+                    maintenance_target_type: str | None = None,
+                    maintenance_estimated_minutes: int | None = None,
+                    fecha_programada_original=None,
+                    fecha_programada_actual=None,
+                    ticket_preventivo_origen_id: int | None = None,
                     commit: bool = True):
         # Sanitizar: si llega un número como texto, lo consideramos vacío (derivaremos la ruta)
         def _clean_text(v):
@@ -328,6 +418,81 @@ class Ticket(db.Model):
         categoria = _clean_text(categoria)
         subcategoria = _clean_text(subcategoria)
         detalle = _clean_text(detalle)
+
+        mantenimiento_tipo = (
+            str(tipo_mantenimiento or "").strip().upper() or None
+        )
+        mantenimiento_origen = (
+            str(origen_correctivo or "").strip().upper() or None
+        )
+        mantenimiento_objetivo = (
+            str(maintenance_target_type or "").strip().upper() or None
+        )
+
+        if maintenance_estimated_minutes in (None, ""):
+            mantenimiento_duracion = None
+        else:
+            try:
+                mantenimiento_duracion = int(maintenance_estimated_minutes)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    "maintenance_estimated_minutes inválido."
+                ) from exc
+            if mantenimiento_duracion <= 0:
+                raise ValueError(
+                    "maintenance_estimated_minutes debe ser mayor a cero."
+                )
+
+        try:
+            es_mantenimiento = int(departamento_id) == 1
+        except (TypeError, ValueError):
+            es_mantenimiento = False
+
+        if es_mantenimiento:
+            mantenimiento_tipo = mantenimiento_tipo or "CORRECTIVO"
+            if mantenimiento_tipo not in {"CORRECTIVO", "PREVENTIVO"}:
+                raise ValueError("tipo_mantenimiento inválido.")
+
+            if mantenimiento_tipo == "CORRECTIVO":
+                mantenimiento_origen = mantenimiento_origen or "REACTIVO"
+                if mantenimiento_origen not in {
+                    "REACTIVO",
+                    "DETECTADO_EN_PREVENTIVO",
+                }:
+                    raise ValueError("origen_correctivo inválido.")
+            else:
+                mantenimiento_origen = None
+
+            if mantenimiento_objetivo is None and aparato_id is not None:
+                mantenimiento_objetivo = "EQUIPO"
+
+            if mantenimiento_objetivo not in {
+                None,
+                "EQUIPO",
+                "EDIFICIO",
+            }:
+                raise ValueError("maintenance_target_type inválido.")
+
+            if (
+                mantenimiento_objetivo == "EQUIPO"
+                and aparato_id is None
+            ):
+                raise ValueError(
+                    "El objetivo EQUIPO requiere aparato_id."
+                )
+
+            if mantenimiento_objetivo == "EDIFICIO":
+                if aparato_id is not None or clasificacion_id is None:
+                    raise ValueError(
+                        "El objetivo EDIFICIO requiere clasificacion_id "
+                        "y no permite aparato_id."
+                    )
+
+        if (
+            fecha_programada_original is not None
+            and fecha_programada_actual is None
+        ):
+            fecha_programada_actual = fecha_programada_original
 
         ticket = cls(
             descripcion=descripcion,
@@ -359,6 +524,14 @@ class Ticket(db.Model):
             aprobador_username=aprobador_username,
             aprobacion_fecha=aprobacion_fecha,
             aprobacion_comentario=aprobacion_comentario,
+
+            tipo_mantenimiento=mantenimiento_tipo,
+            origen_correctivo=mantenimiento_origen,
+            maintenance_target_type=mantenimiento_objetivo,
+            maintenance_estimated_minutes=mantenimiento_duracion,
+            fecha_programada_original=fecha_programada_original,
+            fecha_programada_actual=fecha_programada_actual,
+            ticket_preventivo_origen_id=ticket_preventivo_origen_id,
         )
         db.session.add(ticket)
         db.session.flush()
@@ -415,6 +588,47 @@ class Ticket(db.Model):
             db.session.commit()
 
         return ticket
+
+    def asignar_fecha_compromiso(self, nueva_fecha_compromiso):
+        """Actualiza el compromiso vigente preservando el primero para analítica.
+
+        Para tickets de Mantenimiento existentes que aún no tengan semántica
+        explícita, conserva compatibilidad clasificándolos como correctivos
+        reactivos. Los preventivos no usan este campo como programación.
+        """
+        if nueva_fecha_compromiso is None:
+            raise ValueError("La fecha compromiso es obligatoria.")
+
+        if getattr(nueva_fecha_compromiso, "tzinfo", None) is None:
+            nueva_fecha_compromiso = nueva_fecha_compromiso.replace(
+                tzinfo=timezone.utc
+            )
+        else:
+            nueva_fecha_compromiso = nueva_fecha_compromiso.astimezone(
+                timezone.utc
+            )
+
+        try:
+            es_mantenimiento = int(self.departamento_id or 0) == 1
+        except (TypeError, ValueError):
+            es_mantenimiento = False
+
+        if es_mantenimiento:
+            self.tipo_mantenimiento = (
+                str(self.tipo_mantenimiento or "CORRECTIVO").strip().upper()
+            )
+
+            if self.tipo_mantenimiento == "CORRECTIVO":
+                self.origen_correctivo = (
+                    str(self.origen_correctivo or "REACTIVO").strip().upper()
+                )
+                if self.fecha_compromiso_original is None:
+                    self.fecha_compromiso_original = (
+                        self.fecha_solucion or nueva_fecha_compromiso
+                    )
+
+        self.fecha_solucion = nueva_fecha_compromiso
+        return nueva_fecha_compromiso
 
 
     # ───────────────────────────────────────────────────────────
@@ -548,17 +762,20 @@ class Ticket(db.Model):
 
 
     def aceptar_conformidad_creador(self, commit: bool = True):
-        """El creador confirma el cierre y el ticket pasa a 'finalizado'."""
+        """El gerente/admin confirma el cierre y el ticket pasa a finalizado."""
         from datetime import datetime, timezone
+
+        ahora = datetime.now(timezone.utc)
 
         self.estado_cierre = None
         self.motivo_rechazo_cierre = None
         self.estado = 'finalizado'
+        self.fecha_validacion_cierre = ahora
 
         # Si el jefe ya fijó fecha_finalizado antes, la respetamos.
         # Solo si viene vacío, la ponemos ahora.
         if not self.fecha_finalizado:
-            self.fecha_finalizado = datetime.now(timezone.utc)
+            self.fecha_finalizado = ahora
 
         if commit:
             db.session.commit()
@@ -588,7 +805,26 @@ class Ticket(db.Model):
         self.fecha_finalizado = None
 
         if nueva_fecha_compromiso:
-            self.fecha_solucion = nueva_fecha_compromiso.astimezone(timezone.utc)
+            nueva_fecha_utc = nueva_fecha_compromiso.astimezone(timezone.utc)
+            tipo_mantenimiento = (
+                str(self.tipo_mantenimiento or "").strip().upper()
+            )
+
+            if tipo_mantenimiento == "PREVENTIVO":
+                if self.fecha_programada_original is None:
+                    self.fecha_programada_original = (
+                        self.fecha_programada_actual or nueva_fecha_utc
+                    )
+                self.fecha_programada_actual = nueva_fecha_utc
+            else:
+                if (
+                    int(self.departamento_id or 0) == 1
+                    and self.fecha_compromiso_original is None
+                ):
+                    self.fecha_compromiso_original = (
+                        self.fecha_solucion or nueva_fecha_utc
+                    )
+                self.fecha_solucion = nueva_fecha_utc
 
         self._agregar_evento_historial_cierre(
             evento="rechazo_cierre_gerente",

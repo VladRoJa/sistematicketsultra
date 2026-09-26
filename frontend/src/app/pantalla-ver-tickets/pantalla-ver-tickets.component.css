@@ -55,6 +55,73 @@
   font-size: 14px;
 }
 
+.tickets-maintenance-type-toggle {
+  display: grid;
+  gap: 5px;
+  min-width: 280px;
+}
+
+.tickets-maintenance-type-toggle__label {
+  color: var(--ultra-gray-500);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tickets-maintenance-type-toggle__options {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: 999px;
+  background: var(--ultra-gray-50);
+}
+
+.tickets-maintenance-type-toggle__btn {
+  min-height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ultra-gray-600);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.tickets-maintenance-type-toggle__btn:hover {
+  background: var(--ultra-surface);
+  color: var(--ultra-gray-900);
+}
+
+.tickets-maintenance-type-toggle__btn--active {
+  background: var(--ultra-orange);
+  color: var(--ultra-surface);
+  box-shadow: var(--ultra-shadow-sm);
+}
+
+.tickets-maintenance-type-toggle__btn--active:hover {
+  background: var(--ultra-orange);
+  color: var(--ultra-surface);
+}
+
+@media (max-width: 1100px) {
+  .tickets-page__header {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .tickets-maintenance-type-toggle {
+    min-width: 0;
+  }
+}
+
 .tickets-page__status {
   min-width: 150px;
   padding: 12px 16px;
@@ -845,6 +912,18 @@ td.col-descripcion {
   box-shadow: 0 8px 18px rgba(220, 38, 38, 0.20);
 }
 
+.ticket-validation-button--review {
+  width: 142px;
+  background: var(--ultra-info-soft);
+  color: var(--ultra-blue);
+  box-shadow: 0 6px 14px rgba(44, 69, 149, 0.14);
+}
+
+.ticket-validation-button--review:hover {
+  filter: brightness(0.98);
+  box-shadow: 0 8px 18px rgba(44, 69, 149, 0.20);
+}
+
 
 
 /* ==========================================================================
@@ -1385,6 +1464,28 @@ td.col-descripcion {
   white-space: nowrap;
 }
 
+.btn-ticket-origin {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0;
+  border-radius: 999px;
+  color: var(--ultra-success);
+  background: var(--ultra-success-soft);
+}
+
+.btn-ticket-origin:hover {
+  color: #ffffff;
+  background: var(--ultra-success);
+}
+
+.btn-ticket-origin mat-icon {
+  width: 17px;
+  height: 17px;
+  font-size: 17px;
+  line-height: 17px;
+}
+
 .btn-codigo-equipo {
   width: 28px;
   height: 28px;
@@ -1462,4 +1563,36 @@ td.col-descripcion {
   font-size: 17px;
   line-height: 17px;
   margin-right: 6px;
+}
+
+
+.maintenance-ticket-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 5px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  white-space: normal;
+}
+
+.maintenance-ticket-badge--preventive {
+  background: var(--ultra-orange-soft);
+  color: var(--ultra-orange);
+}
+
+.maintenance-ticket-badge--corrective {
+  background: var(--ultra-gray-100);
+  color: var(--ultra-gray-700);
+}
+
+.maintenance-ticket-badge--derived {
+  background: var(--ultra-success-soft);
+  color: var(--ultra-success);
 }

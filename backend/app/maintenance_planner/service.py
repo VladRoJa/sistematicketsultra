@@ -4,12 +4,12 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.sucursal_model import Sucursal
 from app.models.ticket_model import Ticket
-from app.utils.pm_permissions import can_pm_execute, can_pm_view
+from app.utils.pm_permissions import can_pm_execute, can_pm_reprogram, can_pm_view
 from app.utils.sucursal_audience import (
     SUCURSAL_AUDIENCE_ANALYTICAL,
     SUCURSAL_AUDIENCE_OPERATIONAL,
@@ -270,6 +270,10 @@ def _base_query(user, *, audience: str):
     query = filtrar_tickets_por_usuario(user).filter(
         Ticket.departamento_id == MAINTENANCE_DEPARTMENT_ID,
         ~branch_id.in_(tuple(sorted(TECHNICAL_SUCURSAL_IDS))),
+        or_(
+            Ticket.tipo_mantenimiento.is_(None),
+            Ticket.tipo_mantenimiento == "CORRECTIVO",
+        ),
     )
     query = _apply_planner_role_scope(query, user)
 
@@ -444,6 +448,7 @@ def build_planner_board(
         "permissions": {
             "can_view": True,
             "can_schedule": can_pm_execute(user),
+            "can_reprogram": can_pm_reprogram(user),
         },
     }
 
@@ -484,22 +489,53 @@ def schedule_ticket(ticket_id: int, user, *, due_date: str, reason: str) -> Tick
     due_utc = local_due.astimezone(timezone.utc)
     now_utc = datetime.now(timezone.utc)
 
-    ticket.fecha_solucion = due_utc
+    current_due = _ticket_due_date(ticket)
+    if current_due is not None and current_due != target_date:
+        raise MaintenancePlannerError(
+            "El ticket ya tiene compromiso. Usa la reprogramación "
+            "auditada con motivo de catálogo."
+        )
+
+    ticket.asignar_fecha_compromiso(due_utc)
     if str(ticket.estado or "").strip().lower() == "abierto":
         ticket.estado = "en progreso"
     if ticket.fecha_en_progreso is None:
         ticket.fecha_en_progreso = now_utc
 
     history = list(ticket.historial_fechas or [])
-    history.append(
-        {
-            "fecha": due_utc.isoformat(),
-            "cambiadoPor": str(getattr(user, "username", "") or "").strip(),
-            "fechaCambio": now_utc.isoformat(),
-            "motivo": reason,
-            "origen": "maintenance_planner_v2",
-        }
-    )
+    already_logged = False
+
+    for item in history:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("origen") or "") != "maintenance_planner_v2":
+            continue
+
+        raw_date = str(item.get("fecha") or "").strip()
+        if not raw_date:
+            continue
+
+        try:
+            logged_date = date.fromisoformat(raw_date[:10])
+        except ValueError:
+            continue
+
+        if logged_date == target_date:
+            already_logged = True
+            break
+
+    if not already_logged:
+        history.append(
+            {
+                "fecha": due_utc.isoformat(),
+                "cambiadoPor": str(
+                    getattr(user, "username", "") or ""
+                ).strip(),
+                "fechaCambio": now_utc.isoformat(),
+                "motivo": reason,
+                "origen": "maintenance_planner_v2",
+            }
+        )
     history.sort(
         key=lambda item: str(item.get("fechaCambio") or item.get("fecha") or ""),
         reverse=True,

@@ -3,7 +3,7 @@
 **Documento:** Contrato funcional-técnico  
 **Versión:** 1.0  
 **Fecha:** 18 de septiembre de 2026  
-**Estado:** Aprobado funcionalmente; pendiente de implementación
+**Estado:** Implementado en PR #655; pendiente de validación ejecutable, merge y despliegue
 
 ## 1. Objetivo
 
@@ -206,19 +206,31 @@ Si el código existe pero pertenece a una sucursal distinta de la indicada, debe
 
 Se proporcionará una plantilla de carga preventiva.
 
-Campos mínimos:
+Campos de la plantilla oficial:
 
 - Sucursal.
+- Familia, como selector auxiliar de captura.
 - Código de equipo.
 - Fecha programada.
 - Actividad.
 - Responsable.
 - Observaciones, opcional.
 
+La captura asistida seguirá la dependencia:
+
+```text
+Sucursal
+    ↓
+Familia disponible en esa sucursal
+    ↓
+Código de equipo disponible en esa sucursal y familia
+```
+
+La familia de la plantilla **no será fuente de verdad ni dato operativo autoritativo**. Su función será únicamente facilitar la selección del código de equipo. Suite deberá resolver y validar nuevamente la familia real a partir del código de equipo al procesar el lote.
+
 No deberán solicitarse al usuario:
 
 - IDs internos;
-- familia;
 - categoría interna;
 - semana;
 - mes;
@@ -229,7 +241,7 @@ No deberán solicitarse al usuario:
 
 Suite derivará dichos valores.
 
-La familia deberá obtenerse desde el código del equipo.
+La plantilla podrá incluir catálogos y listas dependientes como ayuda de captura, pero la validación final seguirá siendo responsabilidad del backend.
 
 La carga no generará tickets inmediatamente.
 
@@ -391,11 +403,12 @@ La bitácora incluirá:
 - estado encontrado;
 - trabajo realizado;
 - observaciones;
-- evidencia;
 - checklist;
 - hallazgos;
 - fecha/hora;
 - usuario responsable.
+
+La evidencia fotográfica será opcional y recomendada. La bitácora será obligatoria para marcar el preventivo como realizado. La ausencia de evidencia no bloqueará el envío a validación ni la validación del gerente. La interfaz del técnico iniciará con la opción de adjuntar evidencia activada por defecto para favorecer su captura; el técnico podrá desmarcarla explícitamente cuando el trabajo no requiera evidencia. Si la opción permanece activa, deberá completar la subida antes de marcar realizado.
 
 ## 14. Checklist por familia
 
@@ -472,7 +485,7 @@ El gerente utilizará la vista actual de escritorio para:
 
 - revisar el ticket;
 - consultar bitácora;
-- revisar evidencia;
+- revisar evidencia cuando exista;
 - validar;
 - rechazar.
 
@@ -482,7 +495,7 @@ La adaptación requerida será únicamente permitir consultar dentro del detalle
 
 - checklist preventivo;
 - bitácora;
-- evidencia;
+- evidencia cuando exista;
 - hallazgos;
 - correctivos relacionados.
 
@@ -1092,3 +1105,190 @@ Debe funcionar como un sistema de:
 **planeación → ejecución → validación → trazabilidad → medición → explicación.**
 
 La finalidad es poder observar con evidencia si el mantenimiento preventivo se está ejecutando y si, con el tiempo, la operación correctiva y el backlog disminuyen.
+
+## 51. Estado de implementación V1
+
+La implementación correspondiente a este contrato se encuentra en la PR **#655** sobre la rama `feat/tickets-preventive-maintenance`.
+
+Se implementaron las siete fases funcionales:
+
+1. semántica canónica de mantenimiento en Tickets;
+2. programación manual y batch;
+3. cuadrillas, responsables y Mi programa mobile-first;
+4. bitácora, evidencia, checklist y correctivo derivado;
+5. validación del gerente integrada a Tickets;
+6. panel semanal, backlog histórico y drill-down;
+7. transición reversible del PM legacy.
+
+También quedaron cubiertos los requisitos transversales de:
+
+- reprogramación auditada para preventivos y correctivos;
+- catálogo configurable de motivos;
+- preservación de fecha original;
+- historial de reprogramaciones;
+- navegación preventiva ↔ correctiva;
+- backlog vencido histórico;
+- aging de backlog;
+- separación de correctivos reactivos y detectados preventivamente;
+- feature flag de cutover `TICKETS_PREVENTIVE_V1_ENABLED`.
+
+El procedimiento de activación y rollback se documenta en:
+
+`docs/contratos/ROLLOUT_TICKETS_MANTENIMIENTO_PREVENTIVO_V1.md`
+
+La PR permanece como draft hasta ejecutar las pruebas Python/Angular en un entorno con acceso al repositorio y realizar el smoke test previo al cutover.
+
+
+## 52. Extensión V1.1 — Recurrencia y objetivos de Edificio
+
+La programación preventiva soportará dos tipos de objetivo estructurados:
+
+```text
+EQUIPO
+EDIFICIO
+```
+
+### Equipo
+
+Un preventivo de `EQUIPO` deberá conservar la referencia a
+`inventario_general.id` y continuará utilizando el código interno, familia y
+checklist por familia cuando exista.
+
+### Edificio
+
+Un preventivo de `EDIFICIO` no inventará un equipo de Inventario.
+
+La fuente única del objetivo será el árbol existente:
+
+```text
+catalogo_clasificacion
+Mantenimiento
+└── Edificio
+    └── ...
+```
+
+Únicamente serán válidos nodos activos descendientes reales de
+`Mantenimiento → Edificio`. No se creará un catálogo paralelo.
+
+El Ticket conservará:
+
+- `maintenance_target_type = EDIFICIO`;
+- `clasificacion_id` con el nodo oficial;
+- `aparato_id = NULL`.
+
+La bitácora conservará el mismo tipo de objetivo y la misma clasificación.
+Si durante un preventivo de Edificio se genera un correctivo, dicho correctivo
+heredará el objetivo de Edificio y la clasificación del preventivo origen.
+
+## 53. Recurrencia preventiva
+
+La recurrencia se expresará en **días hábiles**, contando únicamente:
+
+```text
+lunes
+martes
+miércoles
+jueves
+viernes
+```
+
+Sábado y domingo no incrementan el contador.
+
+Una programación recurrente deberá conservar:
+
+- tipo y referencia del objetivo;
+- sucursal;
+- responsable;
+- actividad;
+- observaciones;
+- fecha inicial;
+- intervalo en días hábiles;
+- próxima fecha programada;
+- estado activo.
+
+Cada fecha materializada será una ocurrencia auditable y generará su propio
+Ticket. No se reutilizará el Ticket anterior.
+
+La próxima fecha se calculará desde la fecha que correspondía a la serie, no
+desde la fecha de cierre real del Ticket. Por lo tanto, una ejecución tardía no
+desplazará silenciosamente la cadencia original.
+
+La combinación:
+
+```text
+schedule_id + scheduled_date
+```
+
+será única para evitar generación duplicada.
+
+## 54. Worker de recurrencia
+
+La materialización recurrente se ejecutará fuera de Gunicorn mediante:
+
+```text
+python -m app.services.maintenance_preventive_scheduler_worker
+```
+
+El worker:
+
+- utilizará `America/Tijuana`;
+- correrá bajo el profile Docker `scheduler`;
+- respetará `TICKETS_PREVENTIVE_V1_ENABLED`;
+- hará `db.session.remove()` en cada ciclo;
+- generará como máximo una ocurrencia pendiente por serie y ejecución;
+- utilizará bloqueo de filas para evitar carreras entre workers;
+- hará rollback y reintentará ante errores de ejecución.
+
+El horario será configurable y su valor inicial será 00:10.
+
+## 55. Batch e importación V1.1
+
+La programación manual y la plantilla oficial compartirán el mismo contrato.
+
+Las columnas adicionales serán:
+
+- `Tipo`: Equipo o Edificio;
+- `Clasificación edificio`: solo para Edificio;
+- `Se repite`: Sí/No;
+- `Cada N días hábiles`: intervalo positivo cuando se repite.
+
+Por compatibilidad:
+
+- una fila sin `Tipo` se interpreta como Equipo;
+- las plantillas anteriores continúan siendo válidas;
+- `Código equipo` deja de ser obligatorio a nivel de encabezado, pero sí es
+  obligatorio para una fila de Equipo;
+- `Clasificación edificio` es obligatoria para una fila de Edificio;
+- Equipo y Edificio no pueden mezclarse dentro del mismo renglón.
+
+Las filas inválidas deberán conservar sus valores originales para poder
+corregirse antes de publicar.
+
+## 56. Mi programa V1.1
+
+La vista del técnico deberá identificar el objetivo sin asumir que todos los
+trabajos tienen código de equipo.
+
+Ejemplos:
+
+```text
+EQUIPO
+04CC01 · Caminadora
+```
+
+```text
+EDIFICIO
+Baños > Mingitorios
+```
+
+Ambos objetivos utilizarán el mismo flujo:
+
+```text
+programación
+→ Ticket
+→ Mi programa
+→ bitácora
+→ validación
+→ historial
+```
+
