@@ -15,25 +15,10 @@ from app.models.suite_governance import (
 )
 from app.models.user_model import UserORM
 from app.models.warehouse import TrackBranchCatalogORM
-from app.utils.scope_utils import (
-    normalize_branch_ids,
-    normalize_role,
-)
+from app.utils.scope_utils import normalize_role
 
 
-SPORTS_ANALYSIS_GLOBAL_ROLES = frozenset(
-    {
-        "ADMIN",
-        "ADMINISTRADOR",
-        "SUPER_ADMIN",
-        "LECTOR_GLOBAL",
-        "GERENCIA DEPORTIVA",
-    }
-)
-SPORTS_ANALYSIS_ALLOWED_ROLES = (
-    SPORTS_ANALYSIS_GLOBAL_ROLES
-    | {"GERENTE", "GERENTE_REGIONAL"}
-)
+SPORTS_ANALYSIS_BETA_USERNAME = "ADMICORP"
 
 
 class SportsAnalysisAuthorizationError(
@@ -63,82 +48,40 @@ def get_current_sports_analysis_user() -> UserORM:
         raise SportsAnalysisAuthorizationError(
             "Usuario no encontrado."
         )
+
+    username = str(
+        user.username or ""
+    ).strip().upper()
+    if username != SPORTS_ANALYSIS_BETA_USERNAME:
+        raise SportsAnalysisAuthorizationError(
+            "Aforo y Asistencia está habilitado "
+            "únicamente para ADMICORP durante la beta."
+        )
+
     return user
 
 
 def resolve_sports_analysis_scope(
     user: UserORM,
 ) -> SportsAnalysisScope:
-    role = normalize_role(user.rol)
-    if role not in SPORTS_ANALYSIS_ALLOWED_ROLES:
+    username = str(
+        user.username or ""
+    ).strip().upper()
+    if username != SPORTS_ANALYSIS_BETA_USERNAME:
         raise SportsAnalysisAuthorizationError(
-            "No tienes acceso a Análisis Deportivo."
+            "Aforo y Asistencia está habilitado "
+            "únicamente para ADMICORP durante la beta."
         )
 
     all_branch_ids = tuple(
         item["id"]
         for item in list_sports_analysis_branches()
     )
-    all_branch_set = set(all_branch_ids)
-
-    if role in SPORTS_ANALYSIS_GLOBAL_ROLES:
-        return SportsAnalysisScope(
-            role=role,
-            is_global=True,
-            allowed_branch_ids=all_branch_ids,
-            fixed_branch_id=None,
-        )
-
-    if role == "GERENTE":
-        try:
-            branch_id = int(user.sucursal_id)
-        except (TypeError, ValueError) as exc:
-            raise SportsAnalysisAuthorizationError(
-                "El gerente no tiene una "
-                "sucursal válida."
-            ) from exc
-
-        if branch_id not in all_branch_set:
-            raise SportsAnalysisAuthorizationError(
-                "La sucursal del gerente no está "
-                "habilitada para Análisis Deportivo."
-            )
-
-        return SportsAnalysisScope(
-            role=role,
-            is_global=False,
-            allowed_branch_ids=(branch_id,),
-            fixed_branch_id=branch_id,
-        )
-
-    assigned = normalize_branch_ids(
-        user.sucursales_ids
-    )
-    if not assigned:
-        try:
-            assigned = (int(user.sucursal_id),)
-        except (TypeError, ValueError) as exc:
-            raise SportsAnalysisAuthorizationError(
-                "El gerente regional no tiene "
-                "sucursales autorizadas."
-            ) from exc
-
-    effective = tuple(
-        branch_id
-        for branch_id in assigned
-        if branch_id in all_branch_set
-    )
-    if not effective:
-        raise SportsAnalysisAuthorizationError(
-            "El gerente regional no tiene "
-            "sucursales activas para "
-            "Análisis Deportivo."
-        )
 
     return SportsAnalysisScope(
-        role=role,
-        is_global=False,
-        allowed_branch_ids=effective,
+        role=normalize_role(user.rol),
+        is_global=True,
+        allowed_branch_ids=all_branch_ids,
         fixed_branch_id=None,
     )
 
