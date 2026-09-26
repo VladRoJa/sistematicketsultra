@@ -63,7 +63,7 @@ private readonly mainMenuPriority: string[] = [
   'Track',
   'Aperturas',
   'Automatización',
-  'Control de Rutinas',
+  'Análisis Deportivo',
   'Marketing y Conversión',
   'Warehouse',
   'Planeación',
@@ -251,13 +251,30 @@ ngOnInit(): void {
     ],
   };
 
-  const menuControlRutinas = {
-    label: 'Control de Rutinas',
-    path: '/control-rutinas',
-    submenu: [
-      { label: 'Resumen operativo', path: '/control-rutinas' },
-      { label: 'Historial de corridas', path: '/control-rutinas/corridas' },
-    ],
+  const sportsAnalysisUsername = String(
+    this.authService.getUser()?.username ?? ''
+  ).trim().toUpperCase();
+
+  const sportsAnalysisSubmenu: Array<{ label: string; path: string }> = [];
+
+  if (this.puedeVerControlRutinasPorRol()) {
+    sportsAnalysisSubmenu.push({
+      label: 'Control de Rutinas',
+      path: '/control-rutinas',
+    });
+  }
+
+  if (sportsAnalysisUsername === 'ADMICORP') {
+    sportsAnalysisSubmenu.push({
+      label: 'Aforo y Asistencia',
+      path: '/analisis-deportivo/aforo-asistencia',
+    });
+  }
+
+  const menuAnalisisDeportivo = {
+    label: 'Análisis Deportivo',
+    path: sportsAnalysisSubmenu[0]?.path || '/main/ver-tickets',
+    submenu: sportsAnalysisSubmenu,
   };
 
   const marketingConversionSubmenu: Array<{ label: string; path: string }> = [];
@@ -475,12 +492,14 @@ if (
 }
 
 if (
-  this.puedeVerControlRutinasPorRol() &&
-  !this.menuItems.some((item) => item.label === 'Control de Rutinas')
+  sportsAnalysisSubmenu.length > 0
+  && !this.menuItems.some(
+    (item) => item.label === 'Análisis Deportivo'
+  )
 ) {
   this.menuItems = [
     ...this.menuItems,
-    menuControlRutinas,
+    menuAnalisisDeportivo,
   ];
 }
 
@@ -1348,21 +1367,6 @@ private puedeVerGascaSmsPorRol(): boolean {
     'SISTEMAS',
     'GERENTE_REGIONAL',
 
-  ].includes(rol);
-}
-
-private puedeVerControlRutinasPorRol(): boolean {
-  const user = this.authService.getUser();
-  const rol = String(user?.rol ?? user?.role ?? '').trim().toUpperCase();
-
-  return [
-    'ADMIN',
-    'ADMINISTRADOR',
-    'SUPER_ADMIN',
-    'LECTOR_GLOBAL',
-    'GERENTE',
-    'GERENTE_REGIONAL',
-    "GERENCIA DEPORTIVA",
   ].includes(rol);
 }
 

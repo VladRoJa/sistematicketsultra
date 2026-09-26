@@ -26,6 +26,7 @@ import { trackRegionalOperationalAccessGuard } from './warehouse/track-intellige
 import { trackTiendaCompositionAccessGuard } from './warehouse/track-tienda-composition/track-tienda-composition-access.guard';
 import { MarketingSalesFunnelAccessGuard } from './marketing-sales-funnel/marketing-sales-funnel-access.guard';
 import { contactCenterAccessGuard } from './contact-center/contact-center-access.guard';
+import { sportsAnalysisAccessGuard } from './sports-analysis/sports-analysis-access.guard';
 
 
 
@@ -264,6 +265,13 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./rpa/gasca-sms/gasca-sms-requests.component')
             .then(m => m.GascaSmsRequestsComponent),
+      },
+      {
+        path: 'analisis-deportivo/aforo-asistencia',
+        canActivate: [sportsAnalysisAccessGuard],
+        loadComponent: () =>
+          import('./sports-analysis/attendance/attendance-dashboard.component')
+            .then((m) => m.AttendanceDashboardComponent),
       },
       {
         path: 'control-rutinas',

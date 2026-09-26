@@ -128,6 +128,14 @@ from .routine_control import (
     RoutineControlProviderRunORM,
 )
 
+from .attendance import (
+    TrackAttendanceDailyMartORM,
+    TrackAttendanceIntervalMartORM,
+    WarehouseAttendanceRejectionORM,
+    WarehouseAttendanceRunORM,
+    WarehouseAttendanceVisitORM,
+)
+
 # -------------------------------------------------------------------------------
 # EXPORTACIONES: Control de qué modelos estarán disponibles al importar app.models
 # -------------------------------------------------------------------------------
@@ -231,4 +239,9 @@ __all__ = [
     "RoutineControlProviderRunORM",
     "GascaSmsRequestORM",
     "GascaSmsRequestStatus",
+    "TrackAttendanceDailyMartORM",
+    "TrackAttendanceIntervalMartORM",
+    "WarehouseAttendanceRejectionORM",
+    "WarehouseAttendanceRunORM",
+    "WarehouseAttendanceVisitORM",
 ]
