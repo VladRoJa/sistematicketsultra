@@ -251,16 +251,30 @@ ngOnInit(): void {
     ],
   };
 
+  const sportsAnalysisUsername = String(
+    this.authService.getUser()?.username ?? ''
+  ).trim().toUpperCase();
+
+  const sportsAnalysisSubmenu: Array<{ label: string; path: string }> = [];
+
+  if (this.puedeVerControlRutinasPorRol()) {
+    sportsAnalysisSubmenu.push({
+      label: 'Control de Rutinas',
+      path: '/control-rutinas',
+    });
+  }
+
+  if (sportsAnalysisUsername === 'ADMICORP') {
+    sportsAnalysisSubmenu.push({
+      label: 'Aforo y Asistencia',
+      path: '/analisis-deportivo/aforo-asistencia',
+    });
+  }
+
   const menuAnalisisDeportivo = {
     label: 'Análisis Deportivo',
-    path: '/control-rutinas',
-    submenu: [
-      { label: 'Control de Rutinas', path: '/control-rutinas' },
-      {
-        label: 'Aforo y Asistencia',
-        path: '/analisis-deportivo/aforo-asistencia',
-      },
-    ],
+    path: sportsAnalysisSubmenu[0]?.path || '/main/ver-tickets',
+    submenu: sportsAnalysisSubmenu,
   };
 
   const marketingConversionSubmenu: Array<{ label: string; path: string }> = [];
@@ -477,7 +491,17 @@ if (
   ];
 }
 
-this.habilitarAnalisisDeportivoEnMenuSiAplica(menuAnalisisDeportivo);
+if (
+  sportsAnalysisSubmenu.length > 0
+  && !this.menuItems.some(
+    (item) => item.label === 'Análisis Deportivo'
+  )
+) {
+  this.menuItems = [
+    ...this.menuItems,
+    menuAnalisisDeportivo,
+  ];
+}
 
 if (
   this.puedeVerMarketingConversionPorRol() &&
@@ -507,41 +531,6 @@ this.habilitarWarehouseEnMenuSiAplica(menuWarehouse);
       this.cargarTicketValidationSummary();
     });
   }
-
-private habilitarAnalisisDeportivoEnMenuSiAplica(
-  menuAnalisisDeportivo: any,
-): void {
-  if (
-    this.menuItems.some(
-      (item) => item.label === 'Análisis Deportivo',
-    )
-  ) {
-    return;
-  }
-
-  this.http
-    .get<any>(`${environment.apiUrl}/sports-analysis/context`)
-    .subscribe({
-      next: () => {
-        if (
-          this.menuItems.some(
-            (item) => item.label === 'Análisis Deportivo',
-          )
-        ) {
-          return;
-        }
-
-        this.menuItems = [
-          ...this.menuItems,
-          menuAnalisisDeportivo,
-        ];
-        this.sincronizarMenuConRutaActual();
-      },
-      error: () => {
-        // El backend es la fuente real del permiso.
-      },
-    });
-}
 
 private habilitarControlEnMenuSiAplica(menuControl: any): void {
   if (this.menuItems.some((item) => item.label === 'Control')) {
