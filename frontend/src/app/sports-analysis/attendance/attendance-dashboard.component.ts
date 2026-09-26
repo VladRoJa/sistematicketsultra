@@ -276,6 +276,7 @@ export class AttendanceDashboardComponent implements OnInit {
       + quality.cross_day
       + quality.invalid_time
       + quality.unresolved_branch
+      + quality.non_operational_excluded
     );
   }
 
