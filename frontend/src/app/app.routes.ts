@@ -25,7 +25,7 @@ import { CommercialPromotionsComponent } from './warehouse/commercial-promotions
 import { trackRegionalOperationalAccessGuard } from './warehouse/track-intelligence-regional-operational/track-regional-operational-access.guard';
 import { trackTiendaCompositionAccessGuard } from './warehouse/track-tienda-composition/track-tienda-composition-access.guard';
 import { MarketingSalesFunnelAccessGuard } from './marketing-sales-funnel/marketing-sales-funnel-access.guard';
-import { contactCenterAccessGuard } from './contact-center/contact-center-access.guard';
+import { contactCenterAccessGuard } from './contact-center/contact-center-access.guard';\nimport { sportsAnalysisAccessGuard } from './sports-analysis/sports-analysis-access.guard';
 
 
 
@@ -266,7 +266,15 @@ export const routes: Routes = [
             .then(m => m.GascaSmsRequestsComponent),
       },
       {
+        path: 'analisis-deportivo/aforo-asistencia',
+        canActivate: [sportsAnalysisAccessGuard],
+        loadComponent: () =>
+          import('./sports-analysis/attendance/attendance-dashboard.component')
+            .then((m) => m.AttendanceDashboardComponent),
+      },
+      {
         path: 'control-rutinas',
+        canActivate: [sportsAnalysisAccessGuard],
         loadChildren: () =>
           import('./routine-control/routine-control.routes')
             .then((m) => m.ROUTINE_CONTROL_ROUTES),

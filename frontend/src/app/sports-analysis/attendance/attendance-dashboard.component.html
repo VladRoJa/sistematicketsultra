@@ -1,0 +1,326 @@
+<section class="attendance-page">
+  <header class="page-header">
+    <div>
+      <span class="eyebrow">ANÁLISIS DEPORTIVO</span>
+      <h1>Aforo y Asistencia</h1>
+      <p>
+        Comportamiento de visitas, aforo simultáneo y horarios de mayor actividad.
+      </p>
+    </div>
+
+    <div class="period-chip" *ngIf="dateFrom && dateTo">
+      <span>Periodo</span>
+      <strong>{{ periodLabel }}</strong>
+    </div>
+  </header>
+
+  <mat-card class="filters-card">
+    <div class="filters-grid">
+      <mat-form-field appearance="outline">
+        <mat-label>Desde</mat-label>
+        <input matInput type="date" [(ngModel)]="dateFrom">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Hasta</mat-label>
+        <input matInput type="date" [(ngModel)]="dateTo">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Región</mat-label>
+        <mat-select
+          [ngModel]="selectedRegionKey"
+          (ngModelChange)="onRegionChange($event)">
+          <mat-option [value]="null">Todas</mat-option>
+          <mat-option
+            *ngFor="let region of catalogs?.regions"
+            [value]="region.key">
+            {{ region.name }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Sucursal</mat-label>
+        <mat-select
+          [ngModel]="selectedBranchId"
+          (ngModelChange)="onBranchChange($event)">
+          <mat-option [value]="null">Todas</mat-option>
+          <mat-option
+            *ngFor="let branch of availableBranches"
+            [value]="branch.id">
+            {{ branch.name }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Público</mat-label>
+        <mat-select [(ngModel)]="selectedAttendanceType">
+          <mat-option
+            *ngFor="let type of catalogs?.attendance_types"
+            [value]="type">
+            {{ attendanceTypeLabel(type) }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <button
+        mat-flat-button
+        class="apply-button"
+        type="button"
+        [disabled]="loading"
+        (click)="applyFilters()">
+        Actualizar
+      </button>
+    </div>
+  </mat-card>
+
+  <div class="state-card error" *ngIf="errorMessage">
+    {{ errorMessage }}
+  </div>
+
+  <div class="loading-shell" *ngIf="loading">
+    <mat-spinner diameter="42"></mat-spinner>
+    <span>Consultando asistencia...</span>
+  </div>
+
+  <ng-container *ngIf="!loading && dashboard">
+    <section class="kpi-grid">
+      <article class="kpi-card">
+        <span>Visitas</span>
+        <strong>{{ formatNumber(dashboard.summary.visits) }}</strong>
+        <small>{{ attendanceTypeLabel(dashboard.filters.attendance_type) }}</small>
+      </article>
+
+      <article class="kpi-card">
+        <span>Socios únicos</span>
+        <strong>{{ formatNumber(dashboard.summary.unique_members) }}</strong>
+        <small>PIN distintos en el periodo</small>
+      </article>
+
+      <article class="kpi-card accent">
+        <span>Aforo pico</span>
+        <strong>{{ formatNumber(dashboard.summary.peak_occupancy) }}</strong>
+        <small>
+          {{ formatDate(dashboard.summary.peak_business_date) }}
+          · {{ formatMinute(dashboard.summary.peak_minute) }}
+        </small>
+      </article>
+
+      <article class="kpi-card">
+        <span>Estancia mediana</span>
+        <strong>{{ formatDuration(dashboard.summary.median_duration_seconds) }}</strong>
+        <small>
+          Promedio {{ formatDuration(dashboard.summary.average_duration_seconds) }}
+        </small>
+      </article>
+    </section>
+
+    <section class="content-grid main-grid" *ngIf="hasData">
+      <mat-card class="panel occupancy-card">
+        <div class="panel-heading">
+          <div>
+            <span class="eyebrow">AFORO</span>
+            <h2>{{ occupancyChartTitle }}</h2>
+          </div>
+          <small>Intervalos de 15 minutos</small>
+        </div>
+
+        <div class="chart-scroll" *ngIf="occupancyChart as chart">
+          <svg
+            class="occupancy-chart"
+            [attr.viewBox]="'0 0 ' + chart.width + ' ' + chart.height"
+            role="img"
+            aria-label="Curva de aforo">
+            <g class="grid-lines">
+              <line
+                *ngFor="let tick of chart.yTicks"
+                [attr.x1]="chart.plotX"
+                [attr.x2]="chart.plotX + chart.plotWidth"
+                [attr.y1]="tick.y"
+                [attr.y2]="tick.y">
+              </line>
+            </g>
+
+            <g class="y-axis-labels">
+              <text
+                *ngFor="let tick of chart.yTicks"
+                [attr.x]="chart.plotX - 10"
+                [attr.y]="tick.y + 4"
+                text-anchor="end">
+                {{ tick.label }}
+              </text>
+            </g>
+
+            <polyline
+              class="occupancy-line"
+              [attr.points]="chart.points">
+            </polyline>
+
+            <g class="occupancy-points">
+              <circle
+                *ngFor="let point of chart.pointItems"
+                [attr.cx]="point.x"
+                [attr.cy]="point.y"
+                r="2.5">
+                <title>
+                  {{ point.label }} · {{ formatNumber(point.value) }}
+                </title>
+              </circle>
+            </g>
+
+            <g class="x-axis-labels">
+              <text
+                *ngFor="let tick of chart.xTicks"
+                [attr.x]="tick.x"
+                [attr.y]="chart.plotY + chart.plotHeight + 24"
+                text-anchor="middle">
+                {{ tick.label }}
+              </text>
+            </g>
+          </svg>
+        </div>
+
+        <div class="empty-mini" *ngIf="!occupancyChart">
+          Sin datos de aforo para el filtro seleccionado.
+        </div>
+      </mat-card>
+
+      <mat-card class="panel hour-card">
+        <div class="panel-heading">
+          <div>
+            <span class="eyebrow">FLUJO</span>
+            <h2>Entradas por hora</h2>
+          </div>
+        </div>
+
+        <div class="hour-bars">
+          <div class="hour-column" *ngFor="let item of hourBars">
+            <span class="hour-value">{{ formatNumber(item.entries) }}</span>
+            <div class="hour-track">
+              <div
+                class="hour-fill"
+                [style.height.%]="item.heightPercent">
+              </div>
+            </div>
+            <small>{{ item.label }}</small>
+          </div>
+        </div>
+      </mat-card>
+    </section>
+
+    <section class="content-grid secondary-grid" *ngIf="hasData">
+      <mat-card class="panel">
+        <div class="panel-heading">
+          <div>
+            <span class="eyebrow">PERFIL</span>
+            <h2>Distribución por edad</h2>
+          </div>
+        </div>
+
+        <div class="age-list">
+          <div class="age-row" *ngFor="let item of ageBars">
+            <span>{{ item.label }}</span>
+            <div class="age-track">
+              <div
+                class="age-fill"
+                [style.width.%]="item.widthPercent">
+              </div>
+            </div>
+            <strong>{{ formatNumber(item.visits) }}</strong>
+          </div>
+        </div>
+      </mat-card>
+
+      <mat-card class="panel">
+        <div class="panel-heading">
+          <div>
+            <span class="eyebrow">PÚBLICO</span>
+            <h2>Tipo de asistencia</h2>
+          </div>
+        </div>
+
+        <div class="type-list">
+          <div
+            class="type-row"
+            *ngFor="let item of dashboard.attendance_type_distribution">
+            <span>{{ attendanceTypeLabel(item.attendance_type) }}</span>
+            <strong>{{ formatNumber(item.visits) }}</strong>
+          </div>
+        </div>
+      </mat-card>
+    </section>
+
+    <mat-card class="panel ranking-card" *ngIf="hasData">
+      <div class="panel-heading">
+        <div>
+          <span class="eyebrow">SUCURSALES</span>
+          <h2>Ranking de actividad</h2>
+        </div>
+        <small>Ordenado por visitas</small>
+      </div>
+
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Sucursal</th>
+              <th>Visitas</th>
+              <th>Únicos</th>
+              <th>Aforo pico</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              *ngFor="let row of dashboard.branch_ranking; let i = index">
+              <td>{{ i + 1 }}</td>
+              <td>
+                <strong>{{ row.branch_name }}</strong>
+              </td>
+              <td>{{ formatNumber(row.visits) }}</td>
+              <td>{{ formatNumber(row.unique_members) }}</td>
+              <td>{{ formatNumber(row.peak_occupancy) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </mat-card>
+
+    <mat-card
+      class="quality-card"
+      *ngIf="qualityTotal() > 0">
+      <div>
+        <strong>Calidad de datos</strong>
+        <span>
+          Estos registros se conservan, pero no todos participan en el cálculo de aforo.
+        </span>
+      </div>
+      <div class="quality-pills">
+        <span>Abiertas {{ formatNumber(dashboard.data_quality.open) }}</span>
+        <span>Entre días {{ formatNumber(dashboard.data_quality.cross_day) }}</span>
+        <span>Tiempo inválido {{ formatNumber(dashboard.data_quality.invalid_time) }}</span>
+        <span *ngIf="dashboard.data_quality.unresolved_branch">
+          Sucursal sin resolver {{ formatNumber(dashboard.data_quality.unresolved_branch) }}
+        </span>
+      </div>
+    </mat-card>
+
+    <div class="empty-state" *ngIf="!hasData">
+      <strong>Aún no hay datos para este filtro.</strong>
+      <span>
+        Cuando exista una ingesta de asistencia, esta pantalla se poblará automáticamente.
+      </span>
+    </div>
+  </ng-container>
+
+  <div
+    class="empty-state"
+    *ngIf="!loading && !dashboard && !errorMessage">
+    <strong>Aún no hay asistencias cargadas.</strong>
+    <span>
+      La pantalla ya está lista para recibir la primera ingesta estructurada.
+    </span>
+  </div>
+</section>

@@ -256,6 +256,10 @@ ngOnInit(): void {
     path: '/control-rutinas',
     submenu: [
       { label: 'Control de Rutinas', path: '/control-rutinas' },
+      {
+        label: 'Aforo y Asistencia',
+        path: '/analisis-deportivo/aforo-asistencia',
+      },
     ],
   };
 
@@ -473,15 +477,7 @@ if (
   ];
 }
 
-if (
-  this.puedeVerControlRutinasPorRol() &&
-  !this.menuItems.some((item) => item.label === 'Análisis Deportivo')
-) {
-  this.menuItems = [
-    ...this.menuItems,
-    menuAnalisisDeportivo,
-  ];
-}
+this.habilitarAnalisisDeportivoEnMenuSiAplica(menuAnalisisDeportivo);
 
 if (
   this.puedeVerMarketingConversionPorRol() &&
@@ -511,6 +507,41 @@ this.habilitarWarehouseEnMenuSiAplica(menuWarehouse);
       this.cargarTicketValidationSummary();
     });
   }
+
+private habilitarAnalisisDeportivoEnMenuSiAplica(
+  menuAnalisisDeportivo: any,
+): void {
+  if (
+    this.menuItems.some(
+      (item) => item.label === 'Análisis Deportivo',
+    )
+  ) {
+    return;
+  }
+
+  this.http
+    .get<any>(`${environment.apiUrl}/sports-analysis/context`)
+    .subscribe({
+      next: () => {
+        if (
+          this.menuItems.some(
+            (item) => item.label === 'Análisis Deportivo',
+          )
+        ) {
+          return;
+        }
+
+        this.menuItems = [
+          ...this.menuItems,
+          menuAnalisisDeportivo,
+        ];
+        this.sincronizarMenuConRutaActual();
+      },
+      error: () => {
+        // El backend es la fuente real del permiso.
+      },
+    });
+}
 
 private habilitarControlEnMenuSiAplica(menuControl: any): void {
   if (this.menuItems.some((item) => item.label === 'Control')) {
@@ -1347,21 +1378,6 @@ private puedeVerGascaSmsPorRol(): boolean {
     'SISTEMAS',
     'GERENTE_REGIONAL',
 
-  ].includes(rol);
-}
-
-private puedeVerControlRutinasPorRol(): boolean {
-  const user = this.authService.getUser();
-  const rol = String(user?.rol ?? user?.role ?? '').trim().toUpperCase();
-
-  return [
-    'ADMIN',
-    'ADMINISTRADOR',
-    'SUPER_ADMIN',
-    'LECTOR_GLOBAL',
-    'GERENTE',
-    'GERENTE_REGIONAL',
-    "GERENCIA DEPORTIVA",
   ].includes(rol);
 }
 
