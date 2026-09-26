@@ -99,6 +99,7 @@ def capture_and_ingest_attendance(
             run.id,
             run.source_rows,
             run.inserted_rows,
+            run.updated_rows,
             run.rejected_rows,
         )
         return result
