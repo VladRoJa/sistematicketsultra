@@ -160,13 +160,11 @@ No se infiere sexo por nombre.
 
 El backend es la fuente real de autorización.
 
-Perfiles iniciales:
+Durante la beta inicial, **Aforo y Asistencia sólo está habilitado para el usuario ADMICORP**. La validación se realiza nuevamente en backend en cada endpoint; ocultar el menú no constituye autorización.
 
-- Global: ADMIN, ADMINISTRADOR, SUPER_ADMIN, LECTOR_GLOBAL, GERENCIA DEPORTIVA.
-- Sucursal: GERENTE.
-- Regional: GERENTE_REGIONAL según sus sucursales asignadas.
+**Control de Rutinas conserva exactamente su audiencia y permisos actuales.** Moverlo debajo de Análisis Deportivo sólo cambia su jerarquía de navegación.
 
-El frontend consulta `/api/sports-analysis/context` para habilitar navegación y además protege las rutas; los endpoints vuelven a validar el scope.
+El frontend protege únicamente la ruta de Aforo y Asistencia. La ruta `/control-rutinas` mantiene su comportamiento previo y sus endpoints continúan aplicando sus propias reglas de acceso.
 
 ## 12. API v1
 
