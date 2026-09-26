@@ -304,6 +304,9 @@
         <span *ngIf="dashboard.data_quality.unresolved_branch">
           Sucursal sin resolver {{ formatNumber(dashboard.data_quality.unresolved_branch) }}
         </span>
+        <span *ngIf="dashboard.data_quality.non_operational_excluded">
+          No operativas excluidas {{ formatNumber(dashboard.data_quality.non_operational_excluded) }}
+        </span>
       </div>
     </mat-card>
 
