@@ -63,7 +63,7 @@ private readonly mainMenuPriority: string[] = [
   'Track',
   'Aperturas',
   'Automatización',
-  'Control de Rutinas',
+  'Análisis Deportivo',
   'Marketing y Conversión',
   'Warehouse',
   'Planeación',
@@ -251,12 +251,11 @@ ngOnInit(): void {
     ],
   };
 
-  const menuControlRutinas = {
-    label: 'Control de Rutinas',
+  const menuAnalisisDeportivo = {
+    label: 'Análisis Deportivo',
     path: '/control-rutinas',
     submenu: [
-      { label: 'Resumen operativo', path: '/control-rutinas' },
-      { label: 'Historial de corridas', path: '/control-rutinas/corridas' },
+      { label: 'Control de Rutinas', path: '/control-rutinas' },
     ],
   };
 
@@ -476,11 +475,11 @@ if (
 
 if (
   this.puedeVerControlRutinasPorRol() &&
-  !this.menuItems.some((item) => item.label === 'Control de Rutinas')
+  !this.menuItems.some((item) => item.label === 'Análisis Deportivo')
 ) {
   this.menuItems = [
     ...this.menuItems,
-    menuControlRutinas,
+    menuAnalisisDeportivo,
   ];
 }
 
