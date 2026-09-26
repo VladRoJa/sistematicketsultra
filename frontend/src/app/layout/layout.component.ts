@@ -1600,6 +1600,21 @@ private puedeVerGascaSmsPorRol(): boolean {
   ].includes(rol);
 }
 
+private puedeVerControlRutinasPorRol(): boolean {
+  const user = this.authService.getUser();
+  const rol = String(user?.rol ?? user?.role ?? '').trim().toUpperCase();
+
+  return [
+    'ADMIN',
+    'ADMINISTRADOR',
+    'SUPER_ADMIN',
+    'LECTOR_GLOBAL',
+    'GERENTE',
+    'GERENTE_REGIONAL',
+    'GERENCIA DEPORTIVA',
+  ].includes(rol);
+}
+
 private puedeVerMarketingSalesFunnelPorRol(): boolean {
   const user = this.authService.getUser();
   const rol = String(user?.rol ?? user?.role ?? '').trim().toUpperCase();
