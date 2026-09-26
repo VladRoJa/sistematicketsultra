@@ -102,6 +102,7 @@ export interface AttendanceDataQuality {
   cross_day: number;
   invalid_time: number;
   unresolved_branch: number;
+  non_operational_excluded: number;
 }
 
 export interface AttendanceDashboard {
