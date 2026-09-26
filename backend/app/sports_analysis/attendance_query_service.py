@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import date
 from statistics import mean
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from app.extensions import db
 from app.models.attendance import (
@@ -27,6 +27,7 @@ from .attendance_mart_service import (
 
 DEFAULT_ATTENDANCE_TYPE = "SOCIO"
 MAX_RANGE_DAYS = 93
+NON_OPERATIONAL_SOURCE_BRANCHES = ("CORP CDMX",)
 
 AGE_BUCKETS = (
     ("0-17", 0, 17),
@@ -945,6 +946,7 @@ def _data_quality(
     }
 
     unresolved_visits = 0
+    non_operational_excluded = 0
     if scope.is_global:
         unresolved_query = (
             db.session.query(
@@ -960,6 +962,34 @@ def _data_quality(
                 ),
                 WarehouseAttendanceVisitORM
                 .sucursal_id.is_(None),
+                or_(
+                    WarehouseAttendanceVisitORM
+                    .source_branch_name.is_(None),
+                    WarehouseAttendanceVisitORM
+                    .source_branch_name.notin_(
+                        NON_OPERATIONAL_SOURCE_BRANCHES
+                    ),
+                ),
+            )
+        )
+        non_operational_query = (
+            db.session.query(
+                func.count(
+                    WarehouseAttendanceVisitORM.id
+                )
+            )
+            .filter(
+                WarehouseAttendanceVisitORM
+                .business_date.between(
+                    date_from,
+                    date_to,
+                ),
+                WarehouseAttendanceVisitORM
+                .sucursal_id.is_(None),
+                WarehouseAttendanceVisitORM
+                .source_branch_name.in_(
+                    NON_OPERATIONAL_SOURCE_BRANCHES
+                ),
             )
         )
         if (
@@ -973,8 +1003,19 @@ def _data_quality(
                     == attendance_type
                 )
             )
+            non_operational_query = (
+                non_operational_query.filter(
+                    WarehouseAttendanceVisitORM
+                    .attendance_type
+                    == attendance_type
+                )
+            )
         unresolved_visits = (
             unresolved_query.scalar()
+            or 0
+        )
+        non_operational_excluded = (
+            non_operational_query.scalar()
             or 0
         )
 
@@ -994,6 +1035,9 @@ def _data_quality(
         ),
         "unresolved_branch": int(
             unresolved_visits
+        ),
+        "non_operational_excluded": int(
+            non_operational_excluded
         ),
     }
 
@@ -1050,5 +1094,6 @@ def _empty_dashboard(
             "cross_day": 0,
             "invalid_time": 0,
             "unresolved_branch": 0,
+            "non_operational_excluded": 0,
         },
     }

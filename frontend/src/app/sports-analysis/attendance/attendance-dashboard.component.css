@@ -183,11 +183,19 @@
 }
 
 .main-grid {
-  grid-template-columns: minmax(0, 1.55fr) minmax(360px, 0.85fr);
+  grid-template-columns: minmax(0, 1.4fr) minmax(460px, 1fr);
 }
 
 .secondary-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  align-items: start;
+}
+
+.secondary-grid > .panel {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  box-sizing: border-box;
 }
 
 .panel {
@@ -255,20 +263,20 @@
 }
 
 .hour-bars {
-  min-height: 260px;
+  min-height: 238px;
   display: grid;
-  grid-template-columns: repeat(24, minmax(16px, 1fr));
+  grid-template-columns: repeat(24, minmax(0, 1fr));
   align-items: end;
-  gap: 4px;
-  padding: 26px 2px 0;
-  overflow-x: auto;
+  gap: 3px;
+  padding: 20px 0 0;
+  overflow: hidden;
 }
 
 .hour-column {
-  min-width: 22px;
-  height: 230px;
+  min-width: 0;
+  height: 218px;
   display: grid;
-  grid-template-rows: 22px 1fr 24px;
+  grid-template-rows: 18px 1fr 18px;
   align-items: end;
   text-align: center;
 }
@@ -289,7 +297,7 @@
 
 .hour-track {
   width: 100%;
-  height: 176px;
+  height: 172px;
   display: flex;
   align-items: flex-end;
   border-radius: 8px 8px 3px 3px;
@@ -306,17 +314,23 @@
 
 .hour-column small {
   color: #98a2b3;
-  font-size: 8px;
+  font-size: 7px;
   font-weight: 800;
-  transform: rotate(-55deg);
-  transform-origin: center;
   white-space: nowrap;
+}
+
+.hour-column:nth-child(even) small {
+  visibility: hidden;
 }
 
 .age-list,
 .type-list {
   display: grid;
   gap: 10px;
+}
+
+.type-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .age-row {
@@ -497,6 +511,10 @@ td {
   .filters-grid,
   .kpi-grid,
   .secondary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .type-list {
     grid-template-columns: 1fr;
   }
 

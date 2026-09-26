@@ -1,0 +1,198 @@
+<section class="crew-page">
+  <header class="crew-header">
+    <div>
+      <span class="crew-eyebrow">Tickets · Mantenimiento</span>
+      <h1>Cuadrillas y personal</h1>
+      <p>
+        Define quién puede recibir trabajos preventivos y la región operativa de cada cuadrilla.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      class="button button--ghost"
+      (click)="loadCatalog()"
+      [disabled]="loading || saving"
+    >
+      Actualizar
+    </button>
+  </header>
+
+  <div *ngIf="errorMessage" class="alert alert--error">
+    {{ errorMessage }}
+  </div>
+  <div *ngIf="successMessage" class="alert alert--success">
+    {{ successMessage }}
+  </div>
+
+  <div class="crew-layout">
+    <section class="panel">
+      <header class="panel__header">
+        <div>
+          <span class="panel__eyebrow">Cobertura</span>
+          <h2>Cuadrillas</h2>
+        </div>
+      </header>
+
+      <div class="create-row">
+        <label>
+          <span>Nombre</span>
+          <input
+            type="text"
+            [(ngModel)]="newCrewName"
+            placeholder="Ej. Cuadrilla MXL / SL"
+          />
+        </label>
+
+        <label>
+          <span>Región</span>
+          <select [(ngModel)]="newCrewRegionId">
+            <option [ngValue]="null">Sin región</option>
+            <option
+              *ngFor="let region of catalog.regions"
+              [ngValue]="region.id"
+            >
+              {{ region.label }}
+            </option>
+          </select>
+        </label>
+
+        <button
+          type="button"
+          class="button button--primary"
+          (click)="createCrew()"
+          [disabled]="saving"
+        >
+          Crear cuadrilla
+        </button>
+      </div>
+
+      <div class="rows">
+        <article
+          *ngFor="let crew of catalog.crews; trackBy: trackCrew"
+          class="editable-row"
+        >
+          <input type="text" [(ngModel)]="crew.nombre" />
+
+          <select [(ngModel)]="crew.region_id">
+            <option [ngValue]="null">Sin región</option>
+            <option
+              *ngFor="let region of catalog.regions"
+              [ngValue]="region.id"
+            >
+              {{ region.label }}
+            </option>
+          </select>
+
+          <label class="toggle">
+            <input type="checkbox" [(ngModel)]="crew.activo" />
+            <span>Activa</span>
+          </label>
+
+          <button
+            type="button"
+            class="text-button"
+            (click)="saveCrew(crew)"
+            [disabled]="saving"
+          >
+            Guardar
+          </button>
+        </article>
+
+        <div *ngIf="!catalog.crews.length && !loading" class="empty-state">
+          Aún no hay cuadrillas configuradas.
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <header class="panel__header">
+        <div>
+          <span class="panel__eyebrow">Responsables</span>
+          <h2>Personal de Mantenimiento</h2>
+        </div>
+      </header>
+
+      <div class="create-row">
+        <label>
+          <span>Usuario Suite</span>
+          <select [(ngModel)]="newPersonnelUserId">
+            <option [ngValue]="null">Selecciona</option>
+            <option
+              *ngFor="let candidate of availableCandidates"
+              [ngValue]="candidate.user_id"
+            >
+              {{ candidate.username }} · {{ candidate.rol }}
+            </option>
+          </select>
+        </label>
+
+        <label>
+          <span>Cuadrilla</span>
+          <select [(ngModel)]="newPersonnelCrewId">
+            <option [ngValue]="null">Sin cuadrilla</option>
+            <option
+              *ngFor="let crew of catalog.crews"
+              [ngValue]="crew.id"
+              [disabled]="!crew.activo"
+            >
+              {{ crew.nombre }}{{ crew.region ? ' · ' + crew.region : '' }}
+            </option>
+          </select>
+        </label>
+
+        <button
+          type="button"
+          class="button button--primary"
+          (click)="createPersonnel()"
+          [disabled]="saving || !availableCandidates.length"
+        >
+          Agregar personal
+        </button>
+      </div>
+
+      <div class="rows">
+        <article
+          *ngFor="let row of catalog.personnel; trackBy: trackPersonnel"
+          class="editable-row editable-row--person"
+        >
+          <div class="person-copy">
+            <strong>{{ row.username }}</strong>
+            <small>{{ row.rol }}</small>
+          </div>
+
+          <select [(ngModel)]="row.crew_id">
+            <option [ngValue]="null">Sin cuadrilla</option>
+            <option
+              *ngFor="let crew of catalog.crews"
+              [ngValue]="crew.id"
+              [disabled]="!crew.activo"
+            >
+              {{ crew.nombre }}{{ crew.region ? ' · ' + crew.region : '' }}
+            </option>
+          </select>
+
+          <label class="toggle">
+            <input type="checkbox" [(ngModel)]="row.activo" />
+            <span>Activo</span>
+          </label>
+
+          <button
+            type="button"
+            class="text-button"
+            (click)="savePersonnel(row)"
+            [disabled]="saving"
+          >
+            Guardar
+          </button>
+        </article>
+
+        <div *ngIf="!catalog.personnel.length && !loading" class="empty-state">
+          Aún no hay personal habilitado para programación preventiva.
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div *ngIf="loading" class="loading-note">Cargando catálogo…</div>
+</section>
