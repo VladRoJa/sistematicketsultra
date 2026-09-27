@@ -307,6 +307,18 @@
   stroke-width: 1.8;
 }
 
+.occupancy-points .drillable-point {
+  cursor: pointer;
+  transition:
+    r 0.15s ease,
+    fill 0.15s ease;
+}
+
+.occupancy-points .drillable-point:hover {
+  fill: #dbeafe;
+  r: 4.5px;
+}
+
 .hour-bars {
   min-height: 238px;
   display: grid;
@@ -323,7 +335,24 @@
   display: grid;
   grid-template-rows: 18px 1fr 18px;
   align-items: end;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
   text-align: center;
+  cursor: pointer;
+}
+
+.hour-column:hover .hour-track,
+.hour-column:focus-visible .hour-track {
+  background: #dbeafe;
+}
+
+.hour-column:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.35);
+  outline-offset: 3px;
+  border-radius: 8px;
 }
 
 .hour-value {
@@ -383,6 +412,21 @@
   grid-template-columns: 62px 1fr 72px;
   align-items: center;
   gap: 10px;
+  width: 100%;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.age-row:hover,
+.age-row:focus-visible {
+  background: #f8fafc;
+  outline: none;
 }
 
 .age-row span {
@@ -414,9 +458,21 @@
   align-items: center;
   justify-content: space-between;
   gap: 14px;
+  width: 100%;
   padding: 10px 12px;
+  border: 0;
   border-radius: 12px;
   background: #f8fafc;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.type-row:hover,
+.type-row:focus-visible {
+  background: #eff6ff;
+  outline: none;
 }
 
 .type-row span {
@@ -502,6 +558,27 @@ th {
 
 td {
   color: #344054;
+}
+
+.table-detail-button {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.table-detail-button:hover,
+.table-detail-button:focus-visible {
+  color: #2563eb;
+  text-decoration: underline;
+  outline: none;
+}
+
+.branch-detail-button {
+  text-align: left;
 }
 
 .quality-card {
