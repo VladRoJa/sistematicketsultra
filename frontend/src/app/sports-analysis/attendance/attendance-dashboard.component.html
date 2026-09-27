@@ -16,17 +16,17 @@
 
   <mat-card class="filters-card">
     <div class="filters-grid">
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="fill">
         <mat-label>Desde</mat-label>
         <input matInput type="date" [(ngModel)]="dateFrom">
       </mat-form-field>
 
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="fill">
         <mat-label>Hasta</mat-label>
         <input matInput type="date" [(ngModel)]="dateTo">
       </mat-form-field>
 
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="fill">
         <mat-label>Región</mat-label>
         <mat-select
           [ngModel]="selectedRegionKey"
@@ -40,7 +40,7 @@
         </mat-select>
       </mat-form-field>
 
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="fill">
         <mat-label>Sucursal</mat-label>
         <mat-select
           [ngModel]="selectedBranchId"
@@ -54,7 +54,7 @@
         </mat-select>
       </mat-form-field>
 
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="fill">
         <mat-label>Público</mat-label>
         <mat-select [(ngModel)]="selectedAttendanceType">
           <mat-option
@@ -233,6 +233,29 @@
       </mat-card>
     </section>
 
+    <div class="distribution-toolbar" *ngIf="hasData">
+      <span>Mostrar</span>
+      <div
+        class="metric-switch"
+        role="group"
+        aria-label="Métrica de distribución">
+        <button
+          type="button"
+          [class.active]="distributionMetric === 'visits'"
+          [attr.aria-pressed]="distributionMetric === 'visits'"
+          (click)="setDistributionMetric('visits')">
+          Visitas
+        </button>
+        <button
+          type="button"
+          [class.active]="distributionMetric === 'unique_members'"
+          [attr.aria-pressed]="distributionMetric === 'unique_members'"
+          (click)="setDistributionMetric('unique_members')">
+          Socios únicos
+        </button>
+      </div>
+    </div>
+
     <section class="content-grid secondary-grid" *ngIf="hasData">
       <mat-card class="panel profile-panel">
         <div class="panel-heading">
@@ -255,7 +278,7 @@
                 [style.width.%]="item.widthPercent">
               </div>
             </div>
-            <strong>{{ formatNumber(item.visits) }}</strong>
+            <strong>{{ formatNumber(item.value) }}</strong>
           </button>
         </div>
       </mat-card>
@@ -272,10 +295,10 @@
           <button
             type="button"
             class="type-row"
-            *ngFor="let item of dashboard.attendance_type_distribution"
-            (click)="openAttendanceTypeDetail(item.attendance_type)">
-            <span>{{ attendanceTypeLabel(item.attendance_type) }}</span>
-            <strong>{{ formatNumber(item.visits) }}</strong>
+            *ngFor="let item of attendanceTypeBars"
+            (click)="openAttendanceTypeDetail(item.attendanceType)">
+            <span>{{ item.label }}</span>
+            <strong>{{ formatNumber(item.value) }}</strong>
           </button>
         </div>
       </mat-card>
