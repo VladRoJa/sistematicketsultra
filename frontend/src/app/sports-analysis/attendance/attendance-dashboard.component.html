@@ -258,7 +258,17 @@
           <span class="eyebrow">SUCURSALES</span>
           <h2>Ranking de actividad</h2>
         </div>
-        <small>Ordenado por visitas</small>
+        <div class="ranking-heading-actions">
+          <small>Ordenado por visitas</small>
+          <button
+            *ngIf="hasMoreRankingRows"
+            mat-button
+            type="button"
+            class="ranking-toggle"
+            (click)="toggleRanking()">
+            {{ showFullRanking ? 'Ver Top 10' : 'Ver ranking completo' }}
+          </button>
+        </div>
       </div>
 
       <div class="table-scroll">
@@ -274,7 +284,7 @@
           </thead>
           <tbody>
             <tr
-              *ngFor="let row of dashboard.branch_ranking; let i = index">
+              *ngFor="let row of visibleBranchRanking; let i = index">
               <td>{{ i + 1 }}</td>
               <td>
                 <strong>{{ row.branch_name }}</strong>
