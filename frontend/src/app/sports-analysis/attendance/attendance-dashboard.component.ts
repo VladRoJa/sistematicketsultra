@@ -3,6 +3,8 @@ import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { MAT_DATE_LOCALE } from '@angular/material/core';
+import { MatDatepickerModule } from '@angular/material/datepicker';
 import {
   MatDialog,
   MatDialogModule,
@@ -97,6 +99,7 @@ type RankingSortDirection = 'asc' | 'desc';
     FormsModule,
     MatButtonModule,
     MatCardModule,
+    MatDatepickerModule,
     MatDialogModule,
     MatFormFieldModule,
     MatInputModule,
@@ -105,6 +108,12 @@ type RankingSortDirection = 'asc' | 'desc';
   ],
   templateUrl: './attendance-dashboard.component.html',
   styleUrls: ['./attendance-dashboard.component.css'],
+  providers: [
+    {
+      provide: MAT_DATE_LOCALE,
+      useValue: 'es-MX',
+    },
+  ],
 })
 export class AttendanceDashboardComponent implements OnInit {
   catalogs: AttendanceCatalogs | null = null;
@@ -112,6 +121,8 @@ export class AttendanceDashboardComponent implements OnInit {
 
   dateFrom = '';
   dateTo = '';
+  dateFromPicker: Date | null = null;
+  dateToPicker: Date | null = null;
   selectedRegionKey: string | null = null;
   selectedBranchId: number | null = null;
   selectedAttendanceType = 'SOCIO';
@@ -323,6 +334,12 @@ export class AttendanceDashboardComponent implements OnInit {
             catalogs.latest_business_date,
           );
           this.dateTo = catalogs.latest_business_date;
+          this.dateFromPicker = this.isoToDate(
+            this.dateFrom,
+          );
+          this.dateToPicker = this.isoToDate(
+            this.dateTo,
+          );
           this.loadDashboard();
           return;
         }
@@ -351,6 +368,16 @@ export class AttendanceDashboardComponent implements OnInit {
     }
 
     this.loadDashboard();
+  }
+
+  onDateFromChange(value: Date | null): void {
+    this.dateFromPicker = value;
+    this.dateFrom = this.dateToIso(value);
+  }
+
+  onDateToChange(value: Date | null): void {
+    this.dateToPicker = value;
+    this.dateTo = this.dateToIso(value);
   }
 
   onRegionChange(regionKey: string | null): void {
@@ -771,6 +798,42 @@ export class AttendanceDashboardComponent implements OnInit {
       === 'unique_members'
       ? row.unique_members
       : row.visits;
+  }
+
+  private isoToDate(
+    isoDate: string,
+  ): Date | null {
+    const match =
+      /^(\d{4})-(\d{2})-(\d{2})$/
+        .exec(isoDate);
+
+    if (!match) {
+      return null;
+    }
+
+    return new Date(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+    );
+  }
+
+  private dateToIso(
+    value: Date | null,
+  ): string {
+    if (!value) {
+      return '';
+    }
+
+    const year = value.getFullYear();
+    const month = String(
+      value.getMonth() + 1,
+    ).padStart(2, '0');
+    const day = String(
+      value.getDate(),
+    ).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
   }
 
   private monthStart(
