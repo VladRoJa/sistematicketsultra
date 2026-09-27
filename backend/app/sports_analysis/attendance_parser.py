@@ -435,8 +435,8 @@ def _build_fingerprint(
         identity = f"PIN:{member_pin}"
     else:
         # Nombre/apellido sólo participan dentro del
-        # hash para desambiguar filas sin PIN. Nunca
-        # se persisten en las tablas de asistencia.
+        # hash para desambiguar filas sin PIN. Con PIN,
+        # la huella sigue dependiendo sólo del PIN.
         fallback = "|".join(
             part
             for part in (
