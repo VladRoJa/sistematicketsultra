@@ -13,13 +13,15 @@ import pandas as pd
 
 
 TIJUANA_TZ = ZoneInfo("America/Tijuana")
-PARSER_VERSION = "v1"
+PARSER_VERSION = "v2"
 
 REQUIRED_COLUMNS = frozenset(
     {
         "Pin",
         "Entrada",
         "Salida",
+        "Nombre",
+        "Apellido",
         "Edad",
         "Ciudad",
         "Sucursal",
@@ -52,6 +54,8 @@ class AttendanceVisitRecord:
     business_date: date
     source_row_number: int
     member_pin: str | None
+    source_first_name: str | None
+    source_last_name: str | None
     source_branch_name: str
     entered_at_utc: datetime
     exited_at_utc: datetime | None
@@ -238,6 +242,12 @@ def _parse_row(
         row.get("Edad")
     )
     member_pin = _clean_text(row.get("Pin"))
+    source_first_name = _clean_text(
+        row.get("Nombre")
+    )
+    source_last_name = _clean_text(
+        row.get("Apellido")
+    )
     member_since = _parse_optional_date(
         row.get("Alta")
     )
@@ -252,12 +262,8 @@ def _parse_row(
         entered_at_utc=entered_utc,
         source_branch_name=source_branch_name,
         attendance_type=attendance_type,
-        fallback_name=_clean_text(
-            row.get("Nombre")
-        ),
-        fallback_last_name=_clean_text(
-            row.get("Apellido")
-        ),
+        fallback_name=source_first_name,
+        fallback_last_name=source_last_name,
         source_row_number=source_row_number,
     )
 
@@ -265,6 +271,8 @@ def _parse_row(
         business_date=business_date,
         source_row_number=source_row_number,
         member_pin=member_pin,
+        source_first_name=source_first_name,
+        source_last_name=source_last_name,
         source_branch_name=source_branch_name,
         entered_at_utc=entered_utc,
         exited_at_utc=(
