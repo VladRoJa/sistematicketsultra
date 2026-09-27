@@ -211,53 +211,29 @@
     </section>
 
     <section class="content-grid secondary-grid" *ngIf="hasData">
-      <div class="secondary-column">
-        <mat-card class="panel">
-          <div class="panel-heading">
-            <div>
-              <span class="eyebrow">PERFIL</span>
-              <h2>Distribución por edad</h2>
-            </div>
-          </div>
-
-          <div class="age-list">
-            <div class="age-row" *ngFor="let item of ageBars">
-              <span>{{ item.label }}</span>
-              <div class="age-track">
-                <div
-                  class="age-fill"
-                  [style.width.%]="item.widthPercent">
-                </div>
-              </div>
-              <strong>{{ formatNumber(item.visits) }}</strong>
-            </div>
-          </div>
-        </mat-card>
-
-        <mat-card
-          class="quality-card compact-quality-card"
-          *ngIf="qualityTotal() > 0">
+      <mat-card class="panel profile-panel">
+        <div class="panel-heading">
           <div>
-            <strong>Calidad de datos</strong>
-            <span>
-              Se conservan para auditoría, pero no todos participan en el aforo.
-            </span>
+            <span class="eyebrow">PERFIL</span>
+            <h2>Distribución por edad</h2>
           </div>
-          <div class="quality-pills">
-            <span>Abiertas {{ formatNumber(dashboard.data_quality.open) }}</span>
-            <span>Entre días {{ formatNumber(dashboard.data_quality.cross_day) }}</span>
-            <span>Tiempo inválido {{ formatNumber(dashboard.data_quality.invalid_time) }}</span>
-            <span *ngIf="dashboard.data_quality.unresolved_branch">
-              Sin resolver {{ formatNumber(dashboard.data_quality.unresolved_branch) }}
-            </span>
-            <span *ngIf="dashboard.data_quality.non_operational_excluded">
-              No operativas {{ formatNumber(dashboard.data_quality.non_operational_excluded) }}
-            </span>
-          </div>
-        </mat-card>
-      </div>
+        </div>
 
-      <mat-card class="panel">
+        <div class="age-list">
+          <div class="age-row" *ngFor="let item of ageBars">
+            <span>{{ item.label }}</span>
+            <div class="age-track">
+              <div
+                class="age-fill"
+                [style.width.%]="item.widthPercent">
+              </div>
+            </div>
+            <strong>{{ formatNumber(item.visits) }}</strong>
+          </div>
+        </div>
+      </mat-card>
+
+      <mat-card class="panel audience-panel">
         <div class="panel-heading">
           <div>
             <span class="eyebrow">PÚBLICO</span>
