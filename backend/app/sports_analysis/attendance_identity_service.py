@@ -433,22 +433,49 @@ def _load_exact_candidates_batch(
         if pin and member_since is not None
     ]
 
+    member_since_expr = func.date(
+        SociosActivosSnapshotRowORM
+        .fecha_ingreso_local
+    )
+
     for chunk in _chunked(
         normalized_keys,
         chunk_size,
     ):
-        rows = (
+        ranked = (
             session.query(
-                SociosActivosSnapshotRowORM.pin,
-                func.date(
-                    SociosActivosSnapshotRowORM
-                    .fecha_ingreso_local
-                ).label("member_since"),
-                SociosActivosSnapshotRowORM.id_socio,
-                SociosActivosSnapshotRowORM.nombre,
+                SociosActivosSnapshotRowORM.pin.label(
+                    "pin"
+                ),
+                member_since_expr.label(
+                    "member_since"
+                ),
+                SociosActivosSnapshotRowORM.id_socio.label(
+                    "id_socio"
+                ),
+                SociosActivosSnapshotRowORM.nombre.label(
+                    "nombre"
+                ),
                 SociosActivosSnapshotORM.id.label(
                     "snapshot_id"
                 ),
+                func.row_number()
+                .over(
+                    partition_by=(
+                        SociosActivosSnapshotRowORM.pin,
+                        member_since_expr,
+                        SociosActivosSnapshotRowORM.id_socio,
+                    ),
+                    order_by=(
+                        SociosActivosSnapshotORM.cutoff_date
+                        .desc(),
+                        SociosActivosSnapshotORM.captured_at
+                        .desc(),
+                        SociosActivosSnapshotORM.id.desc(),
+                        SociosActivosSnapshotRowORM.id.desc(),
+                    ),
+                )
+                .label("row_number"),
             )
             .join(
                 SociosActivosSnapshotORM,
@@ -464,19 +491,22 @@ def _load_exact_candidates_batch(
                 .is_(True),
                 tuple_(
                     SociosActivosSnapshotRowORM.pin,
-                    func.date(
-                        SociosActivosSnapshotRowORM
-                        .fecha_ingreso_local
-                    ),
+                    member_since_expr,
                 ).in_(chunk),
             )
-            .order_by(
-                SociosActivosSnapshotORM.cutoff_date
-                .desc(),
-                SociosActivosSnapshotORM.captured_at
-                .desc(),
-                SociosActivosSnapshotORM.id.desc(),
-                SociosActivosSnapshotRowORM.id.desc(),
+            .subquery()
+        )
+
+        rows = (
+            session.query(
+                ranked.c.pin,
+                ranked.c.member_since,
+                ranked.c.id_socio,
+                ranked.c.nombre,
+                ranked.c.snapshot_id,
+            )
+            .filter(
+                ranked.c.row_number == 1
             )
             .all()
         )
@@ -530,7 +560,6 @@ def _load_exact_candidates_batch(
         for key, candidates
         in result.items()
     }
-
 
 def _load_same_day_snapshot_ids_batch(
     session: Any,
