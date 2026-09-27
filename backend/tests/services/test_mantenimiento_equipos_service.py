@@ -61,7 +61,13 @@ class MantenimientoEquiposServiceTest(unittest.TestCase):
             refaccion_definida_por_jefe=False,
             fecha_solucion=None,
             fecha_en_progreso=None,
+            fecha_compromiso_original=None,
+            tipo_mantenimiento=None,
+            origen_correctivo=None,
             historial_fechas=[],
+        )
+        self.ticket.asignar_fecha_compromiso = lambda value: (
+            service.Ticket.asignar_fecha_compromiso(self.ticket, value)
         )
         self.payload = {
             "fecha_solucion": "2026-09-02T07:00:00-07:00",
@@ -110,6 +116,12 @@ class MantenimientoEquiposServiceTest(unittest.TestCase):
         self.assertEqual(self.ticket.falla_mantenimiento_id, 70)
         self.assertEqual(self.ticket.condicion_operativa, "NO_TRABAJA")
         self.assertEqual(self.ticket.estado, "en progreso")
+        self.assertEqual(self.ticket.tipo_mantenimiento, "CORRECTIVO")
+        self.assertEqual(self.ticket.origen_correctivo, "REACTIVO")
+        self.assertEqual(
+            self.ticket.fecha_compromiso_original,
+            self.ticket.fecha_solucion,
+        )
         self.assertEqual(self.ticket.descripcion_refaccion, "Banda")
         self.assertEqual(
             self.ticket.historial_fechas[0]["motivo"],
@@ -149,6 +161,46 @@ class MantenimientoEquiposServiceTest(unittest.TestCase):
         self.assertEqual(
             [item["motivo"] for item in self.ticket.historial_fechas],
             ["Programación de reparación", "Compromiso inicial"],
+        )
+
+    def test_diagnostico_no_reprograma_compromiso_existente(self):
+        self.ticket.fecha_solucion = datetime(
+            2026,
+            9,
+            1,
+            14,
+            0,
+            tzinfo=timezone.utc,
+        )
+        self.ticket.fecha_compromiso_original = self.ticket.fecha_solucion
+        self.ticket.tipo_mantenimiento = "CORRECTIVO"
+        self.ticket.origen_correctivo = "REACTIVO"
+
+        with self.assertRaisesRegex(
+            service.MantenimientoEquiposError,
+            "reprogramación auditada",
+        ):
+            self._prepare()
+
+    def test_diagnostico_permite_repetir_misma_fecha(self):
+        self.ticket.fecha_solucion = datetime(
+            2026,
+            9,
+            2,
+            14,
+            0,
+            tzinfo=timezone.utc,
+        )
+        self.ticket.fecha_compromiso_original = self.ticket.fecha_solucion
+        self.ticket.tipo_mantenimiento = "CORRECTIVO"
+        self.ticket.origen_correctivo = "REACTIVO"
+
+        result, _ = self._prepare()
+
+        self.assertIs(result, self.ticket)
+        self.assertEqual(
+            self.ticket.fecha_solucion.date().isoformat(),
+            "2026-09-02",
         )
 
     def test_falla_de_otra_familia_es_rechazada(self):

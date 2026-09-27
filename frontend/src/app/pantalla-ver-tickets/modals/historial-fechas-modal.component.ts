@@ -60,6 +60,15 @@ export class HistorialFechasModalComponent {
     return `estado-${estado || 'sin-estado'}`;
   }
 
+  esPreventivo(): boolean {
+    return (
+      String(this.data?.tipo_mantenimiento || '')
+        .trim()
+        .toUpperCase()
+      === 'PREVENTIVO'
+    );
+  }
+
   getActivoNombre(): string {
     if (this.data?.inventario?.nombre) {
       return this.data.inventario.nombre;

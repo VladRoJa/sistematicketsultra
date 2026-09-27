@@ -19,10 +19,21 @@ from app.utils.pm_permissions import (
     require_pm_configure,
     require_pm_view,
 )
+from app.utils.pm_legacy_transition import (
+    legacy_operational_block,
+    transition_state_payload,
+)
 from app.models.user_model import UserORM
 
 
 pm_bp = Blueprint("pm", __name__)
+
+
+@pm_bp.route("/transition-state", methods=["GET"])
+@jwt_required()
+def pm_transition_state():
+    return jsonify(transition_state_payload()), 200
+
 
 # ── Admin roles (reutilizado en todos los checks) ──
 _ADMIN_ROLES = {"ADMINISTRADOR", "SUPER_ADMIN", "ADMIN"}
@@ -167,6 +178,12 @@ def _crear_bitacora(data, user_id):
     tipo_mantenimiento = _normalizar_texto_pm(
         data.get("tipo_mantenimiento")
     )  # "CORRECTIVO" | "PREVENTIVO" | "ESTETICO" | "MEJORA"
+
+    if tipo_mantenimiento == "PREVENTIVO":
+        legacy_block = legacy_operational_block()
+        if legacy_block:
+            return None, legacy_block
+
     notas = (data.get("notas") or "").strip()
     checks = data.get("checks") or {}
 
@@ -364,6 +381,19 @@ def _crear_validacion_pm(data, user_id):
         return None, (
             {"error": "Not Found", "detail": "La bitácora PM no existe"},
             404,
+        )
+
+    if bitacora.ticket_id is not None:
+        return None, (
+            {
+                "error": "Conflict",
+                "detail": (
+                    "Esta bitácora pertenece a un ticket preventivo. "
+                    "La validación debe realizarse desde Tickets."
+                ),
+                "ticket_id": bitacora.ticket_id,
+            },
+            409,
         )
 
     # 6) Identificar usuario actual
@@ -1197,6 +1227,10 @@ def pm_listar_configuraciones():
 @pm_bp.route("/configuraciones", methods=["POST"])
 @jwt_required()
 def pm_crear_configuracion():
+    legacy_block = legacy_operational_block()
+    if legacy_block:
+        return jsonify(legacy_block[0]), legacy_block[1]
+
     data = request.get_json(silent=True) or {}
     user_id = get_jwt_identity()
 
@@ -1218,6 +1252,10 @@ def pm_crear_configuracion():
 @pm_bp.route("/configuraciones/<int:config_id>", methods=["PUT"])
 @jwt_required()
 def pm_actualizar_configuracion(config_id):
+    legacy_block = legacy_operational_block()
+    if legacy_block:
+        return jsonify(legacy_block[0]), legacy_block[1]
+
     data = request.get_json(silent=True) or {}
     user_id = get_jwt_identity()
 
@@ -1239,6 +1277,10 @@ def pm_actualizar_configuracion(config_id):
 @pm_bp.route("/preventivo/dashboard", methods=["GET"])
 @jwt_required()
 def pm_preventivo_dashboard():
+    legacy_block = legacy_operational_block()
+    if legacy_block:
+        return jsonify(legacy_block[0]), legacy_block[1]
+
     user_id = get_jwt_identity()
 
     user, user_err = _obtener_usuario_actual_pm(user_id)
@@ -1455,6 +1497,10 @@ def pm_preventivo_dashboard():
 @pm_bp.route("/calendario", methods=["GET"])
 @jwt_required()
 def pm_calendario():
+    legacy_block = legacy_operational_block()
+    if legacy_block:
+        return jsonify(legacy_block[0]), legacy_block[1]
+
     user_id = get_jwt_identity()
 
     user, user_err = _obtener_usuario_actual_pm(user_id)

@@ -499,5 +499,19 @@ export function obtenerFiltrosActivosParaBackend(
   if (pIni) filtros.fecha_prog_desde = pIni;
   if (pFin) filtros.fecha_prog_hasta = pFin;
 
+  const departamentoScopeId =
+    component.getSelectedDepartmentScopeId?.();
+
+  if (departamentoScopeId) {
+    filtros.departamento_id = departamentoScopeId;
+  }
+
+  const tipoMantenimiento =
+    component.getSelectedMaintenanceTypeForBackend?.();
+
+  if (tipoMantenimiento) {
+    filtros.tipo_mantenimiento = tipoMantenimiento;
+  }
+
   return filtros;
 }

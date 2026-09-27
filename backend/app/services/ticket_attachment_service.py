@@ -51,9 +51,14 @@ def create_ticket_image_attachment(
     content: bytes,
     original_filename: str,
     declared_mime_type: str | None = None,
+    allow_additional: bool = False,
 ) -> TicketAttachmentORM:
     """
-    Valida y persiste un único adjunto de imagen para un ticket existente.
+    Valida y persiste una imagen para un ticket existente.
+
+    Por defecto conserva la regla V1 de un adjunto. El flag
+    allow_additional=True se reserva para flujos auditables que requieren
+    evidencias por iteración, como reintentos de mantenimiento preventivo.
 
     Orden deliberado:
     1. validar imagen;
@@ -74,7 +79,10 @@ def create_ticket_image_attachment(
         declared_mime_type=declared_mime_type,
     )
 
-    if _ticket_already_has_attachment(normalized_ticket_id):
+    if (
+        not allow_additional
+        and _ticket_already_has_attachment(normalized_ticket_id)
+    ):
         raise ValueError(
             "El ticket ya tiene un archivo adjunto"
         )

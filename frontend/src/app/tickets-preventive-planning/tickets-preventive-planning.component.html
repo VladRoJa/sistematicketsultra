@@ -1,0 +1,790 @@
+<section class="preventive-page">
+  <header class="preventive-header">
+    <div>
+      <span class="preventive-eyebrow">Tickets · Mantenimiento</span>
+      <h1>Programación preventiva</h1>
+      <p>
+        Crea borradores manuales o carga la plantilla. Los tickets solo nacen al publicar un lote validado.
+      </p>
+    </div>
+
+    <div class="preventive-header__actions">
+      <button type="button" class="button button--ghost" (click)="downloadTemplate()">
+        Descargar plantilla
+      </button>
+      <button type="button" class="button button--ghost" (click)="loadInitialData()" [disabled]="loading || saving">
+        Actualizar
+      </button>
+    </div>
+  </header>
+
+  <div *ngIf="errorMessage" class="alert alert--error" role="alert">
+    {{ errorMessage }}
+  </div>
+
+  <div *ngIf="successMessage" class="alert alert--success" role="status">
+    {{ successMessage }}
+  </div>
+
+  <section class="creation-grid">
+    <article class="panel">
+      <header class="panel__header">
+        <div>
+          <span class="panel__eyebrow">Nuevo lote</span>
+          <h2>Captura manual</h2>
+        </div>
+      </header>
+
+      <div class="form-grid form-grid--batch">
+        <label>
+          <span>Nombre</span>
+          <input
+            type="text"
+            [(ngModel)]="newBatchName"
+            placeholder="Ej. Semana 39 · Cardio"
+          />
+        </label>
+
+        <label>
+          <span>Inicio</span>
+          <input type="date" [(ngModel)]="periodStart" />
+        </label>
+
+        <label>
+          <span>Fin</span>
+          <input type="date" [(ngModel)]="periodEnd" />
+        </label>
+      </div>
+
+      <button
+        type="button"
+        class="button button--primary"
+        (click)="createManualBatch()"
+        [disabled]="saving"
+      >
+        Crear borrador
+      </button>
+    </article>
+
+    <article class="panel">
+      <header class="panel__header">
+        <div>
+          <span class="panel__eyebrow">Carga masiva</span>
+          <h2>Excel / CSV</h2>
+        </div>
+      </header>
+
+      <div class="upload-box">
+        <input
+          type="file"
+          accept=".xlsx,.csv"
+          (change)="onImportFileSelected($event)"
+        />
+        <small>
+          Columnas: Sucursal, Familia, Código equipo, Fecha programada, Actividad, Responsable, repetición, Observaciones, Tipo, Clasificación edificio y Duración estimada (min). Validación se calcula automáticamente.
+        </small>
+      </div>
+
+      <button
+        type="button"
+        class="button button--primary"
+        (click)="importSelectedFile()"
+        [disabled]="!importFile || saving"
+      >
+        Cargar y validar
+      </button>
+    </article>
+  </section>
+
+  <section class="workspace">
+    <aside class="batch-list panel">
+      <header class="panel__header">
+        <div>
+          <span class="panel__eyebrow">Programaciones</span>
+          <h2>Lotes</h2>
+        </div>
+        <span class="count-pill">{{ batches.length }}</span>
+      </header>
+
+      <div class="batch-list__items">
+        <button
+          *ngFor="let batch of batches; trackBy: trackBatch"
+          type="button"
+          class="batch-card"
+          [class.batch-card--active]="selectedBatch?.id === batch.id"
+          (click)="selectBatch(batch.id)"
+        >
+          <div class="batch-card__top">
+            <strong>{{ batch.nombre }}</strong>
+            <span class="status-pill" [attr.data-status]="batch.status">
+              {{ batch.status }}
+            </span>
+          </div>
+
+          <small>{{ batch.batch_key }}</small>
+
+          <div class="batch-card__metrics">
+            <span>{{ batch.total }} registros</span>
+            <span *ngIf="batch.validos">{{ batch.validos }} válidos</span>
+            <span *ngIf="batch.errores" class="text-danger">{{ batch.errores }} errores</span>
+            <span *ngIf="batch.pendientes">{{ batch.pendientes }} pendientes</span>
+          </div>
+        </button>
+
+        <div *ngIf="!batches.length && !loading" class="empty-state">
+          Todavía no hay lotes preventivos.
+        </div>
+      </div>
+    </aside>
+
+    <main class="batch-workspace">
+      <ng-container *ngIf="selectedBatch as batch; else noBatchSelected">
+        <section class="panel batch-summary">
+          <header class="panel__header panel__header--summary">
+            <div class="batch-summary__identity">
+              <span class="panel__eyebrow">{{ batch.batch_key }}</span>
+              <h2>{{ batch.nombre }}</h2>
+              <p>
+                {{ batch.source_type === 'ARCHIVO' ? 'Carga por archivo' : 'Captura manual' }}
+                <ng-container *ngIf="batch.period_start || batch.period_end">
+                  · {{ batch.period_start || '—' }} → {{ batch.period_end || '—' }}
+                </ng-container>
+              </p>
+            </div>
+
+            <div
+              *ngIf="batchCapacityLoading"
+              class="batch-capacity-strip batch-capacity-strip--loading"
+            >
+              Calculando capacidad…
+            </div>
+
+            <div
+              *ngIf="
+                !batchCapacityLoading
+                && batchCapacitySummary?.period_defined
+                && batchCapacitySummary?.days?.length
+              "
+              class="batch-capacity-strip"
+              aria-label="Capacidad diaria del lote"
+            >
+              <article
+                *ngFor="let day of batchCapacitySummary?.days"
+                class="batch-capacity-day"
+                [ngClass]="batchCapacityDayClass(day)"
+              >
+                <span class="batch-capacity-day__date">
+                  {{ batchCapacityDayDate(day.date) }}
+                </span>
+                <strong>{{ batchCapacityDayLoad(day) }}</strong>
+                <span class="batch-capacity-day__status">
+                  {{ batchCapacityDayStatus(day) }}
+                </span>
+                <small>{{ batchCapacityDayMeta(day) }}</small>
+              </article>
+            </div>
+
+            <span class="status-pill status-pill--large" [attr.data-status]="batch.status">
+              {{ batch.status }}
+            </span>
+          </header>
+
+          <div class="summary-strip">
+            <div>
+              <strong>{{ batch.items.length }}</strong>
+              <span>Total</span>
+            </div>
+            <div>
+              <strong>{{ batchValidCount }}</strong>
+              <span>Válidos</span>
+            </div>
+            <div>
+              <strong>{{ batchErrorCount }}</strong>
+              <span>Errores</span>
+            </div>
+            <div>
+              <strong>{{ batchPendingCount }}</strong>
+              <span>Pendientes</span>
+            </div>
+          </div>
+
+          <div class="batch-actions" *ngIf="batch.status === 'BORRADOR'">
+            <button
+              type="button"
+              class="button button--ghost"
+              (click)="validateSelectedBatch()"
+              [disabled]="!canValidate"
+            >
+              Validar lote
+            </button>
+
+            <button
+              type="button"
+              class="button button--primary"
+              (click)="publishSelectedBatch()"
+              [disabled]="!canPublish"
+            >
+              Publicar {{ batch.items.length }} preventivos
+            </button>
+          </div>
+
+          <div *ngIf="batch.status === 'PUBLICADO'" class="published-note">
+            Este lote ya generó tickets reales. El borrador quedó bloqueado.
+          </div>
+        </section>
+
+        <section class="panel manual-planning" *ngIf="batch.status === 'BORRADOR'">
+          <header class="panel__header">
+            <div>
+              <span class="panel__eyebrow">Agregar preventivos</span>
+              <h2>Objetivo preventivo</h2>
+            </div>
+            <span class="count-pill">{{ manualTargetCount }} seleccionados</span>
+          </header>
+
+          <div class="manual-controls">
+            <label>
+              <span>Sucursal</span>
+              <select [(ngModel)]="branchId" (ngModelChange)="onBranchChange()">
+                <option [ngValue]="null">Selecciona</option>
+                <option
+                  *ngFor="let branch of context.sucursales"
+                  [ngValue]="branch.id"
+                >
+                  {{ branch.nombre }}{{ branch.is_demo ? ' · DEMO' : '' }}
+                </option>
+              </select>
+            </label>
+
+            <label>
+              <span>Tipo</span>
+              <select
+                [(ngModel)]="targetType"
+                (ngModelChange)="onTargetTypeChange()"
+              >
+                <option value="EQUIPO">Equipo</option>
+                <option value="EDIFICIO">Edificio</option>
+              </select>
+            </label>
+
+            <label *ngIf="isManualEquipment">
+              <span>Familia</span>
+              <select [(ngModel)]="familyId" [disabled]="!branchId">
+                <option [ngValue]="null">Todas</option>
+                <option
+                  *ngFor="let family of familyOptions"
+                  [ngValue]="family.id"
+                >
+                  {{ family.nombre }}
+                </option>
+              </select>
+            </label>
+
+            <label *ngIf="isManualEquipment">
+              <span>Buscar equipo</span>
+              <input
+                type="search"
+                [(ngModel)]="equipmentSearch"
+                placeholder="Código, equipo, marca..."
+                [disabled]="!branchId"
+              />
+            </label>
+
+            <label *ngIf="isManualBuilding" class="control-wide">
+              <span>Clasificación edificio</span>
+              <select
+                [(ngModel)]="buildingClassificationId"
+                (ngModelChange)="onBuildingClassificationChange()"
+              >
+                <option [ngValue]="null">Selecciona</option>
+                <option
+                  *ngFor="let classification of context.building_classifications"
+                  [ngValue]="classification.id"
+                >
+                  {{ classification.label }}
+                </option>
+              </select>
+            </label>
+
+            <label>
+              <span>Responsable</span>
+              <select
+                [(ngModel)]="responsibleUsername"
+                (ngModelChange)="onCapacityInputChange()"
+              >
+                <option value="">Selecciona</option>
+                <option
+                  *ngFor="let responsible of context.responsables"
+                  [value]="responsible.username"
+                >
+                  {{ responsible.username }}
+                </option>
+              </select>
+            </label>
+
+            <label>
+              <span>Fecha programada</span>
+              <input
+                type="date"
+                [(ngModel)]="programmedDate"
+                (ngModelChange)="onCapacityInputChange()"
+                [attr.min]="batch.period_start || null"
+                [attr.max]="batch.period_end || null"
+              />
+            </label>
+
+            <label>
+              <span>Se repite</span>
+              <select
+                [(ngModel)]="repeatEnabled"
+                (ngModelChange)="onRepeatEnabledChange()"
+              >
+                <option [ngValue]="false">No</option>
+                <option [ngValue]="true">Sí</option>
+              </select>
+            </label>
+
+            <label>
+              <span>Cada N días hábiles</span>
+              <select
+                [(ngModel)]="repeatIntervalWorkdays"
+                [disabled]="!repeatEnabled"
+              >
+                <option
+                  *ngFor="let interval of repeatIntervalOptions"
+                  [ngValue]="interval"
+                >
+                  Cada {{ interval }} días hábiles
+                </option>
+              </select>
+            </label>
+
+            <label>
+              <span>Duración estimada</span>
+              <select
+                [(ngModel)]="estimatedDurationMinutes"
+                (ngModelChange)="onCapacityInputChange()"
+              >
+                <option [ngValue]="null">Selecciona</option>
+                <option
+                  *ngFor="let minutes of durationOptions"
+                  [ngValue]="minutes"
+                >
+                  {{ durationLabel(minutes) }}
+                </option>
+              </select>
+            </label>
+
+            <label class="control-wide">
+              <span>Actividad</span>
+              <input
+                type="text"
+                [(ngModel)]="activity"
+                placeholder="Ej. Mantenimiento preventivo general"
+              />
+            </label>
+
+            <label class="control-wide">
+              <span>Observaciones</span>
+              <input
+                type="text"
+                [(ngModel)]="observations"
+                placeholder="Opcional"
+              />
+            </label>
+          </div>
+
+          <div class="equipment-toolbar" *ngIf="isManualEquipment">
+            <span>
+              {{ filteredEquipment.length }} equipos visibles
+            </span>
+            <div>
+              <button
+                type="button"
+                class="text-button"
+                (click)="selectAllVisibleEquipment()"
+                [disabled]="!filteredEquipment.length"
+              >
+                Seleccionar visibles
+              </button>
+              <button
+                type="button"
+                class="text-button"
+                (click)="clearEquipmentSelection()"
+                [disabled]="!selectedEquipmentCount"
+              >
+                Limpiar
+              </button>
+            </div>
+          </div>
+
+          <div class="equipment-grid" *ngIf="isManualEquipment">
+            <label
+              *ngFor="let item of filteredEquipment; trackBy: trackEquipment"
+              class="equipment-option"
+              [class.equipment-option--selected]="isEquipmentSelected(item.inventario_id)"
+              [title]="item.codigo_interno + ' · ' + item.nombre + (item.marca ? ' · ' + item.marca : '')"
+            >
+              <input
+                type="checkbox"
+                [checked]="isEquipmentSelected(item.inventario_id)"
+                (change)="toggleEquipment(item.inventario_id, $any($event.target).checked)"
+              />
+              <span class="equipment-option__copy">
+                <strong>{{ item.codigo_interno }}</strong>
+                <span>{{ item.nombre }}{{ item.marca ? ' · ' + item.marca : '' }}</span>
+                <small>{{ item.familia?.nombre || 'Sin familia' }}</small>
+              </span>
+            </label>
+
+            <div *ngIf="branchId && !filteredEquipment.length" class="empty-state">
+              No hay equipos que coincidan con estos filtros.
+            </div>
+
+            <div *ngIf="!branchId" class="empty-state">
+              Selecciona una sucursal para cargar sus equipos.
+            </div>
+          </div>
+
+          <section
+            *ngIf="capacityPreviewLoading || capacityPreview || capacityPreviewError"
+            class="capacity-preview"
+            [class.capacity-preview--danger]="capacityPreview?.over_capacity"
+            [class.capacity-preview--warning]="
+              !capacityPreview?.over_capacity
+              && (capacityPreview?.existing_unestimated_count || 0) > 0
+            "
+            aria-live="polite"
+          >
+            <ng-container *ngIf="capacityPreviewLoading">
+              <span class="capacity-preview__eyebrow">Capacidad del día</span>
+              <strong>Calculando carga…</strong>
+            </ng-container>
+
+            <ng-container *ngIf="!capacityPreviewLoading && capacityPreview as preview">
+              <div class="capacity-preview__main">
+                <div>
+                  <span class="capacity-preview__eyebrow">
+                    Capacidad · {{ preview.responsable }}
+                  </span>
+                  <strong>{{ capacitySummary(preview) }}</strong>
+                </div>
+
+                <span
+                  class="capacity-preview__badge"
+                  [class.capacity-preview__badge--danger]="preview.over_capacity"
+                  [class.capacity-preview__badge--warning]="
+                    !preview.over_capacity
+                    && preview.existing_unestimated_count > 0
+                  "
+                >
+                  <ng-container *ngIf="preview.over_capacity; else capacityAvailable">
+                    Exceso {{ durationLabel(preview.over_minutes) }}
+                  </ng-container>
+                  <ng-template #capacityAvailable>
+                    <ng-container
+                      *ngIf="preview.existing_unestimated_count > 0; else capacityOk"
+                    >
+                      Carga incompleta
+                    </ng-container>
+                  </ng-template>
+                  <ng-template #capacityOk>
+                    Quedan {{ durationLabel(preview.remaining_after_minutes) }}
+                  </ng-template>
+                </span>
+              </div>
+
+              <div class="capacity-preview__detail">
+                <span>
+                  {{ preview.tickets.count }} tickets reales
+                </span>
+                <span>
+                  {{ preview.projections.count }} previstos
+                </span>
+                <span>
+                  {{ preview.draft.count }} ya en este lote
+                </span>
+                <span>
+                  + {{ preview.proposed.count }}
+                  {{ preview.proposed.count === 1 ? 'nuevo' : 'nuevos' }}
+                </span>
+              </div>
+
+              <small *ngIf="preview.existing_unestimated_count > 0">
+                Hay {{ preview.existing_unestimated_count }}
+                {{ preview.existing_unestimated_count === 1
+                  ? 'trabajo sin duración; la carga real puede ser mayor.'
+                  : 'trabajos sin duración; la carga real puede ser mayor.' }}
+              </small>
+
+              <small *ngIf="preview.over_capacity">
+                Puedes agregarlo, pero el responsable quedará arriba de la referencia de 9 h.
+              </small>
+            </ng-container>
+
+            <small *ngIf="!capacityPreviewLoading && capacityPreviewError">
+              {{ capacityPreviewError }}
+            </small>
+          </section>
+
+          <div class="manual-footer">
+            <span
+              class="manual-footer__status"
+              [class.manual-footer__status--ready]="canAddManualItems"
+              aria-live="polite"
+            >
+              {{ manualAddHelpText }}
+            </span>
+
+            <button
+              type="button"
+              class="button button--primary"
+              (click)="addSelectedEquipment()"
+              [disabled]="!canAddManualItems || saving"
+            >
+              Agregar {{ manualTargetCount }} preventivos
+            </button>
+          </div>
+        </section>
+
+        <section class="panel draft-table-panel">
+          <header class="panel__header">
+            <div>
+              <span class="panel__eyebrow">Preview</span>
+              <h2>Renglones del lote</h2>
+            </div>
+          </header>
+
+          <div class="draft-table-wrap" *ngIf="batch.items.length; else noRows">
+            <table
+              class="draft-table"
+              [class.draft-table--published]="batch.status === 'PUBLICADO'"
+            >
+              <thead>
+                <tr>
+                  <th>Fila</th>
+                  <th>Sucursal</th>
+                  <th>Objetivo</th>
+                  <th>Fecha</th>
+                  <th>Actividad</th>
+                  <th>Responsable</th>
+                  <th>Repetición</th>
+                  <th>Estado</th>
+                  <th *ngIf="batch.status === 'BORRADOR'">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  *ngFor="let item of batch.items; trackBy: trackItem"
+                  [class.row-error]="item.validation_status === 'ERROR'"
+                  [class.row-valid]="item.validation_status === 'VALIDO'"
+                >
+                  <td>{{ item.source_row_number || '—' }}</td>
+
+                  <td>
+                    <select
+                      *ngIf="batch.status === 'BORRADOR'; else branchRead"
+                      [(ngModel)]="item.sucursal_input"
+                    >
+                      <option value="">Selecciona</option>
+                      <option
+                        *ngFor="let branch of context.sucursales"
+                        [value]="branch.nombre"
+                      >
+                        {{ branch.nombre }}
+                      </option>
+                    </select>
+                    <ng-template #branchRead>{{ item.sucursal_input || '—' }}</ng-template>
+                  </td>
+
+                  <td>
+                    <div
+                      *ngIf="batch.status === 'BORRADOR'; else targetRead"
+                      class="target-cell"
+                    >
+                      <select
+                        [(ngModel)]="item.target_type_input"
+                        (ngModelChange)="onItemTargetTypeChange(item)"
+                      >
+                        <option value="EQUIPO">Equipo</option>
+                        <option value="EDIFICIO">Edificio</option>
+                      </select>
+
+                      <input
+                        *ngIf="!isItemBuilding(item)"
+                        type="text"
+                        [(ngModel)]="item.codigo_equipo_input"
+                        placeholder="Código"
+                      />
+
+                      <select
+                        *ngIf="isItemBuilding(item)"
+                        [(ngModel)]="item.building_classification_input"
+                      >
+                        <option value="">Selecciona</option>
+                        <option
+                          *ngFor="let classification of context.building_classifications"
+                          [value]="classification.id"
+                        >
+                          {{ classification.label }}
+                        </option>
+                      </select>
+                    </div>
+                    <ng-template #targetRead>
+                      <strong class="target-read-type">
+                        {{ item.target_type === 'EDIFICIO' ? 'Edificio' : 'Equipo' }}
+                      </strong>
+                      <small>{{ itemTargetLabel(item) }}</small>
+                    </ng-template>
+                  </td>
+
+                  <td>
+                    <input
+                      *ngIf="batch.status === 'BORRADOR'; else dateRead"
+                      type="date"
+                      [(ngModel)]="item.fecha_programada_input"
+                      [attr.min]="batch.period_start || null"
+                      [attr.max]="batch.period_end || null"
+                    />
+                    <ng-template #dateRead>{{ item.fecha_programada_input || '—' }}</ng-template>
+                  </td>
+
+                  <td>
+                    <div
+                      *ngIf="batch.status === 'BORRADOR'; else activityRead"
+                      class="activity-cell"
+                    >
+                      <input
+                        type="text"
+                        [(ngModel)]="item.actividad"
+                        placeholder="Actividad"
+                      />
+                      <div class="activity-duration">
+                        <span>Duración estimada</span>
+                        <div class="activity-duration__control">
+                          <input
+                            type="number"
+                            min="1"
+                            step="15"
+                            inputmode="numeric"
+                            [(ngModel)]="item.estimated_duration_minutes_input"
+                            aria-label="Duración estimada en minutos"
+                          />
+                          <span>min</span>
+                        </div>
+                      </div>
+                    </div>
+                    <ng-template #activityRead>
+                      <span>{{ item.actividad || '—' }}</span>
+                      <small class="activity-duration-read">
+                        Duración estimada ·
+                        {{ durationLabel(item.estimated_duration_minutes) }}
+                      </small>
+                    </ng-template>
+                  </td>
+
+                  <td>
+                    <select
+                      *ngIf="batch.status === 'BORRADOR'; else responsibleRead"
+                      [(ngModel)]="item.responsable_input"
+                    >
+                      <option value="">Selecciona</option>
+                      <option
+                        *ngFor="let responsible of context.responsables"
+                        [value]="responsible.username"
+                      >
+                        {{ responsible.username }}
+                      </option>
+                    </select>
+                    <ng-template #responsibleRead>{{ item.responsable_input || '—' }}</ng-template>
+                  </td>
+
+                  <td>
+                    <div
+                      *ngIf="batch.status === 'BORRADOR'; else recurrenceRead"
+                      class="recurrence-cell"
+                    >
+                      <select
+                        [(ngModel)]="item.repeat_enabled_input"
+                        (ngModelChange)="onItemRepeatInputChange(item)"
+                      >
+                        <option value="NO">No</option>
+                        <option value="SI">Sí</option>
+                      </select>
+                      <input
+                        type="text"
+                        inputmode="numeric"
+                        [(ngModel)]="item.repeat_interval_workdays_input"
+                        [disabled]="!isItemRecurringInput(item)"
+                        placeholder="Días"
+                      />
+                    </div>
+                    <ng-template #recurrenceRead>
+                      <span>{{ itemRecurrenceLabel(item) }}</span>
+                      <small *ngIf="item.next_scheduled_date">
+                        Próximo: {{ item.next_scheduled_date }}
+                      </small>
+                    </ng-template>
+                  </td>
+
+                  <td>
+                    <span
+                      class="validation-pill"
+                      [attr.data-status]="item.validation_status"
+                    >
+                      {{ itemStatusLabel(item) }}
+                    </span>
+                    <ul *ngIf="item.validation_errors.length" class="row-errors">
+                      <li *ngFor="let error of item.validation_errors">
+                        {{ error }}
+                      </li>
+                    </ul>
+                    <small *ngIf="item.ticket_id">Ticket #{{ item.ticket_id }}</small>
+                  </td>
+
+                  <td *ngIf="batch.status === 'BORRADOR'">
+                    <div class="row-actions">
+                      <button
+                        type="button"
+                        class="text-button"
+                        (click)="saveItem(item)"
+                        [disabled]="saving"
+                      >
+                        Guardar
+                      </button>
+                      <button
+                        type="button"
+                        class="text-button text-button--danger"
+                        (click)="deleteItem(item)"
+                        [disabled]="saving"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <ng-template #noRows>
+            <div class="empty-state empty-state--large">
+              Este lote todavía no tiene renglones.
+            </div>
+          </ng-template>
+        </section>
+      </ng-container>
+
+      <ng-template #noBatchSelected>
+        <section class="panel empty-workspace">
+          <strong>Selecciona o crea un lote</strong>
+          <span>
+            La programación permanece en borrador hasta que la valides y publiques.
+          </span>
+        </section>
+      </ng-template>
+    </main>
+  </section>
+
+  <div *ngIf="loading" class="loading-note">Cargando…</div>
+</section>

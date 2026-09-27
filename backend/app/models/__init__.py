@@ -19,6 +19,19 @@ from .departamento_model import Departamento
 from .formulario_ticket import FormularioTicket, CampoFormulario
 from .pm_bitacora import PmBitacoraORM
 from .pm_validacion import PmValidacionORM
+from .maintenance_checklist import (
+    MaintenanceChecklistItemORM,
+    MaintenanceChecklistTemplateORM,
+)
+from .maintenance_preventive import (
+    MaintenanceCrewORM,
+    MaintenancePersonnelORM,
+    MaintenanceReprogramReasonORM,
+    MaintenancePreventiveBatchORM,
+    MaintenancePreventiveItemORM,
+    MaintenancePreventiveOccurrenceORM,
+    MaintenancePreventiveScheduleORM,
+)
 from .warehouse import (
     WarehouseSourceORM,
     WarehouseFamilyORM,
@@ -155,6 +168,15 @@ __all__ = [
     "CampoFormulario",
     "PmBitacoraORM",
     "PmValidacionORM",
+    "MaintenanceChecklistItemORM",
+    "MaintenanceChecklistTemplateORM",
+    "MaintenanceCrewORM",
+    "MaintenancePersonnelORM",
+    "MaintenanceReprogramReasonORM",
+    "MaintenancePreventiveBatchORM",
+    "MaintenancePreventiveItemORM",
+    "MaintenancePreventiveOccurrenceORM",
+    "MaintenancePreventiveScheduleORM",
     "WarehouseSourceORM",
     "WarehouseFamilyORM",
     "WarehouseOperationalRoleORM",

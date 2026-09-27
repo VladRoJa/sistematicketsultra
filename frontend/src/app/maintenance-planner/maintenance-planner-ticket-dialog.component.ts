@@ -4,9 +4,9 @@ import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angu
 
 import { AsignarFechaModalComponent } from '../shared/asignar-fecha-modal/asignar-fecha-modal.component';
 import {
-  EditarFechaSolucionDialogResult,
-  EditarFechaSolucionModalComponent,
-} from '../shared/editar-fecha-solucion-modal/editar-fecha-solucion-modal.component';
+  MaintenanceReprogramDialogComponent,
+  MaintenanceReprogramDialogResult,
+} from './maintenance-reprogram-dialog.component';
 import { ModalCierreTicketComponent } from '../shared/modal-cierre-ticket/modal-cierre-ticket.component';
 import { AsignarFechaPayload } from '../types/ticket';
 import {
@@ -18,6 +18,7 @@ import {
 export interface MaintenancePlannerTicketDialogData {
   ticket: MaintenancePlannerTicket;
   canSchedule: boolean;
+  canReprogram: boolean;
   canCaptureDiagnosis: boolean;
   canRequestClosure: boolean;
   initialDate?: string | null;
@@ -33,6 +34,7 @@ export interface MaintenancePlannerTicketDialogData {
 export class MaintenancePlannerTicketDialogComponent {
   readonly ticket = this.data.ticket;
   readonly canSchedule = this.data.canSchedule;
+  readonly canReprogram = this.data.canReprogram;
   readonly canCaptureDiagnosis = this.data.canCaptureDiagnosis;
   readonly canRequestClosure = this.data.canRequestClosure;
   readonly commitmentTicket = {
@@ -75,7 +77,7 @@ export class MaintenancePlannerTicketDialogComponent {
 
   get canReprogramCommitment(): boolean {
     return Boolean(
-      this.canSchedule
+      this.canReprogram
       && this.hasCommitment
       && this.normalizedState === 'en progreso',
     );
@@ -132,10 +134,10 @@ export class MaintenancePlannerTicketDialogComponent {
     }
 
     const dialogRef = this.dialog.open<
-      EditarFechaSolucionModalComponent,
-      { fechaActual: string | null },
-      EditarFechaSolucionDialogResult | undefined
-    >(EditarFechaSolucionModalComponent, {
+      MaintenanceReprogramDialogComponent,
+      { fechaActual: string | null; fechaSugerida?: string | null },
+      MaintenanceReprogramDialogResult | undefined
+    >(MaintenanceReprogramDialogComponent, {
       width: '560px',
       maxWidth: '92vw',
       data: { fechaActual: this.ticket.fecha_solucion },
@@ -143,7 +145,7 @@ export class MaintenancePlannerTicketDialogComponent {
     });
 
     dialogRef.afterClosed().subscribe((result) => {
-      if (!result?.fecha || !result.motivo) {
+      if (!result?.fecha || !result.reasonId) {
         return;
       }
 
@@ -154,7 +156,8 @@ export class MaintenancePlannerTicketDialogComponent {
         .reprogramCommitmentFromDate(
           this.ticket,
           result.fecha,
-          result.motivo,
+          result.reasonId,
+          result.comentario,
         )
         .subscribe({
           next: () => {

@@ -458,7 +458,11 @@ const menuMantenimientoGerencial = [
 
 this.habilitarControlEnMenuSiAplica(menuControl);
 this.habilitarContactCenterEnMenuSiAplica(menuContactCenter);
+this.habilitarPanelMantenimientoEnMenu();
+this.habilitarProgramacionPreventivaEnMenu();
+this.habilitarMiProgramaEnMenu();
 this.habilitarMaintenancePlannerEnMenu();
+this.aplicarTransicionPmLegacyEnMenu();
 
 if (
   this.puedeVerTrackDiarioPorRol() &&
@@ -585,6 +589,232 @@ private habilitarContactCenterEnMenuSiAplica(menuContactCenter: any): void {
       },
       error: () => {
         // El backend es la autoridad. Si responde 401/403 no se publica el menú.
+      },
+    });
+}
+
+private habilitarPanelMantenimientoEnMenu(): void {
+  const ticketsMenu = this.menuItems.find(
+    (item) => item.label === 'Tickets'
+  );
+
+  if (!ticketsMenu) {
+    return;
+  }
+
+  const dashboardItem = {
+    label: 'Panel de mantenimiento',
+    path: '/main/panel-mantenimiento',
+  };
+
+  const submenu = Array.isArray(ticketsMenu.submenu)
+    ? ticketsMenu.submenu
+    : [];
+
+  if (
+    submenu.some(
+      (item: { path: string }) => item.path === dashboardItem.path
+    )
+  ) {
+    return;
+  }
+
+  this.http
+    .get<any>(
+      `${environment.apiUrl}/tickets/preventive-planning/dashboard/context`
+    )
+    .subscribe({
+      next: () => {
+        const currentSubmenu = Array.isArray(ticketsMenu.submenu)
+          ? ticketsMenu.submenu
+          : [];
+
+        if (
+          currentSubmenu.some(
+            (item: { path: string }) => item.path === dashboardItem.path
+          )
+        ) {
+          return;
+        }
+
+        ticketsMenu.submenu = [
+          dashboardItem,
+          ...currentSubmenu,
+        ];
+        this.sincronizarMenuConRutaActual();
+      },
+      error: () => {
+        // El backend es autoridad: sin permiso el panel no se publica.
+      },
+    });
+}
+
+private habilitarMiProgramaEnMenu(): void {
+  const ticketsMenu = this.menuItems.find(
+    (item) => item.label === 'Tickets'
+  );
+
+  if (!ticketsMenu) {
+    return;
+  }
+
+  const myProgramItem = {
+    label: 'Mi programa',
+    path: '/main/mi-programa',
+  };
+
+  const submenu = Array.isArray(ticketsMenu.submenu)
+    ? ticketsMenu.submenu
+    : [];
+
+  if (
+    submenu.some(
+      (item: { path: string }) => item.path === myProgramItem.path
+    )
+  ) {
+    return;
+  }
+
+  this.http
+    .get<any>(
+      `${environment.apiUrl}/tickets/preventive-planning/my-program`
+    )
+    .subscribe({
+      next: () => {
+        const currentSubmenu = Array.isArray(ticketsMenu.submenu)
+          ? ticketsMenu.submenu
+          : [];
+
+        if (
+          currentSubmenu.some(
+            (item: { path: string }) => item.path === myProgramItem.path
+          )
+        ) {
+          return;
+        }
+
+        ticketsMenu.submenu = [
+          ...currentSubmenu,
+          myProgramItem,
+        ];
+        this.sincronizarMenuConRutaActual();
+      },
+      error: () => {
+        // El backend es autoridad: 401/403 significa que Mi programa no se publica.
+      },
+    });
+}
+
+private habilitarProgramacionPreventivaEnMenu(): void {
+  if (!this.puedeConfigurarProgramacionPreventivaPorRol()) {
+    return;
+  }
+
+  const ticketsMenu = this.menuItems.find(
+    (item) => item.label === 'Tickets'
+  );
+
+  if (!ticketsMenu) {
+    return;
+  }
+
+  const preventiveItems = [
+    {
+      label: 'Programación preventiva',
+      path: '/main/programacion-preventiva',
+    },
+    {
+      label: 'Cuadrillas y personal',
+      path: '/main/cuadrillas-mantenimiento',
+    },
+    {
+      label: 'Checklists preventivos',
+      path: '/main/checklists-mantenimiento',
+    },
+  ];
+
+  const submenu = Array.isArray(ticketsMenu.submenu)
+    ? ticketsMenu.submenu
+    : [];
+
+  const existingPaths = new Set(
+    submenu.map((item: { path: string }) => item.path)
+  );
+
+  ticketsMenu.submenu = [
+    ...submenu,
+    ...preventiveItems.filter(
+      (item) => !existingPaths.has(item.path)
+    ),
+  ];
+
+  this.sincronizarMenuConRutaActual();
+}
+
+private puedeConfigurarProgramacionPreventivaPorRol(): boolean {
+  const user = this.authService.getUser();
+  const rol = String(user?.rol ?? user?.role ?? '').trim().toUpperCase();
+
+  return [
+    'ADMIN',
+    'ADMINISTRADOR',
+    'SUPER_ADMIN',
+    'MANTENIMIENTO',
+    'SR_MANTENIMIENTO',
+  ].includes(rol);
+}
+
+private aplicarTransicionPmLegacyEnMenu(): void {
+  this.http
+    .get<any>(`${environment.apiUrl}/pm/transition-state`)
+    .subscribe({
+      next: (state) => {
+        if (!state?.tickets_preventive_v1_enabled) {
+          return;
+        }
+
+        const mantenimientoMenu = this.menuItems.find(
+          (item) => item.label === 'Mantenimiento'
+        );
+
+        if (!mantenimientoMenu) {
+          return;
+        }
+
+        const allowedPaths = new Set([
+          '/maintenance-planner',
+          '/pm/consulta-historial',
+        ]);
+
+        const submenu = Array.isArray(mantenimientoMenu.submenu)
+          ? mantenimientoMenu.submenu
+          : [];
+
+        mantenimientoMenu.submenu = submenu
+          .filter(
+            (item: { path: string }) => allowedPaths.has(item.path)
+          )
+          .map((item: { label: string; path: string }) => (
+            item.path === '/pm/consulta-historial'
+              ? {
+                  ...item,
+                  label: 'Historial PM legacy',
+                }
+              : item
+          ));
+
+        const plannerExists = mantenimientoMenu.submenu.some(
+          (item: { path: string }) => item.path === '/maintenance-planner'
+        );
+
+        mantenimientoMenu.path = plannerExists
+          ? '/maintenance-planner'
+          : '/pm/consulta-historial';
+
+        this.sincronizarMenuConRutaActual();
+      },
+      error: () => {
+        // Fail-open visual: backend mantiene la autoridad sobre escrituras legacy.
       },
     });
 }

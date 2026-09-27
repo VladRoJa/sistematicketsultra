@@ -1,0 +1,757 @@
+import { CommonModule } from '@angular/common';
+import { Component, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+
+import {
+  MaintenanceChecklistItem,
+  MaintenanceMyProgram,
+  MaintenanceMyProgramItem,
+  MaintenanceMyProgramWorkloadDay,
+  MaintenancePreventiveService,
+  MaintenanceWorkDetail,
+} from '../services/maintenance-preventive.service';
+
+type ProgramView = 'today' | 'week' | 'overdue' | 'pending';
+type WorkSavingStep = 'bitacora' | 'evidence' | 'complete' | null;
+type FoundState = '' | 'BUENO' | 'REQUIERE_ATENCION' | 'FUERA_SERVICIO';
+
+@Component({
+  selector: 'app-maintenance-my-program',
+  standalone: true,
+  imports: [CommonModule, FormsModule],
+  templateUrl: './maintenance-my-program.component.html',
+  styleUrls: ['./maintenance-my-program.component.css'],
+})
+export class MaintenanceMyProgramComponent implements OnInit {
+  private readonly service = inject(MaintenancePreventiveService);
+
+  @ViewChild('cameraInput')
+  private cameraInput?: ElementRef<HTMLInputElement>;
+
+  @ViewChild('galleryInput')
+  private galleryInput?: ElementRef<HTMLInputElement>;
+
+  program: MaintenanceMyProgram | null = null;
+  activeView: ProgramView = 'today';
+  loading = false;
+  errorMessage = '';
+  selectedWeekStart: string | null = null;
+  selectedWeekEnd: string | null = null;
+
+  expandedTicketId: number | null = null;
+  workDetail: MaintenanceWorkDetail | null = null;
+  workLoading = false;
+  workSavingStep: WorkSavingStep = null;
+  workErrorMessage = '';
+  workSuccessMessage = '';
+
+  estadoEncontrado: FoundState = '';
+  notas = '';
+  hallazgoDetectado = false;
+  hallazgoDescripcion = '';
+  generarCorrectivo = false;
+  criticidadCorrectivo = 2;
+  checkValues: Record<string, string> = {};
+
+  evidenceFile: File | null = null;
+  evidenceRequested = true;
+  bitacoraSaved = false;
+  evidenceSaved = false;
+  showSavedBitacora = false;
+
+  readonly foundStateOptions = [
+    { value: 'BUENO' as const, label: 'Bueno' },
+    {
+      value: 'REQUIERE_ATENCION' as const,
+      label: 'Requiere atención',
+    },
+    {
+      value: 'FUERA_SERVICIO' as const,
+      label: 'Fuera de servicio',
+    },
+  ];
+
+  readonly checkOptions = [
+    { value: 'OK', label: 'OK' },
+    { value: 'ATENCION', label: 'Atención' },
+    { value: 'NO_APLICA', label: 'N/A' },
+  ];
+
+  ngOnInit(): void {
+    this.loadProgram();
+  }
+
+  get visibleItems(): MaintenanceMyProgramItem[] {
+    if (!this.program) return [];
+
+    switch (this.activeView) {
+      case 'week':
+        return this.program.week_items;
+      case 'overdue':
+        return this.program.overdue;
+      case 'pending':
+        return this.program.pending_validation;
+      case 'today':
+      default:
+        return this.program.today_items;
+    }
+  }
+
+  get activeTitle(): string {
+    const titles: Record<ProgramView, string> = {
+      today: 'Hoy',
+      week: this.isCurrentWeek ? 'Esta semana' : 'Semana seleccionada',
+      overdue: 'Vencidos',
+      pending: 'Pendientes de validación',
+    };
+    return titles[this.activeView];
+  }
+
+  get weekRangeLabel(): string {
+    if (!this.program) return '';
+
+    return (
+      this.formatRangeDate(this.program.window.start_date)
+      + ' – '
+      + this.formatRangeDate(this.program.window.end_date)
+    );
+  }
+
+  get isCurrentWeek(): boolean {
+    if (!this.program) return false;
+
+    const { start_date, end_date, today } = this.program.window;
+    return today >= start_date && today <= end_date;
+  }
+
+  get checklistItems(): MaintenanceChecklistItem[] {
+    return this.workDetail?.checklist?.items || [];
+  }
+
+  get hasChecklist(): boolean {
+    return this.checklistItems.length > 0;
+  }
+
+  get canSaveBitacora(): boolean {
+    if (
+      this.workSavingStep !== null
+      || this.bitacoraSaved
+      || !this.estadoEncontrado
+      || !this.notas.trim()
+    ) {
+      return false;
+    }
+
+    if (this.hallazgoDetectado && !this.hallazgoDescripcion.trim()) {
+      return false;
+    }
+
+    return this.requiredChecksComplete();
+  }
+
+  get canUploadEvidence(): boolean {
+    return Boolean(
+      this.bitacoraSaved
+      && this.evidenceRequested
+      && !this.evidenceSaved
+      && this.evidenceFile
+      && this.workSavingStep === null,
+    );
+  }
+
+  get canCompleteWork(): boolean {
+    return Boolean(
+      this.bitacoraSaved
+      && (!this.evidenceRequested || this.evidenceSaved)
+      && this.workSavingStep === null,
+    );
+  }
+
+  get bitacoraHelpText(): string {
+    if (this.bitacoraSaved) {
+      return 'Bitácora guardada.';
+    }
+
+    const missing: string[] = [];
+
+    if (!this.estadoEncontrado) {
+      missing.push('estado encontrado');
+    }
+    if (!this.notas.trim()) {
+      missing.push('trabajo realizado');
+    }
+    if (!this.requiredChecksComplete()) {
+      missing.push('checklist requerido');
+    }
+    if (this.hallazgoDetectado && !this.hallazgoDescripcion.trim()) {
+      missing.push('describir el hallazgo');
+    }
+
+    if (!missing.length) {
+      return 'Listo para guardar la bitácora.';
+    }
+
+    return (
+      (missing.length === 1 ? 'Falta: ' : 'Faltan: ')
+      + missing.join(', ')
+      + '.'
+    );
+  }
+
+  get evidenceHelpText(): string {
+    if (this.evidenceSaved) {
+      return 'Evidencia guardada.';
+    }
+    if (!this.bitacoraSaved) {
+      return 'Primero guarda la bitácora.';
+    }
+    if (!this.evidenceRequested) {
+      return 'Continuarás sin evidencia. Puedes marcar realizado cuando la bitácora esté lista.';
+    }
+    if (!this.evidenceFile) {
+      return 'Toma o selecciona una foto del trabajo.';
+    }
+    return 'Foto lista para subir.';
+  }
+
+  get completeHelpText(): string {
+    if (!this.bitacoraSaved) {
+      return 'Primero guarda la bitácora.';
+    }
+    if (this.evidenceRequested && !this.evidenceSaved) {
+      return 'Falta subir la evidencia seleccionada.';
+    }
+    return 'Listo para enviar a validación del gerente.';
+  }
+
+  get foundStateLabel(): string {
+    return (
+      this.foundStateOptions.find(
+        (option) => option.value === this.estadoEncontrado,
+      )?.label
+      || 'Sin estado'
+    );
+  }
+
+  get bitacoraSummaryText(): string {
+    return this.hallazgoDetectado
+      ? this.foundStateLabel + ' · Hallazgo registrado'
+      : this.foundStateLabel + ' · Sin hallazgo';
+  }
+
+  get mobilePrimaryActionLabel(): string {
+    if (!this.bitacoraSaved) {
+      return this.workSavingStep === 'bitacora'
+        ? 'Guardando…'
+        : 'Guardar bitácora';
+    }
+    if (this.evidenceRequested && !this.evidenceSaved) {
+      return this.workSavingStep === 'evidence'
+        ? 'Subiendo…'
+        : 'Subir evidencia';
+    }
+    return this.workSavingStep === 'complete'
+      ? 'Marcando…'
+      : 'Marcar realizado';
+  }
+
+  get mobilePrimaryActionHelpText(): string {
+    if (!this.bitacoraSaved) {
+      return this.bitacoraHelpText;
+    }
+    if (this.evidenceRequested && !this.evidenceSaved) {
+      return this.evidenceHelpText;
+    }
+    return this.completeHelpText;
+  }
+
+  get canRunMobilePrimaryAction(): boolean {
+    if (!this.bitacoraSaved) {
+      return this.canSaveBitacora;
+    }
+    if (this.evidenceRequested && !this.evidenceSaved) {
+      return this.canUploadEvidence;
+    }
+    return this.canCompleteWork;
+  }
+
+  loadProgram(): void {
+    this.loading = true;
+    this.errorMessage = '';
+
+    const params = (
+      this.selectedWeekStart && this.selectedWeekEnd
+        ? {
+            start_date: this.selectedWeekStart,
+            end_date: this.selectedWeekEnd,
+          }
+        : undefined
+    );
+
+    this.service.getMyProgram(params).subscribe({
+      next: (program) => {
+        this.program = program;
+        this.selectedWeekStart = program.window.start_date;
+        this.selectedWeekEnd = program.window.end_date;
+        this.loading = false;
+      },
+      error: (error) => {
+        this.program = null;
+        this.loading = false;
+        this.errorMessage =
+          error?.error?.mensaje
+          || error?.error?.detail
+          || 'No se pudo cargar tu programa.';
+      },
+    });
+  }
+
+  navigateWeek(offset: -1 | 1): void {
+    const start = this.selectedWeekStart || this.program?.window.start_date;
+    if (!start || this.loading) return;
+
+    this.selectedWeekStart = this.shiftIsoDate(start, offset * 7);
+    this.selectedWeekEnd = this.shiftIsoDate(
+      this.selectedWeekStart,
+      6,
+    );
+    this.activeView = 'week';
+    this.closeWork();
+    this.loadProgram();
+  }
+
+  goToCurrentWeek(): void {
+    if (this.loading || this.isCurrentWeek) return;
+
+    this.selectedWeekStart = null;
+    this.selectedWeekEnd = null;
+    this.activeView = 'week';
+    this.closeWork();
+    this.loadProgram();
+  }
+
+  selectView(view: ProgramView): void {
+    this.activeView = view;
+    this.closeWork();
+  }
+
+  isSelected(view: ProgramView): boolean {
+    return this.activeView === view;
+  }
+
+  isProjection(item: MaintenanceMyProgramItem): boolean {
+    return item.item_kind === 'RECURRENCE_PROJECTION';
+  }
+
+  isWorkExpanded(item: MaintenanceMyProgramItem): boolean {
+    return (
+      item.ticket_id !== null
+      && this.expandedTicketId === item.ticket_id
+    );
+  }
+
+  canOpenWork(item: MaintenanceMyProgramItem): boolean {
+    return (
+      item.item_kind === 'TICKET'
+      && item.ticket_id !== null
+      && item.tipo_mantenimiento === 'PREVENTIVO'
+      && item.operational_status !== 'PENDIENTE_VALIDACION'
+    );
+  }
+
+  toggleWork(item: MaintenanceMyProgramItem): void {
+    if (!this.canOpenWork(item) || item.ticket_id === null) {
+      return;
+    }
+
+    if (this.expandedTicketId === item.ticket_id) {
+      this.closeWork();
+      return;
+    }
+
+    this.expandedTicketId = item.ticket_id;
+    this.loadWorkDetail(item.ticket_id);
+  }
+
+  closeWork(): void {
+    this.expandedTicketId = null;
+    this.workDetail = null;
+    this.workLoading = false;
+    this.resetWorkForm();
+  }
+
+  loadWorkDetail(ticketId: number): void {
+    this.workLoading = true;
+    this.workErrorMessage = '';
+    this.workSuccessMessage = '';
+    this.workDetail = null;
+
+    this.service.getWorkDetail(ticketId).subscribe({
+      next: (detail) => {
+        this.workDetail = detail;
+        this.workLoading = false;
+        this.hydrateWorkForm(detail);
+      },
+      error: (error) => {
+        this.workLoading = false;
+        this.workErrorMessage =
+          error?.error?.mensaje
+          || error?.error?.detail
+          || 'No se pudo cargar el preventivo.';
+      },
+    });
+  }
+
+  setCheckValue(itemKey: string, value: string): void {
+    this.checkValues = {
+      ...this.checkValues,
+      [itemKey]: value,
+    };
+  }
+
+  getCheckValue(itemKey: string): string {
+    return this.checkValues[itemKey] || '';
+  }
+
+  onHallazgoChanged(): void {
+    if (!this.hallazgoDetectado) {
+      this.hallazgoDescripcion = '';
+      this.generarCorrectivo = false;
+      this.criticidadCorrectivo = 2;
+    }
+  }
+
+  saveBitacora(): void {
+    const ticketId = this.expandedTicketId;
+    const estadoEncontrado = this.estadoEncontrado;
+
+    if (
+      !ticketId
+      || !this.canSaveBitacora
+      || !estadoEncontrado
+    ) {
+      return;
+    }
+
+    this.workSavingStep = 'bitacora';
+    this.workErrorMessage = '';
+    this.workSuccessMessage = '';
+
+    this.service.createWorkBitacora(
+      ticketId,
+      {
+        estado_encontrado: estadoEncontrado,
+        notas: this.notas.trim(),
+        checks: { ...this.checkValues },
+        hallazgo_detectado: this.hallazgoDetectado,
+        hallazgo_descripcion:
+          this.hallazgoDescripcion.trim() || null,
+        generar_correctivo:
+          this.hallazgoDetectado && this.generarCorrectivo,
+        criticidad_correctivo:
+          this.hallazgoDetectado && this.generarCorrectivo
+            ? this.criticidadCorrectivo
+            : undefined,
+      },
+    ).subscribe({
+      next: (response) => {
+        this.workSavingStep = null;
+        this.bitacoraSaved = true;
+        this.showSavedBitacora = false;
+        this.workSuccessMessage = response.correctivo_id
+          ? 'Bitácora guardada y correctivo generado #'
+            + String(response.correctivo_id)
+            + '.'
+          : 'Bitácora guardada.';
+      },
+      error: (error) => {
+        this.workSavingStep = null;
+        this.workErrorMessage =
+          error?.error?.mensaje
+          || error?.error?.detail
+          || 'No se pudo guardar la bitácora.';
+      },
+    });
+  }
+
+  toggleSavedBitacora(): void {
+    if (!this.bitacoraSaved) {
+      return;
+    }
+    this.showSavedBitacora = !this.showSavedBitacora;
+  }
+
+  runMobilePrimaryAction(): void {
+    if (!this.canRunMobilePrimaryAction) {
+      return;
+    }
+
+    if (!this.bitacoraSaved) {
+      this.saveBitacora();
+      return;
+    }
+
+    if (this.evidenceRequested && !this.evidenceSaved) {
+      this.uploadEvidence();
+      return;
+    }
+
+    this.completeWork();
+  }
+
+  onEvidencePreferenceChanged(): void {
+    if (!this.evidenceRequested) {
+      this.evidenceFile = null;
+    }
+  }
+
+  openCamera(): void {
+    if (
+      !this.bitacoraSaved
+      || !this.evidenceRequested
+      || this.evidenceSaved
+    ) {
+      return;
+    }
+
+    this.cameraInput?.nativeElement.click();
+  }
+
+  openGallery(): void {
+    if (
+      !this.bitacoraSaved
+      || !this.evidenceRequested
+      || this.evidenceSaved
+    ) {
+      return;
+    }
+
+    this.galleryInput?.nativeElement.click();
+  }
+
+  onEvidenceSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.evidenceFile = input.files?.[0] || null;
+    this.workErrorMessage = '';
+  }
+
+  uploadEvidence(): void {
+    if (
+      !this.expandedTicketId
+      || !this.evidenceFile
+      || !this.canUploadEvidence
+    ) {
+      return;
+    }
+
+    this.workSavingStep = 'evidence';
+    this.workErrorMessage = '';
+    this.workSuccessMessage = '';
+
+    this.service.uploadWorkEvidence(
+      this.expandedTicketId,
+      this.evidenceFile,
+    ).subscribe({
+      next: () => {
+        this.workSavingStep = null;
+        this.evidenceSaved = true;
+        this.evidenceFile = null;
+        this.workSuccessMessage = 'Evidencia guardada.';
+      },
+      error: (error) => {
+        this.workSavingStep = null;
+        this.workErrorMessage =
+          error?.error?.mensaje
+          || error?.error?.detail
+          || 'No se pudo subir la evidencia.';
+      },
+    });
+  }
+
+  completeWork(): void {
+    if (!this.expandedTicketId || !this.canCompleteWork) {
+      return;
+    }
+
+    const ticketId = this.expandedTicketId;
+    this.workSavingStep = 'complete';
+    this.workErrorMessage = '';
+    this.workSuccessMessage = '';
+
+    this.service.completeWork(ticketId).subscribe({
+      next: () => {
+        this.workSavingStep = null;
+        this.closeWork();
+        this.loadProgram();
+      },
+      error: (error) => {
+        this.workSavingStep = null;
+        this.workErrorMessage =
+          error?.error?.mensaje
+          || error?.error?.detail
+          || 'No se pudo marcar el preventivo como realizado.';
+      },
+    });
+  }
+
+  statusLabel(item: MaintenanceMyProgramItem): string {
+    const labels: Record<string, string> = {
+      HOY: 'Hoy',
+      PROGRAMADO: 'Programado',
+      VENCIDO: 'Vencido',
+      PENDIENTE_VALIDACION: 'Por validar',
+      SIN_FECHA: 'Sin fecha',
+      PREVISTO: 'Previsto',
+    };
+    return labels[item.operational_status] || item.operational_status;
+  }
+
+  typeLabel(item: MaintenanceMyProgramItem): string {
+    return item.tipo_mantenimiento === 'PREVENTIVO'
+      ? 'Preventivo'
+      : 'Correctivo';
+  }
+
+  workloadMinutesLabel(minutes: number): string {
+    return this.durationLabel(minutes) || '0 min';
+  }
+
+  workloadProgress(day: MaintenanceMyProgramWorkloadDay): number {
+    return Math.min(100, Math.max(0, day.utilization_percent));
+  }
+
+  workloadStatus(day: MaintenanceMyProgramWorkloadDay): string {
+    if (day.over_capacity) {
+      return 'Sobrecarga';
+    }
+    if (day.estimated_minutes >= day.capacity_minutes) {
+      return 'Capacidad completa';
+    }
+    return 'Disponible';
+  }
+
+  durationLabel(minutes: number | null | undefined): string {
+    if (!minutes || minutes <= 0) return '';
+
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+
+    if (hours === 0) {
+      return String(minutes) + ' min';
+    }
+    if (remainingMinutes === 0) {
+      return String(hours) + ' h';
+    }
+
+    return String(hours) + ' h ' + String(remainingMinutes) + ' min';
+  }
+
+  recurrenceLabel(item: MaintenanceMyProgramItem): string {
+    const interval = item.repeat_interval_workdays;
+    return interval
+      ? 'Recurrente · cada ' + String(interval) + ' días hábiles'
+      : 'Recurrente';
+  }
+
+  formatDate(value: string | null): string {
+    if (!value) return 'Sin fecha';
+
+    const [year, month, day] = value.split('-').map(Number);
+    const date = new Date(year, (month || 1) - 1, day || 1, 12, 0, 0);
+
+    return new Intl.DateTimeFormat('es-MX', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+    }).format(date);
+  }
+
+  private formatRangeDate(value: string): string {
+    const [year, month, day] = value.split('-').map(Number);
+    const date = new Date(year, (month || 1) - 1, day || 1, 12, 0, 0);
+
+    return new Intl.DateTimeFormat('es-MX', {
+      day: 'numeric',
+      month: 'short',
+    }).format(date);
+  }
+
+  private shiftIsoDate(value: string, days: number): string {
+    const [year, month, day] = value.split('-').map(Number);
+    const date = new Date(
+      year,
+      (month || 1) - 1,
+      (day || 1) + days,
+      12,
+      0,
+      0,
+    );
+
+    const shiftedYear = date.getFullYear();
+    const shiftedMonth = String(date.getMonth() + 1).padStart(2, '0');
+    const shiftedDay = String(date.getDate()).padStart(2, '0');
+
+    return `${shiftedYear}-${shiftedMonth}-${shiftedDay}`;
+  }
+
+  trackItem(_: number, item: MaintenanceMyProgramItem): string {
+    if (item.item_kind === 'RECURRENCE_PROJECTION') {
+      return (
+        'schedule-'
+        + String(item.schedule_id || 0)
+        + '-'
+        + String(item.fecha_trabajo || '')
+      );
+    }
+
+    return 'ticket-' + String(item.ticket_id || 0);
+  }
+
+  trackChecklistItem(_: number, item: MaintenanceChecklistItem): number {
+    return item.id;
+  }
+
+  private requiredChecksComplete(): boolean {
+    return this.checklistItems.every((item) => {
+      if (!item.requerido) return true;
+      return Boolean(this.checkValues[item.item_key]);
+    });
+  }
+
+  private hydrateWorkForm(detail: MaintenanceWorkDetail): void {
+    this.resetWorkForm();
+
+    const latest = detail.bitacoras[0];
+    if (latest) {
+      this.bitacoraSaved = true;
+      this.estadoEncontrado =
+        (latest.estado_encontrado || '') as FoundState;
+      this.notas = latest.notas || '';
+      this.hallazgoDetectado = latest.hallazgo_detectado;
+      this.hallazgoDescripcion =
+        latest.hallazgo_descripcion || '';
+      this.checkValues = { ...(latest.checks || {}) };
+    }
+
+    this.evidenceSaved = Boolean(detail.has_evidence);
+    this.evidenceRequested = true;
+  }
+
+  private resetWorkForm(): void {
+    this.workErrorMessage = '';
+    this.workSuccessMessage = '';
+    this.workSavingStep = null;
+    this.estadoEncontrado = '';
+    this.notas = '';
+    this.hallazgoDetectado = false;
+    this.hallazgoDescripcion = '';
+    this.generarCorrectivo = false;
+    this.criticidadCorrectivo = 2;
+    this.checkValues = {};
+    this.evidenceFile = null;
+    this.evidenceRequested = true;
+    this.bitacoraSaved = false;
+    this.evidenceSaved = false;
+    this.showSavedBitacora = false;
+  }
+}

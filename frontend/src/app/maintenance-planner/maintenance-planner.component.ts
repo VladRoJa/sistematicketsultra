@@ -5,9 +5,9 @@ import { FormsModule } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
 
 import {
-  EditarFechaSolucionDialogResult,
-  EditarFechaSolucionModalComponent,
-} from '../shared/editar-fecha-solucion-modal/editar-fecha-solucion-modal.component';
+  MaintenanceReprogramDialogComponent,
+  MaintenanceReprogramDialogResult,
+} from './maintenance-reprogram-dialog.component';
 import {
   MaintenancePlannerBoard,
   MaintenancePlannerDay,
@@ -224,6 +224,7 @@ export class MaintenancePlannerComponent implements OnInit {
       data: {
         ticket,
         canSchedule: Boolean(this.board?.permissions.can_schedule),
+        canReprogram: Boolean(this.board?.permissions.can_reprogram),
         canCaptureDiagnosis: Boolean(
           this.board?.permissions.can_capture_diagnosis,
         ),
@@ -266,19 +267,22 @@ export class MaintenancePlannerComponent implements OnInit {
     this.errorMessage = '';
 
     const dialogRef = this.dialog.open<
-      EditarFechaSolucionModalComponent,
-      { fechaActual: string | null },
-      EditarFechaSolucionDialogResult | undefined
-    >(EditarFechaSolucionModalComponent, {
+      MaintenanceReprogramDialogComponent,
+      { fechaActual: string | null; fechaSugerida?: string | null },
+      MaintenanceReprogramDialogResult | undefined
+    >(MaintenanceReprogramDialogComponent, {
       width: '560px',
       maxWidth: '92vw',
-      data: { fechaActual: targetDay.date },
+      data: {
+        fechaActual: ticket.fecha_solucion,
+        fechaSugerida: targetDay.date,
+      },
       autoFocus: false,
       restoreFocus: false,
     });
 
     dialogRef.afterClosed().subscribe((result) => {
-      if (!result?.fecha || !result.motivo) {
+      if (!result?.fecha || !result.reasonId) {
         return;
       }
 
@@ -286,7 +290,12 @@ export class MaintenancePlannerComponent implements OnInit {
       this.errorMessage = '';
 
       this.plannerService
-        .reprogramCommitmentFromDate(ticket, result.fecha, result.motivo)
+        .reprogramCommitmentFromDate(
+          ticket,
+          result.fecha,
+          result.reasonId,
+          result.comentario,
+        )
         .subscribe({
           next: () => {
             this.dragSavingTicketId = null;
@@ -306,7 +315,7 @@ export class MaintenancePlannerComponent implements OnInit {
 
   canDrag(ticket: MaintenancePlannerTicket): boolean {
     return Boolean(
-      this.board?.permissions.can_schedule
+      this.board?.permissions.can_reprogram
       && ticket.fecha_solucion_date
       && String(ticket.estado || '').trim().toLowerCase() === 'en progreso'
       && this.dragSavingTicketId === null

@@ -38,9 +38,15 @@
       <div class="hero-topline">
         <span class="mini-label">Ticket</span>
 
-        <span class="estado-chip" [ngClass]="getEstadoClass()">
-          {{ getEstadoLabel() | titlecase }}
-        </span>
+        <div class="hero-status-stack">
+          <span class="estado-chip" [ngClass]="getEstadoClass()">
+            {{ getEstadoLabel() | titlecase }}
+          </span>
+
+          <span *ngIf="esPreventivo()" class="maintenance-type-chip">
+            PREVENTIVO
+          </span>
+        </div>
       </div>
 
       <!-- Descripción principal -->
