@@ -99,28 +99,39 @@
         </small>
       </button>
 
-      <article class="kpi-card">
+      <button
+        type="button"
+        class="kpi-card kpi-card-button"
+        (click)="openUniqueMembersDetail()">
         <span>Personas únicas</span>
         <strong>{{ formatNumber(dashboard.summary.unique_members) }}</strong>
-        <small>PIN distintos en el periodo</small>
-      </article>
+        <small>PIN distintos en el periodo · Ver detalle</small>
+      </button>
 
-      <article class="kpi-card accent">
+      <button
+        type="button"
+        class="kpi-card kpi-card-button accent"
+        (click)="openPeakOccupancyDetail()">
         <span>Aforo pico</span>
         <strong>{{ formatNumber(dashboard.summary.peak_occupancy) }}</strong>
         <small>
           {{ formatDate(dashboard.summary.peak_business_date) }}
           · {{ formatMinute(dashboard.summary.peak_minute) }}
+          · Ver detalle
         </small>
-      </article>
+      </button>
 
-      <article class="kpi-card">
+      <button
+        type="button"
+        class="kpi-card kpi-card-button"
+        (click)="openDurationDetail()">
         <span>Estancia mediana</span>
         <strong>{{ formatDuration(dashboard.summary.median_duration_seconds) }}</strong>
         <small>
           Promedio {{ formatDuration(dashboard.summary.average_duration_seconds) }}
+          · Ver detalle
         </small>
-      </article>
+      </button>
     </section>
 
     <section class="content-grid main-grid" *ngIf="hasData">
@@ -169,7 +180,9 @@
                 *ngFor="let point of chart.pointItems"
                 [attr.cx]="point.x"
                 [attr.cy]="point.y"
-                r="2.5">
+                r="3"
+                class="drillable-point"
+                (click)="openOccupancyIntervalDetail(point.minute)">
                 <title>
                   {{ point.label }} · {{ formatNumber(point.value) }}
                 </title>
@@ -202,7 +215,11 @@
         </div>
 
         <div class="hour-bars">
-          <div class="hour-column" *ngFor="let item of hourBars">
+          <button
+            type="button"
+            class="hour-column"
+            *ngFor="let item of hourBars"
+            (click)="openEntriesHourDetail(item.hour)">
             <span class="hour-value">{{ formatNumber(item.entries) }}</span>
             <div class="hour-track">
               <div
@@ -211,7 +228,7 @@
               </div>
             </div>
             <small>{{ item.label }}</small>
-          </div>
+          </button>
         </div>
       </mat-card>
     </section>
@@ -226,7 +243,11 @@
         </div>
 
         <div class="age-list">
-          <div class="age-row" *ngFor="let item of ageBars">
+          <button
+            type="button"
+            class="age-row"
+            *ngFor="let item of ageBars"
+            (click)="openAgeBucketDetail(item.label)">
             <span>{{ item.label }}</span>
             <div class="age-track">
               <div
@@ -235,7 +256,7 @@
               </div>
             </div>
             <strong>{{ formatNumber(item.visits) }}</strong>
-          </div>
+          </button>
         </div>
       </mat-card>
 
@@ -248,12 +269,14 @@
         </div>
 
         <div class="type-list">
-          <div
+          <button
+            type="button"
             class="type-row"
-            *ngFor="let item of dashboard.attendance_type_distribution">
+            *ngFor="let item of dashboard.attendance_type_distribution"
+            (click)="openAttendanceTypeDetail(item.attendance_type)">
             <span>{{ attendanceTypeLabel(item.attendance_type) }}</span>
             <strong>{{ formatNumber(item.visits) }}</strong>
-          </div>
+          </button>
         </div>
       </mat-card>
     </section>
@@ -326,13 +349,46 @@
           <tbody>
             <tr
               *ngFor="let row of visibleBranchRanking; let i = index">
-              <td>{{ rankingPosition(row) }}</td>
               <td>
-                <strong>{{ row.branch_name }}</strong>
+                <button
+                  type="button"
+                  class="table-detail-button"
+                  (click)="openBranchVisitsDetail(row.branch_id)">
+                  {{ rankingPosition(row) }}
+                </button>
               </td>
-              <td>{{ formatNumber(row.visits) }}</td>
-              <td>{{ formatNumber(row.unique_members) }}</td>
-              <td>{{ formatNumber(row.peak_occupancy) }}</td>
+              <td>
+                <button
+                  type="button"
+                  class="table-detail-button branch-detail-button"
+                  (click)="openBranchVisitsDetail(row.branch_id)">
+                  <strong>{{ row.branch_name }}</strong>
+                </button>
+              </td>
+              <td>
+                <button
+                  type="button"
+                  class="table-detail-button"
+                  (click)="openBranchVisitsDetail(row.branch_id)">
+                  {{ formatNumber(row.visits) }}
+                </button>
+              </td>
+              <td>
+                <button
+                  type="button"
+                  class="table-detail-button"
+                  (click)="openBranchUniqueDetail(row.branch_id)">
+                  {{ formatNumber(row.unique_members) }}
+                </button>
+              </td>
+              <td>
+                <button
+                  type="button"
+                  class="table-detail-button"
+                  (click)="openBranchPeakDetail(row.branch_id)">
+                  {{ formatNumber(row.peak_occupancy) }}
+                </button>
+              </td>
             </tr>
           </tbody>
         </table>
