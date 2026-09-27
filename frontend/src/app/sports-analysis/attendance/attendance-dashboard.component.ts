@@ -19,6 +19,7 @@ import {
   AttendanceCatalogs,
   AttendanceDashboard,
   AttendanceHour,
+  AttendanceDetailRequest,
   AttendanceInterval,
 } from './attendance.models';
 import { AttendanceDetailDialogComponent } from './attendance-detail-dialog.component';
@@ -341,6 +342,88 @@ export class AttendanceDashboardComponent implements OnInit {
   }
 
   openVisitsDetail(): void {
+    this.openDetail('visits');
+  }
+
+  openUniqueMembersDetail(): void {
+    this.openDetail('unique_members');
+  }
+
+  openPeakOccupancyDetail(): void {
+    this.openDetail('peak_occupancy');
+  }
+
+  openDurationDetail(): void {
+    this.openDetail('duration');
+  }
+
+  openOccupancyIntervalDetail(
+    minute: number,
+  ): void {
+    this.openDetail(
+      'occupancy_interval',
+      { minute },
+    );
+  }
+
+  openEntriesHourDetail(
+    hour: number,
+  ): void {
+    this.openDetail(
+      'entries_hour',
+      { hour },
+    );
+  }
+
+  openAgeBucketDetail(
+    ageBucket: string,
+  ): void {
+    this.openDetail(
+      'age_bucket',
+      { ageBucket },
+    );
+  }
+
+  openAttendanceTypeDetail(
+    attendanceType: string,
+  ): void {
+    this.openDetail(
+      'attendance_type',
+      { attendanceType },
+    );
+  }
+
+  openBranchVisitsDetail(
+    branchId: number,
+  ): void {
+    this.openDetail(
+      'visits',
+      { branchId },
+    );
+  }
+
+  openBranchUniqueDetail(
+    branchId: number,
+  ): void {
+    this.openDetail(
+      'unique_members',
+      { branchId },
+    );
+  }
+
+  openBranchPeakDetail(
+    branchId: number,
+  ): void {
+    this.openDetail(
+      'peak_occupancy',
+      { branchId },
+    );
+  }
+
+  private openDetail(
+    metric: string,
+    overrides: Partial<AttendanceDetailRequest> = {},
+  ): void {
     const filters = this.dashboard?.filters;
     if (
       !filters?.date_from
@@ -349,20 +432,23 @@ export class AttendanceDashboardComponent implements OnInit {
       return;
     }
 
+    const data: AttendanceDetailRequest = {
+      metric,
+      dateFrom: filters.date_from,
+      dateTo: filters.date_to,
+      branchId: filters.branch_id,
+      regionKey: filters.region_key,
+      attendanceType: filters.attendance_type,
+      ...overrides,
+    };
+
     this.dialog.open(
       AttendanceDetailDialogComponent,
       {
         width: '96vw',
         maxWidth: '1500px',
         height: '86vh',
-        data: {
-          metric: 'visits',
-          dateFrom: filters.date_from,
-          dateTo: filters.date_to,
-          branchId: filters.branch_id,
-          regionKey: filters.region_key,
-          attendanceType: filters.attendance_type,
-        },
+        data,
       },
     );
   }
