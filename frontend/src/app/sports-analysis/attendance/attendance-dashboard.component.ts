@@ -16,15 +16,19 @@ import { DateRangeSelectorComponent } from '../../shared/date-range-selector/dat
 
 import {
   AttendanceAgeBucket,
+  AttendanceBaseHealth,
+  AttendanceBaseHealthMemberStatus,
   AttendanceBranch,
   AttendanceBranchRanking,
   AttendanceCatalogs,
   AttendanceDashboard,
+  AttendanceDashboardView,
   AttendanceHour,
   AttendanceDetailRequest,
   AttendanceInterval,
   AttendanceTypeDistribution,
 } from './attendance.models';
+import { AttendanceBaseHealthDetailDialogComponent } from './attendance-base-health-detail-dialog.component';
 import { AttendanceDetailDialogComponent } from './attendance-detail-dialog.component';
 import { AttendanceService } from './attendance.service';
 
@@ -112,6 +116,8 @@ type RankingSortDirection = 'asc' | 'desc';
 export class AttendanceDashboardComponent implements OnInit {
   catalogs: AttendanceCatalogs | null = null;
   dashboard: AttendanceDashboard | null = null;
+  baseHealth: AttendanceBaseHealth | null = null;
+  activeView: AttendanceDashboardView = 'summary';
 
   dateFrom = '';
   dateTo = '';
@@ -140,6 +146,26 @@ export class AttendanceDashboardComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadCatalogs();
+  }
+
+  get loadingLabel(): string {
+    return this.activeView === 'base-health'
+      ? 'Consultando salud de la base...'
+      : 'Consultando asistencia...';
+  }
+
+  get isSummaryView(): boolean {
+    return this.activeView === 'summary';
+  }
+
+  get isBaseHealthView(): boolean {
+    return this.activeView === 'base-health';
+  }
+
+  get hasBaseHealthSource(): boolean {
+    return Boolean(
+      this.baseHealth?.source.available,
+    );
   }
 
   get availableBranches(): AttendanceBranch[] {
@@ -353,7 +379,21 @@ export class AttendanceDashboardComponent implements OnInit {
       return;
     }
 
-    this.loadDashboard();
+    this.loadActiveView();
+  }
+
+  setView(view: AttendanceDashboardView): void {
+    if (view === 'operations') {
+      return;
+    }
+
+    if (this.activeView === view) {
+      return;
+    }
+
+    this.activeView = view;
+    this.errorMessage = '';
+    this.loadActiveView();
   }
 
   onRegionChange(regionKey: string | null): void {
@@ -372,6 +412,34 @@ export class AttendanceDashboardComponent implements OnInit {
   onBranchChange(branchId: number | null): void {
     this.selectedBranchId =
       branchId === null ? null : Number(branchId);
+  }
+
+  openBaseHealthDetail(
+    status: AttendanceBaseHealthMemberStatus,
+  ): void {
+    const filters = this.baseHealth?.filters;
+    if (
+      !filters?.date_from
+      || !filters.date_to
+    ) {
+      return;
+    }
+
+    this.dialog.open(
+      AttendanceBaseHealthDetailDialogComponent,
+      {
+        width: '96vw',
+        maxWidth: '1200px',
+        height: '82vh',
+        data: {
+          dateFrom: filters.date_from,
+          dateTo: filters.date_to,
+          branchId: filters.branch_id,
+          regionKey: filters.region_key,
+          status,
+        },
+      },
+    );
   }
 
   openVisitsDetail(): void {
@@ -490,6 +558,15 @@ export class AttendanceDashboardComponent implements OnInit {
     );
   }
 
+  formatPercent(
+    value: number | null | undefined,
+  ): string {
+    return new Intl.NumberFormat('es-MX', {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    }).format(Number(value ?? 0)) + '%';
+  }
+
   formatNumber(value: number | null | undefined): string {
     return this.numberFormatter.format(
       Number(value ?? 0),
@@ -560,6 +637,38 @@ export class AttendanceDashboardComponent implements OnInit {
       + quality.unresolved_branch
       + quality.non_operational_excluded
     );
+  }
+
+  private loadActiveView(): void {
+    if (this.activeView === 'base-health') {
+      this.loadBaseHealth();
+      return;
+    }
+
+    this.loadDashboard();
+  }
+
+  private loadBaseHealth(): void {
+    this.loading = true;
+    this.errorMessage = '';
+
+    this.attendanceService.getBaseHealth({
+      dateFrom: this.dateFrom,
+      dateTo: this.dateTo,
+      branchId: this.selectedBranchId,
+      regionKey: this.selectedRegionKey,
+    }).subscribe({
+      next: (baseHealth) => {
+        this.baseHealth = baseHealth;
+        this.loading = false;
+      },
+      error: (error) => {
+        this.loading = false;
+        this.errorMessage =
+          error?.error?.detail
+          || 'No fue posible consultar Salud de la base.';
+      },
+    });
   }
 
   private loadDashboard(): void {
