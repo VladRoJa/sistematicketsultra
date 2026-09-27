@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import date
 from statistics import mean
 
-from sqlalchemy import func, or_
+from sqlalchemy import case, func, or_
 
 from app.extensions import db
 from app.models.attendance import (
@@ -163,7 +163,10 @@ def attendance_dashboard(
         )
 
     resolved_to = date_to or latest_date
-    resolved_from = date_from or resolved_to
+    resolved_from = (
+        date_from
+        or resolved_to.replace(day=1)
+    )
 
     _validate_date_range(
         resolved_from,
@@ -693,11 +696,32 @@ def _aggregate_intervals(
 def _age_distribution(
     visit_query,
 ) -> list[dict]:
+    age_bucket = case(
+        *[
+            (
+                WarehouseAttendanceVisitORM.age.between(
+                    minimum,
+                    maximum,
+                ),
+                label,
+            )
+            for label, minimum, maximum
+            in AGE_BUCKETS
+        ],
+        else_=None,
+    ).label("age_bucket")
+
     rows = (
         visit_query.with_entities(
-            WarehouseAttendanceVisitORM.age,
+            age_bucket,
             func.count(
                 WarehouseAttendanceVisitORM.id
+            ),
+            func.count(
+                func.distinct(
+                    WarehouseAttendanceVisitORM
+                    .member_pin
+                )
             ),
         )
         .filter(
@@ -706,35 +730,36 @@ def _age_distribution(
             WarehouseAttendanceVisitORM
             .age.isnot(None),
         )
-        .group_by(
-            WarehouseAttendanceVisitORM.age
-        )
+        .group_by(age_bucket)
         .all()
     )
 
     result = {
-        label: 0
+        label: {
+            "visits": 0,
+            "unique_members": 0,
+        }
         for label, _, _ in AGE_BUCKETS
     }
-    for age, count in rows:
-        numeric_age = int(age)
-        for (
-            label,
-            minimum,
-            maximum,
-        ) in AGE_BUCKETS:
-            if (
-                minimum
-                <= numeric_age
-                <= maximum
-            ):
-                result[label] += int(count)
-                break
+    for label, visits, unique_members in rows:
+        if label not in result:
+            continue
+        result[str(label)] = {
+            "visits": int(visits),
+            "unique_members": int(
+                unique_members
+            ),
+        }
 
     return [
         {
             "label": label,
-            "visits": result[label],
+            "visits": result[label][
+                "visits"
+            ],
+            "unique_members": result[label][
+                "unique_members"
+            ],
         }
         for label, _, _ in AGE_BUCKETS
     ]
@@ -752,6 +777,12 @@ def _attendance_type_distribution(
             .attendance_type,
             func.count(
                 WarehouseAttendanceVisitORM.id
+            ),
+            func.count(
+                func.distinct(
+                    WarehouseAttendanceVisitORM
+                    .member_pin
+                )
             ),
         )
         .filter(
@@ -781,9 +812,17 @@ def _attendance_type_distribution(
             "attendance_type": str(
                 attendance_type
             ),
-            "visits": int(count),
+            "visits": int(visits),
+            "unique_members": int(
+                unique_members
+            ),
         }
-        for attendance_type, count in rows
+        for (
+            attendance_type,
+            visits,
+            unique_members,
+        ) in rows
+        if attendance_type
     ]
 
 
