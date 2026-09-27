@@ -7,6 +7,7 @@ from flask import (
     current_app,
     jsonify,
     request,
+    send_file,
 )
 from flask_jwt_extended import jwt_required
 
@@ -15,6 +16,11 @@ from app.sports_analysis.attendance_access import (
     SportsAnalysisAuthorizationError,
     get_current_sports_analysis_user,
     resolve_sports_analysis_scope,
+)
+from app.sports_analysis.attendance_detail_service import (
+    DETAIL_EXPORT_MIMETYPE,
+    build_attendance_detail,
+    build_attendance_detail_export,
 )
 from app.sports_analysis.attendance_query_service import (
     SportsAnalysisValidationError,
@@ -197,6 +203,120 @@ def get_attendance_dashboard():
                 ),
             }
         ), 500
+
+
+@sports_analysis_bp.get(
+    "/attendance/detail"
+)
+@jwt_required()
+def get_attendance_detail():
+    _, scope = _scope()
+    date_from = _parse_date_arg("date_from")
+    date_to = _parse_date_arg("date_to")
+    if date_from is None or date_to is None:
+        raise SportsAnalysisValidationError(
+            "date_from y date_to son obligatorios."
+        )
+
+    return jsonify(
+        build_attendance_detail(
+            scope,
+            metric=str(
+                request.args.get("metric") or ""
+            ),
+            date_from=date_from,
+            date_to=date_to,
+            branch_id=_parse_int_arg("branch_id"),
+            region_key=(
+                str(
+                    request.args.get("region_key")
+                    or ""
+                ).strip()
+                or None
+            ),
+            attendance_type=(
+                str(
+                    request.args.get("attendance_type")
+                    or ""
+                ).strip()
+                or None
+            ),
+            page=request.args.get("page"),
+            page_size=request.args.get("page_size"),
+            sort_by=(
+                str(
+                    request.args.get("sort_by")
+                    or ""
+                ).strip()
+                or None
+            ),
+            sort_dir=(
+                str(
+                    request.args.get("sort_dir")
+                    or ""
+                ).strip()
+                or None
+            ),
+        )
+    ), 200
+
+
+@sports_analysis_bp.get(
+    "/attendance/detail/export"
+)
+@jwt_required()
+def export_attendance_detail():
+    _, scope = _scope()
+    date_from = _parse_date_arg("date_from")
+    date_to = _parse_date_arg("date_to")
+    if date_from is None or date_to is None:
+        raise SportsAnalysisValidationError(
+            "date_from y date_to son obligatorios."
+        )
+
+    output, filename = build_attendance_detail_export(
+        scope,
+        metric=str(
+            request.args.get("metric") or ""
+        ),
+        date_from=date_from,
+        date_to=date_to,
+        branch_id=_parse_int_arg("branch_id"),
+        region_key=(
+            str(
+                request.args.get("region_key")
+                or ""
+            ).strip()
+            or None
+        ),
+        attendance_type=(
+            str(
+                request.args.get("attendance_type")
+                or ""
+            ).strip()
+            or None
+        ),
+        sort_by=(
+            str(
+                request.args.get("sort_by")
+                or ""
+            ).strip()
+            or None
+        ),
+        sort_dir=(
+            str(
+                request.args.get("sort_dir")
+                or ""
+            ).strip()
+            or None
+        ),
+    )
+    return send_file(
+        output,
+        mimetype=DETAIL_EXPORT_MIMETYPE,
+        as_attachment=True,
+        download_name=filename,
+    )
 
 
 @sports_analysis_bp.get(
