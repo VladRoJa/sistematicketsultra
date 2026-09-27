@@ -80,11 +80,13 @@ export interface AttendanceHour {
 export interface AttendanceAgeBucket {
   label: string;
   visits: number;
+  unique_members: number;
 }
 
 export interface AttendanceTypeDistribution {
   attendance_type: string;
   visits: number;
+  unique_members: number;
 }
 
 export interface AttendanceBranchRanking {
