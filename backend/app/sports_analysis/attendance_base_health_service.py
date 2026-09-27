@@ -635,85 +635,205 @@ def _load_visited_member_ids(
         .all()
     )
 
+    exact_keys = (
+        db.session.query(
+            WarehouseAttendanceVisitORM.member_pin.label(
+                "pin"
+            ),
+            WarehouseAttendanceVisitORM.member_since.label(
+                "member_since"
+            ),
+        )
+        .filter(
+            WarehouseAttendanceVisitORM.sucursal_id
+            .in_(branch_ids),
+            WarehouseAttendanceVisitORM.business_date
+            .between(
+                date_from,
+                date_to,
+            ),
+            WarehouseAttendanceVisitORM.attendance_type
+            == "SOCIO",
+            WarehouseAttendanceVisitORM.member_pin
+            .isnot(None),
+            WarehouseAttendanceVisitORM.member_since
+            .isnot(None),
+        )
+        .distinct()
+        .subquery()
+    )
+
+    exact_rows = (
+        db.session.query(
+            exact_keys.c.pin,
+            exact_keys.c.member_since,
+            func.count(
+                func.distinct(
+                    SociosActivosSnapshotRowORM.id_socio
+                )
+            ).label("candidate_count"),
+            func.min(
+                SociosActivosSnapshotRowORM.id_socio
+            ).label("id_socio"),
+        )
+        .join(
+            SociosActivosSnapshotRowORM,
+            (
+                SociosActivosSnapshotRowORM.pin
+                == exact_keys.c.pin
+            )
+            & (
+                func.date(
+                    SociosActivosSnapshotRowORM
+                    .fecha_ingreso_local
+                )
+                == exact_keys.c.member_since
+            ),
+        )
+        .join(
+            SociosActivosSnapshotORM,
+            SociosActivosSnapshotORM.id
+            == SociosActivosSnapshotRowORM.snapshot_id,
+        )
+        .filter(
+            SociosActivosSnapshotORM.report_type_key
+            == "socios_activos",
+            SociosActivosSnapshotORM.snapshot_kind
+            == "daily",
+            SociosActivosSnapshotORM.is_canonical
+            .is_(True),
+        )
+        .group_by(
+            exact_keys.c.pin,
+            exact_keys.c.member_since,
+        )
+        .all()
+    )
+
+    exact_map = {
+        (
+            _clean_text(
+                _row_value(
+                    row,
+                    "pin",
+                    0,
+                )
+            ),
+            _row_value(
+                row,
+                "member_since",
+                1,
+            ),
+        ): str(
+            _row_value(
+                row,
+                "id_socio",
+                3,
+            )
+        ).strip()
+        for row in exact_rows
+        if int(
+            _row_value(
+                row,
+                "candidate_count",
+                2,
+            )
+            or 0
+        ) == 1
+        and _row_value(
+            row,
+            "id_socio",
+            3,
+        )
+    }
+
     visited_ids: set[str] = set()
     total_visits = 0
     resolved_visits = 0
+    fallback_probes = []
+    fallback_counts: dict[int, int] = {}
 
-    for start in range(
-        0,
-        len(rows),
-        IDENTITY_BATCH_SIZE,
+    for index, row in enumerate(
+        rows,
+        start=1,
     ):
-        chunk = rows[
-            start:start + IDENTITY_BATCH_SIZE
-        ]
-        probes = []
-        visit_counts: dict[int, int] = {}
+        count = int(
+            _row_value(
+                row,
+                "visit_count",
+                6,
+            )
+            or 0
+        )
+        total_visits += count
 
-        for index, row in enumerate(
-            chunk,
-            start=start + 1,
-        ):
-            count = int(
+        key = (
+            _clean_text(
                 _row_value(
                     row,
-                    "visit_count",
-                    6,
+                    "member_pin",
+                    0,
                 )
-                or 0
-            )
-            total_visits += count
-            visit_counts[index] = count
-            probes.append(
-                SimpleNamespace(
-                    id=index,
-                    attendance_type="SOCIO",
-                    member_pin=_row_value(
-                        row,
-                        "member_pin",
-                        0,
-                    ),
-                    member_since=_row_value(
-                        row,
-                        "member_since",
-                        1,
-                    ),
-                    business_date=_row_value(
-                        row,
-                        "business_date",
-                        2,
-                    ),
-                    sucursal_id=_row_value(
-                        row,
-                        "sucursal_id",
-                        3,
-                    ),
-                    source_first_name=(
-                        _row_value(
-                            row,
-                            "source_first_name",
-                            4,
-                        )
-                    ),
-                    source_last_name=(
-                        _row_value(
-                            row,
-                            "source_last_name",
-                            5,
-                        )
-                    ),
-                )
-            )
+            ),
+            _row_value(
+                row,
+                "member_since",
+                1,
+            ),
+        )
+        exact_id = exact_map.get(key)
 
-        resolutions = (
-            resolve_attendance_identities(
-                probes,
-                session=db.session,
-                chunk_size=IDENTITY_BATCH_SIZE,
+        if exact_id:
+            visited_ids.add(exact_id)
+            resolved_visits += count
+            continue
+
+        fallback_counts[index] = count
+        fallback_probes.append(
+            SimpleNamespace(
+                id=index,
+                attendance_type="SOCIO",
+                member_pin=_row_value(
+                    row,
+                    "member_pin",
+                    0,
+                ),
+                member_since=_row_value(
+                    row,
+                    "member_since",
+                    1,
+                ),
+                business_date=_row_value(
+                    row,
+                    "business_date",
+                    2,
+                ),
+                sucursal_id=_row_value(
+                    row,
+                    "sucursal_id",
+                    3,
+                ),
+                source_first_name=_row_value(
+                    row,
+                    "source_first_name",
+                    4,
+                ),
+                source_last_name=_row_value(
+                    row,
+                    "source_last_name",
+                    5,
+                ),
             )
         )
 
-        for probe in probes:
+    if fallback_probes:
+        resolutions = resolve_attendance_identities(
+            fallback_probes,
+            session=db.session,
+            chunk_size=IDENTITY_BATCH_SIZE,
+        )
+
+        for probe in fallback_probes:
             resolution = resolutions.get(
                 int(probe.id)
             )
@@ -728,7 +848,7 @@ def _load_visited_member_ids(
                     resolution.id_socio
                 ).strip()
             )
-            resolved_visits += visit_counts.get(
+            resolved_visits += fallback_counts.get(
                 int(probe.id),
                 0,
             )
@@ -738,7 +858,6 @@ def _load_visited_member_ids(
         total_visits,
         resolved_visits,
     )
-
 
 def _serialize_member(
     member: _EligibleMember,
