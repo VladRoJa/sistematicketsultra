@@ -496,11 +496,15 @@ def _load_eligible_members(
                 <= date_to,
             ),
         )
+        .distinct(
+            SociosActivosSnapshotRowORM.id_socio
+        )
         .order_by(
-            SociosActivosSnapshotORM.cutoff_date,
-            SociosActivosSnapshotORM.captured_at,
-            SociosActivosSnapshotORM.id,
-            SociosActivosSnapshotRowORM.id,
+            SociosActivosSnapshotRowORM.id_socio,
+            SociosActivosSnapshotORM.cutoff_date.desc(),
+            SociosActivosSnapshotORM.captured_at.desc(),
+            SociosActivosSnapshotORM.id.desc(),
+            SociosActivosSnapshotRowORM.id.desc(),
         )
         .all()
     )
