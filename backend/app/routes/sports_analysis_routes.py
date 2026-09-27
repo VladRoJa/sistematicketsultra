@@ -61,6 +61,25 @@ def _parse_date_arg(
         ) from exc
 
 
+def _parse_nonnegative_int_arg(
+    name: str,
+) -> int | None:
+    raw = request.args.get(name)
+    if raw in (None, ""):
+        return None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise SportsAnalysisValidationError(
+            f"{name} inválido."
+        ) from exc
+    if value < 0:
+        raise SportsAnalysisValidationError(
+            f"{name} inválido."
+        )
+    return value
+
+
 def _parse_int_arg(
     name: str,
 ) -> int | None:
@@ -257,6 +276,19 @@ def get_attendance_detail():
                 ).strip()
                 or None
             ),
+            minute=_parse_nonnegative_int_arg(
+                "minute"
+            ),
+            hour=_parse_nonnegative_int_arg(
+                "hour"
+            ),
+            age_bucket=(
+                str(
+                    request.args.get("age_bucket")
+                    or ""
+                ).strip()
+                or None
+            ),
         )
     ), 200
 
@@ -306,6 +338,19 @@ def export_attendance_detail():
         sort_dir=(
             str(
                 request.args.get("sort_dir")
+                or ""
+            ).strip()
+            or None
+        ),
+        minute=_parse_nonnegative_int_arg(
+            "minute"
+        ),
+        hour=_parse_nonnegative_int_arg(
+            "hour"
+        ),
+        age_bucket=(
+            str(
+                request.args.get("age_bucket")
                 or ""
             ).strip()
             or None
