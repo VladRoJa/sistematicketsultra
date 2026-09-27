@@ -183,7 +183,7 @@ Filtros iniciales del dashboard:
 - branch_id
 - attendance_type
 
-El rango interactivo inicial se limita a 93 días para proteger el backend web. Comparativos históricos más largos deberán usar endpoints agregados específicos si se requieren.
+El rango interactivo se limita a 93 días para proteger el backend web. Al abrir el dashboard sin fechas explícitas, el periodo por defecto inicia el primer día del mes del último `business_date` disponible y termina en ese último día cargado. Comparativos históricos más largos deberán usar endpoints agregados específicos si se requieren.
 
 ## 13. Dashboard inicial
 
@@ -200,8 +200,8 @@ Visualizaciones:
 
 - curva de aforo en intervalos de 15 minutos
 - entradas por hora
-- distribución por edad
-- distribución por tipo de asistencia
+- distribución por edad, con switch entre visitas y PIN/personas únicas
+- distribución por tipo de asistencia, con switch entre visitas y PIN/personas únicas
 - ranking de sucursales
 - calidad de datos
 
