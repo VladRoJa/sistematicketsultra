@@ -131,6 +131,8 @@ class WarehouseAttendanceVisitORM(db.Model):
     source_branch_name = db.Column(db.String(255), nullable=False)
 
     member_pin = db.Column(db.String(64), nullable=True)
+    source_first_name = db.Column(db.String(255), nullable=True)
+    source_last_name = db.Column(db.String(255), nullable=True)
     entered_at_utc = db.Column(db.DateTime(timezone=True), nullable=False)
     exited_at_utc = db.Column(db.DateTime(timezone=True), nullable=True)
     duration_seconds = db.Column(db.Integer, nullable=True)
