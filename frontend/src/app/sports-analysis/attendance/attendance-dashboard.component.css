@@ -705,6 +705,116 @@ td {
   text-align: center;
 }
 
+.view-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  max-width: 1500px;
+  margin: 12px auto 0;
+}
+
+.view-toolbar > span {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.view-switch {
+  display: inline-flex;
+  gap: 3px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #e9eef7;
+}
+
+.view-switch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #667085;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.view-switch button:hover:not(:disabled),
+.view-switch button:focus-visible:not(:disabled) {
+  color: #1d4ed8;
+  outline: none;
+}
+
+.view-switch button.active {
+  background: #ffffff;
+  color: #1d4ed8;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+}
+
+.view-switch button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.view-switch .coming-soon small {
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.base-health-kpi-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.base-health-note {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.8fr);
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+.base-health-note h2 {
+  margin: 4px 0 8px;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+
+.base-health-note p {
+  max-width: 760px;
+  margin: 0;
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.base-health-source {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.base-health-source strong,
+.base-health-source span {
+  display: block;
+}
+
+.base-health-source strong {
+  color: #344054;
+  font-size: 12px;
+}
+
+.base-health-source span {
+  margin-top: 4px;
+  color: #667085;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 @media (max-width: 1180px) {
   .filters-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -715,6 +825,10 @@ td {
   }
 
   .main-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .base-health-note {
     grid-template-columns: 1fr;
   }
 }
@@ -743,9 +857,24 @@ td {
     grid-column: span 1;
   }
 
-  .distribution-toolbar {
+  .distribution-toolbar,
+  .view-toolbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .view-switch {
+    width: 100%;
+    box-sizing: border-box;
+    overflow-x: auto;
+  }
+
+  .view-switch button {
+    white-space: nowrap;
+  }
+
+  .base-health-kpi-grid {
+    grid-template-columns: 1fr;
   }
 
   .type-list {

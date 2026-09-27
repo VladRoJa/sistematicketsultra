@@ -120,6 +120,84 @@ export interface AttendanceDashboard {
 }
 
 
+export type AttendanceDashboardView =
+  | 'summary'
+  | 'base-health'
+  | 'operations';
+
+export interface AttendanceBaseHealthRequest {
+  dateFrom: string;
+  dateTo: string;
+  branchId: number | null;
+  regionKey: string | null;
+}
+
+export interface AttendanceBaseHealthFilters {
+  date_from: string;
+  date_to: string;
+  branch_id: number | null;
+  region_key: string | null;
+  attendance_type: 'SOCIO';
+}
+
+export interface AttendanceBaseHealthSummary {
+  eligible_members: number;
+  members_with_visit: number;
+  members_without_visit: number;
+  utilization_pct: number;
+  without_visit_pct: number;
+}
+
+export interface AttendanceBaseHealthSource {
+  available: boolean;
+  snapshot_count: number;
+  first_snapshot_date: string | null;
+  last_snapshot_date: string | null;
+  identity_coverage_pct: number;
+  visits_checked: number;
+  visits_resolved: number;
+  effective_branch_ids: number[];
+}
+
+export interface AttendanceBaseHealth {
+  scope: Omit<SportsAnalysisScope, 'fixed_branch_id'>;
+  filters: AttendanceBaseHealthFilters;
+  summary: AttendanceBaseHealthSummary;
+  source: AttendanceBaseHealthSource;
+}
+
+export type AttendanceBaseHealthMemberStatus =
+  | 'WITH_VISIT'
+  | 'WITHOUT_VISIT';
+
+export interface AttendanceBaseHealthMemberRow {
+  id_socio: string;
+  name: string | null;
+  branch_id: number;
+  branch_name: string;
+  pin: string;
+  member_since: string | null;
+  has_visit: boolean;
+}
+
+export interface AttendanceBaseHealthMembersRequest
+  extends AttendanceBaseHealthRequest {
+  status: AttendanceBaseHealthMemberStatus;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface AttendanceBaseHealthMembersResponse {
+  status: AttendanceBaseHealthMemberStatus;
+  title: string;
+  count: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  rows: AttendanceBaseHealthMemberRow[];
+}
+
+
 export type AttendanceDetailSortDirection = 'asc' | 'desc';
 
 export interface AttendanceDetailColumn {

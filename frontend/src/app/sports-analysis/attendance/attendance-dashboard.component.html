@@ -57,7 +57,9 @@
 
       <mat-form-field appearance="fill">
         <mat-label>Público</mat-label>
-        <mat-select [(ngModel)]="selectedAttendanceType">
+        <mat-select
+          [(ngModel)]="selectedAttendanceType"
+          [disabled]="!isSummaryView">
           <mat-option
             *ngFor="let type of catalogs?.attendance_types"
             [value]="type">
@@ -78,16 +80,48 @@
     </div>
   </mat-card>
 
+  <div class="view-toolbar">
+    <span>Mostrar</span>
+    <div
+      class="view-switch"
+      role="group"
+      aria-label="Vista de Aforo y Asistencia">
+      <button
+        type="button"
+        [class.active]="activeView === 'summary'"
+        [attr.aria-pressed]="activeView === 'summary'"
+        (click)="setView('summary')">
+        Resumen
+      </button>
+
+      <button
+        type="button"
+        [class.active]="activeView === 'base-health'"
+        [attr.aria-pressed]="activeView === 'base-health'"
+        (click)="setView('base-health')">
+        Salud de la base
+      </button>
+
+      <button
+        type="button"
+        class="coming-soon"
+        disabled>
+        Operación deportiva
+        <small>Próximamente</small>
+      </button>
+    </div>
+  </div>
+
   <div class="state-card error" *ngIf="errorMessage">
     {{ errorMessage }}
   </div>
 
   <div class="loading-shell" *ngIf="loading">
     <mat-spinner diameter="42"></mat-spinner>
-    <span>Consultando asistencia...</span>
+    <span>{{ loadingLabel }}</span>
   </div>
 
-  <ng-container *ngIf="!loading && dashboard">
+  <ng-container *ngIf="isSummaryView && !loading && dashboard">
     <section class="kpi-grid">
       <button
         type="button"
@@ -428,9 +462,78 @@
     </div>
   </ng-container>
 
+  <ng-container
+    *ngIf="isBaseHealthView && !loading && baseHealth">
+    <div
+      class="empty-state"
+      *ngIf="!hasBaseHealthSource">
+      <strong>No hay una base de socios para este periodo.</strong>
+      <span>
+        Salud de la base necesita al menos un corte canónico de Socios Activos.
+      </span>
+    </div>
+
+    <ng-container *ngIf="hasBaseHealthSource">
+      <section class="kpi-grid base-health-kpi-grid">
+        <button
+          type="button"
+          class="kpi-card kpi-card-button accent"
+          (click)="openBaseHealthDetail('WITH_VISIT')">
+          <span>Utilización de la base</span>
+          <strong>
+            {{ formatPercent(baseHealth.summary.utilization_pct) }}
+          </strong>
+          <small>
+            {{ formatNumber(baseHealth.summary.members_with_visit) }}
+            de {{ formatNumber(baseHealth.summary.eligible_members) }}
+            socios usaron Ultra · Ver socios
+          </small>
+        </button>
+
+        <button
+          type="button"
+          class="kpi-card kpi-card-button"
+          (click)="openBaseHealthDetail('WITHOUT_VISIT')">
+          <span>Socios sin visitas</span>
+          <strong>
+            {{ formatNumber(baseHealth.summary.members_without_visit) }}
+          </strong>
+          <small>
+            {{ formatPercent(baseHealth.summary.without_visit_pct) }}
+            de la base · Ver detalle
+          </small>
+        </button>
+      </section>
+
+      <mat-card class="panel base-health-note">
+        <div>
+          <span class="eyebrow">CÓMO SE LEE</span>
+          <h2>Uso real de la base activa</h2>
+          <p>
+            Se cuentan los socios que estuvieron activos al menos un día
+            dentro del periodo. Si un socio visitó cualquier Ultra Gym,
+            cuenta como socio con visita.
+          </p>
+        </div>
+
+        <div class="base-health-source">
+          <strong>
+            {{ formatNumber(baseHealth.source.snapshot_count) }}
+            cortes de Socios Activos usados
+          </strong>
+          <span>
+            Identidad resuelta en
+            {{ formatPercent(baseHealth.source.identity_coverage_pct) }}
+            de las visitas revisadas.
+          </span>
+        </div>
+      </mat-card>
+    </ng-container>
+  </ng-container>
+
   <div
     class="empty-state"
-    *ngIf="!loading && !dashboard && !errorMessage">
+    *ngIf="isSummaryView && !loading && !dashboard && !errorMessage">
     <strong>Aún no hay asistencias cargadas.</strong>
     <span>
       La pantalla ya está lista para recibir la primera ingesta estructurada.

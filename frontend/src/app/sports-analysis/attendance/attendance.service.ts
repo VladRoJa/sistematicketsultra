@@ -4,6 +4,10 @@ import { Observable } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
 import {
+  AttendanceBaseHealth,
+  AttendanceBaseHealthMembersRequest,
+  AttendanceBaseHealthMembersResponse,
+  AttendanceBaseHealthRequest,
   AttendanceCatalogs,
   AttendanceDashboard,
   AttendanceDashboardRequest,
@@ -129,6 +133,75 @@ export class AttendanceService {
     }
 
     return params;
+  }
+
+  getBaseHealth(
+    filters: AttendanceBaseHealthRequest,
+  ): Observable<AttendanceBaseHealth> {
+    let params = new HttpParams()
+      .set('date_from', filters.dateFrom)
+      .set('date_to', filters.dateTo);
+
+    if (filters.branchId !== null) {
+      params = params.set(
+        'branch_id',
+        String(filters.branchId),
+      );
+    }
+
+    if (filters.regionKey) {
+      params = params.set(
+        'region_key',
+        filters.regionKey,
+      );
+    }
+
+    return this.http.get<AttendanceBaseHealth>(
+      `${this.baseUrl}/attendance/base-health`,
+      { params },
+    );
+  }
+
+  getBaseHealthMembers(
+    request: AttendanceBaseHealthMembersRequest,
+  ): Observable<AttendanceBaseHealthMembersResponse> {
+    let params = new HttpParams()
+      .set('date_from', request.dateFrom)
+      .set('date_to', request.dateTo)
+      .set('status', request.status);
+
+    if (request.branchId !== null) {
+      params = params.set(
+        'branch_id',
+        String(request.branchId),
+      );
+    }
+
+    if (request.regionKey) {
+      params = params.set(
+        'region_key',
+        request.regionKey,
+      );
+    }
+
+    if (request.page !== undefined) {
+      params = params.set(
+        'page',
+        String(request.page),
+      );
+    }
+
+    if (request.pageSize !== undefined) {
+      params = params.set(
+        'page_size',
+        String(request.pageSize),
+      );
+    }
+
+    return this.http.get<AttendanceBaseHealthMembersResponse>(
+      `${this.baseUrl}/attendance/base-health/members`,
+      { params },
+    );
   }
 
   getDashboard(

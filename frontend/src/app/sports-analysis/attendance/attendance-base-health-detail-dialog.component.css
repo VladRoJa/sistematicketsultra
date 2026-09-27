@@ -1,0 +1,144 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.dialog-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: #172033;
+}
+
+.dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 24px 16px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.eyebrow {
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+.dialog-header h2 {
+  margin: 5px 0 4px;
+  font-size: 26px;
+  letter-spacing: -0.03em;
+}
+
+.dialog-header p {
+  margin: 0;
+  color: #667085;
+  font-size: 13px;
+}
+
+.close-button {
+  min-width: auto;
+}
+
+.loading-shell,
+.empty-state,
+.message {
+  margin: 18px 24px;
+}
+
+.loading-shell {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #667085;
+  font-weight: 700;
+}
+
+.message.error {
+  padding: 12px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  background: #fef2f2;
+  color: #b42318;
+  font-weight: 700;
+}
+
+.table-shell {
+  flex: 1;
+  margin: 18px 24px 0;
+  overflow: auto;
+  border: 1px solid #e4e7ec;
+  border-radius: 14px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #eef2f7;
+  text-align: left;
+  white-space: nowrap;
+}
+
+th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f8fafc;
+  color: #667085;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+td {
+  color: #344054;
+  font-size: 13px;
+}
+
+.empty-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  color: #667085;
+}
+
+.dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 24px 18px;
+  border-top: 1px solid #eef2f7;
+  color: #475467;
+  font-size: 12px;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (max-width: 720px) {
+  .dialog-header,
+  .dialog-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .table-shell {
+    margin-left: 12px;
+    margin-right: 12px;
+  }
+}
