@@ -12,6 +12,8 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 
+import { DateRangeSelectorComponent } from '../../shared/date-range-selector/date-range-selector.component';
+
 import {
   AttendanceAgeBucket,
   AttendanceBranch,
@@ -102,6 +104,7 @@ type RankingSortDirection = 'asc' | 'desc';
     MatInputModule,
     MatProgressSpinnerModule,
     MatSelectModule,
+    DateRangeSelectorComponent,
   ],
   templateUrl: './attendance-dashboard.component.html',
   styleUrls: ['./attendance-dashboard.component.css'],
