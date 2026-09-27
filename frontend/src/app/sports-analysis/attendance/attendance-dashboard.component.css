@@ -147,6 +147,33 @@
   display: block;
 }
 
+.kpi-card-button {
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.kpi-card-button:hover,
+.kpi-card-button:focus-visible {
+  transform: translateY(-2px);
+  border-color: rgba(37, 99, 235, 0.3);
+  box-shadow: 0 14px 34px rgba(37, 99, 235, 0.12);
+  outline: none;
+}
+
+.kpi-card-button:focus-visible {
+  box-shadow:
+    0 0 0 3px rgba(37, 99, 235, 0.15),
+    0 14px 34px rgba(37, 99, 235, 0.12);
+}
+
 .kpi-card span {
   color: #667085;
   font-size: 12px;
