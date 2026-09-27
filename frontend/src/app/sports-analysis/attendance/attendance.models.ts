@@ -116,3 +116,38 @@ export interface AttendanceDashboard {
   branch_ranking: AttendanceBranchRanking[];
   data_quality: AttendanceDataQuality;
 }
+
+
+export type AttendanceDetailSortDirection = 'asc' | 'desc';
+
+export interface AttendanceDetailColumn {
+  key: string;
+  label: string;
+}
+
+export type AttendanceDetailRow = Record<
+  string,
+  string | number | boolean | null
+>;
+
+export interface AttendanceDetailResponse {
+  metric: string;
+  title: string;
+  count: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  sort_by: string;
+  sort_dir: AttendanceDetailSortDirection;
+  columns: AttendanceDetailColumn[];
+  rows: AttendanceDetailRow[];
+}
+
+export interface AttendanceDetailRequest
+  extends AttendanceDashboardRequest {
+  metric: string;
+  page?: number;
+  pageSize?: number;
+  sortBy?: string;
+  sortDir?: AttendanceDetailSortDirection;
+}
