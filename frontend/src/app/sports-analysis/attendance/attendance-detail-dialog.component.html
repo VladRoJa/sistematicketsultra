@@ -1,0 +1,136 @@
+<div class="attendance-detail-dialog">
+  <header class="dialog-header">
+    <div class="dialog-heading">
+      <span class="eyebrow">DETALLE DEL INDICADOR</span>
+      <h2>{{ detail?.title || 'Cargando detalle…' }}</h2>
+      <div class="dialog-meta" *ngIf="detail">
+        <span>{{ detail.count | number:'1.0-0' }} registros</span>
+        <span>Página {{ detail.page }} de {{ detail.total_pages || 1 }}</span>
+        <span>{{ data.dateFrom }} a {{ data.dateTo }}</span>
+      </div>
+    </div>
+
+    <div class="dialog-actions">
+      <button
+        mat-stroked-button
+        type="button"
+        [disabled]="!detail || exporting"
+        (click)="exportExcel()">
+        <mat-spinner
+          *ngIf="exporting"
+          diameter="16">
+        </mat-spinner>
+        <mat-icon *ngIf="!exporting">
+          download
+        </mat-icon>
+        {{ exporting ? 'Exportando…' : 'Exportar Excel' }}
+      </button>
+
+      <button
+        mat-icon-button
+        type="button"
+        aria-label="Cerrar detalle"
+        (click)="close()">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+  </header>
+
+  <div
+    class="dialog-error"
+    *ngIf="errorMessage"
+    role="alert">
+    <mat-icon>error_outline</mat-icon>
+    <span>{{ errorMessage }}</span>
+  </div>
+
+  <div class="dialog-body">
+    <div
+      class="initial-loading"
+      *ngIf="loading && !detail">
+      <mat-spinner diameter="34"></mat-spinner>
+      <span>Cargando registros…</span>
+    </div>
+
+    <div
+      class="table-wrap"
+      *ngIf="detail">
+      <table
+        mat-table
+        [dataSource]="rows"
+        class="detail-table">
+
+        <ng-container
+          *ngFor="let column of columns"
+          [matColumnDef]="column.key">
+          <th
+            mat-header-cell
+            *matHeaderCellDef>
+            <button
+              type="button"
+              class="sort-header"
+              (click)="toggleSort(column.key)">
+              <span>{{ column.label }}</span>
+              <mat-icon
+                [class.active]="sortBy === column.key">
+                {{ sortIcon(column.key) }}
+              </mat-icon>
+            </button>
+          </th>
+
+          <td
+            mat-cell
+            *matCellDef="let row">
+            {{ formatCell(row, column.key) }}
+          </td>
+        </ng-container>
+
+        <tr
+          mat-header-row
+          *matHeaderRowDef="displayedColumns; sticky: true">
+        </tr>
+        <tr
+          mat-row
+          *matRowDef="let row; columns: displayedColumns">
+        </tr>
+      </table>
+
+      <div
+        class="table-loading"
+        *ngIf="loading">
+        <mat-spinner diameter="30"></mat-spinner>
+        <span>Actualizando…</span>
+      </div>
+    </div>
+  </div>
+
+  <footer
+    class="dialog-footer"
+    *ngIf="detail">
+    <strong>{{ rangeLabel }}</strong>
+
+    <div class="pagination">
+      <button
+        mat-stroked-button
+        type="button"
+        [disabled]="!canGoPrevious"
+        (click)="goToPage(detail.page - 1)">
+        <mat-icon>chevron_left</mat-icon>
+        Anterior
+      </button>
+
+      <span>
+        Página {{ detail.page }} de {{ detail.total_pages || 1 }}
+      </span>
+
+      <button
+        mat-stroked-button
+        type="button"
+        [disabled]="!canGoNext"
+        (click)="goToPage(detail.page + 1)">
+        Siguiente
+        <mat-icon>chevron_right</mat-icon>
+      </button>
+    </div>
+  </footer>
+</div>
