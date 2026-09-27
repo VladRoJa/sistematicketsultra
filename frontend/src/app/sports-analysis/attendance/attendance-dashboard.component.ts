@@ -11,6 +11,7 @@ import { MatSelectModule } from '@angular/material/select';
 import {
   AttendanceAgeBucket,
   AttendanceBranch,
+  AttendanceBranchRanking,
   AttendanceCatalogs,
   AttendanceDashboard,
   AttendanceHour,
@@ -90,6 +91,7 @@ export class AttendanceDashboardComponent implements OnInit {
 
   loading = false;
   errorMessage = '';
+  showFullRanking = false;
 
   occupancyChart: OccupancyChartModel | null = null;
   hourBars: HourBarModel[] = [];
@@ -133,6 +135,21 @@ export class AttendanceDashboardComponent implements OnInit {
       return this.formatDate(this.dateFrom);
     }
     return `${this.formatDate(this.dateFrom)} – ${this.formatDate(this.dateTo)}`;
+  }
+
+  get visibleBranchRanking(): AttendanceBranchRanking[] {
+    const ranking = this.dashboard?.branch_ranking ?? [];
+    return this.showFullRanking
+      ? ranking
+      : ranking.slice(0, 10);
+  }
+
+  get hasMoreRankingRows(): boolean {
+    return (this.dashboard?.branch_ranking.length ?? 0) > 10;
+  }
+
+  toggleRanking(): void {
+    this.showFullRanking = !this.showFullRanking;
   }
 
   get occupancyChartTitle(): string {
@@ -293,6 +310,7 @@ export class AttendanceDashboardComponent implements OnInit {
     }).subscribe({
       next: (dashboard) => {
         this.dashboard = dashboard;
+        this.showFullRanking = false;
         this.buildPresentationModels(dashboard);
         this.loading = false;
       },
