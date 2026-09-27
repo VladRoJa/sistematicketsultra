@@ -108,18 +108,21 @@ export class AttendanceDetailDialogComponent implements OnInit {
     this.loadPage(page);
   }
 
-  toggleSort(column: string): void {
-    if (this.loading) {
+  toggleSort(column: AttendanceDetailColumn): void {
+    if (
+      this.loading
+      || column.sortable === false
+    ) {
       return;
     }
 
-    if (this.sortBy === column) {
+    if (this.sortBy === column.key) {
       this.sortDir =
         this.sortDir === 'asc'
           ? 'desc'
           : 'asc';
     } else {
-      this.sortBy = column;
+      this.sortBy = column.key;
       this.sortDir = 'asc';
     }
 
