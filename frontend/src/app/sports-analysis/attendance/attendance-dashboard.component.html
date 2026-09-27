@@ -259,7 +259,7 @@
           <h2>Ranking de actividad</h2>
         </div>
         <div class="ranking-heading-actions">
-          <small>Ordenado por visitas</small>
+          <small>{{ rankingSortSummary }}</small>
           <button
             *ngIf="hasMoreRankingRows"
             mat-button
@@ -275,17 +275,52 @@
         <table>
           <thead>
             <tr>
-              <th>#</th>
-              <th>Sucursal</th>
-              <th>Visitas</th>
-              <th>Únicos</th>
-              <th>Aforo pico</th>
+              <th>
+                <button
+                  type="button"
+                  class="sort-header"
+                  (click)="setRankingSort('rank')">
+                  # <span>{{ rankingSortIndicator('rank') }}</span>
+                </button>
+              </th>
+              <th>
+                <button
+                  type="button"
+                  class="sort-header"
+                  (click)="setRankingSort('branch_name')">
+                  Sucursal <span>{{ rankingSortIndicator('branch_name') }}</span>
+                </button>
+              </th>
+              <th>
+                <button
+                  type="button"
+                  class="sort-header"
+                  (click)="setRankingSort('visits')">
+                  Visitas <span>{{ rankingSortIndicator('visits') }}</span>
+                </button>
+              </th>
+              <th>
+                <button
+                  type="button"
+                  class="sort-header"
+                  (click)="setRankingSort('unique_members')">
+                  Únicos <span>{{ rankingSortIndicator('unique_members') }}</span>
+                </button>
+              </th>
+              <th>
+                <button
+                  type="button"
+                  class="sort-header"
+                  (click)="setRankingSort('peak_occupancy')">
+                  Aforo pico <span>{{ rankingSortIndicator('peak_occupancy') }}</span>
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody>
             <tr
               *ngFor="let row of visibleBranchRanking; let i = index">
-              <td>{{ i + 1 }}</td>
+              <td>{{ rankingPosition(row) }}</td>
               <td>
                 <strong>{{ row.branch_name }}</strong>
               </td>
