@@ -63,6 +63,15 @@ interface AgeBarModel {
   widthPercent: number;
 }
 
+type RankingSortKey =
+  | 'rank'
+  | 'branch_name'
+  | 'visits'
+  | 'unique_members'
+  | 'peak_occupancy';
+
+type RankingSortDirection = 'asc' | 'desc';
+
 @Component({
   selector: 'app-attendance-dashboard',
   standalone: true,
@@ -92,6 +101,8 @@ export class AttendanceDashboardComponent implements OnInit {
   loading = false;
   errorMessage = '';
   showFullRanking = false;
+  rankingSortKey: RankingSortKey = 'visits';
+  rankingSortDirection: RankingSortDirection = 'desc';
 
   occupancyChart: OccupancyChartModel | null = null;
   hourBars: HourBarModel[] = [];
@@ -138,7 +149,7 @@ export class AttendanceDashboardComponent implements OnInit {
   }
 
   get visibleBranchRanking(): AttendanceBranchRanking[] {
-    const ranking = this.dashboard?.branch_ranking ?? [];
+    const ranking = this.sortedBranchRanking;
     return this.showFullRanking
       ? ranking
       : ranking.slice(0, 10);
@@ -148,8 +159,105 @@ export class AttendanceDashboardComponent implements OnInit {
     return (this.dashboard?.branch_ranking.length ?? 0) > 10;
   }
 
+  get rankingSortSummary(): string {
+    const labels: Record<RankingSortKey, string> = {
+      rank: 'posición',
+      branch_name: 'sucursal',
+      visits: 'visitas',
+      unique_members: 'únicos',
+      peak_occupancy: 'aforo pico',
+    };
+    const direction = this.rankingSortDirection === 'asc'
+      ? 'ascendente'
+      : 'descendente';
+    return `Ordenado por ${labels[this.rankingSortKey]} · ${direction}`;
+  }
+
   toggleRanking(): void {
     this.showFullRanking = !this.showFullRanking;
+  }
+
+  setRankingSort(key: RankingSortKey): void {
+    if (this.rankingSortKey === key) {
+      this.rankingSortDirection =
+        this.rankingSortDirection === 'asc'
+          ? 'desc'
+          : 'asc';
+      return;
+    }
+
+    this.rankingSortKey = key;
+    this.rankingSortDirection =
+      key === 'branch_name' || key === 'rank'
+        ? 'asc'
+        : 'desc';
+  }
+
+  rankingSortIndicator(key: RankingSortKey): string {
+    if (this.rankingSortKey !== key) {
+      return '↕';
+    }
+    return this.rankingSortDirection === 'asc'
+      ? '↑'
+      : '↓';
+  }
+
+  rankingPosition(row: AttendanceBranchRanking): number {
+    const ranking = this.dashboard?.branch_ranking ?? [];
+    const index = ranking.findIndex(
+      (item) => item.branch_id === row.branch_id,
+    );
+    return index >= 0 ? index + 1 : 0;
+  }
+
+  private get sortedBranchRanking(): AttendanceBranchRanking[] {
+    const ranking = this.dashboard?.branch_ranking ?? [];
+    const originalPosition = new Map(
+      ranking.map((row, index) => [row.branch_id, index]),
+    );
+    const direction =
+      this.rankingSortDirection === 'asc' ? 1 : -1;
+
+    return [...ranking].sort((left, right) => {
+      let comparison = 0;
+
+      switch (this.rankingSortKey) {
+        case 'rank':
+          comparison =
+            (originalPosition.get(left.branch_id) ?? 0)
+            - (originalPosition.get(right.branch_id) ?? 0);
+          break;
+        case 'branch_name':
+          comparison = left.branch_name.localeCompare(
+            right.branch_name,
+            'es',
+            { sensitivity: 'base' },
+          );
+          break;
+        case 'unique_members':
+          comparison =
+            left.unique_members - right.unique_members;
+          break;
+        case 'peak_occupancy':
+          comparison =
+            left.peak_occupancy - right.peak_occupancy;
+          break;
+        case 'visits':
+        default:
+          comparison = left.visits - right.visits;
+          break;
+      }
+
+      if (comparison === 0) {
+        comparison = left.branch_name.localeCompare(
+          right.branch_name,
+          'es',
+          { sensitivity: 'base' },
+        );
+      }
+
+      return comparison * direction;
+    });
   }
 
   get occupancyChartTitle(): string {
@@ -311,6 +419,8 @@ export class AttendanceDashboardComponent implements OnInit {
       next: (dashboard) => {
         this.dashboard = dashboard;
         this.showFullRanking = false;
+        this.rankingSortKey = 'visits';
+        this.rankingSortDirection = 'desc';
         this.buildPresentationModels(dashboard);
         this.loading = false;
       },
