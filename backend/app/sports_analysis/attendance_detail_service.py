@@ -354,6 +354,7 @@ def _build_dataset(
             date_from=date_from,
             date_to=date_to,
             attendance_type=normalized_type,
+            age_bucket=age_bucket,
         )
 
     if metric in {
@@ -498,6 +499,7 @@ def _unique_dataset(
     date_from: date,
     date_to: date,
     attendance_type: str,
+    age_bucket: str | None,
 ) -> dict:
     base_filters = [
         WarehouseAttendanceVisitORM.sucursal_id
@@ -514,6 +516,28 @@ def _unique_dataset(
         base_filters.append(
             WarehouseAttendanceVisitORM.attendance_type
             == attendance_type
+        )
+
+    title = "Personas únicas por PIN"
+    if age_bucket:
+        minimum, maximum = _resolve_age_bucket(
+            age_bucket
+        )
+        base_filters.extend(
+            [
+                WarehouseAttendanceVisitORM
+                .age_is_valid.is_(True),
+                WarehouseAttendanceVisitORM
+                .age.isnot(None),
+                WarehouseAttendanceVisitORM.age
+                >= minimum,
+                WarehouseAttendanceVisitORM.age
+                <= maximum,
+            ]
+        )
+        title = (
+            "Personas únicas del rango de edad "
+            f"{age_bucket}"
         )
 
     query = (
@@ -545,7 +569,7 @@ def _unique_dataset(
         )
 
     return {
-        "title": "Personas únicas por PIN",
+        "title": title,
         "columns": _UNIQUE_COLUMNS,
         "query": query,
         "count": count_unique,
