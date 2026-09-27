@@ -133,7 +133,7 @@ export class AttendanceBaseHealthDetailDialogComponent
     });
   }
 
-  private formatNumber(value: number): string {
+  formatNumber(value: number): string {
     return new Intl.NumberFormat('es-MX', {
       maximumFractionDigits: 0,
     }).format(value || 0);
