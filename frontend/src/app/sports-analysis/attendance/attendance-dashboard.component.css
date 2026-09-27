@@ -186,6 +186,13 @@
   grid-template-columns: minmax(0, 1.4fr) minmax(460px, 1fr);
 }
 
+.main-grid > .panel {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  box-sizing: border-box;
+}
+
 .secondary-grid {
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   align-items: stretch;
