@@ -60,11 +60,6 @@ _VISIT_COLUMNS = [
         "sortable": False,
     },
     {"key": "member_pin", "label": "PIN"},
-    {
-        "key": "identity_method",
-        "label": "Método identidad",
-        "sortable": False,
-    },
     {"key": "entered_at", "label": "Entrada"},
     {"key": "exited_at", "label": "Salida"},
     {"key": "visit_status", "label": "Estado"},

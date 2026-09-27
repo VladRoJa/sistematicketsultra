@@ -119,9 +119,10 @@ def test_visit_detail_identity_columns_are_not_sortable():
     for key in (
         "display_name",
         "id_socio",
-        "identity_method",
     ):
         assert columns[key]["sortable"] is False
+
+    assert "identity_method" not in columns
 
     assert "member_pin" in detail._VISIT_SORTS
     assert "display_name" not in detail._VISIT_SORTS
