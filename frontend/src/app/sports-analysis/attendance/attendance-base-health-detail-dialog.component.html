@@ -1,0 +1,88 @@
+<section class="dialog-shell">
+  <header class="dialog-header">
+    <div>
+      <span class="eyebrow">SALUD DE LA BASE</span>
+      <h2>{{ detail?.title || 'Detalle de socios' }}</h2>
+      <p *ngIf="detail">
+        {{ formatDate(data.dateFrom) }} a {{ formatDate(data.dateTo) }}
+        · {{ detail.count | number:'1.0-0':'es-MX' }} socios
+      </p>
+    </div>
+
+    <button
+      mat-button
+      type="button"
+      class="close-button"
+      (click)="close()">
+      Cerrar
+    </button>
+  </header>
+
+  <div class="message error" *ngIf="errorMessage">
+    {{ errorMessage }}
+  </div>
+
+  <div class="loading-shell" *ngIf="loading">
+    <mat-spinner diameter="38"></mat-spinner>
+    <span>Consultando socios...</span>
+  </div>
+
+  <ng-container *ngIf="!loading && detail">
+    <div class="table-shell" *ngIf="rows.length; else emptyState">
+      <table>
+        <thead>
+          <tr>
+            <th>Socio</th>
+            <th>ID socio</th>
+            <th>PIN</th>
+            <th>Sucursal</th>
+            <th>Alta</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of rows">
+            <td>
+              <strong>{{ row.name || 'Sin nombre' }}</strong>
+            </td>
+            <td>{{ row.id_socio }}</td>
+            <td>{{ row.pin }}</td>
+            <td>{{ row.branch_name }}</td>
+            <td>{{ formatDate(row.member_since) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <ng-template #emptyState>
+      <div class="empty-state">
+        No hay socios en este grupo para el periodo seleccionado.
+      </div>
+    </ng-template>
+
+    <footer class="dialog-footer">
+      <strong>{{ rangeLabel }}</strong>
+
+      <div class="pagination" *ngIf="detail.total_pages > 1">
+        <button
+          mat-button
+          type="button"
+          [disabled]="!canGoPrevious"
+          (click)="goToPage(detail.page - 1)">
+          Anterior
+        </button>
+
+        <span>
+          Página {{ detail.page }} de {{ detail.total_pages }}
+        </span>
+
+        <button
+          mat-button
+          type="button"
+          [disabled]="!canGoNext"
+          (click)="goToPage(detail.page + 1)">
+          Siguiente
+        </button>
+      </div>
+    </footer>
+  </ng-container>
+</section>
