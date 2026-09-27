@@ -1,0 +1,12 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.date-range-field {
+  width: 100%;
+}
+
+.date-range-field input {
+  font-weight: 600;
+}
