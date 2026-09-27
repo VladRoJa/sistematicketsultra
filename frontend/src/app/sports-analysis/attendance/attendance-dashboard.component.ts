@@ -21,6 +21,7 @@ import {
   AttendanceHour,
   AttendanceDetailRequest,
   AttendanceInterval,
+  AttendanceTypeDistribution,
 } from './attendance.models';
 import { AttendanceDetailDialogComponent } from './attendance-detail-dialog.component';
 import { AttendanceService } from './attendance.service';
@@ -65,9 +66,19 @@ interface HourBarModel {
 
 interface AgeBarModel {
   label: string;
-  visits: number;
+  value: number;
   widthPercent: number;
 }
+
+interface AttendanceTypeBarModel {
+  attendanceType: string;
+  label: string;
+  value: number;
+}
+
+type DistributionMetric =
+  | 'visits'
+  | 'unique_members';
 
 type RankingSortKey =
   | 'rank'
@@ -114,6 +125,8 @@ export class AttendanceDashboardComponent implements OnInit {
   occupancyChart: OccupancyChartModel | null = null;
   hourBars: HourBarModel[] = [];
   ageBars: AgeBarModel[] = [];
+  attendanceTypeBars: AttendanceTypeBarModel[] = [];
+  distributionMetric: DistributionMetric = 'visits';
 
   private readonly numberFormatter = new Intl.NumberFormat('es-MX');
 
@@ -179,6 +192,21 @@ export class AttendanceDashboardComponent implements OnInit {
       ? 'ascendente'
       : 'descendente';
     return `Ordenado por ${labels[this.rankingSortKey]} · ${direction}`;
+  }
+
+  setDistributionMetric(
+    metric: DistributionMetric,
+  ): void {
+    if (this.distributionMetric === metric) {
+      return;
+    }
+
+    this.distributionMetric = metric;
+    if (this.dashboard) {
+      this.buildDistributionModels(
+        this.dashboard,
+      );
+    }
   }
 
   toggleRanking(): void {
@@ -291,7 +319,9 @@ export class AttendanceDashboardComponent implements OnInit {
         }
 
         if (catalogs.latest_business_date) {
-          this.dateFrom = catalogs.latest_business_date;
+          this.dateFrom = this.monthStart(
+            catalogs.latest_business_date,
+          );
           this.dateTo = catalogs.latest_business_date;
           this.loadDashboard();
           return;
@@ -379,7 +409,9 @@ export class AttendanceDashboardComponent implements OnInit {
     ageBucket: string,
   ): void {
     this.openDetail(
-      'age_bucket',
+      this.distributionMetric === 'unique_members'
+        ? 'unique_members'
+        : 'age_bucket',
       { ageBucket },
     );
   }
@@ -388,7 +420,9 @@ export class AttendanceDashboardComponent implements OnInit {
     attendanceType: string,
   ): void {
     this.openDetail(
-      'attendance_type',
+      this.distributionMetric === 'unique_members'
+        ? 'unique_members'
+        : 'attendance_type',
       { attendanceType },
     );
   }
@@ -562,8 +596,8 @@ export class AttendanceDashboardComponent implements OnInit {
     this.hourBars = this.buildHourBars(
       dashboard.entries_by_hour,
     );
-    this.ageBars = this.buildAgeBars(
-      dashboard.age_distribution,
+    this.buildDistributionModels(
+      dashboard,
     );
   }
 
@@ -666,19 +700,90 @@ export class AttendanceDashboardComponent implements OnInit {
     }));
   }
 
+  private buildDistributionModels(
+    dashboard: AttendanceDashboard,
+  ): void {
+    this.ageBars = this.buildAgeBars(
+      dashboard.age_distribution,
+    );
+    this.attendanceTypeBars =
+      this.buildAttendanceTypeBars(
+        dashboard.attendance_type_distribution,
+      );
+  }
+
   private buildAgeBars(
     rows: AttendanceAgeBucket[],
   ): AgeBarModel[] {
+    const values = rows.map(
+      (row) => this.distributionValue(row),
+    );
     const maxValue = Math.max(
       1,
-      ...rows.map((row) => row.visits),
+      ...values,
     );
 
-    return rows.map((row) => ({
-      label: row.label,
-      visits: row.visits,
-      widthPercent:
-        (row.visits / maxValue) * 100,
-    }));
+    return rows.map((row) => {
+      const value = this.distributionValue(
+        row,
+      );
+      return {
+        label: row.label,
+        value,
+        widthPercent:
+          (value / maxValue) * 100,
+      };
+    });
+  }
+
+  private buildAttendanceTypeBars(
+    rows: AttendanceTypeDistribution[],
+  ): AttendanceTypeBarModel[] {
+    return rows
+      .map((row) => ({
+        attendanceType:
+          row.attendance_type,
+        label: this.attendanceTypeLabel(
+          row.attendance_type,
+        ),
+        value: this.distributionValue(
+          row,
+        ),
+      }))
+      .sort(
+        (left, right) =>
+          right.value - left.value
+          || left.label.localeCompare(
+            right.label,
+            'es',
+            { sensitivity: 'base' },
+          ),
+      );
+  }
+
+  private distributionValue(
+    row: {
+      visits: number;
+      unique_members: number;
+    },
+  ): number {
+    return this.distributionMetric
+      === 'unique_members'
+      ? row.unique_members
+      : row.visits;
+  }
+
+  private monthStart(
+    isoDate: string,
+  ): string {
+    const match =
+      /^(\d{4})-(\d{2})-\d{2}$/
+        .exec(isoDate);
+
+    if (!match) {
+      return isoDate;
+    }
+
+    return `${match[1]}-${match[2]}-01`;
   }
 }
