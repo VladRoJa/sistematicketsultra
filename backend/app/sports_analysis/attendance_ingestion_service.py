@@ -257,6 +257,12 @@ def _apply_visit(
         record.source_branch_name
     )
     target.member_pin = record.member_pin
+    target.source_first_name = (
+        record.source_first_name
+    )
+    target.source_last_name = (
+        record.source_last_name
+    )
     target.entered_at_utc = (
         record.entered_at_utc
     )

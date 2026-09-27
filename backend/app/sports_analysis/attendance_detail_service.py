@@ -20,6 +20,10 @@ from .attendance_access import (
     SportsAnalysisScope,
     scoped_branch_catalog,
 )
+from .attendance_identity_service import (
+    AttendanceIdentityResolution,
+    resolve_attendance_identities,
+)
 from .attendance_mart_service import (
     ALL_ATTENDANCE_TYPES,
 )
@@ -45,6 +49,16 @@ MAX_PAGE_SIZE = 200
 _VISIT_COLUMNS = [
     {"key": "business_date", "label": "Fecha"},
     {"key": "branch_name", "label": "Sucursal"},
+    {
+        "key": "display_name",
+        "label": "Nombre",
+        "sortable": False,
+    },
+    {
+        "key": "id_socio",
+        "label": "ID Socio",
+        "sortable": False,
+    },
     {"key": "member_pin", "label": "PIN"},
     {"key": "entered_at", "label": "Entrada"},
     {"key": "exited_at", "label": "Salida"},
@@ -225,6 +239,11 @@ def build_attendance_detail(
         .all()
     )
 
+    serialized_rows = _serialize_dataset_rows(
+        dataset,
+        rows,
+    )
+
     return {
         "metric": normalized_metric,
         "title": dataset["title"],
@@ -235,10 +254,7 @@ def build_attendance_detail(
         "sort_by": safe_sort_by,
         "sort_dir": safe_sort_dir,
         "columns": list(dataset["columns"]),
-        "rows": [
-            dataset["serialize"](row)
-            for row in rows
-        ],
+        "rows": serialized_rows,
     }
 
 
@@ -293,10 +309,10 @@ def build_attendance_detail_export(
         )
         .all()
     )
-    serialized_rows = [
-        dataset["serialize"](row)
-        for row in rows
-    ]
+    serialized_rows = _serialize_dataset_rows(
+        dataset,
+        rows,
+    )
 
     output = _build_workbook(
         columns=dataset["columns"],
@@ -453,6 +469,7 @@ def _build_dataset(
         ),
         "serialize": _serialize_visit_row,
         "sheet_name": "Detalle",
+        "identity_enrichment": True,
     }
 
 
@@ -707,7 +724,49 @@ def _apply_sort(
     )
 
 
-def _serialize_visit_row(row) -> dict:
+def _serialize_dataset_rows(
+    dataset: dict,
+    rows: list,
+) -> list[dict]:
+    if not dataset.get(
+        "identity_enrichment",
+        False,
+    ):
+        return [
+            dataset["serialize"](row)
+            for row in rows
+        ]
+
+    visits = [
+        row[0]
+        for row in rows
+    ]
+    identities = resolve_attendance_identities(
+        visits,
+        session=db.session,
+    )
+
+    serialized_rows: list[dict] = []
+    for row in rows:
+        visit = row[0]
+        identity = identities.get(
+            int(visit.id)
+        )
+        serialized_rows.append(
+            dataset["serialize"](
+                row,
+                identity,
+            )
+        )
+
+    return serialized_rows
+
+
+def _serialize_visit_row(
+    row,
+    identity: AttendanceIdentityResolution
+    | None = None,
+) -> dict:
     visit, branch_name = row
     duration_minutes = (
         round(
@@ -728,7 +787,27 @@ def _serialize_visit_row(row) -> dict:
             branch_name
             or visit.source_branch_name
         ),
+        "display_name": (
+            identity.display_name
+            if identity is not None
+            else _source_member_name(visit)
+        ),
+        "id_socio": (
+            identity.id_socio
+            if identity is not None
+            else None
+        ),
         "member_pin": visit.member_pin,
+        "identity_method": (
+            identity.identity_method
+            if identity is not None
+            else None
+        ),
+        "identity_snapshot_id": (
+            identity.source_snapshot_id
+            if identity is not None
+            else None
+        ),
         "entered_at": _format_datetime(
             visit.entered_at_utc
         ),
@@ -761,6 +840,22 @@ def _serialize_visit_row(row) -> dict:
             visit.source_branch_name
         ),
     }
+
+
+def _source_member_name(
+    visit: WarehouseAttendanceVisitORM,
+) -> str | None:
+    parts = [
+        str(value).strip()
+        for value in (
+            visit.source_first_name,
+            visit.source_last_name,
+        )
+        if value is not None
+        and str(value).strip()
+    ]
+    value = " ".join(parts).strip()
+    return value or None
 
 
 def _serialize_unique_row(row) -> dict:

@@ -125,6 +125,7 @@ export type AttendanceDetailSortDirection = 'asc' | 'desc';
 export interface AttendanceDetailColumn {
   key: string;
   label: string;
+  sortable?: boolean;
 }
 
 export type AttendanceDetailRow = Record<

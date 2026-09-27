@@ -69,9 +69,11 @@
             <button
               type="button"
               class="sort-header"
-              (click)="toggleSort(column.key)">
+              [disabled]="column.sortable === false"
+              (click)="toggleSort(column)">
               <span>{{ column.label }}</span>
               <mat-icon
+                *ngIf="column.sortable !== false"
                 [class.active]="sortBy === column.key">
                 {{ sortIcon(column.key) }}
               </mat-icon>
