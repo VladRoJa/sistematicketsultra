@@ -98,6 +98,15 @@ get hayMenuAdicional(): boolean {
   return this.menuItemsAdicionales.length > 0;
 }
 
+get puedeVerAccionesFlotantesGlobales(): boolean {
+  const user = this.authService.getUser();
+  const username = String(
+    user?.username ?? ''
+  ).trim().toUpperCase();
+
+  return username !== 'ADMICORP';
+}
+
 isMoreMenuActive(): boolean {
   return this.menuItemsAdicionales.some(
     (item) => item.label === this.currentSubmenu
@@ -519,17 +528,20 @@ this.habilitarWarehouseEnMenuSiAplica(menuWarehouse);
   this.habilitarPermisosObservabilidadEnMenuSiAplica();
   this.habilitarAdminUsuariosEnMenuSiAplica();
   this.sincronizarMenuConRutaActual();
-  this.cargarTicketValidationAlertPosition();
-  this.cargarTicketValidationSummary();
 
-  this.validationSummaryIntervalId = setInterval(() => {
+  if (this.puedeVerAccionesFlotantesGlobales) {
+    this.cargarTicketValidationAlertPosition();
     this.cargarTicketValidationSummary();
-  }, this.validationSummaryRefreshMs);
 
-  this.validationSummaryRefreshSubscription =
-    this.refrescoService.refrescarResumenValidacionTickets$.subscribe(() => {
+    this.validationSummaryIntervalId = setInterval(() => {
       this.cargarTicketValidationSummary();
-    });
+    }, this.validationSummaryRefreshMs);
+
+    this.validationSummaryRefreshSubscription =
+      this.refrescoService.refrescarResumenValidacionTickets$.subscribe(() => {
+        this.cargarTicketValidationSummary();
+      });
+  }
   }
 
 private habilitarControlEnMenuSiAplica(menuControl: any): void {
@@ -1164,6 +1176,10 @@ private cargarTicketValidationAlertPosition(): void {
 }
 
 get shouldShowValidationAlert(): boolean {
+  if (!this.puedeVerAccionesFlotantesGlobales) {
+    return false;
+  }
+
   if (!this.validationSummary) {
     return false;
   }
