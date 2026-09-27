@@ -225,10 +225,10 @@ def _load_same_day_snapshot_id(
     if row is None:
         return None
 
-    snapshot_id = (
-        row[0]
-        if isinstance(row, tuple)
-        else getattr(row, "id", row)
+    snapshot_id = _row_value(
+        row,
+        "id",
+        0,
     )
     try:
         parsed = int(snapshot_id)
@@ -317,15 +317,37 @@ def _candidate_from_row(
 ) -> _IdentityCandidate:
     return _IdentityCandidate(
         id_socio=str(
-            getattr(row, "id_socio", row[0])
+            _row_value(
+                row,
+                "id_socio",
+                0,
+            )
         ).strip(),
         nombre=_clean_text(
-            getattr(row, "nombre", row[1])
+            _row_value(
+                row,
+                "nombre",
+                1,
+            )
         ),
         snapshot_id=int(
-            getattr(row, "snapshot_id", row[2])
+            _row_value(
+                row,
+                "snapshot_id",
+                2,
+            )
         ),
     )
+
+
+def _row_value(
+    row: Any,
+    attribute: str,
+    index: int,
+) -> Any:
+    if hasattr(row, attribute):
+        return getattr(row, attribute)
+    return row[index]
 
 
 def _unique_candidate(
