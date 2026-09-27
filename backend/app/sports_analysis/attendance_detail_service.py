@@ -822,8 +822,8 @@ def _build_workbook(
         start=1,
     ):
         sample_width = max(
-            len(str(column["label"])),
-            *[
+            [len(str(column["label"]))]
+            + [
                 len(
                     str(
                         row.get(
@@ -833,7 +833,7 @@ def _build_workbook(
                     )
                 )
                 for row in rows[:200]
-            ],
+            ]
         )
         worksheet.column_dimensions[
             _excel_column_letter(index)
