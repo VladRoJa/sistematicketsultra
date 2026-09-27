@@ -150,4 +150,7 @@ export interface AttendanceDetailRequest
   pageSize?: number;
   sortBy?: string;
   sortDir?: AttendanceDetailSortDirection;
+  minute?: number;
+  hour?: number;
+  ageBucket?: string;
 }
