@@ -72,6 +72,8 @@ Campos principales:
 - sucursal_id
 - source_branch_name
 - member_pin (VARCHAR)
+- source_first_name
+- source_last_name
 - entered_at_utc
 - exited_at_utc
 - duration_seconds
@@ -86,7 +88,7 @@ Campos principales:
 - source_fingerprint
 - last_run_id
 
-Nombre y apellido no se almacenan en la tabla analítica.
+Desde el parser v2, nombre y apellido reportados por Gasca se conservan como fuente (`source_first_name` / `source_last_name`) para detalle y fallback visual. No forman parte del fingerprint cuando existe PIN.
 
 ### `warehouse_attendance_rejections`
 
