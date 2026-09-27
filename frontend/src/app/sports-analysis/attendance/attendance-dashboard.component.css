@@ -76,20 +76,23 @@
 }
 
 .filters-card {
-  padding: 16px 18px 2px;
+  padding: 16px 18px 10px;
 }
 
 .filters-grid {
   display: grid;
   grid-template-columns:
-    minmax(150px, 0.8fr)
-    minmax(150px, 0.8fr)
+    minmax(320px, 1.6fr)
     minmax(180px, 1fr)
     minmax(200px, 1.2fr)
     minmax(190px, 1fr)
     auto;
   gap: 12px;
   align-items: start;
+}
+
+.date-range-filter {
+  min-width: 0;
 }
 
 .apply-button {
@@ -707,6 +710,10 @@ td {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .date-range-filter {
+    grid-column: span 2;
+  }
+
   .main-grid {
     grid-template-columns: 1fr;
   }
@@ -730,6 +737,10 @@ td {
   .kpi-grid,
   .secondary-grid {
     grid-template-columns: 1fr;
+  }
+
+  .date-range-filter {
+    grid-column: span 1;
   }
 
   .distribution-toolbar {
