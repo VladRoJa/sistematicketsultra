@@ -47,6 +47,8 @@ def _row(
     pin="00123",
     entry="18-06-2026 06:00:00",
     exit_value="18-06-2026 07:30:00",
+    first_name="Ana",
+    last_name="Prueba",
     age="29",
 ):
     return [
@@ -54,8 +56,8 @@ def _row(
         pin,
         entry,
         exit_value,
-        "Ana",
-        "Prueba",
+        first_name,
+        last_name,
         age,
         "MEXICALI",
         "SEND MXL",
@@ -92,6 +94,8 @@ def test_parser_preserves_pin_and_visit_state(tmp_path):
     closed, opened = result.visits
 
     assert closed.member_pin == "00123"
+    assert closed.source_first_name == "Ana"
+    assert closed.source_last_name == "Prueba"
     assert closed.visit_status == "CLOSED"
     assert closed.duration_seconds == 90 * 60
     assert closed.age == 29
@@ -102,6 +106,55 @@ def test_parser_preserves_pin_and_visit_state(tmp_path):
     assert opened.exited_at_utc is None
     assert opened.age is None
     assert opened.age_is_valid is False
+
+
+def test_fingerprint_with_pin_ignores_source_name_changes(
+    tmp_path,
+):
+    original_report = tmp_path / "original-name.xlsx"
+    corrected_report = tmp_path / "corrected-name.xlsx"
+
+    _write_report(
+        original_report,
+        [
+            _row(
+                first_name="Ana",
+                last_name="Prueba",
+            )
+        ],
+    )
+    _write_report(
+        corrected_report,
+        [
+            _row(
+                first_name="Ana Maria",
+                last_name="Prueba Lopez",
+            )
+        ],
+    )
+
+    original = parse_attendance_excel(
+        original_report,
+        business_date=date(2026, 6, 18),
+    ).visits[0]
+    corrected = parse_attendance_excel(
+        corrected_report,
+        business_date=date(2026, 6, 18),
+    ).visits[0]
+
+    assert original.member_pin == corrected.member_pin
+    assert (
+        original.source_fingerprint
+        == corrected.source_fingerprint
+    )
+    assert (
+        original.source_first_name
+        != corrected.source_first_name
+    )
+    assert (
+        original.source_last_name
+        != corrected.source_last_name
+    )
 
 
 def test_fingerprint_is_stable_when_exit_is_completed(tmp_path):
