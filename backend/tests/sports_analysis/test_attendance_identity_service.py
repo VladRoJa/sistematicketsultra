@@ -243,3 +243,17 @@ def test_canonical_name_falls_back_to_source(
 
     assert resolution.id_socio == "331909"
     assert resolution.display_name == "Ana Prueba"
+
+
+def test_candidate_from_labeled_row():
+    row = SimpleNamespace(
+        id_socio="331909",
+        nombre="Ana Canonica",
+        snapshot_id=25,
+    )
+
+    candidate = identity._candidate_from_row(row)
+
+    assert candidate.id_socio == "331909"
+    assert candidate.nombre == "Ana Canonica"
+    assert candidate.snapshot_id == 25
