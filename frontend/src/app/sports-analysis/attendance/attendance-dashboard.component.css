@@ -225,6 +225,59 @@
   align-items: stretch;
 }
 
+.distribution-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  max-width: 1500px;
+  margin: 0 auto 10px;
+}
+
+.distribution-toolbar > span {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.metric-switch {
+  display: inline-flex;
+  gap: 3px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #e9eef7;
+}
+
+.metric-switch button {
+  padding: 7px 13px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #667085;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.metric-switch button:hover,
+.metric-switch button:focus-visible {
+  color: #1d4ed8;
+  outline: none;
+}
+
+.metric-switch button.active {
+  background: #ffffff;
+  color: #1d4ed8;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+}
+
+
 .secondary-grid > .panel {
   width: 100%;
   max-width: none;
@@ -677,6 +730,11 @@ td {
   .kpi-grid,
   .secondary-grid {
     grid-template-columns: 1fr;
+  }
+
+  .distribution-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .type-list {
