@@ -124,6 +124,7 @@ export class AttendanceDashboardComponent implements OnInit {
   selectedRegionKey: string | null = null;
   selectedBranchId: number | null = null;
   selectedAttendanceType = 'SOCIO';
+  private summaryAttendanceType = 'SOCIO';
 
   loading = false;
   errorMessage = '';
@@ -341,6 +342,8 @@ export class AttendanceDashboardComponent implements OnInit {
         this.catalogs = catalogs;
         this.selectedAttendanceType =
           catalogs.default_attendance_type || 'SOCIO';
+        this.summaryAttendanceType =
+          this.selectedAttendanceType;
 
         if (catalogs.scope.fixed_branch_id !== null) {
           this.selectedBranchId =
@@ -391,7 +394,16 @@ export class AttendanceDashboardComponent implements OnInit {
       return;
     }
 
+    if (this.activeView === 'summary') {
+      this.summaryAttendanceType =
+        this.selectedAttendanceType;
+    }
+
     this.activeView = view;
+    this.selectedAttendanceType =
+      view === 'summary'
+        ? this.summaryAttendanceType
+        : 'SOCIO';
     this.errorMessage = '';
     this.loadActiveView();
   }
