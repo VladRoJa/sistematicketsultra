@@ -3,6 +3,10 @@ import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import {
+  MatDialog,
+  MatDialogModule,
+} from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -17,6 +21,7 @@ import {
   AttendanceHour,
   AttendanceInterval,
 } from './attendance.models';
+import { AttendanceDetailDialogComponent } from './attendance-detail-dialog.component';
 import { AttendanceService } from './attendance.service';
 
 interface OccupancyChartPoint {
@@ -80,6 +85,7 @@ type RankingSortDirection = 'asc' | 'desc';
     FormsModule,
     MatButtonModule,
     MatCardModule,
+    MatDialogModule,
     MatFormFieldModule,
     MatInputModule,
     MatProgressSpinnerModule,
@@ -112,6 +118,7 @@ export class AttendanceDashboardComponent implements OnInit {
 
   constructor(
     private readonly attendanceService: AttendanceService,
+    private readonly dialog: MatDialog,
   ) {}
 
   ngOnInit(): void {
@@ -331,6 +338,33 @@ export class AttendanceDashboardComponent implements OnInit {
   onBranchChange(branchId: number | null): void {
     this.selectedBranchId =
       branchId === null ? null : Number(branchId);
+  }
+
+  openVisitsDetail(): void {
+    const filters = this.dashboard?.filters;
+    if (
+      !filters?.date_from
+      || !filters.date_to
+    ) {
+      return;
+    }
+
+    this.dialog.open(
+      AttendanceDetailDialogComponent,
+      {
+        width: '96vw',
+        maxWidth: '1500px',
+        height: '86vh',
+        data: {
+          metric: 'visits',
+          dateFrom: filters.date_from,
+          dateTo: filters.date_to,
+          branchId: filters.branch_id,
+          regionKey: filters.region_key,
+          attendanceType: filters.attendance_type,
+        },
+      },
+    );
   }
 
   formatNumber(value: number | null | undefined): string {
