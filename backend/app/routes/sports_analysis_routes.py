@@ -22,6 +22,10 @@ from app.sports_analysis.attendance_detail_service import (
     build_attendance_detail,
     build_attendance_detail_export,
 )
+from app.sports_analysis.attendance_base_health_service import (
+    attendance_base_health,
+    attendance_base_health_members,
+)
 from app.sports_analysis.attendance_query_service import (
     SportsAnalysisValidationError,
     attendance_catalogs,
@@ -219,6 +223,125 @@ def get_attendance_dashboard():
                 "detail": (
                     "No se pudo consultar "
                     "Aforo y Asistencia."
+                ),
+            }
+        ), 500
+
+
+@sports_analysis_bp.get(
+    "/attendance/base-health"
+)
+@jwt_required()
+def get_attendance_base_health():
+    _, scope = _scope()
+    date_from = _parse_date_arg("date_from")
+    date_to = _parse_date_arg("date_to")
+    if date_from is None or date_to is None:
+        raise SportsAnalysisValidationError(
+            "date_from y date_to son obligatorios."
+        )
+
+    try:
+        result = attendance_base_health(
+            scope,
+            date_from=date_from,
+            date_to=date_to,
+            branch_id=_parse_int_arg(
+                "branch_id"
+            ),
+            region_key=(
+                str(
+                    request.args.get(
+                        "region_key"
+                    )
+                    or ""
+                ).strip()
+                or None
+            ),
+        )
+        return jsonify(result), 200
+    except (
+        SportsAnalysisAuthorizationError,
+        SportsAnalysisValidationError,
+    ):
+        raise
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Error consultando Salud de la base."
+        )
+        return jsonify(
+            {
+                "error": (
+                    "Internal Server Error"
+                ),
+                "detail": (
+                    "No se pudo consultar "
+                    "Salud de la base."
+                ),
+            }
+        ), 500
+
+
+@sports_analysis_bp.get(
+    "/attendance/base-health/members"
+)
+@jwt_required()
+def get_attendance_base_health_members():
+    _, scope = _scope()
+    date_from = _parse_date_arg("date_from")
+    date_to = _parse_date_arg("date_to")
+    if date_from is None or date_to is None:
+        raise SportsAnalysisValidationError(
+            "date_from y date_to son obligatorios."
+        )
+
+    try:
+        result = attendance_base_health_members(
+            scope,
+            date_from=date_from,
+            date_to=date_to,
+            branch_id=_parse_int_arg(
+                "branch_id"
+            ),
+            region_key=(
+                str(
+                    request.args.get(
+                        "region_key"
+                    )
+                    or ""
+                ).strip()
+                or None
+            ),
+            status=str(
+                request.args.get("status")
+                or ""
+            ),
+            page=request.args.get("page"),
+            page_size=request.args.get(
+                "page_size"
+            ),
+        )
+        return jsonify(result), 200
+    except (
+        SportsAnalysisAuthorizationError,
+        SportsAnalysisValidationError,
+    ):
+        raise
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Error consultando detalle "
+            "de Salud de la base."
+        )
+        return jsonify(
+            {
+                "error": (
+                    "Internal Server Error"
+                ),
+                "detail": (
+                    "No se pudo consultar el "
+                    "detalle de Salud de la base."
                 ),
             }
         ), 500
