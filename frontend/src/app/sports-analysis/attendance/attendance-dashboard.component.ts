@@ -3,6 +3,10 @@ import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import {
+  MatDialog,
+  MatDialogModule,
+} from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -11,11 +15,14 @@ import { MatSelectModule } from '@angular/material/select';
 import {
   AttendanceAgeBucket,
   AttendanceBranch,
+  AttendanceBranchRanking,
   AttendanceCatalogs,
   AttendanceDashboard,
   AttendanceHour,
+  AttendanceDetailRequest,
   AttendanceInterval,
 } from './attendance.models';
+import { AttendanceDetailDialogComponent } from './attendance-detail-dialog.component';
 import { AttendanceService } from './attendance.service';
 
 interface OccupancyChartPoint {
@@ -62,6 +69,15 @@ interface AgeBarModel {
   widthPercent: number;
 }
 
+type RankingSortKey =
+  | 'rank'
+  | 'branch_name'
+  | 'visits'
+  | 'unique_members'
+  | 'peak_occupancy';
+
+type RankingSortDirection = 'asc' | 'desc';
+
 @Component({
   selector: 'app-attendance-dashboard',
   standalone: true,
@@ -70,6 +86,7 @@ interface AgeBarModel {
     FormsModule,
     MatButtonModule,
     MatCardModule,
+    MatDialogModule,
     MatFormFieldModule,
     MatInputModule,
     MatProgressSpinnerModule,
@@ -90,6 +107,9 @@ export class AttendanceDashboardComponent implements OnInit {
 
   loading = false;
   errorMessage = '';
+  showFullRanking = false;
+  rankingSortKey: RankingSortKey = 'visits';
+  rankingSortDirection: RankingSortDirection = 'desc';
 
   occupancyChart: OccupancyChartModel | null = null;
   hourBars: HourBarModel[] = [];
@@ -99,6 +119,7 @@ export class AttendanceDashboardComponent implements OnInit {
 
   constructor(
     private readonly attendanceService: AttendanceService,
+    private readonly dialog: MatDialog,
   ) {}
 
   ngOnInit(): void {
@@ -133,6 +154,118 @@ export class AttendanceDashboardComponent implements OnInit {
       return this.formatDate(this.dateFrom);
     }
     return `${this.formatDate(this.dateFrom)} – ${this.formatDate(this.dateTo)}`;
+  }
+
+  get visibleBranchRanking(): AttendanceBranchRanking[] {
+    const ranking = this.sortedBranchRanking;
+    return this.showFullRanking
+      ? ranking
+      : ranking.slice(0, 10);
+  }
+
+  get hasMoreRankingRows(): boolean {
+    return (this.dashboard?.branch_ranking.length ?? 0) > 10;
+  }
+
+  get rankingSortSummary(): string {
+    const labels: Record<RankingSortKey, string> = {
+      rank: 'posición',
+      branch_name: 'sucursal',
+      visits: 'visitas',
+      unique_members: 'únicos',
+      peak_occupancy: 'aforo pico',
+    };
+    const direction = this.rankingSortDirection === 'asc'
+      ? 'ascendente'
+      : 'descendente';
+    return `Ordenado por ${labels[this.rankingSortKey]} · ${direction}`;
+  }
+
+  toggleRanking(): void {
+    this.showFullRanking = !this.showFullRanking;
+  }
+
+  setRankingSort(key: RankingSortKey): void {
+    if (this.rankingSortKey === key) {
+      this.rankingSortDirection =
+        this.rankingSortDirection === 'asc'
+          ? 'desc'
+          : 'asc';
+      return;
+    }
+
+    this.rankingSortKey = key;
+    this.rankingSortDirection =
+      key === 'branch_name' || key === 'rank'
+        ? 'asc'
+        : 'desc';
+  }
+
+  rankingSortIndicator(key: RankingSortKey): string {
+    if (this.rankingSortKey !== key) {
+      return '↕';
+    }
+    return this.rankingSortDirection === 'asc'
+      ? '↑'
+      : '↓';
+  }
+
+  rankingPosition(row: AttendanceBranchRanking): number {
+    const ranking = this.dashboard?.branch_ranking ?? [];
+    const index = ranking.findIndex(
+      (item) => item.branch_id === row.branch_id,
+    );
+    return index >= 0 ? index + 1 : 0;
+  }
+
+  private get sortedBranchRanking(): AttendanceBranchRanking[] {
+    const ranking = this.dashboard?.branch_ranking ?? [];
+    const originalPosition = new Map(
+      ranking.map((row, index) => [row.branch_id, index]),
+    );
+    const direction =
+      this.rankingSortDirection === 'asc' ? 1 : -1;
+
+    return [...ranking].sort((left, right) => {
+      let comparison = 0;
+
+      switch (this.rankingSortKey) {
+        case 'rank':
+          comparison =
+            (originalPosition.get(left.branch_id) ?? 0)
+            - (originalPosition.get(right.branch_id) ?? 0);
+          break;
+        case 'branch_name':
+          comparison = left.branch_name.localeCompare(
+            right.branch_name,
+            'es',
+            { sensitivity: 'base' },
+          );
+          break;
+        case 'unique_members':
+          comparison =
+            left.unique_members - right.unique_members;
+          break;
+        case 'peak_occupancy':
+          comparison =
+            left.peak_occupancy - right.peak_occupancy;
+          break;
+        case 'visits':
+        default:
+          comparison = left.visits - right.visits;
+          break;
+      }
+
+      if (comparison === 0) {
+        comparison = left.branch_name.localeCompare(
+          right.branch_name,
+          'es',
+          { sensitivity: 'base' },
+        );
+      }
+
+      return comparison * direction;
+    });
   }
 
   get occupancyChartTitle(): string {
@@ -208,6 +341,118 @@ export class AttendanceDashboardComponent implements OnInit {
       branchId === null ? null : Number(branchId);
   }
 
+  openVisitsDetail(): void {
+    this.openDetail('visits');
+  }
+
+  openUniqueMembersDetail(): void {
+    this.openDetail('unique_members');
+  }
+
+  openPeakOccupancyDetail(): void {
+    this.openDetail('peak_occupancy');
+  }
+
+  openDurationDetail(): void {
+    this.openDetail('duration');
+  }
+
+  openOccupancyIntervalDetail(
+    minute: number,
+  ): void {
+    this.openDetail(
+      'occupancy_interval',
+      { minute },
+    );
+  }
+
+  openEntriesHourDetail(
+    hour: number,
+  ): void {
+    this.openDetail(
+      'entries_hour',
+      { hour },
+    );
+  }
+
+  openAgeBucketDetail(
+    ageBucket: string,
+  ): void {
+    this.openDetail(
+      'age_bucket',
+      { ageBucket },
+    );
+  }
+
+  openAttendanceTypeDetail(
+    attendanceType: string,
+  ): void {
+    this.openDetail(
+      'attendance_type',
+      { attendanceType },
+    );
+  }
+
+  openBranchVisitsDetail(
+    branchId: number,
+  ): void {
+    this.openDetail(
+      'visits',
+      { branchId },
+    );
+  }
+
+  openBranchUniqueDetail(
+    branchId: number,
+  ): void {
+    this.openDetail(
+      'unique_members',
+      { branchId },
+    );
+  }
+
+  openBranchPeakDetail(
+    branchId: number,
+  ): void {
+    this.openDetail(
+      'peak_occupancy',
+      { branchId },
+    );
+  }
+
+  private openDetail(
+    metric: string,
+    overrides: Partial<AttendanceDetailRequest> = {},
+  ): void {
+    const filters = this.dashboard?.filters;
+    if (
+      !filters?.date_from
+      || !filters.date_to
+    ) {
+      return;
+    }
+
+    const data: AttendanceDetailRequest = {
+      metric,
+      dateFrom: filters.date_from,
+      dateTo: filters.date_to,
+      branchId: filters.branch_id,
+      regionKey: filters.region_key,
+      attendanceType: filters.attendance_type,
+      ...overrides,
+    };
+
+    this.dialog.open(
+      AttendanceDetailDialogComponent,
+      {
+        width: '96vw',
+        maxWidth: '1500px',
+        height: '86vh',
+        data,
+      },
+    );
+  }
+
   formatNumber(value: number | null | undefined): string {
     return this.numberFormatter.format(
       Number(value ?? 0),
@@ -276,6 +521,7 @@ export class AttendanceDashboardComponent implements OnInit {
       + quality.cross_day
       + quality.invalid_time
       + quality.unresolved_branch
+      + quality.non_operational_excluded
     );
   }
 
@@ -292,6 +538,9 @@ export class AttendanceDashboardComponent implements OnInit {
     }).subscribe({
       next: (dashboard) => {
         this.dashboard = dashboard;
+        this.showFullRanking = false;
+        this.rankingSortKey = 'visits';
+        this.rankingSortDirection = 'desc';
         this.buildPresentationModels(dashboard);
         this.loading = false;
       },

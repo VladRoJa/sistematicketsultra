@@ -87,34 +87,51 @@
 
   <ng-container *ngIf="!loading && dashboard">
     <section class="kpi-grid">
-      <article class="kpi-card">
+      <button
+        type="button"
+        class="kpi-card kpi-card-button"
+        (click)="openVisitsDetail()">
         <span>Visitas</span>
         <strong>{{ formatNumber(dashboard.summary.visits) }}</strong>
-        <small>{{ attendanceTypeLabel(dashboard.filters.attendance_type) }}</small>
-      </article>
+        <small>
+          {{ attendanceTypeLabel(dashboard.filters.attendance_type) }}
+          · Ver detalle
+        </small>
+      </button>
 
-      <article class="kpi-card">
+      <button
+        type="button"
+        class="kpi-card kpi-card-button"
+        (click)="openUniqueMembersDetail()">
         <span>Personas únicas</span>
         <strong>{{ formatNumber(dashboard.summary.unique_members) }}</strong>
-        <small>PIN distintos en el periodo</small>
-      </article>
+        <small>PIN distintos en el periodo · Ver detalle</small>
+      </button>
 
-      <article class="kpi-card accent">
+      <button
+        type="button"
+        class="kpi-card kpi-card-button accent"
+        (click)="openPeakOccupancyDetail()">
         <span>Aforo pico</span>
         <strong>{{ formatNumber(dashboard.summary.peak_occupancy) }}</strong>
         <small>
           {{ formatDate(dashboard.summary.peak_business_date) }}
           · {{ formatMinute(dashboard.summary.peak_minute) }}
+          · Ver detalle
         </small>
-      </article>
+      </button>
 
-      <article class="kpi-card">
+      <button
+        type="button"
+        class="kpi-card kpi-card-button"
+        (click)="openDurationDetail()">
         <span>Estancia mediana</span>
         <strong>{{ formatDuration(dashboard.summary.median_duration_seconds) }}</strong>
         <small>
           Promedio {{ formatDuration(dashboard.summary.average_duration_seconds) }}
+          · Ver detalle
         </small>
-      </article>
+      </button>
     </section>
 
     <section class="content-grid main-grid" *ngIf="hasData">
@@ -163,7 +180,9 @@
                 *ngFor="let point of chart.pointItems"
                 [attr.cx]="point.x"
                 [attr.cy]="point.y"
-                r="2.5">
+                r="3"
+                class="drillable-point"
+                (click)="openOccupancyIntervalDetail(point.minute)">
                 <title>
                   {{ point.label }} · {{ formatNumber(point.value) }}
                 </title>
@@ -196,7 +215,11 @@
         </div>
 
         <div class="hour-bars">
-          <div class="hour-column" *ngFor="let item of hourBars">
+          <button
+            type="button"
+            class="hour-column"
+            *ngFor="let item of hourBars"
+            (click)="openEntriesHourDetail(item.hour)">
             <span class="hour-value">{{ formatNumber(item.entries) }}</span>
             <div class="hour-track">
               <div
@@ -205,13 +228,13 @@
               </div>
             </div>
             <small>{{ item.label }}</small>
-          </div>
+          </button>
         </div>
       </mat-card>
     </section>
 
     <section class="content-grid secondary-grid" *ngIf="hasData">
-      <mat-card class="panel">
+      <mat-card class="panel profile-panel">
         <div class="panel-heading">
           <div>
             <span class="eyebrow">PERFIL</span>
@@ -220,7 +243,11 @@
         </div>
 
         <div class="age-list">
-          <div class="age-row" *ngFor="let item of ageBars">
+          <button
+            type="button"
+            class="age-row"
+            *ngFor="let item of ageBars"
+            (click)="openAgeBucketDetail(item.label)">
             <span>{{ item.label }}</span>
             <div class="age-track">
               <div
@@ -229,11 +256,11 @@
               </div>
             </div>
             <strong>{{ formatNumber(item.visits) }}</strong>
-          </div>
+          </button>
         </div>
       </mat-card>
 
-      <mat-card class="panel">
+      <mat-card class="panel audience-panel">
         <div class="panel-heading">
           <div>
             <span class="eyebrow">PÚBLICO</span>
@@ -242,12 +269,14 @@
         </div>
 
         <div class="type-list">
-          <div
+          <button
+            type="button"
             class="type-row"
-            *ngFor="let item of dashboard.attendance_type_distribution">
+            *ngFor="let item of dashboard.attendance_type_distribution"
+            (click)="openAttendanceTypeDetail(item.attendance_type)">
             <span>{{ attendanceTypeLabel(item.attendance_type) }}</span>
             <strong>{{ formatNumber(item.visits) }}</strong>
-          </div>
+          </button>
         </div>
       </mat-card>
     </section>
@@ -258,52 +287,111 @@
           <span class="eyebrow">SUCURSALES</span>
           <h2>Ranking de actividad</h2>
         </div>
-        <small>Ordenado por visitas</small>
+        <div class="ranking-heading-actions">
+          <small>{{ rankingSortSummary }}</small>
+          <button
+            *ngIf="hasMoreRankingRows"
+            mat-button
+            type="button"
+            class="ranking-toggle"
+            (click)="toggleRanking()">
+            {{ showFullRanking ? 'Ver Top 10' : 'Ver ranking completo' }}
+          </button>
+        </div>
       </div>
 
       <div class="table-scroll">
         <table>
           <thead>
             <tr>
-              <th>#</th>
-              <th>Sucursal</th>
-              <th>Visitas</th>
-              <th>Únicos</th>
-              <th>Aforo pico</th>
+              <th>
+                <button
+                  type="button"
+                  class="sort-header"
+                  (click)="setRankingSort('rank')">
+                  # <span>{{ rankingSortIndicator('rank') }}</span>
+                </button>
+              </th>
+              <th>
+                <button
+                  type="button"
+                  class="sort-header"
+                  (click)="setRankingSort('branch_name')">
+                  Sucursal <span>{{ rankingSortIndicator('branch_name') }}</span>
+                </button>
+              </th>
+              <th>
+                <button
+                  type="button"
+                  class="sort-header"
+                  (click)="setRankingSort('visits')">
+                  Visitas <span>{{ rankingSortIndicator('visits') }}</span>
+                </button>
+              </th>
+              <th>
+                <button
+                  type="button"
+                  class="sort-header"
+                  (click)="setRankingSort('unique_members')">
+                  Únicos <span>{{ rankingSortIndicator('unique_members') }}</span>
+                </button>
+              </th>
+              <th>
+                <button
+                  type="button"
+                  class="sort-header"
+                  (click)="setRankingSort('peak_occupancy')">
+                  Aforo pico <span>{{ rankingSortIndicator('peak_occupancy') }}</span>
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody>
             <tr
-              *ngFor="let row of dashboard.branch_ranking; let i = index">
-              <td>{{ i + 1 }}</td>
+              *ngFor="let row of visibleBranchRanking; let i = index">
               <td>
-                <strong>{{ row.branch_name }}</strong>
+                <button
+                  type="button"
+                  class="table-detail-button"
+                  (click)="openBranchVisitsDetail(row.branch_id)">
+                  {{ rankingPosition(row) }}
+                </button>
               </td>
-              <td>{{ formatNumber(row.visits) }}</td>
-              <td>{{ formatNumber(row.unique_members) }}</td>
-              <td>{{ formatNumber(row.peak_occupancy) }}</td>
+              <td>
+                <button
+                  type="button"
+                  class="table-detail-button branch-detail-button"
+                  (click)="openBranchVisitsDetail(row.branch_id)">
+                  <strong>{{ row.branch_name }}</strong>
+                </button>
+              </td>
+              <td>
+                <button
+                  type="button"
+                  class="table-detail-button"
+                  (click)="openBranchVisitsDetail(row.branch_id)">
+                  {{ formatNumber(row.visits) }}
+                </button>
+              </td>
+              <td>
+                <button
+                  type="button"
+                  class="table-detail-button"
+                  (click)="openBranchUniqueDetail(row.branch_id)">
+                  {{ formatNumber(row.unique_members) }}
+                </button>
+              </td>
+              <td>
+                <button
+                  type="button"
+                  class="table-detail-button"
+                  (click)="openBranchPeakDetail(row.branch_id)">
+                  {{ formatNumber(row.peak_occupancy) }}
+                </button>
+              </td>
             </tr>
           </tbody>
         </table>
-      </div>
-    </mat-card>
-
-    <mat-card
-      class="quality-card"
-      *ngIf="qualityTotal() > 0">
-      <div>
-        <strong>Calidad de datos</strong>
-        <span>
-          Estos registros se conservan, pero no todos participan en el cálculo de aforo.
-        </span>
-      </div>
-      <div class="quality-pills">
-        <span>Abiertas {{ formatNumber(dashboard.data_quality.open) }}</span>
-        <span>Entre días {{ formatNumber(dashboard.data_quality.cross_day) }}</span>
-        <span>Tiempo inválido {{ formatNumber(dashboard.data_quality.invalid_time) }}</span>
-        <span *ngIf="dashboard.data_quality.unresolved_branch">
-          Sucursal sin resolver {{ formatNumber(dashboard.data_quality.unresolved_branch) }}
-        </span>
       </div>
     </mat-card>
 

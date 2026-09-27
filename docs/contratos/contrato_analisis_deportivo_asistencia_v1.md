@@ -141,6 +141,8 @@ No se crea un segundo catálogo de alias.
 
 Una visita cuya sucursal no pueda resolverse se conserva con `sucursal_id = NULL` y queda visible como incidencia de calidad para perfiles globales.
 
+Los orígenes que Gasca usa para accesos corporativos o administrativos y que no representan un gimnasio físico se conservan igualmente con `sucursal_id = NULL`, pero se clasifican como **no operativos excluidos**, no como alias faltante. En la validación inicial, `CORP CDMX` pertenece a esta categoría. Estos registros se conservan para auditoría y calidad de datos, pero no participan en visitas, aforo, rankings ni marts por sucursal operativa.
+
 ## 10. Segmentación
 
 La v1 usa directamente:

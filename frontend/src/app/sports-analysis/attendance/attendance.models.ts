@@ -102,6 +102,7 @@ export interface AttendanceDataQuality {
   cross_day: number;
   invalid_time: number;
   unresolved_branch: number;
+  non_operational_excluded: number;
 }
 
 export interface AttendanceDashboard {
@@ -114,4 +115,42 @@ export interface AttendanceDashboard {
   attendance_type_distribution: AttendanceTypeDistribution[];
   branch_ranking: AttendanceBranchRanking[];
   data_quality: AttendanceDataQuality;
+}
+
+
+export type AttendanceDetailSortDirection = 'asc' | 'desc';
+
+export interface AttendanceDetailColumn {
+  key: string;
+  label: string;
+}
+
+export type AttendanceDetailRow = Record<
+  string,
+  string | number | boolean | null
+>;
+
+export interface AttendanceDetailResponse {
+  metric: string;
+  title: string;
+  count: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  sort_by: string;
+  sort_dir: AttendanceDetailSortDirection;
+  columns: AttendanceDetailColumn[];
+  rows: AttendanceDetailRow[];
+}
+
+export interface AttendanceDetailRequest
+  extends AttendanceDashboardRequest {
+  metric: string;
+  page?: number;
+  pageSize?: number;
+  sortBy?: string;
+  sortDir?: AttendanceDetailSortDirection;
+  minute?: number;
+  hour?: number;
+  ageBucket?: string;
 }
