@@ -7,6 +7,8 @@ import {
   AttendanceCatalogs,
   AttendanceDashboard,
   AttendanceDashboardRequest,
+  AttendanceDetailRequest,
+  AttendanceDetailResponse,
   SportsAnalysisContext,
 } from './attendance.models';
 
@@ -28,6 +30,84 @@ export class AttendanceService {
     return this.http.get<AttendanceCatalogs>(
       `${this.baseUrl}/attendance/catalogs`,
     );
+  }
+
+
+  getDetail(
+    request: AttendanceDetailRequest,
+  ): Observable<AttendanceDetailResponse> {
+    const params = this.buildDetailParams(request);
+    return this.http.get<AttendanceDetailResponse>(
+      `${this.baseUrl}/attendance/detail`,
+      { params },
+    );
+  }
+
+  exportDetail(
+    request: AttendanceDetailRequest,
+  ): Observable<Blob> {
+    const params = this.buildDetailParams(request);
+    return this.http.get(
+      `${this.baseUrl}/attendance/detail/export`,
+      {
+        params,
+        responseType: 'blob',
+      },
+    );
+  }
+
+  private buildDetailParams(
+    request: AttendanceDetailRequest,
+  ): HttpParams {
+    let params = new HttpParams()
+      .set('metric', request.metric)
+      .set('date_from', request.dateFrom)
+      .set('date_to', request.dateTo)
+      .set('attendance_type', request.attendanceType);
+
+    if (request.branchId !== null) {
+      params = params.set(
+        'branch_id',
+        String(request.branchId),
+      );
+    }
+
+    if (request.regionKey) {
+      params = params.set(
+        'region_key',
+        request.regionKey,
+      );
+    }
+
+    if (request.page !== undefined) {
+      params = params.set(
+        'page',
+        String(request.page),
+      );
+    }
+
+    if (request.pageSize !== undefined) {
+      params = params.set(
+        'page_size',
+        String(request.pageSize),
+      );
+    }
+
+    if (request.sortBy) {
+      params = params.set(
+        'sort_by',
+        request.sortBy,
+      );
+    }
+
+    if (request.sortDir) {
+      params = params.set(
+        'sort_dir',
+        request.sortDir,
+      );
+    }
+
+    return params;
   }
 
   getDashboard(
