@@ -406,6 +406,18 @@
   margin-bottom: 16px;
 }
 
+.ranking-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ranking-toggle {
+  min-width: auto;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
 .table-scroll {
   overflow-x: auto;
 }
