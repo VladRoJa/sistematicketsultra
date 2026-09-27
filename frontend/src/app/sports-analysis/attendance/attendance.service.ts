@@ -107,6 +107,27 @@ export class AttendanceService {
       );
     }
 
+    if (request.minute !== undefined) {
+      params = params.set(
+        'minute',
+        String(request.minute),
+      );
+    }
+
+    if (request.hour !== undefined) {
+      params = params.set(
+        'hour',
+        String(request.hour),
+      );
+    }
+
+    if (request.ageBucket) {
+      params = params.set(
+        'age_bucket',
+        request.ageBucket,
+      );
+    }
+
     return params;
   }
 
