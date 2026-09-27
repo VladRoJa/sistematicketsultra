@@ -87,11 +87,17 @@
 
   <ng-container *ngIf="!loading && dashboard">
     <section class="kpi-grid">
-      <article class="kpi-card">
+      <button
+        type="button"
+        class="kpi-card kpi-card-button"
+        (click)="openVisitsDetail()">
         <span>Visitas</span>
         <strong>{{ formatNumber(dashboard.summary.visits) }}</strong>
-        <small>{{ attendanceTypeLabel(dashboard.filters.attendance_type) }}</small>
-      </article>
+        <small>
+          {{ attendanceTypeLabel(dashboard.filters.attendance_type) }}
+          · Ver detalle
+        </small>
+      </button>
 
       <article class="kpi-card">
         <span>Personas únicas</span>
