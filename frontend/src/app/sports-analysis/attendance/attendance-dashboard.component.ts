@@ -18,6 +18,7 @@ import {
   AttendanceAgeBucket,
   AttendanceBaseHealth,
   AttendanceBaseHealthMemberStatus,
+  AttendanceBaseHealthOtherAccessTariff,
   AttendanceBranch,
   AttendanceBranchRanking,
   AttendanceCatalogs,
@@ -166,6 +167,27 @@ export class AttendanceDashboardComponent implements OnInit {
   get hasBaseHealthSource(): boolean {
     return Boolean(
       this.baseHealth?.source.available,
+    );
+  }
+
+  get otherActiveAccessPreview(): AttendanceBaseHealthOtherAccessTariff[] {
+    return (
+      this.baseHealth?.other_active_accesses
+        .tariff_distribution.slice(0, 5)
+      ?? []
+    );
+  }
+
+  get otherActiveAccessRemainingTariffs(): number {
+    const total = (
+      this.baseHealth?.other_active_accesses
+        .tariff_distribution.length
+      ?? 0
+    );
+
+    return Math.max(
+      0,
+      total - this.otherActiveAccessPreview.length,
     );
   }
 
