@@ -426,6 +426,49 @@ export class AttendanceDashboardComponent implements OnInit {
       branchId === null ? null : Number(branchId);
   }
 
+  openFrequencyBucket(key: string): void {
+    const statuses: Record<
+      string,
+      AttendanceBaseHealthMemberStatus
+    > = {
+      ZERO: 'FREQUENCY_ZERO',
+      LT_1: 'FREQUENCY_LT_1',
+      FROM_1_TO_1_99: 'FREQUENCY_1_1_99',
+      FROM_2_TO_2_99: 'FREQUENCY_2_2_99',
+      GTE_3: 'FREQUENCY_GTE_3',
+    };
+
+    const status = statuses[key];
+    if (status) {
+      this.openBaseHealthDetail(status);
+    }
+  }
+
+  openRecencyBucket(key: string): void {
+    const statuses: Record<
+      string,
+      AttendanceBaseHealthMemberStatus
+    > = {
+      DAYS_0_7: 'RECENCY_0_7',
+      DAYS_8_14: 'RECENCY_8_14',
+      DAYS_15_21: 'RECENCY_15_21',
+      DAYS_22_PLUS: 'RECENCY_22_PLUS',
+      NO_RECORDED_VISIT: 'RECENCY_NO_RECORDED',
+    };
+
+    const status = statuses[key];
+    if (status) {
+      this.openBaseHealthDetail(status);
+    }
+  }
+
+  formatDecimal(value: number): string {
+    return new Intl.NumberFormat('es-MX', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value || 0);
+  }
+
   openBaseHealthDetail(
     status: AttendanceBaseHealthMemberStatus,
   ): void {
