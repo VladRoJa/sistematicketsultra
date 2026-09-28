@@ -458,3 +458,107 @@ def test_historical_recency_skips_when_history_is_unavailable(
 
     assert result == {}
     assert called is False
+
+
+def test_activation_classifies_new_members():
+    state = health._BaseHealthState(
+        eligible_members={
+            "100": _member(
+                "100",
+                member_since=date(2026, 9, 1),
+            ),
+            "200": _member(
+                "200",
+                member_since=date(2026, 9, 1),
+            ),
+            "300": _member(
+                "300",
+                member_since=date(2026, 9, 1),
+            ),
+            "400": _member(
+                "400",
+                member_since=date(2026, 9, 1),
+            ),
+            "500": _member(
+                "500",
+                member_since=date(2026, 9, 1),
+            ),
+            "600": _member(
+                "600",
+                member_since=date(2026, 9, 20),
+            ),
+            "700": _member(
+                "700",
+                member_since=date(2026, 8, 20),
+            ),
+        },
+        visited_member_ids=frozenset(
+            {"100", "200", "300", "400", "700"}
+        ),
+        snapshot_dates=(date(2026, 9, 1),),
+        total_visits_checked=5,
+        resolved_visits=5,
+        member_visit_stats={
+            "100": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 1),
+                last_visit_date=date(2026, 9, 1),
+            ),
+            "200": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 3),
+                last_visit_date=date(2026, 9, 3),
+            ),
+            "300": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 6),
+                last_visit_date=date(2026, 9, 6),
+            ),
+            "400": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 10),
+                last_visit_date=date(2026, 9, 10),
+            ),
+            "700": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 2),
+                last_visit_date=date(2026, 9, 2),
+            ),
+        },
+    )
+
+    result = health._activation_metrics(
+        state,
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 25),
+    )
+
+    assert result["new_members"] == 6
+    assert [
+        row["count"]
+        for row in result["distribution"]
+    ] == [1, 1, 1, 1, 1, 1]
+
+
+def test_activation_exactly_seven_days_is_not_pending():
+    state = health._BaseHealthState(
+        eligible_members={
+            "100": _member(
+                "100",
+                member_since=date(2026, 9, 18),
+            ),
+        },
+        visited_member_ids=frozenset(),
+        snapshot_dates=(date(2026, 9, 18),),
+        total_visits_checked=0,
+        resolved_visits=0,
+    )
+
+    result = health._activation_metrics(
+        state,
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 25),
+    )
+
+    assert result["distribution"][4]["count"] == 1
+    assert result["distribution"][5]["count"] == 0
