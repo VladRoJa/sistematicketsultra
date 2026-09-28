@@ -150,6 +150,7 @@ export interface AttendanceBaseHealthSummary {
   frequency_median_per_week: number;
   members_14_plus_days_without_visit: number;
   follow_up_members: number;
+  members_less_than_one_visit_per_week: number;
 }
 
 export interface AttendanceBaseHealthDistributionBucket {
@@ -162,6 +163,16 @@ export interface AttendanceBaseHealthDistributionBucket {
 export interface AttendanceBaseHealthActivation {
   new_members: number;
   distribution: AttendanceBaseHealthDistributionBucket[];
+}
+
+export interface AttendanceBaseHealthOtherAccessTariff {
+  tariff: string;
+  count: number;
+}
+
+export interface AttendanceBaseHealthOtherAccesses {
+  count: number;
+  tariff_distribution: AttendanceBaseHealthOtherAccessTariff[];
 }
 
 export interface AttendanceBaseHealthSource {
@@ -182,6 +193,7 @@ export interface AttendanceBaseHealth {
   frequency_distribution: AttendanceBaseHealthDistributionBucket[];
   recency_distribution: AttendanceBaseHealthDistributionBucket[];
   activation: AttendanceBaseHealthActivation;
+  other_active_accesses: AttendanceBaseHealthOtherAccesses;
   source: AttendanceBaseHealthSource;
 }
 
