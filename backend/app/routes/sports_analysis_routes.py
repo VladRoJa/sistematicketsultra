@@ -44,6 +44,30 @@ sports_analysis_bp = Blueprint(
 )
 
 
+SERVER_TIMING_ORDER = (
+    "scope",
+    "socios_activos",
+    "visitas_periodo",
+    "historico",
+    "cohorte",
+    "serializacion",
+    "total",
+)
+
+
+def _server_timing_header(
+    timings: dict[str, float],
+) -> str:
+    return ", ".join(
+        (
+            f"{name};dur="
+            f"{timings[name]:.2f}"
+        )
+        for name in SERVER_TIMING_ORDER
+        if name in timings
+    )
+
+
 def _scope():
     user = get_current_sports_analysis_user()
     return (
@@ -301,6 +325,7 @@ def get_attendance_base_health_members():
         )
 
     try:
+        timings: dict[str, float] = {}
         result = attendance_base_health_members(
             scope,
             date_from=date_from,
@@ -325,8 +350,13 @@ def get_attendance_base_health_members():
             page_size=request.args.get(
                 "page_size"
             ),
+            timings=timings,
         )
-        return jsonify(result), 200
+        response = jsonify(result)
+        response.headers["Server-Timing"] = (
+            _server_timing_header(timings)
+        )
+        return response, 200
     except (
         SportsAnalysisAuthorizationError,
         SportsAnalysisValidationError,

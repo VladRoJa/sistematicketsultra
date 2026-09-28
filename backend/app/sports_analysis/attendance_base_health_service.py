@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from math import ceil
 from statistics import median
+from time import perf_counter
 from types import SimpleNamespace
 from typing import Any
 
@@ -342,7 +343,9 @@ def attendance_base_health_members(
     status: str,
     page: object = 1,
     page_size: object = DEFAULT_MEMBER_PAGE_SIZE,
+    timings: dict[str, float] | None = None,
 ) -> dict[str, Any]:
+    total_started = perf_counter()
     normalized_status = str(
         status or ""
     ).strip().upper()
@@ -373,13 +376,20 @@ def attendance_base_health_members(
         date_to=date_to,
         branch_id=branch_id,
         region_key=region_key,
+        timings=timings,
     )
 
+    cohort_started = perf_counter()
     members = _detail_members_for_status(
         state,
         status=normalized_status,
         date_from=date_from,
         date_to=date_to,
+    )
+    _record_timing(
+        timings,
+        "cohorte",
+        cohort_started,
     )
 
     count = len(members)
@@ -399,6 +409,27 @@ def attendance_base_health_members(
         start:start + safe_page_size
     ]
 
+    serialization_started = perf_counter()
+    serialized_rows = [
+        _serialize_member(
+            state,
+            member,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        for member in page_rows
+    ]
+    _record_timing(
+        timings,
+        "serializacion",
+        serialization_started,
+    )
+    _record_timing(
+        timings,
+        "total",
+        total_started,
+    )
+
     return {
         "status": normalized_status,
         "title": BASE_HEALTH_MEMBER_TITLES[
@@ -408,15 +439,7 @@ def attendance_base_health_members(
         "page": safe_page,
         "page_size": safe_page_size,
         "total_pages": total_pages,
-        "rows": [
-            _serialize_member(
-                state,
-                member,
-                date_from=date_from,
-                date_to=date_to,
-            )
-            for member in page_rows
-        ],
+        "rows": serialized_rows,
     }
 
 
@@ -667,7 +690,9 @@ def _build_state(
     date_to: date,
     branch_id: int | None,
     region_key: str | None,
+    timings: dict[str, float] | None = None,
 ) -> tuple[_BaseHealthState, tuple[int, ...]]:
+    scope_started = perf_counter()
     _validate_date_range(
         date_from,
         date_to,
@@ -681,7 +706,13 @@ def _build_state(
             region_key=region_key,
         )
     )
+    _record_timing(
+        timings,
+        "scope",
+        scope_started,
+    )
 
+    eligible_started = perf_counter()
     (
         eligible_members,
         other_active_members,
@@ -691,8 +722,16 @@ def _build_state(
         date_from=date_from,
         date_to=date_to,
     )
+    _record_timing(
+        timings,
+        "socios_activos",
+        eligible_started,
+    )
 
     if not eligible_members:
+        if timings is not None:
+            timings["visitas_periodo"] = 0.0
+            timings["historico"] = 0.0
         return (
             _BaseHealthState(
                 eligible_members={},
@@ -709,6 +748,7 @@ def _build_state(
             effective_branch_ids,
         )
 
+    period_visits_started = perf_counter()
     (
         member_visit_stats,
         total_visits_checked,
@@ -718,18 +758,29 @@ def _build_state(
         date_from=date_from,
         date_to=date_to,
     )
+    _record_timing(
+        timings,
+        "visitas_periodo",
+        period_visits_started,
+    )
 
     last_known_visit_by_member = {
         id_socio: stats.last_visit_date
         for id_socio, stats
         in member_visit_stats.items()
     }
+    historical_started = perf_counter()
     historical_last_visits = (
         _load_historical_last_visits(
             eligible_members,
             member_visit_stats,
             date_before=date_from,
         )
+    )
+    _record_timing(
+        timings,
+        "historico",
+        historical_started,
     )
     last_known_visit_by_member.update(
         historical_last_visits
@@ -2172,6 +2223,20 @@ def _row_value(
         TypeError,
     ):
         return None
+
+
+def _record_timing(
+    timings: dict[str, float] | None,
+    name: str,
+    started: float,
+) -> None:
+    if timings is None:
+        return
+
+    timings[name] = round(
+        (perf_counter() - started) * 1000,
+        2,
+    )
 
 
 def _clean_text(value: Any) -> str | None:
