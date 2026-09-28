@@ -1728,12 +1728,12 @@ def _activation_metrics(
         },
         {
             "key": "NO_FIRST_VISIT_RECORDED",
-            "label": "Sin primera visita registrada",
+            "label": "7+ días sin primera visita",
             "count": 0,
         },
         {
             "key": "WITHIN_FIRST_7_DAYS",
-            "label": "Aún dentro de sus primeros 7 días",
+            "label": "Alta reciente, aún sin visita",
             "count": 0,
         },
     ]
