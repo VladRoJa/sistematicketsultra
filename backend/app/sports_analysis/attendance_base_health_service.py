@@ -415,7 +415,7 @@ def _member_matches_detail_status(
 ) -> bool:
     has_visit = (
         member.id_socio
-        in state.member_visit_stats
+        in state.visited_member_ids
     )
 
     if status == BASE_HEALTH_STATUS_WITH_VISIT:
@@ -1445,7 +1445,10 @@ def _serialize_member(
             if member.member_since
             else None
         ),
-        "has_visit": visit_stats is not None,
+        "has_visit": (
+            member.id_socio
+            in state.visited_member_ids
+        ),
         "visit_count": (
             visit_stats.visit_count
             if visit_stats is not None
