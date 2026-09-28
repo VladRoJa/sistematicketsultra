@@ -93,6 +93,8 @@ def test_base_health_utilization_uses_eligible_members(
         "members_without_visit": 2,
         "utilization_pct": 50.0,
         "without_visit_pct": 50.0,
+        "frequency_avg_per_week": 0.0,
+        "frequency_median_per_week": 0.0,
     }
     assert (
         result["source"]["identity_coverage_pct"]
