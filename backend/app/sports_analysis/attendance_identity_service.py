@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Any
 
 from sqlalchemy import func, tuple_
@@ -45,8 +46,14 @@ def resolve_attendance_identities(
     *,
     session: Any | None = None,
     chunk_size: int = 1000,
+    timings: dict[str, float] | None = None,
 ) -> dict[int, AttendanceIdentityResolution]:
     active_session = session or db.session
+    if timings is not None:
+        timings["fallback_exact"] = 0.0
+        timings["fallback_snapshots"] = 0.0
+        timings["fallback_pin"] = 0.0
+        timings["fallback_branch"] = 0.0
     safe_chunk_size = max(1, int(chunk_size))
 
     resolutions: dict[
@@ -116,12 +123,18 @@ def resolve_attendance_identities(
             )
         )
     }
+    exact_started = perf_counter()
     exact_candidates = (
         _load_exact_candidates_batch(
             active_session,
             keys=exact_keys,
             chunk_size=safe_chunk_size,
         )
+    )
+    _record_timing(
+        timings,
+        "fallback_exact",
+        exact_started,
     )
 
     for visit in eligible:
@@ -165,11 +178,17 @@ def resolve_attendance_identities(
         for visit in unresolved_visits
         if visit.business_date is not None
     }
+    snapshot_started = perf_counter()
     snapshot_by_date = (
         _load_same_day_snapshot_ids_batch(
             active_session,
             business_dates=dates,
         )
+    )
+    _record_timing(
+        timings,
+        "fallback_snapshots",
+        snapshot_started,
     )
 
     same_day_keys = {
@@ -188,12 +207,18 @@ def resolve_attendance_identities(
             )
         )
     }
+    pin_started = perf_counter()
     same_day_candidates = (
         _load_same_day_pin_candidates_batch(
             active_session,
             keys=same_day_keys,
             chunk_size=safe_chunk_size,
         )
+    )
+    _record_timing(
+        timings,
+        "fallback_pin",
+        pin_started,
     )
 
     for visit in unresolved_visits:
@@ -260,12 +285,18 @@ def resolve_attendance_identities(
             visit.member_pin
         )
     }
+    branch_started = perf_counter()
     branch_candidates = (
         _load_same_day_branch_pin_candidates_batch(
             active_session,
             keys=branch_keys,
             chunk_size=safe_chunk_size,
         )
+    )
+    _record_timing(
+        timings,
+        "fallback_branch",
+        branch_started,
     )
 
     for visit in branch_visits:
@@ -411,6 +442,20 @@ def resolve_attendance_identity(
         )
 
     return _unresolved(fallback_name)
+
+
+def _record_timing(
+    timings: dict[str, float] | None,
+    name: str,
+    started: float,
+) -> None:
+    if timings is None:
+        return
+
+    timings[name] = round(
+        (perf_counter() - started) * 1000,
+        2,
+    )
 
 
 def _load_exact_candidates_batch(

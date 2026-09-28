@@ -359,6 +359,7 @@ def test_batch_resolver_uses_all_identity_levels(
         },
     )
 
+    timings: dict[str, float] = {}
     resolutions = identity.resolve_attendance_identities(
         [
             exact_visit,
@@ -368,6 +369,7 @@ def test_batch_resolver_uses_all_identity_levels(
             instructor_visit,
         ],
         session=object(),
+        timings=timings,
     )
 
     assert resolutions[1].id_socio == "1001"
@@ -401,4 +403,15 @@ def test_batch_resolver_uses_all_identity_levels(
     assert (
         resolutions[5].identity_method
         == identity.IDENTITY_UNRESOLVED
+    )
+
+    assert set(timings) == {
+        "fallback_exact",
+        "fallback_snapshots",
+        "fallback_pin",
+        "fallback_branch",
+    }
+    assert all(
+        value >= 0
+        for value in timings.values()
     )
