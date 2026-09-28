@@ -30,6 +30,8 @@ def _member(
     name: str | None = None,
     member_since: date | None = date(2026, 1, 1),
     expiration_date: date = date(2026, 12, 31),
+    applies_kpi: bool = True,
+    tariff: str | None = None,
 ) -> health._EligibleMember:
     return health._EligibleMember(
         id_socio=id_socio,
@@ -40,6 +42,8 @@ def _member(
         member_since=member_since,
         expiration_date=expiration_date,
         snapshot_date=date(2026, 9, 25),
+        applies_kpi=applies_kpi,
+        tariff=tariff,
     )
 
 
@@ -97,6 +101,7 @@ def test_base_health_utilization_uses_eligible_members(
         "frequency_median_per_week": 0.0,
         "members_14_plus_days_without_visit": 0,
         "follow_up_members": 4,
+        "members_less_than_one_visit_per_week": 0,
     }
     assert (
         result["source"]["identity_coverage_pct"]
@@ -351,6 +356,10 @@ def test_frequency_metrics_include_zero_and_partial_members():
 
     assert metrics["average_per_week"] == 0.83
     assert metrics["median_per_week"] == 0.5
+    assert (
+        metrics["less_than_one_per_week_count"]
+        == 1
+    )
     assert [
         row["count"]
         for row in metrics["distribution"]
@@ -798,3 +807,77 @@ def test_member_detail_supports_recency_and_frequency_buckets(
         row["id_socio"]
         for row in no_recorded["rows"]
     ] == ["300"]
+
+
+
+def test_base_health_keeps_non_kpi_members_separate(
+    monkeypatch,
+):
+    state = health._BaseHealthState(
+        eligible_members={
+            "100": _member("100"),
+            "200": _member("200"),
+        },
+        visited_member_ids=frozenset(
+            {"100", "900"}
+        ),
+        snapshot_dates=(date(2026, 9, 25),),
+        total_visits_checked=2,
+        resolved_visits=2,
+        other_active_members={
+            "900": _member(
+                "900",
+                applies_kpi=False,
+                tariff="SEMANA $299",
+            ),
+            "901": _member(
+                "901",
+                applies_kpi=False,
+                tariff="BECA 6 MESES",
+            ),
+            "902": _member(
+                "902",
+                applies_kpi=False,
+                tariff="SEMANA $299",
+            ),
+        },
+    )
+
+    monkeypatch.setattr(
+        health,
+        "_build_state",
+        lambda *_args, **_kwargs: (
+            state,
+            (1,),
+        ),
+    )
+
+    result = health.attendance_base_health(
+        _scope(),
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 25),
+        branch_id=None,
+        region_key=None,
+    )
+
+    assert result["summary"]["eligible_members"] == 2
+    assert result["summary"]["members_with_visit"] == 1
+    assert (
+        result["other_active_accesses"]["count"]
+        == 3
+    )
+    assert (
+        result["other_active_accesses"][
+            "tariff_distribution"
+        ]
+        == [
+            {
+                "tariff": "SEMANA $299",
+                "count": 2,
+            },
+            {
+                "tariff": "BECA 6 MESES",
+                "count": 1,
+            },
+        ]
+    )
