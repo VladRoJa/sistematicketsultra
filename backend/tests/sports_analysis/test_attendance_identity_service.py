@@ -415,3 +415,86 @@ def test_batch_resolver_uses_all_identity_levels(
         value >= 0
         for value in timings.values()
     )
+
+
+
+def test_branch_batch_lookup_preloads_aliases_and_queries_rows_directly():
+    class FakeQuery:
+        def __init__(self, rows):
+            self.rows = rows
+            self.join_calls = 0
+
+        def join(self, *_args, **_kwargs):
+            self.join_calls += 1
+            return self
+
+        def filter(self, *_args, **_kwargs):
+            return self
+
+        def all(self):
+            return self.rows
+
+    class FakeSession:
+        def __init__(self):
+            self.queries = []
+            self.results = iter(
+                [
+                    [
+                        SimpleNamespace(
+                            raw_branch_name="RAW A",
+                            sucursal_id=5,
+                        ),
+                        SimpleNamespace(
+                            raw_branch_name="RAW A ALT",
+                            sucursal_id=5,
+                        ),
+                        SimpleNamespace(
+                            raw_branch_name="RAW B",
+                            sucursal_id=6,
+                        ),
+                    ],
+                    [
+                        SimpleNamespace(
+                            snapshot_id=25,
+                            pin="001",
+                            sucursal_raw="RAW A ALT",
+                            id_socio="1001",
+                            nombre="Socio A",
+                        ),
+                        SimpleNamespace(
+                            snapshot_id=25,
+                            pin="002",
+                            sucursal_raw="RAW B",
+                            id_socio="1002",
+                            nombre="Socio B",
+                        ),
+                    ],
+                ]
+            )
+
+        def query(self, *_args):
+            query = FakeQuery(
+                next(self.results)
+            )
+            self.queries.append(query)
+            return query
+
+    session = FakeSession()
+    result = (
+        identity
+        ._load_same_day_branch_pin_candidates_batch(
+            session,
+            keys={
+                (25, "001", 5),
+                (25, "002", 6),
+            },
+            chunk_size=1000,
+        )
+    )
+
+    assert result[(25, "001", 5)][0].id_socio == "1001"
+    assert result[(25, "002", 6)][0].id_socio == "1002"
+
+    assert len(session.queries) == 2
+    assert session.queries[0].join_calls == 1
+    assert session.queries[1].join_calls == 0

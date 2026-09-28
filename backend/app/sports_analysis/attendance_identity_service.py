@@ -751,50 +751,92 @@ def _load_same_day_branch_pin_candidates_batch(
             and sucursal_id > 0
         )
     ]
+    if not normalized_keys:
+        return {}
+
+    sucursal_ids = {
+        sucursal_id
+        for _, _, sucursal_id
+        in normalized_keys
+    }
+    raw_branch_to_id = (
+        _load_active_gasca_raw_branch_ids(
+            session,
+            sucursal_ids=sucursal_ids,
+        )
+    )
+    if not raw_branch_to_id:
+        return {}
+
+    raw_branches_by_id: dict[
+        int,
+        list[str],
+    ] = {}
+    for raw_branch_name, sucursal_id in (
+        raw_branch_to_id.items()
+    ):
+        raw_branches_by_id.setdefault(
+            sucursal_id,
+            [],
+        ).append(raw_branch_name)
+
+    raw_keys = [
+        (
+            snapshot_id,
+            pin,
+            raw_branch_name,
+        )
+        for (
+            snapshot_id,
+            pin,
+            sucursal_id,
+        ) in normalized_keys
+        for raw_branch_name in (
+            raw_branches_by_id.get(
+                sucursal_id,
+                (),
+            )
+        )
+    ]
 
     for chunk in _chunked(
-        normalized_keys,
+        raw_keys,
         chunk_size,
     ):
         rows = (
             session.query(
                 SociosActivosSnapshotRowORM.snapshot_id,
                 SociosActivosSnapshotRowORM.pin,
-                TrackBranchCatalogORM.sucursal_id,
+                SociosActivosSnapshotRowORM.sucursal_raw,
                 SociosActivosSnapshotRowORM.id_socio,
                 SociosActivosSnapshotRowORM.nombre,
-            )
-            .join(
-                TrackBranchAliasORM,
-                (
-                    TrackBranchAliasORM.raw_branch_name
-                    == SociosActivosSnapshotRowORM.sucursal_raw
-                )
-                & (
-                    TrackBranchAliasORM.source_family
-                    == GASCA_SOURCE_FAMILY
-                )
-                & (
-                    TrackBranchAliasORM.is_active
-                    .is_(True)
-                ),
-            )
-            .join(
-                TrackBranchCatalogORM,
-                TrackBranchCatalogORM.sucursal_canon
-                == TrackBranchAliasORM.sucursal_canon,
             )
             .filter(
                 tuple_(
                     SociosActivosSnapshotRowORM.snapshot_id,
                     SociosActivosSnapshotRowORM.pin,
-                    TrackBranchCatalogORM.sucursal_id,
+                    SociosActivosSnapshotRowORM.sucursal_raw,
                 ).in_(chunk)
             )
             .all()
         )
 
         for row in rows:
+            raw_branch_name = _clean_text(
+                _row_value(
+                    row,
+                    "sucursal_raw",
+                    2,
+                )
+            )
+            sucursal_id = (
+                raw_branch_to_id.get(
+                    raw_branch_name or ""
+                )
+            )
+            if sucursal_id is None:
+                continue
+
             key = (
                 int(
                     _row_value(
@@ -810,13 +852,7 @@ def _load_same_day_branch_pin_candidates_batch(
                         1,
                     )
                 ),
-                int(
-                    _row_value(
-                        row,
-                        "sucursal_id",
-                        2,
-                    )
-                ),
+                sucursal_id,
             )
             result.setdefault(
                 key,
@@ -846,6 +882,63 @@ def _load_same_day_branch_pin_candidates_batch(
         for key, candidates
         in result.items()
     }
+
+
+def _load_active_gasca_raw_branch_ids(
+    session: Any,
+    *,
+    sucursal_ids: set[int],
+) -> dict[str, int]:
+    if not sucursal_ids:
+        return {}
+
+    rows = (
+        session.query(
+            TrackBranchAliasORM.raw_branch_name,
+            TrackBranchCatalogORM.sucursal_id,
+        )
+        .join(
+            TrackBranchCatalogORM,
+            TrackBranchCatalogORM.sucursal_canon
+            == TrackBranchAliasORM.sucursal_canon,
+        )
+        .filter(
+            TrackBranchAliasORM.source_family
+            == GASCA_SOURCE_FAMILY,
+            TrackBranchAliasORM.is_active
+            .is_(True),
+            TrackBranchCatalogORM.sucursal_id
+            .in_(sucursal_ids),
+        )
+        .all()
+    )
+
+    result: dict[str, int] = {}
+    for row in rows:
+        raw_branch_name = _clean_text(
+            _row_value(
+                row,
+                "raw_branch_name",
+                0,
+            )
+        )
+        sucursal_id = _row_value(
+            row,
+            "sucursal_id",
+            1,
+        )
+        if (
+            not raw_branch_name
+            or not _valid_branch_id(
+                sucursal_id
+            )
+        ):
+            continue
+        result[raw_branch_name] = int(
+            sucursal_id
+        )
+
+    return result
 
 
 def _load_exact_candidates(
