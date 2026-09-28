@@ -97,11 +97,11 @@ def test_base_health_behavior_metrics_are_wired_to_ui():
     assert "openFrequencyBucket(" in component
     assert "openRecencyBucket(" in component
 
-    assert "Frecuencia mediana" in template
+    assert "Visitas por semana" in template
     assert "14+ días sin venir" in template
-    assert "Visitas por semana disponible" in template
+    assert "Frecuencia de visita" in template
     assert "Tiempo desde la última visita" in template
-    assert "Activación después del alta" in template
+    assert "Tiempo para venir por primera vez" in template
     assert "Socios para seguimiento" in template
     assert (
         "openBaseHealthDetail('FOLLOW_UP')"
