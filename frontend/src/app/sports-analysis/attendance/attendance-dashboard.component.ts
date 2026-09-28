@@ -140,6 +140,7 @@ export class AttendanceDashboardComponent implements OnInit {
   distributionMetric: DistributionMetric = 'visits';
 
   private readonly numberFormatter = new Intl.NumberFormat('es-MX');
+  private activeViewRequestId = 0;
 
   constructor(
     private readonly attendanceService: AttendanceService,
@@ -726,6 +727,7 @@ export class AttendanceDashboardComponent implements OnInit {
   }
 
   private loadBaseHealth(): void {
+    const requestId = ++this.activeViewRequestId;
     this.loading = true;
     this.errorMessage = '';
 
@@ -736,10 +738,18 @@ export class AttendanceDashboardComponent implements OnInit {
       regionKey: this.selectedRegionKey,
     }).subscribe({
       next: (baseHealth) => {
+        if (requestId !== this.activeViewRequestId) {
+          return;
+        }
+
         this.baseHealth = baseHealth;
         this.loading = false;
       },
       error: (error) => {
+        if (requestId !== this.activeViewRequestId) {
+          return;
+        }
+
         this.loading = false;
         this.errorMessage =
           error?.error?.detail
@@ -749,6 +759,7 @@ export class AttendanceDashboardComponent implements OnInit {
   }
 
   private loadDashboard(): void {
+    const requestId = ++this.activeViewRequestId;
     this.loading = true;
     this.errorMessage = '';
 
@@ -760,6 +771,10 @@ export class AttendanceDashboardComponent implements OnInit {
       attendanceType: this.selectedAttendanceType,
     }).subscribe({
       next: (dashboard) => {
+        if (requestId !== this.activeViewRequestId) {
+          return;
+        }
+
         this.dashboard = dashboard;
         this.showFullRanking = false;
         this.rankingSortKey = 'visits';
@@ -768,6 +783,10 @@ export class AttendanceDashboardComponent implements OnInit {
         this.loading = false;
       },
       error: (error) => {
+        if (requestId !== this.activeViewRequestId) {
+          return;
+        }
+
         this.loading = false;
         this.errorMessage =
           error?.error?.detail
