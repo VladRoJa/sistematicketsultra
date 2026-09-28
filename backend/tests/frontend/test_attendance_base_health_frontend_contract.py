@@ -167,3 +167,25 @@ def test_attendance_loading_ignores_stale_view_requests():
         "if (requestId !== this.activeViewRequestId)"
         in component
     )
+
+
+
+def test_base_health_detail_can_export_excel():
+    service = _read("attendance.service.ts")
+    component = _read(
+        "attendance-base-health-detail-dialog.component.ts"
+    )
+    template = _read(
+        "attendance-base-health-detail-dialog.component.html"
+    )
+
+    assert (
+        "/attendance/base-health/members/export"
+        in service
+    )
+    assert "exportBaseHealthMembers(" in service
+    assert "exportExcel(): void" in component
+    assert "exporting = false" in component
+    assert "URL.createObjectURL(blob)" in component
+    assert "Exportar Excel" in template
+    assert "[disabled]="loading || exporting || !detail"" in template
