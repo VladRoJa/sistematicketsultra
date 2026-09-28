@@ -733,7 +733,7 @@ def test_member_detail_supports_recency_and_frequency_buckets(
                 last_visit_date=date(2026, 9, 11),
             ),
             "200": health._MemberVisitStats(
-                visit_count=8,
+                visit_count=11,
                 first_visit_date=date(2026, 9, 1),
                 last_visit_date=date(2026, 9, 25),
             ),
