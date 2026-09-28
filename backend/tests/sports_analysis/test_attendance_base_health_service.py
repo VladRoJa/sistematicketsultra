@@ -96,6 +96,7 @@ def test_base_health_utilization_uses_eligible_members(
         "frequency_avg_per_week": 0.0,
         "frequency_median_per_week": 0.0,
         "members_14_plus_days_without_visit": 0,
+        "follow_up_members": 4,
     }
     assert (
         result["source"]["identity_coverage_pct"]
@@ -562,3 +563,91 @@ def test_activation_exactly_seven_days_is_not_pending():
 
     assert result["distribution"][4]["count"] == 1
     assert result["distribution"][5]["count"] == 0
+
+
+def test_follow_up_uses_recency_or_low_frequency_once():
+    state = health._BaseHealthState(
+        eligible_members={
+            "100": _member(
+                "100",
+                expiration_date=date(2026, 12, 31),
+            ),
+            "200": _member(
+                "200",
+                expiration_date=date(2026, 12, 31),
+            ),
+            "300": _member(
+                "300",
+                expiration_date=date(2026, 12, 31),
+            ),
+            "400": _member(
+                "400",
+                expiration_date=date(2026, 9, 20),
+            ),
+        },
+        visited_member_ids=frozenset(
+            {"100", "200", "300"}
+        ),
+        snapshot_dates=(date(2026, 9, 1),),
+        total_visits_checked=6,
+        resolved_visits=6,
+        member_visit_stats={
+            "100": health._MemberVisitStats(
+                visit_count=4,
+                first_visit_date=date(2026, 9, 1),
+                last_visit_date=date(2026, 9, 5),
+            ),
+            "200": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 20),
+                last_visit_date=date(2026, 9, 20),
+            ),
+            "300": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 1),
+                last_visit_date=date(2026, 9, 1),
+            ),
+        },
+        last_known_visit_by_member={
+            "100": date(2026, 9, 5),
+            "200": date(2026, 9, 20),
+            "300": date(2026, 9, 1),
+        },
+    )
+
+    result = health._follow_up_metrics(
+        state,
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 25),
+    )
+
+    assert result["count"] == 3
+    assert result["member_ids"] == frozenset(
+        {"100", "200", "300"}
+    )
+    assert result["by_recency"] == 2
+    assert result["by_low_frequency"] == 2
+
+
+def test_follow_up_excludes_member_not_active_at_date_to():
+    state = health._BaseHealthState(
+        eligible_members={
+            "100": _member(
+                "100",
+                expiration_date=date(2026, 9, 20),
+            ),
+        },
+        visited_member_ids=frozenset(),
+        snapshot_dates=(date(2026, 9, 1),),
+        total_visits_checked=0,
+        resolved_visits=0,
+    )
+
+    result = health._follow_up_metrics(
+        state,
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 25),
+    )
+
+    assert result["count"] == 0
+    assert result["member_ids"] == frozenset()
