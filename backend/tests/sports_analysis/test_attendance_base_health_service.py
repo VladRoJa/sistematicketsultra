@@ -1232,3 +1232,63 @@ def test_base_health_dashboard_records_server_timing(
     assert "total" in timings
     assert timings["metricas"] >= 0
     assert timings["total"] >= timings["metricas"]
+
+
+
+def test_historical_last_visit_query_uses_distinct_on_latest(
+    monkeypatch,
+):
+    class FakeQuery:
+        def __init__(self):
+            self.distinct_args = ()
+            self.order_args = ()
+
+        def filter(self, *_args):
+            return self
+
+        def distinct(self, *args):
+            self.distinct_args = args
+            return self
+
+        def order_by(self, *args):
+            self.order_args = args
+            return self
+
+        def all(self):
+            return [
+                (
+                    "00123",
+                    date(2025, 1, 1),
+                    date(2026, 8, 31),
+                ),
+            ]
+
+    query = FakeQuery()
+    monkeypatch.setattr(
+        health.db.session,
+        "query",
+        lambda *_args: query,
+    )
+
+    rows = health._load_historical_last_visit_rows(
+        [
+            (
+                "00123",
+                date(2025, 1, 1),
+            ),
+        ],
+        date_before=date(2026, 9, 1),
+    )
+
+    assert rows[0][2] == date(2026, 8, 31)
+    assert len(query.distinct_args) == 2
+    assert "member_pin" in str(
+        query.distinct_args[0]
+    )
+    assert "member_since" in str(
+        query.distinct_args[1]
+    )
+    assert len(query.order_args) == 3
+    assert "business_date DESC" in str(
+        query.order_args[2]
+    )
