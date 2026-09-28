@@ -479,7 +479,7 @@
           type="button"
           class="kpi-card kpi-card-button accent"
           (click)="openBaseHealthDetail('WITH_VISIT')">
-          <span>Utilización de la base</span>
+          <span>Socios con visita</span>
           <strong>
             {{ formatPercent(baseHealth.summary.utilization_pct) }}
           </strong>
@@ -505,7 +505,7 @@
         </button>
 
         <div class="kpi-card">
-          <span>Frecuencia mediana</span>
+          <span>Visitas por semana</span>
           <strong>
             {{ formatDecimal(baseHealth.summary.frequency_median_per_week) }}
           </strong>
@@ -531,8 +531,8 @@
         <mat-card class="panel health-distribution-card">
           <div class="panel-heading">
             <div>
-              <span class="eyebrow">FRECUENCIA</span>
-              <h2>Visitas por semana disponible</h2>
+              <span class="eyebrow">VISITAS POR SEMANA</span>
+              <h2>Frecuencia de visita</h2>
             </div>
           </div>
 
@@ -560,7 +560,7 @@
         <mat-card class="panel health-distribution-card">
           <div class="panel-heading">
             <div>
-              <span class="eyebrow">RECENCIA</span>
+              <span class="eyebrow">ÚLTIMA VISITA</span>
               <h2>Tiempo desde la última visita</h2>
             </div>
           </div>
@@ -592,7 +592,7 @@
           <div class="panel-heading">
             <div>
               <span class="eyebrow">NUEVOS SOCIOS</span>
-              <h2>Activación después del alta</h2>
+              <h2>Tiempo para venir por primera vez</h2>
             </div>
             <small>
               {{ formatNumber(baseHealth.activation.new_members) }}
