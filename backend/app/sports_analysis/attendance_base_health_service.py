@@ -1637,9 +1637,18 @@ def _load_historical_last_visits(
             start : start + IDENTITY_BATCH_SIZE
         ]
 
+        batch_number = (
+            start // IDENTITY_BATCH_SIZE
+        ) + 1
+        batch_started = perf_counter()
         rows = _load_historical_last_visit_rows(
             chunk,
             date_before=date_before,
+        )
+        _record_timing(
+            timings,
+            f"hist_q{batch_number}",
+            batch_started,
         )
 
         for row in rows:

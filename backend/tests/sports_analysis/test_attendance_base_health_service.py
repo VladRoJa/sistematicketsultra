@@ -1292,3 +1292,97 @@ def test_historical_last_visit_query_uses_distinct_on_latest(
     assert "business_date DESC" in str(
         query.order_args[2]
     )
+
+
+
+def test_historical_visit_batches_record_individual_timings(
+    monkeypatch,
+):
+    class FakeQuery:
+        def join(self, *_args, **_kwargs):
+            return self
+
+        def filter(self, *_args, **_kwargs):
+            return self
+
+        def group_by(self, *_args, **_kwargs):
+            return self
+
+        def all(self):
+            return [
+                (
+                    "PIN-100",
+                    date(2026, 1, 1),
+                    1,
+                    "100",
+                ),
+                (
+                    "PIN-200",
+                    date(2026, 1, 1),
+                    1,
+                    "200",
+                ),
+            ]
+
+    monkeypatch.setattr(
+        health,
+        "_has_historical_attendance_before",
+        lambda *_args, **_kwargs: True,
+    )
+    monkeypatch.setattr(
+        health,
+        "IDENTITY_BATCH_SIZE",
+        1,
+    )
+    monkeypatch.setattr(
+        health.db.session,
+        "query",
+        lambda *_args, **_kwargs: FakeQuery(),
+    )
+
+    def fake_last_visit_rows(
+        keys,
+        *,
+        date_before,
+    ):
+        del date_before
+        pin, member_since = keys[0]
+        visit_date = (
+            date(2026, 8, 20)
+            if pin == "PIN-100"
+            else date(2026, 8, 22)
+        )
+        return [
+            (
+                pin,
+                member_since,
+                visit_date,
+            ),
+        ]
+
+    monkeypatch.setattr(
+        health,
+        "_load_historical_last_visit_rows",
+        fake_last_visit_rows,
+    )
+
+    timings: dict[str, float] = {}
+    result = health._load_historical_last_visits(
+        {
+            "100": _member("100"),
+            "200": _member("200"),
+        },
+        {},
+        date_before=date(2026, 9, 1),
+        timings=timings,
+    )
+
+    assert result == {
+        "100": date(2026, 8, 20),
+        "200": date(2026, 8, 22),
+    }
+    assert "hist_q1" in timings
+    assert "hist_q2" in timings
+    assert "hist_q3" not in timings
+    assert timings["hist_q1"] >= 0
+    assert timings["hist_q2"] >= 0
