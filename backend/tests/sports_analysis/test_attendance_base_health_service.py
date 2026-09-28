@@ -651,3 +651,142 @@ def test_follow_up_excludes_member_not_active_at_date_to():
 
     assert result["count"] == 0
     assert result["member_ids"] == frozenset()
+
+
+def test_member_detail_supports_follow_up_with_behavior_fields(
+    monkeypatch,
+):
+    state = health._BaseHealthState(
+        eligible_members={
+            "100": _member("100"),
+            "200": _member("200"),
+        },
+        visited_member_ids=frozenset({"100", "200"}),
+        snapshot_dates=(date(2026, 9, 1),),
+        total_visits_checked=3,
+        resolved_visits=3,
+        member_visit_stats={
+            "100": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 1),
+                last_visit_date=date(2026, 9, 1),
+            ),
+            "200": health._MemberVisitStats(
+                visit_count=2,
+                first_visit_date=date(2026, 9, 20),
+                last_visit_date=date(2026, 9, 25),
+            ),
+        },
+        last_known_visit_by_member={
+            "100": date(2026, 9, 1),
+            "200": date(2026, 9, 25),
+        },
+    )
+
+    monkeypatch.setattr(
+        health,
+        "_build_state",
+        lambda *_args, **_kwargs: (
+            state,
+            (1,),
+        ),
+    )
+
+    result = health.attendance_base_health_members(
+        _scope(),
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 25),
+        branch_id=None,
+        region_key=None,
+        status="FOLLOW_UP",
+    )
+
+    assert result["count"] == 2
+    row = next(
+        item
+        for item in result["rows"]
+        if item["id_socio"] == "100"
+    )
+    assert row["visit_count"] == 1
+    assert row["last_visit_date"] == "2026-09-01"
+    assert row["days_since_last_visit"] == 24
+    assert row["frequency_per_week"] == 0.28
+
+
+def test_member_detail_supports_recency_and_frequency_buckets(
+    monkeypatch,
+):
+    state = health._BaseHealthState(
+        eligible_members={
+            "100": _member("100"),
+            "200": _member("200"),
+            "300": _member("300"),
+        },
+        visited_member_ids=frozenset({"100", "200"}),
+        snapshot_dates=(date(2026, 9, 1),),
+        total_visits_checked=4,
+        resolved_visits=4,
+        member_visit_stats={
+            "100": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 11),
+                last_visit_date=date(2026, 9, 11),
+            ),
+            "200": health._MemberVisitStats(
+                visit_count=8,
+                first_visit_date=date(2026, 9, 1),
+                last_visit_date=date(2026, 9, 25),
+            ),
+        },
+        last_known_visit_by_member={
+            "100": date(2026, 9, 11),
+            "200": date(2026, 9, 25),
+        },
+    )
+
+    monkeypatch.setattr(
+        health,
+        "_build_state",
+        lambda *_args, **_kwargs: (
+            state,
+            (1,),
+        ),
+    )
+
+    recency = health.attendance_base_health_members(
+        _scope(),
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 25),
+        branch_id=None,
+        region_key=None,
+        status="RECENCY_8_14",
+    )
+    frequency = health.attendance_base_health_members(
+        _scope(),
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 25),
+        branch_id=None,
+        region_key=None,
+        status="FREQUENCY_GTE_3",
+    )
+    no_recorded = health.attendance_base_health_members(
+        _scope(),
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 25),
+        branch_id=None,
+        region_key=None,
+        status="RECENCY_NO_RECORDED",
+    )
+
+    assert [
+        row["id_socio"]
+        for row in recency["rows"]
+    ] == ["100"]
+    assert [
+        row["id_socio"]
+        for row in frequency["rows"]
+    ] == ["200"]
+    assert [
+        row["id_socio"]
+        for row in no_recorded["rows"]
+    ] == ["300"]
