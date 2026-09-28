@@ -423,3 +423,38 @@ def test_recency_exactly_14_days_counts_in_14_plus():
         == 1
     )
     assert result["distribution"][1]["count"] == 1
+
+
+def test_historical_recency_skips_when_history_is_unavailable(
+    monkeypatch,
+):
+    called = False
+
+    def _unexpected_query(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError(
+            "No debe consultar histórico sin datos previos."
+        )
+
+    monkeypatch.setattr(
+        health,
+        "_has_historical_attendance_before",
+        lambda *_args, **_kwargs: False,
+    )
+    monkeypatch.setattr(
+        health.db.session,
+        "query",
+        _unexpected_query,
+    )
+
+    result = health._load_historical_last_visits(
+        {
+            "100": _member("100"),
+        },
+        {},
+        date_before=date(2026, 9, 1),
+    )
+
+    assert result == {}
+    assert called is False
