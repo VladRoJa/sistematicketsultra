@@ -110,6 +110,15 @@ class WarehouseAttendanceVisitORM(db.Model):
             "business_date",
         ),
         db.Index(
+            "ix_wh_attendance_visits_member_identity_history",
+            "member_pin",
+            "member_since",
+            "business_date",
+            postgresql_where=db.text(
+                "attendance_type = 'SOCIO'"
+            ),
+        ),
+        db.Index(
             "ix_wh_attendance_visits_entered_at",
             "entered_at_utc",
         ),
