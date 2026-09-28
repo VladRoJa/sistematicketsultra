@@ -240,3 +240,32 @@ def test_member_detail_rejects_unknown_status(
             region_key=None,
             status="ALL",
         )
+
+
+def test_record_member_visits_accumulates_count_and_dates():
+    stats: dict[str, health._MemberVisitStats] = {}
+
+    health._record_member_visits(
+        stats,
+        id_socio="100",
+        visit_count=2,
+        business_date=date(2026, 9, 10),
+    )
+    health._record_member_visits(
+        stats,
+        id_socio="100",
+        visit_count=3,
+        business_date=date(2026, 9, 5),
+    )
+    health._record_member_visits(
+        stats,
+        id_socio="100",
+        visit_count=1,
+        business_date=date(2026, 9, 20),
+    )
+
+    assert stats["100"] == health._MemberVisitStats(
+        visit_count=6,
+        first_visit_date=date(2026, 9, 5),
+        last_visit_date=date(2026, 9, 20),
+    )
