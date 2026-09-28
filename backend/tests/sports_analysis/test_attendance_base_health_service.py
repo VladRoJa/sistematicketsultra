@@ -1094,3 +1094,89 @@ def test_other_active_access_export_includes_tariff_and_phone(
     )
     assert rows[1][3] == "6869000000"
     assert rows[1][6] == "PASE GYMPASS"
+
+
+
+def test_base_health_detail_records_server_timing_stages(
+    monkeypatch,
+):
+    member = _member("100")
+    state = health._BaseHealthState(
+        eligible_members={"100": member},
+        visited_member_ids=frozenset({"100"}),
+        snapshot_dates=(date(2026, 9, 25),),
+        total_visits_checked=1,
+        resolved_visits=1,
+        member_visit_stats={
+            "100": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 10),
+                last_visit_date=date(2026, 9, 10),
+            ),
+        },
+        last_known_visit_by_member={
+            "100": date(2026, 9, 10),
+        },
+    )
+
+    monkeypatch.setattr(
+        health,
+        "scoped_branch_catalog",
+        lambda _scope: (),
+    )
+    monkeypatch.setattr(
+        health,
+        "_effective_branch_ids",
+        lambda *_args, **_kwargs: (1,),
+    )
+    monkeypatch.setattr(
+        health,
+        "_load_eligible_members",
+        lambda *_args, **_kwargs: (
+            {"100": member},
+            {},
+            (date(2026, 9, 25),),
+        ),
+    )
+    monkeypatch.setattr(
+        health,
+        "_load_member_visit_stats",
+        lambda *_args, **_kwargs: (
+            state.member_visit_stats,
+            1,
+            1,
+        ),
+    )
+    monkeypatch.setattr(
+        health,
+        "_load_historical_last_visits",
+        lambda *_args, **_kwargs: {},
+    )
+
+    timings: dict[str, float] = {}
+    result = health.attendance_base_health_members(
+        _scope(),
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 25),
+        branch_id=None,
+        region_key=None,
+        status="WITH_VISIT",
+        page=1,
+        page_size=50,
+        timings=timings,
+    )
+
+    assert result["count"] == 1
+    assert set(timings) == {
+        "scope",
+        "socios_activos",
+        "visitas_periodo",
+        "historico",
+        "cohorte",
+        "serializacion",
+        "total",
+    }
+    assert all(
+        value >= 0
+        for value in timings.values()
+    )
