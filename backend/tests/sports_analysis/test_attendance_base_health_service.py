@@ -95,6 +95,7 @@ def test_base_health_utilization_uses_eligible_members(
         "without_visit_pct": 50.0,
         "frequency_avg_per_week": 0.0,
         "frequency_median_per_week": 0.0,
+        "members_14_plus_days_without_visit": 0,
     }
     assert (
         result["source"]["identity_coverage_pct"]
@@ -353,3 +354,72 @@ def test_frequency_metrics_include_zero_and_partial_members():
         row["count"]
         for row in metrics["distribution"]
     ] == [1, 1, 0, 1, 0]
+
+
+def test_recency_uses_date_to_and_known_last_visit():
+    state = health._BaseHealthState(
+        eligible_members={
+            "100": _member("100"),
+            "200": _member("200"),
+            "300": _member("300"),
+            "400": _member("400"),
+            "500": _member("500"),
+        },
+        visited_member_ids=frozenset(
+            {"100", "200", "300", "400"}
+        ),
+        snapshot_dates=(date(2026, 9, 1),),
+        total_visits_checked=4,
+        resolved_visits=4,
+        member_visit_stats={},
+        last_known_visit_by_member={
+            "100": date(2026, 9, 25),
+            "200": date(2026, 9, 17),
+            "300": date(2026, 9, 11),
+            "400": date(2026, 9, 1),
+        },
+    )
+
+    result = health._recency_metrics(
+        state,
+        date_to=date(2026, 9, 25),
+    )
+
+    assert (
+        result[
+            "members_14_plus_days_without_visit"
+        ]
+        == 2
+    )
+    assert [
+        row["count"]
+        for row in result["distribution"]
+    ] == [1, 1, 1, 1, 1]
+
+
+def test_recency_exactly_14_days_counts_in_14_plus():
+    state = health._BaseHealthState(
+        eligible_members={
+            "100": _member("100"),
+        },
+        visited_member_ids=frozenset(),
+        snapshot_dates=(date(2026, 9, 1),),
+        total_visits_checked=0,
+        resolved_visits=0,
+        last_known_visit_by_member={
+            "100": date(2026, 9, 11),
+        },
+    )
+
+    result = health._recency_metrics(
+        state,
+        date_to=date(2026, 9, 25),
+    )
+
+    assert (
+        result[
+            "members_14_plus_days_without_visit"
+        ]
+        == 1
+    )
+    assert result["distribution"][1]["count"] == 1
