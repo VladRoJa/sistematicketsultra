@@ -7,7 +7,7 @@ from statistics import median
 from types import SimpleNamespace
 from typing import Any
 
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, tuple_
 
 from app.extensions import db
 from app.models.attendance import WarehouseAttendanceVisitORM
@@ -76,6 +76,10 @@ class _BaseHealthState:
         str,
         _MemberVisitStats,
     ] = field(default_factory=dict)
+    last_known_visit_by_member: dict[
+        str,
+        date,
+    ] = field(default_factory=dict)
 
 
 def attendance_base_health(
@@ -139,6 +143,10 @@ def attendance_base_health(
         date_from=date_from,
         date_to=date_to,
     )
+    recency = _recency_metrics(
+        state,
+        date_to=date_to,
+    )
 
     return {
         "scope": {
@@ -171,9 +179,17 @@ def attendance_base_health(
             "frequency_median_per_week": (
                 frequency["median_per_week"]
             ),
+            "members_14_plus_days_without_visit": (
+                recency[
+                    "members_14_plus_days_without_visit"
+                ]
+            ),
         },
         "frequency_distribution": (
             frequency["distribution"]
+        ),
+        "recency_distribution": (
+            recency["distribution"]
         ),
         "source": {
             "available": bool(
@@ -353,6 +369,7 @@ def _build_state(
                 total_visits_checked=0,
                 resolved_visits=0,
                 member_visit_stats={},
+                last_known_visit_by_member={},
             ),
             effective_branch_ids,
         )
@@ -367,6 +384,22 @@ def _build_state(
         date_to=date_to,
     )
 
+    last_known_visit_by_member = {
+        id_socio: stats.last_visit_date
+        for id_socio, stats
+        in member_visit_stats.items()
+    }
+    historical_last_visits = (
+        _load_historical_last_visits(
+            eligible_members,
+            member_visit_stats,
+            date_before=date_from,
+        )
+    )
+    last_known_visit_by_member.update(
+        historical_last_visits
+    )
+
     return (
         _BaseHealthState(
             eligible_members=eligible_members,
@@ -379,6 +412,9 @@ def _build_state(
             ),
             resolved_visits=resolved_visits,
             member_visit_stats=member_visit_stats,
+            last_known_visit_by_member=(
+                last_known_visit_by_member
+            ),
         ),
         effective_branch_ids,
     )
@@ -943,6 +979,225 @@ def _record_member_visits(
         ),
     )
 
+def _load_historical_last_visits(
+    eligible_members: dict[
+        str,
+        _EligibleMember,
+    ],
+    member_visit_stats: dict[
+        str,
+        _MemberVisitStats,
+    ],
+    *,
+    date_before: date,
+) -> dict[str, date]:
+    candidates = [
+        member
+        for member in eligible_members.values()
+        if (
+            member.id_socio
+            not in member_visit_stats
+            and member.member_since is not None
+        )
+    ]
+    if not candidates:
+        return {}
+
+    requested_keys = {
+        (
+            member.pin,
+            member.member_since,
+        )
+        for member in candidates
+    }
+
+    exact_map: dict[
+        tuple[str, date],
+        str,
+    ] = {}
+
+    keys_list = list(requested_keys)
+    for start in range(
+        0,
+        len(keys_list),
+        IDENTITY_BATCH_SIZE,
+    ):
+        chunk = keys_list[
+            start : start + IDENTITY_BATCH_SIZE
+        ]
+
+        rows = (
+            db.session.query(
+                SociosActivosSnapshotRowORM.pin,
+                func.date(
+                    SociosActivosSnapshotRowORM
+                    .fecha_ingreso_local
+                ).label("member_since"),
+                func.count(
+                    func.distinct(
+                        SociosActivosSnapshotRowORM.id_socio
+                    )
+                ).label("candidate_count"),
+                func.min(
+                    SociosActivosSnapshotRowORM.id_socio
+                ).label("id_socio"),
+            )
+            .join(
+                SociosActivosSnapshotORM,
+                SociosActivosSnapshotORM.id
+                == SociosActivosSnapshotRowORM
+                .snapshot_id,
+            )
+            .filter(
+                tuple_(
+                    SociosActivosSnapshotRowORM.pin,
+                    func.date(
+                        SociosActivosSnapshotRowORM
+                        .fecha_ingreso_local
+                    ),
+                ).in_(chunk),
+                SociosActivosSnapshotORM.report_type_key
+                == "socios_activos",
+                SociosActivosSnapshotORM.snapshot_kind
+                == "daily",
+                SociosActivosSnapshotORM.is_canonical
+                .is_(True),
+            )
+            .group_by(
+                SociosActivosSnapshotRowORM.pin,
+                func.date(
+                    SociosActivosSnapshotRowORM
+                    .fecha_ingreso_local
+                ),
+            )
+            .all()
+        )
+
+        for row in rows:
+            candidate_count = int(
+                _row_value(
+                    row,
+                    "candidate_count",
+                    2,
+                )
+                or 0
+            )
+            id_socio = _clean_text(
+                _row_value(
+                    row,
+                    "id_socio",
+                    3,
+                )
+            )
+            pin = _clean_text(
+                _row_value(
+                    row,
+                    "pin",
+                    0,
+                )
+            )
+            member_since = _row_value(
+                row,
+                "member_since",
+                1,
+            )
+            if (
+                candidate_count == 1
+                and id_socio
+                and pin
+                and member_since
+            ):
+                exact_map[
+                    (
+                        pin,
+                        member_since,
+                    )
+                ] = id_socio
+
+    if not exact_map:
+        return {}
+
+    last_visits: dict[str, date] = {}
+    exact_keys = list(exact_map)
+
+    for start in range(
+        0,
+        len(exact_keys),
+        IDENTITY_BATCH_SIZE,
+    ):
+        chunk = exact_keys[
+            start : start + IDENTITY_BATCH_SIZE
+        ]
+
+        rows = (
+            db.session.query(
+                WarehouseAttendanceVisitORM.member_pin,
+                WarehouseAttendanceVisitORM.member_since,
+                func.max(
+                    WarehouseAttendanceVisitORM
+                    .business_date
+                ).label("last_visit_date"),
+            )
+            .filter(
+                tuple_(
+                    WarehouseAttendanceVisitORM.member_pin,
+                    WarehouseAttendanceVisitORM.member_since,
+                ).in_(chunk),
+                WarehouseAttendanceVisitORM.attendance_type
+                == "SOCIO",
+                WarehouseAttendanceVisitORM.business_date
+                < date_before,
+            )
+            .group_by(
+                WarehouseAttendanceVisitORM.member_pin,
+                WarehouseAttendanceVisitORM.member_since,
+            )
+            .all()
+        )
+
+        for row in rows:
+            pin = _clean_text(
+                _row_value(
+                    row,
+                    "member_pin",
+                    0,
+                )
+            )
+            member_since = _row_value(
+                row,
+                "member_since",
+                1,
+            )
+            last_visit_date = _row_value(
+                row,
+                "last_visit_date",
+                2,
+            )
+            id_socio = exact_map.get(
+                (
+                    pin,
+                    member_since,
+                )
+            )
+            if (
+                id_socio
+                and last_visit_date is not None
+            ):
+                current = last_visits.get(
+                    id_socio
+                )
+                if (
+                    current is None
+                    or last_visit_date > current
+                ):
+                    last_visits[
+                        id_socio
+                    ] = last_visit_date
+
+    return last_visits
+
+
+
 def _serialize_member(
     member: _EligibleMember,
     *,
@@ -1099,6 +1354,96 @@ def _member_eligible_days(
     if end < start:
         return 0
     return (end - start).days + 1
+
+
+
+def _recency_metrics(
+    state: _BaseHealthState,
+    *,
+    date_to: date,
+) -> dict[str, Any]:
+    buckets = [
+        {
+            "key": "DAYS_0_7",
+            "label": "0–7 días",
+            "count": 0,
+        },
+        {
+            "key": "DAYS_8_14",
+            "label": "8–14 días",
+            "count": 0,
+        },
+        {
+            "key": "DAYS_15_21",
+            "label": "15–21 días",
+            "count": 0,
+        },
+        {
+            "key": "DAYS_22_PLUS",
+            "label": "22+ días",
+            "count": 0,
+        },
+        {
+            "key": "NO_RECORDED_VISIT",
+            "label": "Sin visita registrada",
+            "count": 0,
+        },
+    ]
+
+    members_14_plus = 0
+
+    for member in state.eligible_members.values():
+        last_visit = (
+            state.last_known_visit_by_member.get(
+                member.id_socio
+            )
+        )
+
+        if last_visit is None:
+            buckets[4]["count"] += 1
+            continue
+
+        days = max(
+            0,
+            (date_to - last_visit).days,
+        )
+
+        if days >= 14:
+            members_14_plus += 1
+
+        if days <= 7:
+            bucket_index = 0
+        elif days <= 14:
+            bucket_index = 1
+        elif days <= 21:
+            bucket_index = 2
+        else:
+            bucket_index = 3
+
+        buckets[bucket_index]["count"] += 1
+
+    total = len(state.eligible_members)
+    distribution = [
+        {
+            **bucket,
+            "pct": (
+                round(
+                    bucket["count"] * 100 / total,
+                    1,
+                )
+                if total
+                else 0.0
+            ),
+        }
+        for bucket in buckets
+    ]
+
+    return {
+        "members_14_plus_days_without_visit": (
+            members_14_plus
+        ),
+        "distribution": distribution,
+    }
 
 
 
