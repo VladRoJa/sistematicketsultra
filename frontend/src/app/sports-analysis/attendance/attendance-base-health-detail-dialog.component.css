@@ -38,6 +38,12 @@
   font-size: 13px;
 }
 
+.dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .close-button {
   min-width: auto;
 }
@@ -139,6 +145,10 @@ td {
   .dialog-footer {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .dialog-actions {
+    justify-content: flex-end;
   }
 
   .table-shell {
