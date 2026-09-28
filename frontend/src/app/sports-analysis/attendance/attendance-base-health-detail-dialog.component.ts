@@ -112,6 +112,21 @@ export class AttendanceBaseHealthDetailDialogComponent
     return `${match[3]}/${match[2]}/${match[1]}`;
   }
 
+  formatDecimal(value: number): string {
+    return new Intl.NumberFormat('es-MX', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value || 0);
+  }
+
+  formatOptionalNumber(value: number | null): string {
+    if (value === null) {
+      return '—';
+    }
+
+    return this.formatNumber(value);
+  }
+
   private loadPage(page: number): void {
     this.loading = true;
     this.errorMessage = '';
