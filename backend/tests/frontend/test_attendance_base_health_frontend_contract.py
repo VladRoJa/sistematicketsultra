@@ -111,3 +111,25 @@ def test_base_health_behavior_metrics_are_wired_to_ui():
         "openBaseHealthDetail('RECENCY_14_PLUS')"
         in template
     )
+
+
+def test_base_health_detail_shows_behavior_fields():
+    component = _read(
+        "attendance-base-health-detail-dialog.component.ts"
+    )
+    template = _read(
+        "attendance-base-health-detail-dialog.component.html"
+    )
+
+    assert "formatDecimal(" in component
+    assert "formatOptionalNumber(" in component
+
+    assert ">Visitas<" in template
+    assert ">Última visita<" in template
+    assert ">Días sin venir<" in template
+    assert ">Frecuencia/semana<" in template
+
+    assert "row.visit_count" in template
+    assert "row.last_visit_date" in template
+    assert "row.days_since_last_visit" in template
+    assert "row.frequency_per_week" in template
