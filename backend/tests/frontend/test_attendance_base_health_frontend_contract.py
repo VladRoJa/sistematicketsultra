@@ -150,3 +150,20 @@ def test_base_health_detail_shows_behavior_fields():
     assert "isOtherActiveAccessDetail" in component
     assert ">Tarifa<" in template
     assert "row.tariff" in template
+
+
+
+def test_attendance_loading_ignores_stale_view_requests():
+    component = _read(
+        "attendance-dashboard.component.ts"
+    )
+
+    assert "activeViewRequestId" in component
+    assert (
+        "const requestId = ++this.activeViewRequestId;"
+        in component
+    )
+    assert (
+        "if (requestId !== this.activeViewRequestId)"
+        in component
+    )
