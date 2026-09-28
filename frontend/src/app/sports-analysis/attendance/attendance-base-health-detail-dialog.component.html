@@ -9,13 +9,23 @@
       </p>
     </div>
 
-    <button
-      mat-button
-      type="button"
-      class="close-button"
-      (click)="close()">
-      Cerrar
-    </button>
+    <div class="dialog-actions">
+      <button
+        mat-flat-button
+        type="button"
+        [disabled]="loading || exporting || !detail"
+        (click)="exportExcel()">
+        {{ exporting ? 'Exportando...' : 'Exportar Excel' }}
+      </button>
+
+      <button
+        mat-button
+        type="button"
+        class="close-button"
+        (click)="close()">
+        Cerrar
+      </button>
+    </div>
   </header>
 
   <div class="message error" *ngIf="errorMessage">

@@ -165,6 +165,38 @@ export class AttendanceService {
   getBaseHealthMembers(
     request: AttendanceBaseHealthMembersRequest,
   ): Observable<AttendanceBaseHealthMembersResponse> {
+    const params = this.buildBaseHealthMemberParams(
+      request,
+      true,
+    );
+
+    return this.http.get<AttendanceBaseHealthMembersResponse>(
+      `${this.baseUrl}/attendance/base-health/members`,
+      { params },
+    );
+  }
+
+  exportBaseHealthMembers(
+    request: AttendanceBaseHealthMembersRequest,
+  ): Observable<Blob> {
+    const params = this.buildBaseHealthMemberParams(
+      request,
+      false,
+    );
+
+    return this.http.get(
+      `${this.baseUrl}/attendance/base-health/members/export`,
+      {
+        params,
+        responseType: 'blob',
+      },
+    );
+  }
+
+  private buildBaseHealthMemberParams(
+    request: AttendanceBaseHealthMembersRequest,
+    includePagination: boolean,
+  ): HttpParams {
     let params = new HttpParams()
       .set('date_from', request.dateFrom)
       .set('date_to', request.dateTo)
@@ -184,24 +216,27 @@ export class AttendanceService {
       );
     }
 
-    if (request.page !== undefined) {
+    if (
+      includePagination
+      && request.page !== undefined
+    ) {
       params = params.set(
         'page',
         String(request.page),
       );
     }
 
-    if (request.pageSize !== undefined) {
+    if (
+      includePagination
+      && request.pageSize !== undefined
+    ) {
       params = params.set(
         'page_size',
         String(request.pageSize),
       );
     }
 
-    return this.http.get<AttendanceBaseHealthMembersResponse>(
-      `${this.baseUrl}/attendance/base-health/members`,
-      { params },
-    );
+    return params;
   }
 
   getDashboard(

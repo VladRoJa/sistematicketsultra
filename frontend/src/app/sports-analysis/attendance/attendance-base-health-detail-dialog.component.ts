@@ -44,6 +44,7 @@ export class AttendanceBaseHealthDetailDialogComponent
   detail: AttendanceBaseHealthMembersResponse | null = null;
   rows: AttendanceBaseHealthMemberRow[] = [];
   loading = true;
+  exporting = false;
   errorMessage = '';
 
   ngOnInit(): void {
@@ -137,6 +138,46 @@ export class AttendanceBaseHealthDetailDialogComponent
     return this.formatNumber(value);
   }
 
+  exportExcel(): void {
+    if (
+      this.exporting
+      || !this.detail
+    ) {
+      return;
+    }
+
+    this.exporting = true;
+    this.errorMessage = '';
+
+    this.service.exportBaseHealthMembers(
+      this.data,
+    ).subscribe({
+      next: (blob) => {
+        this.exporting = false;
+
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = this.exportFilename();
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+
+        setTimeout(
+          () => URL.revokeObjectURL(url),
+          0,
+        );
+      },
+      error: (error: HttpErrorResponse) => {
+        this.exporting = false;
+        this.errorMessage = this.resolveError(
+          error,
+          true,
+        );
+      },
+    });
+  }
+
   private loadPage(page: number): void {
     this.loading = true;
     this.errorMessage = '';
@@ -164,7 +205,21 @@ export class AttendanceBaseHealthDetailDialogComponent
     }).format(value || 0);
   }
 
-  private resolveError(error: HttpErrorResponse): string {
+  private exportFilename(): string {
+    const period = this.data.dateFrom === this.data.dateTo
+      ? this.data.dateFrom
+      : `${this.data.dateFrom}_${this.data.dateTo}`;
+
+    return (
+      `salud_base_${this.data.status.toLowerCase()}_`
+      + `${period}.xlsx`
+    );
+  }
+
+  private resolveError(
+    error: HttpErrorResponse,
+    exportRequest = false,
+  ): string {
     const backendMessage = error.error?.detail;
 
     if (
@@ -178,6 +233,8 @@ export class AttendanceBaseHealthDetailDialogComponent
       return 'No fue posible conectar con el backend.';
     }
 
-    return 'No fue posible cargar el detalle de socios.';
+    return exportRequest
+      ? 'No fue posible exportar el detalle a Excel.'
+      : 'No fue posible cargar el detalle de socios.';
   }
 }

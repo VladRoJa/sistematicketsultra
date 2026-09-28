@@ -22,9 +22,13 @@ from app.sports_analysis.attendance_detail_service import (
     build_attendance_detail,
     build_attendance_detail_export,
 )
+from app.sports_analysis.attendance_export_service import (
+    ATTENDANCE_EXPORT_MIMETYPE,
+)
 from app.sports_analysis.attendance_base_health_service import (
     attendance_base_health,
     attendance_base_health_members,
+    attendance_base_health_members_export,
 )
 from app.sports_analysis.attendance_query_service import (
     SportsAnalysisValidationError,
@@ -341,6 +345,73 @@ def get_attendance_base_health_members():
                 ),
                 "detail": (
                     "No se pudo consultar el "
+                    "detalle de Salud de la base."
+                ),
+            }
+        ), 500
+
+
+@sports_analysis_bp.get(
+    "/attendance/base-health/members/export"
+)
+@jwt_required()
+def export_attendance_base_health_members():
+    _, scope = _scope()
+    date_from = _parse_date_arg("date_from")
+    date_to = _parse_date_arg("date_to")
+    if date_from is None or date_to is None:
+        raise SportsAnalysisValidationError(
+            "date_from y date_to son obligatorios."
+        )
+
+    try:
+        output, filename = (
+            attendance_base_health_members_export(
+                scope,
+                date_from=date_from,
+                date_to=date_to,
+                branch_id=_parse_int_arg(
+                    "branch_id"
+                ),
+                region_key=(
+                    str(
+                        request.args.get(
+                            "region_key"
+                        )
+                        or ""
+                    ).strip()
+                    or None
+                ),
+                status=str(
+                    request.args.get("status")
+                    or ""
+                ),
+            )
+        )
+        return send_file(
+            output,
+            mimetype=ATTENDANCE_EXPORT_MIMETYPE,
+            as_attachment=True,
+            download_name=filename,
+        )
+    except (
+        SportsAnalysisAuthorizationError,
+        SportsAnalysisValidationError,
+    ):
+        raise
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Error exportando detalle "
+            "de Salud de la base."
+        )
+        return jsonify(
+            {
+                "error": (
+                    "Internal Server Error"
+                ),
+                "detail": (
+                    "No se pudo exportar el "
                     "detalle de Salud de la base."
                 ),
             }

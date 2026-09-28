@@ -1,6 +1,7 @@
 from datetime import date
 
 import pytest
+from openpyxl import load_workbook
 
 from app.sports_analysis import (
     attendance_base_health_service as health,
@@ -32,6 +33,7 @@ def _member(
     expiration_date: date = date(2026, 12, 31),
     applies_kpi: bool = True,
     tariff: str | None = None,
+    phone: str | None = None,
 ) -> health._EligibleMember:
     return health._EligibleMember(
         id_socio=id_socio,
@@ -44,6 +46,7 @@ def _member(
         snapshot_date=date(2026, 9, 25),
         applies_kpi=applies_kpi,
         tariff=tariff,
+        phone=phone,
     )
 
 
@@ -941,3 +944,153 @@ def test_other_active_access_detail_uses_non_kpi_universe(
         row["tariff"]
         for row in result["rows"]
     } == {"PASE GYMPASS", "SEMANA $299"}
+
+
+
+def test_base_health_export_includes_phone_without_exposing_it_in_json(
+    monkeypatch,
+):
+    state = health._BaseHealthState(
+        eligible_members={
+            "100": _member(
+                "100",
+                phone="6861111111",
+            ),
+            "200": _member(
+                "200",
+                phone="6862222222",
+            ),
+        },
+        visited_member_ids=frozenset(
+            {"100", "200"}
+        ),
+        snapshot_dates=(date(2026, 9, 25),),
+        total_visits_checked=2,
+        resolved_visits=2,
+    )
+
+    monkeypatch.setattr(
+        health,
+        "_build_state",
+        lambda *_args, **_kwargs: (
+            state,
+            (1,),
+        ),
+    )
+
+    detail = health.attendance_base_health_members(
+        _scope(),
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 25),
+        branch_id=None,
+        region_key=None,
+        status="WITH_VISIT",
+        page=1,
+        page_size=1,
+    )
+
+    assert detail["count"] == 2
+    assert len(detail["rows"]) == 1
+    assert "phone" not in detail["rows"][0]
+
+    output, filename = (
+        health.attendance_base_health_members_export(
+            _scope(),
+            date_from=date(2026, 9, 1),
+            date_to=date(2026, 9, 25),
+            branch_id=None,
+            region_key=None,
+            status="WITH_VISIT",
+        )
+    )
+
+    workbook = load_workbook(output)
+    worksheet = workbook.active
+    rows = list(
+        worksheet.iter_rows(values_only=True)
+    )
+
+    assert filename == (
+        "salud_base_with_visit_"
+        "2026-09-01_2026-09-25.xlsx"
+    )
+    assert rows[0] == (
+        "Socio",
+        "ID socio",
+        "PIN",
+        "Teléfono",
+        "Sucursal",
+        "Alta",
+        "Visitas",
+        "Última visita",
+        "Días sin venir",
+        "Frecuencia/semana",
+    )
+    assert len(rows) == 3
+    assert {
+        row[3]
+        for row in rows[1:]
+    } == {
+        "6861111111",
+        "6862222222",
+    }
+
+
+def test_other_active_access_export_includes_tariff_and_phone(
+    monkeypatch,
+):
+    state = health._BaseHealthState(
+        eligible_members={
+            "100": _member("100"),
+        },
+        visited_member_ids=frozenset(),
+        snapshot_dates=(date(2026, 9, 25),),
+        total_visits_checked=0,
+        resolved_visits=0,
+        other_active_members={
+            "900": _member(
+                "900",
+                applies_kpi=False,
+                tariff="PASE GYMPASS",
+                phone="6869000000",
+            ),
+        },
+    )
+
+    monkeypatch.setattr(
+        health,
+        "_build_state",
+        lambda *_args, **_kwargs: (
+            state,
+            (1,),
+        ),
+    )
+
+    output, _ = (
+        health.attendance_base_health_members_export(
+            _scope(),
+            date_from=date(2026, 9, 1),
+            date_to=date(2026, 9, 25),
+            branch_id=None,
+            region_key=None,
+            status="OTHER_ACTIVE_ACCESS",
+        )
+    )
+
+    workbook = load_workbook(output)
+    worksheet = workbook.active
+    rows = list(
+        worksheet.iter_rows(values_only=True)
+    )
+
+    assert rows[0] == (
+        "Socio",
+        "ID socio",
+        "PIN",
+        "Teléfono",
+        "Sucursal",
+        "Alta",
+        "Tarifa",
+    )
+    assert rows[1][3] == "6869000000"
+    assert rows[1][6] == "PASE GYMPASS"
