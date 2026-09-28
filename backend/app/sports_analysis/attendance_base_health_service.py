@@ -1383,6 +1383,7 @@ def _load_member_visit_stats(
             fallback_probes,
             session=db.session,
             chunk_size=IDENTITY_BATCH_SIZE,
+            timings=timings,
         )
 
         _record_timing(
