@@ -152,6 +152,11 @@ def attendance_base_health(
         date_from=date_from,
         date_to=date_to,
     )
+    follow_up = _follow_up_metrics(
+        state,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
     return {
         "scope": {
@@ -188,6 +193,9 @@ def attendance_base_health(
                 recency[
                     "members_14_plus_days_without_visit"
                 ]
+            ),
+            "follow_up_members": (
+                follow_up["count"]
             ),
         },
         "frequency_distribution": (
@@ -1581,6 +1589,77 @@ def _activation_metrics(
         "new_members": total,
         "distribution": distribution,
     }
+
+
+
+def _follow_up_metrics(
+    state: _BaseHealthState,
+    *,
+    date_from: date,
+    date_to: date,
+) -> dict[str, Any]:
+    member_ids: set[str] = set()
+    by_recency = 0
+    by_low_frequency = 0
+
+    for member in state.eligible_members.values():
+        if not _member_is_active_on(
+            member,
+            date_to,
+        ):
+            continue
+
+        last_visit = (
+            state.last_known_visit_by_member.get(
+                member.id_socio
+            )
+        )
+        has_14_plus_days_without_visit = (
+            last_visit is not None
+            and (date_to - last_visit).days >= 14
+        )
+
+        frequency = _member_weekly_frequency(
+            member,
+            state.member_visit_stats.get(
+                member.id_socio
+            ),
+            date_from=date_from,
+            date_to=date_to,
+        )
+        has_low_frequency = frequency < 1
+
+        if has_14_plus_days_without_visit:
+            by_recency += 1
+        if has_low_frequency:
+            by_low_frequency += 1
+
+        if (
+            has_14_plus_days_without_visit
+            or has_low_frequency
+        ):
+            member_ids.add(member.id_socio)
+
+    return {
+        "count": len(member_ids),
+        "member_ids": frozenset(member_ids),
+        "by_recency": by_recency,
+        "by_low_frequency": by_low_frequency,
+    }
+
+
+def _member_is_active_on(
+    member: _EligibleMember,
+    target_date: date,
+) -> bool:
+    if member.expiration_date < target_date:
+        return False
+    if (
+        member.member_since is not None
+        and member.member_since > target_date
+    ):
+        return False
+    return True
 
 
 
