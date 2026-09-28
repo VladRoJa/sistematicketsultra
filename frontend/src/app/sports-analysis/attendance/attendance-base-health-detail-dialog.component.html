@@ -5,7 +5,7 @@
       <h2>{{ detail?.title || 'Detalle de socios' }}</h2>
       <p *ngIf="detail">
         {{ formatDate(data.dateFrom) }} a {{ formatDate(data.dateTo) }}
-        · {{ formatNumber(detail.count) }} socios
+        · {{ formatNumber(detail.count) }} {{ detailCountLabel }}
       </p>
     </div>
 
@@ -37,10 +37,13 @@
             <th>PIN</th>
             <th>Sucursal</th>
             <th>Alta</th>
-            <th class="numeric-column">Visitas</th>
-            <th>Última visita</th>
-            <th class="numeric-column">Días sin venir</th>
-            <th class="numeric-column">Frecuencia/semana</th>
+            <th *ngIf="isOtherActiveAccessDetail">Tarifa</th>
+            <ng-container *ngIf="!isOtherActiveAccessDetail">
+              <th class="numeric-column">Visitas</th>
+              <th>Última visita</th>
+              <th class="numeric-column">Días sin venir</th>
+              <th class="numeric-column">Frecuencia/semana</th>
+            </ng-container>
           </tr>
         </thead>
         <tbody>
@@ -52,16 +55,21 @@
             <td>{{ row.pin }}</td>
             <td>{{ row.branch_name }}</td>
             <td>{{ formatDate(row.member_since) }}</td>
-            <td class="numeric-column">
-              {{ formatNumber(row.visit_count) }}
+            <td *ngIf="isOtherActiveAccessDetail">
+              {{ row.tariff || 'Sin tarifa' }}
             </td>
-            <td>{{ formatDate(row.last_visit_date) }}</td>
-            <td class="numeric-column">
-              {{ formatOptionalNumber(row.days_since_last_visit) }}
-            </td>
-            <td class="numeric-column">
-              {{ formatDecimal(row.frequency_per_week) }}
-            </td>
+            <ng-container *ngIf="!isOtherActiveAccessDetail">
+              <td class="numeric-column">
+                {{ formatNumber(row.visit_count) }}
+              </td>
+              <td>{{ formatDate(row.last_visit_date) }}</td>
+              <td class="numeric-column">
+                {{ formatOptionalNumber(row.days_since_last_visit) }}
+              </td>
+              <td class="numeric-column">
+                {{ formatDecimal(row.frequency_per_week) }}
+              </td>
+            </ng-container>
           </tr>
         </tbody>
       </table>
