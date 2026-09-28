@@ -37,9 +37,75 @@ from .attendance_query_service import (
 
 BASE_HEALTH_STATUS_WITH_VISIT = "WITH_VISIT"
 BASE_HEALTH_STATUS_WITHOUT_VISIT = "WITHOUT_VISIT"
+BASE_HEALTH_STATUS_FOLLOW_UP = "FOLLOW_UP"
+BASE_HEALTH_STATUS_RECENCY_14_PLUS = "RECENCY_14_PLUS"
+BASE_HEALTH_STATUS_RECENCY_0_7 = "RECENCY_0_7"
+BASE_HEALTH_STATUS_RECENCY_8_14 = "RECENCY_8_14"
+BASE_HEALTH_STATUS_RECENCY_15_21 = "RECENCY_15_21"
+BASE_HEALTH_STATUS_RECENCY_22_PLUS = "RECENCY_22_PLUS"
+BASE_HEALTH_STATUS_RECENCY_NO_RECORDED = (
+    "RECENCY_NO_RECORDED"
+)
+BASE_HEALTH_STATUS_FREQUENCY_ZERO = "FREQUENCY_ZERO"
+BASE_HEALTH_STATUS_FREQUENCY_LT_1 = "FREQUENCY_LT_1"
+BASE_HEALTH_STATUS_FREQUENCY_1_1_99 = (
+    "FREQUENCY_1_1_99"
+)
+BASE_HEALTH_STATUS_FREQUENCY_2_2_99 = (
+    "FREQUENCY_2_2_99"
+)
+BASE_HEALTH_STATUS_FREQUENCY_GTE_3 = "FREQUENCY_GTE_3"
+
 BASE_HEALTH_MEMBER_STATUSES = {
     BASE_HEALTH_STATUS_WITH_VISIT,
     BASE_HEALTH_STATUS_WITHOUT_VISIT,
+    BASE_HEALTH_STATUS_FOLLOW_UP,
+    BASE_HEALTH_STATUS_RECENCY_14_PLUS,
+    BASE_HEALTH_STATUS_RECENCY_0_7,
+    BASE_HEALTH_STATUS_RECENCY_8_14,
+    BASE_HEALTH_STATUS_RECENCY_15_21,
+    BASE_HEALTH_STATUS_RECENCY_22_PLUS,
+    BASE_HEALTH_STATUS_RECENCY_NO_RECORDED,
+    BASE_HEALTH_STATUS_FREQUENCY_ZERO,
+    BASE_HEALTH_STATUS_FREQUENCY_LT_1,
+    BASE_HEALTH_STATUS_FREQUENCY_1_1_99,
+    BASE_HEALTH_STATUS_FREQUENCY_2_2_99,
+    BASE_HEALTH_STATUS_FREQUENCY_GTE_3,
+}
+
+BASE_HEALTH_MEMBER_TITLES = {
+    BASE_HEALTH_STATUS_WITH_VISIT: (
+        "Socios que usaron el gimnasio"
+    ),
+    BASE_HEALTH_STATUS_WITHOUT_VISIT: (
+        "Socios sin visitas en el periodo"
+    ),
+    BASE_HEALTH_STATUS_FOLLOW_UP: (
+        "Socios para seguimiento"
+    ),
+    BASE_HEALTH_STATUS_RECENCY_14_PLUS: (
+        "Socios con 14+ días sin venir"
+    ),
+    BASE_HEALTH_STATUS_RECENCY_0_7: "Última visita hace 0–7 días",
+    BASE_HEALTH_STATUS_RECENCY_8_14: "Última visita hace 8–14 días",
+    BASE_HEALTH_STATUS_RECENCY_15_21: "Última visita hace 15–21 días",
+    BASE_HEALTH_STATUS_RECENCY_22_PLUS: "Última visita hace 22+ días",
+    BASE_HEALTH_STATUS_RECENCY_NO_RECORDED: (
+        "Socios sin visita registrada"
+    ),
+    BASE_HEALTH_STATUS_FREQUENCY_ZERO: "Socios con 0 visitas",
+    BASE_HEALTH_STATUS_FREQUENCY_LT_1: (
+        "Socios con menos de 1 visita por semana"
+    ),
+    BASE_HEALTH_STATUS_FREQUENCY_1_1_99: (
+        "Socios con 1.00 a 1.99 visitas por semana"
+    ),
+    BASE_HEALTH_STATUS_FREQUENCY_2_2_99: (
+        "Socios con 2.00 a 2.99 visitas por semana"
+    ),
+    BASE_HEALTH_STATUS_FREQUENCY_GTE_3: (
+        "Socios con 3.00 o más visitas por semana"
+    ),
 }
 DEFAULT_MEMBER_PAGE_SIZE = 50
 MAX_MEMBER_PAGE_SIZE = 200
@@ -256,8 +322,7 @@ def attendance_base_health_members(
         BASE_HEALTH_MEMBER_STATUSES
     ):
         raise SportsAnalysisValidationError(
-            "status debe ser WITH_VISIT "
-            "o WITHOUT_VISIT."
+            "status de Salud de la base inválido."
         )
 
     safe_page = _positive_int(
@@ -282,19 +347,16 @@ def attendance_base_health_members(
         region_key=region_key,
     )
 
-    visited = set(state.visited_member_ids)
-    want_visit = (
-        normalized_status
-        == BASE_HEALTH_STATUS_WITH_VISIT
-    )
-
     members = [
         member
         for member
         in state.eligible_members.values()
-        if (
-            (member.id_socio in visited)
-            == want_visit
+        if _member_matches_detail_status(
+            state,
+            member,
+            status=normalized_status,
+            date_from=date_from,
+            date_to=date_to,
         )
     ]
     members.sort(
@@ -324,23 +386,128 @@ def attendance_base_health_members(
 
     return {
         "status": normalized_status,
-        "title": (
-            "Socios que usaron el gimnasio"
-            if want_visit
-            else "Socios sin visitas en el periodo"
-        ),
+        "title": BASE_HEALTH_MEMBER_TITLES[
+            normalized_status
+        ],
         "count": count,
         "page": safe_page,
         "page_size": safe_page_size,
         "total_pages": total_pages,
         "rows": [
             _serialize_member(
+                state,
                 member,
-                has_visit=want_visit,
+                date_from=date_from,
+                date_to=date_to,
             )
             for member in page_rows
         ],
     }
+
+
+def _member_matches_detail_status(
+    state: _BaseHealthState,
+    member: _EligibleMember,
+    *,
+    status: str,
+    date_from: date,
+    date_to: date,
+) -> bool:
+    has_visit = (
+        member.id_socio
+        in state.member_visit_stats
+    )
+
+    if status == BASE_HEALTH_STATUS_WITH_VISIT:
+        return has_visit
+    if status == BASE_HEALTH_STATUS_WITHOUT_VISIT:
+        return not has_visit
+
+    last_visit = (
+        state.last_known_visit_by_member.get(
+            member.id_socio
+        )
+    )
+    days_since_last_visit = (
+        max(
+            0,
+            (date_to - last_visit).days,
+        )
+        if last_visit is not None
+        else None
+    )
+
+    if status == BASE_HEALTH_STATUS_FOLLOW_UP:
+        if not _member_is_active_on(
+            member,
+            date_to,
+        ):
+            return False
+        frequency = _member_weekly_frequency(
+            member,
+            state.member_visit_stats.get(
+                member.id_socio
+            ),
+            date_from=date_from,
+            date_to=date_to,
+        )
+        return (
+            (
+                days_since_last_visit is not None
+                and days_since_last_visit >= 14
+            )
+            or frequency < 1
+        )
+
+    if status == BASE_HEALTH_STATUS_RECENCY_14_PLUS:
+        return (
+            days_since_last_visit is not None
+            and days_since_last_visit >= 14
+        )
+    if status == BASE_HEALTH_STATUS_RECENCY_0_7:
+        return (
+            days_since_last_visit is not None
+            and days_since_last_visit <= 7
+        )
+    if status == BASE_HEALTH_STATUS_RECENCY_8_14:
+        return (
+            days_since_last_visit is not None
+            and 8 <= days_since_last_visit <= 14
+        )
+    if status == BASE_HEALTH_STATUS_RECENCY_15_21:
+        return (
+            days_since_last_visit is not None
+            and 15 <= days_since_last_visit <= 21
+        )
+    if status == BASE_HEALTH_STATUS_RECENCY_22_PLUS:
+        return (
+            days_since_last_visit is not None
+            and days_since_last_visit >= 22
+        )
+    if status == BASE_HEALTH_STATUS_RECENCY_NO_RECORDED:
+        return last_visit is None
+
+    frequency = _member_weekly_frequency(
+        member,
+        state.member_visit_stats.get(
+            member.id_socio
+        ),
+        date_from=date_from,
+        date_to=date_to,
+    )
+    if status == BASE_HEALTH_STATUS_FREQUENCY_ZERO:
+        return not has_visit
+    if status == BASE_HEALTH_STATUS_FREQUENCY_LT_1:
+        return 0 < frequency < 1
+    if status == BASE_HEALTH_STATUS_FREQUENCY_1_1_99:
+        return 1 <= frequency < 2
+    if status == BASE_HEALTH_STATUS_FREQUENCY_2_2_99:
+        return 2 <= frequency < 3
+    if status == BASE_HEALTH_STATUS_FREQUENCY_GTE_3:
+        return frequency >= 3
+
+    return False
+
 
 
 def _build_state(
@@ -1238,10 +1405,35 @@ def _load_historical_last_visits(
 
 
 def _serialize_member(
+    state: _BaseHealthState,
     member: _EligibleMember,
     *,
-    has_visit: bool,
+    date_from: date,
+    date_to: date,
 ) -> dict[str, Any]:
+    visit_stats = state.member_visit_stats.get(
+        member.id_socio
+    )
+    last_visit = (
+        state.last_known_visit_by_member.get(
+            member.id_socio
+        )
+    )
+    days_since_last_visit = (
+        max(
+            0,
+            (date_to - last_visit).days,
+        )
+        if last_visit is not None
+        else None
+    )
+    frequency = _member_weekly_frequency(
+        member,
+        visit_stats,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
     return {
         "id_socio": member.id_socio,
         "name": member.name,
@@ -1253,8 +1445,26 @@ def _serialize_member(
             if member.member_since
             else None
         ),
-        "has_visit": has_visit,
+        "has_visit": visit_stats is not None,
+        "visit_count": (
+            visit_stats.visit_count
+            if visit_stats is not None
+            else 0
+        ),
+        "last_visit_date": (
+            last_visit.isoformat()
+            if last_visit is not None
+            else None
+        ),
+        "days_since_last_visit": (
+            days_since_last_visit
+        ),
+        "frequency_per_week": round(
+            frequency,
+            2,
+        ),
     }
+
 
 
 def _frequency_metrics(
