@@ -75,10 +75,10 @@ BASE_HEALTH_MEMBER_STATUSES = {
 
 BASE_HEALTH_MEMBER_TITLES = {
     BASE_HEALTH_STATUS_WITH_VISIT: (
-        "Socios que usaron el gimnasio"
+        "Socios con visita"
     ),
     BASE_HEALTH_STATUS_WITHOUT_VISIT: (
-        "Socios sin visitas en el periodo"
+        "Socios sin visita"
     ),
     BASE_HEALTH_STATUS_FOLLOW_UP: (
         "Socios para seguimiento"
@@ -86,10 +86,10 @@ BASE_HEALTH_MEMBER_TITLES = {
     BASE_HEALTH_STATUS_RECENCY_14_PLUS: (
         "Socios con 14+ días sin venir"
     ),
-    BASE_HEALTH_STATUS_RECENCY_0_7: "Última visita hace 0–7 días",
-    BASE_HEALTH_STATUS_RECENCY_8_14: "Última visita hace 8–14 días",
-    BASE_HEALTH_STATUS_RECENCY_15_21: "Última visita hace 15–21 días",
-    BASE_HEALTH_STATUS_RECENCY_22_PLUS: "Última visita hace 22+ días",
+    BASE_HEALTH_STATUS_RECENCY_0_7: "Última visita: 0–7 días",
+    BASE_HEALTH_STATUS_RECENCY_8_14: "Última visita: 8–14 días",
+    BASE_HEALTH_STATUS_RECENCY_15_21: "Última visita: 15–21 días",
+    BASE_HEALTH_STATUS_RECENCY_22_PLUS: "Última visita: 22+ días",
     BASE_HEALTH_STATUS_RECENCY_NO_RECORDED: (
         "Socios sin visita registrada"
     ),
