@@ -106,7 +106,7 @@ def test_base_health_behavior_metrics_are_wired_to_ui():
     assert "Tiempo desde la última visita" in template
     assert "Tiempo para venir por primera vez" in template
     assert "Menos de 1 visita por semana" in template
-    assert "Otros accesos vigentes" in template
+    assert "Otros accesos activos en el periodo" in template
     assert "FUERA DE KPI" in template
     assert "Socios para seguimiento" not in template
     assert (
