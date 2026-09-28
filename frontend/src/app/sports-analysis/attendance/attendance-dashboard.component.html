@@ -503,6 +503,132 @@
             de la base · Ver detalle
           </small>
         </button>
+
+        <div class="kpi-card">
+          <span>Frecuencia mediana</span>
+          <strong>
+            {{ formatDecimal(baseHealth.summary.frequency_median_per_week) }}
+          </strong>
+          <small>
+            visitas por semana · Promedio
+            {{ formatDecimal(baseHealth.summary.frequency_avg_per_week) }}
+          </small>
+        </div>
+
+        <button
+          type="button"
+          class="kpi-card kpi-card-button"
+          (click)="openBaseHealthDetail('RECENCY_14_PLUS')">
+          <span>14+ días sin venir</span>
+          <strong>
+            {{ formatNumber(baseHealth.summary.members_14_plus_days_without_visit) }}
+          </strong>
+          <small>Socios con última visita conocida · Ver detalle</small>
+        </button>
+      </section>
+
+      <section class="base-health-grid">
+        <mat-card class="panel health-distribution-card">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">FRECUENCIA</span>
+              <h2>Visitas por semana disponible</h2>
+            </div>
+          </div>
+
+          <div class="health-distribution-list">
+            <button
+              type="button"
+              class="health-distribution-row"
+              *ngFor="let bucket of baseHealth.frequency_distribution"
+              (click)="openFrequencyBucket(bucket.key)">
+              <div class="health-distribution-label">
+                <span>{{ bucket.label }}</span>
+                <strong>{{ formatNumber(bucket.count) }}</strong>
+              </div>
+              <div class="health-distribution-track">
+                <div
+                  class="health-distribution-fill"
+                  [style.width.%]="bucket.pct">
+                </div>
+              </div>
+              <small>{{ formatPercent(bucket.pct) }} · Ver socios</small>
+            </button>
+          </div>
+        </mat-card>
+
+        <mat-card class="panel health-distribution-card">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">RECENCIA</span>
+              <h2>Tiempo desde la última visita</h2>
+            </div>
+          </div>
+
+          <div class="health-distribution-list">
+            <button
+              type="button"
+              class="health-distribution-row"
+              *ngFor="let bucket of baseHealth.recency_distribution"
+              (click)="openRecencyBucket(bucket.key)">
+              <div class="health-distribution-label">
+                <span>{{ bucket.label }}</span>
+                <strong>{{ formatNumber(bucket.count) }}</strong>
+              </div>
+              <div class="health-distribution-track">
+                <div
+                  class="health-distribution-fill"
+                  [style.width.%]="bucket.pct">
+                </div>
+              </div>
+              <small>{{ formatPercent(bucket.pct) }} · Ver socios</small>
+            </button>
+          </div>
+        </mat-card>
+      </section>
+
+      <section class="base-health-grid">
+        <mat-card class="panel activation-card">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">NUEVOS SOCIOS</span>
+              <h2>Activación después del alta</h2>
+            </div>
+            <small>
+              {{ formatNumber(baseHealth.activation.new_members) }}
+              altas en el periodo
+            </small>
+          </div>
+
+          <div class="activation-grid">
+            <div
+              class="activation-item"
+              *ngFor="let bucket of baseHealth.activation.distribution">
+              <span>{{ bucket.label }}</span>
+              <strong>{{ formatNumber(bucket.count) }}</strong>
+              <small>{{ formatPercent(bucket.pct) }}</small>
+            </div>
+          </div>
+        </mat-card>
+
+        <mat-card class="panel follow-up-card">
+          <div>
+            <span class="eyebrow">SEGUIMIENTO</span>
+            <h2>Socios para seguimiento</h2>
+            <p>
+              Socios vigentes al cierre con 14+ días sin venir
+              o menos de 1 visita por semana.
+            </p>
+          </div>
+
+          <button
+            mat-flat-button
+            type="button"
+            (click)="openBaseHealthDetail('FOLLOW_UP')">
+            {{ formatNumber(baseHealth.summary.follow_up_members) }}
+            socios · Ver detalle
+          </button>
+        </mat-card>
       </section>
 
       <mat-card class="panel base-health-note">
