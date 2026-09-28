@@ -28,6 +28,8 @@ def _member(
     branch_id: int = 1,
     branch_name: str = "Sucursal Uno",
     name: str | None = None,
+    member_since: date | None = date(2026, 1, 1),
+    expiration_date: date = date(2026, 12, 31),
 ) -> health._EligibleMember:
     return health._EligibleMember(
         id_socio=id_socio,
@@ -35,7 +37,8 @@ def _member(
         name=name or f"Socio {id_socio}",
         branch_id=branch_id,
         branch_name=branch_name,
-        member_since=date(2026, 1, 1),
+        member_since=member_since,
+        expiration_date=expiration_date,
         snapshot_date=date(2026, 9, 25),
     )
 
@@ -90,6 +93,10 @@ def test_base_health_utilization_uses_eligible_members(
         "members_without_visit": 2,
         "utilization_pct": 50.0,
         "without_visit_pct": 50.0,
+        "frequency_avg_per_week": 0.0,
+        "frequency_median_per_week": 0.0,
+        "members_14_plus_days_without_visit": 0,
+        "follow_up_members": 4,
     }
     assert (
         result["source"]["identity_coverage_pct"]
@@ -240,3 +247,546 @@ def test_member_detail_rejects_unknown_status(
             region_key=None,
             status="ALL",
         )
+
+
+def test_record_member_visits_accumulates_count_and_dates():
+    stats: dict[str, health._MemberVisitStats] = {}
+
+    health._record_member_visits(
+        stats,
+        id_socio="100",
+        visit_count=2,
+        business_date=date(2026, 9, 10),
+    )
+    health._record_member_visits(
+        stats,
+        id_socio="100",
+        visit_count=3,
+        business_date=date(2026, 9, 5),
+    )
+    health._record_member_visits(
+        stats,
+        id_socio="100",
+        visit_count=1,
+        business_date=date(2026, 9, 20),
+    )
+
+    assert stats["100"] == health._MemberVisitStats(
+        visit_count=6,
+        first_visit_date=date(2026, 9, 5),
+        last_visit_date=date(2026, 9, 20),
+    )
+
+
+def test_frequency_uses_real_eligible_days():
+    member = _member(
+        "100",
+        member_since=date(2026, 9, 15),
+        expiration_date=date(2026, 9, 21),
+    )
+
+    days = health._member_eligible_days(
+        member,
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 30),
+    )
+
+    frequency = health._member_weekly_frequency(
+        member,
+        health._MemberVisitStats(
+            visit_count=2,
+            first_visit_date=date(2026, 9, 15),
+            last_visit_date=date(2026, 9, 20),
+        ),
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 30),
+    )
+
+    assert days == 7
+    assert frequency == 2.0
+
+
+def test_frequency_metrics_include_zero_and_partial_members():
+    state = health._BaseHealthState(
+        eligible_members={
+            "100": _member(
+                "100",
+                member_since=date(2026, 9, 1),
+                expiration_date=date(2026, 9, 7),
+            ),
+            "200": _member(
+                "200",
+                member_since=date(2026, 9, 1),
+                expiration_date=date(2026, 9, 14),
+            ),
+            "300": _member(
+                "300",
+                member_since=date(2026, 9, 1),
+                expiration_date=date(2026, 9, 7),
+            ),
+        },
+        visited_member_ids=frozenset({"100", "200"}),
+        snapshot_dates=(date(2026, 9, 1),),
+        total_visits_checked=4,
+        resolved_visits=4,
+        member_visit_stats={
+            "100": health._MemberVisitStats(
+                visit_count=2,
+                first_visit_date=date(2026, 9, 1),
+                last_visit_date=date(2026, 9, 5),
+            ),
+            "200": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 2),
+                last_visit_date=date(2026, 9, 2),
+            ),
+        },
+    )
+
+    metrics = health._frequency_metrics(
+        state,
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 30),
+    )
+
+    assert metrics["average_per_week"] == 0.83
+    assert metrics["median_per_week"] == 0.5
+    assert [
+        row["count"]
+        for row in metrics["distribution"]
+    ] == [1, 1, 0, 1, 0]
+
+
+def test_recency_uses_date_to_and_known_last_visit():
+    state = health._BaseHealthState(
+        eligible_members={
+            "100": _member("100"),
+            "200": _member("200"),
+            "300": _member("300"),
+            "400": _member("400"),
+            "500": _member("500"),
+        },
+        visited_member_ids=frozenset(
+            {"100", "200", "300", "400"}
+        ),
+        snapshot_dates=(date(2026, 9, 1),),
+        total_visits_checked=4,
+        resolved_visits=4,
+        member_visit_stats={},
+        last_known_visit_by_member={
+            "100": date(2026, 9, 25),
+            "200": date(2026, 9, 17),
+            "300": date(2026, 9, 11),
+            "400": date(2026, 9, 1),
+        },
+    )
+
+    result = health._recency_metrics(
+        state,
+        date_to=date(2026, 9, 25),
+    )
+
+    assert (
+        result[
+            "members_14_plus_days_without_visit"
+        ]
+        == 2
+    )
+    assert [
+        row["count"]
+        for row in result["distribution"]
+    ] == [1, 2, 0, 1, 1]
+
+
+def test_recency_exactly_14_days_counts_in_14_plus():
+    state = health._BaseHealthState(
+        eligible_members={
+            "100": _member("100"),
+        },
+        visited_member_ids=frozenset(),
+        snapshot_dates=(date(2026, 9, 1),),
+        total_visits_checked=0,
+        resolved_visits=0,
+        last_known_visit_by_member={
+            "100": date(2026, 9, 11),
+        },
+    )
+
+    result = health._recency_metrics(
+        state,
+        date_to=date(2026, 9, 25),
+    )
+
+    assert (
+        result[
+            "members_14_plus_days_without_visit"
+        ]
+        == 1
+    )
+    assert result["distribution"][1]["count"] == 1
+
+
+def test_historical_recency_skips_when_history_is_unavailable(
+    monkeypatch,
+):
+    called = False
+
+    def _unexpected_query(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError(
+            "No debe consultar histórico sin datos previos."
+        )
+
+    monkeypatch.setattr(
+        health,
+        "_has_historical_attendance_before",
+        lambda *_args, **_kwargs: False,
+    )
+    monkeypatch.setattr(
+        health.db.session,
+        "query",
+        _unexpected_query,
+    )
+
+    result = health._load_historical_last_visits(
+        {
+            "100": _member("100"),
+        },
+        {},
+        date_before=date(2026, 9, 1),
+    )
+
+    assert result == {}
+    assert called is False
+
+
+def test_activation_classifies_new_members():
+    state = health._BaseHealthState(
+        eligible_members={
+            "100": _member(
+                "100",
+                member_since=date(2026, 9, 1),
+            ),
+            "200": _member(
+                "200",
+                member_since=date(2026, 9, 1),
+            ),
+            "300": _member(
+                "300",
+                member_since=date(2026, 9, 1),
+            ),
+            "400": _member(
+                "400",
+                member_since=date(2026, 9, 1),
+            ),
+            "500": _member(
+                "500",
+                member_since=date(2026, 9, 1),
+            ),
+            "600": _member(
+                "600",
+                member_since=date(2026, 9, 20),
+            ),
+            "700": _member(
+                "700",
+                member_since=date(2026, 8, 20),
+            ),
+        },
+        visited_member_ids=frozenset(
+            {"100", "200", "300", "400", "700"}
+        ),
+        snapshot_dates=(date(2026, 9, 1),),
+        total_visits_checked=5,
+        resolved_visits=5,
+        member_visit_stats={
+            "100": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 1),
+                last_visit_date=date(2026, 9, 1),
+            ),
+            "200": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 3),
+                last_visit_date=date(2026, 9, 3),
+            ),
+            "300": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 6),
+                last_visit_date=date(2026, 9, 6),
+            ),
+            "400": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 10),
+                last_visit_date=date(2026, 9, 10),
+            ),
+            "700": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 2),
+                last_visit_date=date(2026, 9, 2),
+            ),
+        },
+    )
+
+    result = health._activation_metrics(
+        state,
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 25),
+    )
+
+    assert result["new_members"] == 6
+    assert [
+        row["count"]
+        for row in result["distribution"]
+    ] == [1, 1, 1, 1, 1, 1]
+
+
+def test_activation_exactly_seven_days_is_not_pending():
+    state = health._BaseHealthState(
+        eligible_members={
+            "100": _member(
+                "100",
+                member_since=date(2026, 9, 18),
+            ),
+        },
+        visited_member_ids=frozenset(),
+        snapshot_dates=(date(2026, 9, 18),),
+        total_visits_checked=0,
+        resolved_visits=0,
+    )
+
+    result = health._activation_metrics(
+        state,
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 25),
+    )
+
+    assert result["distribution"][4]["count"] == 1
+    assert result["distribution"][5]["count"] == 0
+
+
+def test_follow_up_uses_recency_or_low_frequency_once():
+    state = health._BaseHealthState(
+        eligible_members={
+            "100": _member(
+                "100",
+                expiration_date=date(2026, 12, 31),
+            ),
+            "200": _member(
+                "200",
+                expiration_date=date(2026, 12, 31),
+            ),
+            "300": _member(
+                "300",
+                expiration_date=date(2026, 12, 31),
+            ),
+            "400": _member(
+                "400",
+                expiration_date=date(2026, 9, 20),
+            ),
+        },
+        visited_member_ids=frozenset(
+            {"100", "200", "300"}
+        ),
+        snapshot_dates=(date(2026, 9, 1),),
+        total_visits_checked=6,
+        resolved_visits=6,
+        member_visit_stats={
+            "100": health._MemberVisitStats(
+                visit_count=4,
+                first_visit_date=date(2026, 9, 1),
+                last_visit_date=date(2026, 9, 5),
+            ),
+            "200": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 20),
+                last_visit_date=date(2026, 9, 20),
+            ),
+            "300": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 1),
+                last_visit_date=date(2026, 9, 1),
+            ),
+        },
+        last_known_visit_by_member={
+            "100": date(2026, 9, 5),
+            "200": date(2026, 9, 20),
+            "300": date(2026, 9, 1),
+        },
+    )
+
+    result = health._follow_up_metrics(
+        state,
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 25),
+    )
+
+    assert result["count"] == 3
+    assert result["member_ids"] == frozenset(
+        {"100", "200", "300"}
+    )
+    assert result["by_recency"] == 2
+    assert result["by_low_frequency"] == 2
+
+
+def test_follow_up_excludes_member_not_active_at_date_to():
+    state = health._BaseHealthState(
+        eligible_members={
+            "100": _member(
+                "100",
+                expiration_date=date(2026, 9, 20),
+            ),
+        },
+        visited_member_ids=frozenset(),
+        snapshot_dates=(date(2026, 9, 1),),
+        total_visits_checked=0,
+        resolved_visits=0,
+    )
+
+    result = health._follow_up_metrics(
+        state,
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 25),
+    )
+
+    assert result["count"] == 0
+    assert result["member_ids"] == frozenset()
+
+
+def test_member_detail_supports_follow_up_with_behavior_fields(
+    monkeypatch,
+):
+    state = health._BaseHealthState(
+        eligible_members={
+            "100": _member("100"),
+            "200": _member("200"),
+        },
+        visited_member_ids=frozenset({"100", "200"}),
+        snapshot_dates=(date(2026, 9, 1),),
+        total_visits_checked=3,
+        resolved_visits=3,
+        member_visit_stats={
+            "100": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 1),
+                last_visit_date=date(2026, 9, 1),
+            ),
+            "200": health._MemberVisitStats(
+                visit_count=2,
+                first_visit_date=date(2026, 9, 20),
+                last_visit_date=date(2026, 9, 25),
+            ),
+        },
+        last_known_visit_by_member={
+            "100": date(2026, 9, 1),
+            "200": date(2026, 9, 25),
+        },
+    )
+
+    monkeypatch.setattr(
+        health,
+        "_build_state",
+        lambda *_args, **_kwargs: (
+            state,
+            (1,),
+        ),
+    )
+
+    result = health.attendance_base_health_members(
+        _scope(),
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 25),
+        branch_id=None,
+        region_key=None,
+        status="FOLLOW_UP",
+    )
+
+    assert result["count"] == 2
+    row = next(
+        item
+        for item in result["rows"]
+        if item["id_socio"] == "100"
+    )
+    assert row["visit_count"] == 1
+    assert row["last_visit_date"] == "2026-09-01"
+    assert row["days_since_last_visit"] == 24
+    assert row["frequency_per_week"] == 0.28
+
+
+def test_member_detail_supports_recency_and_frequency_buckets(
+    monkeypatch,
+):
+    state = health._BaseHealthState(
+        eligible_members={
+            "100": _member("100"),
+            "200": _member("200"),
+            "300": _member("300"),
+        },
+        visited_member_ids=frozenset({"100", "200"}),
+        snapshot_dates=(date(2026, 9, 1),),
+        total_visits_checked=4,
+        resolved_visits=4,
+        member_visit_stats={
+            "100": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 11),
+                last_visit_date=date(2026, 9, 11),
+            ),
+            "200": health._MemberVisitStats(
+                visit_count=11,
+                first_visit_date=date(2026, 9, 1),
+                last_visit_date=date(2026, 9, 25),
+            ),
+        },
+        last_known_visit_by_member={
+            "100": date(2026, 9, 11),
+            "200": date(2026, 9, 25),
+        },
+    )
+
+    monkeypatch.setattr(
+        health,
+        "_build_state",
+        lambda *_args, **_kwargs: (
+            state,
+            (1,),
+        ),
+    )
+
+    recency = health.attendance_base_health_members(
+        _scope(),
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 25),
+        branch_id=None,
+        region_key=None,
+        status="RECENCY_8_14",
+    )
+    frequency = health.attendance_base_health_members(
+        _scope(),
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 25),
+        branch_id=None,
+        region_key=None,
+        status="FREQUENCY_GTE_3",
+    )
+    no_recorded = health.attendance_base_health_members(
+        _scope(),
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 25),
+        branch_id=None,
+        region_key=None,
+        status="RECENCY_NO_RECORDED",
+    )
+
+    assert [
+        row["id_socio"]
+        for row in recency["rows"]
+    ] == ["100"]
+    assert [
+        row["id_socio"]
+        for row in frequency["rows"]
+    ] == ["200"]
+    assert [
+        row["id_socio"]
+        for row in no_recorded["rows"]
+    ] == ["300"]

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from math import ceil
+from statistics import median
 from types import SimpleNamespace
 from typing import Any
 
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, tuple_
 
 from app.extensions import db
 from app.models.attendance import WarehouseAttendanceVisitORM
@@ -36,9 +37,75 @@ from .attendance_query_service import (
 
 BASE_HEALTH_STATUS_WITH_VISIT = "WITH_VISIT"
 BASE_HEALTH_STATUS_WITHOUT_VISIT = "WITHOUT_VISIT"
+BASE_HEALTH_STATUS_FOLLOW_UP = "FOLLOW_UP"
+BASE_HEALTH_STATUS_RECENCY_14_PLUS = "RECENCY_14_PLUS"
+BASE_HEALTH_STATUS_RECENCY_0_7 = "RECENCY_0_7"
+BASE_HEALTH_STATUS_RECENCY_8_14 = "RECENCY_8_14"
+BASE_HEALTH_STATUS_RECENCY_15_21 = "RECENCY_15_21"
+BASE_HEALTH_STATUS_RECENCY_22_PLUS = "RECENCY_22_PLUS"
+BASE_HEALTH_STATUS_RECENCY_NO_RECORDED = (
+    "RECENCY_NO_RECORDED"
+)
+BASE_HEALTH_STATUS_FREQUENCY_ZERO = "FREQUENCY_ZERO"
+BASE_HEALTH_STATUS_FREQUENCY_LT_1 = "FREQUENCY_LT_1"
+BASE_HEALTH_STATUS_FREQUENCY_1_1_99 = (
+    "FREQUENCY_1_1_99"
+)
+BASE_HEALTH_STATUS_FREQUENCY_2_2_99 = (
+    "FREQUENCY_2_2_99"
+)
+BASE_HEALTH_STATUS_FREQUENCY_GTE_3 = "FREQUENCY_GTE_3"
+
 BASE_HEALTH_MEMBER_STATUSES = {
     BASE_HEALTH_STATUS_WITH_VISIT,
     BASE_HEALTH_STATUS_WITHOUT_VISIT,
+    BASE_HEALTH_STATUS_FOLLOW_UP,
+    BASE_HEALTH_STATUS_RECENCY_14_PLUS,
+    BASE_HEALTH_STATUS_RECENCY_0_7,
+    BASE_HEALTH_STATUS_RECENCY_8_14,
+    BASE_HEALTH_STATUS_RECENCY_15_21,
+    BASE_HEALTH_STATUS_RECENCY_22_PLUS,
+    BASE_HEALTH_STATUS_RECENCY_NO_RECORDED,
+    BASE_HEALTH_STATUS_FREQUENCY_ZERO,
+    BASE_HEALTH_STATUS_FREQUENCY_LT_1,
+    BASE_HEALTH_STATUS_FREQUENCY_1_1_99,
+    BASE_HEALTH_STATUS_FREQUENCY_2_2_99,
+    BASE_HEALTH_STATUS_FREQUENCY_GTE_3,
+}
+
+BASE_HEALTH_MEMBER_TITLES = {
+    BASE_HEALTH_STATUS_WITH_VISIT: (
+        "Socios que usaron el gimnasio"
+    ),
+    BASE_HEALTH_STATUS_WITHOUT_VISIT: (
+        "Socios sin visitas en el periodo"
+    ),
+    BASE_HEALTH_STATUS_FOLLOW_UP: (
+        "Socios para seguimiento"
+    ),
+    BASE_HEALTH_STATUS_RECENCY_14_PLUS: (
+        "Socios con 14+ días sin venir"
+    ),
+    BASE_HEALTH_STATUS_RECENCY_0_7: "Última visita hace 0–7 días",
+    BASE_HEALTH_STATUS_RECENCY_8_14: "Última visita hace 8–14 días",
+    BASE_HEALTH_STATUS_RECENCY_15_21: "Última visita hace 15–21 días",
+    BASE_HEALTH_STATUS_RECENCY_22_PLUS: "Última visita hace 22+ días",
+    BASE_HEALTH_STATUS_RECENCY_NO_RECORDED: (
+        "Socios sin visita registrada"
+    ),
+    BASE_HEALTH_STATUS_FREQUENCY_ZERO: "Socios con 0 visitas",
+    BASE_HEALTH_STATUS_FREQUENCY_LT_1: (
+        "Socios con menos de 1 visita por semana"
+    ),
+    BASE_HEALTH_STATUS_FREQUENCY_1_1_99: (
+        "Socios con 1.00 a 1.99 visitas por semana"
+    ),
+    BASE_HEALTH_STATUS_FREQUENCY_2_2_99: (
+        "Socios con 2.00 a 2.99 visitas por semana"
+    ),
+    BASE_HEALTH_STATUS_FREQUENCY_GTE_3: (
+        "Socios con 3.00 o más visitas por semana"
+    ),
 }
 DEFAULT_MEMBER_PAGE_SIZE = 50
 MAX_MEMBER_PAGE_SIZE = 200
@@ -53,7 +120,15 @@ class _EligibleMember:
     branch_id: int
     branch_name: str
     member_since: date | None
+    expiration_date: date
     snapshot_date: date
+
+
+@dataclass(frozen=True, slots=True)
+class _MemberVisitStats:
+    visit_count: int
+    first_visit_date: date
+    last_visit_date: date
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +138,14 @@ class _BaseHealthState:
     snapshot_dates: tuple[date, ...]
     total_visits_checked: int
     resolved_visits: int
+    member_visit_stats: dict[
+        str,
+        _MemberVisitStats,
+    ] = field(default_factory=dict)
+    last_known_visit_by_member: dict[
+        str,
+        date,
+    ] = field(default_factory=dict)
 
 
 def attendance_base_health(
@@ -121,6 +204,25 @@ def attendance_base_health(
         if state.total_visits_checked
         else 0.0
     )
+    frequency = _frequency_metrics(
+        state,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    recency = _recency_metrics(
+        state,
+        date_to=date_to,
+    )
+    activation = _activation_metrics(
+        state,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    follow_up = _follow_up_metrics(
+        state,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
     return {
         "scope": {
@@ -147,7 +249,28 @@ def attendance_base_health(
             "without_visit_pct": (
                 without_visit_pct
             ),
+            "frequency_avg_per_week": (
+                frequency["average_per_week"]
+            ),
+            "frequency_median_per_week": (
+                frequency["median_per_week"]
+            ),
+            "members_14_plus_days_without_visit": (
+                recency[
+                    "members_14_plus_days_without_visit"
+                ]
+            ),
+            "follow_up_members": (
+                follow_up["count"]
+            ),
         },
+        "frequency_distribution": (
+            frequency["distribution"]
+        ),
+        "recency_distribution": (
+            recency["distribution"]
+        ),
+        "activation": activation,
         "source": {
             "available": bool(
                 state.snapshot_dates
@@ -199,8 +322,7 @@ def attendance_base_health_members(
         BASE_HEALTH_MEMBER_STATUSES
     ):
         raise SportsAnalysisValidationError(
-            "status debe ser WITH_VISIT "
-            "o WITHOUT_VISIT."
+            "status de Salud de la base inválido."
         )
 
     safe_page = _positive_int(
@@ -225,19 +347,16 @@ def attendance_base_health_members(
         region_key=region_key,
     )
 
-    visited = set(state.visited_member_ids)
-    want_visit = (
-        normalized_status
-        == BASE_HEALTH_STATUS_WITH_VISIT
-    )
-
     members = [
         member
         for member
         in state.eligible_members.values()
-        if (
-            (member.id_socio in visited)
-            == want_visit
+        if _member_matches_detail_status(
+            state,
+            member,
+            status=normalized_status,
+            date_from=date_from,
+            date_to=date_to,
         )
     ]
     members.sort(
@@ -267,23 +386,128 @@ def attendance_base_health_members(
 
     return {
         "status": normalized_status,
-        "title": (
-            "Socios que usaron el gimnasio"
-            if want_visit
-            else "Socios sin visitas en el periodo"
-        ),
+        "title": BASE_HEALTH_MEMBER_TITLES[
+            normalized_status
+        ],
         "count": count,
         "page": safe_page,
         "page_size": safe_page_size,
         "total_pages": total_pages,
         "rows": [
             _serialize_member(
+                state,
                 member,
-                has_visit=want_visit,
+                date_from=date_from,
+                date_to=date_to,
             )
             for member in page_rows
         ],
     }
+
+
+def _member_matches_detail_status(
+    state: _BaseHealthState,
+    member: _EligibleMember,
+    *,
+    status: str,
+    date_from: date,
+    date_to: date,
+) -> bool:
+    has_visit = (
+        member.id_socio
+        in state.visited_member_ids
+    )
+
+    if status == BASE_HEALTH_STATUS_WITH_VISIT:
+        return has_visit
+    if status == BASE_HEALTH_STATUS_WITHOUT_VISIT:
+        return not has_visit
+
+    last_visit = (
+        state.last_known_visit_by_member.get(
+            member.id_socio
+        )
+    )
+    days_since_last_visit = (
+        max(
+            0,
+            (date_to - last_visit).days,
+        )
+        if last_visit is not None
+        else None
+    )
+
+    if status == BASE_HEALTH_STATUS_FOLLOW_UP:
+        if not _member_is_active_on(
+            member,
+            date_to,
+        ):
+            return False
+        frequency = _member_weekly_frequency(
+            member,
+            state.member_visit_stats.get(
+                member.id_socio
+            ),
+            date_from=date_from,
+            date_to=date_to,
+        )
+        return (
+            (
+                days_since_last_visit is not None
+                and days_since_last_visit >= 14
+            )
+            or frequency < 1
+        )
+
+    if status == BASE_HEALTH_STATUS_RECENCY_14_PLUS:
+        return (
+            days_since_last_visit is not None
+            and days_since_last_visit >= 14
+        )
+    if status == BASE_HEALTH_STATUS_RECENCY_0_7:
+        return (
+            days_since_last_visit is not None
+            and days_since_last_visit <= 7
+        )
+    if status == BASE_HEALTH_STATUS_RECENCY_8_14:
+        return (
+            days_since_last_visit is not None
+            and 8 <= days_since_last_visit <= 14
+        )
+    if status == BASE_HEALTH_STATUS_RECENCY_15_21:
+        return (
+            days_since_last_visit is not None
+            and 15 <= days_since_last_visit <= 21
+        )
+    if status == BASE_HEALTH_STATUS_RECENCY_22_PLUS:
+        return (
+            days_since_last_visit is not None
+            and days_since_last_visit >= 22
+        )
+    if status == BASE_HEALTH_STATUS_RECENCY_NO_RECORDED:
+        return last_visit is None
+
+    frequency = _member_weekly_frequency(
+        member,
+        state.member_visit_stats.get(
+            member.id_socio
+        ),
+        date_from=date_from,
+        date_to=date_to,
+    )
+    if status == BASE_HEALTH_STATUS_FREQUENCY_ZERO:
+        return not has_visit
+    if status == BASE_HEALTH_STATUS_FREQUENCY_LT_1:
+        return 0 < frequency < 1
+    if status == BASE_HEALTH_STATUS_FREQUENCY_1_1_99:
+        return 1 <= frequency < 2
+    if status == BASE_HEALTH_STATUS_FREQUENCY_2_2_99:
+        return 2 <= frequency < 3
+    if status == BASE_HEALTH_STATUS_FREQUENCY_GTE_3:
+        return frequency >= 3
+
+    return False
+
 
 
 def _build_state(
@@ -325,31 +549,53 @@ def _build_state(
                 snapshot_dates=snapshot_dates,
                 total_visits_checked=0,
                 resolved_visits=0,
+                member_visit_stats={},
+                last_known_visit_by_member={},
             ),
             effective_branch_ids,
         )
 
     (
-        visited_member_ids,
+        member_visit_stats,
         total_visits_checked,
         resolved_visits,
-    ) = _load_visited_member_ids(
+    ) = _load_member_visit_stats(
         tuple(scope.allowed_branch_ids),
         date_from=date_from,
         date_to=date_to,
+    )
+
+    last_known_visit_by_member = {
+        id_socio: stats.last_visit_date
+        for id_socio, stats
+        in member_visit_stats.items()
+    }
+    historical_last_visits = (
+        _load_historical_last_visits(
+            eligible_members,
+            member_visit_stats,
+            date_before=date_from,
+        )
+    )
+    last_known_visit_by_member.update(
+        historical_last_visits
     )
 
     return (
         _BaseHealthState(
             eligible_members=eligible_members,
             visited_member_ids=frozenset(
-                visited_member_ids
+                member_visit_stats
             ),
             snapshot_dates=snapshot_dates,
             total_visits_checked=(
                 total_visits_checked
             ),
             resolved_visits=resolved_visits,
+            member_visit_stats=member_visit_stats,
+            last_known_visit_by_member=(
+                last_known_visit_by_member
+            ),
         ),
         effective_branch_ids,
     )
@@ -450,6 +696,8 @@ def _load_eligible_members(
             SociosActivosSnapshotORM.cutoff_date,
             TrackBranchCatalogORM.sucursal_id,
             TrackBranchCatalogORM.track_label,
+            SociosActivosSnapshotRowORM
+            .fecha_vencimiento_date,
         )
         .join(
             SociosActivosSnapshotORM,
@@ -574,6 +822,11 @@ def _load_eligible_members(
                     or str(branch_id)
                 ),
                 member_since=member_since,
+                expiration_date=_row_value(
+                    row,
+                    "fecha_vencimiento_date",
+                    7,
+                ),
                 snapshot_date=snapshot_date,
             )
         )
@@ -584,14 +837,18 @@ def _load_eligible_members(
     return members, snapshot_dates
 
 
-def _load_visited_member_ids(
+def _load_member_visit_stats(
     branch_ids: tuple[int, ...],
     *,
     date_from: date,
     date_to: date,
-) -> tuple[set[str], int, int]:
+) -> tuple[
+    dict[str, _MemberVisitStats],
+    int,
+    int,
+]:
     if not branch_ids:
-        return set(), 0, 0
+        return {}, 0, 0
 
     visit_count = func.count(
         WarehouseAttendanceVisitORM.id
@@ -747,7 +1004,10 @@ def _load_visited_member_ids(
         )
     }
 
-    visited_ids: set[str] = set()
+    member_visit_stats: dict[
+        str,
+        _MemberVisitStats,
+    ] = {}
     total_visits = 0
     resolved_visits = 0
     fallback_probes = []
@@ -766,6 +1026,11 @@ def _load_visited_member_ids(
             or 0
         )
         total_visits += count
+        business_date = _row_value(
+            row,
+            "business_date",
+            2,
+        )
 
         key = (
             _clean_text(
@@ -784,7 +1049,12 @@ def _load_visited_member_ids(
         exact_id = exact_map.get(key)
 
         if exact_id:
-            visited_ids.add(exact_id)
+            _record_member_visits(
+                member_visit_stats,
+                id_socio=exact_id,
+                visit_count=count,
+                business_date=business_date,
+            )
             resolved_visits += count
             continue
 
@@ -803,11 +1073,7 @@ def _load_visited_member_ids(
                     "member_since",
                     1,
                 ),
-                business_date=_row_value(
-                    row,
-                    "business_date",
-                    2,
-                ),
+                business_date=business_date,
                 sucursal_id=_row_value(
                     row,
                     "sucursal_id",
@@ -843,27 +1109,331 @@ def _load_visited_member_ids(
             ):
                 continue
 
-            visited_ids.add(
-                str(
-                    resolution.id_socio
-                ).strip()
-            )
-            resolved_visits += fallback_counts.get(
+            count = fallback_counts.get(
                 int(probe.id),
                 0,
             )
+            _record_member_visits(
+                member_visit_stats,
+                id_socio=str(
+                    resolution.id_socio
+                ).strip(),
+                visit_count=count,
+                business_date=probe.business_date,
+            )
+            resolved_visits += count
 
     return (
-        visited_ids,
+        member_visit_stats,
         total_visits,
         resolved_visits,
     )
 
+
+def _record_member_visits(
+    stats: dict[str, _MemberVisitStats],
+    *,
+    id_socio: str,
+    visit_count: int,
+    business_date: date,
+) -> None:
+    current = stats.get(id_socio)
+    if current is None:
+        stats[id_socio] = _MemberVisitStats(
+            visit_count=visit_count,
+            first_visit_date=business_date,
+            last_visit_date=business_date,
+        )
+        return
+
+    stats[id_socio] = _MemberVisitStats(
+        visit_count=(
+            current.visit_count + visit_count
+        ),
+        first_visit_date=min(
+            current.first_visit_date,
+            business_date,
+        ),
+        last_visit_date=max(
+            current.last_visit_date,
+            business_date,
+        ),
+    )
+
+def _has_historical_attendance_before(
+    date_before: date,
+) -> bool:
+    row = (
+        db.session.query(
+            WarehouseAttendanceVisitORM.id
+        )
+        .filter(
+            WarehouseAttendanceVisitORM.attendance_type
+            == "SOCIO",
+            WarehouseAttendanceVisitORM.business_date
+            < date_before,
+        )
+        .limit(1)
+        .first()
+    )
+    return row is not None
+
+
+
+def _load_historical_last_visits(
+    eligible_members: dict[
+        str,
+        _EligibleMember,
+    ],
+    member_visit_stats: dict[
+        str,
+        _MemberVisitStats,
+    ],
+    *,
+    date_before: date,
+) -> dict[str, date]:
+    if not _has_historical_attendance_before(
+        date_before
+    ):
+        return {}
+
+    candidates = [
+        member
+        for member in eligible_members.values()
+        if (
+            member.id_socio
+            not in member_visit_stats
+            and member.member_since is not None
+        )
+    ]
+    if not candidates:
+        return {}
+
+    requested_keys = {
+        (
+            member.pin,
+            member.member_since,
+        )
+        for member in candidates
+    }
+
+    exact_map: dict[
+        tuple[str, date],
+        str,
+    ] = {}
+
+    keys_list = list(requested_keys)
+    for start in range(
+        0,
+        len(keys_list),
+        IDENTITY_BATCH_SIZE,
+    ):
+        chunk = keys_list[
+            start : start + IDENTITY_BATCH_SIZE
+        ]
+
+        rows = (
+            db.session.query(
+                SociosActivosSnapshotRowORM.pin,
+                func.date(
+                    SociosActivosSnapshotRowORM
+                    .fecha_ingreso_local
+                ).label("member_since"),
+                func.count(
+                    func.distinct(
+                        SociosActivosSnapshotRowORM.id_socio
+                    )
+                ).label("candidate_count"),
+                func.min(
+                    SociosActivosSnapshotRowORM.id_socio
+                ).label("id_socio"),
+            )
+            .join(
+                SociosActivosSnapshotORM,
+                SociosActivosSnapshotORM.id
+                == SociosActivosSnapshotRowORM
+                .snapshot_id,
+            )
+            .filter(
+                tuple_(
+                    SociosActivosSnapshotRowORM.pin,
+                    func.date(
+                        SociosActivosSnapshotRowORM
+                        .fecha_ingreso_local
+                    ),
+                ).in_(chunk),
+                SociosActivosSnapshotORM.report_type_key
+                == "socios_activos",
+                SociosActivosSnapshotORM.snapshot_kind
+                == "daily",
+                SociosActivosSnapshotORM.is_canonical
+                .is_(True),
+            )
+            .group_by(
+                SociosActivosSnapshotRowORM.pin,
+                func.date(
+                    SociosActivosSnapshotRowORM
+                    .fecha_ingreso_local
+                ),
+            )
+            .all()
+        )
+
+        for row in rows:
+            candidate_count = int(
+                _row_value(
+                    row,
+                    "candidate_count",
+                    2,
+                )
+                or 0
+            )
+            id_socio = _clean_text(
+                _row_value(
+                    row,
+                    "id_socio",
+                    3,
+                )
+            )
+            pin = _clean_text(
+                _row_value(
+                    row,
+                    "pin",
+                    0,
+                )
+            )
+            member_since = _row_value(
+                row,
+                "member_since",
+                1,
+            )
+            if (
+                candidate_count == 1
+                and id_socio
+                and pin
+                and member_since
+            ):
+                exact_map[
+                    (
+                        pin,
+                        member_since,
+                    )
+                ] = id_socio
+
+    if not exact_map:
+        return {}
+
+    last_visits: dict[str, date] = {}
+    exact_keys = list(exact_map)
+
+    for start in range(
+        0,
+        len(exact_keys),
+        IDENTITY_BATCH_SIZE,
+    ):
+        chunk = exact_keys[
+            start : start + IDENTITY_BATCH_SIZE
+        ]
+
+        rows = (
+            db.session.query(
+                WarehouseAttendanceVisitORM.member_pin,
+                WarehouseAttendanceVisitORM.member_since,
+                func.max(
+                    WarehouseAttendanceVisitORM
+                    .business_date
+                ).label("last_visit_date"),
+            )
+            .filter(
+                tuple_(
+                    WarehouseAttendanceVisitORM.member_pin,
+                    WarehouseAttendanceVisitORM.member_since,
+                ).in_(chunk),
+                WarehouseAttendanceVisitORM.attendance_type
+                == "SOCIO",
+                WarehouseAttendanceVisitORM.business_date
+                < date_before,
+            )
+            .group_by(
+                WarehouseAttendanceVisitORM.member_pin,
+                WarehouseAttendanceVisitORM.member_since,
+            )
+            .all()
+        )
+
+        for row in rows:
+            pin = _clean_text(
+                _row_value(
+                    row,
+                    "member_pin",
+                    0,
+                )
+            )
+            member_since = _row_value(
+                row,
+                "member_since",
+                1,
+            )
+            last_visit_date = _row_value(
+                row,
+                "last_visit_date",
+                2,
+            )
+            id_socio = exact_map.get(
+                (
+                    pin,
+                    member_since,
+                )
+            )
+            if (
+                id_socio
+                and last_visit_date is not None
+            ):
+                current = last_visits.get(
+                    id_socio
+                )
+                if (
+                    current is None
+                    or last_visit_date > current
+                ):
+                    last_visits[
+                        id_socio
+                    ] = last_visit_date
+
+    return last_visits
+
+
+
 def _serialize_member(
+    state: _BaseHealthState,
     member: _EligibleMember,
     *,
-    has_visit: bool,
+    date_from: date,
+    date_to: date,
 ) -> dict[str, Any]:
+    visit_stats = state.member_visit_stats.get(
+        member.id_socio
+    )
+    last_visit = (
+        state.last_known_visit_by_member.get(
+            member.id_socio
+        )
+    )
+    days_since_last_visit = (
+        max(
+            0,
+            (date_to - last_visit).days,
+        )
+        if last_visit is not None
+        else None
+    )
+    frequency = _member_weekly_frequency(
+        member,
+        visit_stats,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
     return {
         "id_socio": member.id_socio,
         "name": member.name,
@@ -875,8 +1445,435 @@ def _serialize_member(
             if member.member_since
             else None
         ),
-        "has_visit": has_visit,
+        "has_visit": (
+            member.id_socio
+            in state.visited_member_ids
+        ),
+        "visit_count": (
+            visit_stats.visit_count
+            if visit_stats is not None
+            else 0
+        ),
+        "last_visit_date": (
+            last_visit.isoformat()
+            if last_visit is not None
+            else None
+        ),
+        "days_since_last_visit": (
+            days_since_last_visit
+        ),
+        "frequency_per_week": round(
+            frequency,
+            2,
+        ),
     }
+
+
+
+def _frequency_metrics(
+    state: _BaseHealthState,
+    *,
+    date_from: date,
+    date_to: date,
+) -> dict[str, Any]:
+    frequencies = [
+        _member_weekly_frequency(
+            member,
+            state.member_visit_stats.get(
+                member.id_socio
+            ),
+            date_from=date_from,
+            date_to=date_to,
+        )
+        for member in state.eligible_members.values()
+    ]
+
+    average = (
+        sum(frequencies) / len(frequencies)
+        if frequencies
+        else 0.0
+    )
+    median_value = (
+        median(frequencies)
+        if frequencies
+        else 0.0
+    )
+
+    buckets = [
+        {
+            "key": "ZERO",
+            "label": "0 visitas",
+            "count": 0,
+        },
+        {
+            "key": "LT_1",
+            "label": "Menos de 1 por semana",
+            "count": 0,
+        },
+        {
+            "key": "FROM_1_TO_1_99",
+            "label": "1.00 a 1.99 por semana",
+            "count": 0,
+        },
+        {
+            "key": "FROM_2_TO_2_99",
+            "label": "2.00 a 2.99 por semana",
+            "count": 0,
+        },
+        {
+            "key": "GTE_3",
+            "label": "3.00 o más por semana",
+            "count": 0,
+        },
+    ]
+
+    for value in frequencies:
+        if value == 0:
+            bucket_index = 0
+        elif value < 1:
+            bucket_index = 1
+        elif value < 2:
+            bucket_index = 2
+        elif value < 3:
+            bucket_index = 3
+        else:
+            bucket_index = 4
+        buckets[bucket_index]["count"] += 1
+
+    total = len(frequencies)
+    distribution = [
+        {
+            **bucket,
+            "pct": (
+                round(
+                    bucket["count"] * 100 / total,
+                    1,
+                )
+                if total
+                else 0.0
+            ),
+        }
+        for bucket in buckets
+    ]
+
+    return {
+        "average_per_week": round(average, 2),
+        "median_per_week": round(
+            float(median_value),
+            2,
+        ),
+        "distribution": distribution,
+    }
+
+
+def _member_weekly_frequency(
+    member: _EligibleMember,
+    visit_stats: _MemberVisitStats | None,
+    *,
+    date_from: date,
+    date_to: date,
+) -> float:
+    eligible_days = _member_eligible_days(
+        member,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    if eligible_days <= 0:
+        return 0.0
+
+    visit_count = (
+        visit_stats.visit_count
+        if visit_stats is not None
+        else 0
+    )
+    return visit_count * 7 / eligible_days
+
+
+def _member_eligible_days(
+    member: _EligibleMember,
+    *,
+    date_from: date,
+    date_to: date,
+) -> int:
+    start = max(
+        date_from,
+        member.member_since or date_from,
+    )
+    end = min(
+        date_to,
+        member.expiration_date,
+    )
+    if end < start:
+        return 0
+    return (end - start).days + 1
+
+
+
+def _recency_metrics(
+    state: _BaseHealthState,
+    *,
+    date_to: date,
+) -> dict[str, Any]:
+    buckets = [
+        {
+            "key": "DAYS_0_7",
+            "label": "0–7 días",
+            "count": 0,
+        },
+        {
+            "key": "DAYS_8_14",
+            "label": "8–14 días",
+            "count": 0,
+        },
+        {
+            "key": "DAYS_15_21",
+            "label": "15–21 días",
+            "count": 0,
+        },
+        {
+            "key": "DAYS_22_PLUS",
+            "label": "22+ días",
+            "count": 0,
+        },
+        {
+            "key": "NO_RECORDED_VISIT",
+            "label": "Sin visita registrada",
+            "count": 0,
+        },
+    ]
+
+    members_14_plus = 0
+
+    for member in state.eligible_members.values():
+        last_visit = (
+            state.last_known_visit_by_member.get(
+                member.id_socio
+            )
+        )
+
+        if last_visit is None:
+            buckets[4]["count"] += 1
+            continue
+
+        days = max(
+            0,
+            (date_to - last_visit).days,
+        )
+
+        if days >= 14:
+            members_14_plus += 1
+
+        if days <= 7:
+            bucket_index = 0
+        elif days <= 14:
+            bucket_index = 1
+        elif days <= 21:
+            bucket_index = 2
+        else:
+            bucket_index = 3
+
+        buckets[bucket_index]["count"] += 1
+
+    total = len(state.eligible_members)
+    distribution = [
+        {
+            **bucket,
+            "pct": (
+                round(
+                    bucket["count"] * 100 / total,
+                    1,
+                )
+                if total
+                else 0.0
+            ),
+        }
+        for bucket in buckets
+    ]
+
+    return {
+        "members_14_plus_days_without_visit": (
+            members_14_plus
+        ),
+        "distribution": distribution,
+    }
+
+
+
+def _activation_metrics(
+    state: _BaseHealthState,
+    *,
+    date_from: date,
+    date_to: date,
+) -> dict[str, Any]:
+    buckets = [
+        {
+            "key": "SAME_DAY",
+            "label": "Mismo día",
+            "count": 0,
+        },
+        {
+            "key": "DAYS_1_3",
+            "label": "1–3 días",
+            "count": 0,
+        },
+        {
+            "key": "DAYS_4_7",
+            "label": "4–7 días",
+            "count": 0,
+        },
+        {
+            "key": "DAYS_8_PLUS",
+            "label": "8+ días",
+            "count": 0,
+        },
+        {
+            "key": "NO_FIRST_VISIT_RECORDED",
+            "label": "Sin primera visita registrada",
+            "count": 0,
+        },
+        {
+            "key": "WITHIN_FIRST_7_DAYS",
+            "label": "Aún dentro de sus primeros 7 días",
+            "count": 0,
+        },
+    ]
+
+    new_members = [
+        member
+        for member in state.eligible_members.values()
+        if (
+            member.member_since is not None
+            and date_from
+            <= member.member_since
+            <= date_to
+        )
+    ]
+
+    for member in new_members:
+        stats = state.member_visit_stats.get(
+            member.id_socio
+        )
+
+        if stats is None:
+            days_since_signup = (
+                date_to - member.member_since
+            ).days
+            bucket_index = (
+                5
+                if days_since_signup < 7
+                else 4
+            )
+            buckets[bucket_index]["count"] += 1
+            continue
+
+        days_to_first_visit = (
+            stats.first_visit_date
+            - member.member_since
+        ).days
+
+        if days_to_first_visit <= 0:
+            bucket_index = 0
+        elif days_to_first_visit <= 3:
+            bucket_index = 1
+        elif days_to_first_visit <= 7:
+            bucket_index = 2
+        else:
+            bucket_index = 3
+
+        buckets[bucket_index]["count"] += 1
+
+    total = len(new_members)
+    distribution = [
+        {
+            **bucket,
+            "pct": (
+                round(
+                    bucket["count"] * 100 / total,
+                    1,
+                )
+                if total
+                else 0.0
+            ),
+        }
+        for bucket in buckets
+    ]
+
+    return {
+        "new_members": total,
+        "distribution": distribution,
+    }
+
+
+
+def _follow_up_metrics(
+    state: _BaseHealthState,
+    *,
+    date_from: date,
+    date_to: date,
+) -> dict[str, Any]:
+    member_ids: set[str] = set()
+    by_recency = 0
+    by_low_frequency = 0
+
+    for member in state.eligible_members.values():
+        if not _member_is_active_on(
+            member,
+            date_to,
+        ):
+            continue
+
+        last_visit = (
+            state.last_known_visit_by_member.get(
+                member.id_socio
+            )
+        )
+        has_14_plus_days_without_visit = (
+            last_visit is not None
+            and (date_to - last_visit).days >= 14
+        )
+
+        frequency = _member_weekly_frequency(
+            member,
+            state.member_visit_stats.get(
+                member.id_socio
+            ),
+            date_from=date_from,
+            date_to=date_to,
+        )
+        has_low_frequency = frequency < 1
+
+        if has_14_plus_days_without_visit:
+            by_recency += 1
+        if has_low_frequency:
+            by_low_frequency += 1
+
+        if (
+            has_14_plus_days_without_visit
+            or has_low_frequency
+        ):
+            member_ids.add(member.id_socio)
+
+    return {
+        "count": len(member_ids),
+        "member_ids": frozenset(member_ids),
+        "by_recency": by_recency,
+        "by_low_frequency": by_low_frequency,
+    }
+
+
+def _member_is_active_on(
+    member: _EligibleMember,
+    target_date: date,
+) -> bool:
+    if member.expiration_date < target_date:
+        return False
+    if (
+        member.member_since is not None
+        and member.member_since > target_date
+    ):
+        return False
+    return True
+
 
 
 def _positive_int(
