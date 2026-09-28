@@ -90,6 +90,8 @@ def test_base_health_behavior_metrics_are_wired_to_ui():
     assert "frequency_median_per_week" in models
     assert "members_14_plus_days_without_visit" in models
     assert "follow_up_members" in models
+    assert "members_less_than_one_visit_per_week" in models
+    assert "other_active_accesses" in models
     assert "frequency_distribution" in models
     assert "recency_distribution" in models
     assert "activation" in models
@@ -103,9 +105,12 @@ def test_base_health_behavior_metrics_are_wired_to_ui():
     assert "Frecuencia de visita" in template
     assert "Tiempo desde la última visita" in template
     assert "Tiempo para venir por primera vez" in template
-    assert "Socios para seguimiento" in template
+    assert "Menos de 1 visita por semana" in template
+    assert "Otros accesos activos en el periodo" in template
+    assert "FUERA DE KPI" in template
+    assert "Socios para seguimiento" not in template
     assert (
-        "openBaseHealthDetail('FOLLOW_UP')"
+        "openBaseHealthDetail('FREQUENCY_LT_1')"
         in template
     )
     assert (

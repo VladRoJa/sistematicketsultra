@@ -122,6 +122,8 @@ class _EligibleMember:
     member_since: date | None
     expiration_date: date
     snapshot_date: date
+    applies_kpi: bool = True
+    tariff: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,6 +147,10 @@ class _BaseHealthState:
     last_known_visit_by_member: dict[
         str,
         date,
+    ] = field(default_factory=dict)
+    other_active_members: dict[
+        str,
+        _EligibleMember,
     ] = field(default_factory=dict)
 
 
@@ -223,6 +229,9 @@ def attendance_base_health(
         date_from=date_from,
         date_to=date_to,
     )
+    other_active_accesses = (
+        _other_active_accesses_metrics(state)
+    )
 
     return {
         "scope": {
@@ -263,6 +272,11 @@ def attendance_base_health(
             "follow_up_members": (
                 follow_up["count"]
             ),
+            "members_less_than_one_visit_per_week": (
+                frequency[
+                    "less_than_one_per_week_count"
+                ]
+            ),
         },
         "frequency_distribution": (
             frequency["distribution"]
@@ -271,6 +285,9 @@ def attendance_base_health(
             recency["distribution"]
         ),
         "activation": activation,
+        "other_active_accesses": (
+            other_active_accesses
+        ),
         "source": {
             "available": bool(
                 state.snapshot_dates
@@ -534,6 +551,7 @@ def _build_state(
 
     (
         eligible_members,
+        other_active_members,
         snapshot_dates,
     ) = _load_eligible_members(
         effective_branch_ids,
@@ -551,6 +569,9 @@ def _build_state(
                 resolved_visits=0,
                 member_visit_stats={},
                 last_known_visit_by_member={},
+                other_active_members=(
+                    other_active_members
+                ),
             ),
             effective_branch_ids,
         )
@@ -596,6 +617,9 @@ def _build_state(
             last_known_visit_by_member=(
                 last_known_visit_by_member
             ),
+            other_active_members=(
+                other_active_members
+            ),
         ),
         effective_branch_ids,
     )
@@ -608,10 +632,11 @@ def _load_eligible_members(
     date_to: date,
 ) -> tuple[
     dict[str, _EligibleMember],
+    dict[str, _EligibleMember],
     tuple[date, ...],
 ]:
     if not branch_ids:
-        return {}, ()
+        return {}, {}, ()
 
     snapshot_rows = (
         db.session.query(
@@ -684,7 +709,7 @@ def _load_eligible_members(
         )
 
     if not snapshots:
-        return {}, ()
+        return {}, {}, ()
 
     rows = (
         db.session.query(
@@ -698,6 +723,8 @@ def _load_eligible_members(
             TrackBranchCatalogORM.track_label,
             SociosActivosSnapshotRowORM
             .fecha_vencimiento_date,
+            SociosActivosSnapshotRowORM.aplica_kpi,
+            SociosActivosSnapshotRowORM.tarifa,
         )
         .join(
             SociosActivosSnapshotORM,
@@ -758,6 +785,10 @@ def _load_eligible_members(
     )
 
     members: dict[str, _EligibleMember] = {}
+    other_active_members: dict[
+        str,
+        _EligibleMember,
+    ] = {}
     for row in rows:
         id_socio = _clean_text(
             _row_value(
@@ -799,42 +830,65 @@ def _load_eligible_members(
             4,
         )
 
-        members[id_socio] = (
-            _EligibleMember(
-                id_socio=id_socio,
-                pin=pin,
-                name=_clean_text(
+        member = _EligibleMember(
+            id_socio=id_socio,
+            pin=pin,
+            name=_clean_text(
+                _row_value(
+                    row,
+                    "nombre",
+                    2,
+                )
+            ),
+            branch_id=branch_id,
+            branch_name=(
+                _clean_text(
                     _row_value(
                         row,
-                        "nombre",
-                        2,
+                        "track_label",
+                        6,
                     )
-                ),
-                branch_id=branch_id,
-                branch_name=(
-                    _clean_text(
-                        _row_value(
-                            row,
-                            "track_label",
-                            6,
-                        )
-                    )
-                    or str(branch_id)
-                ),
-                member_since=member_since,
-                expiration_date=_row_value(
+                )
+                or str(branch_id)
+            ),
+            member_since=member_since,
+            expiration_date=_row_value(
+                row,
+                "fecha_vencimiento_date",
+                7,
+            ),
+            snapshot_date=snapshot_date,
+            applies_kpi=bool(
+                _row_value(
                     row,
-                    "fecha_vencimiento_date",
-                    7,
-                ),
-                snapshot_date=snapshot_date,
-            )
+                    "aplica_kpi",
+                    8,
+                )
+            ),
+            tariff=_clean_text(
+                _row_value(
+                    row,
+                    "tarifa",
+                    9,
+                )
+            ),
         )
+
+        if member.applies_kpi:
+            members[id_socio] = member
+        else:
+            other_active_members[
+                id_socio
+            ] = member
 
     snapshot_dates = tuple(
         sorted(set(snapshots.values()))
     )
-    return members, snapshot_dates
+    return (
+        members,
+        other_active_members,
+        snapshot_dates,
+    )
 
 
 def _load_member_visit_stats(
@@ -1563,6 +1617,9 @@ def _frequency_metrics(
             2,
         ),
         "distribution": distribution,
+        "less_than_one_per_week_count": (
+            buckets[1]["count"]
+        ),
     }
 
 
@@ -1873,6 +1930,36 @@ def _member_is_active_on(
     ):
         return False
     return True
+
+
+
+def _other_active_accesses_metrics(
+    state: _BaseHealthState,
+) -> dict[str, Any]:
+    counts: dict[str, int] = {}
+
+    for member in state.other_active_members.values():
+        tariff = member.tariff or "Sin tarifa"
+        counts[tariff] = counts.get(tariff, 0) + 1
+
+    distribution = [
+        {
+            "tariff": tariff,
+            "count": count,
+        }
+        for tariff, count in sorted(
+            counts.items(),
+            key=lambda item: (
+                -item[1],
+                item[0].casefold(),
+            ),
+        )
+    ]
+
+    return {
+        "count": len(state.other_active_members),
+        "tariff_distribution": distribution,
+    }
 
 
 

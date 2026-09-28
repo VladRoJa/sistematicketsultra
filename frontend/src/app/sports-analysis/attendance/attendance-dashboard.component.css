@@ -767,7 +767,7 @@ td {
 }
 
 .base-health-kpi-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .base-health-grid {
@@ -881,28 +881,56 @@ td {
   font-size: 10px;
 }
 
-.follow-up-card {
+.other-accesses-card {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.other-accesses-summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
 }
 
-.follow-up-card h2 {
-  margin: 4px 0 8px;
-  font-size: 20px;
+.other-accesses-summary h2 {
+  margin: 4px 0 6px;
+  font-size: 18px;
 }
 
-.follow-up-card p {
-  max-width: 560px;
+.other-accesses-summary p {
   margin: 0;
   color: #667085;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
-.follow-up-card button {
+.other-accesses-count {
   flex: 0 0 auto;
+  color: #344054;
+  font-size: 28px;
+}
+
+.other-accesses-tariffs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.other-accesses-tariff {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #667085;
+  font-size: 11px;
+}
+
+.other-accesses-tariff strong {
+  color: #344054;
 }
 
 .base-health-note {
@@ -971,6 +999,10 @@ td {
   .base-health-kpi-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .other-accesses-summary {
+    align-items: flex-start;
+  }
 }
 
 @media (max-width: 820px) {
@@ -1018,8 +1050,7 @@ td {
     grid-template-columns: 1fr;
   }
 
-  .follow-up-card {
-    align-items: flex-start;
+  .other-accesses-summary {
     flex-direction: column;
   }
 
