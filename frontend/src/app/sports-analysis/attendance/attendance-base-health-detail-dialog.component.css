@@ -103,6 +103,10 @@ td {
   font-size: 13px;
 }
 
+.numeric-column {
+  text-align: right;
+}
+
 .empty-state {
   flex: 1;
   display: flex;
