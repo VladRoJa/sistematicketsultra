@@ -5,8 +5,6 @@ from io import BytesIO
 from math import ceil
 from zoneinfo import ZoneInfo
 
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill
 from sqlalchemy import asc, desc, func
 
 from app.extensions import db
@@ -19,6 +17,10 @@ from app.models.sucursal_model import Sucursal
 from .attendance_access import (
     SportsAnalysisScope,
     scoped_branch_catalog,
+)
+from .attendance_export_service import (
+    ATTENDANCE_EXPORT_MIMETYPE,
+    build_attendance_workbook,
 )
 from .attendance_identity_service import (
     AttendanceIdentityResolution,
@@ -37,10 +39,7 @@ from .attendance_query_service import (
 )
 
 
-DETAIL_EXPORT_MIMETYPE = (
-    "application/vnd.openxmlformats-officedocument."
-    "spreadsheetml.sheet"
-)
+DETAIL_EXPORT_MIMETYPE = ATTENDANCE_EXPORT_MIMETYPE
 DETAIL_TIMEZONE_NAME = "America/Tijuana"
 DETAIL_TIMEZONE = ZoneInfo(DETAIL_TIMEZONE_NAME)
 DEFAULT_PAGE_SIZE = 50
@@ -314,7 +313,7 @@ def build_attendance_detail_export(
         rows,
     )
 
-    output = _build_workbook(
+    output = build_attendance_workbook(
         columns=dataset["columns"],
         rows=serialized_rows,
         sheet_name=dataset["sheet_name"],
@@ -893,93 +892,6 @@ def _serialize_interval_row(row) -> dict:
             interval.attendance_type
         ),
     }
-
-
-def _build_workbook(
-    *,
-    columns: list[dict],
-    rows: list[dict],
-    sheet_name: str,
-) -> BytesIO:
-    workbook = Workbook()
-    worksheet = workbook.active
-    worksheet.title = sheet_name[:31]
-
-    worksheet.append(
-        [
-            column["label"]
-            for column in columns
-        ]
-    )
-    for row in rows:
-        worksheet.append(
-            [
-                row.get(column["key"])
-                for column in columns
-            ]
-        )
-
-    header_fill = PatternFill(
-        fill_type="solid",
-        fgColor="1F2937",
-    )
-    header_font = Font(
-        color="FFFFFF",
-        bold=True,
-    )
-    for cell in worksheet[1]:
-        cell.fill = header_fill
-        cell.font = header_font
-
-    worksheet.freeze_panes = "A2"
-    worksheet.auto_filter.ref = (
-        worksheet.dimensions
-    )
-
-    for index, column in enumerate(
-        columns,
-        start=1,
-    ):
-        sample_width = max(
-            [len(str(column["label"]))]
-            + [
-                len(
-                    str(
-                        row.get(
-                            column["key"]
-                        )
-                        or ""
-                    )
-                )
-                for row in rows[:200]
-            ]
-        )
-        worksheet.column_dimensions[
-            _excel_column_letter(index)
-        ].width = min(
-            max(sample_width + 2, 12),
-            28,
-        )
-
-    output = BytesIO()
-    workbook.save(output)
-    output.seek(0)
-    return output
-
-
-def _excel_column_letter(index: int) -> str:
-    result = ""
-    value = index
-    while value:
-        value, remainder = divmod(
-            value - 1,
-            26,
-        )
-        result = (
-            chr(65 + remainder)
-            + result
-        )
-    return result
 
 
 def _resolve_age_bucket(
