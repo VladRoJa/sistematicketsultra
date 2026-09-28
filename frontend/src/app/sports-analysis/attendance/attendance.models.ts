@@ -211,7 +211,8 @@ export type AttendanceBaseHealthMemberStatus =
   | 'FREQUENCY_LT_1'
   | 'FREQUENCY_1_1_99'
   | 'FREQUENCY_2_2_99'
-  | 'FREQUENCY_GTE_3';
+  | 'FREQUENCY_GTE_3'
+  | 'OTHER_ACTIVE_ACCESS';
 
 export interface AttendanceBaseHealthMemberRow {
   id_socio: string;
@@ -225,6 +226,7 @@ export interface AttendanceBaseHealthMemberRow {
   last_visit_date: string | null;
   days_since_last_visit: number | null;
   frequency_per_week: number;
+  tariff: string | null;
 }
 
 export interface AttendanceBaseHealthMembersRequest
