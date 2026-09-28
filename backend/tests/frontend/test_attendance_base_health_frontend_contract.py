@@ -188,4 +188,4 @@ def test_base_health_detail_can_export_excel():
     assert "exporting = false" in component
     assert "URL.createObjectURL(blob)" in component
     assert "Exportar Excel" in template
-    assert "[disabled]="loading || exporting || !detail"" in template
+    assert '[disabled]="loading || exporting || !detail"' in template
