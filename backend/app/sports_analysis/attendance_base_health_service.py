@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 from math import ceil
+from statistics import median
 from types import SimpleNamespace
 from typing import Any
 
@@ -53,6 +54,7 @@ class _EligibleMember:
     branch_id: int
     branch_name: str
     member_since: date | None
+    expiration_date: date
     snapshot_date: date
 
 
@@ -132,6 +134,11 @@ def attendance_base_health(
         if state.total_visits_checked
         else 0.0
     )
+    frequency = _frequency_metrics(
+        state,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
     return {
         "scope": {
@@ -158,7 +165,16 @@ def attendance_base_health(
             "without_visit_pct": (
                 without_visit_pct
             ),
+            "frequency_avg_per_week": (
+                frequency["average_per_week"]
+            ),
+            "frequency_median_per_week": (
+                frequency["median_per_week"]
+            ),
         },
+        "frequency_distribution": (
+            frequency["distribution"]
+        ),
         "source": {
             "available": bool(
                 state.snapshot_dates
@@ -463,6 +479,8 @@ def _load_eligible_members(
             SociosActivosSnapshotORM.cutoff_date,
             TrackBranchCatalogORM.sucursal_id,
             TrackBranchCatalogORM.track_label,
+            SociosActivosSnapshotRowORM
+            .fecha_vencimiento_date,
         )
         .join(
             SociosActivosSnapshotORM,
@@ -587,6 +605,11 @@ def _load_eligible_members(
                     or str(branch_id)
                 ),
                 member_since=member_since,
+                expiration_date=_row_value(
+                    row,
+                    "fecha_vencimiento_date",
+                    7,
+                ),
                 snapshot_date=snapshot_date,
             )
         )
@@ -938,6 +961,145 @@ def _serialize_member(
         ),
         "has_visit": has_visit,
     }
+
+
+def _frequency_metrics(
+    state: _BaseHealthState,
+    *,
+    date_from: date,
+    date_to: date,
+) -> dict[str, Any]:
+    frequencies = [
+        _member_weekly_frequency(
+            member,
+            state.member_visit_stats.get(
+                member.id_socio
+            ),
+            date_from=date_from,
+            date_to=date_to,
+        )
+        for member in state.eligible_members.values()
+    ]
+
+    average = (
+        sum(frequencies) / len(frequencies)
+        if frequencies
+        else 0.0
+    )
+    median_value = (
+        median(frequencies)
+        if frequencies
+        else 0.0
+    )
+
+    buckets = [
+        {
+            "key": "ZERO",
+            "label": "0 visitas",
+            "count": 0,
+        },
+        {
+            "key": "LT_1",
+            "label": "Menos de 1 por semana",
+            "count": 0,
+        },
+        {
+            "key": "FROM_1_TO_1_99",
+            "label": "1.00 a 1.99 por semana",
+            "count": 0,
+        },
+        {
+            "key": "FROM_2_TO_2_99",
+            "label": "2.00 a 2.99 por semana",
+            "count": 0,
+        },
+        {
+            "key": "GTE_3",
+            "label": "3.00 o más por semana",
+            "count": 0,
+        },
+    ]
+
+    for value in frequencies:
+        if value == 0:
+            bucket_index = 0
+        elif value < 1:
+            bucket_index = 1
+        elif value < 2:
+            bucket_index = 2
+        elif value < 3:
+            bucket_index = 3
+        else:
+            bucket_index = 4
+        buckets[bucket_index]["count"] += 1
+
+    total = len(frequencies)
+    distribution = [
+        {
+            **bucket,
+            "pct": (
+                round(
+                    bucket["count"] * 100 / total,
+                    1,
+                )
+                if total
+                else 0.0
+            ),
+        }
+        for bucket in buckets
+    ]
+
+    return {
+        "average_per_week": round(average, 2),
+        "median_per_week": round(
+            float(median_value),
+            2,
+        ),
+        "distribution": distribution,
+    }
+
+
+def _member_weekly_frequency(
+    member: _EligibleMember,
+    visit_stats: _MemberVisitStats | None,
+    *,
+    date_from: date,
+    date_to: date,
+) -> float:
+    eligible_days = _member_eligible_days(
+        member,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    if eligible_days <= 0:
+        return 0.0
+
+    visit_count = (
+        visit_stats.visit_count
+        if visit_stats is not None
+        else 0
+    )
+    return visit_count * 7 / eligible_days
+
+
+def _member_eligible_days(
+    member: _EligibleMember,
+    *,
+    date_from: date,
+    date_to: date,
+) -> int:
+    start = max(
+        date_from,
+        member.member_since or date_from,
+    )
+    end = min(
+        date_to,
+        member.expiration_date,
+    )
+    if end < start:
+        return 0
+    return (end - start).days + 1
+
 
 
 def _positive_int(
