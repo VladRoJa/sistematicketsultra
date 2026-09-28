@@ -979,6 +979,26 @@ def _record_member_visits(
         ),
     )
 
+def _has_historical_attendance_before(
+    date_before: date,
+) -> bool:
+    row = (
+        db.session.query(
+            WarehouseAttendanceVisitORM.id
+        )
+        .filter(
+            WarehouseAttendanceVisitORM.attendance_type
+            == "SOCIO",
+            WarehouseAttendanceVisitORM.business_date
+            < date_before,
+        )
+        .limit(1)
+        .first()
+    )
+    return row is not None
+
+
+
 def _load_historical_last_visits(
     eligible_members: dict[
         str,
@@ -991,6 +1011,11 @@ def _load_historical_last_visits(
     *,
     date_before: date,
 ) -> dict[str, date]:
+    if not _has_historical_attendance_before(
+        date_before
+    ):
+        return {}
+
     candidates = [
         member
         for member in eligible_members.values()
