@@ -599,56 +599,67 @@
         </mat-card>
       </section>
 
-      <mat-card class="panel activation-card">
-        <div class="panel-heading">
-          <div>
-            <span class="eyebrow">NUEVOS SOCIOS</span>
-            <h2>Tiempo para venir por primera vez</h2>
-          </div>
-          <small>
-            {{ formatNumber(baseHealth.activation.new_members) }}
-            altas en el periodo
-          </small>
-        </div>
-
-        <div class="activation-grid">
-          <div
-            class="activation-item"
-            *ngFor="let bucket of baseHealth.activation.distribution">
-            <span>{{ bucket.label }}</span>
-            <strong>{{ formatNumber(bucket.count) }}</strong>
-            <small>{{ formatPercent(bucket.pct) }}</small>
-          </div>
-        </div>
-      </mat-card>
-
-      <mat-card
-        class="panel other-accesses-card"
-        *ngIf="baseHealth.other_active_accesses.count > 0">
-        <div class="other-accesses-summary">
-          <div>
-            <span class="eyebrow">FUERA DE KPI</span>
-            <h2>Otros accesos activos en el periodo</h2>
-            <p>
-              Se muestran por separado y no forman parte de los indicadores
-              de socios activos.
-            </p>
+      <section class="base-health-lower-grid">
+        <mat-card class="panel activation-card">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">NUEVOS SOCIOS</span>
+              <h2>Tiempo para venir por primera vez</h2>
+            </div>
+            <small>
+              {{ formatNumber(baseHealth.activation.new_members) }}
+              altas en el periodo
+            </small>
           </div>
 
-          <strong class="other-accesses-count">
-            {{ formatNumber(baseHealth.other_active_accesses.count) }}
-          </strong>
-        </div>
-
-        <div class="other-accesses-tariffs">
-          <div
-            class="other-accesses-tariff"
-            *ngFor="let item of baseHealth.other_active_accesses.tariff_distribution">
-            <span>{{ item.tariff }}</span>
-            <strong>{{ formatNumber(item.count) }}</strong>
+          <div class="activation-grid">
+            <div
+              class="activation-item"
+              *ngFor="let bucket of baseHealth.activation.distribution">
+              <span>{{ bucket.label }}</span>
+              <strong>{{ formatNumber(bucket.count) }}</strong>
+              <small>{{ formatPercent(bucket.pct) }}</small>
+            </div>
           </div>
-        </div>
-      </mat-card>
+        </mat-card>
+
+        <button
+          type="button"
+          class="panel other-accesses-card"
+          *ngIf="baseHealth.other_active_accesses.count > 0"
+          (click)="openBaseHealthDetail('OTHER_ACTIVE_ACCESS')">
+          <div class="other-accesses-heading">
+            <div>
+              <span class="eyebrow">FUERA DE KPI</span>
+              <h2>Otros accesos activos en el periodo</h2>
+            </div>
+
+            <strong class="other-accesses-count">
+              {{ formatNumber(baseHealth.other_active_accesses.count) }}
+            </strong>
+          </div>
+
+          <p class="other-accesses-description">
+            No forman parte de los indicadores principales.
+          </p>
+
+          <div class="other-accesses-list">
+            <div
+              class="other-accesses-row"
+              *ngFor="let item of otherActiveAccessPreview">
+              <span>{{ item.tariff }}</span>
+              <strong>{{ formatNumber(item.count) }}</strong>
+            </div>
+          </div>
+
+          <div class="other-accesses-footer">
+            <span *ngIf="otherActiveAccessRemainingTariffs > 0">
+              +{{ otherActiveAccessRemainingTariffs }} tarifas más
+            </span>
+            <strong>Ver detalle</strong>
+          </div>
+        </button>
+      </section>
 
       <mat-card class="panel base-health-note">
         <div>
