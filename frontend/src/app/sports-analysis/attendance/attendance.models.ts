@@ -146,6 +146,22 @@ export interface AttendanceBaseHealthSummary {
   members_without_visit: number;
   utilization_pct: number;
   without_visit_pct: number;
+  frequency_avg_per_week: number;
+  frequency_median_per_week: number;
+  members_14_plus_days_without_visit: number;
+  follow_up_members: number;
+}
+
+export interface AttendanceBaseHealthDistributionBucket {
+  key: string;
+  label: string;
+  count: number;
+  pct: number;
+}
+
+export interface AttendanceBaseHealthActivation {
+  new_members: number;
+  distribution: AttendanceBaseHealthDistributionBucket[];
 }
 
 export interface AttendanceBaseHealthSource {
@@ -163,12 +179,27 @@ export interface AttendanceBaseHealth {
   scope: Omit<SportsAnalysisScope, 'fixed_branch_id'>;
   filters: AttendanceBaseHealthFilters;
   summary: AttendanceBaseHealthSummary;
+  frequency_distribution: AttendanceBaseHealthDistributionBucket[];
+  recency_distribution: AttendanceBaseHealthDistributionBucket[];
+  activation: AttendanceBaseHealthActivation;
   source: AttendanceBaseHealthSource;
 }
 
 export type AttendanceBaseHealthMemberStatus =
   | 'WITH_VISIT'
-  | 'WITHOUT_VISIT';
+  | 'WITHOUT_VISIT'
+  | 'FOLLOW_UP'
+  | 'RECENCY_14_PLUS'
+  | 'RECENCY_0_7'
+  | 'RECENCY_8_14'
+  | 'RECENCY_15_21'
+  | 'RECENCY_22_PLUS'
+  | 'RECENCY_NO_RECORDED'
+  | 'FREQUENCY_ZERO'
+  | 'FREQUENCY_LT_1'
+  | 'FREQUENCY_1_1_99'
+  | 'FREQUENCY_2_2_99'
+  | 'FREQUENCY_GTE_3';
 
 export interface AttendanceBaseHealthMemberRow {
   id_socio: string;
@@ -178,6 +209,10 @@ export interface AttendanceBaseHealthMemberRow {
   pin: string;
   member_since: string | null;
   has_visit: boolean;
+  visit_count: number;
+  last_visit_date: string | null;
+  days_since_last_visit: number | null;
+  frequency_per_week: number;
 }
 
 export interface AttendanceBaseHealthMembersRequest
