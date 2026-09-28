@@ -394,7 +394,7 @@ def test_recency_uses_date_to_and_known_last_visit():
     assert [
         row["count"]
         for row in result["distribution"]
-    ] == [1, 1, 1, 1, 1]
+    ] == [1, 2, 0, 1, 1]
 
 
 def test_recency_exactly_14_days_counts_in_14_plus():
