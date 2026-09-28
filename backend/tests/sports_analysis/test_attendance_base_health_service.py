@@ -1185,3 +1185,50 @@ def test_base_health_detail_records_server_timing_stages(
         value >= 0
         for value in timings.values()
     )
+
+
+
+def test_base_health_dashboard_records_server_timing(
+    monkeypatch,
+):
+    state = _state()
+
+    def fake_build_state(*_args, **kwargs):
+        timings = kwargs.get("timings")
+        if timings is not None:
+            timings.update(
+                {
+                    "scope": 1.0,
+                    "socios_activos": 2.0,
+                    "visitas_periodo": 3.0,
+                    "visitas_consulta": 1.0,
+                    "visitas_identidad": 1.0,
+                    "visitas_fallback": 1.0,
+                    "historico": 4.0,
+                    "historico_identidad": 1.0,
+                    "historico_visitas": 3.0,
+                }
+            )
+        return state, (1, 2)
+
+    monkeypatch.setattr(
+        health,
+        "_build_state",
+        fake_build_state,
+    )
+
+    timings: dict[str, float] = {}
+    result = health.attendance_base_health(
+        _scope(),
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 25),
+        branch_id=None,
+        region_key=None,
+        timings=timings,
+    )
+
+    assert result["summary"]["eligible_members"] == 4
+    assert "metricas" in timings
+    assert "total" in timings
+    assert timings["metricas"] >= 0
+    assert timings["total"] >= timings["metricas"]
