@@ -55,6 +55,9 @@ BASE_HEALTH_STATUS_FREQUENCY_2_2_99 = (
     "FREQUENCY_2_2_99"
 )
 BASE_HEALTH_STATUS_FREQUENCY_GTE_3 = "FREQUENCY_GTE_3"
+BASE_HEALTH_STATUS_OTHER_ACTIVE_ACCESS = (
+    "OTHER_ACTIVE_ACCESS"
+)
 
 BASE_HEALTH_MEMBER_STATUSES = {
     BASE_HEALTH_STATUS_WITH_VISIT,
@@ -71,6 +74,7 @@ BASE_HEALTH_MEMBER_STATUSES = {
     BASE_HEALTH_STATUS_FREQUENCY_1_1_99,
     BASE_HEALTH_STATUS_FREQUENCY_2_2_99,
     BASE_HEALTH_STATUS_FREQUENCY_GTE_3,
+    BASE_HEALTH_STATUS_OTHER_ACTIVE_ACCESS,
 }
 
 BASE_HEALTH_MEMBER_TITLES = {
@@ -105,6 +109,9 @@ BASE_HEALTH_MEMBER_TITLES = {
     ),
     BASE_HEALTH_STATUS_FREQUENCY_GTE_3: (
         "Socios con 3.00 o más visitas por semana"
+    ),
+    BASE_HEALTH_STATUS_OTHER_ACTIVE_ACCESS: (
+        "Otros accesos activos en el periodo"
     ),
 }
 DEFAULT_MEMBER_PAGE_SIZE = 50
@@ -364,18 +371,26 @@ def attendance_base_health_members(
         region_key=region_key,
     )
 
-    members = [
-        member
-        for member
-        in state.eligible_members.values()
-        if _member_matches_detail_status(
-            state,
-            member,
-            status=normalized_status,
-            date_from=date_from,
-            date_to=date_to,
+    if (
+        normalized_status
+        == BASE_HEALTH_STATUS_OTHER_ACTIVE_ACCESS
+    ):
+        members = list(
+            state.other_active_members.values()
         )
-    ]
+    else:
+        members = [
+            member
+            for member
+            in state.eligible_members.values()
+            if _member_matches_detail_status(
+                state,
+                member,
+                status=normalized_status,
+                date_from=date_from,
+                date_to=date_to,
+            )
+        ]
     members.sort(
         key=lambda member: (
             member.branch_name.casefold(),
@@ -1520,6 +1535,7 @@ def _serialize_member(
             frequency,
             2,
         ),
+        "tariff": member.tariff,
     }
 
 
