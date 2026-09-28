@@ -25,6 +25,9 @@ from .attendance_access import (
     SportsAnalysisScope,
     scoped_branch_catalog,
 )
+from .attendance_export_service import (
+    build_attendance_workbook,
+)
 from .attendance_identity_service import (
     resolve_attendance_identities,
 )
@@ -131,6 +134,7 @@ class _EligibleMember:
     snapshot_date: date
     applies_kpi: bool = True
     tariff: str | None = None
+    phone: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -371,32 +375,11 @@ def attendance_base_health_members(
         region_key=region_key,
     )
 
-    if (
-        normalized_status
-        == BASE_HEALTH_STATUS_OTHER_ACTIVE_ACCESS
-    ):
-        members = list(
-            state.other_active_members.values()
-        )
-    else:
-        members = [
-            member
-            for member
-            in state.eligible_members.values()
-            if _member_matches_detail_status(
-                state,
-                member,
-                status=normalized_status,
-                date_from=date_from,
-                date_to=date_to,
-            )
-        ]
-    members.sort(
-        key=lambda member: (
-            member.branch_name.casefold(),
-            (member.name or "").casefold(),
-            member.id_socio,
-        )
+    members = _detail_members_for_status(
+        state,
+        status=normalized_status,
+        date_from=date_from,
+        date_to=date_to,
     )
 
     count = len(members)
@@ -435,6 +418,141 @@ def attendance_base_health_members(
             for member in page_rows
         ],
     }
+
+
+
+def attendance_base_health_members_export(
+    scope: SportsAnalysisScope,
+    *,
+    date_from: date,
+    date_to: date,
+    branch_id: int | None,
+    region_key: str | None,
+    status: str,
+):
+    normalized_status = str(
+        status or ""
+    ).strip().upper()
+    if normalized_status not in (
+        BASE_HEALTH_MEMBER_STATUSES
+    ):
+        raise SportsAnalysisValidationError(
+            "status de Salud de la base inválido."
+        )
+
+    state, _ = _build_state(
+        scope,
+        date_from=date_from,
+        date_to=date_to,
+        branch_id=branch_id,
+        region_key=region_key,
+    )
+    members = _detail_members_for_status(
+        state,
+        status=normalized_status,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+    rows = [
+        _serialize_member_export(
+            state,
+            member,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        for member in members
+    ]
+
+    columns = (
+        [
+            {"key": "name", "label": "Socio"},
+            {"key": "id_socio", "label": "ID socio"},
+            {"key": "pin", "label": "PIN"},
+            {"key": "phone", "label": "Teléfono"},
+            {"key": "branch_name", "label": "Sucursal"},
+            {"key": "member_since", "label": "Alta"},
+            {"key": "tariff", "label": "Tarifa"},
+        ]
+        if normalized_status
+        == BASE_HEALTH_STATUS_OTHER_ACTIVE_ACCESS
+        else [
+            {"key": "name", "label": "Socio"},
+            {"key": "id_socio", "label": "ID socio"},
+            {"key": "pin", "label": "PIN"},
+            {"key": "phone", "label": "Teléfono"},
+            {"key": "branch_name", "label": "Sucursal"},
+            {"key": "member_since", "label": "Alta"},
+            {"key": "visit_count", "label": "Visitas"},
+            {
+                "key": "last_visit_date",
+                "label": "Última visita",
+            },
+            {
+                "key": "days_since_last_visit",
+                "label": "Días sin venir",
+            },
+            {
+                "key": "frequency_per_week",
+                "label": "Frecuencia/semana",
+            },
+        ]
+    )
+
+    output = build_attendance_workbook(
+        columns=columns,
+        rows=rows,
+        sheet_name="Salud de la base",
+    )
+    date_fragment = (
+        date_from.isoformat()
+        if date_from == date_to
+        else (
+            f"{date_from.isoformat()}_"
+            f"{date_to.isoformat()}"
+        )
+    )
+    filename = (
+        "salud_base_"
+        f"{normalized_status.lower()}_"
+        f"{date_fragment}.xlsx"
+    )
+    return output, filename
+
+
+def _detail_members_for_status(
+    state: _BaseHealthState,
+    *,
+    status: str,
+    date_from: date,
+    date_to: date,
+) -> list[_EligibleMember]:
+    if status == BASE_HEALTH_STATUS_OTHER_ACTIVE_ACCESS:
+        members = list(
+            state.other_active_members.values()
+        )
+    else:
+        members = [
+            member
+            for member
+            in state.eligible_members.values()
+            if _member_matches_detail_status(
+                state,
+                member,
+                status=status,
+                date_from=date_from,
+                date_to=date_to,
+            )
+        ]
+
+    members.sort(
+        key=lambda member: (
+            member.branch_name.casefold(),
+            (member.name or "").casefold(),
+            member.id_socio,
+        )
+    )
+    return members
 
 
 def _member_matches_detail_status(
@@ -740,6 +858,7 @@ def _load_eligible_members(
             .fecha_vencimiento_date,
             SociosActivosSnapshotRowORM.aplica_kpi,
             SociosActivosSnapshotRowORM.tarifa,
+            SociosActivosSnapshotRowORM.telefono_digits,
         )
         .join(
             SociosActivosSnapshotORM,
@@ -885,6 +1004,13 @@ def _load_eligible_members(
                     row,
                     "tarifa",
                     9,
+                )
+            ),
+            phone=_clean_text(
+                _row_value(
+                    row,
+                    "telefono_digits",
+                    10,
                 )
             ),
         )
@@ -1538,6 +1664,26 @@ def _serialize_member(
         "tariff": member.tariff,
     }
 
+
+
+
+def _serialize_member_export(
+    state: _BaseHealthState,
+    member: _EligibleMember,
+    *,
+    date_from: date,
+    date_to: date,
+) -> dict[str, Any]:
+    row = _serialize_member(
+        state,
+        member,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return {
+        **row,
+        "phone": member.phone,
+    }
 
 
 def _frequency_metrics(
