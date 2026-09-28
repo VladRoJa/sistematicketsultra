@@ -748,6 +748,11 @@ def _build_state(
             effective_branch_ids,
         )
 
+    if timings is not None:
+        timings["visitas_consulta"] = 0.0
+        timings["visitas_identidad"] = 0.0
+        timings["visitas_fallback"] = 0.0
+
     period_visits_started = perf_counter()
     (
         member_visit_stats,
@@ -757,6 +762,7 @@ def _build_state(
         tuple(scope.allowed_branch_ids),
         date_from=date_from,
         date_to=date_to,
+        timings=timings,
     )
     _record_timing(
         timings,
@@ -769,12 +775,17 @@ def _build_state(
         for id_socio, stats
         in member_visit_stats.items()
     }
+    if timings is not None:
+        timings["historico_identidad"] = 0.0
+        timings["historico_visitas"] = 0.0
+
     historical_started = perf_counter()
     historical_last_visits = (
         _load_historical_last_visits(
             eligible_members,
             member_visit_stats,
             date_before=date_from,
+            timings=timings,
         )
     )
     _record_timing(
@@ -895,6 +906,7 @@ def _load_eligible_members(
     if not snapshots:
         return {}, {}, ()
 
+    visits_query_started = perf_counter()
     rows = (
         db.session.query(
             SociosActivosSnapshotRowORM.id_socio,
@@ -1088,6 +1100,7 @@ def _load_member_visit_stats(
     *,
     date_from: date,
     date_to: date,
+    timings: dict[str, float] | None = None,
 ) -> tuple[
     dict[str, _MemberVisitStats],
     int,
@@ -1137,7 +1150,13 @@ def _load_member_visit_stats(
         )
         .all()
     )
+    _record_timing(
+        timings,
+        "visitas_consulta",
+        visits_query_started,
+    )
 
+    exact_identity_started = perf_counter()
     exact_keys = (
         db.session.query(
             WarehouseAttendanceVisitORM.member_pin.label(
@@ -1250,6 +1269,12 @@ def _load_member_visit_stats(
         )
     }
 
+    _record_timing(
+        timings,
+        "visitas_identidad",
+        exact_identity_started,
+    )
+
     member_visit_stats: dict[
         str,
         _MemberVisitStats,
@@ -1339,10 +1364,17 @@ def _load_member_visit_stats(
         )
 
     if fallback_probes:
+        fallback_started = perf_counter()
         resolutions = resolve_attendance_identities(
             fallback_probes,
             session=db.session,
             chunk_size=IDENTITY_BATCH_SIZE,
+        )
+
+        _record_timing(
+            timings,
+            "visitas_fallback",
+            fallback_started,
         )
 
         for probe in fallback_probes:
@@ -1437,6 +1469,7 @@ def _load_historical_last_visits(
     ],
     *,
     date_before: date,
+    timings: dict[str, float] | None = None,
 ) -> dict[str, date]:
     if not _has_historical_attendance_before(
         date_before
@@ -1469,6 +1502,7 @@ def _load_historical_last_visits(
     ] = {}
 
     keys_list = list(requested_keys)
+    historical_identity_started = perf_counter()
     for start in range(
         0,
         len(keys_list),
@@ -1566,11 +1600,18 @@ def _load_historical_last_visits(
                     )
                 ] = id_socio
 
+    _record_timing(
+        timings,
+        "historico_identidad",
+        historical_identity_started,
+    )
+
     if not exact_map:
         return {}
 
     last_visits: dict[str, date] = {}
     exact_keys = list(exact_map)
+    historical_visits_started = perf_counter()
 
     for start in range(
         0,
@@ -1645,6 +1686,12 @@ def _load_historical_last_visits(
                     last_visits[
                         id_socio
                     ] = last_visit_date
+
+    _record_timing(
+        timings,
+        "historico_visitas",
+        historical_visits_started,
+    )
 
     return last_visits
 
