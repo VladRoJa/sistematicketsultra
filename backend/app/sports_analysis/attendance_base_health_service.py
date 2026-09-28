@@ -906,7 +906,6 @@ def _load_eligible_members(
     if not snapshots:
         return {}, {}, ()
 
-    visits_query_started = perf_counter()
     rows = (
         db.session.query(
             SociosActivosSnapshotRowORM.id_socio,
@@ -1113,6 +1112,7 @@ def _load_member_visit_stats(
         WarehouseAttendanceVisitORM.id
     ).label("visit_count")
 
+    visits_query_started = perf_counter()
     rows = (
         db.session.query(
             WarehouseAttendanceVisitORM.member_pin,
