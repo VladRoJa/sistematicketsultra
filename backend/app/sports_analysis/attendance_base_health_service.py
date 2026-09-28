@@ -173,15 +173,19 @@ def attendance_base_health(
     date_to: date,
     branch_id: int | None,
     region_key: str | None,
+    timings: dict[str, float] | None = None,
 ) -> dict[str, Any]:
+    total_started = perf_counter()
     state, effective_branch_ids = _build_state(
         scope,
         date_from=date_from,
         date_to=date_to,
         branch_id=branch_id,
         region_key=region_key,
+        timings=timings,
     )
 
+    metrics_started = perf_counter()
     eligible_ids = set(state.eligible_members)
     with_visit_ids = (
         eligible_ids
@@ -243,6 +247,16 @@ def attendance_base_health(
     )
     other_active_accesses = (
         _other_active_accesses_metrics(state)
+    )
+    _record_timing(
+        timings,
+        "metricas",
+        metrics_started,
+    )
+    _record_timing(
+        timings,
+        "total",
+        total_started,
     )
 
     return {

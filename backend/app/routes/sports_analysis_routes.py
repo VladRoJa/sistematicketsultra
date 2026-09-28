@@ -56,6 +56,7 @@ SERVER_TIMING_ORDER = (
     "historico_visitas",
     "cohorte",
     "serializacion",
+    "metricas",
     "total",
 )
 
@@ -275,6 +276,7 @@ def get_attendance_base_health():
         )
 
     try:
+        timings: dict[str, float] = {}
         result = attendance_base_health(
             scope,
             date_from=date_from,
@@ -291,8 +293,13 @@ def get_attendance_base_health():
                 ).strip()
                 or None
             ),
+            timings=timings,
         )
-        return jsonify(result), 200
+        response = jsonify(result)
+        response.headers["Server-Timing"] = (
+            _server_timing_header(timings)
+        )
+        return response, 200
     except (
         SportsAnalysisAuthorizationError,
         SportsAnalysisValidationError,
