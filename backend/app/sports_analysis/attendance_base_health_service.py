@@ -1637,30 +1637,9 @@ def _load_historical_last_visits(
             start : start + IDENTITY_BATCH_SIZE
         ]
 
-        rows = (
-            db.session.query(
-                WarehouseAttendanceVisitORM.member_pin,
-                WarehouseAttendanceVisitORM.member_since,
-                func.max(
-                    WarehouseAttendanceVisitORM
-                    .business_date
-                ).label("last_visit_date"),
-            )
-            .filter(
-                tuple_(
-                    WarehouseAttendanceVisitORM.member_pin,
-                    WarehouseAttendanceVisitORM.member_since,
-                ).in_(chunk),
-                WarehouseAttendanceVisitORM.attendance_type
-                == "SOCIO",
-                WarehouseAttendanceVisitORM.business_date
-                < date_before,
-            )
-            .group_by(
-                WarehouseAttendanceVisitORM.member_pin,
-                WarehouseAttendanceVisitORM.member_since,
-            )
-            .all()
+        rows = _load_historical_last_visit_rows(
+            chunk,
+            date_before=date_before,
         )
 
         for row in rows:
@@ -1710,6 +1689,43 @@ def _load_historical_last_visits(
 
     return last_visits
 
+
+
+def _load_historical_last_visit_rows(
+    keys: list[tuple[str, date]],
+    *,
+    date_before: date,
+):
+    return (
+        db.session.query(
+            WarehouseAttendanceVisitORM.member_pin,
+            WarehouseAttendanceVisitORM.member_since,
+            WarehouseAttendanceVisitORM.business_date.label(
+                "last_visit_date"
+            ),
+        )
+        .filter(
+            tuple_(
+                WarehouseAttendanceVisitORM.member_pin,
+                WarehouseAttendanceVisitORM.member_since,
+            ).in_(keys),
+            WarehouseAttendanceVisitORM.attendance_type
+            == "SOCIO",
+            WarehouseAttendanceVisitORM.business_date
+            < date_before,
+        )
+        .distinct(
+            WarehouseAttendanceVisitORM.member_pin,
+            WarehouseAttendanceVisitORM.member_since,
+        )
+        .order_by(
+            WarehouseAttendanceVisitORM.member_pin,
+            WarehouseAttendanceVisitORM.member_since,
+            WarehouseAttendanceVisitORM.business_date
+            .desc(),
+        )
+        .all()
+    )
 
 
 def _serialize_member(
