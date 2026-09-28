@@ -147,6 +147,11 @@ def attendance_base_health(
         state,
         date_to=date_to,
     )
+    activation = _activation_metrics(
+        state,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
     return {
         "scope": {
@@ -191,6 +196,7 @@ def attendance_base_health(
         "recency_distribution": (
             recency["distribution"]
         ),
+        "activation": activation,
         "source": {
             "available": bool(
                 state.snapshot_dates
@@ -1467,6 +1473,112 @@ def _recency_metrics(
         "members_14_plus_days_without_visit": (
             members_14_plus
         ),
+        "distribution": distribution,
+    }
+
+
+
+def _activation_metrics(
+    state: _BaseHealthState,
+    *,
+    date_from: date,
+    date_to: date,
+) -> dict[str, Any]:
+    buckets = [
+        {
+            "key": "SAME_DAY",
+            "label": "Mismo día",
+            "count": 0,
+        },
+        {
+            "key": "DAYS_1_3",
+            "label": "1–3 días",
+            "count": 0,
+        },
+        {
+            "key": "DAYS_4_7",
+            "label": "4–7 días",
+            "count": 0,
+        },
+        {
+            "key": "DAYS_8_PLUS",
+            "label": "8+ días",
+            "count": 0,
+        },
+        {
+            "key": "NO_FIRST_VISIT_RECORDED",
+            "label": "Sin primera visita registrada",
+            "count": 0,
+        },
+        {
+            "key": "WITHIN_FIRST_7_DAYS",
+            "label": "Aún dentro de sus primeros 7 días",
+            "count": 0,
+        },
+    ]
+
+    new_members = [
+        member
+        for member in state.eligible_members.values()
+        if (
+            member.member_since is not None
+            and date_from
+            <= member.member_since
+            <= date_to
+        )
+    ]
+
+    for member in new_members:
+        stats = state.member_visit_stats.get(
+            member.id_socio
+        )
+
+        if stats is None:
+            days_since_signup = (
+                date_to - member.member_since
+            ).days
+            bucket_index = (
+                5
+                if days_since_signup < 7
+                else 4
+            )
+            buckets[bucket_index]["count"] += 1
+            continue
+
+        days_to_first_visit = (
+            stats.first_visit_date
+            - member.member_since
+        ).days
+
+        if days_to_first_visit <= 0:
+            bucket_index = 0
+        elif days_to_first_visit <= 3:
+            bucket_index = 1
+        elif days_to_first_visit <= 7:
+            bucket_index = 2
+        else:
+            bucket_index = 3
+
+        buckets[bucket_index]["count"] += 1
+
+    total = len(new_members)
+    distribution = [
+        {
+            **bucket,
+            "pct": (
+                round(
+                    bucket["count"] * 100 / total,
+                    1,
+                )
+                if total
+                else 0.0
+            ),
+        }
+        for bucket in buckets
+    ]
+
+    return {
+        "new_members": total,
         "distribution": distribution,
     }
 
