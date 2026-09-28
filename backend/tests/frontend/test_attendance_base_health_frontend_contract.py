@@ -98,6 +98,7 @@ def test_base_health_behavior_metrics_are_wired_to_ui():
     assert "openRecencyBucket(" in component
 
     assert "Visitas por semana" in template
+    assert "Mediana · Promedio general:" in template
     assert "14+ días sin venir" in template
     assert "Frecuencia de visita" in template
     assert "Tiempo desde la última visita" in template
