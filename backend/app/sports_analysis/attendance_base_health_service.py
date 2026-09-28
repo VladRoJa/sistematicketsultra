@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from math import ceil
 from types import SimpleNamespace
@@ -57,12 +57,23 @@ class _EligibleMember:
 
 
 @dataclass(frozen=True, slots=True)
+class _MemberVisitStats:
+    visit_count: int
+    first_visit_date: date
+    last_visit_date: date
+
+
+@dataclass(frozen=True, slots=True)
 class _BaseHealthState:
     eligible_members: dict[str, _EligibleMember]
     visited_member_ids: frozenset[str]
     snapshot_dates: tuple[date, ...]
     total_visits_checked: int
     resolved_visits: int
+    member_visit_stats: dict[
+        str,
+        _MemberVisitStats,
+    ] = field(default_factory=dict)
 
 
 def attendance_base_health(
@@ -325,15 +336,16 @@ def _build_state(
                 snapshot_dates=snapshot_dates,
                 total_visits_checked=0,
                 resolved_visits=0,
+                member_visit_stats={},
             ),
             effective_branch_ids,
         )
 
     (
-        visited_member_ids,
+        member_visit_stats,
         total_visits_checked,
         resolved_visits,
-    ) = _load_visited_member_ids(
+    ) = _load_member_visit_stats(
         tuple(scope.allowed_branch_ids),
         date_from=date_from,
         date_to=date_to,
@@ -343,13 +355,14 @@ def _build_state(
         _BaseHealthState(
             eligible_members=eligible_members,
             visited_member_ids=frozenset(
-                visited_member_ids
+                member_visit_stats
             ),
             snapshot_dates=snapshot_dates,
             total_visits_checked=(
                 total_visits_checked
             ),
             resolved_visits=resolved_visits,
+            member_visit_stats=member_visit_stats,
         ),
         effective_branch_ids,
     )
@@ -584,14 +597,18 @@ def _load_eligible_members(
     return members, snapshot_dates
 
 
-def _load_visited_member_ids(
+def _load_member_visit_stats(
     branch_ids: tuple[int, ...],
     *,
     date_from: date,
     date_to: date,
-) -> tuple[set[str], int, int]:
+) -> tuple[
+    dict[str, _MemberVisitStats],
+    int,
+    int,
+]:
     if not branch_ids:
-        return set(), 0, 0
+        return {}, 0, 0
 
     visit_count = func.count(
         WarehouseAttendanceVisitORM.id
@@ -747,7 +764,10 @@ def _load_visited_member_ids(
         )
     }
 
-    visited_ids: set[str] = set()
+    member_visit_stats: dict[
+        str,
+        _MemberVisitStats,
+    ] = {}
     total_visits = 0
     resolved_visits = 0
     fallback_probes = []
@@ -766,6 +786,11 @@ def _load_visited_member_ids(
             or 0
         )
         total_visits += count
+        business_date = _row_value(
+            row,
+            "business_date",
+            2,
+        )
 
         key = (
             _clean_text(
@@ -784,7 +809,12 @@ def _load_visited_member_ids(
         exact_id = exact_map.get(key)
 
         if exact_id:
-            visited_ids.add(exact_id)
+            _record_member_visits(
+                member_visit_stats,
+                id_socio=exact_id,
+                visit_count=count,
+                business_date=business_date,
+            )
             resolved_visits += count
             continue
 
@@ -803,11 +833,7 @@ def _load_visited_member_ids(
                     "member_since",
                     1,
                 ),
-                business_date=_row_value(
-                    row,
-                    "business_date",
-                    2,
-                ),
+                business_date=business_date,
                 sucursal_id=_row_value(
                     row,
                     "sucursal_id",
@@ -843,20 +869,55 @@ def _load_visited_member_ids(
             ):
                 continue
 
-            visited_ids.add(
-                str(
-                    resolution.id_socio
-                ).strip()
-            )
-            resolved_visits += fallback_counts.get(
+            count = fallback_counts.get(
                 int(probe.id),
                 0,
             )
+            _record_member_visits(
+                member_visit_stats,
+                id_socio=str(
+                    resolution.id_socio
+                ).strip(),
+                visit_count=count,
+                business_date=probe.business_date,
+            )
+            resolved_visits += count
 
     return (
-        visited_ids,
+        member_visit_stats,
         total_visits,
         resolved_visits,
+    )
+
+
+def _record_member_visits(
+    stats: dict[str, _MemberVisitStats],
+    *,
+    id_socio: str,
+    visit_count: int,
+    business_date: date,
+) -> None:
+    current = stats.get(id_socio)
+    if current is None:
+        stats[id_socio] = _MemberVisitStats(
+            visit_count=visit_count,
+            first_visit_date=business_date,
+            last_visit_date=business_date,
+        )
+        return
+
+    stats[id_socio] = _MemberVisitStats(
+        visit_count=(
+            current.visit_count + visit_count
+        ),
+        first_visit_date=min(
+            current.first_visit_date,
+            business_date,
+        ),
+        last_visit_date=max(
+            current.last_visit_date,
+            business_date,
+        ),
     )
 
 def _serialize_member(
