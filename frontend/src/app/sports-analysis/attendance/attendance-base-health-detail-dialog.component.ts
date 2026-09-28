@@ -50,6 +50,16 @@ export class AttendanceBaseHealthDetailDialogComponent
     this.loadPage(1);
   }
 
+  get isOtherActiveAccessDetail(): boolean {
+    return this.data.status === 'OTHER_ACTIVE_ACCESS';
+  }
+
+  get detailCountLabel(): string {
+    return this.isOtherActiveAccessDetail
+      ? 'accesos'
+      : 'socios';
+  }
+
   get canGoPrevious(): boolean {
     return Boolean(
       this.detail

@@ -92,6 +92,8 @@ def test_base_health_behavior_metrics_are_wired_to_ui():
     assert "follow_up_members" in models
     assert "members_less_than_one_visit_per_week" in models
     assert "other_active_accesses" in models
+    assert "'OTHER_ACTIVE_ACCESS'" in models
+    assert "tariff: string | null" in models
     assert "frequency_distribution" in models
     assert "recency_distribution" in models
     assert "activation" in models
@@ -108,6 +110,12 @@ def test_base_health_behavior_metrics_are_wired_to_ui():
     assert "Menos de 1 visita por semana" in template
     assert "Otros accesos activos en el periodo" in template
     assert "FUERA DE KPI" in template
+    assert "otherActiveAccessPreview" in component
+    assert "otherActiveAccessRemainingTariffs" in component
+    assert (
+        "openBaseHealthDetail('OTHER_ACTIVE_ACCESS')"
+        in template
+    )
     assert "Socios para seguimiento" not in template
     assert (
         "openBaseHealthDetail('FREQUENCY_LT_1')"
@@ -139,3 +147,6 @@ def test_base_health_detail_shows_behavior_fields():
     assert "row.last_visit_date" in template
     assert "row.days_since_last_visit" in template
     assert "row.frequency_per_week" in template
+    assert "isOtherActiveAccessDetail" in component
+    assert ">Tarifa<" in template
+    assert "row.tariff" in template

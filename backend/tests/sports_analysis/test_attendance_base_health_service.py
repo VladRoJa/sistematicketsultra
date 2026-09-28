@@ -881,3 +881,63 @@ def test_base_health_keeps_non_kpi_members_separate(
             },
         ]
     )
+
+
+
+def test_other_active_access_detail_uses_non_kpi_universe(
+    monkeypatch,
+):
+    state = health._BaseHealthState(
+        eligible_members={
+            "100": _member("100"),
+        },
+        visited_member_ids=frozenset(),
+        snapshot_dates=(date(2026, 9, 25),),
+        total_visits_checked=0,
+        resolved_visits=0,
+        other_active_members={
+            "900": _member(
+                "900",
+                applies_kpi=False,
+                tariff="PASE GYMPASS",
+            ),
+            "901": _member(
+                "901",
+                applies_kpi=False,
+                tariff="SEMANA $299",
+            ),
+        },
+    )
+
+    monkeypatch.setattr(
+        health,
+        "_build_state",
+        lambda *_args, **_kwargs: (
+            state,
+            (1,),
+        ),
+    )
+
+    result = health.attendance_base_health_members(
+        _scope(),
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 25),
+        branch_id=None,
+        region_key=None,
+        status="OTHER_ACTIVE_ACCESS",
+        page=1,
+        page_size=50,
+    )
+
+    assert result["count"] == 2
+    assert result["title"] == (
+        "Otros accesos activos en el periodo"
+    )
+    assert {
+        row["id_socio"]
+        for row in result["rows"]
+    } == {"900", "901"}
+    assert {
+        row["tariff"]
+        for row in result["rows"]
+    } == {"PASE GYMPASS", "SEMANA $299"}
