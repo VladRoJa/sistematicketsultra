@@ -8,7 +8,7 @@ from time import perf_counter
 from types import SimpleNamespace
 from typing import Any
 
-from sqlalchemy import func, or_, tuple_
+from sqlalchemy import Date, String, column, func, or_, tuple_, values
 
 from app.extensions import db
 from app.models.attendance import WarehouseAttendanceVisitORM
@@ -1705,6 +1705,18 @@ def _load_historical_last_visit_rows(
     *,
     date_before: date,
 ):
+    requested_keys = values(
+        column(
+            "member_pin",
+            String(64),
+        ),
+        column(
+            "member_since",
+            Date(),
+        ),
+        name="requested_keys",
+    ).data(keys)
+
     return (
         db.session.query(
             WarehouseAttendanceVisitORM.member_pin,
@@ -1713,11 +1725,18 @@ def _load_historical_last_visit_rows(
                 "last_visit_date"
             ),
         )
+        .join(
+            requested_keys,
+            (
+                WarehouseAttendanceVisitORM.member_pin
+                == requested_keys.c.member_pin
+            )
+            & (
+                WarehouseAttendanceVisitORM.member_since
+                == requested_keys.c.member_since
+            ),
+        )
         .filter(
-            tuple_(
-                WarehouseAttendanceVisitORM.member_pin,
-                WarehouseAttendanceVisitORM.member_since,
-            ).in_(keys),
             WarehouseAttendanceVisitORM.attendance_type
             == "SOCIO",
             WarehouseAttendanceVisitORM.business_date
