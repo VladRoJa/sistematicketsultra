@@ -562,7 +562,15 @@ def test_activation_exactly_seven_days_is_not_pending():
     )
 
     assert result["distribution"][4]["count"] == 1
+    assert (
+        result["distribution"][4]["label"]
+        == "7+ días sin primera visita"
+    )
     assert result["distribution"][5]["count"] == 0
+    assert (
+        result["distribution"][5]["label"]
+        == "Alta reciente, aún sin visita"
+    )
 
 
 def test_follow_up_uses_recency_or_low_frequency_once():
