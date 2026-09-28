@@ -526,6 +526,17 @@
           </strong>
           <small>Socios con última visita conocida · Ver detalle</small>
         </button>
+
+        <button
+          type="button"
+          class="kpi-card kpi-card-button"
+          (click)="openBaseHealthDetail('FREQUENCY_LT_1')">
+          <span>Menos de 1 visita por semana</span>
+          <strong>
+            {{ formatNumber(baseHealth.summary.members_less_than_one_visit_per_week) }}
+          </strong>
+          <small>Con al menos una visita · Ver detalle</small>
+        </button>
       </section>
 
       <section class="base-health-grid">
@@ -588,58 +599,66 @@
         </mat-card>
       </section>
 
-      <section class="base-health-grid">
-        <mat-card class="panel activation-card">
-          <div class="panel-heading">
-            <div>
-              <span class="eyebrow">NUEVOS SOCIOS</span>
-              <h2>Tiempo para venir por primera vez</h2>
-            </div>
-            <small>
-              {{ formatNumber(baseHealth.activation.new_members) }}
-              altas en el periodo
-            </small>
-          </div>
-
-          <div class="activation-grid">
-            <div
-              class="activation-item"
-              *ngFor="let bucket of baseHealth.activation.distribution">
-              <span>{{ bucket.label }}</span>
-              <strong>{{ formatNumber(bucket.count) }}</strong>
-              <small>{{ formatPercent(bucket.pct) }}</small>
-            </div>
-          </div>
-        </mat-card>
-
-        <mat-card class="panel follow-up-card">
+      <mat-card class="panel activation-card">
+        <div class="panel-heading">
           <div>
-            <span class="eyebrow">SEGUIMIENTO</span>
-            <h2>Socios para seguimiento</h2>
+            <span class="eyebrow">NUEVOS SOCIOS</span>
+            <h2>Tiempo para venir por primera vez</h2>
+          </div>
+          <small>
+            {{ formatNumber(baseHealth.activation.new_members) }}
+            altas en el periodo
+          </small>
+        </div>
+
+        <div class="activation-grid">
+          <div
+            class="activation-item"
+            *ngFor="let bucket of baseHealth.activation.distribution">
+            <span>{{ bucket.label }}</span>
+            <strong>{{ formatNumber(bucket.count) }}</strong>
+            <small>{{ formatPercent(bucket.pct) }}</small>
+          </div>
+        </div>
+      </mat-card>
+
+      <mat-card
+        class="panel other-accesses-card"
+        *ngIf="baseHealth.other_active_accesses.count > 0">
+        <div class="other-accesses-summary">
+          <div>
+            <span class="eyebrow">FUERA DE KPI</span>
+            <h2>Otros accesos vigentes</h2>
             <p>
-              Socios vigentes al cierre con 14+ días sin venir
-              o menos de 1 visita por semana.
+              Se muestran por separado y no forman parte de los indicadores
+              de socios activos.
             </p>
           </div>
 
-          <button
-            mat-flat-button
-            type="button"
-            (click)="openBaseHealthDetail('FOLLOW_UP')">
-            {{ formatNumber(baseHealth.summary.follow_up_members) }}
-            socios · Ver detalle
-          </button>
-        </mat-card>
-      </section>
+          <strong class="other-accesses-count">
+            {{ formatNumber(baseHealth.other_active_accesses.count) }}
+          </strong>
+        </div>
+
+        <div class="other-accesses-tariffs">
+          <div
+            class="other-accesses-tariff"
+            *ngFor="let item of baseHealth.other_active_accesses.tariff_distribution">
+            <span>{{ item.tariff }}</span>
+            <strong>{{ formatNumber(item.count) }}</strong>
+          </div>
+        </div>
+      </mat-card>
 
       <mat-card class="panel base-health-note">
         <div>
           <span class="eyebrow">CÓMO SE LEE</span>
-          <h2>Uso real de la base activa</h2>
+          <h2>Uso real de los socios activos</h2>
           <p>
-            Se cuentan los socios que estuvieron activos al menos un día
-            dentro del periodo. Si un socio visitó cualquier Ultra Gym,
-            cuenta como socio con visita.
+            Los indicadores principales consideran sólo registros de
+            Socios Activos con Aplica KPI = Sí. Los accesos vigentes fuera
+            de KPI se muestran aparte para no mezclarlos con la frecuencia
+            de una membresía regular.
           </p>
         </div>
 
