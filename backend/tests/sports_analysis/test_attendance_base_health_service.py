@@ -1240,10 +1240,22 @@ def test_historical_last_visit_query_uses_distinct_on_latest(
 ):
     class FakeQuery:
         def __init__(self):
+            self.join_target = None
+            self.filter_args = ()
             self.distinct_args = ()
             self.order_args = ()
 
-        def filter(self, *_args):
+        def join(
+            self,
+            target,
+            *_args,
+            **_kwargs,
+        ):
+            self.join_target = target
+            return self
+
+        def filter(self, *args):
+            self.filter_args = args
             return self
 
         def distinct(self, *args):
@@ -1281,6 +1293,15 @@ def test_historical_last_visit_query_uses_distinct_on_latest(
     )
 
     assert rows[0][2] == date(2026, 8, 31)
+    assert (
+        getattr(
+            query.join_target,
+            "name",
+            None,
+        )
+        == "requested_keys"
+    )
+    assert len(query.filter_args) == 2
     assert len(query.distinct_args) == 2
     assert "member_pin" in str(
         query.distinct_args[0]
