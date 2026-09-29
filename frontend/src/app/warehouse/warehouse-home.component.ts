@@ -23,6 +23,11 @@ import {
 
 
 
+const AGREGADORAS_TEMPLATE_REPORT_TYPE_KEY =
+  'agregadoras_consolidado_template';
+const AGREGADORAS_TEMPLATE_BASELINE_DATE = '2026-08-19';
+
+
 interface WarehouseUploadRow extends WarehouseUploadListItem {
   created_at_display: string;
 }
@@ -435,7 +440,10 @@ loadCatalogs(): void {
 
 onReportTypeChanged(reportTypeKey: string): void {
   this.uploadForm.report_type_key = reportTypeKey;
-  this.uploadForm.cutoff_date = '';
+  this.uploadForm.cutoff_date =
+    reportTypeKey === AGREGADORAS_TEMPLATE_REPORT_TYPE_KEY
+      ? AGREGADORAS_TEMPLATE_BASELINE_DATE
+      : '';
   this.uploadForm.date_from = '';
   this.uploadForm.date_to = '';
   this.uploadForm.target_month = '';
