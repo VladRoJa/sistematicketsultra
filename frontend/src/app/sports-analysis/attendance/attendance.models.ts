@@ -212,7 +212,13 @@ export type AttendanceBaseHealthMemberStatus =
   | 'FREQUENCY_1_1_99'
   | 'FREQUENCY_2_2_99'
   | 'FREQUENCY_GTE_3'
-  | 'OTHER_ACTIVE_ACCESS';
+  | 'OTHER_ACTIVE_ACCESS'
+  | 'ACTIVATION_SAME_DAY'
+  | 'ACTIVATION_1_3'
+  | 'ACTIVATION_4_7'
+  | 'ACTIVATION_8_PLUS'
+  | 'ACTIVATION_NO_FIRST_VISIT'
+  | 'ACTIVATION_RECENT_NO_VISIT';
 
 export interface AttendanceBaseHealthMemberRow {
   id_socio: string;
@@ -232,6 +238,7 @@ export interface AttendanceBaseHealthMemberRow {
 export interface AttendanceBaseHealthMembersRequest
   extends AttendanceBaseHealthRequest {
   status: AttendanceBaseHealthMemberStatus;
+  tariff?: string | null;
   page?: number;
   pageSize?: number;
 }
