@@ -852,9 +852,25 @@ td {
 }
 
 .activation-item {
+  width: 100%;
   padding: 12px;
+  border: 0;
   border-radius: 12px;
   background: #f8fafc;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.activation-item:hover,
+.activation-item:focus-visible {
+  background: #eff6ff;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.18);
+  outline: none;
 }
 
 .activation-item span,
@@ -905,19 +921,7 @@ td {
   border: 0;
   background: #ffffff;
   color: inherit;
-  font: inherit;
   text-align: left;
-  cursor: pointer;
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease;
-}
-
-.other-accesses-card:hover,
-.other-accesses-card:focus-visible {
-  transform: translateY(-2px);
-  box-shadow: 0 14px 34px rgba(37, 99, 235, 0.12);
-  outline: none;
 }
 
 .other-accesses-heading {
@@ -957,10 +961,23 @@ td {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 6px 0;
+  width: 100%;
+  padding: 8px 6px;
+  border: 0;
   border-bottom: 1px solid #eef2f7;
+  background: transparent;
   color: #667085;
+  font: inherit;
   font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.other-accesses-row:hover,
+.other-accesses-row:focus-visible {
+  border-radius: 8px;
+  background: #eff6ff;
+  outline: none;
 }
 
 .other-accesses-row:last-child {
@@ -990,9 +1007,21 @@ td {
   font-size: 10px;
 }
 
-.other-accesses-footer strong {
+.other-accesses-toggle {
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: #1d4ed8;
+  font: inherit;
   font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.other-accesses-toggle:hover,
+.other-accesses-toggle:focus-visible {
+  text-decoration: underline;
+  outline: none;
 }
 
 .base-health-note {

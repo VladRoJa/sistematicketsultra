@@ -216,6 +216,13 @@ export class AttendanceService {
       );
     }
 
+    if (request.tariff) {
+      params = params.set(
+        'tariff',
+        request.tariff,
+      );
+    }
+
     if (
       includePagination
       && request.page !== undefined

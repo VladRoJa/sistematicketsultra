@@ -138,6 +138,7 @@ export class AttendanceDashboardComponent implements OnInit {
   ageBars: AgeBarModel[] = [];
   attendanceTypeBars: AttendanceTypeBarModel[] = [];
   distributionMetric: DistributionMetric = 'visits';
+  showAllOtherActiveAccessTariffs = false;
 
   private readonly numberFormatter = new Intl.NumberFormat('es-MX');
   private activeViewRequestId = 0;
@@ -171,12 +172,16 @@ export class AttendanceDashboardComponent implements OnInit {
     );
   }
 
-  get otherActiveAccessPreview(): AttendanceBaseHealthOtherAccessTariff[] {
-    return (
+  get otherActiveAccessItems(): AttendanceBaseHealthOtherAccessTariff[] {
+    const distribution = (
       this.baseHealth?.other_active_accesses
-        .tariff_distribution.slice(0, 5)
+        .tariff_distribution
       ?? []
     );
+
+    return this.showAllOtherActiveAccessTariffs
+      ? distribution
+      : distribution.slice(0, 5);
   }
 
   get otherActiveAccessRemainingTariffs(): number {
@@ -186,10 +191,7 @@ export class AttendanceDashboardComponent implements OnInit {
       ?? 0
     );
 
-    return Math.max(
-      0,
-      total - this.otherActiveAccessPreview.length,
-    );
+    return Math.max(0, total - 5);
   }
 
   get availableBranches(): AttendanceBranch[] {
@@ -485,6 +487,43 @@ export class AttendanceDashboardComponent implements OnInit {
     }
   }
 
+  openActivationBucket(key: string): void {
+    const statuses: Record<
+      string,
+      AttendanceBaseHealthMemberStatus
+    > = {
+      SAME_DAY: 'ACTIVATION_SAME_DAY',
+      DAYS_1_3: 'ACTIVATION_1_3',
+      DAYS_4_7: 'ACTIVATION_4_7',
+      DAYS_8_PLUS: 'ACTIVATION_8_PLUS',
+      NO_FIRST_VISIT_RECORDED: (
+        'ACTIVATION_NO_FIRST_VISIT'
+      ),
+      WITHIN_FIRST_7_DAYS: (
+        'ACTIVATION_RECENT_NO_VISIT'
+      ),
+    };
+
+    const status = statuses[key];
+    if (status) {
+      this.openBaseHealthDetail(status);
+    }
+  }
+
+  openOtherActiveAccessDetail(
+    item: AttendanceBaseHealthOtherAccessTariff,
+  ): void {
+    this.openBaseHealthDetail(
+      'OTHER_ACTIVE_ACCESS',
+      item.tariff,
+    );
+  }
+
+  toggleOtherActiveAccessTariffs(): void {
+    this.showAllOtherActiveAccessTariffs =
+      !this.showAllOtherActiveAccessTariffs;
+  }
+
   formatDecimal(value: number): string {
     return new Intl.NumberFormat('es-MX', {
       minimumFractionDigits: 2,
@@ -494,6 +533,7 @@ export class AttendanceDashboardComponent implements OnInit {
 
   openBaseHealthDetail(
     status: AttendanceBaseHealthMemberStatus,
+    tariff?: string,
   ): void {
     const filters = this.baseHealth?.filters;
     if (
@@ -515,6 +555,7 @@ export class AttendanceDashboardComponent implements OnInit {
           branchId: filters.branch_id,
           regionKey: filters.region_key,
           status,
+          tariff: tariff ?? null,
         },
       },
     );
@@ -743,6 +784,7 @@ export class AttendanceDashboardComponent implements OnInit {
         }
 
         this.baseHealth = baseHealth;
+        this.showAllOtherActiveAccessTariffs = false;
         this.loading = false;
       },
       error: (error) => {
