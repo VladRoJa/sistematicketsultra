@@ -43,8 +43,8 @@ def test_base_health_view_has_separate_frontend_contract():
     )
 
     assert "Salud de la base" in template
-    assert "Operación deportiva" in template
-    assert "Próximamente" in template
+    assert "Operación deportiva" not in template
+    assert "Próximamente" not in template
     assert (
         '[disabled]="!isSummaryView"'
         in template
@@ -80,6 +80,7 @@ def test_base_health_dialog_uses_external_template_and_styles():
 
 def test_base_health_behavior_metrics_are_wired_to_ui():
     models = _read("attendance.models.ts")
+    service = _read("attendance.service.ts")
     component = _read(
         "attendance-dashboard.component.ts"
     )
@@ -110,12 +111,26 @@ def test_base_health_behavior_metrics_are_wired_to_ui():
     assert "Menos de 1 visita por semana" in template
     assert "Otros accesos activos en el periodo" in template
     assert "FUERA DE KPI" in template
-    assert "otherActiveAccessPreview" in component
+    assert "otherActiveAccessItems" in component
     assert "otherActiveAccessRemainingTariffs" in component
+    assert "openActivationBucket(" in component
     assert (
-        "openBaseHealthDetail('OTHER_ACTIVE_ACCESS')"
+        "openActivationBucket(bucket.key)"
         in template
     )
+    assert "openOtherActiveAccessDetail(" in component
+    assert (
+        "openOtherActiveAccessDetail(item)"
+        in template
+    )
+    assert (
+        "openBaseHealthDetail('OTHER_ACTIVE_ACCESS')"
+        not in template
+    )
+    assert "toggleOtherActiveAccessTariffs()" in template
+    assert "tariff?: string | null" in models
+    assert "params.set(" in service
+    assert "'tariff'," in service
     assert "Socios para seguimiento" not in template
     assert (
         "openBaseHealthDetail('FREQUENCY_LT_1')"

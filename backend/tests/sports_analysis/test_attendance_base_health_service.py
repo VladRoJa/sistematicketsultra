@@ -588,6 +588,110 @@ def test_activation_exactly_seven_days_is_not_pending():
     )
 
 
+def test_activation_detail_matches_activation_buckets(
+    monkeypatch,
+):
+    state = health._BaseHealthState(
+        eligible_members={
+            "100": _member(
+                "100",
+                member_since=date(2026, 9, 1),
+            ),
+            "200": _member(
+                "200",
+                member_since=date(2026, 9, 1),
+            ),
+            "300": _member(
+                "300",
+                member_since=date(2026, 9, 1),
+            ),
+            "400": _member(
+                "400",
+                member_since=date(2026, 9, 1),
+            ),
+            "500": _member(
+                "500",
+                member_since=date(2026, 9, 1),
+            ),
+            "600": _member(
+                "600",
+                member_since=date(2026, 9, 20),
+            ),
+            "700": _member(
+                "700",
+                member_since=date(2026, 8, 20),
+            ),
+        },
+        visited_member_ids=frozenset(
+            {"100", "200", "300", "400", "700"}
+        ),
+        snapshot_dates=(date(2026, 9, 1),),
+        total_visits_checked=5,
+        resolved_visits=5,
+        member_visit_stats={
+            "100": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 1),
+                last_visit_date=date(2026, 9, 1),
+            ),
+            "200": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 3),
+                last_visit_date=date(2026, 9, 3),
+            ),
+            "300": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 6),
+                last_visit_date=date(2026, 9, 6),
+            ),
+            "400": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 10),
+                last_visit_date=date(2026, 9, 10),
+            ),
+            "700": health._MemberVisitStats(
+                visit_count=1,
+                first_visit_date=date(2026, 9, 2),
+                last_visit_date=date(2026, 9, 2),
+            ),
+        },
+    )
+
+    monkeypatch.setattr(
+        health,
+        "_build_state",
+        lambda *_args, **_kwargs: (
+            state,
+            (1,),
+        ),
+    )
+
+    expected = {
+        "ACTIVATION_SAME_DAY": "100",
+        "ACTIVATION_1_3": "200",
+        "ACTIVATION_4_7": "300",
+        "ACTIVATION_8_PLUS": "400",
+        "ACTIVATION_NO_FIRST_VISIT": "500",
+        "ACTIVATION_RECENT_NO_VISIT": "600",
+    }
+
+    for status, id_socio in expected.items():
+        result = health.attendance_base_health_members(
+            _scope(),
+            date_from=date(2026, 9, 1),
+            date_to=date(2026, 9, 25),
+            branch_id=None,
+            region_key=None,
+            status=status,
+        )
+
+        assert result["count"] == 1
+        assert [
+            row["id_socio"]
+            for row in result["rows"]
+        ] == [id_socio]
+
+
 def test_follow_up_uses_recency_or_low_frequency_once():
     state = health._BaseHealthState(
         eligible_members={
@@ -948,6 +1052,28 @@ def test_other_active_access_detail_uses_non_kpi_universe(
         for row in result["rows"]
     } == {"PASE GYMPASS", "SEMANA $299"}
 
+    filtered = health.attendance_base_health_members(
+        _scope(),
+        date_from=date(2026, 9, 1),
+        date_to=date(2026, 9, 25),
+        branch_id=None,
+        region_key=None,
+        status="OTHER_ACTIVE_ACCESS",
+        tariff="PASE GYMPASS",
+        page=1,
+        page_size=50,
+    )
+
+    assert filtered["count"] == 1
+    assert filtered["title"] == (
+        "Otros accesos activos en el periodo: "
+        "PASE GYMPASS"
+    )
+    assert [
+        row["id_socio"]
+        for row in filtered["rows"]
+    ] == ["900"]
+
 
 
 def test_base_health_export_includes_phone_without_exposing_it_in_json(
@@ -1057,6 +1183,12 @@ def test_other_active_access_export_includes_tariff_and_phone(
                 tariff="PASE GYMPASS",
                 phone="6869000000",
             ),
+            "901": _member(
+                "901",
+                applies_kpi=False,
+                tariff="SEMANA $299",
+                phone="6869010000",
+            ),
         },
     )
 
@@ -1077,6 +1209,7 @@ def test_other_active_access_export_includes_tariff_and_phone(
             branch_id=None,
             region_key=None,
             status="OTHER_ACTIVE_ACCESS",
+            tariff="PASE GYMPASS",
         )
     )
 
@@ -1095,6 +1228,7 @@ def test_other_active_access_export_includes_tariff_and_phone(
         "Alta",
         "Tarifa",
     )
+    assert len(rows) == 2
     assert rows[1][3] == "6869000000"
     assert rows[1][6] == "PASE GYMPASS"
 
