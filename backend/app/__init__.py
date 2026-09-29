@@ -20,6 +20,7 @@ from app.routes.formulario_ticket_routes import formulario_ticket_bp
 from app.routes.admin_usuarios_routes import admin_usuarios_bp
 from app.routes.pm_routes import pm_bp
 from app.routes.warehouse_routes import warehouse_bp
+from app.routes.warehouse_agregadoras_routes import warehouse_agregadoras_bp
 from app.routes.warehouse_internal_jobs import warehouse_internal_jobs_bp
 from app.routes.track_routes import track_bp
 from app.routes.track_tienda_routes import track_tienda_bp
@@ -114,6 +115,7 @@ def create_app():
         url_prefix='/api/maintenance-planner',
     )
     app.register_blueprint(warehouse_bp, url_prefix='/api/warehouse')
+    app.register_blueprint(warehouse_agregadoras_bp, url_prefix='/api/warehouse')
     app.register_blueprint(
         warehouse_internal_jobs_bp,
         url_prefix="/api/warehouse/internal",
