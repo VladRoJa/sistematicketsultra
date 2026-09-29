@@ -102,13 +102,6 @@
         Salud de la base
       </button>
 
-      <button
-        type="button"
-        class="coming-soon"
-        disabled>
-        Operación deportiva
-        <small>Próximamente</small>
-      </button>
     </div>
   </div>
 
@@ -613,21 +606,21 @@
           </div>
 
           <div class="activation-grid">
-            <div
+            <button
+              type="button"
               class="activation-item"
-              *ngFor="let bucket of baseHealth.activation.distribution">
+              *ngFor="let bucket of baseHealth.activation.distribution"
+              (click)="openActivationBucket(bucket.key)">
               <span>{{ bucket.label }}</span>
               <strong>{{ formatNumber(bucket.count) }}</strong>
-              <small>{{ formatPercent(bucket.pct) }}</small>
-            </div>
+              <small>{{ formatPercent(bucket.pct) }} · Ver socios</small>
+            </button>
           </div>
         </mat-card>
 
-        <button
-          type="button"
+        <mat-card
           class="panel other-accesses-card"
-          *ngIf="baseHealth.other_active_accesses.count > 0"
-          (click)="openBaseHealthDetail('OTHER_ACTIVE_ACCESS')">
+          *ngIf="baseHealth.other_active_accesses.count > 0">
           <div class="other-accesses-heading">
             <div>
               <span class="eyebrow">FUERA DE KPI</span>
@@ -644,21 +637,33 @@
           </p>
 
           <div class="other-accesses-list">
-            <div
+            <button
+              type="button"
               class="other-accesses-row"
-              *ngFor="let item of otherActiveAccessPreview">
+              *ngFor="let item of otherActiveAccessItems"
+              (click)="openOtherActiveAccessDetail(item)">
               <span>{{ item.tariff }}</span>
-              <strong>{{ formatNumber(item.count) }}</strong>
-            </div>
+              <strong>
+                {{ formatNumber(item.count) }} · Ver detalle
+              </strong>
+            </button>
           </div>
 
-          <div class="other-accesses-footer">
-            <span *ngIf="otherActiveAccessRemainingTariffs > 0">
-              +{{ otherActiveAccessRemainingTariffs }} tarifas más
-            </span>
-            <strong>Ver detalle</strong>
+          <div
+            class="other-accesses-footer"
+            *ngIf="otherActiveAccessRemainingTariffs > 0">
+            <button
+              type="button"
+              class="other-accesses-toggle"
+              (click)="toggleOtherActiveAccessTariffs()">
+              {{
+                showAllOtherActiveAccessTariffs
+                  ? 'Ver menos'
+                  : '+' + otherActiveAccessRemainingTariffs + ' tarifas más'
+              }}
+            </button>
           </div>
-        </button>
+        </mat-card>
       </section>
 
       <mat-card class="panel base-health-note">
