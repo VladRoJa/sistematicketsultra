@@ -47,11 +47,18 @@ SPREADSHEET_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 XML_NS = "http://www.w3.org/XML/1998/namespace"
 Q = lambda tag: f"{{{SPREADSHEET_NS}}}{tag}"
 
-ET.register_namespace("", SPREADSHEET_NS)
-ET.register_namespace(
-    "r",
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
-)
+XML_NAMESPACES = {
+    "": SPREADSHEET_NS,
+    "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+    "mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
+    "x14ac": "http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac",
+    "xr": "http://schemas.microsoft.com/office/spreadsheetml/2014/revision",
+    "xr2": "http://schemas.microsoft.com/office/spreadsheetml/2015/revision2",
+    "xr3": "http://schemas.microsoft.com/office/spreadsheetml/2016/revision3",
+}
+
+for namespace_prefix, namespace_uri in XML_NAMESPACES.items():
+    ET.register_namespace(namespace_prefix, namespace_uri)
 
 
 class AgregadorasConsolidadoError(RuntimeError):
