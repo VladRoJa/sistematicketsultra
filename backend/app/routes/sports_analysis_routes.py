@@ -370,6 +370,13 @@ def get_attendance_base_health_members():
                 request.args.get("status")
                 or ""
             ),
+            tariff=(
+                str(
+                    request.args.get("tariff")
+                    or ""
+                ).strip()
+                or None
+            ),
             page=request.args.get("page"),
             page_size=request.args.get(
                 "page_size"
@@ -439,6 +446,13 @@ def export_attendance_base_health_members():
                 status=str(
                     request.args.get("status")
                     or ""
+                ),
+                tariff=(
+                    str(
+                        request.args.get("tariff")
+                        or ""
+                    ).strip()
+                    or None
                 ),
             )
         )
