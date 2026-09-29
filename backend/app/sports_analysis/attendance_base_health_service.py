@@ -62,6 +62,29 @@ BASE_HEALTH_STATUS_FREQUENCY_GTE_3 = "FREQUENCY_GTE_3"
 BASE_HEALTH_STATUS_OTHER_ACTIVE_ACCESS = (
     "OTHER_ACTIVE_ACCESS"
 )
+BASE_HEALTH_STATUS_ACTIVATION_SAME_DAY = (
+    "ACTIVATION_SAME_DAY"
+)
+BASE_HEALTH_STATUS_ACTIVATION_1_3 = "ACTIVATION_1_3"
+BASE_HEALTH_STATUS_ACTIVATION_4_7 = "ACTIVATION_4_7"
+BASE_HEALTH_STATUS_ACTIVATION_8_PLUS = (
+    "ACTIVATION_8_PLUS"
+)
+BASE_HEALTH_STATUS_ACTIVATION_NO_FIRST_VISIT = (
+    "ACTIVATION_NO_FIRST_VISIT"
+)
+BASE_HEALTH_STATUS_ACTIVATION_RECENT_NO_VISIT = (
+    "ACTIVATION_RECENT_NO_VISIT"
+)
+
+BASE_HEALTH_ACTIVATION_STATUSES = {
+    BASE_HEALTH_STATUS_ACTIVATION_SAME_DAY,
+    BASE_HEALTH_STATUS_ACTIVATION_1_3,
+    BASE_HEALTH_STATUS_ACTIVATION_4_7,
+    BASE_HEALTH_STATUS_ACTIVATION_8_PLUS,
+    BASE_HEALTH_STATUS_ACTIVATION_NO_FIRST_VISIT,
+    BASE_HEALTH_STATUS_ACTIVATION_RECENT_NO_VISIT,
+}
 
 BASE_HEALTH_MEMBER_STATUSES = {
     BASE_HEALTH_STATUS_WITH_VISIT,
@@ -79,6 +102,7 @@ BASE_HEALTH_MEMBER_STATUSES = {
     BASE_HEALTH_STATUS_FREQUENCY_2_2_99,
     BASE_HEALTH_STATUS_FREQUENCY_GTE_3,
     BASE_HEALTH_STATUS_OTHER_ACTIVE_ACCESS,
+    *BASE_HEALTH_ACTIVATION_STATUSES,
 }
 
 BASE_HEALTH_MEMBER_TITLES = {
@@ -116,6 +140,24 @@ BASE_HEALTH_MEMBER_TITLES = {
     ),
     BASE_HEALTH_STATUS_OTHER_ACTIVE_ACCESS: (
         "Otros accesos activos en el periodo"
+    ),
+    BASE_HEALTH_STATUS_ACTIVATION_SAME_DAY: (
+        "Primera visita: mismo día"
+    ),
+    BASE_HEALTH_STATUS_ACTIVATION_1_3: (
+        "Primera visita: 1–3 días"
+    ),
+    BASE_HEALTH_STATUS_ACTIVATION_4_7: (
+        "Primera visita: 4–7 días"
+    ),
+    BASE_HEALTH_STATUS_ACTIVATION_8_PLUS: (
+        "Primera visita: 8+ días"
+    ),
+    BASE_HEALTH_STATUS_ACTIVATION_NO_FIRST_VISIT: (
+        "7+ días sin primera visita"
+    ),
+    BASE_HEALTH_STATUS_ACTIVATION_RECENT_NO_VISIT: (
+        "Alta reciente, aún sin visita"
     ),
 }
 DEFAULT_MEMBER_PAGE_SIZE = 50
@@ -355,6 +397,7 @@ def attendance_base_health_members(
     branch_id: int | None,
     region_key: str | None,
     status: str,
+    tariff: str | None = None,
     page: object = 1,
     page_size: object = DEFAULT_MEMBER_PAGE_SIZE,
     timings: dict[str, float] | None = None,
@@ -368,6 +411,16 @@ def attendance_base_health_members(
     ):
         raise SportsAnalysisValidationError(
             "status de Salud de la base inválido."
+        )
+
+    normalized_tariff = _clean_text(tariff)
+    if (
+        normalized_tariff
+        and normalized_status
+        != BASE_HEALTH_STATUS_OTHER_ACTIVE_ACCESS
+    ):
+        raise SportsAnalysisValidationError(
+            "tariff sólo aplica a otros accesos activos."
         )
 
     safe_page = _positive_int(
@@ -399,6 +452,7 @@ def attendance_base_health_members(
         status=normalized_status,
         date_from=date_from,
         date_to=date_to,
+        tariff=normalized_tariff,
     )
     _record_timing(
         timings,
@@ -444,11 +498,19 @@ def attendance_base_health_members(
         total_started,
     )
 
+    title = BASE_HEALTH_MEMBER_TITLES[
+        normalized_status
+    ]
+    if (
+        normalized_status
+        == BASE_HEALTH_STATUS_OTHER_ACTIVE_ACCESS
+        and normalized_tariff
+    ):
+        title = f"{title}: {normalized_tariff}"
+
     return {
         "status": normalized_status,
-        "title": BASE_HEALTH_MEMBER_TITLES[
-            normalized_status
-        ],
+        "title": title,
         "count": count,
         "page": safe_page,
         "page_size": safe_page_size,
@@ -466,6 +528,7 @@ def attendance_base_health_members_export(
     branch_id: int | None,
     region_key: str | None,
     status: str,
+    tariff: str | None = None,
 ):
     normalized_status = str(
         status or ""
@@ -475,6 +538,16 @@ def attendance_base_health_members_export(
     ):
         raise SportsAnalysisValidationError(
             "status de Salud de la base inválido."
+        )
+
+    normalized_tariff = _clean_text(tariff)
+    if (
+        normalized_tariff
+        and normalized_status
+        != BASE_HEALTH_STATUS_OTHER_ACTIVE_ACCESS
+    ):
+        raise SportsAnalysisValidationError(
+            "tariff sólo aplica a otros accesos activos."
         )
 
     state, _ = _build_state(
@@ -489,6 +562,7 @@ def attendance_base_health_members_export(
         status=normalized_status,
         date_from=date_from,
         date_to=date_to,
+        tariff=normalized_tariff,
     )
 
     rows = [
@@ -563,11 +637,17 @@ def _detail_members_for_status(
     status: str,
     date_from: date,
     date_to: date,
+    tariff: str | None = None,
 ) -> list[_EligibleMember]:
     if status == BASE_HEALTH_STATUS_OTHER_ACTIVE_ACCESS:
-        members = list(
-            state.other_active_members.values()
-        )
+        members = [
+            member
+            for member in state.other_active_members.values()
+            if (
+                tariff is None
+                or (member.tariff or "Sin tarifa") == tariff
+            )
+        ]
     else:
         members = [
             member
@@ -604,6 +684,15 @@ def _member_matches_detail_status(
         member.id_socio
         in state.visited_member_ids
     )
+
+    if status in BASE_HEALTH_ACTIVATION_STATUSES:
+        return _member_matches_activation_status(
+            state,
+            member,
+            status=status,
+            date_from=date_from,
+            date_to=date_to,
+        )
 
     if status == BASE_HEALTH_STATUS_WITH_VISIT:
         return has_visit
@@ -693,6 +782,55 @@ def _member_matches_detail_status(
     if status == BASE_HEALTH_STATUS_FREQUENCY_GTE_3:
         return frequency >= 3
 
+    return False
+
+
+def _member_matches_activation_status(
+    state: _BaseHealthState,
+    member: _EligibleMember,
+    *,
+    status: str,
+    date_from: date,
+    date_to: date,
+) -> bool:
+    member_since = member.member_since
+    if (
+        member_since is None
+        or member_since < date_from
+        or member_since > date_to
+    ):
+        return False
+
+    stats = state.member_visit_stats.get(
+        member.id_socio
+    )
+    if stats is None:
+        days_since_signup = (
+            date_to - member_since
+        ).days
+        if (
+            status
+            == BASE_HEALTH_STATUS_ACTIVATION_NO_FIRST_VISIT
+        ):
+            return days_since_signup >= 7
+        if (
+            status
+            == BASE_HEALTH_STATUS_ACTIVATION_RECENT_NO_VISIT
+        ):
+            return days_since_signup < 7
+        return False
+
+    days_to_first_visit = (
+        stats.first_visit_date - member_since
+    ).days
+    if status == BASE_HEALTH_STATUS_ACTIVATION_SAME_DAY:
+        return days_to_first_visit <= 0
+    if status == BASE_HEALTH_STATUS_ACTIVATION_1_3:
+        return 1 <= days_to_first_visit <= 3
+    if status == BASE_HEALTH_STATUS_ACTIVATION_4_7:
+        return 4 <= days_to_first_visit <= 7
+    if status == BASE_HEALTH_STATUS_ACTIVATION_8_PLUS:
+        return days_to_first_visit > 7
     return False
 
 
