@@ -8,7 +8,7 @@ from time import perf_counter
 from types import SimpleNamespace
 from typing import Any
 
-from sqlalchemy import Date, String, column, func, or_, tuple_, values
+from sqlalchemy import Date, String, column, func, or_, select, true, values
 
 from app.extensions import db
 from app.models.attendance import WarehouseAttendanceVisitORM
@@ -1527,52 +1527,7 @@ def _load_historical_last_visits(
             start : start + IDENTITY_BATCH_SIZE
         ]
 
-        rows = (
-            db.session.query(
-                SociosActivosSnapshotRowORM.pin,
-                func.date(
-                    SociosActivosSnapshotRowORM
-                    .fecha_ingreso_local
-                ).label("member_since"),
-                func.count(
-                    func.distinct(
-                        SociosActivosSnapshotRowORM.id_socio
-                    )
-                ).label("candidate_count"),
-                func.min(
-                    SociosActivosSnapshotRowORM.id_socio
-                ).label("id_socio"),
-            )
-            .join(
-                SociosActivosSnapshotORM,
-                SociosActivosSnapshotORM.id
-                == SociosActivosSnapshotRowORM
-                .snapshot_id,
-            )
-            .filter(
-                tuple_(
-                    SociosActivosSnapshotRowORM.pin,
-                    func.date(
-                        SociosActivosSnapshotRowORM
-                        .fecha_ingreso_local
-                    ),
-                ).in_(chunk),
-                SociosActivosSnapshotORM.report_type_key
-                == "socios_activos",
-                SociosActivosSnapshotORM.snapshot_kind
-                == "daily",
-                SociosActivosSnapshotORM.is_canonical
-                .is_(True),
-            )
-            .group_by(
-                SociosActivosSnapshotRowORM.pin,
-                func.date(
-                    SociosActivosSnapshotRowORM
-                    .fecha_ingreso_local
-                ),
-            )
-            .all()
-        )
+        rows = _load_historical_identity_rows(chunk)
 
         for row in rows:
             candidate_count = int(
@@ -1698,6 +1653,54 @@ def _load_historical_last_visits(
 
     return last_visits
 
+
+
+def _load_historical_identity_rows(
+    keys: list[tuple[str, date]],
+):
+    row = SociosActivosSnapshotRowORM
+    snapshot = SociosActivosSnapshotORM
+    requested_keys = values(
+        column("pin", row.pin.type),
+        column("member_since", Date()),
+        name="requested_identities",
+    ).data(keys)
+    member_since = func.date(row.fecha_ingreso_local)
+
+    # Aggregate every canonical candidate for each identity. A LIMIT or
+    # selecting only the latest snapshot would hide ambiguous identities.
+    candidates = (
+        select(
+            row.pin,
+            member_since.label("member_since"),
+            func.count(func.distinct(row.id_socio)).label(
+                "candidate_count"
+            ),
+            func.min(row.id_socio).label("id_socio"),
+        )
+        .select_from(row)
+        .join(snapshot, snapshot.id == row.snapshot_id)
+        .where(
+            row.pin == requested_keys.c.pin,
+            member_since == requested_keys.c.member_since,
+            snapshot.report_type_key == "socios_activos",
+            snapshot.snapshot_kind == "daily",
+            snapshot.is_canonical.is_(True),
+        )
+        .group_by(row.pin, member_since)
+        .correlate(requested_keys)
+        .lateral("identity_candidates")
+    )
+    statement = (
+        select(
+            candidates.c.pin,
+            candidates.c.member_since,
+            candidates.c.candidate_count,
+            candidates.c.id_socio,
+        )
+        .select_from(requested_keys.join(candidates, true()))
+    )
+    return db.session.execute(statement).all()
 
 
 def _load_historical_last_visit_rows(

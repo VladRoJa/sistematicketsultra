@@ -1,7 +1,10 @@
+from dataclasses import replace
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 from openpyxl import load_workbook
+from sqlalchemy.dialects import postgresql
 
 from app.sports_analysis import (
     attendance_base_health_service as health,
@@ -1319,31 +1322,14 @@ def test_historical_last_visit_query_uses_distinct_on_latest(
 def test_historical_visit_batches_record_individual_timings(
     monkeypatch,
 ):
-    class FakeQuery:
-        def join(self, *_args, **_kwargs):
-            return self
+    identity_batches = []
 
-        def filter(self, *_args, **_kwargs):
-            return self
-
-        def group_by(self, *_args, **_kwargs):
-            return self
-
-        def all(self):
-            return [
-                (
-                    "PIN-100",
-                    date(2026, 1, 1),
-                    1,
-                    "100",
-                ),
-                (
-                    "PIN-200",
-                    date(2026, 1, 1),
-                    1,
-                    "200",
-                ),
-            ]
+    def fake_identity_rows(keys):
+        identity_batches.append(keys)
+        return [
+            (pin, member_since, 1, pin.removeprefix("PIN-"))
+            for pin, member_since in keys
+        ]
 
     monkeypatch.setattr(
         health,
@@ -1356,9 +1342,9 @@ def test_historical_visit_batches_record_individual_timings(
         1,
     )
     monkeypatch.setattr(
-        health.db.session,
-        "query",
-        lambda *_args, **_kwargs: FakeQuery(),
+        health,
+        "_load_historical_identity_rows",
+        fake_identity_rows,
     )
 
     def fake_last_visit_rows(
@@ -1407,3 +1393,109 @@ def test_historical_visit_batches_record_individual_timings(
     assert "hist_q3" not in timings
     assert timings["hist_q1"] >= 0
     assert timings["hist_q2"] >= 0
+    assert len(identity_batches) == 2
+    assert all(len(batch) == 1 for batch in identity_batches)
+
+
+def test_historical_identity_query_correlates_all_canonical_candidates(
+    monkeypatch,
+):
+    statements = []
+    expected = [("00123", date(2025, 1, 1), 2, "100")]
+
+    def execute(statement):
+        statements.append(statement)
+        return SimpleNamespace(all=lambda: expected)
+
+    monkeypatch.setattr(health.db.session, "execute", execute)
+    rows = health._load_historical_identity_rows(
+        [("00123", date(2025, 1, 1))]
+    )
+
+    assert rows == expected
+    compiled = statements[0].compile(dialect=postgresql.dialect())
+    sql = str(compiled)
+    assert "JOIN LATERAL" in sql
+    assert sql.count("VALUES") == 1
+    assert "socios_activos_snapshot_rows.pin = requested_identities.pin" in sql
+    assert (
+        "date(socios_activos_snapshot_rows.fecha_ingreso_local) "
+        "= requested_identities.member_since"
+    ) in sql
+    assert "count(distinct(socios_activos_snapshot_rows.id_socio))" in sql
+    assert "min(socios_activos_snapshot_rows.id_socio)" in sql
+    assert "socios_activos_snapshots.is_canonical IS true" in sql
+    assert "socios_activos_snapshots.id = socios_activos_snapshot_rows.snapshot_id" in sql
+    assert "socios_activos_snapshots.report_type_key =" in sql
+    assert "socios_activos_snapshots.snapshot_kind =" in sql
+    assert "GROUP BY socios_activos_snapshot_rows.pin, date(" in sql
+    assert "LIMIT" not in sql
+    assert "cutoff_date" not in sql
+    assert {"socios_activos", "daily", "00123", date(2025, 1, 1)} <= set(
+        compiled.params.values()
+    )
+
+
+@pytest.mark.parametrize(
+    ("candidate_count", "id_socio", "accepted"),
+    [(1, "100", True), (2, "100", False), (0, None, False), (1, " ", False)],
+)
+def test_historical_identity_keeps_ambiguity_and_empty_id_rules(
+    monkeypatch, candidate_count, id_socio, accepted,
+):
+    member = _member("100")
+    key = (member.pin, member.member_since)
+    visit_calls = []
+    monkeypatch.setattr(health, "_has_historical_attendance_before", lambda *_: True)
+    monkeypatch.setattr(
+        health, "_load_historical_identity_rows",
+        lambda keys: [(key[0], key[1], candidate_count, id_socio)],
+    )
+
+    def visits(keys, *, date_before):
+        visit_calls.append((keys, date_before))
+        return [(key[0], key[1], date(2026, 8, 31))]
+
+    monkeypatch.setattr(health, "_load_historical_last_visit_rows", visits)
+    result = health._load_historical_last_visits(
+        {"100": member}, {}, date_before=date(2026, 9, 1),
+    )
+    assert result == ({"100": date(2026, 8, 31)} if accepted else {})
+    assert visit_calls == ([([key], date(2026, 9, 1))] if accepted else [])
+
+
+def test_historical_identity_deduplicates_keys_and_preserves_signup_date(
+    monkeypatch,
+):
+    first = replace(_member("100"), pin="00123")
+    second = replace(_member("200"), pin="00123", member_since=date(2025, 1, 1))
+    duplicate = replace(first, id_socio="300")
+    visited = _member("400")
+    missing_date = _member("500", member_since=None)
+    identity_calls = []
+    monkeypatch.setattr(health, "_has_historical_attendance_before", lambda *_: True)
+
+    def identities(keys):
+        identity_calls.append(set(keys))
+        return [
+            (first.pin, first.member_since, 1, "100"),
+            (second.pin, second.member_since, 1, "200"),
+        ]
+
+    def visits(keys, *, date_before):
+        assert date_before == date(2026, 9, 1)
+        assert set(keys) == identity_calls[0]
+        return [
+            (first.pin, first.member_since, date(2026, 8, 31)),
+            (second.pin, second.member_since, date(2026, 7, 1)),
+        ]
+
+    monkeypatch.setattr(health, "_load_historical_identity_rows", identities)
+    monkeypatch.setattr(health, "_load_historical_last_visit_rows", visits)
+    result = health._load_historical_last_visits(
+        {m.id_socio: m for m in (first, second, duplicate, visited, missing_date)},
+        {"400": health._MemberVisitStats(1, date(2026, 9, 2), date(2026, 9, 2))},
+        date_before=date(2026, 9, 1),
+    )
+    assert identity_calls == [{(first.pin, first.member_since), (second.pin, second.member_since)}]
+    assert result == {"100": date(2026, 8, 31), "200": date(2026, 7, 1)}
