@@ -148,12 +148,28 @@ export interface WarehouseUploadAuditResponse {
 }
 
 
+export interface WarehouseAgregadorasConsolidadoStatus {
+  template_ready: boolean;
+  template_upload_id: number | null;
+  template_cutoff_date: string | null;
+  latest_ready_date: string | null;
+  generated: boolean;
+  cutoff_date: string | null;
+  generated_at: string | null;
+  download_filename: string | null;
+  file_size_bytes: number | null;
+  wellhub_rows_added: number | null;
+  totalpass_rows_added: number | null;
+}
+
+
 @Injectable({
   providedIn: 'root'
 })
 export class WarehouseUploadsService {
   private readonly http = inject(HttpClient);
-  private readonly apiUrl = `${environment.apiUrl}/warehouse/uploads`;
+  private readonly warehouseApiUrl = `${environment.apiUrl}/warehouse`;
+  private readonly apiUrl = `${this.warehouseApiUrl}/uploads`;
 
   getUploads(params: WarehouseUploadListParams = {}): Observable<WarehouseUploadListResponse> {
     return this.http.get<WarehouseUploadListResponse>(this.apiUrl, {
@@ -238,6 +254,25 @@ getUploadAudit(uploadId: number): Observable<WarehouseUploadAuditResponse> {
   return this.http.get<WarehouseUploadAuditResponse>(`${this.apiUrl}/${uploadId}/audit`, {
     headers: this.buildAuthHeaders(),
   });
+}
+
+getAgregadorasConsolidadoStatus(): Observable<WarehouseAgregadorasConsolidadoStatus> {
+  return this.http.get<WarehouseAgregadorasConsolidadoStatus>(
+    `${this.warehouseApiUrl}/agregadoras-consolidado/status`,
+    {
+      headers: this.buildAuthHeaders(),
+    }
+  );
+}
+
+downloadAgregadorasConsolidado() {
+  return this.http.get(
+    `${this.warehouseApiUrl}/agregadoras-consolidado/download`,
+    {
+      headers: this.buildAuthHeaders(),
+      responseType: 'blob',
+    }
+  );
 }
 
 }
