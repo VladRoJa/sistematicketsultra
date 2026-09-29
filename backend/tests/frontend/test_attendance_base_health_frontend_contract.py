@@ -80,6 +80,7 @@ def test_base_health_dialog_uses_external_template_and_styles():
 
 def test_base_health_behavior_metrics_are_wired_to_ui():
     models = _read("attendance.models.ts")
+    service = _read("attendance.service.ts")
     component = _read(
         "attendance-dashboard.component.ts"
     )
