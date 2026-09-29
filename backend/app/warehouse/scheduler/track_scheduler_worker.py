@@ -24,6 +24,11 @@ from app.warehouse.services.track_daily_version_service import (
 from app.warehouse.services.track_source_agregadoras_daily_service import (
     resolve_exact_agregadoras_snapshot_status_for_date,
 )
+from app.warehouse.services.agregadoras_consolidado_export_service import (
+    AgregadorasConsolidadoError,
+    AgregadorasTemplateMissingError,
+    generate_agregadoras_consolidado,
+)
 from app.warehouse.services.warehouse_retention_service import (
     purge_venta_total_non_canonical_snapshots,
 )
@@ -46,6 +51,7 @@ DEFAULT_WAREHOUSE_RETENTION_MINUTE = 10
 DEFAULT_WAREHOUSE_RETENTION_DAYS = 7
 DEFAULT_WAREHOUSE_RETENTION_BATCH_LIMIT = 100
 DEFAULT_WAREHOUSE_RETENTION_MAX_BATCHES = 20
+DEFAULT_AGREGADORAS_EXPORT_CHECK_MINUTE_STEP = 5
 
 
 @dataclass(frozen=True)
@@ -389,6 +395,23 @@ def execute_warehouse_retention() -> dict:
 
     return result
 
+def _agregadoras_export_check_key(
+    now_local: datetime,
+) -> str | None:
+    step = max(
+        1,
+        _env_int(
+            "AGREGADORAS_EXPORT_CHECK_MINUTE_STEP",
+            DEFAULT_AGREGADORAS_EXPORT_CHECK_MINUTE_STEP,
+        ),
+    )
+
+    if now_local.minute % step != 0:
+        return None
+
+    return now_local.strftime("%Y-%m-%dT%H:%M")
+
+
 def _should_run_warehouse_retention(
     *,
     now_local: datetime,
@@ -427,6 +450,8 @@ def run_scheduler_loop() -> None:
 
     app = create_app()
     last_warehouse_retention_run_date: date | None = None
+    last_agregadoras_export_check_key: str | None = None
+    last_agregadoras_export_error: str | None = None
 
     with app.app_context():
         while True:
@@ -449,6 +474,54 @@ def run_scheduler_loop() -> None:
                             decision.action,
                             decision.track_date.isoformat(),
                         )
+                agregadoras_check_key = _agregadoras_export_check_key(
+                    now_local
+                )
+                if (
+                    agregadoras_check_key is not None
+                    and agregadoras_check_key
+                    != last_agregadoras_export_check_key
+                ):
+                    last_agregadoras_export_check_key = (
+                        agregadoras_check_key
+                    )
+
+                    try:
+                        export_result = generate_agregadoras_consolidado()
+                        last_agregadoras_export_error = None
+
+                        if export_result.get("status") == "generated":
+                            LOGGER.info(
+                                "Consolidado agregadoras generado: "
+                                "cutoff_date=%s wellhub_rows=%s "
+                                "totalpass_rows=%s size_bytes=%s",
+                                export_result.get("cutoff_date"),
+                                export_result.get("wellhub_rows_added"),
+                                export_result.get("totalpass_rows_added"),
+                                export_result.get("file_size_bytes"),
+                            )
+                    except AgregadorasTemplateMissingError as exc:
+                        error_key = f"template_missing:{exc}"
+                        if error_key != last_agregadoras_export_error:
+                            LOGGER.info(
+                                "Consolidado agregadoras pendiente: %s",
+                                exc,
+                            )
+                        last_agregadoras_export_error = error_key
+                    except AgregadorasConsolidadoError as exc:
+                        error_key = str(exc)
+                        if error_key != last_agregadoras_export_error:
+                            LOGGER.warning(
+                                "No se actualizó consolidado agregadoras: %s",
+                                exc,
+                            )
+                        last_agregadoras_export_error = error_key
+                    except Exception:
+                        LOGGER.exception(
+                            "Fallo inesperado generando consolidado "
+                            "de agregadoras."
+                        )
+
                 if _should_run_warehouse_retention(
                     now_local=now_local,
                     last_run_date=(

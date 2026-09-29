@@ -443,11 +443,54 @@
   border: 1px solid rgba(22, 163, 74, 0.22);
 }
 
+.warehouse-banner--warning {
+  background: #fff7ed;
+  color: #9a3412;
+  border: 1px solid rgba(234, 88, 12, 0.22);
+}
+
 .warehouse-banner--muted {
   background: var(--ultra-gray-50);
   color: var(--ultra-gray-600);
   border: 1px solid var(--ultra-gray-200);
   margin: 14px 20px;
+}
+
+/* ==========================================================================
+   Suite Ultra UI v1 - Consolidado agregadoras
+   ========================================================================== */
+
+.warehouse-agregadoras-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px 20px;
+}
+
+.warehouse-agregadoras-card__status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.warehouse-agregadoras-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+@media (max-width: 820px) {
+  .warehouse-agregadoras-card__status-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .warehouse-agregadoras-card__actions {
+    justify-content: stretch;
+  }
+
+  .warehouse-agregadoras-card__actions .warehouse-button {
+    width: 100%;
+  }
 }
 
 /* ==========================================================================

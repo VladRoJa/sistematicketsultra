@@ -47,6 +47,86 @@
     {{ catalogsErrorMessage }}
   </p>
 
+  <section class="warehouse-panel warehouse-agregadoras-card">
+    <div class="warehouse-panel__header warehouse-panel__header--with-action">
+      <div>
+        <h2>Consolidado de agregadoras</h2>
+        <p>
+          Se actualiza automáticamente cuando Warehouse tiene el par canónico
+          de Wellhub y Totalpass.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        class="warehouse-button warehouse-button--secondary"
+        (click)="loadAgregadorasConsolidadoStatus()"
+        [disabled]="isAgregadorasStatusLoading"
+      >
+        Actualizar estado
+      </button>
+    </div>
+
+    <div class="warehouse-agregadoras-card__body">
+      <div class="warehouse-agregadoras-card__status-grid">
+        <div class="warehouse-detail-item">
+          <span class="warehouse-detail-item__label">Plantilla</span>
+          <strong class="warehouse-detail-item__value">
+            {{ getAgregadorasTemplateStatusText() }}
+          </strong>
+        </div>
+
+        <div class="warehouse-detail-item">
+          <span class="warehouse-detail-item__label">Archivo</span>
+          <strong class="warehouse-detail-item__value">
+            {{ getAgregadorasCutoffText() }}
+          </strong>
+        </div>
+
+        <div class="warehouse-detail-item">
+          <span class="warehouse-detail-item__label">Fuentes</span>
+          <strong class="warehouse-detail-item__value">
+            {{ getAgregadorasReadyText() }}
+          </strong>
+        </div>
+      </div>
+
+      <p
+        class="warehouse-banner warehouse-banner--warning"
+        *ngIf="agregadorasStatus && !agregadorasStatus.template_ready"
+      >
+        Falta la carga única del archivo base. Selecciona
+        “Plantilla Consolidado Agregadoras” en Nuevo upload y usa como fecha
+        de corte 2026-08-19.
+      </p>
+
+      <p
+        class="warehouse-banner warehouse-banner--error"
+        *ngIf="agregadorasStatusError"
+      >
+        {{ agregadorasStatusError }}
+      </p>
+
+      <p
+        class="warehouse-banner warehouse-banner--error"
+        *ngIf="agregadorasDownloadError"
+      >
+        {{ agregadorasDownloadError }}
+      </p>
+
+      <div class="warehouse-agregadoras-card__actions">
+        <button
+          type="button"
+          class="warehouse-button warehouse-button--primary"
+          (click)="downloadAgregadorasConsolidado()"
+          [disabled]="!canDownloadAgregadorasConsolidado()"
+        >
+          Descargar consolidado
+        </button>
+      </div>
+    </div>
+  </section>
+
   <div class="warehouse-main-grid">
     <section class="warehouse-panel warehouse-panel--form">
       <div class="warehouse-panel__header">
