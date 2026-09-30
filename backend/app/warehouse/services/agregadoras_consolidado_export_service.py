@@ -12,6 +12,7 @@ from zipfile import ZipFile
 import hashlib
 import json
 import os
+import unicodedata
 import xml.etree.ElementTree as ET
 
 from flask import current_app
@@ -450,6 +451,42 @@ def _template_month_state(
         }
 
 
+def _normalize_branch_match_text(value: str) -> str:
+    normalized = unicodedata.normalize(
+        "NFKD",
+        str(value or "").casefold(),
+    )
+    without_accents = "".join(
+        char
+        for char in normalized
+        if not unicodedata.combining(char)
+    )
+    cleaned = "".join(
+        char if char.isalnum() else " "
+        for char in without_accents
+    )
+    return " ".join(cleaned.split())
+
+
+def _branch_names_match(
+    left: str,
+    right: str,
+) -> bool:
+    left_key = _normalize_branch_match_text(left)
+    right_key = _normalize_branch_match_text(right)
+
+    if not left_key or not right_key:
+        return False
+
+    if left_key == right_key:
+        return True
+
+    return (
+        left_key.endswith(" " + right_key)
+        or right_key.endswith(" " + left_key)
+    )
+
+
 def _track_aliases_by_normalized_raw(
     *,
     source_family: str,
@@ -525,9 +562,14 @@ def _canonicalize_template_baseline(
         }
 
         if not candidate_canons:
-            candidate_canons.update(
-                canons_by_track_label.get(template_key, set())
-            )
+            for origin_key, canon in alias_map.items():
+                if _branch_names_match(template_key, origin_key):
+                    candidate_canons.add(canon)
+
+        if not candidate_canons:
+            for label_key, canons in canons_by_track_label.items():
+                if _branch_names_match(template_key, label_key):
+                    candidate_canons.update(canons)
 
         if len(candidate_canons) != 1:
             unresolved.append(
