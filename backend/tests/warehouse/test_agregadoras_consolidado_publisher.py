@@ -27,6 +27,11 @@ def test_publish_agregadoras_creates_document_first_time(
         "_find_existing_document",
         lambda: None,
     )
+    monkeypatch.setattr(
+        publisher,
+        "_resolve_admicorp_user_id",
+        lambda: 77,
+    )
 
     def fake_upload(**kwargs):
         upload_calls.append(kwargs)
@@ -72,7 +77,15 @@ def test_publish_agregadoras_creates_document_first_time(
     assert publication["warehouse_upload_id"] == 55
     assert publication["publish_now"] is True
     assert publication["is_sensitive"] is True
-    assert publication["visibility_mode"] == "PRIVATE"
+    assert publication["visibility_mode"] == "CUSTOM"
+    assert publication["visibility_rules"] == [
+        {
+            "visibility_type": "USER",
+            "user_id": 77,
+            "can_view": True,
+            "can_download": True,
+        }
+    ]
     assert publication["version_label"] == "2026-09-28"
 
 
@@ -92,6 +105,11 @@ def test_publish_agregadoras_adds_version_to_existing_document(
         publisher,
         "_find_existing_document",
         lambda: SimpleNamespace(id=88),
+    )
+    monkeypatch.setattr(
+        publisher,
+        "_resolve_admicorp_user_id",
+        lambda: 77,
     )
     monkeypatch.setattr(
         publisher,
@@ -144,6 +162,11 @@ def test_publish_agregadoras_is_idempotent_for_same_upload(
         publisher,
         "_find_existing_document",
         lambda: SimpleNamespace(id=88),
+    )
+    monkeypatch.setattr(
+        publisher,
+        "_resolve_admicorp_user_id",
+        lambda: 77,
     )
     monkeypatch.setattr(
         publisher,
