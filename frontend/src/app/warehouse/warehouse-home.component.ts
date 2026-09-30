@@ -6,7 +6,6 @@ import { Component, ElementRef, OnInit, ViewChild, inject } from '@angular/core'
 
 
 import {
-  WarehouseAgregadorasConsolidadoStatus,
   WarehouseCreateUploadRequest,
   WarehouseUploadAuditItem,
   WarehouseUploadDatePreset,
@@ -97,11 +96,6 @@ export class WarehouseHomeComponent implements OnInit {
   selectedUploadAudit: WarehouseUploadAuditRow[] = [];
   auditErrorMessage = '';
 
-  agregadorasStatus: WarehouseAgregadorasConsolidadoStatus | null = null;
-  isAgregadorasStatusLoading = false;
-  agregadorasStatusError = '';
-  agregadorasDownloadError = '';
-
   uploads: WarehouseUploadRow[] = [];
   isLoading = false;
   errorMessage = '';
@@ -125,90 +119,6 @@ export class WarehouseHomeComponent implements OnInit {
   ngOnInit(): void {
     this.loadCatalogs();
     this.loadUploads();
-    this.loadAgregadorasConsolidadoStatus();
-  }
-
-  loadAgregadorasConsolidadoStatus(): void {
-    this.isAgregadorasStatusLoading = true;
-    this.agregadorasStatusError = '';
-
-    this.warehouseUploadsService.getAgregadorasConsolidadoStatus().subscribe({
-      next: (status) => {
-        this.agregadorasStatus = status;
-        this.isAgregadorasStatusLoading = false;
-      },
-      error: () => {
-        this.agregadorasStatus = null;
-        this.agregadorasStatusError =
-          'No se pudo consultar el estado del consolidado de agregadoras.';
-        this.isAgregadorasStatusLoading = false;
-      },
-    });
-  }
-
-  canDownloadAgregadorasConsolidado(): boolean {
-    return !!this.agregadorasStatus?.generated
-      && !this.isAgregadorasStatusLoading;
-  }
-
-  getAgregadorasTemplateStatusText(): string {
-    if (this.isAgregadorasStatusLoading) {
-      return 'Consultando plantilla...';
-    }
-
-    if (!this.agregadorasStatus?.template_ready) {
-      return 'Plantilla pendiente';
-    }
-
-    if (this.agregadorasStatus.template_cutoff_date) {
-      return `Plantilla base ${this.agregadorasStatus.template_cutoff_date}`;
-    }
-
-    return 'Plantilla lista';
-  }
-
-  getAgregadorasCutoffText(): string {
-    if (!this.agregadorasStatus?.generated) {
-      return 'Aún no generado';
-    }
-
-    return this.agregadorasStatus.cutoff_date
-      ? `Disponible hasta ${this.agregadorasStatus.cutoff_date}`
-      : 'Consolidado disponible';
-  }
-
-  getAgregadorasReadyText(): string {
-    const readyDate = this.agregadorasStatus?.latest_ready_date;
-    return readyDate
-      ? `Último par canónico: ${readyDate}`
-      : 'Sin par canónico disponible';
-  }
-
-  downloadAgregadorasConsolidado(): void {
-    if (!this.canDownloadAgregadorasConsolidado()) {
-      return;
-    }
-
-    this.agregadorasDownloadError = '';
-
-    this.warehouseUploadsService.downloadAgregadorasConsolidado().subscribe({
-      next: (blob) => {
-        const objectUrl = window.URL.createObjectURL(blob);
-        const anchor = document.createElement('a');
-
-        anchor.href = objectUrl;
-        anchor.download =
-          this.agregadorasStatus?.download_filename
-          || 'Agregadoras consolidado.xlsx';
-        anchor.click();
-
-        window.URL.revokeObjectURL(objectUrl);
-      },
-      error: () => {
-        this.agregadorasDownloadError =
-          'No se pudo descargar el consolidado de agregadoras.';
-      },
-    });
   }
 
   loadUploads(page: number = this.uploadListPage): void {
@@ -501,7 +411,6 @@ submitUpload(): void {
       this.uploadSuccessMessage = `Upload creado correctamente con id ${response.upload_id}.`;
       this.resetUploadForm();
       this.loadUploads();
-      this.loadAgregadorasConsolidadoStatus();
     },
     error: (error) => {
       const detail = error?.error?.detail || '';
