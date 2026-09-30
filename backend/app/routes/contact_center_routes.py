@@ -106,7 +106,10 @@ def _detail_case_is_no_show_follow_up(
     detail,
     case_payload,
 ) -> bool:
-    if str(case_payload.get("status") or "") != "IN_PROGRESS":
+    if str(case_payload.get("status") or "") not in {
+        "IN_PROGRESS",
+        "FOLLOW_UP",
+    }:
         return False
 
     try:
