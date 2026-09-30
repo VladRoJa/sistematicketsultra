@@ -164,6 +164,15 @@ readonly discoveryCards: InternalDocumentDiscoveryCard[] = [
         categoryName: 'Reportes',
         period: 'all',
       },
+      {
+        key: 'reportes-agregadoras',
+        title: 'Agregadoras',
+        description: 'Consolidado automático de Wellhub y TotalPass.',
+        icon: 'AGR',
+        query: 'Consolidado de agregadoras',
+        categoryName: 'Reportes',
+        period: 'all',
+      },
     ],
   },
 ];

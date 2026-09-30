@@ -28,6 +28,7 @@ INTERNAL_DOCUMENT_MANAGER_USERS = {
     "ADMICORP",
 }
 COBRANZA_RECURRENTE_TITLE_PREFIX = "COBRANZA RECURRENTE RECHAZADOS"
+AGREGADORAS_CONSOLIDADO_TITLE = "CONSOLIDADO DE AGREGADORAS"
 
 COBRANZA_RECURRENTE_ALLOWED_ROLES = {
     "GERENTE",
@@ -85,6 +86,13 @@ def _normalize_int_tuple(values: Any) -> tuple[int, ...]:
 
 def _normalize_access_key(value: Any) -> str:
     return str(value or "").strip().upper()
+
+
+def _document_is_agregadoras_consolidado(
+    document: InternalDocumentORM,
+) -> bool:
+    title = _normalize_access_key(getattr(document, "title", None))
+    return title == AGREGADORAS_CONSOLIDADO_TITLE
 
 
 def _document_is_cobranza_recurrente(document: InternalDocumentORM) -> bool:
@@ -553,6 +561,16 @@ def can_view_internal_document(
     if document is None or context is None:
         return False
 
+    if _document_is_agregadoras_consolidado(document):
+        if document.status != InternalDocumentStatus.PUBLISHED:
+            return False
+
+        return has_document_visibility_access(
+            document,
+            context,
+            action="view",
+        )
+
     if is_internal_document_admin(context):
         return True
 
@@ -587,11 +605,21 @@ def can_download_internal_document(
     if document is None or context is None:
         return False
 
-    if is_internal_document_admin(context):
-        return document.current_version_id is not None
-
     if document.current_version_id is None:
         return False
+
+    if _document_is_agregadoras_consolidado(document):
+        if document.status != InternalDocumentStatus.PUBLISHED:
+            return False
+
+        return has_document_visibility_access(
+            document,
+            context,
+            action="download",
+        )
+
+    if is_internal_document_admin(context):
+        return True
 
     if document.status != InternalDocumentStatus.PUBLISHED:
         return False

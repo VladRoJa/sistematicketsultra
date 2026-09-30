@@ -1169,6 +1169,15 @@ def list_internal_documents():
     can_manage = can_manage_internal_documents(context)
 
     if can_manage:
+        if (
+            str(context.username or "").strip().upper()
+            != "ADMICORP"
+        ):
+            query = query.filter(
+                InternalDocumentORM.title
+                != "Consolidado de agregadoras"
+            )
+
         if requested_status and requested_status != "ALL":
             query = query.filter(InternalDocumentORM.status == requested_status)
     else:
