@@ -134,7 +134,10 @@ export class ContactCenterContactDialogComponent implements OnInit {
 
   get isNoShowFollowUpCase(): boolean {
     const currentCase = this.activeCase;
-    if (!currentCase || currentCase.status !== 'IN_PROGRESS') {
+    if (
+      !currentCase
+      || !['IN_PROGRESS', 'FOLLOW_UP'].includes(currentCase.status)
+    ) {
       return false;
     }
 
