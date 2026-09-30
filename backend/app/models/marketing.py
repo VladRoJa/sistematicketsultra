@@ -148,6 +148,33 @@ class MarketingReactivationTariffORM(db.Model):
     )
 
 
+class MarketingCampaignV2TariffORM(db.Model):
+    __tablename__ = "marketing_campaign_v2_tariffs"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    tarifa_key = db.Column(db.String(255), nullable=False)
+    tarifa_raw = db.Column(db.String(255), nullable=False)
+    categoria_tarifa = db.Column(db.String(100), nullable=False)
+    audience_family = db.Column(db.String(30), nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "tarifa_key",
+            name="uq_marketing_campaign_v2_tariffs_tarifa_key",
+        ),
+        db.CheckConstraint(
+            "audience_family IN "
+            "('DOMICILIADO', 'TRIMESTRAL', 'CONVENIO', "
+            "'SEMESTRE', 'ESTUDIANTE', 'MES', 'OUT_OF_SEGMENT')",
+            name="ck_marketing_campaign_v2_tariffs_audience_family",
+        ),
+        db.Index(
+            "ix_marketing_campaign_v2_tariffs_audience_family",
+            "audience_family",
+        ),
+    )
+
+
 class MarketingReactivationCampaignORM(db.Model):
     __tablename__ = "marketing_reactivation_campaigns"
 
