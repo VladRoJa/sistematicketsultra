@@ -18,8 +18,21 @@ def _acc(visits: int, amount: str, *raw_names: str):
 
 
 def _minimal_sheet(last_column: str) -> bytes:
+    mc_ns = service.XML_NAMESPACES["mc"]
+    x14ac_ns = service.XML_NAMESPACES["x14ac"]
+    xr_ns = service.XML_NAMESPACES["xr"]
+    xr2_ns = service.XML_NAMESPACES["xr2"]
+    xr3_ns = service.XML_NAMESPACES["xr3"]
+
     return f"""<?xml version="1.0" encoding="UTF-8"?>
-<worksheet xmlns="{service.SPREADSHEET_NS}">
+<worksheet
+  xmlns="{service.SPREADSHEET_NS}"
+  xmlns:mc="{mc_ns}"
+  xmlns:x14ac="{x14ac_ns}"
+  xmlns:xr="{xr_ns}"
+  xmlns:xr2="{xr2_ns}"
+  xmlns:xr3="{xr3_ns}"
+  mc:Ignorable="x14ac xr xr2 xr3">
   <dimension ref="A1:{last_column}1"/>
   <sheetData>
     <row r="1">
@@ -29,7 +42,6 @@ def _minimal_sheet(last_column: str) -> bytes:
   <autoFilter ref="A1:{last_column}1"/>
 </worksheet>
 """.encode("utf-8")
-
 
 def _minimal_workbook() -> bytes:
     buffer = BytesIO()
@@ -55,6 +67,34 @@ def _minimal_workbook() -> bytes:
         archive.writestr(
             "xl/charts/chart1.xml",
             b"<chart>must-remain-byte-identical</chart>",
+        )
+        archive.writestr(
+            service.CALC_CHAIN,
+            (
+                f'<?xml version="1.0" encoding="UTF-8"?>'
+                f'<calcChain xmlns="{service.SPREADSHEET_NS}">'
+                f'<c r="F2" i="3"/>'
+                f'</calcChain>'
+            ).encode("utf-8"),
+        )
+        archive.writestr(
+            service.WORKBOOK_RELS,
+            b"""<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId13"
+    Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain"
+    Target="calcChain.xml"/>
+</Relationships>
+""",
+        )
+        archive.writestr(
+            service.CONTENT_TYPES,
+            b"""<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Override PartName="/xl/calcChain.xml"
+    ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml"/>
+</Types>
+""",
         )
     return buffer.getvalue()
 
@@ -161,6 +201,23 @@ def test_render_workbook_only_rewrites_expected_parts():
         assert "Wellhub" in todo_xml
         assert "Totalpass" in todo_xml
         assert 'TEXT(Tabla1[[#This Row],[Fecha]],"dd")' in todo_xml
+
+        for worksheet_xml in (wellhub_xml, totalpass_xml, todo_xml):
+            assert 'xmlns:xr2="' in worksheet_xml
+            assert 'xmlns:xr3="' in worksheet_xml
+            assert 'mc:Ignorable="x14ac xr xr2 xr3"' in worksheet_xml
+
+        assert service.CALC_CHAIN not in archive.namelist()
+
+        workbook_rels = archive.read(
+            service.WORKBOOK_RELS
+        ).decode("utf-8")
+        content_types = archive.read(
+            service.CONTENT_TYPES
+        ).decode("utf-8")
+
+        assert "calcChain" not in workbook_rels
+        assert "/xl/calcChain.xml" not in content_types
 
 def _source_sheet(rows: list[tuple[date, str, int, str]]) -> bytes:
     xml_rows = [
