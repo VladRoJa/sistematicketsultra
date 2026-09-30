@@ -8,13 +8,13 @@ Alcance: arquitectura global, convivencia con legacy y límites entre Fase 1, Fa
 
 Este archivo está diseñado para poder entregarse **por sí solo** a una conversación nueva.
 
-La conversación debe tratar este documento como contrato de alcance, pero **no como sustituto del repositorio**. Antes de proponer o modificar código debe inspeccionar el estado actual de \`main\`, porque los nombres de archivos, modelos o servicios pueden haber evolucionado después de la fecha de este contrato.
+La conversación debe tratar este documento como contrato de alcance, pero **no como sustituto del repositorio**. Antes de proponer o modificar código debe inspeccionar el estado actual de `main`, porque los nombres de archivos, modelos o servicios pueden haber evolucionado después de la fecha de este contrato.
 
 Reglas de trabajo obligatorias:
 
 - Suite Ultra usa Angular + Flask + PostgreSQL, con migraciones Alembic.
 - Backend es la autoridad de permisos y reglas de negocio.
-- En Angular la lógica vive en \`.ts\`; HTML solo contiene estructura, bindings simples y llamadas a propiedades/métodos ya definidos.
+- En Angular la lógica vive en `.ts`; HTML solo contiene estructura, bindings simples y llamadas a propiedades/métodos ya definidos.
 - No editar código manualmente en servidor. El flujo correcto es local -> pruebas -> commit -> PR/merge -> pull servidor -> build -> migraciones cuando apliquen.
 - Trabajar un cambio y una prueba a la vez.
 - Antes de crear una pieza nueva, investigar si existe una capacidad equivalente y reutilizarla cuando su semántica realmente coincida.
@@ -312,9 +312,9 @@ Así se reutilizan las bases existentes sin contaminarlas con estado de una camp
 
 ### 8.1 Comportamiento histórico de mensajería como dimensión transversal
 
-Que \`VIEWED\`, \`DELIVERED\` o \`FAILED\` pertenezcan a una campaña concreta **no impide utilizarlos para construir una campaña nueva**.
+Que `VIEWED`, `DELIVERED` o `FAILED` pertenezcan a una campaña concreta **no impide utilizarlos para construir una campaña nueva**.
 
-Campañas V2 debe ofrecer un resolver histórico por \`phone_mx10\` que consulte campañas anteriores y derive comportamiento utilizable por cualquier fuente de audiencia:
+Campañas V2 debe ofrecer un resolver histórico por `phone_mx10` que consulte campañas anteriores y derive comportamiento utilizable por cualquier fuente de audiencia:
 
     fuente actual
         -> phone_mx10

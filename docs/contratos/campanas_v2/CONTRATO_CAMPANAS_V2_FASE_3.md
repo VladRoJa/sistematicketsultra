@@ -12,18 +12,18 @@ Contexto fijo:
 
 - Suite Ultra usa Angular + Flask + PostgreSQL y Alembic.
 - Fase 1 construye y congela audiencias.
-- Fase 2 sincroniza iVentas, conserva estados por campaign-recipient, deriva comportamiento histórico por teléfono e incorpora \`FUNNEL_PORTFOLIO\`.
-- Funnel debe haber aplicado la lógica vigente de compradores/no compradores y \`ACTIVE_MEMBER_SUPPRESSION\` contra Socios Activos antes de congelar la audiencia.
+- Fase 2 sincroniza iVentas, conserva estados por campaign-recipient, deriva comportamiento histórico por teléfono e incorpora `FUNNEL_PORTFOLIO`.
+- Funnel debe haber aplicado la lógica vigente de compradores/no compradores y `ACTIVE_MEMBER_SUPPRESSION` contra Socios Activos antes de congelar la audiencia.
 - Fase 3 **no recalcula fuentes, familias, compras, socios activos ni historial de engagement**: envía exactamente la audiencia congelada y validada.
 - No crear tablas espejo de Socios Activos/Vencidos.
 - No crear un tercer normalizador de teléfonos ni un mapping duplicado de sucursales/canales.
-- Un Campaign V2 puede requerir N provider campaigns porque iVentas envía por \`channelId\`.
+- Un Campaign V2 puede requerir N provider campaigns porque iVentas envía por `channelId`.
 - Backend es autoridad para permisos, channel binding, plantilla, variables e idempotencia.
 - No retirar el legacy dentro de esta fase.
 
 Modo de trabajo:
 
-1. inspeccionar \`main\` y confirmar que Fase 1/Fase 2 están completas;
+1. inspeccionar `main` y confirmar que Fase 1/Fase 2 están completas;
 2. revisar provider abstraction, delivery y mappings existentes;
 3. explicar un solo cambio mínimo y prueba;
 4. probar primero un flujo controlado;

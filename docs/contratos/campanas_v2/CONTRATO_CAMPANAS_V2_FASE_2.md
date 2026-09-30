@@ -14,17 +14,17 @@ Contexto fijo:
 - Campañas V2 convive con Reactivaciones legacy.
 - Fase 1 aporta el núcleo de campañas, preview y audiencia congelada.
 - No se crean tablas espejo de Socios Activos ni Socios Vencidos.
-- \`socios_vencidos_cartera\` y snapshots/resolvers canónicos de Socios Activos son fuentes existentes que se reutilizan.
+- `socios_vencidos_cartera` y snapshots/resolvers canónicos de Socios Activos son fuentes existentes que se reutilizan.
 - Campaign-recipient almacena la pertenencia al cohorte y hechos específicos de esa campaña; no reemplaza la base fuente.
-- \`sent\`, \`delivered\`, \`viewed\`, \`failed\` e interacciones son hechos de una campaña concreta.
+- `sent`, `delivered`, `viewed`, `failed` e interacciones son hechos de una campaña concreta.
 - A partir de esos hechos se debe poder derivar **comportamiento histórico por teléfono** para filtrar campañas nuevas sin contaminar las fuentes.
-- \`FUNNEL_PORTFOLIO\` se integra en esta fase, antes del enviador. Su identidad mínima puede ser teléfono; \`contact_id\`, nombre, sucursal, canal y fecha son enriquecimientos cuando existan.
+- `FUNNEL_PORTFOLIO` se integra en esta fase, antes del enviador. Su identidad mínima puede ser teléfono; `contact_id`, nombre, sucursal, canal y fecha son enriquecimientos cuando existan.
 - Funnel debe reutilizar su lógica existente de compradores/no compradores y además aplicar supresión por teléfono contra el snapshot canónico vigente de Socios Activos.
 - Esta fase es solo lectura/BI de iVentas + Cartera Funnel. **No implementar POST /v2/broadcast.**
 
 Modo de trabajo:
 
-1. inspeccionar \`main\` y confirmar Fase 1;
+1. inspeccionar `main` y confirmar Fase 1;
 2. revisar integración iVentas y Funnel existentes antes de crear código;
 3. explicar un solo cambio mínimo y su prueba;
 4. no modelar campos no observados en un payload real;
@@ -284,7 +284,7 @@ FAILED debe conservarse con su error/cause cuando esté disponible; no convertir
 
 Fase 2 debe permitir que el constructor de Campañas V2 use el historial de campañas anteriores como dimensión transversal.
 
-El resolver parte de \`phone_mx10\` y consulta los campaign recipients/provider delivery ya persistidos. **No escribe flags históricos en las tablas fuente.**
+El resolver parte de `phone_mx10` y consulta los campaign recipients/provider delivery ya persistidos. **No escribe flags históricos en las tablas fuente.**
 
 Scopes que la arquitectura debe soportar:
 
@@ -304,14 +304,14 @@ Ejemplos de hechos derivados:
 
 Semántica importante:
 
-- \`has_any_viewed = true\` significa que existe al menos una campaña previa con evidencia \`viewed=true\`.
+- `has_any_viewed = true` significa que existe al menos una campaña previa con evidencia `viewed=true`.
 - "Nunca contactado" significa que no existe historial de campaign-recipient/provider campaign aplicable.
-- "Contactado pero nunca leído" requiere historial de contacto y ausencia de \`viewed=true\`; no es equivalente a "sin datos".
-- \`answeredMessages=[]\` no puede utilizarse para derivar "no respondió".
+- "Contactado pero nunca leído" requiere historial de contacto y ausencia de `viewed=true`; no es equivalente a "sin datos".
+- `answeredMessages=[]` no puede utilizarse para derivar "no respondió".
 
 Al crear/confirmar una nueva campaña, el resultado del filtro histórico queda congelado con la audiencia. Si una campaña anterior recibe nuevos webhooks después, no se recalcula retroactivamente la campaña ya creada.
 
-Implementación inicial: consulta derivada sobre tablas de campañas/recipient/delivery con índices adecuados. No crear de entrada una tabla \`messaging_engagement\`. Una proyección o materialized view solo se justifica después de medir un problema real de rendimiento.
+Implementación inicial: consulta derivada sobre tablas de campañas/recipient/delivery con índices adecuados. No crear de entrada una tabla `messaging_engagement`. Una proyección o materialized view solo se justifica después de medir un problema real de rendimiento.
 
 ## 9. Interacciones
 

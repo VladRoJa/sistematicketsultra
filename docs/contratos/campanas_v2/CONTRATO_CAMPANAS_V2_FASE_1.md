@@ -15,7 +15,7 @@ Contexto fijo:
 - Backend es autoridad de permisos, composición real de audiencia, deduplicación y persistencia.
 - No se crean tablas espejo de Socios Activos ni Socios Vencidos. Se reutilizan sus fuentes canónicas.
 - Una fila campaign-recipient representa pertenencia a una campaña/cohorte; **no es una segunda base maestra de socios**.
-- La normalización general de teléfonos debe reutilizar \`backend/app/services/marketing_phone.py::normalize_phone()\`; el normalizador específico de iVentas se mantiene dentro de esa integración.
+- La normalización general de teléfonos debe reutilizar `backend/app/services/marketing_phone.py::normalize_phone()`; el normalizador específico de iVentas se mantiene dentro de esa integración.
 - Los estados iVentas pertenecen a campaña-recipient, no a las tablas fuente.
 - Fase 2 agregará un resolver de comportamiento histórico por teléfono para poder filtrar, por ejemplo, "solo quienes han leído campañas anteriores". Fase 1 debe dejar el modelo preparado, pero **no implementa todavía stats iVentas**.
 - Funnel/Venta Nueva se integra operativamente en Fase 2. Fase 1 solo debe evitar exigir member_id, PIN, tarifa o sucursal para todas las fuentes.
@@ -23,7 +23,7 @@ Contexto fijo:
 
 Modo de trabajo:
 
-1. inspeccionar \`main\` actual y los archivos citados;
+1. inspeccionar `main` actual y los archivos citados;
 2. identificar qué se reutiliza y qué pieza nueva es realmente necesaria;
 3. explicar archivo, función/método, objetivo y motivo;
 4. hacer un solo cambio mínimo;
