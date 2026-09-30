@@ -11,11 +11,15 @@ from zoneinfo import ZoneInfo
 
 from app import create_app
 from app.extensions import db
+from app.models.attendance import WarehouseAttendanceRunORM
 from app.models.warehouse import (
     ReporteDireccionSnapshotORM,
     WarehouseAuditLogORM,
 )
 from app.utils.warehouse_audit import log_warehouse_audit
+from app.warehouse.jobs.attendance_daily_capture_job import (
+    run_job as run_attendance_daily_capture_job,
+)
 from app.warehouse.jobs.cobranza_recurrente_rechazados_job import (
     CobranzaRecurrenteNotReadyError,
     run_job as run_cobranza_recurrente_job,
@@ -263,6 +267,153 @@ def _should_run_daily_job(
 
     return True
 
+
+
+def _find_existing_attendance_scheduler_success(
+    *,
+    business_date: date,
+):
+    return (
+        WarehouseAttendanceRunORM.query
+        .filter_by(
+            business_date=business_date,
+            status="SUCCESS",
+            trigger_source="REPORTS_SCHEDULER",
+        )
+        .order_by(
+            WarehouseAttendanceRunORM.id.desc()
+        )
+        .first()
+    )
+
+
+def _run_attendance_daily_capture_if_due(
+    now: datetime,
+) -> None:
+    job_key = "attendance_daily_capture"
+
+    if not _env_bool(
+        "ATTENDANCE_DAILY_CAPTURE_ENABLED",
+        False,
+    ):
+        return
+
+    business_date = (
+        now.date() - timedelta(days=1)
+    )
+    run_key = _job_date_key(
+        job_key,
+        business_date,
+    )
+
+    if run_key in _COMPLETED_BY_JOB_AND_DATE:
+        return
+
+    scheduled_at = _scheduled_datetime(
+        now=now,
+        hour_env="ATTENDANCE_DAILY_CAPTURE_RUN_HOUR",
+        minute_env="ATTENDANCE_DAILY_CAPTURE_RUN_MINUTE",
+        default_hour=6,
+        default_minute=20,
+    )
+
+    if now < scheduled_at:
+        return
+
+    next_retry_at = (
+        _NEXT_RETRY_BY_JOB_AND_DATE.get(
+            run_key
+        )
+    )
+    if (
+        next_retry_at is not None
+        and now < next_retry_at
+    ):
+        return
+
+    block_reason = get_secondary_job_block_reason(
+        now
+    )
+    if block_reason is not None:
+        logger.debug(
+            "%s diferido por prioridad Track. "
+            "reason=%s now=%s business_date=%s",
+            job_key,
+            block_reason,
+            now.isoformat(timespec="seconds"),
+            business_date.isoformat(),
+        )
+        return
+
+    existing_success = (
+        _find_existing_attendance_scheduler_success(
+            business_date=business_date,
+        )
+    )
+    if existing_success is not None:
+        _mark_job_as_completed(
+            job_key,
+            business_date,
+        )
+        logger.info(
+            "%s ya cuenta con captura SUCCESS "
+            "persistida. business_date=%s run_id=%s",
+            job_key,
+            business_date.isoformat(),
+            existing_success.id,
+        )
+        return
+
+    retry_minutes = max(
+        _env_int(
+            "ATTENDANCE_DAILY_CAPTURE_RETRY_MINUTES",
+            30,
+        ),
+        5,
+    )
+
+    logger.info(
+        "%s iniciado. business_date=%s",
+        job_key,
+        business_date.isoformat(),
+    )
+
+    try:
+        result = run_attendance_daily_capture_job(
+            business_date=business_date,
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "%s falló. Se reintentará en %s minutos.",
+            job_key,
+            retry_minutes,
+        )
+        _schedule_retry(
+            job_key=job_key,
+            business_date=business_date,
+            now=now,
+            retry_minutes=retry_minutes,
+            reason="technical_error",
+        )
+        return
+
+    _mark_job_as_completed(
+        job_key,
+        business_date,
+    )
+
+    logger.info(
+        "%s finalizado OK. business_date=%s "
+        "run_id=%s source_rows=%s inserted=%s "
+        "updated=%s rejected=%s",
+        job_key,
+        result.get("business_date"),
+        result.get("run_id"),
+        result.get("source_rows"),
+        result.get("inserted_rows"),
+        result.get("updated_rows"),
+        result.get("rejected_rows"),
+    )
 
 def _find_existing_nightly_reporte_direccion_snapshot(
     *,
@@ -803,6 +954,7 @@ def run_scheduler_loop() -> None:
             _run_reporte_direccion_daily_capture_if_due(
                 now
             )
+            _run_attendance_daily_capture_if_due(now)
             _run_reactivation_sources_if_due(now)
             _run_reactivation_outcomes_if_due(now)
             _run_cobranza_recurrente_if_due(now)
