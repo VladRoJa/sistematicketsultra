@@ -973,11 +973,11 @@ def _preserve_root_namespace_declarations(
     rendered_text = rendered_xml.decode("utf-8")
 
     original_root = re.search(
-        rf"<{re.escape(root_tag)}\\b[^>]*>",
+        rf"<{re.escape(root_tag)}\b[^>]*>",
         original_text,
     )
     rendered_root = re.search(
-        rf"<{re.escape(root_tag)}\\b[^>]*>",
+        rf"<{re.escape(root_tag)}\b[^>]*>",
         rendered_text,
     )
 
@@ -987,7 +987,7 @@ def _preserve_root_namespace_declarations(
         )
 
     original_declarations = re.findall(
-        r'\\s(xmlns(?::[A-Za-z_][\\w.-]*)?="[^"]+")',
+        r'\s(xmlns(?::[A-Za-z_][\w.-]*)?="[^"]+")',
         original_root.group(0),
     )
     rendered_root_text = rendered_root.group(0)
@@ -996,7 +996,7 @@ def _preserve_root_namespace_declarations(
     for declaration in original_declarations:
         attribute_name = declaration.split("=", 1)[0]
         if re.search(
-            rf"\\s{re.escape(attribute_name)}=",
+            rf"\s{re.escape(attribute_name)}=",
             rendered_root_text,
         ):
             continue
@@ -1016,7 +1016,6 @@ def _preserve_root_namespace_declarations(
         + rendered_text[insert_at:]
     )
     return patched.encode("utf-8")
-
 
 def _remove_calc_chain_relationship(
     relationships_xml: bytes,
