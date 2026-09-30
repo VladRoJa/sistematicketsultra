@@ -251,7 +251,7 @@ def test_daily_rows_use_template_baseline_and_assign_gap_to_next_snapshot():
         target_date=date(2026, 8, 21),
         snapshots=snapshots,
         template_baseline={
-            "sucursal a": _acc(10, "100.00", "Sucursal A"),
+            "A": _acc(10, "100.00", "Sucursal A"),
         },
         state_loader=lambda snapshot_id: states[snapshot_id],
         aggregator_code="WH",
