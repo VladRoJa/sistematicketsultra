@@ -24,6 +24,7 @@ from app.services.contact_center_service import (
     find_duplicate_contacts,
     get_contact_detail,
     import_crm_candidate,
+    is_no_show_follow_up_case,
     list_agents,
     list_appointments,
     list_branches,
@@ -101,21 +102,44 @@ def _parse_date_arg(name: str) -> date | None:
         ) from exc
 
 
+def _detail_case_is_no_show_follow_up(
+    detail,
+    case_payload,
+) -> bool:
+    if str(case_payload.get("status") or "") != "IN_PROGRESS":
+        return False
+
+    try:
+        case_id = int(case_payload.get("id"))
+    except (TypeError, ValueError):
+        return False
+
+    return any(
+        int(row.get("case_id") or 0) == case_id
+        and str(row.get("status") or "") == "CLOSED"
+        and str(row.get("outcome") or "") == "NO_SHOW"
+        for row in detail.get("appointments", [])
+    )
+
+
 def _assert_contact_access(detail, actor, access) -> None:
     if access.is_supervisor or not access.is_manager:
         return
 
     allowed_branch_ids = set(access.allowed_branch_ids)
-    assigned = any(
-        int(case.get("assigned_user", {}).get("id") or 0) == int(actor.id)
-        and int(case.get("sucursal", {}).get("id") or 0) in allowed_branch_ids
+    accessible = any(
+        int(case.get("sucursal", {}).get("id") or 0) in allowed_branch_ids
+        and (
+            int(case.get("assigned_user", {}).get("id") or 0) == int(actor.id)
+            or _detail_case_is_no_show_follow_up(detail, case)
+        )
         for case in detail.get("cases", [])
         if (
             isinstance(case.get("assigned_user"), dict)
             and isinstance(case.get("sucursal"), dict)
         )
     )
-    if not assigned:
+    if not accessible:
         raise ContactCenterAuthorizationError(
             "El contacto no pertenece a tu cartera."
         )
@@ -132,8 +156,11 @@ def _scope_contact_detail_for_manager(detail, actor, access):
         if (
             isinstance(case.get("assigned_user"), dict)
             and isinstance(case.get("sucursal"), dict)
-            and int(case["assigned_user"].get("id") or 0) == int(actor.id)
             and int(case["sucursal"].get("id") or 0) in allowed_branch_ids
+            and (
+                int(case["assigned_user"].get("id") or 0) == int(actor.id)
+                or _detail_case_is_no_show_follow_up(detail, case)
+            )
         )
     ]
     allowed_case_ids = {
@@ -166,14 +193,15 @@ def _scope_contact_detail_for_manager(detail, actor, access):
     return detail
 
 
-def _assert_case_access(case: ContactCenterCaseORM, actor, access) -> None:
+def _assert_case_access(
+    case: ContactCenterCaseORM,
+    actor,
+    access,
+    *,
+    allow_no_show_follow_up: bool = False,
+) -> None:
     if access.is_supervisor:
         return
-
-    if int(case.assigned_user_id or 0) != int(actor.id):
-        raise ContactCenterAuthorizationError(
-            "El caso no pertenece a tu cartera."
-        )
 
     if (
         access.is_manager
@@ -182,6 +210,16 @@ def _assert_case_access(case: ContactCenterCaseORM, actor, access) -> None:
         raise ContactCenterAuthorizationError(
             "El caso no pertenece a una sucursal autorizada."
         )
+
+    if int(case.assigned_user_id or 0) == int(actor.id):
+        return
+
+    if allow_no_show_follow_up and is_no_show_follow_up_case(case):
+        return
+
+    raise ContactCenterAuthorizationError(
+        "El caso no pertenece a tu cartera."
+    )
 
 
 def _assert_appointment_access(appointment, actor, access) -> None:
@@ -409,7 +447,16 @@ def post_interaction(case_id: int):
     case = ContactCenterCaseORM.query.get(case_id)
     if case is None:
         raise ContactCenterNotFoundError("Caso no encontrado.")
-    _assert_case_access(case, actor, access)
+    allow_foreign_case = (
+        int(case.assigned_user_id or 0) != int(actor.id)
+        and is_no_show_follow_up_case(case)
+    )
+    _assert_case_access(
+        case,
+        actor,
+        access,
+        allow_no_show_follow_up=True,
+    )
     payload = request.get_json(silent=True) or {}
 
     try:
@@ -418,6 +465,7 @@ def post_interaction(case_id: int):
             payload,
             actor,
             is_supervisor=access.is_supervisor,
+            allow_foreign_case=allow_foreign_case,
         )
         db.session.commit()
     except (ContactCenterValidationError, ContactCenterNotFoundError):
@@ -434,7 +482,16 @@ def post_appointment(case_id: int):
     case = ContactCenterCaseORM.query.get(case_id)
     if case is None:
         raise ContactCenterNotFoundError("Caso no encontrado.")
-    _assert_case_access(case, actor, access)
+    allow_foreign_case = (
+        int(case.assigned_user_id or 0) != int(actor.id)
+        and is_no_show_follow_up_case(case)
+    )
+    _assert_case_access(
+        case,
+        actor,
+        access,
+        allow_no_show_follow_up=True,
+    )
     payload = request.get_json(silent=True) or {}
 
     if access.is_manager:
@@ -453,6 +510,7 @@ def post_appointment(case_id: int):
             payload,
             actor,
             is_supervisor=access.is_supervisor,
+            allow_foreign_case=allow_foreign_case,
         )
         db.session.commit()
     except (ContactCenterValidationError, ContactCenterNotFoundError):
