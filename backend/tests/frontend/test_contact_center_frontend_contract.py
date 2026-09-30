@@ -357,7 +357,7 @@ def test_contact_center_dialog_allows_recovery_after_no_show():
     dialog_html = _read(CONTACT_DIALOG_HTML)
 
     assert "get isNoShowFollowUpCase()" in dialog_ts
-    assert "currentCase.status !== 'IN_PROGRESS'" in dialog_ts
+    assert "['IN_PROGRESS', 'FOLLOW_UP'].includes(currentCase.status)" in dialog_ts
     assert "row.status === 'CLOSED'" in dialog_ts
     assert "row.outcome === 'NO_SHOW'" in dialog_ts
     assert "|| this.isNoShowFollowUpCase" in dialog_ts
