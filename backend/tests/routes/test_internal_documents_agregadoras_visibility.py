@@ -5,6 +5,20 @@ from flask import Flask
 import app.routes.internal_documents_routes as routes
 
 
+class _FakeColumn:
+    def __init__(self, name):
+        self.name = name
+
+    def __ne__(self, other):
+        return f"{self.name} != {other!r}"
+
+    def __eq__(self, other):
+        return f"{self.name} == {other!r}"
+
+    def desc(self):
+        return f"{self.name} DESC"
+
+
 class _FakeQuery:
     def __init__(self):
         self.filters = []
@@ -45,10 +59,17 @@ def test_list_hides_agregadoras_from_non_admicorp_manager(
     app.config["TESTING"] = True
 
     fake_query = _FakeQuery()
+    fake_model = SimpleNamespace(
+        query=fake_query,
+        title=_FakeColumn("internal_documents.title"),
+        status=_FakeColumn("internal_documents.status"),
+        created_at=_FakeColumn("internal_documents.created_at"),
+        id=_FakeColumn("internal_documents.id"),
+    )
     monkeypatch.setattr(
-        routes.InternalDocumentORM,
-        "query",
-        fake_query,
+        routes,
+        "InternalDocumentORM",
+        fake_model,
     )
     monkeypatch.setattr(
         routes,
