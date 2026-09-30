@@ -890,7 +890,10 @@ def _daily_delta(
         visits = current_value.visits - previous_value.visits
         amount = current_value.amount - previous_value.amount
 
-        if visits < 0 or amount < Decimal("0"):
+        if (
+            aggregator_code != "WH"
+            and (visits < 0 or amount < Decimal("0"))
+        ):
             raise AgregadorasSourceRegressionError(
                 f"{aggregator_code} presentó retroceso MTD para "
                 f"{canon} en {business_date.isoformat()}: "
@@ -1470,6 +1473,13 @@ def generate_agregadoras_consolidado(
             item.isoformat()
             for item in totalpass_absorbed
         ],
+        "wellhub_correction_dates": sorted(
+            {
+                row.business_date.isoformat()
+                for row in wellhub_rows
+                if row.visits < 0 or row.amount < Decimal("0")
+            }
+        ),
         "wellhub_rows_added": len(wellhub_rows),
         "totalpass_rows_added": len(totalpass_rows),
         "todo_rows_added": len(wellhub_rows) + len(totalpass_rows),
