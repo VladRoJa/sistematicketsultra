@@ -305,3 +305,6 @@ def test_resolve_upload_file_path_includes_stored_filename(
         / "plantilla.xlsx"
     ).resolve()
 
+def test_excel_date_from_cell_accepts_spanish_text_date():
+    assert service._excel_date_from_cell("29/07/2026") == date(2026, 7, 29)
+
