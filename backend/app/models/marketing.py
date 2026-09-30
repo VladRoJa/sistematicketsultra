@@ -175,6 +175,174 @@ class MarketingCampaignV2TariffORM(db.Model):
     )
 
 
+class MarketingCampaignV2ORM(db.Model):
+    __tablename__ = "marketing_campaign_v2_campaigns"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(255), nullable=False)
+    purpose = db.Column(
+        db.String(30),
+        nullable=False,
+        default="UNCLASSIFIED",
+        server_default=db.text("'UNCLASSIFIED'"),
+    )
+    source = db.Column(db.String(100), nullable=False)
+    audience_definition_json = db.Column(
+        db.JSON,
+        nullable=False,
+        default=dict,
+        server_default=db.text("'{}'"),
+    )
+    created_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    frozen_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        onupdate=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+
+    created_by_user = db.relationship(
+        "UserORM",
+        foreign_keys=[created_by_user_id],
+    )
+    recipients = db.relationship(
+        "MarketingCampaignV2RecipientORM",
+        back_populates="campaign",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="MarketingCampaignV2RecipientORM.id",
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "purpose IN "
+            "('NEW_SALE', 'REACTIVATION', 'ACTIVE_MEMBERS', 'UNCLASSIFIED')",
+            name="ck_marketing_campaign_v2_campaigns_purpose",
+        ),
+        db.Index(
+            "ix_marketing_campaign_v2_campaigns_created_at",
+            "created_at",
+        ),
+        db.Index(
+            "ix_marketing_campaign_v2_campaigns_purpose",
+            "purpose",
+        ),
+        db.Index(
+            "ix_marketing_campaign_v2_campaigns_source",
+            "source",
+        ),
+    )
+
+
+class MarketingCampaignV2RecipientORM(db.Model):
+    __tablename__ = "marketing_campaign_v2_recipients"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    campaign_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "marketing_campaign_v2_campaigns.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+    phone_mx10 = db.Column(db.String(10), nullable=False)
+    source = db.Column(db.String(100), nullable=False)
+    socios_vencidos_cartera_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "socios_vencidos_cartera.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=True,
+    )
+    socios_activos_snapshot_row_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "socios_activos_snapshot_rows.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=True,
+    )
+    member_id = db.Column(db.String(64), nullable=True)
+    member_pin = db.Column(db.String(64), nullable=True)
+    member_name = db.Column(db.String(255), nullable=True)
+    sucursal = db.Column(db.String(255), nullable=True)
+    tarifa_raw = db.Column(db.String(255), nullable=True)
+    categoria_tarifa = db.Column(db.String(100), nullable=True)
+    audience_family = db.Column(db.String(30), nullable=True)
+    fecha_vencimiento_date = db.Column(db.Date, nullable=True)
+    inclusion_reason = db.Column(db.String(100), nullable=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+
+    campaign = db.relationship(
+        "MarketingCampaignV2ORM",
+        back_populates="recipients",
+    )
+    socios_vencidos_cartera = db.relationship(
+        "SociosVencidosCarteraORM",
+    )
+    socios_activos_snapshot_row = db.relationship(
+        "SociosActivosSnapshotRowORM",
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "campaign_id",
+            "phone_mx10",
+            name="uq_marketing_campaign_v2_recipients_campaign_phone",
+        ),
+        db.CheckConstraint(
+            "length(phone_mx10) = 10",
+            name="ck_marketing_campaign_v2_recipients_phone_mx10_length",
+        ),
+        db.CheckConstraint(
+            "audience_family IS NULL OR audience_family IN "
+            "('DOMICILIADO', 'TRIMESTRAL', 'CONVENIO', "
+            "'SEMESTRE', 'ESTUDIANTE', 'MES', 'OUT_OF_SEGMENT')",
+            name="ck_marketing_campaign_v2_recipients_audience_family",
+        ),
+        db.Index(
+            "ix_marketing_campaign_v2_recipients_campaign_id",
+            "campaign_id",
+        ),
+        db.Index(
+            "ix_marketing_campaign_v2_recipients_phone_mx10",
+            "phone_mx10",
+        ),
+        db.Index(
+            "ix_marketing_campaign_v2_recipients_vencidos_cartera_id",
+            "socios_vencidos_cartera_id",
+        ),
+        db.Index(
+            "ix_marketing_campaign_v2_recipients_activos_snapshot_row_id",
+            "socios_activos_snapshot_row_id",
+        ),
+    )
+
+
 class MarketingReactivationCampaignORM(db.Model):
     __tablename__ = "marketing_reactivation_campaigns"
 
