@@ -20,11 +20,12 @@ El objetivo arquitectónico es que las APIs nuevas de iVentas entren como una in
 - No requiere API nueva de iVentas.
 - Define catálogo, fuentes, filtros, familias, preview, deduplicación y audiencia congelada.
 
-### Fase 2 — Integración analítica con iVentas
+### Fase 2 — Integración analítica con iVentas + Cartera Funnel
 
-- Solo lectura/sincronización.
+- Solo lectura/sincronización de iVentas.
 - Estados por destinatario, interacciones, analytics, costos e histórico.
 - Importación de campañas externas.
+- Incorpora antes del enviador una fuente `FUNNEL_PORTFOLIO` para Venta Nueva/Funnel, tolerante a registros donde prácticamente solo existe teléfono.
 - No envía campañas desde Suite.
 
 ### Fase 3 — Envío por iVentas
@@ -88,7 +89,7 @@ Existen:
 - backend/app/services/marketing_iventas_*_persistence_service.py
 - modelos MarketingIventas* en backend/app/models/marketing.py
 
-Ya existe normalize_iventas_phone(). V2 debe reutilizarlo; no crear otro normalizador de teléfonos.
+El repo ya contiene dos niveles útiles de normalización: `backend/app/services/marketing_phone.py::normalize_phone()` es el normalizador general que ya consumen Funnel y Contact Center, mientras que `marketing_iventas_service.py::normalize_iventas_phone()` conserva semántica específica de iVentas. El núcleo genérico de audiencias debe preferir `normalize_phone()` y el adapter iVentas reutilizar su normalizador específico. No crear un tercer normalizador.
 
 También existe resolución de sucursales iVentas mediante:
 
@@ -112,7 +113,17 @@ Socios vencidos:
 
 Decisión: V2 debe consumir estas fuentes/resolvers. No debe reimplementar canonicalidad ni lógica de identidad de socios vencidos vs activos.
 
-### 3.5 Envío registrado y atribución de Reactivaciones ya existente
+Regla adicional: **no crear tablas espejo de Socios Activos ni Socios Vencidos para Campañas V2**. Las bases canónicas ya existen y deben consultarse/referenciarse. Una fila de destinatario de campaña representa pertenencia a un cohorte, no una copia de la base fuente.
+
+Para Socios Vencidos se debe conservar la referencia al episodio canónico existente (`socios_vencidos_cartera_id` cuando aplique). Para Socios Activos se debe conservar la referencia al snapshot/fila canónica cuando el modelo vigente lo permita. Solo se persiste en la campaña la metadata mínima necesaria para congelar la selección o sobrevivir a una política de retención demostrada; no se repuebla otra base completa.
+
+### 3.5 Cartera Funnel / Venta Nueva ya tiene detalle individual reutilizable
+
+Existen servicios de detalle del Funnel (`marketing_sales_funnel_detail_service.py`, `marketing_sales_funnel_iventas_stage_service.py` y drill-downs) y `marketing_phone.py`. Además Contact Center ya consume contactos CRM/Funnel.
+
+Decisión: `FUNNEL_PORTFOLIO` se integra en Fase 2, antes del enviador. Su contrato mínimo es phone-centric: `phone_mx10` puede ser el único dato confiable. Nombre, sucursal, contact_id, canal o fecha son enriquecimientos opcionales; no se inventan member_id, PIN, tarifa ni sucursal.
+
+### 3.6 Envío registrado y atribución de Reactivaciones ya existente
 
 Existen:
 
@@ -262,7 +273,25 @@ Ejemplos de bloqueo técnico:
 
 Toda exclusión obligatoria debe ser explícita y auditable.
 
-## 8. Audiencia congelada
+## 8. Dónde viven los estados iVentas
+
+Los flags de iVentas son **campaña-específicos**, no atributos globales del socio.
+
+Ejemplo: el mismo teléfono puede quedar `VIEWED` en una campaña y `FAILED` en otra. Por eso no se deben agregar columnas `sent/delivered/viewed/failed` a `socios_vencidos_cartera`, a las filas canónicas de Socios Activos ni a la entidad global del contacto.
+
+Los estados viven en la relación **campaña -> destinatario** (o en su detalle/provider-delivery equivalente):
+
+    campaign recipient
+      -> successful
+      -> sent
+      -> delivered
+      -> viewed
+      -> failed
+      -> interactions
+
+Así se reutilizan las bases existentes sin contaminarlas con estado de una campaña particular.
+
+## 9. Audiencia congelada
 
 Al confirmar una campaña, la audiencia debe quedar persistida como cohorte.
 
@@ -276,7 +305,7 @@ Si una campaña se creó con 3,842 destinatarios, esos 3,842 no cambian porque d
 
 El preview se puede recalcular mientras la campaña no se confirme. La campaña confirmada no.
 
-## 9. Capa de proveedores
+## 10. Capa de proveedores
 
 El núcleo de V2 debe depender de una interfaz conceptual CampaignProvider y capacidades declaradas.
 
@@ -292,7 +321,7 @@ Capacidades esperadas:
 
 iVentas será un adaptador. Un proveedor futuro no debe obligar a reescribir audiencias o persistencia central.
 
-## 10. Seguridad
+## 11. Seguridad
 
 Las credenciales de integración viven solo en backend/env/secrets.
 
@@ -309,7 +338,7 @@ Los documentos recibidos con credenciales no deben copiarse al repositorio.
 
 La credencial usada durante integración debe poder rotarse sin cambio de código.
 
-## 11. Convivencia con legacy
+## 12. Convivencia con legacy
 
 Ruta de transición:
 
@@ -324,7 +353,7 @@ Ruta de transición:
 
 No borrar ni migrar datos legacy durante estas tres fases salvo decisión separada.
 
-## 12. Preguntas abiertas que no pueden resolverse por inferencia
+## 13. Preguntas abiertas que no pueden resolverse por inferencia
 
 - Tratamiento final de la familia mes.
 - Endpoint iVentas para listar campañas históricas por periodo.
@@ -336,7 +365,7 @@ No borrar ni migrar datos legacy durante estas tres fases salvo decisión separa
 
 Si una conversación posterior necesita una de estas respuestas, debe pedir evidencia o inspeccionar el proveedor/repo. No inventar.
 
-## 13. Regla de trabajo para nuevas conversaciones
+## 14. Regla de trabajo para nuevas conversaciones
 
 Antes de modificar código:
 

@@ -2,11 +2,14 @@
 
 Estado: CONTRATO DE LECTURA/BI; NO AUTORIZA ENVÍO  
 Dependencia: Fase 1 terminada y estable  
-Objetivo: integrar resultados de campañas iVentas con Campañas V2 sin acoplar el núcleo al proveedor.
+Objetivo: integrar resultados de campañas iVentas con Campañas V2 sin acoplar el núcleo al proveedor e incorporar, antes del enviador, la Cartera Funnel de Venta Nueva como fuente phone-centric.
 
 ## 1. Alcance exacto
 
-Fase 2 agrega lectura y sincronización de campañas iVentas.
+Fase 2 contiene dos bloques que deben quedar listos antes de Fase 3:
+
+- **2A — iVentas lectura/BI:** lectura y sincronización de campañas.
+- **2B — Cartera Funnel:** fuente de audiencia para Venta Nueva/Funnel, tolerante a identidad incompleta.
 
 Debe permitir:
 
@@ -19,7 +22,9 @@ Debe permitir:
 - persistir costo de campaña cuando el proveedor lo entregue;
 - clasificar campañas históricas por propósito comercial;
 - filtrar audiencias futuras por comportamiento previo soportado;
-- realizar sincronizaciones idempotentes.
+- realizar sincronizaciones idempotentes;
+- crear una audiencia desde `FUNNEL_PORTFOLIO` aunque el único dato individual confiable sea el teléfono;
+- congelar esa cartera sin fabricar socio, PIN, tarifa o sucursal.
 
 Fase 2 NO debe:
 
@@ -68,7 +73,75 @@ Sí se debe reutilizar:
 - patrones de sync idempotente;
 - manejo de timezone cuando aplique.
 
-## 4. Provider abstraction
+## 4. Regla de persistencia: reutilizar fuentes, guardar estado por campaña
+
+Fase 2 no crea una copia completa de Socios Activos ni de Socios Vencidos.
+
+- Socios Vencidos: reutilizar `socios_vencidos_cartera` y conservar referencia al episodio cuando aplique.
+- Socios Activos: reutilizar snapshots canónicos y conservar referencia al snapshot/fila fuente cuando el modelo vigente lo permita.
+- Funnel: reutilizar el detalle/identidad existente; si solo existe teléfono, conservar `PHONE_ONLY`.
+
+Los flags de iVentas se guardan en el recipient/delivery de **esa campaña**:
+
+    successful
+    sent
+    delivered
+    viewed
+    failed
+    interactions
+
+Nunca agregarlos como estado global a las bases canónicas. El mismo socio/teléfono puede tener resultados distintos en campañas distintas.
+
+## 5. Cartera Funnel / Venta Nueva
+
+### 5.1 Infraestructura existente
+
+Revisar/reutilizar antes de crear código nuevo:
+- `marketing_sales_funnel_detail_service.py`;
+- `marketing_sales_funnel_iventas_stage_service.py`;
+- `marketing_sales_funnel_drilldown_service.py`;
+- `marketing_sales_funnel_service.py`;
+- `marketing_phone.py`;
+- integración Funnel -> Contact Center.
+
+### 5.2 Contrato mínimo
+
+Para `FUNNEL_PORTFOLIO` solo es obligatorio:
+
+    phone_mx10
+    source = FUNNEL_PORTFOLIO
+
+Opcionales cuando existan:
+
+    source_reference
+    contact_id
+    name
+    sucursal_id
+    channel
+    source_date
+    origin
+
+No exigir member_id, PIN, tarifa, categoria_tarifa ni audience_family.
+
+### 5.3 Identidad phone-only
+
+El teléfono es clave operativa para deduplicar envíos, no identidad humana definitiva. Un recipient puede quedar `identity_quality = PHONE_ONLY`.
+
+No inferir sucursal por lada ni fabricar datos faltantes.
+
+### 5.4 Compradores y cartera utilizable
+
+El Funnel ya contiene lógica de cruces contra ventas y una ventana de compra para leads. Antes de definir quién queda en cartera para campaña, localizar y reutilizar exactamente esa semántica.
+
+No contactar a un comprador solo porque Campañas V2 consultó una fuente más cruda que el Funnel vigente. Si la definición de cartera deseada difiere, detenerse y crear contrato específico; no crear un segundo matcher silencioso.
+
+### 5.5 Sucursal desconocida
+
+Un contacto puede conservar `sucursal_id = NULL` en Fase 2. Esto no invalida su existencia en cartera.
+
+Antes de Fase 3 deberá existir una regla explícita de dispatch/channel. Si no puede resolverse, el recipient se bloquea para envío; jamás se manda desde una sucursal arbitraria.
+
+## 6. Provider abstraction
 
 Fase 2 debe introducir o completar una abstracción de proveedor.
 
@@ -87,7 +160,7 @@ Implementación inicial:
 
 El resto del módulo no debe conocer URLs ni nombres concretos de campos externos salvo en el adaptador.
 
-## 5. Capacidades conocidas de iVentas
+## 7. Capacidades conocidas de iVentas
 
 Documentación recibida:
 
@@ -123,8 +196,7 @@ Regla:
 - unavailable NO significa cero;
 - disabled NO significa cero.
 
-## 6. Estado por destinatario
-
+## 8. Estado por destinatario
 Los arrays de estado no son mutuamente excluyentes.
 
 Un número puede aparecer en:
@@ -145,7 +217,7 @@ La UI puede mostrar estado más avanzado conocido:
 
 FAILED debe conservarse con su error/cause cuando esté disponible; no convertirlo automáticamente en una etapa secuencial.
 
-## 7. Interacciones
+## 9. Interacciones
 
 interactions devuelve:
 - label del botón;
@@ -162,7 +234,7 @@ No convertir INTERACTED en sustituto de VIEWED.
 
 Si un destinatario puede tocar más de un botón, el modelo debe soportar 0..N interacciones.
 
-## 8. Respondidos
+## 10. Respondidos
 
 La documentación actual indica que answeredMessages está reservado y actualmente vacío.
 
@@ -177,7 +249,7 @@ Si analytics presenta un conteo agregado de responded, conservarlo como agregado
 
 Para habilitar filtro por respuesta individual se requiere evidencia/API explícita.
 
-## 9. Timestamps individuales
+## 11. Timestamps individuales
 
 Actualmente el contrato recibido no garantiza:
 
@@ -199,7 +271,7 @@ Puede persistirse:
 
 si se nombran claramente como metadata de Suite, no como evento WhatsApp.
 
-## 10. campaign_id externo
+## 12. campaign_id externo
 
 Campañas V2 debe tener identidad propia y referencia externa.
 
@@ -213,7 +285,7 @@ Debe existir una unique constraint adecuada para evitar duplicar la misma campa�
 
 No usar el campaign_id de iVentas como PK interna de Suite.
 
-## 11. Campañas creadas fuera de Suite
+## 13. Campañas creadas fuera de Suite
 
 Fase 2 debe soportar el concepto:
 
@@ -230,7 +302,7 @@ Datos mínimos deseables al importar:
 - stats;
 - purpose = UNCLASSIFIED inicialmente si no es evidente.
 
-## 12. Descubrimiento histórico por periodo
+## 14. Descubrimiento histórico por periodo
 
 Con la documentación actual, GET /v2/broadcast/stats/:id consulta una campaña por vez y no tiene query params.
 
@@ -255,7 +327,7 @@ Si todavía no existe listado, permitir un mecanismo administrativo controlado p
 
 No inventar scraping del panel ni consultar MongoDB de iVentas.
 
-## 13. Retroactividad
+## 15. Retroactividad
 
 No hay restricción documentada que prohíba consultar stats de una campaña histórica existente y autorizada.
 
@@ -266,7 +338,7 @@ Por tanto el contrato permite backfill retroactivo de septiembre u otros periodo
 
 El backfill debe guardar la cohorte/resultado observado, no simular timestamps que no existan.
 
-## 14. Costos por campaña
+## 16. Costos por campaña
 
 iVentas indicó que analytics incluye costo de campaña y que el envío almacena totalCost según país, categoría y fecha de envío.
 
@@ -285,7 +357,7 @@ Prohibido inventar rutas como:
 
 sin ver el payload real.
 
-## 15. Conciliación de costos
+## 17. Conciliación de costos
 
 La API anterior de costos por sucursal sigue existiendo y complementa la nueva.
 
@@ -303,7 +375,7 @@ No exigir que la suma de campañas sea igual al 100% del costo de sucursal si ex
 
 La diferencia debe poder mostrarse como no atribuida, nunca repartirse artificialmente.
 
-## 16. Clasificación comercial histórica
+## 18. Clasificación comercial histórica
 
 Propósitos:
 - NEW_SALE
@@ -328,7 +400,7 @@ Pero la implementación debe ser:
 
 No codificar reglas en Angular.
 
-## 17. Drill-down de clasificación
+## 19. Drill-down de clasificación
 
 En el listado de campañas importadas debe poder abrirse un control y seleccionar:
 
@@ -345,7 +417,7 @@ Persistir:
 
 Una clasificación manual prevalece sobre la automática y no debe reescribirse en siguientes sync.
 
-## 18. Estados iVentas como filtro de futuras audiencias
+## 20. Estados iVentas como filtro de futuras audiencias
 
 Una vez persistidos, Fase 2 puede añadir a Campañas V2 filtros como:
 
@@ -366,7 +438,7 @@ Ejemplo:
 
 No ofrecer NO_RESPONDIDO hasta tener dato individual confiable.
 
-## 19. Persistencia conceptual
+## 21. Persistencia conceptual
 
 La implementación puede variar, pero debe separar como mínimo:
 
@@ -404,7 +476,7 @@ La implementación puede variar, pero debe separar como mínimo:
 
 No crear una mega-columna JSON como sustituto de todo si después se necesitan filtros frecuentes. Tampoco normalizar campos no usados por anticipado.
 
-## 20. Idempotencia
+## 22. Idempotencia
 
 Repetir sync de una campaña no debe duplicar nada.
 
@@ -422,7 +494,7 @@ No borrar estado más avanzado porque una respuesta transitoria venga incompleta
 
 Definir explícitamente reglas de monotonicidad cuando el proveedor las garantice; no asumirlas si no están documentadas.
 
-## 21. Rate limits y retries
+## 23. Rate limits y retries
 
 El adaptador debe respetar límites documentados por iVentas.
 
@@ -435,7 +507,7 @@ La estrategia debe:
 
 No meter requests largos dentro del backend web si terminan bloqueando workers. Para backfills grandes evaluar job separado/scheduler siguiendo la arquitectura ya usada por Warehouse/Track.
 
-## 22. Seguridad
+## 24. Seguridad
 
 La integration key:
 - backend only;
@@ -446,7 +518,7 @@ La integration key:
 
 La credencial compartida durante análisis debe rotarse antes de considerarse integración productiva final.
 
-## 23. Sucursal y branch
+## 25. Sucursal y branch
 
 Reutilizar:
 
@@ -463,7 +535,7 @@ Si no puede resolverse:
 - marcar branch unresolved;
 - no asignarla arbitrariamente.
 
-## 24. Relación con Funnel
+## 26. Relación con Funnel
 
 Venta nueva puede usar costos de campañas clasificadas NEW_SALE.
 
@@ -476,7 +548,7 @@ Fase 2 entrega datos de campaña para que Funnel los consuma posteriormente medi
 
 No modificar el KPI del Funnel en el mismo cambio que implementa el sync si no existe un contrato separado de cálculo.
 
-## 25. Relación con Reactivaciones
+## 27. Relación con Reactivaciones
 
 Una campaña clasificada REACTIVATION puede cruzarse con el motor de outcomes existente.
 
@@ -488,7 +560,7 @@ Primero investigar adaptación; no duplicar:
 
 La conexión del nuevo campaign model al motor legacy puede requerir una interfaz común. Debe ser un cambio separado y probado.
 
-## 26. API interna esperada
+## 28. API interna esperada
 
 Operaciones equivalentes:
 
@@ -502,7 +574,7 @@ Operaciones equivalentes:
 
 Los nombres definitivos se acuerdan al implementar.
 
-## 27. Pruebas mínimas
+## 29. Pruebas mínimas
 
 Provider parser:
 - successful;
@@ -535,7 +607,7 @@ Histórico:
 - volver a sincronizar;
 - mismos registros.
 
-## 28. Criterio de aceptación de Fase 2
+## 30. Criterio de aceptación de Fase 2
 
 Dada una campaña real conocida de iVentas, Suite debe poder mostrar:
 
@@ -559,7 +631,7 @@ Debe poder cambiarse propósito comercial manualmente.
 
 No es requisito todavía enviar desde Suite.
 
-## 29. Condición de salida hacia Fase 3
+## 31. Condición de salida hacia Fase 3
 
 No iniciar Fase 3 hasta que:
 - provider abstraction sea estable;
@@ -569,9 +641,12 @@ No iniciar Fase 3 hasta que:
 - campañas externas puedan representarse;
 - branch resolution funcione;
 - secretos estén fuera del código;
-- legacy no se haya roto.
+- legacy no se haya roto;
+- `FUNNEL_PORTFOLIO` funcione con recipients phone-only;
+- la cartera Funnel reutilice la semántica vigente de compradores/no compradores;
+- los flags iVentas estén ligados a campaña-recipient y no a las bases canónicas.
 
-## 30. Instrucción para una conversación nueva de Fase 2
+## 32. Instrucción para una conversación nueva de Fase 2
 
     Estamos implementando únicamente Campañas V2 Fase 2.
     Lee el contrato global, Fase 1 y este contrato.

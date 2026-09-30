@@ -1,7 +1,7 @@
 # Contrato Campañas V2 — Fase 3
 
 Estado: CONTRATO DE ENVÍO; REQUIERE FASES 1 Y 2 ESTABLES  
-Dependencia: Fase 1 y Fase 2 terminadas  
+Dependencia: Fase 1 y Fase 2 terminadas, incluida la fuente FUNNEL_PORTFOLIO  
 Objetivo: permitir que Suite Ultra envíe campañas mediante iVentas sin romper la trazabilidad construida previamente.
 
 ## 1. Alcance exacto
@@ -125,7 +125,8 @@ Antes de llamar iVentas, backend debe validar:
 - campaña está en estado permitido;
 - audiencia no está vacía;
 - todos los recipients sendables tienen teléfono normalizado;
-- sucursal/canal está resuelto;
+- sucursal/canal o política de dispatch está resuelta explícitamente;
+- recipients `PHONE_ONLY` sin dispatch resoluble están bloqueados y visibles, no reasignados arbitrariamente;
 - plantilla está definida;
 - variables requeridas pueden construirse;
 - provider binding no indica envío previo;
