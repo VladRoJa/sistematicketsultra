@@ -77,6 +77,11 @@ def test_list_hides_agregadoras_from_non_admicorp_manager(
     )
     monkeypatch.setattr(
         routes,
+        "joinedload",
+        lambda _attribute: None,
+    )
+    monkeypatch.setattr(
+        routes,
         "get_current_internal_document_context",
         lambda: SimpleNamespace(
             user_id=88,
