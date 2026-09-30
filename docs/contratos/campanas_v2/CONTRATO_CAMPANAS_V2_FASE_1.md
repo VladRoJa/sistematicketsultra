@@ -317,6 +317,8 @@ Fase 1 debe diferenciar claramente:
 - exclusión técnica;
 - exclusión obligatoria de negocio.
 
+El pipeline debe permitir **suppression resolvers** por fuente. Ejemplo futuro de Fase 2: `FUNNEL_PORTFOLIO` cruza contra el snapshot canónico de Socios Activos y marca `ACTIVE_MEMBER_SUPPRESSION` antes de congelar la audiencia. Fase 1 no implementa ese cruce, pero no debe diseñar un modelo que impida agregarlo.
+
 Ejemplos técnicos:
 - teléfono ausente;
 - teléfono no normalizable para el canal;

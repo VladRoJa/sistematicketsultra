@@ -123,6 +123,8 @@ Existen servicios de detalle del Funnel (`marketing_sales_funnel_detail_service.
 
 Decisión: `FUNNEL_PORTFOLIO` se integra en Fase 2, antes del enviador. Su contrato mínimo es phone-centric: `phone_mx10` puede ser el único dato confiable. Nombre, sucursal, contact_id, canal o fecha son enriquecimientos opcionales; no se inventan member_id, PIN, tarifa ni sucursal.
 
+Además, la cartera Funnel debe aplicar una **supresión obligatoria contra Socios Activos** usando el snapshot canónico vigente. Si el teléfono destinatario aparece asociado a un socio actualmente activo, ese número no entra a una campaña de Venta Nueva. Esta supresión se resuelve en preview; no se copia la base de activos ni se agrega un flag permanente al lead.
+
 ### 3.6 Envío registrado y atribución de Reactivaciones ya existente
 
 Existen:
