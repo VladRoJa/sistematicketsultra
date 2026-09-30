@@ -343,3 +343,53 @@ def test_canonicalize_template_baseline_uses_track_aliases(monkeypatch):
         ),
     }
 
+def test_canonicalize_template_baseline_matches_historical_suffix_aliases(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        service,
+        "_track_aliases_by_normalized_raw",
+        lambda *, source_family: {
+            "ultra - insurgentes sur": "INSURGENTES",
+            "ultragym san luis río colorado": "SAN_LUIS",
+        },
+    )
+
+    result = service._canonicalize_template_baseline(
+        template_baseline={
+            "insurgentes sur": _acc(
+                791,
+                "46680.00",
+                "Insurgentes Sur",
+            ),
+            "san luis rio colorado": _acc(
+                378,
+                "17640.00",
+                "San Luis Rio Colorado",
+            ),
+        },
+        aggregator_code="WH",
+        source_family="wellhub_family",
+        template_catalog={
+            ("ultra - insurgentes sur", "WH"): "Insurgentes",
+            ("ultra - san luis rio colorado", "WH"): "San Luis",
+        },
+        track_labels={
+            "INSURGENTES": "Insurgentes",
+            "SAN_LUIS": "San Luis",
+        },
+    )
+
+    assert result == {
+        "INSURGENTES": _acc(
+            791,
+            "46680.00",
+            "Insurgentes Sur",
+        ),
+        "SAN_LUIS": _acc(
+            378,
+            "17640.00",
+            "San Luis Rio Colorado",
+        ),
+    }
+
