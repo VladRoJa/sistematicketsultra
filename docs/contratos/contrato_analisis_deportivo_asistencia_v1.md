@@ -221,4 +221,14 @@ Requisitos del capturador:
 - permitir prueba local y reproceso por fecha;
 - no correr dentro de una petición Gunicorn.
 
+Automatización productiva:
+
+- `reports-scheduler` ejecuta la captura diaria D+1;
+- fecha objetivo: día calendario anterior en `America/Tijuana`;
+- horario default: 06:20;
+- el horario es configurable por variables de entorno;
+- respeta la ventana de prioridad de Track;
+- ante error técnico reintenta cada 30 minutos por default;
+- una ejecución `SUCCESS` previa con `trigger_source=REPORTS_SCHEDULER` evita una descarga duplicada después de reinicios.
+
 El capturador se llevará a PR únicamente después de validarlo localmente.
