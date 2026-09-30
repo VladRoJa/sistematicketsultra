@@ -251,7 +251,7 @@ def test_daily_rows_use_template_baseline_and_assign_gap_to_next_snapshot():
         target_date=date(2026, 8, 21),
         snapshots=snapshots,
         template_baseline={
-            "sucursal a": _acc(10, "100.00", "Sucursal A"),
+            "A": _acc(10, "100.00", "Sucursal A"),
         },
         state_loader=lambda snapshot_id: states[snapshot_id],
         aggregator_code="WH",
@@ -307,4 +307,39 @@ def test_resolve_upload_file_path_includes_stored_filename(
 
 def test_excel_date_from_cell_accepts_spanish_text_date():
     assert service._excel_date_from_cell("29/07/2026") == date(2026, 7, 29)
+
+def test_canonicalize_template_baseline_uses_track_aliases(monkeypatch):
+    monkeypatch.setattr(
+        service,
+        "_track_aliases_by_normalized_raw",
+        lambda *, source_family: {
+            "ultra - insurgentes sur": "INSURGENTES",
+        },
+    )
+
+    result = service._canonicalize_template_baseline(
+        template_baseline={
+            "insurgentes sur": _acc(
+                791,
+                "46680.00",
+                "Insurgentes Sur",
+            ),
+        },
+        aggregator_code="WH",
+        source_family="wellhub_family",
+        template_catalog={
+            ("ultra - insurgentes sur", "WH"): "Insurgentes Sur",
+        },
+        track_labels={
+            "INSURGENTES": "Insurgentes",
+        },
+    )
+
+    assert result == {
+        "INSURGENTES": _acc(
+            791,
+            "46680.00",
+            "Insurgentes Sur",
+        ),
+    }
 
