@@ -15,7 +15,7 @@ def test_no_show_case_returns_to_shared_follow_up_without_reassignment():
     routes = _read(ROUTES)
 
     assert "def is_no_show_follow_up_case(" in service
-    assert 'case.status != "IN_PROGRESS"' in service
+    assert 'case.status not in {"IN_PROGRESS", "FOLLOW_UP"}' in service
     assert 'ContactCenterAppointmentORM.status == "CLOSED"' in service
     assert 'ContactCenterAppointmentORM.outcome == "NO_SHOW"' in service
 
@@ -32,7 +32,8 @@ def test_manager_portfolio_and_detail_include_recoverable_no_show_case():
     routes = _read(ROUTES)
 
     assert "no_show_follow_up_exists" in service
-    assert 'ContactCenterCaseORM.status == "IN_PROGRESS"' in service
+    assert 'ContactCenterCaseORM.status.in_(' in service
+    assert '"IN_PROGRESS", "FOLLOW_UP"' in service
     assert "ContactCenterAppointmentORM.outcome == "NO_SHOW"" in service
 
     assert "def _detail_case_is_no_show_follow_up(" in routes
