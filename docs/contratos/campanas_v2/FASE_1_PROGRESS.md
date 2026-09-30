@@ -171,7 +171,7 @@ No se agregaron:
 
 ## Milestone 2 — Persistencia base Campaign V2 + Recipient V2
 
-Estado: **completado en rama, pendiente de merge**.
+Estado: **completado y mergeado vía PR #752 a `main` en `b949817eff87d3d82a0c2ff0f540576c028ded4c`**.
 
 ### Base y rama
 
@@ -320,8 +320,239 @@ No se agregan:
 - scheduling;
 - cambios al flujo de Reactivaciones legacy.
 
+## Milestone 3 — Audience Builder backend + Preview V2
+
+Estado: **completado en rama, pendiente de merge**.
+
+### Base y rama
+
+- Base SHA: `b949817eff87d3d82a0c2ff0f540576c028ded4c`
+- Rama: `feat/campaign-v2-audience-preview`
+- Milestone 2 ya estaba mergeado vía PR #752.
+- No se agregó migración: este milestone es exclusivamente read-only/in-memory.
+
+### Arquitectura
+
+Nuevo servicio:
+
+`backend/app/services/marketing_campaign_v2_audience_service.py`
+
+El motor mantiene una sola tubería V2:
+
+`fuente canónica → scope → estado actual cuando aplica → clasificación V2 → familias seleccionadas → teléfono → deduplicación → Preview/Detail`
+
+Dos dataclasses internas representan el flujo sin persistirlo:
+
+- `MarketingCampaignV2AudienceCandidate`: candidato previo a freeze, con source ref, teléfono, identidad opcional, sucursal, tarifa, clasificación, fecha y evidencia.
+- `MarketingCampaignV2RecipientCandidate`: teléfono final deduplicado con metadata de consenso, `conflict_fields` y todas las filas de evidencia.
+
+El Preview no crea `MarketingCampaignV2ORM` ni `MarketingCampaignV2RecipientORM`.
+
+### EXPIRED_MEMBERS
+
+Fuente canónica: `SociosVencidosCarteraORM`.
+
+El rango `expiration_date_from..expiration_date_to` es inclusivo.
+
+El scope se aplica con `normalize_socios_vencidos_branch_key()`.
+
+Para determinar si el episodio sigue siendo realmente vencido se reutilizan exclusivamente:
+
+- `prepare_socios_vencidos_current_status_context()`
+- `resolve_socios_vencidos_rows_with_context()`
+
+Esto reutiliza el matcher vigente vencido↔activo y el snapshot activo canónico, pero corta antes del resolver específico de Reactivaciones.
+
+Política fail-closed de estado actual:
+
+- `NOT_FOUND` continúa como candidato vencido.
+- cualquier evidencia `ACTIVE_CONFIRMED`, `ACTIVE_REVIEW`, `AMBIGUOUS` o `IDENTIFIER_CONFLICT` queda fuera del recipient final y se conserva en `current_status_counts` / `CURRENT_STATUS_BLOCKED`.
+
+No se importa ni invoca el resolver de candidatos de Reactivaciones y no hay dependencia iVentas.
+
+### ACTIVE_MEMBERS
+
+El servicio llama obligatoriamente:
+
+`resolve_latest_canonical_socios_activos_snapshot()`
+
+y lee filas individuales `SociosActivosSnapshotRowORM` sólo del snapshot resuelto.
+
+El Preview conserva:
+
+- `activos_snapshot_id`
+- `activos_cutoff_date`
+- `activos_captured_at`
+- `snapshot_kind`
+
+Cada candidato conserva `SOCIOS_ACTIVOS_SNAPSHOT_ROW`, row id y snapshot id como referencia canónica.
+
+### Scope y filtros
+
+`allowed_sucursal_keys=None` significa scope global.
+
+Una colección explícita —incluida una colección vacía— se normaliza con el matcher vigente y limita el universo backend.
+
+Para `EXPIRED_MEMBERS` son obligatorios los dos extremos del rango.
+
+Para `ACTIVE_MEMBERS` no se aceptan filtros de vencimiento.
+
+`audience_families` exige al menos una de las cinco familias comerciales seleccionables:
+
+- `DOMICILIADO`
+- `TRIMESTRAL`
+- `CONVENIO`
+- `SEMESTRE`
+- `ESTUDIANTE`
+
+La selección es OR dentro de familias y AND respecto a source/scope/rango.
+
+`MES`, `OUT_OF_SEGMENT` y tarifa sin match permanecen visibles en composición pero no son valores seleccionables del filtro comercial.
+
+### Teléfono
+
+La única identidad general es `phone_mx10`.
+
+Se reutiliza exclusivamente `marketing_phone.normalize_phone()`.
+
+Para Socios Activos se intenta primero el teléfono disponible y, si no normaliza, se vuelve a llamar el mismo `normalize_phone()` con `lada + teléfono`; no existe un normalizador V2 adicional.
+
+Los inválidos permanecen en `INVALID_PHONE`.
+
+### Clasificación de tarifa
+
+Se consulta exclusivamente `MarketingCampaignV2TariffORM`.
+
+La llave se obtiene con el helper puro vigente `normalize_reactivation_tariff_key()`, cuya semántica es exactamente la normalización aprobada en Milestone 1.
+
+No se consulta `MarketingReactivationTariffORM`, no se lee `reactivation_group` y no se hereda ninguna exclusión legacy.
+
+Una tarifa sin match conserva `tarifa_key` normalizada pero queda con `audience_family=None` y bucket `UNCLASSIFIED`.
+
+### Deduplicación y conflictos
+
+La deduplicación final es por `phone_mx10`.
+
+El orden es estable por teléfono y referencia canónica.
+
+Para un teléfono con varias filas:
+
+- todas las filas quedan en `evidence_rows`;
+- `duplicate_count = filas válidas absorbidas después de la primera referencia estable`;
+- cada campo de metadata se conserva sólo cuando todos sus valores no nulos coinciden;
+- si hay dos valores no nulos distintos, el valor consolidado queda `None` y el campo se agrega a `conflict_fields`.
+
+Por tanto el orden de query nunca elige silenciosamente nombre, sucursal, tarifa o family como “verdad”.
+
+### Contrato del Preview
+
+`build_campaign_v2_audience_preview()` devuelve:
+
+- `source`
+- `source_metadata`
+- `filters` normalizados
+- `universe_count`
+- `scoped_count`
+- `current_status_counts`
+- `current_status_blocked_count`
+- `filtered_count`
+- `family_counts`
+- `unclassified_family_count`
+- `out_of_segment_count`
+- `invalid_phone_count`
+- `duplicate_count`
+- `unique_recipient_count`
+
+`family_counts` describe filas clasificadas después de scope/estado actual y antes de selección/deduplicación. `filtered_count` son filas pertenecientes a las familias seleccionadas antes de bloqueo por teléfono.
+
+### Drill-down
+
+`build_campaign_v2_audience_preview_detail()` reconstruye el plan desde las mismas fuentes/filtros y permite buckets:
+
+- `RECIPIENTS`
+- `INVALID_PHONE`
+- `DUPLICATES`
+- `OUT_OF_SEGMENT`
+- `UNCLASSIFIED`
+- `FAMILY` + `audience_family`
+- `CURRENT_STATUS_BLOCKED`
+
+La paginación es estable.
+
+Antes de paginar se compara el total reconstruido del bucket contra el contador del Preview. Si diverge, lanza `RuntimeError` y falla cerrado.
+
+### Helpers reutilizados
+
+Se reutilizaron sin modificar:
+
+- `marketing_phone.normalize_phone()`
+- `marketing_reactivation_service.normalize_reactivation_tariff_key()`
+- `socios_vencidos_current_status_resolver.normalize_socios_vencidos_branch_key()`
+- `prepare_socios_vencidos_current_status_context()`
+- `resolve_socios_vencidos_rows_with_context()`
+- `resolve_latest_canonical_socios_activos_snapshot()`
+
+No se extrajeron ni cambiaron helpers legacy.
+
+### Pruebas específicas
+
+Nuevo archivo:
+
+`backend/tests/marketing/test_marketing_campaign_v2_audience_service.py`
+
+Cobertura escrita:
+
+- OR de familias y AND con source/scope/rango;
+- MES separado;
+- OUT_OF_SEGMENT separado;
+- UNCLASSIFIED separado;
+- familias comerciales válidas;
+- `normalize_phone()` y fallback lada+teléfono con el mismo normalizador;
+- inválidos;
+- deduplicación por `phone_mx10`;
+- determinismo ante orden invertido;
+- conflictos de metadata explícitos;
+- rango vencidos inclusivo;
+- scope vencidos;
+- current-status canónico;
+- ausencia de iVentas/reactivation_group en el builder;
+- snapshot canónico de activos;
+- referencia snapshot/row activo;
+- catálogo V2 exclusivo;
+- paginación estable;
+- preview count == detail count;
+- mismatch fail-closed;
+- bucket de estado actual bloqueado.
+
+Resultado realmente ejecutado en harness aislado con stubs mínimos de las dependencias del repo:
+
+`9 passed in 0.07s`
+
+También pasaron `py_compile` del servicio y del test exactos.
+
+Limitación del entorno: no hay acceso de red para clonar el repo y no están instalados Flask/Flask-SQLAlchemy. Por ello no se ejecutó el archivo de pytest dentro del árbol completo de Suite Ultra, PostgreSQL, toda la suite ni CI. Los tests de Milestone 1 y Milestone 2 no pudieron reejecutarse aquí; sus archivos/modelos/migraciones no fueron modificados por Milestone 3.
+
+### Fuera de alcance
+
+No se agregó:
+
+- creación/freeze de Campaign V2 desde Preview;
+- endpoints;
+- Angular;
+- permisos HTTP;
+- Funnel;
+- PREVIOUS_CAMPAIGN;
+- supresión Funnel contra activos;
+- iVentas;
+- provider/broadcast;
+- costos;
+- templates;
+- scheduling;
+- migraciones;
+- cambios de semántica legacy.
+
 ## Siguiente milestone propuesto
 
-**Milestone 3 — Audience Builder backend: fuentes canónicas + preview/composición V2**
+**Milestone 4 — Freeze/Create server-side desde Preview V2**
 
-Objetivo recomendado: construir los adapters de `EXPIRED_MEMBERS` y `ACTIVE_MEMBERS`, filtros y composición/deduplicación de preview sobre las fuentes canónicas, todavía sin envío y manteniendo la creación/freeze como paso server-side posterior.
+Objetivo recomendado: tomar una definición de Preview validada, reconstruir el universo server-side con el mismo builder, exigir consistencia/fail-closed y persistir `MarketingCampaignV2ORM` + `MarketingCampaignV2RecipientORM` usando la evidencia y snapshots del Milestone 3. Todavía sin endpoints/Angular si se mantiene la progresión backend-first.
