@@ -19,6 +19,7 @@ from app.utils.scope_utils import normalize_role
 
 
 SPORTS_ANALYSIS_BETA_USERNAME = "ADMICORP"
+SPORTS_ANALYSIS_GLOBAL_ROLES = frozenset({"GERENCIA DEPORTIVA"})
 
 
 class SportsAnalysisAuthorizationError(
@@ -52,10 +53,14 @@ def get_current_sports_analysis_user() -> UserORM:
     username = str(
         user.username or ""
     ).strip().upper()
-    if username != SPORTS_ANALYSIS_BETA_USERNAME:
+    role = normalize_role(user.rol)
+    if (
+        username != SPORTS_ANALYSIS_BETA_USERNAME
+        and role not in SPORTS_ANALYSIS_GLOBAL_ROLES
+    ):
         raise SportsAnalysisAuthorizationError(
-            "Aforo y Asistencia está habilitado "
-            "únicamente para ADMICORP durante la beta."
+            "Aforo y Asistencia no está habilitado "
+            "para este perfil."
         )
 
     return user
@@ -67,10 +72,14 @@ def resolve_sports_analysis_scope(
     username = str(
         user.username or ""
     ).strip().upper()
-    if username != SPORTS_ANALYSIS_BETA_USERNAME:
+    role = normalize_role(user.rol)
+    if (
+        username != SPORTS_ANALYSIS_BETA_USERNAME
+        and role not in SPORTS_ANALYSIS_GLOBAL_ROLES
+    ):
         raise SportsAnalysisAuthorizationError(
-            "Aforo y Asistencia está habilitado "
-            "únicamente para ADMICORP durante la beta."
+            "Aforo y Asistencia no está habilitado "
+            "para este perfil."
         )
 
     all_branch_ids = tuple(

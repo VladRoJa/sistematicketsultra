@@ -260,8 +260,12 @@ ngOnInit(): void {
     ],
   };
 
+  const sportsAnalysisUser = this.authService.getUser();
   const sportsAnalysisUsername = String(
-    this.authService.getUser()?.username ?? ''
+    sportsAnalysisUser?.username ?? ''
+  ).trim().toUpperCase();
+  const sportsAnalysisRole = String(
+    sportsAnalysisUser?.rol ?? sportsAnalysisUser?.role ?? ''
   ).trim().toUpperCase();
 
   const sportsAnalysisSubmenu: Array<{ label: string; path: string }> = [];
@@ -273,7 +277,10 @@ ngOnInit(): void {
     });
   }
 
-  if (sportsAnalysisUsername === 'ADMICORP') {
+  if (
+    sportsAnalysisUsername === 'ADMICORP'
+    || sportsAnalysisRole === 'GERENCIA DEPORTIVA'
+  ) {
     sportsAnalysisSubmenu.push({
       label: 'Aforo y Asistencia',
       path: '/analisis-deportivo/aforo-asistencia',
