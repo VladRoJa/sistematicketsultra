@@ -141,6 +141,43 @@ Un contacto puede conservar `sucursal_id = NULL` en Fase 2. Esto no invalida su 
 
 Antes de Fase 3 deberá existir una regla explícita de dispatch/channel. Si no puede resolverse, el recipient se bloquea para envío; jamás se manda desde una sucursal arbitraria.
 
+### 5.6 Supresión obligatoria contra Socios Activos
+
+Una campaña de Venta Nueva construida desde `FUNNEL_PORTFOLIO` no debe enviar mensajes a números que ya correspondan a socios actualmente activos.
+
+El cruce debe reutilizar:
+
+    resolve_latest_canonical_socios_activos_snapshot()
+    SociosActivosSnapshotRowORM.telefono_raw
+    marketing_phone.normalize_phone()
+
+No crear una tabla paralela de socios activos ni poblarla para Marketing.
+
+Flujo conceptual:
+
+    FUNNEL_PORTFOLIO
+        -> normalizar phone_mx10
+        -> cruzar contra snapshot canónico de Socios Activos
+        -> teléfono presente en activos: ACTIVE_MEMBER_SUPPRESSION
+        -> teléfono ausente: continuar evaluación
+
+La supresión es **por número destinatario**, no una declaración fuerte de identidad humana. Esto es deliberado: si un teléfono está siendo utilizado por un socio activo, no se desea enviar a ese mismo número una campaña de adquisición aunque el lead CRM corresponda a otra fila/contact_id.
+
+El Preview debe mostrar esta población por separado, por ejemplo:
+
+    Candidatos Funnel
+    Compradores excluidos por lógica Funnel
+    Socios activos excluidos
+    Teléfonos duplicados/conflictos
+    Audiencia final
+
+La razón `ACTIVE_MEMBER_SUPPRESSION` debe quedar congelada/auditada en el resultado del preview o creación cuando corresponda, pero **no** se escribe como flag permanente en el lead ni en Socios Activos.
+
+Esta supresión complementa, no reemplaza, el cruce de compra de 60 días ya utilizado por el Funnel:
+
+- cruce de compra: evita contactar a quien ya convirtió dentro de la lógica comercial del Funnel;
+- Socios Activos: evita contactar como Venta Nueva a quien hoy ya pertenece a la base activa, incluso si el dato de compra no quedó representado del mismo modo en la cohorte del Funnel.
+
 ## 6. Provider abstraction
 
 Fase 2 debe introducir o completar una abstracción de proveedor.
@@ -397,7 +434,6 @@ Pero la implementación debe ser:
 - configurable/mantenible;
 - auditable;
 - con override manual.
-
 No codificar reglas en Angular.
 
 ## 19. Drill-down de clasificación
@@ -644,6 +680,7 @@ No iniciar Fase 3 hasta que:
 - legacy no se haya roto;
 - `FUNNEL_PORTFOLIO` funcione con recipients phone-only;
 - la cartera Funnel reutilice la semántica vigente de compradores/no compradores;
+- la cartera Funnel excluya por número a quienes aparezcan en el snapshot canónico vigente de Socios Activos y reporte `ACTIVE_MEMBER_SUPPRESSION`;
 - los flags iVentas estén ligados a campaña-recipient y no a las bases canónicas.
 
 ## 32. Instrucción para una conversación nueva de Fase 2
