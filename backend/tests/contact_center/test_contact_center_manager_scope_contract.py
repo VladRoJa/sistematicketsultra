@@ -10,7 +10,7 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_manager_portfolio_is_own_cases_inside_allowed_branches():
+def test_manager_portfolio_is_own_cases_plus_no_show_recovery_inside_allowed_branches():
     routes = _read(ROUTES)
     service = _read(SERVICE)
 
@@ -18,6 +18,8 @@ def test_manager_portfolio_is_own_cases_inside_allowed_branches():
     assert "allowed_branch_ids=(" in routes
     assert "if not is_supervisor and not include_all_assignees:" in service
     assert "ContactCenterCaseORM.assigned_user_id == actor.id" in service
+    assert "no_show_follow_up_exists" in service
+    assert '"IN_PROGRESS", "FOLLOW_UP"' in service
     assert "ContactCenterCaseORM.sucursal_id.in_(allowed_branch_ids)" in service
 
 

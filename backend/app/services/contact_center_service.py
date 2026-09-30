@@ -498,8 +498,26 @@ def list_contacts(
         )
 
     if not is_supervisor and not include_all_assignees:
+        no_show_follow_up_exists = (
+            db.session.query(ContactCenterAppointmentORM.id)
+            .filter(
+                ContactCenterAppointmentORM.case_id
+                == ContactCenterCaseORM.id,
+                ContactCenterAppointmentORM.status == "CLOSED",
+                ContactCenterAppointmentORM.outcome == "NO_SHOW",
+            )
+            .exists()
+        )
         cases_query = cases_query.filter(
-            ContactCenterCaseORM.assigned_user_id == actor.id
+            or_(
+                ContactCenterCaseORM.assigned_user_id == actor.id,
+                and_(
+                    ContactCenterCaseORM.status.in_(
+                        ("IN_PROGRESS", "FOLLOW_UP")
+                    ),
+                    no_show_follow_up_exists,
+                ),
+            )
         )
 
     normalized_status = str(status or "").strip().upper()
@@ -669,17 +687,44 @@ def assign_case(
     return case
 
 
+def is_no_show_follow_up_case(
+    case: ContactCenterCaseORM,
+) -> bool:
+    if case.status not in {"IN_PROGRESS", "FOLLOW_UP"}:
+        return False
+
+    return (
+        ContactCenterAppointmentORM.query
+        .filter(
+            ContactCenterAppointmentORM.case_id == case.id,
+            ContactCenterAppointmentORM.status == "CLOSED",
+            ContactCenterAppointmentORM.outcome == "NO_SHOW",
+        )
+        .order_by(
+            ContactCenterAppointmentORM.scheduled_at.desc(),
+            ContactCenterAppointmentORM.id.desc(),
+        )
+        .first()
+        is not None
+    )
+
+
 def add_interaction(
     case_id: int,
     payload: dict[str, Any],
     actor: UserORM,
     *,
     is_supervisor: bool,
+    allow_foreign_case: bool = False,
 ) -> ContactCenterInteractionORM:
     case = ContactCenterCaseORM.query.get(case_id)
     if case is None:
         raise ContactCenterNotFoundError("Caso no encontrado.")
-    if not is_supervisor and case.assigned_user_id != actor.id:
+    if (
+        not is_supervisor
+        and not allow_foreign_case
+        and case.assigned_user_id != actor.id
+    ):
         raise ContactCenterValidationError(
             "El caso está asignado a otro agente."
         )
@@ -741,6 +786,7 @@ def create_appointment(
     actor: UserORM,
     *,
     is_supervisor: bool,
+    allow_foreign_case: bool = False,
 ) -> ContactCenterAppointmentORM:
     case = (
         ContactCenterCaseORM.query
@@ -750,7 +796,11 @@ def create_appointment(
     )
     if case is None:
         raise ContactCenterNotFoundError("Caso no encontrado.")
-    if not is_supervisor and case.assigned_user_id != actor.id:
+    if (
+        not is_supervisor
+        and not allow_foreign_case
+        and case.assigned_user_id != actor.id
+    ):
         raise ContactCenterValidationError(
             "El caso está asignado a otro agente."
         )

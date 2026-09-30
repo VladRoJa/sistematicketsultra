@@ -132,6 +132,25 @@ export class ContactCenterContactDialogComponent implements OnInit {
     return this.activeCase ?? this.contact?.cases[0] ?? null;
   }
 
+  get isNoShowFollowUpCase(): boolean {
+    const currentCase = this.activeCase;
+    if (
+      !currentCase
+      || !['IN_PROGRESS', 'FOLLOW_UP'].includes(currentCase.status)
+    ) {
+      return false;
+    }
+
+    return Boolean(
+      this.contact?.appointments.some(
+        (row) =>
+          row.case_id === currentCase.id
+          && row.status === 'CLOSED'
+          && row.outcome === 'NO_SHOW',
+      ),
+    );
+  }
+
   get canOperateActiveCase(): boolean {
     if (this.isSupervisor) {
       return true;
@@ -139,7 +158,10 @@ export class ContactCenterContactDialogComponent implements OnInit {
 
     return Boolean(
       this.activeCase
-      && this.activeCase.assigned_user?.id === this.data.access.user.id
+      && (
+        this.activeCase.assigned_user?.id === this.data.access.user.id
+        || this.isNoShowFollowUpCase
+      )
     );
   }
 
