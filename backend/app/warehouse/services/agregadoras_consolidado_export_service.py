@@ -105,7 +105,11 @@ def _uploads_root() -> Path:
 
 
 def _resolve_upload_file_path(upload: WarehouseUploadORM) -> Path:
-    return (_uploads_root() / Path(upload.stored_path)).resolve()
+    return (
+        _uploads_root()
+        / Path(upload.stored_path)
+        / str(upload.stored_filename)
+    ).resolve()
 
 
 def _generated_dir() -> Path:
