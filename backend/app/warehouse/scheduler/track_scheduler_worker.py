@@ -29,6 +29,10 @@ from app.warehouse.services.agregadoras_consolidado_export_service import (
     AgregadorasTemplateMissingError,
     generate_agregadoras_consolidado,
 )
+from app.warehouse.jobs.agregadoras_consolidado_publisher import (
+    AgregadorasConsolidadoPublishError,
+    publish_agregadoras_consolidado_output,
+)
 from app.warehouse.services.warehouse_retention_service import (
     purge_venta_total_non_canonical_snapshots,
 )
@@ -395,6 +399,21 @@ def execute_warehouse_retention() -> dict:
 
     return result
 
+def execute_agregadoras_consolidado_export() -> dict:
+    export_result = generate_agregadoras_consolidado()
+
+    publication_result = publish_agregadoras_consolidado_output(
+        file_path=export_result["output_path"],
+        cutoff_date=export_result["cutoff_date"],
+        download_filename=export_result.get("download_filename"),
+    )
+
+    return {
+        "export": export_result,
+        "publication": publication_result,
+    }
+
+
 def _agregadoras_export_check_key(
     now_local: datetime,
 ) -> str | None:
@@ -487,7 +506,13 @@ def run_scheduler_loop() -> None:
                     )
 
                     try:
-                        export_result = generate_agregadoras_consolidado()
+                        agregadoras_result = (
+                            execute_agregadoras_consolidado_export()
+                        )
+                        export_result = agregadoras_result["export"]
+                        publication_result = (
+                            agregadoras_result["publication"]
+                        )
                         last_agregadoras_export_error = None
 
                         if export_result.get("status") == "generated":
@@ -500,6 +525,22 @@ def run_scheduler_loop() -> None:
                                 export_result.get("totalpass_rows_added"),
                                 export_result.get("file_size_bytes"),
                             )
+
+                        LOGGER.info(
+                            "Consolidado agregadoras publicado en Nube: "
+                            "cutoff_date=%s action=%s "
+                            "warehouse_upload_id=%s document_id=%s",
+                            export_result.get("cutoff_date"),
+                            publication_result.get("action"),
+                            publication_result.get(
+                                "warehouse_upload_id"
+                            ),
+                            publication_result.get("document_id")
+                            or (
+                                publication_result.get("publication")
+                                or {}
+                            ).get("document_id"),
+                        )
                     except AgregadorasTemplateMissingError as exc:
                         error_key = f"template_missing:{exc}"
                         if error_key != last_agregadoras_export_error:
@@ -513,6 +554,15 @@ def run_scheduler_loop() -> None:
                         if error_key != last_agregadoras_export_error:
                             LOGGER.warning(
                                 "No se actualizó consolidado agregadoras: %s",
+                                exc,
+                            )
+                        last_agregadoras_export_error = error_key
+                    except AgregadorasConsolidadoPublishError as exc:
+                        error_key = f"publish:{exc}"
+                        if error_key != last_agregadoras_export_error:
+                            LOGGER.warning(
+                                "Consolidado generado pero no publicado "
+                                "en Nube: %s",
                                 exc,
                             )
                         last_agregadoras_export_error = error_key
