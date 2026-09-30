@@ -65,6 +65,10 @@ def test_list_hides_agregadoras_from_non_admicorp_manager(
         status=_FakeColumn("internal_documents.status"),
         created_at=_FakeColumn("internal_documents.created_at"),
         id=_FakeColumn("internal_documents.id"),
+        category=object(),
+        current_version=object(),
+        owner_user=object(),
+        owner_department=object(),
     )
     monkeypatch.setattr(
         routes,
