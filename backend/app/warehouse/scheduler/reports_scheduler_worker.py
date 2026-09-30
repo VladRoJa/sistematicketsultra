@@ -383,7 +383,6 @@ def _run_attendance_daily_capture_if_due(
             business_date=business_date,
         )
     except Exception:  # noqa: BLE001
-        db.session.rollback()
         logger.exception(
             "%s falló. Se reintentará en %s minutos.",
             job_key,
