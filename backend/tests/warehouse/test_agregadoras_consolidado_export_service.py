@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
 from io import BytesIO
+from types import SimpleNamespace
 from zipfile import ZipFile
 
 import pytest
@@ -160,3 +161,120 @@ def test_render_workbook_only_rewrites_expected_parts():
         assert "Wellhub" in todo_xml
         assert "Totalpass" in todo_xml
         assert 'TEXT(Tabla1[[#This Row],[Fecha]],"dd")' in todo_xml
+
+def _source_sheet(rows: list[tuple[date, str, int, str]]) -> bytes:
+    xml_rows = [
+        """<row r="1">
+          <c r="A1" t="inlineStr"><is><t>Fecha</t></is></c>
+          <c r="B1" t="inlineStr"><is><t>Sucursal</t></is></c>
+          <c r="D1" t="inlineStr"><is><t>Visitas</t></is></c>
+          <c r="E1" t="inlineStr"><is><t>Pago</t></is></c>
+        </row>"""
+    ]
+    for index, (business_date, branch, visits, amount) in enumerate(
+        rows,
+        start=2,
+    ):
+        xml_rows.append(
+            f"""<row r="{index}">
+              <c r="A{index}"><v>{service._excel_serial(business_date)}</v></c>
+              <c r="B{index}" t="inlineStr"><is><t>{branch}</t></is></c>
+              <c r="D{index}"><v>{visits}</v></c>
+              <c r="E{index}"><v>{amount}</v></c>
+            </row>"""
+        )
+
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="{service.SPREADSHEET_NS}">
+  <dimension ref="A1:E{len(rows) + 1}"/>
+  <sheetData>
+    {''.join(xml_rows)}
+  </sheetData>
+</worksheet>
+""".encode("utf-8")
+
+
+def test_template_month_state_uses_template_as_cutoff_baseline():
+    buffer = BytesIO()
+    with ZipFile(buffer, "w") as archive:
+        archive.writestr(
+            service.SHEET_WELLHUB,
+            _source_sheet(
+                [
+                    (date(2026, 7, 31), "Sucursal A", 100, "1000.00"),
+                    (date(2026, 8, 1), "Sucursal A", 2, "20.00"),
+                    (date(2026, 8, 19), "Sucursal A", 3, "30.00"),
+                    (date(2026, 8, 20), "Sucursal A", 99, "990.00"),
+                ]
+            ),
+        )
+
+    state = service._template_month_state(
+        buffer.getvalue(),
+        sheet_name=service.SHEET_WELLHUB,
+        baseline_date=date(2026, 8, 19),
+    )
+
+    assert state["sucursal a"].visits == 5
+    assert state["sucursal a"].amount == Decimal("50.00")
+
+
+def test_snapshot_gap_is_absorbed_when_same_month_has_later_snapshot():
+    baseline = date(2026, 8, 19)
+    target = date(2026, 8, 21)
+    snapshots = {
+        date(2026, 8, 21): SimpleNamespace(id=21),
+    }
+
+    absorbed, unrecoverable = service._classify_snapshot_gaps(
+        baseline_date=baseline,
+        target_date=target,
+        snapshots=snapshots,
+    )
+
+    assert absorbed == [date(2026, 8, 20)]
+    assert unrecoverable == []
+
+
+def test_daily_rows_use_template_baseline_and_assign_gap_to_next_snapshot():
+    snapshots = {
+        date(2026, 8, 21): SimpleNamespace(id=21),
+    }
+    states = {
+        21: {
+            "A": _acc(15, "150.00", "Ultra - A"),
+        }
+    }
+
+    rows = service._build_daily_rows_from_snapshots(
+        baseline_date=date(2026, 8, 19),
+        target_date=date(2026, 8, 21),
+        snapshots=snapshots,
+        template_baseline={
+            "sucursal a": _acc(10, "100.00", "Sucursal A"),
+        },
+        state_loader=lambda snapshot_id: states[snapshot_id],
+        aggregator_code="WH",
+        template_catalog={
+            ("ultra - a", "WH"): "Sucursal A",
+        },
+        track_labels={"A": "Sucursal A"},
+    )
+
+    assert [
+        (
+            row.business_date,
+            row.branch_name,
+            row.visits,
+            row.amount,
+        )
+        for row in rows
+    ] == [
+        (
+            date(2026, 8, 21),
+            "Sucursal A",
+            5,
+            Decimal("50.00"),
+        )
+    ]
+
