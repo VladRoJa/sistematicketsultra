@@ -353,12 +353,18 @@ def _excel_date_from_cell(value: str) -> date | None:
     except Exception:
         pass
 
-    try:
-        return date.fromisoformat(raw[:10])
-    except Exception as exc:
-        raise AgregadorasTemplateInvalidError(
-            f"No se pudo interpretar fecha Excel de plantilla: {raw!r}."
-        ) from exc
+    for parser in (
+        lambda item: date.fromisoformat(item[:10]),
+        lambda item: datetime.strptime(item, "%d/%m/%Y").date(),
+    ):
+        try:
+            return parser(raw)
+        except (TypeError, ValueError):
+            continue
+
+    raise AgregadorasTemplateInvalidError(
+        f"No se pudo interpretar fecha Excel de plantilla: {raw!r}."
+    )
 
 
 def _template_month_state(
