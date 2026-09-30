@@ -278,3 +278,30 @@ def test_daily_rows_use_template_baseline_and_assign_gap_to_next_snapshot():
         )
     ]
 
+def test_resolve_upload_file_path_includes_stored_filename(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setattr(
+        service,
+        "_uploads_root",
+        lambda: tmp_path,
+    )
+    upload = SimpleNamespace(
+        stored_path="uploads/warehouse/manual/agregadoras/2026/08",
+        stored_filename="plantilla.xlsx",
+    )
+
+    resolved = service._resolve_upload_file_path(upload)
+
+    assert resolved == (
+        tmp_path
+        / "uploads"
+        / "warehouse"
+        / "manual"
+        / "agregadoras"
+        / "2026"
+        / "08"
+        / "plantilla.xlsx"
+    ).resolve()
+
