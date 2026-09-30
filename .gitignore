@@ -42,3 +42,8 @@ backend/.playwright/
 graphify-out/
 
 .venv/
+
+# Local test/runtime artifacts
+/artifacts/
+/backend/.pytest_tmp*/
+/suite_prod.dump
