@@ -164,7 +164,7 @@ No se infiere sexo por nombre.
 
 El backend es la fuente real de autorización.
 
-Durante la beta inicial, **Aforo y Asistencia sólo está habilitado para el usuario ADMICORP**. La validación se realiza nuevamente en backend en cada endpoint; ocultar el menú no constituye autorización.
+Aforo y Asistencia está habilitado para **ADMICORP** y para usuarios con rol **GERENCIA DEPORTIVA**. Ambos perfiles tienen alcance global sobre las sucursales operativas incluidas en el catálogo Track. La validación se realiza nuevamente en backend en cada endpoint; ocultar el menú no constituye autorización.
 
 **Control de Rutinas conserva exactamente su audiencia y permisos actuales.** Moverlo debajo de Análisis Deportivo sólo cambia su jerarquía de navegación.
 
