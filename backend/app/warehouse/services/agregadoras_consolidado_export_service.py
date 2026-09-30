@@ -22,6 +22,7 @@ from app.models.warehouse import (
     IngresosTotalpassSnapshotRowORM,
     IngresosWellhubSnapshotORM,
     IngresosWellhubSnapshotRowORM,
+    TrackBranchAliasORM,
     TrackBranchCatalogORM,
     WarehouseReportTypeORM,
     WarehouseUploadORM,
@@ -449,6 +450,120 @@ def _template_month_state(
         }
 
 
+def _track_aliases_by_normalized_raw(
+    *,
+    source_family: str,
+) -> dict[str, str]:
+    rows = (
+        TrackBranchAliasORM.query
+        .filter(
+            TrackBranchAliasORM.source_family == source_family,
+            TrackBranchAliasORM.is_active.is_(True),
+        )
+        .all()
+    )
+
+    result: dict[str, str] = {}
+    for row in rows:
+        key = _normalize_catalog_text(row.raw_branch_name)
+        canon = str(row.sucursal_canon).strip()
+
+        existing = result.get(key)
+        if existing is not None and existing != canon:
+            raise AgregadorasTemplateInvalidError(
+                "Alias ambiguo en track_branch_aliases para "
+                f"{source_family}: {row.raw_branch_name!r}."
+            )
+
+        result[key] = canon
+
+    return result
+
+
+def _canonicalize_template_baseline(
+    *,
+    template_baseline: dict[str, _AccumulatedBranch],
+    aggregator_code: str,
+    source_family: str,
+    template_catalog: dict[tuple[str, str], str],
+    track_labels: dict[str, str],
+) -> dict[str, _AccumulatedBranch]:
+    alias_map = _track_aliases_by_normalized_raw(
+        source_family=source_family,
+    )
+
+    origins_by_display: dict[str, set[str]] = {}
+    for (origin_key, catalog_aggregator), display_name in (
+        template_catalog.items()
+    ):
+        if catalog_aggregator != aggregator_code:
+            continue
+
+        display_key = _normalize_catalog_text(display_name)
+        origins_by_display.setdefault(display_key, set()).add(origin_key)
+
+    canons_by_track_label: dict[str, set[str]] = {}
+    for canon, label in track_labels.items():
+        canons_by_track_label.setdefault(
+            _normalize_catalog_text(label),
+            set(),
+        ).add(canon)
+
+    mutable: dict[str, dict] = {}
+    unresolved: list[str] = []
+
+    for template_key, value in template_baseline.items():
+        candidate_origins = set(
+            origins_by_display.get(template_key, set())
+        )
+        candidate_origins.add(template_key)
+
+        candidate_canons = {
+            alias_map[origin_key]
+            for origin_key in candidate_origins
+            if origin_key in alias_map
+        }
+
+        if not candidate_canons:
+            candidate_canons.update(
+                canons_by_track_label.get(template_key, set())
+            )
+
+        if len(candidate_canons) != 1:
+            unresolved.append(
+                next(iter(value.raw_names), template_key)
+            )
+            continue
+
+        canon = next(iter(candidate_canons))
+        item = mutable.setdefault(
+            canon,
+            {
+                "visits": 0,
+                "amount": Decimal("0"),
+                "raw_names": [],
+            },
+        )
+        item["visits"] += value.visits
+        item["amount"] += value.amount
+        item["raw_names"].extend(value.raw_names)
+
+    if unresolved:
+        raise AgregadorasTemplateInvalidError(
+            f"No se pudo canonizar baseline {aggregator_code}: "
+            + ", ".join(sorted(unresolved, key=str.casefold))
+        )
+
+    return {
+        canon: _AccumulatedBranch(
+            visits=int(item["visits"]),
+            amount=Decimal(item["amount"]),
+            raw_names=_normalize_raw_names(item["raw_names"]),
+        )
+        for canon, item in mutable.items()
+    }
+
+
 def _classify_snapshot_gaps(
     *,
     baseline_date: date,
@@ -533,70 +648,21 @@ def _state_by_display_name(
 
 def _daily_delta_from_template_baseline(
     *,
-    previous_by_display: dict[str, _AccumulatedBranch],
+    previous_canonical: dict[str, _AccumulatedBranch],
     current: dict[str, _AccumulatedBranch],
     business_date: date,
     aggregator_code: str,
     template_catalog: dict[tuple[str, str], str],
     track_labels: dict[str, str],
 ) -> list[AgregadoraDailyRow]:
-    current_by_display, labels = _state_by_display_name(
-        state=current,
+    return _daily_delta(
+        previous=previous_canonical,
+        current=current,
+        business_date=business_date,
         aggregator_code=aggregator_code,
         template_catalog=template_catalog,
         track_labels=track_labels,
     )
-
-    missing_current = [
-        key
-        for key, previous_value in previous_by_display.items()
-        if key not in current_by_display
-        and (
-            previous_value.visits != 0
-            or previous_value.amount != Decimal("0")
-        )
-    ]
-    if missing_current:
-        raise AgregadorasSourceRegressionError(
-            f"{aggregator_code} perdió sucursales acumuladas contra baseline "
-            f"de plantilla en {business_date.isoformat()}: "
-            + ", ".join(sorted(missing_current))
-        )
-
-    rows: list[AgregadoraDailyRow] = []
-    for key, current_value in current_by_display.items():
-        previous_value = previous_by_display.get(
-            key,
-            _AccumulatedBranch(
-                visits=0,
-                amount=Decimal("0"),
-                raw_names=(),
-            ),
-        )
-        visits = current_value.visits - previous_value.visits
-        amount = current_value.amount - previous_value.amount
-
-        if visits < 0 or amount < Decimal("0"):
-            raise AgregadorasSourceRegressionError(
-                f"{aggregator_code} presentó retroceso MTD contra plantilla "
-                f"para {labels.get(key, key)} en {business_date.isoformat()}: "
-                f"visits={visits}, amount={amount}."
-            )
-
-        if visits == 0 and amount == Decimal("0"):
-            continue
-
-        rows.append(
-            AgregadoraDailyRow(
-                business_date=business_date,
-                branch_name=labels.get(key, key),
-                visits=visits,
-                amount=amount,
-            )
-        )
-
-    rows.sort(key=lambda row: row.branch_name.casefold())
-    return rows
 
 
 def _build_daily_rows_from_snapshots(
@@ -647,7 +713,7 @@ def _build_daily_rows_from_snapshots(
         elif previous_state is None:
             rows.extend(
                 _daily_delta_from_template_baseline(
-                    previous_by_display=template_baseline,
+                    previous_canonical=template_baseline,
                     current=current_state,
                     business_date=business_date,
                     aggregator_code=aggregator_code,
@@ -1295,15 +1361,27 @@ def generate_agregadoras_consolidado(
     template_catalog = _template_catalog_map(template_bytes)
     track_labels = _track_labels()
 
-    wellhub_template_baseline = _template_month_state(
-        template_bytes,
-        sheet_name=SHEET_WELLHUB,
-        baseline_date=baseline_date,
+    wellhub_template_baseline = _canonicalize_template_baseline(
+        template_baseline=_template_month_state(
+            template_bytes,
+            sheet_name=SHEET_WELLHUB,
+            baseline_date=baseline_date,
+        ),
+        aggregator_code="WH",
+        source_family="wellhub_family",
+        template_catalog=template_catalog,
+        track_labels=track_labels,
     )
-    totalpass_template_baseline = _template_month_state(
-        template_bytes,
-        sheet_name=SHEET_TOTALPASS,
-        baseline_date=baseline_date,
+    totalpass_template_baseline = _canonicalize_template_baseline(
+        template_baseline=_template_month_state(
+            template_bytes,
+            sheet_name=SHEET_TOTALPASS,
+            baseline_date=baseline_date,
+        ),
+        aggregator_code="TP",
+        source_family="totalpass_family",
+        template_catalog=template_catalog,
+        track_labels=track_labels,
     )
 
     wellhub_rows = _build_daily_rows_from_snapshots(
