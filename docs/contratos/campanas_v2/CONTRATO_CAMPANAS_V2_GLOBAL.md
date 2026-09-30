@@ -4,6 +4,23 @@ Estado: BASE CONTRACTUAL PARA IMPLEMENTACIÓN POR FASES
 Fecha: 2026-09-30  
 Alcance: arquitectura global, convivencia con legacy y límites entre Fase 1, Fase 2 y Fase 3.
 
+## Cómo usar este documento en una conversación nueva
+
+Este archivo está diseñado para poder entregarse **por sí solo** a una conversación nueva.
+
+La conversación debe tratar este documento como contrato de alcance, pero **no como sustituto del repositorio**. Antes de proponer o modificar código debe inspeccionar el estado actual de `main`, porque los nombres de archivos, modelos o servicios pueden haber evolucionado después de la fecha de este contrato.
+
+Reglas de trabajo obligatorias:
+
+- Suite Ultra usa Angular + Flask + PostgreSQL, con migraciones Alembic.
+- Backend es la autoridad de permisos y reglas de negocio.
+- En Angular la lógica vive en `.ts`; HTML solo contiene estructura, bindings simples y llamadas a propiedades/métodos ya definidos.
+- No editar código manualmente en servidor. El flujo correcto es local -> pruebas -> commit -> PR/merge -> pull servidor -> build -> migraciones cuando apliquen.
+- Trabajar un cambio y una prueba a la vez.
+- Antes de crear una pieza nueva, investigar si existe una capacidad equivalente y reutilizarla cuando su semántica realmente coincida.
+- No inventar respuestas para puntos marcados como pendientes.
+- Campañas V2 convive con el módulo legacy durante estas fases; no se retira por implicación.
+
 ## 1. Objetivo
 
 Campañas V2 será un módulo nuevo de Suite Ultra para construir audiencias, congelar cohortes, clasificar campañas, leer resultados de proveedores y, en una fase posterior, enviar campañas.
@@ -292,6 +309,33 @@ Los estados viven en la relación **campaña -> destinatario** (o en su detalle/
       -> interactions
 
 Así se reutilizan las bases existentes sin contaminarlas con estado de una campaña particular.
+
+### 8.1 Comportamiento histórico de mensajería como dimensión transversal
+
+Que `VIEWED`, `DELIVERED` o `FAILED` pertenezcan a una campaña concreta **no impide utilizarlos para construir una campaña nueva**.
+
+Campañas V2 debe ofrecer un resolver histórico por `phone_mx10` que consulte campañas anteriores y derive comportamiento utilizable por cualquier fuente de audiencia:
+
+    fuente actual
+        -> phone_mx10
+        -> historial de campaign recipients / provider delivery
+        -> comportamiento histórico
+        -> filtros de audiencia
+
+Ejemplos de filtros válidos una vez implementada Fase 2:
+
+- leyó una campaña específica;
+- ha leído al menos una campaña anterior;
+- leyó la última campaña aplicable;
+- ha interactuado al menos una vez;
+- fue contactado pero nunca se observó VIEWED;
+- nunca fue contactado por una campaña registrada en V2.
+
+Estos datos son **derivados**, no columnas permanentes de Socios Activos, Socios Vencidos o Funnel.
+
+La primera implementación debe consultar el historial persistido. Solo si el volumen demuestra un problema real de rendimiento se podrá introducir una proyección/materialización de engagement; esa proyección seguiría siendo derivada y reconstruible.
+
+Al congelar una campaña se conserva la audiencia resultante y, cuando sea útil para auditoría, la evidencia de comportamiento que justificó la inclusión. Una sincronización posterior no reescribe retroactivamente la audiencia ya congelada.
 
 ## 9. Audiencia congelada
 

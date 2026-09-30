@@ -1,8 +1,33 @@
 # Contrato Campañas V2 — Fase 3
 
 Estado: CONTRATO DE ENVÍO; REQUIERE FASES 1 Y 2 ESTABLES  
-Dependencia: Fase 1 y Fase 2 terminadas, incluida la fuente FUNNEL_PORTFOLIO  
+Dependencia de ejecución: Fase 1 y Fase 2 terminadas, incluida la fuente FUNNEL_PORTFOLIO; este archivo es autosuficiente como contexto.  
 Objetivo: permitir que Suite Ultra envíe campañas mediante iVentas sin romper la trazabilidad construida previamente.
+
+## 0. Contexto autosuficiente para una conversación nueva
+
+Este archivo puede entregarse **por sí solo** a una conversación nueva, pero Fase 3 solo puede comenzar después de comprobar en el repositorio que Fase 1 y Fase 2 están terminadas.
+
+Contexto fijo:
+
+- Suite Ultra usa Angular + Flask + PostgreSQL y Alembic.
+- Fase 1 construye y congela audiencias.
+- Fase 2 sincroniza iVentas, conserva estados por campaign-recipient, deriva comportamiento histórico por teléfono e incorpora `FUNNEL_PORTFOLIO`.
+- Funnel debe haber aplicado la lógica vigente de compradores/no compradores y `ACTIVE_MEMBER_SUPPRESSION` contra Socios Activos antes de congelar la audiencia.
+- Fase 3 **no recalcula fuentes, familias, compras, socios activos ni historial de engagement**: envía exactamente la audiencia congelada y validada.
+- No crear tablas espejo de Socios Activos/Vencidos.
+- No crear un tercer normalizador de teléfonos ni un mapping duplicado de sucursales/canales.
+- Un Campaign V2 puede requerir N provider campaigns porque iVentas envía por `channelId`.
+- Backend es autoridad para permisos, channel binding, plantilla, variables e idempotencia.
+- No retirar el legacy dentro de esta fase.
+
+Modo de trabajo:
+
+1. inspeccionar `main` y confirmar que Fase 1/Fase 2 están completas;
+2. revisar provider abstraction, delivery y mappings existentes;
+3. explicar un solo cambio mínimo y prueba;
+4. probar primero un flujo controlado;
+5. no mezclar en el mismo cambio rediseños del constructor de audiencia.
 
 ## 1. Alcance exacto
 
@@ -558,11 +583,11 @@ Antes:
 
 El retiro debe tener contrato/PR separado.
 
-## 30. Instrucción para una conversación nueva de Fase 3
+## 30. Instrucción de arranque recomendada para una conversación nueva de Fase 3
 
     Estamos implementando únicamente Campañas V2 Fase 3.
-    Lee los cuatro contratos.
-    Confirma con pruebas que Fase 1 y Fase 2 están terminadas.
+    Este archivo es autosuficiente; no asumas contexto de conversaciones anteriores.
+    Confirma con pruebas en el repositorio que Fase 1 y Fase 2 están terminadas.
     Inspecciona la integración actual y reutiliza normalización,
     branch resolution, permisos, delivery y provider abstraction.
     No recalcules audiencias al enviar.
