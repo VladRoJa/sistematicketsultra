@@ -21,10 +21,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.exc import IntegrityError
 
-from app.models.marketing import (
-    MarketingCampaignV2TariffORM,
-    MarketingReactivationTariffORM,
-)
+from app.models import MarketingCampaignV2TariffORM
+from app.models.marketing import MarketingReactivationTariffORM
 from app.services.marketing_reactivation_service import (
     normalize_reactivation_tariff_key,
 )

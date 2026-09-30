@@ -1,1 +1,2 @@
 *.sh text eol=lf
+backend/data/reference/marketing_campaign_v2_tariffs_2026-09-30.json -text

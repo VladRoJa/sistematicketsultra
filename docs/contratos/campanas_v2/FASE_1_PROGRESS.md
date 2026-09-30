@@ -149,6 +149,15 @@ Resultado del harness específico del milestone:
 
 `6 passed`
 
+### Hardening previo a PR
+
+- Se agregó una regla específica en `.gitattributes`:
+  `backend/data/reference/marketing_campaign_v2_tariffs_2026-09-30.json -text`.
+  Esto impide conversiones automáticas de finales de línea o normalización de texto por Git, protegiendo el SHA-256 exacto del artefacto también en clones sobre Windows.
+- `MarketingCampaignV2TariffORM` se exporta oficialmente desde `backend/app/models/__init__.py`, tanto en el import de `.marketing` como en `__all__`.
+- La prueba específica importa el ORM V2 desde `app.models`, por lo que el export queda cubierto por la suite del milestone.
+- El snapshot permanece sin cambios y conserva SHA-256 `00b9475ea8bdfbaf3c9d1d3571d630035ff315ab8cd374fb0339e18589162bae`.
+
 ## Fuera de alcance del Milestone 1
 
 No se agregaron:
