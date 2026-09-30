@@ -393,3 +393,48 @@ def test_canonicalize_template_baseline_matches_historical_suffix_aliases(
         ),
     }
 
+def test_daily_delta_allows_negative_wellhub_corrections():
+    rows = service._daily_delta(
+        previous={
+            "METEPEC": _acc(777, "44940.00", "Ultra - Metepec"),
+        },
+        current={
+            "METEPEC": _acc(775, "44700.00", "Ultra - Metepec"),
+        },
+        business_date=date(2026, 8, 23),
+        aggregator_code="WH",
+        template_catalog={},
+        track_labels={"METEPEC": "Metepec"},
+    )
+
+    assert [
+        (
+            row.branch_name,
+            row.visits,
+            row.amount,
+        )
+        for row in rows
+    ] == [
+        (
+            "Metepec",
+            -2,
+            Decimal("-240.00"),
+        )
+    ]
+
+
+def test_daily_delta_still_rejects_negative_totalpass_corrections():
+    with pytest.raises(service.AgregadorasSourceRegressionError):
+        service._daily_delta(
+            previous={
+                "METEPEC": _acc(777, "44940.00", "Totalpass Metepec"),
+            },
+            current={
+                "METEPEC": _acc(775, "44700.00", "Totalpass Metepec"),
+            },
+            business_date=date(2026, 8, 23),
+            aggregator_code="TP",
+            template_catalog={},
+            track_labels={"METEPEC": "Metepec"},
+        )
+
