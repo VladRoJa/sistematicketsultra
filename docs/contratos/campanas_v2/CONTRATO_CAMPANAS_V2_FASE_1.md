@@ -1,8 +1,34 @@
 # Contrato Campañas V2 — Fase 1
 
 Estado: LISTO PARA IMPLEMENTACIÓN DESPUÉS DE REVALIDAR MAIN  
-Dependencia: CONTRATO_CAMPANAS_V2_GLOBAL.md  
+Dependencia funcional: ninguna lectura adicional es necesaria para usar este archivo; se debe revalidar `main` actual.  
 Objetivo: construir el núcleo de Campañas V2 y el constructor de audiencias sin depender de envío ni lectura nueva de iVentas.
+
+## 0. Contexto autosuficiente para una conversación nueva
+
+Este archivo puede entregarse **sin adjuntar los otros contratos**. Contiene el contexto mínimo necesario para trabajar Fase 1. Si existe una contradicción con código actual, primero se investiga el repositorio y se detiene el cambio; no se improvisa.
+
+Contexto fijo:
+
+- Suite Ultra usa Angular + Flask + PostgreSQL y Alembic.
+- Campañas V2 es un módulo nuevo que convivirá con Reactivaciones legacy.
+- Backend es autoridad de permisos, composición real de audiencia, deduplicación y persistencia.
+- No se crean tablas espejo de Socios Activos ni Socios Vencidos. Se reutilizan sus fuentes canónicas.
+- Una fila campaign-recipient representa pertenencia a una campaña/cohorte; **no es una segunda base maestra de socios**.
+- La normalización general de teléfonos debe reutilizar \`backend/app/services/marketing_phone.py::normalize_phone()\`; el normalizador específico de iVentas se mantiene dentro de esa integración.
+- Los estados iVentas pertenecen a campaña-recipient, no a las tablas fuente.
+- Fase 2 agregará un resolver de comportamiento histórico por teléfono para poder filtrar, por ejemplo, "solo quienes han leído campañas anteriores". Fase 1 debe dejar el modelo preparado, pero **no implementa todavía stats iVentas**.
+- Funnel/Venta Nueva se integra operativamente en Fase 2. Fase 1 solo debe evitar exigir member_id, PIN, tarifa o sucursal para todas las fuentes.
+- No avanzar a Fase 2 ni Fase 3 dentro de esta conversación.
+
+Modo de trabajo:
+
+1. inspeccionar \`main\` actual y los archivos citados;
+2. identificar qué se reutiliza y qué pieza nueva es realmente necesaria;
+3. explicar archivo, función/método, objetivo y motivo;
+4. hacer un solo cambio mínimo;
+5. correr su prueba específica;
+6. continuar únicamente si el resultado coincide con este contrato.
 
 ## 1. Alcance exacto
 
@@ -523,12 +549,12 @@ No iniciar Fase 2 hasta que:
 - no exista duplicación obvia de utilidades existentes;
 - los contratos de API internos de Campañas V2 estén estabilizados.
 
-## 22. Instrucción para una conversación nueva de Fase 1
+## 22. Instrucción de arranque recomendada para una conversación nueva de Fase 1
 
 Usar este texto como primera orden:
 
     Estamos implementando únicamente Campañas V2 Fase 1.
-    Lee CONTRATO_CAMPANAS_V2_GLOBAL.md y CONTRATO_CAMPANAS_V2_FASE_1.md.
+    Este archivo es autosuficiente; no asumas que tienes contexto de conversaciones anteriores.
     Inspecciona primero main actual y los archivos existentes citados.
     No modifiques nada todavía.
     Identifica exactamente qué podemos reutilizar y qué requiere persistencia nueva.

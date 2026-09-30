@@ -1,8 +1,34 @@
 # Contrato Campañas V2 — Fase 2
 
 Estado: CONTRATO DE LECTURA/BI; NO AUTORIZA ENVÍO  
-Dependencia: Fase 1 terminada y estable  
+Dependencia de ejecución: Fase 1 debe estar terminada y comprobada en el repositorio; este archivo es autosuficiente como contexto.  
 Objetivo: integrar resultados de campañas iVentas con Campañas V2 sin acoplar el núcleo al proveedor e incorporar, antes del enviador, la Cartera Funnel de Venta Nueva como fuente phone-centric.
+
+## 0. Contexto autosuficiente para una conversación nueva
+
+Este archivo puede entregarse **por sí solo** a una conversación nueva. La conversación debe comprobar en el repositorio que Fase 1 está realmente implementada y estable antes de modificar Fase 2; no debe asumirlo por el texto.
+
+Contexto fijo:
+
+- Suite Ultra usa Angular + Flask + PostgreSQL y Alembic.
+- Campañas V2 convive con Reactivaciones legacy.
+- Fase 1 aporta el núcleo de campañas, preview y audiencia congelada.
+- No se crean tablas espejo de Socios Activos ni Socios Vencidos.
+- \`socios_vencidos_cartera\` y snapshots/resolvers canónicos de Socios Activos son fuentes existentes que se reutilizan.
+- Campaign-recipient almacena la pertenencia al cohorte y hechos específicos de esa campaña; no reemplaza la base fuente.
+- \`sent\`, \`delivered\`, \`viewed\`, \`failed\` e interacciones son hechos de una campaña concreta.
+- A partir de esos hechos se debe poder derivar **comportamiento histórico por teléfono** para filtrar campañas nuevas sin contaminar las fuentes.
+- \`FUNNEL_PORTFOLIO\` se integra en esta fase, antes del enviador. Su identidad mínima puede ser teléfono; \`contact_id\`, nombre, sucursal, canal y fecha son enriquecimientos cuando existan.
+- Funnel debe reutilizar su lógica existente de compradores/no compradores y además aplicar supresión por teléfono contra el snapshot canónico vigente de Socios Activos.
+- Esta fase es solo lectura/BI de iVentas + Cartera Funnel. **No implementar POST /v2/broadcast.**
+
+Modo de trabajo:
+
+1. inspeccionar \`main\` y confirmar Fase 1;
+2. revisar integración iVentas y Funnel existentes antes de crear código;
+3. explicar un solo cambio mínimo y su prueba;
+4. no modelar campos no observados en un payload real;
+5. no avanzar a Fase 3.
 
 ## 1. Alcance exacto
 
@@ -253,6 +279,39 @@ La UI puede mostrar estado más avanzado conocido:
     SENT
 
 FAILED debe conservarse con su error/cause cuando esté disponible; no convertirlo automáticamente en una etapa secuencial.
+
+### 8.1 Resolver de comportamiento histórico por teléfono
+
+Fase 2 debe permitir que el constructor de Campañas V2 use el historial de campañas anteriores como dimensión transversal.
+
+El resolver parte de \`phone_mx10\` y consulta los campaign recipients/provider delivery ya persistidos. **No escribe flags históricos en las tablas fuente.**
+
+Scopes que la arquitectura debe soportar:
+
+- campaña específica;
+- última campaña previa aplicable;
+- cualquier campaña previa registrada.
+
+La primera entrega no tiene que exponer todos los scopes en UI, pero no debe diseñarse de forma que solo permita una campaña específica.
+
+Ejemplos de hechos derivados:
+
+    has_any_campaign_history
+    has_any_viewed
+    has_any_interaction
+    last_campaign_viewed
+    contacted_never_viewed
+
+Semántica importante:
+
+- \`has_any_viewed = true\` significa que existe al menos una campaña previa con evidencia \`viewed=true\`.
+- "Nunca contactado" significa que no existe historial de campaign-recipient/provider campaign aplicable.
+- "Contactado pero nunca leído" requiere historial de contacto y ausencia de \`viewed=true\`; no es equivalente a "sin datos".
+- \`answeredMessages=[]\` no puede utilizarse para derivar "no respondió".
+
+Al crear/confirmar una nueva campaña, el resultado del filtro histórico queda congelado con la audiencia. Si una campaña anterior recibe nuevos webhooks después, no se recalcula retroactivamente la campaña ya creada.
+
+Implementación inicial: consulta derivada sobre tablas de campañas/recipient/delivery con índices adecuados. No crear de entrada una tabla \`messaging_engagement\`. Una proyección o materialized view solo se justifica después de medir un problema real de rendimiento.
 
 ## 9. Interacciones
 
@@ -683,11 +742,11 @@ No iniciar Fase 3 hasta que:
 - la cartera Funnel excluya por número a quienes aparezcan en el snapshot canónico vigente de Socios Activos y reporte `ACTIVE_MEMBER_SUPPRESSION`;
 - los flags iVentas estén ligados a campaña-recipient y no a las bases canónicas.
 
-## 32. Instrucción para una conversación nueva de Fase 2
+## 32. Instrucción de arranque recomendada para una conversación nueva de Fase 2
 
     Estamos implementando únicamente Campañas V2 Fase 2.
-    Lee el contrato global, Fase 1 y este contrato.
-    Confirma que Fase 1 está terminada.
+    Este archivo es autosuficiente; no asumas contexto de conversaciones anteriores.
+    Confirma en el repositorio que Fase 1 está terminada.
     Inspecciona la integración iVentas existente y reutiliza normalización,
     aliases, seguridad y patrones de persistencia.
     No implementes POST /v2/broadcast.
