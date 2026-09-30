@@ -351,3 +351,17 @@ def test_contact_center_portfolio_opens_contact_detail_as_floating_dialog():
     assert "Historial" in dialog_html
     assert "Venta Total" in dialog_html
     assert "@media (max-width: 640px)" in dialog_css
+
+def test_contact_center_dialog_allows_recovery_after_no_show():
+    dialog_ts = _read(CONTACT_DIALOG_TS)
+    dialog_html = _read(CONTACT_DIALOG_HTML)
+
+    assert "get isNoShowFollowUpCase()" in dialog_ts
+    assert "currentCase.status !== 'IN_PROGRESS'" in dialog_ts
+    assert "row.status === 'CLOSED'" in dialog_ts
+    assert "row.outcome === 'NO_SHOW'" in dialog_ts
+    assert "|| this.isNoShowFollowUpCase" in dialog_ts
+
+    assert "activeCase && canOperateActiveCase" in dialog_html
+    assert "Registrar seguimiento" in dialog_html
+    assert "Agendar cita" in dialog_html
