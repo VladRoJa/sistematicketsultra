@@ -483,16 +483,17 @@ Antes de paginar se compara el total reconstruido del bucket contra el contador 
 
 ### Helpers reutilizados
 
-Se reutilizaron sin modificar:
+Se reutilizan:
 
 - `marketing_phone.normalize_phone()`
-- `marketing_reactivation_service.normalize_reactivation_tariff_key()`
+- `marketing_tariff_normalization.normalize_marketing_tariff_key()` como helper puro compartido de tarifa
+- `marketing_reactivation_service.normalize_reactivation_tariff_key()` se conserva como API legacy compatible y delega al helper puro
 - `socios_vencidos_current_status_resolver.normalize_socios_vencidos_branch_key()`
 - `prepare_socios_vencidos_current_status_context()`
 - `resolve_socios_vencidos_rows_with_context()`
 - `resolve_latest_canonical_socios_activos_snapshot()`
 
-No se extrajeron ni cambiaron helpers legacy.
+Hardening previo a PR: la normalización de tarifa se extrajo de `marketing_reactivation_service.py` para eliminar la dependencia transitiva V2 → Reactivaciones/iVentas. La API legacy conserva nombre y resultados mediante delegación; no se refactorizó ninguna otra regla legacy.
 
 ### Pruebas específicas
 
@@ -524,9 +525,26 @@ Cobertura escrita:
 - mismatch fail-closed;
 - bucket de estado actual bloqueado.
 
-Resultado realmente ejecutado en harness aislado con stubs mínimos de las dependencias del repo:
+Resultado realmente ejecutado en harness aislado con stubs mínimos de las dependencias del repo antes del hardening:
 
 `9 passed in 0.07s`
+
+Hardening de frontera previo a PR:
+
+- se agregó `backend/app/services/marketing_tariff_normalization.py`;
+- V2 ya no importa `marketing_reactivation_service`;
+- la API legacy delega al helper compartido;
+- `backend/tests/marketing/test_marketing_tariff_normalization.py` demuestra equivalencia exacta para caso normal, whitespace, Unicode NFKC, `None` y vacío;
+- la suite M3 incluye una comprobación AST de que el módulo V2 no importa `app.services.marketing_reactivation_service` y sí importa directamente el helper puro.
+
+Resultados reales del hardening en harness aislado:
+
+- suite M3 ejecutada con un stub de `marketing_reactivation_service.py` que falla inmediatamente si llega a importarse: `10 passed in 0.06s`;
+- equivalencia helper compartido ↔ API legacy: `5 passed in 0.03s`;
+- ejecución conjunta de ambas suites: `15 passed in 0.05s`;
+- `py_compile` pasó para el servicio V2, helper compartido y ambos archivos de prueba.
+
+La primera ejecución demuestra la frontera de imports de forma dinámica: importar y probar `marketing_campaign_v2_audience_service` no necesita cargar `marketing_reactivation_service`.
 
 También pasaron `py_compile` del servicio y del test exactos.
 

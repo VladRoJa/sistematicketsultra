@@ -12,9 +12,7 @@ from app.models.warehouse import (
     SociosVencidosCarteraORM,
 )
 from app.services.marketing_phone import normalize_phone
-from app.services.marketing_reactivation_service import (
-    normalize_reactivation_tariff_key,
-)
+from app.services.marketing_tariff_normalization import normalize_marketing_tariff_key
 from app.warehouse.services import socios_activos_snapshot_resolver as activos_resolver
 from app.warehouse.services import socios_vencidos_current_status_resolver as current_status
 
@@ -533,7 +531,7 @@ def _classify_candidate(
     *,
     tariff_catalog: dict[str, tuple[str, str]],
 ) -> MarketingCampaignV2AudienceCandidate:
-    tarifa_key = normalize_reactivation_tariff_key(candidate.tarifa_raw)
+    tarifa_key = normalize_marketing_tariff_key(candidate.tarifa_raw)
     match = tariff_catalog.get(tarifa_key) if tarifa_key is not None else None
     if match is None:
         return replace(

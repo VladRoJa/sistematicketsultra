@@ -34,6 +34,7 @@ from app.models import (
 from app.models.warehouse import SociosVencidosCarteraORM
 from app.services.marketing_iventas_leads_service import read_canonical_iventas_run
 from app.services.marketing_iventas_service import normalize_iventas_phone
+from app.services.marketing_tariff_normalization import normalize_marketing_tariff_key
 from app.warehouse.services.socios_activos_snapshot_resolver import (
     resolve_latest_canonical_socios_activos_snapshot,
 )
@@ -2070,11 +2071,8 @@ def _serialize_candidate(
 
 
 def normalize_reactivation_tariff_key(value: Any) -> str | None:
-    if value is None:
-        return None
-    normalized = unicodedata.normalize("NFKC", str(value)).strip().upper()
-    normalized = " ".join(normalized.split())
-    return normalized or None
+    """API legacy compatible; delega al normalizador puro compartido."""
+    return normalize_marketing_tariff_key(value)
 
 
 def _read_active_tariff_catalog(

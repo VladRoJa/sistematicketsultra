@@ -1,12 +1,28 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+import ast
 import inspect
 from types import SimpleNamespace as NS
 
 import pytest
 
 from app.services import marketing_campaign_v2_audience_service as service
+
+
+def test_v2_module_has_no_reactivation_service_import_boundary():
+    source = inspect.getsource(service)
+    tree = ast.parse(source)
+    imported_modules = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add(node.module)
+
+    assert "app.services.marketing_reactivation_service" not in imported_modules
+    assert "normalize_reactivation_tariff_key" not in source
+    assert "app.services.marketing_tariff_normalization" in imported_modules
 
 
 def _candidate(
