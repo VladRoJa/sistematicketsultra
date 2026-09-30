@@ -512,7 +512,9 @@ def list_contacts(
             or_(
                 ContactCenterCaseORM.assigned_user_id == actor.id,
                 and_(
-                    ContactCenterCaseORM.status == "IN_PROGRESS",
+                    ContactCenterCaseORM.status.in_(
+                        ("IN_PROGRESS", "FOLLOW_UP")
+                    ),
                     no_show_follow_up_exists,
                 ),
             )
@@ -688,7 +690,7 @@ def assign_case(
 def is_no_show_follow_up_case(
     case: ContactCenterCaseORM,
 ) -> bool:
-    if case.status != "IN_PROGRESS":
+    if case.status not in {"IN_PROGRESS", "FOLLOW_UP"}:
         return False
 
     return (
