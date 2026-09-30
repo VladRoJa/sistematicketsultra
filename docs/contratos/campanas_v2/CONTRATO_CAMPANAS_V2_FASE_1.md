@@ -377,15 +377,15 @@ Por destinatario, conceptualmente conservar:
 - razón de inclusión;
 - created_at.
 
-No depender exclusivamente de FK a una fila mutable para mostrar el histórico.
+Preferir referencia a la fuente canónica. Si la fila fuente es inmutable y su retención está garantizada, no duplicar sus campos. Solo congelar metadata mínima cuando la fuente sea mutable, calculada o exista una política real de retención que pueda romper el histórico.
 
-## 13.1 Estados de mensajería no pertenecen a las bases fuente
+## 13. Estados de mensajería no pertenecen a las bases fuente
 
 Aunque Fase 1 todavía no sincroniza iVentas, el modelo debe reservar el lugar correcto para Fase 2: los flags `sent`, `delivered`, `viewed`, `failed` e interacciones pertenecen al destinatario **dentro de una campaña**, no a Socios Activos ni Socios Vencidos.
 
 No agregar esos flags a las tablas canónicas de Warehouse.
 
-## 13. Clasificación comercial de campaña
+## 14. Clasificación comercial de campaña
 
 Campo obligatorio con default:
 
@@ -404,7 +404,7 @@ Ejemplo válido:
     purpose = REACTIVATION
     families = DOMICILIADO + TRIMESTRAL
 
-## 14. Precarga por nombre
+## 15. Precarga por nombre
 
 Para campañas creadas dentro de V2, el usuario debe elegir explícitamente el propósito cuando corresponda.
 
@@ -419,7 +419,7 @@ Si Fase 1 implementa sugerencia por nombre:
 
 No hardcodear reglas en Angular.
 
-## 15. Frontend
+## 16. Frontend
 
 Crear un módulo/pantalla nuevo, separado del flujo legacy.
 
@@ -433,7 +433,7 @@ Sí se permite:
 
 La ruta exacta debe definirse tras revisar app.routes.ts y menú actual. No modificar la ruta /#/marketing/reactivation.
 
-## 16. Permisos
+## 17. Permisos
 
 Fase 1 debe investigar el permiso real que hoy protege Marketing/Reactivaciones.
 
@@ -443,7 +443,7 @@ El backend debe validar alcance por usuario y sucursal en cada preview/create/re
 
 Si Campañas V2 necesita permiso nuevo, debe definirse en el sistema de permisos existente, no con un if de rol aislado.
 
-## 17. API interna esperada
+## 18. API interna esperada
 
 Los nombres finales se decidirán al implementar, pero V2 necesita operaciones equivalentes a:
 
@@ -457,7 +457,7 @@ Los nombres finales se decidirán al implementar, pero V2 necesita operaciones e
 
 No duplicar endpoints legacy solo cambiando /v1 por /v2 si la semántica es distinta.
 
-## 18. Pruebas mínimas
+## 19. Pruebas mínimas
 
 Backend:
 - OR de familias;
@@ -489,7 +489,7 @@ Frontend:
 - mostrar composición y total único;
 - drill-down.
 
-## 19. Criterio de aceptación de Fase 1
+## 20. Criterio de aceptación de Fase 1
 
 Debe ser posible:
 
@@ -509,7 +509,7 @@ También debe funcionar un caso de Socios activos si su fuente ya está soportad
 
 No es requisito de Fase 1 que esa campaña sea enviada por iVentas.
 
-## 20. Condición de salida hacia Fase 2
+## 21. Condición de salida hacia Fase 2
 
 No iniciar Fase 2 hasta que:
 
@@ -521,7 +521,7 @@ No iniciar Fase 2 hasta que:
 - no exista duplicación obvia de utilidades existentes;
 - los contratos de API internos de Campañas V2 estén estabilizados.
 
-## 21. Instrucción para una conversación nueva de Fase 1
+## 22. Instrucción para una conversación nueva de Fase 1
 
 Usar este texto como primera orden:
 

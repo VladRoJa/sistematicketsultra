@@ -94,7 +94,7 @@ Nunca agregarlos como estado global a las bases canónicas. El mismo socio/telé
 
 ## 5. Cartera Funnel / Venta Nueva
 
-### 7.1 Infraestructura existente
+### 5.1 Infraestructura existente
 
 Revisar/reutilizar antes de crear código nuevo:
 - `marketing_sales_funnel_detail_service.py`;
@@ -104,7 +104,7 @@ Revisar/reutilizar antes de crear código nuevo:
 - `marketing_phone.py`;
 - integración Funnel -> Contact Center.
 
-### 7.2 Contrato mínimo
+### 5.2 Contrato mínimo
 
 Para `FUNNEL_PORTFOLIO` solo es obligatorio:
 
@@ -123,19 +123,19 @@ Opcionales cuando existan:
 
 No exigir member_id, PIN, tarifa, categoria_tarifa ni audience_family.
 
-### 7.3 Identidad phone-only
+### 5.3 Identidad phone-only
 
 El teléfono es clave operativa para deduplicar envíos, no identidad humana definitiva. Un recipient puede quedar `identity_quality = PHONE_ONLY`.
 
 No inferir sucursal por lada ni fabricar datos faltantes.
 
-### 7.4 Compradores y cartera utilizable
+### 5.4 Compradores y cartera utilizable
 
 El Funnel ya contiene lógica de cruces contra ventas y una ventana de compra para leads. Antes de definir quién queda en cartera para campaña, localizar y reutilizar exactamente esa semántica.
 
 No contactar a un comprador solo porque Campañas V2 consultó una fuente más cruda que el Funnel vigente. Si la definición de cartera deseada difiere, detenerse y crear contrato específico; no crear un segundo matcher silencioso.
 
-### 7.5 Sucursal desconocida
+### 5.5 Sucursal desconocida
 
 Un contacto puede conservar `sucursal_id = NULL` en Fase 2. Esto no invalida su existencia en cartera.
 
@@ -197,7 +197,6 @@ Regla:
 - disabled NO significa cero.
 
 ## 8. Estado por destinatario
-
 Los arrays de estado no son mutuamente excluyentes.
 
 Un número puede aparecer en:
