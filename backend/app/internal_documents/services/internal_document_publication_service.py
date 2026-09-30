@@ -240,6 +240,130 @@ def _build_document_link(
     )
 
 
+def add_internal_document_version_from_warehouse_upload(
+    *,
+    document_id: int,
+    warehouse_upload_id: int,
+    created_by_user_id: int,
+    version_label: str | None = None,
+    change_notes: str | None = None,
+    audit_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """
+    Agrega una nueva versión a un documento existente desde un WarehouseUpload.
+
+    Es idempotente por warehouse_upload_id: si ese upload ya está ligado a una
+    versión del mismo documento, no crea una versión duplicada.
+    """
+    resolved_document_id = _parse_positive_int(document_id)
+    if not resolved_document_id:
+        raise InternalDocumentPublicationError(
+            "document_id debe ser un entero positivo."
+        )
+
+    creator_id = _parse_positive_int(created_by_user_id)
+    if not creator_id:
+        raise InternalDocumentPublicationError(
+            "created_by_user_id debe ser un entero positivo."
+        )
+
+    document = InternalDocumentORM.query.filter_by(
+        id=resolved_document_id
+    ).first()
+    if not document:
+        raise InternalDocumentPublicationError(
+            f"No existe InternalDocumentORM con id={resolved_document_id}."
+        )
+
+    upload = _resolve_warehouse_upload(warehouse_upload_id)
+
+    existing_version = InternalDocumentVersionORM.query.filter_by(
+        document_id=document.id,
+        warehouse_upload_id=upload.id,
+    ).first()
+    if existing_version:
+        return {
+            "created": False,
+            "document_id": document.id,
+            "version_id": existing_version.id,
+            "warehouse_upload_id": upload.id,
+            "version_number": existing_version.version_number,
+            "version_label": existing_version.version_label,
+            "message": "Ese upload ya estaba publicado como versión del documento.",
+        }
+
+    current_max_version = (
+        db.session.query(
+            db.func.max(InternalDocumentVersionORM.version_number)
+        )
+        .filter(
+            InternalDocumentVersionORM.document_id == document.id
+        )
+        .scalar()
+    )
+    next_version_number = int(current_max_version or 0) + 1
+
+    old_version_id = document.current_version_id
+    current_version = document.current_version
+    if current_version:
+        current_version.is_current = False
+        current_version.is_hidden_from_users = True
+
+    version = InternalDocumentVersionORM(
+        document_id=document.id,
+        warehouse_upload_id=upload.id,
+        version_label=(
+            _normalize_text(version_label)
+            or f"1.{max(next_version_number - 1, 0)}"
+        ),
+        version_number=next_version_number,
+        original_filename=upload.original_filename,
+        file_mime_type=upload.mime_type,
+        file_size_bytes=upload.file_size_bytes,
+        file_hash_sha256=upload.file_hash_sha256,
+        change_notes=(
+            _normalize_text(change_notes)
+            or "Nueva versión automática desde Warehouse"
+        ),
+        is_current=True,
+        is_hidden_from_users=False,
+        created_by=creator_id,
+    )
+
+    db.session.add(version)
+    db.session.flush()
+
+    document.current_version_id = version.id
+    document.updated_by = creator_id
+
+    _log_document_audit(
+        document_id=document.id,
+        version_id=version.id,
+        actor_user_id=creator_id,
+        action="DOCUMENT_VERSION_REPLACED",
+        old_value_json={"current_version_id": old_version_id},
+        new_value_json={
+            "current_version_id": version.id,
+            "version_label": version.version_label,
+            "version_number": version.version_number,
+            "warehouse_upload_id": upload.id,
+        },
+        metadata_json=audit_metadata,
+    )
+
+    db.session.commit()
+
+    return {
+        "created": True,
+        "document_id": document.id,
+        "version_id": version.id,
+        "warehouse_upload_id": upload.id,
+        "version_number": version.version_number,
+        "version_label": version.version_label,
+        "message": "Nueva versión documental publicada desde Warehouse.",
+    }
+
+
 def publish_internal_document_from_warehouse_upload(
     *,
     warehouse_upload_id: int,
