@@ -10,6 +10,7 @@ from app.internal_documents.services.internal_document_publication_service impor
     publish_internal_document_from_warehouse_upload,
 )
 from app.models import InternalDocumentORM, InternalDocumentStatus
+from app.models.user_model import UserORM
 from app.models.internal_documents import InternalDocumentVisibilityMode
 from app.warehouse.services.warehouse_document_upload_service import (
     create_warehouse_document_upload,
@@ -89,6 +90,17 @@ def _extract_warehouse_upload_id(upload_result: dict[str, Any]) -> int:
     return upload_id
 
 
+def _resolve_admicorp_user_id() -> int:
+    user = UserORM.get_by_username("ADMICORP")
+    if user is None or not getattr(user, "id", None):
+        raise AgregadorasConsolidadoPublishError(
+            "No existe el usuario ADMICORP requerido para publicar "
+            "el consolidado de agregadoras."
+        )
+
+    return int(user.id)
+
+
 def _find_existing_document() -> InternalDocumentORM | None:
     return (
         InternalDocumentORM.query
@@ -119,6 +131,7 @@ def publish_agregadoras_consolidado_output(
 
     resolved_cutoff_date = _coerce_business_date(cutoff_date)
     automation_user_id = _resolve_automation_user_id()
+    admicorp_user_id = _resolve_admicorp_user_id()
     original_filename = (
         str(download_filename or "").strip()
         or resolved_file_path.name
@@ -160,8 +173,15 @@ def publish_agregadoras_consolidado_output(
             ),
             document_type=DOCUMENT_TYPE,
             is_sensitive=True,
-            visibility_mode=InternalDocumentVisibilityMode.PRIVATE,
-            visibility_rules=None,
+            visibility_mode=InternalDocumentVisibilityMode.CUSTOM,
+            visibility_rules=[
+                {
+                    "visibility_type": "USER",
+                    "user_id": admicorp_user_id,
+                    "can_view": True,
+                    "can_download": True,
+                }
+            ],
             links=[
                 {
                     "entity_type": "GENERAL",
