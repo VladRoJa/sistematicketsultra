@@ -219,12 +219,6 @@ def test_attendance_capture_failure_schedules_retry(
         "_find_existing_attendance_scheduler_success",
         lambda **_kwargs: None,
     )
-    monkeypatch.setattr(
-        worker.db.session,
-        "rollback",
-        lambda: None,
-    )
-
     def fake_job(**_kwargs):
         raise RuntimeError(
             "fallo controlado"
