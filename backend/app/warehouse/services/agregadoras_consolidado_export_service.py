@@ -12,6 +12,7 @@ from zipfile import ZipFile
 import hashlib
 import json
 import os
+import re
 import unicodedata
 import xml.etree.ElementTree as ET
 
@@ -44,6 +45,10 @@ SHEET_CATALOGOS = "xl/worksheets/sheet5.xml"
 TABLE_TODO = "xl/tables/table1.xml"
 PIVOT_CACHE_DEFINITION = "xl/pivotCache/pivotCacheDefinition1.xml"
 SHARED_STRINGS = "xl/sharedStrings.xml"
+CALC_CHAIN = "xl/calcChain.xml"
+WORKBOOK_RELS = "xl/_rels/workbook.xml.rels"
+CONTENT_TYPES = "[Content_Types].xml"
+RENDERER_VERSION = "xlsx_xml_integrity_v2"
 
 SPREADSHEET_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 XML_NS = "http://www.w3.org/XML/1998/namespace"
@@ -958,6 +963,106 @@ def _append_numeric(
     ET.SubElement(cell, Q("v")).text = str(value)
 
 
+def _preserve_root_namespace_declarations(
+    original_xml: bytes,
+    rendered_xml: bytes,
+    *,
+    root_tag: str,
+) -> bytes:
+    original_text = original_xml.decode("utf-8")
+    rendered_text = rendered_xml.decode("utf-8")
+
+    original_root = re.search(
+        rf"<{re.escape(root_tag)}\\b[^>]*>",
+        original_text,
+    )
+    rendered_root = re.search(
+        rf"<{re.escape(root_tag)}\\b[^>]*>",
+        rendered_text,
+    )
+
+    if original_root is None or rendered_root is None:
+        raise AgregadorasTemplateInvalidError(
+            f"No se pudo preservar namespaces de <{root_tag}>."
+        )
+
+    original_declarations = re.findall(
+        r'\\s(xmlns(?::[A-Za-z_][\\w.-]*)?="[^"]+")',
+        original_root.group(0),
+    )
+    rendered_root_text = rendered_root.group(0)
+
+    missing_declarations = []
+    for declaration in original_declarations:
+        attribute_name = declaration.split("=", 1)[0]
+        if re.search(
+            rf"\\s{re.escape(attribute_name)}=",
+            rendered_root_text,
+        ):
+            continue
+        missing_declarations.append(declaration)
+
+    if not missing_declarations:
+        return rendered_xml
+
+    insertion = "".join(
+        f" {declaration}"
+        for declaration in missing_declarations
+    )
+    insert_at = rendered_root.end() - 1
+    patched = (
+        rendered_text[:insert_at]
+        + insertion
+        + rendered_text[insert_at:]
+    )
+    return patched.encode("utf-8")
+
+
+def _remove_calc_chain_relationship(
+    relationships_xml: bytes,
+) -> bytes:
+    root = ET.fromstring(relationships_xml)
+    removed = False
+
+    for relationship in list(root):
+        relationship_type = str(
+            relationship.get("Type") or ""
+        )
+        if relationship_type.endswith("/calcChain"):
+            root.remove(relationship)
+            removed = True
+
+    if not removed:
+        return relationships_xml
+
+    return ET.tostring(
+        root,
+        encoding="utf-8",
+        xml_declaration=True,
+    )
+
+
+def _remove_calc_chain_content_type(
+    content_types_xml: bytes,
+) -> bytes:
+    root = ET.fromstring(content_types_xml)
+    removed = False
+
+    for override in list(root):
+        if override.get("PartName") == "/xl/calcChain.xml":
+            root.remove(override)
+            removed = True
+
+    if not removed:
+        return content_types_xml
+
+    return ET.tostring(
+        root,
+        encoding="utf-8",
+        xml_declaration=True,
+    )
+
+
 def _append_source_rows(
     sheet_xml: bytes,
     rows_to_add: list[AgregadoraDailyRow],
@@ -1028,7 +1133,16 @@ def _append_source_rows(
     if auto_filter is not None:
         auto_filter.set("ref", f"A1:E{last_row}")
 
-    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    rendered_xml = ET.tostring(
+        root,
+        encoding="utf-8",
+        xml_declaration=True,
+    )
+    return _preserve_root_namespace_declarations(
+        sheet_xml,
+        rendered_xml,
+        root_tag="worksheet",
+    )
 
 
 def _append_todo_rows(
@@ -1107,8 +1221,17 @@ def _append_todo_rows(
     if dimension is not None:
         dimension.set("ref", f"A1:F{last_row}")
 
+    rendered_xml = ET.tostring(
+        root,
+        encoding="utf-8",
+        xml_declaration=True,
+    )
     return (
-        ET.tostring(root, encoding="utf-8", xml_declaration=True),
+        _preserve_root_namespace_declarations(
+            sheet_xml,
+            rendered_xml,
+            root_tag="worksheet",
+        ),
         last_row,
     )
 
@@ -1201,8 +1324,21 @@ def _render_workbook(
             source_zip.read(PIVOT_CACHE_DEFINITION)
         )
 
+        if WORKBOOK_RELS in source_zip.namelist():
+            replacements[WORKBOOK_RELS] = _remove_calc_chain_relationship(
+                source_zip.read(WORKBOOK_RELS)
+            )
+
+        if CONTENT_TYPES in source_zip.namelist():
+            replacements[CONTENT_TYPES] = _remove_calc_chain_content_type(
+                source_zip.read(CONTENT_TYPES)
+            )
+
         with ZipFile(output_buffer, "w") as output_zip:
             for info in source_zip.infolist():
+                if info.filename == CALC_CHAIN:
+                    continue
+
                 data = replacements.get(
                     info.filename,
                     source_zip.read(info.filename),
@@ -1225,6 +1361,7 @@ def _source_signature(
         f"baseline:{baseline_date.isoformat()}",
         f"target:{target_date.isoformat()}",
         "gap_policy:absorb_into_next_available_same_month_v1",
+        f"renderer:{RENDERER_VERSION}",
     ]
 
     for business_date, snapshot in sorted(wellhub_snapshots.items()):
