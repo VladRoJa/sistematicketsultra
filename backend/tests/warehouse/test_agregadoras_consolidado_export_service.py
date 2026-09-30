@@ -18,14 +18,20 @@ def _acc(visits: int, amount: str, *raw_names: str):
 
 
 def _minimal_sheet(last_column: str) -> bytes:
+    mc_ns = service.XML_NAMESPACES["mc"]
+    x14ac_ns = service.XML_NAMESPACES["x14ac"]
+    xr_ns = service.XML_NAMESPACES["xr"]
+    xr2_ns = service.XML_NAMESPACES["xr2"]
+    xr3_ns = service.XML_NAMESPACES["xr3"]
+
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <worksheet
   xmlns="{service.SPREADSHEET_NS}"
-  xmlns:mc="{service.XML_NAMESPACES["mc"]}"
-  xmlns:x14ac="{service.XML_NAMESPACES["x14ac"]}"
-  xmlns:xr="{service.XML_NAMESPACES["xr"]}"
-  xmlns:xr2="{service.XML_NAMESPACES["xr2"]}"
-  xmlns:xr3="{service.XML_NAMESPACES["xr3"]}"
+  xmlns:mc="{mc_ns}"
+  xmlns:x14ac="{x14ac_ns}"
+  xmlns:xr="{xr_ns}"
+  xmlns:xr2="{xr2_ns}"
+  xmlns:xr3="{xr3_ns}"
   mc:Ignorable="x14ac xr xr2 xr3">
   <dimension ref="A1:{last_column}1"/>
   <sheetData>
@@ -36,7 +42,6 @@ def _minimal_sheet(last_column: str) -> bytes:
   <autoFilter ref="A1:{last_column}1"/>
 </worksheet>
 """.encode("utf-8")
-
 
 def _minimal_workbook() -> bytes:
     buffer = BytesIO()
