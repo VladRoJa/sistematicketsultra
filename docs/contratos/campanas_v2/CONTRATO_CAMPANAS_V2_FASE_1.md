@@ -69,14 +69,17 @@ No asumir que estos archivos no cambiaron después de la fecha del contrato.
 
 ### 3.1 Normalización de teléfono
 
-Reutilizar:
+Reutilizar como normalizador general:
+
+    backend/app/services/marketing_phone.py
+    normalize_phone()
+
+El adapter iVentas conserva además:
 
     backend/app/services/marketing_iventas_service.py
     normalize_iventas_phone()
 
-No crear normalize_campaign_phone(), normalize_whatsapp_phone() ni variantes equivalentes si su propósito es el mismo.
-
-Si Fase 1 necesita una representación genérica de teléfono, extraer un helper común únicamente si las pruebas demuestran que no cambia el contrato iVentas actual.
+El primero ya es compartido por Funnel/Contact Center; el segundo aporta semántica específica de iVentas. No crear normalize_campaign_phone(), normalize_whatsapp_phone() ni un tercer normalizador equivalente.
 
 ### 3.2 Resolución de sucursales y regiones
 
@@ -98,9 +101,13 @@ Reutilizar:
 
 La fuente de Socios activos debe respetar canonicalidad Warehouse. No consultar directamente una tabla raw ignorando el resolver.
 
+**No crear una nueva tabla poblada con todos los socios activos para Campañas V2.** El constructor consulta la base canónica existente. La campaña solo necesita registrar la pertenencia de los destinatarios elegidos al cohorte y una referencia al snapshot/fila fuente cuando sea posible.
+
 ### 3.4 Socios vencidos
 
-Reutilizar los resolvers vigentes de estado actual y candidatos de reactivación.
+Reutilizar los resolvers vigentes de estado actual y candidatos de reactivación y la cartera histórica canónica existente.
+
+**No crear una nueva tabla poblada con la base completa de socios vencidos.** V2 consulta `socios_vencidos_cartera`/resolvers vigentes y, al congelar una campaña, referencia el episodio canónico (`socios_vencidos_cartera_id`) cuando aplique.
 
 V2 puede cambiar la forma de seleccionar segmentos, pero no debe duplicar el matcher de identidad vencido/activo.
 
@@ -139,8 +146,9 @@ Como el usuario pidió convivencia real entre legacy y V2, es pertinente que V2 
 La decisión exacta debe documentarse en el primer PR de implementación, pero la preferencia contractual es:
 
 - campañas V2 en entidad genérica propia;
-- destinatarios V2 en entidad propia;
-- referencias hacia fuentes existentes;
+- una relación mínima de destinatarios/cohorte V2, no una copia de las bases fuente;
+- referencias hacia Socios Activos, Socios Vencidos, Funnel u otras fuentes existentes;
+- metadata snapshot únicamente cuando sea necesaria para congelar el criterio o cubrir una retención real;
 - reutilización de utilidades comunes.
 
 No renombrar tablas legacy ni cambiar su semántica en Fase 1.
@@ -197,7 +205,6 @@ reactivation_group tiene semántica legacy:
 - DOMICILIATED_FLOW
 - EXCLUDE
 - REVIEW
-
 Esto NO equivale a audience_family.
 
 Por lo tanto está prohibido sustituir reactivation_group por la nueva taxonomía.
@@ -248,17 +255,16 @@ Debe permitir construir audiencias de campañas para clubes sin volver a descarg
 
 ### 7.3 Funnel / Venta nueva
 
-En Fase 1 puede definirse la fuente y contrato interno, pero solo debe implementarse si el repo ya expone de forma estable el detalle individual necesario.
+Fase 1 debe dejar el modelo suficientemente genérico para una fuente `FUNNEL_PORTFOLIO`, pero su integración operativa se hará en **Fase 2 antes del enviador**.
 
-No usar agregados del Funnel como si fueran destinatarios.
+La investigación ya localizó detalle individual en los servicios de Funnel. No usar agregados como destinatarios.
 
-Debe localizarse el servicio de detalle individual existente y confirmar:
-- teléfono;
-- sucursal;
-- identidad;
-- cohorte/fecha relevante.
+Contrato mínimo futuro:
+- `phone_mx10` válido;
+- `source = FUNNEL_PORTFOLIO`;
+- referencias/origen cuando existan.
 
-Si el detalle necesario no existe con semántica suficiente, documentar el bloqueo y no inventar una consulta paralela.
+Nombre, sucursal, contact_id, canal y fecha son opcionales. No exigir member_id, PIN, tarifa ni audience_family y no inventar sucursal por lada. Fase 1 solo debe evitar un esquema que obligue a tener identidad de socio para todo recipient.
 
 ### 7.4 Campaña anterior
 
@@ -358,9 +364,10 @@ Al crear la campaña V2, persistir snapshot suficiente para reconstruir qué se 
 Por destinatario, conceptualmente conservar:
 
 - identificador de campaña;
-- identidad de miembro/lead si existe;
+- identidad de miembro/lead si existe; puede ser NULL para fuentes phone-only;
 - teléfono normalizado;
-- sucursal;
+- identidad/calidad de fuente cuando aplique (por ejemplo PHONE_ONLY);
+- sucursal cuando exista; no debe ser obligatoria para todas las fuentes;
 - fuente;
 - referencia de fuente;
 - tarifa observada;
@@ -371,6 +378,12 @@ Por destinatario, conceptualmente conservar:
 - created_at.
 
 No depender exclusivamente de FK a una fila mutable para mostrar el histórico.
+
+## 13.1 Estados de mensajería no pertenecen a las bases fuente
+
+Aunque Fase 1 todavía no sincroniza iVentas, el modelo debe reservar el lugar correcto para Fase 2: los flags `sent`, `delivered`, `viewed`, `failed` e interacciones pertenecen al destinatario **dentro de una campaña**, no a Socios Activos ni Socios Vencidos.
+
+No agregar esos flags a las tablas canónicas de Warehouse.
 
 ## 13. Clasificación comercial de campaña
 
