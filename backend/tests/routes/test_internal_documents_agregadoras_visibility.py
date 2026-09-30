@@ -100,7 +100,14 @@ def test_list_hides_agregadoras_from_non_admicorp_manager(
     monkeypatch.setattr(
         routes,
         "_resolve_document_period_filter",
-        lambda: ("all", None),
+        lambda: (
+            {
+                "period": "all",
+                "date_from": None,
+                "date_to": None,
+            },
+            None,
+        ),
     )
     monkeypatch.setattr(
         routes,
