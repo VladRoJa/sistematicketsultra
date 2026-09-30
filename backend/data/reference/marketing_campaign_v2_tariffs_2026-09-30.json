@@ -1,0 +1,839 @@
+{
+  "schema_version": 1,
+  "catalog_key": "marketing_campaign_v2_tariffs",
+  "artifact_policy": "immutable",
+  "approved_on": "2026-09-30",
+  "row_count": 166,
+  "tariffs": [
+    {
+      "tarifa_raw": "ESTUDIANTE",
+      "categoria_tarifa": "Estudiante",
+      "audience_family": "ESTUDIANTE"
+    },
+    {
+      "tarifa_raw": "12 MESES EN LÍNEA $4990",
+      "categoria_tarifa": "Anualidad",
+      "audience_family": "SEMESTRE"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO SIN PLAZO $599",
+      "categoria_tarifa": "Recurrente",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "3 MESES PROPORCIONAL",
+      "categoria_tarifa": "Trimestre",
+      "audience_family": "TRIMESTRAL"
+    },
+    {
+      "tarifa_raw": "CONVENIO HTP $599",
+      "categoria_tarifa": "Convenio",
+      "audience_family": "CONVENIO"
+    },
+    {
+      "tarifa_raw": "PASE GYMPASS",
+      "categoria_tarifa": "Agregadora",
+      "audience_family": "OUT_OF_SEGMENT"
+    },
+    {
+      "tarifa_raw": "PASE TOTAL PASS",
+      "categoria_tarifa": "Agregadora",
+      "audience_family": "OUT_OF_SEGMENT"
+    },
+    {
+      "tarifa_raw": "RECURRENTE SIN PLAZO NVA",
+      "categoria_tarifa": "Recurrente",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "BORRON Y CUENTA NUEVA 6 MESES",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "CONVENIOS $549",
+      "categoria_tarifa": "Convenio",
+      "audience_family": "CONVENIO"
+    },
+    {
+      "tarifa_raw": "RECURRENTE $649 LE",
+      "categoria_tarifa": "Recurrente",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 12 MESES $549 MARZO 2026",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 6 MESES $ 549",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 12 MESES $549 LE",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "BORRON Y CUENTA NUEVA 12 MESES $499",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 12 MESES $499",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 12 MESES $449 (LOS 12 MESES)",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "BORRON Y CUENTA NUEVA 12 MESES",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "1 MES $899",
+      "categoria_tarifa": "Mensualidad",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "PLAN FAMILIA / AMIGOS X $499",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 12 MESES + 250 INSCRIPCIÓN 2DO MES GRATIS",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "PROMO ENERO 12 MESES",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "MES REWARD",
+      "categoria_tarifa": "Mes Reward",
+      "audience_family": "OUT_OF_SEGMENT"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO $449 6 MESES BUENFIT",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "PASE 2 DIAS GRATIS",
+      "categoria_tarifa": "Pase de Cortesía",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 6 MESES: $399 (LOS 6 MESES)",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 12 MESES PLAN FAMILIAR $999 (ADULTO + ADULTO)",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 6 MESES MAYO $499",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "PROMO FEBRERO 12 MESES",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "CONVENIO MARINA 12 MESES $399",
+      "categoria_tarifa": "Convenio",
+      "audience_family": "CONVENIO"
+    },
+    {
+      "tarifa_raw": "DIA $149",
+      "categoria_tarifa": "Diario",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO ANUAL",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "BORRON Y CUENTA NUEVA SIN PLAZO $649",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "RECURRENTE JUBILADOS $399",
+      "categoria_tarifa": "Recurrente",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 12 MESES PROMO NOVIEMBRE $499",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "3 MESES $1,899",
+      "categoria_tarifa": "Trimestre",
+      "audience_family": "TRIMESTRAL"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 12 MESES; $399 (LOS 12 MESES)",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 6 MESES $399 JULIO",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "50% 1ER MES 12 MESES $499",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "PASE RECORRIDO",
+      "categoria_tarifa": "Pase de Cortesía",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "BORRÓN Y CUENTA NUEVA MAYO $649",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 12 MESES $549 ABRIL 2026",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "50% 1ER MES SIN PLAZO $599",
+      "categoria_tarifa": "Recurrente",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO PLAN 6 MESES $449",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 6 MESES PROMO NOVIEMBRE$549",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "ANUALIDAD 2X1 $2,999.50 - LA VIGENCIA DE 12 MESES",
+      "categoria_tarifa": "Anualidad",
+      "audience_family": "SEMESTRE"
+    },
+    {
+      "tarifa_raw": "50% 1ER MES 6 MESES $549",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DIARIO $100",
+      "categoria_tarifa": "Diario",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "PRIMER PAGO 399 POSTERIOR 549",
+      "categoria_tarifa": "Recurrente",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO SANTA 12 MESES $499",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "CONVENIO DOMICILIADO $549",
+      "categoria_tarifa": "Convenio",
+      "audience_family": "CONVENIO"
+    },
+    {
+      "tarifa_raw": "BORRÓN Y CUENTA NUEVA SIN PLAZO",
+      "categoria_tarifa": "Recurrente",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "SEMANA $250",
+      "categoria_tarifa": "Semana",
+      "audience_family": "MES"
+    },
+    {
+      "tarifa_raw": "BORRON 6 MESES PRIMER MES 699 (449 + 250)",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "3 MESES",
+      "categoria_tarifa": "Trimestre",
+      "audience_family": "TRIMESTRAL"
+    },
+    {
+      "tarifa_raw": "50% 1ER MES + INSCRIPCIÓN X 12 MESES (TOTAL PRIMER PAGO: $499.50)",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 6 MESES $549 (LOS 6 MESES)",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "PLAN RECURRENTE PAGO INCIAL $1,449 LE",
+      "categoria_tarifa": "Recurrente",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO $549 3 MESES BUENFIT",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 1ER MES GRATIS 6 MESES $549",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "399 HOT SALE",
+      "categoria_tarifa": "Recurrente",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "BORRÓN Y CUENTA NUEVA ABRIL",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "ANUALIDAD DE $4,999.00 3 MESES DE REGALO",
+      "categoria_tarifa": "Anualidad",
+      "audience_family": "SEMESTRE"
+    },
+    {
+      "tarifa_raw": "RECURRENTE 399",
+      "categoria_tarifa": "Recurrente",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "PROMO 399 PRIMER PAGO",
+      "categoria_tarifa": "Recurrente",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "BECA 6 MESES",
+      "categoria_tarifa": "Beca",
+      "audience_family": "OUT_OF_SEGMENT"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 6 MESES; $449 (LOS 6 MESES)",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "50% 1ER MES + INSCRIPCIÓN SIN PLAZO (TOTAL PRIMER PAGO: $549.50)",
+      "categoria_tarifa": "Recurrente",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "2 MESES X $ 1250",
+      "categoria_tarifa": "Bimestre",
+      "audience_family": "TRIMESTRAL"
+    },
+    {
+      "tarifa_raw": "DIARIO A DOMICILIADO 12 MESES",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "50% 1ER MES 60+ SIN PLAZO",
+      "categoria_tarifa": "Recurrente",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "50% 1ER MES + INSCRIPCIÓN X 6 MESES (TOTAL PRIMER PAGO: $524.50)",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "MEMBRESIA LM",
+      "categoria_tarifa": "Convenio",
+      "audience_family": "CONVENIO"
+    },
+    {
+      "tarifa_raw": "MENSUALIDAD FARMACIAS SIMILARES $399",
+      "categoria_tarifa": "Convenio",
+      "audience_family": "CONVENIO"
+    },
+    {
+      "tarifa_raw": "PROMO SAN VALENTIN RECURRENTE",
+      "categoria_tarifa": "Recurrente",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "MISION ZOE ENS",
+      "categoria_tarifa": "Convenio",
+      "audience_family": "CONVENIO"
+    },
+    {
+      "tarifa_raw": "PAGO EN LÍNEA ANUALIDAD X 4999",
+      "categoria_tarifa": "Anualidad",
+      "audience_family": "SEMESTRE"
+    },
+    {
+      "tarifa_raw": "PAGO EN LINEA CIERRE ABRIL",
+      "categoria_tarifa": "Mensualidad",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO PLAN ULTRA PAGO INCIAL 12 MESES $1,449",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "BORRON Y CUENTA NUEVA TDC 12 MESES",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "BORRON Y CUENTA NUEVA TDC SIN PLAZO",
+      "categoria_tarifa": "Recurrente",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "SEMANA $299",
+      "categoria_tarifa": "Semana",
+      "audience_family": "MES"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO SEMESTRAL",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "TRIMESTRE NAVIDAD",
+      "categoria_tarifa": "Instructor",
+      "audience_family": "OUT_OF_SEGMENT"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO SIN PLAZO PROMO NOVIEMBRE $599",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO NAVIDAD 3 MESES INSCRIPCION GRATIS $549",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "50% 1ER MES 60+ 12 MESES",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "PROMO DICIEMBRE 3 MESES POR $1,350",
+      "categoria_tarifa": "Trimestre",
+      "audience_family": "TRIMESTRAL"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 6 MESES + 250 INSCRIPCIÓN 2DO MES GRATIS",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "3 MESES X $1,690 1 MES DE REGALO",
+      "categoria_tarifa": "Trimestre",
+      "audience_family": "TRIMESTRAL"
+    },
+    {
+      "tarifa_raw": "1 DIA",
+      "categoria_tarifa": "Diario",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 1ER MES GRATIS 12 MESES $499",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "PROMO 498 PRIMER PAGO",
+      "categoria_tarifa": "Recurrente",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "BORRON Y CUENTA NUEVA TDC 6 MESES",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "RECURRENTE SIN PLAZO",
+      "categoria_tarifa": "Recurrente",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "ESTUDIANTES 3 MESES X $1200",
+      "categoria_tarifa": "Estudiante",
+      "audience_family": "ESTUDIANTE"
+    },
+    {
+      "tarifa_raw": "BUEN FIT PAGO EN LÍNEA ANUALIDAD X $3999",
+      "categoria_tarifa": "Anualidad",
+      "audience_family": "SEMESTRE"
+    },
+    {
+      "tarifa_raw": "PROMO 3 X 2 $1,100",
+      "categoria_tarifa": "Trimestre",
+      "audience_family": "TRIMESTRAL"
+    },
+    {
+      "tarifa_raw": "ESTUDIANTE $599",
+      "categoria_tarifa": "Estudiante",
+      "audience_family": "ESTUDIANTE"
+    },
+    {
+      "tarifa_raw": "MENSUALIDAD $799",
+      "categoria_tarifa": "Mensualidad",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "CONVENIO $599",
+      "categoria_tarifa": "Convenio",
+      "audience_family": "CONVENIO"
+    },
+    {
+      "tarifa_raw": "SEMANA $349",
+      "categoria_tarifa": "Semana",
+      "audience_family": "MES"
+    },
+    {
+      "tarifa_raw": "DIARIO $130",
+      "categoria_tarifa": "Diario",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "ULTRA FIT KIDS SIN PLAZO $399",
+      "categoria_tarifa": "Recurrente",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "RECURRENTE $599",
+      "categoria_tarifa": "Recurrente",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "RECURRENTE REACTIVACION",
+      "categoria_tarifa": "Recurrente",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "BORRON 12 MESES PRIMER MES $699 (449 + 250)",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "BECA",
+      "categoria_tarifa": "Beca",
+      "audience_family": "OUT_OF_SEGMENT"
+    },
+    {
+      "tarifa_raw": "ESTUDIANTES 2 MESES X $999",
+      "categoria_tarifa": "Estudiante",
+      "audience_family": "ESTUDIANTE"
+    },
+    {
+      "tarifa_raw": "SEMANA INSTRUCTOR PERSONALIZADO EXTERNO $900",
+      "categoria_tarifa": "Instructor",
+      "audience_family": "OUT_OF_SEGMENT"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 12 MESES 2DO MES GRATIS",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 6 MESES 2DO MES GRATIS",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "ANUALIDAD EN LINEA",
+      "categoria_tarifa": "Anualidad",
+      "audience_family": "SEMESTRE"
+    },
+    {
+      "tarifa_raw": "$349 ATLETA CAR/COBACH ROSARITO",
+      "categoria_tarifa": "Convenio",
+      "audience_family": "CONVENIO"
+    },
+    {
+      "tarifa_raw": "3 MESES EN MOSTRADOR $1,699",
+      "categoria_tarifa": "Trimestre",
+      "audience_family": "TRIMESTRAL"
+    },
+    {
+      "tarifa_raw": "1 MES EN LINEA $699",
+      "categoria_tarifa": "Mensualidad",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "3 MESES EN LINEA",
+      "categoria_tarifa": "Trimestre",
+      "audience_family": "TRIMESTRAL"
+    },
+    {
+      "tarifa_raw": "INSCRIPCIÓN $250",
+      "categoria_tarifa": "Mensualidad",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "BUEN FIT PAGO EN LÍNEA 3 MESES X $1350",
+      "categoria_tarifa": "Trimestre",
+      "audience_family": "TRIMESTRAL"
+    },
+    {
+      "tarifa_raw": "DOMICILIADO 12 MESES $399 JULIO",
+      "categoria_tarifa": "Domiciliado",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "MENSUALIDAD 749",
+      "categoria_tarifa": "Mensualidad",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "3 MESES ANIVERSARIO $1499 EN SUCURSAL",
+      "categoria_tarifa": "Trimestre",
+      "audience_family": "TRIMESTRAL"
+    },
+    {
+      "tarifa_raw": "CONVENIO",
+      "categoria_tarifa": "Convenio",
+      "audience_family": "CONVENIO"
+    },
+    {
+      "tarifa_raw": "SEMANA",
+      "categoria_tarifa": "Trimestre",
+      "audience_family": "TRIMESTRAL"
+    },
+    {
+      "tarifa_raw": "PAGO EN LINEA 3 MESES",
+      "categoria_tarifa": "Mensualidad",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DIARIO",
+      "categoria_tarifa": "Diario",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "TRES MESES POR 1,490",
+      "categoria_tarifa": "Trimestre",
+      "audience_family": "TRIMESTRAL"
+    },
+    {
+      "tarifa_raw": "ANUALIDAD PROMO",
+      "categoria_tarifa": "Anualidad",
+      "audience_family": "SEMESTRE"
+    },
+    {
+      "tarifa_raw": "PAGO EN LINEA",
+      "categoria_tarifa": "Mensualidad",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "MENSUALIDAD",
+      "categoria_tarifa": "Mensualidad",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "SEMANA SANTA 3 MESES X 1499",
+      "categoria_tarifa": "Semana",
+      "audience_family": "MES"
+    },
+    {
+      "tarifa_raw": "SEMESTRAL $2,999 + 1 MES GRATIS",
+      "categoria_tarifa": "Semestre",
+      "audience_family": "SEMESTRE"
+    },
+    {
+      "tarifa_raw": "SEMANA INSTRUCTOR PERSONALIZADO",
+      "categoria_tarifa": "Instructor",
+      "audience_family": "OUT_OF_SEGMENT"
+    },
+    {
+      "tarifa_raw": "DIARIO TOTAL PASS",
+      "categoria_tarifa": "Agregadora",
+      "audience_family": "OUT_OF_SEGMENT"
+    },
+    {
+      "tarifa_raw": "3 MESES PROMO",
+      "categoria_tarifa": "Trimestre",
+      "audience_family": "TRIMESTRAL"
+    },
+    {
+      "tarifa_raw": "GYMPASS",
+      "categoria_tarifa": "Agregadora",
+      "audience_family": "OUT_OF_SEGMENT"
+    },
+    {
+      "tarifa_raw": "MENSUALIDAD ESPECIAL",
+      "categoria_tarifa": "Mensualidad",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "TRIMESTRE ESTUDIANTE MAYO $1,499",
+      "categoria_tarifa": "Trimestre",
+      "audience_family": "TRIMESTRAL"
+    },
+    {
+      "tarifa_raw": "MENSUALIDAD NVA",
+      "categoria_tarifa": "Mensualidad",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "DICIEMBRE GRATIS",
+      "categoria_tarifa": "Mensualidad",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "CONVENIO EMPRESAS",
+      "categoria_tarifa": "Convenio",
+      "audience_family": "CONVENIO"
+    },
+    {
+      "tarifa_raw": "TARIFA ESTUDIANTE",
+      "categoria_tarifa": "Estudiante",
+      "audience_family": "ESTUDIANTE"
+    },
+    {
+      "tarifa_raw": "SEMANAL",
+      "categoria_tarifa": "Semana",
+      "audience_family": "MES"
+    },
+    {
+      "tarifa_raw": "MENSUALIDAD STA CAT/SL/LB",
+      "categoria_tarifa": "Mensualidad",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "2 MESES PROMO",
+      "categoria_tarifa": "Bimestre",
+      "audience_family": "TRIMESTRAL"
+    },
+    {
+      "tarifa_raw": "ESTUDIANTE/CONVENIO",
+      "categoria_tarifa": "Estudiante",
+      "audience_family": "ESTUDIANTE"
+    },
+    {
+      "tarifa_raw": "ANUALIDAD",
+      "categoria_tarifa": "Anualidad",
+      "audience_family": "SEMESTRE"
+    },
+    {
+      "tarifa_raw": "2 MESES",
+      "categoria_tarifa": "Bimestre",
+      "audience_family": "TRIMESTRAL"
+    },
+    {
+      "tarifa_raw": "2 DIAS CORTESIA",
+      "categoria_tarifa": "Pase de Cortesía",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "MENSUALIDAD LB/STA",
+      "categoria_tarifa": "Mensualidad",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "SEMESTRE",
+      "categoria_tarifa": "Semestre",
+      "audience_family": "SEMESTRE"
+    },
+    {
+      "tarifa_raw": "CORTESIA DIARIA",
+      "categoria_tarifa": "Pase de Cortesía",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "RENOVACION DICIEMBRE",
+      "categoria_tarifa": "Mensualidad",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "CUPON 1ER MES",
+      "categoria_tarifa": "Mensualidad",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "MENSUALIDAD CONVENIOS",
+      "categoria_tarifa": "Convenio",
+      "audience_family": "CONVENIO"
+    },
+    {
+      "tarifa_raw": "3 MESES X1290",
+      "categoria_tarifa": "Trimestre",
+      "audience_family": "TRIMESTRAL"
+    },
+    {
+      "tarifa_raw": "PROMO 3 MESES",
+      "categoria_tarifa": "Trimestre",
+      "audience_family": "TRIMESTRAL"
+    },
+    {
+      "tarifa_raw": "CORTESIA MENSUAL 1",
+      "categoria_tarifa": "Pase de Cortesía",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "PROMO DIA DE LA MUJER",
+      "categoria_tarifa": "Mensualidad",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "PROMO 14 FEB",
+      "categoria_tarifa": "Mensualidad",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "PROMO 2X 800",
+      "categoria_tarifa": "Bimestre",
+      "audience_family": "TRIMESTRAL"
+    },
+    {
+      "tarifa_raw": "MENSUALIDAD NAVIDEÑA",
+      "categoria_tarifa": "Mensualidad",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "PROMO 2 X 800",
+      "categoria_tarifa": "Bimestre",
+      "audience_family": "TRIMESTRAL"
+    },
+    {
+      "tarifa_raw": "DIARIO LM",
+      "categoria_tarifa": "Diario",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "PROMO AMIGO BAJA",
+      "categoria_tarifa": "Mensualidad",
+      "audience_family": "DOMICILIADO"
+    },
+    {
+      "tarifa_raw": "PROMO BUEN FIN",
+      "categoria_tarifa": "Mensualidad",
+      "audience_family": "DOMICILIADO"
+    }
+  ]
+}
