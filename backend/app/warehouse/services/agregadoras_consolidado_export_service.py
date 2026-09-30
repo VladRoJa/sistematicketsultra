@@ -338,6 +338,331 @@ def _cell_text(
     return value_node.text if value_node is not None and value_node.text else ""
 
 
+def _excel_date_from_cell(value: str) -> date | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+
+    try:
+        serial = int(Decimal(raw))
+        return date(1899, 12, 30) + timedelta(days=serial)
+    except Exception:
+        pass
+
+    try:
+        return date.fromisoformat(raw[:10])
+    except Exception as exc:
+        raise AgregadorasTemplateInvalidError(
+            f"No se pudo interpretar fecha Excel de plantilla: {raw!r}."
+        ) from exc
+
+
+def _template_month_state(
+    template_bytes: bytes,
+    *,
+    sheet_name: str,
+    baseline_date: date,
+) -> dict[str, _AccumulatedBranch]:
+    with ZipFile(BytesIO(template_bytes), "r") as source_zip:
+        if sheet_name not in source_zip.namelist():
+            raise AgregadorasTemplateInvalidError(
+                f"La plantilla no contiene {sheet_name}."
+            )
+
+        shared_strings = _shared_strings_from_zip(source_zip)
+        root = ET.fromstring(source_zip.read(sheet_name))
+        sheet_data = root.find(Q("sheetData"))
+        if sheet_data is None:
+            raise AgregadorasTemplateInvalidError(
+                f"La hoja {sheet_name} no contiene sheetData."
+            )
+
+        mutable: dict[str, dict] = {}
+
+        for row in list(sheet_data)[1:]:
+            values: dict[str, str] = {}
+            for cell in row.findall(Q("c")):
+                ref = cell.get("r") or ""
+                if not ref:
+                    continue
+                values[ref[0]] = _cell_text(
+                    cell,
+                    shared_strings,
+                ).strip()
+
+            row_date = _excel_date_from_cell(values.get("A", ""))
+            if row_date is None:
+                continue
+            if (
+                row_date.year != baseline_date.year
+                or row_date.month != baseline_date.month
+                or row_date > baseline_date
+            ):
+                continue
+
+            branch_name = values.get("B", "").strip()
+            if not branch_name:
+                continue
+
+            key = _normalize_catalog_text(branch_name)
+            item = mutable.setdefault(
+                key,
+                {
+                    "visits": 0,
+                    "amount": Decimal("0"),
+                    "raw_names": [],
+                },
+            )
+
+            visits_raw = values.get("D", "").strip() or "0"
+            amount_raw = values.get("E", "").strip() or "0"
+
+            try:
+                item["visits"] += int(Decimal(visits_raw))
+                item["amount"] += Decimal(amount_raw)
+            except Exception as exc:
+                raise AgregadorasTemplateInvalidError(
+                    "La plantilla contiene visitas/pago inválidos en "
+                    f"{sheet_name}, sucursal={branch_name!r}, "
+                    f"fecha={row_date.isoformat()}."
+                ) from exc
+
+            item["raw_names"].append(branch_name)
+
+        return {
+            key: _AccumulatedBranch(
+                visits=int(item["visits"]),
+                amount=Decimal(item["amount"]),
+                raw_names=_normalize_raw_names(item["raw_names"]),
+            )
+            for key, item in mutable.items()
+        }
+
+
+def _classify_snapshot_gaps(
+    *,
+    baseline_date: date,
+    target_date: date,
+    snapshots: dict[date, object],
+) -> tuple[list[date], list[date]]:
+    available_dates = sorted(
+        business_date
+        for business_date in snapshots
+        if baseline_date < business_date <= target_date
+    )
+    available_set = set(available_dates)
+
+    absorbed: list[date] = []
+    unrecoverable: list[date] = []
+
+    for missing_date in _expected_dates(
+        baseline_date + timedelta(days=1),
+        target_date,
+    ):
+        if missing_date in available_set:
+            continue
+
+        has_later_same_month = any(
+            candidate > missing_date
+            and candidate.year == missing_date.year
+            and candidate.month == missing_date.month
+            for candidate in available_dates
+        )
+        if has_later_same_month:
+            absorbed.append(missing_date)
+        else:
+            unrecoverable.append(missing_date)
+
+    return absorbed, unrecoverable
+
+
+def _state_by_display_name(
+    *,
+    state: dict[str, _AccumulatedBranch],
+    aggregator_code: str,
+    template_catalog: dict[tuple[str, str], str],
+    track_labels: dict[str, str],
+) -> tuple[dict[str, _AccumulatedBranch], dict[str, str]]:
+    mutable: dict[str, dict] = {}
+    labels: dict[str, str] = {}
+
+    for canon, value in state.items():
+        display_name = _resolve_display_name(
+            canon=canon,
+            raw_names=value.raw_names,
+            aggregator_code=aggregator_code,
+            template_catalog=template_catalog,
+            track_labels=track_labels,
+        )
+        key = _normalize_catalog_text(display_name)
+        item = mutable.setdefault(
+            key,
+            {
+                "visits": 0,
+                "amount": Decimal("0"),
+                "raw_names": [],
+            },
+        )
+        item["visits"] += value.visits
+        item["amount"] += value.amount
+        item["raw_names"].append(display_name)
+        labels[key] = display_name
+
+    return (
+        {
+            key: _AccumulatedBranch(
+                visits=int(item["visits"]),
+                amount=Decimal(item["amount"]),
+                raw_names=_normalize_raw_names(item["raw_names"]),
+            )
+            for key, item in mutable.items()
+        },
+        labels,
+    )
+
+
+def _daily_delta_from_template_baseline(
+    *,
+    previous_by_display: dict[str, _AccumulatedBranch],
+    current: dict[str, _AccumulatedBranch],
+    business_date: date,
+    aggregator_code: str,
+    template_catalog: dict[tuple[str, str], str],
+    track_labels: dict[str, str],
+) -> list[AgregadoraDailyRow]:
+    current_by_display, labels = _state_by_display_name(
+        state=current,
+        aggregator_code=aggregator_code,
+        template_catalog=template_catalog,
+        track_labels=track_labels,
+    )
+
+    missing_current = [
+        key
+        for key, previous_value in previous_by_display.items()
+        if key not in current_by_display
+        and (
+            previous_value.visits != 0
+            or previous_value.amount != Decimal("0")
+        )
+    ]
+    if missing_current:
+        raise AgregadorasSourceRegressionError(
+            f"{aggregator_code} perdió sucursales acumuladas contra baseline "
+            f"de plantilla en {business_date.isoformat()}: "
+            + ", ".join(sorted(missing_current))
+        )
+
+    rows: list[AgregadoraDailyRow] = []
+    for key, current_value in current_by_display.items():
+        previous_value = previous_by_display.get(
+            key,
+            _AccumulatedBranch(
+                visits=0,
+                amount=Decimal("0"),
+                raw_names=(),
+            ),
+        )
+        visits = current_value.visits - previous_value.visits
+        amount = current_value.amount - previous_value.amount
+
+        if visits < 0 or amount < Decimal("0"):
+            raise AgregadorasSourceRegressionError(
+                f"{aggregator_code} presentó retroceso MTD contra plantilla "
+                f"para {labels.get(key, key)} en {business_date.isoformat()}: "
+                f"visits={visits}, amount={amount}."
+            )
+
+        if visits == 0 and amount == Decimal("0"):
+            continue
+
+        rows.append(
+            AgregadoraDailyRow(
+                business_date=business_date,
+                branch_name=labels.get(key, key),
+                visits=visits,
+                amount=amount,
+            )
+        )
+
+    rows.sort(key=lambda row: row.branch_name.casefold())
+    return rows
+
+
+def _build_daily_rows_from_snapshots(
+    *,
+    baseline_date: date,
+    target_date: date,
+    snapshots: dict[date, object],
+    template_baseline: dict[str, _AccumulatedBranch],
+    state_loader,
+    aggregator_code: str,
+    template_catalog: dict[tuple[str, str], str],
+    track_labels: dict[str, str],
+) -> list[AgregadoraDailyRow]:
+    available_dates = sorted(
+        business_date
+        for business_date in snapshots
+        if baseline_date < business_date <= target_date
+    )
+    if target_date > baseline_date and target_date not in snapshots:
+        raise AgregadorasSourceGapError(
+            f"{aggregator_code} no tiene snapshot canónico en la fecha "
+            f"de corte {target_date.isoformat()}."
+        )
+
+    rows: list[AgregadoraDailyRow] = []
+    previous_state: dict[str, _AccumulatedBranch] | None = None
+    previous_date = baseline_date
+
+    for business_date in available_dates:
+        current_state = state_loader(
+            int(snapshots[business_date].id)
+        )
+
+        if (
+            business_date.year != previous_date.year
+            or business_date.month != previous_date.month
+        ):
+            rows.extend(
+                _daily_delta(
+                    previous={},
+                    current=current_state,
+                    business_date=business_date,
+                    aggregator_code=aggregator_code,
+                    template_catalog=template_catalog,
+                    track_labels=track_labels,
+                )
+            )
+        elif previous_state is None:
+            rows.extend(
+                _daily_delta_from_template_baseline(
+                    previous_by_display=template_baseline,
+                    current=current_state,
+                    business_date=business_date,
+                    aggregator_code=aggregator_code,
+                    template_catalog=template_catalog,
+                    track_labels=track_labels,
+                )
+            )
+        else:
+            rows.extend(
+                _daily_delta(
+                    previous=previous_state,
+                    current=current_state,
+                    business_date=business_date,
+                    aggregator_code=aggregator_code,
+                    template_catalog=template_catalog,
+                    track_labels=track_labels,
+                )
+            )
+
+        previous_state = current_state
+        previous_date = business_date
+
+    return rows
+
+
 def _template_catalog_map(template_bytes: bytes) -> dict[tuple[str, str], str]:
     with ZipFile(BytesIO(template_bytes), "r") as source_zip:
         if SHEET_CATALOGOS not in source_zip.namelist():
@@ -769,17 +1094,30 @@ def _render_workbook(
 def _source_signature(
     *,
     template_upload_id: int,
-    dates: list[date],
+    baseline_date: date,
+    target_date: date,
     wellhub_snapshots: dict[date, IngresosWellhubSnapshotORM],
     totalpass_snapshots: dict[date, IngresosTotalpassSnapshotORM],
 ) -> str:
-    parts = [f"template:{template_upload_id}"]
-    for business_date in dates:
-        parts.append(
-            f"{business_date.isoformat()}:"
-            f"{wellhub_snapshots[business_date].id}:"
-            f"{totalpass_snapshots[business_date].id}"
-        )
+    parts = [
+        f"template:{template_upload_id}",
+        f"baseline:{baseline_date.isoformat()}",
+        f"target:{target_date.isoformat()}",
+        "gap_policy:absorb_into_next_available_same_month_v1",
+    ]
+
+    for business_date, snapshot in sorted(wellhub_snapshots.items()):
+        if baseline_date < business_date <= target_date:
+            parts.append(
+                f"WH:{business_date.isoformat()}:{snapshot.id}"
+            )
+
+    for business_date, snapshot in sorted(totalpass_snapshots.items()):
+        if baseline_date < business_date <= target_date:
+            parts.append(
+                f"TP:{business_date.isoformat()}:{snapshot.id}"
+            )
+
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
 
 
@@ -868,26 +1206,65 @@ def generate_agregadoras_consolidado(
 
     wellhub_snapshots = _canonical_snapshots_by_date(
         IngresosWellhubSnapshotORM,
-        baseline_date,
+        baseline_date + timedelta(days=1),
         resolved_target_date,
     )
     totalpass_snapshots = _canonical_snapshots_by_date(
         IngresosTotalpassSnapshotORM,
-        baseline_date,
+        baseline_date + timedelta(days=1),
         resolved_target_date,
     )
 
-    _validate_snapshot_continuity(
+    if resolved_target_date > baseline_date:
+        missing_target = []
+        if resolved_target_date not in wellhub_snapshots:
+            missing_target.append("Wellhub")
+        if resolved_target_date not in totalpass_snapshots:
+            missing_target.append("TotalPass")
+        if missing_target:
+            raise AgregadorasSourceGapError(
+                "La fecha de corte debe tener snapshot canónico de ambas "
+                "agregadoras. Faltan: " + ", ".join(missing_target)
+            )
+
+    wellhub_absorbed, wellhub_unrecoverable = _classify_snapshot_gaps(
         baseline_date=baseline_date,
         target_date=resolved_target_date,
-        wellhub_snapshots=wellhub_snapshots,
-        totalpass_snapshots=totalpass_snapshots,
+        snapshots=wellhub_snapshots,
+    )
+    totalpass_absorbed, totalpass_unrecoverable = _classify_snapshot_gaps(
+        baseline_date=baseline_date,
+        target_date=resolved_target_date,
+        snapshots=totalpass_snapshots,
     )
 
-    all_dates = _expected_dates(baseline_date, resolved_target_date)
+    if wellhub_unrecoverable or totalpass_unrecoverable:
+        details = []
+        if wellhub_unrecoverable:
+            details.append(
+                "Wellhub: "
+                + ", ".join(
+                    item.isoformat()
+                    for item in wellhub_unrecoverable
+                )
+            )
+        if totalpass_unrecoverable:
+            details.append(
+                "TotalPass: "
+                + ", ".join(
+                    item.isoformat()
+                    for item in totalpass_unrecoverable
+                )
+            )
+        raise AgregadorasSourceGapError(
+            "Hay huecos al final de un mes que no pueden absorberse en "
+            "un snapshot posterior del mismo mes. " + " | ".join(details)
+        )
+
     signature = _source_signature(
         template_upload_id=int(template_upload.id),
-        dates=all_dates,
+        baseline_date=baseline_date,
+        target_date=resolved_target_date,
         wellhub_snapshots=wellhub_snapshots,
         totalpass_snapshots=totalpass_snapshots,
     )
@@ -908,54 +1285,37 @@ def generate_agregadoras_consolidado(
     template_catalog = _template_catalog_map(template_bytes)
     track_labels = _track_labels()
 
-    previous_wellhub = _load_wellhub_state(
-        int(wellhub_snapshots[baseline_date].id)
+    wellhub_template_baseline = _template_month_state(
+        template_bytes,
+        sheet_name=SHEET_WELLHUB,
+        baseline_date=baseline_date,
     )
-    previous_totalpass = _load_totalpass_state(
-        int(totalpass_snapshots[baseline_date].id)
+    totalpass_template_baseline = _template_month_state(
+        template_bytes,
+        sheet_name=SHEET_TOTALPASS,
+        baseline_date=baseline_date,
     )
 
-    wellhub_rows: list[AgregadoraDailyRow] = []
-    totalpass_rows: list[AgregadoraDailyRow] = []
-
-    for business_date in all_dates[1:]:
-        current_wellhub = _load_wellhub_state(
-            int(wellhub_snapshots[business_date].id)
-        )
-        current_totalpass = _load_totalpass_state(
-            int(totalpass_snapshots[business_date].id)
-        )
-
-        if business_date.day == 1:
-            previous_wellhub_for_delta = {}
-            previous_totalpass_for_delta = {}
-        else:
-            previous_wellhub_for_delta = previous_wellhub
-            previous_totalpass_for_delta = previous_totalpass
-
-        wellhub_rows.extend(
-            _daily_delta(
-                previous=previous_wellhub_for_delta,
-                current=current_wellhub,
-                business_date=business_date,
-                aggregator_code="WH",
-                template_catalog=template_catalog,
-                track_labels=track_labels,
-            )
-        )
-        totalpass_rows.extend(
-            _daily_delta(
-                previous=previous_totalpass_for_delta,
-                current=current_totalpass,
-                business_date=business_date,
-                aggregator_code="TP",
-                template_catalog=template_catalog,
-                track_labels=track_labels,
-            )
-        )
-
-        previous_wellhub = current_wellhub
-        previous_totalpass = current_totalpass
+    wellhub_rows = _build_daily_rows_from_snapshots(
+        baseline_date=baseline_date,
+        target_date=resolved_target_date,
+        snapshots=wellhub_snapshots,
+        template_baseline=wellhub_template_baseline,
+        state_loader=_load_wellhub_state,
+        aggregator_code="WH",
+        template_catalog=template_catalog,
+        track_labels=track_labels,
+    )
+    totalpass_rows = _build_daily_rows_from_snapshots(
+        baseline_date=baseline_date,
+        target_date=resolved_target_date,
+        snapshots=totalpass_snapshots,
+        template_baseline=totalpass_template_baseline,
+        state_loader=_load_totalpass_state,
+        aggregator_code="TP",
+        template_catalog=template_catalog,
+        track_labels=track_labels,
+    )
 
     output_bytes = _render_workbook(
         template_bytes=template_bytes,
@@ -971,6 +1331,15 @@ def generate_agregadoras_consolidado(
         "cutoff_date": resolved_target_date.isoformat(),
         "source_signature": signature,
         "generated_at": _utc_now().isoformat(),
+        "gap_policy": "absorb_into_next_available_same_month",
+        "absorbed_gap_dates_wellhub": [
+            item.isoformat()
+            for item in wellhub_absorbed
+        ],
+        "absorbed_gap_dates_totalpass": [
+            item.isoformat()
+            for item in totalpass_absorbed
+        ],
         "wellhub_rows_added": len(wellhub_rows),
         "totalpass_rows_added": len(totalpass_rows),
         "todo_rows_added": len(wellhub_rows) + len(totalpass_rows),
@@ -983,7 +1352,6 @@ def generate_agregadoras_consolidado(
         **metadata,
         "output_path": str(_output_path()),
     }
-
 
 def get_agregadoras_consolidado_status() -> dict:
     template_upload = _latest_template_upload()
