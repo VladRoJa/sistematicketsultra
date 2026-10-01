@@ -230,6 +230,12 @@ services:
       MARKETING_SCHEDULER_RUN_TIMES: "08:20,12:20,16:20,20:20"
       MARKETING_SCHEDULER_POLL_SECONDS: "60"
       MARKETING_SCHEDULER_RETRY_MINUTES: "15"
+      # Campaign V2 provider stats auto-capture is disabled by default.
+      # Enable through .env.docker only with all four explicit variables:
+      # CAMPAIGN_V2_PROVIDER_STATS_AUTO_CAPTURE_ENABLED
+      # CAMPAIGN_V2_PROVIDER_STATS_INTERVAL_SECONDS
+      # CAMPAIGN_V2_PROVIDER_STATS_HORIZON_HOURS
+      # CAMPAIGN_V2_PROVIDER_STATS_MAX_CAMPAIGNS_PER_CYCLE
     command: python -m app.services.marketing_scheduler_worker
     restart: unless-stopped
     init: true

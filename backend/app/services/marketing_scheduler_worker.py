@@ -23,6 +23,10 @@ from app.services.marketing_meta_run_sync_service import (
     MarketingMetaAccount,
     sync_meta_full_run,
 )
+from app.services.marketing_campaign_v2_provider_stats_scheduler_service import (
+    CampaignV2ProviderStatsCycleResult,
+    run_campaign_v2_provider_stats_capture_cycle,
+)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -44,6 +48,19 @@ DEFAULT_RUN_TIMES = (
 )
 DEFAULT_POLL_SECONDS = 60
 DEFAULT_RETRY_MINUTES = 15
+
+CAMPAIGN_V2_PROVIDER_STATS_ENABLED_ENV = (
+    "CAMPAIGN_V2_PROVIDER_STATS_AUTO_CAPTURE_ENABLED"
+)
+CAMPAIGN_V2_PROVIDER_STATS_INTERVAL_SECONDS_ENV = (
+    "CAMPAIGN_V2_PROVIDER_STATS_INTERVAL_SECONDS"
+)
+CAMPAIGN_V2_PROVIDER_STATS_HORIZON_HOURS_ENV = (
+    "CAMPAIGN_V2_PROVIDER_STATS_HORIZON_HOURS"
+)
+CAMPAIGN_V2_PROVIDER_STATS_MAX_PER_CYCLE_ENV = (
+    "CAMPAIGN_V2_PROVIDER_STATS_MAX_CAMPAIGNS_PER_CYCLE"
+)
 
 DEFAULT_META_ACCOUNT_BINDINGS = (
     (
@@ -82,6 +99,15 @@ _NEXT_RETRY_BY_SLOT: dict[
     datetime,
 ] = {}
 
+_NEXT_PROVIDER_STATS_CAPTURE_AT: datetime | None = None
+
+
+@dataclass(frozen=True)
+class CampaignV2ProviderStatsSchedulerConfig:
+    interval_seconds: int
+    horizon_hours: int
+    max_campaigns_per_cycle: int
+
 
 @dataclass(frozen=True)
 class MarketingSyncResult:
@@ -105,6 +131,68 @@ def _handle_stop(signum, frame):  # noqa: ARG001
         signum,
     )
     _SHOULD_STOP = True
+
+
+def _env_bool(
+    name: str,
+    default: bool = False,
+) -> bool:
+    raw_value = os.getenv(name)
+
+    if raw_value is None:
+        return default
+
+    return raw_value.strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "y",
+        "on",
+    }
+
+
+def _required_positive_env_int(name: str) -> int:
+    raw_value = os.getenv(name)
+
+    if raw_value is None or not raw_value.strip():
+        raise RuntimeError(
+            f"{name} es obligatorio cuando la captura automática está habilitada."
+        )
+
+    try:
+        value = int(raw_value)
+    except ValueError as exc:
+        raise RuntimeError(
+            f"{name} debe ser un entero positivo."
+        ) from exc
+
+    if value <= 0:
+        raise RuntimeError(
+            f"{name} debe ser un entero positivo."
+        )
+
+    return value
+
+
+def _load_campaign_v2_provider_stats_scheduler_config(
+) -> CampaignV2ProviderStatsSchedulerConfig | None:
+    if not _env_bool(
+        CAMPAIGN_V2_PROVIDER_STATS_ENABLED_ENV,
+        False,
+    ):
+        return None
+
+    return CampaignV2ProviderStatsSchedulerConfig(
+        interval_seconds=_required_positive_env_int(
+            CAMPAIGN_V2_PROVIDER_STATS_INTERVAL_SECONDS_ENV
+        ),
+        horizon_hours=_required_positive_env_int(
+            CAMPAIGN_V2_PROVIDER_STATS_HORIZON_HOURS_ENV
+        ),
+        max_campaigns_per_cycle=_required_positive_env_int(
+            CAMPAIGN_V2_PROVIDER_STATS_MAX_PER_CYCLE_ENV
+        ),
+    )
 
 
 def _env_int(
@@ -438,8 +526,69 @@ def _resolve_due_slot(
     return slot_key
 
 
+def _run_campaign_v2_provider_stats_if_due(
+    *,
+    now: datetime,
+    config: CampaignV2ProviderStatsSchedulerConfig | None,
+) -> CampaignV2ProviderStatsCycleResult | None:
+    global _NEXT_PROVIDER_STATS_CAPTURE_AT
+
+    if config is None:
+        return None
+
+    if (
+        _NEXT_PROVIDER_STATS_CAPTURE_AT is not None
+        and now < _NEXT_PROVIDER_STATS_CAPTURE_AT
+    ):
+        return None
+
+    _NEXT_PROVIDER_STATS_CAPTURE_AT = now + timedelta(
+        seconds=config.interval_seconds
+    )
+
+    try:
+        result = run_campaign_v2_provider_stats_capture_cycle(
+            now=now,
+            horizon_hours=config.horizon_hours,
+            max_campaigns=config.max_campaigns_per_cycle,
+        )
+        LOGGER.info(
+            "Campaign V2 provider stats cycle terminado. "
+            "selected=%s attempted=%s created=%s unchanged=%s "
+            "failed=%s skipped=%s",
+            result.selected,
+            result.attempted,
+            result.created,
+            result.unchanged,
+            result.failed,
+            result.skipped,
+        )
+        return result
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        LOGGER.warning(
+            "Campaign V2 provider stats cycle falló. error_type=%s",
+            type(exc).__name__,
+        )
+        return None
+    finally:
+        db.session.remove()
+
+
 def run_scheduler_loop() -> None:
     run_times = _parse_run_times()
+
+    try:
+        provider_stats_config = (
+            _load_campaign_v2_provider_stats_scheduler_config()
+        )
+    except RuntimeError as exc:
+        LOGGER.error(
+            "Campaign V2 provider stats auto-capture deshabilitado "
+            "por configuración inválida. error_type=%s",
+            type(exc).__name__,
+        )
+        provider_stats_config = None
 
     poll_seconds = max(
         _env_int(
@@ -460,7 +609,8 @@ def run_scheduler_loop() -> None:
     LOGGER.info(
         "Marketing scheduler iniciado. "
         "timezone=%s run_times=%s "
-        "poll_seconds=%s retry_minutes=%s",
+        "poll_seconds=%s retry_minutes=%s "
+        "campaign_v2_provider_stats_enabled=%s",
         _timezone().key,
         ",".join(
             f"{hour:02d}:{minute:02d}"
@@ -468,11 +618,32 @@ def run_scheduler_loop() -> None:
         ),
         poll_seconds,
         retry_minutes,
+        provider_stats_config is not None,
     )
+
+    if provider_stats_config is not None:
+        LOGGER.info(
+            "Campaign V2 provider stats config. "
+            "interval_seconds=%s horizon_hours=%s "
+            "max_campaigns_per_cycle=%s",
+            provider_stats_config.interval_seconds,
+            provider_stats_config.horizon_hours,
+            provider_stats_config.max_campaigns_per_cycle,
+        )
 
     while not _SHOULD_STOP:
         try:
             now = _now_local()
+
+            if provider_stats_config is not None:
+                provider_stats_block_reason = (
+                    get_secondary_job_block_reason(now)
+                )
+                if provider_stats_block_reason is None:
+                    _run_campaign_v2_provider_stats_if_due(
+                        now=now,
+                        config=provider_stats_config,
+                    )
 
             slot_key = _resolve_due_slot(
                 now=now,

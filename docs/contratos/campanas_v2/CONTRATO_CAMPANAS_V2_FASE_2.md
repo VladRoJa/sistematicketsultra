@@ -654,6 +654,75 @@ API:
 
 La creación de snapshot + observations es una sola transacción. M11 no persiste timestamps recipient-level ni failure causes.
 
+### M12 — captura automática de provider stats
+
+M12 reutiliza el proceso separado ya existente:
+
+    marketing-scheduler
+      -> selección Campaign V2
+      -> capture_campaign_v2_provider_stats_snapshot()
+      -> M11
+
+No corre en Gunicorn, no crea background threads Flask y no hace requests HTTP internos contra Suite.
+
+Configuración:
+
+    CAMPAIGN_V2_PROVIDER_STATS_AUTO_CAPTURE_ENABLED
+    CAMPAIGN_V2_PROVIDER_STATS_INTERVAL_SECONDS
+    CAMPAIGN_V2_PROVIDER_STATS_HORIZON_HOURS
+    CAMPAIGN_V2_PROVIDER_STATS_MAX_CAMPAIGNS_PER_CYCLE
+
+Reglas de configuración:
+- auto-capture está disabled por defecto;
+- si se habilita, interval/horizon/max son obligatorios y deben ser enteros positivos;
+- no existen defaults ocultos de producto para cadence, horizon o batch size.
+
+Elegibilidad:
+- sólo Campaign V2 con provider binding completo;
+- campaign sin snapshots puede recibir captura inicial;
+- después de la primera captura, la ventana automática se mide desde el primer `fetched_at` M11;
+- si `first_fetched_at < now - horizon`, deja de consultarse automáticamente;
+- no se inspecciona `analytics_json` para scheduling.
+
+Orden de selección:
+1. campañas sin snapshot;
+2. campañas elegibles por `latest_fetched_at` más antiguo;
+3. `campaign_id`.
+
+El límite se aplica después de ese orden para evitar starvation.
+
+Resumen de ciclo:
+
+    selected
+    attempted
+    created
+    unchanged
+    failed
+    skipped
+
+`skipped` incluye campañas bound fuera de horizon y elegibles omitidas por max-per-cycle. Campañas sin binding no entran a selección.
+
+Aislamiento:
+- cada campaña llama directamente M11;
+- M11 decide created/unchanged mediante fingerprint;
+- un fallo de una campaña no aborta las siguientes;
+- logs sólo incluyen campaign_id, conteos y clase/categoría de error sanitizada;
+- no se loggean teléfonos, payloads, analytics, headers ni secretos.
+
+Sesiones:
+- cleanup por campaña cuando usa `db.session`;
+- rollback aislado en fallo;
+- `db.session.remove()` al finalizar el ciclo M12;
+- el loop general de marketing-scheduler conserva además su cleanup final.
+
+Concurrencia:
+- no se agrega advisory lock;
+- dos workers pueden efectuar HTTP redundante accidentalmente;
+- M11 evita snapshots idénticos duplicados mediante fingerprint + UNIQUE;
+- respuestas realmente distintas pueden producir snapshots distintos, como evidencia válida.
+
+M12 no crea tablas ni migraciones.
+
 ## 13. Campañas creadas fuera de Suite
 
 Fase 2 debe soportar el concepto:
@@ -959,6 +1028,16 @@ Ya existe en M11:
 - diagnostics matched/unmatched/frozen-without-status;
 - history/latest sin volver a consultar provider.
 
+Ya existe en M12:
+
+- captura automática dentro del proceso separado `marketing-scheduler`;
+- auto-capture disabled por defecto;
+- cadence/horizon/max obligatorios cuando se habilita;
+- selección bound, determinística y acotada;
+- ventana anclada en primer `fetched_at` M11;
+- reutilización directa del snapshot service M11;
+- aislamiento por campaña y cleanup de `db.session`.
+
 Capacidades futuras, separadas:
 
 - update commercial purpose;
@@ -1063,9 +1142,9 @@ queda satisfecho en modo read-only para un `campaign_id` conocido mediante campa
 
 ## 31. Limitaciones que permanecen abiertas para Fase 2
 
-El cierre M11 **no cierra toda Fase 2**. Permanecen abiertos:
+El cierre M12 **no cierra toda Fase 2**. Permanecen abiertos:
 
-- sync automático/scheduler de snapshots;
+- definición/activación operativa de los valores productivos de cadence/horizon/max;
 - listado/importación de campañas por periodo;
 - representación/persistencia de campañas externas;
 - normalización específica de costos cuando vaya a consumirse;
@@ -1099,5 +1178,8 @@ No iniciar Fase 3 hasta cerrar los requisitos restantes de Fase 2 que correspond
     No rebindear una campaña a otra identidad provider.
     M10 ya expone GET /campaigns-v2/{campaign_id}/provider-stats como read-through.
     Ese endpoint obtiene provider/external id sólo de la Campaign V2 persistida.
-    No implementes todavía persistencia de stats/delivery.
+    M11 persiste snapshots append-only y recipient observations.
+    M12 reutiliza marketing-scheduler para captura automática configurable.
+    M12 permanece disabled hasta definir explícitamente interval/horizon/max.
+    No reemplaces snapshots M11 por estado mutable ni inventes timestamps/causas recipient-level.
     No implementes POST /v2/broadcast ni GraphQL mutations.
