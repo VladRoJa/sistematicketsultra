@@ -558,6 +558,44 @@ con payload:
 
 List/detail exponen ambos campos. M9 no consulta stats automáticamente ni persiste analytics/delivery.
 
+### M10 — provider stats read-through
+
+M10 conecta el binding persistido con la abstracción provider existente mediante:
+
+    GET /api/marketing/campaigns-v2/{campaign_id}/provider-stats
+
+El request no acepta `provider` ni `provider_campaign_id`. Ambos salen exclusivamente de la Campaign V2 visible para el usuario.
+
+Flujo:
+
+    Campaign V2 accesible por scope
+      -> provider/provider_campaign_id persistidos
+      -> resolve_campaign_provider(provider)
+      -> CampaignProvider.get_campaign_stats(provider_campaign_id)
+      -> serialización provider-agnostic
+
+La respuesta separa:
+
+- `raw_counts`;
+- recipients por outcome/bucket;
+- `button_interactions`;
+- `analytics_status`;
+- `analytics` agregado/opaco.
+
+Las colecciones normalizadas se serializan ordenadas para una respuesta determinística.
+
+M10 es estrictamente read-through:
+
+- no INSERT;
+- no UPDATE;
+- no DELETE;
+- no commit;
+- no snapshot;
+- no `last_synced_at`;
+- no persistencia de `analytics_status`.
+
+`analyticsStatus=not_synced` sigue siendo respuesta válida `200` cuando el provider respondió correctamente.
+
 ## 13. Campañas creadas fuera de Suite
 
 Fase 2 debe soportar el concepto:
@@ -845,6 +883,14 @@ Ya existe en M9:
 - attach/persist provider campaign id;
 - consultar provider/provider_campaign_id en list/detail.
 
+Ya existe en M10:
+
+- resolver provider desde `campaign.provider`;
+- consultar stats read-through usando exclusivamente `campaign.provider_campaign_id`;
+- endpoint interno provider-agnostic `GET /campaigns-v2/{id}/provider-stats`;
+- serialización determinística de `CampaignProviderStats`;
+- manejo sanitizado de errores upstream sin persistencia.
+
 Capacidades futuras, separadas:
 
 - update commercial purpose;
@@ -899,6 +945,17 @@ Seguridad:
 - ningún envío;
 - ningún secreto expuesto.
 
+M10 read-through:
+- resolver IVENTAS y rechazar provider desconocido;
+- respetar scope/permisos Campaign V2;
+- campaign sin binding no llama al provider;
+- external ID sale sólo de DB, nunca del request;
+- stats normalizados se preservan;
+- `not_synced` y analytics `None` son válidos;
+- upstream retryable/no-retryable se sanitiza;
+- parser/invariant errors no se silencian;
+- sólo SELECT, sin commit ni escrituras.
+
 ## 30. Criterio de aceptación de M8 provider read-only
 
 M8 queda cerrado cuando:
@@ -924,7 +981,7 @@ queda satisfecho en modo read-only para un `campaign_id` conocido mediante campa
 
 ## 31. Limitaciones que permanecen abiertas para Fase 2
 
-El cierre M9 **no cierra toda Fase 2**. Permanecen abiertos:
+El cierre M10 **no cierra toda Fase 2**. Permanecen abiertos:
 
 - persistencia/idempotencia de recipient state y stats snapshots;
 - listado/importación de campañas por periodo;
@@ -958,5 +1015,7 @@ No iniciar Fase 3 hasta cerrar los requisitos restantes de Fase 2 que correspond
     M9 ya persiste únicamente provider + provider_campaign_id en Campaign V2.
     Usa PUT /campaigns-v2/{campaign_id}/provider-binding para ese vínculo.
     No rebindear una campaña a otra identidad provider.
+    M10 ya expone GET /campaigns-v2/{campaign_id}/provider-stats como read-through.
+    Ese endpoint obtiene provider/external id sólo de la Campaign V2 persistida.
     No implementes todavía persistencia de stats/delivery.
     No implementes POST /v2/broadcast ni GraphQL mutations.

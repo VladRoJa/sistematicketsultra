@@ -70,6 +70,7 @@ class TestMarketingCampaignV2Routes:
             ("put", "/api/marketing/campaigns-v2/tariffs/PLAN%20FAMILIAR/classification"),
             ("get", "/api/marketing/campaigns-v2"),
             ("get", "/api/marketing/campaigns-v2/1"),
+            ("get", "/api/marketing/campaigns-v2/1/provider-stats"),
             ("get", "/api/marketing/campaigns-v2/1/recipients"),
             ("get", "/api/marketing/campaigns-v2/1/recipients/2"),
             ("patch", "/api/marketing/campaigns-v2/1/purpose"),
@@ -596,6 +597,130 @@ class TestMarketingCampaignV2Routes:
                 headers=self.headers,
             )
         assert response.status_code == 409
+
+    def test_provider_stats_success_uses_backend_scope_only(self):
+        expected = {
+            "campaign_id": 1,
+            "provider": "IVENTAS",
+            "provider_campaign_id": "external-1",
+            "analytics_status": "ok",
+            "raw_counts": {},
+            "recipients": {},
+            "button_interactions": [],
+            "analytics": {},
+        }
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.get_campaign_v2_provider_stats",
+                return_value=expected,
+            ) as service,
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/1/provider-stats",
+                headers=self.headers,
+            )
+        assert response.status_code == 200
+        assert response.get_json() == expected
+        assert service.call_args.kwargs["campaign_id"] == 1
+        assert service.call_args.kwargs["allowed_sucursal_keys"] is None
+
+    def test_provider_stats_rejects_external_id_or_provider_query_override(self):
+        with self._auth():
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/1/provider-stats"
+                "?provider=OTHER&provider_campaign_id=arbitrary",
+                headers=self.headers,
+            )
+        assert response.status_code == 400
+
+    def test_provider_stats_unbound_maps_to_409(self):
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.get_campaign_v2_provider_stats",
+                side_effect=routes.MarketingCampaignV2ProviderStatsUnboundError(
+                    "Campaign V2 no tiene provider binding completo."
+                ),
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/1/provider-stats",
+                headers=self.headers,
+            )
+        assert response.status_code == 409
+
+    def test_provider_stats_unsupported_maps_to_422(self):
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.get_campaign_v2_provider_stats",
+                side_effect=routes.MarketingCampaignV2ProviderStatsUnsupportedError(
+                    "OTHER"
+                ),
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/1/provider-stats",
+                headers=self.headers,
+            )
+        assert response.status_code == 422
+        assert response.get_json()["message"] == "Campaign provider no soportado."
+
+    def test_provider_stats_retryable_upstream_is_sanitized_503(self):
+        secret = "provider-secret"
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.get_campaign_v2_provider_stats",
+                side_effect=routes.MarketingCampaignV2ProviderStatsUpstreamError(
+                    secret,
+                    retryable=True,
+                    retry_after_seconds=120.0,
+                ),
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/1/provider-stats",
+                headers=self.headers,
+            )
+        assert response.status_code == 503
+        assert response.headers["Retry-After"] == "120"
+        assert secret not in response.get_data(as_text=True)
+        assert response.get_json()["message"] == (
+            "No fue posible obtener stats del provider."
+        )
+
+    def test_provider_stats_nonretryable_upstream_is_sanitized_502(self):
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.get_campaign_v2_provider_stats",
+                side_effect=routes.MarketingCampaignV2ProviderStatsUpstreamError(
+                    "contract detail",
+                    retryable=False,
+                ),
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/1/provider-stats",
+                headers=self.headers,
+            )
+        assert response.status_code == 502
+        assert "contract detail" not in response.get_data(as_text=True)
+
+    def test_provider_stats_reuses_campaign_v2_management_permission(self):
+        access = SimpleNamespace(
+            is_global=True,
+            branch_ids=(),
+            can_edit_inputs=False,
+        )
+        with self._auth(access):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/1/provider-stats",
+                headers=self.headers,
+            )
+        assert response.status_code == 403
 
     def test_query_validation_maps_to_400(self):
         with (
