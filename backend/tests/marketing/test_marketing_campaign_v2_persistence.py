@@ -104,8 +104,9 @@ def _recipient(recipient_id=1, **overrides):
 def test_campaign_and_recipient_v2_orm_contracts_are_independent_from_legacy():
     campaign_columns = MarketingCampaignV2ORM.__table__.c
     assert set(campaign_columns.keys()) == {
-        "id", "name", "purpose", "source", "audience_definition_json",
-        "created_by_user_id", "frozen_at", "created_at", "updated_at",
+        "id", "name", "purpose", "source", "provider", "provider_campaign_id",
+        "audience_definition_json", "created_by_user_id", "frozen_at",
+        "created_at", "updated_at",
     }
     assert campaign_columns.purpose.nullable is False
     assert campaign_columns.purpose.default.arg == "UNCLASSIFIED"

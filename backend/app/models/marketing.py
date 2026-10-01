@@ -246,6 +246,8 @@ class MarketingCampaignV2ORM(db.Model):
         server_default=db.text("'UNCLASSIFIED'"),
     )
     source = db.Column(db.String(100), nullable=False)
+    provider = db.Column(db.String(50), nullable=True)
+    provider_campaign_id = db.Column(db.String(255), nullable=True)
     audience_definition_json = db.Column(
         db.JSON,
         nullable=False,
@@ -294,6 +296,20 @@ class MarketingCampaignV2ORM(db.Model):
             "purpose IN "
             "('NEW_SALE', 'REACTIVATION', 'ACTIVE_MEMBERS', 'UNCLASSIFIED')",
             name="ck_marketing_campaign_v2_campaigns_purpose",
+        ),
+        db.CheckConstraint(
+            "(provider IS NULL AND provider_campaign_id IS NULL) OR "
+            "(provider IS NOT NULL AND provider_campaign_id IS NOT NULL "
+            "AND length(trim(provider)) > 0 "
+            "AND length(trim(provider_campaign_id)) > 0 "
+            "AND provider = upper(trim(provider)) "
+            "AND provider_campaign_id = trim(provider_campaign_id))",
+            name="ck_marketing_campaign_v2_campaigns_provider_binding_complete",
+        ),
+        db.UniqueConstraint(
+            "provider",
+            "provider_campaign_id",
+            name="uq_marketing_campaign_v2_campaigns_provider_identity",
         ),
         db.Index(
             "ix_marketing_campaign_v2_campaigns_created_at",

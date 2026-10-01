@@ -73,6 +73,7 @@ class TestMarketingCampaignV2Routes:
             ("get", "/api/marketing/campaigns-v2/1/recipients"),
             ("get", "/api/marketing/campaigns-v2/1/recipients/2"),
             ("patch", "/api/marketing/campaigns-v2/1/purpose"),
+            ("put", "/api/marketing/campaigns-v2/1/provider-binding"),
         ]
         for method, path in paths:
             response = getattr(self.client, method)(
@@ -534,6 +535,67 @@ class TestMarketingCampaignV2Routes:
                 headers=self.headers,
             )
         assert invalid.status_code == 400
+
+    def test_provider_binding_put_accepts_only_identity_and_applies_scope(self):
+        expected = {
+            "campaign_id": 1,
+            "provider": "IVENTAS",
+            "provider_campaign_id": "external-1",
+            "created": True,
+        }
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.bind_campaign_v2_provider",
+                return_value=expected,
+            ) as service,
+        ):
+            response = self.client.put(
+                "/api/marketing/campaigns-v2/1/provider-binding",
+                json={
+                    "provider": "IVENTAS",
+                    "provider_campaign_id": "external-1",
+                },
+                headers=self.headers,
+            )
+        assert response.status_code == 200
+        assert response.get_json() == expected
+        assert service.call_args.kwargs["campaign_id"] == 1
+        assert service.call_args.kwargs["provider"] == "IVENTAS"
+        assert service.call_args.kwargs["provider_campaign_id"] == "external-1"
+        assert service.call_args.kwargs["allowed_sucursal_keys"] is None
+
+        with self._auth():
+            invalid = self.client.put(
+                "/api/marketing/campaigns-v2/1/provider-binding",
+                json={
+                    "provider": "IVENTAS",
+                    "provider_campaign_id": "external-1",
+                    "stats": {},
+                },
+                headers=self.headers,
+            )
+        assert invalid.status_code == 400
+
+    def test_provider_binding_conflict_maps_to_409(self):
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.bind_campaign_v2_provider",
+                side_effect=routes.MarketingCampaignV2ProviderBindingConflictError(
+                    "conflict"
+                ),
+            ),
+        ):
+            response = self.client.put(
+                "/api/marketing/campaigns-v2/1/provider-binding",
+                json={
+                    "provider": "IVENTAS",
+                    "provider_campaign_id": "external-1",
+                },
+                headers=self.headers,
+            )
+        assert response.status_code == 409
 
     def test_query_validation_maps_to_400(self):
         with (

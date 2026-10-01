@@ -32,6 +32,12 @@ from app.services.marketing_campaign_v2_query_service import (
     list_campaign_v2_recipients,
     update_campaign_v2_purpose,
 )
+from app.services.marketing_campaign_v2_provider_binding_service import (
+    MarketingCampaignV2ProviderBindingConflictError,
+    MarketingCampaignV2ProviderBindingPersistenceError,
+    MarketingCampaignV2ProviderBindingValidationError,
+    bind_campaign_v2_provider,
+)
 
 
 marketing_campaign_v2_bp = Blueprint("marketing_campaign_v2", __name__)
@@ -394,6 +400,41 @@ def update_campaign_v2_purpose_endpoint(campaign_id: int):
         return _error(str(exc), 400)
     except Exception:
         return _error("Falló la actualización de purpose de Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.put(
+    "/campaigns-v2/<int:campaign_id>/provider-binding"
+)
+@jwt_required()
+def bind_campaign_v2_provider_endpoint(campaign_id: int):
+    try:
+        _, access = _resolve_campaign_v2_request()
+        payload = _parse_payload(
+            {"provider", "provider_campaign_id"}
+        )
+        result = bind_campaign_v2_provider(
+            campaign_id=campaign_id,
+            provider=payload.get("provider"),
+            provider_campaign_id=payload.get("provider_campaign_id"),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2NotFoundError:
+        return _error("Campaign V2 no encontrada.", 404)
+    except (
+        MarketingCampaignV2RouteValidationError,
+        MarketingCampaignV2ProviderBindingValidationError,
+    ) as exc:
+        return _error(str(exc), 400)
+    except MarketingCampaignV2ProviderBindingConflictError as exc:
+        return _error(str(exc), 409)
+    except MarketingCampaignV2ProviderBindingPersistenceError:
+        return _error("No fue posible guardar el provider binding.", 500)
+    except Exception:
+        return _error("Falló el provider binding de Campaign V2.", 500)
 
 
 def _get_current_campaign_v2_user() -> UserORM:

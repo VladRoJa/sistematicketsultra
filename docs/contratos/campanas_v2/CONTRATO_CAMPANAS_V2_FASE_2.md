@@ -520,19 +520,43 @@ No reinterpretar hora de sync, hora de campaña, campos GraphQL históricos ni a
 
 Metadata propia de Suite como `last_synced_at` puede existir en un milestone posterior si se nombra claramente y no se confunde con un evento WhatsApp.
 
-## 12. campaign_id externo
+## 12. campaign_id externo — M9 implementado
 
-Campañas V2 debe tener identidad propia y referencia externa.
+Campaign V2 conserva identidad interna propia y puede quedar vinculada opcionalmente a una identidad externa provider mediante:
 
-Conceptualmente:
+    marketing_campaign_v2_campaigns.provider
+    marketing_campaign_v2_campaigns.provider_campaign_id
 
-    campaign_v2.id
-    provider = IVENTAS
-    provider_campaign_id = <id>
+Reglas M9:
 
-Debe existir una unique constraint adecuada para evitar duplicar la misma campaña externa.
+- ambos campos son nullable sólo como conjunto;
+- no se permite binding parcial;
+- `provider` se normaliza a uppercase en backend;
+- `provider_campaign_id` conserva el ID externo como texto;
+- el CHECK de DB exige provider canónico uppercase/trimmed e ID externo sin espacios de borde;
+- existe `UNIQUE(provider, provider_campaign_id)`;
+- el mismo ID externo puede existir en providers distintos;
+- la PK interna de Suite sigue siendo `campaign_v2.id`.
 
-No usar el campaign_id de iVentas como PK interna de Suite.
+Idempotencia:
+
+- repetir el mismo binding sobre la misma Campaign V2 es no-op exitoso;
+- intentar cambiar una Campaign V2 ya vinculada a otro par produce conflicto;
+- reutilizar el mismo par `(provider, provider_campaign_id)` en otra Campaign V2 produce conflicto;
+- el bind bloquea la fila de campaña durante la decisión para evitar rebinding concurrente silencioso.
+
+API interna/backend:
+
+    PUT /campaigns-v2/{campaign_id}/provider-binding
+
+con payload:
+
+    {
+      "provider": "IVENTAS",
+      "provider_campaign_id": "<external id>"
+    }
+
+List/detail exponen ambos campos. M9 no consulta stats automáticamente ni persiste analytics/delivery.
 
 ## 13. Campañas creadas fuera de Suite
 
@@ -671,15 +695,20 @@ No ofrecer `NO_RESPONDIDO` ni filtros de free-text response hasta tener atribuci
 
 ## 21. Persistencia conceptual
 
-M8.1–M8.4 no crea persistencia. Un milestone posterior puede modelarla usando la evidencia ya confirmada.
+M9 crea únicamente la persistencia mínima de identidad provider directamente sobre `marketing_campaign_v2_campaigns`.
 
-### Provider campaign binding
-- campaign_v2_id opcional;
-- provider;
-- provider_campaign_id;
+### Provider campaign binding — implementado
+- campaign_v2_id = PK interna existente;
+- provider nullable;
+- provider_campaign_id nullable;
+- check de completitud del par;
+- unique constraint por `(provider, provider_campaign_id)`.
+
+Todavía no se persisten:
 - external origin;
 - last_synced_at;
-- analytics_status.
+- analytics_status;
+- stats snapshots.
 
 ### Recipient delivery state
 - campaign/provider campaign;
@@ -811,9 +840,13 @@ Ya existe en M8:
 - `IVentasCampaignProvider`;
 - `CampaignProviderStats` con raw counts, outcome/buckets normalizados, button interactions y analytics agregado/opaco.
 
-Capacidades futuras, separadas:
+Ya existe en M9:
 
 - attach/persist provider campaign id;
+- consultar provider/provider_campaign_id en list/detail.
+
+Capacidades futuras, separadas:
+
 - update commercial purpose;
 - list imported/external campaigns;
 - sync period cuando exista capability de listado confirmada;
@@ -891,10 +924,9 @@ queda satisfecho en modo read-only para un `campaign_id` conocido mediante campa
 
 ## 31. Limitaciones que permanecen abiertas para Fase 2
 
-El cierre M8 **no cierra toda Fase 2**. Permanecen fuera de M8:
+El cierre M9 **no cierra toda Fase 2**. Permanecen abiertos:
 
-- persistencia/idempotencia de provider campaign binding y recipient state;
-- `provider_campaign_id` en DB;
+- persistencia/idempotencia de recipient state y stats snapshots;
 - listado/importación de campañas por periodo;
 - representación/persistencia de campañas externas;
 - normalización específica de costos cuando vaya a consumirse;
@@ -923,5 +955,8 @@ No iniciar Fase 3 hasta cerrar los requisitos restantes de Fase 2 que correspond
     interactions[].items son button interactions recipient-level.
     analytics/freeText/failures/cost permanecen agregados salvo contrato posterior.
     No inventes timestamps ni failure cause por teléfono.
+    M9 ya persiste únicamente provider + provider_campaign_id en Campaign V2.
+    Usa PUT /campaigns-v2/{campaign_id}/provider-binding para ese vínculo.
+    No rebindear una campaña a otra identidad provider.
+    No implementes todavía persistencia de stats/delivery.
     No implementes POST /v2/broadcast ni GraphQL mutations.
-    M8 no autoriza DB, persistencia ni envío.
