@@ -66,6 +66,8 @@ class TestMarketingCampaignV2Routes:
             ("post", "/api/marketing/campaigns-v2/preview"),
             ("post", "/api/marketing/campaigns-v2/preview-detail"),
             ("post", "/api/marketing/campaigns-v2"),
+            ("get", "/api/marketing/campaigns-v2/tariffs/unclassified"),
+            ("put", "/api/marketing/campaigns-v2/tariffs/PLAN%20FAMILIAR/classification"),
             ("get", "/api/marketing/campaigns-v2"),
             ("get", "/api/marketing/campaigns-v2/1"),
             ("get", "/api/marketing/campaigns-v2/1/recipients"),
@@ -73,8 +75,113 @@ class TestMarketingCampaignV2Routes:
             ("patch", "/api/marketing/campaigns-v2/1/purpose"),
         ]
         for method, path in paths:
-            response = getattr(self.client, method)(path, json={} if method in {"post", "patch"} else None)
+            response = getattr(self.client, method)(
+                path,
+                json={} if method in {"post", "put", "patch"} else None,
+            )
             assert response.status_code == 401
+
+    def test_tariff_classifier_reuses_campaign_v2_management_permission(self):
+        access = SimpleNamespace(
+            is_global=True,
+            branch_ids=(),
+            can_edit_inputs=False,
+        )
+        with self._auth(access):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/tariffs/unclassified?source=ACTIVE_MEMBERS",
+                headers=self.headers,
+            )
+        assert response.status_code == 403
+
+    def test_unclassified_tariff_route_uses_backend_scope_and_source_filters(self):
+        expected = {
+            "source": "EXPIRED_MEMBERS",
+            "total_unique_tariffs": 1,
+            "total_unclassified_rows": 12,
+            "unkeyed_row_count": 0,
+            "rows": [
+                {
+                    "tarifa_raw": "PLAN X",
+                    "tarifa_key": "PLAN X",
+                    "source": "EXPIRED_MEMBERS",
+                    "row_count": 12,
+                }
+            ],
+        }
+        with self._auth(), patch.object(
+            routes.tariff_classifier,
+            "list_unclassified_tariffs",
+            return_value=expected,
+        ) as mocked:
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/tariffs/unclassified"
+                "?source=EXPIRED_MEMBERS"
+                "&expiration_date_from=2026-08-01"
+                "&expiration_date_to=2026-08-31",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert response.get_json()["rows"][0]["row_count"] == 12
+        kwargs = mocked.call_args.kwargs
+        assert kwargs["source"] == "EXPIRED_MEMBERS"
+        assert kwargs["allowed_sucursal_keys"] is None
+        assert kwargs["expiration_date_from"] == "2026-08-01"
+        assert kwargs["expiration_date_to"] == "2026-08-31"
+
+    def test_tariff_classification_put_allows_only_category_family_and_uses_jwt_user(self):
+        path = (
+            "/api/marketing/campaigns-v2/tariffs/PLAN%20FAMILIAR/classification"
+            "?source=ACTIVE_MEMBERS"
+        )
+        with self._auth():
+            rejected = self.client.put(
+                path,
+                headers=self.headers,
+                json={
+                    "categoria_tarifa": "Domiciliado",
+                    "audience_family": "DOMICILIADO",
+                    "created_by_user_id": 999,
+                },
+            )
+        assert rejected.status_code == 400
+
+        result = {
+            "id": 5,
+            "tarifa_key": "PLAN FAMILIAR",
+            "tarifa_raw": "Plan Familiar",
+            "categoria_tarifa": "Domiciliado",
+            "audience_family": "DOMICILIADO",
+            "created_by_user_id": 7,
+            "updated_by_user_id": 7,
+            "created": True,
+        }
+        with self._auth(), patch.object(
+            routes.tariff_classifier,
+            "stable_representative_for_key",
+            return_value="Plan Familiar",
+        ), patch.object(
+            routes.tariff_classifier,
+            "upsert_tariff_classification",
+            return_value=result,
+        ) as mocked:
+            response = self.client.put(
+                path,
+                headers=self.headers,
+                json={
+                    "categoria_tarifa": "Domiciliado",
+                    "audience_family": "DOMICILIADO",
+                },
+            )
+
+        assert response.status_code == 200
+        kwargs = mocked.call_args.kwargs
+        assert kwargs["tarifa_key"] == "PLAN FAMILIAR"
+        assert kwargs["categoria_tarifa"] == "Domiciliado"
+        assert kwargs["audience_family"] == "DOMICILIADO"
+        assert kwargs["user_id"] == 7
+        assert kwargs["representative_raw"] == "Plan Familiar"
 
     def test_invalid_or_missing_user_is_403(self):
         with patch(

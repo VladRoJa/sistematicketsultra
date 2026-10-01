@@ -13,6 +13,7 @@ from app.services.marketing_access import (
 )
 from app.services.marketing_branch_scope import marketing_branch_keys_by_sucursal_ids
 from app.services import marketing_campaign_v2_audience_service as audience
+from app.services import marketing_campaign_v2_tariff_classifier_service as tariff_classifier
 from app.services.marketing_campaign_v2_creation_service import (
     MarketingCampaignV2CreationValidationError,
     MarketingCampaignV2EmptyAudienceError,
@@ -184,6 +185,95 @@ def freeze_campaign_v2_endpoint():
         return _error("No fue posible congelar Campaign V2.", 500)
     except Exception:
         return _error("Falló la creación de Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/tariffs/unclassified")
+@jwt_required()
+def list_campaign_v2_unclassified_tariffs_endpoint():
+    try:
+        _, access = _resolve_campaign_v2_request()
+        _validate_query_args(
+            {
+                "source",
+                "expiration_date_from",
+                "expiration_date_to",
+            }
+        )
+        result = tariff_classifier.list_unclassified_tariffs(
+            source=request.args.get("source"),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            expiration_date_from=request.args.get("expiration_date_from"),
+            expiration_date_to=request.args.get("expiration_date_to"),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (
+        MarketingCampaignV2RouteValidationError,
+        audience.MarketingCampaignV2AudienceValidationError,
+        tariff_classifier.MarketingCampaignV2TariffClassifierValidationError,
+    ) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("Falló la consulta de tarifas sin clasificación.", 500)
+
+
+@marketing_campaign_v2_bp.put(
+    "/campaigns-v2/tariffs/<path:tarifa_key>/classification"
+)
+@jwt_required()
+def classify_campaign_v2_tariff_endpoint(tarifa_key: str):
+    try:
+        user, access = _resolve_campaign_v2_request()
+        _validate_query_args(
+            {
+                "source",
+                "expiration_date_from",
+                "expiration_date_to",
+            }
+        )
+        payload = _parse_payload({"categoria_tarifa", "audience_family"})
+        source = request.args.get("source")
+        date_from = request.args.get("expiration_date_from")
+        date_to = request.args.get("expiration_date_to")
+        if source is None and (date_from is not None or date_to is not None):
+            raise MarketingCampaignV2RouteValidationError(
+                "source es obligatorio cuando se envía rango de vencimiento."
+            )
+
+        representative_raw = None
+        if source is not None:
+            representative_raw = tariff_classifier.stable_representative_for_key(
+                tarifa_key=tarifa_key,
+                source=source,
+                allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+                expiration_date_from=date_from,
+                expiration_date_to=date_to,
+                session=db.session,
+            )
+
+        result = tariff_classifier.upsert_tariff_classification(
+            tarifa_key=tarifa_key,
+            categoria_tarifa=payload.get("categoria_tarifa"),
+            audience_family=payload.get("audience_family"),
+            user_id=int(user.id),
+            representative_raw=representative_raw,
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (
+        MarketingCampaignV2RouteValidationError,
+        audience.MarketingCampaignV2AudienceValidationError,
+        tariff_classifier.MarketingCampaignV2TariffClassifierValidationError,
+    ) as exc:
+        return _error(str(exc), 400)
+    except tariff_classifier.MarketingCampaignV2TariffClassifierPersistenceError:
+        return _error("No fue posible guardar la clasificación de tarifa.", 500)
+    except Exception:
+        return _error("Falló la clasificación de tarifa Campaign V2.", 500)
 
 
 @marketing_campaign_v2_bp.get("/campaigns-v2")

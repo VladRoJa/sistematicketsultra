@@ -175,6 +175,65 @@ class MarketingCampaignV2TariffORM(db.Model):
     )
 
 
+class MarketingCampaignV2TariffOverrideORM(db.Model):
+    __tablename__ = "marketing_campaign_v2_tariff_overrides"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    tarifa_key = db.Column(db.String(255), nullable=False)
+    tarifa_raw = db.Column(db.String(255), nullable=False)
+    categoria_tarifa = db.Column(db.String(100), nullable=False)
+    audience_family = db.Column(db.String(30), nullable=False)
+    created_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    updated_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        onupdate=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+
+    created_by_user = db.relationship(
+        "UserORM",
+        foreign_keys=[created_by_user_id],
+    )
+    updated_by_user = db.relationship(
+        "UserORM",
+        foreign_keys=[updated_by_user_id],
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "tarifa_key",
+            name="uq_marketing_campaign_v2_tariff_overrides_tarifa_key",
+        ),
+        db.CheckConstraint(
+            "audience_family IN "
+            "('DOMICILIADO', 'TRIMESTRAL', 'CONVENIO', "
+            "'SEMESTRE', 'ESTUDIANTE', 'MES', 'OUT_OF_SEGMENT')",
+            name="ck_marketing_campaign_v2_tariff_overrides_family",
+        ),
+        db.Index(
+            "ix_marketing_campaign_v2_tariff_overrides_family",
+            "audience_family",
+        ),
+    )
+
+
 class MarketingCampaignV2ORM(db.Model):
     __tablename__ = "marketing_campaign_v2_campaigns"
 

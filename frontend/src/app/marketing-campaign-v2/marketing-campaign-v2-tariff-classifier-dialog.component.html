@@ -1,0 +1,87 @@
+<div class="classifier-dialog">
+  <header class="dialog-header">
+    <div>
+      <span class="eyebrow">Campaign V2</span>
+      <h2>Catalogar tarifas sin clasificación</h2>
+      <p>Ordenadas por impacto. Cada fila representa una tarifa única normalizada, no un socio.</p>
+    </div>
+    <button mat-button type="button" (click)="close()">Cerrar</button>
+  </header>
+
+  <div *ngIf="loading" class="state-panel" role="status">
+    <mat-spinner diameter="22"></mat-spinner>
+    Cargando tarifas…
+  </div>
+
+  <p *ngIf="error" class="inline-error">{{ error }}</p>
+
+  <div *ngIf="!loading && !error" class="summary">
+    <strong>{{ rows.length | number }}</strong> tarifas únicas ·
+    <strong>{{ totalUnclassifiedRows | number }}</strong> filas sin clasificación
+    <span *ngIf="unkeyedRowCount > 0"> · {{ unkeyedRowCount | number }} sin key catalogable</span>
+  </div>
+
+  <div *ngIf="!loading && rows.length" class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Tarifa</th>
+          <th>Conteo</th>
+          <th>Categoría</th>
+          <th>Familia</th>
+          <th>Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let row of rows">
+          <td>
+            <strong>{{ row.tarifa_raw }}</strong>
+            <small>{{ row.tarifa_key }}</small>
+          </td>
+          <td class="count-cell">{{ row.row_count | number }}</td>
+          <td>
+            <mat-form-field appearance="outline">
+              <input
+                matInput
+                maxlength="100"
+                [value]="row.categoriaTarifa"
+                (input)="setCategory(row, $event)"
+                placeholder="Ej. Convenio"
+              />
+            </mat-form-field>
+          </td>
+          <td>
+            <mat-form-field appearance="outline">
+              <mat-select
+                [value]="row.audienceFamily"
+                (selectionChange)="setFamily(row, $event.value)"
+                placeholder="Familia"
+              >
+                <mat-option *ngFor="let family of data.families" [value]="family">
+                  {{ familyLabel(family) }}
+                </mat-option>
+              </mat-select>
+            </mat-form-field>
+          </td>
+          <td>
+            <button
+              mat-stroked-button
+              color="primary"
+              type="button"
+              [disabled]="!canSave(row)"
+              (click)="save(row)"
+            >
+              {{ row.saving ? 'Guardando…' : (row.saved ? 'Actualizar' : 'Guardar') }}
+            </button>
+            <small *ngIf="row.saved" class="saved">Clasificación guardada</small>
+            <small *ngIf="row.error" class="row-error">{{ row.error }}</small>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p *ngIf="!loading && !error && !rows.length" class="empty-state">
+    No quedan tarifas catalogables sin clasificación para este Preview.
+  </p>
+</div>

@@ -1858,3 +1858,327 @@ Hasta completar esos puntos la recomendación formal es:
 **FASE 1 NO LISTA PARA MERGE DESDE M7 EN ESTE ENTORNO — blocker: falta entorno local integrado para la aceptación requerida.**
 
 No existe blocker de diseño identificado ni cambio arquitectónico pendiente; el blocker es exclusivamente de capacidad de ejecución del smoke M7.
+
+## Milestone 7.1 — Catalogador de tarifas Campaign V2
+
+Estado: **implementado en rama, pendiente de validación real en checkout completo antes de merge**.
+
+### Contexto y rama
+
+- Base: `feat/campaign-v2-phase1-acceptance` en `03921346837e1f12d2ddebc9fa52ff2b9f81bf9a`.
+- Rama: `feat/campaign-v2-tariff-classifier`.
+- Hallazgo local real que motiva M7.1: `8,910` filas de `ACTIVE_MEMBERS` caían en “Tarifa sin clasificación”.
+- M7 queda pausado; al terminar M7.1 se retoma desde `EXPIRED_MEMBERS → Freeze → History → Evidence → purpose → scope`.
+- No se inició Fase 2.
+
+### Snapshot aprobado permanece inmutable
+
+No se modifica ni sobreescribe:
+
+`backend/data/reference/marketing_campaign_v2_tariffs_2026-09-30.json`
+
+El snapshot de 166 filas sigue siendo baseline histórico.
+
+No se modifica `MarketingReactivationTariffORM`.
+
+### Modelo override
+
+Nuevo ORM:
+
+`MarketingCampaignV2TariffOverrideORM`
+
+Tabla:
+
+`marketing_campaign_v2_tariff_overrides`
+
+Campos:
+
+- `id`;
+- `tarifa_key` UNIQUE;
+- `tarifa_raw`;
+- `categoria_tarifa`;
+- `audience_family`;
+- `created_by_user_id`;
+- `updated_by_user_id`;
+- `created_at`;
+- `updated_at`.
+
+`created_by_user_id` y `updated_by_user_id` referencian `users.id` con `ON DELETE SET NULL`.
+
+El key siempre se normaliza mediante el helper compartido:
+
+`normalize_marketing_tariff_key()`
+
+Semántica:
+
+`NFKC → strip → upper → collapse whitespace`.
+
+Familias válidas:
+
+- `DOMICILIADO`
+- `TRIMESTRAL`
+- `CONVENIO`
+- `SEMESTRE`
+- `ESTUDIANTE`
+- `MES`
+- `OUT_OF_SEGMENT`
+
+`MES` sigue sin agregarse a `SELECTABLE_AUDIENCE_FAMILIES`.
+
+### Precedence efectiva
+
+`marketing_campaign_v2_audience_service._read_v2_tariff_catalog()` ahora construye:
+
+`snapshot V2 → apply overrides V2`
+
+Resultado efectivo:
+
+1. override V2;
+2. snapshot V2;
+3. sin match → `UNCLASSIFIED`.
+
+No se consulta el catálogo legacy.
+
+El cambio ocurre en el mismo punto de clasificación usado por Preview y Freeze; por tanto una clasificación nueva puede cambiar composición, recipients y fingerprint sin reescribir campañas ya congeladas.
+
+### Servicio catalogador
+
+Nuevo:
+
+`backend/app/services/marketing_campaign_v2_tariff_classifier_service.py`
+
+Operaciones:
+
+- `list_unclassified_tariffs()`;
+- `upsert_tariff_classification()`;
+- `stable_representative_for_key()`.
+
+La lista reutiliza los loaders canónicos del Audience Builder:
+
+- ACTIVE → latest canonical Socios Activos snapshot;
+- EXPIRED → rango actual + current-status resolver;
+- scope → mismo `allowed_sucursal_keys` backend.
+
+No trabaja sobre socios individuales como unidad de UI. Agrupa por `tarifa_key`.
+
+Variantes raw que normalizan al mismo key se suman en una sola fila.
+
+Orden:
+
+`row_count DESC, tarifa_key ASC`.
+
+El response separa también `unkeyed_row_count` para filas sin key catalogable.
+
+### Endpoints
+
+Bajo el blueprint existente:
+
+`GET /api/marketing/campaigns-v2/tariffs/unclassified`
+
+Query:
+
+- `source`;
+- `expiration_date_from` y `expiration_date_to` cuando source=EXPIRED_MEMBERS.
+
+Response incluye:
+
+- source;
+- source_metadata;
+- total_unique_tariffs;
+- total_unclassified_rows;
+- unkeyed_row_count;
+- rows con `tarifa_raw`, `tarifa_key`, `source`, `row_count`.
+
+`PUT /api/marketing/campaigns-v2/tariffs/<tarifa_key>/classification`
+
+Body permitido únicamente:
+
+`categoria_tarifa`
+`audience_family`
+
+No acepta creator/user IDs.
+
+El actor se toma de JWT mediante el mismo user resuelto por Campaign V2.
+
+El PUT puede recibir source/rango como query context para conservar una representación raw estable observada; esos parámetros no cambian la identidad del override.
+
+### Permisos
+
+Ambos endpoints reutilizan exactamente:
+
+`_resolve_campaign_v2_request()`
+
+y por tanto:
+
+`access.can_edit_inputs == True`.
+
+No se creó permiso nuevo.
+
+### UI catalogador
+
+Desde la tarjeta “Tarifa sin clasificación” se agregan dos acciones:
+
+- Ver detalle;
+- Catalogar tarifas.
+
+Nuevo dialog:
+
+`MarketingCampaignV2TariffClassifierDialogComponent`
+
+Tabla:
+
+- Tarifa;
+- Conteo;
+- Categoría;
+- Familia;
+- Acción.
+
+El backend entrega tarifas únicas ya ordenadas por impacto, por lo que las de mayor `row_count` aparecen primero.
+
+La UI trabaja fila por fila y permite continuar catalogando después de cada guardado.
+
+No manda Authorization manual, creator, scope ni IDs de socio.
+
+Familias disponibles para clasificación:
+
+- las cinco seleccionables;
+- MES;
+- OUT_OF_SEGMENT.
+
+No ofrece UNCLASSIFIED como valor de guardado.
+
+### Invalidación Preview
+
+Cada save exitoso emite `classificationSaved`.
+
+La página escucha el evento e inmediatamente ejecuta:
+
+`invalidatePreview()`
+
+El dialog permanece abierto para seguir catalogando.
+
+No hay Freeze automático.
+
+Después de guardar se exige ejecutar nuevamente “Revisar audiencia”.
+
+Esto evita usar un fingerprint calculado con semántica de tarifa anterior.
+
+### Migración
+
+Nueva revisión:
+
+`b7c2e9f4a1d6`
+
+Parent:
+
+`f6c1d8a3b2e4`
+
+Crea únicamente:
+
+`marketing_campaign_v2_tariff_overrides`.
+
+Incluye:
+
+- PK;
+- UNIQUE `tarifa_key`;
+- CHECK de las siete familias;
+- FKs auditables a users;
+- índice por audience_family;
+- downgrade limpio.
+
+Al retomar M7, el head esperado deja de ser `f6c1d8a3b2e4` y pasa a:
+
+`b7c2e9f4a1d6`.
+
+No se crea merge migration.
+
+### Pruebas versionadas M7.1
+
+Nuevo:
+
+`backend/tests/marketing/test_marketing_campaign_v2_tariff_classifier.py`
+
+Cobertura escrita:
+
+- override > snapshot;
+- snapshot sin override;
+- desconocida sin override → UNCLASSIFIED;
+- agrupación por key normalizado;
+- row_count y orden por impacto;
+- normalización NFKC/whitespace;
+- family inválida;
+- UNIQUE del modelo;
+- Preview cambia tras override;
+- fingerprint cambia tras override;
+- legacy tariff model no se toca;
+- migration upgrade/downgrade y parent.
+
+Se ampliaron:
+
+- `test_marketing_campaign_v2_audience_service.py` para la precedence efectiva;
+- `test_marketing_campaign_v2_routes.py` para JWT, permiso, allowlist y creator desde JWT.
+
+Frontend V2 amplía el runner existente con cobertura de:
+
+- acción “Catalogar tarifas”;
+- endpoints del service;
+- tabla con `row_count`;
+- body exacto category/family;
+- ausencia de auth manual y creator;
+- invalidación inmediata de Preview;
+- legacy `/marketing/reactivation` intacto.
+
+### Validación ejecutada en este runtime
+
+Ejecutado sobre los archivos nuevos exactos disponibles localmente:
+
+- `py_compile` service/migration/test M7.1: OK;
+- classifier service harness: `3 passed`;
+- migration upgrade/downgrade harness: `1 passed`;
+- TypeScript `transpileModule` del dialog nuevo: `0` errores sintácticos.
+
+Limitación: este runtime sigue sin checkout completo, Flask/Flask-SQLAlchemy, PostgreSQL local, Angular CLI ni `node_modules`.
+
+Por ello todavía no fue posible ejecutar aquí el corredor real solicitado:
+
+- backend M7.1 + M1–M5 + legacy;
+- `node scripts/test-campaign-v2.cjs` sobre el checkout completo modificado;
+- `node scripts/test-campaigns.cjs`;
+- `npm run build`.
+
+Los baselines reales previos a M7.1 siguen siendo:
+
+- backend: `132 passed`;
+- frontend V2: `9 passed`;
+- frontend legacy: `38 passed`;
+- Angular build: OK.
+
+M7.1 no debe mergearse hasta repetir esas validaciones con los nuevos tests/código en un checkout completo.
+
+### Fuera de alcance M7.1
+
+No se agregó:
+
+- iVentas;
+- WhatsApp;
+- envíos;
+- provider IDs;
+- costos;
+- templates;
+- delivery status;
+- Funnel operacional;
+- ACTIVE_MEMBER_SUPPRESSION;
+- PREVIOUS_CAMPAIGN con stats;
+- exportación;
+- scheduler;
+- MES como sexta familia seleccionable;
+- edición del snapshot aprobado.
+
+### Continuidad
+
+Después de validar y cerrar M7.1, retomar M7 exactamente en:
+
+`EXPIRED_MEMBERS → Freeze → History → Evidence → purpose → scope`.
+
+No avanzar a Fase 2.
+

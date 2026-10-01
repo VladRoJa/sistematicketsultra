@@ -264,6 +264,45 @@ export interface CampaignV2CampaignQuery {
   source?: CampaignV2Source;
 }
 
+export interface CampaignV2TariffClassificationRequest {
+  categoria_tarifa: string;
+  audience_family: CampaignV2ObservedFamily;
+}
+
+export interface CampaignV2UnclassifiedTariffRow {
+  tarifa_raw: string;
+  tarifa_key: string;
+  source: CampaignV2Source;
+  row_count: number;
+}
+
+export interface CampaignV2UnclassifiedTariffsResponse {
+  source: CampaignV2Source;
+  source_metadata: CampaignV2SourceMetadata;
+  filters: {
+    source: CampaignV2Source;
+    expiration_date_from?: string;
+    expiration_date_to?: string;
+  };
+  total_unique_tariffs: number;
+  total_unclassified_rows: number;
+  unkeyed_row_count: number;
+  rows: CampaignV2UnclassifiedTariffRow[];
+}
+
+export interface CampaignV2TariffClassificationResult {
+  id: number;
+  tarifa_key: string;
+  tarifa_raw: string;
+  categoria_tarifa: string;
+  audience_family: CampaignV2ObservedFamily;
+  created_by_user_id: number | null;
+  updated_by_user_id: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  created: boolean;
+}
+
 export interface CampaignV2ErrorResponse {
   status?: string;
   message?: string;

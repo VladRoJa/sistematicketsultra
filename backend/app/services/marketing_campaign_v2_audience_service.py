@@ -6,7 +6,10 @@ from datetime import date, datetime
 from typing import Any, Iterable
 
 from app.extensions import db
-from app.models.marketing import MarketingCampaignV2TariffORM
+from app.models.marketing import (
+    MarketingCampaignV2TariffORM,
+    MarketingCampaignV2TariffOverrideORM,
+)
 from app.models.warehouse import (
     SociosActivosSnapshotRowORM,
     SociosVencidosCarteraORM,
@@ -515,15 +518,30 @@ def _active_candidate(
 
 
 def _read_v2_tariff_catalog(*, session: Any) -> dict[str, tuple[str, str]]:
-    rows = (
+    snapshot_rows = (
         session.query(MarketingCampaignV2TariffORM)
         .order_by(MarketingCampaignV2TariffORM.tarifa_key.asc())
         .all()
     )
-    return {
+    override_rows = (
+        session.query(MarketingCampaignV2TariffOverrideORM)
+        .order_by(MarketingCampaignV2TariffOverrideORM.tarifa_key.asc())
+        .all()
+    )
+    effective = {
         str(row.tarifa_key): (str(row.categoria_tarifa), str(row.audience_family))
-        for row in rows
+        for row in snapshot_rows
     }
+    effective.update(
+        {
+            str(row.tarifa_key): (
+                str(row.categoria_tarifa),
+                str(row.audience_family),
+            )
+            for row in override_rows
+        }
+    )
+    return effective
 
 
 def _classify_candidate(
