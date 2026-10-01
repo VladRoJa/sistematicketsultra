@@ -1,0 +1,64 @@
+<header class="dialog-header">
+  <div>
+    <p class="eyebrow">Evidence congelada</p>
+    <h2>Detalle del destinatario</h2>
+  </div>
+  <button mat-button mat-dialog-close type="button">Cerrar</button>
+</header>
+
+<mat-dialog-content>
+  <div *ngIf="loading" class="state-row" role="status">
+    <mat-spinner diameter="22"></mat-spinner>
+    Cargando evidence…
+  </div>
+  <div *ngIf="error" class="inline-error" role="alert">{{ error }}</div>
+
+  <ng-container *ngIf="recipient && !loading">
+    <section class="recipient-summary">
+      <div><span>Teléfono</span><strong>{{ recipient.phone_mx10 }}</strong></div>
+      <div><span>Nombre</span><strong>{{ recipient.member_name || '—' }}</strong></div>
+      <div><span>Socio / PIN</span><strong>{{ recipient.member_id || '—' }} / {{ recipient.member_pin || '—' }}</strong></div>
+      <div><span>Sucursal</span><strong>{{ recipient.sucursal || '—' }}</strong></div>
+      <div><span>Tarifa</span><strong>{{ recipient.tarifa_raw || '—' }}</strong></div>
+      <div><span>Familia</span><strong>{{ familyLabel(recipient.audience_family) }}</strong></div>
+    </section>
+
+    <div *ngIf="recipient.conflict_fields.length" class="conflict-box">
+      <strong>Datos con conflicto</strong>
+      <span>{{ recipient.conflict_fields.join(', ') }}</span>
+    </div>
+
+    <section class="evidence-section">
+      <div class="section-heading">
+        <h3>Evidence</h3>
+        <span>{{ recipient.evidence_count }} filas</span>
+      </div>
+
+      <article class="evidence-row" *ngFor="let evidence of recipient.evidence">
+        <div class="evidence-main">
+          <div><span>Fuente</span><strong>{{ evidence.source }}</strong></div>
+          <div><span>Nombre</span><strong>{{ evidence.member_name || '—' }}</strong></div>
+          <div><span>Socio / PIN</span><strong>{{ evidence.member_id || '—' }} / {{ evidence.member_pin || '—' }}</strong></div>
+          <div><span>Sucursal</span><strong>{{ evidence.sucursal || '—' }}</strong></div>
+          <div><span>Tarifa</span><strong>{{ evidence.tarifa_raw || '—' }}</strong></div>
+          <div><span>Familia</span><strong>{{ familyLabel(evidence.audience_family) }}</strong></div>
+          <div><span>Vencimiento</span><strong>{{ evidence.fecha_vencimiento_date || '—' }}</strong></div>
+          <div><span>Estado actual</span><strong>{{ evidence.current_status || '—' }}</strong></div>
+        </div>
+
+        <div class="tags" *ngIf="evidence.evidence.length">
+          <span *ngFor="let tag of evidence.evidence">{{ tag }}</span>
+        </div>
+
+        <details class="technical-detail">
+          <summary>Referencias técnicas</summary>
+          <dl>
+            <div><dt>Vencidos cartera</dt><dd>{{ evidence.socios_vencidos_cartera_id ?? '—' }}</dd></div>
+            <div><dt>Active row</dt><dd>{{ evidence.socios_activos_snapshot_row_id ?? '—' }}</dd></div>
+            <div><dt>Active snapshot</dt><dd>{{ evidence.socios_activos_snapshot_id ?? '—' }}</dd></div>
+          </dl>
+        </details>
+      </article>
+    </section>
+  </ng-container>
+</mat-dialog-content>

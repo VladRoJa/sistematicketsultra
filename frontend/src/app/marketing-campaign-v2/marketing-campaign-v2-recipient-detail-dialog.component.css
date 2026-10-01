@@ -1,0 +1,14 @@
+:host { display:block; color:#0f172a; }
+.dialog-header { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; padding:18px 22px 10px; border-bottom:1px solid #e2e8f0; }
+h2 { margin:2px 0 0; font-size:20px; }.eyebrow { margin:0; color:var(--ultra-orange,#e54525); font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; }
+mat-dialog-content { padding:18px 22px 24px; min-width:min(860px,90vw); }
+.state-row { display:flex; align-items:center; gap:10px; padding:18px 0; }.inline-error { padding:12px; background:#fff1f2; color:#9f1239; border:1px solid #fecdd3; border-radius:10px; }
+.recipient-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1px; border:1px solid #e2e8f0; background:#e2e8f0; border-radius:10px; overflow:hidden; }
+.recipient-summary > div,.evidence-main > div { background:#fff; padding:9px 10px; min-width:0; }
+.recipient-summary span,.evidence-main span { display:block; color:#64748b; font-size:10px; font-weight:800; text-transform:uppercase; }.recipient-summary strong,.evidence-main strong { display:block; margin-top:2px; font-size:12px; overflow-wrap:anywhere; }
+.conflict-box { display:flex; gap:12px; margin-top:12px; padding:10px 12px; background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; border-radius:9px; font-size:12px; }.conflict-box span { color:#7c2d12; }
+.evidence-section { margin-top:18px; }.section-heading { display:flex; justify-content:space-between; align-items:center; }.section-heading h3 { margin:0; font-size:15px; }.section-heading span { color:#64748b; font-size:12px; }
+.evidence-row { margin-top:10px; border:1px solid #e2e8f0; border-radius:10px; padding:12px; background:#f8fafc; }.evidence-main { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1px; background:#e2e8f0; border:1px solid #e2e8f0; overflow:hidden; border-radius:8px; }
+.tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }.tags span { font-size:10px; padding:3px 6px; border:1px solid #cbd5e1; background:#fff; border-radius:5px; color:#475569; }
+.technical-detail { margin-top:10px; font-size:11px; color:#475569; }.technical-detail summary { cursor:pointer; font-weight:700; }.technical-detail dl { margin:8px 0 0; }.technical-detail dl div { display:flex; gap:10px; }.technical-detail dt { min-width:120px; }.technical-detail dd { margin:0; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+@media(max-width:760px) { mat-dialog-content { min-width:0; padding:14px; }.dialog-header { padding:14px; }.recipient-summary,.evidence-main { grid-template-columns:1fr 1fr; } }

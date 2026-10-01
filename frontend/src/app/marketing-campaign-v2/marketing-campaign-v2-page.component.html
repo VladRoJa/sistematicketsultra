@@ -1,0 +1,199 @@
+<main class="campaign-v2-page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Marketing y Conversión</p>
+      <h1>Campañas V2</h1>
+      <p>Construye una audiencia, revisa el Preview y congela una cohorte trazable.</p>
+    </div>
+    <span *ngIf="options" class="scope-note">{{ scopeLabel }}</span>
+  </header>
+
+  <div *ngIf="loadingOptions" class="state-panel" role="status">
+    <mat-spinner diameter="24"></mat-spinner>
+    Cargando acceso y opciones…
+  </div>
+
+  <section *ngIf="accessDenied" class="access-panel" role="alert">
+    <h2>Acceso no disponible</h2>
+    <p>{{ error }}</p>
+    <button mat-stroked-button type="button" (click)="loadOptions()">Reintentar</button>
+  </section>
+
+  <ng-container *ngIf="options && !accessDenied">
+    <section class="workspace builder" aria-labelledby="campaign-v2-builder">
+      <div class="section-heading">
+        <div>
+          <h2 id="campaign-v2-builder">Nueva campaña</h2>
+          <p>El backend aplica automáticamente tu alcance autorizado.</p>
+        </div>
+        <span class="scope-inline">{{ scopeLabel }}</span>
+      </div>
+
+      <div class="builder-grid">
+        <div class="builder-panel">
+          <h3>Audiencia</h3>
+          <div class="field-grid">
+            <mat-form-field appearance="fill">
+              <mat-label>Fuente</mat-label>
+              <mat-select [formControl]="source">
+                <mat-option *ngFor="let value of options.sources" [value]="value">{{ sourceLabel(value) }}</mat-option>
+              </mat-select>
+            </mat-form-field>
+
+            <mat-form-field *ngIf="isExpiredSource" appearance="fill">
+              <mat-label>Vencimiento desde</mat-label>
+              <input matInput type="date" [formControl]="expirationDateFrom">
+            </mat-form-field>
+
+            <mat-form-field *ngIf="isExpiredSource" appearance="fill">
+              <mat-label>Vencimiento hasta</mat-label>
+              <input matInput type="date" [formControl]="expirationDateTo">
+            </mat-form-field>
+          </div>
+
+          <div class="families-header">
+            <div>
+              <strong>Familias comerciales</strong>
+              <span>Selecciona una o más.</span>
+            </div>
+            <div class="compact-actions">
+              <button mat-button type="button" (click)="selectAllFamilies()">Seleccionar todas</button>
+              <button mat-button type="button" (click)="clearFamilies()">Limpiar</button>
+            </div>
+          </div>
+
+          <div class="family-options">
+            <mat-checkbox
+              *ngFor="let family of options.selectable_audience_families"
+              [checked]="isFamilySelected(family)"
+              (change)="setFamilySelected(family, $event)"
+            >{{ familyLabel(family) }}</mat-checkbox>
+          </div>
+
+          <button mat-stroked-button type="button" (click)="reviewAudience()" [disabled]="!canReviewAudience">
+            {{ loadingPreview ? 'Revisando…' : 'Revisar audiencia' }}
+          </button>
+        </div>
+
+        <div class="builder-panel commercial-panel">
+          <h3>Clasificación comercial</h3>
+          <mat-form-field appearance="fill">
+            <mat-label>Nombre de campaña</mat-label>
+            <input matInput maxlength="255" [formControl]="name">
+          </mat-form-field>
+          <mat-form-field appearance="fill">
+            <mat-label>Purpose</mat-label>
+            <mat-select [formControl]="purpose">
+              <mat-option *ngFor="let value of options.purposes" [value]="value">{{ purposeLabel(value) }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+          <p class="helper-text">Purpose clasifica la campaña; no cambia la audiencia ni el fingerprint.</p>
+          <button mat-flat-button color="primary" type="button" (click)="freezeCampaign()" [disabled]="!canFreeze">
+            {{ creating ? 'Congelando…' : 'Congelar campaña' }}
+          </button>
+        </div>
+      </div>
+
+      <div *ngIf="loadingPreview" class="state-panel compact" role="status">
+        <mat-spinner diameter="22"></mat-spinner>
+        Reconstruyendo Preview…
+      </div>
+
+      <section *ngIf="preview" class="preview-panel" aria-labelledby="preview-heading">
+        <div class="section-heading preview-heading">
+          <div>
+            <h3 id="preview-heading">Preview vigente</h3>
+            <p>El fingerprint se invalida si cambia la definición de audiencia.</p>
+          </div>
+          <span class="fingerprint">{{ preview.preview_fingerprint_version }}</span>
+        </div>
+
+        <div class="metric-grid">
+          <div class="metric"><span>Universo inicial</span><strong>{{ preview.universe_count | number }}</strong></div>
+          <div class="metric"><span>Scope aplicado</span><strong>{{ preview.scoped_count | number }}</strong></div>
+          <div class="metric"><span>Filtrados</span><strong>{{ preview.filtered_count | number }}</strong></div>
+          <button class="metric clickable" type="button" (click)="openMetric('recipients', preview.unique_recipient_count)" [disabled]="preview.unique_recipient_count <= 0"><span>Destinatarios finales</span><strong>{{ preview.unique_recipient_count | number }}</strong><small>Ver detalle</small></button>
+          <button class="metric clickable" type="button" (click)="openMetric('invalid_phone', preview.invalid_phone_count)" [disabled]="preview.invalid_phone_count <= 0"><span>Teléfonos inválidos</span><strong>{{ preview.invalid_phone_count | number }}</strong><small>Ver detalle</small></button>
+          <button class="metric clickable" type="button" (click)="openMetric('duplicates', preview.duplicate_count)" [disabled]="preview.duplicate_count <= 0"><span>Duplicados</span><strong>{{ preview.duplicate_count | number }}</strong><small>Ver detalle</small></button>
+          <button class="metric clickable" type="button" (click)="openMetric('out_of_segment', preview.out_of_segment_count)" [disabled]="preview.out_of_segment_count <= 0"><span>Fuera de segmento</span><strong>{{ preview.out_of_segment_count | number }}</strong><small>Ver detalle</small></button>
+          <button class="metric clickable" type="button" (click)="openMetric('unclassified', preview.unclassified_family_count)" [disabled]="preview.unclassified_family_count <= 0"><span>Tarifa sin clasificación</span><strong>{{ preview.unclassified_family_count | number }}</strong><small>Ver detalle</small></button>
+          <button class="metric clickable" type="button" (click)="openMetric('current_status_blocked', preview.current_status_blocked_count)" [disabled]="preview.current_status_blocked_count <= 0"><span>Bloqueados por estado actual</span><strong>{{ preview.current_status_blocked_count | number }}</strong><small>Ver detalle</small></button>
+        </div>
+
+        <div class="preview-columns">
+          <div class="composition-panel">
+            <h4>Composición por tarifa</h4>
+            <button class="composition-row" type="button" *ngFor="let family of observedFamilies" (click)="openFamily(family)" [disabled]="familyCount(family) <= 0">
+              <span>{{ familyLabel(family) }}</span><strong>{{ familyCount(family) | number }}</strong>
+            </button>
+            <div class="composition-row static"><span>Tarifa sin clasificación</span><strong>{{ preview.unclassified_family_count | number }}</strong></div>
+          </div>
+
+          <div class="metadata-panel">
+            <h4>Fuente utilizada</h4>
+            <dl *ngIf="metadataRows(preview.source_metadata).length; else noPreviewMetadata">
+              <div *ngFor="let row of metadataRows(preview.source_metadata)"><dt>{{ row.label }}</dt><dd>{{ row.value }}</dd></div>
+            </dl>
+            <ng-template #noPreviewMetadata><p class="helper-text">Sin metadata adicional para mostrar.</p></ng-template>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <div *ngIf="error" class="inline-error" role="alert">{{ error }}</div>
+    <div *ngIf="success" class="inline-success" role="status">{{ success }}</div>
+
+    <section class="workspace" aria-labelledby="campaign-v2-history">
+      <div class="section-heading">
+        <div><h2 id="campaign-v2-history">Historial Campaign V2</h2><p>Sólo cohortes congeladas.</p></div>
+        <button mat-button type="button" (click)="loadCampaigns(campaignPage)" [disabled]="loadingCampaigns">Actualizar</button>
+      </div>
+
+      <div class="history-filters">
+        <mat-form-field appearance="fill">
+          <mat-label>Fuente</mat-label>
+          <mat-select [formControl]="historySource">
+            <mat-option value="">Todas</mat-option>
+            <mat-option *ngFor="let value of options.sources" [value]="value">{{ sourceLabel(value) }}</mat-option>
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="fill">
+          <mat-label>Purpose</mat-label>
+          <mat-select [formControl]="historyPurpose">
+            <mat-option value="">Todos</mat-option>
+            <mat-option *ngFor="let value of options.purposes" [value]="value">{{ purposeLabel(value) }}</mat-option>
+          </mat-select>
+        </mat-form-field>
+        <button mat-stroked-button type="button" (click)="loadCampaigns(1)" [disabled]="loadingCampaigns">Aplicar filtros</button>
+      </div>
+
+      <div *ngIf="loadingCampaigns" class="state-panel compact" role="status">
+        <mat-spinner diameter="20"></mat-spinner>
+        Cargando historial…
+      </div>
+
+      <div class="table-wrapper" *ngIf="campaigns.length; else emptyHistory">
+        <table>
+          <thead><tr><th>Nombre</th><th>Congelada</th><th>Fuente</th><th>Purpose</th><th>Destinatarios</th><th>Acciones</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let campaign of campaigns">
+              <td>{{ campaign.name }}</td>
+              <td>{{ campaign.frozen_at | date:'short' }}</td>
+              <td>{{ sourceLabel(campaign.source) }}</td>
+              <td>{{ purposeLabel(campaign.purpose) }}</td>
+              <td>{{ campaign.recipient_count | number }}</td>
+              <td><button mat-button type="button" (click)="openCampaign(campaign)">Ver detalle</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <ng-template #emptyHistory><p class="empty-state" *ngIf="!loadingCampaigns">Aún no hay Campaign V2 visibles con estos filtros.</p></ng-template>
+
+      <div class="pager" *ngIf="campaignTotalPages > 1">
+        <button mat-stroked-button type="button" (click)="previousCampaignPage()" [disabled]="campaignPage <= 1 || loadingCampaigns">Anterior</button>
+        <span>Página {{ campaignPage }} de {{ campaignTotalPages }} · {{ campaignTotal | number }} campañas</span>
+        <button mat-stroked-button type="button" (click)="nextCampaignPage()" [disabled]="campaignPage >= campaignTotalPages || loadingCampaigns">Siguiente</button>
+      </div>
+    </section>
+  </ng-container>
+</main>

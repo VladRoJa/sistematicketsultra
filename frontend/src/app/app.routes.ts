@@ -202,6 +202,12 @@ export const routes: Routes = [
             .then(m => m.MarketingReactivationPageComponent),
       },
       {
+        path: 'marketing/campaigns-v2',
+        loadComponent: () =>
+          import('./marketing-campaign-v2/marketing-campaign-v2-page.component')
+            .then(m => m.MarketingCampaignV2PageComponent),
+      },
+      {
         path: 'warehouse/track/kpi-desempeno',
         component: TrackKpiDesempenoComponent,
       },

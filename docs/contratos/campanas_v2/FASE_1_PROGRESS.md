@@ -922,7 +922,7 @@ No se agregó:
 
 ## Milestone 5 — API backend Campaign V2 + permisos y scope
 
-Estado: **completado en rama, pendiente de merge**.
+Estado: **completado y mergeado vía PR #755 a `main` en `dd2e1d6ebbfe756d419d266fc833bb33046953a7`**.
 
 ### Base y rama
 
@@ -930,6 +930,7 @@ Estado: **completado en rama, pendiente de merge**.
 - Esa base corresponde al merge del PR #754 de Milestone 4.
 - Baseline real previo al milestone: `92 passed`.
 - Rama: `feat/campaign-v2-api-permissions`.
+- Validación real conjunta previa al merge: `132 passed`.
 - No se agregó migración: M4 ya dejó el esquema suficiente para API/lectura.
 
 ### Permiso backend
@@ -1250,8 +1251,388 @@ No se agregó:
 - mutación de cohorte;
 - nuevo sistema de permisos.
 
+## Milestone 6 — Angular Campaign V2 + integración Fase 1
+
+Estado: **implementado en rama, pendiente de validación Angular real y merge**.
+
+### Base y rama
+
+- Base obligatoria confirmada: `dd2e1d6ebbfe756d419d266fc833bb33046953a7`.
+- Esa base corresponde al merge del PR #755 de Milestone 5.
+- Baseline backend real antes de M6: `132 passed`.
+- Rama: `feat/campaign-v2-angular-phase1`.
+- No se modificó backend ni Alembic.
+
+### Ruta Angular
+
+Nueva ruta independiente:
+
+`/marketing/campaigns-v2`
+
+Con hash routing:
+
+`/#/marketing/campaigns-v2`
+
+La ruta legacy `/marketing/reactivation` permanece intacta.
+
+### Archivos/componentes
+
+Nuevo módulo bajo:
+
+`frontend/src/app/marketing-campaign-v2/`
+
+Archivos principales:
+
+- `marketing-campaign-v2.models.ts`
+- `marketing-campaign-v2.logic.ts`
+- `marketing-campaign-v2-menu.ts`
+- `marketing-campaign-v2.service.ts`
+- `marketing-campaign-v2-page.component.ts/.html/.css`
+- `marketing-campaign-v2-preview-detail-dialog.component.ts/.html/.css`
+- `marketing-campaign-v2-campaign-detail-dialog.component.ts/.html/.css`
+- `marketing-campaign-v2-recipient-detail-dialog.component.ts/.html/.css`
+- `marketing-campaign-v2.logic.node-test.ts`
+
+Runner nuevo:
+
+`frontend/scripts/test-campaign-v2.cjs`
+
+Todos los componentes conservan archivos TypeScript/HTML/CSS separados; no hay template/style inline.
+
+### Menú y acceso backend-authoritative
+
+`layout.component.ts` consulta:
+
+`GET /api/marketing/campaigns-v2/options`
+
+sin construir Authorization headers manualmente.
+
+Política:
+
+- 200 → publica `Campañas V2`;
+- error/401/403 → no publica;
+- si `Marketing y Conversión` ya existe, agrega el submenu;
+- si no existe pero backend autoriza V2, crea el grupo;
+- `withCampaignV2MenuItem()` hace la mutación idempotente y evita duplicados;
+- la entrada legacy `Campañas → /marketing/reactivation` no se renombra ni elimina.
+
+No se reutiliza `puedeVerMarketingReactivacionPorRol()` como autoridad V2.
+
+### Service Angular
+
+`MarketingCampaignV2Service` usa exclusivamente `environment.apiUrl` + `HttpClient`.
+
+No lee token/localStorage ni construye Authorization.
+
+Métodos:
+
+- `getOptions()`
+- `preview()`
+- `previewDetail()`
+- `freeze()`
+- `listCampaigns()`
+- `getCampaign()`
+- `listRecipients()`
+- `getRecipient()`
+- `updatePurpose()`
+
+Corresponden exactamente a las nueve operaciones M5.
+
+### Modelos TypeScript
+
+Se modelaron explícitamente:
+
+- `CampaignV2Source`
+- `CampaignV2AudienceFamily`
+- `CampaignV2ObservedFamily`
+- `CampaignV2Purpose`
+- `CampaignV2PreviewBucket`
+- Options/scope;
+- Preview/filter/source metadata/family counts;
+- Preview Detail;
+- Freeze request/response;
+- Campaign summary/detail;
+- paginación;
+- Recipient summary/detail;
+- Evidence.
+
+No se usa `any` como contrato principal.
+
+### Builder UX
+
+Pantalla operativa dividida conceptualmente en:
+
+- Nueva campaña;
+- Historial Campaign V2.
+
+Builder:
+
+- fuente desde Options;
+- familias seleccionables desde Options;
+- shortcut `Seleccionar todas`;
+- mínimo una familia;
+- EXPIRED muestra y exige ambas fechas;
+- ACTIVE limpia fechas y nunca las envía;
+- no existe selector de sucursal;
+- scope backend se muestra sólo como información;
+- nombre y purpose están visualmente separados de la definición de audiencia;
+- purpose no se deriva automáticamente desde source.
+
+### Invalidación Preview/fingerprint
+
+Cambios en:
+
+- source;
+- audience_families;
+- expiration_date_from;
+- expiration_date_to
+
+ejecutan `invalidatePreview()`.
+
+Cambios de:
+
+- name;
+- purpose
+
+no invalidan Preview.
+
+El fingerprint sólo vive en memoria del componente.
+
+Freeze queda deshabilitado si no existe Preview vigente, fingerprint, audiencia > 0, nombre/purpose válidos o existe request en curso.
+
+### Preview visual
+
+Se muestran:
+
+- universe;
+- scoped;
+- filtered;
+- unique recipients;
+- invalid phones;
+- duplicates;
+- out-of-segment;
+- tarifa sin clasificación;
+- current-status blocked;
+- composición por las cinco familias + MES + OUT_OF_SEGMENT;
+- metadata importante de la fuente.
+
+`UNCLASSIFIED` de tarifa se presenta como “Tarifa sin clasificación”, separado del purpose “Sin clasificar”.
+
+### Preview Detail
+
+Dialog dedicado:
+
+`MarketingCampaignV2PreviewDetailDialogComponent`
+
+Los contadores mapean a buckets backend:
+
+- RECIPIENTS
+- INVALID_PHONE
+- DUPLICATES
+- OUT_OF_SEGMENT
+- UNCLASSIFIED
+- FAMILY + audience_family
+- CURRENT_STATUS_BLOCKED.
+
+Paginación llama nuevamente al backend; no reconstruye detalle local.
+
+### Freeze/Create
+
+Payload se construye con `buildCampaignV2FreezeRequest()`.
+
+Sólo envía:
+
+- name;
+- purpose;
+- source;
+- audience_families;
+- fechas cuando source=EXPIRED_MEMBERS;
+- expected_preview_fingerprint.
+
+No puede enviar scope, creator, phones, recipients, recipient IDs, source IDs ni evidence.
+
+Al 201:
+
+- muestra confirmación;
+- limpia audiencia/Preview para evitar doble freeze;
+- conserva Options;
+- refresca historial.
+
+No existe Exportar ni estados DRAFT/EXPORTED/SENT.
+
+### Manejo 409
+
+Cualquier 409 de Freeze invalida inmediatamente Preview/fingerprint.
+
+Para mismatch se muestra:
+
+“La audiencia cambió desde la última revisión. Vuelve a revisar antes de crear la campaña.”
+
+No existe retry ni Preview silencioso automático.
+
+### Historial
+
+Consume `GET /campaigns-v2`.
+
+- tabla paginada;
+- filtros backend sólo source/purpose;
+- orden proviene del backend;
+- columnas: nombre, frozen_at, source, purpose, recipient_count y acciones.
+
+### Campaign Detail
+
+Dialog dedicado que consume únicamente Campaign V2 congelada.
+
+Muestra:
+
+- name;
+- source;
+- purpose;
+- frozen/created;
+- recipient count;
+- fingerprint;
+- filters congelados;
+- source metadata congelada.
+
+No ejecuta Preview ni consulta fuentes vivas.
+
+### Recipients
+
+Dentro de Campaign Detail:
+
+- paginación backend;
+- id/phone/name/member/pin/sucursal/tarifa/category/family/vencimiento;
+- inclusion reason mediante modelo;
+- conflict_fields;
+- evidence_count.
+
+Cuando hay conflictos se muestra “Datos con conflicto”.
+
+### Evidence
+
+Recipient dialog usa exclusivamente:
+
+`GET /campaigns-v2/:campaignId/recipients/:recipientId`
+
+Renderiza summary + Evidence ya ordenada por backend.
+
+Los IDs técnicos de Vencidos/Active row/Active snapshot aparecen sólo en un bloque técnico secundario.
+
+No consulta fuente viva.
+
+### PATCH purpose
+
+Se implementa en Campaign Detail.
+
+Payload:
+
+`{ purpose }`
+
+Al éxito se sustituye únicamente la representación Campaign devuelta por backend; no se ejecuta Preview ni se modifica cohorte desde frontend.
+
+### Errores/estados
+
+Se manejan explícitamente:
+
+- 401 sesión;
+- 403 acceso;
+- 404 “Campaña no encontrada o no disponible”;
+- 409 Preview stale/audiencia no congelable;
+- validación 400;
+- fallback 500.
+
+No se usa `alert()`.
+
+Estados de carga separados para Options, Preview, Create, historial, Campaign Detail, Recipients, Preview Detail y Purpose.
+
+Las subscriptions nuevas usan `takeUntilDestroyed()`.
+
+### Tests frontend ejecutados
+
+Runner nuevo ejecutado realmente:
+
+`node scripts/test-campaign-v2.cjs`
+
+Resultado:
+
+`9 passed, 0 failed`
+
+Cobertura del runner:
+
+- EXPIRED incluye fechas;
+- ACTIVE elimina fechas residuales;
+- selección de familias y “seleccionar todas”;
+- cero familias inválido;
+- orden de fechas;
+- invalidación por source/family/fechas y no por name/purpose;
+- payload Freeze exacto sin scope/creator/cohorte;
+- fingerprint requerido;
+- 409 invalida;
+- buckets Preview Detail;
+- PATCH purpose sólo manda purpose;
+- menú crea grupo/conserva legacy/no duplica;
+- service no usa Authorization/localStorage;
+- UI no contiene Exportar/DRAFT/SENT.
+
+Validaciones adicionales ejecutadas:
+
+- `tsc --noEmit` sobre models/logic/menu: OK;
+- typecheck de todos los TS productivos M6 con declaraciones mínimas Angular/RxJS del harness: OK;
+- `transpileModule` de los 9 TS locales M6: sin diagnósticos sintácticos.
+
+### npm run build
+
+Se intentó ejecutar realmente:
+
+`npm run build`
+
+Resultado del entorno:
+
+`sh: 1: ng: not found`
+
+Este runtime tiene Node/npm/TypeScript global, pero no tiene Angular CLI ni `node_modules`, tampoco DNS/red para instalar dependencias. No existe `.github/workflows` en el repo que permita delegar el build sin introducir infraestructura nueva.
+
+Por tanto **no se afirma un build Angular exitoso** y M6 queda pendiente de ejecutar `npm run build` en un checkout completo antes de merge.
+
+### Regresión frontend legacy
+
+`frontend/scripts/test-campaigns.cjs` existe y no fue modificado.
+
+Se intentó ejecutar realmente:
+
+`node scripts/test-campaigns.cjs`
+
+El runner no alcanzó a iniciar sus tests porque este staging no contiene el checkout frontend completo. Falló al buscar:
+
+`src/app/marketing-reactivation/marketing-reactivation.component.node-test.ts`
+
+con `ENOENT`.
+
+Esto es una limitación del entorno de ejecución, no un resultado de regresión legacy. Además siguen ausentes las dependencias Angular runtime. Reactivaciones legacy no fue modificada; sólo cambian routing/layout para agregar V2 de forma aditiva.
+
+### Backend
+
+Cero archivos backend modificados.
+
+No se reejecutó backend M1–M5 porque M6 no toca backend.
+
+### Fuera de alcance
+
+No se agregó:
+
+- WhatsApp;
+- iVentas stats/provider/broadcast;
+- templates/costos;
+- delivery status;
+- Funnel operacional;
+- PREVIOUS_CAMPAIGN operacional;
+- scheduler;
+- Exportar;
+- estados DRAFT/EXPORTED/SENT;
+- producción/migraciones.
+
 ## Siguiente milestone propuesto
 
-**Milestone 6 — Angular Campaign V2 + integración Fase 1**
+**Milestone 7 — Validación Angular real + cierre de Fase 1**
 
-Objetivo recomendado: construir la pantalla Angular separada de Reactivaciones para Options → Preview/Detail → Freeze y lectura de campañas/cohortes congeladas, consumiendo exclusivamente los contratos API M5 y sin avanzar todavía a iVentas/Fase 2.
+Objetivo recomendado: en un checkout con dependencias instaladas, ejecutar `node scripts/test-campaign-v2.cjs`, `node scripts/test-campaigns.cjs` y `npm run build`; corregir únicamente hallazgos de compile/template si aparecen, realizar smoke manual de Options → Preview → Detail → Freeze → History → Evidence/Purpose y cerrar Fase 1 sin introducir Fase 2/iVentas.
