@@ -1253,7 +1253,7 @@ No se agregó:
 
 ## Milestone 6 — Angular Campaign V2 + integración Fase 1
 
-Estado: **implementado en rama, pendiente de validación Angular real y merge**.
+Estado: **completado y mergeado vía PR #756 a `main` en `aec0e78022d2acf03b3fe1b1887d4f7676e0c6d9`**.
 
 ### Base y rama
 
@@ -1580,35 +1580,15 @@ Validaciones adicionales ejecutadas:
 - typecheck de todos los TS productivos M6 con declaraciones mínimas Angular/RxJS del harness: OK;
 - `transpileModule` de los 9 TS locales M6: sin diagnósticos sintácticos.
 
-### npm run build
+### Validación final previa al merge M6
 
-Se intentó ejecutar realmente:
+Antes del merge del PR #756 se validaron realmente en un checkout completo:
 
-`npm run build`
+- Frontend Campaign V2: `9 passed`;
+- Frontend legacy campañas: `38 passed`;
+- Angular: `npm run build` OK.
 
-Resultado del entorno:
-
-`sh: 1: ng: not found`
-
-Este runtime tiene Node/npm/TypeScript global, pero no tiene Angular CLI ni `node_modules`, tampoco DNS/red para instalar dependencias. No existe `.github/workflows` en el repo que permita delegar el build sin introducir infraestructura nueva.
-
-Por tanto **no se afirma un build Angular exitoso** y M6 queda pendiente de ejecutar `npm run build` en un checkout completo antes de merge.
-
-### Regresión frontend legacy
-
-`frontend/scripts/test-campaigns.cjs` existe y no fue modificado.
-
-Se intentó ejecutar realmente:
-
-`node scripts/test-campaigns.cjs`
-
-El runner no alcanzó a iniciar sus tests porque este staging no contiene el checkout frontend completo. Falló al buscar:
-
-`src/app/marketing-reactivation/marketing-reactivation.component.node-test.ts`
-
-con `ENOENT`.
-
-Esto es una limitación del entorno de ejecución, no un resultado de regresión legacy. Además siguen ausentes las dependencias Angular runtime. Reactivaciones legacy no fue modificada; sólo cambian routing/layout para agregar V2 de forma aditiva.
+Estos resultados pertenecen al estado mergeado de M6 y son el baseline de entrada de M7.
 
 ### Backend
 
@@ -1631,8 +1611,250 @@ No se agregó:
 - estados DRAFT/EXPORTED/SENT;
 - producción/migraciones.
 
-## Siguiente milestone propuesto
+## Milestone 7 — Aceptación integrada + cierre de Fase 1
 
-**Milestone 7 — Validación Angular real + cierre de Fase 1**
+Estado: **iniciado en rama; aceptación integrada bloqueada por entorno, sin cambios productivos**.
 
-Objetivo recomendado: en un checkout con dependencias instaladas, ejecutar `node scripts/test-campaign-v2.cjs`, `node scripts/test-campaigns.cjs` y `npm run build`; corregir únicamente hallazgos de compile/template si aparecen, realizar smoke manual de Options → Preview → Detail → Freeze → History → Evidence/Purpose y cerrar Fase 1 sin introducir Fase 2/iVentas.
+### Base y rama
+
+- Base obligatoria confirmada: `aec0e78022d2acf03b3fe1b1887d4f7676e0c6d9`.
+- Esa base corresponde al merge del PR #756 de Milestone 6.
+- Rama: `feat/campaign-v2-phase1-acceptance`.
+- Baselines reales ya validados antes de M7:
+  - backend M1–M5: `132 passed`;
+  - frontend Campaign V2: `9 passed`;
+  - frontend legacy campañas: `38 passed`;
+  - Angular: `npm run build` OK.
+
+### Entorno M7 realmente disponible
+
+El runtime de esta conversación no contiene un checkout completo de Suite Ultra.
+
+Disponible:
+
+- Node `v22.16.0`;
+- npm `10.9.2`;
+- Python `3.13.5`;
+- SQLAlchemy/Alembic/pytest;
+- staging parcial de M6 suficiente para el runner V2.
+
+No disponible:
+
+- checkout completo backend/frontend;
+- Flask;
+- Flask-SQLAlchemy;
+- Angular CLI / `node_modules`;
+- PostgreSQL/`psql`;
+- Docker;
+- browser/computer conectado a un entorno local de Suite;
+- red/DNS para instalar dependencias o clonar el repo.
+
+Por contrato M7 exige checkout local completo, backend/frontend funcionando y PostgreSQL local. Por ello no se sustituyó el smoke con mocks ni se usó producción.
+
+### DB head/current
+
+No fue posible ejecutar:
+
+- `flask db heads`;
+- `flask db current`;
+- `flask db upgrade`.
+
+Motivo: Flask no está instalado y no existe PostgreSQL local disponible.
+
+Validación estática del repo:
+
+- existe la revisión `f6c1d8a3b2e4`;
+- ningún archivo de migración declara `down_revision` hacia `f6c1d8a3b2e4`.
+
+Por tanto el head estático del código sigue siendo `f6c1d8a3b2e4`, pero el current de una DB local no pudo verificarse.
+
+### Usuarios/roles de smoke
+
+No se usaron usuarios reales de prueba porque no existe backend local ejecutable ni base local conectada.
+
+En consecuencia no se validaron manualmente:
+
+- usuario autorizado Campaign V2;
+- usuario no autorizado;
+- usuario parcial vs global.
+
+Las reglas automatizadas ya validadas en M5/M6 siguen siendo baseline, pero no sustituyen el smoke de aceptación M7.
+
+### Smoke ACTIVE_MEMBERS
+
+No ejecutado.
+
+Blocker:
+
+- no existe backend local;
+- no existe PostgreSQL local;
+- no se puede consultar el canonical snapshot real.
+
+No se fabricaron recipients ni metadata.
+
+### Smoke EXPIRED_MEMBERS
+
+No ejecutado.
+
+Blocker:
+
+- no existe backend local;
+- no existe PostgreSQL local;
+- no se puede seleccionar un rango real de Socios Vencidos ni observar current-status/drill-down contra datos locales.
+
+No se insertaron filas manuales.
+
+### Preview invalidation
+
+No se ejecutó en browser real durante M7.
+
+La prueba automatizada V2 se reejecutó y cubrió:
+
+- source/family/fechas invalidan;
+- name/purpose no invalidan.
+
+Resultado fresco M7: `9 passed, 0 failed` para todo el runner V2.
+
+### Freeze/Create
+
+No ejecutado contra backend/DB reales.
+
+No se creó Campaign local y no existen campaign IDs M7 que registrar.
+
+### Stale Preview / 409
+
+No se forzó manualmente porque no existe backend/DB local donde producir drift reversible.
+
+La cobertura automatizada previa de backend/frontend permanece como baseline, pero no se presenta como smoke M7.
+
+### History / Campaign Detail / Recipients / Evidence / PATCH purpose
+
+No ejecutados manualmente por ausencia de Campaign local creada mediante el flujo real.
+
+No se consultaron fuentes vivas ni se alteró historia congelada.
+
+### Scope/auth
+
+No validado manualmente en M7 por falta de usuarios/backend/DB locales.
+
+No se intentó usar producción.
+
+### Validación visual
+
+No ejecutada en browser real a 1366px ni viewport angosto porque el frontend Angular no puede levantarse en este runtime.
+
+No se afirma validación visual.
+
+### Defects encontrados
+
+No se encontró un defect funcional reproducible de Campaign V2.
+
+El único hallazgo de M7 es un blocker de entorno de aceptación:
+
+- el runtime no cumple los prerrequisitos explícitos del milestone.
+
+Esto no se trató como bug de producto.
+
+### Fixes realizados
+
+Ninguno.
+
+No se modificó backend, frontend, modelos, migraciones, rutas, servicios ni estilos.
+
+M7 sólo actualiza este documento para dejar continuidad verificable.
+
+### Pruebas finales M7
+
+#### Backend M1–M5
+
+No ejecutable aquí.
+
+Motivo:
+
+- no existe checkout backend completo;
+- Flask y Flask-SQLAlchemy no están instalados;
+- no existe PostgreSQL local.
+
+Baseline previo válido: `132 passed`.
+
+#### Frontend Campaign V2
+
+Ejecutado realmente en M7:
+
+`node scripts/test-campaign-v2.cjs`
+
+Resultado:
+
+`9 passed, 0 failed`.
+
+#### Frontend legacy campañas
+
+Se intentó ejecutar realmente:
+
+`node scripts/test-campaigns.cjs`
+
+Resultado: el runner no pudo iniciar porque el staging parcial no contiene:
+
+`src/app/marketing-reactivation/marketing-reactivation.component.node-test.ts`
+
+Error: `ENOENT`.
+
+No se interpreta como regresión legacy.
+
+Baseline previo válido: `38 passed`.
+
+#### Angular build
+
+Se intentó ejecutar realmente:
+
+`npm run build`
+
+Resultado:
+
+`sh: 1: ng: not found`
+
+El runtime no tiene Angular CLI ni `node_modules`.
+
+No se interpreta como fallo de compilación del código M6.
+
+Baseline previo válido antes de M7: `npm run build` OK.
+
+### Producción
+
+No se usó producción.
+
+No hubo:
+
+- deploy;
+- Docker Compose en servidor;
+- `flask db upgrade` en producción;
+- `git pull` de servidor.
+
+### Fase 2
+
+No se inició Fase 2.
+
+No se agregó iVentas, WhatsApp, broadcast, provider IDs, stats, costos, templates, Funnel operacional, exportación ni scheduler.
+
+### Criterio de cierre Fase 1
+
+**No cumplido dentro de este runtime.**
+
+Para declarar Fase 1 cerrada aún falta ejecutar en un checkout local completo:
+
+1. `flask db heads` → único head `f6c1d8a3b2e4`;
+2. `flask db current` y upgrade local si aplica;
+3. corredor backend M1–M5 → `132 passed`;
+4. frontend V2 → `9 passed`;
+5. frontend legacy → `38 passed`;
+6. `npm run build` OK;
+7. smoke real Options → Preview → Detail → Freeze → History → Recipients → Evidence → PATCH purpose;
+8. acceso autorizado/no autorizado y scope global/parcial;
+9. validación visual;
+10. confirmar ausencia de defect crítico.
+
+Hasta completar esos puntos la recomendación formal es:
+
+**FASE 1 NO LISTA PARA MERGE DESDE M7 EN ESTE ENTORNO — blocker: falta entorno local integrado para la aceptación requerida.**
+
+No existe blocker de diseño identificado ni cambio arquitectónico pendiente; el blocker es exclusivamente de capacidad de ejecución del smoke M7.
