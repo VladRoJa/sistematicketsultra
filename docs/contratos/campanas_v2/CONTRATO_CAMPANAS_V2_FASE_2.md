@@ -30,6 +30,56 @@ Modo de trabajo:
 4. no modelar campos no observados en un payload real;
 5. no avanzar a Fase 3.
 
+### 0.1 Enmienda M8 — evidencia real observada y frontera vigente
+
+Esta enmienda corrige supuestos del contrato original a partir de evidencia real observada en la aplicación web de iVentas. **Si una sección posterior entra en conflicto con esta enmienda, prevalece esta enmienda.**
+
+M8 reconoce dos capacidades independientes:
+
+1. **Campaign aggregate analytics**
+   - evidencia observada en:
+     `GET https://iventas-analytics-v1-production.up.railway.app/campaign-stats/campaigns/{campaignId}?companyId={companyId}`;
+   - devuelve analytics agregados de campaña, incluyendo campos observados como `totalRecipients`, `funnel`, `rates`, `failures`, `costs`, `interactions` y `temporal`;
+   - no se observó en esta frontera una lista de destinatarios/teléfonos por estado.
+
+2. **Recipient/message historical status**
+   - evidencia observada mediante GraphQL HTTP en `graph-v2.iventas.mx`;
+   - la app resuelve primero conversación/cliente por teléfono y obtiene `Client.id`;
+   - después consulta historial por `Client.id` mediante una query `messages`;
+   - se observaron, entre otros, `sender`, `messageStatus`, `errorCode`, `errorInfo`, `createdAt`, `seenAt`, `messageApiId` y `quotedMsgId`.
+
+Frontera histórica observada:
+
+    phone
+      -> Client.id
+      -> messages(clientId)
+      -> sender / messageStatus / errorCode / errorInfo / createdAt
+
+Reglas derivadas de la evidencia:
+
+- `sender == CLIENT` identifica inbound en los casos observados.
+- Un inbound con `messageStatus = null` **no** representa estado delivery y no debe convertirse en `sent`, `delivered`, `viewed`, `failed` ni equivalente.
+- Cuando un inbound cumple `quotedMsgId == outbound.messageApiId`, existe evidencia positiva de respuesta a **ese outbound concreto**.
+- La ausencia de esa relación no significa “no respondió”.
+- `createdAt`, `seenAt` u otros timestamps del proveedor no deben reinterpretarse todavía como `sent_at`, `delivered_at` o `viewed_at` sin evidencia adicional de su semántica.
+- La correlación `Campaign V2 recipient -> outbound provider message` **permanece abierta**. Haber encontrado historial por teléfono no demuestra todavía qué outbound individual pertenece a una campaña concreta.
+- El criterio de salida de Fase 2 que exige `sent/delivered/viewed/failed` **por número y por campaña** permanece bloqueado hasta demostrar esa correlación.
+
+Supuestos retirados como contrato implementable:
+
+- `GET /v2/broadcast/stats/:id` **NO OBSERVADO** como frontera válida con un campaign ID real.
+- `successfulMessages`, `failedMessages`, `sentMessages`, `deliveredMessages`, `viewedMessages`, `answeredMessages` y su shape por destinatario quedan **NO OBSERVADOS**.
+- No construir provider, parser ni persistencia recipient-level basándose en esos arrays hasta obtener evidencia real compatible.
+
+Regla de seguridad M8:
+
+- solo operaciones provider estrictamente read-only;
+- HTTP GET read-only permitido;
+- GraphQL `query` read-only mediante HTTP POST permitido;
+- GraphQL `mutation` prohibida;
+- `POST /v2/broadcast` prohibido;
+- no asumir que `IVENTAS_API_TOKEN` actual es intercambiable con la credencial usada por el frontend GraphQL; debe comprobarse de forma read-only antes de integrar.
+
 ## 1. Alcance exacto
 
 Fase 2 contiene dos bloques que deben quedar listos antes de Fase 3:
@@ -41,11 +91,12 @@ Debe permitir:
 
 - asociar una campaña V2 con un campaign_id de iVentas;
 - importar campañas creadas directamente en iVentas cuando exista forma de descubrirlas;
-- consultar estadísticas de una campaña;
-- persistir estados por destinatario;
-- persistir interacciones;
+- consultar analytics agregados de una campaña cuando la frontera observada y la credencial backend lo permitan;
+- consultar histórico de mensajes por teléfono cuando la frontera GraphQL observada y la credencial backend lo permitan;
+- persistir estados por destinatario **solo después** de demostrar la correlación campaña concreta -> outbound provider message;
+- persistir interacciones recipient-level **solo si** existe evidencia individual suficiente;
 - persistir analytics relevantes;
-- persistir costo de campaña cuando el proveedor lo entregue;
+- persistir costo de campaña cuando el proveedor lo entregue y su shape real haya sido congelado;
 - clasificar campañas históricas por propósito comercial;
 - filtrar audiencias futuras por comportamiento previo soportado;
 - realizar sincronizaciones idempotentes;
@@ -83,9 +134,14 @@ Hallazgo de diseño: Suite ya tiene una integración iVentas de contactos, raw/s
 
 La integración existente GET /v1/integrations/contacts representa contactos CRM y snapshots de contactos.
 
-La API nueva de broadcast stats representa una campaña concreta y sus destinatarios/estados.
+La evidencia M8 distingue además dos superficies nuevas:
 
-No mezclar ambas cosas.
+- Campaign Analytics: analytics agregados por `campaignId + companyId`;
+- GraphQL histórico: conversación/Client y mensajes por `Client.id`.
+
+No existe todavía evidencia de una sola API que entregue simultáneamente campaña concreta + destinatarios + estados individuales.
+
+No mezclar estas cosas.
 
 Ejemplo de error prohibido:
 - asumir que MarketingIventasContactORM es la tabla natural para guardar cada estado de broadcast.
@@ -107,16 +163,11 @@ Fase 2 no crea una copia completa de Socios Activos ni de Socios Vencidos.
 - Socios Activos: reutilizar snapshots canónicos y conservar referencia al snapshot/fila fuente cuando el modelo vigente lo permita.
 - Funnel: reutilizar el detalle/identidad existente; si solo existe teléfono, conservar `PHONE_ONLY`.
 
-Los flags de iVentas se guardan en el recipient/delivery de **esa campaña**:
+Cuando exista correlación demostrada entre una campaña concreta y sus mensajes individuales, los hechos de delivery deberán guardarse en el recipient/delivery de **esa campaña**, nunca como estado global del contacto.
 
-    successful
-    sent
-    delivered
-    viewed
-    failed
-    interactions
+Hasta resolver `Campaign V2 recipient -> outbound provider message`, M8 **no autoriza** persistir `sent`, `delivered`, `viewed`, `failed` ni interacciones recipient-level como hechos de una campaña.
 
-Nunca agregarlos como estado global a las bases canónicas. El mismo socio/teléfono puede tener resultados distintos en campañas distintas.
+Nunca agregar estos hechos a las bases canónicas. El mismo socio/teléfono puede tener resultados distintos en campañas distintas.
 
 ## 5. Cartera Funnel / Venta Nueva
 
@@ -208,164 +259,216 @@ Esta supresión complementa, no reemplaza, el cruce de compra de 60 días ya uti
 
 Fase 2 debe introducir o completar una abstracción de proveedor.
 
-Interfaz conceptual:
+La abstracción debe representar **capacidades independientes**, sin fingir que analytics agregados e historial por destinatario son la misma respuesta.
+
+Interfaz conceptual mínima:
 
     CampaignProvider
-        get_campaign_stats(provider_campaign_id)
-        get_campaign_cost(provider_campaign_id)
-        list_campaigns(period)          # opcional por capability
-        get_recipient_events(id)        # opcional
         capabilities()
 
-Implementación inicial:
+        # capability independiente
+        get_campaign_aggregate_analytics(provider_campaign_id, provider_company_id)
+
+        # capability independiente
+        resolve_recipient_by_phone(phone_mx10)
+        get_recipient_message_history(provider_client_id, ...)
+
+        # opcional solo con evidencia
+        list_campaigns(period)
+        get_campaign_recipient_delivery(...)
+
+Implementación futura:
 
     IVentasCampaignProvider
 
-El resto del módulo no debe conocer URLs ni nombres concretos de campos externos salvo en el adaptador.
+M8 no implementará todavía esta interfaz hasta validar acceso backend read-only a las fronteras observadas.
+
+El resto del módulo no debe conocer URLs, GraphQL, nombres concretos de campos externos ni detalles de Apollo salvo en el adaptador.
 
 ## 7. Capacidades conocidas de iVentas
 
-Documentación recibida:
+### 7.1 Campaign aggregate analytics — OBSERVADO
 
-### GET /v2/broadcast/stats/:id
+Frontera observada en Network:
 
-Autenticación:
-- integration key backend;
-- scope read:campaign-stats.
+    GET https://iventas-analytics-v1-production.up.railway.app/campaign-stats/campaigns/{campaignId}?companyId={companyId}
 
-La respuesta base documenta listas:
+En una campaña real se observaron analytics agregados con campos como:
 
-- successfulMessages
-- failedMessages
-- sentMessages
-- deliveredMessages
-- viewedMessages
-- answeredMessages
-- interactions
+- `totalRecipients`;
+- `funnel.accepted`;
+- `funnel.delivered`;
+- `funnel.read`;
+- `funnel.failed`;
+- `rates.deliveryRate`;
+- `rates.readRate`;
+- `rates.failureRate`;
+- `rates.responseRate`;
+- `failures`;
+- `costs`;
+- `interactions`;
+- `temporal`.
 
-Con integration key también:
-- analytics
-- analyticsStatus
+También se observaron costo real/provisional, moneda, errores Meta y responders dentro del payload agregado.
 
-Estados analyticsStatus documentados:
-- ok
-- not_synced
-- unavailable
-- disabled
+**No se observó una lista de destinatarios/teléfonos por estado en esta frontera.**
 
-Regla:
-- solo ok autoriza usar analytics;
-- not_synced NO significa cero;
-- unavailable NO significa cero;
-- disabled NO significa cero.
+El shape exacto de `costs`, `failures`, `interactions`, `temporal` y otros objetos debe congelarse con payload sanitizado antes de programar parser.
 
-## 8. Estado por destinatario
-Los arrays de estado no son mutuamente excluyentes.
+### 7.2 Recipient/message historical status — OBSERVADO
 
-Un número puede aparecer en:
-- successful;
-- sent;
-- delivered;
-- viewed.
+Transporte observado:
 
-Persistir flags independientes o eventos normalizados según el diseño final.
+- GraphQL HTTP;
+- host `graph-v2.iventas.mx`;
+- Apollo `HttpLink`;
+- header `Authorization: Bearer <token>`.
 
-La UI puede mostrar estado más avanzado conocido:
+La app primero resuelve conversación/cliente mediante una operación equivalente a `conversationByFilters`, donde se observaron:
 
-    VIEWED
-      ↑
-    DELIVERED
-      ↑
-    SENT
+- `Client.id`;
+- `senderId`;
+- `phoneNumber`;
+- `lastMessageId`.
 
-FAILED debe conservarse con su error/cause cuando esté disponible; no convertirlo automáticamente en una etapa secuencial.
+Después consulta historial mediante una query equivalente a:
+
+    messages(
+      where: {clientId: $id}
+      orderBy: createdAt_DESC
+      skip: $skip
+      first: 30
+    )
+
+con campos observados como:
+
+- `id`;
+- `content`;
+- `time`;
+- `createdAt`;
+- `seen`;
+- `seenAt`;
+- `messageStatus`;
+- `errorCode`;
+- `errorInfo`;
+- `seenBy`;
+- `sender`;
+- `senderId`;
+- `messageApiId`;
+- `messageType`;
+- `structuredPayload`;
+- `quotedMsgId` cuando aplique.
+
+La paginación observada usa `skip=0,30,60...`.
+
+### 7.3 Broadcast stats anterior — NO OBSERVADO
+
+La documentación anterior mencionaba:
+
+    GET /v2/broadcast/stats/:id
+
+y arrays:
+
+- `successfulMessages`;
+- `failedMessages`;
+- `sentMessages`;
+- `deliveredMessages`;
+- `viewedMessages`;
+- `answeredMessages`;
+- `interactions`;
+- `analytics`;
+- `analyticsStatus`.
+
+Sin embargo, al probar esa ruta con un campaign ID real se obtuvo “no se encontró la orden”. Por tanto:
+
+- la ruta no queda confirmada como frontera real para Campañas V2;
+- los arrays anteriores quedan **NO OBSERVADOS**;
+- `analyticsStatus = ok/not_synced/unavailable/disabled` queda **NO OBSERVADO** en las fronteras reales ahora conocidas;
+- no se implementará parser, persistence ni capability basados en esa estructura hasta recibir evidencia real compatible.
+
+## 8. Estado histórico por destinatario
+
+La evidencia actual permite consultar **historial de mensajes por teléfono/Client.id**, pero no atribuir todavía cada outbound a una campaña concreta de Campaign V2.
+
+En registros observados:
+
+- outbound: `sender != CLIENT` y puede tener `messageStatus` como `viewed`;
+- inbound: `sender == CLIENT` y se observó `messageStatus = null`.
+
+Reglas:
+
+- `sender == CLIENT` se trata como inbound observado.
+- `messageStatus = null` de un inbound no se convierte en ningún estado delivery.
+- Estados observados en mensajes deben conservarse con su semántica provider; no se convierten automáticamente en flags de campaign-recipient.
+- Historial por teléfono puede servir como dimensión de comportamiento previa, pero debe distinguir “mensaje histórico observado” de “mensaje atribuido a una campaña concreta”.
+- La correlación `Campaign V2 recipient -> outbound provider message` queda como requisito pendiente.
 
 ### 8.1 Resolver de comportamiento histórico por teléfono
 
-Fase 2 debe permitir que el constructor de Campañas V2 use el historial de campañas anteriores como dimensión transversal.
+Fase 2 debe poder derivar comportamiento histórico a partir de evidencia provider observada, sin escribir flags históricos en tablas fuente.
 
-El resolver parte de `phone_mx10` y consulta los campaign recipients/provider delivery ya persistidos. **No escribe flags históricos en las tablas fuente.**
+Mientras no exista correlación por campaña, cualquier resolver inicial debe limitarse a afirmaciones soportadas por el historial de mensajes por teléfono, por ejemplo:
 
-Scopes que la arquitectura debe soportar:
+    has_any_provider_message_history
+    has_any_observed_viewed_message
 
-- campaña específica;
-- última campaña previa aplicable;
-- cualquier campaña previa registrada.
+No debe afirmar todavía:
 
-La primera entrega no tiene que exponer todos los scopes en UI, pero no debe diseñarse de forma que solo permita una campaña específica.
-
-Ejemplos de hechos derivados:
-
-    has_any_campaign_history
-    has_any_viewed
-    has_any_interaction
     last_campaign_viewed
-    contacted_never_viewed
+    viewed_in_campaign_X
+    contacted_never_viewed_in_campaign_X
+
+salvo que exista una relación demostrada entre campaña y outbound.
 
 Semántica importante:
 
-- `has_any_viewed = true` significa que existe al menos una campaña previa con evidencia `viewed=true`.
-- "Nunca contactado" significa que no existe historial de campaign-recipient/provider campaign aplicable.
-- "Contactado pero nunca leído" requiere historial de contacto y ausencia de `viewed=true`; no es equivalente a "sin datos".
-- `answeredMessages=[]` no puede utilizarse para derivar "no respondió".
-
-Al crear/confirmar una nueva campaña, el resultado del filtro histórico queda congelado con la audiencia. Si una campaña anterior recibe nuevos webhooks después, no se recalcula retroactivamente la campaña ya creada.
-
-Implementación inicial: consulta derivada sobre tablas de campañas/recipient/delivery con índices adecuados. No crear de entrada una tabla `messaging_engagement`. Una proyección o materialized view solo se justifica después de medir un problema real de rendimiento.
+- “sin historial observado” no equivale a “nunca contactado” fuera del alcance de los datos consultados.
+- La ausencia de un `messageStatus` concreto no equivale a un estado negativo.
+- La ausencia de una respuesta con quote no equivale a “no respondió”.
+- No recalcular retroactivamente audiencias ya congeladas sin un contrato explícito.
 
 ## 9. Interacciones
 
-interactions devuelve:
-- label del botón;
-- items con destinatarios.
+Campaign Analytics devolvió `interactions` a nivel agregado, pero M8 todavía no ha demostrado una lista individual de teléfonos/destinatarios asociada a esas interacciones.
 
-Persistir interacción separada del delivery.
+Por tanto:
 
-Ejemplo:
-
-    delivery_status = VIEWED
-    interaction = "Me interesa"
-
-No convertir INTERACTED en sustituto de VIEWED.
-
-Si un destinatario puede tocar más de un botón, el modelo debe soportar 0..N interacciones.
+- conservar `interactions` como capability agregada observada;
+- no persistir interacciones recipient-level sin evidencia individual;
+- no convertir `INTERACTED` en sustituto de `VIEWED`;
+- si posteriormente se observa una relación individual 0..N, documentar el payload real y recién entonces modelarla.
 
 ## 10. Respondidos
 
-La documentación actual indica que answeredMessages está reservado y actualmente vacío.
+El array `answeredMessages` del contrato anterior queda **NO OBSERVADO** y no puede usarse como fuente individual.
 
-Por lo tanto Fase 2 no puede implementar:
+Sí se observó un caso real donde:
 
-    RESPONDIÓ
-    NO RESPONDIÓ
+    inbound.quotedMsgId == outbound.messageApiId
 
-por destinatario basándose en ese campo.
+Esto constituye evidencia positiva de que ese inbound referencia/responde a **ese outbound concreto**.
 
-Si analytics presenta un conteo agregado de responded, conservarlo como agregado únicamente mientras no exista lista de números.
+Reglas:
 
-Para habilitar filtro por respuesta individual se requiere evidencia/API explícita.
+- puede registrarse conceptualmente una evidencia positiva de reply cuando exista esa correlación inequívoca;
+- la ausencia de `quotedMsgId` o de una coincidencia no significa “no respondió”;
+- no implementar `NO_RESPONDIÓ` por destinatario;
+- un conteo agregado de responders puede conservarse como agregado si el payload real lo soporta, sin inventar la lista individual.
 
 ## 11. Timestamps individuales
 
-Actualmente el contrato recibido no garantiza:
+La frontera GraphQL observada expone campos como `createdAt` y `seenAt`, pero M8 todavía no ha demostrado que su semántica equivalga a:
 
-- sent_at por destinatario;
-- delivered_at;
-- viewed_at;
-- replied_at.
+- `sent_at`;
+- `delivered_at`;
+- `viewed_at`;
+- `replied_at`.
 
-No crear columnas llenas con:
-- hora de sync;
-- hora de campaña;
-- hora aproximada
+Por tanto no reinterpretar `createdAt`, `seenAt`, hora de sync, hora de campaña ni hora aproximada como timestamps de delivery.
 
-fingiendo que son timestamps del evento.
+Solo podrán normalizarse timestamps de evento cuando exista evidencia adicional de su significado provider.
 
-Puede persistirse:
-- first_seen_at_in_suite;
-- last_synced_at
-
-si se nombran claramente como metadata de Suite, no como evento WhatsApp.
+Metadata propia de Suite como `first_seen_at_in_suite` o `last_synced_at` puede existir más adelante si se nombra claramente y no se confunde con un evento WhatsApp.
 
 ## 12. campaign_id externo
 
@@ -400,58 +503,49 @@ Datos mínimos deseables al importar:
 
 ## 14. Descubrimiento histórico por periodo
 
-Con la documentación actual, GET /v2/broadcast/stats/:id consulta una campaña por vez y no tiene query params.
+M8 no tiene todavía un endpoint de listado de campañas por periodo confirmado.
 
-Esto no impide backfill si conocemos los IDs.
+La frontera Campaign Analytics observada requiere `campaignId + companyId`; la frontera GraphQL observada permite recorrer mensajes de un `Client.id`, pero eso no constituye un listado de campañas.
 
-El punto pendiente es descubrir todos los IDs de un periodo.
+Por tanto se mantienen dos caminos conceptuales:
 
-Fase 2 debe manejar dos caminos:
+### Camino A — listado provider confirmado
 
-### Camino A — endpoint de listado disponible
-
-Si iVentas libera una consulta por periodo:
+Solo si se observa/documenta una operación read-only de listado:
 1. listar campañas del periodo;
-2. upsert metadata;
-3. ejecutar stats por campaign_id;
-4. persistir resultados;
-5. marcar sync final.
+2. registrar metadata;
+3. consultar analytics agregados;
+4. ejecutar las capacidades adicionales que estén realmente soportadas.
 
 ### Camino B — IDs provistos externamente
 
-Si todavía no existe listado, permitir un mecanismo administrativo controlado para registrar/importar IDs conocidos, sin enviar campañas.
+Mientras no exista listado confirmado, permitir más adelante un mecanismo administrativo controlado para registrar/importar IDs conocidos, sin enviar campañas.
 
 No inventar scraping del panel ni consultar MongoDB de iVentas.
 
 ## 15. Retroactividad
 
-No hay restricción documentada que prohíba consultar stats de una campaña histórica existente y autorizada.
+La evidencia actual permite investigar retroactividad por dos vías independientes:
 
-Por tanto el contrato permite backfill retroactivo de septiembre u otros periodos siempre que:
-- se conozca provider_campaign_id;
-- la API todavía exponga la campaña;
-- la credencial tenga acceso.
+- Campaign Analytics por `campaignId + companyId`;
+- historial GraphQL por `Client.id` y paginación de mensajes.
 
-El backfill debe guardar la cohorte/resultado observado, no simular timestamps que no existan.
+Un backfill futuro solo queda autorizado para capacidades read-only realmente accesibles con credencial backend y con payload real documentado.
+
+No asumir que consultar historial por teléfono reconstruye automáticamente una campaña. El backfill no debe crear correlaciones campaña->mensaje ni simular timestamps que no existan.
 
 ## 16. Costos por campaña
 
-iVentas indicó que analytics incluye costo de campaña y que el envío almacena totalCost según país, categoría y fecha de envío.
-
-Sin embargo, el shape exacto de analytics no está congelado en la documentación.
+Campaign Analytics observado incluye `costs` y datos de costo real/provisional, pero el shape exacto todavía no está congelado contractualmente.
 
 Antes de programar parser:
-1. ejecutar GET stats contra una campaña real;
-2. guardar/inspeccionar un payload sanitizado;
-3. documentar campos usados;
-4. escribir fixture;
-5. implementar parser tolerante a campos extra.
+1. obtener un payload real sanitizado desde la frontera Campaign Analytics observada;
+2. documentar exactamente los campos usados;
+3. escribir fixture;
+4. implementar parser tolerante a campos extra;
+5. mantener `cost unavailable/unknown` cuando la frontera o la credencial no permita obtenerlo.
 
-Prohibido inventar rutas como:
-
-    analytics.cost.total
-
-sin ver el payload real.
+Prohibido inventar rutas internas del objeto `costs` sin ver y congelar el payload real.
 
 ## 17. Conciliación de costos
 
@@ -514,28 +608,19 @@ Una clasificación manual prevalece sobre la automática y no debe reescribirse 
 
 ## 20. Estados iVentas como filtro de futuras audiencias
 
-Una vez persistidos, Fase 2 puede añadir a Campañas V2 filtros como:
+Fase 2 podrá añadir filtros por campaña como `SENT`, `DELIVERED`, `VIEWED`, `FAILED` o `INTERACTED` **solo después** de demostrar y persistir correctamente la relación:
 
-- SENT
-- DELIVERED
-- VIEWED
-- FAILED
-- INTERACTED
+    Campaign V2 recipient
+      -> outbound provider message
+      -> estado/interacción observada
 
-Estos filtros se aplican sobre una campaña anterior elegida.
+Mientras esa correlación siga abierta, el historial GraphQL por teléfono puede informar comportamiento provider general, pero no debe presentarse como estado de una campaña concreta.
 
-Ejemplo:
-
-    source = previous_campaign
-    family in (DOMICILIADO, TRIMESTRAL)
-    AND viewed = true
-    AND interacted = false
-
-No ofrecer NO_RESPONDIDO hasta tener dato individual confiable.
+No ofrecer `NO_RESPONDIDO` hasta tener dato individual confiable.
 
 ## 21. Persistencia conceptual
 
-La implementación puede variar, pero debe separar como mínimo:
+La implementación futura puede variar, pero debe separar como mínimo. **M8 no autoriza todavía crear esta persistencia; recipient delivery e interactions quedan bloqueados hasta resolver la correlación campaña->outbound:**
 
 ### Provider campaign binding
 - campaign_v2_id opcional;
@@ -575,19 +660,21 @@ No crear una mega-columna JSON como sustituto de todo si después se necesitan f
 
 Repetir sync de una campaña no debe duplicar nada.
 
-Patrón:
+El patrón final dependerá de la capability:
 
-    fetch
+    campaign aggregate analytics
+      -> fetch
       -> normalize
-      -> upsert campaign binding
-      -> upsert recipients
-      -> upsert interactions
-      -> upsert analytics/cost
-      -> set last_synced_at
+      -> upsert campaign binding/analytics cuando esté autorizado
+
+    recipient/message history
+      -> fetch read-only
+      -> normalize evidencia histórica
+      -> NO convertir en campaign-recipient hasta resolver correlación
 
 No borrar estado más avanzado porque una respuesta transitoria venga incompleta.
 
-Definir explícitamente reglas de monotonicidad cuando el proveedor las garantice; no asumirlas si no están documentadas.
+Definir explícitamente reglas de monotonicidad solo cuando el proveedor las garantice; no asumirlas si no están documentadas.
 
 ## 23. Rate limits y retries
 
@@ -604,12 +691,16 @@ No meter requests largos dentro del backend web si terminan bloqueando workers. 
 
 ## 24. Seguridad
 
-La integration key:
+Toda credencial iVentas:
 - backend only;
 - env/secret;
 - nunca persistida en DB;
 - nunca enviada a Angular;
 - nunca registrada completa.
+
+No asumir que `IVENTAS_API_TOKEN` de la integración REST existente funciona también contra GraphQL o Campaign Analytics. Esa compatibilidad debe probarse read-only de forma aislada.
+
+GraphQL HTTP POST está permitido únicamente para operaciones `query` read-only. `mutation` está prohibida en M8.
 
 La credencial compartida durante análisis debe rotarse antes de considerarse integración productiva final.
 
@@ -657,72 +748,97 @@ La conexión del nuevo campaign model al motor legacy puede requerir una interfa
 
 ## 28. API interna esperada
 
-Operaciones equivalentes:
+Capacidades equivalentes futuras, separadas:
 
 - attach provider campaign id;
-- sync one campaign;
-- read campaign delivery;
-- read campaign interactions;
+- read campaign aggregate analytics;
+- resolve provider client/conversation by phone;
+- read recipient message history;
 - update commercial purpose;
 - list imported/external campaigns;
-- sync period cuando capability list_campaigns exista.
+- sync period cuando exista capability de listado confirmada;
+- read campaign-recipient delivery **solo cuando exista correlación demostrada campaña->outbound**.
 
 Los nombres definitivos se acuerdan al implementar.
 
 ## 29. Pruebas mínimas
 
-Provider parser:
-- successful;
-- failed;
-- sent;
-- delivered;
-- viewed;
-- interactions;
-- analyticsStatus ok;
-- not_synced;
-- unavailable;
+M8, antes de implementación:
+
+- validar de forma aislada si la credencial backend existente accede al GraphQL HTTP observado;
+- validar por separado la credencial necesaria para Campaign Analytics si difiere;
+- no ejecutar mutations;
+- no ejecutar `POST /v2/broadcast`.
+
+Cuando exista implementación basada en payloads reales:
+
+Campaign aggregate analytics:
+- payload real sanitizado;
+- campos usados documentados;
+- costos solo según shape observado;
 - campos extra ignorados;
 - payload incompleto controlado.
 
-Persistencia:
-- idempotencia;
-- no duplicar recipient;
-- no duplicar interaction;
-- unique provider campaign;
-- manual classification survives resync.
+Recipient/message history:
+- phone -> Client.id;
+- paginación `skip`;
+- outbound con `messageStatus`;
+- inbound `sender == CLIENT` con `messageStatus = null` sin convertirlo en delivery;
+- quote positivo `quotedMsgId == outbound.messageApiId`;
+- ausencia de quote no produce `NO_RESPONDIDO`;
+- timestamps no reinterpretados sin evidencia.
+
+Correlación campaign-recipient:
+- permanece bloqueada hasta encontrar evidencia provider suficiente;
+- cuando exista, deberá probar pertenencia del outbound a una campaña concreta antes de persistir `sent/delivered/viewed/failed` por número y campaña.
 
 Seguridad:
 - token no aparece en logs/response;
-- branch fuera de scope rechazado;
-- campaign fuera de scope manejado como provider error.
-
-Histórico:
-- importar ID histórico;
-- sincronizar;
-- volver a sincronizar;
-- mismos registros.
+- errores sanitizados;
+- ninguna mutation/envío en pruebas M8.
 
 ## 30. Criterio de aceptación de Fase 2
 
-Dada una campaña real conocida de iVentas, Suite debe poder mostrar:
+Fase 2 debe poder representar correctamente las dos capacidades independientes observadas:
 
-- nombre/identidad de campaña;
-- provider_campaign_id;
-- sucursal si se puede resolver;
-- destinatarios;
-- sent;
-- delivered;
-- viewed;
-- failed;
-- interacciones;
-- analytics status;
-- costo si el payload real lo soporta;
-- propósito comercial;
-- fecha de última sincronización.
+### Campaign aggregate analytics
 
-Debe poder abrirse el detalle y saber qué números pertenecen a cada estado soportado.
+Dada una campaña real conocida y accesible, Suite debe poder mostrar/persistir únicamente campos soportados por payload real, incluyendo cuando aplique:
 
-Debe poder cambiarse propósito comercial manualmente.
+- identidad/provider_campaign_id;
+- analytics agregados;
+- funnel/rates agregados;
+- failures agregados;
+- interactions agregadas;
+- costo/moneda según shape congelado;
+- fecha de última sincronización;
+- propósito comercial.
+
+### Recipient/message historical status
+
+Dado un teléfono accesible por la frontera provider:
+
+- resolver `Client.id`;
+- recorrer historial de mensajes;
+- distinguir inbound/outbound según evidencia observada;
+- conservar `messageStatus` y errores provider sin inventar delivery;
+- reconocer evidencia positiva de reply cuando exista correlación `quotedMsgId -> messageApiId`;
+- no fabricar “no respondió” ni timestamps de delivery.
+
+### Bloqueo explícito
+
+El criterio original:
+
+    saber qué números de una campaña pertenecen a
+    sent / delivered / viewed / failed
+
+**permanece pendiente**.
+
+No se considera satisfecho hasta demostrar:
+
+    Campaign V2 recipient
+      -> outbound provider message
+      -> estado individual
 
 No es requisito todavía enviar desde Suite.
 
@@ -730,17 +846,20 @@ No es requisito todavía enviar desde Suite.
 
 No iniciar Fase 3 hasta que:
 - provider abstraction sea estable;
-- stats reales estén validados;
-- costos reales estén parseados con fixture;
-- sync sea idempotente;
+- Campaign aggregate analytics reales estén validados con payload sanitizado;
+- recipient/message history real esté validado con credencial backend;
+- la correlación `Campaign V2 recipient -> outbound provider message` esté demostrada;
+- `sent/delivered/viewed/failed` por número y campaña puedan derivarse sin especulación;
+- costos reales estén parseados con fixture si la capability los expone;
+- sync sea idempotente para cada capability implementada;
 - campañas externas puedan representarse;
-- branch resolution funcione;
+- branch resolution funcione cuando aplique;
 - secretos estén fuera del código;
 - legacy no se haya roto;
 - `FUNNEL_PORTFOLIO` funcione con recipients phone-only;
 - la cartera Funnel reutilice la semántica vigente de compradores/no compradores;
 - la cartera Funnel excluya por número a quienes aparezcan en el snapshot canónico vigente de Socios Activos y reporte `ACTIVE_MEMBER_SUPPRESSION`;
-- los flags iVentas estén ligados a campaña-recipient y no a las bases canónicas.
+- los flags iVentas, cuando puedan atribuirse, estén ligados a campaña-recipient y no a las bases canónicas.
 
 ## 32. Instrucción de arranque recomendada para una conversación nueva de Fase 2
 
@@ -749,6 +868,9 @@ No iniciar Fase 3 hasta que:
     Confirma en el repositorio que Fase 1 está terminada.
     Inspecciona la integración iVentas existente y reutiliza normalización,
     aliases, seguridad y patrones de persistencia.
-    No implementes POST /v2/broadcast.
+    No implementes POST /v2/broadcast ni GraphQL mutations.
+    Trata Campaign aggregate analytics y Recipient/message history como capabilities independientes.
+    Considera /v2/broadcast/stats/:id y sus arrays como NO OBSERVADOS hasta nueva evidencia.
     Antes de modelar analytics/costo, obtén un payload real sanitizado.
+    No persistir delivery por campaign-recipient hasta demostrar campaign -> outbound provider message.
     Propón un solo cambio mínimo y su prueba.
