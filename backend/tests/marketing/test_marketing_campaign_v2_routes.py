@@ -69,6 +69,7 @@ class TestMarketingCampaignV2Routes:
             ("get", "/api/marketing/campaigns-v2/tariffs/unclassified"),
             ("put", "/api/marketing/campaigns-v2/tariffs/PLAN%20FAMILIAR/classification"),
             ("get", "/api/marketing/campaigns-v2"),
+            ("post", "/api/marketing/campaigns-v2/provider-history/lookup"),
             ("get", "/api/marketing/campaigns-v2/1"),
             ("get", "/api/marketing/campaigns-v2/1/provider-stats"),
             ("post", "/api/marketing/campaigns-v2/1/provider-stats/snapshots"),
@@ -600,6 +601,91 @@ class TestMarketingCampaignV2Routes:
                 headers=self.headers,
             )
         assert response.status_code == 409
+
+    def test_provider_history_lookup_uses_backend_scope_and_read_only_payload(self):
+        expected = {
+            "observed_before": "2026-10-01T12:00:00+00:00",
+            "phone_count": 1,
+            "rows": [
+                {
+                    "normalized_phone": "mx10:6861111111",
+                    "campaign_count": 1,
+                }
+            ],
+        }
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.get_provider_history_for_phones",
+                return_value=expected,
+            ) as service,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/provider-history/lookup",
+                json={
+                    "phones": ["6861111111"],
+                    "observed_before": "2026-10-01T12:00:00Z",
+                },
+                headers=self.headers,
+            )
+        assert response.status_code == 200
+        assert response.get_json() == expected
+        assert service.call_args.kwargs["phones"] == ["6861111111"]
+        assert (
+            service.call_args.kwargs["observed_before"].isoformat()
+            == "2026-10-01T12:00:00+00:00"
+        )
+        assert service.call_args.kwargs["allowed_sucursal_keys"] is None
+
+    def test_provider_history_lookup_rejects_invalid_payload_and_cutoff(self):
+        with self._auth():
+            unknown = self.client.post(
+                "/api/marketing/campaigns-v2/provider-history/lookup",
+                json={"phones": ["6861111111"], "provider": "IVENTAS"},
+                headers=self.headers,
+            )
+            invalid_cutoff = self.client.post(
+                "/api/marketing/campaigns-v2/provider-history/lookup",
+                json={
+                    "phones": ["6861111111"],
+                    "observed_before": "2026-10-01T12:00:00",
+                },
+                headers=self.headers,
+            )
+        assert unknown.status_code == 400
+        assert invalid_cutoff.status_code == 400
+
+    def test_provider_history_lookup_validation_error_maps_to_400(self):
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.get_provider_history_for_phones",
+                side_effect=routes.MarketingCampaignV2ProviderHistoryValidationError(
+                    "phones admite máximo 100 elementos."
+                ),
+            ),
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/provider-history/lookup",
+                json={"phones": ["6861111111"]},
+                headers=self.headers,
+            )
+        assert response.status_code == 400
+        assert "máximo 100" in response.get_json()["message"]
+
+    def test_provider_history_lookup_reuses_campaign_v2_management_permission(self):
+        access = SimpleNamespace(
+            is_global=True,
+            branch_ids=(),
+            can_edit_inputs=False,
+        )
+        with self._auth(access):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/provider-history/lookup",
+                json={"phones": ["6861111111"]},
+                headers=self.headers,
+            )
+        assert response.status_code == 403
 
     def test_provider_stats_success_uses_backend_scope_only(self):
         expected = {

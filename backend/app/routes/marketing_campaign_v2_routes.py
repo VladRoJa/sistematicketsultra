@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from flask import Blueprint, jsonify, request
@@ -49,6 +50,10 @@ from app.services.marketing_campaign_v2_provider_stats_snapshot_service import (
     capture_campaign_v2_provider_stats_snapshot,
     get_latest_campaign_v2_provider_stats_snapshot,
     list_campaign_v2_provider_stats_snapshots,
+)
+from app.services.marketing_campaign_v2_provider_history_service import (
+    MarketingCampaignV2ProviderHistoryValidationError,
+    get_provider_history_for_phones,
 )
 
 
@@ -320,6 +325,39 @@ def list_campaign_v2_endpoint():
         return _error(str(exc), 400)
     except Exception:
         return _error("Falló la consulta de Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.post(
+    "/campaigns-v2/provider-history/lookup"
+)
+@jwt_required()
+def lookup_campaign_v2_provider_history_endpoint():
+    try:
+        _, access = _resolve_campaign_v2_request()
+        _validate_query_args(set())
+        payload = _parse_payload({"phones", "observed_before"})
+        observed_before = _parse_optional_iso_datetime(
+            payload.get("observed_before")
+        )
+        result = get_provider_history_for_phones(
+            phones=payload.get("phones"),
+            observed_before=observed_before,
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (
+        MarketingCampaignV2RouteValidationError,
+        MarketingCampaignV2ProviderHistoryValidationError,
+    ) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error(
+            "Falló la consulta histórica provider de Campaign V2.",
+            500,
+        )
 
 
 @marketing_campaign_v2_bp.get("/campaigns-v2/<int:campaign_id>")
@@ -635,6 +673,29 @@ def _validate_query_args(allowed_fields: set[str]) -> None:
         raise MarketingCampaignV2RouteValidationError(
             "Parámetros no permitidos: " + ", ".join(unknown) + "."
         )
+
+
+def _parse_optional_iso_datetime(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise MarketingCampaignV2RouteValidationError(
+            "observed_before debe ser fecha ISO con zona horaria."
+        )
+    normalized = value.strip()
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise MarketingCampaignV2RouteValidationError(
+            "observed_before debe ser fecha ISO con zona horaria."
+        ) from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise MarketingCampaignV2RouteValidationError(
+            "observed_before debe incluir zona horaria."
+        )
+    return parsed
 
 
 def _provider_stats_upstream_response(

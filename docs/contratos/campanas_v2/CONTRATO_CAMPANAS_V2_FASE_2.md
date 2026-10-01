@@ -723,6 +723,100 @@ Concurrencia:
 
 M12 no crea tablas ni migraciones.
 
+### M13 — histórico recipient-level transversal por teléfono
+
+M13 construye una consulta histórica provider-agnostic usando exclusivamente evidencia persistida M11:
+
+    marketing_campaign_v2_provider_stats_snapshots
+      -> marketing_campaign_v2_provider_recipient_observations
+      -> marketing_campaign_v2_campaigns
+
+No consulta iVentas, GraphQL, M10 read-through ni dispara capturas.
+
+Semántica temporal:
+
+    observed_at = snapshot.fetched_at
+
+significa cuándo Suite observó el estado. No representa sent_at/delivered_at/viewed_at reales del provider.
+
+El servicio bulk:
+
+    get_provider_history_for_phones(...)
+
+normaliza inputs reutilizando `normalize_iventas_phone()` y resuelve MX10 a la representación interna:
+
+    mx10:<10 dígitos>
+
+Máximo por request:
+
+    100 teléfonos
+
+alineado con el límite ya usado por Campaign V2 para page_size.
+
+La consulta es bulk y evita N+1:
+- una query observations -> snapshots -> campaigns;
+- filtro por `normalized_phone IN (...)`;
+- cutoff opcional `fetched_at <= observed_before`;
+- scope Campaign V2 aplicado con la semántica existente.
+
+Perspectivas:
+
+1. `latest_by_campaign`
+   - una observación por `campaign_v2_id + normalized_phone`;
+   - desempate determinístico `fetched_at DESC, snapshot_id DESC`;
+   - conserva outcome, exact delivery bucket, button labels, provider identity y observed_at.
+
+2. `ever_observed`
+   - outcomes observados;
+   - delivery buckets exactos observados;
+   - button labels observadas;
+   - `button_interacted`;
+   - first/last observed_at;
+   - campaign_count.
+
+M13 no fabrica jerarquía:
+
+    VIEWED != SENT + DELIVERED
+
+ni crea:
+
+    responded
+    no_answer
+    unanswered
+
+La ausencia de button interaction no se reinterpreta como ausencia de respuesta.
+
+API read-only:
+
+    POST /api/marketing/campaigns-v2/provider-history/lookup
+
+Payload:
+
+    {
+      "phones": ["686...", "664..."],
+      "observed_before": "optional ISO datetime with timezone"
+    }
+
+Aunque usa POST como transporte, la operación hace:
+- cero INSERT;
+- cero UPDATE;
+- cero DELETE;
+- cero commit;
+- `session.no_autoflush`.
+
+Scope/permisos:
+- reutiliza autorización Campaign V2;
+- campañas fuera del scope backend no aparecen;
+- un teléfono conocido no permite descubrir actividad de campañas no visibles.
+
+Performance/índices:
+- M11 ya tiene índice por observation.normalized_phone;
+- snapshot_id une por PK;
+- snapshots ya tienen índice por campaign_v2_id + fetched_at;
+- M13 no requiere migración ni materialización adicional.
+
+M13 funciona indistintamente con snapshots manuales M11 y automáticos M12.
+
 ## 13. Campañas creadas fuera de Suite
 
 Fase 2 debe soportar el concepto:
@@ -1038,6 +1132,18 @@ Ya existe en M12:
 - reutilización directa del snapshot service M11;
 - aislamiento por campaña y cleanup de `db.session`.
 
+Ya existe en M13:
+
+- histórico transversal recipient-level por teléfono sobre snapshots M11;
+- lookup bulk provider-agnostic sin llamadas a iVentas;
+- `latest_by_campaign` determinístico;
+- `ever_observed` con outcomes/buckets/button labels exactos;
+- cutoff `observed_before` basado en `snapshot.fetched_at`;
+- scope Campaign V2 backend-authoritative;
+- endpoint read-only `POST /campaigns-v2/provider-history/lookup`;
+- máximo de 100 teléfonos por request;
+- una query bulk, sin N+1 y sin migración adicional.
+
 Capacidades futuras, separadas:
 
 - update commercial purpose;
@@ -1142,7 +1248,7 @@ queda satisfecho en modo read-only para un `campaign_id` conocido mediante campa
 
 ## 31. Limitaciones que permanecen abiertas para Fase 2
 
-El cierre M12 **no cierra toda Fase 2**. Permanecen abiertos:
+El cierre M13 **no cierra toda Fase 2**. Permanecen abiertos:
 
 - definición/activación operativa de los valores productivos de cadence/horizon/max;
 - listado/importación de campañas por periodo;
@@ -1181,5 +1287,7 @@ No iniciar Fase 3 hasta cerrar los requisitos restantes de Fase 2 que correspond
     M11 persiste snapshots append-only y recipient observations.
     M12 reutiliza marketing-scheduler para captura automática configurable.
     M12 permanece disabled hasta definir explícitamente interval/horizon/max.
+    M13 expone histórico transversal bulk sobre snapshots M11, sin provider calls.
+    M13 usa observed_at=fetched_at y no fabrica timestamps provider.
     No reemplaces snapshots M11 por estado mutable ni inventes timestamps/causas recipient-level.
     No implementes POST /v2/broadcast ni GraphQL mutations.
