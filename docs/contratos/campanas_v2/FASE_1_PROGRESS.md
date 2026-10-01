@@ -1,6 +1,6 @@
 # Campañas V2 — Fase 1 — Progreso
 
-Última actualización: 2026-09-30
+Última actualización: 2026-10-01
 
 ## Base de trabajo
 
@@ -2376,3 +2376,208 @@ Sin cambios:
 - no edición del snapshot aprobado;
 - no PR/merge/deploy.
 
+
+
+## Cierre de Fase 1 — aceptación local real (2026-10-01)
+
+Estado: **FASE 1 LISTA PARA MERGE**.
+
+La aceptación integrada se reanudó en un checkout local completo con PostgreSQL, backend Flask y frontend Angular disponibles.
+
+### Estado de DB y migraciones
+
+Antes del smoke se detectó una marca Alembic local huérfana (`b01d3194e7c6`) coexistiendo con la rama válida `a9d3e7f1c5b8`. Se confirmó que la revisión huérfana no existe en el repo ni en su historial local. La fila huérfana se eliminó únicamente en la DB local de aceptación y Alembic volvió a reconocer la cadena válida.
+
+Después se aplicó el upgrade normal hasta:
+
+`b7c2e9f4a1d6 (head)`
+
+`flask db current` y `flask db heads` quedaron alineados en esa revisión.
+
+### Validación automatizada local
+
+En el checkout local completo se reejecutaron y quedaron verdes:
+
+- corredor backend actualizado de Campaign V2 + regresión legacy tocada: sin failures;
+- `node scripts/test-campaign-v2.cjs`: verde con la cobertura M7.1/M7.1.1;
+- `node scripts/test-campaigns.cjs`: verde, baseline legacy conservado;
+- `npm run build`: completado correctamente.
+
+Los warnings Angular existentes de autoprefixer/CommonJS/CSS no bloquearon el build.
+
+### Smoke ACTIVE_MEMBERS
+
+Con source `ACTIVE_MEMBERS` y familia `DOMICILIADO`:
+
+- universo inicial: 34,342;
+- scope aplicado: 34,342;
+- Domiciliado clasificado inicialmente: 20,637;
+- teléfonos inválidos: 1;
+- duplicados: 89;
+- destinatarios finales: 20,547;
+- tarifa sin clasificación observada inicialmente: 8,910;
+- snapshot canónico usado: corte 2026-09-19, kind `daily`.
+
+La conciliación del segmento seleccionado fue exacta:
+
+`20,637 - 1 - 89 = 20,547`.
+
+Se validaron drill-downs reales de RECIPIENTS y FAMILY, con paginación backend.
+
+### Smoke del catalogador M7.1/M7.1.1
+
+El catalogador real mostró inicialmente:
+
+- 96 tarifas únicas;
+- 8,910 filas sin clasificación;
+- orden por `row_count DESC`.
+
+Se clasificó la tarifa:
+
+`DOMICILIADO 12 MESES $649 HE`
+
+como:
+
+- categoría canónica: `Domiciliado`;
+- family: `DOMICILIADO`.
+
+El save fue exitoso, la fila mostró “Clasificación guardada” y el Preview/fingerprint vigente quedó invalidado.
+
+Al reconstruir el catálogo efectivo:
+
+- tarifas únicas sin clasificar: 95;
+- filas sin clasificación: 7,164.
+
+La reducción fue exactamente:
+
+`8,910 - 1,746 = 7,164`.
+
+Esto valida persistencia del override y precedence efectiva `override > snapshot > UNCLASSIFIED`.
+
+La categoría se seleccionó desde el dominio canónico backend; no existe input libre.
+
+### Smoke EXPIRED_MEMBERS
+
+Rango validado:
+
+`2026-09-01 → 2026-09-19`
+
+con familia `DOMICILIADO`.
+
+Resultados:
+
+- universo inicial: 26,892;
+- scope aplicado: 26,892;
+- Domiciliado: 3,370;
+- duplicados: 94;
+- teléfonos inválidos: 0;
+- destinatarios finales: 3,276;
+- bloqueados por estado actual: 3,098;
+- fuera de segmento: 19,027;
+- tarifa sin clasificación: 332;
+- corte usado para estado actual: 2026-09-19.
+
+La composición total no bloqueada más los bloqueados reconcilió exactamente con el universo.
+
+El drill-down `CURRENT_STATUS_BLOCKED` devolvió 3,098 filas reales con estado `ACTIVE_CONFIRMED`, validando que Vencidos se cruza contra estado actual y no trata toda la cartera histórica como elegible.
+
+### Freeze e historia congelada
+
+Se creó exitosamente la campaña local:
+
+`Smoke M7 Vencidos 2026-09-01 a 2026-09-19`
+
+con:
+
+- source: EXPIRED_MEMBERS;
+- family: DOMICILIADO;
+- purpose inicial: REACTIVATION;
+- recipients congelados: 3,276.
+
+El historial mostró inmediatamente la campaña con el mismo recipient_count.
+
+El detalle congelado conservó:
+
+- fingerprint;
+- source;
+- family;
+- scope global autorizado;
+- rango 2026-09-01 → 2026-09-19;
+- corte de estado actual 2026-09-19;
+- frozen_at;
+- 3,276 recipients.
+
+No se reconstruyó la audiencia viva para mostrar el detalle.
+
+### Recipients y Evidence
+
+Se validó la lista paginada de recipients congelados y el detalle de Evidence.
+
+Ejemplo real inspeccionado:
+
+- source: EXPIRED_MEMBERS;
+- current status congelado: NOT_FOUND;
+- evidencia: `CURRENT_STATUS:NOT_FOUND`;
+- evidencia: `TARIFF_FAMILY:DOMICILIADO`;
+- nombre/PIN/sucursal/tarifa/familia/vencimiento permanecieron congelados.
+
+La muestra inspeccionada tuvo una sola Evidence y sin conflictos; el caso múltiple/conflict continúa cubierto por pruebas automatizadas.
+
+### PATCH purpose
+
+La misma campaña se cambió de `REACTIVATION` a `UNCLASSIFIED`.
+
+Después del PATCH permanecieron sin cambio observable:
+
+- 3,276 recipients;
+- fingerprint;
+- frozen_at;
+- definición congelada;
+- rango;
+- source metadata.
+
+El historial reflejó el nuevo purpose sin alterar la cohorte.
+
+### Auth / permisos
+
+Con un usuario GERENTE real se intentó acceso manual a `/#/marketing/campaigns-v2`.
+
+El backend rechazó Options y el frontend mostró:
+
+`Acceso no disponible / No tienes acceso a Campañas V2`.
+
+Esto valida que el ocultamiento/navegación frontend no sustituye la autoridad backend `can_edit_inputs`.
+
+### Stale Preview / 409
+
+El caso concurrente de stale Preview no se forzó manualmente en el smoke final por requerir dos sesiones y una mutación intermedia controlada. No se considera blocker de aceptación porque el mismatch/fingerprint y el manejo 409 permanecen cubiertos por pruebas automatizadas de M4/M6.
+
+### Observación no bloqueante para Fase 2
+
+El normalizador general acepta cualquier cadena de 10 dígitos, por lo que valores placeholder como `0000000000` pueden llegar a recipients si la fuente los contiene. No se modificó en Fase 1 porque `marketing_phone.normalize_phone()` es compartido con otros módulos y el contrato exige reutilizarlo.
+
+Antes del envío real en Fase 2 debe distinguirse “teléfono normalizable” de “teléfono enviable” mediante una regla técnica explícita, sin alterar silenciosamente la identidad compartida.
+
+### Criterio de cierre
+
+Fase 1 se considera cerrada para merge porque quedaron validados:
+
+- catálogo V2 y overrides auditables;
+- categorías canónicas controladas;
+- ACTIVE_MEMBERS;
+- EXPIRED_MEMBERS + current status;
+- Preview/drill-down;
+- invalidación de fingerprint;
+- Freeze;
+- History;
+- Campaign Detail congelado;
+- Recipients;
+- Evidence;
+- PATCH purpose;
+- autorización backend;
+- regresión frontend legacy;
+- build Angular;
+- pruebas backend/frontend sin failures;
+- cero funcionalidad de Fase 2 incorporada.
+
+No se desplegó a producción durante esta aceptación.
