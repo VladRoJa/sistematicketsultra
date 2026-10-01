@@ -63,11 +63,25 @@ def get_provider_history_for_phones(
     phones: Iterable[Any],
     allowed_sucursal_keys: Iterable[str] | None,
     observed_before: datetime | None = None,
+    observed_after: datetime | None = None,
+    max_phones: int | None = MAX_PROVIDER_HISTORY_PHONES,
     session=None,
 ) -> dict[str, Any]:
     active_session = session if session is not None else db.session
-    normalized_phones = _normalize_requested_phones(phones)
+    normalized_phones = _normalize_requested_phones(
+        phones,
+        max_phones=max_phones,
+    )
     cutoff = _normalize_cutoff(observed_before)
+    lower_bound = _normalize_cutoff(observed_after)
+    if (
+        cutoff is not None
+        and lower_bound is not None
+        and lower_bound > cutoff
+    ):
+        raise MarketingCampaignV2ProviderHistoryValidationError(
+            "observed_after no puede ser posterior a observed_before."
+        )
     scope = _normalize_current_scope(allowed_sucursal_keys)
 
     with active_session.no_autoflush:
@@ -97,6 +111,11 @@ def get_provider_history_for_phones(
             query = query.filter(
                 MarketingCampaignV2ProviderStatsSnapshotORM.fetched_at
                 <= cutoff
+            )
+        if lower_bound is not None:
+            query = query.filter(
+                MarketingCampaignV2ProviderStatsSnapshotORM.fetched_at
+                >= lower_bound
             )
 
         db_rows = query.order_by(
@@ -130,6 +149,7 @@ def get_provider_history_for_phones(
 
     return {
         "observed_before": _iso_datetime(cutoff),
+        "observed_after": _iso_datetime(lower_bound),
         "phone_count": len(normalized_phones),
         "rows": [_serialize_history(history) for history in histories],
     }
@@ -236,6 +256,8 @@ def _build_history(
 
 def _normalize_requested_phones(
     phones: Iterable[Any],
+    *,
+    max_phones: int | None,
 ) -> tuple[str, ...]:
     if isinstance(phones, (str, bytes)) or phones is None:
         raise MarketingCampaignV2ProviderHistoryValidationError(
@@ -253,9 +275,9 @@ def _normalize_requested_phones(
         raise MarketingCampaignV2ProviderHistoryValidationError(
             "phones debe contener al menos un teléfono."
         )
-    if len(raw_values) > MAX_PROVIDER_HISTORY_PHONES:
+    if max_phones is not None and len(raw_values) > max_phones:
         raise MarketingCampaignV2ProviderHistoryValidationError(
-            f"phones admite máximo {MAX_PROVIDER_HISTORY_PHONES} elementos."
+            f"phones admite máximo {max_phones} elementos."
         )
 
     normalized: list[str] = []

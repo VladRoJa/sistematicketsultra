@@ -246,6 +246,25 @@ def test_cutoff_excludes_later_snapshots_inclusively(session):
     ).isoformat()
 
 
+def test_observed_after_is_inclusive(session):
+    result = get_provider_history_for_phones(
+        phones=["6861111111"],
+        allowed_sucursal_keys=("BRANCH A",),
+        observed_before=BASE + timedelta(hours=1),
+        observed_after=BASE + timedelta(hours=1),
+        session=session,
+    )
+    row = result["rows"][0]
+
+    assert row["ever_observed"]["delivery_buckets"] == ["DELIVERED"]
+    assert row["first_observed_at"] == (
+        BASE + timedelta(hours=1)
+    ).isoformat()
+    assert row["last_observed_at"] == (
+        BASE + timedelta(hours=1)
+    ).isoformat()
+
+
 def test_provider_unmatched_phone_is_still_queryable(session):
     result = get_provider_history_for_phones(
         phones=["mx10:6642222222"],

@@ -817,6 +817,94 @@ Performance/índices:
 
 M13 funciona indistintamente con snapshots manuales M11 y automáticos M12.
 
+### M14 — filtros históricos provider en Audience Builder
+
+M14 integra M13 dentro del builder server-side sin provider HTTP:
+
+    source audience
+      -> scope/status/clasificación
+      -> teléfono MX10
+      -> history M13 bulk
+      -> history exclusion
+      -> dedupe
+      -> Preview / Detail / Freeze
+
+Contrato de filtro:
+
+    {
+      "history_exclusion": {
+        "delivery_buckets": ["SENT", "DELIVERED", "VIEWED"],
+        "outcomes": ["SUCCESSFUL", "FAILED"],
+        "button_interacted": true,
+        "lookback_days": null
+      }
+    }
+
+Todos los campos son opcionales. Un objeto sin condiciones efectivas equivale a no usar filtro histórico. lookback_days no tiene default y requiere al menos una condición.
+
+Semántica de exclusión:
+- OR entre todas las condiciones seleccionadas;
+- un teléfono se excluye una sola vez aunque cumpla varias reglas;
+- reason counts son no exclusivos y pueden sumar más que history_excluded_count;
+- VIEWED/DELIVERED/SENT son buckets exactos observados, sin jerarquía implícita;
+- no existen responded/no_answer/unanswered.
+
+Razones canónicas de Preview Detail:
+- HISTORY_DELIVERY_SENT;
+- HISTORY_DELIVERY_DELIVERED;
+- HISTORY_DELIVERY_VIEWED;
+- HISTORY_OUTCOME_SUCCESSFUL;
+- HISTORY_OUTCOME_FAILED;
+- HISTORY_BUTTON_INTERACTION.
+
+Preview diagnostics, sólo cuando el filtro está activo:
+- before_history_filter_count;
+- history_excluded_count;
+- after_history_filter_count;
+- excluded_by_delivery_bucket;
+- excluded_by_outcome;
+- excluded_by_button_interaction.
+
+Los tres primeros cuentan teléfonos MX10 únicos antes/después de aplicar history, no filas fuente.
+
+Cutoff/reproducibilidad:
+- Angular no envía observed_before ni resultados históricos;
+- el backend consulta M13 sobre los teléfonos candidatos visibles;
+- observed_before efectivo es el máximo last_observed_at persistido relevante para esos teléfonos;
+- sin historia, el cutoff efectivo es null;
+- con lookback_days=N, observed_after = observed_before - N días;
+- la ventana es inclusiva: observed_after <= fetched_at <= observed_before;
+- Preview calcula su cutoff autoritativamente;
+- Preview Detail reconstruye y recalcula autoritativamente en su request;
+- Freeze reconstruye de nuevo;
+- history_evaluation.observed_before/observed_after se guarda en source_metadata;
+- filters + source_metadata ya forman parte del fingerprint existente;
+- si nuevos snapshots relevantes cambian el cutoff o audiencia entre Preview y Freeze, Freeze produce preview mismatch y exige regenerar Preview.
+
+Persistencia:
+- audience_definition_json.filters.history_exclusion conserva la regla aplicada;
+- audience_definition_json.source_metadata.history_evaluation conserva los límites efectivos;
+- no se copian snapshots/history dentro de Campaign V2;
+- no se requiere migración.
+
+Preview Detail soporta:
+
+    bucket = HISTORY_EXCLUDED
+
+y devuelve un teléfono representativo con history_exclusion_reasons.
+
+Performance:
+- M13 mantiene máximo 100 sólo como default de la frontera pública;
+- Audience Builder llama el mismo core con max_phones=None;
+- sin lookback se hace una llamada bulk M13;
+- con lookback se hace una consulta bulk anchor + una consulta bulk de ventana;
+- nunca hay N+1 por recipient.
+
+Compatibilidad:
+- sin history_exclusion, Audience Builder no llama M13;
+- filtros/source_metadata/fingerprint/recipient set previos permanecen sin cambios;
+- campañas existentes siguen siendo legibles.
+
 ## 13. Campañas creadas fuera de Suite
 
 Fase 2 debe soportar el concepto:
@@ -1144,6 +1232,18 @@ Ya existe en M13:
 - máximo de 100 teléfonos por request;
 - una query bulk, sin N+1 y sin migración adicional.
 
+Ya existe en M14:
+
+- history exclusions server-side integradas al Audience Builder;
+- exclusión OR por delivery bucket, outcome y button interaction;
+- lookback opcional con ventana observada inclusiva;
+- cutoff backend-authoritative;
+- Preview diagnostics + bucket `HISTORY_EXCLUDED`;
+- regla + cutoff efectivo dentro de `audience_definition_json`;
+- Preview/Freeze protegidos por fingerprint existente;
+- core M13 reutilizado en bulk, sin provider HTTP ni N+1;
+- compatibilidad exacta cuando no se usa history filter.
+
 Capacidades futuras, separadas:
 
 - update commercial purpose;
@@ -1248,14 +1348,14 @@ queda satisfecho en modo read-only para un `campaign_id` conocido mediante campa
 
 ## 31. Limitaciones que permanecen abiertas para Fase 2
 
-El cierre M13 **no cierra toda Fase 2**. Permanecen abiertos:
+El cierre M14 **no cierra toda Fase 2**. Permanecen abiertos:
 
 - definición/activación operativa de los valores productivos de cadence/horizon/max;
 - listado/importación de campañas por periodo;
 - representación/persistencia de campañas externas;
 - normalización específica de costos cuando vaya a consumirse;
 - branch resolution para campañas externas cuando aplique;
-- integración de filtros históricos persistidos con audiencias;
+- UI Angular para configurar los filtros históricos ya cerrados en backend;
 - GraphQL histórico por teléfono si se requiere para otro caso de uso;
 - Cartera Funnel y sus reglas completas;
 - preparación para Fase 3/envío.
@@ -1289,5 +1389,7 @@ No iniciar Fase 3 hasta cerrar los requisitos restantes de Fase 2 que correspond
     M12 permanece disabled hasta definir explícitamente interval/horizon/max.
     M13 expone histórico transversal bulk sobre snapshots M11, sin provider calls.
     M13 usa observed_at=fetched_at y no fabrica timestamps provider.
+    M14 integra exclusiones históricas OR en Audience Builder con cutoff backend-authoritative.
+    M14 persiste sólo criterios + history_evaluation; no copia snapshots.
     No reemplaces snapshots M11 por estado mutable ni inventes timestamps/causas recipient-level.
     No implementes POST /v2/broadcast ni GraphQL mutations.

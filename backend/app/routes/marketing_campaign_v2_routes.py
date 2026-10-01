@@ -115,6 +115,7 @@ def campaign_v2_preview_endpoint():
                 "audience_families",
                 "expiration_date_from",
                 "expiration_date_to",
+                "history_exclusion",
             }
         )
         result = build_campaign_v2_freeze_preview(
@@ -123,6 +124,7 @@ def campaign_v2_preview_endpoint():
             allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
             expiration_date_from=payload.get("expiration_date_from"),
             expiration_date_to=payload.get("expiration_date_to"),
+            history_exclusion=payload.get("history_exclusion"),
             session=db.session,
         )
         return jsonify(result), 200
@@ -149,6 +151,7 @@ def campaign_v2_preview_detail_endpoint():
                 "audience_family",
                 "page",
                 "page_size",
+                "history_exclusion",
             }
         )
         result = audience.build_campaign_v2_audience_preview_detail(
@@ -161,6 +164,7 @@ def campaign_v2_preview_detail_endpoint():
             page_size=payload.get("page_size", 50),
             expiration_date_from=payload.get("expiration_date_from"),
             expiration_date_to=payload.get("expiration_date_to"),
+            history_exclusion=payload.get("history_exclusion"),
             session=db.session,
         )
         return jsonify(result), 200
@@ -187,6 +191,7 @@ def freeze_campaign_v2_endpoint():
                 "audience_families",
                 "expiration_date_from",
                 "expiration_date_to",
+                "history_exclusion",
                 "expected_preview_fingerprint",
             }
         )
@@ -200,6 +205,7 @@ def freeze_campaign_v2_endpoint():
             created_by_user_id=int(user.id),
             expiration_date_from=payload.get("expiration_date_from"),
             expiration_date_to=payload.get("expiration_date_to"),
+            history_exclusion=payload.get("history_exclusion"),
             session=db.session,
         )
         return jsonify(result), 201

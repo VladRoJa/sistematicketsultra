@@ -59,6 +59,7 @@ def build_campaign_v2_freeze_preview(
     allowed_sucursal_keys: Iterable[Any] | None,
     expiration_date_from: Any = None,
     expiration_date_to: Any = None,
+    history_exclusion: Any = None,
     session: Any | None = None,
 ) -> dict[str, Any]:
     """Reconstruye con M3 y entrega Preview más fingerprint server-side."""
@@ -69,6 +70,7 @@ def build_campaign_v2_freeze_preview(
         allowed_sucursal_keys=allowed_sucursal_keys,
         expiration_date_from=expiration_date_from,
         expiration_date_to=expiration_date_to,
+        history_exclusion=history_exclusion,
         session=session,
     )
     preview = audience._serialize_preview(plan)
@@ -92,6 +94,7 @@ def freeze_campaign_v2(
     created_by_user_id: Any,
     expiration_date_from: Any = None,
     expiration_date_to: Any = None,
+    history_exclusion: Any = None,
     session: Any | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -114,6 +117,7 @@ def freeze_campaign_v2(
         allowed_sucursal_keys=allowed_sucursal_keys,
         expiration_date_from=expiration_date_from,
         expiration_date_to=expiration_date_to,
+        history_exclusion=history_exclusion,
         session=active_session,
     )
     preview = audience._serialize_preview(plan)
@@ -203,6 +207,7 @@ def _rebuild_plan(
     allowed_sucursal_keys: Iterable[Any] | None,
     expiration_date_from: Any,
     expiration_date_to: Any,
+    history_exclusion: Any,
     session: Any | None,
 ):
     try:
@@ -212,6 +217,7 @@ def _rebuild_plan(
             allowed_sucursal_keys=allowed_sucursal_keys,
             expiration_date_from=expiration_date_from,
             expiration_date_to=expiration_date_to,
+            history_exclusion=history_exclusion,
             session=session,
         )
     except audience.MarketingCampaignV2AudienceValidationError as exc:
@@ -237,7 +243,7 @@ def _build_audience_definition(
 
 
 def _preview_summary(preview: dict[str, Any]) -> dict[str, Any]:
-    keys = (
+    keys = [
         "universe_count",
         "scoped_count",
         "current_status_counts",
@@ -249,7 +255,18 @@ def _preview_summary(preview: dict[str, Any]) -> dict[str, Any]:
         "invalid_phone_count",
         "duplicate_count",
         "unique_recipient_count",
-    )
+    ]
+    if "history_exclusion" in (preview.get("filters") or {}):
+        keys.extend(
+            [
+                "before_history_filter_count",
+                "history_excluded_count",
+                "after_history_filter_count",
+                "excluded_by_delivery_bucket",
+                "excluded_by_outcome",
+                "excluded_by_button_interaction",
+            ]
+        )
     return {
         key: _canonical_value(preview[key])
         for key in keys

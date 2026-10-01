@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field, replace
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Iterable
 
 from app.extensions import db
@@ -15,6 +15,10 @@ from app.models.warehouse import (
     SociosVencidosCarteraORM,
 )
 from app.services.marketing_phone import normalize_phone
+from app.services.marketing_campaign_v2_provider_history_service import (
+    MarketingCampaignV2ProviderHistoryValidationError,
+    get_provider_history_for_phones,
+)
 from app.services.marketing_tariff_normalization import normalize_marketing_tariff_key
 from app.warehouse.services import socios_activos_snapshot_resolver as activos_resolver
 from app.warehouse.services import socios_vencidos_current_status_resolver as current_status
@@ -44,6 +48,7 @@ BUCKET_OUT_OF_SEGMENT = "OUT_OF_SEGMENT"
 BUCKET_UNCLASSIFIED = "UNCLASSIFIED"
 BUCKET_FAMILY = "FAMILY"
 BUCKET_CURRENT_STATUS_BLOCKED = "CURRENT_STATUS_BLOCKED"
+BUCKET_HISTORY_EXCLUDED = "HISTORY_EXCLUDED"
 SUPPORTED_BUCKETS = frozenset(
     {
         BUCKET_RECIPIENTS,
@@ -53,6 +58,7 @@ SUPPORTED_BUCKETS = frozenset(
         BUCKET_UNCLASSIFIED,
         BUCKET_FAMILY,
         BUCKET_CURRENT_STATUS_BLOCKED,
+        BUCKET_HISTORY_EXCLUDED,
     }
 )
 
@@ -102,6 +108,12 @@ class MarketingCampaignV2RecipientCandidate:
 
 
 @dataclass(frozen=True, slots=True)
+class MarketingCampaignV2HistoryExcludedCandidate:
+    candidate: MarketingCampaignV2AudienceCandidate
+    reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class _SourceLoadResult:
     universe_count: int
     scoped_count: int
@@ -128,6 +140,11 @@ class _AudiencePlan:
     family_counts: dict[str, int]
     unclassified_family_count: int
     out_of_segment_count: int
+    history_excluded_rows: tuple[
+        MarketingCampaignV2HistoryExcludedCandidate,
+        ...,
+    ] = field(default_factory=tuple)
+    history_diagnostics: dict[str, Any] = field(default_factory=dict)
 
 
 def build_campaign_v2_audience_preview(
@@ -137,6 +154,7 @@ def build_campaign_v2_audience_preview(
     allowed_sucursal_keys: Iterable[Any] | None,
     expiration_date_from: Any = None,
     expiration_date_to: Any = None,
+    history_exclusion: Any = None,
     session: Any | None = None,
 ) -> dict[str, Any]:
     """Build a deterministic, read-only Campaign V2 audience preview."""
@@ -147,6 +165,7 @@ def build_campaign_v2_audience_preview(
         allowed_sucursal_keys=allowed_sucursal_keys,
         expiration_date_from=expiration_date_from,
         expiration_date_to=expiration_date_to,
+        history_exclusion=history_exclusion,
         session=session,
     )
     return _serialize_preview(plan)
@@ -163,6 +182,7 @@ def build_campaign_v2_audience_preview_detail(
     page_size: Any = 50,
     expiration_date_from: Any = None,
     expiration_date_to: Any = None,
+    history_exclusion: Any = None,
     session: Any | None = None,
 ) -> dict[str, Any]:
     """Rebuild preview and return a stable paged bucket, failing closed."""
@@ -185,6 +205,7 @@ def build_campaign_v2_audience_preview_detail(
         allowed_sucursal_keys=allowed_sucursal_keys,
         expiration_date_from=expiration_date_from,
         expiration_date_to=expiration_date_to,
+        history_exclusion=history_exclusion,
         session=session,
     )
     preview = _serialize_preview(plan)
@@ -228,7 +249,14 @@ def build_campaign_v2_audience_preview_detail(
         "rows": [
             _serialize_recipient(row)
             if isinstance(row, MarketingCampaignV2RecipientCandidate)
-            else _serialize_candidate(row)
+            else (
+                _serialize_history_excluded(row)
+                if isinstance(
+                    row,
+                    MarketingCampaignV2HistoryExcludedCandidate,
+                )
+                else _serialize_candidate(row)
+            )
             for row in page_rows
         ],
     }
@@ -241,11 +269,15 @@ def _build_campaign_v2_audience_plan(
     allowed_sucursal_keys: Iterable[Any] | None,
     expiration_date_from: Any,
     expiration_date_to: Any,
-    session: Any | None,
+    history_exclusion: Any = None,
+    session: Any | None = None,
 ) -> _AudiencePlan:
     normalized_source = _normalize_source(source)
     selected_families = _normalize_family_selection(audience_families)
     normalized_scope = _normalize_scope(allowed_sucursal_keys)
+    normalized_history_exclusion = _normalize_history_exclusion(
+        history_exclusion
+    )
     active_session = session if session is not None else db.session
 
     if normalized_source == SOURCE_EXPIRED_MEMBERS:
@@ -287,6 +319,11 @@ def _build_campaign_v2_audience_plan(
             "audience_families": list(selected_families),
         }
 
+    if normalized_history_exclusion is not None:
+        normalized_filters["history_exclusion"] = (
+            normalized_history_exclusion
+        )
+
     tariff_catalog = _read_v2_tariff_catalog(session=active_session)
     classified = tuple(
         _classify_candidate(candidate, tariff_catalog=tariff_catalog)
@@ -313,12 +350,34 @@ def _build_campaign_v2_audience_plan(
     valid_rows = tuple(
         candidate for candidate in selected if candidate.phone_mx10 is not None
     )
+
+    source_metadata = dict(source_result.metadata)
+    history_excluded_rows: tuple[
+        MarketingCampaignV2HistoryExcludedCandidate,
+        ...,
+    ] = ()
+    history_diagnostics: dict[str, Any] = {}
+
+    if normalized_history_exclusion is not None:
+        (
+            valid_rows,
+            history_excluded_rows,
+            history_diagnostics,
+            history_evaluation,
+        ) = _apply_history_exclusion(
+            candidates=valid_rows,
+            rule=normalized_history_exclusion,
+            allowed_sucursal_keys=normalized_scope,
+            session=active_session,
+        )
+        source_metadata["history_evaluation"] = history_evaluation
+
     recipients, duplicate_rows = _deduplicate_candidates(valid_rows)
 
     return _AudiencePlan(
         source=normalized_source,
         filters=normalized_filters,
-        source_metadata=dict(source_result.metadata),
+        source_metadata=source_metadata,
         universe_count=int(source_result.universe_count),
         scoped_count=int(source_result.scoped_count),
         current_status_counts=dict(source_result.current_status_counts),
@@ -331,7 +390,272 @@ def _build_campaign_v2_audience_plan(
         family_counts=family_counts,
         unclassified_family_count=unclassified_count,
         out_of_segment_count=out_of_segment_count,
+        history_excluded_rows=history_excluded_rows,
+        history_diagnostics=history_diagnostics,
     )
+
+
+def _normalize_history_exclusion(value: Any) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise MarketingCampaignV2AudienceValidationError(
+            "history_exclusion debe ser un objeto o null."
+        )
+
+    allowed = {
+        "delivery_buckets",
+        "outcomes",
+        "button_interacted",
+        "lookback_days",
+    }
+    unknown = sorted(set(value) - allowed)
+    if unknown:
+        raise MarketingCampaignV2AudienceValidationError(
+            "Campos history_exclusion no permitidos: "
+            + ", ".join(unknown)
+            + "."
+        )
+
+    delivery = _normalize_history_enum_list(
+        value.get("delivery_buckets", []),
+        field_name="history_exclusion.delivery_buckets",
+        allowed=("SENT", "DELIVERED", "VIEWED"),
+    )
+    outcomes = _normalize_history_enum_list(
+        value.get("outcomes", []),
+        field_name="history_exclusion.outcomes",
+        allowed=("SUCCESSFUL", "FAILED"),
+    )
+
+    raw_button = value.get("button_interacted", False)
+    if not isinstance(raw_button, bool):
+        raise MarketingCampaignV2AudienceValidationError(
+            "history_exclusion.button_interacted debe ser booleano."
+        )
+
+    raw_lookback = value.get("lookback_days")
+    lookback_days: int | None = None
+    if raw_lookback is not None:
+        if isinstance(raw_lookback, bool):
+            raise MarketingCampaignV2AudienceValidationError(
+                "history_exclusion.lookback_days debe ser entero positivo o null."
+            )
+        try:
+            lookback_days = int(raw_lookback)
+        except (TypeError, ValueError) as exc:
+            raise MarketingCampaignV2AudienceValidationError(
+                "history_exclusion.lookback_days debe ser entero positivo o null."
+            ) from exc
+        if lookback_days <= 0:
+            raise MarketingCampaignV2AudienceValidationError(
+                "history_exclusion.lookback_days debe ser entero positivo o null."
+            )
+
+    has_condition = bool(delivery or outcomes or raw_button)
+    if not has_condition:
+        if lookback_days is not None:
+            raise MarketingCampaignV2AudienceValidationError(
+                "history_exclusion.lookback_days requiere al menos una condición."
+            )
+        return None
+
+    return {
+        "delivery_buckets": list(delivery),
+        "outcomes": list(outcomes),
+        "button_interacted": raw_button,
+        "lookback_days": lookback_days,
+    }
+
+
+def _normalize_history_enum_list(
+    value: Any,
+    *,
+    field_name: str,
+    allowed: tuple[str, ...],
+) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, (str, bytes)) or not isinstance(value, (list, tuple)):
+        raise MarketingCampaignV2AudienceValidationError(
+            f"{field_name} debe ser una lista."
+        )
+    allowed_set = set(allowed)
+    normalized: set[str] = set()
+    for raw in value:
+        item = str(raw or "").strip().upper()
+        if item not in allowed_set:
+            raise MarketingCampaignV2AudienceValidationError(
+                f"{field_name} contiene un valor no soportado."
+            )
+        normalized.add(item)
+    return tuple(item for item in allowed if item in normalized)
+
+
+def _apply_history_exclusion(
+    *,
+    candidates: tuple[MarketingCampaignV2AudienceCandidate, ...],
+    rule: dict[str, Any],
+    allowed_sucursal_keys: tuple[str, ...] | None,
+    session: Any,
+):
+    unique_phones = tuple(
+        sorted(
+            {
+                str(candidate.phone_mx10)
+                for candidate in candidates
+                if candidate.phone_mx10 is not None
+            }
+        )
+    )
+    before_count = len(unique_phones)
+
+    if not unique_phones:
+        diagnostics = _empty_history_diagnostics(before_count)
+        return candidates, (), diagnostics, {
+            "observed_before": None,
+            "observed_after": None,
+        }
+
+    try:
+        anchor = get_provider_history_for_phones(
+            phones=unique_phones,
+            allowed_sucursal_keys=allowed_sucursal_keys,
+            max_phones=None,
+            session=session,
+        )
+    except MarketingCampaignV2ProviderHistoryValidationError as exc:
+        raise RuntimeError(
+            "No fue posible evaluar histórico provider para Campaign V2."
+        ) from exc
+
+    observed_before = _max_history_observed_at(anchor)
+    observed_after = None
+    evaluated = anchor
+
+    lookback_days = rule.get("lookback_days")
+    if observed_before is not None and lookback_days is not None:
+        observed_after = observed_before - timedelta(days=int(lookback_days))
+        evaluated = get_provider_history_for_phones(
+            phones=unique_phones,
+            allowed_sucursal_keys=allowed_sucursal_keys,
+            observed_before=observed_before,
+            observed_after=observed_after,
+            max_phones=None,
+            session=session,
+        )
+
+    reasons_by_phone: dict[str, tuple[str, ...]] = {}
+    reason_counts: Counter[str] = Counter()
+
+    selected_delivery = set(rule["delivery_buckets"])
+    selected_outcomes = set(rule["outcomes"])
+    require_button = bool(rule["button_interacted"])
+
+    for row in evaluated["rows"]:
+        reasons: set[str] = set()
+        ever = row["ever_observed"]
+
+        for bucket in sorted(
+            selected_delivery.intersection(ever["delivery_buckets"])
+        ):
+            reasons.add(f"HISTORY_DELIVERY_{bucket}")
+
+        for outcome in sorted(
+            selected_outcomes.intersection(ever["outcomes"])
+        ):
+            reasons.add(f"HISTORY_OUTCOME_{outcome}")
+
+        if require_button and bool(ever["button_interacted"]):
+            reasons.add("HISTORY_BUTTON_INTERACTION")
+
+        if reasons:
+            normalized_phone = str(row["normalized_phone"])
+            mx10 = (
+                normalized_phone[5:]
+                if normalized_phone.startswith("mx10:")
+                else normalized_phone
+            )
+            ordered_reasons = tuple(sorted(reasons))
+            reasons_by_phone[mx10] = ordered_reasons
+            for reason in ordered_reasons:
+                reason_counts[reason] += 1
+
+    excluded_phones = set(reasons_by_phone)
+    remaining = tuple(
+        candidate
+        for candidate in candidates
+        if candidate.phone_mx10 not in excluded_phones
+    )
+
+    representative_by_phone: dict[
+        str,
+        MarketingCampaignV2AudienceCandidate,
+    ] = {}
+    for candidate in candidates:
+        phone = str(candidate.phone_mx10)
+        representative_by_phone.setdefault(phone, candidate)
+
+    excluded_rows = tuple(
+        MarketingCampaignV2HistoryExcludedCandidate(
+            candidate=representative_by_phone[phone],
+            reasons=reasons_by_phone[phone],
+        )
+        for phone in sorted(excluded_phones)
+    )
+
+    diagnostics = {
+        "before_history_filter_count": before_count,
+        "history_excluded_count": len(excluded_phones),
+        "after_history_filter_count": before_count - len(excluded_phones),
+        "excluded_by_delivery_bucket": {
+            bucket: int(
+                reason_counts.get(f"HISTORY_DELIVERY_{bucket}", 0)
+            )
+            for bucket in rule["delivery_buckets"]
+        },
+        "excluded_by_outcome": {
+            outcome: int(
+                reason_counts.get(f"HISTORY_OUTCOME_{outcome}", 0)
+            )
+            for outcome in rule["outcomes"]
+        },
+        "excluded_by_button_interaction": int(
+            reason_counts.get("HISTORY_BUTTON_INTERACTION", 0)
+        ),
+    }
+    return remaining, excluded_rows, diagnostics, {
+        "observed_before": (
+            observed_before.isoformat()
+            if observed_before is not None
+            else None
+        ),
+        "observed_after": (
+            observed_after.isoformat()
+            if observed_after is not None
+            else None
+        ),
+    }
+
+
+def _empty_history_diagnostics(before_count: int) -> dict[str, Any]:
+    return {
+        "before_history_filter_count": before_count,
+        "history_excluded_count": 0,
+        "after_history_filter_count": before_count,
+        "excluded_by_delivery_bucket": {},
+        "excluded_by_outcome": {},
+        "excluded_by_button_interaction": 0,
+    }
+
+
+def _max_history_observed_at(result: dict[str, Any]) -> datetime | None:
+    values: list[datetime] = []
+    for row in result.get("rows", []):
+        raw = row.get("last_observed_at")
+        if raw:
+            values.append(datetime.fromisoformat(str(raw)))
+    return max(values) if values else None
 
 
 def _load_expired_source(
@@ -642,7 +966,7 @@ def _merge_candidate_metadata(
 
 
 def _serialize_preview(plan: _AudiencePlan) -> dict[str, Any]:
-    return {
+    payload = {
         "source": plan.source,
         "source_metadata": dict(plan.source_metadata),
         "filters": dict(plan.filters),
@@ -658,6 +982,9 @@ def _serialize_preview(plan: _AudiencePlan) -> dict[str, Any]:
         "duplicate_count": len(plan.duplicate_rows),
         "unique_recipient_count": len(plan.recipients),
     }
+    if "history_exclusion" in plan.filters:
+        payload.update(plan.history_diagnostics)
+    return payload
 
 
 def _bucket_rows(
@@ -686,6 +1013,8 @@ def _bucket_rows(
         ]
     if bucket == BUCKET_CURRENT_STATUS_BLOCKED:
         return list(plan.current_status_blocked)
+    if bucket == BUCKET_HISTORY_EXCLUDED:
+        return list(plan.history_excluded_rows)
     raise AssertionError(f"Bucket no soportado: {bucket}")
 
 
@@ -709,7 +1038,18 @@ def _expected_bucket_total(
         return int((preview["family_counts"] or {}).get(audience_family, 0))
     if bucket == BUCKET_CURRENT_STATUS_BLOCKED:
         return int(preview["current_status_blocked_count"])
+    if bucket == BUCKET_HISTORY_EXCLUDED:
+        return int(preview.get("history_excluded_count", 0))
     raise AssertionError(f"Bucket no soportado: {bucket}")
+
+
+def _serialize_history_excluded(
+    row: MarketingCampaignV2HistoryExcludedCandidate,
+) -> dict[str, Any]:
+    return {
+        **_serialize_candidate(row.candidate),
+        "history_exclusion_reasons": list(row.reasons),
+    }
 
 
 def _serialize_candidate(row: MarketingCampaignV2AudienceCandidate) -> dict[str, Any]:

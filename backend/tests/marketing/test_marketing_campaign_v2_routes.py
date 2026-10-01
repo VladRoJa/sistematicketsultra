@@ -333,6 +333,9 @@ class TestMarketingCampaignV2Routes:
             ("/api/marketing/campaigns-v2", {"created_by_user_id": 999}),
             ("/api/marketing/campaigns-v2", {"allowed_sucursal_keys": ["EXTRA"]}),
             ("/api/marketing/campaigns-v2/preview", {"phones": ["6861000001"]}),
+            ("/api/marketing/campaigns-v2/preview", {"excluded_phones": ["6861000001"]}),
+            ("/api/marketing/campaigns-v2/preview-detail", {"excluded_phones": ["6861000001"]}),
+            ("/api/marketing/campaigns-v2", {"excluded_phones": ["6861000001"]}),
             ("/api/marketing/campaigns-v2", {"recipients": [{"phone_mx10": "6861000001"}]}),
             ("/api/marketing/campaigns-v2", {"recipient_ids": [1]}),
             ("/api/marketing/campaigns-v2", {"source_record_ids": [1]}),
@@ -377,12 +380,18 @@ class TestMarketingCampaignV2Routes:
                     "audience_families": ["DOMICILIADO"],
                     "expiration_date_from": "2026-08-01",
                     "expiration_date_to": "2026-08-31",
+                    "history_exclusion": {
+                        "delivery_buckets": ["VIEWED"],
+                    },
                 },
                 headers=self.headers,
             )
         assert response.status_code == 200
         assert response.get_json()["preview_fingerprint"] == "b" * 64
         assert service.call_args.kwargs["allowed_sucursal_keys"] is None
+        assert service.call_args.kwargs["history_exclusion"] == {
+            "delivery_buckets": ["VIEWED"],
+        }
 
     def test_preview_detail_uses_m3_detail_and_backend_scope(self):
         expected = {"total": 1, "rows": [{"phone_mx10": "6861000001"}]}
@@ -403,12 +412,18 @@ class TestMarketingCampaignV2Routes:
                     "bucket": "RECIPIENTS",
                     "page": 1,
                     "page_size": 25,
+                    "history_exclusion": {
+                        "outcomes": ["FAILED"],
+                    },
                 },
                 headers=self.headers,
             )
         assert response.status_code == 200
         assert service.call_args.kwargs["allowed_sucursal_keys"] is None
         assert service.call_args.kwargs["bucket"] == "RECIPIENTS"
+        assert service.call_args.kwargs["history_exclusion"] == {
+            "outcomes": ["FAILED"],
+        }
 
     def test_freeze_uses_authenticated_user_and_backend_scope(self):
         expected = {"campaign_id": 44, "recipient_count": 10}
@@ -426,6 +441,9 @@ class TestMarketingCampaignV2Routes:
                     "purpose": "ACTIVE_MEMBERS",
                     "source": "ACTIVE_MEMBERS",
                     "audience_families": ["DOMICILIADO"],
+                    "history_exclusion": {
+                        "button_interacted": True,
+                    },
                     "expected_preview_fingerprint": "c" * 64,
                 },
                 headers=self.headers,
@@ -434,6 +452,9 @@ class TestMarketingCampaignV2Routes:
         assert service.call_args.kwargs["created_by_user_id"] == 7
         assert service.call_args.kwargs["allowed_sucursal_keys"] is None
         assert service.call_args.kwargs["expected_preview_fingerprint"] == "c" * 64
+        assert service.call_args.kwargs["history_exclusion"] == {
+            "button_interacted": True,
+        }
 
     @pytest.mark.parametrize(
         "error,status",
