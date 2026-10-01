@@ -171,7 +171,7 @@ No se agregaron:
 
 ## Milestone 2 — Persistencia base Campaign V2 + Recipient V2
 
-Estado: **completado en rama, pendiente de merge**.
+Estado: **completado y mergeado vía PR #752 a `main` en `b949817eff87d3d82a0c2ff0f540576c028ded4c`**.
 
 ### Base y rama
 
@@ -320,8 +320,282 @@ No se agregan:
 - scheduling;
 - cambios al flujo de Reactivaciones legacy.
 
+## Milestone 3 — Audience Builder backend + Preview V2
+
+Estado: **completado en rama, pendiente de merge**.
+
+### Base y rama
+
+- Base SHA: `b949817eff87d3d82a0c2ff0f540576c028ded4c`
+- Rama: `feat/campaign-v2-audience-preview`
+- Milestone 2 ya estaba mergeado vía PR #752.
+- No se agregó migración: este milestone es exclusivamente read-only/in-memory.
+
+### Arquitectura
+
+Nuevo servicio:
+
+`backend/app/services/marketing_campaign_v2_audience_service.py`
+
+El motor mantiene una sola tubería V2:
+
+`fuente canónica → scope → estado actual cuando aplica → clasificación V2 → familias seleccionadas → teléfono → deduplicación → Preview/Detail`
+
+Dos dataclasses internas representan el flujo sin persistirlo:
+
+- `MarketingCampaignV2AudienceCandidate`: candidato previo a freeze, con source ref, teléfono, identidad opcional, sucursal, tarifa, clasificación, fecha y evidencia.
+- `MarketingCampaignV2RecipientCandidate`: teléfono final deduplicado con metadata de consenso, `conflict_fields` y todas las filas de evidencia.
+
+El Preview no crea `MarketingCampaignV2ORM` ni `MarketingCampaignV2RecipientORM`.
+
+### EXPIRED_MEMBERS
+
+Fuente canónica: `SociosVencidosCarteraORM`.
+
+El rango `expiration_date_from..expiration_date_to` es inclusivo.
+
+El scope se aplica con `normalize_socios_vencidos_branch_key()`.
+
+Para determinar si el episodio sigue siendo realmente vencido se reutilizan exclusivamente:
+
+- `prepare_socios_vencidos_current_status_context()`
+- `resolve_socios_vencidos_rows_with_context()`
+
+Esto reutiliza el matcher vigente vencido↔activo y el snapshot activo canónico, pero corta antes del resolver específico de Reactivaciones.
+
+Política fail-closed de estado actual:
+
+- `NOT_FOUND` continúa como candidato vencido.
+- cualquier evidencia `ACTIVE_CONFIRMED`, `ACTIVE_REVIEW`, `AMBIGUOUS` o `IDENTIFIER_CONFLICT` queda fuera del recipient final y se conserva en `current_status_counts` / `CURRENT_STATUS_BLOCKED`.
+
+No se importa ni invoca el resolver de candidatos de Reactivaciones y no hay dependencia iVentas.
+
+### ACTIVE_MEMBERS
+
+El servicio llama obligatoriamente:
+
+`resolve_latest_canonical_socios_activos_snapshot()`
+
+y lee filas individuales `SociosActivosSnapshotRowORM` sólo del snapshot resuelto.
+
+El Preview conserva:
+
+- `activos_snapshot_id`
+- `activos_cutoff_date`
+- `activos_captured_at`
+- `snapshot_kind`
+
+Cada candidato conserva `SOCIOS_ACTIVOS_SNAPSHOT_ROW`, row id y snapshot id como referencia canónica.
+
+### Scope y filtros
+
+`allowed_sucursal_keys=None` significa scope global.
+
+Una colección explícita —incluida una colección vacía— se normaliza con el matcher vigente y limita el universo backend.
+
+Para `EXPIRED_MEMBERS` son obligatorios los dos extremos del rango.
+
+Para `ACTIVE_MEMBERS` no se aceptan filtros de vencimiento.
+
+`audience_families` exige al menos una de las cinco familias comerciales seleccionables:
+
+- `DOMICILIADO`
+- `TRIMESTRAL`
+- `CONVENIO`
+- `SEMESTRE`
+- `ESTUDIANTE`
+
+La selección es OR dentro de familias y AND respecto a source/scope/rango.
+
+`MES`, `OUT_OF_SEGMENT` y tarifa sin match permanecen visibles en composición pero no son valores seleccionables del filtro comercial.
+
+### Teléfono
+
+La única identidad general es `phone_mx10`.
+
+Se reutiliza exclusivamente `marketing_phone.normalize_phone()`.
+
+Para Socios Activos se intenta primero el teléfono disponible y, si no normaliza, se vuelve a llamar el mismo `normalize_phone()` con `lada + teléfono`; no existe un normalizador V2 adicional.
+
+Los inválidos permanecen en `INVALID_PHONE`.
+
+### Clasificación de tarifa
+
+Se consulta exclusivamente `MarketingCampaignV2TariffORM`.
+
+La llave se obtiene con el helper puro vigente `normalize_reactivation_tariff_key()`, cuya semántica es exactamente la normalización aprobada en Milestone 1.
+
+No se consulta `MarketingReactivationTariffORM`, no se lee `reactivation_group` y no se hereda ninguna exclusión legacy.
+
+Una tarifa sin match conserva `tarifa_key` normalizada pero queda con `audience_family=None` y bucket `UNCLASSIFIED`.
+
+### Deduplicación y conflictos
+
+La deduplicación final es por `phone_mx10`.
+
+El orden es estable por teléfono y referencia canónica.
+
+Para un teléfono con varias filas:
+
+- todas las filas quedan en `evidence_rows`;
+- `duplicate_count = filas válidas absorbidas después de la primera referencia estable`;
+- cada campo de metadata se conserva sólo cuando todos sus valores no nulos coinciden;
+- si hay dos valores no nulos distintos, el valor consolidado queda `None` y el campo se agrega a `conflict_fields`.
+
+Por tanto el orden de query nunca elige silenciosamente nombre, sucursal, tarifa o family como “verdad”.
+
+### Contrato del Preview
+
+`build_campaign_v2_audience_preview()` devuelve:
+
+- `source`
+- `source_metadata`
+- `filters` normalizados
+- `universe_count`
+- `scoped_count`
+- `current_status_counts`
+- `current_status_blocked_count`
+- `filtered_count`
+- `family_counts`
+- `unclassified_family_count`
+- `out_of_segment_count`
+- `invalid_phone_count`
+- `duplicate_count`
+- `unique_recipient_count`
+
+`family_counts` describe filas clasificadas después de scope/estado actual y antes de selección/deduplicación. `filtered_count` son filas pertenecientes a las familias seleccionadas antes de bloqueo por teléfono.
+
+### Drill-down
+
+`build_campaign_v2_audience_preview_detail()` reconstruye el plan desde las mismas fuentes/filtros y permite buckets:
+
+- `RECIPIENTS`
+- `INVALID_PHONE`
+- `DUPLICATES`
+- `OUT_OF_SEGMENT`
+- `UNCLASSIFIED`
+- `FAMILY` + `audience_family`
+- `CURRENT_STATUS_BLOCKED`
+
+La paginación es estable.
+
+Antes de paginar se compara el total reconstruido del bucket contra el contador del Preview. Si diverge, lanza `RuntimeError` y falla cerrado.
+
+### Helpers reutilizados
+
+Se reutilizan:
+
+- `marketing_phone.normalize_phone()`
+- `marketing_tariff_normalization.normalize_marketing_tariff_key()` como helper puro compartido de tarifa
+- `marketing_reactivation_service.normalize_reactivation_tariff_key()` se conserva como API legacy compatible y delega al helper puro
+- `socios_vencidos_current_status_resolver.normalize_socios_vencidos_branch_key()`
+- `prepare_socios_vencidos_current_status_context()`
+- `resolve_socios_vencidos_rows_with_context()`
+- `resolve_latest_canonical_socios_activos_snapshot()`
+
+Hardening previo a PR: la normalización de tarifa se extrajo de `marketing_reactivation_service.py` para eliminar la dependencia transitiva V2 → Reactivaciones/iVentas. La API legacy conserva nombre y resultados mediante delegación; no se refactorizó ninguna otra regla legacy.
+
+### Pruebas específicas
+
+Nuevo archivo:
+
+`backend/tests/marketing/test_marketing_campaign_v2_audience_service.py`
+
+Cobertura escrita:
+
+- OR de familias y AND con source/scope/rango;
+- MES separado;
+- OUT_OF_SEGMENT separado;
+- UNCLASSIFIED separado;
+- familias comerciales válidas;
+- `normalize_phone()` y fallback lada+teléfono con el mismo normalizador;
+- inválidos;
+- deduplicación por `phone_mx10`;
+- determinismo ante orden invertido;
+- conflictos de metadata explícitos;
+- rango vencidos inclusivo;
+- scope vencidos;
+- current-status canónico;
+- ausencia de iVentas/reactivation_group en el builder;
+- snapshot canónico de activos;
+- referencia snapshot/row activo;
+- catálogo V2 exclusivo;
+- paginación estable;
+- preview count == detail count;
+- mismatch fail-closed;
+- bucket de estado actual bloqueado.
+
+Resultado realmente ejecutado en harness aislado con stubs mínimos de las dependencias del repo antes del hardening:
+
+`9 passed in 0.07s`
+
+Hardening de frontera previo a PR:
+
+- se agregó `backend/app/services/marketing_tariff_normalization.py`;
+- V2 ya no importa `marketing_reactivation_service`;
+- la API legacy delega al helper compartido;
+- `backend/tests/marketing/test_marketing_tariff_normalization.py` demuestra equivalencia exacta para caso normal, whitespace, Unicode NFKC, `None` y vacío;
+- la suite M3 incluye una comprobación AST de que el módulo V2 no importa `app.services.marketing_reactivation_service` y sí importa directamente el helper puro.
+
+Resultados reales del hardening en harness aislado:
+
+- suite M3 ejecutada con un stub de `marketing_reactivation_service.py` que falla inmediatamente si llega a importarse: `10 passed in 0.06s`;
+- equivalencia helper compartido ↔ API legacy: `5 passed in 0.03s`;
+- ejecución conjunta de ambas suites: `15 passed in 0.05s`;
+- `py_compile` pasó para el servicio V2, helper compartido y ambos archivos de prueba.
+
+La primera ejecución demuestra la frontera de imports de forma dinámica: importar y probar `marketing_campaign_v2_audience_service` no necesita cargar `marketing_reactivation_service`.
+
+
+### Hardening de parser Alembic previo a PR
+
+La suite real conjunta detectó una regresión exclusivamente en test:
+
+`python -m pytest tests/marketing/test_marketing_campaign_v2_tariff_catalog.py tests/marketing/test_marketing_campaign_v2_persistence.py tests/marketing/test_marketing_campaign_v2_audience_service.py tests/marketing/test_marketing_tariff_normalization.py tests/services/test_marketing_reactivation_campaign_service.py -q --basetemp .pytest_tmp`
+
+Resultado previo reportado: `73 passed, 1 failed`, con fallo en `test_alembic_has_single_head_for_nullable_campaign_recipient_migration()`.
+
+Alembic real no tenía bifurcación: `flask db heads` devolvió únicamente `a4d8c2e6f1b5 (head)`.
+
+La causa era el parser del test, que sólo reconocía asignaciones sin anotación. Se corrigió exclusivamente `backend/tests/services/test_marketing_reactivation_campaign_service.py`:
+
+- acepta `revision = "..."` y `revision: str = "..."`;
+- acepta `down_revision` con o sin type annotation;
+- conserva extracción de todos los parents citados, incluido un tuple tipado;
+- agrega un caso explícito para `revision: str = ...`;
+- la prueba de grafo ya no fija el head obsoleto `b9e2f7a4d3c5`, sino que exige exactamente un head.
+
+No se creó merge migration y no se modificó ninguna migración, modelo, servicio productivo ni Audience Builder.
+
+Validación ejecutada en este entorno para el parser: `4 cases passed`, incluyendo el caso real `c1d4e7f9a2b3 -> b9e2f7a4d3c5`.
+
+Limitación: este entorno no dispone de Flask/Flask-SQLAlchemy y no puede instalar dependencias ni clonar el repo por falta de red. Por ello la suite real conjunta anterior no pudo reejecutarse aquí. Tampoco existe `.github/workflows` en la rama para delegar esa ejecución a GitHub Actions. El cambio queda preparado para repetir exactamente el comando anterior en un entorno completo.
+
+También pasaron `py_compile` del servicio y del test exactos.
+
+Limitación del entorno: no hay acceso de red para clonar el repo y no están instalados Flask/Flask-SQLAlchemy. Por ello no se ejecutó el archivo de pytest dentro del árbol completo de Suite Ultra, PostgreSQL, toda la suite ni CI. Los tests de Milestone 1 y Milestone 2 no pudieron reejecutarse aquí; sus archivos/modelos/migraciones no fueron modificados por Milestone 3.
+
+### Fuera de alcance
+
+No se agregó:
+
+- creación/freeze de Campaign V2 desde Preview;
+- endpoints;
+- Angular;
+- permisos HTTP;
+- Funnel;
+- PREVIOUS_CAMPAIGN;
+- supresión Funnel contra activos;
+- iVentas;
+- provider/broadcast;
+- costos;
+- templates;
+- scheduling;
+- migraciones;
+- cambios de semántica legacy.
+
 ## Siguiente milestone propuesto
 
-**Milestone 3 — Audience Builder backend: fuentes canónicas + preview/composición V2**
+**Milestone 4 — Freeze/Create server-side desde Preview V2**
 
-Objetivo recomendado: construir los adapters de `EXPIRED_MEMBERS` y `ACTIVE_MEMBERS`, filtros y composición/deduplicación de preview sobre las fuentes canónicas, todavía sin envío y manteniendo la creación/freeze como paso server-side posterior.
+Objetivo recomendado: tomar una definición de Preview validada, reconstruir el universo server-side con el mismo builder, exigir consistencia/fail-closed y persistir `MarketingCampaignV2ORM` + `MarketingCampaignV2RecipientORM` usando la evidencia y snapshots del Milestone 3. Todavía sin endpoints/Angular si se mantiene la progresión backend-first.
