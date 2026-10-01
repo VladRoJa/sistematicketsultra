@@ -308,12 +308,36 @@ def test_fingerprint_is_deterministic_for_different_recipient_and_evidence_order
         ),
     ],
 )
-def test_fingerprint_changes_on_material_preview_changes(mutator):
+def test_freeze_rejects_material_preview_changes_even_with_same_count(
+    monkeypatch,
+    mutator,
+):
     base = _plan((_recipient(),))
     changed = mutator(base)
+    expected = creation._fingerprint_plan(base)
+    _install_plan(monkeypatch, changed)
+    session = WriteSession()
 
     assert len(base.recipients) == len(changed.recipients)
-    assert creation._fingerprint_plan(base) != creation._fingerprint_plan(changed)
+    assert expected != creation._fingerprint_plan(changed)
+
+    with pytest.raises(creation.MarketingCampaignV2PreviewMismatchError):
+        creation.freeze_campaign_v2(
+            name="Changed",
+            purpose="REACTIVATION",
+            source="EXPIRED_MEMBERS",
+            audience_families=["DOMICILIADO"],
+            allowed_sucursal_keys=["BRANCH A"],
+            expected_preview_fingerprint=expected,
+            created_by_user_id=7,
+            expiration_date_from="2026-08-01",
+            expiration_date_to="2026-08-31",
+            session=session,
+            now=NOW,
+        )
+
+    assert session.added == []
+    assert session.commits == 0
 
 
 def test_freeze_rebuilds_server_side_and_freezes_campaign_recipients_and_evidence(
@@ -425,6 +449,63 @@ def test_freeze_rebuilds_server_side_and_freezes_campaign_recipients_and_evidenc
     assert single_row.socios_activos_snapshot_row_id is None
     assert single_row.conflict_fields_json == []
     assert len(single_row.evidence_rows) == 1
+
+
+def test_frozen_tariff_classification_does_not_follow_later_reclassification(monkeypatch):
+    original_evidence = _evidence(10, category="Domiciliado", family="DOMICILIADO")
+    original_recipient = _recipient(
+        evidence_rows=(original_evidence,),
+        category="Domiciliado",
+        family="DOMICILIADO",
+    )
+    original_plan = _plan((original_recipient,))
+    _install_plan(monkeypatch, original_plan)
+    session = WriteSession()
+
+    creation.freeze_campaign_v2(
+        name="Frozen catalog",
+        purpose="REACTIVATION",
+        source="EXPIRED_MEMBERS",
+        audience_families=["DOMICILIADO"],
+        allowed_sucursal_keys=["BRANCH A"],
+        expected_preview_fingerprint=creation._fingerprint_plan(original_plan),
+        created_by_user_id=7,
+        expiration_date_from="2026-08-01",
+        expiration_date_to="2026-08-31",
+        session=session,
+        now=NOW,
+    )
+
+    frozen_recipient = session.added[0].recipients[0]
+    frozen_evidence = frozen_recipient.evidence_rows[0]
+
+    changed_evidence = replace(
+        original_evidence,
+        categoria_tarifa="Convenio",
+        audience_family="CONVENIO",
+        evidence=("CURRENT_STATUS:NOT_FOUND", "TARIFF_FAMILY:CONVENIO"),
+    )
+    changed_recipient = replace(
+        original_recipient,
+        categoria_tarifa="Convenio",
+        audience_family="CONVENIO",
+        evidence_rows=(changed_evidence,),
+    )
+    changed_plan = _plan((changed_recipient,))
+    _install_plan(monkeypatch, changed_plan)
+    creation.build_campaign_v2_freeze_preview(
+        source="EXPIRED_MEMBERS",
+        audience_families=["DOMICILIADO"],
+        allowed_sucursal_keys=["BRANCH A"],
+        expiration_date_from="2026-08-01",
+        expiration_date_to="2026-08-31",
+        session=object(),
+    )
+
+    assert frozen_recipient.categoria_tarifa == "Domiciliado"
+    assert frozen_recipient.audience_family == "DOMICILIADO"
+    assert frozen_evidence.categoria_tarifa == "Domiciliado"
+    assert frozen_evidence.audience_family == "DOMICILIADO"
 
 
 def test_active_member_evidence_keeps_snapshot_and_row_reference(monkeypatch):
@@ -746,6 +827,21 @@ def test_evidence_migration_upgrade_constraints_immutability_cascade_and_downgra
                 )
                 """
             ))
+            connection.execute(text(
+                """
+                INSERT INTO marketing_campaign_v2_recipient_evidence (
+                    id, recipient_id, evidence_order, source,
+                    phone_raw, phone_mx10,
+                    socios_activos_snapshot_row_id, socios_activos_snapshot_id,
+                    member_name, tarifa_raw, audience_family, evidence_json
+                ) VALUES (
+                    1001, 10, 1, 'ACTIVE_MEMBERS',
+                    '6861000001', '6861000001', 200, 7,
+                    'Activo congelado', 'Tarifa activa congelada',
+                    'DOMICILIADO', '["CANONICAL_ACTIVE_SNAPSHOT"]'
+                )
+                """
+            ))
 
             connection.execute(text(
                 "UPDATE socios_vencidos_cartera "
@@ -760,6 +856,14 @@ def test_evidence_migration_upgrade_constraints_immutability_cascade_and_downgra
             with pytest.raises(IntegrityError):
                 connection.execute(text(
                     "DELETE FROM socios_vencidos_cartera WHERE id=100"
+                ))
+            with pytest.raises(IntegrityError):
+                connection.execute(text(
+                    "DELETE FROM socios_activos_snapshot_rows WHERE id=200"
+                ))
+            with pytest.raises(IntegrityError):
+                connection.execute(text(
+                    "DELETE FROM socios_activos_snapshots WHERE id=7"
                 ))
 
             connection.execute(text(
@@ -794,6 +898,28 @@ def test_evidence_migration_upgrade_constraints_immutability_cascade_and_downgra
         engine.dispose()
 
 
+def test_recipient_schema_still_supports_future_phone_only_sources():
+    columns = MarketingCampaignV2RecipientORM.__table__.c
+
+    assert columns.phone_mx10.nullable is False
+    assert columns.source.nullable is False
+    for name in (
+        "socios_vencidos_cartera_id",
+        "socios_activos_snapshot_row_id",
+        "member_id",
+        "member_pin",
+        "member_name",
+        "sucursal",
+        "tarifa_raw",
+        "categoria_tarifa",
+        "audience_family",
+        "fecha_vencimiento_date",
+        "inclusion_reason",
+    ):
+        assert columns[name].nullable is True
+    assert columns.conflict_fields_json.nullable is False
+
+
 def test_evidence_model_contract_preserves_explicit_canonical_references():
     columns = MarketingCampaignV2RecipientEvidenceORM.__table__.c
     assert columns.recipient_id.nullable is False
@@ -823,4 +949,18 @@ def test_evidence_model_contract_preserves_explicit_canonical_references():
         "socios_activos_snapshots.id",
         "RESTRICT",
     )
-    assert MarketingCampaignV2RecipientORM.__table__.c.conflict_fields_json.nullable is False
+    recipient_columns = MarketingCampaignV2RecipientORM.__table__.c
+    assert recipient_columns.conflict_fields_json.nullable is False
+    for name in (
+        "socios_vencidos_cartera_id",
+        "socios_activos_snapshot_row_id",
+        "member_id",
+        "member_pin",
+        "member_name",
+        "sucursal",
+        "tarifa_raw",
+        "categoria_tarifa",
+        "audience_family",
+        "fecha_vencimiento_date",
+    ):
+        assert recipient_columns[name].nullable is True

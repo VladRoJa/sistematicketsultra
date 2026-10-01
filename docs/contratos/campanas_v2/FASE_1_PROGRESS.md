@@ -812,7 +812,7 @@ Los campos conflictivos permanecen NULL exactamente como los entrega M3.
 
 ### Mapping Evidence
 
-Cada `recipient_candidate.evidence_rows` produce una Evidence ORM en orden estable.
+Cada `recipient_candidate.evidence_rows` produce una Evidence ORM ordenada explícitamente con la misma llave canónica usada por el fingerprint; no se altera la deduplicación ni se introduce prioridad comercial.
 
 EXPIRED_MEMBERS:
 
@@ -882,12 +882,14 @@ Cobertura:
 - defaults/constraints de evidencia;
 - snapshots permanecen inmutables ante cambios de fuente viva;
 - CASCADE Campaign → Recipient → Evidence;
-- RESTRICT hacia referencias canónicas;
+- RESTRICT hacia referencias canónicas de vencidos, active row y active snapshot;
+- esquema Recipient sigue representando fuentes phone-only;
+- reclasificar posteriormente category/family no modifica valores ya congelados;
 - legacy intacto.
 
-Resultado realmente ejecutado en harness aislado con SQLAlchemy/Alembic/SQLite y stubs mínimos de las dependencias de Suite:
+Resultado realmente ejecutado en harness aislado con SQLAlchemy/Alembic/SQLite y stubs mínimos de las dependencias de Suite, sobre los bytes finales del servicio/migración/test:
 
-`13 passed in 0.22s`
+`15 passed in 0.34s`
 
 También pasó `py_compile` para servicio, migración y test específicos.
 

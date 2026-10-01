@@ -151,7 +151,10 @@ def freeze_campaign_v2(
         )
         campaign.recipients.append(recipient)
         for evidence_order, evidence_candidate in enumerate(
-            recipient_candidate.evidence_rows
+            sorted(
+                recipient_candidate.evidence_rows,
+                key=_canonical_evidence_sort_key,
+            )
         ):
             recipient.evidence_rows.append(
                 _build_evidence_orm(
