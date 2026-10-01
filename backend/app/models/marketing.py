@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from sqlalchemy.dialects.postgresql import JSONB
+
 from app.extensions import db
+
+
+_JSON_DOCUMENT = db.JSON().with_variant(JSONB, "postgresql")
 
 
 def _utc_now() -> datetime:
@@ -290,6 +295,15 @@ class MarketingCampaignV2ORM(db.Model):
         passive_deletes=True,
         order_by="MarketingCampaignV2RecipientORM.id",
     )
+    provider_stats_snapshots = db.relationship(
+        "MarketingCampaignV2ProviderStatsSnapshotORM",
+        back_populates="campaign",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by=(
+            "MarketingCampaignV2ProviderStatsSnapshotORM.fetched_at"
+        ),
+    )
 
     __table_args__ = (
         db.CheckConstraint(
@@ -394,6 +408,11 @@ class MarketingCampaignV2RecipientORM(db.Model):
         cascade="all, delete-orphan",
         passive_deletes=True,
         order_by="MarketingCampaignV2RecipientEvidenceORM.evidence_order",
+    )
+    provider_stats_observations = db.relationship(
+        "MarketingCampaignV2ProviderRecipientObservationORM",
+        back_populates="campaign_recipient",
+        passive_deletes=True,
     )
 
     __table_args__ = (
@@ -540,6 +559,177 @@ class MarketingCampaignV2RecipientEvidenceORM(db.Model):
         db.Index(
             "ix_marketing_campaign_v2_evidence_activos_snapshot_id",
             "socios_activos_snapshot_id",
+        ),
+    )
+
+
+class MarketingCampaignV2ProviderStatsSnapshotORM(db.Model):
+    __tablename__ = "marketing_campaign_v2_provider_stats_snapshots"
+
+    id = db.Column(
+        db.BigInteger().with_variant(db.Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
+    campaign_v2_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_campaigns.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    provider = db.Column(db.String(50), nullable=False)
+    provider_campaign_id = db.Column(db.String(255), nullable=False)
+    analytics_status = db.Column(db.String(50), nullable=True)
+    fetched_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    raw_successful = db.Column(db.Integer, nullable=False)
+    raw_failed = db.Column(db.Integer, nullable=False)
+    raw_sent = db.Column(db.Integer, nullable=False)
+    raw_delivered = db.Column(db.Integer, nullable=False)
+    raw_viewed = db.Column(db.Integer, nullable=False)
+    raw_answered = db.Column(db.Integer, nullable=False)
+    raw_interaction_groups = db.Column(db.Integer, nullable=False)
+    raw_interaction_items = db.Column(db.Integer, nullable=False)
+    analytics_json = db.Column(_JSON_DOCUMENT, nullable=True)
+    button_interactions_json = db.Column(
+        _JSON_DOCUMENT,
+        nullable=False,
+        default=list,
+        server_default=db.text("'[]'"),
+    )
+    provider_recipient_count = db.Column(db.Integer, nullable=False)
+    matched_recipient_count = db.Column(db.Integer, nullable=False)
+    unmatched_provider_count = db.Column(db.Integer, nullable=False)
+    frozen_recipient_without_provider_status_count = db.Column(
+        db.Integer,
+        nullable=False,
+    )
+    fingerprint = db.Column(db.String(64), nullable=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+
+    campaign = db.relationship(
+        "MarketingCampaignV2ORM",
+        back_populates="provider_stats_snapshots",
+    )
+    observations = db.relationship(
+        "MarketingCampaignV2ProviderRecipientObservationORM",
+        back_populates="snapshot",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="MarketingCampaignV2ProviderRecipientObservationORM.id",
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "campaign_v2_id",
+            "provider",
+            "provider_campaign_id",
+            "fingerprint",
+            name="uq_marketing_campaign_v2_provider_stats_snapshot_identity",
+        ),
+        db.CheckConstraint(
+            "length(fingerprint) = 64",
+            name="ck_marketing_campaign_v2_provider_stats_fingerprint_length",
+        ),
+        db.CheckConstraint(
+            "raw_successful >= 0 AND raw_failed >= 0 AND raw_sent >= 0 "
+            "AND raw_delivered >= 0 AND raw_viewed >= 0 AND raw_answered >= 0 "
+            "AND raw_interaction_groups >= 0 AND raw_interaction_items >= 0",
+            name="ck_marketing_campaign_v2_provider_stats_raw_counts_nonnegative",
+        ),
+        db.CheckConstraint(
+            "provider_recipient_count >= 0 AND matched_recipient_count >= 0 "
+            "AND unmatched_provider_count >= 0 "
+            "AND frozen_recipient_without_provider_status_count >= 0",
+            name="ck_marketing_campaign_v2_provider_stats_diagnostics_nonnegative",
+        ),
+        db.Index(
+            "ix_marketing_campaign_v2_provider_stats_campaign_fetched",
+            "campaign_v2_id",
+            "fetched_at",
+        ),
+    )
+
+
+class MarketingCampaignV2ProviderRecipientObservationORM(db.Model):
+    __tablename__ = "marketing_campaign_v2_provider_recipient_observations"
+
+    id = db.Column(
+        db.BigInteger().with_variant(db.Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
+    snapshot_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "marketing_campaign_v2_provider_stats_snapshots.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+    normalized_phone = db.Column(db.String(128), nullable=False)
+    campaign_recipient_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "marketing_campaign_v2_recipients.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+    )
+    outcome = db.Column(db.String(20), nullable=False)
+    delivery_bucket = db.Column(db.String(20), nullable=True)
+    button_labels_json = db.Column(
+        _JSON_DOCUMENT,
+        nullable=False,
+        default=list,
+        server_default=db.text("'[]'"),
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+
+    snapshot = db.relationship(
+        "MarketingCampaignV2ProviderStatsSnapshotORM",
+        back_populates="observations",
+    )
+    campaign_recipient = db.relationship(
+        "MarketingCampaignV2RecipientORM",
+        back_populates="provider_stats_observations",
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "snapshot_id",
+            "normalized_phone",
+            name="uq_marketing_campaign_v2_provider_obs_snapshot_phone",
+        ),
+        db.CheckConstraint(
+            "outcome IN ('SUCCESSFUL', 'FAILED')",
+            name="ck_marketing_campaign_v2_provider_obs_outcome",
+        ),
+        db.CheckConstraint(
+            "(outcome = 'FAILED' AND delivery_bucket IS NULL) OR "
+            "(outcome = 'SUCCESSFUL' AND delivery_bucket IN "
+            "('SENT', 'DELIVERED', 'VIEWED'))",
+            name="ck_marketing_campaign_v2_provider_obs_delivery",
+        ),
+        db.Index(
+            "ix_marketing_campaign_v2_provider_obs_snapshot_id",
+            "snapshot_id",
+        ),
+        db.Index(
+            "ix_marketing_campaign_v2_provider_obs_campaign_recipient_id",
+            "campaign_recipient_id",
+        ),
+        db.Index(
+            "ix_marketing_campaign_v2_provider_obs_normalized_phone",
+            "normalized_phone",
         ),
     )
 

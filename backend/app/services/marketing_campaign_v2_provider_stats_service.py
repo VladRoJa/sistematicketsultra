@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import dataclass
 from typing import Any, Callable, Iterable
 
 from app.extensions import db
@@ -65,6 +66,14 @@ class MarketingCampaignV2ProviderStatsUpstreamError(
 ProviderResolver = Callable[[str], CampaignProvider]
 
 
+@dataclass(frozen=True)
+class CampaignV2ProviderStatsFetch:
+    campaign_id: int
+    provider: str
+    provider_campaign_id: str
+    stats: CampaignProviderStats
+
+
 def get_campaign_v2_provider_stats(
     *,
     campaign_id: Any,
@@ -72,6 +81,27 @@ def get_campaign_v2_provider_stats(
     session=None,
     provider_resolver: ProviderResolver = resolve_campaign_provider,
 ) -> dict[str, Any]:
+    fetched = fetch_campaign_v2_provider_stats(
+        campaign_id=campaign_id,
+        allowed_sucursal_keys=allowed_sucursal_keys,
+        session=session,
+        provider_resolver=provider_resolver,
+    )
+    return _serialize_provider_stats(
+        campaign_id=fetched.campaign_id,
+        provider=fetched.provider,
+        provider_campaign_id=fetched.provider_campaign_id,
+        stats=fetched.stats,
+    )
+
+
+def fetch_campaign_v2_provider_stats(
+    *,
+    campaign_id: Any,
+    allowed_sucursal_keys: Iterable[str] | None,
+    session=None,
+    provider_resolver: ProviderResolver = resolve_campaign_provider,
+) -> CampaignV2ProviderStatsFetch:
     active_session = session if session is not None else db.session
     normalized_campaign_id = _positive_int(
         campaign_id,
@@ -132,7 +162,7 @@ def get_campaign_v2_provider_stats(
             retryable=False,
         ) from exc
 
-    return _serialize_provider_stats(
+    return CampaignV2ProviderStatsFetch(
         campaign_id=int(campaign.id),
         provider=provider_key,
         provider_campaign_id=provider_campaign_id,

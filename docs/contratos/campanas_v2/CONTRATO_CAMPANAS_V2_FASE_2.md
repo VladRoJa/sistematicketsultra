@@ -596,6 +596,64 @@ M10 es estrictamente read-through:
 
 `analyticsStatus=not_synced` sigue siendo respuesta válida `200` cuando el provider respondió correctamente.
 
+### M11 — snapshots persistentes append-only
+
+M11 agrega evidencia histórica persistente sin alterar el GET read-through de M10.
+
+Modelo:
+
+    marketing_campaign_v2_provider_stats_snapshots
+      -> marketing_campaign_v2_provider_recipient_observations
+
+Cada snapshot copia:
+- `campaign_v2_id`;
+- `provider`;
+- `provider_campaign_id`;
+- `analytics_status`;
+- `fetched_at` propio de Suite;
+- raw counts;
+- `analytics_json` agregado/opaco;
+- `button_interactions_json`;
+- métricas diagnósticas;
+- fingerprint SHA-256;
+- `created_at`.
+
+Las observations conservan:
+- `normalized_phone` según la clave normalizada M8;
+- `campaign_recipient_id` nullable;
+- outcome `SUCCESSFUL/FAILED`;
+- delivery bucket `SENT/DELIVERED/VIEWED` sólo para successful;
+- button labels observadas.
+
+Matching con frozen recipients:
+- sólo `mx10:<10 dígitos>` se vincula contra `MarketingCampaignV2RecipientORM.phone_mx10`;
+- teléfonos provider sin frozen recipient se conservan con FK null;
+- frozen recipients ausentes del provider no reciben estado inventado.
+
+Diagnósticos por snapshot:
+- provider recipients normalizados únicos;
+- matched recipients;
+- unmatched provider phones;
+- frozen recipients sin status provider.
+
+Idempotencia:
+- fingerprint determinístico sobre `CampaignProviderStats` normalizado;
+- sets ordenados;
+- interactions ordenadas establemente;
+- analytics JSON canonicalizado;
+- no incluye fetched_at ni DB ids;
+- `UNIQUE(campaign_v2_id, provider, provider_campaign_id, fingerprint)`;
+- captura idéntica devuelve el snapshot existente sin duplicar observations;
+- cambio real crea nuevo snapshot append-only.
+
+API:
+
+    POST /api/marketing/campaigns-v2/{id}/provider-stats/snapshots
+    GET  /api/marketing/campaigns-v2/{id}/provider-stats/snapshots
+    GET  /api/marketing/campaigns-v2/{id}/provider-stats/snapshots/latest
+
+La creación de snapshot + observations es una sola transacción. M11 no persiste timestamps recipient-level ni failure causes.
+
 ## 13. Campañas creadas fuera de Suite
 
 Fase 2 debe soportar el concepto:
@@ -891,6 +949,16 @@ Ya existe en M10:
 - serialización determinística de `CampaignProviderStats`;
 - manejo sanitizado de errores upstream sin persistencia.
 
+Ya existe en M11:
+
+- snapshots append-only de provider stats;
+- observations recipient-level por snapshot;
+- fingerprint SHA-256 determinístico e idempotencia DB;
+- matching opcional provider phone -> frozen recipient;
+- conservación de provider phones unmatched;
+- diagnostics matched/unmatched/frozen-without-status;
+- history/latest sin volver a consultar provider.
+
 Capacidades futuras, separadas:
 
 - update commercial purpose;
@@ -956,6 +1024,20 @@ M10 read-through:
 - parser/invariant errors no se silencian;
 - sólo SELECT, sin commit ni escrituras.
 
+M11 snapshots:
+- captura inicial atómica;
+- repetición exacta idempotente;
+- cambio de analytics o buckets crea snapshot nuevo;
+- matching con frozen recipients;
+- provider phone unmatched se conserva;
+- frozen recipient ausente no recibe estado inventado;
+- FAILED siempre con delivery bucket null;
+- button labels recipient-level preservadas;
+- `not_synced` y analytics null persistibles;
+- rollback no deja snapshot parcial;
+- history/latest ordenados por fetched_at/id desc;
+- constraint de fingerprint soporta carreras de idempotencia.
+
 ## 30. Criterio de aceptación de M8 provider read-only
 
 M8 queda cerrado cuando:
@@ -981,9 +1063,9 @@ queda satisfecho en modo read-only para un `campaign_id` conocido mediante campa
 
 ## 31. Limitaciones que permanecen abiertas para Fase 2
 
-El cierre M10 **no cierra toda Fase 2**. Permanecen abiertos:
+El cierre M11 **no cierra toda Fase 2**. Permanecen abiertos:
 
-- persistencia/idempotencia de recipient state y stats snapshots;
+- sync automático/scheduler de snapshots;
 - listado/importación de campañas por periodo;
 - representación/persistencia de campañas externas;
 - normalización específica de costos cuando vaya a consumirse;

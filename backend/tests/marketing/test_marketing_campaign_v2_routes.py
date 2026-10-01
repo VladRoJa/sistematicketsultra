@@ -71,6 +71,9 @@ class TestMarketingCampaignV2Routes:
             ("get", "/api/marketing/campaigns-v2"),
             ("get", "/api/marketing/campaigns-v2/1"),
             ("get", "/api/marketing/campaigns-v2/1/provider-stats"),
+            ("post", "/api/marketing/campaigns-v2/1/provider-stats/snapshots"),
+            ("get", "/api/marketing/campaigns-v2/1/provider-stats/snapshots"),
+            ("get", "/api/marketing/campaigns-v2/1/provider-stats/snapshots/latest"),
             ("get", "/api/marketing/campaigns-v2/1/recipients"),
             ("get", "/api/marketing/campaigns-v2/1/recipients/2"),
             ("patch", "/api/marketing/campaigns-v2/1/purpose"),
@@ -721,6 +724,133 @@ class TestMarketingCampaignV2Routes:
                 headers=self.headers,
             )
         assert response.status_code == 403
+
+    def test_provider_stats_snapshot_capture_success_and_rejects_payload(self):
+        expected = {
+            "id": 7,
+            "campaign_id": 1,
+            "fingerprint": "a" * 64,
+            "created": True,
+        }
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.capture_campaign_v2_provider_stats_snapshot",
+                return_value=expected,
+            ) as service,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/1/provider-stats/snapshots",
+                headers=self.headers,
+            )
+        assert response.status_code == 200
+        assert response.get_json() == expected
+        assert service.call_args.kwargs["campaign_id"] == 1
+        assert service.call_args.kwargs["allowed_sucursal_keys"] is None
+
+        with self._auth():
+            invalid = self.client.post(
+                "/api/marketing/campaigns-v2/1/provider-stats/snapshots",
+                json={"provider_campaign_id": "arbitrary"},
+                headers=self.headers,
+            )
+        assert invalid.status_code == 400
+
+    def test_provider_stats_snapshot_capture_maps_provider_errors(self):
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.capture_campaign_v2_provider_stats_snapshot",
+                side_effect=routes.MarketingCampaignV2ProviderStatsUnboundError(
+                    "unbound"
+                ),
+            ),
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/1/provider-stats/snapshots",
+                headers=self.headers,
+            )
+        assert response.status_code == 409
+
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.capture_campaign_v2_provider_stats_snapshot",
+                side_effect=routes.MarketingCampaignV2ProviderStatsUpstreamError(
+                    "secret upstream",
+                    retryable=True,
+                    retry_after_seconds=30,
+                ),
+            ),
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/1/provider-stats/snapshots",
+                headers=self.headers,
+            )
+        assert response.status_code == 503
+        assert response.headers["Retry-After"] == "30"
+        assert "secret upstream" not in response.get_data(as_text=True)
+
+    def test_provider_stats_snapshot_history_and_latest_use_scope(self):
+        history = {"campaign_id": 1, "rows": [{"id": 2}, {"id": 1}]}
+        latest = {"id": 2, "campaign_id": 1}
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.list_campaign_v2_provider_stats_snapshots",
+                return_value=history,
+            ) as list_service,
+            patch(
+                "app.routes.marketing_campaign_v2_routes.get_latest_campaign_v2_provider_stats_snapshot",
+                return_value=latest,
+            ) as latest_service,
+        ):
+            history_response = self.client.get(
+                "/api/marketing/campaigns-v2/1/provider-stats/snapshots",
+                headers=self.headers,
+            )
+            latest_response = self.client.get(
+                "/api/marketing/campaigns-v2/1/provider-stats/snapshots/latest",
+                headers=self.headers,
+            )
+        assert history_response.status_code == 200
+        assert history_response.get_json() == history
+        assert latest_response.status_code == 200
+        assert latest_response.get_json() == latest
+        assert list_service.call_args.kwargs["allowed_sucursal_keys"] is None
+        assert latest_service.call_args.kwargs["allowed_sucursal_keys"] is None
+
+    def test_provider_stats_snapshot_latest_missing_is_404(self):
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.get_latest_campaign_v2_provider_stats_snapshot",
+                return_value=None,
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/1/provider-stats/snapshots/latest",
+                headers=self.headers,
+            )
+        assert response.status_code == 404
+
+    def test_provider_stats_snapshot_routes_reuse_management_permission(self):
+        access = SimpleNamespace(
+            is_global=True,
+            branch_ids=(),
+            can_edit_inputs=False,
+        )
+        for method, path in (
+            ("post", "/api/marketing/campaigns-v2/1/provider-stats/snapshots"),
+            ("get", "/api/marketing/campaigns-v2/1/provider-stats/snapshots"),
+            ("get", "/api/marketing/campaigns-v2/1/provider-stats/snapshots/latest"),
+        ):
+            with self._auth(access):
+                response = getattr(self.client, method)(
+                    path,
+                    headers=self.headers,
+                )
+            assert response.status_code == 403
 
     def test_query_validation_maps_to_400(self):
         with (
