@@ -1150,13 +1150,68 @@ def test_seed_has_expected_tariffs_without_normalized_duplicates():
     assert by_raw["SEMANA $299"]["reactivation_group"] == "REVIEW"
 
 
+def _alembic_revision_patterns():
+    annotation = r"(?:\s*:\s*[^=]+)?"
+    return (
+        re.compile(
+            rf"^revision{annotation}\s*=\s*[\"']([^\"']+)[\"']",
+            re.M,
+        ),
+        re.compile(
+            rf"^down_revision{annotation}\s*=\s*(.+)$",
+            re.M,
+        ),
+        re.compile(r"[\"']([^\"']+)[\"']"),
+    )
+
+
+@pytest.mark.parametrize(
+    ("source", "expected_revision", "expected_parents"),
+    [
+        (
+            'revision = "plain"\ndown_revision = "root"\n',
+            "plain",
+            {"root"},
+        ),
+        (
+            'revision: str = "typed"\ndown_revision: str = "plain"\n',
+            "typed",
+            {"plain"},
+        ),
+        (
+            (
+                'revision: str = "merge"\n'
+                'down_revision: tuple[str, str] = ("left", "right")\n'
+            ),
+            "merge",
+            {"left", "right"},
+        ),
+    ],
+)
+def test_alembic_revision_parser_accepts_typed_and_untyped_assignments(
+    source,
+    expected_revision,
+    expected_parents,
+):
+    revision_pattern, parent_pattern, quoted_pattern = (
+        _alembic_revision_patterns()
+    )
+    revision_match = revision_pattern.search(source)
+    parent_match = parent_pattern.search(source)
+
+    assert revision_match is not None
+    assert revision_match.group(1) == expected_revision
+    assert parent_match is not None
+    assert set(quoted_pattern.findall(parent_match.group(1))) == expected_parents
+
+
 def test_alembic_has_single_head_for_nullable_campaign_recipient_migration():
     versions_path = Path(__file__).resolve().parents[2] / "migrations" / "versions"
     revisions: set[str] = set()
     parents: set[str] = set()
-    revision_pattern = re.compile(r'^revision\s*=\s*["\']([^"\']+)["\']', re.M)
-    parent_pattern = re.compile(r'^down_revision\s*=\s*(.+)$', re.M)
-    quoted_pattern = re.compile(r'["\']([^"\']+)["\']')
+    revision_pattern, parent_pattern, quoted_pattern = (
+        _alembic_revision_patterns()
+    )
     for migration_path in versions_path.glob("*.py"):
         source = migration_path.read_text(encoding="utf-8")
         revision_match = revision_pattern.search(source)
@@ -1166,7 +1221,8 @@ def test_alembic_has_single_head_for_nullable_campaign_recipient_migration():
         if parent_match:
             parents.update(quoted_pattern.findall(parent_match.group(1)))
 
-    assert revisions - parents == {"b9e2f7a4d3c5"}
+    heads = revisions - parents
+    assert len(heads) == 1, f"Se esperaba un único head Alembic, encontrados: {heads}"
 
 def test_read_last_suite_campaign_sent_at_applies_optional_sent_window():
     sent_from = datetime(

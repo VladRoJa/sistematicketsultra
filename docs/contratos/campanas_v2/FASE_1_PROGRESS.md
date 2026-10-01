@@ -546,6 +546,31 @@ Resultados reales del hardening en harness aislado:
 
 La primera ejecución demuestra la frontera de imports de forma dinámica: importar y probar `marketing_campaign_v2_audience_service` no necesita cargar `marketing_reactivation_service`.
 
+
+### Hardening de parser Alembic previo a PR
+
+La suite real conjunta detectó una regresión exclusivamente en test:
+
+`python -m pytest tests/marketing/test_marketing_campaign_v2_tariff_catalog.py tests/marketing/test_marketing_campaign_v2_persistence.py tests/marketing/test_marketing_campaign_v2_audience_service.py tests/marketing/test_marketing_tariff_normalization.py tests/services/test_marketing_reactivation_campaign_service.py -q --basetemp .pytest_tmp`
+
+Resultado previo reportado: `73 passed, 1 failed`, con fallo en `test_alembic_has_single_head_for_nullable_campaign_recipient_migration()`.
+
+Alembic real no tenía bifurcación: `flask db heads` devolvió únicamente `a4d8c2e6f1b5 (head)`.
+
+La causa era el parser del test, que sólo reconocía asignaciones sin anotación. Se corrigió exclusivamente `backend/tests/services/test_marketing_reactivation_campaign_service.py`:
+
+- acepta `revision = "..."` y `revision: str = "..."`;
+- acepta `down_revision` con o sin type annotation;
+- conserva extracción de todos los parents citados, incluido un tuple tipado;
+- agrega un caso explícito para `revision: str = ...`;
+- la prueba de grafo ya no fija el head obsoleto `b9e2f7a4d3c5`, sino que exige exactamente un head.
+
+No se creó merge migration y no se modificó ninguna migración, modelo, servicio productivo ni Audience Builder.
+
+Validación ejecutada en este entorno para el parser: `4 cases passed`, incluyendo el caso real `c1d4e7f9a2b3 -> b9e2f7a4d3c5`.
+
+Limitación: este entorno no dispone de Flask/Flask-SQLAlchemy y no puede instalar dependencias ni clonar el repo por falta de red. Por ello la suite real conjunta anterior no pudo reejecutarse aquí. Tampoco existe `.github/workflows` en la rama para delegar esa ejecución a GitHub Actions. El cambio queda preparado para repetir exactamente el comando anterior en un entorno completo.
+
 También pasaron `py_compile` del servicio y del test exactos.
 
 Limitación del entorno: no hay acceso de red para clonar el repo y no están instalados Flask/Flask-SQLAlchemy. Por ello no se ejecutó el archivo de pytest dentro del árbol completo de Suite Ultra, PostgreSQL, toda la suite ni CI. Los tests de Milestone 1 y Milestone 2 no pudieron reejecutarse aquí; sus archivos/modelos/migraciones no fueron modificados por Milestone 3.
