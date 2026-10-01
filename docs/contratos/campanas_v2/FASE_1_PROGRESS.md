@@ -1598,7 +1598,17 @@ Por tanto **no se afirma un build Angular exitoso** y M6 queda pendiente de ejec
 
 `frontend/scripts/test-campaigns.cjs` existe y no fue modificado.
 
-No pudo ejecutarse realmente aquí por la misma ausencia del checkout frontend completo y dependencias Angular runtime. Reactivaciones legacy no fue modificada; sólo cambian routing/layout para agregar V2 de forma aditiva.
+Se intentó ejecutar realmente:
+
+`node scripts/test-campaigns.cjs`
+
+El runner no alcanzó a iniciar sus tests porque este staging no contiene el checkout frontend completo. Falló al buscar:
+
+`src/app/marketing-reactivation/marketing-reactivation.component.node-test.ts`
+
+con `ENOENT`.
+
+Esto es una limitación del entorno de ejecución, no un resultado de regresión legacy. Además siguen ausentes las dependencias Angular runtime. Reactivaciones legacy no fue modificada; sólo cambian routing/layout para agregar V2 de forma aditiva.
 
 ### Backend
 
