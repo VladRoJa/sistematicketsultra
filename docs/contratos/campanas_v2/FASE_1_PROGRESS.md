@@ -920,8 +920,338 @@ No se agregó:
 - scheduling;
 - templates.
 
+## Milestone 5 — API backend Campaign V2 + permisos y scope
+
+Estado: **completado en rama, pendiente de merge**.
+
+### Base y rama
+
+- Base obligatoria confirmada: `68d5e2b0988efa13d69c7e11697a1742c7a48c6d`.
+- Esa base corresponde al merge del PR #754 de Milestone 4.
+- Baseline real previo al milestone: `92 passed`.
+- Rama: `feat/campaign-v2-api-permissions`.
+- No se agregó migración: M4 ya dejó el esquema suficiente para API/lectura.
+
+### Permiso backend
+
+Campaign V2 reutiliza la autoridad existente de Marketing:
+
+`resolve_marketing_access(user)`
+
+La gestión completa V2 exige explícitamente:
+
+`access.can_edit_inputs == True`
+
+No usa `can_view_reactivation` como permiso V2 y no agrega ifs por rol.
+
+El blueprint V2 obtiene el usuario desde JWT, resuelve `UserORM.get_by_id()`, llama `resolve_marketing_access()` y después ejecuta `_require_campaign_v2_management(access)`.
+
+El archivo V2 no importa `marketing_routes.py` ni depende de `_request_targets_reactivation()`; por tanto no hereda accidentalmente la heurística especial de paths `/reactivation`.
+
+### Scope backend y mapper compartido
+
+Se extrajo el mapper genérico sucursal Suite → Track branch key a:
+
+`backend/app/services/marketing_branch_scope.py::marketing_branch_keys_by_sucursal_ids()`
+
+Usa `TrackBranchCatalogORM` activo y `normalize_socios_vencidos_branch_key()`.
+
+El wrapper legacy:
+
+`reactivation_branch_keys_by_sucursal_ids()`
+
+se conserva con el mismo nombre y ahora delega al helper compartido. No se cambió semántica del legacy.
+
+Campaign V2 deriva scope exclusivamente del `MarketingAccess` autenticado:
+
+- `access.is_global=True` → `allowed_sucursal_keys=None`;
+- scope parcial → sólo keys provenientes de `access.branch_ids`;
+- mapper sin keys válidas → 403 fail-closed;
+- el payload nunca puede enviar `allowed_sucursal_keys`.
+
+### Blueprint y rutas
+
+Nuevo blueprint:
+
+`backend/app/routes/marketing_campaign_v2_routes.py`
+
+Registrado en app factory bajo:
+
+`url_prefix="/api/marketing"`
+
+Rutas:
+
+- `GET /api/marketing/campaigns-v2/options`
+- `POST /api/marketing/campaigns-v2/preview`
+- `POST /api/marketing/campaigns-v2/preview-detail`
+- `POST /api/marketing/campaigns-v2`
+- `GET /api/marketing/campaigns-v2`
+- `GET /api/marketing/campaigns-v2/<campaign_id>`
+- `GET /api/marketing/campaigns-v2/<campaign_id>/recipients`
+- `GET /api/marketing/campaigns-v2/<campaign_id>/recipients/<recipient_id>`
+- `PATCH /api/marketing/campaigns-v2/<campaign_id>/purpose`
+
+Todas requieren JWT y el permiso de gestión V2.
+
+### Options
+
+Devuelve dominios estables para la futura UI:
+
+- sources: `EXPIRED_MEMBERS`, `ACTIVE_MEMBERS`;
+- selectable families: `DOMICILIADO`, `TRIMESTRAL`, `CONVENIO`, `SEMESTRE`, `ESTUDIANTE`;
+- non-selectable: `MES`, `OUT_OF_SEGMENT`, `UNCLASSIFIED`;
+- purposes: `NEW_SALE`, `REACTIVATION`, `ACTIVE_MEMBERS`, `UNCLASSIFIED`;
+- scope backend resuelto.
+
+No consulta ni devuelve iVentas.
+
+### Preview
+
+`POST /campaigns-v2/preview` llama exclusivamente:
+
+`build_campaign_v2_freeze_preview()`
+
+Payload permitido:
+
+- `source`
+- `audience_families`
+- `expiration_date_from`
+- `expiration_date_to`
+
+El route inyecta `allowed_sucursal_keys` desde backend.
+
+Devuelve el Preview M3 completo más:
+
+- `preview_fingerprint_version`
+- `preview_fingerprint`
+
+No persiste.
+
+### Preview Detail
+
+`POST /campaigns-v2/preview-detail` usa:
+
+`build_campaign_v2_audience_preview_detail()`
+
+Payload permitido:
+
+- definición de audiencia;
+- `bucket`;
+- `audience_family`;
+- `page`;
+- `page_size`.
+
+Scope siempre backend. Conserva el rebuild y fail-closed contador Preview == Detail de M3.
+
+### Freeze/Create
+
+`POST /campaigns-v2` permite sólo:
+
+- `name`
+- `purpose`
+- `source`
+- `audience_families`
+- rango de vencimiento cuando aplica
+- `expected_preview_fingerprint`
+
+No acepta:
+
+- `allowed_sucursal_keys`
+- `created_by_user_id`
+- `recipients`
+- `recipient_ids`
+- `phones`
+- `source_record_ids`
+- `evidence_rows`.
+
+El route pasa internamente:
+
+- `created_by_user_id=user.id`;
+- `allowed_sucursal_keys=scope backend`.
+
+M4 sigue siendo la autoridad para rebuild, fingerprint, atomicidad y persistencia.
+
+### Read/query service
+
+Nuevo servicio:
+
+`backend/app/services/marketing_campaign_v2_query_service.py`
+
+Trabaja exclusivamente con:
+
+- `MarketingCampaignV2ORM`
+- `MarketingCampaignV2RecipientORM`
+- `MarketingCampaignV2RecipientEvidenceORM`
+
+No consulta Socios Activos/Vencidos para reconstruir valores históricos.
+
+Operaciones:
+
+- `list_campaign_v2()`
+- `get_campaign_v2()`
+- `list_campaign_v2_recipients()`
+- `get_campaign_v2_recipient()`
+- `update_campaign_v2_purpose()`.
+
+### Visibilidad de campañas congeladas
+
+La campaña es una cohorte atómica.
+
+El query service lee `audience_definition_json.filters.allowed_sucursal_keys` congelado y aplica política fail-closed:
+
+- definición ausente/malformada → no visible, incluso para un scope que no necesita inferencia;
+- usuario global → puede ver campañas con definición de scope válida, tanto globales como locales;
+- usuario parcial → una campaña global (`allowed_sucursal_keys=None`) no es visible;
+- usuario parcial → campaña local sólo es visible si todo su scope congelado está contenido en el scope actual;
+- no se devuelve una vista parcial.
+
+Campaign inexistente y Campaign existente fuera de scope se presentan como el mismo 404.
+
+### List y Campaign Detail
+
+List:
+
+- paginación estable;
+- orden `frozen_at DESC, id DESC`;
+- filtros opcionales únicamente `purpose` y `source`;
+- recipient count agregado;
+- fingerprint/version cuando existe.
+
+Campaign Detail devuelve datos congelados:
+
+- identidad/purpose/source/timestamps;
+- creator;
+- recipient_count;
+- fingerprint;
+- `audience_definition`.
+
+No hay joins a fuentes vivas.
+
+### Recipients y Evidence
+
+Listado:
+
+`GET /campaigns-v2/<campaign_id>/recipients`
+
+- paginación estable;
+- orden `recipient.id ASC`;
+- summary congelado;
+- `conflict_fields`;
+- `evidence_count` agregado sin cargar Evidence completa por cada row.
+
+Detalle:
+
+`GET /campaigns-v2/<campaign_id>/recipients/<recipient_id>`
+
+devuelve summary + todas las `MarketingCampaignV2RecipientEvidenceORM` congeladas ordenadas por:
+
+`evidence_order ASC, id ASC`.
+
+El recipient debe pertenecer a la Campaign indicada; un ID de otra Campaign responde como no encontrado.
+
+### PATCH purpose
+
+Única mutación posterior al freeze:
+
+`PATCH /campaigns-v2/<campaign_id>/purpose`
+
+Payload permitido únicamente:
+
+`purpose`
+
+Valores:
+
+- `NEW_SALE`
+- `REACTIVATION`
+- `ACTIVE_MEMBERS`
+- `UNCLASSIFIED`.
+
+Modifica sólo:
+
+- `purpose`;
+- `updated_at`.
+
+No modifica `frozen_at`, definición, fingerprint, recipients ni evidence.
+
+### Errores HTTP
+
+- JWT ausente/inválido → manejo estándar JWT, 401;
+- sin permiso/scope backend resoluble → 403;
+- payload/query/definición inválida → 400;
+- Campaign/Recipient inexistente o fuera de scope → 404;
+- Preview mismatch → 409;
+- audiencia vacía al Freeze → 409;
+- persistencia Freeze → 500 genérico;
+- inesperado → 500 genérico.
+
+No se filtran detalles SQL ni stack traces.
+
+### Pruebas M5
+
+Archivos agregados:
+
+- `backend/tests/marketing/test_marketing_branch_scope.py`
+- `backend/tests/marketing/test_marketing_campaign_v2_query_service.py`
+- `backend/tests/marketing/test_marketing_campaign_v2_routes.py`
+
+Cobertura versionada incluye:
+
+- JWT obligatorio;
+- usuario inválido;
+- permiso `can_edit_inputs`;
+- independencia de `can_view_reactivation` y heurística Reactivaciones;
+- global/partial/empty scope;
+- mapper sucursal → key y wrapper legacy;
+- allowlists de payload;
+- spoof de scope/creator/cohort rechazado;
+- Preview + fingerprint;
+- Detail M3;
+- Freeze creator/fingerprint/scope;
+- mapping 400/403/404/409/500 relevante;
+- list/read scope fail-closed;
+- campaña global oculta a usuario parcial;
+- definición malformada oculta;
+- recipient ajeno no revelado;
+- paginación estable;
+- counts de recipients/evidence;
+- evidence congelada en orden;
+- purpose como única mutación.
+
+Validación realmente ejecutada en este runtime sobre el código M5:
+
+- helper/branch scope harness: `2 passed`;
+- query/read harness con SQLAlchemy/SQLite: `9 passed`;
+- route/scope harness con Flask/JWT stubs mínimos: `8 passed`;
+- combinado: `19 passed in 0.23s`;
+- `py_compile` pasó para los tres archivos productivos nuevos y los tres tests versionados.
+
+Limitación: este runtime no tiene Flask, Flask-JWT-Extended ni Flask-SQLAlchemy y no tiene acceso de red para instalar/clonar. Por ello los tests Flask versionados, el corredor real M1-M5, PostgreSQL, CI y full suite no se ejecutaron aquí.
+
+Baseline real confirmado antes de M5: `92 passed`.
+
+### Migraciones
+
+No hay migración M5.
+
+No se modificó la cadena Alembic de M4.
+
+### Fuera de alcance
+
+No se agregó:
+
+- Angular;
+- ruta/menu frontend;
+- service Angular;
+- iVentas provider/broadcast/stats;
+- costos/templates;
+- Funnel operacional;
+- ACTIVE_MEMBER_SUPPRESSION;
+- PREVIOUS_CAMPAIGN operacional;
+- mutación de cohorte;
+- nuevo sistema de permisos.
+
 ## Siguiente milestone propuesto
 
-**Milestone 5 — API backend Campaign V2 + permisos**
+**Milestone 6 — Angular Campaign V2 + integración Fase 1**
 
-Objetivo recomendado: exponer Preview/Detail/Freeze y lectura de Campaign V2 mediante rutas Flask, aplicando el sistema real de permisos y alcance de sucursal en backend, sin Angular todavía.
+Objetivo recomendado: construir la pantalla Angular separada de Reactivaciones para Options → Preview/Detail → Freeze y lectura de campañas/cohortes congeladas, consumiendo exclusivamente los contratos API M5 y sin avanzar todavía a iVentas/Fase 2.

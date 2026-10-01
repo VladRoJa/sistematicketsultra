@@ -12,9 +12,9 @@ from app.models.marketing import MarketingReactivationCampaignRecipientORM as Re
 from app.models.sucursal_model import Sucursal
 from app.models.suite_governance import SuiteRegionORM, SuiteSucursalRegionAssignmentORM
 from app.models.warehouse import (
-    TrackBranchCatalogORM,
     VentasNuevosSociosDetalleSnapshotORM as NewSnapshot,
 )
+from app.services.marketing_branch_scope import marketing_branch_keys_by_sucursal_ids
 from app.warehouse.services.socios_vencidos_current_status_resolver import normalize_socios_vencidos_branch_key as branch_key
 
 TZ = ZoneInfo("America/Tijuana")
@@ -65,19 +65,11 @@ def region_branches(*, region_id, today, session):
 
 
 def reactivation_branch_keys_by_sucursal_ids(*, sucursal_ids, session):
-    ids = tuple(sorted({int(value) for value in sucursal_ids if value is not None}))
-    if not ids:
-        return {}
-
-    rows = session.query(TrackBranchCatalogORM).filter(
-        TrackBranchCatalogORM.is_track_active.is_(True),
-        TrackBranchCatalogORM.sucursal_id.in_(ids),
-    ).all()
-    return {
-        int(row.sucursal_id): branch_key(row.track_label)
-        for row in rows
-        if row.sucursal_id is not None and branch_key(row.track_label) is not None
-    }
+    """Compatibilidad legacy; delega al mapper compartido de Marketing."""
+    return marketing_branch_keys_by_sucursal_ids(
+        sucursal_ids=sucursal_ids,
+        session=session,
+    )
 
 
 def campaign_options(*, allowed_sucursal_keys, session, now):
