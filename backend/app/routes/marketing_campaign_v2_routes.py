@@ -62,6 +62,11 @@ def campaign_v2_options_endpoint():
                     "UNCLASSIFIED",
                 ],
                 "purposes": list(CAMPAIGN_V2_PURPOSES),
+                "tariff_categories": list(
+                    tariff_classifier.list_canonical_tariff_categories(
+                        session=db.session,
+                    )
+                ),
                 "scope": {
                     "is_global": bool(access.is_global),
                     "allowed_sucursal_keys": (

@@ -2182,3 +2182,197 @@ Después de validar y cerrar M7.1, retomar M7 exactamente en:
 
 No avanzar a Fase 2.
 
+## M7.1.1 — Categorías canónicas en catalogador Campaign V2
+
+Estado: **implementado sobre M7.1, pendiente de validación completa en checkout local**.
+
+### Base
+
+- Rama: `feat/campaign-v2-tariff-classifier`.
+- HEAD base de este hardening: `9a3954236da6b2acd44f2c71ec2e1e7c81b1cc8c`.
+- El smoke real de M7.1 confirmó `96` tarifas únicas y `8,910` filas ACTIVE_MEMBERS sin clasificación.
+- Problema detectado: `categoria_tarifa` permitía texto libre y podía degradar el catálogo con sinónimos/duplicados semánticos.
+
+### Fuente canónica de categorías
+
+Se agregó:
+
+`marketing_campaign_v2_tariff_classifier_service.list_canonical_tariff_categories()`
+
+La única fuente es:
+
+`MarketingCampaignV2TariffORM`
+
+No consulta `MarketingCampaignV2TariffOverrideORM` para construir el dominio y no consulta `MarketingReactivationTariffORM`.
+
+El helper:
+
+- elimina categorías vacías;
+- deduplica;
+- devuelve orden estable;
+- preserva el nombre canónico almacenado en el snapshot ORM.
+
+Las 16 categorías actuales del baseline son:
+
+- Agregadora
+- Anualidad
+- Beca
+- Bimestre
+- Convenio
+- Diario
+- Domiciliado
+- Estudiante
+- Instructor
+- Mensualidad
+- Mes Reward
+- Pase de Cortesía
+- Recurrente
+- Semana
+- Semestre
+- Trimestre
+
+La lista no se hardcodea en Angular.
+
+### Options
+
+`GET /api/marketing/campaigns-v2/options` conserva todo su contrato y agrega:
+
+`tariff_categories: string[]`
+
+El valor se obtiene en runtime mediante `list_canonical_tariff_categories(session=db.session)`.
+
+### Validación PUT
+
+`upsert_tariff_classification()` ya no acepta cualquier texto no vacío.
+
+Flujo:
+
+1. `strip` de la entrada;
+2. consulta categorías canónicas desde `MarketingCampaignV2TariffORM`;
+3. matching exacto case-insensitive;
+4. persistencia usando exactamente el spelling canónico del baseline.
+
+Ejemplos:
+
+- `Trimestre` → `Trimestre`;
+- `" trimestre "` → `Trimestre`;
+- `Domiciliado` → `Domiciliado`;
+- `Dom` → error 400;
+- `Domiciliados` → error 400;
+- `Nueva categoría` → error 400.
+
+No hay fuzzy matching ni aliases.
+
+`audience_family` sigue validándose por separado y no se deriva desde categoría.
+
+### Frontend
+
+`CampaignV2OptionsResponse` ahora incluye:
+
+`tariff_categories: string[]`.
+
+La página pasa al dialog:
+
+- definición de audiencia;
+- `options.tariff_categories`;
+- familias observadas permitidas para clasificación.
+
+El catalogador reemplaza el input libre de categoría por un `mat-select`.
+
+Las opciones salen exclusivamente de `data.categories`, es decir, del response backend Options.
+
+No existe lista duplicada de categorías en TypeScript.
+
+La familia continúa siendo un segundo `mat-select` independiente.
+
+### Semántica posterior al save
+
+Sin cambios respecto a M7.1:
+
+- save fila por fila;
+- PUT envía únicamente `categoria_tarifa` + `audience_family`;
+- modal permanece abierto;
+- fila muestra “Clasificación guardada”;
+- `classificationSaved` invalida Preview/fingerprint vigente;
+- no hay auto-Preview;
+- no hay auto-Freeze.
+
+### DB
+
+No se agregó ni modificó migración.
+
+La revisión vigente continúa siendo:
+
+`b7c2e9f4a1d6`.
+
+El snapshot JSON aprobado sigue intacto.
+
+### Tests M7.1.1
+
+Backend actualizado para cubrir:
+
+- categorías sólo desde snapshot V2;
+- categorías distintas;
+- orden estable;
+- overrides no alimentan el dominio canónico;
+- categoría canónica aceptada;
+- whitespace + case-insensitive resuelven al spelling canónico;
+- categoría arbitraria rechazada;
+- family inválida rechazada independientemente;
+- Options expone `tariff_categories`;
+- PUT inválido retorna 400;
+- legacy no se toca.
+
+Frontend actualizado para comprobar:
+
+- modelo Options contiene `tariff_categories`;
+- dialog no contiene `<input>` de categoría;
+- usa `mat-select`;
+- opciones vienen de `data.categories`;
+- page pasa `options.tariff_categories`;
+- PUT conserva body category/family;
+- no Authorization manual;
+- no `created_by_user_id`;
+- invalidación Preview permanece;
+- legacy Campaign permanece intacto.
+
+### Validación realmente ejecutada M7.1.1
+
+En este runtime se ejecutó un harness aislado de la lógica exacta de categorías canónicas:
+
+- 16 categorías distintas y ordenadas: OK;
+- duplicado `Domiciliado` no duplica el dominio: OK;
+- blank/null se excluyen: OK;
+- `" trimestre "` → `Trimestre`: OK;
+- `"domiciliado"` → `Domiciliado`: OK;
+- `Dom`, `Domiciliados` y `Nueva categoría` se rechazan: OK.
+
+Resultado: `canonical-category harness: 7 checks passed`.
+
+También se verificaron directamente sobre los bytes publicados en GitHub:
+
+- helper consulta sólo `MarketingCampaignV2TariffORM`;
+- Options expone `tariff_categories`;
+- PUT conserva allowlist exacta `categoria_tarifa` + `audience_family`;
+- no existe cambio en `backend/migrations/`;
+- dialog no contiene `<input>` de categoría ni `MatInputModule`;
+- categoría usa `mat-select` alimentado por `data.categories`;
+- page pasa `options.tariff_categories`;
+- node test contiene cobertura del contrato nuevo;
+- ruta legacy `/marketing/reactivation` permanece en su cobertura.
+
+Limitación del entorno: sigue sin checkout completo, Flask/Flask-SQLAlchemy, PostgreSQL local, Angular CLI y `node_modules`. Por ello no se atribuyen como ejecutados el pytest real de repo, `node scripts/test-campaign-v2.cjs`, legacy runner ni `npm run build` para M7.1.1.
+
+### Fuera de alcance
+
+Sin cambios:
+
+- no iVentas;
+- no WhatsApp;
+- no envíos/costos/templates/delivery;
+- no Funnel operacional;
+- no ACTIVE_MEMBER_SUPPRESSION;
+- no MES como sexta familia seleccionable;
+- no edición del snapshot aprobado;
+- no PR/merge/deploy.
+

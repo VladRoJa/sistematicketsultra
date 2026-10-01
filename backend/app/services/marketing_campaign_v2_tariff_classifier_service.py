@@ -43,6 +43,50 @@ class MarketingCampaignV2TariffClassifierPersistenceError(
     """No fue posible persistir una clasificación V2."""
 
 
+def list_canonical_tariff_categories(
+    *,
+    session: Any | None = None,
+) -> tuple[str, ...]:
+    """Categorías canónicas derivadas exclusivamente del snapshot V2 persistido."""
+
+    active_session = session if session is not None else db.session
+    rows = (
+        active_session.query(MarketingCampaignV2TariffORM)
+        .order_by(MarketingCampaignV2TariffORM.categoria_tarifa.asc())
+        .all()
+    )
+    categories = {
+        str(row.categoria_tarifa).strip()
+        for row in rows
+        if getattr(row, "categoria_tarifa", None) is not None
+        and str(row.categoria_tarifa).strip()
+    }
+    return tuple(sorted(categories, key=lambda value: (value.casefold(), value)))
+
+
+def _resolve_canonical_tariff_category(
+    value: Any,
+    *,
+    session: Any,
+) -> str:
+    requested = _required_text(
+        value,
+        field_name="categoria_tarifa",
+        maximum=100,
+    )
+    canonical_categories = list_canonical_tariff_categories(session=session)
+    by_casefold = {
+        category.casefold(): category
+        for category in canonical_categories
+    }
+    canonical = by_casefold.get(requested.casefold())
+    if canonical is None:
+        raise MarketingCampaignV2TariffClassifierValidationError(
+            "categoria_tarifa no pertenece al catálogo canónico Campaign V2."
+        )
+    return canonical
+
+
 def list_unclassified_tariffs(
     *,
     source: Any,
@@ -154,10 +198,9 @@ def upsert_tariff_classification(
         raise MarketingCampaignV2TariffClassifierValidationError(
             "tarifa_key es obligatorio."
         )
-    normalized_category = _required_text(
+    normalized_category = _resolve_canonical_tariff_category(
         categoria_tarifa,
-        field_name="categoria_tarifa",
-        maximum=100,
+        session=active_session,
     )
     normalized_family = str(audience_family or "").strip().upper()
     if normalized_family not in AUDIENCE_FAMILIES:

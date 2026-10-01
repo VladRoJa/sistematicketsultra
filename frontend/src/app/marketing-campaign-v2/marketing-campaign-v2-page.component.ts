@@ -293,6 +293,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       maxHeight: '90vh',
       data: {
         audience: this.previewRequest,
+        categories: this.options?.tariff_categories ?? [],
         families: this.observedFamilies,
       },
     });

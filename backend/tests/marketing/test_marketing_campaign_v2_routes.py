@@ -183,6 +183,34 @@ class TestMarketingCampaignV2Routes:
         assert kwargs["user_id"] == 7
         assert kwargs["representative_raw"] == "Plan Familiar"
 
+    def test_tariff_classification_put_invalid_category_returns_400(self):
+        path = (
+            "/api/marketing/campaigns-v2/tariffs/PLAN%20FAMILIAR/classification"
+            "?source=ACTIVE_MEMBERS"
+        )
+        with self._auth(), patch.object(
+            routes.tariff_classifier,
+            "stable_representative_for_key",
+            return_value="Plan Familiar",
+        ), patch.object(
+            routes.tariff_classifier,
+            "upsert_tariff_classification",
+            side_effect=routes.tariff_classifier.MarketingCampaignV2TariffClassifierValidationError(
+                "categoria_tarifa no pertenece al catálogo canónico Campaign V2."
+            ),
+        ):
+            response = self.client.put(
+                path,
+                headers=self.headers,
+                json={
+                    "categoria_tarifa": "Dom",
+                    "audience_family": "DOMICILIADO",
+                },
+            )
+
+        assert response.status_code == 400
+        assert "catálogo canónico" in response.get_json()["message"]
+
     def test_invalid_or_missing_user_is_403(self):
         with patch(
             "app.routes.marketing_campaign_v2_routes._resolve_request_access",
@@ -208,8 +236,30 @@ class TestMarketingCampaignV2Routes:
             )
         assert response.status_code == 403
 
-    def test_options_returns_domains_and_global_scope(self):
-        with self._auth():
+    def test_options_returns_domains_tariff_categories_and_global_scope(self):
+        categories = [
+            "Agregadora",
+            "Anualidad",
+            "Beca",
+            "Bimestre",
+            "Convenio",
+            "Diario",
+            "Domiciliado",
+            "Estudiante",
+            "Instructor",
+            "Mensualidad",
+            "Mes Reward",
+            "Pase de Cortesía",
+            "Recurrente",
+            "Semana",
+            "Semestre",
+            "Trimestre",
+        ]
+        with self._auth(), patch.object(
+            routes.tariff_classifier,
+            "list_canonical_tariff_categories",
+            return_value=tuple(categories),
+        ) as mocked:
             response = self.client.get(
                 "/api/marketing/campaigns-v2/options",
                 headers=self.headers,
@@ -223,6 +273,8 @@ class TestMarketingCampaignV2Routes:
         assert body["non_selectable_classifications"] == [
             "MES", "OUT_OF_SEGMENT", "UNCLASSIFIED"
         ]
+        assert body["tariff_categories"] == categories
+        mocked.assert_called_once()
         assert body["scope"] == {"is_global": True, "allowed_sucursal_keys": None}
 
     def test_partial_scope_is_derived_from_backend_branch_ids(self):

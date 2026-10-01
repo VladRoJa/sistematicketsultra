@@ -43,8 +43,10 @@ class _Session:
         self.added = []
         self.commits = 0
         self.rollbacks = 0
+        self.queried_models = []
 
     def query(self, model):
+        self.queried_models.append(model)
         return _Query(self.rows_by_model.get(model, ()))
 
     def add(self, row):
@@ -91,6 +93,74 @@ def _source_result(candidates):
         current_status_counts={},
         metadata={"activos_snapshot_id": 77, "activos_cutoff_date": "2026-10-01"},
     )
+
+
+CANONICAL_CATEGORIES = (
+    "Agregadora",
+    "Anualidad",
+    "Beca",
+    "Bimestre",
+    "Convenio",
+    "Diario",
+    "Domiciliado",
+    "Estudiante",
+    "Instructor",
+    "Mensualidad",
+    "Mes Reward",
+    "Pase de Cortesía",
+    "Recurrente",
+    "Semana",
+    "Semestre",
+    "Trimestre",
+)
+
+
+def _category_snapshot_rows():
+    return [
+        NS(
+            tarifa_key=f"KEY-{index}",
+            tarifa_raw=f"Raw {index}",
+            categoria_tarifa=category,
+            audience_family="DOMICILIADO",
+        )
+        for index, category in enumerate(CANONICAL_CATEGORIES, start=1)
+    ]
+
+
+def test_canonical_categories_come_only_from_snapshot_distinct_and_sorted():
+    snapshot_rows = [
+        *_category_snapshot_rows(),
+        NS(
+            tarifa_key="DUP",
+            tarifa_raw="Dup",
+            categoria_tarifa="Domiciliado",
+            audience_family="DOMICILIADO",
+        ),
+        NS(
+            tarifa_key="BLANK",
+            tarifa_raw="Blank",
+            categoria_tarifa="   ",
+            audience_family="DOMICILIADO",
+        ),
+    ]
+    session = _Session(
+        {
+            MarketingCampaignV2TariffORM: snapshot_rows,
+            MarketingCampaignV2TariffOverrideORM: [
+                NS(
+                    tarifa_key="OVERRIDE",
+                    categoria_tarifa="Nueva categoría accidental",
+                    audience_family="CONVENIO",
+                )
+            ],
+        }
+    )
+
+    result = classifier.list_canonical_tariff_categories(session=session)
+
+    assert result == CANONICAL_CATEGORIES
+    assert session.queried_models == [MarketingCampaignV2TariffORM]
+    assert "Nueva categoría accidental" not in result
 
 
 def test_effective_catalog_precedence_override_over_snapshot():
@@ -175,16 +245,16 @@ def test_unclassified_aggregation_is_by_normalized_key_and_impact(monkeypatch):
     assert result["total_unclassified_rows"] == 5
 
 
-def test_upsert_normalizes_key_validates_family_and_does_not_accept_user_from_payload():
+def test_upsert_normalizes_key_resolves_canonical_category_and_validates_family():
     session = _Session(
         {
             MarketingCampaignV2TariffOverrideORM: [],
-            MarketingCampaignV2TariffORM: [],
+            MarketingCampaignV2TariffORM: _category_snapshot_rows(),
         }
     )
     result = classifier.upsert_tariff_classification(
         tarifa_key="  ３ meses   proporcional  ",
-        categoria_tarifa=" Trimestre ",
+        categoria_tarifa=" trimestre ",
         audience_family="trimestral",
         user_id=7,
         representative_raw="3 MESES PROPORCIONAL",
@@ -199,13 +269,39 @@ def test_upsert_normalizes_key_validates_family_and_does_not_accept_user_from_pa
     assert result["updated_by_user_id"] == 7
     assert session.commits == 1
 
-    with pytest.raises(classifier.MarketingCampaignV2TariffClassifierValidationError):
+    for invalid_category in ("Dom", "Domiciliados", "Nueva categoría"):
+        with pytest.raises(
+            classifier.MarketingCampaignV2TariffClassifierValidationError,
+            match="catálogo canónico",
+        ):
+            classifier.upsert_tariff_classification(
+                tarifa_key="X",
+                categoria_tarifa=invalid_category,
+                audience_family="DOMICILIADO",
+                user_id=7,
+                session=_Session(
+                    {
+                        MarketingCampaignV2TariffORM: _category_snapshot_rows(),
+                        MarketingCampaignV2TariffOverrideORM: [],
+                    }
+                ),
+            )
+
+    with pytest.raises(
+        classifier.MarketingCampaignV2TariffClassifierValidationError,
+        match="audience_family",
+    ):
         classifier.upsert_tariff_classification(
             tarifa_key="X",
-            categoria_tarifa="X",
+            categoria_tarifa="Domiciliado",
             audience_family="NO_EXISTE",
             user_id=7,
-            session=_Session(),
+            session=_Session(
+                {
+                    MarketingCampaignV2TariffORM: _category_snapshot_rows(),
+                    MarketingCampaignV2TariffOverrideORM: [],
+                }
+            ),
         )
 
 

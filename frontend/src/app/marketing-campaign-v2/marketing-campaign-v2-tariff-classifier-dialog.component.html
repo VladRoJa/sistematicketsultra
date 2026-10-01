@@ -41,13 +41,15 @@
           <td class="count-cell">{{ row.row_count | number }}</td>
           <td>
             <mat-form-field appearance="outline">
-              <input
-                matInput
-                maxlength="100"
+              <mat-select
                 [value]="row.categoriaTarifa"
-                (input)="setCategory(row, $event)"
-                placeholder="Ej. Convenio"
-              />
+                (selectionChange)="setCategory(row, $event.value)"
+                placeholder="Categoría"
+              >
+                <mat-option *ngFor="let category of data.categories" [value]="category">
+                  {{ category }}
+                </mat-option>
+              </mat-select>
             </mat-form-field>
           </td>
           <td>

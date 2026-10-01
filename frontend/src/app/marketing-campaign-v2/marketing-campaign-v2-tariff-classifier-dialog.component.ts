@@ -5,7 +5,6 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 
@@ -19,6 +18,7 @@ import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
 
 export interface MarketingCampaignV2TariffClassifierDialogData {
   audience: CampaignV2AudienceDefinitionRequest;
+  categories: string[];
   families: CampaignV2ObservedFamily[];
 }
 
@@ -38,7 +38,6 @@ interface TariffClassifierRowState extends CampaignV2UnclassifiedTariffRow {
     MatButtonModule,
     MatDialogModule,
     MatFormFieldModule,
-    MatInputModule,
     MatProgressSpinnerModule,
     MatSelectModule,
   ],
@@ -71,8 +70,8 @@ export class MarketingCampaignV2TariffClassifierDialogComponent implements OnIni
     this.dialogRef.close();
   }
 
-  setCategory(row: TariffClassifierRowState, event: Event): void {
-    row.categoriaTarifa = (event.target as HTMLInputElement).value;
+  setCategory(row: TariffClassifierRowState, category: string): void {
+    row.categoriaTarifa = category;
     row.saved = false;
     row.error = '';
   }

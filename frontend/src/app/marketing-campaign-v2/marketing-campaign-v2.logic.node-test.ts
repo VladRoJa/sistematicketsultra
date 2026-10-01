@@ -196,10 +196,11 @@ test('service y page conservan contrato M5 sin auth manual ni Exportar', () => {
   assert.equal(html.includes('SENT'), false);
 });
 
-test('catalogador trabaja por tarifa única, guarda clasificación exacta e invalida Preview', () => {
+test('catalogador trabaja por tarifa única, usa categorías backend e invalida Preview', () => {
   const root = process.cwd();
   const dir = path.join(root, 'src/app/marketing-campaign-v2');
   const service = fs.readFileSync(path.join(dir, 'marketing-campaign-v2.service.ts'), 'utf8');
+  const models = fs.readFileSync(path.join(dir, 'marketing-campaign-v2.models.ts'), 'utf8');
   const page = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.ts'), 'utf8');
   const pageHtml = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.html'), 'utf8');
   const classifier = fs.readFileSync(
@@ -214,15 +215,21 @@ test('catalogador trabaja por tarifa única, guarda clasificación exacta e inva
 
   assert.equal(service.includes('/tariffs/unclassified'), true);
   assert.equal(service.includes('/classification'), true);
+  assert.equal(models.includes('tariff_categories: string[];'), true);
   assert.equal(service.includes('Authorization'), false);
   assert.equal(service.includes('created_by_user_id'), false);
   assert.equal(pageHtml.includes('Catalogar tarifas'), true);
   assert.equal(classifierHtml.includes('row.row_count'), true);
   assert.equal(classifierHtml.includes('Categoría'), true);
   assert.equal(classifierHtml.includes('Familia'), true);
+  assert.equal(classifierHtml.includes('<input'), false);
+  assert.equal(classifierHtml.includes('<mat-select'), true);
+  assert.equal(classifierHtml.includes('data.categories'), true);
+  assert.equal(classifier.includes('categories: string[];'), true);
   assert.equal(classifier.includes('categoria_tarifa: row.categoriaTarifa.trim()'), true);
   assert.equal(classifier.includes('audience_family: row.audienceFamily'), true);
   assert.equal(classifier.includes('created_by_user_id'), false);
+  assert.equal(page.includes('categories: this.options?.tariff_categories ?? []'), true);
   assert.equal(page.includes('ref.componentInstance.classificationSaved'), true);
   assert.equal(
     page.includes("this.success = 'Clasificación guardada. Revisa la audiencia nuevamente antes de congelar.'"),

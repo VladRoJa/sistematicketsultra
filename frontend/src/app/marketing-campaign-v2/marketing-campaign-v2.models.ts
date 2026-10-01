@@ -42,6 +42,7 @@ export interface CampaignV2OptionsResponse {
   selectable_audience_families: CampaignV2AudienceFamily[];
   non_selectable_classifications: CampaignV2NonSelectableClassification[];
   purposes: CampaignV2Purpose[];
+  tariff_categories: string[];
   scope: CampaignV2Scope;
 }
 
