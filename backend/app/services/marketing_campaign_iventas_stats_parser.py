@@ -20,6 +20,8 @@ class IVentasCampaignStatsInvariantError(
     IVentasCampaignStatsPayloadError
 ):
     """Buckets incompatibles después de normalización telefónica."""
+
+
 @dataclass(frozen=True)
 class IVentasCampaignStatsRawCounts:
     successful: int

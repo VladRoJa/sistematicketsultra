@@ -1,3 +1,7 @@
+import json
+from copy import deepcopy
+from pathlib import Path
+
 import pytest
 
 from app.integrations.iventas.campaigns_client import (
@@ -32,55 +36,31 @@ class FakeClient:
         return self.payload
 
 
+FIXTURE_PATH = (
+    Path(__file__).parents[1]
+    / "fixtures"
+    / "iventas_campaign_stats_observed_sanitized.json"
+)
+
+with FIXTURE_PATH.open(
+    "r",
+    encoding="utf-8",
+) as fixture_file:
+    _BASE_PAYLOAD = json.load(fixture_file)
+
+
 def _payload(
     *,
     analytics_status="ok",
     analytics=None,
 ):
-    return {
-        "successfulMessages": [
-            "6861111111",
-            "6862222222",
-            "6863333333",
-        ],
-        "failedMessages": [
-            "6864444444",
-        ],
-        "sentMessages": [
-            "6861111111",
-        ],
-        "sentdMessages": [
-            "6861111111",
-        ],
-        "deliveredMessages": [
-            "6862222222",
-        ],
-        "viewedMessages": [
-            "6863333333",
-        ],
-        "answeredMessages": [],
-        "interactions": [
-            {
-                "label": "Me interesa",
-                "items": [
-                    "6863333333",
-                    "6863333333",
-                ],
-            }
-        ],
-        "analyticsStatus": analytics_status,
-        "analytics": (
-            {
-                "responders": 79,
-                "interactions": {
-                    "campaignButton": 63,
-                    "freeText": 16,
-                },
-            }
-            if analytics is None
-            else analytics
-        ),
-    }
+    payload = deepcopy(_BASE_PAYLOAD)
+    payload["analyticsStatus"] = analytics_status
+
+    if analytics is not None:
+        payload["analytics"] = analytics
+
+    return payload
 def test_capabilities_are_exact_for_m8():
     provider = IVentasCampaignProvider(
         client=FakeClient(payload=_payload()),

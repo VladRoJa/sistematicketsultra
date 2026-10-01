@@ -39,6 +39,7 @@ class IVentasCampaignProvider:
         client: IVentasCampaignsClient,
     ) -> None:
         self._client = client
+
     def capabilities(
         self,
     ) -> CampaignProviderCapabilities:
@@ -83,6 +84,7 @@ class IVentasCampaignProvider:
             )
             for interaction in parsed.interactions
         )
+
         return CampaignProviderStats(
             analytics_status=parsed.analytics_status,
             analytics=parsed.analytics,

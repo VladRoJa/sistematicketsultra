@@ -24,6 +24,8 @@ MAX_SYNCHRONOUS_RETRY_AFTER_SECONDS = 60.0
 RETRYABLE_STATUS_CODES = frozenset({
     429, 500, 502, 503, 504,
 })
+
+
 class IVentasCampaignsClientError(RuntimeError):
     """Error base del cliente de campañas iVentas."""
 
@@ -50,6 +52,7 @@ class IVentasCampaignsProviderError(
     IVentasCampaignsClientError
 ):
     """Respuesta HTTP de error emitida por iVentas."""
+
     def __init__(
         self,
         *,

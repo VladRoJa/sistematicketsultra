@@ -29,6 +29,8 @@ class CampaignProviderRawCounts:
     answered: int
     interaction_groups: int
     interaction_items: int
+
+
 @dataclass(frozen=True)
 class CampaignProviderInteraction:
     label: str

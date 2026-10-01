@@ -1,3 +1,7 @@
+import json
+from copy import deepcopy
+from pathlib import Path
+
 import pytest
 
 from app.services.marketing_campaign_iventas_stats_parser import (
@@ -7,47 +11,21 @@ from app.services.marketing_campaign_iventas_stats_parser import (
 )
 
 
+FIXTURE_PATH = (
+    Path(__file__).parents[1]
+    / "fixtures"
+    / "iventas_campaign_stats_observed_sanitized.json"
+)
+
+with FIXTURE_PATH.open(
+    "r",
+    encoding="utf-8",
+) as fixture_file:
+    _BASE_PAYLOAD = json.load(fixture_file)
+
+
 def _payload() -> dict:
-    return {
-        "successfulMessages": [
-            "6861111111",
-            "6862222222",
-            "6863333333",
-        ],
-        "failedMessages": [
-            "6864444444",
-        ],
-        "sentMessages": [
-            "6861111111",
-        ],
-        "sentdMessages": [
-            "6861111111",
-        ],
-        "deliveredMessages": [
-            "6862222222",
-        ],
-        "viewedMessages": [
-            "6863333333",
-        ],
-        "answeredMessages": [],
-        "interactions": [
-            {
-                "label": "Me interesa",
-                "items": [
-                    "6863333333",
-                    "6863333333",
-                ],
-            }
-        ],
-        "analyticsStatus": "ok",
-        "analytics": {
-            "responders": 79,
-            "funnel": {
-                "delivered": 2,
-                "read": 1,
-            },
-        },
-    }
+    return deepcopy(_BASE_PAYLOAD)
 
 
 def test_parses_observed_outcome_and_delivery_buckets() -> None:
@@ -205,12 +183,11 @@ def test_answered_messages_do_not_create_individual_responders() -> None:
     parsed = parse_iventas_campaign_stats(_payload())
 
     assert parsed.raw_counts.answered == 0
-    assert parsed.analytics == {
-        "responders": 79,
-        "funnel": {
-            "delivered": 2,
-            "read": 1,
-        },
+    assert parsed.analytics is not None
+    assert parsed.analytics["responders"] == 79
+    assert parsed.analytics["interactions"] == {
+        "campaignButton": 63,
+        "freeText": 16,
     }
     assert not hasattr(
         parsed,
