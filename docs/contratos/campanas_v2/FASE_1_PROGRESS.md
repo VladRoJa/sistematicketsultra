@@ -322,13 +322,14 @@ No se agregan:
 
 ## Milestone 3 — Audience Builder backend + Preview V2
 
-Estado: **completado en rama, pendiente de merge**.
+Estado: **completado y mergeado vía PR #753 a `main` en `be2fe1305c059382cf053ead2032af745ef74f3d`**.
 
 ### Base y rama
 
 - Base SHA: `b949817eff87d3d82a0c2ff0f540576c028ded4c`
 - Rama: `feat/campaign-v2-audience-preview`
 - Milestone 2 ya estaba mergeado vía PR #752.
+- Validación conjunta real previa al merge: `77 passed`.
 - No se agregó migración: este milestone es exclusivamente read-only/in-memory.
 
 ### Arquitectura
@@ -594,8 +595,331 @@ No se agregó:
 - migraciones;
 - cambios de semántica legacy.
 
+
+## Milestone 4 — Freeze/Create server-side desde Preview V2
+
+Estado: **completado en rama, pendiente de merge**.
+
+### Base y rama
+
+- Base obligatoria confirmada: `be2fe1305c059382cf053ead2032af745ef74f3d`.
+- Esa base corresponde al merge del PR #753 de Milestone 3.
+- Rama: `feat/campaign-v2-freeze-create`.
+- Head Alembic confirmado antes de crear persistencia nueva: `a4d8c2e6f1b5`.
+- No existía ninguna migración hija de `a4d8c2e6f1b5` en `main`.
+
+### Decisión de persistencia de evidencia
+
+El Recipient V2 de Milestone 2 no era suficiente para congelar completamente la semántica real de Milestone 3:
+
+- un mismo `phone_mx10` puede absorber varias `evidence_rows`;
+- cada evidencia puede apuntar a una fila canónica distinta;
+- M3 conserva `conflict_fields` y deliberadamente deja metadata consolidada en NULL cuando hay conflicto;
+- las dos FKs summary existentes no podían representar múltiples referencias sin elegir una arbitrariamente.
+
+Por ello Milestone 4 agrega persistencia estructurada 1:N:
+
+`MarketingCampaignV2RecipientORM -> MarketingCampaignV2RecipientEvidenceORM`
+
+No se guarda la evidencia como mega-JSON ni se introduce `source_record_id` genérico.
+
+Recipient summary agrega únicamente:
+
+- `conflict_fields_json`: lista congelada de campos conflictivos detectados por M3.
+
+Evidence V2 conserva por fila:
+
+- `recipient_id`
+- `evidence_order`
+- `source`
+- `phone_raw`
+- `phone_mx10`
+- `socios_vencidos_cartera_id`
+- `socios_activos_snapshot_row_id`
+- `socios_activos_snapshot_id`
+- `member_id`
+- `member_pin`
+- `member_name`
+- `sucursal`
+- `sucursal_key`
+- `tarifa_raw`
+- `tarifa_key`
+- `categoria_tarifa`
+- `audience_family`
+- `fecha_vencimiento_date`
+- `current_status`
+- `evidence_json`
+- `created_at`
+
+Las FKs canónicas son explícitas y nullable; por tanto el esquema sigue soportando una fuente futura phone-only.
+
+### Política de referencias summary
+
+La fila principal Recipient conserva una FK singular sólo si:
+
+1. existe exactamente una `evidence_row`;
+2. no existen `conflict_fields`;
+3. la evidencia corresponde inequívocamente a una referencia canónica conocida.
+
+Entonces:
+
+- EXPIRED_MEMBERS → `socios_vencidos_cartera_id`;
+- ACTIVE_MEMBERS → `socios_activos_snapshot_row_id`.
+
+Si hay varias evidencias o conflicto, ambas FKs summary quedan NULL. La procedencia completa permanece en Evidence V2.
+
+Nunca se elige primera/última/menor ID como referencia principal.
+
+### Migración
+
+Nueva revisión:
+
+`f6c1d8a3b2e4_add_campaign_v2_recipient_evidence.py`
+
+Cadena:
+
+`a4d8c2e6f1b5 -> f6c1d8a3b2e4`
+
+Upgrade:
+
+- agrega `conflict_fields_json JSON NOT NULL DEFAULT []` a Recipient V2;
+- crea `marketing_campaign_v2_recipient_evidence`;
+- FK Evidence → Recipient usa CASCADE;
+- FKs hacia Socios Vencidos, Socios Activos row y Socios Activos snapshot usan RESTRICT;
+- UNIQUE `(recipient_id, evidence_order)`;
+- CHECK de teléfono de 10 dígitos;
+- CHECK nullable de `audience_family`;
+- índices por recipient y referencias canónicas.
+
+Downgrade elimina Evidence V2 y luego `conflict_fields_json`.
+
+No se modifica ni reescribe `a4d8c2e6f1b5`. Legacy queda intacto.
+
+### Servicio Freeze/Create
+
+Nuevo servicio:
+
+`backend/app/services/marketing_campaign_v2_creation_service.py`
+
+Interfaz principal:
+
+- `build_campaign_v2_freeze_preview(...)`
+- `freeze_campaign_v2(...)`
+
+`freeze_campaign_v2()` recibe exclusivamente definición de negocio:
+
+- `name`
+- `purpose`
+- `source`
+- `audience_families`
+- `allowed_sucursal_keys`
+- rango de vencimiento cuando aplica
+- `expected_preview_fingerprint`
+- `created_by_user_id`
+
+No acepta:
+
+- recipients;
+- recipient IDs;
+- phones;
+- filas Preview;
+- source record IDs.
+
+Create siempre vuelve a llamar al mismo `_build_campaign_v2_audience_plan()` de Milestone 3. El caller no es autoridad sobre las filas.
+
+### Consistencia Preview → Create
+
+Se introdujo un fingerprint determinista server-side:
+
+`PREVIEW_FINGERPRINT_VERSION = "campaign-v2-freeze-v1"`
+
+Algoritmo:
+
+1. reconstruir el plan M3;
+2. construir una representación canónica;
+3. serializar JSON con `sort_keys=True` y separadores estables;
+4. calcular SHA-256.
+
+Incluye:
+
+- versión;
+- source;
+- filtros normalizados;
+- source metadata/snapshot;
+- resumen completo del Preview;
+- recipients finales deduplicados;
+- `conflict_fields`;
+- todas las `evidence_rows`;
+- referencias canónicas;
+- metadata congelada por evidencia;
+- tags/evidence relevantes.
+
+Recipients se ordenan por `phone_mx10` y evidencias por una llave canónica estable antes del hash.
+
+Por ello:
+
+- distinto orden de query → mismo fingerprint;
+- cambio de filtro → fingerprint distinto;
+- cambio de snapshot/source metadata → distinto;
+- recipients distintos con mismo conteo → distinto;
+- cambio de referencia/evidencia → distinto.
+
+Create reconstruye nuevamente y compara contra `expected_preview_fingerprint`. Mismatch falla cerrado antes de persistir.
+
+### Campaign V2 congelada
+
+Se persiste:
+
+- `name`
+- `purpose`
+- `source`
+- `audience_definition_json`
+- `created_by_user_id`
+- `frozen_at`
+- timestamps existentes.
+
+`audience_definition_json` conserva únicamente:
+
+- schema version;
+- filtros normalizados;
+- source metadata;
+- fingerprint/version;
+- resumen de composición.
+
+No contiene la lista de recipients.
+
+Una audiencia con `unique_recipient_count == 0` se rechaza antes de `session.add()`.
+
+### Mapping RecipientCandidate → Recipient ORM
+
+Se usa directamente el resultado deduplicado de M3, sin renormalizar ni rededuplicar:
+
+- `phone_mx10`
+- `source`
+- `member_id`
+- `member_pin`
+- `member_name`
+- `sucursal`
+- `tarifa_raw`
+- `categoria_tarifa`
+- `audience_family`
+- `fecha_vencimiento -> fecha_vencimiento_date`
+- `inclusion_reason`
+- `conflict_fields -> conflict_fields_json`
+- FK summary sólo bajo la política inequívoca descrita arriba.
+
+Los campos conflictivos permanecen NULL exactamente como los entrega M3.
+
+### Mapping Evidence
+
+Cada `recipient_candidate.evidence_rows` produce una Evidence ORM en orden estable.
+
+EXPIRED_MEMBERS:
+
+- `source_ref_type = SOCIOS_VENCIDOS_CARTERA`
+- `source_ref_id -> socios_vencidos_cartera_id`
+
+ACTIVE_MEMBERS:
+
+- `source_ref_type = SOCIOS_ACTIVOS_SNAPSHOT_ROW`
+- `source_ref_id -> socios_activos_snapshot_row_id`
+- `source_snapshot_id -> socios_activos_snapshot_id`
+
+Los demás valores se copian como snapshot, no se reconstruyen posteriormente mediante joins vivos.
+
+### Atomicidad
+
+El servicio construye el grafo:
+
+`Campaign -> Recipients -> Evidence`
+
+antes de persistir.
+
+Boundary:
+
+- un `session.add(campaign)`;
+- un `session.flush()`;
+- un `session.commit()`;
+- cualquier `IntegrityError`/error SQLAlchemy → rollback completo y excepción V2 de persistencia;
+- una excepción no SQLAlchemy también hace rollback y se propaga.
+
+No hay commits por recipient/evidence.
+
+### Excepciones V2
+
+- `MarketingCampaignV2CreationValidationError`
+- `MarketingCampaignV2PreviewMismatchError`
+- `MarketingCampaignV2EmptyAudienceError`
+- `MarketingCampaignV2PersistenceError`
+
+No se devuelve `None` silenciosamente.
+
+### Pruebas específicas
+
+Nuevo archivo:
+
+`backend/tests/marketing/test_marketing_campaign_v2_creation_service.py`
+
+Cobertura:
+
+- firma create no acepta recipients/phones/IDs arbitrarios;
+- fingerprint determinista ante cambio de orden;
+- cambio de filtros rechaza;
+- cambio de source snapshot rechaza;
+- recipients distintos con mismo conteo rechazan;
+- cambio de evidencia rechaza;
+- rebuild server-side;
+- campaña y definición congeladas;
+- campaña vacía falla antes de persistir;
+- source/filter inválido falla antes de persistir;
+- exactamente un Recipient por phone proveniente de M3;
+- summary FK singular sólo cuando es inequívoca;
+- conflicto conserva NULL + `conflict_fields_json`;
+- múltiples evidencias por recipient;
+- Active Member conserva snapshot + row explícitos;
+- fallo de integridad hace rollback completo;
+- upgrade/downgrade de migración;
+- defaults/constraints de evidencia;
+- snapshots permanecen inmutables ante cambios de fuente viva;
+- CASCADE Campaign → Recipient → Evidence;
+- RESTRICT hacia referencias canónicas;
+- legacy intacto.
+
+Resultado realmente ejecutado en harness aislado con SQLAlchemy/Alembic/SQLite y stubs mínimos de las dependencias de Suite:
+
+`13 passed in 0.22s`
+
+También pasó `py_compile` para servicio, migración y test específicos.
+
+### Regresiones y limitaciones
+
+Baseline real antes de iniciar M4: la validación conjunta de M1 + M2 + M3 + normalización + legacy tocado terminó en `77 passed` antes del merge de PR #753.
+
+En este entorno no hay checkout completo de Suite ni Flask/Flask-SQLAlchemy instalados y no hay red para clonar/instalar dependencias. Por ello no se ejecutó aquí PostgreSQL, `flask db upgrade`, la suite real de 77 tests, toda la suite ni CI.
+
+La regresión específica de M4 sí se ejecutó en el harness indicado. Los archivos de M1/M2/M3 no son modificados por M4 salvo la ampliación compatible del modelo Recipient y el nuevo export de Evidence.
+
+### Fuera de alcance
+
+No se agregó:
+
+- rutas Flask;
+- JWT/request access;
+- permisos HTTP;
+- Angular;
+- menú;
+- UI Preview;
+- iVentas delivery/stats;
+- provider/broadcast;
+- costos;
+- Funnel operacional;
+- ACTIVE_MEMBER_SUPPRESSION;
+- PREVIOUS_CAMPAIGN operacional;
+- scheduling;
+- templates.
+
 ## Siguiente milestone propuesto
 
-**Milestone 4 — Freeze/Create server-side desde Preview V2**
+**Milestone 5 — API backend Campaign V2 + permisos**
 
-Objetivo recomendado: tomar una definición de Preview validada, reconstruir el universo server-side con el mismo builder, exigir consistencia/fail-closed y persistir `MarketingCampaignV2ORM` + `MarketingCampaignV2RecipientORM` usando la evidencia y snapshots del Milestone 3. Todavía sin endpoints/Angular si se mantiene la progresión backend-first.
+Objetivo recomendado: exponer Preview/Detail/Freeze y lectura de Campaign V2 mediante rutas Flask, aplicando el sistema real de permisos y alcance de sucursal en backend, sin Angular todavía.

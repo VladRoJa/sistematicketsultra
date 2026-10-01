@@ -290,6 +290,12 @@ class MarketingCampaignV2RecipientORM(db.Model):
     audience_family = db.Column(db.String(30), nullable=True)
     fecha_vencimiento_date = db.Column(db.Date, nullable=True)
     inclusion_reason = db.Column(db.String(100), nullable=True)
+    conflict_fields_json = db.Column(
+        db.JSON,
+        nullable=False,
+        default=list,
+        server_default=db.text("'[]'"),
+    )
     created_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
@@ -306,6 +312,13 @@ class MarketingCampaignV2RecipientORM(db.Model):
     )
     socios_activos_snapshot_row = db.relationship(
         "SociosActivosSnapshotRowORM",
+    )
+    evidence_rows = db.relationship(
+        "MarketingCampaignV2RecipientEvidenceORM",
+        back_populates="recipient",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="MarketingCampaignV2RecipientEvidenceORM.evidence_order",
     )
 
     __table_args__ = (
@@ -339,6 +352,119 @@ class MarketingCampaignV2RecipientORM(db.Model):
         db.Index(
             "ix_marketing_campaign_v2_recipients_activos_snapshot_row_id",
             "socios_activos_snapshot_row_id",
+        ),
+    )
+
+
+class MarketingCampaignV2RecipientEvidenceORM(db.Model):
+    __tablename__ = "marketing_campaign_v2_recipient_evidence"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    recipient_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "marketing_campaign_v2_recipients.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+    evidence_order = db.Column(db.Integer, nullable=False)
+    source = db.Column(db.String(100), nullable=False)
+    phone_raw = db.Column(db.String(64), nullable=True)
+    phone_mx10 = db.Column(db.String(10), nullable=False)
+    socios_vencidos_cartera_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "socios_vencidos_cartera.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=True,
+    )
+    socios_activos_snapshot_row_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "socios_activos_snapshot_rows.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=True,
+    )
+    socios_activos_snapshot_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "socios_activos_snapshots.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=True,
+    )
+    member_id = db.Column(db.String(64), nullable=True)
+    member_pin = db.Column(db.String(64), nullable=True)
+    member_name = db.Column(db.String(255), nullable=True)
+    sucursal = db.Column(db.String(255), nullable=True)
+    sucursal_key = db.Column(db.String(255), nullable=True)
+    tarifa_raw = db.Column(db.String(255), nullable=True)
+    tarifa_key = db.Column(db.String(255), nullable=True)
+    categoria_tarifa = db.Column(db.String(100), nullable=True)
+    audience_family = db.Column(db.String(30), nullable=True)
+    fecha_vencimiento_date = db.Column(db.Date, nullable=True)
+    current_status = db.Column(db.String(50), nullable=True)
+    evidence_json = db.Column(
+        db.JSON,
+        nullable=False,
+        default=list,
+        server_default=db.text("'[]'"),
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+
+    recipient = db.relationship(
+        "MarketingCampaignV2RecipientORM",
+        back_populates="evidence_rows",
+    )
+    socios_vencidos_cartera = db.relationship(
+        "SociosVencidosCarteraORM",
+    )
+    socios_activos_snapshot_row = db.relationship(
+        "SociosActivosSnapshotRowORM",
+    )
+    socios_activos_snapshot = db.relationship(
+        "SociosActivosSnapshotORM",
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "recipient_id",
+            "evidence_order",
+            name="uq_marketing_campaign_v2_evidence_recipient_order",
+        ),
+        db.CheckConstraint(
+            "length(phone_mx10) = 10",
+            name="ck_marketing_campaign_v2_evidence_phone_mx10_length",
+        ),
+        db.CheckConstraint(
+            "audience_family IS NULL OR audience_family IN "
+            "('DOMICILIADO', 'TRIMESTRAL', 'CONVENIO', "
+            "'SEMESTRE', 'ESTUDIANTE', 'MES', 'OUT_OF_SEGMENT')",
+            name="ck_marketing_campaign_v2_evidence_audience_family",
+        ),
+        db.Index(
+            "ix_marketing_campaign_v2_evidence_recipient_id",
+            "recipient_id",
+        ),
+        db.Index(
+            "ix_marketing_campaign_v2_evidence_vencidos_cartera_id",
+            "socios_vencidos_cartera_id",
+        ),
+        db.Index(
+            "ix_marketing_campaign_v2_evidence_activos_snapshot_row_id",
+            "socios_activos_snapshot_row_id",
+        ),
+        db.Index(
+            "ix_marketing_campaign_v2_evidence_activos_snapshot_id",
+            "socios_activos_snapshot_id",
         ),
     )
 
