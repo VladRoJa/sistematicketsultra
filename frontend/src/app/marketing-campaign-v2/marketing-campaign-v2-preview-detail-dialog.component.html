@@ -1,0 +1,60 @@
+<header class="dialog-header">
+  <div>
+    <p class="eyebrow">Preview Campaign V2</p>
+    <h2>{{ title }}</h2>
+  </div>
+  <button mat-button mat-dialog-close type="button">Cerrar</button>
+</header>
+
+<mat-dialog-content>
+  <div *ngIf="loading" class="state-row" role="status">
+    <mat-spinner diameter="22"></mat-spinner>
+    Cargando detalle…
+  </div>
+
+  <div *ngIf="error" class="inline-error" role="alert">{{ error }}</div>
+
+  <ng-container *ngIf="response && !loading">
+    <div class="detail-meta">
+      <span>{{ response.total | number }} registros</span>
+      <span *ngIf="response.pages">Página {{ response.page }} de {{ response.pages }}</span>
+    </div>
+
+    <div class="table-wrap" *ngIf="response.rows.length; else emptyState">
+      <table>
+        <thead>
+          <tr>
+            <th>Teléfono</th>
+            <th>Nombre</th>
+            <th>Sucursal</th>
+            <th>Tarifa</th>
+            <th>Familia</th>
+            <th>Vencimiento</th>
+            <th>Estado actual</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of response.rows">
+            <td>{{ row.phone_mx10 || row.phone_raw || '—' }}</td>
+            <td>{{ row.member_name || '—' }}</td>
+            <td>{{ row.sucursal || '—' }}</td>
+            <td>{{ row.tarifa_raw || '—' }}</td>
+            <td>{{ familyLabel(row.audience_family) }}</td>
+            <td>{{ row.fecha_vencimiento || '—' }}</td>
+            <td>{{ row.current_status || '—' }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <ng-template #emptyState>
+      <p class="empty-state">No hay filas para este detalle.</p>
+    </ng-template>
+
+    <div class="pager" *ngIf="response.pages > 1">
+      <button mat-stroked-button type="button" (click)="previousPage()" [disabled]="response.page <= 1 || loading">Anterior</button>
+      <span>Página {{ response.page }} de {{ response.pages }}</span>
+      <button mat-stroked-button type="button" (click)="nextPage()" [disabled]="response.page >= response.pages || loading">Siguiente</button>
+    </div>
+  </ng-container>
+</mat-dialog-content>

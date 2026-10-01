@@ -22,6 +22,7 @@ import { Subscription } from 'rxjs';
 import { RefrescoService } from '../services/refresco.service';
 import { canAccessTrackRegionalOperational } from '../warehouse/track-intelligence-regional-operational/track-regional-operational-access.guard';
 import { canAccessContactCenter } from '../contact-center/contact-center-access.guard';
+import { withCampaignV2MenuItem } from '../marketing-campaign-v2/marketing-campaign-v2-menu';
 
 @Component({
   selector: 'app-layout',
@@ -531,6 +532,7 @@ if (
 
 this.habilitarWarehouseEnMenuSiAplica(menuWarehouse);
   this.habilitarPlanningEnMenuSiAplica(menuPlanning);
+  this.habilitarCampaignV2EnMenuSiAplica();
   this.habilitarInternalDocumentsEnMenuSiAplica(menuNubeCorporativa);
   this.habilitarPermisosObservabilidadEnMenuSiAplica();
   this.habilitarAdminUsuariosEnMenuSiAplica();
@@ -742,6 +744,34 @@ private habilitarPermisosObservabilidadEnMenuSiAplica(): void {
   this.sincronizarMenuConRutaActual();
 }
 
+private habilitarCampaignV2EnMenuSiAplica(): void {
+  const alreadyPublished = this.menuItems.some(
+    (menu) => Array.isArray(menu.submenu)
+      && menu.submenu.some(
+        (item: { path?: string }) => item.path === '/marketing/campaigns-v2'
+      )
+  );
+
+  if (alreadyPublished) {
+    return;
+  }
+
+  this.http
+    .get<unknown>(`${environment.apiUrl}/marketing/campaigns-v2/options`)
+    .subscribe({
+      next: () => {
+        const nextMenuItems = withCampaignV2MenuItem(this.menuItems);
+        if (nextMenuItems === this.menuItems) {
+          return;
+        }
+        this.menuItems = nextMenuItems;
+        this.sincronizarMenuConRutaActual();
+      },
+      error: () => {
+        // Backend-authoritative: 401/403 no publica Campañas V2.
+      },
+    });
+}
 private habilitarWarehouseEnMenuSiAplica(menuWarehouse: any): void {
   if (this.menuItems.some((item) => item.label === 'Warehouse')) {
     return;

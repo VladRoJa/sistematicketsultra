@@ -1,0 +1,88 @@
+<header class="dialog-header">
+  <div>
+    <p class="eyebrow">Campaign V2 congelada</p>
+    <h2>{{ campaign?.name || 'Detalle de campaña' }}</h2>
+  </div>
+  <button mat-button type="button" (click)="close()">Cerrar</button>
+</header>
+
+<mat-dialog-content>
+  <div *ngIf="loadingCampaignDetail" class="state-row" role="status">
+    <mat-spinner diameter="22"></mat-spinner>
+    Cargando campaña…
+  </div>
+  <div *ngIf="error" class="inline-error" role="alert">{{ error }}</div>
+
+  <ng-container *ngIf="campaign && !loadingCampaignDetail">
+    <section class="summary-grid">
+      <div><span>Fuente</span><strong>{{ sourceLabel(campaign.source) }}</strong></div>
+      <div><span>Congelada</span><strong>{{ campaign.frozen_at | date:'medium' }}</strong></div>
+      <div><span>Destinatarios</span><strong>{{ campaign.recipient_count | number }}</strong></div>
+      <div><span>Fingerprint</span><strong class="mono">{{ campaign.preview_fingerprint || '—' }}</strong></div>
+    </section>
+
+    <section class="purpose-row">
+      <mat-form-field appearance="fill">
+        <mat-label>Purpose comercial</mat-label>
+        <mat-select [formControl]="purposeControl">
+          <mat-option *ngFor="let value of data.purposes" [value]="value">{{ purposeLabel(value) }}</mat-option>
+        </mat-select>
+      </mat-form-field>
+      <button mat-stroked-button type="button" (click)="savePurpose()" [disabled]="updatingPurpose || purposeControl.value === campaign.purpose">
+        {{ updatingPurpose ? 'Guardando…' : 'Actualizar purpose' }}
+      </button>
+    </section>
+
+    <div class="definition-grid">
+      <section class="definition-panel">
+        <h3>Definición congelada</h3>
+        <dl>
+          <div *ngFor="let row of filterRows(campaign.audience_definition)">
+            <dt>{{ row.label }}</dt><dd>{{ row.value }}</dd>
+          </div>
+        </dl>
+      </section>
+      <section class="definition-panel">
+        <h3>Metadata de fuente</h3>
+        <dl *ngIf="metadataRows(campaign.audience_definition.source_metadata).length; else noMetadata">
+          <div *ngFor="let row of metadataRows(campaign.audience_definition.source_metadata)">
+            <dt>{{ row.label }}</dt><dd>{{ row.value }}</dd>
+          </div>
+        </dl>
+        <ng-template #noMetadata><p class="muted">Sin metadata adicional.</p></ng-template>
+      </section>
+    </div>
+
+    <section class="recipients-section">
+      <div class="section-heading">
+        <div><h3>Destinatarios congelados</h3><p>{{ recipientsTotal | number }} registros</p></div>
+        <span *ngIf="loadingRecipients" class="loading-inline">Cargando…</span>
+      </div>
+
+      <div class="table-wrap" *ngIf="recipients.length; else emptyRecipients">
+        <table>
+          <thead><tr><th>Teléfono</th><th>Nombre</th><th>Sucursal</th><th>Tarifa</th><th>Familia</th><th>Conflictos</th><th>Evidence</th><th></th></tr></thead>
+          <tbody>
+            <tr *ngFor="let recipient of recipients">
+              <td>{{ recipient.phone_mx10 }}</td>
+              <td>{{ recipient.member_name || '—' }}</td>
+              <td>{{ recipient.sucursal || '—' }}</td>
+              <td>{{ recipient.tarifa_raw || '—' }}</td>
+              <td>{{ familyLabel(recipient.audience_family) }}</td>
+              <td><span *ngIf="recipient.conflict_fields.length" class="conflict-label">Datos con conflicto</span><span *ngIf="!recipient.conflict_fields.length">—</span></td>
+              <td>{{ recipient.evidence_count }}</td>
+              <td><button mat-button type="button" (click)="openRecipient(recipient)">Ver</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <ng-template #emptyRecipients><p class="muted">No hay destinatarios congelados.</p></ng-template>
+
+      <div class="pager" *ngIf="recipientsTotalPages > 1">
+        <button mat-stroked-button type="button" (click)="previousRecipientsPage()" [disabled]="recipientsPage <= 1 || loadingRecipients">Anterior</button>
+        <span>Página {{ recipientsPage }} de {{ recipientsTotalPages }}</span>
+        <button mat-stroked-button type="button" (click)="nextRecipientsPage()" [disabled]="recipientsPage >= recipientsTotalPages || loadingRecipients">Siguiente</button>
+      </div>
+    </section>
+  </ng-container>
+</mat-dialog-content>
