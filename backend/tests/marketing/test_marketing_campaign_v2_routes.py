@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+from importlib.metadata import version
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -26,7 +27,7 @@ from app.services.marketing_campaign_v2_query_service import (
 class TestMarketingCampaignV2Routes:
     def setup_method(self):
         if not hasattr(werkzeug, "__version__"):
-            werkzeug.__version__ = "test"
+            werkzeug.__version__ = version("werkzeug")
         self.app = Flask(__name__)
         self.app.config.update(TESTING=True, JWT_SECRET_KEY="campaign-v2-test")
         JWTManager(self.app)

@@ -1222,7 +1222,7 @@ Validación realmente ejecutada en este runtime sobre el código M5:
 - helper/branch scope harness: `2 passed`;
 - query/read harness con SQLAlchemy/SQLite: `9 passed`;
 - route/scope harness con Flask/JWT stubs mínimos: `8 passed`;
-- combinado: `19 passed in 0.26s`;
+- combinado: `19 passed in 0.23s`;
 - `py_compile` pasó para los tres archivos productivos nuevos y los tres tests versionados.
 
 Limitación: este runtime no tiene Flask, Flask-JWT-Extended ni Flask-SQLAlchemy y no tiene acceso de red para instalar/clonar. Por ello los tests Flask versionados, el corredor real M1-M5, PostgreSQL, CI y full suite no se ejecutaron aquí.

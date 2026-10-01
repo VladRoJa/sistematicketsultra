@@ -253,21 +253,25 @@ def update_campaign_v2_purpose(
         scope=scope,
         session=active_session,
     )
-    updated_at = _normalize_now(now)
-    campaign.purpose = normalized_purpose
-    campaign.updated_at = updated_at
-    try:
-        active_session.commit()
-    except SQLAlchemyError:
-        active_session.rollback()
-        raise
     recipient_count = int(
         active_session.query(func.count(MarketingCampaignV2RecipientORM.id))
         .filter(MarketingCampaignV2RecipientORM.campaign_id == normalized_id)
         .scalar()
         or 0
     )
-    return _serialize_campaign_detail(campaign, recipient_count=recipient_count)
+    updated_at = _normalize_now(now)
+    campaign.purpose = normalized_purpose
+    campaign.updated_at = updated_at
+    result = _serialize_campaign_detail(
+        campaign,
+        recipient_count=recipient_count,
+    )
+    try:
+        active_session.commit()
+    except SQLAlchemyError:
+        active_session.rollback()
+        raise
+    return result
 
 
 def _load_visible_campaign_orm(*, campaign_id: int, scope, session):
@@ -310,6 +314,8 @@ def _extract_frozen_scope(campaign) -> tuple[str, ...] | None:
         return ()
     keys: set[str] = set()
     for value in raw_scope:
+        if not isinstance(value, str):
+            return ()
         key = normalize_socios_vencidos_branch_key(value)
         if key is None:
             return ()
