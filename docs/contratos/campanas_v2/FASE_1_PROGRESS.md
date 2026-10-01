@@ -1,6 +1,6 @@
 # Campañas V2 — Fase 1 — Progreso
 
-Última actualización: 2026-09-30
+Última actualización: 2026-10-01
 
 ## Base de trabajo
 
@@ -1253,7 +1253,7 @@ No se agregó:
 
 ## Milestone 6 — Angular Campaign V2 + integración Fase 1
 
-Estado: **implementado en rama, pendiente de validación Angular real y merge**.
+Estado: **completado y mergeado vía PR #756 a `main` en `aec0e78022d2acf03b3fe1b1887d4f7676e0c6d9`**.
 
 ### Base y rama
 
@@ -1580,35 +1580,15 @@ Validaciones adicionales ejecutadas:
 - typecheck de todos los TS productivos M6 con declaraciones mínimas Angular/RxJS del harness: OK;
 - `transpileModule` de los 9 TS locales M6: sin diagnósticos sintácticos.
 
-### npm run build
+### Validación final previa al merge M6
 
-Se intentó ejecutar realmente:
+Antes del merge del PR #756 se validaron realmente en un checkout completo:
 
-`npm run build`
+- Frontend Campaign V2: `9 passed`;
+- Frontend legacy campañas: `38 passed`;
+- Angular: `npm run build` OK.
 
-Resultado del entorno:
-
-`sh: 1: ng: not found`
-
-Este runtime tiene Node/npm/TypeScript global, pero no tiene Angular CLI ni `node_modules`, tampoco DNS/red para instalar dependencias. No existe `.github/workflows` en el repo que permita delegar el build sin introducir infraestructura nueva.
-
-Por tanto **no se afirma un build Angular exitoso** y M6 queda pendiente de ejecutar `npm run build` en un checkout completo antes de merge.
-
-### Regresión frontend legacy
-
-`frontend/scripts/test-campaigns.cjs` existe y no fue modificado.
-
-Se intentó ejecutar realmente:
-
-`node scripts/test-campaigns.cjs`
-
-El runner no alcanzó a iniciar sus tests porque este staging no contiene el checkout frontend completo. Falló al buscar:
-
-`src/app/marketing-reactivation/marketing-reactivation.component.node-test.ts`
-
-con `ENOENT`.
-
-Esto es una limitación del entorno de ejecución, no un resultado de regresión legacy. Además siguen ausentes las dependencias Angular runtime. Reactivaciones legacy no fue modificada; sólo cambian routing/layout para agregar V2 de forma aditiva.
+Estos resultados pertenecen al estado mergeado de M6 y son el baseline de entrada de M7.
 
 ### Backend
 
@@ -1631,8 +1611,973 @@ No se agregó:
 - estados DRAFT/EXPORTED/SENT;
 - producción/migraciones.
 
-## Siguiente milestone propuesto
+## Milestone 7 — Aceptación integrada + cierre de Fase 1
 
-**Milestone 7 — Validación Angular real + cierre de Fase 1**
+Estado: **iniciado en rama; aceptación integrada bloqueada por entorno, sin cambios productivos**.
 
-Objetivo recomendado: en un checkout con dependencias instaladas, ejecutar `node scripts/test-campaign-v2.cjs`, `node scripts/test-campaigns.cjs` y `npm run build`; corregir únicamente hallazgos de compile/template si aparecen, realizar smoke manual de Options → Preview → Detail → Freeze → History → Evidence/Purpose y cerrar Fase 1 sin introducir Fase 2/iVentas.
+### Base y rama
+
+- Base obligatoria confirmada: `aec0e78022d2acf03b3fe1b1887d4f7676e0c6d9`.
+- Esa base corresponde al merge del PR #756 de Milestone 6.
+- Rama: `feat/campaign-v2-phase1-acceptance`.
+- Baselines reales ya validados antes de M7:
+  - backend M1–M5: `132 passed`;
+  - frontend Campaign V2: `9 passed`;
+  - frontend legacy campañas: `38 passed`;
+  - Angular: `npm run build` OK.
+
+### Entorno M7 realmente disponible
+
+El runtime de esta conversación no contiene un checkout completo de Suite Ultra.
+
+Disponible:
+
+- Node `v22.16.0`;
+- npm `10.9.2`;
+- Python `3.13.5`;
+- SQLAlchemy/Alembic/pytest;
+- staging parcial de M6 suficiente para el runner V2.
+
+No disponible:
+
+- checkout completo backend/frontend;
+- Flask;
+- Flask-SQLAlchemy;
+- Angular CLI / `node_modules`;
+- PostgreSQL/`psql`;
+- Docker;
+- browser/computer conectado a un entorno local de Suite;
+- red/DNS para instalar dependencias o clonar el repo.
+
+Por contrato M7 exige checkout local completo, backend/frontend funcionando y PostgreSQL local. Por ello no se sustituyó el smoke con mocks ni se usó producción.
+
+### DB head/current
+
+No fue posible ejecutar:
+
+- `flask db heads`;
+- `flask db current`;
+- `flask db upgrade`.
+
+Motivo: Flask no está instalado y no existe PostgreSQL local disponible.
+
+Validación estática del repo:
+
+- existe la revisión `f6c1d8a3b2e4`;
+- ningún archivo de migración declara `down_revision` hacia `f6c1d8a3b2e4`.
+
+Por tanto el head estático del código sigue siendo `f6c1d8a3b2e4`, pero el current de una DB local no pudo verificarse.
+
+### Usuarios/roles de smoke
+
+No se usaron usuarios reales de prueba porque no existe backend local ejecutable ni base local conectada.
+
+En consecuencia no se validaron manualmente:
+
+- usuario autorizado Campaign V2;
+- usuario no autorizado;
+- usuario parcial vs global.
+
+Las reglas automatizadas ya validadas en M5/M6 siguen siendo baseline, pero no sustituyen el smoke de aceptación M7.
+
+### Smoke ACTIVE_MEMBERS
+
+No ejecutado.
+
+Blocker:
+
+- no existe backend local;
+- no existe PostgreSQL local;
+- no se puede consultar el canonical snapshot real.
+
+No se fabricaron recipients ni metadata.
+
+### Smoke EXPIRED_MEMBERS
+
+No ejecutado.
+
+Blocker:
+
+- no existe backend local;
+- no existe PostgreSQL local;
+- no se puede seleccionar un rango real de Socios Vencidos ni observar current-status/drill-down contra datos locales.
+
+No se insertaron filas manuales.
+
+### Preview invalidation
+
+No se ejecutó en browser real durante M7.
+
+La prueba automatizada V2 se reejecutó y cubrió:
+
+- source/family/fechas invalidan;
+- name/purpose no invalidan.
+
+Resultado fresco M7: `9 passed, 0 failed` para todo el runner V2.
+
+### Freeze/Create
+
+No ejecutado contra backend/DB reales.
+
+No se creó Campaign local y no existen campaign IDs M7 que registrar.
+
+### Stale Preview / 409
+
+No se forzó manualmente porque no existe backend/DB local donde producir drift reversible.
+
+La cobertura automatizada previa de backend/frontend permanece como baseline, pero no se presenta como smoke M7.
+
+### History / Campaign Detail / Recipients / Evidence / PATCH purpose
+
+No ejecutados manualmente por ausencia de Campaign local creada mediante el flujo real.
+
+No se consultaron fuentes vivas ni se alteró historia congelada.
+
+### Scope/auth
+
+No validado manualmente en M7 por falta de usuarios/backend/DB locales.
+
+No se intentó usar producción.
+
+### Validación visual
+
+No ejecutada en browser real a 1366px ni viewport angosto porque el frontend Angular no puede levantarse en este runtime.
+
+No se afirma validación visual.
+
+### Defects encontrados
+
+No se encontró un defect funcional reproducible de Campaign V2.
+
+El único hallazgo de M7 es un blocker de entorno de aceptación:
+
+- el runtime no cumple los prerrequisitos explícitos del milestone.
+
+Esto no se trató como bug de producto.
+
+### Fixes realizados
+
+Ninguno.
+
+No se modificó backend, frontend, modelos, migraciones, rutas, servicios ni estilos.
+
+M7 sólo actualiza este documento para dejar continuidad verificable.
+
+### Pruebas finales M7
+
+#### Backend M1–M5
+
+No ejecutable aquí.
+
+Motivo:
+
+- no existe checkout backend completo;
+- Flask y Flask-SQLAlchemy no están instalados;
+- no existe PostgreSQL local.
+
+Baseline previo válido: `132 passed`.
+
+#### Frontend Campaign V2
+
+Ejecutado realmente en M7:
+
+`node scripts/test-campaign-v2.cjs`
+
+Resultado:
+
+`9 passed, 0 failed`.
+
+#### Frontend legacy campañas
+
+Se intentó ejecutar realmente:
+
+`node scripts/test-campaigns.cjs`
+
+Resultado: el runner no pudo iniciar porque el staging parcial no contiene:
+
+`src/app/marketing-reactivation/marketing-reactivation.component.node-test.ts`
+
+Error: `ENOENT`.
+
+No se interpreta como regresión legacy.
+
+Baseline previo válido: `38 passed`.
+
+#### Angular build
+
+Se intentó ejecutar realmente:
+
+`npm run build`
+
+Resultado:
+
+`sh: 1: ng: not found`
+
+El runtime no tiene Angular CLI ni `node_modules`.
+
+No se interpreta como fallo de compilación del código M6.
+
+Baseline previo válido antes de M7: `npm run build` OK.
+
+### Producción
+
+No se usó producción.
+
+No hubo:
+
+- deploy;
+- Docker Compose en servidor;
+- `flask db upgrade` en producción;
+- `git pull` de servidor.
+
+### Fase 2
+
+No se inició Fase 2.
+
+No se agregó iVentas, WhatsApp, broadcast, provider IDs, stats, costos, templates, Funnel operacional, exportación ni scheduler.
+
+### Criterio de cierre Fase 1
+
+**No cumplido dentro de este runtime.**
+
+Para declarar Fase 1 cerrada aún falta ejecutar en un checkout local completo:
+
+1. `flask db heads` → único head `f6c1d8a3b2e4`;
+2. `flask db current` y upgrade local si aplica;
+3. corredor backend M1–M5 → `132 passed`;
+4. frontend V2 → `9 passed`;
+5. frontend legacy → `38 passed`;
+6. `npm run build` OK;
+7. smoke real Options → Preview → Detail → Freeze → History → Recipients → Evidence → PATCH purpose;
+8. acceso autorizado/no autorizado y scope global/parcial;
+9. validación visual;
+10. confirmar ausencia de defect crítico.
+
+Hasta completar esos puntos la recomendación formal es:
+
+**FASE 1 NO LISTA PARA MERGE DESDE M7 EN ESTE ENTORNO — blocker: falta entorno local integrado para la aceptación requerida.**
+
+No existe blocker de diseño identificado ni cambio arquitectónico pendiente; el blocker es exclusivamente de capacidad de ejecución del smoke M7.
+
+## Milestone 7.1 — Catalogador de tarifas Campaign V2
+
+Estado: **implementado en rama, pendiente de validación real en checkout completo antes de merge**.
+
+### Contexto y rama
+
+- Base: `feat/campaign-v2-phase1-acceptance` en `03921346837e1f12d2ddebc9fa52ff2b9f81bf9a`.
+- Rama: `feat/campaign-v2-tariff-classifier`.
+- Hallazgo local real que motiva M7.1: `8,910` filas de `ACTIVE_MEMBERS` caían en “Tarifa sin clasificación”.
+- M7 queda pausado; al terminar M7.1 se retoma desde `EXPIRED_MEMBERS → Freeze → History → Evidence → purpose → scope`.
+- No se inició Fase 2.
+
+### Snapshot aprobado permanece inmutable
+
+No se modifica ni sobreescribe:
+
+`backend/data/reference/marketing_campaign_v2_tariffs_2026-09-30.json`
+
+El snapshot de 166 filas sigue siendo baseline histórico.
+
+No se modifica `MarketingReactivationTariffORM`.
+
+### Modelo override
+
+Nuevo ORM:
+
+`MarketingCampaignV2TariffOverrideORM`
+
+Tabla:
+
+`marketing_campaign_v2_tariff_overrides`
+
+Campos:
+
+- `id`;
+- `tarifa_key` UNIQUE;
+- `tarifa_raw`;
+- `categoria_tarifa`;
+- `audience_family`;
+- `created_by_user_id`;
+- `updated_by_user_id`;
+- `created_at`;
+- `updated_at`.
+
+`created_by_user_id` y `updated_by_user_id` referencian `users.id` con `ON DELETE SET NULL`.
+
+El key siempre se normaliza mediante el helper compartido:
+
+`normalize_marketing_tariff_key()`
+
+Semántica:
+
+`NFKC → strip → upper → collapse whitespace`.
+
+Familias válidas:
+
+- `DOMICILIADO`
+- `TRIMESTRAL`
+- `CONVENIO`
+- `SEMESTRE`
+- `ESTUDIANTE`
+- `MES`
+- `OUT_OF_SEGMENT`
+
+`MES` sigue sin agregarse a `SELECTABLE_AUDIENCE_FAMILIES`.
+
+### Precedence efectiva
+
+`marketing_campaign_v2_audience_service._read_v2_tariff_catalog()` ahora construye:
+
+`snapshot V2 → apply overrides V2`
+
+Resultado efectivo:
+
+1. override V2;
+2. snapshot V2;
+3. sin match → `UNCLASSIFIED`.
+
+No se consulta el catálogo legacy.
+
+El cambio ocurre en el mismo punto de clasificación usado por Preview y Freeze; por tanto una clasificación nueva puede cambiar composición, recipients y fingerprint sin reescribir campañas ya congeladas.
+
+### Servicio catalogador
+
+Nuevo:
+
+`backend/app/services/marketing_campaign_v2_tariff_classifier_service.py`
+
+Operaciones:
+
+- `list_unclassified_tariffs()`;
+- `upsert_tariff_classification()`;
+- `stable_representative_for_key()`.
+
+La lista reutiliza los loaders canónicos del Audience Builder:
+
+- ACTIVE → latest canonical Socios Activos snapshot;
+- EXPIRED → rango actual + current-status resolver;
+- scope → mismo `allowed_sucursal_keys` backend.
+
+No trabaja sobre socios individuales como unidad de UI. Agrupa por `tarifa_key`.
+
+Variantes raw que normalizan al mismo key se suman en una sola fila.
+
+Orden:
+
+`row_count DESC, tarifa_key ASC`.
+
+El response separa también `unkeyed_row_count` para filas sin key catalogable.
+
+### Endpoints
+
+Bajo el blueprint existente:
+
+`GET /api/marketing/campaigns-v2/tariffs/unclassified`
+
+Query:
+
+- `source`;
+- `expiration_date_from` y `expiration_date_to` cuando source=EXPIRED_MEMBERS.
+
+Response incluye:
+
+- source;
+- source_metadata;
+- total_unique_tariffs;
+- total_unclassified_rows;
+- unkeyed_row_count;
+- rows con `tarifa_raw`, `tarifa_key`, `source`, `row_count`.
+
+`PUT /api/marketing/campaigns-v2/tariffs/<tarifa_key>/classification`
+
+Body permitido únicamente:
+
+`categoria_tarifa`
+`audience_family`
+
+No acepta creator/user IDs.
+
+El actor se toma de JWT mediante el mismo user resuelto por Campaign V2.
+
+El PUT puede recibir source/rango como query context para conservar una representación raw estable observada; esos parámetros no cambian la identidad del override.
+
+### Permisos
+
+Ambos endpoints reutilizan exactamente:
+
+`_resolve_campaign_v2_request()`
+
+y por tanto:
+
+`access.can_edit_inputs == True`.
+
+No se creó permiso nuevo.
+
+### UI catalogador
+
+Desde la tarjeta “Tarifa sin clasificación” se agregan dos acciones:
+
+- Ver detalle;
+- Catalogar tarifas.
+
+Nuevo dialog:
+
+`MarketingCampaignV2TariffClassifierDialogComponent`
+
+Tabla:
+
+- Tarifa;
+- Conteo;
+- Categoría;
+- Familia;
+- Acción.
+
+El backend entrega tarifas únicas ya ordenadas por impacto, por lo que las de mayor `row_count` aparecen primero.
+
+La UI trabaja fila por fila y permite continuar catalogando después de cada guardado.
+
+No manda Authorization manual, creator, scope ni IDs de socio.
+
+Familias disponibles para clasificación:
+
+- las cinco seleccionables;
+- MES;
+- OUT_OF_SEGMENT.
+
+No ofrece UNCLASSIFIED como valor de guardado.
+
+### Invalidación Preview
+
+Cada save exitoso emite `classificationSaved`.
+
+La página escucha el evento e inmediatamente ejecuta:
+
+`invalidatePreview()`
+
+El dialog permanece abierto para seguir catalogando.
+
+No hay Freeze automático.
+
+Después de guardar se exige ejecutar nuevamente “Revisar audiencia”.
+
+Esto evita usar un fingerprint calculado con semántica de tarifa anterior.
+
+### Migración
+
+Nueva revisión:
+
+`b7c2e9f4a1d6`
+
+Parent:
+
+`f6c1d8a3b2e4`
+
+Crea únicamente:
+
+`marketing_campaign_v2_tariff_overrides`.
+
+Incluye:
+
+- PK;
+- UNIQUE `tarifa_key`;
+- CHECK de las siete familias;
+- FKs auditables a users;
+- índice por audience_family;
+- downgrade limpio.
+
+Al retomar M7, el head esperado deja de ser `f6c1d8a3b2e4` y pasa a:
+
+`b7c2e9f4a1d6`.
+
+No se crea merge migration.
+
+### Pruebas versionadas M7.1
+
+Nuevo:
+
+`backend/tests/marketing/test_marketing_campaign_v2_tariff_classifier.py`
+
+Cobertura escrita:
+
+- override > snapshot;
+- snapshot sin override;
+- desconocida sin override → UNCLASSIFIED;
+- agrupación por key normalizado;
+- row_count y orden por impacto;
+- normalización NFKC/whitespace;
+- family inválida;
+- UNIQUE del modelo;
+- Preview cambia tras override;
+- fingerprint cambia tras override;
+- legacy tariff model no se toca;
+- migration upgrade/downgrade y parent.
+
+Se ampliaron:
+
+- `test_marketing_campaign_v2_audience_service.py` para la precedence efectiva;
+- `test_marketing_campaign_v2_routes.py` para JWT, permiso, allowlist y creator desde JWT.
+
+Frontend V2 amplía el runner existente con cobertura de:
+
+- acción “Catalogar tarifas”;
+- endpoints del service;
+- tabla con `row_count`;
+- body exacto category/family;
+- ausencia de auth manual y creator;
+- invalidación inmediata de Preview;
+- legacy `/marketing/reactivation` intacto.
+
+### Validación ejecutada en este runtime
+
+Ejecutado sobre los archivos nuevos exactos disponibles localmente:
+
+- `py_compile` service/migration/test M7.1: OK;
+- classifier service harness: `3 passed`;
+- migration upgrade/downgrade harness: `1 passed`;
+- TypeScript `transpileModule` del dialog nuevo: `0` errores sintácticos.
+
+Limitación: este runtime sigue sin checkout completo, Flask/Flask-SQLAlchemy, PostgreSQL local, Angular CLI ni `node_modules`.
+
+Por ello todavía no fue posible ejecutar aquí el corredor real solicitado:
+
+- backend M7.1 + M1–M5 + legacy;
+- `node scripts/test-campaign-v2.cjs` sobre el checkout completo modificado;
+- `node scripts/test-campaigns.cjs`;
+- `npm run build`.
+
+Los baselines reales previos a M7.1 siguen siendo:
+
+- backend: `132 passed`;
+- frontend V2: `9 passed`;
+- frontend legacy: `38 passed`;
+- Angular build: OK.
+
+M7.1 no debe mergearse hasta repetir esas validaciones con los nuevos tests/código en un checkout completo.
+
+### Fuera de alcance M7.1
+
+No se agregó:
+
+- iVentas;
+- WhatsApp;
+- envíos;
+- provider IDs;
+- costos;
+- templates;
+- delivery status;
+- Funnel operacional;
+- ACTIVE_MEMBER_SUPPRESSION;
+- PREVIOUS_CAMPAIGN con stats;
+- exportación;
+- scheduler;
+- MES como sexta familia seleccionable;
+- edición del snapshot aprobado.
+
+### Continuidad
+
+Después de validar y cerrar M7.1, retomar M7 exactamente en:
+
+`EXPIRED_MEMBERS → Freeze → History → Evidence → purpose → scope`.
+
+No avanzar a Fase 2.
+
+## M7.1.1 — Categorías canónicas en catalogador Campaign V2
+
+Estado: **implementado sobre M7.1, pendiente de validación completa en checkout local**.
+
+### Base
+
+- Rama: `feat/campaign-v2-tariff-classifier`.
+- HEAD base de este hardening: `9a3954236da6b2acd44f2c71ec2e1e7c81b1cc8c`.
+- El smoke real de M7.1 confirmó `96` tarifas únicas y `8,910` filas ACTIVE_MEMBERS sin clasificación.
+- Problema detectado: `categoria_tarifa` permitía texto libre y podía degradar el catálogo con sinónimos/duplicados semánticos.
+
+### Fuente canónica de categorías
+
+Se agregó:
+
+`marketing_campaign_v2_tariff_classifier_service.list_canonical_tariff_categories()`
+
+La única fuente es:
+
+`MarketingCampaignV2TariffORM`
+
+No consulta `MarketingCampaignV2TariffOverrideORM` para construir el dominio y no consulta `MarketingReactivationTariffORM`.
+
+El helper:
+
+- elimina categorías vacías;
+- deduplica;
+- devuelve orden estable;
+- preserva el nombre canónico almacenado en el snapshot ORM.
+
+Las 16 categorías actuales del baseline son:
+
+- Agregadora
+- Anualidad
+- Beca
+- Bimestre
+- Convenio
+- Diario
+- Domiciliado
+- Estudiante
+- Instructor
+- Mensualidad
+- Mes Reward
+- Pase de Cortesía
+- Recurrente
+- Semana
+- Semestre
+- Trimestre
+
+La lista no se hardcodea en Angular.
+
+### Options
+
+`GET /api/marketing/campaigns-v2/options` conserva todo su contrato y agrega:
+
+`tariff_categories: string[]`
+
+El valor se obtiene en runtime mediante `list_canonical_tariff_categories(session=db.session)`.
+
+### Validación PUT
+
+`upsert_tariff_classification()` ya no acepta cualquier texto no vacío.
+
+Flujo:
+
+1. `strip` de la entrada;
+2. consulta categorías canónicas desde `MarketingCampaignV2TariffORM`;
+3. matching exacto case-insensitive;
+4. persistencia usando exactamente el spelling canónico del baseline.
+
+Ejemplos:
+
+- `Trimestre` → `Trimestre`;
+- `" trimestre "` → `Trimestre`;
+- `Domiciliado` → `Domiciliado`;
+- `Dom` → error 400;
+- `Domiciliados` → error 400;
+- `Nueva categoría` → error 400.
+
+No hay fuzzy matching ni aliases.
+
+`audience_family` sigue validándose por separado y no se deriva desde categoría.
+
+### Frontend
+
+`CampaignV2OptionsResponse` ahora incluye:
+
+`tariff_categories: string[]`.
+
+La página pasa al dialog:
+
+- definición de audiencia;
+- `options.tariff_categories`;
+- familias observadas permitidas para clasificación.
+
+El catalogador reemplaza el input libre de categoría por un `mat-select`.
+
+Las opciones salen exclusivamente de `data.categories`, es decir, del response backend Options.
+
+No existe lista duplicada de categorías en TypeScript.
+
+La familia continúa siendo un segundo `mat-select` independiente.
+
+### Semántica posterior al save
+
+Sin cambios respecto a M7.1:
+
+- save fila por fila;
+- PUT envía únicamente `categoria_tarifa` + `audience_family`;
+- modal permanece abierto;
+- fila muestra “Clasificación guardada”;
+- `classificationSaved` invalida Preview/fingerprint vigente;
+- no hay auto-Preview;
+- no hay auto-Freeze.
+
+### DB
+
+No se agregó ni modificó migración.
+
+La revisión vigente continúa siendo:
+
+`b7c2e9f4a1d6`.
+
+El snapshot JSON aprobado sigue intacto.
+
+### Tests M7.1.1
+
+Backend actualizado para cubrir:
+
+- categorías sólo desde snapshot V2;
+- categorías distintas;
+- orden estable;
+- overrides no alimentan el dominio canónico;
+- categoría canónica aceptada;
+- whitespace + case-insensitive resuelven al spelling canónico;
+- categoría arbitraria rechazada;
+- family inválida rechazada independientemente;
+- Options expone `tariff_categories`;
+- PUT inválido retorna 400;
+- legacy no se toca.
+
+Frontend actualizado para comprobar:
+
+- modelo Options contiene `tariff_categories`;
+- dialog no contiene `<input>` de categoría;
+- usa `mat-select`;
+- opciones vienen de `data.categories`;
+- page pasa `options.tariff_categories`;
+- PUT conserva body category/family;
+- no Authorization manual;
+- no `created_by_user_id`;
+- invalidación Preview permanece;
+- legacy Campaign permanece intacto.
+
+### Validación realmente ejecutada M7.1.1
+
+En este runtime se ejecutó un harness aislado de la lógica exacta de categorías canónicas:
+
+- 16 categorías distintas y ordenadas: OK;
+- duplicado `Domiciliado` no duplica el dominio: OK;
+- blank/null se excluyen: OK;
+- `" trimestre "` → `Trimestre`: OK;
+- `"domiciliado"` → `Domiciliado`: OK;
+- `Dom`, `Domiciliados` y `Nueva categoría` se rechazan: OK.
+
+Resultado: `canonical-category harness: 7 checks passed`.
+
+También se verificaron directamente sobre los bytes publicados en GitHub:
+
+- helper consulta sólo `MarketingCampaignV2TariffORM`;
+- Options expone `tariff_categories`;
+- PUT conserva allowlist exacta `categoria_tarifa` + `audience_family`;
+- no existe cambio en `backend/migrations/`;
+- dialog no contiene `<input>` de categoría ni `MatInputModule`;
+- categoría usa `mat-select` alimentado por `data.categories`;
+- page pasa `options.tariff_categories`;
+- node test contiene cobertura del contrato nuevo;
+- ruta legacy `/marketing/reactivation` permanece en su cobertura.
+
+Limitación del entorno: sigue sin checkout completo, Flask/Flask-SQLAlchemy, PostgreSQL local, Angular CLI y `node_modules`. Por ello no se atribuyen como ejecutados el pytest real de repo, `node scripts/test-campaign-v2.cjs`, legacy runner ni `npm run build` para M7.1.1.
+
+### Fuera de alcance
+
+Sin cambios:
+
+- no iVentas;
+- no WhatsApp;
+- no envíos/costos/templates/delivery;
+- no Funnel operacional;
+- no ACTIVE_MEMBER_SUPPRESSION;
+- no MES como sexta familia seleccionable;
+- no edición del snapshot aprobado;
+- no PR/merge/deploy.
+
+
+
+## Cierre de Fase 1 — aceptación local real (2026-10-01)
+
+Estado: **FASE 1 LISTA PARA MERGE**.
+
+La aceptación integrada se reanudó en un checkout local completo con PostgreSQL, backend Flask y frontend Angular disponibles.
+
+### Estado de DB y migraciones
+
+Antes del smoke se detectó una marca Alembic local huérfana (`b01d3194e7c6`) coexistiendo con la rama válida `a9d3e7f1c5b8`. Se confirmó que la revisión huérfana no existe en el repo ni en su historial local. La fila huérfana se eliminó únicamente en la DB local de aceptación y Alembic volvió a reconocer la cadena válida.
+
+Después se aplicó el upgrade normal hasta:
+
+`b7c2e9f4a1d6 (head)`
+
+`flask db current` y `flask db heads` quedaron alineados en esa revisión.
+
+### Validación automatizada local
+
+En el checkout local completo se reejecutaron y quedaron verdes:
+
+- corredor backend actualizado de Campaign V2 + regresión legacy tocada: sin failures;
+- `node scripts/test-campaign-v2.cjs`: verde con la cobertura M7.1/M7.1.1;
+- `node scripts/test-campaigns.cjs`: verde, baseline legacy conservado;
+- `npm run build`: completado correctamente.
+
+Los warnings Angular existentes de autoprefixer/CommonJS/CSS no bloquearon el build.
+
+### Smoke ACTIVE_MEMBERS
+
+Con source `ACTIVE_MEMBERS` y familia `DOMICILIADO`:
+
+- universo inicial: 34,342;
+- scope aplicado: 34,342;
+- Domiciliado clasificado inicialmente: 20,637;
+- teléfonos inválidos: 1;
+- duplicados: 89;
+- destinatarios finales: 20,547;
+- tarifa sin clasificación observada inicialmente: 8,910;
+- snapshot canónico usado: corte 2026-09-19, kind `daily`.
+
+La conciliación del segmento seleccionado fue exacta:
+
+`20,637 - 1 - 89 = 20,547`.
+
+Se validaron drill-downs reales de RECIPIENTS y FAMILY, con paginación backend.
+
+### Smoke del catalogador M7.1/M7.1.1
+
+El catalogador real mostró inicialmente:
+
+- 96 tarifas únicas;
+- 8,910 filas sin clasificación;
+- orden por `row_count DESC`.
+
+Se clasificó la tarifa:
+
+`DOMICILIADO 12 MESES $649 HE`
+
+como:
+
+- categoría canónica: `Domiciliado`;
+- family: `DOMICILIADO`.
+
+El save fue exitoso, la fila mostró “Clasificación guardada” y el Preview/fingerprint vigente quedó invalidado.
+
+Al reconstruir el catálogo efectivo:
+
+- tarifas únicas sin clasificar: 95;
+- filas sin clasificación: 7,164.
+
+La reducción fue exactamente:
+
+`8,910 - 1,746 = 7,164`.
+
+Esto valida persistencia del override y precedence efectiva `override > snapshot > UNCLASSIFIED`.
+
+La categoría se seleccionó desde el dominio canónico backend; no existe input libre.
+
+### Smoke EXPIRED_MEMBERS
+
+Rango validado:
+
+`2026-09-01 → 2026-09-19`
+
+con familia `DOMICILIADO`.
+
+Resultados:
+
+- universo inicial: 26,892;
+- scope aplicado: 26,892;
+- Domiciliado: 3,370;
+- duplicados: 94;
+- teléfonos inválidos: 0;
+- destinatarios finales: 3,276;
+- bloqueados por estado actual: 3,098;
+- fuera de segmento: 19,027;
+- tarifa sin clasificación: 332;
+- corte usado para estado actual: 2026-09-19.
+
+La composición total no bloqueada más los bloqueados reconcilió exactamente con el universo.
+
+El drill-down `CURRENT_STATUS_BLOCKED` devolvió 3,098 filas reales con estado `ACTIVE_CONFIRMED`, validando que Vencidos se cruza contra estado actual y no trata toda la cartera histórica como elegible.
+
+### Freeze e historia congelada
+
+Se creó exitosamente la campaña local:
+
+`Smoke M7 Vencidos 2026-09-01 a 2026-09-19`
+
+con:
+
+- source: EXPIRED_MEMBERS;
+- family: DOMICILIADO;
+- purpose inicial: REACTIVATION;
+- recipients congelados: 3,276.
+
+El historial mostró inmediatamente la campaña con el mismo recipient_count.
+
+El detalle congelado conservó:
+
+- fingerprint;
+- source;
+- family;
+- scope global autorizado;
+- rango 2026-09-01 → 2026-09-19;
+- corte de estado actual 2026-09-19;
+- frozen_at;
+- 3,276 recipients.
+
+No se reconstruyó la audiencia viva para mostrar el detalle.
+
+### Recipients y Evidence
+
+Se validó la lista paginada de recipients congelados y el detalle de Evidence.
+
+Ejemplo real inspeccionado:
+
+- source: EXPIRED_MEMBERS;
+- current status congelado: NOT_FOUND;
+- evidencia: `CURRENT_STATUS:NOT_FOUND`;
+- evidencia: `TARIFF_FAMILY:DOMICILIADO`;
+- nombre/PIN/sucursal/tarifa/familia/vencimiento permanecieron congelados.
+
+La muestra inspeccionada tuvo una sola Evidence y sin conflictos; el caso múltiple/conflict continúa cubierto por pruebas automatizadas.
+
+### PATCH purpose
+
+La misma campaña se cambió de `REACTIVATION` a `UNCLASSIFIED`.
+
+Después del PATCH permanecieron sin cambio observable:
+
+- 3,276 recipients;
+- fingerprint;
+- frozen_at;
+- definición congelada;
+- rango;
+- source metadata.
+
+El historial reflejó el nuevo purpose sin alterar la cohorte.
+
+### Auth / permisos
+
+Con un usuario GERENTE real se intentó acceso manual a `/#/marketing/campaigns-v2`.
+
+El backend rechazó Options y el frontend mostró:
+
+`Acceso no disponible / No tienes acceso a Campañas V2`.
+
+Esto valida que el ocultamiento/navegación frontend no sustituye la autoridad backend `can_edit_inputs`.
+
+### Stale Preview / 409
+
+El caso concurrente de stale Preview no se forzó manualmente en el smoke final por requerir dos sesiones y una mutación intermedia controlada. No se considera blocker de aceptación porque el mismatch/fingerprint y el manejo 409 permanecen cubiertos por pruebas automatizadas de M4/M6.
+
+### Observación no bloqueante para Fase 2
+
+El normalizador general acepta cualquier cadena de 10 dígitos, por lo que valores placeholder como `0000000000` pueden llegar a recipients si la fuente los contiene. No se modificó en Fase 1 porque `marketing_phone.normalize_phone()` es compartido con otros módulos y el contrato exige reutilizarlo.
+
+Antes del envío real en Fase 2 debe distinguirse “teléfono normalizable” de “teléfono enviable” mediante una regla técnica explícita, sin alterar silenciosamente la identidad compartida.
+
+### Criterio de cierre
+
+Fase 1 se considera cerrada para merge porque quedaron validados:
+
+- catálogo V2 y overrides auditables;
+- categorías canónicas controladas;
+- ACTIVE_MEMBERS;
+- EXPIRED_MEMBERS + current status;
+- Preview/drill-down;
+- invalidación de fingerprint;
+- Freeze;
+- History;
+- Campaign Detail congelado;
+- Recipients;
+- Evidence;
+- PATCH purpose;
+- autorización backend;
+- regresión frontend legacy;
+- build Angular;
+- pruebas backend/frontend sin failures;
+- cero funcionalidad de Fase 2 incorporada.
+
+No se desplegó a producción durante esta aceptación.

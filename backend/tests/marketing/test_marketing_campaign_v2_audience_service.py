@@ -317,11 +317,50 @@ def test_active_adapter_uses_latest_canonical_snapshot_scope_and_row_reference(m
     assert result.candidates[0].phone_mx10 == "6867654321"
 
 
-def test_tariff_catalog_reader_uses_only_v2_catalog_model():
-    rows = [NS(tarifa_key="DOM", categoria_tarifa="Domiciliado", audience_family="DOMICILIADO")]
-    session = _Session(rows, expected_model=service.MarketingCampaignV2TariffORM)
+def test_tariff_catalog_reader_uses_only_v2_catalog_models_with_override_precedence():
+    snapshot_rows = [
+        NS(
+            tarifa_key="DOM",
+            categoria_tarifa="Domiciliado",
+            audience_family="DOMICILIADO",
+        ),
+        NS(
+            tarifa_key="SHARED",
+            categoria_tarifa="Snapshot",
+            audience_family="TRIMESTRAL",
+        ),
+    ]
+    override_rows = [
+        NS(
+            tarifa_key="SHARED",
+            categoria_tarifa="Override",
+            audience_family="CONVENIO",
+        )
+    ]
+
+    class Session:
+        def __init__(self):
+            self.queried_models = []
+
+        def query(self, model):
+            self.queried_models.append(model)
+            if model is service.MarketingCampaignV2TariffORM:
+                return _Query(snapshot_rows)
+            if model is service.MarketingCampaignV2TariffOverrideORM:
+                return _Query(override_rows)
+            raise AssertionError(f"Modelo no esperado: {model}")
+
+    session = Session()
     catalog = service._read_v2_tariff_catalog(session=session)
-    assert catalog == {"DOM": ("Domiciliado", "DOMICILIADO")}
+
+    assert catalog == {
+        "DOM": ("Domiciliado", "DOMICILIADO"),
+        "SHARED": ("Override", "CONVENIO"),
+    }
+    assert session.queried_models == [
+        service.MarketingCampaignV2TariffORM,
+        service.MarketingCampaignV2TariffOverrideORM,
+    ]
     source_text = inspect.getsource(service)
     assert "MarketingReactivationTariffORM" not in source_text
 

@@ -18,6 +18,9 @@ import {
   CampaignV2Purpose,
   CampaignV2RecipientDetail,
   CampaignV2RecipientPage,
+  CampaignV2TariffClassificationRequest,
+  CampaignV2TariffClassificationResult,
+  CampaignV2UnclassifiedTariffsResponse,
 } from './marketing-campaign-v2.models';
 
 @Injectable({
@@ -92,6 +95,40 @@ export class MarketingCampaignV2Service {
     );
   }
 
+  listUnclassifiedTariffs(
+    audience: CampaignV2AudienceDefinitionRequest,
+  ): Observable<CampaignV2UnclassifiedTariffsResponse> {
+    let params = new HttpParams().set('source', audience.source);
+    if (audience.expiration_date_from) {
+      params = params.set('expiration_date_from', audience.expiration_date_from);
+    }
+    if (audience.expiration_date_to) {
+      params = params.set('expiration_date_to', audience.expiration_date_to);
+    }
+    return this.http.get<CampaignV2UnclassifiedTariffsResponse>(
+      `${this.apiUrl}/tariffs/unclassified`,
+      { params },
+    );
+  }
+
+  classifyTariff(
+    tarifaKey: string,
+    request: CampaignV2TariffClassificationRequest,
+    audience: CampaignV2AudienceDefinitionRequest,
+  ): Observable<CampaignV2TariffClassificationResult> {
+    let params = new HttpParams().set('source', audience.source);
+    if (audience.expiration_date_from) {
+      params = params.set('expiration_date_from', audience.expiration_date_from);
+    }
+    if (audience.expiration_date_to) {
+      params = params.set('expiration_date_to', audience.expiration_date_to);
+    }
+    return this.http.put<CampaignV2TariffClassificationResult>(
+      `${this.apiUrl}/tariffs/${encodeURIComponent(tarifaKey)}/classification`,
+      request,
+      { params },
+    );
+  }
   updatePurpose(
     campaignId: number,
     purpose: CampaignV2Purpose,

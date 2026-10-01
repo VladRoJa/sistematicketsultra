@@ -42,6 +42,10 @@ import {
   MarketingCampaignV2CampaignDetailDialogComponent,
   MarketingCampaignV2CampaignDetailDialogData,
 } from './marketing-campaign-v2-campaign-detail-dialog.component';
+import {
+  MarketingCampaignV2TariffClassifierDialogComponent,
+  MarketingCampaignV2TariffClassifierDialogData,
+} from './marketing-campaign-v2-tariff-classifier-dialog.component';
 
 @Component({
   selector: 'app-marketing-campaign-v2-page',
@@ -273,6 +277,33 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       return;
     }
     this.openPreviewDetail('FAMILY', family);
+  }
+
+  openTariffClassifier(): void {
+    if (!this.previewRequest || (this.preview?.unclassified_family_count ?? 0) <= 0) {
+      return;
+    }
+
+    const ref = this.dialog.open<
+      MarketingCampaignV2TariffClassifierDialogComponent,
+      MarketingCampaignV2TariffClassifierDialogData
+    >(MarketingCampaignV2TariffClassifierDialogComponent, {
+      width: 'min(1180px, 96vw)',
+      maxWidth: '96vw',
+      maxHeight: '90vh',
+      data: {
+        audience: this.previewRequest,
+        categories: this.options?.tariff_categories ?? [],
+        families: this.observedFamilies,
+      },
+    });
+
+    ref.componentInstance.classificationSaved
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.invalidatePreview();
+        this.success = 'Clasificación guardada. Revisa la audiencia nuevamente antes de congelar.';
+      });
   }
 
   freezeCampaign(): void {
