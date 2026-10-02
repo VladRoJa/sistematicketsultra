@@ -60,6 +60,7 @@ def build_campaign_v2_freeze_preview(
     expiration_date_from: Any = None,
     expiration_date_to: Any = None,
     history_exclusion: Any = None,
+    historical_targeting: Any = None,
     funnel_month: Any = None,
     funnel_cutoff_date: Any = None,
     marketing_access: Any = None,
@@ -74,6 +75,7 @@ def build_campaign_v2_freeze_preview(
         expiration_date_from=expiration_date_from,
         expiration_date_to=expiration_date_to,
         history_exclusion=history_exclusion,
+        historical_targeting=historical_targeting,
         funnel_month=funnel_month,
         funnel_cutoff_date=funnel_cutoff_date,
         marketing_access=marketing_access,
@@ -100,6 +102,7 @@ def freeze_campaign_v2(
     expiration_date_from: Any = None,
     expiration_date_to: Any = None,
     history_exclusion: Any = None,
+    historical_targeting: Any = None,
     funnel_month: Any = None,
     funnel_cutoff_date: Any = None,
     marketing_access: Any = None,
@@ -126,6 +129,7 @@ def freeze_campaign_v2(
         expiration_date_from=expiration_date_from,
         expiration_date_to=expiration_date_to,
         history_exclusion=history_exclusion,
+        historical_targeting=historical_targeting,
         funnel_month=funnel_month,
         funnel_cutoff_date=funnel_cutoff_date,
         marketing_access=marketing_access,
@@ -219,6 +223,7 @@ def _rebuild_plan(
     expiration_date_from: Any,
     expiration_date_to: Any,
     history_exclusion: Any,
+    historical_targeting: Any = None,
     funnel_month: Any = None,
     funnel_cutoff_date: Any = None,
     marketing_access: Any = None,
@@ -232,6 +237,7 @@ def _rebuild_plan(
             expiration_date_from=expiration_date_from,
             expiration_date_to=expiration_date_to,
             history_exclusion=history_exclusion,
+            historical_targeting=historical_targeting,
             funnel_month=funnel_month,
             funnel_cutoff_date=funnel_cutoff_date,
             marketing_access=marketing_access,
@@ -283,7 +289,8 @@ def _preview_summary(preview: dict[str, Any]) -> dict[str, Any]:
                 "after_history_filter_count",
             ]
         )
-    if "history_exclusion" in (preview.get("filters") or {}):
+    filters = preview.get("filters") or {}
+    if "history_exclusion" in filters:
         keys.extend(
             [
                 "before_history_filter_count",
@@ -292,6 +299,20 @@ def _preview_summary(preview: dict[str, Any]) -> dict[str, Any]:
                 "excluded_by_delivery_bucket",
                 "excluded_by_outcome",
                 "excluded_by_button_interaction",
+            ]
+        )
+    if "historical_targeting" in filters:
+        keys.extend(
+            [
+                "before_history_filter_count",
+                "history_matched_count",
+                "history_not_matched_count",
+                "history_included_count",
+                "history_excluded_count",
+                "after_history_filter_count",
+                "matched_by_delivery_bucket",
+                "matched_by_outcome",
+                "matched_by_button_interaction",
             ]
         )
     return {

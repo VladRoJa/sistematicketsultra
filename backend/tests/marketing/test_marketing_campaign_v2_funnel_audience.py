@@ -224,3 +224,41 @@ def test_funnel_family_bucket_is_not_applicable(monkeypatch):
 
 def test_supported_sources_contains_funnel_portfolio():
     assert audience.SOURCE_FUNNEL_PORTFOLIO in audience.SUPPORTED_SOURCES
+
+
+def test_funnel_canonical_historical_targeting_uses_common_evaluator(monkeypatch):
+    history_calls = _install(monkeypatch)
+    payload = _kwargs()
+    payload.pop("history_exclusion")
+    payload["historical_targeting"] = {
+        "mode": "INCLUDE",
+        "match": "ANY",
+        "delivery_buckets": ["VIEWED"],
+        "outcomes": [],
+        "button_interacted": False,
+        "lookback_days": None,
+    }
+
+    preview = audience.build_campaign_v2_audience_preview(**payload)
+
+    assert preview["active_member_suppression_count"] == 1
+    assert preview["before_history_filter_count"] == 2
+    assert preview["history_matched_count"] == 1
+    assert preview["history_not_matched_count"] == 1
+    assert preview["history_included_count"] == 1
+    assert preview["history_excluded_count"] == 1
+    assert preview["unique_recipient_count"] == 1
+    assert preview["filters"]["historical_targeting"]["mode"] == "INCLUDE"
+    assert len(history_calls) == 1
+    assert set(history_calls[0]["phones"]) == {
+        "6861000001",
+        "6861000002",
+    }
+
+    detail = audience.build_campaign_v2_audience_preview_detail(
+        bucket="RECIPIENTS",
+        page=1,
+        page_size=50,
+        **payload,
+    )
+    assert detail["rows"][0]["phone_mx10"] == "6861000002"

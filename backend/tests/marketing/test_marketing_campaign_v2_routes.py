@@ -294,6 +294,15 @@ class TestMarketingCampaignV2Routes:
         assert body["non_selectable_classifications"] == [
             "MES", "OUT_OF_SEGMENT", "UNCLASSIFIED"
         ]
+        assert body["historical_targeting"] == {
+            "modes": ["INCLUDE", "EXCLUDE"],
+            "matches": ["ALL", "ANY"],
+            "delivery_buckets": ["SENT", "DELIVERED", "VIEWED"],
+            "outcomes": ["SUCCESSFUL", "FAILED"],
+            "button_interaction": True,
+            "window_modes": ["ALL_HISTORY", "LOOKBACK_DAYS"],
+            "legacy_history_exclusion_supported": True,
+        }
         assert body["tariff_categories"] == categories
         mocked.assert_called_once()
         assert body["scope"] == {"is_global": True, "allowed_sucursal_keys": None}
@@ -407,6 +416,141 @@ class TestMarketingCampaignV2Routes:
         assert service.call_args.kwargs["history_exclusion"] == {
             "delivery_buckets": ["VIEWED"],
         }
+
+    def test_preview_forwards_canonical_historical_targeting(self):
+        expected = {"preview_fingerprint": "9" * 64}
+        rule = {
+            "mode": "INCLUDE",
+            "match": "ALL",
+            "delivery_buckets": ["VIEWED"],
+            "outcomes": [],
+            "button_interacted": True,
+            "lookback_days": 90,
+        }
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.build_campaign_v2_freeze_preview",
+                return_value=expected,
+            ) as service,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/preview",
+                json={
+                    "source": "ACTIVE_MEMBERS",
+                    "audience_families": ["DOMICILIADO"],
+                    "historical_targeting": rule,
+                },
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert service.call_args.kwargs["historical_targeting"] == rule
+        assert service.call_args.kwargs["history_exclusion"] is None
+
+    def test_preview_detail_forwards_canonical_historical_targeting(self):
+        rule = {
+            "mode": "EXCLUDE",
+            "match": "ANY",
+            "outcomes": ["FAILED"],
+        }
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.audience.build_campaign_v2_audience_preview_detail",
+                return_value={"total": 0, "rows": []},
+            ) as service,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/preview-detail",
+                json={
+                    "source": "ACTIVE_MEMBERS",
+                    "audience_families": ["DOMICILIADO"],
+                    "bucket": "RECIPIENTS",
+                    "page": 1,
+                    "page_size": 25,
+                    "historical_targeting": rule,
+                },
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert service.call_args.kwargs["historical_targeting"] == rule
+        assert service.call_args.kwargs["history_exclusion"] is None
+
+    def test_freeze_forwards_canonical_historical_targeting(self):
+        rule = {
+            "mode": "INCLUDE",
+            "match": "ANY",
+            "delivery_buckets": ["DELIVERED"],
+        }
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.freeze_campaign_v2",
+                return_value={"campaign_id": 55, "recipient_count": 1},
+            ) as service,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2",
+                json={
+                    "name": "Targeted",
+                    "purpose": "ACTIVE_MEMBERS",
+                    "source": "ACTIVE_MEMBERS",
+                    "audience_families": ["DOMICILIADO"],
+                    "historical_targeting": rule,
+                    "expected_preview_fingerprint": "8" * 64,
+                },
+                headers=self.headers,
+            )
+
+        assert response.status_code == 201
+        assert service.call_args.kwargs["historical_targeting"] == rule
+        assert service.call_args.kwargs["history_exclusion"] is None
+
+    @pytest.mark.parametrize(
+        ("endpoint", "extra"),
+        [
+            ("/api/marketing/campaigns-v2/preview", {}),
+            (
+                "/api/marketing/campaigns-v2/preview-detail",
+                {"bucket": "RECIPIENTS", "page": 1, "page_size": 25},
+            ),
+            (
+                "/api/marketing/campaigns-v2",
+                {
+                    "name": "Ambiguous",
+                    "purpose": "ACTIVE_MEMBERS",
+                    "expected_preview_fingerprint": "7" * 64,
+                },
+            ),
+        ],
+    )
+    def test_legacy_and_canonical_history_together_returns_400(
+        self,
+        endpoint,
+        extra,
+    ):
+        payload = {
+            "source": "ACTIVE_MEMBERS",
+            "audience_families": ["DOMICILIADO"],
+            "history_exclusion": {"delivery_buckets": ["VIEWED"]},
+            "historical_targeting": {
+                "mode": "INCLUDE",
+                "match": "ANY",
+                "delivery_buckets": ["VIEWED"],
+            },
+            **extra,
+        }
+        with self._auth():
+            response = self.client.post(
+                endpoint,
+                json=payload,
+                headers=self.headers,
+            )
+
+        assert response.status_code == 400
+        assert "no pueden enviarse juntos" in response.get_json()["message"]
 
     def test_funnel_preview_forwards_backend_access_and_cutoff(self):
         expected = {"preview_fingerprint": "f" * 64}

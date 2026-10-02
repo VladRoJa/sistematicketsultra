@@ -49,6 +49,12 @@ ALL_AUDIENCE_FAMILIES = (
     "OUT_OF_SEGMENT",
 )
 
+HISTORICAL_TARGETING_MODES = ("INCLUDE", "EXCLUDE")
+HISTORICAL_TARGETING_MATCHES = ("ALL", "ANY")
+HISTORICAL_TARGETING_DELIVERY_BUCKETS = ("SENT", "DELIVERED", "VIEWED")
+HISTORICAL_TARGETING_OUTCOMES = ("SUCCESSFUL", "FAILED")
+HISTORICAL_TARGETING_WINDOW_MODES = ("ALL_HISTORY", "LOOKBACK_DAYS")
+
 BUCKET_RECIPIENTS = "RECIPIENTS"
 BUCKET_INVALID_PHONE = "INVALID_PHONE"
 BUCKET_DUPLICATES = "DUPLICATES"
@@ -128,6 +134,22 @@ class MarketingCampaignV2HistoryExcludedCandidate:
 
 
 @dataclass(frozen=True, slots=True)
+class MarketingCampaignV2HistoricalDecisionCandidate:
+    candidate: MarketingCampaignV2AudienceCandidate
+    matched: bool
+    decision: str
+    reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _HistoricalTargetingResolution:
+    rule: dict[str, Any] | None
+    filter_key: str | None
+    filter_value: dict[str, Any] | None
+    legacy: bool
+
+
+@dataclass(frozen=True, slots=True)
 class _SourceLoadResult:
     universe_count: int
     scoped_count: int
@@ -158,6 +180,10 @@ class _AudiencePlan:
         MarketingCampaignV2HistoryExcludedCandidate,
         ...,
     ] = field(default_factory=tuple)
+    historical_decision_rows: tuple[
+        MarketingCampaignV2HistoricalDecisionCandidate,
+        ...,
+    ] = field(default_factory=tuple)
     history_diagnostics: dict[str, Any] = field(default_factory=dict)
     funnel_candidate_rows: tuple[
         MarketingCampaignV2AudienceCandidate,
@@ -181,6 +207,7 @@ def build_campaign_v2_audience_preview(
     expiration_date_from: Any = None,
     expiration_date_to: Any = None,
     history_exclusion: Any = None,
+    historical_targeting: Any = None,
     funnel_month: Any = None,
     funnel_cutoff_date: Any = None,
     marketing_access: Any = None,
@@ -195,6 +222,7 @@ def build_campaign_v2_audience_preview(
         expiration_date_from=expiration_date_from,
         expiration_date_to=expiration_date_to,
         history_exclusion=history_exclusion,
+        historical_targeting=historical_targeting,
         funnel_month=funnel_month,
         funnel_cutoff_date=funnel_cutoff_date,
         marketing_access=marketing_access,
@@ -214,6 +242,7 @@ def build_campaign_v2_audience_preview_detail(
     expiration_date_from: Any = None,
     expiration_date_to: Any = None,
     history_exclusion: Any = None,
+    historical_targeting: Any = None,
     funnel_month: Any = None,
     funnel_cutoff_date: Any = None,
     marketing_access: Any = None,
@@ -240,6 +269,7 @@ def build_campaign_v2_audience_preview_detail(
         expiration_date_from=expiration_date_from,
         expiration_date_to=expiration_date_to,
         history_exclusion=history_exclusion,
+        historical_targeting=historical_targeting,
         funnel_month=funnel_month,
         funnel_cutoff_date=funnel_cutoff_date,
         marketing_access=marketing_access,
@@ -310,6 +340,7 @@ def _build_campaign_v2_audience_plan(
     expiration_date_from: Any,
     expiration_date_to: Any,
     history_exclusion: Any = None,
+    historical_targeting: Any = None,
     funnel_month: Any = None,
     funnel_cutoff_date: Any = None,
     marketing_access: Any = None,
@@ -317,8 +348,9 @@ def _build_campaign_v2_audience_plan(
 ) -> _AudiencePlan:
     normalized_source = _normalize_source(source)
     normalized_scope = _normalize_scope(allowed_sucursal_keys)
-    normalized_history_exclusion = _normalize_history_exclusion(
-        history_exclusion
+    history_resolution = _resolve_historical_targeting_input(
+        history_exclusion=history_exclusion,
+        historical_targeting=historical_targeting,
     )
     active_session = session if session is not None else db.session
 
@@ -328,7 +360,7 @@ def _build_campaign_v2_audience_plan(
             allowed_sucursal_keys=normalized_scope,
             expiration_date_from=expiration_date_from,
             expiration_date_to=expiration_date_to,
-            history_exclusion=normalized_history_exclusion,
+            history_resolution=history_resolution,
             funnel_month=funnel_month,
             funnel_cutoff_date=funnel_cutoff_date,
             marketing_access=marketing_access,
@@ -376,9 +408,9 @@ def _build_campaign_v2_audience_plan(
             "audience_families": list(selected_families),
         }
 
-    if normalized_history_exclusion is not None:
-        normalized_filters["history_exclusion"] = (
-            normalized_history_exclusion
+    if history_resolution.filter_key is not None:
+        normalized_filters[history_resolution.filter_key] = (
+            history_resolution.filter_value
         )
 
     tariff_catalog = _read_v2_tariff_catalog(session=active_session)
@@ -413,19 +445,27 @@ def _build_campaign_v2_audience_plan(
         MarketingCampaignV2HistoryExcludedCandidate,
         ...,
     ] = ()
+    historical_decision_rows: tuple[
+        MarketingCampaignV2HistoricalDecisionCandidate,
+        ...,
+    ] = ()
     history_diagnostics: dict[str, Any] = {}
 
-    if normalized_history_exclusion is not None:
+    if history_resolution.rule is not None:
         (
             valid_rows,
-            history_excluded_rows,
+            historical_decision_rows,
             history_diagnostics,
             history_evaluation,
-        ) = _apply_history_exclusion(
+        ) = _evaluate_historical_targeting(
             candidates=valid_rows,
-            rule=normalized_history_exclusion,
+            rule=history_resolution.rule,
             allowed_sucursal_keys=normalized_scope,
             session=active_session,
+            legacy=history_resolution.legacy,
+        )
+        history_excluded_rows = _legacy_history_excluded_rows(
+            historical_decision_rows
         )
         source_metadata["history_evaluation"] = history_evaluation
 
@@ -448,6 +488,7 @@ def _build_campaign_v2_audience_plan(
         unclassified_family_count=unclassified_count,
         out_of_segment_count=out_of_segment_count,
         history_excluded_rows=history_excluded_rows,
+        historical_decision_rows=historical_decision_rows,
         history_diagnostics=history_diagnostics,
     )
 
@@ -457,7 +498,7 @@ def _build_funnel_audience_plan(
     allowed_sucursal_keys: tuple[str, ...] | None,
     expiration_date_from: Any,
     expiration_date_to: Any,
-    history_exclusion: dict[str, Any] | None,
+    history_resolution: _HistoricalTargetingResolution,
     funnel_month: Any,
     funnel_cutoff_date: Any,
     marketing_access: Any,
@@ -515,28 +556,38 @@ def _build_funnel_audience_plan(
             else None
         ),
     }
-    if history_exclusion is not None:
-        normalized_filters["history_exclusion"] = history_exclusion
+    if history_resolution.filter_key is not None:
+        normalized_filters[history_resolution.filter_key] = (
+            history_resolution.filter_value
+        )
 
     source_metadata = dict(loaded.metadata)
     history_excluded_rows: tuple[
         MarketingCampaignV2HistoryExcludedCandidate,
         ...,
     ] = ()
+    historical_decision_rows: tuple[
+        MarketingCampaignV2HistoricalDecisionCandidate,
+        ...,
+    ] = ()
     history_diagnostics = _empty_history_diagnostics(
         len({row.phone_mx10 for row in valid_rows if row.phone_mx10})
     )
-    if history_exclusion is not None:
+    if history_resolution.rule is not None:
         (
             valid_rows,
-            history_excluded_rows,
+            historical_decision_rows,
             history_diagnostics,
             history_evaluation,
-        ) = _apply_history_exclusion(
+        ) = _evaluate_historical_targeting(
             candidates=valid_rows,
-            rule=history_exclusion,
+            rule=history_resolution.rule,
             allowed_sucursal_keys=allowed_sucursal_keys,
             session=session,
+            legacy=history_resolution.legacy,
+        )
+        history_excluded_rows = _legacy_history_excluded_rows(
+            historical_decision_rows
         )
         source_metadata["history_evaluation"] = history_evaluation
 
@@ -561,6 +612,7 @@ def _build_funnel_audience_plan(
         unclassified_family_count=0,
         out_of_segment_count=0,
         history_excluded_rows=history_excluded_rows,
+        historical_decision_rows=historical_decision_rows,
         history_diagnostics=history_diagnostics,
         funnel_candidate_rows=funnel_candidates,
         funnel_buyer_excluded_rows=buyer_excluded,
@@ -597,6 +649,116 @@ def _funnel_candidate(
     )
 
 
+def _resolve_historical_targeting_input(
+    *,
+    history_exclusion: Any,
+    historical_targeting: Any,
+) -> _HistoricalTargetingResolution:
+    if history_exclusion is not None and historical_targeting is not None:
+        raise MarketingCampaignV2AudienceValidationError(
+            "history_exclusion y historical_targeting no pueden enviarse juntos."
+        )
+
+    if historical_targeting is not None:
+        normalized = _normalize_historical_targeting(historical_targeting)
+        return _HistoricalTargetingResolution(
+            rule=normalized,
+            filter_key="historical_targeting",
+            filter_value=normalized,
+            legacy=False,
+        )
+
+    normalized_legacy = _normalize_history_exclusion(history_exclusion)
+    if normalized_legacy is None:
+        return _HistoricalTargetingResolution(
+            rule=None,
+            filter_key=None,
+            filter_value=None,
+            legacy=False,
+        )
+
+    internal_rule = {
+        "mode": "EXCLUDE",
+        "match": "ANY",
+        **normalized_legacy,
+    }
+    return _HistoricalTargetingResolution(
+        rule=internal_rule,
+        filter_key="history_exclusion",
+        filter_value=normalized_legacy,
+        legacy=True,
+    )
+
+
+def _normalize_historical_targeting(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise MarketingCampaignV2AudienceValidationError(
+            "historical_targeting debe ser un objeto."
+        )
+
+    allowed = {
+        "mode",
+        "match",
+        "delivery_buckets",
+        "outcomes",
+        "button_interacted",
+        "lookback_days",
+    }
+    unknown = sorted(set(value) - allowed)
+    if unknown:
+        raise MarketingCampaignV2AudienceValidationError(
+            "Campos historical_targeting no permitidos: "
+            + ", ".join(unknown)
+            + "."
+        )
+
+    mode = str(value.get("mode") or "").strip().upper()
+    if mode not in HISTORICAL_TARGETING_MODES:
+        raise MarketingCampaignV2AudienceValidationError(
+            "historical_targeting.mode debe ser INCLUDE o EXCLUDE."
+        )
+
+    match = str(value.get("match") or "").strip().upper()
+    if match not in HISTORICAL_TARGETING_MATCHES:
+        raise MarketingCampaignV2AudienceValidationError(
+            "historical_targeting.match debe ser ALL o ANY."
+        )
+
+    delivery = _normalize_history_enum_list(
+        value.get("delivery_buckets", []),
+        field_name="historical_targeting.delivery_buckets",
+        allowed=HISTORICAL_TARGETING_DELIVERY_BUCKETS,
+    )
+    outcomes = _normalize_history_enum_list(
+        value.get("outcomes", []),
+        field_name="historical_targeting.outcomes",
+        allowed=HISTORICAL_TARGETING_OUTCOMES,
+    )
+    raw_button = value.get("button_interacted", False)
+    if not isinstance(raw_button, bool):
+        raise MarketingCampaignV2AudienceValidationError(
+            "historical_targeting.button_interacted debe ser booleano."
+        )
+    lookback_days = _normalize_history_lookback_days(
+        value.get("lookback_days"),
+        field_name="historical_targeting.lookback_days",
+    )
+
+    if not (delivery or outcomes or raw_button):
+        raise MarketingCampaignV2AudienceValidationError(
+            "historical_targeting requiere al menos una condición efectiva."
+        )
+
+    return {
+        "mode": mode,
+        "match": match,
+        "delivery_buckets": list(delivery),
+        "outcomes": list(outcomes),
+        "button_interacted": raw_button,
+        "lookback_days": lookback_days,
+    }
+
+
 def _normalize_history_exclusion(value: Any) -> dict[str, Any] | None:
     if value is None:
         return None
@@ -622,37 +784,22 @@ def _normalize_history_exclusion(value: Any) -> dict[str, Any] | None:
     delivery = _normalize_history_enum_list(
         value.get("delivery_buckets", []),
         field_name="history_exclusion.delivery_buckets",
-        allowed=("SENT", "DELIVERED", "VIEWED"),
+        allowed=HISTORICAL_TARGETING_DELIVERY_BUCKETS,
     )
     outcomes = _normalize_history_enum_list(
         value.get("outcomes", []),
         field_name="history_exclusion.outcomes",
-        allowed=("SUCCESSFUL", "FAILED"),
+        allowed=HISTORICAL_TARGETING_OUTCOMES,
     )
-
     raw_button = value.get("button_interacted", False)
     if not isinstance(raw_button, bool):
         raise MarketingCampaignV2AudienceValidationError(
             "history_exclusion.button_interacted debe ser booleano."
         )
-
-    raw_lookback = value.get("lookback_days")
-    lookback_days: int | None = None
-    if raw_lookback is not None:
-        if isinstance(raw_lookback, bool):
-            raise MarketingCampaignV2AudienceValidationError(
-                "history_exclusion.lookback_days debe ser entero positivo o null."
-            )
-        try:
-            lookback_days = int(raw_lookback)
-        except (TypeError, ValueError) as exc:
-            raise MarketingCampaignV2AudienceValidationError(
-                "history_exclusion.lookback_days debe ser entero positivo o null."
-            ) from exc
-        if lookback_days <= 0:
-            raise MarketingCampaignV2AudienceValidationError(
-                "history_exclusion.lookback_days debe ser entero positivo o null."
-            )
+    lookback_days = _normalize_history_lookback_days(
+        value.get("lookback_days"),
+        field_name="history_exclusion.lookback_days",
+    )
 
     has_condition = bool(delivery or outcomes or raw_button)
     if not has_condition:
@@ -668,6 +815,30 @@ def _normalize_history_exclusion(value: Any) -> dict[str, Any] | None:
         "button_interacted": raw_button,
         "lookback_days": lookback_days,
     }
+
+
+def _normalize_history_lookback_days(
+    value: Any,
+    *,
+    field_name: str,
+) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise MarketingCampaignV2AudienceValidationError(
+            f"{field_name} debe ser entero positivo o null."
+        )
+    try:
+        lookback_days = int(value)
+    except (TypeError, ValueError) as exc:
+        raise MarketingCampaignV2AudienceValidationError(
+            f"{field_name} debe ser entero positivo o null."
+        ) from exc
+    if lookback_days <= 0:
+        raise MarketingCampaignV2AudienceValidationError(
+            f"{field_name} debe ser entero positivo o null."
+        )
+    return lookback_days
 
 
 def _normalize_history_enum_list(
@@ -694,12 +865,47 @@ def _normalize_history_enum_list(
     return tuple(item for item in allowed if item in normalized)
 
 
-def _apply_history_exclusion(
+def _selected_history_conditions(rule: dict[str, Any]) -> frozenset[str]:
+    conditions = {
+        f"HISTORY_DELIVERY_{bucket}"
+        for bucket in rule["delivery_buckets"]
+    }
+    conditions.update(
+        f"HISTORY_OUTCOME_{outcome}"
+        for outcome in rule["outcomes"]
+    )
+    if bool(rule["button_interacted"]):
+        conditions.add("HISTORY_BUTTON_INTERACTION")
+    return frozenset(conditions)
+
+
+def _satisfied_history_reasons(
+    *,
+    rule: dict[str, Any],
+    ever: dict[str, Any],
+) -> frozenset[str]:
+    reasons: set[str] = set()
+    observed_delivery = set(ever.get("delivery_buckets") or [])
+    observed_outcomes = set(ever.get("outcomes") or [])
+
+    for bucket in rule["delivery_buckets"]:
+        if bucket in observed_delivery:
+            reasons.add(f"HISTORY_DELIVERY_{bucket}")
+    for outcome in rule["outcomes"]:
+        if outcome in observed_outcomes:
+            reasons.add(f"HISTORY_OUTCOME_{outcome}")
+    if bool(rule["button_interacted"]) and bool(ever.get("button_interacted")):
+        reasons.add("HISTORY_BUTTON_INTERACTION")
+    return frozenset(reasons)
+
+
+def _evaluate_historical_targeting(
     *,
     candidates: tuple[MarketingCampaignV2AudienceCandidate, ...],
     rule: dict[str, Any],
     allowed_sucursal_keys: tuple[str, ...] | None,
     session: Any,
+    legacy: bool,
 ):
     unique_phones = tuple(
         sorted(
@@ -713,7 +919,11 @@ def _apply_history_exclusion(
     before_count = len(unique_phones)
 
     if not unique_phones:
-        diagnostics = _empty_history_diagnostics(before_count)
+        diagnostics = (
+            _empty_history_diagnostics(before_count)
+            if legacy
+            else _empty_historical_targeting_diagnostics(before_count)
+        )
         return candidates, (), diagnostics, {
             "observed_before": None,
             "observed_after": None,
@@ -747,86 +957,159 @@ def _apply_history_exclusion(
             session=session,
         )
 
-    reasons_by_phone: dict[str, tuple[str, ...]] = {}
-    reason_counts: Counter[str] = Counter()
-
-    selected_delivery = set(rule["delivery_buckets"])
-    selected_outcomes = set(rule["outcomes"])
-    require_button = bool(rule["button_interacted"])
-
-    for row in evaluated["rows"]:
-        reasons: set[str] = set()
-        ever = row["ever_observed"]
-
-        for bucket in sorted(
-            selected_delivery.intersection(ever["delivery_buckets"])
-        ):
-            reasons.add(f"HISTORY_DELIVERY_{bucket}")
-
-        for outcome in sorted(
-            selected_outcomes.intersection(ever["outcomes"])
-        ):
-            reasons.add(f"HISTORY_OUTCOME_{outcome}")
-
-        if require_button and bool(ever["button_interacted"]):
-            reasons.add("HISTORY_BUTTON_INTERACTION")
-
-        if reasons:
-            normalized_phone = str(row["normalized_phone"])
-            mx10 = (
-                normalized_phone[5:]
-                if normalized_phone.startswith("mx10:")
-                else normalized_phone
-            )
-            ordered_reasons = tuple(sorted(reasons))
-            reasons_by_phone[mx10] = ordered_reasons
-            for reason in ordered_reasons:
-                reason_counts[reason] += 1
-
-    excluded_phones = set(reasons_by_phone)
-    remaining = tuple(
-        candidate
-        for candidate in candidates
-        if candidate.phone_mx10 not in excluded_phones
-    )
+    selected_conditions = _selected_history_conditions(rule)
+    match_mode = str(rule["match"])
+    mode = str(rule["mode"])
 
     representative_by_phone: dict[
         str,
         MarketingCampaignV2AudienceCandidate,
     ] = {}
     for candidate in candidates:
-        phone = str(candidate.phone_mx10)
-        representative_by_phone.setdefault(phone, candidate)
+        if candidate.phone_mx10 is not None:
+            representative_by_phone.setdefault(
+                str(candidate.phone_mx10),
+                candidate,
+            )
 
-    excluded_rows = tuple(
-        MarketingCampaignV2HistoryExcludedCandidate(
-            candidate=representative_by_phone[phone],
-            reasons=reasons_by_phone[phone],
+    decisions_by_phone: dict[
+        str,
+        MarketingCampaignV2HistoricalDecisionCandidate,
+    ] = {}
+    matched_reason_counts: Counter[str] = Counter()
+
+    for row in evaluated["rows"]:
+        normalized_phone = str(row["normalized_phone"])
+        mx10 = (
+            normalized_phone[5:]
+            if normalized_phone.startswith("mx10:")
+            else normalized_phone
         )
-        for phone in sorted(excluded_phones)
+        if mx10 not in representative_by_phone:
+            continue
+
+        satisfied = _satisfied_history_reasons(
+            rule=rule,
+            ever=row["ever_observed"],
+        )
+        matched = (
+            selected_conditions.issubset(satisfied)
+            if match_mode == "ALL"
+            else bool(selected_conditions.intersection(satisfied))
+        )
+        keep = matched if mode == "INCLUDE" else not matched
+        decision = "INCLUDED" if keep else "EXCLUDED"
+        ordered_reasons = tuple(sorted(satisfied))
+        decisions_by_phone[mx10] = MarketingCampaignV2HistoricalDecisionCandidate(
+            candidate=representative_by_phone[mx10],
+            matched=matched,
+            decision=decision,
+            reasons=ordered_reasons,
+        )
+        if matched:
+            for reason in ordered_reasons:
+                matched_reason_counts[reason] += 1
+
+    # M13 returns one row for every requested phone, including phones with no history.
+    # Fail closed if a custom/test implementation ever omits one.
+    for phone in unique_phones:
+        if phone in decisions_by_phone:
+            continue
+        keep = mode == "EXCLUDE"
+        decisions_by_phone[phone] = MarketingCampaignV2HistoricalDecisionCandidate(
+            candidate=representative_by_phone[phone],
+            matched=False,
+            decision="INCLUDED" if keep else "EXCLUDED",
+            reasons=(),
+        )
+
+    decisions = tuple(
+        decisions_by_phone[phone]
+        for phone in sorted(decisions_by_phone)
+    )
+    matched_phones = {
+        phone
+        for phone, decision in decisions_by_phone.items()
+        if decision.matched
+    }
+    included_phones = {
+        phone
+        for phone, decision in decisions_by_phone.items()
+        if decision.decision == "INCLUDED"
+    }
+    excluded_phones = set(unique_phones) - included_phones
+
+    remaining = tuple(
+        candidate
+        for candidate in candidates
+        if candidate.phone_mx10 in included_phones
     )
 
-    diagnostics = {
-        "before_history_filter_count": before_count,
-        "history_excluded_count": len(excluded_phones),
-        "after_history_filter_count": before_count - len(excluded_phones),
-        "excluded_by_delivery_bucket": {
-            bucket: int(
-                reason_counts.get(f"HISTORY_DELIVERY_{bucket}", 0)
-            )
-            for bucket in rule["delivery_buckets"]
-        },
-        "excluded_by_outcome": {
-            outcome: int(
-                reason_counts.get(f"HISTORY_OUTCOME_{outcome}", 0)
-            )
-            for outcome in rule["outcomes"]
-        },
-        "excluded_by_button_interaction": int(
-            reason_counts.get("HISTORY_BUTTON_INTERACTION", 0)
-        ),
-    }
-    return remaining, excluded_rows, diagnostics, {
+    if legacy:
+        diagnostics = {
+            "before_history_filter_count": before_count,
+            "history_excluded_count": len(excluded_phones),
+            "after_history_filter_count": len(included_phones),
+            "excluded_by_delivery_bucket": {
+                bucket: int(
+                    matched_reason_counts.get(
+                        f"HISTORY_DELIVERY_{bucket}",
+                        0,
+                    )
+                )
+                for bucket in rule["delivery_buckets"]
+            },
+            "excluded_by_outcome": {
+                outcome: int(
+                    matched_reason_counts.get(
+                        f"HISTORY_OUTCOME_{outcome}",
+                        0,
+                    )
+                )
+                for outcome in rule["outcomes"]
+            },
+            "excluded_by_button_interaction": int(
+                matched_reason_counts.get(
+                    "HISTORY_BUTTON_INTERACTION",
+                    0,
+                )
+            ),
+        }
+    else:
+        diagnostics = {
+            "before_history_filter_count": before_count,
+            "history_matched_count": len(matched_phones),
+            "history_not_matched_count": before_count - len(matched_phones),
+            "history_included_count": len(included_phones),
+            "history_excluded_count": len(excluded_phones),
+            "after_history_filter_count": len(included_phones),
+            "matched_by_delivery_bucket": {
+                bucket: int(
+                    matched_reason_counts.get(
+                        f"HISTORY_DELIVERY_{bucket}",
+                        0,
+                    )
+                )
+                for bucket in rule["delivery_buckets"]
+            },
+            "matched_by_outcome": {
+                outcome: int(
+                    matched_reason_counts.get(
+                        f"HISTORY_OUTCOME_{outcome}",
+                        0,
+                    )
+                )
+                for outcome in rule["outcomes"]
+            },
+            "matched_by_button_interaction": int(
+                matched_reason_counts.get(
+                    "HISTORY_BUTTON_INTERACTION",
+                    0,
+                )
+            ),
+        }
+
+    return remaining, decisions, diagnostics, {
         "observed_before": (
             observed_before.isoformat()
             if observed_before is not None
@@ -837,6 +1120,63 @@ def _apply_history_exclusion(
             if observed_after is not None
             else None
         ),
+    }
+
+
+def _legacy_history_excluded_rows(
+    decisions: tuple[MarketingCampaignV2HistoricalDecisionCandidate, ...],
+) -> tuple[MarketingCampaignV2HistoryExcludedCandidate, ...]:
+    return tuple(
+        MarketingCampaignV2HistoryExcludedCandidate(
+            candidate=row.candidate,
+            reasons=row.reasons,
+        )
+        for row in decisions
+        if row.decision == "EXCLUDED"
+    )
+
+
+def _apply_history_exclusion(
+    *,
+    candidates: tuple[MarketingCampaignV2AudienceCandidate, ...],
+    rule: dict[str, Any],
+    allowed_sucursal_keys: tuple[str, ...] | None,
+    session: Any,
+):
+    """Compat M14: conserva la API interna legacy sobre el evaluator común."""
+    internal_rule = {
+        "mode": "EXCLUDE",
+        "match": "ANY",
+        **rule,
+    }
+    remaining, decisions, diagnostics, evaluation = _evaluate_historical_targeting(
+        candidates=candidates,
+        rule=internal_rule,
+        allowed_sucursal_keys=allowed_sucursal_keys,
+        session=session,
+        legacy=True,
+    )
+    return (
+        remaining,
+        _legacy_history_excluded_rows(decisions),
+        diagnostics,
+        evaluation,
+    )
+
+
+def _empty_historical_targeting_diagnostics(
+    before_count: int,
+) -> dict[str, Any]:
+    return {
+        "before_history_filter_count": before_count,
+        "history_matched_count": 0,
+        "history_not_matched_count": before_count,
+        "history_included_count": 0,
+        "history_excluded_count": before_count,
+        "after_history_filter_count": 0,
+        "matched_by_delivery_bucket": {},
+        "matched_by_outcome": {},
+        "matched_by_button_interaction": 0,
     }
 
 
@@ -1200,9 +1540,15 @@ def _serialize_preview(plan: _AudiencePlan) -> dict[str, Any]:
                 ),
             }
         )
-        if "history_exclusion" not in plan.filters:
+        if (
+            "history_exclusion" not in plan.filters
+            and "historical_targeting" not in plan.filters
+        ):
             payload.update(plan.history_diagnostics)
-    if "history_exclusion" in plan.filters:
+    if (
+        "history_exclusion" in plan.filters
+        or "historical_targeting" in plan.filters
+    ):
         payload.update(plan.history_diagnostics)
     return payload
 
