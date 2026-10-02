@@ -12,6 +12,7 @@ def _base():
         "scope": "branch_scope",
         "branch_ids": (1,),
         "branch_names": {1: "Sucursal 1"},
+        "iventas_sync_run_id": 99,
         "rows": [
             {
                 "branch_id": 1,
@@ -96,6 +97,7 @@ def test_same_month_and_cutoff_produce_same_portfolio(monkeypatch):
     assert first == second
     assert first["funnel_month"] == "2026-09"
     assert first["funnel_cutoff_date"] == "2026-09-30"
+    assert first["iventas_sync_run_id"] == 99
 
 
 def test_portfolio_preserves_resolved_scope(monkeypatch):

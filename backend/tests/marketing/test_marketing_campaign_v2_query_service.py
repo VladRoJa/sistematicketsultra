@@ -290,3 +290,9 @@ def test_list_filters_and_pagination_are_stable(session):
     assert result["total"] == 2
     assert result["total_pages"] == 2
     assert len(result["rows"]) == 1
+
+
+def test_query_source_filter_accepts_funnel_portfolio():
+    from app.services import marketing_campaign_v2_query_service as service
+
+    assert service._normalize_optional_source("funnel_portfolio") == "FUNNEL_PORTFOLIO"

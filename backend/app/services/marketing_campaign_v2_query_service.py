@@ -449,7 +449,7 @@ def _normalize_optional_source(value: Any) -> str | None:
     normalized = str(value).strip().upper()
     if normalized not in audience.SUPPORTED_SOURCES:
         raise MarketingCampaignV2QueryValidationError(
-            "source debe ser EXPIRED_MEMBERS o ACTIVE_MEMBERS."
+            "source debe ser EXPIRED_MEMBERS, ACTIVE_MEMBERS o FUNNEL_PORTFOLIO."
         )
     return normalized
 

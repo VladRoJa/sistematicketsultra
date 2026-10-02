@@ -491,6 +491,7 @@ def _resolve_leads_meta_cutoff_base(
         "branch_id": branch_id_filter,
         "branch_ids": branch_ids,
         "branch_names": branch_names,
+        "iventas_sync_run_id": int(iventas_run.id),
         "count": len(rows),
         "revenue_total": Decimal("0"),
         "rows": rows,
@@ -599,6 +600,7 @@ def build_marketing_funnel_portfolio_at_cutoff(
     return {
         "funnel_month": base["month"],
         "funnel_cutoff_date": base["cutoff_date"],
+        "iventas_sync_run_id": int(base["iventas_sync_run_id"]),
         "scope": base["scope"],
         "rows": candidates,
         "buyer_excluded": buyer_excluded,

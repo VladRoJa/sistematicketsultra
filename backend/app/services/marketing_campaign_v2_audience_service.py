@@ -15,6 +15,7 @@ from app.models.warehouse import (
     SociosVencidosCarteraORM,
 )
 from app.services.marketing_phone import normalize_phone
+from app.services import marketing_campaign_v2_funnel_source_service as funnel_source
 from app.services.marketing_campaign_v2_provider_history_service import (
     MarketingCampaignV2ProviderHistoryValidationError,
     get_provider_history_for_phones,
@@ -26,7 +27,14 @@ from app.warehouse.services import socios_vencidos_current_status_resolver as cu
 
 SOURCE_EXPIRED_MEMBERS = "EXPIRED_MEMBERS"
 SOURCE_ACTIVE_MEMBERS = "ACTIVE_MEMBERS"
-SUPPORTED_SOURCES = frozenset({SOURCE_EXPIRED_MEMBERS, SOURCE_ACTIVE_MEMBERS})
+SOURCE_FUNNEL_PORTFOLIO = funnel_source.SOURCE_FUNNEL_PORTFOLIO
+SUPPORTED_SOURCES = frozenset(
+    {
+        SOURCE_EXPIRED_MEMBERS,
+        SOURCE_ACTIVE_MEMBERS,
+        SOURCE_FUNNEL_PORTFOLIO,
+    }
+)
 
 SELECTABLE_AUDIENCE_FAMILIES = (
     "DOMICILIADO",
@@ -49,6 +57,9 @@ BUCKET_UNCLASSIFIED = "UNCLASSIFIED"
 BUCKET_FAMILY = "FAMILY"
 BUCKET_CURRENT_STATUS_BLOCKED = "CURRENT_STATUS_BLOCKED"
 BUCKET_HISTORY_EXCLUDED = "HISTORY_EXCLUDED"
+BUCKET_FUNNEL_CANDIDATES = "FUNNEL_CANDIDATES"
+BUCKET_FUNNEL_BUYER_EXCLUDED = "FUNNEL_BUYER_EXCLUDED"
+BUCKET_ACTIVE_MEMBER_SUPPRESSION = "ACTIVE_MEMBER_SUPPRESSION"
 SUPPORTED_BUCKETS = frozenset(
     {
         BUCKET_RECIPIENTS,
@@ -59,6 +70,9 @@ SUPPORTED_BUCKETS = frozenset(
         BUCKET_FAMILY,
         BUCKET_CURRENT_STATUS_BLOCKED,
         BUCKET_HISTORY_EXCLUDED,
+        BUCKET_FUNNEL_CANDIDATES,
+        BUCKET_FUNNEL_BUYER_EXCLUDED,
+        BUCKET_ACTIVE_MEMBER_SUPPRESSION,
     }
 )
 
@@ -145,6 +159,18 @@ class _AudiencePlan:
         ...,
     ] = field(default_factory=tuple)
     history_diagnostics: dict[str, Any] = field(default_factory=dict)
+    funnel_candidate_rows: tuple[
+        MarketingCampaignV2AudienceCandidate,
+        ...,
+    ] = field(default_factory=tuple)
+    funnel_buyer_excluded_rows: tuple[
+        MarketingCampaignV2AudienceCandidate,
+        ...,
+    ] = field(default_factory=tuple)
+    active_member_suppressed_rows: tuple[
+        MarketingCampaignV2AudienceCandidate,
+        ...,
+    ] = field(default_factory=tuple)
 
 
 def build_campaign_v2_audience_preview(
@@ -155,6 +181,9 @@ def build_campaign_v2_audience_preview(
     expiration_date_from: Any = None,
     expiration_date_to: Any = None,
     history_exclusion: Any = None,
+    funnel_month: Any = None,
+    funnel_cutoff_date: Any = None,
+    marketing_access: Any = None,
     session: Any | None = None,
 ) -> dict[str, Any]:
     """Build a deterministic, read-only Campaign V2 audience preview."""
@@ -166,10 +195,12 @@ def build_campaign_v2_audience_preview(
         expiration_date_from=expiration_date_from,
         expiration_date_to=expiration_date_to,
         history_exclusion=history_exclusion,
+        funnel_month=funnel_month,
+        funnel_cutoff_date=funnel_cutoff_date,
+        marketing_access=marketing_access,
         session=session,
     )
     return _serialize_preview(plan)
-
 
 def build_campaign_v2_audience_preview_detail(
     *,
@@ -183,6 +214,9 @@ def build_campaign_v2_audience_preview_detail(
     expiration_date_from: Any = None,
     expiration_date_to: Any = None,
     history_exclusion: Any = None,
+    funnel_month: Any = None,
+    funnel_cutoff_date: Any = None,
+    marketing_access: Any = None,
     session: Any | None = None,
 ) -> dict[str, Any]:
     """Rebuild preview and return a stable paged bucket, failing closed."""
@@ -206,7 +240,14 @@ def build_campaign_v2_audience_preview_detail(
         expiration_date_from=expiration_date_from,
         expiration_date_to=expiration_date_to,
         history_exclusion=history_exclusion,
+        funnel_month=funnel_month,
+        funnel_cutoff_date=funnel_cutoff_date,
+        marketing_access=marketing_access,
         session=session,
+    )
+    _validate_bucket_for_source(
+        source=plan.source,
+        bucket=normalized_bucket,
     )
     preview = _serialize_preview(plan)
     bucket_rows = _bucket_rows(
@@ -261,7 +302,6 @@ def build_campaign_v2_audience_preview_detail(
         ],
     }
 
-
 def _build_campaign_v2_audience_plan(
     *,
     source: Any,
@@ -270,15 +310,32 @@ def _build_campaign_v2_audience_plan(
     expiration_date_from: Any,
     expiration_date_to: Any,
     history_exclusion: Any = None,
+    funnel_month: Any = None,
+    funnel_cutoff_date: Any = None,
+    marketing_access: Any = None,
     session: Any | None = None,
 ) -> _AudiencePlan:
     normalized_source = _normalize_source(source)
-    selected_families = _normalize_family_selection(audience_families)
     normalized_scope = _normalize_scope(allowed_sucursal_keys)
     normalized_history_exclusion = _normalize_history_exclusion(
         history_exclusion
     )
     active_session = session if session is not None else db.session
+
+    if normalized_source == SOURCE_FUNNEL_PORTFOLIO:
+        return _build_funnel_audience_plan(
+            audience_families=audience_families,
+            allowed_sucursal_keys=normalized_scope,
+            expiration_date_from=expiration_date_from,
+            expiration_date_to=expiration_date_to,
+            history_exclusion=normalized_history_exclusion,
+            funnel_month=funnel_month,
+            funnel_cutoff_date=funnel_cutoff_date,
+            marketing_access=marketing_access,
+            session=active_session,
+        )
+
+    selected_families = _normalize_family_selection(audience_families)
 
     if normalized_source == SOURCE_EXPIRED_MEMBERS:
         date_from = _ensure_date(expiration_date_from, field_name="expiration_date_from")
@@ -392,6 +449,151 @@ def _build_campaign_v2_audience_plan(
         out_of_segment_count=out_of_segment_count,
         history_excluded_rows=history_excluded_rows,
         history_diagnostics=history_diagnostics,
+    )
+
+def _build_funnel_audience_plan(
+    *,
+    audience_families: Any,
+    allowed_sucursal_keys: tuple[str, ...] | None,
+    expiration_date_from: Any,
+    expiration_date_to: Any,
+    history_exclusion: dict[str, Any] | None,
+    funnel_month: Any,
+    funnel_cutoff_date: Any,
+    marketing_access: Any,
+    session: Any,
+) -> _AudiencePlan:
+    if audience_families is not None:
+        raise MarketingCampaignV2AudienceValidationError(
+            "audience_families no aplica a FUNNEL_PORTFOLIO."
+        )
+    if expiration_date_from is not None or expiration_date_to is not None:
+        raise MarketingCampaignV2AudienceValidationError(
+            "Los filtros de vencimiento no aplican a FUNNEL_PORTFOLIO."
+        )
+    if marketing_access is None:
+        raise MarketingCampaignV2AudienceValidationError(
+            "FUNNEL_PORTFOLIO requiere scope backend de Marketing."
+        )
+
+    normalized_month = str(funnel_month or "").strip()
+    normalized_cutoff = str(funnel_cutoff_date or "").strip()
+    if not normalized_month:
+        raise MarketingCampaignV2AudienceValidationError(
+            "funnel_month es obligatorio para FUNNEL_PORTFOLIO."
+        )
+    if not normalized_cutoff:
+        raise MarketingCampaignV2AudienceValidationError(
+            "funnel_cutoff_date es obligatorio para FUNNEL_PORTFOLIO."
+        )
+
+    try:
+        loaded = funnel_source.load_campaign_v2_funnel_source(
+            funnel_month=normalized_month,
+            funnel_cutoff_date=normalized_cutoff,
+            marketing_access=marketing_access,
+            session=session,
+        )
+    except (funnel_source.MarketingCampaignV2FunnelSourceValidationError, ValueError) as exc:
+        raise MarketingCampaignV2AudienceValidationError(str(exc)) from exc
+
+    funnel_candidates = tuple(_funnel_candidate(row) for row in loaded.funnel_candidates)
+    buyer_excluded = tuple(_funnel_candidate(row) for row in loaded.buyer_excluded)
+    invalid_phone_rows = tuple(_funnel_candidate(row) for row in loaded.invalid_phone)
+    active_member_suppressed = tuple(
+        _funnel_candidate(row) for row in loaded.active_member_suppressed
+    )
+    valid_rows = tuple(_funnel_candidate(row) for row in loaded.candidates)
+
+    normalized_filters: dict[str, Any] = {
+        "source": SOURCE_FUNNEL_PORTFOLIO,
+        "funnel_month": loaded.funnel_month,
+        "funnel_cutoff_date": loaded.funnel_cutoff_date,
+        "allowed_sucursal_keys": (
+            list(allowed_sucursal_keys)
+            if allowed_sucursal_keys is not None
+            else None
+        ),
+    }
+    if history_exclusion is not None:
+        normalized_filters["history_exclusion"] = history_exclusion
+
+    source_metadata = dict(loaded.metadata)
+    history_excluded_rows: tuple[
+        MarketingCampaignV2HistoryExcludedCandidate,
+        ...,
+    ] = ()
+    history_diagnostics = _empty_history_diagnostics(
+        len({row.phone_mx10 for row in valid_rows if row.phone_mx10})
+    )
+    if history_exclusion is not None:
+        (
+            valid_rows,
+            history_excluded_rows,
+            history_diagnostics,
+            history_evaluation,
+        ) = _apply_history_exclusion(
+            candidates=valid_rows,
+            rule=history_exclusion,
+            allowed_sucursal_keys=allowed_sucursal_keys,
+            session=session,
+        )
+        source_metadata["history_evaluation"] = history_evaluation
+
+    recipients, duplicate_rows = _deduplicate_candidates(valid_rows)
+
+    return _AudiencePlan(
+        source=SOURCE_FUNNEL_PORTFOLIO,
+        filters=normalized_filters,
+        source_metadata=source_metadata,
+        universe_count=int(loaded.universe_count),
+        scoped_count=int(loaded.scoped_count),
+        current_status_counts={},
+        current_status_blocked=(),
+        classified_candidates=funnel_candidates,
+        selected_candidates=tuple(
+            _funnel_candidate(row) for row in loaded.candidates
+        ),
+        invalid_phone_rows=invalid_phone_rows,
+        duplicate_rows=duplicate_rows,
+        recipients=recipients,
+        family_counts={family: 0 for family in ALL_AUDIENCE_FAMILIES},
+        unclassified_family_count=0,
+        out_of_segment_count=0,
+        history_excluded_rows=history_excluded_rows,
+        history_diagnostics=history_diagnostics,
+        funnel_candidate_rows=funnel_candidates,
+        funnel_buyer_excluded_rows=buyer_excluded,
+        active_member_suppressed_rows=active_member_suppressed,
+    )
+
+
+def _funnel_candidate(
+    row: funnel_source.MarketingCampaignV2FunnelCandidate,
+) -> MarketingCampaignV2AudienceCandidate:
+    evidence = ["FUNNEL_PORTFOLIO"]
+    if row.source_reference is not None:
+        evidence.append(f"SOURCE_REFERENCE:{row.source_reference}")
+    if row.contact_id is not None:
+        evidence.append(f"CONTACT_ID:{row.contact_id}")
+    if row.sucursal_id is not None:
+        evidence.append(f"SUCURSAL_ID:{row.sucursal_id}")
+    if row.channel is not None:
+        evidence.append(f"CHANNEL:{row.channel}")
+    if row.source_date is not None:
+        evidence.append(f"SOURCE_DATE:{row.source_date}")
+    if row.origin is not None:
+        evidence.append(f"ORIGIN:{row.origin}")
+
+    return MarketingCampaignV2AudienceCandidate(
+        source=SOURCE_FUNNEL_PORTFOLIO,
+        source_ref_type="IVENTAS_CONTACT",
+        source_ref_id=None,
+        phone_raw=row.phone_raw,
+        phone_mx10=row.phone_mx10,
+        sucursal=row.sucursal_key,
+        sucursal_key=row.sucursal_key,
+        evidence=tuple(evidence),
     )
 
 
@@ -924,7 +1126,11 @@ def _deduplicate_candidates(
                 categoria_tarifa=merged["categoria_tarifa"],
                 audience_family=merged["audience_family"],
                 fecha_vencimiento=merged["fecha_vencimiento"],
-                inclusion_reason="AUDIENCE_FAMILY_MATCH",
+                inclusion_reason=(
+                    "FUNNEL_PORTFOLIO_ELIGIBLE"
+                    if merged["source"] == SOURCE_FUNNEL_PORTFOLIO
+                    else "AUDIENCE_FAMILY_MATCH"
+                ),
                 conflict_fields=conflicts,
                 evidence_rows=evidence_rows,
             )
@@ -982,10 +1188,23 @@ def _serialize_preview(plan: _AudiencePlan) -> dict[str, Any]:
         "duplicate_count": len(plan.duplicate_rows),
         "unique_recipient_count": len(plan.recipients),
     }
+    if plan.source == SOURCE_FUNNEL_PORTFOLIO:
+        payload.update(
+            {
+                "funnel_candidate_count": len(plan.funnel_candidate_rows),
+                "funnel_buyer_excluded_count": len(
+                    plan.funnel_buyer_excluded_rows
+                ),
+                "active_member_suppression_count": len(
+                    plan.active_member_suppressed_rows
+                ),
+            }
+        )
+        if "history_exclusion" not in plan.filters:
+            payload.update(plan.history_diagnostics)
     if "history_exclusion" in plan.filters:
         payload.update(plan.history_diagnostics)
     return payload
-
 
 def _bucket_rows(
     plan: _AudiencePlan,
@@ -1015,8 +1234,13 @@ def _bucket_rows(
         return list(plan.current_status_blocked)
     if bucket == BUCKET_HISTORY_EXCLUDED:
         return list(plan.history_excluded_rows)
+    if bucket == BUCKET_FUNNEL_CANDIDATES:
+        return list(plan.funnel_candidate_rows)
+    if bucket == BUCKET_FUNNEL_BUYER_EXCLUDED:
+        return list(plan.funnel_buyer_excluded_rows)
+    if bucket == BUCKET_ACTIVE_MEMBER_SUPPRESSION:
+        return list(plan.active_member_suppressed_rows)
     raise AssertionError(f"Bucket no soportado: {bucket}")
-
 
 def _expected_bucket_total(
     preview: dict[str, Any],
@@ -1040,8 +1264,13 @@ def _expected_bucket_total(
         return int(preview["current_status_blocked_count"])
     if bucket == BUCKET_HISTORY_EXCLUDED:
         return int(preview.get("history_excluded_count", 0))
+    if bucket == BUCKET_FUNNEL_CANDIDATES:
+        return int(preview.get("funnel_candidate_count", 0))
+    if bucket == BUCKET_FUNNEL_BUYER_EXCLUDED:
+        return int(preview.get("funnel_buyer_excluded_count", 0))
+    if bucket == BUCKET_ACTIVE_MEMBER_SUPPRESSION:
+        return int(preview.get("active_member_suppression_count", 0))
     raise AssertionError(f"Bucket no soportado: {bucket}")
-
 
 def _serialize_history_excluded(
     row: MarketingCampaignV2HistoryExcludedCandidate,
@@ -1107,7 +1336,7 @@ def _normalize_source(value: Any) -> str:
     normalized = str(value or "").strip().upper()
     if normalized not in SUPPORTED_SOURCES:
         raise MarketingCampaignV2AudienceValidationError(
-            "source debe ser EXPIRED_MEMBERS o ACTIVE_MEMBERS."
+            "source debe ser EXPIRED_MEMBERS, ACTIVE_MEMBERS o FUNNEL_PORTFOLIO."
         )
     return normalized
 
@@ -1158,6 +1387,24 @@ def _row_in_scope(row: Any, allowed_sucursal_keys: tuple[str, ...] | None) -> bo
     raw_key = getattr(row, "sucursal_key", None) or getattr(row, "sucursal_raw", None)
     key = current_status.normalize_socios_vencidos_branch_key(raw_key)
     return key in set(allowed_sucursal_keys)
+
+
+def _validate_bucket_for_source(
+    *,
+    source: str,
+    bucket: str,
+) -> None:
+    if source != SOURCE_FUNNEL_PORTFOLIO:
+        return
+    if bucket in {
+        BUCKET_OUT_OF_SEGMENT,
+        BUCKET_UNCLASSIFIED,
+        BUCKET_FAMILY,
+        BUCKET_CURRENT_STATUS_BLOCKED,
+    }:
+        raise MarketingCampaignV2AudienceValidationError(
+            f"bucket {bucket} no aplica a FUNNEL_PORTFOLIO."
+        )
 
 
 def _normalize_bucket(value: Any) -> str:
