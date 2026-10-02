@@ -63,6 +63,7 @@ BUCKET_UNCLASSIFIED = "UNCLASSIFIED"
 BUCKET_FAMILY = "FAMILY"
 BUCKET_CURRENT_STATUS_BLOCKED = "CURRENT_STATUS_BLOCKED"
 BUCKET_HISTORY_EXCLUDED = "HISTORY_EXCLUDED"
+BUCKET_HISTORY_INCLUDED = "HISTORY_INCLUDED"
 BUCKET_FUNNEL_CANDIDATES = "FUNNEL_CANDIDATES"
 BUCKET_FUNNEL_BUYER_EXCLUDED = "FUNNEL_BUYER_EXCLUDED"
 BUCKET_ACTIVE_MEMBER_SUPPRESSION = "ACTIVE_MEMBER_SUPPRESSION"
@@ -76,6 +77,7 @@ SUPPORTED_BUCKETS = frozenset(
         BUCKET_FAMILY,
         BUCKET_CURRENT_STATUS_BLOCKED,
         BUCKET_HISTORY_EXCLUDED,
+        BUCKET_HISTORY_INCLUDED,
         BUCKET_FUNNEL_CANDIDATES,
         BUCKET_FUNNEL_BUYER_EXCLUDED,
         BUCKET_ACTIVE_MEMBER_SUPPRESSION,
@@ -318,15 +320,9 @@ def build_campaign_v2_audience_preview_detail(
             else 0
         ),
         "rows": [
-            _serialize_recipient(row)
-            if isinstance(row, MarketingCampaignV2RecipientCandidate)
-            else (
-                _serialize_history_excluded(row)
-                if isinstance(
-                    row,
-                    MarketingCampaignV2HistoryExcludedCandidate,
-                )
-                else _serialize_candidate(row)
+            _serialize_preview_detail_row(
+                row,
+                legacy_history=("history_exclusion" in plan.filters),
             )
             for row in page_rows
         ],
@@ -1579,7 +1575,19 @@ def _bucket_rows(
     if bucket == BUCKET_CURRENT_STATUS_BLOCKED:
         return list(plan.current_status_blocked)
     if bucket == BUCKET_HISTORY_EXCLUDED:
+        if "historical_targeting" in plan.filters:
+            return [
+                row
+                for row in plan.historical_decision_rows
+                if row.decision == "EXCLUDED"
+            ]
         return list(plan.history_excluded_rows)
+    if bucket == BUCKET_HISTORY_INCLUDED:
+        return [
+            row
+            for row in plan.historical_decision_rows
+            if row.decision == "INCLUDED"
+        ]
     if bucket == BUCKET_FUNNEL_CANDIDATES:
         return list(plan.funnel_candidate_rows)
     if bucket == BUCKET_FUNNEL_BUYER_EXCLUDED:
@@ -1610,6 +1618,19 @@ def _expected_bucket_total(
         return int(preview["current_status_blocked_count"])
     if bucket == BUCKET_HISTORY_EXCLUDED:
         return int(preview.get("history_excluded_count", 0))
+    if bucket == BUCKET_HISTORY_INCLUDED:
+        filters = preview.get("filters") or {}
+        if (
+            "historical_targeting" not in filters
+            and "history_exclusion" not in filters
+        ):
+            return 0
+        return int(
+            preview.get(
+                "history_included_count",
+                preview.get("after_history_filter_count", 0),
+            )
+        )
     if bucket == BUCKET_FUNNEL_CANDIDATES:
         return int(preview.get("funnel_candidate_count", 0))
     if bucket == BUCKET_FUNNEL_BUYER_EXCLUDED:
@@ -1618,13 +1639,52 @@ def _expected_bucket_total(
         return int(preview.get("active_member_suppression_count", 0))
     raise AssertionError(f"Bucket no soportado: {bucket}")
 
-def _serialize_history_excluded(
-    row: MarketingCampaignV2HistoryExcludedCandidate,
+def _serialize_preview_detail_row(
+    row: Any,
+    *,
+    legacy_history: bool,
+) -> dict[str, Any]:
+    if isinstance(row, MarketingCampaignV2RecipientCandidate):
+        return _serialize_recipient(row)
+    if isinstance(row, MarketingCampaignV2HistoricalDecisionCandidate):
+        return _serialize_historical_decision(row)
+    if isinstance(row, MarketingCampaignV2HistoryExcludedCandidate):
+        return _serialize_history_excluded(
+            row,
+            include_neutral=legacy_history,
+        )
+    return _serialize_candidate(row)
+
+
+def _serialize_historical_decision(
+    row: MarketingCampaignV2HistoricalDecisionCandidate,
 ) -> dict[str, Any]:
     return {
         **_serialize_candidate(row.candidate),
+        "history_matched": bool(row.matched),
+        "history_decision": row.decision,
+        "history_reasons": list(row.reasons),
+    }
+
+
+def _serialize_history_excluded(
+    row: MarketingCampaignV2HistoryExcludedCandidate,
+    *,
+    include_neutral: bool = False,
+) -> dict[str, Any]:
+    payload = {
+        **_serialize_candidate(row.candidate),
         "history_exclusion_reasons": list(row.reasons),
     }
+    if include_neutral:
+        payload.update(
+            {
+                "history_matched": True,
+                "history_decision": "EXCLUDED",
+                "history_reasons": list(row.reasons),
+            }
+        )
+    return payload
 
 
 def _serialize_candidate(row: MarketingCampaignV2AudienceCandidate) -> dict[str, Any]:

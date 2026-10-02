@@ -478,6 +478,49 @@ class TestMarketingCampaignV2Routes:
         assert service.call_args.kwargs["historical_targeting"] == rule
         assert service.call_args.kwargs["history_exclusion"] is None
 
+    def test_preview_detail_accepts_history_included_bucket(self):
+        expected = {
+            "bucket": "HISTORY_INCLUDED",
+            "total": 1,
+            "rows": [
+                {
+                    "phone_mx10": "6861000001",
+                    "history_matched": True,
+                    "history_decision": "INCLUDED",
+                    "history_reasons": ["HISTORY_DELIVERY_VIEWED"],
+                }
+            ],
+        }
+        rule = {
+            "mode": "INCLUDE",
+            "match": "ANY",
+            "delivery_buckets": ["VIEWED"],
+        }
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.audience.build_campaign_v2_audience_preview_detail",
+                return_value=expected,
+            ) as service,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/preview-detail",
+                json={
+                    "source": "ACTIVE_MEMBERS",
+                    "audience_families": ["DOMICILIADO"],
+                    "bucket": "HISTORY_INCLUDED",
+                    "page": 1,
+                    "page_size": 25,
+                    "historical_targeting": rule,
+                },
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert response.get_json()["bucket"] == "HISTORY_INCLUDED"
+        assert service.call_args.kwargs["bucket"] == "HISTORY_INCLUDED"
+        assert service.call_args.kwargs["historical_targeting"] == rule
+
     def test_freeze_forwards_canonical_historical_targeting(self):
         rule = {
             "mode": "INCLUDE",

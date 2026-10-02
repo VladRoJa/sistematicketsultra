@@ -262,3 +262,62 @@ def test_funnel_canonical_historical_targeting_uses_common_evaluator(monkeypatch
         **payload,
     )
     assert detail["rows"][0]["phone_mx10"] == "6861000002"
+
+
+def test_funnel_history_decision_buckets_never_restore_active_suppression(monkeypatch):
+    history_calls = _install(monkeypatch)
+    payload = _kwargs()
+    payload.pop("history_exclusion")
+    payload["historical_targeting"] = {
+        "mode": "INCLUDE",
+        "match": "ANY",
+        "delivery_buckets": ["VIEWED"],
+        "outcomes": [],
+        "button_interacted": False,
+        "lookback_days": None,
+    }
+
+    included = audience.build_campaign_v2_audience_preview_detail(
+        bucket="HISTORY_INCLUDED",
+        page=1,
+        page_size=50,
+        **payload,
+    )
+    excluded = audience.build_campaign_v2_audience_preview_detail(
+        bucket="HISTORY_EXCLUDED",
+        page=1,
+        page_size=50,
+        **payload,
+    )
+    recipients = audience.build_campaign_v2_audience_preview_detail(
+        bucket="RECIPIENTS",
+        page=1,
+        page_size=50,
+        **payload,
+    )
+
+    assert [row["phone_mx10"] for row in included["rows"]] == [
+        "6861000002"
+    ]
+    assert included["rows"][0]["history_matched"] is True
+    assert included["rows"][0]["history_decision"] == "INCLUDED"
+    assert included["rows"][0]["history_reasons"] == [
+        "HISTORY_DELIVERY_VIEWED"
+    ]
+
+    assert [row["phone_mx10"] for row in excluded["rows"]] == [
+        "6861000001"
+    ]
+    assert excluded["rows"][0]["history_matched"] is False
+    assert excluded["rows"][0]["history_decision"] == "EXCLUDED"
+    assert excluded["rows"][0]["history_reasons"] == []
+
+    assert [row["phone_mx10"] for row in recipients["rows"]] == [
+        "6861000002"
+    ]
+    observed_phones = {
+        phone
+        for call in history_calls
+        for phone in call["phones"]
+    }
+    assert "6861000003" not in observed_phones
