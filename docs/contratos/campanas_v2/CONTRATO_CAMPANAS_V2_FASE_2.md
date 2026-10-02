@@ -1244,6 +1244,21 @@ Ya existe en M14:
 - core M13 reutilizado en bulk, sin provider HTTP ni N+1;
 - compatibilidad exacta cuando no se usa history filter.
 
+Ya existe en M15:
+
+- UI Angular dentro del Audience Builder existente;
+- `SENT`, `DELIVERED` y `VIEWED` se presentan como opciones independientes;
+- outcomes `SUCCESSFUL` / `FAILED` se presentan como dimensión separada;
+- button interaction usa exclusivamente `button_interacted=true`;
+- `history_exclusion` se omite si no existe condición efectiva;
+- `lookback_days` sólo admite null o entero positivo;
+- Angular nunca envía `observed_before`, `observed_after`, teléfonos excluidos ni resultados históricos;
+- cualquier cambio de criterio histórico invalida Preview/fingerprint;
+- Preview muestra diagnostics M14 sin sumar reason counts como total exclusivo;
+- Preview Detail integra `HISTORY_EXCLUDED` con mapper TypeScript de razones canónicas y fallback seguro;
+- detalle de Campaign V2 muestra criterios persistidos desde `audience_definition_json`;
+- frontend no llama `/provider-history/lookup`, iVentas ni maneja Authorization manual.
+
 Capacidades futuras, separadas:
 
 - update commercial purpose;
@@ -1323,6 +1338,27 @@ M11 snapshots:
 - history/latest ordenados por fetched_at/id desc;
 - constraint de fingerprint soporta carreras de idempotencia.
 
+M12-M15:
+- scheduler disabled por defecto y sin provider calls cuando está deshabilitado;
+- configuración incompleta M12 queda aislada del resto del marketing-scheduler;
+- cleanup de `db.session`;
+- M13 read-only con sesión dirty/no_autoflush;
+- scope histórico backend-authoritative;
+- lookback inclusivo basado en `fetched_at`;
+- M14 OR exclusion + Preview/Freeze reproducible;
+- drift histórico entre Preview y Freeze produce PreviewMismatch;
+- M15 payload coincide exactamente con M14;
+- M15 no llama M13/iVentas ni envía cutoff/resultados históricos.
+
+M16 acceptance transversal:
+- provider binding -> provider stats double -> snapshot M11 -> observations -> history M13 -> M14 Preview -> Freeze;
+- A=VIEWED, B=FAILED, C=button interaction y D sin history visible deja sólo D;
+- evidencia del mismo teléfono fuera de scope no afecta Preview;
+- snapshot idéntico es idempotente y no duplica observations;
+- mismo Preview sin cambios conserva fingerprint;
+- nueva evidencia histórica posterior invalida el fingerprint aprobado;
+- todo el historial y lookback producen resultados distintos cuando corresponde.
+
 ## 30. Criterio de aceptación de M8 provider read-only
 
 M8 queda cerrado cuando:
@@ -1348,14 +1384,13 @@ queda satisfecho en modo read-only para un `campaign_id` conocido mediante campa
 
 ## 31. Limitaciones que permanecen abiertas para Fase 2
 
-El cierre M14 **no cierra toda Fase 2**. Permanecen abiertos:
+La aceptación M16 no agrega las capacidades siguientes, que permanecen como trabajo posterior:
 
 - definición/activación operativa de los valores productivos de cadence/horizon/max;
 - listado/importación de campañas por periodo;
 - representación/persistencia de campañas externas;
 - normalización específica de costos cuando vaya a consumirse;
 - branch resolution para campañas externas cuando aplique;
-- UI Angular para configurar los filtros históricos ya cerrados en backend;
 - GraphQL histórico por teléfono si se requiere para otro caso de uso;
 - Cartera Funnel y sus reglas completas;
 - preparación para Fase 3/envío.
@@ -1391,5 +1426,7 @@ No iniciar Fase 3 hasta cerrar los requisitos restantes de Fase 2 que correspond
     M13 usa observed_at=fetched_at y no fabrica timestamps provider.
     M14 integra exclusiones históricas OR en Audience Builder con cutoff backend-authoritative.
     M14 persiste sólo criterios + history_evaluation; no copia snapshots.
+    M15 integra esos criterios en Angular y sólo envía history_exclusion; no llama M13/iVentas.
+    M15 invalida Preview ante cambios históricos y conserva el fingerprint backend-authoritative.
     No reemplaces snapshots M11 por estado mutable ni inventes timestamps/causas recipient-level.
     No implementes POST /v2/broadcast ni GraphQL mutations.
