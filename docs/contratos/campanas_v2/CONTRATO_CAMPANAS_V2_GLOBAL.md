@@ -37,13 +37,14 @@ El objetivo arquitectónico es que las APIs nuevas de iVentas entren como una in
 - No requiere API nueva de iVentas.
 - Define catálogo, fuentes, filtros, familias, preview, deduplicación y audiencia congelada.
 
-### Fase 2 — Integración analítica con iVentas + Cartera Funnel
+### Fase 2 — iVentas / histórico / Funnel / Campaign BI
 
-- Solo lectura/sincronización de iVentas.
-- Estados por destinatario, interacciones, analytics, costos e histórico.
-- Importación de campañas externas.
-- Incorpora antes del enviador una fuente `FUNNEL_PORTFOLIO` para Venta Nueva/Funnel, tolerante a registros donde prácticamente solo existe teléfono.
-- No envía campañas desde Suite.
+- **2A — iVentas / histórico / engagement:** implementada; lectura/sincronización, estados recipient-level, interacciones, analytics e histórico.
+- **2B — FUNNEL_PORTFOLIO:** pendiente; incorpora Venta Nueva/Funnel dentro del mismo Audience Builder, con identidad phone-centric y supresión obligatoria de socios activos.
+- **2C — Campaign BI / Reporting / Excel:** pendiente; proyecta evidencia persistida en reportes individuales/consolidados y exportación Excel backend-side.
+- **2D — Acceptance final:** pendiente; debe validar integralmente 2A + 2B + 2C antes de Fase 3.
+- Fase 2 puede incluir costos e importación histórica cuando exista evidencia suficiente, pero Reporting no llama al provider para generar reportes.
+- Fase 2 no envía campañas desde Suite ni autoriza POST /v2/broadcast.
 
 ### Fase 3 — Envío por iVentas
 

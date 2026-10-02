@@ -1,18 +1,18 @@
 # Contrato Campañas V2 — Fase 3
 
-Estado: CONTRATO DE ENVÍO; REQUIERE FASES 1 Y 2 ESTABLES  
-Dependencia de ejecución: Fase 1 y Fase 2 terminadas, incluida la fuente FUNNEL_PORTFOLIO; este archivo es autosuficiente como contexto.  
+Estado: CONTRATO DE ENVÍO; REQUIERE FASE 2 COMPLETAMENTE ACEPTADA
+Dependencia de ejecución: Fase 1 terminada y Fase 2 completamente aceptada, incluyendo `FUNNEL_PORTFOLIO` y Campaign BI/Reporting/Excel; este archivo es autosuficiente como contexto.
 Objetivo: permitir que Suite Ultra envíe campañas mediante iVentas sin romper la trazabilidad construida previamente.
 
 ## 0. Contexto autosuficiente para una conversación nueva
 
-Este archivo puede entregarse **por sí solo** a una conversación nueva, pero Fase 3 solo puede comenzar después de comprobar en el repositorio que Fase 1 y Fase 2 están terminadas.
+Este archivo puede entregarse **por sí solo** a una conversación nueva, pero Fase 3 sólo puede comenzar después de comprobar en el repositorio que Fase 2 está completamente aceptada: 2A + 2B + 2C cerradas y 2D PASS.
 
 Contexto fijo:
 
 - Suite Ultra usa Angular + Flask + PostgreSQL y Alembic.
 - Fase 1 construye y congela audiencias.
-- Fase 2 sincroniza iVentas, conserva estados por campaign-recipient, deriva comportamiento histórico por teléfono e incorpora `FUNNEL_PORTFOLIO`.
+- Fase 2 aporta iVentas/histórico recipient-level, `FUNNEL_PORTFOLIO` y Campaign BI/Reporting/Excel, todos cerrados antes de habilitar envío.
 - Funnel debe haber aplicado la lógica vigente de compradores/no compradores y `ACTIVE_MEMBER_SUPPRESSION` contra Socios Activos antes de congelar la audiencia.
 - Fase 3 **no recalcula fuentes, familias, compras, socios activos ni historial de engagement**: envía exactamente la audiencia congelada y validada.
 - No crear tablas espejo de Socios Activos/Vencidos.

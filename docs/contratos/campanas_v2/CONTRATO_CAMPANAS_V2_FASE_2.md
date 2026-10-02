@@ -2,7 +2,7 @@
 
 Estado: CONTRATO DE LECTURA/BI; NO AUTORIZA ENVÍO  
 Dependencia de ejecución: Fase 1 debe estar terminada y comprobada en el repositorio; este archivo es autosuficiente como contexto.  
-Objetivo: integrar resultados de campañas iVentas con Campañas V2 sin acoplar el núcleo al proveedor e incorporar, antes del enviador, la Cartera Funnel de Venta Nueva como fuente phone-centric.
+Objetivo: consolidar la lectura/histórico de iVentas ya aceptada como 2A, incorporar `FUNNEL_PORTFOLIO` como 2B y añadir Campaign BI/Reporting/Excel como 2C antes de habilitar cualquier envío en Fase 3.
 
 ## 0. Contexto autosuficiente para una conversación nueva
 
@@ -18,9 +18,9 @@ Contexto fijo:
 - Campaign-recipient almacena la pertenencia al cohorte y hechos específicos de esa campaña; no reemplaza la base fuente.
 - `sent`, `delivered`, `viewed`, `failed` e interacciones son hechos de una campaña concreta.
 - A partir de esos hechos se debe poder derivar **comportamiento histórico por teléfono** para filtrar campañas nuevas sin contaminar las fuentes.
-- `FUNNEL_PORTFOLIO` se integra en esta fase, antes del enviador. Su identidad mínima puede ser teléfono; `contact_id`, nombre, sucursal, canal y fecha son enriquecimientos cuando existan.
+- `FUNNEL_PORTFOLIO` pertenece a 2B y permanece PENDIENTE. Su identidad mínima puede ser teléfono; `contact_id`, nombre, sucursal, canal y fecha son enriquecimientos cuando existan.
 - Funnel debe reutilizar su lógica existente de compradores/no compradores y además aplicar supresión por teléfono contra el snapshot canónico vigente de Socios Activos.
-- Esta fase es solo lectura/BI de iVentas + Cartera Funnel. **No implementar POST /v2/broadcast.**
+- Esta fase cubre lectura/histórico iVentas, `FUNNEL_PORTFOLIO`, Campaign BI/Reporting y Excel. **No implementar POST /v2/broadcast.**
 
 Modo de trabajo:
 
@@ -30,7 +30,22 @@ Modo de trabajo:
 4. no modelar campos no observados en un payload real;
 5. no avanzar a Fase 3.
 
-### 0.1 Enmienda M8 — evidencia real observada y frontera vigente
+### 0.1 Estado contractual de Fase 2
+
+La estructura de Fase 2 queda congelada así:
+
+    2A — iVentas / histórico / engagement      IMPLEMENTADA
+    2B — FUNNEL_PORTFOLIO                      PENDIENTE
+    2C — Campaign BI / Reporting / Excel       PENDIENTE
+    2D — Acceptance final                      PENDIENTE
+
+2A corresponde a M8–M16 y está IMPLEMENTADA, ACCEPTED M16 y DEPLOYADA. Smoke real provider: PASS.
+
+La captura automática M12 está implementada, pero permanece operativamente deshabilitada hasta definir explícitamente `cadence`, `horizon` y `max`.
+
+Fase 3 sólo puede comenzar después de cerrar 2B y 2C y completar 2D con aceptación integral.
+
+### 0.2 Enmienda M8 — evidencia real observada y frontera vigente
 
 Esta enmienda consolida la evidencia real confirmada para el provider read-only de Campaign V2. Si una sección posterior entra en conflicto con esta enmienda, debe actualizarse para mantener una sola semántica contractual.
 
@@ -154,10 +169,14 @@ Regla de seguridad M8:
 
 ## 1. Alcance exacto
 
-Fase 2 contiene dos bloques que deben quedar listos antes de Fase 3:
+Fase 2 contiene cuatro bloques contractuales:
 
-- **2A — iVentas lectura/BI:** lectura y sincronización de campañas.
-- **2B — Cartera Funnel:** fuente de audiencia para Venta Nueva/Funnel, tolerante a identidad incompleta.
+- **2A — iVentas / histórico / engagement:** IMPLEMENTADA; corresponde a M8–M16 y conserva toda su semántica vigente.
+- **2B — FUNNEL_PORTFOLIO:** PENDIENTE; fuente de audiencia para Venta Nueva/Funnel, tolerante a identidad incompleta.
+- **2C — Campaign BI / Reporting / Excel:** PENDIENTE; proyección read-only sobre evidencia persistida por Suite.
+- **2D — Acceptance final:** PENDIENTE; valida integralmente 2A + 2B + 2C antes de autorizar Fase 3.
+
+M8–M16 no se reinterpretan: `successful/failed`, `SENT/DELIVERED/VIEWED`, snapshots append-only, `fetched_at`, button interactions, history exclusions y M12 disabled por defecto mantienen su semántica existente.
 
 Debe permitir:
 
@@ -325,6 +344,41 @@ Esta supresión complementa, no reemplaza, el cruce de compra de 60 días ya uti
 
 - cruce de compra: evita contactar a quien ya convirtió dentro de la lógica comercial del Funnel;
 - Socios Activos: evita contactar como Venta Nueva a quien hoy ya pertenece a la base activa, incluso si el dato de compra no quedó representado del mismo modo en la cohorte del Funnel.
+
+### 5.7 Pipeline contractual de 2B
+
+El pipeline de `FUNNEL_PORTFOLIO` debe ser:
+
+    Funnel vigente
+      -> lógica comprador/no comprador existente
+      -> normalización phone_mx10
+      -> ACTIVE_MEMBER_SUPPRESSION
+      -> scope backend
+      -> history exclusions existentes
+      -> dedupe
+      -> Preview
+      -> Freeze
+
+El contrato mínimo del recipient continúa siendo:
+
+    phone_mx10
+    source = FUNNEL_PORTFOLIO
+
+Los campos `contact_id`, `name`, `sucursal_id`, `channel`, `source_date`, `origin` y `source_reference` son opcionales y sólo se incluyen cuando existan realmente.
+
+`identity_quality = PHONE_ONLY` es válido. Está prohibido inventar `member_id`, PIN, tarifa, familia o sucursal cuando no exista evidencia.
+
+Preview/Detail debe auditar separadamente:
+
+- candidatos Funnel;
+- compradores excluidos;
+- socios activos excluidos;
+- teléfonos inválidos;
+- duplicados/conflictos;
+- history exclusions;
+- audiencia final.
+
+`ACTIVE_MEMBER_SUPPRESSION` significa únicamente "no enviar Venta Nueva a ese número"; no afirma que el lead y el socio sean necesariamente la misma persona.
 
 ## 6. Provider abstraction
 
@@ -1350,7 +1404,7 @@ M12-M15:
 - M15 payload coincide exactamente con M14;
 - M15 no llama M13/iVentas ni envía cutoff/resultados históricos.
 
-M16 acceptance transversal:
+M16 acceptance transversal de 2A:
 - provider binding -> provider stats double -> snapshot M11 -> observations -> history M13 -> M14 Preview -> Freeze;
 - A=VIEWED, B=FAILED, C=button interaction y D sin history visible deja sólo D;
 - evidencia del mismo teléfono fuera de scope no afecta Preview;
@@ -1382,51 +1436,320 @@ El criterio:
 
 queda satisfecho en modo read-only para un `campaign_id` conocido mediante campaign stats.
 
-## 31. Limitaciones que permanecen abiertas para Fase 2
+## 31. Fase 2C — Campaign BI / Reporting / Excel
 
-La aceptación M16 no agrega las capacidades siguientes, que permanecen como trabajo posterior:
+### 31.1 Objetivo y frontera read-only
 
-- definición/activación operativa de los valores productivos de cadence/horizon/max;
-- listado/importación de campañas por periodo;
-- representación/persistencia de campañas externas;
-- normalización específica de costos cuando vaya a consumirse;
-- branch resolution para campañas externas cuando aplique;
-- GraphQL histórico por teléfono si se requiere para otro caso de uso;
-- Cartera Funnel y sus reglas completas;
-- preparación para Fase 3/envío.
+2C convierte la evidencia persistida de Campaign V2 en reportes operativos y ejecutivos:
 
-No iniciar Fase 3 hasta cerrar los requisitos restantes de Fase 2 que correspondan al flujo de envío.
+    Campaign V2
+      -> snapshots M11
+      -> recipient observations
+      -> analytics provider
+      -> reporting projection
+      -> dashboard
+      -> Excel
 
-## 32. Instrucción de arranque recomendada para una conversación nueva de Fase 2
+Reporting es **read-only respecto al provider**. Generar un reporte o exportar Excel **no consulta iVentas** y usa únicamente información ya persistida por Suite.
+
+Si se necesita mayor frescura, `captura/sync` es una operación separada del reporting.
+
+### 31.2 Dos niveles de reporte
+
+El reporte individual de campaña debe poder mostrar como mínimo:
+
+- Campaign V2;
+- nombre;
+- purpose;
+- provider;
+- provider_campaign_id;
+- analytics_status;
+- latest_observed_at;
+- destinatarios;
+- successful;
+- failed;
+- sent;
+- delivered;
+- viewed;
+- reached;
+- delivery/reach rate;
+- read rate;
+- failure rate;
+- button interaction recipients;
+- button interaction groups;
+- responders agregados cuando provider los entregue;
+- freeText agregado cuando provider lo entregue;
+- costo;
+- currency;
+- cost status;
+- KPIs de costo disponibles.
+
+El reporte consolidado debe permitir comparar varias campañas por:
+
+- periodo observado;
+- campaign;
+- purpose;
+- provider;
+- sucursal cuando sea atribuible;
+- audience family cuando exista evidencia.
+
+Ejemplo conceptual:
+
+    Campaign       Dest. Reach Viewed Interactions Failed Cost
+    React Oct 01     528   491    295       63       31   ...
+    VN Oct 02        ...
+
+### 31.3 Métricas y denominadores
+
+`efectividad` no es una métrica canónica única hasta que negocio defina cuál desea usar. Reporting debe presentar métricas con nombre y denominador explícitos.
+
+Como mínimo:
+
+    total_recipients
+
+    successful_rate =
+      successful / total_recipients
+
+    reach_count =
+      DELIVERED ∪ VIEWED
+
+    reach_rate =
+      reach_count / total_recipients
+
+    read_rate =
+      viewed / reach_count
+
+    failure_rate =
+      failed / total_recipients
+
+Toda división debe proteger denominador cero.
+
+Bajo las invariantes actuales `DELIVERED ∩ VIEWED = ∅`, `reach_count` equivale hoy a `delivered + viewed`; cuando se trabaje recipient-level debe implementarse conceptualmente como conjunto/unión.
+
+### 31.4 Provider raw vs Suite normalized
+
+Reporting debe distinguir siempre entre:
+
+- raw provider counts;
+- normalized unique recipients.
+
+Nunca debe mezclar ambos silenciosamente. Si varios formatos de teléfono del provider colapsan durante normalización, el reporte debe conservar y explicar esa diferencia.
+
+### 31.5 Respuestas e interacciones
+
+Se conserva la semántica vigente de 2A:
+
+    analytics responders
+      -> agregado provider
+
+    analytics freeText
+      -> agregado provider
+
+    button interactions
+      -> recipient-level identificable
+
+No se exportan listas ficticias de `responded_phones`, `free_text_responders`, `no_answer` o `unanswered`.
+
+Cuando existan, el reporte puede mostrar de forma explícita valores como:
+
+    Responders agregados: 79
+    Interacción botón identificable: 63
+    Free text agregado: 16
+
+### 31.6 Costos
+
+La primera implementación debe consumir `snapshot.analytics_json` mediante una projection/extractor testeado.
+
+No se normalizan anticipadamente todos los campos de costo a columnas DB.
+
+Campos observados que pueden exponerse sólo cuando estén realmente presentes/soportados:
+
+- currency;
+- status;
+- estimated;
+- real.total;
+- byCountry;
+- costPerDelivered;
+- costPerResponse;
+- spendWithoutResponse;
+- provider;
+- paymentMethod.
+
+Si el costo falta, el valor es `unavailable`/`null`, nunca `0` por ausencia.
+
+No se suman costos de monedas distintas. El consolidado agrupa o separa por `currency` y marca cualquier total incompleto.
+
+### 31.7 KPIs derivados por Suite
+
+Si se agregan métricas como `cost_per_reached`, `cost_per_viewed` o `cost_per_button_interaction`, deben:
+
+- etiquetarse como derivadas por Suite;
+- documentar fórmula;
+- documentar moneda;
+- devolver `null` si el denominador es cero;
+- no confundirse con un KPI del provider.
+
+### 31.8 Evolución temporal
+
+2C puede aprovechar los snapshots append-only de M11 para representar evolución por `fetched_at`, por ejemplo:
+
+    fetched_at    SENT  DELIVERED  VIEWED
+    10:00          ...
+    12:00          ...
+    18:00          ...
+
+Debe describirse como **estado observado por Suite**. No se presenta como `sent_at`, `delivered_at` o `viewed_at` real del provider.
+
+### 31.9 Histórico transversal
+
+Reporting puede reutilizar M13 para análisis como:
+
+- teléfono nunca observado anteriormente;
+- teléfono previamente impactado;
+- ever VIEWED;
+- ever FAILED;
+- ever button_interaction.
+
+Debe distinguir el histórico previo a la campaña analizada de los resultados de la campaña actual para evitar leakage temporal.
+
+2C no crea scoring.
+
+### 31.10 Sucursal, propósito y familia
+
+Sólo se agrupa por dimensiones atribuibles con evidencia:
+
+- `purpose`: usar Campaign V2 purpose persistido;
+- `sucursal`: usar relación/scope/binding disponible; no inferir por lada ni inventar desde phone;
+- `audience_family`: usar metadata congelada cuando exista.
+
+Si una dimensión no puede resolverse, usar `UNKNOWN`/`UNAVAILABLE` según la convención existente.
+
+### 31.11 Excel
+
+La exportación se genera **backend-side**. Angular solicita y descarga el archivo; no recalcula KPIs.
+
+Arquitectura objetivo del workbook:
+
+    1. Resumen
+    2. Campañas
+    3. KPIs
+    4. Destinatarios
+    5. Interacciones
+    6. Costos
+    7. Evolución
+    8. Metadata
+
+No es obligatorio implementar todas las hojas en el primer milestone si se preserva el contrato funcional, pero la arquitectura debe permitirlas.
+
+Excel debe incluir:
+
+- generated_at;
+- filtros aplicados;
+- última observación disponible;
+- analytics_status;
+- definiciones/denominadores relevantes.
+
+No se hacen provider calls durante export.
+
+### 31.12 Privacidad, permisos y freshness
+
+Reporting reutiliza los permisos backend de Campaign V2.
+
+El scope del usuario limita:
+
+- campañas;
+- recipients;
+- agregaciones;
+- exportaciones.
+
+Un consolidado no puede revelar información de otra sucursal.
+
+El Excel nunca debe contener:
+
+- API keys;
+- Authorization;
+- payload provider raw innecesario;
+- headers;
+- secrets.
+
+Los teléfonos sólo aparecen cuando el permiso y el propósito del reporte lo justifican. No se loggean teléfonos durante export.
+
+Todo reporte debe poder indicar `latest_observed_at` y `analytics_status`.
+
+M12 deshabilitado no bloquea Reporting; significa que la frescura depende de snapshots existentes/manuales hasta activar captura automática.
+
+### 31.13 No duplicar persistencia
+
+La primera implementación de Reporting debe reutilizar:
+
+- Campaign V2;
+- frozen recipients;
+- M11 snapshots;
+- M11 observations;
+- M13 history;
+- `analytics_json`.
+
+No crear una reporting mega-table, copia de snapshots o copia de recipients salvo que una necesidad de rendimiento medida lo justifique posteriormente.
+
+## 32. Fase 2D — Acceptance final
+
+Fase 2 queda finalmente aceptada cuando estén cerrados:
+
+    2A — iVentas/history                 PASS
+    2B — FUNNEL_PORTFOLIO                PASS
+    2C — Campaign BI/Reporting           PASS
+
+La aceptación integral debe comprobar:
+
+- Funnel -> Preview -> Freeze;
+- ACTIVE_MEMBER_SUPPRESSION;
+- history exclusions;
+- reporting individual;
+- reporting consolidado;
+- Excel;
+- scope/permisos;
+- no provider writes;
+- no envío.
+
+Sólo después puede comenzar:
+
+    Fase 3 — POST /v2/broadcast
+
+## 33. Pendientes y trabajo posterior
+
+PENDIENTE PARA CERRAR FASE 2:
+
+- FUNNEL_PORTFOLIO;
+- ACTIVE_MEMBER_SUPPRESSION;
+- Campaign BI;
+- Excel;
+- Angular Reporting;
+- acceptance final.
+
+POSTERIOR / NO BLOQUEANTE salvo necesidad:
+
+- importación automática de campañas externas;
+- listado provider por periodo no confirmado;
+- GraphQL histórico;
+- normalización DB específica de costos;
+- activación productiva M12.
+
+`FUNNEL_PORTFOLIO` no se considera implementada por existir su contrato: permanece PENDIENTE hasta cerrar 2B.
+
+## 34. Instrucción de arranque recomendada para una conversación nueva de Fase 2
 
     Estamos implementando únicamente Campañas V2 Fase 2.
     Este archivo es autosuficiente; no asumas contexto de conversaciones anteriores.
-    M8 provider read-only ya existe y usa:
-      GET /v2/broadcast/stats/{campaign_id}
-      IVENTAS_CAMPAIGNS_API_KEY
-    Reutiliza normalize_iventas_phone() y las capas:
-      IVentasCampaignsClient
-      parse_iventas_campaign_stats()
-      IVentasCampaignProvider
-      CampaignProviderStats
-    sentMessages es canónico; sentdMessages sólo fallback legacy.
-    No derives responders desde answeredMessages.
-    interactions[].items son button interactions recipient-level.
-    analytics/freeText/failures/cost permanecen agregados salvo contrato posterior.
-    No inventes timestamps ni failure cause por teléfono.
-    M9 ya persiste únicamente provider + provider_campaign_id en Campaign V2.
-    Usa PUT /campaigns-v2/{campaign_id}/provider-binding para ese vínculo.
-    No rebindear una campaña a otra identidad provider.
-    M10 ya expone GET /campaigns-v2/{campaign_id}/provider-stats como read-through.
-    Ese endpoint obtiene provider/external id sólo de la Campaign V2 persistida.
-    M11 persiste snapshots append-only y recipient observations.
-    M12 reutiliza marketing-scheduler para captura automática configurable.
-    M12 permanece disabled hasta definir explícitamente interval/horizon/max.
-    M13 expone histórico transversal bulk sobre snapshots M11, sin provider calls.
-    M13 usa observed_at=fetched_at y no fabrica timestamps provider.
-    M14 integra exclusiones históricas OR en Audience Builder con cutoff backend-authoritative.
-    M14 persiste sólo criterios + history_evaluation; no copia snapshots.
-    M15 integra esos criterios en Angular y sólo envía history_exclusion; no llama M13/iVentas.
-    M15 invalida Preview ante cambios históricos y conserva el fingerprint backend-authoritative.
-    No reemplaces snapshots M11 por estado mutable ni inventes timestamps/causas recipient-level.
+    2A — iVentas / histórico / engagement está IMPLEMENTADA, ACCEPTED M16 y DEPLOYADA.
+    Conserva sin reinterpretar successful/failed, SENT/DELIVERED/VIEWED,
+    snapshots append-only, fetched_at, button interactions e history exclusions.
+    M12 permanece implementada pero disabled hasta definir cadence/horizon/max.
+    2B — FUNNEL_PORTFOLIO está PENDIENTE.
+    Reutiliza la lógica comprador/no comprador del Funnel,
+    normalize phone, ACTIVE_MEMBER_SUPPRESSION, scope backend,
+    history exclusions, dedupe, Preview y Freeze.
+    2C — Campaign BI / Reporting / Excel está PENDIENTE.
+    Reporting usa sólo evidencia persistida por Suite y no consulta iVentas.
+    Export Excel es backend-side y Angular no recalcula KPIs.
+    2D sólo pasa cuando 2A + 2B + 2C tienen aceptación integral.
     No implementes POST /v2/broadcast ni GraphQL mutations.
