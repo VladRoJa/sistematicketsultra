@@ -5,6 +5,10 @@ import {
   CampaignV2HistoryDeliveryBucket,
   CampaignV2HistoryDiagnostics,
   CampaignV2HistoryExclusion,
+  CampaignV2HistoricalTargeting,
+  CampaignV2HistoricalTargetingMatch,
+  CampaignV2HistoricalTargetingMode,
+  CampaignV2HistoricalTargetingWindowMode,
   CampaignV2HistoryOutcome,
   CampaignV2PreviewBucket,
   CampaignV2OptionsResponse,
@@ -13,8 +17,6 @@ import {
   CampaignV2Source,
 } from './marketing-campaign-v2.models';
 
-export type CampaignV2HistoryWindowMode = 'ALL' | 'DAYS';
-
 export interface CampaignV2AudienceState {
   source: CampaignV2Source;
   audienceFamilies: CampaignV2AudienceFamily[];
@@ -22,11 +24,13 @@ export interface CampaignV2AudienceState {
   expirationDateTo: string;
   funnelMonth?: string;
   funnelCutoffDate?: string;
-  historyEnabled?: boolean;
+  historyTargetingEnabled?: boolean;
+  historyMode?: CampaignV2HistoricalTargetingMode;
+  historyMatch?: CampaignV2HistoricalTargetingMatch;
   historyDeliveryBuckets?: CampaignV2HistoryDeliveryBucket[];
   historyOutcomes?: CampaignV2HistoryOutcome[];
   historyButtonInteracted?: boolean;
-  historyWindowMode?: CampaignV2HistoryWindowMode;
+  historyWindowMode?: CampaignV2HistoricalTargetingWindowMode;
   historyLookbackDays?: string;
 }
 
@@ -37,7 +41,9 @@ export type CampaignV2AudienceField =
   | 'expiration_date_to'
   | 'funnel_month'
   | 'funnel_cutoff_date'
-  | 'history_enabled'
+  | 'history_targeting_enabled'
+  | 'history_mode'
+  | 'history_match'
   | 'history_delivery_buckets'
   | 'history_outcomes'
   | 'history_button_interacted'
@@ -110,43 +116,50 @@ export function buildCampaignV2AudienceRequest(
     base.funnel_cutoff_date = state.funnelCutoffDate?.trim();
   }
 
-  const historyExclusion = buildCampaignV2HistoryExclusion(state);
-  if (historyExclusion) {
-    base.history_exclusion = historyExclusion;
+  const historicalTargeting = buildCampaignV2HistoricalTargeting(state);
+  if (historicalTargeting) {
+    base.historical_targeting = historicalTargeting;
   }
 
   return base;
 }
 
-export function buildCampaignV2HistoryExclusion(
+export function buildCampaignV2HistoricalTargeting(
   state: CampaignV2AudienceState,
-): CampaignV2HistoryExclusion | undefined {
-  if (!state.historyEnabled) {
+): CampaignV2HistoricalTargeting | undefined {
+  if (!state.historyTargetingEnabled) {
     return undefined;
   }
 
   const deliveryBuckets = state.historyDeliveryBuckets ?? [];
   const outcomes = state.historyOutcomes ?? [];
   const buttonInteracted = Boolean(state.historyButtonInteracted);
-  const hasCondition = Boolean(
-    deliveryBuckets.length
-    || outcomes.length
-    || buttonInteracted,
-  );
-
-  if (!hasCondition) {
+  if (!historicalTargetingHasConditions(state)) {
     return undefined;
   }
 
   return {
+    mode: state.historyMode ?? 'EXCLUDE',
+    match: state.historyMatch ?? 'ANY',
     delivery_buckets: [...deliveryBuckets],
     outcomes: [...outcomes],
     button_interacted: buttonInteracted,
-    lookback_days: state.historyWindowMode === 'DAYS'
+    lookback_days: state.historyWindowMode === 'LOOKBACK_DAYS'
       ? parseCampaignV2LookbackDays(state.historyLookbackDays ?? '')
       : null,
   };
 }
+
+export function historicalTargetingHasConditions(
+  state: CampaignV2AudienceState,
+): boolean {
+  return Boolean(
+    (state.historyDeliveryBuckets ?? []).length
+    || (state.historyOutcomes ?? []).length
+    || state.historyButtonInteracted,
+  );
+}
+
 
 export function isCampaignV2AudienceValid(
   state: CampaignV2AudienceState,
@@ -185,21 +198,18 @@ export function isCampaignV2AudienceValid(
 export function isCampaignV2HistoryFilterValid(
   state: CampaignV2AudienceState,
 ): boolean {
-  if (!state.historyEnabled) {
+  if (!state.historyTargetingEnabled) {
     return true;
   }
-
-  const hasCondition = Boolean(
-    (state.historyDeliveryBuckets ?? []).length
-    || (state.historyOutcomes ?? []).length
-    || state.historyButtonInteracted,
-  );
-  if (!hasCondition || (state.historyWindowMode ?? 'ALL') === 'ALL') {
+  if (!historicalTargetingHasConditions(state)) {
+    return false;
+  }
+  if ((state.historyWindowMode ?? 'ALL_HISTORY') === 'ALL_HISTORY') {
     return true;
   }
-
   return parseCampaignV2LookbackDays(state.historyLookbackDays ?? '') !== null;
 }
+
 
 export function parseCampaignV2LookbackDays(value: string): number | null {
   const normalized = value.trim();
@@ -261,7 +271,9 @@ export function campaignV2FieldInvalidatesPreview(field: CampaignV2AudienceField
     'expiration_date_to',
     'funnel_month',
     'funnel_cutoff_date',
-    'history_enabled',
+    'history_targeting_enabled',
+    'history_mode',
+    'history_match',
     'history_delivery_buckets',
     'history_outcomes',
     'history_button_interacted',
@@ -305,6 +317,7 @@ export function campaignV2MetricBucket(
     | 'unclassified'
     | 'current_status_blocked'
     | 'history_excluded'
+    | 'history_included'
     | 'funnel_candidates'
     | 'funnel_buyer_excluded'
     | 'active_member_suppression'
@@ -325,6 +338,8 @@ export function campaignV2MetricBucket(
       return 'CURRENT_STATUS_BLOCKED';
     case 'history_excluded':
       return 'HISTORY_EXCLUDED';
+    case 'history_included':
+      return 'HISTORY_INCLUDED';
     case 'funnel_candidates':
       return 'FUNNEL_CANDIDATES';
     case 'funnel_buyer_excluded':
@@ -358,9 +373,16 @@ export function campaignV2HistoryOutcomeLabel(
 }
 
 export function campaignV2HistoryBreakdownRows(
-  diagnostics: Partial<CampaignV2HistoryDiagnostics>,
+  diagnostics: Partial<CampaignV2HistoryDiagnostics> & {
+    matched_by_delivery_bucket?: Partial<Record<CampaignV2HistoryDeliveryBucket, number>>;
+    matched_by_outcome?: Partial<Record<CampaignV2HistoryOutcome, number>>;
+    matched_by_button_interaction?: number;
+  },
 ): Array<{ label: string; count: number }> {
   const rows: Array<{ label: string; count: number }> = [];
+  const neutral = diagnostics.matched_by_delivery_bucket !== undefined
+    || diagnostics.matched_by_outcome !== undefined
+    || diagnostics.matched_by_button_interaction !== undefined;
   const deliveryLabels: Record<CampaignV2HistoryDeliveryBucket, string> = {
     SENT: 'Enviados',
     DELIVERED: 'Entregados',
@@ -372,18 +394,24 @@ export function campaignV2HistoryBreakdownRows(
   };
 
   for (const bucket of ['SENT', 'DELIVERED', 'VIEWED'] as const) {
-    const count = diagnostics.excluded_by_delivery_bucket?.[bucket] ?? 0;
+    const count = neutral
+      ? diagnostics.matched_by_delivery_bucket?.[bucket] ?? 0
+      : diagnostics.excluded_by_delivery_bucket?.[bucket] ?? 0;
     if (count > 0) {
       rows.push({ label: deliveryLabels[bucket], count });
     }
   }
   for (const outcome of ['SUCCESSFUL', 'FAILED'] as const) {
-    const count = diagnostics.excluded_by_outcome?.[outcome] ?? 0;
+    const count = neutral
+      ? diagnostics.matched_by_outcome?.[outcome] ?? 0
+      : diagnostics.excluded_by_outcome?.[outcome] ?? 0;
     if (count > 0) {
       rows.push({ label: outcomeLabels[outcome], count });
     }
   }
-  const buttonCount = diagnostics.excluded_by_button_interaction ?? 0;
+  const buttonCount = neutral
+    ? diagnostics.matched_by_button_interaction ?? 0
+    : diagnostics.excluded_by_button_interaction ?? 0;
   if (buttonCount > 0) {
     rows.push({ label: 'Interacción con botón', count: buttonCount });
   }
@@ -400,6 +428,80 @@ export function campaignV2HistoryReasonLabel(reason: string): string {
     HISTORY_BUTTON_INTERACTION: 'Interactuó con un botón',
   };
   return labels[reason] ?? `Razón histórica: ${reason}`;
+}
+
+export function campaignV2HistoricalTargetingModeLabel(
+  value: CampaignV2HistoricalTargetingMode,
+): string {
+  return value === 'INCLUDE'
+    ? 'Incluir sólo contactos que cumplan'
+    : 'Excluir contactos que cumplan';
+}
+
+export function campaignV2HistoricalTargetingMatchLabel(
+  value: CampaignV2HistoricalTargetingMatch,
+): string {
+  return value === 'ALL' ? 'Todas' : 'Cualquiera';
+}
+
+export function campaignV2HistoricalTargetingSummary(
+  rule: CampaignV2HistoricalTargeting | undefined,
+): string[] {
+  if (!rule) {
+    return [];
+  }
+  const rows = [
+    ...rule.delivery_buckets.map(campaignV2HistoryDeliveryLabel),
+    ...rule.outcomes.map(campaignV2HistoryOutcomeLabel),
+  ];
+  if (rule.button_interacted) {
+    rows.push('Interacción con botón');
+  }
+  return rows;
+}
+
+export function campaignV2HistoricalTargetingWindowLabel(
+  rule: CampaignV2HistoricalTargeting | undefined,
+): string {
+  if (!rule || rule.lookback_days === null) {
+    return 'Todo el historial';
+  }
+  return 'Últimos ' + rule.lookback_days + ' días';
+}
+
+export function campaignV2HistoryMatchedLabel(
+  matched: boolean | undefined,
+): string {
+  if (matched === true) {
+    return 'Sí';
+  }
+  if (matched === false) {
+    return 'No';
+  }
+  return '—';
+}
+
+export function campaignV2HistoryReasonsLabel(
+  historyReasons: string[] | undefined,
+  legacyReasons: string[] | undefined,
+): string {
+  const reasons = historyReasons ?? legacyReasons ?? [];
+  if (!reasons.length) {
+    return 'Sin señales seleccionadas observadas';
+  }
+  return reasons.map(campaignV2HistoryReasonLabel).join(', ');
+}
+
+export function campaignV2HistoryDecisionLabel(
+  decision: 'INCLUDED' | 'EXCLUDED' | undefined,
+): string {
+  if (decision === 'INCLUDED') {
+    return 'Incluido';
+  }
+  if (decision === 'EXCLUDED') {
+    return 'Excluido';
+  }
+  return '—';
 }
 
 export function campaignV2HistoryExclusionSummary(

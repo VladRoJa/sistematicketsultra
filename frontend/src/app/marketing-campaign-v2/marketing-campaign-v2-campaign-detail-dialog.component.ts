@@ -24,6 +24,10 @@ import {
   CampaignV2SourceMetadata,
 } from './marketing-campaign-v2.models';
 import {
+  campaignV2HistoricalTargetingMatchLabel,
+  campaignV2HistoricalTargetingModeLabel,
+  campaignV2HistoricalTargetingSummary,
+  campaignV2HistoricalTargetingWindowLabel,
   campaignV2HistoryExclusionSummary,
   campaignV2HistoryWindowLabel,
 } from './marketing-campaign-v2.logic';
@@ -250,16 +254,35 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
     if (definition.filters.expiration_date_to) {
       rows.push({ label: 'Vencimiento hasta', value: definition.filters.expiration_date_to });
     }
-    if (definition.filters.history_exclusion) {
+    if (definition.filters.historical_targeting) {
+      const targeting = definition.filters.historical_targeting;
+      const conditionLabels = campaignV2HistoricalTargetingSummary(targeting);
+      rows.push({
+        label: 'Historial de campañas · Modo',
+        value: campaignV2HistoricalTargetingModeLabel(targeting.mode),
+      });
+      rows.push({
+        label: 'Historial de campañas · Cumplimiento',
+        value: campaignV2HistoricalTargetingMatchLabel(targeting.match),
+      });
+      rows.push({
+        label: 'Historial de campañas · Condiciones',
+        value: conditionLabels.length ? conditionLabels.join(', ') : '—',
+      });
+      rows.push({
+        label: 'Historial de campañas · Ventana',
+        value: campaignV2HistoricalTargetingWindowLabel(targeting),
+      });
+    } else if (definition.filters.history_exclusion) {
       const exclusionLabels = campaignV2HistoryExclusionSummary(
         definition.filters.history_exclusion,
       );
       rows.push({
-        label: 'Exclusiones históricas',
+        label: 'Exclusión histórica',
         value: exclusionLabels.length ? exclusionLabels.join(', ') : '—',
       });
       rows.push({
-        label: 'Ventana histórica',
+        label: 'Ventana histórica legacy',
         value: campaignV2HistoryWindowLabel(definition.filters.history_exclusion),
       });
     }

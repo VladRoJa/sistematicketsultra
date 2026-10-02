@@ -12,7 +12,11 @@ import {
   CampaignV2PreviewBucket,
   CampaignV2PreviewDetailResponse,
 } from './marketing-campaign-v2.models';
-import { campaignV2HistoryReasonLabel } from './marketing-campaign-v2.logic';
+import {
+  campaignV2HistoryDecisionLabel,
+  campaignV2HistoryMatchedLabel,
+  campaignV2HistoryReasonsLabel,
+} from './marketing-campaign-v2.logic';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
 
 export interface MarketingCampaignV2PreviewDetailDialogData {
@@ -58,7 +62,8 @@ export class MarketingCampaignV2PreviewDetailDialogComponent implements OnInit {
       UNCLASSIFIED: 'Tarifa sin clasificación',
       FAMILY: 'Familia',
       CURRENT_STATUS_BLOCKED: 'Bloqueados por estado actual',
-      HISTORY_EXCLUDED: 'Excluidos por historial',
+      HISTORY_EXCLUDED: 'Excluidos por regla histórica',
+      HISTORY_INCLUDED: 'Incluidos por regla histórica',
       FUNNEL_CANDIDATES: 'Leads Funnel',
       FUNNEL_BUYER_EXCLUDED: 'Compradores excluidos',
       ACTIVE_MEMBER_SUPPRESSION: 'Socios activos excluidos',
@@ -67,6 +72,12 @@ export class MarketingCampaignV2PreviewDetailDialogComponent implements OnInit {
   }
 
   get explanation(): string {
+    if (this.data.bucket === 'HISTORY_INCLUDED') {
+      return 'Contactos que permanecieron después de aplicar la regla histórica.';
+    }
+    if (this.data.bucket === 'HISTORY_EXCLUDED') {
+      return 'Contactos descartados por el resultado de la regla histórica.';
+    }
     if (this.data.bucket === 'FUNNEL_BUYER_EXCLUDED') {
       return 'Conversión detectada por la lógica Funnel vigente.';
     }
@@ -115,12 +126,30 @@ export class MarketingCampaignV2PreviewDetailDialogComponent implements OnInit {
     }
   }
 
-  historyReasonsLabel(reasons: string[] | undefined): string {
-    if (!reasons?.length) {
-      return '—';
-    }
-    return reasons.map(campaignV2HistoryReasonLabel).join(', ');
+  isHistoryDecisionBucket(): boolean {
+    return this.data.bucket === 'HISTORY_INCLUDED'
+      || this.data.bucket === 'HISTORY_EXCLUDED';
   }
+
+  historyDecisionLabel(
+    value: CampaignV2PreviewDetailResponse['rows'][number]['history_decision'],
+  ): string {
+    return campaignV2HistoryDecisionLabel(value);
+  }
+
+  historyMatchedLabel(value: boolean | undefined): string {
+    return campaignV2HistoryMatchedLabel(value);
+  }
+
+  historyReasonsLabel(
+    row: CampaignV2PreviewDetailResponse['rows'][number],
+  ): string {
+    return campaignV2HistoryReasonsLabel(
+      row.history_reasons,
+      row.history_exclusion_reasons,
+    );
+  }
+
 
   evidenceLabel(value: CampaignV2PreviewDetailResponse['rows'][number]['evidence']): string {
     if (!Array.isArray(value) || !value.length || typeof value[0] !== 'string') {

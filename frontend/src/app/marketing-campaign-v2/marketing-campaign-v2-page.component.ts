@@ -17,8 +17,11 @@ import {
   campaignV2FilterApplies,
   campaignV2FreezeErrorInvalidatesPreview,
   campaignV2HistoryBreakdownRows,
+  campaignV2HistoricalTargetingMatchLabel,
+  campaignV2HistoricalTargetingModeLabel,
   campaignV2HistoryDeliveryLabel,
   campaignV2HistoryOutcomeLabel,
+  historicalTargetingHasConditions,
   campaignV2MetricBucket,
   canFreezeCampaignV2,
   isCampaignV2AudienceValid,
@@ -27,13 +30,15 @@ import {
   toggleCampaignV2Family,
   toggleCampaignV2HistoryDeliveryBucket,
   toggleCampaignV2HistoryOutcome,
-  CampaignV2HistoryWindowMode,
 } from './marketing-campaign-v2.logic';
 import {
   CampaignV2AudienceDefinitionRequest,
   CampaignV2AudienceFamily,
   CampaignV2CampaignSummary,
   CampaignV2HistoryDeliveryBucket,
+  CampaignV2HistoricalTargetingMatch,
+  CampaignV2HistoricalTargetingMode,
+  CampaignV2HistoricalTargetingWindowMode,
   CampaignV2HistoryOutcome,
   CampaignV2ObservedFamily,
   CampaignV2OptionsResponse,
@@ -88,11 +93,18 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   readonly expirationDateTo = new FormControl('', { nonNullable: true });
   readonly funnelMonth = new FormControl('', { nonNullable: true });
   readonly funnelCutoffDate = new FormControl('', { nonNullable: true });
-  readonly historyEnabled = new FormControl(false, { nonNullable: true });
-  readonly historyButtonInteracted = new FormControl(false, { nonNullable: true });
-  readonly historyWindowMode = new FormControl<CampaignV2HistoryWindowMode>('ALL', {
+  readonly historyTargetingEnabled = new FormControl(false, { nonNullable: true });
+  readonly historyMode = new FormControl<CampaignV2HistoricalTargetingMode>('EXCLUDE', {
     nonNullable: true,
   });
+  readonly historyMatch = new FormControl<CampaignV2HistoricalTargetingMatch>('ANY', {
+    nonNullable: true,
+  });
+  readonly historyButtonInteracted = new FormControl(false, { nonNullable: true });
+  readonly historyWindowMode = new FormControl<CampaignV2HistoricalTargetingWindowMode>(
+    'ALL_HISTORY',
+    { nonNullable: true },
+  );
   readonly historyLookbackDays = new FormControl('', { nonNullable: true });
   readonly name = new FormControl('', { nonNullable: true });
   readonly purpose = new FormControl<CampaignV2Purpose>('UNCLASSIFIED', {
@@ -109,15 +121,25 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   selectedFamilies: CampaignV2AudienceFamily[] = [];
   selectedHistoryDeliveryBuckets: CampaignV2HistoryDeliveryBucket[] = [];
   selectedHistoryOutcomes: CampaignV2HistoryOutcome[] = [];
-  readonly historyDeliveryOptions: CampaignV2HistoryDeliveryBucket[] = [
-    'SENT',
-    'DELIVERED',
-    'VIEWED',
-  ];
-  readonly historyOutcomeOptions: CampaignV2HistoryOutcome[] = [
-    'SUCCESSFUL',
-    'FAILED',
-  ];
+  get historyDeliveryOptions(): CampaignV2HistoryDeliveryBucket[] {
+    return this.options?.historical_targeting?.delivery_buckets ?? [];
+  }
+
+  get historyOutcomeOptions(): CampaignV2HistoryOutcome[] {
+    return this.options?.historical_targeting?.outcomes ?? [];
+  }
+
+  get historyModeOptions(): CampaignV2HistoricalTargetingMode[] {
+    return this.options?.historical_targeting?.modes ?? [];
+  }
+
+  get historyMatchOptions(): CampaignV2HistoricalTargetingMatch[] {
+    return this.options?.historical_targeting?.matches ?? [];
+  }
+
+  get historyWindowOptions(): CampaignV2HistoricalTargetingWindowMode[] {
+    return this.options?.historical_targeting?.window_modes ?? [];
+  }
   preview: CampaignV2PreviewResponse | null = null;
   campaigns: CampaignV2CampaignSummary[] = [];
   funnelCutoffDates: string[] = [];
@@ -172,7 +194,13 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.invalidatePreview());
 
-    this.historyEnabled.valueChanges
+    this.historyTargetingEnabled.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.invalidatePreview());
+    this.historyMode.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.invalidatePreview());
+    this.historyMatch.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.invalidatePreview());
     this.historyButtonInteracted.valueChanges
@@ -240,19 +268,26 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     );
   }
 
-  get historyLookbackInvalid(): boolean {
-    const hasCondition = Boolean(
-      this.selectedHistoryDeliveryBuckets.length
-      || this.selectedHistoryOutcomes.length
-      || this.historyButtonInteracted.value,
-    );
+  get historyTargetingMissingConditions(): boolean {
     return Boolean(
-      this.historyEnabled.value
-      && hasCondition
-      && this.historyWindowMode.value === 'DAYS'
+      this.historyTargetingEnabled.value
+      && !historicalTargetingHasConditions(this.audienceState()),
+    );
+  }
+
+  get historyLookbackInvalid(): boolean {
+    return Boolean(
+      this.historyTargetingEnabled.value
+      && !this.historyTargetingMissingConditions
+      && this.historyWindowMode.value === 'LOOKBACK_DAYS'
       && parseCampaignV2LookbackDays(this.historyLookbackDays.value) === null,
     );
   }
+
+  get isCanonicalHistoryPreview(): boolean {
+    return Boolean(this.preview?.filters.historical_targeting);
+  }
+
 
   get canFreeze(): boolean {
     return canFreezeCampaignV2({
@@ -403,6 +438,72 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     return campaignV2HistoryOutcomeLabel(value);
   }
 
+  historyModeLabel(value: CampaignV2HistoricalTargetingMode): string {
+    return campaignV2HistoricalTargetingModeLabel(value);
+  }
+
+  historyMatchLabel(value: CampaignV2HistoricalTargetingMatch): string {
+    return campaignV2HistoricalTargetingMatchLabel(value);
+  }
+
+  historyWindowLabel(value: CampaignV2HistoricalTargetingWindowMode): string {
+    return value === 'ALL_HISTORY' ? 'Todo el historial' : 'Últimos N días';
+  }
+
+  historyDiagnosticCards(): Array<{
+    label: string;
+    count: number;
+    metric?: 'history_included' | 'history_excluded';
+  }> {
+    if (!this.preview) {
+      return [];
+    }
+    if (this.isCanonicalHistoryPreview) {
+      return [
+        {
+          label: 'Coincidieron con historial',
+          count: this.preview.history_matched_count ?? 0,
+        },
+        {
+          label: 'No coincidieron',
+          count: this.preview.history_not_matched_count ?? 0,
+        },
+        {
+          label: 'Incluidos por regla histórica',
+          count: this.preview.history_included_count ?? 0,
+          metric: 'history_included',
+        },
+        {
+          label: 'Excluidos por regla histórica',
+          count: this.preview.history_excluded_count ?? 0,
+          metric: 'history_excluded',
+        },
+      ];
+    }
+    return [
+      {
+        label: 'Antes del filtro histórico',
+        count: this.preview.before_history_filter_count ?? 0,
+      },
+      {
+        label: 'Excluidos por historial',
+        count: this.preview.history_excluded_count ?? 0,
+        metric: 'history_excluded',
+      },
+      {
+        label: 'Después del filtro histórico',
+        count: this.preview.after_history_filter_count ?? 0,
+      },
+    ];
+  }
+
+  openHistoryDiagnostic(metric: 'history_included' | 'history_excluded' | undefined, count: number): void {
+    if (!metric || count <= 0) {
+      return;
+    }
+    this.openMetric(metric, count);
+  }
+
   historyBreakdownRows(): Array<{ label: string; count: number }> {
     return this.preview
       ? campaignV2HistoryBreakdownRows(this.preview)
@@ -479,6 +580,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       | 'unclassified'
       | 'current_status_blocked'
       | 'history_excluded'
+      | 'history_included'
       | 'funnel_candidates'
       | 'funnel_buyer_excluded'
       | 'active_member_suppression',
@@ -740,7 +842,9 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       expirationDateTo: this.expirationDateTo.value,
       funnelMonth: this.funnelMonth.value,
       funnelCutoffDate: this.funnelCutoffDate.value,
-      historyEnabled: this.historyEnabled.value,
+      historyTargetingEnabled: this.historyTargetingEnabled.value,
+      historyMode: this.historyMode.value,
+      historyMatch: this.historyMatch.value,
       historyDeliveryBuckets: this.selectedHistoryDeliveryBuckets,
       historyOutcomes: this.selectedHistoryOutcomes,
       historyButtonInteracted: this.historyButtonInteracted.value,
@@ -762,9 +866,11 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     this.funnelMonth.setValue('', { emitEvent: false });
     this.funnelCutoffDate.setValue('', { emitEvent: false });
     this.funnelCutoffDates = [];
-    this.historyEnabled.setValue(false, { emitEvent: false });
+    this.historyTargetingEnabled.setValue(false, { emitEvent: false });
+    this.historyMode.setValue('EXCLUDE', { emitEvent: false });
+    this.historyMatch.setValue('ANY', { emitEvent: false });
     this.historyButtonInteracted.setValue(false, { emitEvent: false });
-    this.historyWindowMode.setValue('ALL', { emitEvent: false });
+    this.historyWindowMode.setValue('ALL_HISTORY', { emitEvent: false });
     this.historyLookbackDays.setValue('', { emitEvent: false });
     this.selectedHistoryDeliveryBuckets = [];
     this.selectedHistoryOutcomes = [];
@@ -792,6 +898,36 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     this.selectedFamilies = this.selectedFamilies.filter(value =>
       options.selectable_audience_families.includes(value),
     );
+
+    const historyOptions = options.historical_targeting;
+    if (historyOptions) {
+      if (!historyOptions.modes.includes(this.historyMode.value)) {
+        this.historyMode.setValue(
+          historyOptions.modes.includes('EXCLUDE') ? 'EXCLUDE' : historyOptions.modes[0],
+          { emitEvent: false },
+        );
+      }
+      if (!historyOptions.matches.includes(this.historyMatch.value)) {
+        this.historyMatch.setValue(
+          historyOptions.matches.includes('ANY') ? 'ANY' : historyOptions.matches[0],
+          { emitEvent: false },
+        );
+      }
+      if (!historyOptions.window_modes.includes(this.historyWindowMode.value)) {
+        this.historyWindowMode.setValue(
+          historyOptions.window_modes.includes('ALL_HISTORY')
+            ? 'ALL_HISTORY'
+            : historyOptions.window_modes[0],
+          { emitEvent: false },
+        );
+      }
+      this.selectedHistoryDeliveryBuckets = this.selectedHistoryDeliveryBuckets.filter(
+        value => historyOptions.delivery_buckets.includes(value),
+      );
+      this.selectedHistoryOutcomes = this.selectedHistoryOutcomes.filter(
+        value => historyOptions.outcomes.includes(value),
+      );
+    }
   }
 
   private audienceValidationMessage(): string {
@@ -803,6 +939,9 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     }
     if (this.isFunnelSource && !this.funnelCutoffDate.value) {
       return 'Selecciona un Corte Funnel completo.';
+    }
+    if (this.historyTargetingMissingConditions) {
+      return 'Selecciona al menos una condición histórica.';
     }
     if (this.historyLookbackInvalid) {
       return 'Indica un número entero de días mayor a cero para la ventana histórica.';

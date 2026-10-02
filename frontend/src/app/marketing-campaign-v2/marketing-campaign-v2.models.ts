@@ -20,11 +20,36 @@ export type CampaignV2HistoryExclusionReason =
   | 'HISTORY_OUTCOME_FAILED'
   | 'HISTORY_BUTTON_INTERACTION';
 
+export type CampaignV2HistoricalTargetingMode = 'INCLUDE' | 'EXCLUDE';
+export type CampaignV2HistoricalTargetingMatch = 'ALL' | 'ANY';
+export type CampaignV2HistoricalTargetingWindowMode =
+  | 'ALL_HISTORY'
+  | 'LOOKBACK_DAYS';
+
+export interface CampaignV2HistoricalTargeting {
+  mode: CampaignV2HistoricalTargetingMode;
+  match: CampaignV2HistoricalTargetingMatch;
+  delivery_buckets: CampaignV2HistoryDeliveryBucket[];
+  outcomes: CampaignV2HistoryOutcome[];
+  button_interacted: boolean;
+  lookback_days: number | null;
+}
+
 export interface CampaignV2HistoryExclusion {
   delivery_buckets: CampaignV2HistoryDeliveryBucket[];
   outcomes: CampaignV2HistoryOutcome[];
   button_interacted: boolean;
   lookback_days: number | null;
+}
+
+export interface CampaignV2HistoricalTargetingOptions {
+  modes: CampaignV2HistoricalTargetingMode[];
+  matches: CampaignV2HistoricalTargetingMatch[];
+  delivery_buckets: CampaignV2HistoryDeliveryBucket[];
+  outcomes: CampaignV2HistoryOutcome[];
+  button_interaction: boolean;
+  window_modes: CampaignV2HistoricalTargetingWindowMode[];
+  legacy_history_exclusion_supported: boolean;
 }
 
 export interface CampaignV2HistoryDiagnostics {
@@ -73,6 +98,7 @@ export type CampaignV2PreviewBucket =
   | 'FAMILY'
   | 'CURRENT_STATUS_BLOCKED'
   | 'HISTORY_EXCLUDED'
+  | 'HISTORY_INCLUDED'
   | 'FUNNEL_CANDIDATES'
   | 'FUNNEL_BUYER_EXCLUDED'
   | 'ACTIVE_MEMBER_SUPPRESSION';
@@ -103,6 +129,7 @@ export interface CampaignV2OptionsResponse {
   selectable_audience_families: CampaignV2AudienceFamily[];
   non_selectable_classifications: CampaignV2NonSelectableClassification[];
   purposes: CampaignV2Purpose[];
+  historical_targeting?: CampaignV2HistoricalTargetingOptions;
   tariff_categories: string[];
   scope: CampaignV2Scope;
 }
@@ -115,6 +142,7 @@ export interface CampaignV2AudienceDefinitionRequest {
   funnel_month?: string;
   funnel_cutoff_date?: string;
   history_exclusion?: CampaignV2HistoryExclusion;
+  historical_targeting?: CampaignV2HistoricalTargeting;
 }
 
 export interface CampaignV2PreviewDetailRequest
@@ -172,6 +200,7 @@ export interface CampaignV2PreviewFilters {
   funnel_month?: string;
   funnel_cutoff_date?: string;
   history_exclusion?: CampaignV2HistoryExclusion;
+  historical_targeting?: CampaignV2HistoricalTargeting;
 }
 
 export interface CampaignV2PreviewSummary {
@@ -190,8 +219,14 @@ export interface CampaignV2PreviewSummary {
   funnel_buyer_excluded_count?: number;
   active_member_suppression_count?: number;
   before_history_filter_count?: number;
+  history_matched_count?: number;
+  history_not_matched_count?: number;
+  history_included_count?: number;
   history_excluded_count?: number;
   after_history_filter_count?: number;
+  matched_by_delivery_bucket?: Partial<Record<CampaignV2HistoryDeliveryBucket, number>>;
+  matched_by_outcome?: Partial<Record<CampaignV2HistoryOutcome, number>>;
+  matched_by_button_interaction?: number;
   excluded_by_delivery_bucket?: Partial<Record<CampaignV2HistoryDeliveryBucket, number>>;
   excluded_by_outcome?: Partial<Record<CampaignV2HistoryOutcome, number>>;
   excluded_by_button_interaction?: number;
@@ -235,6 +270,9 @@ export interface CampaignV2PreviewDetailRow {
   evidence?: string[] | CampaignV2PreviewDetailRow[];
   source_references?: CampaignV2SourceReference[];
   history_exclusion_reasons?: string[];
+  history_matched?: boolean;
+  history_decision?: 'INCLUDED' | 'EXCLUDED';
+  history_reasons?: string[];
 }
 
 export interface CampaignV2PreviewDetailResponse {

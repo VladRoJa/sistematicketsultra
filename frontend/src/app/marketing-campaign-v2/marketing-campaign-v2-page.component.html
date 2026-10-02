@@ -93,14 +93,34 @@
                 <strong id="campaign-v2-history-filter">Historial de campañas</strong>
                 <span>Usa únicamente observaciones persistidas por Suite.</span>
               </div>
-              <mat-checkbox [formControl]="historyEnabled">
-                Excluir contactos según historial
+              <mat-checkbox [formControl]="historyTargetingEnabled">
+                Aplicar regla histórica
               </mat-checkbox>
             </div>
 
-            <div *ngIf="historyEnabled.value" class="history-builder-body">
+            <div *ngIf="historyTargetingEnabled.value" class="history-builder-body">
+              <div class="history-window-grid">
+                <mat-form-field appearance="fill">
+                  <mat-label>Modo</mat-label>
+                  <mat-select [formControl]="historyMode">
+                    <mat-option *ngFor="let value of historyModeOptions" [value]="value">
+                      {{ historyModeLabel(value) }}
+                    </mat-option>
+                  </mat-select>
+                </mat-form-field>
+
+                <mat-form-field appearance="fill">
+                  <mat-label>Cumplimiento</mat-label>
+                  <mat-select [formControl]="historyMatch">
+                    <mat-option *ngFor="let value of historyMatchOptions" [value]="value">
+                      {{ historyMatchLabel(value) }}
+                    </mat-option>
+                  </mat-select>
+                </mat-form-field>
+              </div>
+
               <div class="history-rule-group">
-                <span class="history-rule-title">Excluir si anteriormente:</span>
+                <span class="history-rule-title">Condiciones de entrega</span>
                 <div class="history-options">
                   <mat-checkbox
                     *ngFor="let bucket of historyDeliveryOptions"
@@ -108,7 +128,7 @@
                     (change)="setHistoryDeliverySelected(bucket, $event)"
                   >{{ historyDeliveryLabel(bucket) }}</mat-checkbox>
                 </div>
-                <p class="helper-text">Enviado, Entregado y Visto son estados observados independientes.</p>
+                <p class="helper-text">Enviado, Entregado y Visto son observaciones independientes.</p>
               </div>
 
               <div class="history-rule-group">
@@ -122,23 +142,24 @@
                 </div>
               </div>
 
-              <div class="history-rule-group">
+              <div class="history-rule-group" *ngIf="options.historical_targeting?.button_interaction">
                 <mat-checkbox [formControl]="historyButtonInteracted">
-                  Excluir si interactuó con un botón
+                  Interactuó con un botón
                 </mat-checkbox>
               </div>
 
               <div class="history-window-grid">
                 <mat-form-field appearance="fill">
-                  <mat-label>Historial</mat-label>
+                  <mat-label>Ventana</mat-label>
                   <mat-select [formControl]="historyWindowMode">
-                    <mat-option value="ALL">Todo el historial observado</mat-option>
-                    <mat-option value="DAYS">Limitar historial a N días</mat-option>
+                    <mat-option *ngFor="let value of historyWindowOptions" [value]="value">
+                      {{ historyWindowLabel(value) }}
+                    </mat-option>
                   </mat-select>
                 </mat-form-field>
 
-                <mat-form-field *ngIf="historyWindowMode.value === 'DAYS'" appearance="fill">
-                  <mat-label>Días observados</mat-label>
+                <mat-form-field *ngIf="historyWindowMode.value === 'LOOKBACK_DAYS'" appearance="fill">
+                  <mat-label>Días</mat-label>
                   <input
                     matInput
                     type="text"
@@ -149,12 +170,15 @@
                 </mat-form-field>
               </div>
 
+              <p *ngIf="historyTargetingMissingConditions" class="history-validation" role="alert">
+                Selecciona al menos una condición histórica.
+              </p>
               <p *ngIf="historyLookbackInvalid" class="history-validation" role="alert">
                 Indica un número entero de días mayor a cero.
               </p>
               <p class="helper-text">
-                La ventana se calcula sobre las observaciones persistidas por Suite.
-                No representa la hora real en que WhatsApp entregó o leyó el mensaje.
+                La ventana se calcula sobre observaciones persistidas por Suite;
+                Angular no evalúa el historial.
               </p>
             </div>
           </section>
@@ -203,7 +227,6 @@
           <button class="metric clickable" type="button" (click)="openMetric('funnel_buyer_excluded', preview.funnel_buyer_excluded_count || 0)" [disabled]="(preview.funnel_buyer_excluded_count || 0) <= 0"><span>Compradores excluidos</span><strong>{{ (preview.funnel_buyer_excluded_count || 0) | number }}</strong><small>Conversión detectada por lógica Funnel</small></button>
           <button class="metric clickable" type="button" (click)="openMetric('active_member_suppression', preview.active_member_suppression_count || 0)" [disabled]="(preview.active_member_suppression_count || 0) <= 0"><span>Socios activos excluidos</span><strong>{{ (preview.active_member_suppression_count || 0) | number }}</strong><small>Número asociado actualmente a Socios Activos</small></button>
           <button class="metric clickable" type="button" (click)="openMetric('invalid_phone', preview.invalid_phone_count)" [disabled]="preview.invalid_phone_count <= 0"><span>Teléfonos no utilizables</span><strong>{{ preview.invalid_phone_count | number }}</strong><small>Ver detalle</small></button>
-          <button class="metric clickable" type="button" (click)="openMetric('history_excluded', preview.history_excluded_count || 0)" [disabled]="(preview.history_excluded_count || 0) <= 0"><span>Excluidos por historial</span><strong>{{ (preview.history_excluded_count || 0) | number }}</strong><small>Ver detalle</small></button>
           <button class="metric clickable" type="button" (click)="openMetric('duplicates', preview.duplicate_count)" [disabled]="preview.duplicate_count <= 0"><span>Duplicados</span><strong>{{ preview.duplicate_count | number }}</strong><small>Ver detalle</small></button>
           <button class="metric clickable" type="button" (click)="openMetric('recipients', preview.unique_recipient_count)" [disabled]="preview.unique_recipient_count <= 0"><span>Audiencia final</span><strong>{{ preview.unique_recipient_count | number }}</strong><small>Ver detalle</small></button>
         </div>
@@ -237,29 +260,23 @@
           <div class="history-diagnostics-heading">
             <div>
               <h4 id="history-diagnostics-heading">Impacto del historial</h4>
-              <p class="helper-text">Un contacto puede aparecer en más de una razón de exclusión.</p>
+              <p class="helper-text">
+                Las señales observadas pueden solaparse; los conteos de razones no se suman para reconstruir el total.
+              </p>
             </div>
-            <button
-              mat-button
-              type="button"
-              (click)="openMetric('history_excluded', preview.history_excluded_count || 0)"
-              [disabled]="(preview.history_excluded_count || 0) <= 0"
-            >Ver excluidos</button>
           </div>
 
           <div class="history-impact-grid">
-            <div class="history-impact-card">
-              <span>Antes del filtro histórico</span>
-              <strong>{{ preview.before_history_filter_count | number }}</strong>
-            </div>
-            <div class="history-impact-card">
-              <span>Excluidos por historial</span>
-              <strong>{{ preview.history_excluded_count | number }}</strong>
-            </div>
-            <div class="history-impact-card">
-              <span>Después del filtro histórico</span>
-              <strong>{{ preview.after_history_filter_count | number }}</strong>
-            </div>
+            <button
+              *ngFor="let card of historyDiagnosticCards()"
+              class="history-impact-card"
+              type="button"
+              (click)="openHistoryDiagnostic(card.metric, card.count)"
+              [disabled]="!card.metric || card.count <= 0"
+            >
+              <span>{{ card.label }}</span>
+              <strong>{{ card.count | number }}</strong>
+            </button>
           </div>
 
           <div *ngIf="historyBreakdownRows().length" class="history-breakdown">
