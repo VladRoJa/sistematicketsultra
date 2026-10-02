@@ -2,7 +2,7 @@
 
 Estado: CONTRATO DE LECTURA/BI; NO AUTORIZA ENVÍO  
 Dependencia de ejecución: Fase 1 debe estar terminada y comprobada en el repositorio; este archivo es autosuficiente como contexto.  
-Objetivo: consolidar la lectura/histórico de iVentas ya aceptada como 2A, incorporar `FUNNEL_PORTFOLIO` como 2B y añadir Campaign BI/Reporting/Excel como 2C antes de habilitar cualquier envío en Fase 3.
+Objetivo: consolidar la lectura/histórico de iVentas ya aceptada como 2A, mantener `FUNNEL_PORTFOLIO` ya aceptada como 2B, incorporar Historical Targeting como capacidad transversal obligatoria y añadir Campaign BI/Reporting/Excel como 2C antes de habilitar cualquier envío en Fase 3.
 
 ## 0. Contexto autosuficiente para una conversación nueva
 
@@ -18,7 +18,7 @@ Contexto fijo:
 - Campaign-recipient almacena la pertenencia al cohorte y hechos específicos de esa campaña; no reemplaza la base fuente.
 - `sent`, `delivered`, `viewed`, `failed` e interacciones son hechos de una campaña concreta.
 - A partir de esos hechos se debe poder derivar **comportamiento histórico por teléfono** para filtrar campañas nuevas sin contaminar las fuentes.
-- `FUNNEL_PORTFOLIO` pertenece a 2B y permanece PENDIENTE. Su identidad mínima puede ser teléfono; `contact_id`, nombre, sucursal, canal y fecha son enriquecimientos cuando existan.
+- `FUNNEL_PORTFOLIO` pertenece a 2B y está ACCEPTED. Su identidad mínima puede ser teléfono; `contact_id`, nombre, sucursal, canal y fecha son enriquecimientos cuando existan.
 - Funnel debe reutilizar su lógica existente de compradores/no compradores y además aplicar supresión por teléfono contra el snapshot canónico vigente de Socios Activos.
 - Esta fase cubre lectura/histórico iVentas, `FUNNEL_PORTFOLIO`, Campaign BI/Reporting y Excel. **No implementar POST /v2/broadcast.**
 
@@ -34,16 +34,21 @@ Modo de trabajo:
 
 La estructura de Fase 2 queda congelada así:
 
-    2A — iVentas / histórico / engagement      IMPLEMENTADA
-    2B — FUNNEL_PORTFOLIO                      PENDIENTE
+    2A — iVentas / histórico / engagement      ACCEPTED
+    2B — FUNNEL_PORTFOLIO                      ACCEPTED
+
+    Historical Targeting transversal           PENDIENTE
+
     2C — Campaign BI / Reporting / Excel       PENDIENTE
     2D — Acceptance final                      PENDIENTE
 
 2A corresponde a M8–M16 y está IMPLEMENTADA, ACCEPTED M16 y DEPLOYADA. Smoke real provider: PASS.
 
+2B corresponde a M17–M20 y está ACCEPTED. `FUNNEL_PORTFOLIO` ya atraviesa cartera canónica, comprador/no comprador, `ACTIVE_MEMBER_SUPPRESSION`, scope backend, history exclusion M14, dedupe, Preview, Preview Detail, fingerprint, Freeze y Angular.
+
 La captura automática M12 está implementada, pero permanece operativamente deshabilitada hasta definir explícitamente `cadence`, `horizon` y `max`.
 
-Fase 3 sólo puede comenzar después de cerrar 2B y 2C y completar 2D con aceptación integral.
+Historical Targeting transversal es obligatorio antes de cerrar 2C/2D. Fase 3 sólo puede comenzar después de completar Historical Targeting, cerrar 2C y completar 2D con aceptación integral.
 
 ### 0.2 Enmienda M8 — evidencia real observada y frontera vigente
 
@@ -169,12 +174,13 @@ Regla de seguridad M8:
 
 ## 1. Alcance exacto
 
-Fase 2 contiene cuatro bloques contractuales:
+Fase 2 conserva cuatro bloques numerados y añade una capacidad transversal obligatoria:
 
-- **2A — iVentas / histórico / engagement:** IMPLEMENTADA; corresponde a M8–M16 y conserva toda su semántica vigente.
-- **2B — FUNNEL_PORTFOLIO:** PENDIENTE; fuente de audiencia para Venta Nueva/Funnel, tolerante a identidad incompleta.
+- **2A — iVentas / histórico / engagement:** ACCEPTED; corresponde a M8–M16 y conserva toda su semántica vigente.
+- **2B — FUNNEL_PORTFOLIO:** ACCEPTED; corresponde a M17–M20 y reutiliza la cartera Funnel canónica, `ACTIVE_MEMBER_SUPPRESSION`, scope backend, history M14, dedupe, Preview/Detail, fingerprint, Freeze y Angular.
+- **Historical Targeting transversal:** PENDIENTE; amplía el histórico persistido M11/M13 para poder incluir o excluir por comportamiento previo con semántica `INCLUDE/EXCLUDE` + `ALL/ANY`.
 - **2C — Campaign BI / Reporting / Excel:** PENDIENTE; proyección read-only sobre evidencia persistida por Suite.
-- **2D — Acceptance final:** PENDIENTE; valida integralmente 2A + 2B + 2C antes de autorizar Fase 3.
+- **2D — Acceptance final:** PENDIENTE; valida integralmente 2A + 2B + Historical Targeting + 2C antes de autorizar Fase 3.
 
 M8–M16 no se reinterpretan: `successful/failed`, `SENT/DELIVERED/VIEWED`, snapshots append-only, `fetched_at`, button interactions, history exclusions y M12 disabled por defecto mantienen su semántica existente.
 
@@ -1436,6 +1442,480 @@ El criterio:
 
 queda satisfecho en modo read-only para un `campaign_id` conocido mediante campaign stats.
 
+## 30.1 Historical Targeting transversal — contrato previo obligatorio a 2C/2D
+
+Historical Targeting es una capacidad transversal del Audience Builder y no una fuente nueva ni un caso especial de Socios Vencidos.
+
+Su objetivo es reutilizar la evidencia persistida por M11/M13 para que el comportamiento histórico por `phone_mx10` pueda actuar tanto como **criterio positivo de inclusión** como **regla de exclusión**, sobre:
+
+- `EXPIRED_MEMBERS`;
+- `ACTIVE_MEMBERS`;
+- `FUNNEL_PORTFOLIO`;
+- futuras fuentes Campaign V2 que atraviesen el mismo Audience Builder.
+
+No se crea un histórico paralelo y Preview/Freeze no consultan iVentas. La única frontera histórica v1 sigue siendo la evidencia persistida y el core M13.
+
+### 30.1.1 Estado y posición contractual
+
+La estructura de Fase 2 permanece:
+
+    2A — iVentas / histórico / engagement      ACCEPTED
+    2B — FUNNEL_PORTFOLIO                      ACCEPTED
+
+    Historical Targeting transversal           PENDIENTE
+
+    2C — Campaign BI / Reporting / Excel       PENDIENTE
+    2D — Acceptance final                      PENDIENTE
+
+No se renumeran 2A/2B/2C/2D.
+
+Historical Targeting debe quedar implementado y aceptado antes de considerar cerrables 2C/2D. Fase 3 continúa bloqueada hasta completar toda Fase 2.
+
+### 30.1.2 Contrato conceptual v1
+
+La forma conceptual nueva es:
+
+    {
+      "historical_targeting": {
+        "mode": "INCLUDE",
+        "match": "ALL",
+        "delivery_buckets": ["VIEWED"],
+        "outcomes": [],
+        "button_interacted": true,
+        "lookback_days": 90
+      }
+    }
+
+Reglas:
+
+- `mode`: `INCLUDE | EXCLUDE`;
+- `match`: `ALL | ANY`;
+- `delivery_buckets`: subconjunto de `SENT | DELIVERED | VIEWED`;
+- `outcomes`: subconjunto de `SUCCESSFUL | FAILED`;
+- `button_interacted`: `true` o ausente/`false`;
+- `lookback_days`: `null` o entero positivo;
+- si `historical_targeting` está presente debe existir al menos una condición efectiva;
+- Angular construye criterios; no envía teléfonos preseleccionados, resultados históricos ni cutoffs efectivos.
+
+No se agregan en v1:
+
+- `RESPONDED`;
+- `FREE_TEXT_RESPONSE`;
+- `NO_RESPONSE`;
+- `UNANSWERED`;
+- causa de fallo recipient-level;
+- `sent_at/delivered_at/viewed_at`;
+- filtros por campaña específica;
+- purpose histórico específico;
+- última campaña o última campaña aplicable.
+
+### 30.1.3 Semántica de `mode`
+
+#### INCLUDE
+
+El contacto permanece en la audiencia únicamente si la regla histórica hace match.
+
+Ejemplo:
+
+    mode = INCLUDE
+    signals = [VIEWED, BUTTON_INTERACTION]
+    match = ALL
+
+equivale a conservar teléfonos que demuestran:
+
+    VIEWED
+    AND
+    BUTTON_INTERACTION
+
+#### EXCLUDE
+
+El contacto se elimina si la regla histórica hace match.
+
+Ejemplo:
+
+    mode = EXCLUDE
+    signals = [VIEWED, BUTTON_INTERACTION]
+    match = ANY
+
+equivale a excluir teléfonos que demuestran:
+
+    VIEWED
+    OR
+    BUTTON_INTERACTION
+
+`INCLUDE` nunca revive un recipient eliminado previamente por una regla obligatoria de negocio.
+
+### 30.1.4 Semántica de `match`
+
+Las cuatro combinaciones quedan congeladas explícitamente:
+
+    INCLUDE + ALL
+    -> conservar si cumple TODAS las señales
+
+    INCLUDE + ANY
+    -> conservar si cumple AL MENOS UNA señal
+
+    EXCLUDE + ALL
+    -> excluir sólo si cumple TODAS las señales
+
+    EXCLUDE + ANY
+    -> excluir si cumple AL MENOS UNA señal
+
+No existe interpretación implícita. El backend es la autoridad.
+
+### 30.1.5 Señales soportadas v1
+
+Sólo pueden utilizarse señales ya respaldadas por evidencia persistida:
+
+    SENT
+    DELIVERED
+    VIEWED
+
+    SUCCESSFUL
+    FAILED
+
+    BUTTON_INTERACTION
+
+Separación semántica:
+
+- `SENT/DELIVERED/VIEWED` son delivery buckets recipient-level observados;
+- `SUCCESSFUL/FAILED` son outcomes;
+- `BUTTON_INTERACTION` significa interacción recipient-level identificable.
+
+No existe jerarquía implícita `VIEWED => DELIVERED => SENT` para esta regla. Se consulta exactamente la evidencia observada.
+
+### 30.1.6 ALL puede satisfacerse entre campañas históricas diferentes
+
+La semántica v1 opera sobre `ever_observed` transversal del teléfono dentro de la ventana.
+
+Para:
+
+    signals = [VIEWED, BUTTON_INTERACTION]
+    match = ALL
+
+es válido que:
+
+    Campaign A -> VIEWED
+    Campaign B -> BUTTON_INTERACTION
+
+y el resultado sea:
+
+    ALL = true
+
+No se exige que las señales coexistan en una misma campaña histórica.
+
+Filtrar por `campaign_id`, purpose, última campaña o misma provider campaign queda explícitamente diferido porque requiere otra semántica.
+
+### 30.1.7 Ventana histórica
+
+Se soportan:
+
+    ALL_HISTORY
+
+y:
+
+    LOOKBACK_DAYS = entero positivo
+
+Se reutiliza la semántica temporal de M13/M14:
+
+    observed_at = snapshot.fetched_at
+
+Esto significa momento en que Suite observó el estado, no timestamp real de WhatsApp.
+
+El cutoff sigue siendo backend-authoritative:
+
+- Angular no envía `observed_before`;
+- Angular no envía `observed_after`;
+- Preview resuelve el cutoff efectivo;
+- Preview Detail reconstruye contra evidencia vigente;
+- Freeze reconstruye nuevamente;
+- con `lookback_days=N`, la ventana se deriva desde el cutoff autoritativo;
+- si nueva evidencia relevante cambia el resultado entre Preview y Freeze debe ocurrir `PreviewMismatch`.
+
+### 30.1.8 Orden dentro del Audience Builder
+
+Pipeline general:
+
+    SOURCE
+      -> reglas propias de la fuente
+      -> scope backend
+      -> teléfonos válidos
+      -> supresiones obligatorias de negocio
+      -> HISTORICAL TARGETING
+      -> dedupe
+      -> Preview
+      -> Freeze
+
+Para Funnel:
+
+    FUNNEL_PORTFOLIO
+      -> comprador/no comprador canónico
+      -> normalización de teléfono
+      -> ACTIVE_MEMBER_SUPPRESSION
+      -> scope backend
+      -> HISTORICAL TARGETING
+      -> dedupe
+      -> Preview
+      -> Freeze
+
+Para otras fuentes:
+
+    source-specific filters
+      -> scope backend
+      -> teléfonos válidos
+      -> HISTORICAL TARGETING
+      -> dedupe
+
+No se crean filtros históricos específicos por source.
+
+### 30.1.9 Supresiones obligatorias ganan sobre INCLUDE
+
+Historical Targeting no puede volver a incluir un recipient ya eliminado por una supresión obligatoria.
+
+Ejemplo Funnel:
+
+    ACTIVE_MEMBER_SUPPRESSION
+      -> elimina el número
+
+después:
+
+    INCLUDE VIEWED
+
+no puede restaurarlo.
+
+Por tanto `INCLUDE` es una condición adicional sobre candidatos aún elegibles, no una excepción de reglas comerciales o de permisos.
+
+### 30.1.10 Scope y permisos
+
+Historical Targeting reutiliza exactamente el scope Campaign V2.
+
+Evidencia histórica de campañas fuera del scope del usuario:
+
+- no puede influir en `INCLUDE`;
+- no puede influir en `EXCLUDE`;
+- no entra en counts;
+- no genera reasons;
+- no aparece en Preview Detail.
+
+No se modifica M13 para ampliar visibilidad. `NULL` nunca significa acceso global.
+
+### 30.1.11 Compatibilidad con M14/M15
+
+Hoy existe:
+
+    history_exclusion
+
+La capacidad futura común se denomina:
+
+    historical_targeting
+
+Las campañas ya congeladas con `history_exclusion` **no se reinterpretan retroactivamente**.
+
+Su significado legacy queda congelado exactamente como:
+
+    mode = EXCLUDE
+    match = ANY
+
+con las mismas señales y ventana ya persistidas por M14/M15.
+
+No se exige migración destructiva de `audience_definition_json` histórico.
+
+Estrategia recomendada para implementación futura:
+
+1. el lector de campañas debe seguir entendiendo `history_exclusion` legacy;
+2. la UI de campañas históricas debe poder representarlo con su semántica original;
+3. nuevas campañas deben converger en `historical_targeting`;
+4. si temporalmente se acepta `history_exclusion` como payload legacy, debe normalizarse server-side sin cambiar su significado;
+5. una vez retirada esa compatibilidad de escritura, `history_exclusion` puede permanecer únicamente como formato de lectura histórica.
+
+Esta enmienda no decide todavía en qué milestone exacto se elimina la escritura legacy; sólo prohíbe romper campañas M14/M15 ya persistidas.
+
+### 30.1.12 Preview diagnostics
+
+El diseño debe soportar diagnostics genéricos:
+
+    before_history_filter_count
+    history_matched_count
+    history_not_matched_count
+    history_included_count
+    history_excluded_count
+    after_history_filter_count
+
+Los nombres exactos podrán ajustarse al implementar si es necesario para compatibilidad, pero la semántica debe distinguir:
+
+- población evaluada;
+- población que hizo match;
+- población que no hizo match;
+- efecto final de `INCLUDE` o `EXCLUDE`.
+
+Se mantienen reasons canónicas:
+
+    HISTORY_DELIVERY_SENT
+    HISTORY_DELIVERY_DELIVERED
+    HISTORY_DELIVERY_VIEWED
+    HISTORY_OUTCOME_SUCCESSFUL
+    HISTORY_OUTCOME_FAILED
+    HISTORY_BUTTON_INTERACTION
+
+Un teléfono puede acumular múltiples reasons. Los reason counts pueden solaparse y nunca se suman para reconstruir el total de recipients.
+
+### 30.1.13 Preview Detail
+
+Preview Detail debe permitir explicar:
+
+- si el teléfono hizo match histórico;
+- qué reasons canónicas sustentan ese match;
+- `mode`;
+- `match`;
+- señales configuradas;
+- si el resultado terminó incluido o excluido.
+
+No se inventan eventos individuales, timestamps provider ni campañas específicas cuando la evidencia v1 sólo demuestra `ever_observed`.
+
+### 30.1.14 Fingerprint, Freeze y persistencia
+
+Historical Targeting participa íntegramente en:
+
+- `audience_definition_json`;
+- `source_metadata.history_evaluation`;
+- Preview fingerprint;
+- Freeze rebuild.
+
+Deben formar parte del fingerprint, directa o derivadamente:
+
+- `mode`;
+- `match`;
+- señales seleccionadas;
+- `lookback_days`;
+- cutoff histórico backend-authoritative;
+- resultado final de recipients.
+
+Si nueva evidencia histórica relevante aparece entre Preview y Freeze y altera cutoff o recipients, Freeze debe producir `PreviewMismatch`.
+
+Angular nunca puede enviar como autoridad:
+
+- snapshot IDs;
+- `observed_before`;
+- `observed_after`;
+- teléfonos que hicieron match;
+- recipients finales;
+- resultados históricos precalculados.
+
+### 30.1.15 Read-only / frontera provider
+
+Historical Targeting utiliza únicamente:
+
+- M11 snapshots;
+- M11 recipient observations;
+- M13 history.
+
+Preview y Freeze:
+
+- no llaman iVentas;
+- no hacen provider HTTP;
+- no capturan snapshots;
+- no activan M12.
+
+La frescura del histórico pertenece a los mecanismos separados de captura/sync.
+
+### 30.1.16 UX Angular objetivo
+
+La UX objetivo es:
+
+    Historial de campañas
+
+    Modo:
+    ○ Incluir sólo contactos que cumplan
+    ○ Excluir contactos que cumplan
+
+    Condiciones:
+    ☐ Enviado
+    ☐ Entregado
+    ☐ Visto
+    ☐ Exitoso
+    ☐ Fallido
+    ☐ Interactuó con botón
+
+    Cumplimiento:
+    ○ Todas
+    ○ Cualquiera
+
+    Ventana:
+    ○ Todo el historial
+    ○ Últimos N días
+
+Angular:
+
+- construye únicamente criterios;
+- invalida Preview ante cualquier cambio;
+- no resuelve histórico;
+- no llama M13 directamente;
+- no llama iVentas;
+- no envía cutoffs efectivos.
+
+### 30.1.17 No es un rule builder general
+
+v1 queda deliberadamente limitado a:
+
+    un mode
+    un match
+    N señales
+    una ventana
+
+No se diseñan:
+
+- expresiones anidadas;
+- `(A AND B) OR (C AND NOT D)`;
+- grupos recursivos;
+- SQL visual;
+- `NOT` por señal individual;
+- scoring;
+- pesos;
+- ranking.
+
+### 30.1.18 Acceptance futura mínima
+
+La implementación debe probar las cuatro combinaciones:
+
+    INCLUDE + ALL
+    INCLUDE + ANY
+    EXCLUDE + ALL
+    EXCLUDE + ANY
+
+Fixture conceptual mínimo:
+
+    A = VIEWED
+    B = BUTTON
+    C = VIEWED + BUTTON
+    D = sin history
+
+Resultados obligatorios:
+
+    INCLUDE + ALL [VIEWED, BUTTON]
+    -> sólo C
+
+    INCLUDE + ANY [VIEWED, BUTTON]
+    -> A + B + C
+
+    EXCLUDE + ALL [VIEWED, BUTTON]
+    -> elimina C
+
+    EXCLUDE + ANY [VIEWED, BUTTON]
+    -> elimina A + B + C
+
+Además debe probar:
+
+- mezcla de delivery/outcome/button;
+- lookback;
+- scope;
+- contacto sin history;
+- compatibilidad legacy `history_exclusion`;
+- fingerprint estable sin cambios;
+- drift histórico -> `PreviewMismatch`;
+- ninguna provider call;
+- ninguna ampliación de scope;
+- supresiones obligatorias preceden a Historical Targeting.
+
 ## 31. Fase 2C — Campaign BI / Reporting / Excel
 
 ### 31.1 Objetivo y frontera read-only
@@ -1697,13 +2177,15 @@ Fase 2 queda finalmente aceptada cuando estén cerrados:
 
     2A — iVentas/history                 PASS
     2B — FUNNEL_PORTFOLIO                PASS
+    Historical Targeting transversal     PASS
     2C — Campaign BI/Reporting           PASS
 
 La aceptación integral debe comprobar:
 
 - Funnel -> Preview -> Freeze;
 - ACTIVE_MEMBER_SUPPRESSION;
-- history exclusions;
+- Historical Targeting `INCLUDE/EXCLUDE` + `ALL/ANY`;
+- compatibilidad legacy `history_exclusion`;
 - reporting individual;
 - reporting consolidado;
 - Excel;
@@ -1719,8 +2201,7 @@ Sólo después puede comenzar:
 
 PENDIENTE PARA CERRAR FASE 2:
 
-- FUNNEL_PORTFOLIO;
-- ACTIVE_MEMBER_SUPPRESSION;
+- Historical Targeting transversal;
 - Campaign BI;
 - Excel;
 - Angular Reporting;
@@ -1734,7 +2215,7 @@ POSTERIOR / NO BLOQUEANTE salvo necesidad:
 - normalización DB específica de costos;
 - activación productiva M12.
 
-`FUNNEL_PORTFOLIO` no se considera implementada por existir su contrato: permanece PENDIENTE hasta cerrar 2B.
+`FUNNEL_PORTFOLIO` está ACCEPTED como 2B. Historical Targeting permanece PENDIENTE como capacidad transversal previa al cierre de 2C/2D.
 
 ## 34. Instrucción de arranque recomendada para una conversación nueva de Fase 2
 
@@ -1744,10 +2225,13 @@ POSTERIOR / NO BLOQUEANTE salvo necesidad:
     Conserva sin reinterpretar successful/failed, SENT/DELIVERED/VIEWED,
     snapshots append-only, fetched_at, button interactions e history exclusions.
     M12 permanece implementada pero disabled hasta definir cadence/horizon/max.
-    2B — FUNNEL_PORTFOLIO está PENDIENTE.
-    Reutiliza la lógica comprador/no comprador del Funnel,
+    2B — FUNNEL_PORTFOLIO está ACCEPTED.
+    Conserva la lógica comprador/no comprador canónica del Funnel,
     normalize phone, ACTIVE_MEMBER_SUPPRESSION, scope backend,
-    history exclusions, dedupe, Preview y Freeze.
+    history M14, dedupe, Preview/Detail, fingerprint, Freeze y Angular.
+    Historical Targeting transversal está PENDIENTE.
+    Debe reutilizar M13 y ampliar el histórico a INCLUDE/EXCLUDE + ALL/ANY
+    sin romper campañas M14/M15 con history_exclusion.
     2C — Campaign BI / Reporting / Excel está PENDIENTE.
     Reporting usa sólo evidencia persistida por Suite y no consulta iVentas.
     Export Excel es backend-side y Angular no recalcula KPIs.
