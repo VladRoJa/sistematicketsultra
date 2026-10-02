@@ -964,3 +964,174 @@ def test_evidence_model_contract_preserves_explicit_canonical_references():
         "fecha_vencimiento_date",
     ):
         assert recipient_columns[name].nullable is True
+
+
+
+def _funnel_plan_for_m19(*, active_snapshot_id=900, iventas_sync_run_id=77, cutoff="2026-09-30"):
+    evidence = audience.MarketingCampaignV2AudienceCandidate(
+        source=audience.SOURCE_FUNNEL_PORTFOLIO,
+        source_ref_type="IVENTAS_CONTACT",
+        source_ref_id=None,
+        phone_raw="6861000001",
+        phone_mx10="6861000001",
+        sucursal="BRANCH A",
+        sucursal_key="BRANCH A",
+        evidence=(
+            "FUNNEL_PORTFOLIO",
+            "SOURCE_REFERENCE:1:contact-1",
+            "CONTACT_ID:contact-1",
+            "SOURCE_DATE:2026-09-15",
+        ),
+    )
+    recipient = audience.MarketingCampaignV2RecipientCandidate(
+        source=audience.SOURCE_FUNNEL_PORTFOLIO,
+        phone_mx10="6861000001",
+        member_id=None,
+        member_pin=None,
+        member_name=None,
+        sucursal="BRANCH A",
+        tarifa_raw=None,
+        tarifa_key=None,
+        categoria_tarifa=None,
+        audience_family=None,
+        fecha_vencimiento=None,
+        inclusion_reason="FUNNEL_PORTFOLIO_ELIGIBLE",
+        conflict_fields=(),
+        evidence_rows=(evidence,),
+    )
+    return audience._AudiencePlan(
+        source=audience.SOURCE_FUNNEL_PORTFOLIO,
+        filters={
+            "source": audience.SOURCE_FUNNEL_PORTFOLIO,
+            "funnel_month": "2026-09",
+            "funnel_cutoff_date": cutoff,
+            "allowed_sucursal_keys": ["BRANCH A"],
+        },
+        source_metadata={
+            "funnel_month": "2026-09",
+            "funnel_cutoff_date": cutoff,
+            "iventas_sync_run_id": iventas_sync_run_id,
+            "active_members_snapshot_id": active_snapshot_id,
+            "active_members_cutoff_date": "2026-09-30",
+        },
+        universe_count=1,
+        scoped_count=1,
+        current_status_counts={},
+        current_status_blocked=(),
+        classified_candidates=(evidence,),
+        selected_candidates=(evidence,),
+        invalid_phone_rows=(),
+        duplicate_rows=(),
+        recipients=(recipient,),
+        family_counts={family: 0 for family in audience.ALL_AUDIENCE_FAMILIES},
+        unclassified_family_count=0,
+        out_of_segment_count=0,
+        history_diagnostics={
+            "before_history_filter_count": 1,
+            "history_excluded_count": 0,
+            "after_history_filter_count": 1,
+            "excluded_by_delivery_bucket": {},
+            "excluded_by_outcome": {},
+            "excluded_by_button_interaction": 0,
+        },
+        funnel_candidate_rows=(evidence,),
+    )
+
+
+def test_funnel_phone_only_freeze_uses_existing_nullable_recipient_schema(monkeypatch):
+    plan = _funnel_plan_for_m19()
+    calls = _install_plan(monkeypatch, plan)
+    fingerprint = creation._fingerprint_plan(plan)
+    session = WriteSession()
+    access = object()
+
+    result = creation.freeze_campaign_v2(
+        name="Funnel septiembre",
+        purpose="NEW_SALE",
+        source="FUNNEL_PORTFOLIO",
+        audience_families=None,
+        allowed_sucursal_keys=["BRANCH A"],
+        expected_preview_fingerprint=fingerprint,
+        created_by_user_id=7,
+        funnel_month="2026-09",
+        funnel_cutoff_date="2026-09-30",
+        marketing_access=access,
+        session=session,
+        now=NOW,
+    )
+
+    assert result["source"] == "FUNNEL_PORTFOLIO"
+    assert result["recipient_count"] == 1
+    assert calls[0]["funnel_month"] == "2026-09"
+    assert calls[0]["funnel_cutoff_date"] == "2026-09-30"
+    assert calls[0]["marketing_access"] is access
+
+    campaign = session.added[0]
+    recipient = campaign.recipients[0]
+    evidence = recipient.evidence_rows[0]
+    assert recipient.source == "FUNNEL_PORTFOLIO"
+    assert recipient.member_id is None
+    assert recipient.member_pin is None
+    assert recipient.member_name is None
+    assert recipient.tarifa_raw is None
+    assert recipient.categoria_tarifa is None
+    assert recipient.audience_family is None
+    assert recipient.socios_vencidos_cartera_id is None
+    assert recipient.socios_activos_snapshot_row_id is None
+    assert evidence.socios_vencidos_cartera_id is None
+    assert evidence.socios_activos_snapshot_row_id is None
+    assert evidence.socios_activos_snapshot_id is None
+    assert evidence.member_id is None
+    assert evidence.member_pin is None
+    assert evidence.tarifa_raw is None
+    assert evidence.audience_family is None
+    assert campaign.audience_definition_json["source_metadata"]["iventas_sync_run_id"] == 77
+    assert campaign.audience_definition_json["source_metadata"]["active_members_snapshot_id"] == 900
+
+
+def test_funnel_fingerprint_is_stable_and_changes_on_authoritative_drift():
+    base = _funnel_plan_for_m19()
+    same = _funnel_plan_for_m19()
+    active_changed = _funnel_plan_for_m19(active_snapshot_id=901)
+    funnel_changed = _funnel_plan_for_m19(iventas_sync_run_id=78)
+    cutoff_changed = _funnel_plan_for_m19(cutoff="2026-09-29")
+
+    base_fingerprint = creation._fingerprint_plan(base)
+    assert base_fingerprint == creation._fingerprint_plan(same)
+    assert base_fingerprint != creation._fingerprint_plan(active_changed)
+    assert base_fingerprint != creation._fingerprint_plan(funnel_changed)
+    assert base_fingerprint != creation._fingerprint_plan(cutoff_changed)
+
+
+@pytest.mark.parametrize(
+    "changed",
+    [
+        _funnel_plan_for_m19(active_snapshot_id=901),
+        _funnel_plan_for_m19(iventas_sync_run_id=78),
+        _funnel_plan_for_m19(cutoff="2026-09-29"),
+    ],
+)
+def test_funnel_authoritative_drift_causes_preview_mismatch(monkeypatch, changed):
+    base = _funnel_plan_for_m19()
+    expected = creation._fingerprint_plan(base)
+    _install_plan(monkeypatch, changed)
+    session = WriteSession()
+
+    with pytest.raises(creation.MarketingCampaignV2PreviewMismatchError):
+        creation.freeze_campaign_v2(
+            name="Funnel drift",
+            purpose="NEW_SALE",
+            source="FUNNEL_PORTFOLIO",
+            audience_families=None,
+            allowed_sucursal_keys=["BRANCH A"],
+            expected_preview_fingerprint=expected,
+            created_by_user_id=7,
+            funnel_month="2026-09",
+            funnel_cutoff_date="2026-09-30",
+            marketing_access=object(),
+            session=session,
+            now=NOW,
+        )
+
+    assert session.added == []
+    assert session.commits == 0

@@ -59,8 +59,21 @@ export class MarketingCampaignV2PreviewDetailDialogComponent implements OnInit {
       FAMILY: 'Familia',
       CURRENT_STATUS_BLOCKED: 'Bloqueados por estado actual',
       HISTORY_EXCLUDED: 'Excluidos por historial',
+      FUNNEL_CANDIDATES: 'Leads Funnel',
+      FUNNEL_BUYER_EXCLUDED: 'Compradores excluidos',
+      ACTIVE_MEMBER_SUPPRESSION: 'Socios activos excluidos',
     };
     return labels[this.data.bucket];
+  }
+
+  get explanation(): string {
+    if (this.data.bucket === 'FUNNEL_BUYER_EXCLUDED') {
+      return 'Conversión detectada por la lógica Funnel vigente.';
+    }
+    if (this.data.bucket === 'ACTIVE_MEMBER_SUPPRESSION') {
+      return 'El número está asociado actualmente a Socios Activos; no implica identidad humana.';
+    }
+    return '';
   }
 
   load(page: number): void {
@@ -107,6 +120,13 @@ export class MarketingCampaignV2PreviewDetailDialogComponent implements OnInit {
       return '—';
     }
     return reasons.map(campaignV2HistoryReasonLabel).join(', ');
+  }
+
+  evidenceLabel(value: CampaignV2PreviewDetailResponse['rows'][number]['evidence']): string {
+    if (!Array.isArray(value) || !value.length || typeof value[0] !== 'string') {
+      return '—';
+    }
+    return (value as string[]).join(', ');
   }
 
   familyLabel(value: CampaignV2ObservedFamily | null | undefined): string {

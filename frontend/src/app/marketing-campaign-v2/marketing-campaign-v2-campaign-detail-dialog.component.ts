@@ -196,7 +196,12 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   }
 
   sourceLabel(value: CampaignV2Source): string {
-    return value === 'ACTIVE_MEMBERS' ? 'Socios activos' : 'Socios vencidos';
+    const labels: Record<CampaignV2Source, string> = {
+      EXPIRED_MEMBERS: 'Socios vencidos',
+      ACTIVE_MEMBERS: 'Socios activos',
+      FUNNEL_PORTFOLIO: 'Cartera Funnel / Venta Nueva',
+    };
+    return labels[value];
   }
 
   familyLabel(value: CampaignV2ObservedFamily | null): string {
@@ -219,16 +224,26 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
     const rows: Array<{ label: string; value: string }> = [
       { label: 'Fuente', value: this.sourceLabel(definition.filters.source) },
       {
-        label: 'Familias',
-        value: definition.filters.audience_families.map(value => this.familyLabel(value)).join(', '),
-      },
-      {
         label: 'Alcance congelado',
         value: definition.filters.allowed_sucursal_keys === null
           ? 'Global autorizado'
           : `${definition.filters.allowed_sucursal_keys.length} sucursales`,
       },
     ];
+    if (definition.filters.audience_families?.length) {
+      rows.push({
+        label: 'Familias',
+        value: definition.filters.audience_families
+          .map(value => this.familyLabel(value))
+          .join(', '),
+      });
+    }
+    if (definition.filters.funnel_month) {
+      rows.push({ label: 'Mes Funnel', value: definition.filters.funnel_month });
+    }
+    if (definition.filters.funnel_cutoff_date) {
+      rows.push({ label: 'Corte Funnel', value: definition.filters.funnel_cutoff_date });
+    }
     if (definition.filters.expiration_date_from) {
       rows.push({ label: 'Vencimiento desde', value: definition.filters.expiration_date_from });
     }
@@ -260,6 +275,9 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
       ['Vencimiento desde', metadata.expiration_date_from],
       ['Vencimiento hasta', metadata.expiration_date_to],
       ['Corte de estado actual', metadata.current_status_activos_cutoff_date],
+      ['Mes Funnel', metadata.funnel_month],
+      ['Corte Funnel', metadata.funnel_cutoff_date],
+      ['Corte Socios Activos', metadata.active_members_cutoff_date],
     ];
     for (const [label, value] of values) {
       if (value !== null && value !== undefined && value !== '') {

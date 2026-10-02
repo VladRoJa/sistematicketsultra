@@ -272,7 +272,22 @@ class TestMarketingCampaignV2Routes:
             )
         assert response.status_code == 200
         body = response.get_json()
-        assert body["sources"] == ["EXPIRED_MEMBERS", "ACTIVE_MEMBERS"]
+        assert body["sources"] == [
+            "EXPIRED_MEMBERS",
+            "ACTIVE_MEMBERS",
+            "FUNNEL_PORTFOLIO",
+        ]
+        assert body["source_filters"]["FUNNEL_PORTFOLIO"] == {
+            "required": ["funnel_month", "funnel_cutoff_date"],
+            "not_applicable": [
+                "audience_families",
+                "expiration_date_from",
+                "expiration_date_to",
+                "tarifa",
+                "categoria_tarifa",
+            ],
+            "cutoff_policy": "EXACT_COMPLETE",
+        }
         assert body["selectable_audience_families"] == [
             "DOMICILIADO", "TRIMESTRAL", "CONVENIO", "SEMESTRE", "ESTUDIANTE"
         ]
@@ -392,6 +407,50 @@ class TestMarketingCampaignV2Routes:
         assert service.call_args.kwargs["history_exclusion"] == {
             "delivery_buckets": ["VIEWED"],
         }
+
+    def test_funnel_preview_forwards_backend_access_and_cutoff(self):
+        expected = {"preview_fingerprint": "f" * 64}
+        with (
+            self._auth(self.partial_access),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.marketing_branch_keys_by_sucursal_ids",
+                return_value={11: "BRANCH A", 22: "BRANCH B"},
+            ),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.build_campaign_v2_freeze_preview",
+                return_value=expected,
+            ) as service,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/preview",
+                json={
+                    "source": "FUNNEL_PORTFOLIO",
+                    "funnel_month": "2026-09",
+                    "funnel_cutoff_date": "2026-09-30",
+                },
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert service.call_args.kwargs["funnel_month"] == "2026-09"
+        assert service.call_args.kwargs["funnel_cutoff_date"] == "2026-09-30"
+        assert service.call_args.kwargs["marketing_access"] is self.partial_access
+        assert service.call_args.kwargs["audience_families"] is None
+
+    @pytest.mark.parametrize("field", ["tarifa", "categoria_tarifa"])
+    def test_funnel_preview_rejects_tariff_filters_at_route_boundary(self, field):
+        with self._auth():
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/preview",
+                json={
+                    "source": "FUNNEL_PORTFOLIO",
+                    "funnel_month": "2026-09",
+                    "funnel_cutoff_date": "2026-09-30",
+                    field: "NO_APLICA",
+                },
+                headers=self.headers,
+            )
+        assert response.status_code == 400
 
     def test_preview_detail_uses_m3_detail_and_backend_scope(self):
         expected = {"total": 1, "rows": [{"phone_mx10": "6861000001"}]}

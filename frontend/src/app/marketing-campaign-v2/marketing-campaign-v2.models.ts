@@ -1,4 +1,7 @@
-export type CampaignV2Source = 'EXPIRED_MEMBERS' | 'ACTIVE_MEMBERS';
+export type CampaignV2Source =
+  | 'EXPIRED_MEMBERS'
+  | 'ACTIVE_MEMBERS'
+  | 'FUNNEL_PORTFOLIO';
 
 export type CampaignV2HistoryDeliveryBucket =
   | 'SENT'
@@ -69,15 +72,34 @@ export type CampaignV2PreviewBucket =
   | 'UNCLASSIFIED'
   | 'FAMILY'
   | 'CURRENT_STATUS_BLOCKED'
-  | 'HISTORY_EXCLUDED';
+  | 'HISTORY_EXCLUDED'
+  | 'FUNNEL_CANDIDATES'
+  | 'FUNNEL_BUYER_EXCLUDED'
+  | 'ACTIVE_MEMBER_SUPPRESSION';
 
 export interface CampaignV2Scope {
   is_global: boolean;
   allowed_sucursal_keys: string[] | null;
 }
 
+export type CampaignV2AudienceFilterKey =
+  | 'audience_families'
+  | 'expiration_date_from'
+  | 'expiration_date_to'
+  | 'tarifa'
+  | 'categoria_tarifa'
+  | 'funnel_month'
+  | 'funnel_cutoff_date';
+
+export interface CampaignV2SourceFilterContract {
+  required: CampaignV2AudienceFilterKey[];
+  not_applicable: CampaignV2AudienceFilterKey[];
+  cutoff_policy?: string;
+}
+
 export interface CampaignV2OptionsResponse {
   sources: CampaignV2Source[];
+  source_filters?: Partial<Record<CampaignV2Source, CampaignV2SourceFilterContract>>;
   selectable_audience_families: CampaignV2AudienceFamily[];
   non_selectable_classifications: CampaignV2NonSelectableClassification[];
   purposes: CampaignV2Purpose[];
@@ -87,9 +109,11 @@ export interface CampaignV2OptionsResponse {
 
 export interface CampaignV2AudienceDefinitionRequest {
   source: CampaignV2Source;
-  audience_families: CampaignV2AudienceFamily[];
+  audience_families?: CampaignV2AudienceFamily[];
   expiration_date_from?: string;
   expiration_date_to?: string;
+  funnel_month?: string;
+  funnel_cutoff_date?: string;
   history_exclusion?: CampaignV2HistoryExclusion;
 }
 
@@ -118,6 +142,14 @@ export interface CampaignV2SourceMetadata {
   activos_cutoff_date?: string | null;
   activos_captured_at?: string | null;
   snapshot_kind?: string | null;
+  funnel_month?: string | null;
+  funnel_cutoff_date?: string | null;
+  iventas_sync_run_id?: number | null;
+  active_members_snapshot_id?: number | null;
+  active_members_cutoff_date?: string | null;
+  active_members_snapshot_kind?: string | null;
+  active_members_captured_at?: string | null;
+  funnel_scope?: Record<string, unknown> | null;
   history_evaluation?: CampaignV2HistoryEvaluationMetadata | null;
   [key: string]:
     | string
@@ -127,15 +159,18 @@ export interface CampaignV2SourceMetadata {
     | string[]
     | number[]
     | CampaignV2HistoryEvaluationMetadata
+    | Record<string, unknown>
     | undefined;
 }
 
 export interface CampaignV2PreviewFilters {
   source: CampaignV2Source;
-  audience_families: CampaignV2AudienceFamily[];
+  audience_families?: CampaignV2AudienceFamily[];
   allowed_sucursal_keys: string[] | null;
   expiration_date_from?: string;
   expiration_date_to?: string;
+  funnel_month?: string;
+  funnel_cutoff_date?: string;
   history_exclusion?: CampaignV2HistoryExclusion;
 }
 
@@ -151,6 +186,9 @@ export interface CampaignV2PreviewSummary {
   invalid_phone_count: number;
   duplicate_count: number;
   unique_recipient_count: number;
+  funnel_candidate_count?: number;
+  funnel_buyer_excluded_count?: number;
+  active_member_suppression_count?: number;
   before_history_filter_count?: number;
   history_excluded_count?: number;
   after_history_filter_count?: number;

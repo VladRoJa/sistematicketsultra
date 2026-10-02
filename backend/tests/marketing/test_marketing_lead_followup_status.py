@@ -169,3 +169,75 @@ def test_purchase_branch_is_hidden_when_outside_visible_scope():
     assert enriched[0]["purchase_status"] == "Sí"
     assert enriched[0]["purchase_branch"] == "Otra sucursal Ultra"
     assert enriched[0]["followup_status"] == "Ya compró"
+
+
+
+def test_buyer_same_branch_is_bought():
+    enriched = _enrich_lead_followup_rows(
+        [_lead(branch_id=1, phone="6861000001", lead_date="2026-09-01")],
+        visits=[],
+        sales=[
+            _sale(
+                branch_id=1,
+                phone="6861000001",
+                sale_date=date(2026, 9, 10),
+            )
+        ],
+        global_branch_names={1: "Sucursal 1"},
+        visible_branch_ids=(1,),
+        cutoff_date=date(2026, 9, 30),
+    )
+    assert enriched[0]["purchase_status"] == "Sí"
+
+
+def test_buyer_other_branch_is_still_bought():
+    enriched = _enrich_lead_followup_rows(
+        [_lead(branch_id=1, phone="6861000002", lead_date="2026-09-01")],
+        visits=[],
+        sales=[
+            _sale(
+                branch_id=2,
+                phone="6861000002",
+                sale_date=date(2026, 9, 20),
+            )
+        ],
+        global_branch_names={2: "Sucursal 2"},
+        visible_branch_ids=(1,),
+        cutoff_date=date(2026, 9, 30),
+    )
+    assert enriched[0]["purchase_status"] == "Sí"
+
+
+def test_purchase_after_60_days_does_not_count():
+    enriched = _enrich_lead_followup_rows(
+        [_lead(branch_id=1, phone="6861000003", lead_date="2026-09-01")],
+        visits=[],
+        sales=[
+            _sale(
+                branch_id=2,
+                phone="6861000003",
+                sale_date=date(2026, 11, 1),
+            )
+        ],
+        global_branch_names={2: "Sucursal 2"},
+        visible_branch_ids=(1, 2),
+    )
+    assert enriched[0]["purchase_status"] == "No"
+
+
+def test_purchase_after_cutoff_does_not_count():
+    enriched = _enrich_lead_followup_rows(
+        [_lead(branch_id=1, phone="6861000004", lead_date="2026-09-01")],
+        visits=[],
+        sales=[
+            _sale(
+                branch_id=1,
+                phone="6861000004",
+                sale_date=date(2026, 9, 21),
+            )
+        ],
+        global_branch_names={1: "Sucursal 1"},
+        visible_branch_ids=(1,),
+        cutoff_date=date(2026, 9, 20),
+    )
+    assert enriched[0]["purchase_status"] == "No"

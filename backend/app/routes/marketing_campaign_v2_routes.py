@@ -75,7 +75,24 @@ def campaign_v2_options_endpoint():
                 "sources": [
                     audience.SOURCE_EXPIRED_MEMBERS,
                     audience.SOURCE_ACTIVE_MEMBERS,
+                    audience.SOURCE_FUNNEL_PORTFOLIO,
                 ],
+                "source_filters": {
+                    audience.SOURCE_FUNNEL_PORTFOLIO: {
+                        "required": [
+                            "funnel_month",
+                            "funnel_cutoff_date",
+                        ],
+                        "not_applicable": [
+                            "audience_families",
+                            "expiration_date_from",
+                            "expiration_date_to",
+                            "tarifa",
+                            "categoria_tarifa",
+                        ],
+                        "cutoff_policy": "EXACT_COMPLETE",
+                    }
+                },
                 "selectable_audience_families": list(
                     audience.SELECTABLE_AUDIENCE_FAMILIES
                 ),
@@ -116,6 +133,8 @@ def campaign_v2_preview_endpoint():
                 "expiration_date_from",
                 "expiration_date_to",
                 "history_exclusion",
+                "funnel_month",
+                "funnel_cutoff_date",
             }
         )
         result = build_campaign_v2_freeze_preview(
@@ -125,6 +144,9 @@ def campaign_v2_preview_endpoint():
             expiration_date_from=payload.get("expiration_date_from"),
             expiration_date_to=payload.get("expiration_date_to"),
             history_exclusion=payload.get("history_exclusion"),
+            funnel_month=payload.get("funnel_month"),
+            funnel_cutoff_date=payload.get("funnel_cutoff_date"),
+            marketing_access=access,
             session=db.session,
         )
         return jsonify(result), 200
@@ -134,7 +156,6 @@ def campaign_v2_preview_endpoint():
         return _error(str(exc), 400)
     except Exception:
         return _error("Falló el Preview de Campaign V2.", 500)
-
 
 @marketing_campaign_v2_bp.post("/campaigns-v2/preview-detail")
 @jwt_required()
@@ -152,6 +173,8 @@ def campaign_v2_preview_detail_endpoint():
                 "page",
                 "page_size",
                 "history_exclusion",
+                "funnel_month",
+                "funnel_cutoff_date",
             }
         )
         result = audience.build_campaign_v2_audience_preview_detail(
@@ -165,6 +188,9 @@ def campaign_v2_preview_detail_endpoint():
             expiration_date_from=payload.get("expiration_date_from"),
             expiration_date_to=payload.get("expiration_date_to"),
             history_exclusion=payload.get("history_exclusion"),
+            funnel_month=payload.get("funnel_month"),
+            funnel_cutoff_date=payload.get("funnel_cutoff_date"),
+            marketing_access=access,
             session=db.session,
         )
         return jsonify(result), 200
@@ -176,7 +202,6 @@ def campaign_v2_preview_detail_endpoint():
         return _error("El detalle ya no coincide con el Preview de Campaign V2.", 409)
     except Exception:
         return _error("Falló el detalle del Preview de Campaign V2.", 500)
-
 
 @marketing_campaign_v2_bp.post("/campaigns-v2")
 @jwt_required()
@@ -192,6 +217,8 @@ def freeze_campaign_v2_endpoint():
                 "expiration_date_from",
                 "expiration_date_to",
                 "history_exclusion",
+                "funnel_month",
+                "funnel_cutoff_date",
                 "expected_preview_fingerprint",
             }
         )
@@ -206,6 +233,9 @@ def freeze_campaign_v2_endpoint():
             expiration_date_from=payload.get("expiration_date_from"),
             expiration_date_to=payload.get("expiration_date_to"),
             history_exclusion=payload.get("history_exclusion"),
+            funnel_month=payload.get("funnel_month"),
+            funnel_cutoff_date=payload.get("funnel_cutoff_date"),
+            marketing_access=access,
             session=db.session,
         )
         return jsonify(result), 201
@@ -219,7 +249,6 @@ def freeze_campaign_v2_endpoint():
         return _error("No fue posible congelar Campaign V2.", 500)
     except Exception:
         return _error("Falló la creación de Campaign V2.", 500)
-
 
 @marketing_campaign_v2_bp.get("/campaigns-v2/tariffs/unclassified")
 @jwt_required()

@@ -14,6 +14,7 @@ import { MatSelectModule } from '@angular/material/select';
 import {
   buildCampaignV2AudienceRequest,
   buildCampaignV2FreezeRequest,
+  campaignV2FilterApplies,
   campaignV2FreezeErrorInvalidatesPreview,
   campaignV2HistoryBreakdownRows,
   campaignV2HistoryDeliveryLabel,
@@ -43,6 +44,7 @@ import {
   CampaignV2SourceMetadata,
 } from './marketing-campaign-v2.models';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
+import { MarketingSalesFunnelService } from '../marketing-sales-funnel/marketing-sales-funnel.service';
 import {
   MarketingCampaignV2PreviewDetailDialogComponent,
   MarketingCampaignV2PreviewDetailDialogData,
@@ -75,6 +77,7 @@ import {
 })
 export class MarketingCampaignV2PageComponent implements OnInit {
   private readonly service = inject(MarketingCampaignV2Service);
+  private readonly funnelService = inject(MarketingSalesFunnelService);
   private readonly dialog = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -83,6 +86,8 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   });
   readonly expirationDateFrom = new FormControl('', { nonNullable: true });
   readonly expirationDateTo = new FormControl('', { nonNullable: true });
+  readonly funnelMonth = new FormControl('', { nonNullable: true });
+  readonly funnelCutoffDate = new FormControl('', { nonNullable: true });
   readonly historyEnabled = new FormControl(false, { nonNullable: true });
   readonly historyButtonInteracted = new FormControl(false, { nonNullable: true });
   readonly historyWindowMode = new FormControl<CampaignV2HistoryWindowMode>('ALL', {
@@ -115,9 +120,11 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   ];
   preview: CampaignV2PreviewResponse | null = null;
   campaigns: CampaignV2CampaignSummary[] = [];
+  funnelCutoffDates: string[] = [];
 
   loadingOptions = false;
   loadingPreview = false;
+  loadingFunnelCutoffs = false;
   creating = false;
   loadingCampaigns = false;
   accessDenied = false;
@@ -135,9 +142,12 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     this.source.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(source => {
-        if (source === 'ACTIVE_MEMBERS') {
+        if (!this.showsExpirationRange) {
           this.expirationDateFrom.setValue('', { emitEvent: false });
           this.expirationDateTo.setValue('', { emitEvent: false });
+        }
+        if (source === 'FUNNEL_PORTFOLIO') {
+          this.loadFunnelCutoffs();
         }
         this.invalidatePreview();
       });
@@ -146,6 +156,19 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.invalidatePreview());
     this.expirationDateTo.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.invalidatePreview());
+    this.funnelMonth.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.funnelCutoffDate.setValue('', { emitEvent: false });
+        this.funnelCutoffDates = [];
+        this.invalidatePreview();
+        if (this.isFunnelSource) {
+          this.loadFunnelCutoffs();
+        }
+      });
+    this.funnelCutoffDate.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.invalidatePreview());
 
@@ -169,12 +192,51 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     return this.source.value === 'EXPIRED_MEMBERS';
   }
 
+  get isFunnelSource(): boolean {
+    return this.source.value === 'FUNNEL_PORTFOLIO';
+  }
+
+  get showsExpirationRange(): boolean {
+    return campaignV2FilterApplies(
+      this.options,
+      this.source.value,
+      'expiration_date_from',
+    );
+  }
+
+  get showsAudienceFamilies(): boolean {
+    return campaignV2FilterApplies(
+      this.options,
+      this.source.value,
+      'audience_families',
+    );
+  }
+
+  get showsFunnelFilters(): boolean {
+    return campaignV2FilterApplies(
+      this.options,
+      this.source.value,
+      'funnel_month',
+    );
+  }
+
+  get funnelCutoffPolicy(): string | null {
+    return this.options?.source_filters?.[this.source.value]?.cutoff_policy ?? null;
+  }
+
+  get funnelCutoffPolicyHint(): string {
+    return this.funnelCutoffPolicy === 'EXACT_COMPLETE'
+      ? 'Sólo se muestran cortes completos y alineados por el Funnel.'
+      : 'El backend valida el corte disponible para esta fuente.';
+  }
+
   get canReviewAudience(): boolean {
     return Boolean(
       this.options
       && !this.loadingPreview
       && !this.creating
-      && isCampaignV2AudienceValid(this.audienceState()),
+      && !this.loadingFunnelCutoffs
+      && isCampaignV2AudienceValid(this.audienceState(), this.options),
     );
   }
 
@@ -246,6 +308,39 @@ export class MarketingCampaignV2PageComponent implements OnInit {
             return;
           }
           this.error = this.errorMessage(error, 'No fue posible cargar Campañas V2.');
+        },
+      });
+  }
+
+  loadFunnelCutoffs(): void {
+    const month = this.funnelMonth.value.trim();
+    if (!this.isFunnelSource || !/^\d{4}-\d{2}$/.test(month)) {
+      this.funnelCutoffDates = [];
+      this.funnelCutoffDate.setValue('', { emitEvent: false });
+      return;
+    }
+
+    this.loadingFunnelCutoffs = true;
+    this.error = '';
+    this.funnelService.getDashboard(month)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: result => {
+          this.loadingFunnelCutoffs = false;
+          this.funnelCutoffDates = [...result.available_cutoff_dates];
+          const selected = result.selected_cutoff_date || this.funnelCutoffDates[0] || '';
+          this.funnelCutoffDate.setValue(selected, { emitEvent: false });
+          this.invalidatePreview();
+        },
+        error: (error: HttpErrorResponse) => {
+          this.loadingFunnelCutoffs = false;
+          this.funnelCutoffDates = [];
+          this.funnelCutoffDate.setValue('', { emitEvent: false });
+          this.invalidatePreview();
+          this.error = this.errorMessage(
+            error,
+            'No fue posible consultar los cortes completos del Funnel.',
+          );
         },
       });
   }
@@ -353,7 +448,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       return;
     }
 
-    const request = buildCampaignV2AudienceRequest(this.audienceState());
+    const request = buildCampaignV2AudienceRequest(this.audienceState(), this.options);
     this.loadingPreview = true;
     this.error = '';
     this.success = '';
@@ -383,7 +478,10 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       | 'out_of_segment'
       | 'unclassified'
       | 'current_status_blocked'
-      | 'history_excluded',
+      | 'history_excluded'
+      | 'funnel_candidates'
+      | 'funnel_buyer_excluded'
+      | 'active_member_suppression',
     count: number,
   ): void {
     if (count <= 0) {
@@ -556,7 +654,12 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   }
 
   sourceLabel(value: CampaignV2Source): string {
-    return value === 'ACTIVE_MEMBERS' ? 'Socios activos' : 'Socios vencidos';
+    const labels: Record<CampaignV2Source, string> = {
+      EXPIRED_MEMBERS: 'Socios vencidos',
+      ACTIVE_MEMBERS: 'Socios activos',
+      FUNNEL_PORTFOLIO: 'Cartera Funnel / Venta Nueva',
+    };
+    return labels[value];
   }
 
   purposeLabel(value: CampaignV2Purpose): string {
@@ -592,6 +695,18 @@ export class MarketingCampaignV2PageComponent implements OnInit {
         value: String(metadata.current_status_activos_cutoff_date),
       });
     }
+    if (metadata.funnel_month) {
+      rows.push({ label: 'Mes Funnel', value: String(metadata.funnel_month) });
+    }
+    if (metadata.funnel_cutoff_date) {
+      rows.push({ label: 'Corte Funnel', value: String(metadata.funnel_cutoff_date) });
+    }
+    if (metadata.active_members_cutoff_date) {
+      rows.push({
+        label: 'Corte Socios Activos',
+        value: String(metadata.active_members_cutoff_date),
+      });
+    }
     return rows;
   }
 
@@ -623,6 +738,8 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       audienceFamilies: this.selectedFamilies,
       expirationDateFrom: this.expirationDateFrom.value,
       expirationDateTo: this.expirationDateTo.value,
+      funnelMonth: this.funnelMonth.value,
+      funnelCutoffDate: this.funnelCutoffDate.value,
       historyEnabled: this.historyEnabled.value,
       historyDeliveryBuckets: this.selectedHistoryDeliveryBuckets,
       historyOutcomes: this.selectedHistoryOutcomes,
@@ -642,6 +759,9 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     this.selectedFamilies = [];
     this.expirationDateFrom.setValue('', { emitEvent: false });
     this.expirationDateTo.setValue('', { emitEvent: false });
+    this.funnelMonth.setValue('', { emitEvent: false });
+    this.funnelCutoffDate.setValue('', { emitEvent: false });
+    this.funnelCutoffDates = [];
     this.historyEnabled.setValue(false, { emitEvent: false });
     this.historyButtonInteracted.setValue(false, { emitEvent: false });
     this.historyWindowMode.setValue('ALL', { emitEvent: false });
@@ -675,13 +795,19 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   }
 
   private audienceValidationMessage(): string {
-    if (!this.selectedFamilies.length) {
+    if (this.showsAudienceFamilies && !this.selectedFamilies.length) {
       return 'Selecciona al menos una familia comercial.';
+    }
+    if (this.isFunnelSource && !this.funnelMonth.value) {
+      return 'Selecciona el Mes Funnel.';
+    }
+    if (this.isFunnelSource && !this.funnelCutoffDate.value) {
+      return 'Selecciona un Corte Funnel completo.';
     }
     if (this.historyLookbackInvalid) {
       return 'Indica un número entero de días mayor a cero para la ventana histórica.';
     }
-    if (this.isExpiredSource) {
+    if (this.showsExpirationRange) {
       if (!this.expirationDateFrom.value || !this.expirationDateTo.value) {
         return 'Indica las dos fechas de vencimiento.';
       }

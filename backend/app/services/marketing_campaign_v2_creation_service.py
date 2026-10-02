@@ -60,9 +60,12 @@ def build_campaign_v2_freeze_preview(
     expiration_date_from: Any = None,
     expiration_date_to: Any = None,
     history_exclusion: Any = None,
+    funnel_month: Any = None,
+    funnel_cutoff_date: Any = None,
+    marketing_access: Any = None,
     session: Any | None = None,
 ) -> dict[str, Any]:
-    """Reconstruye con M3 y entrega Preview más fingerprint server-side."""
+    """Reconstruye con Audience Builder y entrega Preview más fingerprint server-side."""
 
     plan = _rebuild_plan(
         source=source,
@@ -71,6 +74,9 @@ def build_campaign_v2_freeze_preview(
         expiration_date_from=expiration_date_from,
         expiration_date_to=expiration_date_to,
         history_exclusion=history_exclusion,
+        funnel_month=funnel_month,
+        funnel_cutoff_date=funnel_cutoff_date,
+        marketing_access=marketing_access,
         session=session,
     )
     preview = audience._serialize_preview(plan)
@@ -81,7 +87,6 @@ def build_campaign_v2_freeze_preview(
         "preview_fingerprint_version": PREVIEW_FINGERPRINT_VERSION,
         "preview_fingerprint": fingerprint,
     }
-
 
 def freeze_campaign_v2(
     *,
@@ -95,6 +100,9 @@ def freeze_campaign_v2(
     expiration_date_from: Any = None,
     expiration_date_to: Any = None,
     history_exclusion: Any = None,
+    funnel_month: Any = None,
+    funnel_cutoff_date: Any = None,
+    marketing_access: Any = None,
     session: Any | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -118,6 +126,9 @@ def freeze_campaign_v2(
         expiration_date_from=expiration_date_from,
         expiration_date_to=expiration_date_to,
         history_exclusion=history_exclusion,
+        funnel_month=funnel_month,
+        funnel_cutoff_date=funnel_cutoff_date,
+        marketing_access=marketing_access,
         session=active_session,
     )
     preview = audience._serialize_preview(plan)
@@ -208,7 +219,10 @@ def _rebuild_plan(
     expiration_date_from: Any,
     expiration_date_to: Any,
     history_exclusion: Any,
-    session: Any | None,
+    funnel_month: Any = None,
+    funnel_cutoff_date: Any = None,
+    marketing_access: Any = None,
+    session: Any | None = None,
 ):
     try:
         return audience._build_campaign_v2_audience_plan(
@@ -218,11 +232,13 @@ def _rebuild_plan(
             expiration_date_from=expiration_date_from,
             expiration_date_to=expiration_date_to,
             history_exclusion=history_exclusion,
+            funnel_month=funnel_month,
+            funnel_cutoff_date=funnel_cutoff_date,
+            marketing_access=marketing_access,
             session=session,
         )
     except audience.MarketingCampaignV2AudienceValidationError as exc:
         raise MarketingCampaignV2CreationValidationError(str(exc)) from exc
-
 
 def _build_audience_definition(
     *,
@@ -256,6 +272,17 @@ def _preview_summary(preview: dict[str, Any]) -> dict[str, Any]:
         "duplicate_count",
         "unique_recipient_count",
     ]
+    if preview.get("source") == audience.SOURCE_FUNNEL_PORTFOLIO:
+        keys.extend(
+            [
+                "funnel_candidate_count",
+                "funnel_buyer_excluded_count",
+                "active_member_suppression_count",
+                "before_history_filter_count",
+                "history_excluded_count",
+                "after_history_filter_count",
+            ]
+        )
     if "history_exclusion" in (preview.get("filters") or {}):
         keys.extend(
             [
@@ -269,9 +296,8 @@ def _preview_summary(preview: dict[str, Any]) -> dict[str, Any]:
         )
     return {
         key: _canonical_value(preview[key])
-        for key in keys
+        for key in dict.fromkeys(keys)
     }
-
 
 def _fingerprint_plan(plan: Any) -> str:
     preview = audience._serialize_preview(plan)

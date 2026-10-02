@@ -17,6 +17,9 @@ from app.models.warehouse import (
 from app.services.marketing_access import MarketingAccess
 from app.services.marketing_dashboard_service import load_visible_marketing_branches
 from app.services.marketing_inputs_service import parse_month
+from app.services.marketing_iventas_leads_service import (
+    build_iventas_ads_lead_condition,
+)
 from app.services.marketing_phone import normalize_member_phone, normalize_phone
 from app.services.marketing_sales_funnel_service import (
     MATCH_WINDOW_DAYS,
@@ -38,7 +41,6 @@ from app.services.marketing_sales_funnel_service import (
     _load_visits,
     _match_iventas,
     _merge_visits_with_direct_purchases,
-    _meta_contact_keys,
     _month_end,
     _payment_local_date,
     _select_new_sales_detail_snapshot,
@@ -670,6 +672,7 @@ def _enrich_lead_followup_rows(
                 "visit_status": "Sí" if visited else "No",
                 "visit_date": visit_date.isoformat() if visit_date else None,
                 "purchase_status": "Sí" if bought else "No",
+                "bought": bought,
                 "sale_date": (
                     global_sale_date.isoformat()
                     if global_sale_date is not None
@@ -997,13 +1000,12 @@ def _leads_meta_detail(
     if not current_run_ids:
         return [], 0
 
-    meta_keys = _meta_contact_keys(current_run_ids)
     allowed = set(branch_ids)
     contacts = (
         MarketingIventasContactORM.query.filter(
             MarketingIventasContactORM.sync_run_id.in_(current_run_ids),
             MarketingIventasContactORM.sucursal_id.in_(branch_ids),
-            MarketingIventasContactORM.first_message_at_utc.isnot(None),
+            build_iventas_ads_lead_condition(),
             MarketingIventasContactORM.phone_mx10.isnot(None),
         )
         .order_by(MarketingIventasContactORM.first_message_at_local.asc())
@@ -1019,9 +1021,6 @@ def _leads_meta_detail(
             continue
         if branch_id_filter is not None and branch_id != branch_id_filter:
             continue
-        if (int(contact.sync_run_id), int(contact.id)) not in meta_keys:
-            continue
-
         current_index = matched_count
         matched_count += 1
         if current_index < page_start or current_index >= page_end:

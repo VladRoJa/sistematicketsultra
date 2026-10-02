@@ -15,6 +15,7 @@
   <div *ngIf="error" class="inline-error" role="alert">{{ error }}</div>
 
   <ng-container *ngIf="response && !loading">
+    <p *ngIf="explanation" class="detail-meta">{{ explanation }}</p>
     <div class="detail-meta">
       <span>{{ response.total | number }} registros</span>
       <span *ngIf="response.pages">Página {{ response.page }} de {{ response.pages }}</span>
@@ -32,6 +33,7 @@
             <th>Vencimiento</th>
             <th>Estado actual</th>
             <th *ngIf="data.bucket === 'HISTORY_EXCLUDED'">Razones</th>
+            <th *ngIf="response.source === 'FUNNEL_PORTFOLIO'">Evidencia Funnel</th>
           </tr>
         </thead>
         <tbody>
@@ -45,6 +47,9 @@
             <td>{{ row.current_status || '—' }}</td>
             <td *ngIf="data.bucket === 'HISTORY_EXCLUDED'">
               {{ historyReasonsLabel(row.history_exclusion_reasons) }}
+            </td>
+            <td *ngIf="response.source === 'FUNNEL_PORTFOLIO'">
+              {{ evidenceLabel(row.evidence) }}
             </td>
           </tr>
         </tbody>

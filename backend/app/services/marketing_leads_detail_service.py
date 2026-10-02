@@ -6,7 +6,7 @@ from datetime import date, datetime
 from typing import Any, Iterable, Mapping
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, exists, or_, select
+from sqlalchemy import select
 
 from app.extensions import db
 from app.models import (
@@ -21,6 +21,9 @@ from app.services.marketing_dashboard_service import (
 from app.services.marketing_inputs_service import parse_month
 from app.services.marketing_iventas_dashboard_data_service import (
     read_iventas_dashboard_month_data,
+)
+from app.services.marketing_iventas_leads_service import (
+    build_iventas_ads_lead_condition,
 )
 from app.services.marketing_iventas_service import TAG_KIND_META_AD
 from app.services.marketing_meta_dashboard_service import (
@@ -44,25 +47,6 @@ def build_marketing_lead_contacts_statement(
     if not normalized_branch_ids:
         raise ValueError("branch_ids no puede estar vacío.")
 
-    has_meta_tag = exists(
-        select(MarketingIventasContactTagORM.id).where(
-            MarketingIventasContactTagORM.sync_run_id
-            == iventas_sync_run_id,
-            MarketingIventasContactTagORM.iventas_contact_row_id
-            == MarketingIventasContactORM.id,
-            MarketingIventasContactTagORM.tag_kind
-            == TAG_KIND_META_AD,
-        )
-    )
-
-    is_ads_lead = or_(
-        MarketingIventasContactORM.is_from_ads.is_(True),
-        and_(
-            MarketingIventasContactORM.is_from_ads.is_(None),
-            has_meta_tag,
-        ),
-    )
-
     return (
         select(
             MarketingIventasContactORM.id.label("contact_row_id"),
@@ -84,8 +68,7 @@ def build_marketing_lead_contacts_statement(
             MarketingIventasContactORM.sucursal_id.in_(
                 normalized_branch_ids
             ),
-            MarketingIventasContactORM.first_message_at_utc.is_not(None),
-            is_ads_lead,
+            build_iventas_ads_lead_condition(),
         )
         .order_by(
             MarketingIventasContactORM.sucursal_id.asc(),

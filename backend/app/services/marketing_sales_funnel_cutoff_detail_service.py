@@ -14,6 +14,9 @@ from app.models.warehouse import (
 from app.services.marketing_access import MarketingAccess
 from app.services.marketing_dashboard_service import load_visible_marketing_branches
 from app.services.marketing_inputs_service import parse_month
+from app.services.marketing_iventas_leads_service import (
+    build_iventas_ads_lead_condition,
+)
 from app.services.marketing_sales_funnel_cutoff_service import (
     _select_exact_iventas_run,
     _select_exact_new_sales_snapshot,
@@ -59,7 +62,6 @@ from app.services.marketing_sales_funnel_service import (
     _load_new_sales,
     _load_visits,
     _match_iventas,
-    _meta_contact_keys,
     _visit_source_label,
     _visit_type_label,
 )
@@ -287,14 +289,19 @@ def _lead_rows(
     if iventas_run_id is None:
         return []
 
-    meta_keys = _meta_contact_keys((iventas_run_id,)) if meta_only else set()
-    contacts = (
-        MarketingIventasContactORM.query.filter(
-            MarketingIventasContactORM.sync_run_id == iventas_run_id,
-            MarketingIventasContactORM.sucursal_id.in_(branch_ids),
-            MarketingIventasContactORM.first_message_at_utc.isnot(None),
+    query = MarketingIventasContactORM.query.filter(
+        MarketingIventasContactORM.sync_run_id == iventas_run_id,
+        MarketingIventasContactORM.sucursal_id.in_(branch_ids),
+    )
+    if meta_only:
+        query = query.filter(build_iventas_ads_lead_condition())
+    else:
+        query = query.filter(
+            MarketingIventasContactORM.first_message_at_utc.isnot(None)
         )
-        .order_by(
+
+    contacts = (
+        query.order_by(
             MarketingIventasContactORM.first_message_at_local.asc(),
             MarketingIventasContactORM.id.asc(),
         )
@@ -305,8 +312,6 @@ def _lead_rows(
     for contact in contacts:
         branch_id = int(contact.sucursal_id)
         if branch_id_filter is not None and branch_id != branch_id_filter:
-            continue
-        if meta_only and (iventas_run_id, int(contact.id)) not in meta_keys:
             continue
 
         contact_date = contact.first_message_date_local
@@ -376,14 +381,19 @@ def _lead_contact_rows(
     iventas_run_id: int,
     meta_only: bool,
 ) -> list[dict[str, Any]]:
-    meta_keys = _meta_contact_keys((iventas_run_id,)) if meta_only else set()
-    contacts = (
-        MarketingIventasContactORM.query.filter(
-            MarketingIventasContactORM.sync_run_id == iventas_run_id,
-            MarketingIventasContactORM.sucursal_id.in_(branch_ids),
-            MarketingIventasContactORM.first_message_at_utc.isnot(None),
+    query = MarketingIventasContactORM.query.filter(
+        MarketingIventasContactORM.sync_run_id == iventas_run_id,
+        MarketingIventasContactORM.sucursal_id.in_(branch_ids),
+    )
+    if meta_only:
+        query = query.filter(build_iventas_ads_lead_condition())
+    else:
+        query = query.filter(
+            MarketingIventasContactORM.first_message_at_utc.isnot(None)
         )
-        .order_by(
+
+    contacts = (
+        query.order_by(
             MarketingIventasContactORM.first_message_at_local.asc(),
             MarketingIventasContactORM.id.asc(),
         )
@@ -394,8 +404,6 @@ def _lead_contact_rows(
     for contact in contacts:
         branch_id = int(contact.sucursal_id)
         if branch_id_filter is not None and branch_id != branch_id_filter:
-            continue
-        if meta_only and (iventas_run_id, int(contact.id)) not in meta_keys:
             continue
 
         contact_date = contact.first_message_date_local
@@ -483,6 +491,7 @@ def _resolve_leads_meta_cutoff_base(
         "branch_id": branch_id_filter,
         "branch_ids": branch_ids,
         "branch_names": branch_names,
+        "iventas_sync_run_id": int(iventas_run.id),
         "count": len(rows),
         "revenue_total": Decimal("0"),
         "rows": rows,
@@ -539,6 +548,63 @@ def _enrich_leads_meta_cutoff_rows(
         visible_branch_ids=branch_ids,
         cutoff_date=selected_cutoff,
     )
+
+
+def build_marketing_funnel_portfolio_at_cutoff(
+    *,
+    month: str,
+    cutoff_date: Any,
+    access: MarketingAccess,
+    branch_id: Any = None,
+) -> dict[str, Any]:
+    """Cartera Funnel v1 reproducible por month + cutoff.
+
+    Devuelve candidatos no compradores y compradores excluidos usando la
+    misma cohorte Ads y el mismo matcher de compra global a 60 días del Funnel.
+    """
+
+    if not str(cutoff_date or "").strip():
+        raise MarketingSalesFunnelDetailValidationError(
+            "cutoff_date es obligatorio para la cartera Funnel reproducible."
+        )
+
+    base = _resolve_leads_meta_cutoff_base(
+        month=month,
+        cutoff_date=cutoff_date,
+        access=access,
+        branch_id=branch_id,
+    )
+    enriched_rows = _enrich_leads_meta_cutoff_rows(
+        base=base,
+        rows=list(base["rows"]),
+    )
+
+    candidates: list[dict[str, Any]] = []
+    buyer_excluded: list[dict[str, Any]] = []
+    for row in enriched_rows:
+        item = {
+            "phone_mx10": row.get("phone"),
+            "contact_id": row.get("contact_id"),
+            "name": row.get("name"),
+            "sucursal_id": row.get("branch_id"),
+            "channel": row.get("channel"),
+            "source_date": row.get("date"),
+            "origin": row.get("origin"),
+            "bought": bool(row.get("bought")),
+        }
+        if item["bought"]:
+            buyer_excluded.append(item)
+        else:
+            candidates.append(item)
+
+    return {
+        "funnel_month": base["month"],
+        "funnel_cutoff_date": base["cutoff_date"],
+        "iventas_sync_run_id": int(base["iventas_sync_run_id"]),
+        "scope": base["scope"],
+        "rows": candidates,
+        "buyer_excluded": buyer_excluded,
+    }
 
 
 def _public_leads_meta_cutoff_base(base: dict[str, Any]) -> dict[str, Any]:
