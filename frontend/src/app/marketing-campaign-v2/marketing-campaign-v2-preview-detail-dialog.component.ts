@@ -12,6 +12,7 @@ import {
   CampaignV2PreviewBucket,
   CampaignV2PreviewDetailResponse,
 } from './marketing-campaign-v2.models';
+import { campaignV2HistoryReasonLabel } from './marketing-campaign-v2.logic';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
 
 export interface MarketingCampaignV2PreviewDetailDialogData {
@@ -57,6 +58,7 @@ export class MarketingCampaignV2PreviewDetailDialogComponent implements OnInit {
       UNCLASSIFIED: 'Tarifa sin clasificación',
       FAMILY: 'Familia',
       CURRENT_STATUS_BLOCKED: 'Bloqueados por estado actual',
+      HISTORY_EXCLUDED: 'Excluidos por historial',
     };
     return labels[this.data.bucket];
   }
@@ -98,6 +100,13 @@ export class MarketingCampaignV2PreviewDetailDialogComponent implements OnInit {
     if (this.response && this.response.page < this.response.pages) {
       this.load(this.response.page + 1);
     }
+  }
+
+  historyReasonsLabel(reasons: string[] | undefined): string {
+    if (!reasons?.length) {
+      return '—';
+    }
+    return reasons.map(campaignV2HistoryReasonLabel).join(', ');
   }
 
   familyLabel(value: CampaignV2ObservedFamily | null | undefined): string {

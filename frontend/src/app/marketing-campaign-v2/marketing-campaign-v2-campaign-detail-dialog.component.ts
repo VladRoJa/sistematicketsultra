@@ -23,6 +23,10 @@ import {
   CampaignV2Source,
   CampaignV2SourceMetadata,
 } from './marketing-campaign-v2.models';
+import {
+  campaignV2HistoryExclusionSummary,
+  campaignV2HistoryWindowLabel,
+} from './marketing-campaign-v2.logic';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
 import {
   MarketingCampaignV2RecipientDetailDialogComponent,
@@ -231,6 +235,19 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
     if (definition.filters.expiration_date_to) {
       rows.push({ label: 'Vencimiento hasta', value: definition.filters.expiration_date_to });
     }
+    if (definition.filters.history_exclusion) {
+      const exclusionLabels = campaignV2HistoryExclusionSummary(
+        definition.filters.history_exclusion,
+      );
+      rows.push({
+        label: 'Exclusiones históricas',
+        value: exclusionLabels.length ? exclusionLabels.join(', ') : '—',
+      });
+      rows.push({
+        label: 'Ventana histórica',
+        value: campaignV2HistoryWindowLabel(definition.filters.history_exclusion),
+      });
+    }
     return rows;
   }
 
@@ -249,7 +266,33 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
         rows.push({ label, value: String(value) });
       }
     }
+
+    const historyEvaluation = metadata.history_evaluation;
+    if (historyEvaluation?.observed_after) {
+      rows.push({
+        label: 'Historial observado desde',
+        value: this.formatHistoryObservedAt(historyEvaluation.observed_after),
+      });
+    }
+    if (historyEvaluation?.observed_before) {
+      rows.push({
+        label: 'Historial evaluado hasta',
+        value: this.formatHistoryObservedAt(historyEvaluation.observed_before),
+      });
+    }
     return rows;
+  }
+
+  private formatHistoryObservedAt(value: string): string {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return value;
+    }
+    return new Intl.DateTimeFormat('es-MX', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'America/Tijuana',
+    }).format(parsed);
   }
 
   private errorMessage(error: HttpErrorResponse, fallback: string): string {

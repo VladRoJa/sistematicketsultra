@@ -31,6 +31,7 @@
             <th>Familia</th>
             <th>Vencimiento</th>
             <th>Estado actual</th>
+            <th *ngIf="data.bucket === 'HISTORY_EXCLUDED'">Razones</th>
           </tr>
         </thead>
         <tbody>
@@ -42,6 +43,9 @@
             <td>{{ familyLabel(row.audience_family) }}</td>
             <td>{{ row.fecha_vencimiento || '—' }}</td>
             <td>{{ row.current_status || '—' }}</td>
+            <td *ngIf="data.bucket === 'HISTORY_EXCLUDED'">
+              {{ historyReasonsLabel(row.history_exclusion_reasons) }}
+            </td>
           </tr>
         </tbody>
       </table>

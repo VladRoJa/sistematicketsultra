@@ -6,6 +6,11 @@ import path from 'node:path';
 import {
   buildCampaignV2AudienceRequest,
   buildCampaignV2FreezeRequest,
+  buildCampaignV2HistoryExclusion,
+  campaignV2HistoryBreakdownRows,
+  campaignV2HistoryReasonLabel,
+  isCampaignV2HistoryFilterValid,
+  parseCampaignV2LookbackDays,
   campaignV2FieldInvalidatesPreview,
   campaignV2FreezeErrorInvalidatesPreview,
   campaignV2MetricBucket,
@@ -21,6 +26,8 @@ import {
 } from './marketing-campaign-v2-menu';
 import {
   CampaignV2AudienceFamily,
+  CampaignV2HistoryDeliveryBucket,
+  CampaignV2HistoryOutcome,
   CampaignV2PreviewResponse,
 } from './marketing-campaign-v2.models';
 
@@ -238,3 +245,270 @@ test('catalogador trabaja por tarifa única, usa categorías backend e invalida 
   assert.equal(layout.includes("path: '/marketing/reactivation'"), true);
 });
 
+
+
+test('history_exclusion se omite sin condiciones efectivas', () => {
+  const request = buildCampaignV2AudienceRequest({
+    source: 'ACTIVE_MEMBERS',
+    audienceFamilies: ['DOMICILIADO'],
+    expirationDateFrom: '',
+    expirationDateTo: '',
+    historyEnabled: true,
+    historyDeliveryBuckets: [],
+    historyOutcomes: [],
+    historyButtonInteracted: false,
+    historyWindowMode: 'ALL',
+    historyLookbackDays: '',
+  });
+  assert.equal('history_exclusion' in request, false);
+});
+
+test('VIEWED genera payload exacto sin inferir SENT ni DELIVERED', () => {
+  const request = buildCampaignV2AudienceRequest({
+    source: 'ACTIVE_MEMBERS',
+    audienceFamilies: ['DOMICILIADO'],
+    expirationDateFrom: '',
+    expirationDateTo: '',
+    historyEnabled: true,
+    historyDeliveryBuckets: ['VIEWED'],
+    historyOutcomes: [],
+    historyButtonInteracted: false,
+    historyWindowMode: 'ALL',
+    historyLookbackDays: '',
+  });
+  assert.deepEqual(request.history_exclusion, {
+    delivery_buckets: ['VIEWED'],
+    outcomes: [],
+    button_interacted: false,
+    lookback_days: null,
+  });
+});
+
+test('FAILED + VIEWED + button conserva OR como criterios independientes', () => {
+  const exclusion = buildCampaignV2HistoryExclusion({
+    source: 'ACTIVE_MEMBERS',
+    audienceFamilies: ['DOMICILIADO'],
+    expirationDateFrom: '',
+    expirationDateTo: '',
+    historyEnabled: true,
+    historyDeliveryBuckets: ['VIEWED'],
+    historyOutcomes: ['FAILED'],
+    historyButtonInteracted: true,
+    historyWindowMode: 'DAYS',
+    historyLookbackDays: '90',
+  });
+  assert.deepEqual(exclusion, {
+    delivery_buckets: ['VIEWED'],
+    outcomes: ['FAILED'],
+    button_interacted: true,
+    lookback_days: 90,
+  });
+});
+
+test('lookback acepta null conceptual o entero positivo y rechaza inválidos', () => {
+  assert.equal(parseCampaignV2LookbackDays('1'), 1);
+  assert.equal(parseCampaignV2LookbackDays('90'), 90);
+  for (const value of ['', '0', '-1', '1.5', 'NaN', 'texto']) {
+    assert.equal(parseCampaignV2LookbackDays(value), null, value);
+  }
+
+  const base = {
+    source: 'ACTIVE_MEMBERS' as const,
+    audienceFamilies: ['DOMICILIADO'] as CampaignV2AudienceFamily[],
+    expirationDateFrom: '',
+    expirationDateTo: '',
+    historyEnabled: true,
+    historyDeliveryBuckets: ['VIEWED'] as Array<'SENT' | 'DELIVERED' | 'VIEWED'>,
+    historyOutcomes: [] as Array<'SUCCESSFUL' | 'FAILED'>,
+    historyButtonInteracted: false,
+    historyWindowMode: 'DAYS' as const,
+  };
+  assert.equal(isCampaignV2HistoryFilterValid({ ...base, historyLookbackDays: '30' }), true);
+  assert.equal(isCampaignV2HistoryFilterValid({ ...base, historyLookbackDays: '0' }), false);
+});
+
+test('cualquier criterio histórico invalida Preview; name/purpose no', () => {
+  for (const field of [
+    'history_enabled',
+    'history_delivery_buckets',
+    'history_outcomes',
+    'history_button_interacted',
+    'history_window_mode',
+    'history_lookback_days',
+  ] as const) {
+    assert.equal(campaignV2FieldInvalidatesPreview(field), true, field);
+  }
+  assert.equal(campaignV2FieldInvalidatesPreview('name'), false);
+  assert.equal(campaignV2FieldInvalidatesPreview('purpose'), false);
+});
+
+test('reason mapper traduce razones conocidas y tiene fallback seguro', () => {
+  assert.equal(campaignV2HistoryReasonLabel('HISTORY_DELIVERY_VIEWED'), 'Visto anteriormente');
+  assert.equal(campaignV2HistoryReasonLabel('HISTORY_OUTCOME_FAILED'), 'Resultado fallido anteriormente');
+  assert.equal(campaignV2HistoryReasonLabel('HISTORY_BUTTON_INTERACTION'), 'Interactuó con un botón');
+  assert.equal(campaignV2HistoryReasonLabel('HISTORY_FUTURE_REASON'), 'Razón histórica: HISTORY_FUTURE_REASON');
+});
+
+test('Freeze conserva history_exclusion y nunca agrega teléfonos/cutoff efectivo', () => {
+  const audience = buildCampaignV2AudienceRequest({
+    source: 'ACTIVE_MEMBERS',
+    audienceFamilies: ['DOMICILIADO'],
+    expirationDateFrom: '',
+    expirationDateTo: '',
+    historyEnabled: true,
+    historyDeliveryBuckets: ['VIEWED'],
+    historyOutcomes: ['FAILED'],
+    historyButtonInteracted: true,
+    historyWindowMode: 'DAYS',
+    historyLookbackDays: '90',
+  });
+  const request = buildCampaignV2FreezeRequest(
+    audience,
+    ' Histórica ',
+    'REACTIVATION',
+    'f'.repeat(64),
+  );
+  assert.deepEqual(request.history_exclusion, {
+    delivery_buckets: ['VIEWED'],
+    outcomes: ['FAILED'],
+    button_interacted: true,
+    lookback_days: 90,
+  });
+  for (const forbidden of [
+    'excluded_phones',
+    'history_rows',
+    'observed_before',
+    'observed_after',
+  ]) {
+    assert.equal(forbidden in request, false, forbidden);
+  }
+});
+
+
+test('M15 renderiza diagnostics/history detail sin M13 ni auth manual', () => {
+  const root = process.cwd();
+  const dir = path.join(root, 'src/app/marketing-campaign-v2');
+  const service = fs.readFileSync(path.join(dir, 'marketing-campaign-v2.service.ts'), 'utf8');
+  const pageTs = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.ts'), 'utf8');
+  const pageHtml = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.html'), 'utf8');
+  const detailTs = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-preview-detail-dialog.component.ts'),
+    'utf8',
+  );
+  const detailHtml = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-preview-detail-dialog.component.html'),
+    'utf8',
+  );
+
+  assert.equal(pageHtml.includes('Antes del filtro histórico'), true);
+  assert.equal(pageHtml.includes('Excluidos por historial'), true);
+  assert.equal(pageHtml.includes('Después del filtro histórico'), true);
+  assert.equal(
+    pageHtml.includes('Un contacto puede aparecer en más de una razón de exclusión.'),
+    true,
+  );
+  assert.equal(pageTs.includes("openMetric('history_excluded'"), false);
+  assert.equal(pageHtml.includes("openMetric('history_excluded'"), true);
+  assert.equal(detailTs.includes("HISTORY_EXCLUDED: 'Excluidos por historial'"), true);
+  assert.equal(detailTs.includes('campaignV2HistoryReasonLabel'), true);
+  assert.equal(detailHtml.includes("data.bucket === 'HISTORY_EXCLUDED'"), true);
+
+  assert.equal(service.includes('provider-history/lookup'), false);
+  assert.equal(service.includes('Authorization'), false);
+  assert.equal(service.includes('localStorage'), false);
+  assert.equal(pageTs.includes('provider-history/lookup'), false);
+});
+
+
+test('UI M15 expone filtros/diagnostics/detail sin consultar M13 ni auth manual', () => {
+  const root = process.cwd();
+  const dir = path.join(root, 'src/app/marketing-campaign-v2');
+  const service = fs.readFileSync(path.join(dir, 'marketing-campaign-v2.service.ts'), 'utf8');
+  const models = fs.readFileSync(path.join(dir, 'marketing-campaign-v2.models.ts'), 'utf8');
+  const page = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.ts'), 'utf8');
+  const html = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.html'), 'utf8');
+  const detail = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-preview-detail-dialog.component.ts'),
+    'utf8',
+  );
+  const detailHtml = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-preview-detail-dialog.component.html'),
+    'utf8',
+  );
+
+  assert.equal(models.includes("history_exclusion?: CampaignV2HistoryExclusion"), true);
+  assert.equal(models.includes("| 'HISTORY_EXCLUDED'"), true);
+  assert.equal(html.includes('Historial de campañas'), true);
+  assert.equal(html.includes('Excluir contactos según historial'), true);
+  assert.equal(html.includes('Antes del filtro histórico'), true);
+  assert.equal(html.includes('Excluidos por historial'), true);
+  assert.equal(html.includes('Después del filtro histórico'), true);
+  assert.equal(html.includes('Un contacto puede aparecer en más de una razón de exclusión.'), true);
+  assert.equal(page.includes('historyBreakdownRows()'), true);
+  assert.equal(page.includes('this.invalidatePreview();'), true);
+  assert.equal(detail.includes("HISTORY_EXCLUDED: 'Excluidos por historial'"), true);
+  assert.equal(detail.includes('campaignV2HistoryReasonLabel'), true);
+  assert.equal(detailHtml.includes('historyReasonsLabel(row.history_exclusion_reasons)'), true);
+
+  for (const forbidden of [
+    'provider-history/lookup',
+    '/provider-history',
+    'rest.iventas.mx',
+    'IVENTAS_CAMPAIGNS_API_KEY',
+    'Authorization',
+    'localStorage',
+  ]) {
+    assert.equal(service.includes(forbidden), false, forbidden);
+  }
+});
+
+test('UI no expone cutoff editable ni copy de respondió/no contestó', () => {
+  const root = process.cwd();
+  const dir = path.join(root, 'src/app/marketing-campaign-v2');
+  const html = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.html'), 'utf8');
+  const page = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.ts'), 'utf8');
+
+  assert.equal(html.includes('observed_before'), false);
+  assert.equal(html.includes('observed_after'), false);
+  assert.equal(html.toLowerCase().includes('no contestó'), false);
+  assert.equal(html.toLowerCase().includes('respondió'), false);
+  assert.equal(page.includes("label: 'Historial observado desde'"), true);
+  assert.equal(page.includes("label: 'Historial evaluado hasta'"), true);
+});
+
+
+test('diagnostics solapados conservan total backend y razones no exclusivas', () => {
+  const backendHistoryExcludedCount = 2;
+  const rows = campaignV2HistoryBreakdownRows({
+    history_excluded_count: backendHistoryExcludedCount,
+    excluded_by_delivery_bucket: { VIEWED: 1 },
+    excluded_by_outcome: { FAILED: 1 },
+    excluded_by_button_interaction: 1,
+  });
+  assert.deepEqual(rows, [
+    { label: 'Vistos', count: 1 },
+    { label: 'Fallidos', count: 1 },
+    { label: 'Interacción con botón', count: 1 },
+  ]);
+  assert.equal(rows.reduce((total, row) => total + row.count, 0), 3);
+  assert.equal(backendHistoryExcludedCount, 2);
+});
+
+
+test('detalle congelado muestra criterios históricos persistidos sin backend nuevo', () => {
+  const root = process.cwd();
+  const dir = path.join(root, 'src/app/marketing-campaign-v2');
+  const service = fs.readFileSync(path.join(dir, 'marketing-campaign-v2.service.ts'), 'utf8');
+  const detail = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-campaign-detail-dialog.component.ts'),
+    'utf8',
+  );
+
+  assert.equal(detail.includes("label: 'Exclusiones históricas'"), true);
+  assert.equal(detail.includes("label: 'Ventana histórica'"), true);
+  assert.equal(detail.includes('definition.filters.history_exclusion'), true);
+  assert.equal(detail.includes('campaignV2HistoryExclusionSummary'), true);
+  assert.equal(detail.includes('campaignV2HistoryWindowLabel'), true);
+  assert.equal(detail.includes("timeZone: 'America/Tijuana'"), true);
+  assert.equal(service.includes('/provider-history'), false);
+});

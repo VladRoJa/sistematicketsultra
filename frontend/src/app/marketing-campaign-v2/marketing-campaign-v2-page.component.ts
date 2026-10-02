@@ -15,16 +15,25 @@ import {
   buildCampaignV2AudienceRequest,
   buildCampaignV2FreezeRequest,
   campaignV2FreezeErrorInvalidatesPreview,
+  campaignV2HistoryBreakdownRows,
+  campaignV2HistoryDeliveryLabel,
+  campaignV2HistoryOutcomeLabel,
   campaignV2MetricBucket,
   canFreezeCampaignV2,
   isCampaignV2AudienceValid,
+  parseCampaignV2LookbackDays,
   selectAllCampaignV2Families,
   toggleCampaignV2Family,
+  toggleCampaignV2HistoryDeliveryBucket,
+  toggleCampaignV2HistoryOutcome,
+  CampaignV2HistoryWindowMode,
 } from './marketing-campaign-v2.logic';
 import {
   CampaignV2AudienceDefinitionRequest,
   CampaignV2AudienceFamily,
   CampaignV2CampaignSummary,
+  CampaignV2HistoryDeliveryBucket,
+  CampaignV2HistoryOutcome,
   CampaignV2ObservedFamily,
   CampaignV2OptionsResponse,
   CampaignV2PreviewBucket,
@@ -74,6 +83,12 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   });
   readonly expirationDateFrom = new FormControl('', { nonNullable: true });
   readonly expirationDateTo = new FormControl('', { nonNullable: true });
+  readonly historyEnabled = new FormControl(false, { nonNullable: true });
+  readonly historyButtonInteracted = new FormControl(false, { nonNullable: true });
+  readonly historyWindowMode = new FormControl<CampaignV2HistoryWindowMode>('ALL', {
+    nonNullable: true,
+  });
+  readonly historyLookbackDays = new FormControl('', { nonNullable: true });
   readonly name = new FormControl('', { nonNullable: true });
   readonly purpose = new FormControl<CampaignV2Purpose>('UNCLASSIFIED', {
     nonNullable: true,
@@ -87,6 +102,17 @@ export class MarketingCampaignV2PageComponent implements OnInit {
 
   options: CampaignV2OptionsResponse | null = null;
   selectedFamilies: CampaignV2AudienceFamily[] = [];
+  selectedHistoryDeliveryBuckets: CampaignV2HistoryDeliveryBucket[] = [];
+  selectedHistoryOutcomes: CampaignV2HistoryOutcome[] = [];
+  readonly historyDeliveryOptions: CampaignV2HistoryDeliveryBucket[] = [
+    'SENT',
+    'DELIVERED',
+    'VIEWED',
+  ];
+  readonly historyOutcomeOptions: CampaignV2HistoryOutcome[] = [
+    'SUCCESSFUL',
+    'FAILED',
+  ];
   preview: CampaignV2PreviewResponse | null = null;
   campaigns: CampaignV2CampaignSummary[] = [];
 
@@ -123,6 +149,19 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.invalidatePreview());
 
+    this.historyEnabled.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.invalidatePreview());
+    this.historyButtonInteracted.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.invalidatePreview());
+    this.historyWindowMode.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.invalidatePreview());
+    this.historyLookbackDays.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.invalidatePreview());
+
     this.loadOptions();
   }
 
@@ -136,6 +175,20 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       && !this.loadingPreview
       && !this.creating
       && isCampaignV2AudienceValid(this.audienceState()),
+    );
+  }
+
+  get historyLookbackInvalid(): boolean {
+    const hasCondition = Boolean(
+      this.selectedHistoryDeliveryBuckets.length
+      || this.selectedHistoryOutcomes.length
+      || this.historyButtonInteracted.value,
+    );
+    return Boolean(
+      this.historyEnabled.value
+      && hasCondition
+      && this.historyWindowMode.value === 'DAYS'
+      && parseCampaignV2LookbackDays(this.historyLookbackDays.value) === null,
     );
   }
 
@@ -215,6 +268,73 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     return this.selectedFamilies.includes(family);
   }
 
+  setHistoryDeliverySelected(
+    bucket: CampaignV2HistoryDeliveryBucket,
+    change: MatCheckboxChange,
+  ): void {
+    this.selectedHistoryDeliveryBuckets = toggleCampaignV2HistoryDeliveryBucket(
+      this.selectedHistoryDeliveryBuckets,
+      bucket,
+      change.checked,
+    );
+    this.invalidatePreview();
+  }
+
+  isHistoryDeliverySelected(bucket: CampaignV2HistoryDeliveryBucket): boolean {
+    return this.selectedHistoryDeliveryBuckets.includes(bucket);
+  }
+
+  setHistoryOutcomeSelected(
+    outcome: CampaignV2HistoryOutcome,
+    change: MatCheckboxChange,
+  ): void {
+    this.selectedHistoryOutcomes = toggleCampaignV2HistoryOutcome(
+      this.selectedHistoryOutcomes,
+      outcome,
+      change.checked,
+    );
+    this.invalidatePreview();
+  }
+
+  isHistoryOutcomeSelected(outcome: CampaignV2HistoryOutcome): boolean {
+    return this.selectedHistoryOutcomes.includes(outcome);
+  }
+
+  historyDeliveryLabel(value: CampaignV2HistoryDeliveryBucket): string {
+    return campaignV2HistoryDeliveryLabel(value);
+  }
+
+  historyOutcomeLabel(value: CampaignV2HistoryOutcome): string {
+    return campaignV2HistoryOutcomeLabel(value);
+  }
+
+  historyBreakdownRows(): Array<{ label: string; count: number }> {
+    return this.preview
+      ? campaignV2HistoryBreakdownRows(this.preview)
+      : [];
+  }
+
+  historyEvaluationRows(): Array<{ label: string; value: string }> {
+    const evaluation = this.preview?.source_metadata.history_evaluation;
+    if (!evaluation) {
+      return [];
+    }
+    const rows: Array<{ label: string; value: string }> = [];
+    if (evaluation.observed_after) {
+      rows.push({
+        label: 'Historial observado desde',
+        value: this.formatObservedAt(evaluation.observed_after),
+      });
+    }
+    if (evaluation.observed_before) {
+      rows.push({
+        label: 'Historial evaluado hasta',
+        value: this.formatObservedAt(evaluation.observed_before),
+      });
+    }
+    return rows;
+  }
+
   selectAllFamilies(): void {
     this.selectedFamilies = selectAllCampaignV2Families(
       this.options?.selectable_audience_families ?? [],
@@ -262,7 +382,8 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       | 'duplicates'
       | 'out_of_segment'
       | 'unclassified'
-      | 'current_status_blocked',
+      | 'current_status_blocked'
+      | 'history_excluded',
     count: number,
   ): void {
     if (count <= 0) {
@@ -502,6 +623,12 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       audienceFamilies: this.selectedFamilies,
       expirationDateFrom: this.expirationDateFrom.value,
       expirationDateTo: this.expirationDateTo.value,
+      historyEnabled: this.historyEnabled.value,
+      historyDeliveryBuckets: this.selectedHistoryDeliveryBuckets,
+      historyOutcomes: this.selectedHistoryOutcomes,
+      historyButtonInteracted: this.historyButtonInteracted.value,
+      historyWindowMode: this.historyWindowMode.value,
+      historyLookbackDays: this.historyLookbackDays.value,
     };
   }
 
@@ -515,6 +642,12 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     this.selectedFamilies = [];
     this.expirationDateFrom.setValue('', { emitEvent: false });
     this.expirationDateTo.setValue('', { emitEvent: false });
+    this.historyEnabled.setValue(false, { emitEvent: false });
+    this.historyButtonInteracted.setValue(false, { emitEvent: false });
+    this.historyWindowMode.setValue('ALL', { emitEvent: false });
+    this.historyLookbackDays.setValue('', { emitEvent: false });
+    this.selectedHistoryDeliveryBuckets = [];
+    this.selectedHistoryOutcomes = [];
     this.name.setValue('', { emitEvent: false });
     const nextPurpose = this.options?.purposes.includes('UNCLASSIFIED')
       ? 'UNCLASSIFIED'
@@ -545,6 +678,9 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     if (!this.selectedFamilies.length) {
       return 'Selecciona al menos una familia comercial.';
     }
+    if (this.historyLookbackInvalid) {
+      return 'Indica un número entero de días mayor a cero para la ventana histórica.';
+    }
     if (this.isExpiredSource) {
       if (!this.expirationDateFrom.value || !this.expirationDateTo.value) {
         return 'Indica las dos fechas de vencimiento.';
@@ -554,6 +690,18 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       }
     }
     return 'Revisa la definición de audiencia.';
+  }
+
+  private formatObservedAt(value: string): string {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return value;
+    }
+    return new Intl.DateTimeFormat('es-MX', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'America/Tijuana',
+    }).format(parsed);
   }
 
   private serverMessage(error: HttpErrorResponse): string | null {
