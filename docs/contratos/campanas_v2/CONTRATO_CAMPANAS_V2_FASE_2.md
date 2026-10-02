@@ -37,7 +37,7 @@ La estructura de Fase 2 queda congelada así:
     2A — iVentas / histórico / engagement      ACCEPTED
     2B — FUNNEL_PORTFOLIO                      ACCEPTED
 
-    Historical Targeting transversal           PENDIENTE
+    Historical Targeting transversal           ACCEPTED
 
     2C — Campaign BI / Reporting / Excel       PENDIENTE
     2D — Acceptance final                      PENDIENTE
@@ -48,7 +48,7 @@ La estructura de Fase 2 queda congelada así:
 
 La captura automática M12 está implementada, pero permanece operativamente deshabilitada hasta definir explícitamente `cadence`, `horizon` y `max`.
 
-Historical Targeting transversal es obligatorio antes de cerrar 2C/2D. Fase 3 sólo puede comenzar después de completar Historical Targeting, cerrar 2C y completar 2D con aceptación integral.
+Historical Targeting transversal corresponde a M21–M25 y está ACCEPTED. 2C y 2D permanecen PENDIENTES. Fase 3 sólo puede comenzar después de cerrar 2C y completar 2D con aceptación integral.
 
 ### 0.2 Enmienda M8 — evidencia real observada y frontera vigente
 
@@ -178,7 +178,7 @@ Fase 2 conserva cuatro bloques numerados y añade una capacidad transversal obli
 
 - **2A — iVentas / histórico / engagement:** ACCEPTED; corresponde a M8–M16 y conserva toda su semántica vigente.
 - **2B — FUNNEL_PORTFOLIO:** ACCEPTED; corresponde a M17–M20 y reutiliza la cartera Funnel canónica, `ACTIVE_MEMBER_SUPPRESSION`, scope backend, history M14, dedupe, Preview/Detail, fingerprint, Freeze y Angular.
-- **Historical Targeting transversal:** PENDIENTE; amplía el histórico persistido M11/M13 para poder incluir o excluir por comportamiento previo con semántica `INCLUDE/EXCLUDE` + `ALL/ANY`.
+- **Historical Targeting transversal:** ACCEPTED; M21–M25 reutilizan el histórico persistido M11/M13 para incluir o excluir por comportamiento previo con semántica `INCLUDE/EXCLUDE` + `ALL/ANY`, Preview Detail neutral, fingerprint/Freeze y Angular, preservando compatibilidad legacy.
 - **2C — Campaign BI / Reporting / Excel:** PENDIENTE; proyección read-only sobre evidencia persistida por Suite.
 - **2D — Acceptance final:** PENDIENTE; valida integralmente 2A + 2B + Historical Targeting + 2C antes de autorizar Fase 3.
 
@@ -1462,14 +1462,14 @@ La estructura de Fase 2 permanece:
     2A — iVentas / histórico / engagement      ACCEPTED
     2B — FUNNEL_PORTFOLIO                      ACCEPTED
 
-    Historical Targeting transversal           PENDIENTE
+    Historical Targeting transversal           ACCEPTED
 
     2C — Campaign BI / Reporting / Excel       PENDIENTE
     2D — Acceptance final                      PENDIENTE
 
 No se renumeran 2A/2B/2C/2D.
 
-Historical Targeting debe quedar implementado y aceptado antes de considerar cerrables 2C/2D. Fase 3 continúa bloqueada hasta completar toda Fase 2.
+Historical Targeting está implementado y ACCEPTED mediante M21–M25. 2C/2D siguen pendientes y Fase 3 continúa bloqueada hasta completar toda Fase 2.
 
 ### 30.1.2 Contrato conceptual v1
 
@@ -2201,7 +2201,6 @@ Sólo después puede comenzar:
 
 PENDIENTE PARA CERRAR FASE 2:
 
-- Historical Targeting transversal;
 - Campaign BI;
 - Excel;
 - Angular Reporting;
@@ -2215,7 +2214,7 @@ POSTERIOR / NO BLOQUEANTE salvo necesidad:
 - normalización DB específica de costos;
 - activación productiva M12.
 
-`FUNNEL_PORTFOLIO` está ACCEPTED como 2B. Historical Targeting permanece PENDIENTE como capacidad transversal previa al cierre de 2C/2D.
+`FUNNEL_PORTFOLIO` está ACCEPTED como 2B. Historical Targeting transversal también está ACCEPTED; 2C/2D permanecen pendientes antes de habilitar Fase 3.
 
 ## 34. Instrucción de arranque recomendada para una conversación nueva de Fase 2
 
@@ -2229,11 +2228,11 @@ POSTERIOR / NO BLOQUEANTE salvo necesidad:
     Conserva la lógica comprador/no comprador canónica del Funnel,
     normalize phone, ACTIVE_MEMBER_SUPPRESSION, scope backend,
     history M14, dedupe, Preview/Detail, fingerprint, Freeze y Angular.
-    Historical Targeting transversal está PENDIENTE.
-    Debe reutilizar M13 y ampliar el histórico a INCLUDE/EXCLUDE + ALL/ANY
-    sin romper campañas M14/M15 con history_exclusion.
+    Historical Targeting transversal está ACCEPTED mediante M21–M25.
+    Reutiliza M13 con INCLUDE/EXCLUDE + ALL/ANY, Preview Detail neutral,
+    fingerprint/Freeze y Angular sin romper campañas M14/M15 con history_exclusion.
     2C — Campaign BI / Reporting / Excel está PENDIENTE.
     Reporting usa sólo evidencia persistida por Suite y no consulta iVentas.
     Export Excel es backend-side y Angular no recalcula KPIs.
-    2D sólo pasa cuando 2A + 2B + 2C tienen aceptación integral.
+    2D sólo pasa cuando 2A + 2B + Historical Targeting + 2C tienen aceptación integral.
     No implementes POST /v2/broadcast ni GraphQL mutations.

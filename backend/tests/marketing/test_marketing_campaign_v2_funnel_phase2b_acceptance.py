@@ -113,7 +113,7 @@ def _history(**kwargs):
 
 
 def _install(monkeypatch, state):
-    calls = {"portfolio": 0, "history": 0}
+    calls = {"portfolio": 0, "history": 0, "history_phones": []}
 
     def portfolio(**_kwargs):
         calls["portfolio"] += 1
@@ -121,6 +121,7 @@ def _install(monkeypatch, state):
 
     def history(**kwargs):
         calls["history"] += 1
+        calls["history_phones"].append(tuple(kwargs["phones"]))
         return _history(**kwargs)
     monkeypatch.setattr(
         funnel_source,
@@ -257,3 +258,66 @@ def test_phase2b_funnel_acceptance_has_no_forbidden_side_effects():
     assert forbidden_broadcast_path not in creation_source
     assert ".add(" not in adapter_source
     assert ".commit(" not in adapter_source
+
+
+def test_m25_canonical_include_never_restores_funnel_buyer_or_active_member(monkeypatch):
+    state = {"iventas_sync_run_id": 77, "active_snapshot_id": 900}
+    calls = _install(monkeypatch, state)
+    session = _Session([("526862000002",)])
+    kwargs = {
+        "source": "FUNNEL_PORTFOLIO",
+        "audience_families": None,
+        "allowed_sucursal_keys": ("BRANCH A",),
+        "funnel_month": "2026-09",
+        "funnel_cutoff_date": "2026-09-30",
+        "marketing_access": ACCESS,
+        "historical_targeting": {
+            "mode": "INCLUDE",
+            "match": "ANY",
+            "delivery_buckets": ["VIEWED"],
+            "outcomes": [],
+            "button_interacted": False,
+            "lookback_days": None,
+        },
+        "session": session,
+    }
+
+    preview = creation.build_campaign_v2_freeze_preview(**kwargs)
+    included = audience.build_campaign_v2_audience_preview_detail(
+        bucket="HISTORY_INCLUDED",
+        page=1,
+        page_size=50,
+        **kwargs,
+    )
+    excluded = audience.build_campaign_v2_audience_preview_detail(
+        bucket="HISTORY_EXCLUDED",
+        page=1,
+        page_size=50,
+        **kwargs,
+    )
+    recipients = audience.build_campaign_v2_audience_preview_detail(
+        bucket="RECIPIENTS",
+        page=1,
+        page_size=50,
+        **kwargs,
+    )
+
+    assert preview["funnel_buyer_excluded_count"] == 1
+    assert preview["active_member_suppression_count"] == 1
+    assert preview["before_history_filter_count"] == 2
+    assert preview["history_included_count"] == 1
+    assert preview["history_excluded_count"] == 1
+    assert preview["unique_recipient_count"] == 1
+
+    assert [row["phone_mx10"] for row in included["rows"]] == ["6862000003"]
+    assert [row["phone_mx10"] for row in excluded["rows"]] == ["6862000004"]
+    assert [row["phone_mx10"] for row in recipients["rows"]] == ["6862000003"]
+
+    evaluated = {
+        phone
+        for batch in calls["history_phones"]
+        for phone in batch
+    }
+    assert "6862000001" not in evaluated
+    assert "6862000002" not in evaluated
+    assert evaluated == {"6862000003", "6862000004"}
