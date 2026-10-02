@@ -83,6 +83,8 @@ def session():
                     name="A",
                     purpose="ACTIVE_MEMBERS",
                     source="ACTIVE_MEMBERS",
+                    provider="IVENTAS",
+                    provider_campaign_id="provider-campaign-2",
                     audience_definition_json=_definition(["BRANCH A"]),
                     frozen_at=NOW,
                     created_at=NOW,
@@ -172,6 +174,8 @@ def test_partial_scope_hides_global_outside_and_malformed_campaigns(session):
         session=session,
     )
     assert [row["id"] for row in result["rows"]] == [2]
+    assert result["rows"][0]["provider"] == "IVENTAS"
+    assert result["rows"][0]["provider_campaign_id"] == "provider-campaign-2"
 
 
 def test_partial_scope_sees_only_campaigns_fully_contained_in_current_scope(session):
@@ -203,6 +207,8 @@ def test_campaign_detail_uses_frozen_definition_and_recipient_count(session):
         session=session,
     )
     assert result["recipient_count"] == 2
+    assert result["provider"] == "IVENTAS"
+    assert result["provider_campaign_id"] == "provider-campaign-2"
     assert result["audience_definition"] == _definition(["BRANCH A"])
     assert result["preview_fingerprint"] == "abc"
 

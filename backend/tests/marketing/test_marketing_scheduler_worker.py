@@ -17,6 +17,7 @@ def reset_scheduler_state():
     worker._IVENTAS_COMPLETED_SLOTS.clear()
     worker._META_COMPLETED_SLOTS.clear()
     worker._NEXT_RETRY_BY_SLOT.clear()
+    worker._NEXT_PROVIDER_STATS_CAPTURE_AT = None
 
     yield
 
@@ -24,6 +25,7 @@ def reset_scheduler_state():
     worker._IVENTAS_COMPLETED_SLOTS.clear()
     worker._META_COMPLETED_SLOTS.clear()
     worker._NEXT_RETRY_BY_SLOT.clear()
+    worker._NEXT_PROVIDER_STATS_CAPTURE_AT = None
 
 
 def test_parse_run_times_uses_expected_defaults(
@@ -414,3 +416,166 @@ def test_retry_flags_only_failed_source():
 
     assert run_iventas is False
     assert run_meta is True
+
+
+def test_provider_stats_scheduler_disabled_by_default(monkeypatch):
+    monkeypatch.delenv(
+        worker.CAMPAIGN_V2_PROVIDER_STATS_ENABLED_ENV,
+        raising=False,
+    )
+
+    assert worker._load_campaign_v2_provider_stats_scheduler_config() is None
+
+
+def test_provider_stats_scheduler_requires_explicit_policy_when_enabled(monkeypatch):
+    monkeypatch.setenv(
+        worker.CAMPAIGN_V2_PROVIDER_STATS_ENABLED_ENV,
+        "true",
+    )
+    for name in (
+        worker.CAMPAIGN_V2_PROVIDER_STATS_INTERVAL_SECONDS_ENV,
+        worker.CAMPAIGN_V2_PROVIDER_STATS_HORIZON_HOURS_ENV,
+        worker.CAMPAIGN_V2_PROVIDER_STATS_MAX_PER_CYCLE_ENV,
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    with pytest.raises(RuntimeError, match="obligatorio"):
+        worker._load_campaign_v2_provider_stats_scheduler_config()
+
+
+def test_provider_stats_scheduler_loads_explicit_policy(monkeypatch):
+    monkeypatch.setenv(
+        worker.CAMPAIGN_V2_PROVIDER_STATS_ENABLED_ENV,
+        "true",
+    )
+    monkeypatch.setenv(
+        worker.CAMPAIGN_V2_PROVIDER_STATS_INTERVAL_SECONDS_ENV,
+        "900",
+    )
+    monkeypatch.setenv(
+        worker.CAMPAIGN_V2_PROVIDER_STATS_HORIZON_HOURS_ENV,
+        "48",
+    )
+    monkeypatch.setenv(
+        worker.CAMPAIGN_V2_PROVIDER_STATS_MAX_PER_CYCLE_ENV,
+        "25",
+    )
+
+    config = worker._load_campaign_v2_provider_stats_scheduler_config()
+
+    assert config == worker.CampaignV2ProviderStatsSchedulerConfig(
+        interval_seconds=900,
+        horizon_hours=48,
+        max_campaigns_per_cycle=25,
+    )
+
+
+def test_provider_stats_scheduler_disabled_makes_zero_cycle_calls(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        worker,
+        "run_campaign_v2_provider_stats_capture_cycle",
+        lambda **kwargs: calls.append(kwargs),
+    )
+
+    result = worker._run_campaign_v2_provider_stats_if_due(
+        now=datetime(2026, 10, 1, 15, 0, tzinfo=TIJUANA),
+        config=None,
+    )
+
+    assert result is None
+    assert calls == []
+
+
+def test_provider_stats_scheduler_respects_cadence_and_cleans_session(monkeypatch):
+    calls = []
+    cleanups = []
+    result = worker.CampaignV2ProviderStatsCycleResult(
+        selected=1,
+        attempted=1,
+        created=1,
+        unchanged=0,
+        failed=0,
+        skipped=0,
+    )
+
+    monkeypatch.setattr(
+        worker,
+        "run_campaign_v2_provider_stats_capture_cycle",
+        lambda **kwargs: calls.append(kwargs) or result,
+    )
+    monkeypatch.setattr(
+        worker.db.session,
+        "remove",
+        lambda: cleanups.append("remove"),
+    )
+
+    config = worker.CampaignV2ProviderStatsSchedulerConfig(
+        interval_seconds=900,
+        horizon_hours=48,
+        max_campaigns_per_cycle=25,
+    )
+    first_at = datetime(2026, 10, 1, 15, 0, tzinfo=TIJUANA)
+
+    first = worker._run_campaign_v2_provider_stats_if_due(
+        now=first_at,
+        config=config,
+    )
+    before_due = worker._run_campaign_v2_provider_stats_if_due(
+        now=first_at + timedelta(seconds=899),
+        config=config,
+    )
+    second = worker._run_campaign_v2_provider_stats_if_due(
+        now=first_at + timedelta(seconds=900),
+        config=config,
+    )
+
+    assert first == result
+    assert before_due is None
+    assert second == result
+    assert len(calls) == 2
+    assert cleanups == ["remove", "remove"]
+    assert calls[0]["horizon_hours"] == 48
+    assert calls[0]["max_campaigns"] == 25
+
+
+def test_provider_stats_scheduler_failure_is_sanitized_and_cleans_session(
+    monkeypatch,
+    caplog,
+):
+    cleanups = []
+    rollbacks = []
+
+    def fail(**kwargs):
+        raise RuntimeError("provider-secret-payload")
+
+    monkeypatch.setattr(
+        worker,
+        "run_campaign_v2_provider_stats_capture_cycle",
+        fail,
+    )
+    monkeypatch.setattr(
+        worker.db.session,
+        "rollback",
+        lambda: rollbacks.append("rollback"),
+    )
+    monkeypatch.setattr(
+        worker.db.session,
+        "remove",
+        lambda: cleanups.append("remove"),
+    )
+
+    result = worker._run_campaign_v2_provider_stats_if_due(
+        now=datetime(2026, 10, 1, 15, 0, tzinfo=TIJUANA),
+        config=worker.CampaignV2ProviderStatsSchedulerConfig(
+            interval_seconds=900,
+            horizon_hours=48,
+            max_campaigns_per_cycle=25,
+        ),
+    )
+
+    assert result is None
+    assert rollbacks == ["rollback"]
+    assert cleanups == ["remove"]
+    assert "provider-secret-payload" not in caplog.text
+    assert "RuntimeError" in caplog.text

@@ -1,0 +1,48 @@
+{
+  "successfulMessages": [
+    "6861111111",
+    "6862222222",
+    "6863333333"
+  ],
+  "failedMessages": [
+    "6864444444"
+  ],
+  "sentMessages": [
+    "6861111111"
+  ],
+  "sentdMessages": [
+    "6861111111"
+  ],
+  "deliveredMessages": [
+    "6862222222"
+  ],
+  "viewedMessages": [
+    "6863333333"
+  ],
+  "answeredMessages": [],
+  "interactions": [
+    {
+      "label": "Me interesa",
+      "items": [
+        "6863333333",
+        "6863333333"
+      ]
+    }
+  ],
+  "analyticsStatus": "ok",
+  "analytics": {
+    "responders": 79,
+    "interactions": {
+      "campaignButton": 63,
+      "freeText": 16
+    },
+    "funnel": {
+      "delivered": 2,
+      "read": 1
+    },
+    "failures": {
+      "categories": []
+    },
+    "cost": {}
+  }
+}

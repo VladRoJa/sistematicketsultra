@@ -69,10 +69,16 @@ class TestMarketingCampaignV2Routes:
             ("get", "/api/marketing/campaigns-v2/tariffs/unclassified"),
             ("put", "/api/marketing/campaigns-v2/tariffs/PLAN%20FAMILIAR/classification"),
             ("get", "/api/marketing/campaigns-v2"),
+            ("post", "/api/marketing/campaigns-v2/provider-history/lookup"),
             ("get", "/api/marketing/campaigns-v2/1"),
+            ("get", "/api/marketing/campaigns-v2/1/provider-stats"),
+            ("post", "/api/marketing/campaigns-v2/1/provider-stats/snapshots"),
+            ("get", "/api/marketing/campaigns-v2/1/provider-stats/snapshots"),
+            ("get", "/api/marketing/campaigns-v2/1/provider-stats/snapshots/latest"),
             ("get", "/api/marketing/campaigns-v2/1/recipients"),
             ("get", "/api/marketing/campaigns-v2/1/recipients/2"),
             ("patch", "/api/marketing/campaigns-v2/1/purpose"),
+            ("put", "/api/marketing/campaigns-v2/1/provider-binding"),
         ]
         for method, path in paths:
             response = getattr(self.client, method)(
@@ -327,6 +333,9 @@ class TestMarketingCampaignV2Routes:
             ("/api/marketing/campaigns-v2", {"created_by_user_id": 999}),
             ("/api/marketing/campaigns-v2", {"allowed_sucursal_keys": ["EXTRA"]}),
             ("/api/marketing/campaigns-v2/preview", {"phones": ["6861000001"]}),
+            ("/api/marketing/campaigns-v2/preview", {"excluded_phones": ["6861000001"]}),
+            ("/api/marketing/campaigns-v2/preview-detail", {"excluded_phones": ["6861000001"]}),
+            ("/api/marketing/campaigns-v2", {"excluded_phones": ["6861000001"]}),
             ("/api/marketing/campaigns-v2", {"recipients": [{"phone_mx10": "6861000001"}]}),
             ("/api/marketing/campaigns-v2", {"recipient_ids": [1]}),
             ("/api/marketing/campaigns-v2", {"source_record_ids": [1]}),
@@ -371,12 +380,18 @@ class TestMarketingCampaignV2Routes:
                     "audience_families": ["DOMICILIADO"],
                     "expiration_date_from": "2026-08-01",
                     "expiration_date_to": "2026-08-31",
+                    "history_exclusion": {
+                        "delivery_buckets": ["VIEWED"],
+                    },
                 },
                 headers=self.headers,
             )
         assert response.status_code == 200
         assert response.get_json()["preview_fingerprint"] == "b" * 64
         assert service.call_args.kwargs["allowed_sucursal_keys"] is None
+        assert service.call_args.kwargs["history_exclusion"] == {
+            "delivery_buckets": ["VIEWED"],
+        }
 
     def test_preview_detail_uses_m3_detail_and_backend_scope(self):
         expected = {"total": 1, "rows": [{"phone_mx10": "6861000001"}]}
@@ -397,12 +412,18 @@ class TestMarketingCampaignV2Routes:
                     "bucket": "RECIPIENTS",
                     "page": 1,
                     "page_size": 25,
+                    "history_exclusion": {
+                        "outcomes": ["FAILED"],
+                    },
                 },
                 headers=self.headers,
             )
         assert response.status_code == 200
         assert service.call_args.kwargs["allowed_sucursal_keys"] is None
         assert service.call_args.kwargs["bucket"] == "RECIPIENTS"
+        assert service.call_args.kwargs["history_exclusion"] == {
+            "outcomes": ["FAILED"],
+        }
 
     def test_freeze_uses_authenticated_user_and_backend_scope(self):
         expected = {"campaign_id": 44, "recipient_count": 10}
@@ -420,6 +441,9 @@ class TestMarketingCampaignV2Routes:
                     "purpose": "ACTIVE_MEMBERS",
                     "source": "ACTIVE_MEMBERS",
                     "audience_families": ["DOMICILIADO"],
+                    "history_exclusion": {
+                        "button_interacted": True,
+                    },
                     "expected_preview_fingerprint": "c" * 64,
                 },
                 headers=self.headers,
@@ -428,6 +452,9 @@ class TestMarketingCampaignV2Routes:
         assert service.call_args.kwargs["created_by_user_id"] == 7
         assert service.call_args.kwargs["allowed_sucursal_keys"] is None
         assert service.call_args.kwargs["expected_preview_fingerprint"] == "c" * 64
+        assert service.call_args.kwargs["history_exclusion"] == {
+            "button_interacted": True,
+        }
 
     @pytest.mark.parametrize(
         "error,status",
@@ -534,6 +561,403 @@ class TestMarketingCampaignV2Routes:
                 headers=self.headers,
             )
         assert invalid.status_code == 400
+
+    def test_provider_binding_put_accepts_only_identity_and_applies_scope(self):
+        expected = {
+            "campaign_id": 1,
+            "provider": "IVENTAS",
+            "provider_campaign_id": "external-1",
+            "created": True,
+        }
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.bind_campaign_v2_provider",
+                return_value=expected,
+            ) as service,
+        ):
+            response = self.client.put(
+                "/api/marketing/campaigns-v2/1/provider-binding",
+                json={
+                    "provider": "IVENTAS",
+                    "provider_campaign_id": "external-1",
+                },
+                headers=self.headers,
+            )
+        assert response.status_code == 200
+        assert response.get_json() == expected
+        assert service.call_args.kwargs["campaign_id"] == 1
+        assert service.call_args.kwargs["provider"] == "IVENTAS"
+        assert service.call_args.kwargs["provider_campaign_id"] == "external-1"
+        assert service.call_args.kwargs["allowed_sucursal_keys"] is None
+
+        with self._auth():
+            invalid = self.client.put(
+                "/api/marketing/campaigns-v2/1/provider-binding",
+                json={
+                    "provider": "IVENTAS",
+                    "provider_campaign_id": "external-1",
+                    "stats": {},
+                },
+                headers=self.headers,
+            )
+        assert invalid.status_code == 400
+
+    def test_provider_binding_conflict_maps_to_409(self):
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.bind_campaign_v2_provider",
+                side_effect=routes.MarketingCampaignV2ProviderBindingConflictError(
+                    "conflict"
+                ),
+            ),
+        ):
+            response = self.client.put(
+                "/api/marketing/campaigns-v2/1/provider-binding",
+                json={
+                    "provider": "IVENTAS",
+                    "provider_campaign_id": "external-1",
+                },
+                headers=self.headers,
+            )
+        assert response.status_code == 409
+
+    def test_provider_history_lookup_uses_backend_scope_and_read_only_payload(self):
+        expected = {
+            "observed_before": "2026-10-01T12:00:00+00:00",
+            "phone_count": 1,
+            "rows": [
+                {
+                    "normalized_phone": "mx10:6861111111",
+                    "campaign_count": 1,
+                }
+            ],
+        }
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.get_provider_history_for_phones",
+                return_value=expected,
+            ) as service,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/provider-history/lookup",
+                json={
+                    "phones": ["6861111111"],
+                    "observed_before": "2026-10-01T12:00:00Z",
+                },
+                headers=self.headers,
+            )
+        assert response.status_code == 200
+        assert response.get_json() == expected
+        assert service.call_args.kwargs["phones"] == ["6861111111"]
+        assert (
+            service.call_args.kwargs["observed_before"].isoformat()
+            == "2026-10-01T12:00:00+00:00"
+        )
+        assert service.call_args.kwargs["allowed_sucursal_keys"] is None
+
+    def test_provider_history_lookup_rejects_invalid_payload_and_cutoff(self):
+        with self._auth():
+            unknown = self.client.post(
+                "/api/marketing/campaigns-v2/provider-history/lookup",
+                json={"phones": ["6861111111"], "provider": "IVENTAS"},
+                headers=self.headers,
+            )
+            invalid_cutoff = self.client.post(
+                "/api/marketing/campaigns-v2/provider-history/lookup",
+                json={
+                    "phones": ["6861111111"],
+                    "observed_before": "2026-10-01T12:00:00",
+                },
+                headers=self.headers,
+            )
+        assert unknown.status_code == 400
+        assert invalid_cutoff.status_code == 400
+
+    def test_provider_history_lookup_validation_error_maps_to_400(self):
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.get_provider_history_for_phones",
+                side_effect=routes.MarketingCampaignV2ProviderHistoryValidationError(
+                    "phones admite máximo 100 elementos."
+                ),
+            ),
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/provider-history/lookup",
+                json={"phones": ["6861111111"]},
+                headers=self.headers,
+            )
+        assert response.status_code == 400
+        assert "máximo 100" in response.get_json()["message"]
+
+    def test_provider_history_lookup_reuses_campaign_v2_management_permission(self):
+        access = SimpleNamespace(
+            is_global=True,
+            branch_ids=(),
+            can_edit_inputs=False,
+        )
+        with self._auth(access):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/provider-history/lookup",
+                json={"phones": ["6861111111"]},
+                headers=self.headers,
+            )
+        assert response.status_code == 403
+
+    def test_provider_stats_success_uses_backend_scope_only(self):
+        expected = {
+            "campaign_id": 1,
+            "provider": "IVENTAS",
+            "provider_campaign_id": "external-1",
+            "analytics_status": "ok",
+            "raw_counts": {},
+            "recipients": {},
+            "button_interactions": [],
+            "analytics": {},
+        }
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.get_campaign_v2_provider_stats",
+                return_value=expected,
+            ) as service,
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/1/provider-stats",
+                headers=self.headers,
+            )
+        assert response.status_code == 200
+        assert response.get_json() == expected
+        assert service.call_args.kwargs["campaign_id"] == 1
+        assert service.call_args.kwargs["allowed_sucursal_keys"] is None
+
+    def test_provider_stats_rejects_external_id_or_provider_query_override(self):
+        with self._auth():
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/1/provider-stats"
+                "?provider=OTHER&provider_campaign_id=arbitrary",
+                headers=self.headers,
+            )
+        assert response.status_code == 400
+
+    def test_provider_stats_unbound_maps_to_409(self):
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.get_campaign_v2_provider_stats",
+                side_effect=routes.MarketingCampaignV2ProviderStatsUnboundError(
+                    "Campaign V2 no tiene provider binding completo."
+                ),
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/1/provider-stats",
+                headers=self.headers,
+            )
+        assert response.status_code == 409
+
+    def test_provider_stats_unsupported_maps_to_422(self):
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.get_campaign_v2_provider_stats",
+                side_effect=routes.MarketingCampaignV2ProviderStatsUnsupportedError(
+                    "OTHER"
+                ),
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/1/provider-stats",
+                headers=self.headers,
+            )
+        assert response.status_code == 422
+        assert response.get_json()["message"] == "Campaign provider no soportado."
+
+    def test_provider_stats_retryable_upstream_is_sanitized_503(self):
+        secret = "provider-secret"
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.get_campaign_v2_provider_stats",
+                side_effect=routes.MarketingCampaignV2ProviderStatsUpstreamError(
+                    secret,
+                    retryable=True,
+                    retry_after_seconds=120.0,
+                ),
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/1/provider-stats",
+                headers=self.headers,
+            )
+        assert response.status_code == 503
+        assert response.headers["Retry-After"] == "120"
+        assert secret not in response.get_data(as_text=True)
+        assert response.get_json()["message"] == (
+            "No fue posible obtener stats del provider."
+        )
+
+    def test_provider_stats_nonretryable_upstream_is_sanitized_502(self):
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.get_campaign_v2_provider_stats",
+                side_effect=routes.MarketingCampaignV2ProviderStatsUpstreamError(
+                    "contract detail",
+                    retryable=False,
+                ),
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/1/provider-stats",
+                headers=self.headers,
+            )
+        assert response.status_code == 502
+        assert "contract detail" not in response.get_data(as_text=True)
+
+    def test_provider_stats_reuses_campaign_v2_management_permission(self):
+        access = SimpleNamespace(
+            is_global=True,
+            branch_ids=(),
+            can_edit_inputs=False,
+        )
+        with self._auth(access):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/1/provider-stats",
+                headers=self.headers,
+            )
+        assert response.status_code == 403
+
+    def test_provider_stats_snapshot_capture_success_and_rejects_payload(self):
+        expected = {
+            "id": 7,
+            "campaign_id": 1,
+            "fingerprint": "a" * 64,
+            "created": True,
+        }
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.capture_campaign_v2_provider_stats_snapshot",
+                return_value=expected,
+            ) as service,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/1/provider-stats/snapshots",
+                headers=self.headers,
+            )
+        assert response.status_code == 200
+        assert response.get_json() == expected
+        assert service.call_args.kwargs["campaign_id"] == 1
+        assert service.call_args.kwargs["allowed_sucursal_keys"] is None
+
+        with self._auth():
+            invalid = self.client.post(
+                "/api/marketing/campaigns-v2/1/provider-stats/snapshots",
+                json={"provider_campaign_id": "arbitrary"},
+                headers=self.headers,
+            )
+        assert invalid.status_code == 400
+
+    def test_provider_stats_snapshot_capture_maps_provider_errors(self):
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.capture_campaign_v2_provider_stats_snapshot",
+                side_effect=routes.MarketingCampaignV2ProviderStatsUnboundError(
+                    "unbound"
+                ),
+            ),
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/1/provider-stats/snapshots",
+                headers=self.headers,
+            )
+        assert response.status_code == 409
+
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.capture_campaign_v2_provider_stats_snapshot",
+                side_effect=routes.MarketingCampaignV2ProviderStatsUpstreamError(
+                    "secret upstream",
+                    retryable=True,
+                    retry_after_seconds=30,
+                ),
+            ),
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/1/provider-stats/snapshots",
+                headers=self.headers,
+            )
+        assert response.status_code == 503
+        assert response.headers["Retry-After"] == "30"
+        assert "secret upstream" not in response.get_data(as_text=True)
+
+    def test_provider_stats_snapshot_history_and_latest_use_scope(self):
+        history = {"campaign_id": 1, "rows": [{"id": 2}, {"id": 1}]}
+        latest = {"id": 2, "campaign_id": 1}
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.list_campaign_v2_provider_stats_snapshots",
+                return_value=history,
+            ) as list_service,
+            patch(
+                "app.routes.marketing_campaign_v2_routes.get_latest_campaign_v2_provider_stats_snapshot",
+                return_value=latest,
+            ) as latest_service,
+        ):
+            history_response = self.client.get(
+                "/api/marketing/campaigns-v2/1/provider-stats/snapshots",
+                headers=self.headers,
+            )
+            latest_response = self.client.get(
+                "/api/marketing/campaigns-v2/1/provider-stats/snapshots/latest",
+                headers=self.headers,
+            )
+        assert history_response.status_code == 200
+        assert history_response.get_json() == history
+        assert latest_response.status_code == 200
+        assert latest_response.get_json() == latest
+        assert list_service.call_args.kwargs["allowed_sucursal_keys"] is None
+        assert latest_service.call_args.kwargs["allowed_sucursal_keys"] is None
+
+    def test_provider_stats_snapshot_latest_missing_is_404(self):
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.get_latest_campaign_v2_provider_stats_snapshot",
+                return_value=None,
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/1/provider-stats/snapshots/latest",
+                headers=self.headers,
+            )
+        assert response.status_code == 404
+
+    def test_provider_stats_snapshot_routes_reuse_management_permission(self):
+        access = SimpleNamespace(
+            is_global=True,
+            branch_ids=(),
+            can_edit_inputs=False,
+        )
+        for method, path in (
+            ("post", "/api/marketing/campaigns-v2/1/provider-stats/snapshots"),
+            ("get", "/api/marketing/campaigns-v2/1/provider-stats/snapshots"),
+            ("get", "/api/marketing/campaigns-v2/1/provider-stats/snapshots/latest"),
+        ):
+            with self._auth(access):
+                response = getattr(self.client, method)(
+                    path,
+                    headers=self.headers,
+                )
+            assert response.status_code == 403
 
     def test_query_validation_maps_to_400(self):
         with (

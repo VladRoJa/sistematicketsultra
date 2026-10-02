@@ -1,5 +1,43 @@
 export type CampaignV2Source = 'EXPIRED_MEMBERS' | 'ACTIVE_MEMBERS';
 
+export type CampaignV2HistoryDeliveryBucket =
+  | 'SENT'
+  | 'DELIVERED'
+  | 'VIEWED';
+
+export type CampaignV2HistoryOutcome =
+  | 'SUCCESSFUL'
+  | 'FAILED';
+
+export type CampaignV2HistoryExclusionReason =
+  | 'HISTORY_DELIVERY_SENT'
+  | 'HISTORY_DELIVERY_DELIVERED'
+  | 'HISTORY_DELIVERY_VIEWED'
+  | 'HISTORY_OUTCOME_SUCCESSFUL'
+  | 'HISTORY_OUTCOME_FAILED'
+  | 'HISTORY_BUTTON_INTERACTION';
+
+export interface CampaignV2HistoryExclusion {
+  delivery_buckets: CampaignV2HistoryDeliveryBucket[];
+  outcomes: CampaignV2HistoryOutcome[];
+  button_interacted: boolean;
+  lookback_days: number | null;
+}
+
+export interface CampaignV2HistoryDiagnostics {
+  before_history_filter_count: number;
+  history_excluded_count: number;
+  after_history_filter_count: number;
+  excluded_by_delivery_bucket: Partial<Record<CampaignV2HistoryDeliveryBucket, number>>;
+  excluded_by_outcome: Partial<Record<CampaignV2HistoryOutcome, number>>;
+  excluded_by_button_interaction: number;
+}
+
+export interface CampaignV2HistoryEvaluationMetadata {
+  observed_before: string | null;
+  observed_after: string | null;
+}
+
 export type CampaignV2AudienceFamily =
   | 'DOMICILIADO'
   | 'TRIMESTRAL'
@@ -30,7 +68,8 @@ export type CampaignV2PreviewBucket =
   | 'OUT_OF_SEGMENT'
   | 'UNCLASSIFIED'
   | 'FAMILY'
-  | 'CURRENT_STATUS_BLOCKED';
+  | 'CURRENT_STATUS_BLOCKED'
+  | 'HISTORY_EXCLUDED';
 
 export interface CampaignV2Scope {
   is_global: boolean;
@@ -51,6 +90,7 @@ export interface CampaignV2AudienceDefinitionRequest {
   audience_families: CampaignV2AudienceFamily[];
   expiration_date_from?: string;
   expiration_date_to?: string;
+  history_exclusion?: CampaignV2HistoryExclusion;
 }
 
 export interface CampaignV2PreviewDetailRequest
@@ -78,7 +118,16 @@ export interface CampaignV2SourceMetadata {
   activos_cutoff_date?: string | null;
   activos_captured_at?: string | null;
   snapshot_kind?: string | null;
-  [key: string]: string | number | boolean | null | string[] | number[] | undefined;
+  history_evaluation?: CampaignV2HistoryEvaluationMetadata | null;
+  [key: string]:
+    | string
+    | number
+    | boolean
+    | null
+    | string[]
+    | number[]
+    | CampaignV2HistoryEvaluationMetadata
+    | undefined;
 }
 
 export interface CampaignV2PreviewFilters {
@@ -87,6 +136,7 @@ export interface CampaignV2PreviewFilters {
   allowed_sucursal_keys: string[] | null;
   expiration_date_from?: string;
   expiration_date_to?: string;
+  history_exclusion?: CampaignV2HistoryExclusion;
 }
 
 export interface CampaignV2PreviewSummary {
@@ -101,6 +151,12 @@ export interface CampaignV2PreviewSummary {
   invalid_phone_count: number;
   duplicate_count: number;
   unique_recipient_count: number;
+  before_history_filter_count?: number;
+  history_excluded_count?: number;
+  after_history_filter_count?: number;
+  excluded_by_delivery_bucket?: Partial<Record<CampaignV2HistoryDeliveryBucket, number>>;
+  excluded_by_outcome?: Partial<Record<CampaignV2HistoryOutcome, number>>;
+  excluded_by_button_interaction?: number;
 }
 
 export interface CampaignV2PreviewResponse extends CampaignV2PreviewSummary {
@@ -140,6 +196,7 @@ export interface CampaignV2PreviewDetailRow {
   evidence_count?: number;
   evidence?: string[] | CampaignV2PreviewDetailRow[];
   source_references?: CampaignV2SourceReference[];
+  history_exclusion_reasons?: string[];
 }
 
 export interface CampaignV2PreviewDetailResponse {

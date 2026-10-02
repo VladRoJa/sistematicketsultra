@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from flask import Blueprint, jsonify, request
@@ -31,6 +32,28 @@ from app.services.marketing_campaign_v2_query_service import (
     list_campaign_v2,
     list_campaign_v2_recipients,
     update_campaign_v2_purpose,
+)
+from app.services.marketing_campaign_v2_provider_binding_service import (
+    MarketingCampaignV2ProviderBindingConflictError,
+    MarketingCampaignV2ProviderBindingPersistenceError,
+    MarketingCampaignV2ProviderBindingValidationError,
+    bind_campaign_v2_provider,
+)
+from app.services.marketing_campaign_v2_provider_stats_service import (
+    MarketingCampaignV2ProviderStatsUnboundError,
+    MarketingCampaignV2ProviderStatsUnsupportedError,
+    MarketingCampaignV2ProviderStatsUpstreamError,
+    get_campaign_v2_provider_stats,
+)
+from app.services.marketing_campaign_v2_provider_stats_snapshot_service import (
+    MarketingCampaignV2ProviderStatsSnapshotPersistenceError,
+    capture_campaign_v2_provider_stats_snapshot,
+    get_latest_campaign_v2_provider_stats_snapshot,
+    list_campaign_v2_provider_stats_snapshots,
+)
+from app.services.marketing_campaign_v2_provider_history_service import (
+    MarketingCampaignV2ProviderHistoryValidationError,
+    get_provider_history_for_phones,
 )
 
 
@@ -92,6 +115,7 @@ def campaign_v2_preview_endpoint():
                 "audience_families",
                 "expiration_date_from",
                 "expiration_date_to",
+                "history_exclusion",
             }
         )
         result = build_campaign_v2_freeze_preview(
@@ -100,6 +124,7 @@ def campaign_v2_preview_endpoint():
             allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
             expiration_date_from=payload.get("expiration_date_from"),
             expiration_date_to=payload.get("expiration_date_to"),
+            history_exclusion=payload.get("history_exclusion"),
             session=db.session,
         )
         return jsonify(result), 200
@@ -126,6 +151,7 @@ def campaign_v2_preview_detail_endpoint():
                 "audience_family",
                 "page",
                 "page_size",
+                "history_exclusion",
             }
         )
         result = audience.build_campaign_v2_audience_preview_detail(
@@ -138,6 +164,7 @@ def campaign_v2_preview_detail_endpoint():
             page_size=payload.get("page_size", 50),
             expiration_date_from=payload.get("expiration_date_from"),
             expiration_date_to=payload.get("expiration_date_to"),
+            history_exclusion=payload.get("history_exclusion"),
             session=db.session,
         )
         return jsonify(result), 200
@@ -164,6 +191,7 @@ def freeze_campaign_v2_endpoint():
                 "audience_families",
                 "expiration_date_from",
                 "expiration_date_to",
+                "history_exclusion",
                 "expected_preview_fingerprint",
             }
         )
@@ -177,6 +205,7 @@ def freeze_campaign_v2_endpoint():
             created_by_user_id=int(user.id),
             expiration_date_from=payload.get("expiration_date_from"),
             expiration_date_to=payload.get("expiration_date_to"),
+            history_exclusion=payload.get("history_exclusion"),
             session=db.session,
         )
         return jsonify(result), 201
@@ -304,6 +333,39 @@ def list_campaign_v2_endpoint():
         return _error("Falló la consulta de Campaign V2.", 500)
 
 
+@marketing_campaign_v2_bp.post(
+    "/campaigns-v2/provider-history/lookup"
+)
+@jwt_required()
+def lookup_campaign_v2_provider_history_endpoint():
+    try:
+        _, access = _resolve_campaign_v2_request()
+        _validate_query_args(set())
+        payload = _parse_payload({"phones", "observed_before"})
+        observed_before = _parse_optional_iso_datetime(
+            payload.get("observed_before")
+        )
+        result = get_provider_history_for_phones(
+            phones=payload.get("phones"),
+            observed_before=observed_before,
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (
+        MarketingCampaignV2RouteValidationError,
+        MarketingCampaignV2ProviderHistoryValidationError,
+    ) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error(
+            "Falló la consulta histórica provider de Campaign V2.",
+            500,
+        )
+
+
 @marketing_campaign_v2_bp.get("/campaigns-v2/<int:campaign_id>")
 @jwt_required()
 def get_campaign_v2_endpoint(campaign_id: int):
@@ -323,6 +385,126 @@ def get_campaign_v2_endpoint(campaign_id: int):
         return _error(str(exc), 400)
     except Exception:
         return _error("Falló la consulta de Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.get(
+    "/campaigns-v2/<int:campaign_id>/provider-stats"
+)
+@jwt_required()
+def get_campaign_v2_provider_stats_endpoint(campaign_id: int):
+    try:
+        _, access = _resolve_campaign_v2_request()
+        _validate_query_args(set())
+        result = get_campaign_v2_provider_stats(
+            campaign_id=campaign_id,
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2NotFoundError:
+        return _error("Campaign V2 no encontrada.", 404)
+    except MarketingCampaignV2RouteValidationError as exc:
+        return _error(str(exc), 400)
+    except MarketingCampaignV2ProviderStatsUnboundError as exc:
+        return _error(str(exc), 409)
+    except MarketingCampaignV2ProviderStatsUnsupportedError:
+        return _error("Campaign provider no soportado.", 422)
+    except MarketingCampaignV2ProviderStatsUpstreamError as exc:
+        return _provider_stats_upstream_response(exc)
+    except Exception:
+        return _error(
+            "Falló la consulta de provider stats de Campaign V2.",
+            500,
+        )
+
+
+@marketing_campaign_v2_bp.post(
+    "/campaigns-v2/<int:campaign_id>/provider-stats/snapshots"
+)
+@jwt_required()
+def capture_campaign_v2_provider_stats_snapshot_endpoint(campaign_id: int):
+    try:
+        _, access = _resolve_campaign_v2_request()
+        _validate_query_args(set())
+        payload = request.get_json(silent=True)
+        if payload not in (None, {}):
+            raise MarketingCampaignV2RouteValidationError(
+                "La captura de provider stats no acepta payload."
+            )
+        result = capture_campaign_v2_provider_stats_snapshot(
+            campaign_id=campaign_id,
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2NotFoundError:
+        return _error("Campaign V2 no encontrada.", 404)
+    except MarketingCampaignV2RouteValidationError as exc:
+        return _error(str(exc), 400)
+    except MarketingCampaignV2ProviderStatsUnboundError as exc:
+        return _error(str(exc), 409)
+    except MarketingCampaignV2ProviderStatsUnsupportedError:
+        return _error("Campaign provider no soportado.", 422)
+    except MarketingCampaignV2ProviderStatsUpstreamError as exc:
+        return _provider_stats_upstream_response(exc)
+    except MarketingCampaignV2ProviderStatsSnapshotPersistenceError:
+        return _error("No fue posible persistir provider stats.", 500)
+    except Exception:
+        return _error("Falló la captura de provider stats.", 500)
+
+
+@marketing_campaign_v2_bp.get(
+    "/campaigns-v2/<int:campaign_id>/provider-stats/snapshots"
+)
+@jwt_required()
+def list_campaign_v2_provider_stats_snapshots_endpoint(campaign_id: int):
+    try:
+        _, access = _resolve_campaign_v2_request()
+        _validate_query_args(set())
+        result = list_campaign_v2_provider_stats_snapshots(
+            campaign_id=campaign_id,
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2NotFoundError:
+        return _error("Campaign V2 no encontrada.", 404)
+    except MarketingCampaignV2RouteValidationError as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("Falló la consulta de snapshots provider stats.", 500)
+
+
+@marketing_campaign_v2_bp.get(
+    "/campaigns-v2/<int:campaign_id>/provider-stats/snapshots/latest"
+)
+@jwt_required()
+def latest_campaign_v2_provider_stats_snapshot_endpoint(campaign_id: int):
+    try:
+        _, access = _resolve_campaign_v2_request()
+        _validate_query_args(set())
+        result = get_latest_campaign_v2_provider_stats_snapshot(
+            campaign_id=campaign_id,
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        if result is None:
+            return _error("No hay snapshots provider stats.", 404)
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2NotFoundError:
+        return _error("Campaign V2 no encontrada.", 404)
+    except MarketingCampaignV2RouteValidationError as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("Falló la consulta del último snapshot provider stats.", 500)
 
 
 @marketing_campaign_v2_bp.get("/campaigns-v2/<int:campaign_id>/recipients")
@@ -396,6 +578,41 @@ def update_campaign_v2_purpose_endpoint(campaign_id: int):
         return _error("Falló la actualización de purpose de Campaign V2.", 500)
 
 
+@marketing_campaign_v2_bp.put(
+    "/campaigns-v2/<int:campaign_id>/provider-binding"
+)
+@jwt_required()
+def bind_campaign_v2_provider_endpoint(campaign_id: int):
+    try:
+        _, access = _resolve_campaign_v2_request()
+        payload = _parse_payload(
+            {"provider", "provider_campaign_id"}
+        )
+        result = bind_campaign_v2_provider(
+            campaign_id=campaign_id,
+            provider=payload.get("provider"),
+            provider_campaign_id=payload.get("provider_campaign_id"),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2NotFoundError:
+        return _error("Campaign V2 no encontrada.", 404)
+    except (
+        MarketingCampaignV2RouteValidationError,
+        MarketingCampaignV2ProviderBindingValidationError,
+    ) as exc:
+        return _error(str(exc), 400)
+    except MarketingCampaignV2ProviderBindingConflictError as exc:
+        return _error(str(exc), 409)
+    except MarketingCampaignV2ProviderBindingPersistenceError:
+        return _error("No fue posible guardar el provider binding.", 500)
+    except Exception:
+        return _error("Falló el provider binding de Campaign V2.", 500)
+
+
 def _get_current_campaign_v2_user() -> UserORM:
     try:
         user_id = int(get_jwt_identity())
@@ -462,6 +679,46 @@ def _validate_query_args(allowed_fields: set[str]) -> None:
         raise MarketingCampaignV2RouteValidationError(
             "Parámetros no permitidos: " + ", ".join(unknown) + "."
         )
+
+
+def _parse_optional_iso_datetime(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise MarketingCampaignV2RouteValidationError(
+            "observed_before debe ser fecha ISO con zona horaria."
+        )
+    normalized = value.strip()
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise MarketingCampaignV2RouteValidationError(
+            "observed_before debe ser fecha ISO con zona horaria."
+        ) from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise MarketingCampaignV2RouteValidationError(
+            "observed_before debe incluir zona horaria."
+        )
+    return parsed
+
+
+def _provider_stats_upstream_response(
+    exc: MarketingCampaignV2ProviderStatsUpstreamError,
+):
+    status = 503 if exc.retryable else 502
+    response = jsonify(
+        {
+            "status": "error",
+            "message": "No fue posible obtener stats del provider.",
+        }
+    )
+    if exc.retry_after_seconds is not None:
+        response.headers["Retry-After"] = str(
+            max(0, int(exc.retry_after_seconds))
+        )
+    return response, status
 
 
 def _error(message: str, status: int):
