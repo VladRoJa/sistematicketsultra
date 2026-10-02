@@ -15,11 +15,24 @@ from app.models.suite_governance import (
 )
 from app.models.user_model import UserORM
 from app.models.warehouse import TrackBranchCatalogORM
-from app.utils.scope_utils import normalize_role
+from app.utils.scope_utils import (
+    get_user_assigned_branch_ids,
+    get_user_primary_branch_id,
+    normalize_role,
+)
 
 
 SPORTS_ANALYSIS_BETA_USERNAME = "ADMICORP"
 SPORTS_ANALYSIS_GLOBAL_ROLES = frozenset({"GERENCIA DEPORTIVA"})
+SPORTS_ANALYSIS_BRANCH_ROLE = "GERENTE"
+SPORTS_ANALYSIS_REGIONAL_ROLE = "GERENTE_REGIONAL"
+SPORTS_ANALYSIS_ALLOWED_ROLES = frozenset(
+    {
+        *SPORTS_ANALYSIS_GLOBAL_ROLES,
+        SPORTS_ANALYSIS_BRANCH_ROLE,
+        SPORTS_ANALYSIS_REGIONAL_ROLE,
+    }
+)
 
 
 class SportsAnalysisAuthorizationError(
@@ -56,7 +69,7 @@ def get_current_sports_analysis_user() -> UserORM:
     role = normalize_role(user.rol)
     if (
         username != SPORTS_ANALYSIS_BETA_USERNAME
-        and role not in SPORTS_ANALYSIS_GLOBAL_ROLES
+        and role not in SPORTS_ANALYSIS_ALLOWED_ROLES
     ):
         raise SportsAnalysisAuthorizationError(
             "Aforo y Asistencia no está habilitado "
@@ -75,7 +88,7 @@ def resolve_sports_analysis_scope(
     role = normalize_role(user.rol)
     if (
         username != SPORTS_ANALYSIS_BETA_USERNAME
-        and role not in SPORTS_ANALYSIS_GLOBAL_ROLES
+        and role not in SPORTS_ANALYSIS_ALLOWED_ROLES
     ):
         raise SportsAnalysisAuthorizationError(
             "Aforo y Asistencia no está habilitado "
@@ -87,10 +100,60 @@ def resolve_sports_analysis_scope(
         for item in list_sports_analysis_branches()
     )
 
+    if (
+        username == SPORTS_ANALYSIS_BETA_USERNAME
+        or role in SPORTS_ANALYSIS_GLOBAL_ROLES
+    ):
+        return SportsAnalysisScope(
+            role=role,
+            is_global=True,
+            allowed_branch_ids=all_branch_ids,
+            fixed_branch_id=None,
+        )
+
+    available_branch_ids = set(all_branch_ids)
+
+    if role == SPORTS_ANALYSIS_BRANCH_ROLE:
+        primary_branch_id = get_user_primary_branch_id(user)
+        if (
+            primary_branch_id is None
+            or primary_branch_id not in available_branch_ids
+        ):
+            raise SportsAnalysisAuthorizationError(
+                "El gerente no tiene una sucursal "
+                "operativa autorizada para Aforo y Asistencia."
+            )
+
+        return SportsAnalysisScope(
+            role=role,
+            is_global=False,
+            allowed_branch_ids=(primary_branch_id,),
+            fixed_branch_id=primary_branch_id,
+        )
+
+    assigned_branch_ids = tuple(
+        branch_id
+        for branch_id in get_user_assigned_branch_ids(user)
+        if branch_id in available_branch_ids
+    )
+    if not assigned_branch_ids:
+        primary_branch_id = get_user_primary_branch_id(user)
+        if (
+            primary_branch_id is not None
+            and primary_branch_id in available_branch_ids
+        ):
+            assigned_branch_ids = (primary_branch_id,)
+
+    if not assigned_branch_ids:
+        raise SportsAnalysisAuthorizationError(
+            "El gerente regional no tiene sucursales "
+            "operativas autorizadas para Aforo y Asistencia."
+        )
+
     return SportsAnalysisScope(
-        role=normalize_role(user.rol),
-        is_global=True,
-        allowed_branch_ids=all_branch_ids,
+        role=role,
+        is_global=False,
+        allowed_branch_ids=assigned_branch_ids,
         fixed_branch_id=None,
     )
 

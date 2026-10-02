@@ -281,6 +281,8 @@ ngOnInit(): void {
   if (
     sportsAnalysisUsername === 'ADMICORP'
     || sportsAnalysisRole === 'GERENCIA DEPORTIVA'
+    || sportsAnalysisRole === 'GERENTE'
+    || sportsAnalysisRole === 'GERENTE_REGIONAL'
   ) {
     sportsAnalysisSubmenu.push({
       label: 'Aforo y Asistencia',
