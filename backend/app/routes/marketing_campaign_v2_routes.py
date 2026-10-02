@@ -102,6 +102,19 @@ def campaign_v2_options_endpoint():
                     "UNCLASSIFIED",
                 ],
                 "purposes": list(CAMPAIGN_V2_PURPOSES),
+                "historical_targeting": {
+                    "modes": list(audience.HISTORICAL_TARGETING_MODES),
+                    "matches": list(audience.HISTORICAL_TARGETING_MATCHES),
+                    "delivery_buckets": list(
+                        audience.HISTORICAL_TARGETING_DELIVERY_BUCKETS
+                    ),
+                    "outcomes": list(audience.HISTORICAL_TARGETING_OUTCOMES),
+                    "button_interaction": True,
+                    "window_modes": list(
+                        audience.HISTORICAL_TARGETING_WINDOW_MODES
+                    ),
+                    "legacy_history_exclusion_supported": True,
+                },
                 "tariff_categories": list(
                     tariff_classifier.list_canonical_tariff_categories(
                         session=db.session,
@@ -133,10 +146,12 @@ def campaign_v2_preview_endpoint():
                 "expiration_date_from",
                 "expiration_date_to",
                 "history_exclusion",
+                "historical_targeting",
                 "funnel_month",
                 "funnel_cutoff_date",
             }
         )
+        _reject_ambiguous_history_payload(payload)
         result = build_campaign_v2_freeze_preview(
             source=payload.get("source"),
             audience_families=payload.get("audience_families"),
@@ -144,6 +159,7 @@ def campaign_v2_preview_endpoint():
             expiration_date_from=payload.get("expiration_date_from"),
             expiration_date_to=payload.get("expiration_date_to"),
             history_exclusion=payload.get("history_exclusion"),
+            historical_targeting=payload.get("historical_targeting"),
             funnel_month=payload.get("funnel_month"),
             funnel_cutoff_date=payload.get("funnel_cutoff_date"),
             marketing_access=access,
@@ -173,10 +189,12 @@ def campaign_v2_preview_detail_endpoint():
                 "page",
                 "page_size",
                 "history_exclusion",
+                "historical_targeting",
                 "funnel_month",
                 "funnel_cutoff_date",
             }
         )
+        _reject_ambiguous_history_payload(payload)
         result = audience.build_campaign_v2_audience_preview_detail(
             source=payload.get("source"),
             audience_families=payload.get("audience_families"),
@@ -188,6 +206,7 @@ def campaign_v2_preview_detail_endpoint():
             expiration_date_from=payload.get("expiration_date_from"),
             expiration_date_to=payload.get("expiration_date_to"),
             history_exclusion=payload.get("history_exclusion"),
+            historical_targeting=payload.get("historical_targeting"),
             funnel_month=payload.get("funnel_month"),
             funnel_cutoff_date=payload.get("funnel_cutoff_date"),
             marketing_access=access,
@@ -217,11 +236,13 @@ def freeze_campaign_v2_endpoint():
                 "expiration_date_from",
                 "expiration_date_to",
                 "history_exclusion",
+                "historical_targeting",
                 "funnel_month",
                 "funnel_cutoff_date",
                 "expected_preview_fingerprint",
             }
         )
+        _reject_ambiguous_history_payload(payload)
         result = freeze_campaign_v2(
             name=payload.get("name"),
             purpose=payload.get("purpose"),
@@ -233,6 +254,7 @@ def freeze_campaign_v2_endpoint():
             expiration_date_from=payload.get("expiration_date_from"),
             expiration_date_to=payload.get("expiration_date_to"),
             history_exclusion=payload.get("history_exclusion"),
+            historical_targeting=payload.get("historical_targeting"),
             funnel_month=payload.get("funnel_month"),
             funnel_cutoff_date=payload.get("funnel_cutoff_date"),
             marketing_access=access,
@@ -686,6 +708,16 @@ def _campaign_v2_allowed_sucursal_keys(access) -> tuple[str, ...] | None:
             "No hay sucursales Campaign V2 dentro del alcance del usuario."
         )
     return keys
+
+
+def _reject_ambiguous_history_payload(payload: dict[str, Any]) -> None:
+    if (
+        "history_exclusion" in payload
+        and "historical_targeting" in payload
+    ):
+        raise MarketingCampaignV2RouteValidationError(
+            "history_exclusion y historical_targeting no pueden enviarse juntos."
+        )
 
 
 def _parse_payload(allowed_fields: set[str]) -> dict[str, Any]:

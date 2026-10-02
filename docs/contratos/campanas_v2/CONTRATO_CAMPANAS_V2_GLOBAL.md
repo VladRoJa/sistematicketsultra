@@ -41,7 +41,7 @@ El objetivo arquitectónico es que las APIs nuevas de iVentas entren como una in
 
 - **2A — iVentas / histórico / engagement:** ACCEPTED; lectura/sincronización, estados recipient-level, interacciones, analytics e histórico.
 - **2B — FUNNEL_PORTFOLIO:** ACCEPTED; incorpora Venta Nueva/Funnel dentro del mismo Audience Builder, con identidad phone-centric, supresión obligatoria de socios activos, Preview/Detail, fingerprint, Freeze y Angular.
-- **Historical Targeting transversal:** PENDIENTE; reutiliza M11/M13 para aplicar `INCLUDE/EXCLUDE` + `ALL/ANY` de forma común sobre cualquier fuente Campaign V2, preservando compatibilidad con `history_exclusion` legacy de M14/M15.
+- **Historical Targeting transversal:** ACCEPTED; M21–M25 reutilizan M11/M13 para aplicar `INCLUDE/EXCLUDE` + `ALL/ANY` de forma común sobre cualquier fuente Campaign V2, con Preview Detail neutral, fingerprint/Freeze y Angular, preservando compatibilidad con `history_exclusion` legacy de M14/M15.
 - **2C — Campaign BI / Reporting / Excel:** pendiente; proyecta evidencia persistida en reportes individuales/consolidados y exportación Excel backend-side.
 - **2D — Acceptance final:** pendiente; debe validar integralmente 2A + 2B + Historical Targeting + 2C antes de Fase 3.
 - Fase 2 puede incluir costos e importación histórica cuando exista evidencia suficiente, pero Reporting no llama al provider para generar reportes.
@@ -316,7 +316,7 @@ Así se reutilizan las bases existentes sin contaminarlas con estado de una camp
 
 Que `VIEWED`, `DELIVERED`, `FAILED` o una interacción de botón pertenezcan a campañas concretas **no impide utilizar su evidencia persistida para construir una campaña nueva**.
 
-Fase 2 ya dispone del histórico transversal por `phone_mx10` a través de M11/M13. La capacidad pendiente **Historical Targeting** debe consumir ese mismo histórico desde el Audience Builder común:
+Fase 2 ya dispone del histórico transversal por `phone_mx10` a través de M11/M13. La capacidad **Historical Targeting**, ACCEPTED mediante M21–M25, consume ese mismo histórico desde el Audience Builder común:
 
     fuente actual
         -> reglas propias de la fuente
@@ -346,7 +346,7 @@ No forman parte de v1:
 - responded/free-text/no-response;
 - expresiones booleanas anidadas.
 
-La semántica detallada vive en `CONTRATO_CAMPANAS_V2_FASE_2.md`. GLOBAL sólo congela que Historical Targeting es una capacidad transversal obligatoria previa al cierre de 2C/2D y que no crea un histórico paralelo.
+La semántica detallada vive en `CONTRATO_CAMPANAS_V2_FASE_2.md`. GLOBAL congela Historical Targeting como capacidad transversal ACCEPTED que no crea un histórico paralelo; 2C y 2D siguen pendientes antes de habilitar Fase 3.
 
 Las campañas legacy M14/M15 con `history_exclusion` conservan exactamente su semántica original equivalente a `EXCLUDE + ANY`; no se reinterpretan retroactivamente.
 

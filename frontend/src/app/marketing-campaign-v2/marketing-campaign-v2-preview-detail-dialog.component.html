@@ -32,7 +32,9 @@
             <th>Familia</th>
             <th>Vencimiento</th>
             <th>Estado actual</th>
-            <th *ngIf="data.bucket === 'HISTORY_EXCLUDED'">Razones</th>
+            <th *ngIf="isHistoryDecisionBucket()">Decisión</th>
+            <th *ngIf="isHistoryDecisionBucket()">Cumplió la regla</th>
+            <th *ngIf="isHistoryDecisionBucket()">Señales observadas</th>
             <th *ngIf="response.source === 'FUNNEL_PORTFOLIO'">Evidencia Funnel</th>
           </tr>
         </thead>
@@ -45,8 +47,14 @@
             <td>{{ familyLabel(row.audience_family) }}</td>
             <td>{{ row.fecha_vencimiento || '—' }}</td>
             <td>{{ row.current_status || '—' }}</td>
-            <td *ngIf="data.bucket === 'HISTORY_EXCLUDED'">
-              {{ historyReasonsLabel(row.history_exclusion_reasons) }}
+            <td *ngIf="isHistoryDecisionBucket()">
+              {{ historyDecisionLabel(row.history_decision) }}
+            </td>
+            <td *ngIf="isHistoryDecisionBucket()">
+              {{ historyMatchedLabel(row.history_matched) }}
+            </td>
+            <td *ngIf="isHistoryDecisionBucket()">
+              {{ historyReasonsLabel(row) }}
             </td>
             <td *ngIf="response.source === 'FUNNEL_PORTFOLIO'">
               {{ evidenceLabel(row.evidence) }}

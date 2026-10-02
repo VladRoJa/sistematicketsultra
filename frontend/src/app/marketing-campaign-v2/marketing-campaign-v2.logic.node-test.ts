@@ -6,9 +6,12 @@ import path from 'node:path';
 import {
   buildCampaignV2AudienceRequest,
   buildCampaignV2FreezeRequest,
-  buildCampaignV2HistoryExclusion,
+  buildCampaignV2HistoricalTargeting,
   campaignV2HistoryBreakdownRows,
+  campaignV2HistoryDecisionLabel,
+  campaignV2HistoryMatchedLabel,
   campaignV2HistoryReasonLabel,
+  campaignV2HistoryReasonsLabel,
   isCampaignV2HistoryFilterValid,
   parseCampaignV2LookbackDays,
   campaignV2FieldInvalidatesPreview,
@@ -248,89 +251,108 @@ test('catalogador trabaja por tarifa única, usa categorías backend e invalida 
 
 
 
-test('history_exclusion se omite sin condiciones efectivas', () => {
-  const request = buildCampaignV2AudienceRequest({
-    source: 'ACTIVE_MEMBERS',
-    audienceFamilies: ['DOMICILIADO'],
-    expirationDateFrom: '',
-    expirationDateTo: '',
-    historyEnabled: true,
-    historyDeliveryBuckets: [],
-    historyOutcomes: [],
-    historyButtonInteracted: false,
-    historyWindowMode: 'ALL',
-    historyLookbackDays: '',
-  });
-  assert.equal('history_exclusion' in request, false);
-});
+const historicalOptions = {
+  modes: ['INCLUDE', 'EXCLUDE'] as const,
+  matches: ['ALL', 'ANY'] as const,
+  delivery_buckets: ['SENT', 'DELIVERED', 'VIEWED'] as const,
+  outcomes: ['SUCCESSFUL', 'FAILED'] as const,
+  button_interaction: true,
+  window_modes: ['ALL_HISTORY', 'LOOKBACK_DAYS'] as const,
+  legacy_history_exclusion_supported: true,
+};
 
-test('VIEWED genera payload exacto sin inferir SENT ni DELIVERED', () => {
-  const request = buildCampaignV2AudienceRequest({
-    source: 'ACTIVE_MEMBERS',
-    audienceFamilies: ['DOMICILIADO'],
-    expirationDateFrom: '',
-    expirationDateTo: '',
-    historyEnabled: true,
-    historyDeliveryBuckets: ['VIEWED'],
-    historyOutcomes: [],
-    historyButtonInteracted: false,
-    historyWindowMode: 'ALL',
-    historyLookbackDays: '',
-  });
-  assert.deepEqual(request.history_exclusion, {
-    delivery_buckets: ['VIEWED'],
-    outcomes: [],
-    button_interacted: false,
-    lookback_days: null,
-  });
-});
-
-test('FAILED + VIEWED + button conserva OR como criterios independientes', () => {
-  const exclusion = buildCampaignV2HistoryExclusion({
-    source: 'ACTIVE_MEMBERS',
-    audienceFamilies: ['DOMICILIADO'],
-    expirationDateFrom: '',
-    expirationDateTo: '',
-    historyEnabled: true,
-    historyDeliveryBuckets: ['VIEWED'],
-    historyOutcomes: ['FAILED'],
-    historyButtonInteracted: true,
-    historyWindowMode: 'DAYS',
-    historyLookbackDays: '90',
-  });
-  assert.deepEqual(exclusion, {
-    delivery_buckets: ['VIEWED'],
-    outcomes: ['FAILED'],
-    button_interacted: true,
-    lookback_days: 90,
-  });
-});
-
-test('lookback acepta null conceptual o entero positivo y rechaza inválidos', () => {
-  assert.equal(parseCampaignV2LookbackDays('1'), 1);
-  assert.equal(parseCampaignV2LookbackDays('90'), 90);
-  for (const value of ['', '0', '-1', '1.5', 'NaN', 'texto']) {
-    assert.equal(parseCampaignV2LookbackDays(value), null, value);
-  }
-
-  const base = {
+function historicalState(
+  mode: 'INCLUDE' | 'EXCLUDE',
+  match: 'ALL' | 'ANY',
+) {
+  return {
     source: 'ACTIVE_MEMBERS' as const,
     audienceFamilies: ['DOMICILIADO'] as CampaignV2AudienceFamily[],
     expirationDateFrom: '',
     expirationDateTo: '',
-    historyEnabled: true,
-    historyDeliveryBuckets: ['VIEWED'] as Array<'SENT' | 'DELIVERED' | 'VIEWED'>,
-    historyOutcomes: [] as Array<'SUCCESSFUL' | 'FAILED'>,
-    historyButtonInteracted: false,
-    historyWindowMode: 'DAYS' as const,
+    historyTargetingEnabled: true,
+    historyMode: mode,
+    historyMatch: match,
+    historyDeliveryBuckets: ['VIEWED'] as CampaignV2HistoryDeliveryBucket[],
+    historyOutcomes: [] as CampaignV2HistoryOutcome[],
+    historyButtonInteracted: true,
+    historyWindowMode: 'ALL_HISTORY' as const,
+    historyLookbackDays: '',
   };
-  assert.equal(isCampaignV2HistoryFilterValid({ ...base, historyLookbackDays: '30' }), true);
-  assert.equal(isCampaignV2HistoryFilterValid({ ...base, historyLookbackDays: '0' }), false);
+}
+
+for (const [mode, match] of [
+  ['INCLUDE', 'ALL'],
+  ['INCLUDE', 'ANY'],
+  ['EXCLUDE', 'ALL'],
+  ['EXCLUDE', 'ANY'],
+] as const) {
+  test('M24 payload ' + mode + ' + ' + match + ' usa historical_targeting', () => {
+    const request = buildCampaignV2AudienceRequest(historicalState(mode, match));
+    assert.deepEqual(request.historical_targeting, {
+      mode,
+      match,
+      delivery_buckets: ['VIEWED'],
+      outcomes: [],
+      button_interacted: true,
+      lookback_days: null,
+    });
+    assert.equal('history_exclusion' in request, false);
+  });
+}
+
+test('M24 disabled omite historical_targeting aunque conserve state residual', () => {
+  const request = buildCampaignV2AudienceRequest({
+    ...historicalState('INCLUDE', 'ALL'),
+    historyTargetingEnabled: false,
+    historyWindowMode: 'LOOKBACK_DAYS',
+    historyLookbackDays: '30',
+  });
+  assert.equal('historical_targeting' in request, false);
+  assert.equal('history_exclusion' in request, false);
 });
 
-test('cualquier criterio histórico invalida Preview; name/purpose no', () => {
+test('M24 enabled sin condiciones es inválido y builder omite regla', () => {
+  const state = {
+    ...historicalState('EXCLUDE', 'ANY'),
+    historyDeliveryBuckets: [] as CampaignV2HistoryDeliveryBucket[],
+    historyOutcomes: [] as CampaignV2HistoryOutcome[],
+    historyButtonInteracted: false,
+  };
+  assert.equal(isCampaignV2HistoryFilterValid(state), false);
+  assert.equal(buildCampaignV2HistoricalTargeting(state), undefined);
+  assert.equal(isCampaignV2AudienceValid(state), false);
+});
+
+test('M24 LOOKBACK_DAYS exige entero positivo y ALL_HISTORY envía null', () => {
+  const valid = {
+    ...historicalState('INCLUDE', 'ALL'),
+    historyWindowMode: 'LOOKBACK_DAYS' as const,
+    historyLookbackDays: '90',
+  };
+  assert.equal(isCampaignV2HistoryFilterValid(valid), true);
+  assert.equal(buildCampaignV2HistoricalTargeting(valid)?.lookback_days, 90);
+
+  const invalid = { ...valid, historyLookbackDays: '0' };
+  assert.equal(isCampaignV2HistoryFilterValid(invalid), false);
+
+  const allHistory = {
+    ...valid,
+    historyWindowMode: 'ALL_HISTORY' as const,
+    historyLookbackDays: '999',
+  };
+  assert.equal(buildCampaignV2HistoricalTargeting(allHistory)?.lookback_days, null);
+
+  for (const value of ['', '0', '-1', '1.5', 'NaN', 'texto']) {
+    assert.equal(parseCampaignV2LookbackDays(value), null, value);
+  }
+});
+
+test('M24 cualquier cambio histórico invalida Preview; name/purpose no', () => {
   for (const field of [
-    'history_enabled',
+    'history_targeting_enabled',
+    'history_mode',
+    'history_match',
     'history_delivery_buckets',
     'history_outcomes',
     'history_button_interacted',
@@ -343,24 +365,30 @@ test('cualquier criterio histórico invalida Preview; name/purpose no', () => {
   assert.equal(campaignV2FieldInvalidatesPreview('purpose'), false);
 });
 
-test('reason mapper traduce razones conocidas y tiene fallback seguro', () => {
+test('reason mapper y breakdown neutral conservan múltiples señales', () => {
   assert.equal(campaignV2HistoryReasonLabel('HISTORY_DELIVERY_VIEWED'), 'Visto anteriormente');
   assert.equal(campaignV2HistoryReasonLabel('HISTORY_OUTCOME_FAILED'), 'Resultado fallido anteriormente');
   assert.equal(campaignV2HistoryReasonLabel('HISTORY_BUTTON_INTERACTION'), 'Interactuó con un botón');
-  assert.equal(campaignV2HistoryReasonLabel('HISTORY_FUTURE_REASON'), 'Razón histórica: HISTORY_FUTURE_REASON');
+
+  const rows = campaignV2HistoryBreakdownRows({
+    history_excluded_count: 1,
+    matched_by_delivery_bucket: { VIEWED: 1 },
+    matched_by_outcome: { FAILED: 1 },
+    matched_by_button_interaction: 1,
+  });
+  assert.deepEqual(rows, [
+    { label: 'Vistos', count: 1 },
+    { label: 'Fallidos', count: 1 },
+    { label: 'Interacción con botón', count: 1 },
+  ]);
+  assert.equal(rows.reduce((total, row) => total + row.count, 0), 3);
 });
 
-test('Freeze conserva history_exclusion y nunca agrega teléfonos/cutoff efectivo', () => {
+test('M24 Freeze conserva historical_targeting y no fabrica autoridad backend', () => {
   const audience = buildCampaignV2AudienceRequest({
-    source: 'ACTIVE_MEMBERS',
-    audienceFamilies: ['DOMICILIADO'],
-    expirationDateFrom: '',
-    expirationDateTo: '',
-    historyEnabled: true,
-    historyDeliveryBuckets: ['VIEWED'],
+    ...historicalState('INCLUDE', 'ALL'),
     historyOutcomes: ['FAILED'],
-    historyButtonInteracted: true,
-    historyWindowMode: 'DAYS',
+    historyWindowMode: 'LOOKBACK_DAYS',
     historyLookbackDays: '90',
   });
   const request = buildCampaignV2FreezeRequest(
@@ -369,12 +397,15 @@ test('Freeze conserva history_exclusion y nunca agrega teléfonos/cutoff efectiv
     'REACTIVATION',
     'f'.repeat(64),
   );
-  assert.deepEqual(request.history_exclusion, {
+  assert.deepEqual(request.historical_targeting, {
+    mode: 'INCLUDE',
+    match: 'ALL',
     delivery_buckets: ['VIEWED'],
     outcomes: ['FAILED'],
     button_interacted: true,
     lookback_days: 90,
   });
+  assert.equal('history_exclusion' in request, false);
   for (const forbidden of [
     'excluded_phones',
     'history_rows',
@@ -385,71 +416,29 @@ test('Freeze conserva history_exclusion y nunca agrega teléfonos/cutoff efectiv
   }
 });
 
-
-test('M15 renderiza diagnostics/history detail sin M13 ni auth manual', () => {
-  const root = process.cwd();
-  const dir = path.join(root, 'src/app/marketing-campaign-v2');
-  const service = fs.readFileSync(path.join(dir, 'marketing-campaign-v2.service.ts'), 'utf8');
-  const pageTs = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.ts'), 'utf8');
-  const pageHtml = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.html'), 'utf8');
-  const detailTs = fs.readFileSync(
-    path.join(dir, 'marketing-campaign-v2-preview-detail-dialog.component.ts'),
-    'utf8',
-  );
-  const detailHtml = fs.readFileSync(
-    path.join(dir, 'marketing-campaign-v2-preview-detail-dialog.component.html'),
-    'utf8',
-  );
-
-  assert.equal(pageHtml.includes('Antes del filtro histórico'), true);
-  assert.equal(pageHtml.includes('Excluidos por historial'), true);
-  assert.equal(pageHtml.includes('Después del filtro histórico'), true);
-  assert.equal(
-    pageHtml.includes('Un contacto puede aparecer en más de una razón de exclusión.'),
-    true,
-  );
-  assert.equal(pageTs.includes("openMetric('history_excluded'"), false);
-  assert.equal(pageHtml.includes("openMetric('history_excluded'"), true);
-  assert.equal(detailTs.includes("HISTORY_EXCLUDED: 'Excluidos por historial'"), true);
-  assert.equal(detailTs.includes('campaignV2HistoryReasonLabel'), true);
-  assert.equal(detailHtml.includes("data.bucket === 'HISTORY_EXCLUDED'"), true);
-
-  assert.equal(service.includes('provider-history/lookup'), false);
-  assert.equal(service.includes('Authorization'), false);
-  assert.equal(service.includes('localStorage'), false);
-  assert.equal(pageTs.includes('provider-history/lookup'), false);
-});
-
-
-test('UI M15 expone filtros/diagnostics/detail sin consultar M13 ni auth manual', () => {
+test('M24 UI consume options y no evalúa historial en Angular', () => {
   const root = process.cwd();
   const dir = path.join(root, 'src/app/marketing-campaign-v2');
   const service = fs.readFileSync(path.join(dir, 'marketing-campaign-v2.service.ts'), 'utf8');
   const models = fs.readFileSync(path.join(dir, 'marketing-campaign-v2.models.ts'), 'utf8');
+  const logic = fs.readFileSync(path.join(dir, 'marketing-campaign-v2.logic.ts'), 'utf8');
   const page = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.ts'), 'utf8');
   const html = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.html'), 'utf8');
-  const detail = fs.readFileSync(
-    path.join(dir, 'marketing-campaign-v2-preview-detail-dialog.component.ts'),
-    'utf8',
-  );
-  const detailHtml = fs.readFileSync(
-    path.join(dir, 'marketing-campaign-v2-preview-detail-dialog.component.html'),
-    'utf8',
-  );
 
-  assert.equal(models.includes("history_exclusion?: CampaignV2HistoryExclusion"), true);
-  assert.equal(models.includes("| 'HISTORY_EXCLUDED'"), true);
+  assert.equal(models.includes("CampaignV2HistoricalTargetingMode = 'INCLUDE' | 'EXCLUDE'"), true);
+  assert.equal(models.includes("CampaignV2HistoricalTargetingMatch = 'ALL' | 'ANY'"), true);
+  assert.equal(models.includes("| 'HISTORY_INCLUDED'"), true);
+  assert.equal(page.includes('this.options?.historical_targeting?.modes'), true);
+  assert.equal(page.includes('this.options?.historical_targeting?.matches'), true);
+  assert.equal(page.includes('this.options?.historical_targeting?.delivery_buckets'), true);
+  assert.equal(page.includes('this.options?.historical_targeting?.window_modes'), true);
   assert.equal(html.includes('Historial de campañas'), true);
-  assert.equal(html.includes('Excluir contactos según historial'), true);
-  assert.equal(html.includes('Antes del filtro histórico'), true);
-  assert.equal(html.includes('Excluidos por historial'), true);
-  assert.equal(html.includes('Después del filtro histórico'), true);
-  assert.equal(html.includes('Un contacto puede aparecer en más de una razón de exclusión.'), true);
-  assert.equal(page.includes('historyBreakdownRows()'), true);
-  assert.equal(page.includes('this.invalidatePreview();'), true);
-  assert.equal(detail.includes("HISTORY_EXCLUDED: 'Excluidos por historial'"), true);
-  assert.equal(detail.includes('campaignV2HistoryReasonLabel'), true);
-  assert.equal(detailHtml.includes('historyReasonsLabel(row.history_exclusion_reasons)'), true);
+  assert.equal(html.includes('Aplicar regla histórica'), true);
+  assert.equal(html.includes('<mat-label>Modo</mat-label>'), true);
+  assert.equal(html.includes('<mat-label>Cumplimiento</mat-label>'), true);
+  assert.equal(html.includes('<mat-label>Ventana</mat-label>'), true);
+  assert.equal(logic.includes('base.history_exclusion ='), false);
+  assert.equal(logic.includes('base.historical_targeting = historicalTargeting'), true);
 
   for (const forbidden of [
     'provider-history/lookup',
@@ -463,59 +452,76 @@ test('UI M15 expone filtros/diagnostics/detail sin consultar M13 ni auth manual'
   }
 });
 
-test('UI no expone cutoff editable ni copy de respondió/no contestó', () => {
-  const root = process.cwd();
-  const dir = path.join(root, 'src/app/marketing-campaign-v2');
-  const html = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.html'), 'utf8');
-  const page = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.ts'), 'utf8');
+test('M24 Preview Detail helpers cubren decisión/match/reasons y legacy fallback', () => {
+  for (const [decision, matched, decisionLabel, matchedLabel] of [
+    ['INCLUDED', true, 'Incluido', 'Sí'],
+    ['INCLUDED', false, 'Incluido', 'No'],
+    ['EXCLUDED', true, 'Excluido', 'Sí'],
+    ['EXCLUDED', false, 'Excluido', 'No'],
+  ] as const) {
+    assert.equal(campaignV2HistoryDecisionLabel(decision), decisionLabel);
+    assert.equal(campaignV2HistoryMatchedLabel(matched), matchedLabel);
+  }
 
-  assert.equal(html.includes('observed_before'), false);
-  assert.equal(html.includes('observed_after'), false);
-  assert.equal(html.toLowerCase().includes('no contestó'), false);
-  assert.equal(html.toLowerCase().includes('respondió'), false);
-  assert.equal(page.includes("label: 'Historial observado desde'"), true);
-  assert.equal(page.includes("label: 'Historial evaluado hasta'"), true);
+  assert.equal(
+    campaignV2HistoryReasonsLabel(
+      ['HISTORY_DELIVERY_VIEWED', 'HISTORY_BUTTON_INTERACTION'],
+      undefined,
+    ),
+    'Visto anteriormente, Interactuó con un botón',
+  );
+  assert.equal(
+    campaignV2HistoryReasonsLabel([], undefined),
+    'Sin señales seleccionadas observadas',
+  );
+  assert.equal(
+    campaignV2HistoryReasonsLabel(
+      undefined,
+      ['HISTORY_OUTCOME_FAILED'],
+    ),
+    'Resultado fallido anteriormente',
+  );
 });
 
-
-test('diagnostics solapados conservan total backend y razones no exclusivas', () => {
-  const backendHistoryExcludedCount = 2;
-  const rows = campaignV2HistoryBreakdownRows({
-    history_excluded_count: backendHistoryExcludedCount,
-    excluded_by_delivery_bucket: { VIEWED: 1 },
-    excluded_by_outcome: { FAILED: 1 },
-    excluded_by_button_interaction: 1,
-  });
-  assert.deepEqual(rows, [
-    { label: 'Vistos', count: 1 },
-    { label: 'Fallidos', count: 1 },
-    { label: 'Interacción con botón', count: 1 },
-  ]);
-  assert.equal(rows.reduce((total, row) => total + row.count, 0), 3);
-  assert.equal(backendHistoryExcludedCount, 2);
-});
-
-
-test('detalle congelado muestra criterios históricos persistidos sin backend nuevo', () => {
+test('M24 Preview Detail muestra buckets neutrales y fallback legacy', () => {
   const root = process.cwd();
   const dir = path.join(root, 'src/app/marketing-campaign-v2');
-  const service = fs.readFileSync(path.join(dir, 'marketing-campaign-v2.service.ts'), 'utf8');
+  const detail = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-preview-detail-dialog.component.ts'),
+    'utf8',
+  );
+  const detailHtml = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-preview-detail-dialog.component.html'),
+    'utf8',
+  );
+
+  assert.equal(detail.includes("HISTORY_INCLUDED: 'Incluidos por regla histórica'"), true);
+  assert.equal(detail.includes("HISTORY_EXCLUDED: 'Excluidos por regla histórica'"), true);
+  assert.equal(detail.includes('campaignV2HistoryReasonsLabel('), true);
+  assert.equal(detailHtml.includes('historyDecisionLabel(row.history_decision)'), true);
+  assert.equal(detailHtml.includes('historyMatchedLabel(row.history_matched)'), true);
+  assert.equal(detailHtml.includes('historyReasonsLabel(row)'), true);
+});
+
+test('M24 frozen detail separa canónico y legacy sin reinterpretar', () => {
+  const root = process.cwd();
+  const dir = path.join(root, 'src/app/marketing-campaign-v2');
   const detail = fs.readFileSync(
     path.join(dir, 'marketing-campaign-v2-campaign-detail-dialog.component.ts'),
     'utf8',
   );
 
-  assert.equal(detail.includes("label: 'Exclusiones históricas'"), true);
-  assert.equal(detail.includes("label: 'Ventana histórica'"), true);
-  assert.equal(detail.includes('definition.filters.history_exclusion'), true);
-  assert.equal(detail.includes('campaignV2HistoryExclusionSummary'), true);
-  assert.equal(detail.includes('campaignV2HistoryWindowLabel'), true);
-  assert.equal(detail.includes("timeZone: 'America/Tijuana'"), true);
-  assert.equal(service.includes('/provider-history'), false);
+  assert.equal(detail.includes('definition.filters.historical_targeting'), true);
+  assert.equal(detail.includes("label: 'Historial de campañas · Modo'"), true);
+  assert.equal(detail.includes("label: 'Historial de campañas · Cumplimiento'"), true);
+  assert.equal(detail.includes("label: 'Historial de campañas · Condiciones'"), true);
+  assert.equal(detail.includes("label: 'Historial de campañas · Ventana'"), true);
+  assert.equal(detail.includes('else if (definition.filters.history_exclusion)'), true);
+  assert.equal(detail.includes("label: 'Exclusión histórica'"), true);
+  assert.equal(detail.includes("label: 'Ventana histórica legacy'"), true);
 });
 
-
-test('M20 Funnel usa options como contrato, exige mes/corte y omite filtros no aplicables', () => {
+test('M24 Funnel usa contract options y envía sólo filtros aplicables + targeting', () => {
   const options: CampaignV2OptionsResponse = {
     sources: ['EXPIRED_MEMBERS', 'ACTIVE_MEMBERS', 'FUNNEL_PORTFOLIO'],
     source_filters: {
@@ -534,33 +540,28 @@ test('M20 Funnel usa options como contrato, exige mes/corte y omite filtros no a
     selectable_audience_families: allFamilies,
     non_selectable_classifications: ['MES', 'OUT_OF_SEGMENT', 'UNCLASSIFIED'],
     purposes: ['NEW_SALE', 'REACTIVATION', 'ACTIVE_MEMBERS', 'UNCLASSIFIED'],
+    historical_targeting: {
+      modes: [...historicalOptions.modes],
+      matches: [...historicalOptions.matches],
+      delivery_buckets: [...historicalOptions.delivery_buckets],
+      outcomes: [...historicalOptions.outcomes],
+      button_interaction: true,
+      window_modes: [...historicalOptions.window_modes],
+      legacy_history_exclusion_supported: true,
+    },
     tariff_categories: [],
     scope: { is_global: true, allowed_sucursal_keys: null },
   };
 
   const base = {
+    ...historicalState('INCLUDE', 'ALL'),
     source: 'FUNNEL_PORTFOLIO' as const,
-    audienceFamilies: ['DOMICILIADO'] as CampaignV2AudienceFamily[],
-    expirationDateFrom: '2026-09-01',
-    expirationDateTo: '2026-09-30',
     funnelMonth: '2026-09',
     funnelCutoffDate: '2026-09-30',
-    historyEnabled: true,
-    historyDeliveryBuckets: ['VIEWED'] as CampaignV2HistoryDeliveryBucket[],
-    historyOutcomes: [] as CampaignV2HistoryOutcome[],
-    historyButtonInteracted: false,
-    historyWindowMode: 'ALL' as const,
-    historyLookbackDays: '',
   };
 
-  assert.equal(isCampaignV2AudienceValid(
-    { ...base, funnelMonth: '' },
-    options,
-  ), false);
-  assert.equal(isCampaignV2AudienceValid(
-    { ...base, funnelCutoffDate: '' },
-    options,
-  ), false);
+  assert.equal(isCampaignV2AudienceValid({ ...base, funnelMonth: '' }, options), false);
+  assert.equal(isCampaignV2AudienceValid({ ...base, funnelCutoffDate: '' }, options), false);
   assert.equal(isCampaignV2AudienceValid(base, options), true);
 
   const request = buildCampaignV2AudienceRequest(base, options);
@@ -568,63 +569,37 @@ test('M20 Funnel usa options como contrato, exige mes/corte y omite filtros no a
     source: 'FUNNEL_PORTFOLIO',
     funnel_month: '2026-09',
     funnel_cutoff_date: '2026-09-30',
-    history_exclusion: {
+    historical_targeting: {
+      mode: 'INCLUDE',
+      match: 'ALL',
       delivery_buckets: ['VIEWED'],
       outcomes: [],
-      button_interacted: false,
+      button_interacted: true,
       lookback_days: null,
     },
   });
+  assert.equal('history_exclusion' in request, false);
   assert.equal('audience_families' in request, false);
   assert.equal('expiration_date_from' in request, false);
   assert.equal('expiration_date_to' in request, false);
-
-  const freeze = buildCampaignV2FreezeRequest(
-    request,
-    'Funnel septiembre',
-    'NEW_SALE',
-    'f'.repeat(64),
-  );
-  assert.deepEqual(Object.keys(freeze).sort(), [
-    'expected_preview_fingerprint',
-    'funnel_cutoff_date',
-    'funnel_month',
-    'history_exclusion',
-    'name',
-    'purpose',
-    'source',
-  ]);
-  for (const forbidden of [
-    'iventas_sync_run_id',
-    'active_members_snapshot_id',
-    'active_phones',
-    'buyer_exclusions',
-    'recipients',
-    'observed_before',
-  ]) {
-    assert.equal(forbidden in freeze, false, forbidden);
-  }
 });
 
-test('M20 month/cutoff y source invalidan Preview y buckets Funnel mapean backend', () => {
+test('M24 buckets e invalidación Funnel conservan M20', () => {
   for (const field of ['source', 'funnel_month', 'funnel_cutoff_date'] as const) {
     assert.equal(campaignV2FieldInvalidatesPreview(field), true, field);
   }
+  assert.equal(campaignV2MetricBucket('history_included'), 'HISTORY_INCLUDED');
+  assert.equal(campaignV2MetricBucket('history_excluded'), 'HISTORY_EXCLUDED');
   assert.equal(campaignV2MetricBucket('funnel_candidates'), 'FUNNEL_CANDIDATES');
   assert.equal(campaignV2MetricBucket('funnel_buyer_excluded'), 'FUNNEL_BUYER_EXCLUDED');
   assert.equal(campaignV2MetricBucket('active_member_suppression'), 'ACTIVE_MEMBER_SUPPRESSION');
 });
 
-test('M20 UI Funnel renderiza contrato/diagnostics, reutiliza cortes y tolera recipients phone-only', () => {
+test('M24 UI Funnel conserva source-specific + Historical Targeting común', () => {
   const root = process.cwd();
   const dir = path.join(root, 'src/app/marketing-campaign-v2');
-  const models = fs.readFileSync(path.join(dir, 'marketing-campaign-v2.models.ts'), 'utf8');
   const page = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.ts'), 'utf8');
   const html = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.html'), 'utf8');
-  const previewDetail = fs.readFileSync(
-    path.join(dir, 'marketing-campaign-v2-preview-detail-dialog.component.ts'),
-    'utf8',
-  );
   const campaignDetail = fs.readFileSync(
     path.join(dir, 'marketing-campaign-v2-campaign-detail-dialog.component.ts'),
     'utf8',
@@ -634,45 +609,15 @@ test('M20 UI Funnel renderiza contrato/diagnostics, reutiliza cortes y tolera re
     'utf8',
   );
 
-  assert.equal(models.includes("| 'FUNNEL_PORTFOLIO'"), true);
-  assert.equal(models.includes("| 'FUNNEL_CANDIDATES'"), true);
-  assert.equal(models.includes("| 'FUNNEL_BUYER_EXCLUDED'"), true);
-  assert.equal(models.includes("| 'ACTIVE_MEMBER_SUPPRESSION'"), true);
-  assert.equal(html.includes('Cartera Funnel / Venta Nueva'), false);
   assert.equal(page.includes("FUNNEL_PORTFOLIO: 'Cartera Funnel / Venta Nueva'"), true);
   assert.equal(html.includes('Mes Funnel'), true);
   assert.equal(html.includes('Corte Funnel'), true);
   assert.equal(page.includes('funnelService.getDashboard(month)'), true);
-  assert.equal(page.includes("'audience_families'"), true);
-  assert.equal(html.includes('Leads Funnel'), true);
-  assert.equal(html.includes('Compradores excluidos'), true);
-  assert.equal(html.includes('Socios activos excluidos'), true);
-  assert.equal(html.includes('Teléfonos no utilizables'), true);
-  assert.equal(html.includes('Audiencia final'), true);
-  assert.equal(
-    html.includes('Número asociado actualmente a Socios Activos'),
-    true,
-  );
-  assert.equal(
-    html.includes('Conversión detectada por lógica Funnel'),
-    true,
-  );
-  assert.equal(previewDetail.includes("FUNNEL_CANDIDATES: 'Leads Funnel'"), true);
-  assert.equal(
-    previewDetail.includes("ACTIVE_MEMBER_SUPPRESSION: 'Socios activos excluidos'"),
-    true,
-  );
+  assert.equal(html.includes('Historial de campañas'), true);
+  assert.equal(page.includes("label: 'Coincidieron con historial'"), true);
+  assert.equal(page.includes("metric: 'history_included'"), true);
+  assert.equal(page.includes("metric: 'history_excluded'"), true);
   assert.equal(campaignDetail.includes('definition.filters.audience_families?.length'), true);
-  assert.equal(campaignDetail.includes("label: 'Mes Funnel'"), true);
   assert.equal(recipientHtml.includes("recipient.member_name || '—'"), true);
   assert.equal(recipientHtml.includes("recipient.tarifa_raw || '—'"), true);
-
-  for (const forbidden of [
-    'active_members_snapshot_id:',
-    'iventas_sync_run_id:',
-    'buyer_exclusions:',
-    'recipients:',
-  ]) {
-    assert.equal(page.includes(forbidden), false, forbidden);
-  }
 });
