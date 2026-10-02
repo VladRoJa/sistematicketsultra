@@ -28,6 +28,7 @@ import {
   CampaignV2AudienceFamily,
   CampaignV2HistoryDeliveryBucket,
   CampaignV2HistoryOutcome,
+  CampaignV2OptionsResponse,
   CampaignV2PreviewResponse,
 } from './marketing-campaign-v2.models';
 
@@ -195,7 +196,7 @@ test('service y page conservan contrato M5 sin auth manual ni Exportar', () => {
   }
   assert.equal(service.includes('Authorization'), false);
   assert.equal(service.includes('localStorage'), false);
-  assert.equal(page.includes("if (source === 'ACTIVE_MEMBERS')"), true);
+  assert.equal(page.includes('showsExpirationRange'), true);
   assert.equal(page.includes('this.invalidatePreview();'), true);
   assert.equal(page.includes('this.loadCampaigns(1);'), true);
   assert.equal(html.includes('Exportar'), false);
@@ -511,4 +512,167 @@ test('detalle congelado muestra criterios históricos persistidos sin backend nu
   assert.equal(detail.includes('campaignV2HistoryWindowLabel'), true);
   assert.equal(detail.includes("timeZone: 'America/Tijuana'"), true);
   assert.equal(service.includes('/provider-history'), false);
+});
+
+
+test('M20 Funnel usa options como contrato, exige mes/corte y omite filtros no aplicables', () => {
+  const options: CampaignV2OptionsResponse = {
+    sources: ['EXPIRED_MEMBERS', 'ACTIVE_MEMBERS', 'FUNNEL_PORTFOLIO'],
+    source_filters: {
+      FUNNEL_PORTFOLIO: {
+        required: ['funnel_month', 'funnel_cutoff_date'],
+        not_applicable: [
+          'audience_families',
+          'expiration_date_from',
+          'expiration_date_to',
+          'tarifa',
+          'categoria_tarifa',
+        ],
+        cutoff_policy: 'EXACT_COMPLETE',
+      },
+    },
+    selectable_audience_families: allFamilies,
+    non_selectable_classifications: ['MES', 'OUT_OF_SEGMENT', 'UNCLASSIFIED'],
+    purposes: ['NEW_SALE', 'REACTIVATION', 'ACTIVE_MEMBERS', 'UNCLASSIFIED'],
+    tariff_categories: [],
+    scope: { is_global: true, allowed_sucursal_keys: null },
+  };
+
+  const base = {
+    source: 'FUNNEL_PORTFOLIO' as const,
+    audienceFamilies: ['DOMICILIADO'] as CampaignV2AudienceFamily[],
+    expirationDateFrom: '2026-09-01',
+    expirationDateTo: '2026-09-30',
+    funnelMonth: '2026-09',
+    funnelCutoffDate: '2026-09-30',
+    historyEnabled: true,
+    historyDeliveryBuckets: ['VIEWED'] as CampaignV2HistoryDeliveryBucket[],
+    historyOutcomes: [] as CampaignV2HistoryOutcome[],
+    historyButtonInteracted: false,
+    historyWindowMode: 'ALL' as const,
+    historyLookbackDays: '',
+  };
+
+  assert.equal(isCampaignV2AudienceValid(
+    { ...base, funnelMonth: '' },
+    options,
+  ), false);
+  assert.equal(isCampaignV2AudienceValid(
+    { ...base, funnelCutoffDate: '' },
+    options,
+  ), false);
+  assert.equal(isCampaignV2AudienceValid(base, options), true);
+
+  const request = buildCampaignV2AudienceRequest(base, options);
+  assert.deepEqual(request, {
+    source: 'FUNNEL_PORTFOLIO',
+    funnel_month: '2026-09',
+    funnel_cutoff_date: '2026-09-30',
+    history_exclusion: {
+      delivery_buckets: ['VIEWED'],
+      outcomes: [],
+      button_interacted: false,
+      lookback_days: null,
+    },
+  });
+  assert.equal('audience_families' in request, false);
+  assert.equal('expiration_date_from' in request, false);
+  assert.equal('expiration_date_to' in request, false);
+
+  const freeze = buildCampaignV2FreezeRequest(
+    request,
+    'Funnel septiembre',
+    'NEW_SALE',
+    'f'.repeat(64),
+  );
+  assert.deepEqual(Object.keys(freeze).sort(), [
+    'expected_preview_fingerprint',
+    'funnel_cutoff_date',
+    'funnel_month',
+    'history_exclusion',
+    'name',
+    'purpose',
+    'source',
+  ]);
+  for (const forbidden of [
+    'iventas_sync_run_id',
+    'active_members_snapshot_id',
+    'active_phones',
+    'buyer_exclusions',
+    'recipients',
+    'observed_before',
+  ]) {
+    assert.equal(forbidden in freeze, false, forbidden);
+  }
+});
+
+test('M20 month/cutoff y source invalidan Preview y buckets Funnel mapean backend', () => {
+  for (const field of ['source', 'funnel_month', 'funnel_cutoff_date'] as const) {
+    assert.equal(campaignV2FieldInvalidatesPreview(field), true, field);
+  }
+  assert.equal(campaignV2MetricBucket('funnel_candidates'), 'FUNNEL_CANDIDATES');
+  assert.equal(campaignV2MetricBucket('funnel_buyer_excluded'), 'FUNNEL_BUYER_EXCLUDED');
+  assert.equal(campaignV2MetricBucket('active_member_suppression'), 'ACTIVE_MEMBER_SUPPRESSION');
+});
+
+test('M20 UI Funnel renderiza contrato/diagnostics, reutiliza cortes y tolera recipients phone-only', () => {
+  const root = process.cwd();
+  const dir = path.join(root, 'src/app/marketing-campaign-v2');
+  const models = fs.readFileSync(path.join(dir, 'marketing-campaign-v2.models.ts'), 'utf8');
+  const page = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.ts'), 'utf8');
+  const html = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.html'), 'utf8');
+  const previewDetail = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-preview-detail-dialog.component.ts'),
+    'utf8',
+  );
+  const campaignDetail = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-campaign-detail-dialog.component.ts'),
+    'utf8',
+  );
+  const recipientHtml = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-recipient-detail-dialog.component.html'),
+    'utf8',
+  );
+
+  assert.equal(models.includes("| 'FUNNEL_PORTFOLIO'"), true);
+  assert.equal(models.includes("| 'FUNNEL_CANDIDATES'"), true);
+  assert.equal(models.includes("| 'FUNNEL_BUYER_EXCLUDED'"), true);
+  assert.equal(models.includes("| 'ACTIVE_MEMBER_SUPPRESSION'"), true);
+  assert.equal(html.includes('Cartera Funnel / Venta Nueva'), false);
+  assert.equal(page.includes("FUNNEL_PORTFOLIO: 'Cartera Funnel / Venta Nueva'"), true);
+  assert.equal(html.includes('Mes Funnel'), true);
+  assert.equal(html.includes('Corte Funnel'), true);
+  assert.equal(page.includes('funnelService.getDashboard(month)'), true);
+  assert.equal(page.includes("'audience_families'"), true);
+  assert.equal(html.includes('Leads Funnel'), true);
+  assert.equal(html.includes('Compradores excluidos'), true);
+  assert.equal(html.includes('Socios activos excluidos'), true);
+  assert.equal(html.includes('Teléfonos no utilizables'), true);
+  assert.equal(html.includes('Audiencia final'), true);
+  assert.equal(
+    html.includes('Número asociado actualmente a Socios Activos'),
+    true,
+  );
+  assert.equal(
+    html.includes('Conversión detectada por lógica Funnel'),
+    true,
+  );
+  assert.equal(previewDetail.includes("FUNNEL_CANDIDATES: 'Leads Funnel'"), true);
+  assert.equal(
+    previewDetail.includes("ACTIVE_MEMBER_SUPPRESSION: 'Socios activos excluidos'"),
+    true,
+  );
+  assert.equal(campaignDetail.includes('definition.filters.audience_families?.length'), true);
+  assert.equal(campaignDetail.includes("label: 'Mes Funnel'"), true);
+  assert.equal(recipientHtml.includes("recipient.member_name || '—'"), true);
+  assert.equal(recipientHtml.includes("recipient.tarifa_raw || '—'"), true);
+
+  for (const forbidden of [
+    'active_members_snapshot_id:',
+    'iventas_sync_run_id:',
+    'buyer_exclusions:',
+    'recipients:',
+  ]) {
+    assert.equal(page.includes(forbidden), false, forbidden);
+  }
 });

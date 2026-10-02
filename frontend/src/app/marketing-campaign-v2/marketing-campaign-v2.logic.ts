@@ -7,6 +7,7 @@ import {
   CampaignV2HistoryExclusion,
   CampaignV2HistoryOutcome,
   CampaignV2PreviewBucket,
+  CampaignV2OptionsResponse,
   CampaignV2PreviewResponse,
   CampaignV2Purpose,
   CampaignV2Source,
@@ -19,6 +20,8 @@ export interface CampaignV2AudienceState {
   audienceFamilies: CampaignV2AudienceFamily[];
   expirationDateFrom: string;
   expirationDateTo: string;
+  funnelMonth?: string;
+  funnelCutoffDate?: string;
   historyEnabled?: boolean;
   historyDeliveryBuckets?: CampaignV2HistoryDeliveryBucket[];
   historyOutcomes?: CampaignV2HistoryOutcome[];
@@ -32,6 +35,8 @@ export type CampaignV2AudienceField =
   | 'audience_families'
   | 'expiration_date_from'
   | 'expiration_date_to'
+  | 'funnel_month'
+  | 'funnel_cutoff_date'
   | 'history_enabled'
   | 'history_delivery_buckets'
   | 'history_outcomes'
@@ -48,17 +53,61 @@ export interface CampaignV2FreezeEligibility {
   creating: boolean;
 }
 
+export function campaignV2FilterApplies(
+  options: CampaignV2OptionsResponse | null | undefined,
+  source: CampaignV2Source,
+  filter: 'audience_families' | 'expiration_date_from' | 'expiration_date_to' | 'funnel_month' | 'funnel_cutoff_date',
+): boolean {
+  const contract = options?.source_filters?.[source];
+  if (contract) {
+    return !contract.not_applicable.includes(filter);
+  }
+  if (source === 'FUNNEL_PORTFOLIO') {
+    return filter === 'funnel_month' || filter === 'funnel_cutoff_date';
+  }
+  if (filter === 'audience_families') {
+    return true;
+  }
+  if (filter === 'expiration_date_from' || filter === 'expiration_date_to') {
+    return source === 'EXPIRED_MEMBERS';
+  }
+  return false;
+}
+
+export function campaignV2FilterRequired(
+  options: CampaignV2OptionsResponse | null | undefined,
+  source: CampaignV2Source,
+  filter: 'funnel_month' | 'funnel_cutoff_date',
+): boolean {
+  const contract = options?.source_filters?.[source];
+  if (contract) {
+    return contract.required.includes(filter);
+  }
+  return source === 'FUNNEL_PORTFOLIO';
+}
+
 export function buildCampaignV2AudienceRequest(
   state: CampaignV2AudienceState,
+  options?: CampaignV2OptionsResponse | null,
 ): CampaignV2AudienceDefinitionRequest {
   const base: CampaignV2AudienceDefinitionRequest = {
     source: state.source,
-    audience_families: [...state.audienceFamilies],
   };
 
-  if (state.source === 'EXPIRED_MEMBERS') {
+  if (campaignV2FilterApplies(options, state.source, 'audience_families')) {
+    base.audience_families = [...state.audienceFamilies];
+  }
+  if (campaignV2FilterApplies(options, state.source, 'expiration_date_from')) {
     base.expiration_date_from = state.expirationDateFrom;
+  }
+  if (campaignV2FilterApplies(options, state.source, 'expiration_date_to')) {
     base.expiration_date_to = state.expirationDateTo;
+  }
+  if (campaignV2FilterApplies(options, state.source, 'funnel_month')) {
+    base.funnel_month = state.funnelMonth?.trim();
+  }
+  if (campaignV2FilterApplies(options, state.source, 'funnel_cutoff_date')) {
+    base.funnel_cutoff_date = state.funnelCutoffDate?.trim();
   }
 
   const historyExclusion = buildCampaignV2HistoryExclusion(state);
@@ -99,23 +148,37 @@ export function buildCampaignV2HistoryExclusion(
   };
 }
 
-export function isCampaignV2AudienceValid(state: CampaignV2AudienceState): boolean {
-  if (!state.audienceFamilies.length) {
-    return false;
-  }
-
+export function isCampaignV2AudienceValid(
+  state: CampaignV2AudienceState,
+  options?: CampaignV2OptionsResponse | null,
+): boolean {
   if (!isCampaignV2HistoryFilterValid(state)) {
     return false;
   }
 
-  if (state.source === 'ACTIVE_MEMBERS') {
-    return true;
-  }
-
-  if (!state.expirationDateFrom || !state.expirationDateTo) {
+  if (
+    campaignV2FilterApplies(options, state.source, 'audience_families')
+    && !state.audienceFamilies.length
+  ) {
     return false;
   }
 
+  if (campaignV2FilterRequired(options, state.source, 'funnel_month') && !state.funnelMonth?.trim()) {
+    return false;
+  }
+  if (
+    campaignV2FilterRequired(options, state.source, 'funnel_cutoff_date')
+    && !state.funnelCutoffDate?.trim()
+  ) {
+    return false;
+  }
+
+  if (!campaignV2FilterApplies(options, state.source, 'expiration_date_from')) {
+    return true;
+  }
+  if (!state.expirationDateFrom || !state.expirationDateTo) {
+    return false;
+  }
   return state.expirationDateFrom <= state.expirationDateTo;
 }
 
@@ -196,6 +259,8 @@ export function campaignV2FieldInvalidatesPreview(field: CampaignV2AudienceField
     'audience_families',
     'expiration_date_from',
     'expiration_date_to',
+    'funnel_month',
+    'funnel_cutoff_date',
     'history_enabled',
     'history_delivery_buckets',
     'history_outcomes',
@@ -240,6 +305,9 @@ export function campaignV2MetricBucket(
     | 'unclassified'
     | 'current_status_blocked'
     | 'history_excluded'
+    | 'funnel_candidates'
+    | 'funnel_buyer_excluded'
+    | 'active_member_suppression'
     | 'family',
 ): CampaignV2PreviewBucket {
   switch (metric) {
@@ -257,6 +325,12 @@ export function campaignV2MetricBucket(
       return 'CURRENT_STATUS_BLOCKED';
     case 'history_excluded':
       return 'HISTORY_EXCLUDED';
+    case 'funnel_candidates':
+      return 'FUNNEL_CANDIDATES';
+    case 'funnel_buyer_excluded':
+      return 'FUNNEL_BUYER_EXCLUDED';
+    case 'active_member_suppression':
+      return 'ACTIVE_MEMBER_SUPPRESSION';
     case 'family':
       return 'FAMILY';
   }
