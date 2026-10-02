@@ -39,10 +39,11 @@ El objetivo arquitectónico es que las APIs nuevas de iVentas entren como una in
 
 ### Fase 2 — iVentas / histórico / Funnel / Campaign BI
 
-- **2A — iVentas / histórico / engagement:** implementada; lectura/sincronización, estados recipient-level, interacciones, analytics e histórico.
-- **2B — FUNNEL_PORTFOLIO:** pendiente; incorpora Venta Nueva/Funnel dentro del mismo Audience Builder, con identidad phone-centric y supresión obligatoria de socios activos.
+- **2A — iVentas / histórico / engagement:** ACCEPTED; lectura/sincronización, estados recipient-level, interacciones, analytics e histórico.
+- **2B — FUNNEL_PORTFOLIO:** ACCEPTED; incorpora Venta Nueva/Funnel dentro del mismo Audience Builder, con identidad phone-centric, supresión obligatoria de socios activos, Preview/Detail, fingerprint, Freeze y Angular.
+- **Historical Targeting transversal:** PENDIENTE; reutiliza M11/M13 para aplicar `INCLUDE/EXCLUDE` + `ALL/ANY` de forma común sobre cualquier fuente Campaign V2, preservando compatibilidad con `history_exclusion` legacy de M14/M15.
 - **2C — Campaign BI / Reporting / Excel:** pendiente; proyecta evidencia persistida en reportes individuales/consolidados y exportación Excel backend-side.
-- **2D — Acceptance final:** pendiente; debe validar integralmente 2A + 2B + 2C antes de Fase 3.
+- **2D — Acceptance final:** pendiente; debe validar integralmente 2A + 2B + Historical Targeting + 2C antes de Fase 3.
 - Fase 2 puede incluir costos e importación histórica cuando exista evidencia suficiente, pero Reporting no llama al provider para generar reportes.
 - Fase 2 no envía campañas desde Suite ni autoriza POST /v2/broadcast.
 
@@ -311,32 +312,45 @@ Los estados viven en la relación **campaña -> destinatario** (o en su detalle/
 
 Así se reutilizan las bases existentes sin contaminarlas con estado de una campaña particular.
 
-### 8.1 Comportamiento histórico de mensajería como dimensión transversal
+### 8.1 Historical Targeting como dimensión transversal
 
-Que `VIEWED`, `DELIVERED` o `FAILED` pertenezcan a una campaña concreta **no impide utilizarlos para construir una campaña nueva**.
+Que `VIEWED`, `DELIVERED`, `FAILED` o una interacción de botón pertenezcan a campañas concretas **no impide utilizar su evidencia persistida para construir una campaña nueva**.
 
-Campañas V2 debe ofrecer un resolver histórico por `phone_mx10` que consulte campañas anteriores y derive comportamiento utilizable por cualquier fuente de audiencia:
+Fase 2 ya dispone del histórico transversal por `phone_mx10` a través de M11/M13. La capacidad pendiente **Historical Targeting** debe consumir ese mismo histórico desde el Audience Builder común:
 
     fuente actual
-        -> phone_mx10
-        -> historial de campaign recipients / provider delivery
-        -> comportamiento histórico
-        -> filtros de audiencia
+        -> reglas propias de la fuente
+        -> scope backend
+        -> supresiones obligatorias
+        -> histórico M11/M13 por phone_mx10
+        -> Historical Targeting
+        -> dedupe
+        -> Preview / Freeze
 
-Ejemplos de filtros válidos una vez implementada Fase 2:
+El contrato v1 queda limitado a:
 
-- leyó una campaña específica;
-- ha leído al menos una campaña anterior;
-- leyó la última campaña aplicable;
-- ha interactuado al menos una vez;
-- fue contactado pero nunca se observó VIEWED;
-- nunca fue contactado por una campaña registrada en V2.
+- `mode = INCLUDE | EXCLUDE`;
+- `match = ALL | ANY`;
+- señales `SENT | DELIVERED | VIEWED | SUCCESSFUL | FAILED | BUTTON_INTERACTION`;
+- ventana `ALL_HISTORY` o `LOOKBACK_DAYS`.
 
-Estos datos son **derivados**, no columnas permanentes de Socios Activos, Socios Vencidos o Funnel.
+`ALL` evalúa `ever_observed` transversal dentro de la ventana: las señales pueden provenir de campañas históricas distintas.
 
-La primera implementación debe consultar el historial persistido. Solo si el volumen demuestra un problema real de rendimiento se podrá introducir una proyección/materialización de engagement; esa proyección seguiría siendo derivada y reconstruible.
+No forman parte de v1:
 
-Al congelar una campaña se conserva la audiencia resultante y, cuando sea útil para auditoría, la evidencia de comportamiento que justificó la inclusión. Una sincronización posterior no reescribe retroactivamente la audiencia ya congelada.
+- campaña específica;
+- purpose histórico específico;
+- última campaña;
+- última campaña aplicable;
+- nunca contactado;
+- responded/free-text/no-response;
+- expresiones booleanas anidadas.
+
+La semántica detallada vive en `CONTRATO_CAMPANAS_V2_FASE_2.md`. GLOBAL sólo congela que Historical Targeting es una capacidad transversal obligatoria previa al cierre de 2C/2D y que no crea un histórico paralelo.
+
+Las campañas legacy M14/M15 con `history_exclusion` conservan exactamente su semántica original equivalente a `EXCLUDE + ANY`; no se reinterpretan retroactivamente.
+
+Estos datos son **derivados**, no columnas permanentes de Socios Activos, Socios Vencidos o Funnel. Preview/Freeze no llaman al provider para resolverlos y una sincronización posterior no reescribe retroactivamente una audiencia ya congelada.
 
 ## 9. Audiencia congelada
 

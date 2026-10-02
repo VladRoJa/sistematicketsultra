@@ -1,20 +1,20 @@
 # Contrato Campañas V2 — Fase 3
 
 Estado: CONTRATO DE ENVÍO; REQUIERE FASE 2 COMPLETAMENTE ACEPTADA
-Dependencia de ejecución: Fase 1 terminada y Fase 2 completamente aceptada, incluyendo `FUNNEL_PORTFOLIO` y Campaign BI/Reporting/Excel; este archivo es autosuficiente como contexto.
+Dependencia de ejecución: Fase 1 terminada y Fase 2 completamente aceptada, incluyendo `FUNNEL_PORTFOLIO`, Historical Targeting transversal y Campaign BI/Reporting/Excel; este archivo es autosuficiente como contexto.
 Objetivo: permitir que Suite Ultra envíe campañas mediante iVentas sin romper la trazabilidad construida previamente.
 
 ## 0. Contexto autosuficiente para una conversación nueva
 
-Este archivo puede entregarse **por sí solo** a una conversación nueva, pero Fase 3 sólo puede comenzar después de comprobar en el repositorio que Fase 2 está completamente aceptada: 2A + 2B + 2C cerradas y 2D PASS.
+Este archivo puede entregarse **por sí solo** a una conversación nueva, pero Fase 3 sólo puede comenzar después de comprobar en el repositorio que Fase 2 está completamente aceptada: 2A + 2B + Historical Targeting transversal + 2C cerrados y 2D PASS.
 
 Contexto fijo:
 
 - Suite Ultra usa Angular + Flask + PostgreSQL y Alembic.
 - Fase 1 construye y congela audiencias.
-- Fase 2 aporta iVentas/histórico recipient-level, `FUNNEL_PORTFOLIO` y Campaign BI/Reporting/Excel, todos cerrados antes de habilitar envío.
+- Fase 2 aporta iVentas/histórico recipient-level, `FUNNEL_PORTFOLIO`, Historical Targeting transversal y Campaign BI/Reporting/Excel, todos cerrados antes de habilitar envío.
 - Funnel debe haber aplicado la lógica vigente de compradores/no compradores y `ACTIVE_MEMBER_SUPPRESSION` contra Socios Activos antes de congelar la audiencia.
-- Fase 3 **no recalcula fuentes, familias, compras, socios activos ni historial de engagement**: envía exactamente la audiencia congelada y validada.
+- Fase 3 **no recalcula fuentes, familias, compras, socios activos ni Historical Targeting**: envía exactamente la audiencia congelada y validada después de aplicar en Fase 2 las reglas históricas que correspondían.
 - No crear tablas espejo de Socios Activos/Vencidos.
 - No crear un tercer normalizador de teléfonos ni un mapping duplicado de sucursales/canales.
 - Un Campaign V2 puede requerir N provider campaigns porque iVentas envía por `channelId`.
@@ -133,9 +133,23 @@ Está prohibido:
 - volver a consultar socios vencidos;
 - volver a ejecutar el Funnel;
 - recalcular familias;
+- reevaluar `historical_targeting`;
+- reinterpretar `history_exclusion` legacy;
 - agregar o quitar destinatarios silenciosamente
 
 en el momento del POST.
+
+La audiencia que llega a Fase 3 ya debe haber atravesado en Fase 2, cuando aplique:
+
+    source-specific rules
+      -> scope backend
+      -> supresiones obligatorias
+      -> Historical Targeting
+      -> dedupe
+      -> Preview
+      -> Freeze
+
+Fase 3 consume ese resultado congelado; no vuelve a decidir quién cumple historia.
 
 Si el usuario necesita cambiar audiencia:
 - crear nueva versión/campaña según política que se defina;
