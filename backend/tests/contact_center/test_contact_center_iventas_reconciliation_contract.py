@@ -62,3 +62,15 @@ def test_crm_import_links_unique_existing_phone_and_rejects_ambiguous():
     assert "elif len(exact_phone_matches) > 1:" in service
     assert '"matched_by": "PHONE_MX10"' in service
     assert "ContactCenterDuplicateError" in service
+
+
+
+def test_contact_center_crm_uses_shared_canonical_ads_statement():
+    service = _read(CONTACT_CENTER)
+    leads_service = _read(
+        REPOSITORY_ROOT / "backend/app/services/marketing_leads_detail_service.py"
+    )
+
+    assert "build_marketing_lead_contacts_statement(" in service
+    assert "build_iventas_ads_lead_condition(" in leads_service
+    assert "is_ads_lead = or_(" not in leads_service

@@ -12,7 +12,6 @@ from zoneinfo import ZoneInfo
 from app.extensions import db
 from app.models import (
     MarketingIventasContactORM,
-    MarketingIventasContactTagORM,
     MarketingIventasSyncRunORM,
 )
 from app.models.warehouse import (
@@ -31,6 +30,9 @@ from app.services.marketing_iventas_dashboard_data_service import (
     read_iventas_dashboard_month_data,
 )
 from app.services.marketing_inputs_service import parse_month
+from app.services.marketing_iventas_leads_service import (
+    build_iventas_ads_origin_expression,
+)
 from app.services.marketing_phone import normalize_member_phone, normalize_phone
 
 
@@ -814,29 +816,6 @@ def _canonical_runs_for_window(
     )
 
 
-def _meta_contact_keys(
-    run_ids: tuple[int, ...],
-) -> set[tuple[int, int]]:
-    if not run_ids:
-        return set()
-
-    rows = (
-        db.session.query(
-            MarketingIventasContactTagORM.sync_run_id,
-            MarketingIventasContactTagORM.iventas_contact_row_id,
-        )
-        .filter(
-            MarketingIventasContactTagORM.sync_run_id.in_(run_ids),
-            MarketingIventasContactTagORM.tag_kind == "META_AD",
-        )
-        .all()
-    )
-    return {
-        (int(sync_run_id), int(contact_row_id))
-        for sync_run_id, contact_row_id in rows
-    }
-
-
 def _load_iventas_data(
     month_start: date,
     branch_ids: tuple[int, ...],
@@ -866,26 +845,13 @@ def _load_iventas_data(
         if str(run.period_key) == current_period_key
     }
 
-    meta_tag_exists = (
-        db.session.query(MarketingIventasContactTagORM.id)
-        .filter(
-            MarketingIventasContactTagORM.sync_run_id
-            == MarketingIventasContactORM.sync_run_id,
-            MarketingIventasContactTagORM.iventas_contact_row_id
-            == MarketingIventasContactORM.id,
-            MarketingIventasContactTagORM.tag_kind == "META_AD",
-        )
-        .exists()
-    )
-
     contacts = (
         db.session.query(
             MarketingIventasContactORM.sync_run_id,
             MarketingIventasContactORM.sucursal_id,
             MarketingIventasContactORM.phone_mx10,
             MarketingIventasContactORM.first_message_date_local,
-            MarketingIventasContactORM.is_from_ads,
-            meta_tag_exists.label("legacy_has_meta"),
+            build_iventas_ads_origin_expression().label("has_meta_ad"),
         )
         .filter(
             MarketingIventasContactORM.sync_run_id.in_(run_ids),
@@ -903,13 +869,7 @@ def _load_iventas_data(
         if not phone or interaction_date is None:
             continue
 
-        has_meta = (
-            contact.is_from_ads is True
-            or (
-                contact.is_from_ads is None
-                and bool(contact.legacy_has_meta)
-            )
-        )
+        has_meta = bool(contact.has_meta_ad)
         if lookback_start <= interaction_date <= month_end:
             evidence[(branch_id, phone)].append(
                 _IventasEvidence(

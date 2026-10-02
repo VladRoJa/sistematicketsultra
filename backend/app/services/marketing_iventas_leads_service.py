@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, false, func, select, true
 from sqlalchemy.exc import NoResultFound
 
 from app.extensions import db
@@ -145,23 +145,65 @@ def _legacy_meta_tag_exists():
     )
 
 
-def _is_ads_lead_condition():
-    """Contrato de lead Ads con fallback de snapshots históricos.
+def build_iventas_ads_origin_expression(
+    *,
+    is_from_ads_expression: Any | None = None,
+    legacy_meta_exists_expression: Any | None = None,
+):
+    """Expresión canónica del origen Ads observado por iVentas.
 
-    Nuevo contrato:
-        firstMessageAt + isFromAds=true
+    Precedencia:
+    - isFromAds=true  -> Ads
+    - isFromAds=false -> no Ads, aunque exista tag legacy
+    - isFromAds=NULL  -> el tag META_AD decide por compatibilidad histórica
 
-    Compatibilidad histórica:
-        si isFromAds es NULL porque el snapshot es anterior al nuevo
-        contrato, se acepta la antigua evidencia META_AD.
+    Los parámetros opcionales existen para reutilizar/probar la misma
+    expresión sin crear otra implementación semántica.
     """
 
-    return or_(
-        MarketingIventasContactORM.is_from_ads.is_(True),
-        and_(
-            MarketingIventasContactORM.is_from_ads.is_(None),
-            _legacy_meta_tag_exists(),
+    is_from_ads = (
+        MarketingIventasContactORM.is_from_ads
+        if is_from_ads_expression is None
+        else is_from_ads_expression
+    )
+    legacy_meta_exists = (
+        _legacy_meta_tag_exists()
+        if legacy_meta_exists_expression is None
+        else legacy_meta_exists_expression
+    )
+    return case(
+        (is_from_ads.is_(True), true()),
+        (is_from_ads.is_(False), false()),
+        (
+            and_(
+                is_from_ads.is_(None),
+                legacy_meta_exists,
+            ),
+            true(),
         ),
+        else_=false(),
+    )
+
+
+def build_iventas_ads_lead_condition(
+    *,
+    first_message_expression: Any | None = None,
+    is_from_ads_expression: Any | None = None,
+    legacy_meta_exists_expression: Any | None = None,
+):
+    """Condición canónica de lead Ads elegible para Funnel."""
+
+    first_message = (
+        MarketingIventasContactORM.first_message_at_utc
+        if first_message_expression is None
+        else first_message_expression
+    )
+    return and_(
+        first_message.is_not(None),
+        build_iventas_ads_origin_expression(
+            is_from_ads_expression=is_from_ads_expression,
+            legacy_meta_exists_expression=legacy_meta_exists_expression,
+        ).is_(True),
     )
 
 
@@ -206,10 +248,7 @@ def _build_lead_metrics_statement(
         .where(
             MarketingIventasContactORM.sync_run_id
             == sync_run_id,
-            MarketingIventasContactORM
-            .first_message_at_utc
-            .is_not(None),
-            _is_ads_lead_condition(),
+            build_iventas_ads_lead_condition(),
         )
         .scalar_subquery()
     )
@@ -430,10 +469,7 @@ def _build_lead_metrics_by_branch_date_statement(
                 MarketingIventasContactORM.id
             )
             .filter(
-                MarketingIventasContactORM
-                .first_message_at_utc
-                .is_not(None),
-                _is_ads_lead_condition(),
+                build_iventas_ads_lead_condition(),
             )
             .label(
                 "meta_observed_leads"
@@ -627,10 +663,7 @@ def _build_lead_metrics_by_branch_month_statement(
                 MarketingIventasContactORM.id
             )
             .filter(
-                MarketingIventasContactORM
-                .first_message_at_utc
-                .is_not(None),
-                _is_ads_lead_condition(),
+                build_iventas_ads_lead_condition(),
             )
             .label(
                 "meta_observed_leads"

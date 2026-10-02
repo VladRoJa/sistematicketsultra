@@ -2,6 +2,7 @@ from datetime import date
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import create_engine, literal, select
 from sqlalchemy.dialects import postgresql
 
 from app.services.marketing_iventas_leads_service import (
@@ -10,6 +11,8 @@ from app.services.marketing_iventas_leads_service import (
     MarketingIventasLeadMetricsByBranchDate,
     _build_lead_metrics_by_branch_date_statement,
     _build_lead_metrics_statement,
+    build_iventas_ads_lead_condition,
+    build_iventas_ads_origin_expression,
     list_canonical_iventas_lead_metrics_by_branch_date,
     read_canonical_iventas_run,
     read_canonical_iventas_lead_metrics,
@@ -496,3 +499,53 @@ def test_branch_date_sql_preserves_lead_business_contract():
 
     # Debe quedar aislado al snapshot solicitado.
     assert "sync_run_id = 41" in sql
+
+
+
+@pytest.mark.parametrize(
+    ("is_from_ads", "legacy_meta", "expected"),
+    [
+        (True, False, True),
+        (False, True, False),
+        (None, True, True),
+        (None, False, False),
+    ],
+)
+def test_canonical_ads_origin_truth_table(
+    is_from_ads,
+    legacy_meta,
+    expected,
+):
+    statement = select(
+        build_iventas_ads_origin_expression(
+            is_from_ads_expression=literal(is_from_ads),
+            legacy_meta_exists_expression=literal(legacy_meta),
+        )
+    )
+    with create_engine("sqlite://").connect() as connection:
+        assert bool(connection.execute(statement).scalar_one()) is expected
+
+
+def test_canonical_ads_lead_requires_first_message():
+    with create_engine("sqlite://").connect() as connection:
+        without_message = connection.execute(
+            select(
+                build_iventas_ads_lead_condition(
+                    first_message_expression=literal(None),
+                    is_from_ads_expression=literal(True),
+                    legacy_meta_exists_expression=literal(False),
+                )
+            )
+        ).scalar_one()
+        with_message = connection.execute(
+            select(
+                build_iventas_ads_lead_condition(
+                    first_message_expression=literal("2026-09-01T10:00:00Z"),
+                    is_from_ads_expression=literal(True),
+                    legacy_meta_exists_expression=literal(False),
+                )
+            )
+        ).scalar_one()
+
+    assert bool(without_message) is False
+    assert bool(with_message) is True

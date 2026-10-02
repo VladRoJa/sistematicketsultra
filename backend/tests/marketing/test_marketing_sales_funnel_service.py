@@ -189,24 +189,21 @@ def test_load_iventas_data_prefers_provider_ads_origin_and_uses_legacy_fallback(
             sucursal_id=4,
             phone_mx10="6861111111",
             first_message_date_local=date(2026, 8, 20),
-            is_from_ads=None,
-            legacy_has_meta=True,
+            has_meta_ad=True,
         ),
         SimpleNamespace(
             sync_run_id=20,
             sucursal_id=4,
             phone_mx10="6862222222",
             first_message_date_local=date(2026, 9, 5),
-            is_from_ads=True,
-            legacy_has_meta=False,
+            has_meta_ad=True,
         ),
         SimpleNamespace(
             sync_run_id=20,
             sucursal_id=4,
             phone_mx10="6863333333",
             first_message_date_local=date(2026, 9, 6),
-            is_from_ads=False,
-            legacy_has_meta=True,
+            has_meta_ad=False,
         ),
     ]
 
@@ -228,24 +225,12 @@ def test_load_iventas_data_prefers_provider_ads_origin_and_uses_legacy_fallback(
         def all(self):
             return self.rows
 
-    query_results = iter(
-        (
-            FakeQuery(exists_value=FakeExists()),
-            FakeQuery(rows=projected_contacts),
-        )
-    )
+    query_results = iter((FakeQuery(rows=projected_contacts),))
 
     monkeypatch.setattr(
         marketing_sales_funnel_service,
         "_canonical_runs_for_window",
         lambda *_args: runs,
-    )
-    monkeypatch.setattr(
-        marketing_sales_funnel_service,
-        "_meta_contact_keys",
-        lambda *_args: (_ for _ in ()).throw(
-            AssertionError("_load_iventas_data no debe cargar tags aparte")
-        ),
     )
     monkeypatch.setattr(
         marketing_sales_funnel_service,
