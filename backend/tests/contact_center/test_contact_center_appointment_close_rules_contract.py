@@ -13,7 +13,7 @@ def test_appointment_result_rules_close_case_except_no_show():
     service = _read(SERVICE)
 
     assert "def _apply_appointment_result(" in service
-    assert 'if outcome == "NO_SHOW":' in service
+    assert 'if outcome in {"NO_SHOW", "ATTENDED_COURTESY_PASS"}:' in service
     assert 'case.status = "IN_PROGRESS"' in service
     assert "case.closed_at = None" in service
     assert "case.closed_by_user_id = None" in service
