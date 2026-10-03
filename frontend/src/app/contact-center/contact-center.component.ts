@@ -914,7 +914,7 @@ export class ContactCenterComponent implements OnInit {
     const labels: Record<string, string> = {
       ATTENDED_PURCHASE_REPORTED: 'Asistió y compró',
       ATTENDED_NO_PURCHASE: 'Asistió sin compra',
-      ATTENDED_COURTESY_PASS: 'Visitó y activó pase de cortesía/recorrido',
+      ATTENDED_COURTESY_PASS: 'Asistió y activó pase de cortesía/recorrido',
       NO_SHOW: 'No asistió',
       CANCELLED: 'Cancelada',
       RESCHEDULED: 'Reagendada',

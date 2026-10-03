@@ -32,8 +32,8 @@ def test_courtesy_pass_is_a_first_class_appointment_outcome():
     assert "'ATTENDED_COURTESY_PASS'" in model
     assert "'ATTENDED_COURTESY_PASS'" in migration
     assert "'ATTENDED_COURTESY_PASS'" in models_ts
-    assert "Visitó y activó pase de cortesía/recorrido" in dialog
-    assert "Visitó y activó pase de cortesía/recorrido" in component
+    assert "Asistió y activó pase de cortesía/recorrido" in dialog
+    assert "Asistió y activó pase de cortesía/recorrido" in component
 
 
 def test_courtesy_pass_remains_open_and_eligible_for_later_paid_purchase_reconciliation():
