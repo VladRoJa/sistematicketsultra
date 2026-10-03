@@ -71,6 +71,7 @@ class TestMarketingCampaignV2Routes:
             ("get", "/api/marketing/campaigns-v2"),
             ("post", "/api/marketing/campaigns-v2/provider-history/lookup"),
             ("get", "/api/marketing/campaigns-v2/1"),
+            ("get", "/api/marketing/campaigns-v2/reporting"),
             ("get", "/api/marketing/campaigns-v2/1/report"),
             ("get", "/api/marketing/campaigns-v2/1/provider-stats"),
             ("post", "/api/marketing/campaigns-v2/1/provider-stats/snapshots"),
@@ -769,6 +770,105 @@ class TestMarketingCampaignV2Routes:
             )
         assert response.status_code == 404
 
+
+
+    def test_consolidated_reporting_forwards_filters_and_backend_scope(self):
+        expected = {
+            "filters": {"purpose": "NEW_SALE"},
+            "summary": {"campaign_count": 1},
+            "campaigns": [],
+            "breakdowns": {"branches": [], "audience_families": []},
+        }
+        with (
+            self._auth(self.partial_access),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.marketing_branch_keys_by_sucursal_ids",
+                return_value={11: "A", 22: "B"},
+            ),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.build_campaign_v2_consolidated_report",
+                return_value=expected,
+            ) as service,
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/reporting"
+                "?observed_from=2026-10-01T12:00:00Z"
+                "&observed_to=2026-10-02T12:00:00Z"
+                "&purpose=NEW_SALE"
+                "&source=FUNNEL_PORTFOLIO"
+                "&provider=IVENTAS"
+                "&snapshot_status=WITH_SNAPSHOT",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert response.get_json() == expected
+        assert service.call_args.kwargs["allowed_sucursal_keys"] == ("A", "B")
+        assert service.call_args.kwargs["filters"] == {
+            "observed_from": "2026-10-01T12:00:00Z",
+            "observed_to": "2026-10-02T12:00:00Z",
+            "purpose": "NEW_SALE",
+            "source": "FUNNEL_PORTFOLIO",
+            "provider": "IVENTAS",
+            "snapshot_status": "WITH_SNAPSHOT",
+        }
+
+    def test_consolidated_reporting_reuses_campaign_v2_management_permission(self):
+        access = SimpleNamespace(
+            is_global=True,
+            branch_ids=(),
+            can_edit_inputs=False,
+        )
+        with self._auth(access):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/reporting",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 403
+
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "?observed_from=2026-10-01T12:00:00",
+            "?observed_to=not-a-date",
+            "?observed_from=2026-10-02T00:00:00Z&observed_to=2026-10-01T00:00:00Z",
+            "?purpose=BAD",
+            "?source=BAD",
+            "?provider=" + ("X" * 51),
+            "?snapshot_status=BAD",
+        ],
+    )
+    def test_consolidated_reporting_validation_maps_to_400(self, query):
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.build_campaign_v2_consolidated_report",
+                side_effect=routes.MarketingCampaignV2ReportingValidationError(
+                    "invalid reporting filter"
+                ),
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/reporting" + query,
+                headers=self.headers,
+            )
+
+        assert response.status_code == 400
+
+    def test_consolidated_reporting_rejects_unknown_refresh_sync_export_params(self):
+        with self._auth():
+            for query in (
+                "?refresh=true",
+                "?sync=true",
+                "?export=xlsx",
+                "?branch=BRANCH%20A",
+            ):
+                response = self.client.get(
+                    "/api/marketing/campaigns-v2/reporting" + query,
+                    headers=self.headers,
+                )
+                assert response.status_code == 400
 
     def test_individual_report_uses_backend_scope_only(self):
         expected = {

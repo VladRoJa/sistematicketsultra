@@ -56,6 +56,8 @@ from app.services.marketing_campaign_v2_provider_history_service import (
     get_provider_history_for_phones,
 )
 from app.services.marketing_campaign_v2_reporting_service import (
+    MarketingCampaignV2ReportingValidationError,
+    build_campaign_v2_consolidated_report,
     build_campaign_v2_individual_report,
 )
 
@@ -439,6 +441,45 @@ def get_campaign_v2_endpoint(campaign_id: int):
         return _error(str(exc), 400)
     except Exception:
         return _error("Falló la consulta de Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/reporting")
+@jwt_required()
+def get_campaign_v2_reporting_endpoint():
+    try:
+        _, access = _resolve_campaign_v2_request()
+        _validate_query_args(
+            {
+                "observed_from",
+                "observed_to",
+                "purpose",
+                "source",
+                "provider",
+                "snapshot_status",
+            }
+        )
+        result = build_campaign_v2_consolidated_report(
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            filters={
+                "observed_from": request.args.get("observed_from"),
+                "observed_to": request.args.get("observed_to"),
+                "purpose": request.args.get("purpose"),
+                "source": request.args.get("source"),
+                "provider": request.args.get("provider"),
+                "snapshot_status": request.args.get("snapshot_status"),
+            },
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (
+        MarketingCampaignV2RouteValidationError,
+        MarketingCampaignV2ReportingValidationError,
+    ) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("Falló el reporting consolidado de Campaign V2.", 500)
 
 
 @marketing_campaign_v2_bp.get(
