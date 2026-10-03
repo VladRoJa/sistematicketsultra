@@ -55,6 +55,7 @@ INTERACTION_OUTCOMES = frozenset({
 APPOINTMENT_OUTCOMES = frozenset({
     "ATTENDED_PURCHASE_REPORTED",
     "ATTENDED_NO_PURCHASE",
+    "ATTENDED_COURTESY_PASS",
     "NO_SHOW",
     "CANCELLED",
 })
@@ -920,7 +921,7 @@ def _apply_appointment_result(
     case.next_action_at = None
     case.updated_at = changed_at
 
-    if outcome == "NO_SHOW":
+    if outcome in {"NO_SHOW", "ATTENDED_COURTESY_PASS"}:
         case.status = "IN_PROGRESS"
         case.closed_at = None
         case.closed_by_user_id = None
@@ -1922,13 +1923,27 @@ def _resolve_appointment_purchase_match(
         ).strip()
         grouped[transaction_key].append((row, transaction_local))
 
-    if not grouped:
+    paid_grouped = {
+        transaction_key: transaction_rows
+        for transaction_key, transaction_rows in grouped.items()
+        if sum(
+            (
+                Decimal(str(row.total or 0))
+                for row, _ in transaction_rows
+            ),
+            Decimal("0"),
+        ) > Decimal("0")
+    }
+
+    if not paid_grouped:
         return {"status": "NOT_FOUND_YET"}
 
-    if len(grouped) > 1:
+    if len(paid_grouped) > 1:
         return {"status": "REVIEW"}
 
-    transaction_rows = next(iter(grouped.values()))
+    transaction_key, transaction_rows = next(
+        iter(paid_grouped.items())
+    )
     first_row, first_datetime = min(
         transaction_rows,
         key=lambda item: item[1],
@@ -1980,7 +1995,7 @@ def _resolve_appointment_purchase_match(
 
     return {
         "status": "VERIFIED",
-        "transaction_key": next(iter(grouped.keys())),
+        "transaction_key": transaction_key,
         "snapshot_id": int(snapshot_value.id),
         "snapshot_row_id": int(first_row.id),
         "purchase_at": first_datetime.astimezone(timezone.utc),
@@ -2064,7 +2079,11 @@ def reconcile_contact_center_appointments_from_venta_total(
                     ContactCenterAppointmentORM.status == "CLOSED",
                     or_(
                         ContactCenterAppointmentORM.outcome.in_(
-                            ("NO_SHOW", "ATTENDED_NO_PURCHASE")
+                            (
+                                "NO_SHOW",
+                                "ATTENDED_NO_PURCHASE",
+                                "ATTENDED_COURTESY_PASS",
+                            )
                         ),
                         and_(
                             ContactCenterAppointmentORM.outcome

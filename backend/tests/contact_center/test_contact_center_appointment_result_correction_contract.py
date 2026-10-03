@@ -72,7 +72,9 @@ def test_automatic_reconciliation_is_conservative():
 
     assert "def reconcile_contact_center_appointments_from_venta_total(" in service
     assert 'ContactCenterAppointmentORM.status == "SCHEDULED"' in service
-    assert '("NO_SHOW", "ATTENDED_NO_PURCHASE")' in service
+    assert '"NO_SHOW",' in service
+    assert '"ATTENDED_NO_PURCHASE",' in service
+    assert '"ATTENDED_COURTESY_PASS",' in service
     assert '== "ATTENDED_PURCHASE_REPORTED"' in service
     assert "ContactCenterAppointmentORM.purchase_verification_status" in service
     assert '!= "VERIFIED"' in service

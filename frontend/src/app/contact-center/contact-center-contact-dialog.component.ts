@@ -132,7 +132,7 @@ export class ContactCenterContactDialogComponent implements OnInit {
     return this.activeCase ?? this.contact?.cases[0] ?? null;
   }
 
-  get isNoShowFollowUpCase(): boolean {
+  get isAppointmentFollowUpCase(): boolean {
     const currentCase = this.activeCase;
     if (
       !currentCase
@@ -146,7 +146,9 @@ export class ContactCenterContactDialogComponent implements OnInit {
         (row) =>
           row.case_id === currentCase.id
           && row.status === 'CLOSED'
-          && row.outcome === 'NO_SHOW',
+          && ['NO_SHOW', 'ATTENDED_COURTESY_PASS'].includes(
+            String(row.outcome),
+          ),
       ),
     );
   }
@@ -160,7 +162,7 @@ export class ContactCenterContactDialogComponent implements OnInit {
       this.activeCase
       && (
         this.activeCase.assigned_user?.id === this.data.access.user.id
-        || this.isNoShowFollowUpCase
+        || this.isAppointmentFollowUpCase
       )
     );
   }
@@ -545,6 +547,7 @@ export class ContactCenterContactDialogComponent implements OnInit {
     result: {
       outcome: 'ATTENDED_PURCHASE_REPORTED'
         | 'ATTENDED_NO_PURCHASE'
+        | 'ATTENDED_COURTESY_PASS'
         | 'NO_SHOW'
         | 'CANCELLED';
       notes?: string | null;
