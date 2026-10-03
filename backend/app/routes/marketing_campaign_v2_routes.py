@@ -55,6 +55,9 @@ from app.services.marketing_campaign_v2_provider_history_service import (
     MarketingCampaignV2ProviderHistoryValidationError,
     get_provider_history_for_phones,
 )
+from app.services.marketing_campaign_v2_reporting_service import (
+    build_campaign_v2_individual_report,
+)
 
 
 marketing_campaign_v2_bp = Blueprint("marketing_campaign_v2", __name__)
@@ -436,6 +439,33 @@ def get_campaign_v2_endpoint(campaign_id: int):
         return _error(str(exc), 400)
     except Exception:
         return _error("Falló la consulta de Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.get(
+    "/campaigns-v2/<int:campaign_id>/report"
+)
+@jwt_required()
+def get_campaign_v2_report_endpoint(campaign_id: int):
+    try:
+        _, access = _resolve_campaign_v2_request()
+        _validate_query_args(set())
+        result = build_campaign_v2_individual_report(
+            campaign_id=campaign_id,
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2NotFoundError:
+        return _error("Campaign V2 no encontrada.", 404)
+    except (
+        MarketingCampaignV2RouteValidationError,
+        MarketingCampaignV2QueryValidationError,
+    ) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("Falló el reporte individual de Campaign V2.", 500)
 
 
 @marketing_campaign_v2_bp.get(

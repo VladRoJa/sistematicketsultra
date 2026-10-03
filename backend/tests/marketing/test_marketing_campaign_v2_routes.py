@@ -71,6 +71,7 @@ class TestMarketingCampaignV2Routes:
             ("get", "/api/marketing/campaigns-v2"),
             ("post", "/api/marketing/campaigns-v2/provider-history/lookup"),
             ("get", "/api/marketing/campaigns-v2/1"),
+            ("get", "/api/marketing/campaigns-v2/1/report"),
             ("get", "/api/marketing/campaigns-v2/1/provider-stats"),
             ("post", "/api/marketing/campaigns-v2/1/provider-stats/snapshots"),
             ("get", "/api/marketing/campaigns-v2/1/provider-stats/snapshots"),
@@ -767,6 +768,79 @@ class TestMarketingCampaignV2Routes:
                 headers=self.headers,
             )
         assert response.status_code == 404
+
+
+    def test_individual_report_uses_backend_scope_only(self):
+        expected = {
+            "campaign": {"id": 1, "name": "Reporte"},
+            "audience": {"total_recipients": 10},
+        }
+        with (
+            self._auth(self.partial_access),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.marketing_branch_keys_by_sucursal_ids",
+                return_value={11: "A", 22: "B"},
+            ),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.build_campaign_v2_individual_report",
+                return_value=expected,
+            ) as service,
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/1/report",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert response.get_json() == expected
+        assert service.call_args.kwargs["campaign_id"] == 1
+        assert service.call_args.kwargs["allowed_sucursal_keys"] == ("A", "B")
+
+    def test_individual_report_rejects_refresh_sync_or_provider_flags(self):
+        with self._auth():
+            for query in (
+                "?refresh=true",
+                "?sync=true",
+                "?provider=IVENTAS",
+            ):
+                response = self.client.get(
+                    "/api/marketing/campaigns-v2/1/report" + query,
+                    headers=self.headers,
+                )
+                assert response.status_code == 400
+
+    def test_individual_report_out_of_scope_maps_to_404(self):
+        with (
+            self._auth(self.partial_access),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.marketing_branch_keys_by_sucursal_ids",
+                return_value={11: "A", 22: "B"},
+            ),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.build_campaign_v2_individual_report",
+                side_effect=MarketingCampaignV2NotFoundError("hidden"),
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/99/report",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 404
+
+    def test_individual_report_reuses_campaign_v2_management_permission(self):
+        access = SimpleNamespace(
+            is_global=True,
+            branch_ids=(),
+            can_edit_inputs=False,
+        )
+        with self._auth(access):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/1/report",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 403
 
     def test_recipient_detail_does_not_cross_campaign_boundary(self):
         with (
