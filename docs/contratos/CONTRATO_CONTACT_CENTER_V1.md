@@ -502,7 +502,7 @@ Etiquetas:
 
 - Asistió y compró
 - Asistió y no compró
-- Visitó y activó pase de cortesía/recorrido
+- Asistió y activó pase de cortesía/recorrido
 - No asistió
 - Cancelada
 - Reagendada

@@ -60,7 +60,7 @@ export class ContactCenterAppointmentDialogComponent {
     },
     {
       value: 'ATTENDED_COURTESY_PASS',
-      label: 'Visitó y activó pase de cortesía/recorrido',
+      label: 'Asistió y activó pase de cortesía/recorrido',
     },
     {
       value: 'NO_SHOW',
