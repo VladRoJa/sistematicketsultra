@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from io import BytesIO
 from unittest.mock import patch
 
 import pytest
+from openpyxl import load_workbook
 from sqlalchemy import BigInteger, Column, Integer, MetaData, Table, create_engine, event
 from sqlalchemy.orm import Session
 
@@ -17,6 +19,10 @@ from app.models.marketing import (
 from app.services.marketing_campaign_v2_reporting_service import (
     MarketingCampaignV2ReportingValidationError,
     build_campaign_v2_consolidated_report,
+    build_campaign_v2_reporting_export_dataset,
+)
+from app.services.marketing_campaign_v2_reporting_excel_service import (
+    build_campaign_v2_reporting_excel,
 )
 
 
@@ -686,3 +692,216 @@ def test_query_count_is_approximately_constant_not_per_campaign(session):
     assert many["summary"]["campaign_count"] == 6
     assert many_count <= one_count + 2
     assert many_count <= 6
+
+
+def test_export_dataset_reuses_m28_selection_and_loads_historical_evolution_bulk(session):
+    consolidated = _report(session, purpose="REACTIVATION")
+    dataset = build_campaign_v2_reporting_export_dataset(
+        allowed_sucursal_keys=("BRANCH A",),
+        filters={"purpose": "REACTIVATION"},
+        session=session,
+    )
+
+    assert dataset["report_type"] == "CONSOLIDATED"
+    assert dataset["report"] == consolidated
+    assert [
+        row["campaign"]["id"]
+        for row in dataset["report"]["campaigns"]
+    ] == [1]
+    assert [
+        (
+            row["campaign_id"],
+            row["snapshot_id"],
+            row["observed_at"],
+        )
+        for row in dataset["evolution"]
+    ] == [
+        (1, 10, (BASE + timedelta(hours=1)).isoformat()),
+        (1, 11, (BASE + timedelta(hours=2)).isoformat()),
+    ]
+    assert dataset["evolution"][0]["normalized"] == {
+        "successful": 0,
+        "failed": 0,
+        "sent": 0,
+        "delivered": 0,
+        "viewed": 0,
+        "reach_count": 0,
+    }
+    assert dataset["evolution"][1]["normalized"] == {
+        "successful": 2,
+        "failed": 0,
+        "sent": 0,
+        "delivered": 1,
+        "viewed": 1,
+        "reach_count": 2,
+    }
+    assert dataset["scope"] == {
+        "is_global": False,
+        "allowed_sucursal_keys": ["BRANCH A"],
+    }
+
+
+def test_export_dataset_multi_campaign_evolution_order_is_deterministic(session):
+    dataset = build_campaign_v2_reporting_export_dataset(
+        allowed_sucursal_keys=None,
+        filters=None,
+        session=session,
+    )
+
+    evolution_keys = [
+        (row["campaign_id"], row["observed_at"], row["snapshot_id"])
+        for row in dataset["evolution"]
+    ]
+    assert evolution_keys == sorted(evolution_keys)
+    assert {row["campaign_id"] for row in dataset["evolution"]} == {
+        1,
+        2,
+        4,
+        5,
+        6,
+    }
+
+
+def test_export_dataset_empty_consolidated_is_valid(session):
+    dataset = build_campaign_v2_reporting_export_dataset(
+        allowed_sucursal_keys=("BRANCH A",),
+        filters={"purpose": "UNCLASSIFIED"},
+        session=session,
+    )
+
+    assert dataset["report"]["summary"]["campaign_count"] == 0
+    assert dataset["report"]["summary"]["total_recipients"] == 0
+    assert dataset["report"]["campaigns"] == []
+    assert dataset["evolution"] == []
+
+
+def _export_statement_count(session, scope):
+    statements = []
+
+    def before_cursor_execute(
+        _conn,
+        _cursor,
+        statement,
+        _parameters,
+        _context,
+        _executemany,
+    ):
+        statements.append(statement)
+
+    event.listen(
+        session.get_bind(),
+        "before_cursor_execute",
+        before_cursor_execute,
+    )
+    try:
+        dataset = build_campaign_v2_reporting_export_dataset(
+            allowed_sucursal_keys=scope,
+            filters=None,
+            session=session,
+        )
+    finally:
+        event.remove(
+            session.get_bind(),
+            "before_cursor_execute",
+            before_cursor_execute,
+        )
+    return len(statements), dataset
+
+
+def test_export_dataset_query_count_is_bulk_not_per_campaign(session):
+    one_count, one = _export_statement_count(session, ("BRANCH B",))
+    many_count, many = _export_statement_count(session, None)
+
+    assert one["report"]["summary"]["campaign_count"] == 1
+    assert many["report"]["summary"]["campaign_count"] == 6
+    assert one_count <= 7
+    assert many_count <= 7
+    assert many_count <= one_count + 1
+
+
+def test_export_dataset_provider_boundary_and_m13_are_not_used(session):
+    with (
+        patch(
+            "app.services.marketing_campaign_v2_provider_stats_service."
+            "get_campaign_v2_provider_stats",
+            side_effect=AssertionError("no provider read-through"),
+        ),
+        patch(
+            "app.services.marketing_campaign_v2_provider_stats_snapshot_service."
+            "capture_campaign_v2_provider_stats_snapshot",
+            side_effect=AssertionError("no provider capture"),
+        ),
+        patch(
+            "app.services.marketing_campaign_v2_provider_history_service."
+            "get_provider_history_for_phones",
+            side_effect=AssertionError("no M13"),
+        ),
+    ):
+        dataset = build_campaign_v2_reporting_export_dataset(
+            allowed_sucursal_keys=("BRANCH A",),
+            filters=None,
+            session=session,
+        )
+
+    assert dataset["report"]["summary"]["campaign_count"] == 3
+
+
+def test_json_and_xlsx_use_the_same_selected_campaigns_and_summary(session):
+    filters = {"purpose": "REACTIVATION"}
+    json_report = build_campaign_v2_consolidated_report(
+        allowed_sucursal_keys=("BRANCH A",),
+        filters=filters,
+        session=session,
+    )
+    dataset = build_campaign_v2_reporting_export_dataset(
+        allowed_sucursal_keys=("BRANCH A",),
+        filters=filters,
+        session=session,
+    )
+    output, _ = build_campaign_v2_reporting_excel(
+        report_type=dataset["report_type"],
+        report=dataset["report"],
+        evolution=dataset["evolution"],
+        scope=dataset["scope"],
+        generated_at=BASE,
+    )
+    workbook = load_workbook(BytesIO(output.getvalue()), data_only=False)
+
+    campaign_sheet = workbook["Campañas"]
+    campaign_id_col = next(
+        cell.column
+        for cell in campaign_sheet[1]
+        if cell.value == "campaign_id"
+    )
+    xlsx_campaign_ids = [
+        campaign_sheet.cell(row, campaign_id_col).value
+        for row in range(2, campaign_sheet.max_row + 1)
+    ]
+    json_campaign_ids = [
+        row["campaign"]["id"]
+        for row in json_report["campaigns"]
+    ]
+    assert xlsx_campaign_ids == json_campaign_ids
+
+    summary_sheet = workbook["Resumen"]
+    summary_values = {
+        summary_sheet.cell(row, 1).value: summary_sheet.cell(row, 2).value
+        for row in range(2, summary_sheet.max_row + 1)
+    }
+    assert summary_values["campaign_count"] == json_report["summary"]["campaign_count"]
+    assert (
+        summary_values["Exposiciones de destinatarios"]
+        == json_report["summary"]["total_recipients"]
+    )
+    assert (
+        summary_values["successful"]
+        == json_report["summary"]["normalized"]["successful"]
+    )
+    assert (
+        summary_values["successful_rate"]
+        == json_report["summary"]["rates"]["successful_rate"]
+    )
+    assert (
+        summary_values["status_coverage_rate"]
+        == json_report["summary"]["coverage"]["status_coverage_rate"]
+    )

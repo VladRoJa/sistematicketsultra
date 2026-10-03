@@ -228,6 +228,99 @@ def build_campaign_v2_consolidated_report(
     }
 
 
+def build_campaign_v2_reporting_export_dataset(
+    *,
+    allowed_sucursal_keys: Iterable[str] | None,
+    filters: Mapping[str, Any] | None = None,
+    session=None,
+) -> dict[str, Any]:
+    """Extiende el consolidado M28 con evolución histórica bulk para XLSX."""
+    active_session = session if session is not None else db.session
+    normalized_scope = _normalize_current_scope(allowed_sucursal_keys)
+    report = build_campaign_v2_consolidated_report(
+        allowed_sucursal_keys=normalized_scope,
+        filters=filters,
+        session=active_session,
+    )
+    selected_campaigns = {
+        int(row["campaign"]["id"]): row["campaign"]["name"]
+        for row in report["campaigns"]
+    }
+    selected_ids = sorted(selected_campaigns)
+
+    snapshots = []
+    observations = []
+    if selected_ids:
+        with active_session.no_autoflush:
+            snapshots = (
+                active_session.query(
+                    MarketingCampaignV2ProviderStatsSnapshotORM
+                )
+                .filter(
+                    MarketingCampaignV2ProviderStatsSnapshotORM.campaign_v2_id.in_(
+                        selected_ids
+                    )
+                )
+                .order_by(
+                    MarketingCampaignV2ProviderStatsSnapshotORM.campaign_v2_id.asc(),
+                    MarketingCampaignV2ProviderStatsSnapshotORM.fetched_at.asc(),
+                    MarketingCampaignV2ProviderStatsSnapshotORM.id.asc(),
+                )
+                .all()
+            )
+            snapshot_ids = [int(row.id) for row in snapshots]
+            if snapshot_ids:
+                observations = (
+                    active_session.query(
+                        MarketingCampaignV2ProviderRecipientObservationORM
+                    )
+                    .filter(
+                        MarketingCampaignV2ProviderRecipientObservationORM.snapshot_id.in_(
+                            snapshot_ids
+                        )
+                    )
+                    .order_by(
+                        MarketingCampaignV2ProviderRecipientObservationORM.snapshot_id.asc(),
+                        MarketingCampaignV2ProviderRecipientObservationORM.id.asc(),
+                    )
+                    .all()
+                )
+
+    observations_by_snapshot: dict[int, list[Any]] = defaultdict(list)
+    for observation in observations:
+        observations_by_snapshot[int(observation.snapshot_id)].append(
+            observation
+        )
+
+    evolution = [
+        {
+            "campaign_id": int(snapshot.campaign_v2_id),
+            "campaign_name": selected_campaigns[int(snapshot.campaign_v2_id)],
+            **_evolution_point(
+                snapshot=snapshot,
+                observations=observations_by_snapshot.get(
+                    int(snapshot.id),
+                    [],
+                ),
+            ),
+        }
+        for snapshot in snapshots
+    ]
+    return {
+        "report_type": "CONSOLIDATED",
+        "report": report,
+        "evolution": evolution,
+        "scope": {
+            "is_global": normalized_scope is None,
+            "allowed_sucursal_keys": (
+                None
+                if normalized_scope is None
+                else list(normalized_scope)
+            ),
+        },
+    }
+
+
 def _load_latest_snapshots_bulk(
     *,
     campaign_ids: list[int],
