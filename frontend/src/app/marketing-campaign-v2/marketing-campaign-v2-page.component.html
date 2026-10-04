@@ -317,6 +317,262 @@
     <div *ngIf="error" class="inline-error" role="alert">{{ error }}</div>
     <div *ngIf="success" class="inline-success" role="status">{{ success }}</div>
 
+    <section class="workspace reporting-workspace" aria-labelledby="campaign-v2-reporting">
+      <div class="section-heading">
+        <div>
+          <h2 id="campaign-v2-reporting">Reporting Campaign V2</h2>
+          <p>Resultados persistidos de campañas congeladas. Se carga bajo demanda.</p>
+        </div>
+        <div class="reporting-actions">
+          <button
+            mat-stroked-button
+            type="button"
+            (click)="loadReporting()"
+            [disabled]="loadingReporting || !!reportingFilterError"
+          >
+            {{ loadingReporting ? 'Cargando…' : 'Cargar reporte' }}
+          </button>
+          <button
+            mat-stroked-button
+            type="button"
+            (click)="exportReporting()"
+            [disabled]="exportingReporting || !!reportingFilterError"
+          >
+            {{ exportingReporting ? 'Exportando…' : 'Exportar Excel' }}
+          </button>
+        </div>
+      </div>
+
+      <div class="reporting-filters">
+        <mat-form-field appearance="fill">
+          <mat-label>Observado desde</mat-label>
+          <input matInput type="date" [formControl]="reportingObservedFrom">
+        </mat-form-field>
+        <mat-form-field appearance="fill">
+          <mat-label>Observado hasta</mat-label>
+          <input matInput type="date" [formControl]="reportingObservedTo">
+        </mat-form-field>
+        <mat-form-field appearance="fill">
+          <mat-label>Propósito</mat-label>
+          <mat-select [formControl]="reportingPurpose">
+            <mat-option value="">Todos</mat-option>
+            <mat-option *ngFor="let value of options.purposes" [value]="value">{{ purposeLabel(value) }}</mat-option>
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="fill">
+          <mat-label>Fuente</mat-label>
+          <mat-select [formControl]="reportingSource">
+            <mat-option value="">Todas</mat-option>
+            <mat-option *ngFor="let value of options.sources" [value]="value">{{ sourceLabel(value) }}</mat-option>
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="fill">
+          <mat-label>Provider</mat-label>
+          <input matInput [formControl]="reportingProvider" placeholder="Ej. IVENTAS">
+        </mat-form-field>
+        <mat-form-field appearance="fill">
+          <mat-label>Estado de observación</mat-label>
+          <mat-select [formControl]="reportingSnapshotStatus">
+            <mat-option value="">Todas</mat-option>
+            <mat-option value="WITH_SNAPSHOT">Con observación</mat-option>
+            <mat-option value="WITHOUT_SNAPSHOT">Sin observación</mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+
+      <p *ngIf="reportingFilterError" class="reporting-validation">{{ reportingFilterError }}</p>
+      <div *ngIf="loadingReporting" class="state-panel compact" role="status">
+        <mat-spinner diameter="20"></mat-spinner>
+        Cargando Reporting Campaign V2…
+      </div>
+      <div *ngIf="reportingError" class="inline-error" role="alert">{{ reportingError }}</div>
+      <div *ngIf="reportingSuccess" class="inline-success" role="status">{{ reportingSuccess }}</div>
+
+      <p
+        *ngIf="!reporting && !loadingReporting && !reportingError"
+        class="empty-state"
+      >
+        Define filtros opcionales y usa “Cargar reporte”.
+      </p>
+
+      <ng-container *ngIf="reporting as report">
+        <p *ngIf="report.summary.campaign_count === 0" class="empty-state">
+          No hay campañas visibles que coincidan con estos filtros.
+        </p>
+
+        <ng-container *ngIf="report.summary.campaign_count > 0">
+          <div class="reporting-section-title">
+            <div>
+              <h3>Resumen consolidado</h3>
+              <p>Los porcentajes y totales provienen del backend; Angular sólo los presenta.</p>
+            </div>
+          </div>
+
+          <div class="reporting-metric-grid">
+            <div class="reporting-metric"><span>Campañas</span><strong>{{ report.summary.campaign_count | number }}</strong></div>
+            <div class="reporting-metric"><span>Con observación</span><strong>{{ report.summary.campaigns_with_snapshot | number }}</strong></div>
+            <div class="reporting-metric"><span>Sin observación</span><strong>{{ report.summary.campaigns_without_snapshot | number }}</strong></div>
+            <div class="reporting-metric emphasized"><span>Exposiciones de destinatarios</span><strong>{{ report.summary.total_recipients | number }}</strong></div>
+            <div class="reporting-metric"><span>Successful</span><strong>{{ report.summary.normalized.successful | number }}</strong></div>
+            <div class="reporting-metric"><span>Reach</span><strong>{{ report.summary.normalized.reach_count | number }}</strong></div>
+            <div class="reporting-metric"><span>Viewed</span><strong>{{ report.summary.normalized.viewed | number }}</strong></div>
+            <div class="reporting-metric"><span>Failed</span><strong>{{ report.summary.normalized.failed | number }}</strong></div>
+          </div>
+
+          <div class="reporting-rate-grid">
+            <div><span>Successful rate</span><strong>{{ reportingPercent(report.summary.rates.successful_rate) }}</strong></div>
+            <div><span>Reach rate</span><strong>{{ reportingPercent(report.summary.rates.reach_rate) }}</strong></div>
+            <div><span>Read rate</span><strong>{{ reportingPercent(report.summary.rates.read_rate) }}</strong></div>
+            <div><span>Failure rate</span><strong>{{ reportingPercent(report.summary.rates.failure_rate) }}</strong></div>
+            <div><span>Coverage</span><strong>{{ reportingPercent(report.summary.coverage.status_coverage_rate) }}</strong></div>
+          </div>
+
+          <div class="reporting-secondary-grid">
+            <div>
+              <span>Responders reportados por provider</span>
+              <strong>{{ reportingValue(report.summary.interactions.responders_aggregate) }}</strong>
+              <small>{{ report.summary.interactions.responders_campaigns_with_value || 0 }} campañas con dato</small>
+            </div>
+            <div>
+              <span>Respuestas de texto agregadas</span>
+              <strong>{{ reportingValue(report.summary.interactions.free_text_aggregate) }}</strong>
+              <small>{{ report.summary.interactions.free_text_campaigns_with_value || 0 }} campañas con dato</small>
+            </div>
+            <div>
+              <span>Exposiciones con interacción de botón</span>
+              <strong>{{ reportingValue(report.summary.interactions.button_interaction_recipient_exposures) }}</strong>
+            </div>
+            <div>
+              <span>Costos</span>
+              <strong>{{ reportingCostLabel(report.summary.cost.status) }}</strong>
+            </div>
+          </div>
+
+          <div class="reporting-section-title">
+            <div>
+              <h3>Campañas</h3>
+              <p>Métricas normalized de la cohorte congelada.</p>
+            </div>
+          </div>
+          <div class="table-wrapper reporting-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Campaña</th>
+                  <th>Propósito</th>
+                  <th>Fuente</th>
+                  <th>Estado de observación</th>
+                  <th>Última observación de Suite</th>
+                  <th>Exposiciones</th>
+                  <th>Successful</th>
+                  <th>Reach</th>
+                  <th>Viewed</th>
+                  <th>Failed</th>
+                  <th>Reach rate</th>
+                  <th>Read rate</th>
+                  <th>Coverage</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let campaign of report.campaigns">
+                  <td>{{ campaign.campaign.name }}</td>
+                  <td>{{ purposeLabel(campaign.campaign.purpose) }}</td>
+                  <td>{{ sourceLabel(campaign.campaign.source) }}</td>
+                  <td>{{ reportingSnapshotLabel(campaign.observation) }}</td>
+                  <td>{{ reportingObservedAt(campaign.observation.latest_observed_at) }}</td>
+                  <td>{{ campaign.audience.total_recipients | number }}</td>
+                  <td>{{ campaign.normalized.successful | number }}</td>
+                  <td>{{ campaign.normalized.reach_count | number }}</td>
+                  <td>{{ campaign.normalized.viewed | number }}</td>
+                  <td>{{ campaign.normalized.failed | number }}</td>
+                  <td>{{ reportingPercent(campaign.rates.reach_rate) }}</td>
+                  <td>{{ reportingPercent(campaign.rates.read_rate) }}</td>
+                  <td>{{ reportingPercent(campaign.coverage.status_coverage_rate) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="reporting-section-title secondary">
+            <div>
+              <h3>Conteos raw del provider</h3>
+              <p>Se muestran separados de las métricas normalized Campaign V2.</p>
+            </div>
+          </div>
+          <div class="table-wrapper reporting-table raw-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Campaña</th>
+                  <th>Successful raw</th>
+                  <th>Failed raw</th>
+                  <th>Sent raw</th>
+                  <th>Delivered raw</th>
+                  <th>Viewed raw</th>
+                  <th>Answered raw</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let campaign of report.campaigns">
+                  <td>{{ campaign.campaign.name }}</td>
+                  <td>{{ reportingValue(campaign.provider_raw?.successful) }}</td>
+                  <td>{{ reportingValue(campaign.provider_raw?.failed) }}</td>
+                  <td>{{ reportingValue(campaign.provider_raw?.sent) }}</td>
+                  <td>{{ reportingValue(campaign.provider_raw?.delivered) }}</td>
+                  <td>{{ reportingValue(campaign.provider_raw?.viewed) }}</td>
+                  <td>{{ reportingValue(campaign.provider_raw?.answered) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="reporting-breakdowns">
+            <section>
+              <h3>Por sucursal</h3>
+              <div class="table-wrapper reporting-table">
+                <table>
+                  <thead><tr><th>Sucursal</th><th>Exposiciones</th><th>Successful</th><th>Reach</th><th>Viewed</th><th>Failed</th><th>Reach rate</th><th>Coverage</th></tr></thead>
+                  <tbody>
+                    <tr *ngFor="let row of report.breakdowns.branches">
+                      <td>{{ reportingBranchLabel(row.value) }}</td>
+                      <td>{{ row.recipient_exposures | number }}</td>
+                      <td>{{ row.successful | number }}</td>
+                      <td>{{ row.reach_count | number }}</td>
+                      <td>{{ row.viewed | number }}</td>
+                      <td>{{ row.failed | number }}</td>
+                      <td>{{ reportingPercent(row.rates.reach_rate) }}</td>
+                      <td>{{ reportingPercent(row.coverage.status_coverage_rate) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section>
+              <h3>Por familia de audiencia</h3>
+              <div class="table-wrapper reporting-table">
+                <table>
+                  <thead><tr><th>Familia</th><th>Exposiciones</th><th>Successful</th><th>Reach</th><th>Viewed</th><th>Failed</th><th>Reach rate</th><th>Coverage</th></tr></thead>
+                  <tbody>
+                    <tr *ngFor="let row of report.breakdowns.audience_families">
+                      <td>{{ reportingAudienceFamilyLabel(row.value) }}</td>
+                      <td>{{ row.recipient_exposures | number }}</td>
+                      <td>{{ row.successful | number }}</td>
+                      <td>{{ row.reach_count | number }}</td>
+                      <td>{{ row.viewed | number }}</td>
+                      <td>{{ row.failed | number }}</td>
+                      <td>{{ reportingPercent(row.rates.reach_rate) }}</td>
+                      <td>{{ reportingPercent(row.coverage.status_coverage_rate) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </ng-container>
+      </ng-container>
+    </section>
+
     <section class="workspace" aria-labelledby="campaign-v2-history">
       <div class="section-heading">
         <div><h2 id="campaign-v2-history">Historial Campaign V2</h2><p>Sólo cohortes congeladas.</p></div>

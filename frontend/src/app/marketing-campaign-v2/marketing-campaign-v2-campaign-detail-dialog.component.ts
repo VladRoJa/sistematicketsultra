@@ -17,6 +17,7 @@ import { MatSelectModule } from '@angular/material/select';
 import {
   CampaignV2AudienceDefinition,
   CampaignV2CampaignDetail,
+  CampaignV2IndividualReport,
   CampaignV2ObservedFamily,
   CampaignV2Purpose,
   CampaignV2RecipientSummary,
@@ -24,12 +25,17 @@ import {
   CampaignV2SourceMetadata,
 } from './marketing-campaign-v2.models';
 import {
+  campaignV2DownloadBlob,
   campaignV2HistoricalTargetingMatchLabel,
   campaignV2HistoricalTargetingModeLabel,
   campaignV2HistoricalTargetingSummary,
   campaignV2HistoricalTargetingWindowLabel,
   campaignV2HistoryExclusionSummary,
   campaignV2HistoryWindowLabel,
+  campaignV2ReportingCostLabel,
+  campaignV2ReportingPercent,
+  campaignV2ReportingSnapshotLabel,
+  campaignV2ReportingValue,
 } from './marketing-campaign-v2.logic';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
 import {
@@ -70,6 +76,7 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   });
 
   campaign: CampaignV2CampaignDetail | null = null;
+  reporting: CampaignV2IndividualReport | null = null;
   recipients: CampaignV2RecipientSummary[] = [];
   recipientsPage = 1;
   readonly recipientsPageSize = 25;
@@ -78,8 +85,12 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
 
   loadingCampaignDetail = false;
   loadingRecipients = false;
+  loadingReporting = false;
+  exportingReporting = false;
   updatingPurpose = false;
   error = '';
+  reportingError = '';
+  reportingSuccess = '';
   purposeUpdated = false;
 
   constructor(
@@ -131,6 +142,84 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
           this.error = this.errorMessage(error, 'No fue posible cargar los destinatarios.');
         },
       });
+  }
+
+
+  loadReporting(): void {
+    if (this.loadingReporting) {
+      return;
+    }
+    this.loadingReporting = true;
+    this.reportingError = '';
+    this.reportingSuccess = '';
+
+    this.service.getCampaignReport(this.data.campaignId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: report => {
+          this.loadingReporting = false;
+          this.reporting = report;
+        },
+        error: (error: HttpErrorResponse) => {
+          this.loadingReporting = false;
+          this.reporting = null;
+          this.reportingError = this.errorMessage(
+            error,
+            'No fue posible cargar los resultados de Reporting.',
+          );
+        },
+      });
+  }
+
+  exportReporting(): void {
+    if (this.exportingReporting) {
+      return;
+    }
+    this.exportingReporting = true;
+    this.reportingError = '';
+    this.reportingSuccess = '';
+
+    this.service.exportCampaignReport(this.data.campaignId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: blob => {
+          this.exportingReporting = false;
+          campaignV2DownloadBlob(
+            blob,
+            `campaign_v2_${this.data.campaignId}_report.xlsx`,
+          );
+          this.reportingSuccess = 'Reporte individual exportado.';
+        },
+        error: (error: HttpErrorResponse) => {
+          this.exportingReporting = false;
+          this.reportingError = this.errorMessage(
+            error,
+            'No fue posible exportar el reporte individual.',
+          );
+        },
+      });
+  }
+
+  reportingPercent(value: number | null | undefined): string {
+    return campaignV2ReportingPercent(value);
+  }
+
+  reportingValue(value: number | string | null | undefined): string {
+    return campaignV2ReportingValue(value);
+  }
+
+  reportingSnapshotLabel(): string {
+    return this.reporting
+      ? campaignV2ReportingSnapshotLabel(this.reporting.observation)
+      : '—';
+  }
+
+  reportingObservedAt(value: string | null): string {
+    return value ? this.formatHistoryObservedAt(value) : '—';
+  }
+
+  reportingCostLabel(status: string): string {
+    return campaignV2ReportingCostLabel(status);
   }
 
   previousRecipientsPage(): void {

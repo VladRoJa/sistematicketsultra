@@ -14,6 +14,8 @@ import {
   CampaignV2OptionsResponse,
   CampaignV2PreviewResponse,
   CampaignV2Purpose,
+  CampaignV2ReportingFilters,
+  CampaignV2ReportingObservation,
   CampaignV2Source,
 } from './marketing-campaign-v2.models';
 
@@ -538,4 +540,159 @@ export function campaignV2PurposePatch(
 
 export function campaignV2FreezeErrorInvalidatesPreview(status: number): boolean {
   return status === 409;
+}
+
+export interface CampaignV2ReportingFilterState {
+  observedFromDate: string;
+  observedToDate: string;
+  purpose: CampaignV2Purpose | '';
+  source: CampaignV2Source | '';
+  provider: string;
+  snapshotStatus: '' | 'WITH_SNAPSHOT' | 'WITHOUT_SNAPSHOT';
+}
+
+export function campaignV2ReportingFilterValidation(
+  state: CampaignV2ReportingFilterState,
+): string | null {
+  if (state.observedFromDate && !campaignV2IsIsoDate(state.observedFromDate)) {
+    return 'La fecha "Observado desde" no es válida.';
+  }
+  if (state.observedToDate && !campaignV2IsIsoDate(state.observedToDate)) {
+    return 'La fecha "Observado hasta" no es válida.';
+  }
+  if (
+    state.observedFromDate
+    && state.observedToDate
+    && state.observedFromDate > state.observedToDate
+  ) {
+    return '"Observado desde" no puede ser posterior a "Observado hasta".';
+  }
+  return null;
+}
+
+export function buildCampaignV2ReportingQuery(
+  state: CampaignV2ReportingFilterState,
+): CampaignV2ReportingFilters {
+  const query: CampaignV2ReportingFilters = {};
+  if (state.observedFromDate) {
+    query.observed_from = campaignV2LocalDayBoundaryIso(
+      state.observedFromDate,
+      'START',
+    );
+  }
+  if (state.observedToDate) {
+    query.observed_to = campaignV2LocalDayBoundaryIso(
+      state.observedToDate,
+      'END',
+    );
+  }
+  if (state.purpose) {
+    query.purpose = state.purpose;
+  }
+  if (state.source) {
+    query.source = state.source;
+  }
+  const provider = state.provider.trim();
+  if (provider) {
+    query.provider = provider;
+  }
+  if (state.snapshotStatus) {
+    query.snapshot_status = state.snapshotStatus;
+  }
+  return query;
+}
+
+export function campaignV2ReportingPercent(value: number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return '—';
+  }
+  return `${(value * 100).toFixed(2)}%`;
+}
+
+export function campaignV2ReportingValue(
+  value: number | string | null | undefined,
+): string {
+  if (value === null || value === undefined || value === '') {
+    return '—';
+  }
+  return String(value);
+}
+
+export function campaignV2ReportingSnapshotLabel(
+  observation: CampaignV2ReportingObservation,
+): string {
+  if (observation.snapshot_id === null) {
+    return 'Sin observación';
+  }
+  return observation.analytics_status || 'Con observación';
+}
+
+export function campaignV2ReportingBranchLabel(value: string): string {
+  return value === 'UNKNOWN' ? 'Sin atribución' : value;
+}
+
+export function campaignV2ReportingAudienceFamilyLabel(value: string): string {
+  return value === 'UNKNOWN' ? 'Sin clasificación' : value;
+}
+
+export function campaignV2ReportingCostLabel(status: string): string {
+  return status === 'unavailable'
+    ? 'Costos no disponibles'
+    : status;
+}
+
+export function campaignV2DownloadBlob(
+  blob: Blob,
+  filename: string,
+): void {
+  const objectUrl = window.URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  anchor.click();
+  window.URL.revokeObjectURL(objectUrl);
+}
+
+function campaignV2LocalDayBoundaryIso(
+  value: string,
+  boundary: 'START' | 'END',
+): string {
+  if (!campaignV2IsIsoDate(value)) {
+    throw new Error('Fecha local inválida.');
+  }
+  const [year, month, day] = value.split('-').map(Number);
+  const local = boundary === 'START'
+    ? new Date(year, month - 1, day, 0, 0, 0, 0)
+    : new Date(year, month - 1, day, 23, 59, 59, 999);
+  return campaignV2IsoWithLocalOffset(local);
+}
+
+function campaignV2IsoWithLocalOffset(value: Date): string {
+  const pad = (part: number, size = 2): string => String(part).padStart(size, '0');
+  const offsetMinutes = -value.getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? '+' : '-';
+  const absoluteOffset = Math.abs(offsetMinutes);
+  const offsetHours = Math.floor(absoluteOffset / 60);
+  const offsetRemainder = absoluteOffset % 60;
+  return [
+    `${pad(value.getFullYear(), 4)}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`,
+    `T${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}.${pad(value.getMilliseconds(), 3)}`,
+    `${sign}${pad(offsetHours)}:${pad(offsetRemainder)}`,
+  ].join('');
+}
+
+function campaignV2IsIsoDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) {
+    return false;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(year, month - 1, day);
+  return (
+    parsed.getFullYear() === year
+    && parsed.getMonth() === month - 1
+    && parsed.getDate() === day
+  );
 }

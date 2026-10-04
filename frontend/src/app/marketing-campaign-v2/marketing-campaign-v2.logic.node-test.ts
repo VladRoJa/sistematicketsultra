@@ -7,6 +7,7 @@ import {
   buildCampaignV2AudienceRequest,
   buildCampaignV2FreezeRequest,
   buildCampaignV2HistoricalTargeting,
+  buildCampaignV2ReportingQuery,
   campaignV2HistoryBreakdownRows,
   campaignV2HistoryDecisionLabel,
   campaignV2HistoryMatchedLabel,
@@ -18,6 +19,13 @@ import {
   campaignV2FreezeErrorInvalidatesPreview,
   campaignV2MetricBucket,
   campaignV2PurposePatch,
+  campaignV2ReportingAudienceFamilyLabel,
+  campaignV2ReportingBranchLabel,
+  campaignV2ReportingCostLabel,
+  campaignV2ReportingFilterValidation,
+  campaignV2ReportingPercent,
+  campaignV2ReportingSnapshotLabel,
+  campaignV2ReportingValue,
   canFreezeCampaignV2,
   isCampaignV2AudienceValid,
   selectAllCampaignV2Families,
@@ -185,7 +193,7 @@ test('menu V2 crea grupo cuando falta, conserva legacy y no duplica submenu', ()
   assert.equal(repeated[0].submenu?.filter(item => item.path === '/marketing/campaigns-v2').length, 1);
 });
 
-test('service y page conservan contrato M5 sin auth manual ni Exportar', () => {
+test('service y page conservan contrato M5 sin auth manual y builder intacto', () => {
   const root = process.cwd();
   const dir = path.join(root, 'src/app/marketing-campaign-v2');
   const service = fs.readFileSync(path.join(dir, 'marketing-campaign-v2.service.ts'), 'utf8');
@@ -202,7 +210,8 @@ test('service y page conservan contrato M5 sin auth manual ni Exportar', () => {
   assert.equal(page.includes('showsExpirationRange'), true);
   assert.equal(page.includes('this.invalidatePreview();'), true);
   assert.equal(page.includes('this.loadCampaigns(1);'), true);
-  assert.equal(html.includes('Exportar'), false);
+  assert.equal(html.includes('Nueva campaña'), true);
+  assert.equal(service.includes('/v2/broadcast'), false);
   assert.equal(html.includes('DRAFT'), false);
   assert.equal(html.includes('SENT'), false);
 });
@@ -620,4 +629,242 @@ test('M24 UI Funnel conserva source-specific + Historical Targeting común', () 
   assert.equal(campaignDetail.includes('definition.filters.audience_families?.length'), true);
   assert.equal(recipientHtml.includes("recipient.member_name || '—'"), true);
   assert.equal(recipientHtml.includes("recipient.tarifa_raw || '—'"), true);
+});
+
+
+test('M30 reporting query vacío omite params y fechas usan límites locales con offset', () => {
+  const empty = buildCampaignV2ReportingQuery({
+    observedFromDate: '',
+    observedToDate: '',
+    purpose: '',
+    source: '',
+    provider: '   ',
+    snapshotStatus: '',
+  });
+  assert.deepEqual(empty, {});
+
+  const fromOnly = buildCampaignV2ReportingQuery({
+    observedFromDate: '2026-10-03',
+    observedToDate: '',
+    purpose: '',
+    source: '',
+    provider: '',
+    snapshotStatus: '',
+  });
+  assert.match(
+    fromOnly.observed_from ?? '',
+    /^2026-10-03T00:00:00\.000[+-]\d{2}:\d{2}$/,
+  );
+
+  const toOnly = buildCampaignV2ReportingQuery({
+    observedFromDate: '',
+    observedToDate: '2026-10-03',
+    purpose: '',
+    source: '',
+    provider: '',
+    snapshotStatus: '',
+  });
+  assert.match(
+    toOnly.observed_to ?? '',
+    /^2026-10-03T23:59:59\.999[+-]\d{2}:\d{2}$/,
+  );
+});
+
+test('M30 reporting query incluye filtros v1 y omite vacíos', () => {
+  const query = buildCampaignV2ReportingQuery({
+    observedFromDate: '2026-10-01',
+    observedToDate: '2026-10-03',
+    purpose: 'REACTIVATION',
+    source: 'EXPIRED_MEMBERS',
+    provider: ' IVENTAS ',
+    snapshotStatus: 'WITH_SNAPSHOT',
+  });
+  assert.equal(query.purpose, 'REACTIVATION');
+  assert.equal(query.source, 'EXPIRED_MEMBERS');
+  assert.equal(query.provider, 'IVENTAS');
+  assert.equal(query.snapshot_status, 'WITH_SNAPSHOT');
+  assert.match(query.observed_from ?? '', /T00:00:00\.000[+-]\d{2}:\d{2}$/);
+  assert.match(query.observed_to ?? '', /T23:59:59\.999[+-]\d{2}:\d{2}$/);
+});
+
+test('M30 reporting validation bloquea from posterior a to e inválidos', () => {
+  const base = {
+    purpose: '' as const,
+    source: '' as const,
+    provider: '',
+    snapshotStatus: '' as const,
+  };
+  assert.equal(
+    campaignV2ReportingFilterValidation({
+      ...base,
+      observedFromDate: '2026-10-04',
+      observedToDate: '2026-10-03',
+    }),
+    '"Observado desde" no puede ser posterior a "Observado hasta".',
+  );
+  assert.equal(
+    campaignV2ReportingFilterValidation({
+      ...base,
+      observedFromDate: '2026-02-30',
+      observedToDate: '',
+    }),
+    'La fecha "Observado desde" no es válida.',
+  );
+  assert.equal(
+    campaignV2ReportingFilterValidation({
+      ...base,
+      observedFromDate: '2026-10-01',
+      observedToDate: '2026-10-03',
+    }),
+    null,
+  );
+});
+
+test('M30 helpers visuales no recalculan KPIs ni convierten null en cero', () => {
+  assert.equal(campaignV2ReportingPercent(null), '—');
+  assert.equal(campaignV2ReportingPercent(0), '0.00%');
+  assert.equal(campaignV2ReportingPercent(0.753), '75.30%');
+  assert.equal(campaignV2ReportingValue(null), '—');
+  assert.equal(campaignV2ReportingValue(0), '0');
+  assert.equal(campaignV2ReportingBranchLabel('UNKNOWN'), 'Sin atribución');
+  assert.equal(campaignV2ReportingBranchLabel('MEXICALI'), 'MEXICALI');
+  assert.equal(campaignV2ReportingAudienceFamilyLabel('UNKNOWN'), 'Sin clasificación');
+  assert.equal(campaignV2ReportingAudienceFamilyLabel('DOMICILIADO'), 'DOMICILIADO');
+  assert.equal(campaignV2ReportingCostLabel('unavailable'), 'Costos no disponibles');
+  assert.equal(
+    campaignV2ReportingSnapshotLabel({
+      snapshot_id: null,
+      latest_observed_at: null,
+      analytics_status: null,
+    }),
+    'Sin observación',
+  );
+  assert.equal(
+    campaignV2ReportingSnapshotLabel({
+      snapshot_id: 9,
+      latest_observed_at: '2026-10-03T20:00:00+00:00',
+      analytics_status: 'ok',
+    }),
+    'ok',
+  );
+});
+
+test('M30 service consume individual, consolidado y export con builder compartido', () => {
+  const root = process.cwd();
+  const service = fs.readFileSync(
+    path.join(root, 'src/app/marketing-campaign-v2/marketing-campaign-v2.service.ts'),
+    'utf8',
+  );
+
+  assert.equal(service.includes('getCampaignReport(campaignId: number)'), true);
+  assert.equal(service.includes('${this.apiUrl}/${campaignId}/report'), true);
+  assert.equal(service.includes('getReporting('), true);
+  assert.equal(service.includes('${this.apiUrl}/reporting'), true);
+  assert.equal(service.includes('exportReporting(filters:'), true);
+  assert.equal(service.includes('exportCampaignReport(campaignId: number)'), true);
+  assert.equal(service.includes("responseType: 'blob'"), true);
+  assert.equal(service.includes("new HttpParams().set('campaign_id', String(campaignId))"), true);
+  assert.equal(
+    (service.match(/this\.buildReportingParams\(filters\)/g) ?? []).length >= 2,
+    true,
+  );
+  assert.equal(service.includes('Authorization'), false);
+  assert.equal(service.includes('localStorage'), false);
+  assert.equal(service.includes('rest.iventas.mx'), false);
+});
+
+test('M30 UI consolidado pinta backend summary y separa raw provider', () => {
+  const root = process.cwd();
+  const dir = path.join(root, 'src/app/marketing-campaign-v2');
+  const page = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.ts'), 'utf8');
+  const html = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.html'), 'utf8');
+
+  for (const label of [
+    'Reporting Campaign V2',
+    'Observado desde',
+    'Observado hasta',
+    'Propósito',
+    'Provider',
+    'Estado de observación',
+    'Exposiciones de destinatarios',
+    'Última observación de Suite',
+    'Conteos raw del provider',
+    'Por sucursal',
+    'Por familia de audiencia',
+    'Responders reportados por provider',
+    'Respuestas de texto agregadas',
+    'Exposiciones con interacción de botón',
+  ]) {
+    assert.equal(html.includes(label), true, label);
+  }
+  assert.equal(page.includes('this.service.getReporting(filters)'), true);
+  assert.equal(page.includes('this.service.exportReporting(filters)'), true);
+  assert.equal(page.includes('const filters = this.reportingQuery();'), true);
+  assert.equal(html.includes('report.summary.rates.successful_rate'), true);
+  assert.equal(html.includes('report.summary.rates.reach_rate'), true);
+  assert.equal(html.includes('report.summary.rates.read_rate'), true);
+  assert.equal(html.includes('report.summary.rates.failure_rate'), true);
+  assert.equal(html.includes('report.summary.coverage.status_coverage_rate'), true);
+  assert.equal(html.includes('report.summary.total_recipients'), true);
+  assert.equal(html.includes('reportingCostLabel(report.summary.cost.status)'), true);
+  assert.equal(html.includes('Personas únicas'), false);
+});
+
+test('M30 Campaign Detail carga reporting lazy, evolution y export individual', () => {
+  const root = process.cwd();
+  const dir = path.join(root, 'src/app/marketing-campaign-v2');
+  const detail = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-campaign-detail-dialog.component.ts'),
+    'utf8',
+  );
+  const html = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-campaign-detail-dialog.component.html'),
+    'utf8',
+  );
+
+  assert.equal(detail.includes('this.service.getCampaignReport(this.data.campaignId)'), true);
+  assert.equal(detail.includes('this.service.exportCampaignReport(this.data.campaignId)'), true);
+  assert.equal(html.includes('Resultados / Reporting'), true);
+  assert.equal(html.includes('Cargar resultados'), true);
+  assert.equal(html.includes('Exportar reporte'), true);
+  assert.equal(
+    html.includes('Aún no hay observaciones persistidas para esta campaña.'),
+    true,
+  );
+  assert.equal(html.includes('Conteos raw del provider'), true);
+  assert.equal(html.includes('Evolución observada por Suite'), true);
+  assert.equal(html.includes('report.evolution'), true);
+  assert.equal(html.includes('report.provider_raw'), true);
+  assert.equal(html.includes('reportingPercent(report.rates.read_rate)'), true);
+});
+
+test('M30 modelos Reporting están tipados explícitamente', () => {
+  const root = process.cwd();
+  const models = fs.readFileSync(
+    path.join(root, 'src/app/marketing-campaign-v2/marketing-campaign-v2.models.ts'),
+    'utf8',
+  );
+  for (const name of [
+    'CampaignV2ReportingNormalized',
+    'CampaignV2ReportingRates',
+    'CampaignV2ReportingCoverage',
+    'CampaignV2ReportingProviderRaw',
+    'CampaignV2ReportingInteractions',
+    'CampaignV2ReportingCost',
+    'CampaignV2ReportingObservation',
+    'CampaignV2ReportingCampaignIdentity',
+    'CampaignV2IndividualReport',
+    'CampaignV2ConsolidatedCampaignRow',
+    'CampaignV2ConsolidatedSummary',
+    'CampaignV2ReportingBreakdownRow',
+    'CampaignV2ConsolidatedReport',
+    'CampaignV2ReportingFilters',
+    'CampaignV2ReportingSnapshotStatus',
+  ]) {
+    assert.equal(models.includes(`interface ${name}`) || models.includes(`type ${name}`), true, name);
+  }
+  assert.equal(
+    models.includes('provider_raw: CampaignV2ReportingProviderRaw | null;'),
+    true,
+  );
 });

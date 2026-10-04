@@ -441,3 +441,188 @@ export interface CampaignV2ErrorResponse {
   status?: string;
   message?: string;
 }
+
+export type CampaignV2ReportingSnapshotStatus =
+  | 'WITH_SNAPSHOT'
+  | 'WITHOUT_SNAPSHOT';
+
+export interface CampaignV2ReportingNormalized {
+  successful: number;
+  failed: number;
+  sent: number;
+  delivered: number;
+  viewed: number;
+  reach_count: number;
+}
+
+export interface CampaignV2ReportingRates {
+  successful_rate: number | null;
+  reach_rate: number | null;
+  read_rate: number | null;
+  failure_rate: number | null;
+}
+
+export interface CampaignV2ReportingCoverage {
+  matched_recipient_count: number;
+  unmatched_provider_count?: number;
+  frozen_recipient_without_provider_status_count: number;
+  status_coverage_rate: number | null;
+}
+
+export interface CampaignV2ReportingProviderRaw {
+  successful: number;
+  failed: number;
+  sent: number;
+  delivered: number;
+  viewed: number;
+  answered?: number;
+  interaction_groups?: number;
+  interaction_items?: number;
+}
+
+export interface CampaignV2ReportingCost {
+  status: string;
+  currency: string | null;
+  total: number | null;
+}
+
+export interface CampaignV2ReportingObservation {
+  snapshot_id: number | null;
+  latest_observed_at: string | null;
+  analytics_status: string | null;
+  fingerprint?: string | null;
+}
+
+export interface CampaignV2ReportingCampaignIdentity {
+  id: number;
+  name: string;
+  purpose: CampaignV2Purpose;
+  source: CampaignV2Source;
+  provider: string;
+  provider_campaign_id: string | null;
+  frozen_at: string;
+}
+
+export interface CampaignV2ReportingButtonGroup {
+  label: string;
+  unique_recipient_count: number;
+  raw_item_count: number | null;
+}
+
+export interface CampaignV2ReportingInteractions {
+  unique_button_recipients?: number;
+  button_interaction_recipient_exposures?: number;
+  button_groups?: CampaignV2ReportingButtonGroup[];
+  responders_aggregate: number | null;
+  responders_campaigns_with_value?: number;
+  free_text_aggregate: number | null;
+  free_text_campaigns_with_value?: number;
+}
+
+export interface CampaignV2ReportingScope {
+  is_global: boolean;
+  allowed_sucursal_keys: string[] | null;
+}
+
+export interface CampaignV2ReportingDimensions {
+  scope: CampaignV2ReportingScope;
+  branches: Array<{ value: string; recipient_count: number }>;
+  audience_families: Array<{ value: string; recipient_count: number }>;
+}
+
+export interface CampaignV2ReportingEvolutionPoint {
+  snapshot_id: number;
+  observed_at: string;
+  normalized: CampaignV2ReportingNormalized;
+  provider_raw: Pick<
+    CampaignV2ReportingProviderRaw,
+    'successful' | 'failed' | 'sent' | 'delivered' | 'viewed'
+  >;
+  coverage: Pick<
+    CampaignV2ReportingCoverage,
+    'matched_recipient_count' | 'unmatched_provider_count'
+  >;
+}
+
+export interface CampaignV2IndividualReport {
+  campaign: CampaignV2ReportingCampaignIdentity;
+  observation: CampaignV2ReportingObservation;
+  audience: {
+    total_recipients: number;
+  };
+  normalized: CampaignV2ReportingNormalized;
+  rates: CampaignV2ReportingRates;
+  coverage: CampaignV2ReportingCoverage;
+  provider_raw: CampaignV2ReportingProviderRaw | null;
+  interactions: CampaignV2ReportingInteractions;
+  cost: CampaignV2ReportingCost;
+  dimensions: CampaignV2ReportingDimensions;
+  evolution: CampaignV2ReportingEvolutionPoint[];
+}
+
+export interface CampaignV2ConsolidatedCampaignRow {
+  campaign: CampaignV2ReportingCampaignIdentity;
+  observation: CampaignV2ReportingObservation;
+  audience: {
+    total_recipients: number;
+  };
+  normalized: CampaignV2ReportingNormalized;
+  rates: CampaignV2ReportingRates;
+  coverage: CampaignV2ReportingCoverage;
+  provider_raw: CampaignV2ReportingProviderRaw | null;
+  interactions: CampaignV2ReportingInteractions;
+  cost: CampaignV2ReportingCost;
+}
+
+export interface CampaignV2ConsolidatedSummary {
+  campaign_count: number;
+  campaigns_with_snapshot: number;
+  campaigns_without_snapshot: number;
+  total_recipients: number;
+  normalized: CampaignV2ReportingNormalized;
+  rates: CampaignV2ReportingRates;
+  coverage: CampaignV2ReportingCoverage;
+  provider_raw: CampaignV2ReportingProviderRaw;
+  interactions: CampaignV2ReportingInteractions;
+  cost: CampaignV2ReportingCost;
+}
+
+export interface CampaignV2ReportingBreakdownRow {
+  value: string;
+  recipient_exposures: number;
+  successful: number;
+  failed: number;
+  sent: number;
+  delivered: number;
+  viewed: number;
+  reach_count: number;
+  button_interaction_recipient_exposures: number;
+  rates: CampaignV2ReportingRates;
+  coverage: Omit<CampaignV2ReportingCoverage, 'unmatched_provider_count'>;
+}
+
+export interface CampaignV2ReportingFilters {
+  observed_from?: string | null;
+  observed_to?: string | null;
+  purpose?: CampaignV2Purpose | null;
+  source?: CampaignV2Source | null;
+  provider?: string | null;
+  snapshot_status?: CampaignV2ReportingSnapshotStatus | null;
+}
+
+export interface CampaignV2ConsolidatedReport {
+  filters: {
+    observed_from: string | null;
+    observed_to: string | null;
+    purpose: CampaignV2Purpose | null;
+    source: CampaignV2Source | null;
+    provider: string | null;
+    snapshot_status: CampaignV2ReportingSnapshotStatus | null;
+  };
+  summary: CampaignV2ConsolidatedSummary;
+  campaigns: CampaignV2ConsolidatedCampaignRow[];
+  breakdowns: {
+    branches: CampaignV2ReportingBreakdownRow[];
+    audience_families: CampaignV2ReportingBreakdownRow[];
+  };
+}
