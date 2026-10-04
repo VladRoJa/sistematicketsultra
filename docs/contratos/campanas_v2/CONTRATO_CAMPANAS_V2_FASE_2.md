@@ -28,7 +28,7 @@ Modo de trabajo:
 2. revisar integración iVentas y Funnel existentes antes de crear código;
 3. explicar un solo cambio mínimo y su prueba;
 4. no modelar campos no observados en un payload real;
-5. no avanzar a Fase 3.
+5. no implementar Fase 3 dentro de este contrato; M32 sólo cierra el gate de Fase 2.
 
 ### 0.1 Estado contractual de Fase 2
 
@@ -40,7 +40,10 @@ La estructura de Fase 2 queda congelada así:
     Historical Targeting transversal           ACCEPTED
 
     2C — Campaign BI / Reporting / Excel       ACCEPTED
-    2D — Acceptance final                      PENDIENTE
+    2D — Acceptance final                      ACCEPTED
+
+    Fase 2                                     ACCEPTED
+    Fase 3                                     DESBLOQUEADA / PENDIENTE DE IMPLEMENTACIÓN
 
 2A corresponde a M8–M16 y está IMPLEMENTADA, ACCEPTED M16 y DEPLOYADA. Smoke real provider: PASS.
 
@@ -48,7 +51,7 @@ La estructura de Fase 2 queda congelada así:
 
 La captura automática M12 está implementada, pero permanece operativamente deshabilitada hasta definir explícitamente `cadence`, `horizon` y `max`.
 
-Historical Targeting transversal corresponde a M21–M25 y está ACCEPTED. 2C corresponde a M26–M31 y está ACCEPTED. 2D permanece PENDIENTE. Fase 3 continúa BLOQUEADA hasta completar 2D con aceptación integral.
+Historical Targeting transversal corresponde a M21–M25 y está ACCEPTED. 2C corresponde a M26–M31 y está ACCEPTED. 2D corresponde a M32 y está ACCEPTED. Fase 2 queda ACCEPTED; Fase 3 queda DESBLOQUEADA para iniciarse, pero continúa PENDIENTE DE IMPLEMENTACIÓN.
 
 ### 0.2 Enmienda M8 — evidencia real observada y frontera vigente
 
@@ -180,7 +183,7 @@ Fase 2 conserva cuatro bloques numerados y añade una capacidad transversal obli
 - **2B — FUNNEL_PORTFOLIO:** ACCEPTED; corresponde a M17–M20 y reutiliza la cartera Funnel canónica, `ACTIVE_MEMBER_SUPPRESSION`, scope backend, history M14, dedupe, Preview/Detail, fingerprint, Freeze y Angular.
 - **Historical Targeting transversal:** ACCEPTED; M21–M25 reutilizan el histórico persistido M11/M13 para incluir o excluir por comportamiento previo con semántica `INCLUDE/EXCLUDE` + `ALL/ANY`, Preview Detail neutral, fingerprint/Freeze y Angular, preservando compatibilidad legacy.
 - **2C — Campaign BI / Reporting / Excel:** ACCEPTED; M26–M31 validan proyección read-only sobre evidencia persistida por Suite, reporting individual/consolidado, breakdowns, Excel backend-side y Angular.
-- **2D — Acceptance final:** PENDIENTE; valida integralmente 2A + 2B + Historical Targeting + 2C antes de autorizar Fase 3.
+- **2D — Acceptance final:** ACCEPTED mediante M32; valida integralmente 2A + 2B + Historical Targeting + 2C y cierra Fase 2.
 
 M8–M16 no se reinterpretan: `successful/failed`, `SENT/DELIVERED/VIEWED`, snapshots append-only, `fetched_at`, button interactions, history exclusions y M12 disabled por defecto mantienen su semántica existente.
 
@@ -1465,11 +1468,14 @@ La estructura de Fase 2 permanece:
     Historical Targeting transversal           ACCEPTED
 
     2C — Campaign BI / Reporting / Excel       ACCEPTED
-    2D — Acceptance final                      PENDIENTE
+    2D — Acceptance final                      ACCEPTED
+
+    Fase 2                                     ACCEPTED
+    Fase 3                                     DESBLOQUEADA / PENDIENTE DE IMPLEMENTACIÓN
 
 No se renumeran 2A/2B/2C/2D.
 
-Historical Targeting está implementado y ACCEPTED mediante M21–M25. 2C está ACCEPTED mediante M26–M31; 2D sigue PENDIENTE y Fase 3 continúa BLOQUEADA hasta completar toda Fase 2.
+Historical Targeting está implementado y ACCEPTED mediante M21–M25. 2C está ACCEPTED mediante M26–M31 y 2D está ACCEPTED mediante M32. Fase 2 queda ACCEPTED; Fase 3 queda DESBLOQUEADA / PENDIENTE DE IMPLEMENTACIÓN.
 
 ### 30.1.2 Contrato conceptual v1
 
@@ -2183,10 +2189,10 @@ Invariantes ACCEPTED:
 - cero persistencia/reporting tables nuevas;
 - cero migrations/ORM changes;
 - JSON, XLSX y Angular conservan la misma semántica backend;
-- 2D permanece PENDIENTE;
-- Fase 3 permanece BLOQUEADA.
+- **Estado al cierre de M31:** 2D permanecía PENDIENTE y Fase 3 permanecía BLOQUEADA.
+- **Estado vigente tras M32:** 2D y Fase 2 están ACCEPTED; Fase 3 está DESBLOQUEADA / PENDIENTE DE IMPLEMENTACIÓN.
 
-## 32. Fase 2D — Acceptance final
+## 32. Fase 2D — Acceptance final — ACCEPTED
 
 Fase 2 queda finalmente aceptada cuando estén cerrados:
 
@@ -2208,15 +2214,32 @@ La aceptación integral debe comprobar:
 - no provider writes;
 - no envío.
 
-Sólo después puede comenzar:
+M32 cerró esta aceptación integral sobre `main` integrado con:
 
-    Fase 3 — POST /v2/broadcast
+- **363 PASS** en la familia backend Campaign V2 completa, incluyendo el guard final M32;
+- **83 PASS** focales cross-phase para parser 2A, M12 disabled/fail-closed, snapshots, M13, Funnel, Historical Targeting y Phase 2 acceptance;
+- `backend/tests/marketing` completo con **541 PASS + 1 fallo legacy Reactivation preexistente/no relacionado**, reproducido antes de cualquier cambio M32 sobre el HEAD base `143aff87a198ae9e14011a573a9af2bd98e2f609`;
+- frontend Campaign V2 **35 PASS**;
+- frontend Marketing relacionado **38 PASS**;
+- Angular build **PASS**;
+- provider/write boundary **PASS**;
+- Reporting no-writes/M13-free **PASS**;
+- diff M32 de migrations/models **vacío**.
+
+Resultado contractual:
+
+    2D — Acceptance final                      ACCEPTED
+    Fase 2                                     ACCEPTED
+    Fase 3                                     DESBLOQUEADA / PENDIENTE DE IMPLEMENTACIÓN
+
+`DESBLOQUEADA` significa que Fase 3 puede iniciar su implementación bajo su propio contrato. No significa que exista envío desde Suite ni que `POST /v2/broadcast` esté implementado.
 
 ## 33. Pendientes y trabajo posterior
 
-PENDIENTE PARA CERRAR FASE 2:
+FASE 2 CERRADA:
 
-- 2D — Acceptance final.
+- 2D — Acceptance final: ACCEPTED mediante M32.
+- No quedan bloques contractuales pendientes dentro de Fase 2.
 
 POSTERIOR / NO BLOQUEANTE salvo necesidad:
 
@@ -2226,7 +2249,7 @@ POSTERIOR / NO BLOQUEANTE salvo necesidad:
 - normalización DB específica de costos;
 - activación productiva M12.
 
-`FUNNEL_PORTFOLIO` está ACCEPTED como 2B. Historical Targeting transversal también está ACCEPTED. 2C — Campaign BI / Reporting / Excel está ACCEPTED mediante M26–M31. 2D permanece PENDIENTE y Fase 3 continúa BLOQUEADA.
+`FUNNEL_PORTFOLIO` está ACCEPTED como 2B. Historical Targeting transversal también está ACCEPTED. 2C — Campaign BI / Reporting / Excel está ACCEPTED mediante M26–M31 y 2D está ACCEPTED mediante M32. Fase 2 está ACCEPTED; Fase 3 está DESBLOQUEADA / PENDIENTE DE IMPLEMENTACIÓN.
 
 ## 34. Instrucción de arranque recomendada para una conversación nueva de Fase 2
 
@@ -2246,6 +2269,7 @@ POSTERIOR / NO BLOQUEANTE salvo necesidad:
     2C — Campaign BI / Reporting / Excel está ACCEPTED mediante M26–M31.
     Reporting usa sólo evidencia persistida por Suite, no consulta iVentas y no usa M13.
     Export Excel es backend-side y Angular no recalcula KPIs contractuales.
-    2D — Acceptance final sigue PENDIENTE.
-    Fase 3 permanece BLOQUEADA hasta que 2D tenga aceptación integral.
+    2D — Acceptance final está ACCEPTED mediante M32.
+    Fase 2 está ACCEPTED.
+    Fase 3 está DESBLOQUEADA / PENDIENTE DE IMPLEMENTACIÓN; aún no existe envío desde Suite.
     No implementes POST /v2/broadcast ni GraphQL mutations.

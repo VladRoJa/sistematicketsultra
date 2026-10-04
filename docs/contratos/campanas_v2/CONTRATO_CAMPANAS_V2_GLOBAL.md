@@ -37,17 +37,17 @@ El objetivo arquitectónico es que las APIs nuevas de iVentas entren como una in
 - No requiere API nueva de iVentas.
 - Define catálogo, fuentes, filtros, familias, preview, deduplicación y audiencia congelada.
 
-### Fase 2 — iVentas / histórico / Funnel / Campaign BI
+### Fase 2 — iVentas / histórico / Funnel / Campaign BI — ACCEPTED
 
 - **2A — iVentas / histórico / engagement:** ACCEPTED; lectura/sincronización, estados recipient-level, interacciones, analytics e histórico.
 - **2B — FUNNEL_PORTFOLIO:** ACCEPTED; incorpora Venta Nueva/Funnel dentro del mismo Audience Builder, con identidad phone-centric, supresión obligatoria de socios activos, Preview/Detail, fingerprint, Freeze y Angular.
 - **Historical Targeting transversal:** ACCEPTED; M21–M25 reutilizan M11/M13 para aplicar `INCLUDE/EXCLUDE` + `ALL/ANY` de forma común sobre cualquier fuente Campaign V2, con Preview Detail neutral, fingerprint/Freeze y Angular, preservando compatibilidad con `history_exclusion` legacy de M14/M15.
 - **2C — Campaign BI / Reporting / Excel:** ACCEPTED mediante M26–M31; proyecta exclusivamente evidencia persistida en reporting individual/consolidado, breakdowns, Excel backend-side y Angular, sin provider HTTP, M13 ni nueva persistencia.
-- **2D — Acceptance final:** pendiente; debe validar integralmente 2A + 2B + Historical Targeting + 2C antes de Fase 3.
+- **2D — Acceptance final:** ACCEPTED mediante M32; la convivencia integral de 2A + 2B + Historical Targeting + 2C quedó validada.
 - Fase 2 puede incluir costos e importación histórica cuando exista evidencia suficiente, pero Reporting no llama al provider para generar reportes.
 - Fase 2 no envía campañas desde Suite ni autoriza POST /v2/broadcast.
 
-### Fase 3 — Envío por iVentas
+### Fase 3 — Envío por iVentas — DESBLOQUEADA / PENDIENTE DE IMPLEMENTACIÓN
 
 - Selección de plantilla, variables, canal, programación y POST /v2/broadcast.
 - Guarda provider_campaign_id y enlaza automáticamente con Fase 2.
@@ -346,7 +346,7 @@ No forman parte de v1:
 - responded/free-text/no-response;
 - expresiones booleanas anidadas.
 
-La semántica detallada vive en `CONTRATO_CAMPANAS_V2_FASE_2.md`. GLOBAL congela Historical Targeting como capacidad transversal ACCEPTED que no crea un histórico paralelo. 2C está ACCEPTED mediante M26–M31; 2D sigue PENDIENTE y Fase 3 continúa BLOQUEADA.
+La semántica detallada vive en `CONTRATO_CAMPANAS_V2_FASE_2.md`. GLOBAL congela Historical Targeting como capacidad transversal ACCEPTED que no crea un histórico paralelo. 2C está ACCEPTED mediante M26–M31 y 2D está ACCEPTED mediante M32. Fase 2 está ACCEPTED; Fase 3 queda DESBLOQUEADA / PENDIENTE DE IMPLEMENTACIÓN.
 
 Las campañas legacy M14/M15 con `history_exclusion` conservan exactamente su semántica original equivalente a `EXCLUDE + ANY`; no se reinterpretan retroactivamente.
 
