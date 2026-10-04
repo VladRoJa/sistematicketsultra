@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.extensions import db
@@ -54,6 +54,16 @@ from app.services.marketing_campaign_v2_provider_stats_snapshot_service import (
 from app.services.marketing_campaign_v2_provider_history_service import (
     MarketingCampaignV2ProviderHistoryValidationError,
     get_provider_history_for_phones,
+)
+from app.services.marketing_campaign_v2_reporting_service import (
+    MarketingCampaignV2ReportingValidationError,
+    build_campaign_v2_consolidated_report,
+    build_campaign_v2_individual_report,
+    build_campaign_v2_reporting_export_dataset,
+)
+from app.services.marketing_campaign_v2_reporting_excel_service import (
+    XLSX_MIMETYPE,
+    build_campaign_v2_reporting_excel,
 )
 
 
@@ -438,6 +448,164 @@ def get_campaign_v2_endpoint(campaign_id: int):
         return _error("Falló la consulta de Campaign V2.", 500)
 
 
+@marketing_campaign_v2_bp.get("/campaigns-v2/reporting/export")
+@jwt_required()
+def export_campaign_v2_reporting_endpoint():
+    try:
+        _, access = _resolve_campaign_v2_request()
+        consolidated_fields = {
+            "observed_from",
+            "observed_to",
+            "purpose",
+            "source",
+            "provider",
+            "snapshot_status",
+        }
+        _validate_query_args({"campaign_id", *consolidated_fields})
+        allowed_scope = _campaign_v2_allowed_sucursal_keys(access)
+        campaign_id_raw = request.args.get("campaign_id")
+        generated_at = datetime.now(timezone.utc)
+
+        if campaign_id_raw is not None:
+            mixed = sorted(
+                field
+                for field in consolidated_fields
+                if field in request.args
+            )
+            if mixed:
+                raise MarketingCampaignV2RouteValidationError(
+                    "campaign_id no puede combinarse con filtros consolidados."
+                )
+            campaign_id = _parse_positive_query_int(
+                campaign_id_raw,
+                field_name="campaign_id",
+            )
+            report = build_campaign_v2_individual_report(
+                campaign_id=campaign_id,
+                allowed_sucursal_keys=allowed_scope,
+                session=db.session,
+            )
+            evolution = [
+                {
+                    "campaign_id": int(report["campaign"]["id"]),
+                    "campaign_name": report["campaign"]["name"],
+                    **row,
+                }
+                for row in report["evolution"]
+            ]
+            output, filename = build_campaign_v2_reporting_excel(
+                report_type="INDIVIDUAL",
+                report=report,
+                evolution=evolution,
+                scope=report["dimensions"]["scope"],
+                generated_at=generated_at,
+            )
+        else:
+            dataset = build_campaign_v2_reporting_export_dataset(
+                allowed_sucursal_keys=allowed_scope,
+                filters={
+                    "observed_from": request.args.get("observed_from"),
+                    "observed_to": request.args.get("observed_to"),
+                    "purpose": request.args.get("purpose"),
+                    "source": request.args.get("source"),
+                    "provider": request.args.get("provider"),
+                    "snapshot_status": request.args.get("snapshot_status"),
+                },
+                session=db.session,
+            )
+            output, filename = build_campaign_v2_reporting_excel(
+                report_type=dataset["report_type"],
+                report=dataset["report"],
+                evolution=dataset["evolution"],
+                scope=dataset["scope"],
+                generated_at=generated_at,
+            )
+
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype=XLSX_MIMETYPE,
+        )
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2NotFoundError:
+        return _error("Campaign V2 no encontrada.", 404)
+    except (
+        MarketingCampaignV2RouteValidationError,
+        MarketingCampaignV2ReportingValidationError,
+    ) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("Falló la exportación XLSX de Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/reporting")
+@jwt_required()
+def get_campaign_v2_reporting_endpoint():
+    try:
+        _, access = _resolve_campaign_v2_request()
+        _validate_query_args(
+            {
+                "observed_from",
+                "observed_to",
+                "purpose",
+                "source",
+                "provider",
+                "snapshot_status",
+            }
+        )
+        result = build_campaign_v2_consolidated_report(
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            filters={
+                "observed_from": request.args.get("observed_from"),
+                "observed_to": request.args.get("observed_to"),
+                "purpose": request.args.get("purpose"),
+                "source": request.args.get("source"),
+                "provider": request.args.get("provider"),
+                "snapshot_status": request.args.get("snapshot_status"),
+            },
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (
+        MarketingCampaignV2RouteValidationError,
+        MarketingCampaignV2ReportingValidationError,
+    ) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("Falló el reporting consolidado de Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.get(
+    "/campaigns-v2/<int:campaign_id>/report"
+)
+@jwt_required()
+def get_campaign_v2_report_endpoint(campaign_id: int):
+    try:
+        _, access = _resolve_campaign_v2_request()
+        _validate_query_args(set())
+        result = build_campaign_v2_individual_report(
+            campaign_id=campaign_id,
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2NotFoundError:
+        return _error("Campaign V2 no encontrada.", 404)
+    except (
+        MarketingCampaignV2RouteValidationError,
+        MarketingCampaignV2QueryValidationError,
+    ) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("Falló el reporte individual de Campaign V2.", 500)
+
+
 @marketing_campaign_v2_bp.get(
     "/campaigns-v2/<int:campaign_id>/provider-stats"
 )
@@ -740,6 +908,24 @@ def _validate_query_args(allowed_fields: set[str]) -> None:
         raise MarketingCampaignV2RouteValidationError(
             "Parámetros no permitidos: " + ", ".join(unknown) + "."
         )
+
+
+def _parse_positive_query_int(value: Any, *, field_name: str) -> int:
+    if isinstance(value, bool):
+        raise MarketingCampaignV2RouteValidationError(
+            f"{field_name} debe ser entero positivo."
+        )
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise MarketingCampaignV2RouteValidationError(
+            f"{field_name} debe ser entero positivo."
+        ) from exc
+    if parsed <= 0:
+        raise MarketingCampaignV2RouteValidationError(
+            f"{field_name} debe ser entero positivo."
+        )
+    return parsed
 
 
 def _parse_optional_iso_datetime(value: Any) -> datetime | None:

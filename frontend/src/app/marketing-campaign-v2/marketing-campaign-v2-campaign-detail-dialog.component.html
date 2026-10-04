@@ -53,6 +53,127 @@
       </section>
     </div>
 
+    <section class="reporting-section">
+      <div class="section-heading">
+        <div>
+          <h3>Resultados / Reporting</h3>
+          <p>Lectura de evidencia persistida. No consulta iVentas en tiempo real.</p>
+        </div>
+        <div class="reporting-actions">
+          <button
+            mat-stroked-button
+            type="button"
+            (click)="loadReporting()"
+            [disabled]="loadingReporting"
+          >
+            {{ loadingReporting ? 'Cargando…' : 'Cargar resultados' }}
+          </button>
+          <button
+            mat-stroked-button
+            type="button"
+            (click)="exportReporting()"
+            [disabled]="exportingReporting"
+          >
+            {{ exportingReporting ? 'Exportando…' : 'Exportar reporte' }}
+          </button>
+        </div>
+      </div>
+
+      <div *ngIf="loadingReporting" class="state-row compact" role="status">
+        <mat-spinner diameter="20"></mat-spinner>
+        Cargando resultados…
+      </div>
+      <div *ngIf="reportingError" class="inline-error" role="alert">{{ reportingError }}</div>
+      <div *ngIf="reportingSuccess" class="inline-success" role="status">{{ reportingSuccess }}</div>
+      <p *ngIf="!reporting && !loadingReporting && !reportingError" class="muted">
+        Carga los resultados cuando necesites revisar el desempeño persistido de esta campaña.
+      </p>
+
+      <ng-container *ngIf="reporting as report">
+        <p *ngIf="report.observation.snapshot_id === null" class="reporting-empty">
+          Aún no hay observaciones persistidas para esta campaña.
+        </p>
+
+        <div class="reporting-summary-grid">
+          <div><span>Destinatarios congelados</span><strong>{{ report.audience.total_recipients | number }}</strong></div>
+          <div><span>Estado de observación</span><strong>{{ reportingSnapshotLabel() }}</strong></div>
+          <div><span>Última observación de Suite</span><strong>{{ reportingObservedAt(report.observation.latest_observed_at) }}</strong></div>
+          <div><span>Successful</span><strong>{{ report.normalized.successful | number }}</strong></div>
+          <div><span>Failed</span><strong>{{ report.normalized.failed | number }}</strong></div>
+          <div><span>Sent</span><strong>{{ report.normalized.sent | number }}</strong></div>
+          <div><span>Delivered</span><strong>{{ report.normalized.delivered | number }}</strong></div>
+          <div><span>Viewed</span><strong>{{ report.normalized.viewed | number }}</strong></div>
+          <div><span>Reach</span><strong>{{ report.normalized.reach_count | number }}</strong></div>
+        </div>
+
+        <div class="reporting-rate-grid">
+          <div><span>Successful rate</span><strong>{{ reportingPercent(report.rates.successful_rate) }}</strong></div>
+          <div><span>Reach rate</span><strong>{{ reportingPercent(report.rates.reach_rate) }}</strong></div>
+          <div><span>Read rate</span><strong>{{ reportingPercent(report.rates.read_rate) }}</strong></div>
+          <div><span>Failure rate</span><strong>{{ reportingPercent(report.rates.failure_rate) }}</strong></div>
+          <div><span>Coverage</span><strong>{{ reportingPercent(report.coverage.status_coverage_rate) }}</strong></div>
+        </div>
+
+        <div class="reporting-detail-grid">
+          <section>
+            <h4>Conteos raw del provider</h4>
+            <dl *ngIf="report.provider_raw; else noProviderRaw">
+              <div><dt>Successful raw</dt><dd>{{ reportingValue(report.provider_raw.successful) }}</dd></div>
+              <div><dt>Failed raw</dt><dd>{{ reportingValue(report.provider_raw.failed) }}</dd></div>
+              <div><dt>Sent raw</dt><dd>{{ reportingValue(report.provider_raw.sent) }}</dd></div>
+              <div><dt>Delivered raw</dt><dd>{{ reportingValue(report.provider_raw.delivered) }}</dd></div>
+              <div><dt>Viewed raw</dt><dd>{{ reportingValue(report.provider_raw.viewed) }}</dd></div>
+              <div><dt>Answered raw</dt><dd>{{ reportingValue(report.provider_raw.answered) }}</dd></div>
+            </dl>
+            <ng-template #noProviderRaw><p class="muted">—</p></ng-template>
+          </section>
+
+          <section>
+            <h4>Interacciones y aggregates provider</h4>
+            <dl>
+              <div><dt>Destinatarios con interacción de botón</dt><dd>{{ reportingValue(report.interactions.unique_button_recipients) }}</dd></div>
+              <div><dt>Responders reportados por provider</dt><dd>{{ reportingValue(report.interactions.responders_aggregate) }}</dd></div>
+              <div><dt>Respuestas de texto agregadas</dt><dd>{{ reportingValue(report.interactions.free_text_aggregate) }}</dd></div>
+              <div><dt>Costos</dt><dd>{{ reportingCostLabel(report.cost.status) }}</dd></div>
+            </dl>
+          </section>
+        </div>
+
+        <section class="reporting-evolution">
+          <h4>Evolución observada por Suite</h4>
+          <div class="table-wrap" *ngIf="report.evolution.length; else noEvolution">
+            <table>
+              <thead>
+                <tr>
+                  <th>Observado por Suite</th>
+                  <th>Successful</th>
+                  <th>Failed</th>
+                  <th>Sent</th>
+                  <th>Delivered</th>
+                  <th>Viewed</th>
+                  <th>Reach</th>
+                  <th>Coverage</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let point of report.evolution">
+                  <td>{{ reportingObservedAt(point.observed_at) }}</td>
+                  <td>{{ point.normalized.successful | number }}</td>
+                  <td>{{ point.normalized.failed | number }}</td>
+                  <td>{{ point.normalized.sent | number }}</td>
+                  <td>{{ point.normalized.delivered | number }}</td>
+                  <td>{{ point.normalized.viewed | number }}</td>
+                  <td>{{ point.normalized.reach_count | number }}</td>
+                  <td>{{ point.coverage.matched_recipient_count | number }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <ng-template #noEvolution><p class="muted">Sin snapshots históricos para mostrar.</p></ng-template>
+        </section>
+      </ng-container>
+    </section>
+
     <section class="recipients-section">
       <div class="section-heading">
         <div><h3>Destinatarios congelados</h3><p>{{ recipientsTotal | number }} registros</p></div>

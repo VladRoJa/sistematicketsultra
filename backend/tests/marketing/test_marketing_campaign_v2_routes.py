@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import inspect
 from importlib.metadata import version
+from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 import werkzeug
+from openpyxl import load_workbook
 from flask import Flask
 from flask_jwt_extended import JWTManager, create_access_token
 
@@ -22,6 +24,161 @@ from app.services.marketing_campaign_v2_query_service import (
     MarketingCampaignV2NotFoundError,
     MarketingCampaignV2QueryValidationError,
 )
+
+
+
+
+def _reporting_export_campaign_row(campaign_id=1):
+    return {
+        "campaign": {
+            "id": campaign_id,
+            "name": f"Campaign {campaign_id}",
+            "purpose": "REACTIVATION",
+            "source": "EXPIRED_MEMBERS",
+            "provider": "IVENTAS",
+            "provider_campaign_id": f"external-{campaign_id}",
+            "frozen_at": "2026-10-01T18:00:00+00:00",
+        },
+        "observation": {
+            "snapshot_id": 10,
+            "latest_observed_at": "2026-10-03T20:00:00+00:00",
+            "analytics_status": "ok",
+        },
+        "audience": {"total_recipients": 2},
+        "normalized": {
+            "successful": 1,
+            "failed": 1,
+            "sent": 0,
+            "delivered": 0,
+            "viewed": 1,
+            "reach_count": 1,
+        },
+        "rates": {
+            "successful_rate": 0.5,
+            "reach_rate": 0.5,
+            "read_rate": 1.0,
+            "failure_rate": 0.5,
+        },
+        "coverage": {
+            "matched_recipient_count": 2,
+            "unmatched_provider_count": 0,
+            "frozen_recipient_without_provider_status_count": 0,
+            "status_coverage_rate": 1.0,
+        },
+        "provider_raw": {
+            "successful": 2,
+            "failed": 1,
+            "sent": 1,
+            "delivered": 0,
+            "viewed": 1,
+            "answered": 1,
+            "interaction_groups": 1,
+            "interaction_items": 1,
+        },
+        "interactions": {
+            "unique_button_recipients": 1,
+            "responders_aggregate": 1,
+            "free_text_aggregate": 0,
+        },
+        "cost": {
+            "status": "unavailable",
+            "currency": None,
+            "total": None,
+        },
+    }
+
+
+def _reporting_export_dataset():
+    row = _reporting_export_campaign_row()
+    return {
+        "report_type": "CONSOLIDATED",
+        "report": {
+            "filters": {
+                "observed_from": None,
+                "observed_to": None,
+                "purpose": None,
+                "source": None,
+                "provider": None,
+                "snapshot_status": None,
+            },
+            "summary": {
+                "campaign_count": 1,
+                "campaigns_with_snapshot": 1,
+                "campaigns_without_snapshot": 0,
+                "total_recipients": 2,
+                "normalized": dict(row["normalized"]),
+                "rates": dict(row["rates"]),
+                "coverage": dict(row["coverage"]),
+                "provider_raw": dict(row["provider_raw"]),
+                "interactions": {
+                    "button_interaction_recipient_exposures": 1,
+                    "responders_aggregate": 1,
+                    "responders_campaigns_with_value": 1,
+                    "free_text_aggregate": 0,
+                    "free_text_campaigns_with_value": 1,
+                },
+                "cost": dict(row["cost"]),
+            },
+            "campaigns": [row],
+            "breakdowns": {
+                "branches": [],
+                "audience_families": [],
+            },
+        },
+        "evolution": [
+            {
+                "campaign_id": 1,
+                "campaign_name": "Campaign 1",
+                "snapshot_id": 10,
+                "observed_at": "2026-10-03T20:00:00+00:00",
+                "normalized": dict(row["normalized"]),
+                "provider_raw": {
+                    "successful": 2,
+                    "failed": 1,
+                    "sent": 1,
+                    "delivered": 0,
+                    "viewed": 1,
+                },
+                "coverage": {
+                    "matched_recipient_count": 2,
+                    "unmatched_provider_count": 0,
+                },
+            }
+        ],
+        "scope": {
+            "is_global": False,
+            "allowed_sucursal_keys": ["A", "B"],
+        },
+    }
+
+
+def _reporting_individual_report():
+    row = _reporting_export_campaign_row(7)
+    row["dimensions"] = {
+        "scope": {
+            "is_global": False,
+            "allowed_sucursal_keys": ["A", "B"],
+        }
+    }
+    row["evolution"] = [
+        {
+            "snapshot_id": 10,
+            "observed_at": "2026-10-03T20:00:00+00:00",
+            "normalized": dict(row["normalized"]),
+            "provider_raw": {
+                "successful": 2,
+                "failed": 1,
+                "sent": 1,
+                "delivered": 0,
+                "viewed": 1,
+            },
+            "coverage": {
+                "matched_recipient_count": 2,
+                "unmatched_provider_count": 0,
+            },
+        }
+    ]
+    return row
 
 
 class TestMarketingCampaignV2Routes:
@@ -71,6 +228,9 @@ class TestMarketingCampaignV2Routes:
             ("get", "/api/marketing/campaigns-v2"),
             ("post", "/api/marketing/campaigns-v2/provider-history/lookup"),
             ("get", "/api/marketing/campaigns-v2/1"),
+            ("get", "/api/marketing/campaigns-v2/reporting"),
+            ("get", "/api/marketing/campaigns-v2/reporting/export"),
+            ("get", "/api/marketing/campaigns-v2/1/report"),
             ("get", "/api/marketing/campaigns-v2/1/provider-stats"),
             ("post", "/api/marketing/campaigns-v2/1/provider-stats/snapshots"),
             ("get", "/api/marketing/campaigns-v2/1/provider-stats/snapshots"),
@@ -767,6 +927,433 @@ class TestMarketingCampaignV2Routes:
                 headers=self.headers,
             )
         assert response.status_code == 404
+
+
+
+
+    def test_consolidated_reporting_export_returns_parseable_xlsx(self):
+        dataset = _reporting_export_dataset()
+        with (
+            self._auth(self.partial_access),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.marketing_branch_keys_by_sucursal_ids",
+                return_value={11: "A", 22: "B"},
+            ),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.build_campaign_v2_reporting_export_dataset",
+                return_value=dataset,
+            ) as service,
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/reporting/export",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert response.content_type == routes.XLSX_MIMETYPE
+        assert "attachment" in response.headers["Content-Disposition"]
+        assert ".xlsx" in response.headers["Content-Disposition"]
+        workbook = load_workbook(BytesIO(response.data), data_only=False)
+        assert workbook.sheetnames == [
+            "Resumen",
+            "Campañas",
+            "KPIs",
+            "Evolución",
+            "Metadata",
+        ]
+        assert service.call_args.kwargs["allowed_sucursal_keys"] == ("A", "B")
+
+    def test_filtered_reporting_export_forwards_same_m28_filters(self):
+        dataset = _reporting_export_dataset()
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.build_campaign_v2_reporting_export_dataset",
+                return_value=dataset,
+            ) as service,
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/reporting/export"
+                "?observed_from=2026-10-01T12:00:00Z"
+                "&observed_to=2026-10-02T12:00:00Z"
+                "&purpose=REACTIVATION"
+                "&source=EXPIRED_MEMBERS"
+                "&provider=IVENTAS"
+                "&snapshot_status=WITH_SNAPSHOT",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert service.call_args.kwargs["filters"] == {
+            "observed_from": "2026-10-01T12:00:00Z",
+            "observed_to": "2026-10-02T12:00:00Z",
+            "purpose": "REACTIVATION",
+            "source": "EXPIRED_MEMBERS",
+            "provider": "IVENTAS",
+            "snapshot_status": "WITH_SNAPSHOT",
+        }
+
+    def test_individual_reporting_export_returns_one_campaign_workbook(self):
+        report = _reporting_individual_report()
+        with (
+            self._auth(self.partial_access),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.marketing_branch_keys_by_sucursal_ids",
+                return_value={11: "A", 22: "B"},
+            ),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.build_campaign_v2_individual_report",
+                return_value=report,
+            ) as service,
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/reporting/export?campaign_id=7",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert "campaign_v2_7_report_" in response.headers["Content-Disposition"]
+        workbook = load_workbook(BytesIO(response.data), data_only=False)
+        assert workbook["Campañas"].max_row == 2
+        assert service.call_args.kwargs["campaign_id"] == 7
+        assert service.call_args.kwargs["allowed_sucursal_keys"] == ("A", "B")
+
+    def test_reporting_export_reuses_campaign_v2_management_permission(self):
+        access = SimpleNamespace(
+            is_global=True,
+            branch_ids=(),
+            can_edit_inputs=False,
+        )
+        with self._auth(access):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/reporting/export",
+                headers=self.headers,
+            )
+        assert response.status_code == 403
+
+    def test_individual_reporting_export_out_of_scope_maps_to_404(self):
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.build_campaign_v2_individual_report",
+                side_effect=MarketingCampaignV2NotFoundError("hidden"),
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/reporting/export?campaign_id=99",
+                headers=self.headers,
+            )
+        assert response.status_code == 404
+
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "?campaign_id=0",
+            "?campaign_id=-1",
+            "?campaign_id=abc",
+            "?campaign_id=1.5",
+        ],
+    )
+    def test_reporting_export_rejects_invalid_campaign_id(self, query):
+        with self._auth():
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/reporting/export" + query,
+                headers=self.headers,
+            )
+        assert response.status_code == 400
+
+    def test_reporting_export_rejects_campaign_id_plus_consolidated_filter(self):
+        with self._auth():
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/reporting/export"
+                "?campaign_id=7&purpose=REACTIVATION",
+                headers=self.headers,
+            )
+        assert response.status_code == 400
+
+    def test_reporting_export_rejects_unknown_param(self):
+        with self._auth():
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/reporting/export?foo=bar",
+                headers=self.headers,
+            )
+        assert response.status_code == 400
+
+    def test_reporting_export_invalid_m28_filter_maps_to_400(self):
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.build_campaign_v2_reporting_export_dataset",
+                side_effect=routes.MarketingCampaignV2ReportingValidationError(
+                    "snapshot_status inválido"
+                ),
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/reporting/export?snapshot_status=BAD",
+                headers=self.headers,
+            )
+        assert response.status_code == 400
+
+
+    def test_reporting_export_provider_boundary_never_calls_refresh_capture_or_m13(self):
+        dataset = _reporting_export_dataset()
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.build_campaign_v2_reporting_export_dataset",
+                return_value=dataset,
+            ),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.get_campaign_v2_provider_stats",
+                side_effect=AssertionError("no provider read-through"),
+            ),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.capture_campaign_v2_provider_stats_snapshot",
+                side_effect=AssertionError("no provider capture"),
+            ),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.get_provider_history_for_phones",
+                side_effect=AssertionError("no M13"),
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/reporting/export",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        load_workbook(BytesIO(response.data), data_only=False)
+
+
+    def test_reporting_json_and_export_have_same_logical_dataset(self):
+        dataset = _reporting_export_dataset()
+        json_report = dataset["report"]
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.build_campaign_v2_consolidated_report",
+                return_value=json_report,
+            ),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.build_campaign_v2_reporting_export_dataset",
+                return_value=dataset,
+            ),
+        ):
+            json_response = self.client.get(
+                "/api/marketing/campaigns-v2/reporting?purpose=REACTIVATION",
+                headers=self.headers,
+            )
+            export_response = self.client.get(
+                "/api/marketing/campaigns-v2/reporting/export?purpose=REACTIVATION",
+                headers=self.headers,
+            )
+
+        assert json_response.status_code == 200
+        assert export_response.status_code == 200
+        payload = json_response.get_json()
+        workbook = load_workbook(
+            BytesIO(export_response.data),
+            data_only=False,
+        )
+
+        campaign_sheet = workbook["Campañas"]
+        headers = {
+            campaign_sheet.cell(1, col).value: col
+            for col in range(1, campaign_sheet.max_column + 1)
+        }
+        xlsx_ids = [
+            campaign_sheet.cell(row, headers["campaign_id"]).value
+            for row in range(2, campaign_sheet.max_row + 1)
+        ]
+        assert xlsx_ids == [
+            row["campaign"]["id"] for row in payload["campaigns"]
+        ]
+
+        summary_sheet = workbook["Resumen"]
+        summary = {
+            summary_sheet.cell(row, 1).value: summary_sheet.cell(row, 2).value
+            for row in range(2, summary_sheet.max_row + 1)
+        }
+        assert summary["campaign_count"] == payload["summary"]["campaign_count"]
+        assert (
+            summary["Exposiciones de destinatarios"]
+            == payload["summary"]["total_recipients"]
+        )
+        assert (
+            summary["successful_rate"]
+            == payload["summary"]["rates"]["successful_rate"]
+        )
+
+    def test_consolidated_reporting_forwards_filters_and_backend_scope(self):
+        expected = {
+            "filters": {"purpose": "NEW_SALE"},
+            "summary": {"campaign_count": 1},
+            "campaigns": [],
+            "breakdowns": {"branches": [], "audience_families": []},
+        }
+        with (
+            self._auth(self.partial_access),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.marketing_branch_keys_by_sucursal_ids",
+                return_value={11: "A", 22: "B"},
+            ),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.build_campaign_v2_consolidated_report",
+                return_value=expected,
+            ) as service,
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/reporting"
+                "?observed_from=2026-10-01T12:00:00Z"
+                "&observed_to=2026-10-02T12:00:00Z"
+                "&purpose=NEW_SALE"
+                "&source=FUNNEL_PORTFOLIO"
+                "&provider=IVENTAS"
+                "&snapshot_status=WITH_SNAPSHOT",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert response.get_json() == expected
+        assert service.call_args.kwargs["allowed_sucursal_keys"] == ("A", "B")
+        assert service.call_args.kwargs["filters"] == {
+            "observed_from": "2026-10-01T12:00:00Z",
+            "observed_to": "2026-10-02T12:00:00Z",
+            "purpose": "NEW_SALE",
+            "source": "FUNNEL_PORTFOLIO",
+            "provider": "IVENTAS",
+            "snapshot_status": "WITH_SNAPSHOT",
+        }
+
+    def test_consolidated_reporting_reuses_campaign_v2_management_permission(self):
+        access = SimpleNamespace(
+            is_global=True,
+            branch_ids=(),
+            can_edit_inputs=False,
+        )
+        with self._auth(access):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/reporting",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 403
+
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "?observed_from=2026-10-01T12:00:00",
+            "?observed_to=not-a-date",
+            "?observed_from=2026-10-02T00:00:00Z&observed_to=2026-10-01T00:00:00Z",
+            "?purpose=BAD",
+            "?source=BAD",
+            "?provider=" + ("X" * 51),
+            "?snapshot_status=BAD",
+        ],
+    )
+    def test_consolidated_reporting_validation_maps_to_400(self, query):
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.build_campaign_v2_consolidated_report",
+                side_effect=routes.MarketingCampaignV2ReportingValidationError(
+                    "invalid reporting filter"
+                ),
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/reporting" + query,
+                headers=self.headers,
+            )
+
+        assert response.status_code == 400
+
+    def test_consolidated_reporting_rejects_unknown_refresh_sync_export_params(self):
+        with self._auth():
+            for query in (
+                "?refresh=true",
+                "?sync=true",
+                "?export=xlsx",
+                "?branch=BRANCH%20A",
+            ):
+                response = self.client.get(
+                    "/api/marketing/campaigns-v2/reporting" + query,
+                    headers=self.headers,
+                )
+                assert response.status_code == 400
+
+    def test_individual_report_uses_backend_scope_only(self):
+        expected = {
+            "campaign": {"id": 1, "name": "Reporte"},
+            "audience": {"total_recipients": 10},
+        }
+        with (
+            self._auth(self.partial_access),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.marketing_branch_keys_by_sucursal_ids",
+                return_value={11: "A", 22: "B"},
+            ),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.build_campaign_v2_individual_report",
+                return_value=expected,
+            ) as service,
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/1/report",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert response.get_json() == expected
+        assert service.call_args.kwargs["campaign_id"] == 1
+        assert service.call_args.kwargs["allowed_sucursal_keys"] == ("A", "B")
+
+    def test_individual_report_rejects_refresh_sync_or_provider_flags(self):
+        with self._auth():
+            for query in (
+                "?refresh=true",
+                "?sync=true",
+                "?provider=IVENTAS",
+            ):
+                response = self.client.get(
+                    "/api/marketing/campaigns-v2/1/report" + query,
+                    headers=self.headers,
+                )
+                assert response.status_code == 400
+
+    def test_individual_report_out_of_scope_maps_to_404(self):
+        with (
+            self._auth(self.partial_access),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.marketing_branch_keys_by_sucursal_ids",
+                return_value={11: "A", 22: "B"},
+            ),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.build_campaign_v2_individual_report",
+                side_effect=MarketingCampaignV2NotFoundError("hidden"),
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/99/report",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 404
+
+    def test_individual_report_reuses_campaign_v2_management_permission(self):
+        access = SimpleNamespace(
+            is_global=True,
+            branch_ids=(),
+            can_edit_inputs=False,
+        )
+        with self._auth(access):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/1/report",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 403
 
     def test_recipient_detail_does_not_cross_campaign_boundary(self):
         with (

@@ -14,6 +14,8 @@ import { MatSelectModule } from '@angular/material/select';
 import {
   buildCampaignV2AudienceRequest,
   buildCampaignV2FreezeRequest,
+  buildCampaignV2ReportingQuery,
+  campaignV2DownloadBlob,
   campaignV2FilterApplies,
   campaignV2FreezeErrorInvalidatesPreview,
   campaignV2HistoryBreakdownRows,
@@ -23,6 +25,13 @@ import {
   campaignV2HistoryOutcomeLabel,
   historicalTargetingHasConditions,
   campaignV2MetricBucket,
+  campaignV2ReportingAudienceFamilyLabel,
+  campaignV2ReportingBranchLabel,
+  campaignV2ReportingCostLabel,
+  campaignV2ReportingFilterValidation,
+  campaignV2ReportingPercent,
+  campaignV2ReportingSnapshotLabel,
+  campaignV2ReportingValue,
   canFreezeCampaignV2,
   isCampaignV2AudienceValid,
   parseCampaignV2LookbackDays,
@@ -35,6 +44,7 @@ import {
   CampaignV2AudienceDefinitionRequest,
   CampaignV2AudienceFamily,
   CampaignV2CampaignSummary,
+  CampaignV2ConsolidatedReport,
   CampaignV2HistoryDeliveryBucket,
   CampaignV2HistoricalTargetingMatch,
   CampaignV2HistoricalTargetingMode,
@@ -45,6 +55,7 @@ import {
   CampaignV2PreviewBucket,
   CampaignV2PreviewResponse,
   CampaignV2Purpose,
+  CampaignV2ReportingSnapshotStatus,
   CampaignV2Source,
   CampaignV2SourceMetadata,
 } from './marketing-campaign-v2.models';
@@ -116,6 +127,18 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   readonly historySource = new FormControl<CampaignV2Source | ''>('', {
     nonNullable: true,
   });
+  readonly reportingObservedFrom = new FormControl('', { nonNullable: true });
+  readonly reportingObservedTo = new FormControl('', { nonNullable: true });
+  readonly reportingPurpose = new FormControl<CampaignV2Purpose | ''>('', {
+    nonNullable: true,
+  });
+  readonly reportingSource = new FormControl<CampaignV2Source | ''>('', {
+    nonNullable: true,
+  });
+  readonly reportingProvider = new FormControl('', { nonNullable: true });
+  readonly reportingSnapshotStatus = new FormControl<
+    CampaignV2ReportingSnapshotStatus | ''
+  >('', { nonNullable: true });
 
   options: CampaignV2OptionsResponse | null = null;
   selectedFamilies: CampaignV2AudienceFamily[] = [];
@@ -142,6 +165,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   }
   preview: CampaignV2PreviewResponse | null = null;
   campaigns: CampaignV2CampaignSummary[] = [];
+  reporting: CampaignV2ConsolidatedReport | null = null;
   funnelCutoffDates: string[] = [];
 
   loadingOptions = false;
@@ -149,9 +173,13 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   loadingFunnelCutoffs = false;
   creating = false;
   loadingCampaigns = false;
+  loadingReporting = false;
+  exportingReporting = false;
   accessDenied = false;
   error = '';
   success = '';
+  reportingError = '';
+  reportingSuccess = '';
 
   campaignPage = 1;
   readonly campaignPageSize = 25;
@@ -212,6 +240,25 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     this.historyLookbackDays.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.invalidatePreview());
+
+    this.reportingObservedFrom.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.invalidateReporting());
+    this.reportingObservedTo.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.invalidateReporting());
+    this.reportingPurpose.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.invalidateReporting());
+    this.reportingSource.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.invalidateReporting());
+    this.reportingProvider.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.invalidateReporting());
+    this.reportingSnapshotStatus.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.invalidateReporting());
 
     this.loadOptions();
   }
@@ -665,6 +712,134 @@ export class MarketingCampaignV2PageComponent implements OnInit {
           this.error = this.errorMessage(error, 'No fue posible crear la campaña.');
         },
       });
+  }
+
+
+  get reportingFilterError(): string | null {
+    return campaignV2ReportingFilterValidation({
+      observedFromDate: this.reportingObservedFrom.value,
+      observedToDate: this.reportingObservedTo.value,
+      purpose: this.reportingPurpose.value,
+      source: this.reportingSource.value,
+      provider: this.reportingProvider.value,
+      snapshotStatus: this.reportingSnapshotStatus.value,
+    });
+  }
+
+  loadReporting(): void {
+    if (this.loadingReporting) {
+      return;
+    }
+    const validation = this.reportingFilterError;
+    if (validation) {
+      this.reportingError = validation;
+      return;
+    }
+
+    const filters = this.reportingQuery();
+    this.loadingReporting = true;
+    this.reportingError = '';
+    this.reportingSuccess = '';
+
+    this.service.getReporting(filters)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: report => {
+          this.loadingReporting = false;
+          this.reporting = report;
+        },
+        error: (error: HttpErrorResponse) => {
+          this.loadingReporting = false;
+          this.reporting = null;
+          this.reportingError = this.errorMessage(
+            error,
+            'No fue posible cargar Reporting Campaign V2.',
+          );
+        },
+      });
+  }
+
+  exportReporting(): void {
+    if (this.exportingReporting) {
+      return;
+    }
+    const validation = this.reportingFilterError;
+    if (validation) {
+      this.reportingError = validation;
+      return;
+    }
+
+    const filters = this.reportingQuery();
+    this.exportingReporting = true;
+    this.reportingError = '';
+    this.reportingSuccess = '';
+
+    this.service.exportReporting(filters)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: blob => {
+          this.exportingReporting = false;
+          campaignV2DownloadBlob(
+            blob,
+            `campaign_v2_reporting_${new Date().toISOString().slice(0, 10)}.xlsx`,
+          );
+          this.reportingSuccess = 'Reporte Excel generado.';
+        },
+        error: (error: HttpErrorResponse) => {
+          this.exportingReporting = false;
+          this.reportingError = this.errorMessage(
+            error,
+            'No fue posible exportar Reporting Campaign V2.',
+          );
+        },
+      });
+  }
+
+  reportingPercent(value: number | null | undefined): string {
+    return campaignV2ReportingPercent(value);
+  }
+
+  reportingValue(value: number | string | null | undefined): string {
+    return campaignV2ReportingValue(value);
+  }
+
+  reportingSnapshotLabel(
+    observation: CampaignV2ConsolidatedReport['campaigns'][number]['observation'],
+  ): string {
+    return campaignV2ReportingSnapshotLabel(observation);
+  }
+
+  reportingObservedAt(value: string | null): string {
+    return value ? this.formatObservedAt(value) : 'Sin observación';
+  }
+
+  reportingBranchLabel(value: string): string {
+    return campaignV2ReportingBranchLabel(value);
+  }
+
+  reportingAudienceFamilyLabel(value: string): string {
+    return campaignV2ReportingAudienceFamilyLabel(value);
+  }
+
+  reportingCostLabel(status: string): string {
+    return campaignV2ReportingCostLabel(status);
+  }
+
+  private reportingQuery() {
+    return buildCampaignV2ReportingQuery({
+      observedFromDate: this.reportingObservedFrom.value,
+      observedToDate: this.reportingObservedTo.value,
+      purpose: this.reportingPurpose.value,
+      source: this.reportingSource.value,
+      provider: this.reportingProvider.value,
+      snapshotStatus: this.reportingSnapshotStatus.value,
+    });
+  }
+
+  private invalidateReporting(): void {
+    this.reporting = null;
+    this.reportingError = '';
+    this.reportingSuccess = '';
   }
 
   loadCampaigns(page = this.campaignPage): void {

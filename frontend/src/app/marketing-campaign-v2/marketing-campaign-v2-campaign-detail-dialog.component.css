@@ -29,3 +29,22 @@ th { background:#f8fafc; color:#334155; font-size:10px; text-transform:uppercase
 .conflict-label { font-size:10px; font-weight:800; color:#9a3412; border-bottom:1px dotted #9a3412; }
 .pager { display:flex; justify-content:flex-end; align-items:center; gap:12px; margin-top:12px; color:#475569; font-size:12px; }
 @media(max-width:800px) { mat-dialog-content { min-width:0; padding:14px; } .dialog-header { padding:14px; } .summary-grid { grid-template-columns:1fr 1fr; } .definition-grid { grid-template-columns:1fr; } .purpose-row { align-items:stretch; flex-direction:column; } .purpose-row mat-form-field { width:100%; } }
+
+.reporting-section { margin-top:18px; padding-top:16px; border-top:1px solid #e2e8f0; }
+.reporting-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.state-row.compact { padding:10px 0; }
+.inline-success { margin-bottom:12px; padding:11px 12px; border:1px solid #bbf7d0; background:#f0fdf4; color:#166534; border-radius:10px; }
+.reporting-empty { margin:10px 0; padding:10px 12px; border:1px solid #fde68a; background:#fffbeb; color:#92400e; border-radius:9px; font-size:12px; }
+.reporting-summary-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:12px; }
+.reporting-summary-grid>div,.reporting-rate-grid>div { padding:9px 10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; }
+.reporting-summary-grid span,.reporting-rate-grid span { display:block; color:#64748b; font-size:10px; font-weight:700; }
+.reporting-summary-grid strong,.reporting-rate-grid strong { display:block; margin-top:4px; font-size:15px; }
+.reporting-rate-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; margin-top:8px; }
+.reporting-detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px; }
+.reporting-detail-grid section { padding:12px; border:1px solid #e2e8f0; border-radius:9px; background:#f8fafc; }
+.reporting-detail-grid h4,.reporting-evolution h4 { margin:0 0 8px; font-size:13px; }
+.reporting-evolution { margin-top:14px; }
+@media(max-width:800px) {
+  .reporting-actions { align-items:stretch; flex-direction:column; }
+  .reporting-summary-grid,.reporting-rate-grid,.reporting-detail-grid { grid-template-columns:1fr; }
+}

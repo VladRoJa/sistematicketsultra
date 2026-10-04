@@ -9,8 +9,10 @@ import {
   CampaignV2CampaignDetail,
   CampaignV2CampaignPage,
   CampaignV2CampaignQuery,
+  CampaignV2ConsolidatedReport,
   CampaignV2FreezeRequest,
   CampaignV2FreezeResponse,
+  CampaignV2IndividualReport,
   CampaignV2OptionsResponse,
   CampaignV2PreviewDetailRequest,
   CampaignV2PreviewDetailResponse,
@@ -18,6 +20,7 @@ import {
   CampaignV2Purpose,
   CampaignV2RecipientDetail,
   CampaignV2RecipientPage,
+  CampaignV2ReportingFilters,
   CampaignV2TariffClassificationRequest,
   CampaignV2TariffClassificationResult,
   CampaignV2UnclassifiedTariffsResponse,
@@ -129,6 +132,63 @@ export class MarketingCampaignV2Service {
       { params },
     );
   }
+
+  getCampaignReport(campaignId: number): Observable<CampaignV2IndividualReport> {
+    return this.http.get<CampaignV2IndividualReport>(
+      `${this.apiUrl}/${campaignId}/report`,
+    );
+  }
+
+  getReporting(
+    filters: CampaignV2ReportingFilters,
+  ): Observable<CampaignV2ConsolidatedReport> {
+    return this.http.get<CampaignV2ConsolidatedReport>(
+      `${this.apiUrl}/reporting`,
+      { params: this.buildReportingParams(filters) },
+    );
+  }
+
+  exportReporting(filters: CampaignV2ReportingFilters): Observable<Blob> {
+    return this.http.get(
+      `${this.apiUrl}/reporting/export`,
+      {
+        params: this.buildReportingParams(filters),
+        responseType: 'blob',
+      },
+    );
+  }
+
+  exportCampaignReport(campaignId: number): Observable<Blob> {
+    const params = new HttpParams().set('campaign_id', String(campaignId));
+    return this.http.get(
+      `${this.apiUrl}/reporting/export`,
+      {
+        params,
+        responseType: 'blob',
+      },
+    );
+  }
+
+  private buildReportingParams(
+    filters: CampaignV2ReportingFilters,
+  ): HttpParams {
+    let params = new HttpParams();
+    const entries: Array<[string, string | null | undefined]> = [
+      ['observed_from', filters.observed_from],
+      ['observed_to', filters.observed_to],
+      ['purpose', filters.purpose],
+      ['source', filters.source],
+      ['provider', filters.provider],
+      ['snapshot_status', filters.snapshot_status],
+    ];
+    for (const [key, value] of entries) {
+      if (value !== null && value !== undefined && value !== '') {
+        params = params.set(key, value);
+      }
+    }
+    return params;
+  }
+
   updatePurpose(
     campaignId: number,
     purpose: CampaignV2Purpose,

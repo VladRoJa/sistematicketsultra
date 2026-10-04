@@ -39,7 +39,7 @@ La estructura de Fase 2 queda congelada así:
 
     Historical Targeting transversal           ACCEPTED
 
-    2C — Campaign BI / Reporting / Excel       PENDIENTE
+    2C — Campaign BI / Reporting / Excel       ACCEPTED
     2D — Acceptance final                      PENDIENTE
 
 2A corresponde a M8–M16 y está IMPLEMENTADA, ACCEPTED M16 y DEPLOYADA. Smoke real provider: PASS.
@@ -48,7 +48,7 @@ La estructura de Fase 2 queda congelada así:
 
 La captura automática M12 está implementada, pero permanece operativamente deshabilitada hasta definir explícitamente `cadence`, `horizon` y `max`.
 
-Historical Targeting transversal corresponde a M21–M25 y está ACCEPTED. 2C y 2D permanecen PENDIENTES. Fase 3 sólo puede comenzar después de cerrar 2C y completar 2D con aceptación integral.
+Historical Targeting transversal corresponde a M21–M25 y está ACCEPTED. 2C corresponde a M26–M31 y está ACCEPTED. 2D permanece PENDIENTE. Fase 3 continúa BLOQUEADA hasta completar 2D con aceptación integral.
 
 ### 0.2 Enmienda M8 — evidencia real observada y frontera vigente
 
@@ -179,7 +179,7 @@ Fase 2 conserva cuatro bloques numerados y añade una capacidad transversal obli
 - **2A — iVentas / histórico / engagement:** ACCEPTED; corresponde a M8–M16 y conserva toda su semántica vigente.
 - **2B — FUNNEL_PORTFOLIO:** ACCEPTED; corresponde a M17–M20 y reutiliza la cartera Funnel canónica, `ACTIVE_MEMBER_SUPPRESSION`, scope backend, history M14, dedupe, Preview/Detail, fingerprint, Freeze y Angular.
 - **Historical Targeting transversal:** ACCEPTED; M21–M25 reutilizan el histórico persistido M11/M13 para incluir o excluir por comportamiento previo con semántica `INCLUDE/EXCLUDE` + `ALL/ANY`, Preview Detail neutral, fingerprint/Freeze y Angular, preservando compatibilidad legacy.
-- **2C — Campaign BI / Reporting / Excel:** PENDIENTE; proyección read-only sobre evidencia persistida por Suite.
+- **2C — Campaign BI / Reporting / Excel:** ACCEPTED; M26–M31 validan proyección read-only sobre evidencia persistida por Suite, reporting individual/consolidado, breakdowns, Excel backend-side y Angular.
 - **2D — Acceptance final:** PENDIENTE; valida integralmente 2A + 2B + Historical Targeting + 2C antes de autorizar Fase 3.
 
 M8–M16 no se reinterpretan: `successful/failed`, `SENT/DELIVERED/VIEWED`, snapshots append-only, `fetched_at`, button interactions, history exclusions y M12 disabled por defecto mantienen su semántica existente.
@@ -1464,12 +1464,12 @@ La estructura de Fase 2 permanece:
 
     Historical Targeting transversal           ACCEPTED
 
-    2C — Campaign BI / Reporting / Excel       PENDIENTE
+    2C — Campaign BI / Reporting / Excel       ACCEPTED
     2D — Acceptance final                      PENDIENTE
 
 No se renumeran 2A/2B/2C/2D.
 
-Historical Targeting está implementado y ACCEPTED mediante M21–M25. 2C/2D siguen pendientes y Fase 3 continúa bloqueada hasta completar toda Fase 2.
+Historical Targeting está implementado y ACCEPTED mediante M21–M25. 2C está ACCEPTED mediante M26–M31; 2D sigue PENDIENTE y Fase 3 continúa BLOQUEADA hasta completar toda Fase 2.
 
 ### 30.1.2 Contrato conceptual v1
 
@@ -2082,15 +2082,9 @@ Debe describirse como **estado observado por Suite**. No se presenta como `sent_
 
 ### 31.9 Histórico transversal
 
-Reporting puede reutilizar M13 para análisis como:
+La implementación v1 ACCEPTED de 2C **no usa M13** ni consulta histórico provider para construir Reporting. El reporting individual, consolidado y Excel se proyectan exclusivamente desde Campaign V2 congelada, M11 snapshots/observations persistidos y `analytics_json`.
 
-- teléfono nunca observado anteriormente;
-- teléfono previamente impactado;
-- ever VIEWED;
-- ever FAILED;
-- ever button_interaction.
-
-Debe distinguir el histórico previo a la campaña analizada de los resultados de la campaña actual para evitar leakage temporal.
+Análisis futuros como teléfono nunca observado, previamente impactado, ever VIEWED/FAILED o ever button_interaction pueden investigarse después, pero quedan fuera del 2C aceptado y deberán preservar separación temporal explícita.
 
 2C no crea scoring.
 
@@ -2108,18 +2102,15 @@ Si una dimensión no puede resolverse, usar `UNKNOWN`/`UNAVAILABLE` según la co
 
 La exportación se genera **backend-side**. Angular solicita y descarga el archivo; no recalcula KPIs.
 
-Arquitectura objetivo del workbook:
+Workbook v1 ACCEPTED:
 
     1. Resumen
     2. Campañas
     3. KPIs
-    4. Destinatarios
-    5. Interacciones
-    6. Costos
-    7. Evolución
-    8. Metadata
+    4. Evolución
+    5. Metadata
 
-No es obligatorio implementar todas las hojas en el primer milestone si se preserva el contrato funcional, pero la arquitectura debe permitirlas.
+`Destinatarios`, `Interacciones` y `Costos` no existen como hojas independientes en 2C v1. Sus métricas soportadas se proyectan únicamente en las hojas anteriores sin exponer PII recipient-level ni payload provider completo.
 
 Excel debe incluir:
 
@@ -2160,16 +2151,40 @@ M12 deshabilitado no bloquea Reporting; significa que la frescura depende de sna
 
 ### 31.13 No duplicar persistencia
 
-La primera implementación de Reporting debe reutilizar:
+La implementación v1 ACCEPTED de Reporting reutiliza:
 
 - Campaign V2;
 - frozen recipients;
 - M11 snapshots;
 - M11 observations;
-- M13 history;
 - `analytics_json`.
 
+M13 no forma parte de la proyección 2C aceptada.
+
 No crear una reporting mega-table, copia de snapshots o copia de recipients salvo que una necesidad de rendimiento medida lo justifique posteriormente.
+
+### 31.14 Estado ACCEPTED — M26–M31
+
+2C queda ACCEPTED con la siguiente secuencia:
+
+- **M26 — investigación técnica:** frontera y semántica de Reporting congeladas.
+- **M27 — reporting individual:** frozen denominator, latest snapshot determinista, normalized vs provider raw, coverage, interactions, aggregates, costos `unavailable`, dimensiones y evolución.
+- **M28 — reporting consolidado:** recipient exposures cross-campaign, weighted rates, filtros, scope/permisos, breakdowns branch/family, offline boundary y query scaling bulk.
+- **M29 — Excel backend:** parity JSON/XLSX, workbook v1 de cinco hojas, privacidad, formula-injection, integridad numérica, empty export y evolución.
+- **M30 — Angular Reporting:** carga lazy individual/consolidada, filtros con ISO+offset, raw separado de normalized, no KPI math contractual en frontend y descarga Blob backend-side.
+- **M31 — acceptance integral 2C:** PASS sobre individual, consolidated, filtros, raw vs normalized, exposures, weighted rates, breakdowns, scope, JSON/XLSX parity, privacidad, formula injection, evolución, Angular, provider boundary, no-writes, query scaling y regresiones.
+- Regresión backend Campaign V2: **359 PASS**. `backend/tests/marketing` completo: **537 PASS + 1 fallo legacy Reactivation preexistente/no relacionado**, reproducido también sobre el HEAD base M30 `e0de85a4` y con diff vacío en `marketing_routes.py`/`test_marketing_routes.py`; no se corrige dentro de 2C.
+
+Invariantes ACCEPTED:
+
+- sólo evidencia persistida por Suite;
+- cero provider HTTP/capture durante Reporting;
+- cero uso M13 en 2C;
+- cero persistencia/reporting tables nuevas;
+- cero migrations/ORM changes;
+- JSON, XLSX y Angular conservan la misma semántica backend;
+- 2D permanece PENDIENTE;
+- Fase 3 permanece BLOQUEADA.
 
 ## 32. Fase 2D — Acceptance final
 
@@ -2201,10 +2216,7 @@ Sólo después puede comenzar:
 
 PENDIENTE PARA CERRAR FASE 2:
 
-- Campaign BI;
-- Excel;
-- Angular Reporting;
-- acceptance final.
+- 2D — Acceptance final.
 
 POSTERIOR / NO BLOQUEANTE salvo necesidad:
 
@@ -2214,7 +2226,7 @@ POSTERIOR / NO BLOQUEANTE salvo necesidad:
 - normalización DB específica de costos;
 - activación productiva M12.
 
-`FUNNEL_PORTFOLIO` está ACCEPTED como 2B. Historical Targeting transversal también está ACCEPTED; 2C/2D permanecen pendientes antes de habilitar Fase 3.
+`FUNNEL_PORTFOLIO` está ACCEPTED como 2B. Historical Targeting transversal también está ACCEPTED. 2C — Campaign BI / Reporting / Excel está ACCEPTED mediante M26–M31. 2D permanece PENDIENTE y Fase 3 continúa BLOQUEADA.
 
 ## 34. Instrucción de arranque recomendada para una conversación nueva de Fase 2
 
@@ -2231,8 +2243,9 @@ POSTERIOR / NO BLOQUEANTE salvo necesidad:
     Historical Targeting transversal está ACCEPTED mediante M21–M25.
     Reutiliza M13 con INCLUDE/EXCLUDE + ALL/ANY, Preview Detail neutral,
     fingerprint/Freeze y Angular sin romper campañas M14/M15 con history_exclusion.
-    2C — Campaign BI / Reporting / Excel está PENDIENTE.
-    Reporting usa sólo evidencia persistida por Suite y no consulta iVentas.
-    Export Excel es backend-side y Angular no recalcula KPIs.
-    2D sólo pasa cuando 2A + 2B + Historical Targeting + 2C tienen aceptación integral.
+    2C — Campaign BI / Reporting / Excel está ACCEPTED mediante M26–M31.
+    Reporting usa sólo evidencia persistida por Suite, no consulta iVentas y no usa M13.
+    Export Excel es backend-side y Angular no recalcula KPIs contractuales.
+    2D — Acceptance final sigue PENDIENTE.
+    Fase 3 permanece BLOQUEADA hasta que 2D tenga aceptación integral.
     No implementes POST /v2/broadcast ni GraphQL mutations.
