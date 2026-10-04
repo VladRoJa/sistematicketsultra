@@ -5,6 +5,7 @@ import inspect
 from io import BytesIO
 
 from openpyxl import load_workbook
+import pytest
 
 from app.services import marketing_campaign_v2_reporting_excel_service as excel_service
 from app.services.marketing_campaign_v2_reporting_excel_service import (
@@ -703,3 +704,27 @@ def test_excel_service_is_pure_and_has_no_db_reporting_or_provider_dependencies(
         "httpx",
     ):
         assert forbidden not in source
+
+
+@pytest.mark.parametrize("prefix", ["=", "+", "-", "@"])
+def test_formula_injection_sanitizes_campaign_provider_and_provider_campaign_id(prefix):
+    report = _consolidated_report()
+    campaign = report["campaigns"][0]["campaign"]
+    campaign["name"] = f"{prefix}campaign"
+    campaign["provider"] = f"{prefix}provider"
+    campaign["provider_campaign_id"] = f"{prefix}provider-id"
+
+    output, _ = build_campaign_v2_reporting_excel(
+        report_type="CONSOLIDATED",
+        report=report,
+        evolution=_evolution(),
+        scope={"is_global": False, "allowed_sucursal_keys": ["BRANCH A"]},
+        generated_at=GENERATED_AT,
+    )
+    sheet = _load(output)["Campañas"]
+    headers = _header_map(sheet)
+
+    for column in ("name", "provider", "provider_campaign_id"):
+        cell = sheet.cell(2, headers[column])
+        assert cell.data_type != "f"
+        assert cell.value == f"'{prefix}" + campaign[column][1:]

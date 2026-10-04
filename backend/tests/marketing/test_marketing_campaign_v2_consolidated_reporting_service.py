@@ -19,6 +19,7 @@ from app.models.marketing import (
 from app.services.marketing_campaign_v2_reporting_service import (
     MarketingCampaignV2ReportingValidationError,
     build_campaign_v2_consolidated_report,
+    build_campaign_v2_individual_report,
     build_campaign_v2_reporting_export_dataset,
 )
 from app.services.marketing_campaign_v2_reporting_excel_service import (
@@ -905,3 +906,211 @@ def test_json_and_xlsx_use_the_same_selected_campaigns_and_summary(session):
         summary_values["status_coverage_rate"]
         == json_report["summary"]["coverage"]["status_coverage_rate"]
     )
+
+
+def test_phase2c_reporting_paths_are_read_only_and_offline(session):
+    tracked_models = (
+        MarketingCampaignV2ORM,
+        MarketingCampaignV2RecipientORM,
+        MarketingCampaignV2RecipientEvidenceORM,
+        MarketingCampaignV2ProviderStatsSnapshotORM,
+        MarketingCampaignV2ProviderRecipientObservationORM,
+    )
+    before = {
+        model.__name__: session.query(model).count()
+        for model in tracked_models
+    }
+
+    with (
+        patch(
+            "app.services.marketing_campaign_v2_provider_stats_service."
+            "get_campaign_v2_provider_stats",
+            side_effect=AssertionError("2C must stay offline"),
+        ),
+        patch(
+            "app.services.marketing_campaign_v2_provider_stats_snapshot_service."
+            "capture_campaign_v2_provider_stats_snapshot",
+            side_effect=AssertionError("2C must not capture"),
+        ),
+        patch(
+            "app.services.marketing_campaign_v2_provider_history_service."
+            "get_provider_history_for_phones",
+            side_effect=AssertionError("2C must not use M13"),
+        ),
+    ):
+        individual = build_campaign_v2_individual_report(
+            campaign_id=1,
+            allowed_sucursal_keys=("BRANCH A",),
+            session=session,
+        )
+        consolidated = build_campaign_v2_consolidated_report(
+            allowed_sucursal_keys=("BRANCH A",),
+            filters={"purpose": "REACTIVATION"},
+            session=session,
+        )
+        dataset = build_campaign_v2_reporting_export_dataset(
+            allowed_sucursal_keys=("BRANCH A",),
+            filters={"purpose": "REACTIVATION"},
+            session=session,
+        )
+        consolidated_output, _ = build_campaign_v2_reporting_excel(
+            report_type=dataset["report_type"],
+            report=dataset["report"],
+            evolution=dataset["evolution"],
+            scope=dataset["scope"],
+            generated_at=BASE,
+        )
+        individual_evolution = [
+            {
+                "campaign_id": individual["campaign"]["id"],
+                "campaign_name": individual["campaign"]["name"],
+                **row,
+            }
+            for row in individual["evolution"]
+        ]
+        individual_output, _ = build_campaign_v2_reporting_excel(
+            report_type="INDIVIDUAL",
+            report=individual,
+            evolution=individual_evolution,
+            scope=individual["dimensions"]["scope"],
+            generated_at=BASE,
+        )
+
+    assert consolidated["summary"]["campaign_count"] == 1
+    assert load_workbook(
+        BytesIO(consolidated_output.getvalue()),
+        data_only=False,
+    ).sheetnames == ["Resumen", "Campañas", "KPIs", "Evolución", "Metadata"]
+    assert load_workbook(
+        BytesIO(individual_output.getvalue()),
+        data_only=False,
+    ).sheetnames == ["Resumen", "Campañas", "KPIs", "Evolución", "Metadata"]
+
+    after = {
+        model.__name__: session.query(model).count()
+        for model in tracked_models
+    }
+    assert after == before
+    assert not session.new
+    assert not session.dirty
+    assert not session.deleted
+
+
+def test_individual_json_and_xlsx_have_phase2c_parity(session):
+    report = build_campaign_v2_individual_report(
+        campaign_id=1,
+        allowed_sucursal_keys=("BRANCH A",),
+        session=session,
+    )
+    evolution = [
+        {
+            "campaign_id": report["campaign"]["id"],
+            "campaign_name": report["campaign"]["name"],
+            **row,
+        }
+        for row in report["evolution"]
+    ]
+    output, _ = build_campaign_v2_reporting_excel(
+        report_type="INDIVIDUAL",
+        report=report,
+        evolution=evolution,
+        scope=report["dimensions"]["scope"],
+        generated_at=BASE,
+    )
+    workbook = load_workbook(BytesIO(output.getvalue()), data_only=False)
+
+    campaigns = workbook["Campañas"]
+    headers = {
+        campaigns.cell(1, col).value: col
+        for col in range(1, campaigns.max_column + 1)
+    }
+    row = {
+        key: campaigns.cell(2, column).value
+        for key, column in headers.items()
+    }
+
+    assert row["campaign_id"] == report["campaign"]["id"]
+    assert row["name"] == report["campaign"]["name"]
+    assert row["purpose"] == report["campaign"]["purpose"]
+    assert row["source"] == report["campaign"]["source"]
+    assert row["provider"] == report["campaign"]["provider"]
+    assert row["provider_campaign_id"] == report["campaign"]["provider_campaign_id"]
+    assert row["snapshot_id"] == report["observation"]["snapshot_id"]
+    assert row["latest_observed_at"] == report["observation"]["latest_observed_at"]
+    assert row["analytics_status"] == report["observation"]["analytics_status"]
+    assert row["total_recipients"] == report["audience"]["total_recipients"]
+
+    for metric in (
+        "successful",
+        "failed",
+        "sent",
+        "delivered",
+        "viewed",
+        "reach_count",
+    ):
+        assert row[metric] == report["normalized"][metric]
+    for metric in (
+        "successful_rate",
+        "reach_rate",
+        "read_rate",
+        "failure_rate",
+    ):
+        assert row[metric] == report["rates"][metric]
+    assert (
+        row["matched_recipient_count"]
+        == report["coverage"]["matched_recipient_count"]
+    )
+    assert (
+        row["unmatched_provider_count"]
+        == report["coverage"]["unmatched_provider_count"]
+    )
+    assert (
+        row["frozen_without_status"]
+        == report["coverage"]["frozen_recipient_without_provider_status_count"]
+    )
+    assert (
+        row["status_coverage_rate"]
+        == report["coverage"]["status_coverage_rate"]
+    )
+    assert row["raw_successful"] == report["provider_raw"]["successful"]
+    assert row["raw_failed"] == report["provider_raw"]["failed"]
+    assert (
+        row["button_interaction_recipient_exposures"]
+        == report["interactions"]["unique_button_recipients"]
+    )
+    assert (
+        row["responders_aggregate"]
+        == report["interactions"]["responders_aggregate"]
+    )
+    assert (
+        row["free_text_aggregate"]
+        == report["interactions"]["free_text_aggregate"]
+    )
+    assert row["cost_status"] == report["cost"]["status"]
+    assert row["currency"] is report["cost"]["currency"]
+    assert row["cost_total"] is report["cost"]["total"]
+
+    evolution_sheet = workbook["Evolución"]
+    evolution_headers = {
+        evolution_sheet.cell(1, col).value: col
+        for col in range(1, evolution_sheet.max_column + 1)
+    }
+    workbook_evolution = [
+        (
+            evolution_sheet.cell(r, evolution_headers["snapshot_id"]).value,
+            evolution_sheet.cell(r, evolution_headers["observed_at"]).value,
+            evolution_sheet.cell(
+                r,
+                evolution_headers["normalized_successful"],
+            ).value,
+        )
+        for r in range(2, evolution_sheet.max_row + 1)
+    ]
+    assert workbook_evolution == [
+        (
+            point["snapshot_id"],
+            point["observed_at"],
+            point["normalized"]["successful"],
+        )
+        for point in report["evolution"]
+    ]
