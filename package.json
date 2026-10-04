@@ -22,7 +22,16 @@
     "watch": "ng build --watch --configuration development",
 
 
-    "test": "ng test"
+    "test": "ng test",
+
+
+    "qa:campaign-v2:safe": "playwright test -c qa/campaign-v2-prod/playwright.config.ts",
+
+
+    "qa:campaign-v2:install": "playwright install chromium",
+
+
+    "qa:campaign-v2:auth": "node qa/campaign-v2-prod/capture-auth.mjs"
 
 
   },
@@ -101,6 +110,9 @@
 
 
     "@angular/compiler-cli": "^16.2.0",
+
+
+    "@playwright/test": "^1.55.0",
 
 
     "@types/file-saver": "^2.0.7",
