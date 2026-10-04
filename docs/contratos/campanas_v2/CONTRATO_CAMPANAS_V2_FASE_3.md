@@ -1,12 +1,12 @@
 # Contrato Campañas V2 — Fase 3
 
-Estado: CONTRATO DE ENVÍO; REQUIERE FASE 2 COMPLETAMENTE ACEPTADA
-Dependencia de ejecución: Fase 1 terminada y Fase 2 completamente aceptada, incluyendo `FUNNEL_PORTFOLIO`, Historical Targeting transversal y Campaign BI/Reporting/Excel; este archivo es autosuficiente como contexto.
+Estado: DESBLOQUEADA / PENDIENTE DE IMPLEMENTACIÓN; FASE 2 ACCEPTED MEDIANTE M32
+Dependencia de ejecución: el gate de Fase 2 quedó satisfecho mediante M32. Antes de implementar Fase 3 debe revalidarse que `main` conserve 2A + 2B + Historical Targeting + 2C + 2D ACCEPTED; este archivo es autosuficiente como contexto.
 Objetivo: permitir que Suite Ultra envíe campañas mediante iVentas sin romper la trazabilidad construida previamente.
 
 ## 0. Contexto autosuficiente para una conversación nueva
 
-Este archivo puede entregarse **por sí solo** a una conversación nueva, pero Fase 3 sólo puede comenzar después de comprobar en el repositorio que Fase 2 está completamente aceptada: 2A + 2B + Historical Targeting transversal + 2C cerrados y 2D PASS.
+Este archivo puede entregarse **por sí solo** a una conversación nueva. M32 comprobó en el repositorio que Fase 2 está completamente aceptada: 2A + 2B + Historical Targeting transversal + 2C cerrados y 2D PASS. Por tanto Fase 3 está desbloqueada para iniciar implementación, pero todavía no está implementada.
 
 Contexto fijo:
 
@@ -601,7 +601,7 @@ El retiro debe tener contrato/PR separado.
 
     Estamos implementando únicamente Campañas V2 Fase 3.
     Este archivo es autosuficiente; no asumas contexto de conversaciones anteriores.
-    Confirma con pruebas en el repositorio que Fase 1 y Fase 2 están terminadas.
+    M32 dejó Fase 2 ACCEPTED y Fase 3 desbloqueada; revalida en main que ese gate siga vigente antes de implementar.
     Inspecciona la integración actual y reutiliza normalización,
     branch resolution, permisos, delivery y provider abstraction.
     No recalcules audiencias al enviar.
