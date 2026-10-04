@@ -493,6 +493,7 @@ Toda cita deberá terminar en uno de estos resultados:
 
 - `ATTENDED_PURCHASE_REPORTED`
 - `ATTENDED_NO_PURCHASE`
+- `ATTENDED_COURTESY_PASS`
 - `NO_SHOW`
 - `CANCELLED`
 - `RESCHEDULED`
@@ -501,9 +502,18 @@ Etiquetas:
 
 - Asistió y compró
 - Asistió y no compró
+- Asistió y activó pase de cortesía/recorrido
 - No asistió
 - Cancelada
 - Reagendada
+
+El resultado `ATTENDED_COURTESY_PASS` cierra la cita para conservar
+trazabilidad, pero mantiene el caso en `IN_PROGRESS` para permitir
+seguimiento posterior.
+
+Una coincidencia en Venta Total solo se considera compra canónica cuando
+el importe total de la transacción es mayor a cero. Operaciones con importe
+cero o negativo no deben marcarse como compra validada.
 
 ### 10.1 Reagendado
 

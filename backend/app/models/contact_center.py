@@ -391,6 +391,7 @@ class ContactCenterAppointmentORM(db.Model):
             "outcome IS NULL OR outcome IN ("
             "'ATTENDED_PURCHASE_REPORTED', "
             "'ATTENDED_NO_PURCHASE', "
+            "'ATTENDED_COURTESY_PASS', "
             "'NO_SHOW', "
             "'CANCELLED', "
             "'RESCHEDULED'"

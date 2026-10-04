@@ -25,6 +25,7 @@ export type ContactCenterInteractionOutcome =
 export type ContactCenterAppointmentOutcome =
   | 'ATTENDED_PURCHASE_REPORTED'
   | 'ATTENDED_NO_PURCHASE'
+  | 'ATTENDED_COURTESY_PASS'
   | 'NO_SHOW'
   | 'CANCELLED'
   | 'RESCHEDULED';

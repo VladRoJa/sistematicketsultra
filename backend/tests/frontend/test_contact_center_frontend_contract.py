@@ -356,11 +356,12 @@ def test_contact_center_dialog_allows_recovery_after_no_show():
     dialog_ts = _read(CONTACT_DIALOG_TS)
     dialog_html = _read(CONTACT_DIALOG_HTML)
 
-    assert "get isNoShowFollowUpCase()" in dialog_ts
+    assert "get isAppointmentFollowUpCase()" in dialog_ts
     assert "['IN_PROGRESS', 'FOLLOW_UP'].includes(currentCase.status)" in dialog_ts
     assert "row.status === 'CLOSED'" in dialog_ts
-    assert "row.outcome === 'NO_SHOW'" in dialog_ts
-    assert "|| this.isNoShowFollowUpCase" in dialog_ts
+    assert "['NO_SHOW', 'ATTENDED_COURTESY_PASS'].includes(" in dialog_ts
+    assert "String(row.outcome)" in dialog_ts
+    assert "|| this.isAppointmentFollowUpCase" in dialog_ts
 
     assert "activeCase && canOperateActiveCase" in dialog_html
     assert "Registrar seguimiento" in dialog_html

@@ -914,6 +914,7 @@ export class ContactCenterComponent implements OnInit {
     const labels: Record<string, string> = {
       ATTENDED_PURCHASE_REPORTED: 'Asistió y compró',
       ATTENDED_NO_PURCHASE: 'Asistió sin compra',
+      ATTENDED_COURTESY_PASS: 'Asistió y activó pase de cortesía/recorrido',
       NO_SHOW: 'No asistió',
       CANCELLED: 'Cancelada',
       RESCHEDULED: 'Reagendada',
@@ -1191,6 +1192,7 @@ export class ContactCenterComponent implements OnInit {
     result: {
       outcome: 'ATTENDED_PURCHASE_REPORTED'
         | 'ATTENDED_NO_PURCHASE'
+        | 'ATTENDED_COURTESY_PASS'
         | 'NO_SHOW'
         | 'CANCELLED';
       notes?: string | null;
