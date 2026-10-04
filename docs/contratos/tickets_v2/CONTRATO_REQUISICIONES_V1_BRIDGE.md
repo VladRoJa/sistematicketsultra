@@ -456,8 +456,10 @@ Mantenimiento no adquiere acceso operativo por ser futuro owner.
 
 Solo:
 
-- GERENCIA DEPORTIVA;
-- administradores explícitamente autorizados.
+- rol GERENCIA DEPORTIVA;
+- rol ADMINISTRADOR.
+
+ADMICORP debe quedar cubierto por esta regla a través de su rol ADMINISTRADOR; no se implementará una excepción por username.
 
 No:
 
@@ -597,7 +599,7 @@ Mostrar:
 - estado;
 - historial.
 
-Gerencia Deportiva en PENDING_REVIEW:
+Gerencia Deportiva o ADMINISTRADOR en PENDING_REVIEW:
 
     [ Aprobar ]
     [ Solicitar información ]
@@ -916,20 +918,21 @@ Backend:
 6. evento CREATED;
 7. Mantenimiento no recibe routing inicial;
 8. Gerencia Deportiva puede aprobar;
-9. usuario no autorizado no aprueba;
-10. aprobación guarda actor/fecha/comentario;
-11. aprobación deja IN_QUOTATION;
-12. handoff a Mantenimiento una sola vez;
-13. rechazo exige motivo;
-14. rechazo no notifica Mantenimiento;
-15. request-info exige comentario;
-16. resubmit desde NEEDS_INFO;
-17. transición inválida rechazada;
-18. concurrencia evita doble decisión;
-19. scope de lectura;
-20. LECTOR_GLOBAL no escribe;
-21. adjunto privado respeta scope;
-22. Ticket V1 normal continúa funcionando.
+9. ADMINISTRADOR puede aprobar; smoke explícito con ADMICORP;
+10. usuario no autorizado no aprueba;
+11. aprobación guarda actor/fecha/comentario;
+12. aprobación deja IN_QUOTATION;
+13. handoff a Mantenimiento una sola vez;
+14. rechazo exige motivo;
+15. rechazo no notifica Mantenimiento;
+16. request-info exige comentario;
+17. resubmit desde NEEDS_INFO;
+18. transición inválida rechazada;
+19. concurrencia evita doble decisión;
+20. scope de lectura;
+21. LECTOR_GLOBAL no escribe;
+22. adjunto privado respeta scope;
+23. Ticket V1 normal continúa funcionando.
 
 Frontend:
 
@@ -1097,7 +1100,7 @@ R1. Una requisición no es un Ticket V1.
 
 R2. Toda requisición nace PENDING_REVIEW.
 
-R3. Gerencia Deportiva es reviewer funcional inicial.
+R3. Gerencia Deportiva y ADMINISTRADOR son reviewers autorizados; ADMICORP queda cubierto por su rol ADMINISTRADOR.
 
 R4. Mantenimiento no recibe requisición antes de aprobación.
 
