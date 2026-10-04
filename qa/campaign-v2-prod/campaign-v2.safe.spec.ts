@@ -74,6 +74,14 @@ async function openCampaignV2(page: Page): Promise<void> {
   if (!page.url().includes('/#/marketing/campaigns-v2')) {
     await page.goto('/#/marketing/campaigns-v2');
   }
+
+  const reauth = page.getByRole('heading', { name: 'Reautenticación' });
+  if (await reauth.isVisible({ timeout: 1_500 }).catch(() => false)) {
+    throw new Error(
+      'QA session requires reauthentication. Run "npm run qa:campaign-v2:auth" again before continuing.',
+    );
+  }
+
   await expect(page.getByRole('heading', { name: 'Campañas V2' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Nueva campaña' })).toBeVisible();
 }
@@ -254,6 +262,66 @@ test('SAFE F6: Historical Targeting EXCLUDE + ANY', async ({ page }) => {
 
   await runPreview(page);
   await screenshot(page, 'f6-historical-exclude-any.png');
+});
+
+test('SAFE F7: campaña congelada, Reporting individual y consolidado', async ({ page }) => {
+  const qaCampaignName = 'QA V2 - PROD SMOKE - VENCIDOS';
+  await openCampaignV2(page);
+
+  const row = page.getByRole('row').filter({ hasText: qaCampaignName }).first();
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  const frozenCountText = await row.locator('td').nth(4).textContent();
+  const frozenCount = Number((frozenCountText || '').replace(/[^0-9]/g, ''));
+  expect(frozenCount).toBeGreaterThan(0);
+
+  await row.getByRole('button', { name: 'Ver detalle' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('heading', { name: qaCampaignName })).toBeVisible();
+
+  await dialog.getByRole('button', { name: 'Cargar resultados' }).click();
+  await expect(
+    dialog.getByText('Aún no hay observaciones persistidas para esta campaña.'),
+  ).toBeVisible({ timeout: 20_000 });
+  await expect(dialog.getByText('Sin observación')).toBeVisible();
+  await expect(
+    dialog.getByRole('heading', { name: 'Destinatarios congelados' }),
+  ).toBeVisible();
+
+  const individualDownloadPromise = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Exportar reporte' }).click();
+  const individualDownload = await individualDownloadPromise;
+  const individualPath = await individualDownload.path();
+  expect(individualPath).toBeTruthy();
+
+  const individualWorkbook = new ExcelJS.Workbook();
+  await individualWorkbook.xlsx.readFile(individualPath!);
+  expect(individualWorkbook.worksheets.map(sheet => sheet.name)).toEqual(EXPECTED_SHEETS);
+
+  await screenshot(page, 'f7-individual-report.png');
+  await dialog.getByRole('button', { name: 'Cerrar' }).click();
+
+  const reporting = page.getByRole('region', { name: 'Reporting Campaign V2' });
+  const snapshotField = reporting
+    .locator('mat-form-field')
+    .filter({ hasText: 'Estado de observación' });
+  await snapshotField.locator('mat-select').click();
+  await page.getByRole('option', { name: 'Sin observación' }).click();
+
+  await reporting.getByRole('button', { name: 'Cargar reporte' }).click();
+  await expect(reporting.getByText(qaCampaignName).first()).toBeVisible({ timeout: 20_000 });
+  await expect(reporting.getByText('Exposiciones de destinatarios')).toBeVisible();
+
+  const consolidatedDownloadPromise = page.waitForEvent('download');
+  await reporting.getByRole('button', { name: 'Exportar Excel' }).click();
+  const consolidatedDownload = await consolidatedDownloadPromise;
+  const consolidatedPath = await consolidatedDownload.path();
+  expect(consolidatedPath).toBeTruthy();
+
+  const consolidatedWorkbook = new ExcelJS.Workbook();
+  await consolidatedWorkbook.xlsx.readFile(consolidatedPath!);
+  expect(consolidatedWorkbook.worksheets.map(sheet => sheet.name)).toEqual(EXPECTED_SHEETS);
+
+  await screenshot(page, 'f7-consolidated-report.png');
 });
 
 test('SAFE F8: Reporting consolidado, filtro y Excel', async ({ page }) => {

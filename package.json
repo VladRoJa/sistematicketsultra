@@ -25,13 +25,16 @@
     "test": "ng test",
 
 
-    "qa:campaign-v2:safe": "playwright test -c qa/campaign-v2-prod/playwright.config.ts",
+    "qa:campaign-v2:safe": "playwright test -c qa/campaign-v2-prod/playwright.config.ts campaign-v2.safe.spec.ts",
 
 
     "qa:campaign-v2:install": "playwright install chromium",
 
 
-    "qa:campaign-v2:auth": "node qa/campaign-v2-prod/capture-auth.mjs"
+    "qa:campaign-v2:auth": "node qa/campaign-v2-prod/capture-auth.mjs",
+
+
+    "qa:campaign-v2:write": "playwright test -c qa/campaign-v2-prod/playwright.config.ts campaign-v2.write-qa.spec.ts"
 
 
   },

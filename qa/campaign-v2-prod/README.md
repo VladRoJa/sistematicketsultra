@@ -34,6 +34,8 @@ artifacts/campaign-v2-prod/auth.json
 
 `artifacts/` is ignored by Git. Treat that file as sensitive because it contains an authenticated browser session.
 
+If Suite shows the `Reautenticación` dialog during a long smoke run, capture a fresh session with `npm run qa:campaign-v2:auth` and rerun. The suite reports this state explicitly instead of treating it as a Campaign V2 failure.
+
 Alternative: provide these environment variables at runtime:
 
 ```text
@@ -53,11 +55,22 @@ SUITE_ULTRA_QA_FUNNEL_MONTH=YYYY-MM
 Without explicit expired-member dates, SAFE smoke uses the 90-day period ending yesterday.
 Without an explicit Funnel month, it uses the previous calendar month and waits for Suite to resolve a complete cutoff.
 
-## Run
+## Run SAFE
 
 ```bash
 npm run qa:campaign-v2:safe
 ```
+
+## Run WRITE_QA deliberately
+
+WRITE_QA is separate from SAFE and permits exactly one Campaign V2 Freeze for the fixed QA campaign name.
+
+```bat
+set SUITE_ULTRA_QA_ALLOW_WRITE=FREEZE_ONCE
+npm run qa:campaign-v2:write
+```
+
+Do not add this flag to shell profiles, CI defaults, or committed files.
 
 Artifacts:
 
@@ -77,6 +90,7 @@ artifacts/campaign-v2-prod/
 - F4: Funnel Preview with a complete cutoff, including buyer/active-member suppression metrics.
 - F5: Historical Targeting INCLUDE + ALL with VIEWED + button interaction.
 - F6: Historical Targeting EXCLUDE + ANY with VIEWED + FAILED.
+- F7: Existing frozen QA campaign detail, individual Reporting, individual Excel, consolidated Reporting, and consolidated Excel.
 - F8: Consolidated Reporting, WITHOUT_SNAPSHOT filter, Excel download and five-sheet validation; empty reporting is a valid state.
 
-The suite intentionally does not implement WRITE_QA/Freeze yet. Individual Reporting and non-empty consolidated KPI parity require at least one controlled frozen QA campaign.
+WRITE_QA lives in a separate spec and is guarded by `SUITE_ULTRA_QA_ALLOW_WRITE=FREEZE_ONCE`. It only permits the exact QA Freeze request plus read-only Campaign V2 traffic; unexpected mutations are blocked.
