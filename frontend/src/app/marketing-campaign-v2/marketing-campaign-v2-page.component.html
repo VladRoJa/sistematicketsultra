@@ -61,15 +61,16 @@
               </mat-select>
             </mat-form-field>
 
-            <mat-form-field *ngIf="showsExpirationRange" appearance="fill">
-              <mat-label>Vencimiento desde</mat-label>
-              <input matInput type="date" [formControl]="expirationDateFrom">
-            </mat-form-field>
-
-            <mat-form-field *ngIf="showsExpirationRange" appearance="fill">
-              <mat-label>Vencimiento hasta</mat-label>
-              <input matInput type="date" [formControl]="expirationDateTo">
-            </mat-form-field>
+            <app-suite-date-range-selector
+              *ngIf="showsExpirationRange"
+              class="expiration-range-selector"
+              [dateFrom]="expirationDateFrom.value"
+              [dateTo]="expirationDateTo.value"
+              label="Periodo de vencimiento"
+              hint="Selecciona el rango de vencimiento de los socios."
+              (dateFromChange)="onExpirationDateFromChange($event)"
+              (dateToChange)="onExpirationDateToChange($event)">
+            </app-suite-date-range-selector>
 
             <mat-form-field *ngIf="showsFunnelFilters" appearance="fill">
               <mat-label>Mes Funnel</mat-label>
