@@ -143,6 +143,19 @@ from .attendance import (
     WarehouseAttendanceVisitORM,
 )
 
+from .purchase_requisition import (
+    PurchaseRequisitionAttachmentORM,
+    PurchaseRequisitionCategory,
+    PurchaseRequisitionEventORM,
+    PurchaseRequisitionEventType,
+    PurchaseRequisitionItemORM,
+    PurchaseRequisitionNotificationORM,
+    PurchaseRequisitionORM,
+    PurchaseRequisitionPriority,
+    PurchaseRequisitionReason,
+    PurchaseRequisitionStatus,
+)
+
 # -------------------------------------------------------------------------------
 # EXPORTACIONES: Control de qué modelos estarán disponibles al importar app.models
 # -------------------------------------------------------------------------------
@@ -258,4 +271,14 @@ __all__ = [
     "WarehouseAttendanceRejectionORM",
     "WarehouseAttendanceRunORM",
     "WarehouseAttendanceVisitORM",
+    "PurchaseRequisitionAttachmentORM",
+    "PurchaseRequisitionCategory",
+    "PurchaseRequisitionEventORM",
+    "PurchaseRequisitionEventType",
+    "PurchaseRequisitionItemORM",
+    "PurchaseRequisitionNotificationORM",
+    "PurchaseRequisitionORM",
+    "PurchaseRequisitionPriority",
+    "PurchaseRequisitionReason",
+    "PurchaseRequisitionStatus",
 ]
