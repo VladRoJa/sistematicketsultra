@@ -82,6 +82,29 @@
 
           </div>
 
+          <section
+            *ngIf="iventasCurrentStatusOptions.length"
+            class="iventas-current-status-builder"
+            aria-labelledby="campaign-v2-iventas-current-status"
+          >
+            <div class="iventas-current-status-heading">
+              <div>
+                <strong id="campaign-v2-iventas-current-status">Estado actual en iVentas</strong>
+                <span>Consulta el último estado conocido del número en el sync canónico más reciente.</span>
+              </div>
+            </div>
+            <div class="iventas-current-status-options">
+              <mat-checkbox
+                *ngFor="let status of iventasCurrentStatusOptions"
+                [checked]="isIventasCurrentStatusSelected(status)"
+                (change)="setIventasCurrentStatusSelected(status, $event)"
+              >{{ iventasCurrentStatusLabel(status) }}</mat-checkbox>
+            </div>
+            <p class="helper-text">
+              Sin selección no aplica filtro. Si marcas varios, se incluyen contactos que coincidan con cualquiera.
+            </p>
+          </section>
+
           <ng-container *ngIf="showsAudienceFamilies">
             <div class="families-header">
               <div>

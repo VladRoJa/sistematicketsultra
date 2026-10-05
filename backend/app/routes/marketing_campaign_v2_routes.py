@@ -117,6 +117,9 @@ def campaign_v2_options_endpoint():
                     "UNCLASSIFIED",
                 ],
                 "purposes": list(CAMPAIGN_V2_PURPOSES),
+                "iventas_current_statuses": list(
+                    audience.IVENTAS_CURRENT_STATUSES
+                ),
                 "historical_targeting": {
                     "modes": list(audience.HISTORICAL_TARGETING_MODES),
                     "matches": list(audience.HISTORICAL_TARGETING_MATCHES),
@@ -162,6 +165,7 @@ def campaign_v2_preview_endpoint():
                 "expiration_date_to",
                 "history_exclusion",
                 "historical_targeting",
+                "iventas_current_statuses",
                 "funnel_month",
                 "funnel_cutoff_date",
             }
@@ -175,6 +179,7 @@ def campaign_v2_preview_endpoint():
             expiration_date_to=payload.get("expiration_date_to"),
             history_exclusion=payload.get("history_exclusion"),
             historical_targeting=payload.get("historical_targeting"),
+            iventas_current_statuses=payload.get("iventas_current_statuses"),
             funnel_month=payload.get("funnel_month"),
             funnel_cutoff_date=payload.get("funnel_cutoff_date"),
             marketing_access=access,
@@ -205,6 +210,7 @@ def campaign_v2_preview_detail_endpoint():
                 "page_size",
                 "history_exclusion",
                 "historical_targeting",
+                "iventas_current_statuses",
                 "funnel_month",
                 "funnel_cutoff_date",
             }
@@ -222,6 +228,7 @@ def campaign_v2_preview_detail_endpoint():
             expiration_date_to=payload.get("expiration_date_to"),
             history_exclusion=payload.get("history_exclusion"),
             historical_targeting=payload.get("historical_targeting"),
+            iventas_current_statuses=payload.get("iventas_current_statuses"),
             funnel_month=payload.get("funnel_month"),
             funnel_cutoff_date=payload.get("funnel_cutoff_date"),
             marketing_access=access,
@@ -252,6 +259,7 @@ def freeze_campaign_v2_endpoint():
                 "expiration_date_to",
                 "history_exclusion",
                 "historical_targeting",
+                "iventas_current_statuses",
                 "funnel_month",
                 "funnel_cutoff_date",
                 "expected_preview_fingerprint",
@@ -270,6 +278,7 @@ def freeze_campaign_v2_endpoint():
             expiration_date_to=payload.get("expiration_date_to"),
             history_exclusion=payload.get("history_exclusion"),
             historical_targeting=payload.get("historical_targeting"),
+            iventas_current_statuses=payload.get("iventas_current_statuses"),
             funnel_month=payload.get("funnel_month"),
             funnel_cutoff_date=payload.get("funnel_cutoff_date"),
             marketing_access=access,

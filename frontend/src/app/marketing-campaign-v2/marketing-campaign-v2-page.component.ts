@@ -23,6 +23,7 @@ import {
   campaignV2HistoricalTargetingModeLabel,
   campaignV2HistoryDeliveryLabel,
   campaignV2HistoryOutcomeLabel,
+  campaignV2IventasCurrentStatusLabel,
   historicalTargetingHasConditions,
   campaignV2MetricBucket,
   campaignV2ReportingAudienceFamilyLabel,
@@ -37,6 +38,7 @@ import {
   parseCampaignV2LookbackDays,
   selectAllCampaignV2Families,
   toggleCampaignV2Family,
+  toggleCampaignV2IventasCurrentStatus,
   toggleCampaignV2HistoryDeliveryBucket,
   toggleCampaignV2HistoryOutcome,
 } from './marketing-campaign-v2.logic';
@@ -50,6 +52,7 @@ import {
   CampaignV2HistoricalTargetingMode,
   CampaignV2HistoricalTargetingWindowMode,
   CampaignV2HistoryOutcome,
+  CampaignV2IventasCurrentStatus,
   CampaignV2ObservedFamily,
   CampaignV2OptionsResponse,
   CampaignV2PreviewBucket,
@@ -143,8 +146,13 @@ export class MarketingCampaignV2PageComponent implements OnInit {
 
   options: CampaignV2OptionsResponse | null = null;
   selectedFamilies: CampaignV2AudienceFamily[] = [];
+  selectedIventasCurrentStatuses: CampaignV2IventasCurrentStatus[] = [];
   selectedHistoryDeliveryBuckets: CampaignV2HistoryDeliveryBucket[] = [];
   selectedHistoryOutcomes: CampaignV2HistoryOutcome[] = [];
+  get iventasCurrentStatusOptions(): CampaignV2IventasCurrentStatus[] {
+    return this.options?.iventas_current_statuses ?? [];
+  }
+
   get historyDeliveryOptions(): CampaignV2HistoryDeliveryBucket[] {
     return this.options?.historical_targeting?.delivery_buckets ?? [];
   }
@@ -485,6 +493,26 @@ export class MarketingCampaignV2PageComponent implements OnInit {
 
   isFamilySelected(family: CampaignV2AudienceFamily): boolean {
     return this.selectedFamilies.includes(family);
+  }
+
+  setIventasCurrentStatusSelected(
+    status: CampaignV2IventasCurrentStatus,
+    change: MatCheckboxChange,
+  ): void {
+    this.selectedIventasCurrentStatuses = toggleCampaignV2IventasCurrentStatus(
+      this.selectedIventasCurrentStatuses,
+      status,
+      change.checked,
+    );
+    this.invalidatePreview();
+  }
+
+  isIventasCurrentStatusSelected(status: CampaignV2IventasCurrentStatus): boolean {
+    return this.selectedIventasCurrentStatuses.includes(status);
+  }
+
+  iventasCurrentStatusLabel(status: CampaignV2IventasCurrentStatus): string {
+    return campaignV2IventasCurrentStatusLabel(status);
   }
 
   setHistoryDeliverySelected(
@@ -1060,6 +1088,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       expirationDateTo: this.expirationDateTo.value,
       funnelMonth: this.funnelMonth.value,
       funnelCutoffDate: this.funnelCutoffDate.value,
+      iventasCurrentStatuses: this.selectedIventasCurrentStatuses,
       historyTargetingEnabled: this.historyTargetingEnabled.value,
       historyMode: this.historyMode.value,
       historyMatch: this.historyMatch.value,
@@ -1085,6 +1114,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     this.funnelMonth.setValue('', { emitEvent: false });
     this.funnelCutoffDate.setValue('', { emitEvent: false });
     this.funnelCutoffDates = [];
+    this.selectedIventasCurrentStatuses = [];
     this.historyTargetingEnabled.setValue(false, { emitEvent: false });
     this.historyMode.setValue('EXCLUDE', { emitEvent: false });
     this.historyMatch.setValue('ANY', { emitEvent: false });
@@ -1116,6 +1146,10 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     }
     this.selectedFamilies = this.selectedFamilies.filter(value =>
       options.selectable_audience_families.includes(value),
+    );
+    const iventasOptions = options.iventas_current_statuses ?? [];
+    this.selectedIventasCurrentStatuses = this.selectedIventasCurrentStatuses.filter(
+      value => iventasOptions.includes(value),
     );
 
     const historyOptions = options.historical_targeting;

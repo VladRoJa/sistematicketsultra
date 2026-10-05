@@ -38,6 +38,11 @@ dl { margin:0; }.metadata-panel dl div { display:grid; grid-template-columns:170
 .metric-actions { display:flex; align-items:center; gap:4px; margin-top:4px; flex-wrap:wrap; }
 .metric-actions button { min-width:0; font-size:10px; line-height:28px; }
 
+.iventas-current-status-builder { margin:12px 0 14px; padding:12px; border:1px solid #bfdbfe; border-radius:9px; background:#f8fbff; }
+.iventas-current-status-heading strong,.iventas-current-status-heading span { display:block; }
+.iventas-current-status-heading span { margin-top:3px; color:#64748b; font-size:11px; }
+.iventas-current-status-options { display:flex; flex-wrap:wrap; gap:4px 18px; margin-top:10px; }
+
 .history-builder { margin:12px 0 14px; padding:12px; border:1px solid #e2e8f0; border-radius:9px; background:#f8fafc; }
 .history-builder-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; }
 .history-builder-heading strong,.history-builder-heading span { display:block; }

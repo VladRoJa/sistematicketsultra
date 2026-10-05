@@ -6,6 +6,7 @@ import {
   CampaignV2HistoryDiagnostics,
   CampaignV2HistoryExclusion,
   CampaignV2HistoricalTargeting,
+  CampaignV2IventasCurrentStatus,
   CampaignV2HistoricalTargetingMatch,
   CampaignV2HistoricalTargetingMode,
   CampaignV2HistoricalTargetingWindowMode,
@@ -26,6 +27,7 @@ export interface CampaignV2AudienceState {
   expirationDateTo: string;
   funnelMonth?: string;
   funnelCutoffDate?: string;
+  iventasCurrentStatuses?: CampaignV2IventasCurrentStatus[];
   historyTargetingEnabled?: boolean;
   historyMode?: CampaignV2HistoricalTargetingMode;
   historyMatch?: CampaignV2HistoricalTargetingMatch;
@@ -43,6 +45,7 @@ export type CampaignV2AudienceField =
   | 'expiration_date_to'
   | 'funnel_month'
   | 'funnel_cutoff_date'
+  | 'iventas_current_statuses'
   | 'history_targeting_enabled'
   | 'history_mode'
   | 'history_match'
@@ -116,6 +119,9 @@ export function buildCampaignV2AudienceRequest(
   }
   if (campaignV2FilterApplies(options, state.source, 'funnel_cutoff_date')) {
     base.funnel_cutoff_date = state.funnelCutoffDate?.trim();
+  }
+  if ((state.iventasCurrentStatuses ?? []).length) {
+    base.iventas_current_statuses = [...(state.iventasCurrentStatuses ?? [])];
   }
 
   const historicalTargeting = buildCampaignV2HistoricalTargeting(state);
@@ -243,6 +249,36 @@ export function selectAllCampaignV2Families(
   return [...available];
 }
 
+export function toggleCampaignV2IventasCurrentStatus(
+  selected: CampaignV2IventasCurrentStatus[],
+  status: CampaignV2IventasCurrentStatus,
+  checked: boolean,
+): CampaignV2IventasCurrentStatus[] {
+  const order: CampaignV2IventasCurrentStatus[] = [
+    'SENT',
+    'DELIVERED',
+    'VIEWED',
+    'FAILED',
+    'NO_DATA',
+  ];
+  const next = new Set(selected);
+  checked ? next.add(status) : next.delete(status);
+  return order.filter(value => next.has(value));
+}
+
+export function campaignV2IventasCurrentStatusLabel(
+  status: CampaignV2IventasCurrentStatus,
+): string {
+  const labels: Record<CampaignV2IventasCurrentStatus, string> = {
+    SENT: 'Enviado',
+    DELIVERED: 'Entregado',
+    VIEWED: 'Visto',
+    FAILED: 'Fallido',
+    NO_DATA: 'Sin dato',
+  };
+  return labels[status];
+}
+
 export function toggleCampaignV2HistoryDeliveryBucket(
   selected: CampaignV2HistoryDeliveryBucket[],
   bucket: CampaignV2HistoryDeliveryBucket,
@@ -273,6 +309,7 @@ export function campaignV2FieldInvalidatesPreview(field: CampaignV2AudienceField
     'expiration_date_to',
     'funnel_month',
     'funnel_cutoff_date',
+    'iventas_current_statuses',
     'history_targeting_enabled',
     'history_mode',
     'history_match',
