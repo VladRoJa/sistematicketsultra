@@ -271,7 +271,7 @@ export function campaignV2IventasCurrentStatusLabel(
 ): string {
   const labels: Record<CampaignV2IventasCurrentStatus, string> = {
     SENT: 'Enviado',
-    DELIVERED: 'Entregado',
+    DELIVERED: 'Entregado, no visto',
     VIEWED: 'Visto',
     FAILED: 'Fallido',
     NO_DATA: 'Sin dato',
