@@ -176,6 +176,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   loadingReporting = false;
   exportingReporting = false;
   accessDenied = false;
+  lastFreezeCompleted = false;
   error = '';
   success = '';
   reportingError = '';
@@ -697,6 +698,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
           this.creating = false;
           this.success = `Campaña "${result.name}" creada con ${result.recipient_count} destinatarios.`;
           this.resetBuilderAfterFreeze();
+          this.lastFreezeCompleted = true;
           this.loadCampaigns(1);
         },
         error: (error: HttpErrorResponse) => {
@@ -1031,6 +1033,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   private invalidatePreview(): void {
     this.preview = null;
     this.previewRequest = null;
+    this.lastFreezeCompleted = false;
   }
 
   private resetBuilderAfterFreeze(): void {

@@ -22,6 +22,8 @@ dt { color:#64748b; font-size:11px; } dd { margin:0; font-size:12px; overflow-wr
 .recipients-section { margin-top:18px; }
 .section-heading { display:flex; justify-content:space-between; align-items:end; gap:12px; }
 .section-heading h3,.section-heading p { margin:0; }.section-heading p,.loading-inline,.muted { color:#64748b; font-size:12px; }
+.recipient-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.delivery-feedback { margin-top:10px; margin-bottom:0; }
 .table-wrap { overflow:auto; margin-top:10px; border:1px solid #e2e8f0; border-radius:10px; }
 table { width:100%; border-collapse:collapse; }
 th,td { padding:8px 9px; border-bottom:1px solid #e2e8f0; white-space:nowrap; text-align:left; font-size:12px; }

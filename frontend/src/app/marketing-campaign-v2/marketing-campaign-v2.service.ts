@@ -74,6 +74,13 @@ export class MarketingCampaignV2Service {
     return this.http.get<CampaignV2CampaignDetail>(`${this.apiUrl}/${campaignId}`);
   }
 
+  exportCampaignDeliveryPackage(campaignId: number): Observable<Blob> {
+    return this.http.get(
+      `${this.apiUrl}/${campaignId}/export-package`,
+      { responseType: 'blob' },
+    );
+  }
+
   listRecipients(
     campaignId: number,
     page: number,
