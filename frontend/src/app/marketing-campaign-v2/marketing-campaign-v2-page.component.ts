@@ -104,6 +104,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   readonly expirationDateTo = new FormControl('', { nonNullable: true });
   readonly funnelMonth = new FormControl('', { nonNullable: true });
   readonly funnelCutoffDate = new FormControl('', { nonNullable: true });
+  readonly funnelMonthOptions = this.buildFunnelMonthOptions();
   readonly historyTargetingEnabled = new FormControl(false, { nonNullable: true });
   readonly historyMode = new FormControl<CampaignV2HistoricalTargetingMode>('EXCLUDE', {
     nonNullable: true,
@@ -304,6 +305,46 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     return this.funnelCutoffPolicy === 'EXACT_COMPLETE'
       ? 'Sólo se muestran cortes completos y alineados por el Funnel.'
       : 'El backend valida el corte disponible para esta fuente.';
+  }
+
+  formatFunnelCutoffDate(value: string): string {
+    const [year, month, day] = value.split('-').map(Number);
+    if (!year || !month || !day) {
+      return value;
+    }
+    return new Intl.DateTimeFormat('es-MX', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }).format(new Date(year, month - 1, day));
+  }
+
+  private buildFunnelMonthOptions(): Array<{ value: string; label: string }> {
+    const firstMonth = new Date(2026, 0, 1);
+    const currentMonth = new Date();
+    const formatter = new Intl.DateTimeFormat('es-MX', {
+      month: 'long',
+      year: 'numeric',
+    });
+    const options: Array<{ value: string; label: string }> = [];
+    const cursor = new Date(
+      currentMonth.getFullYear(),
+      currentMonth.getMonth(),
+      1,
+    );
+
+    while (cursor >= firstMonth) {
+      const year = cursor.getFullYear();
+      const month = String(cursor.getMonth() + 1).padStart(2, '0');
+      const formatted = formatter.format(cursor);
+      options.push({
+        value: `${year}-${month}`,
+        label: formatted.charAt(0).toUpperCase() + formatted.slice(1),
+      });
+      cursor.setMonth(cursor.getMonth() - 1);
+    }
+
+    return options;
   }
 
   get canReviewAudience(): boolean {
