@@ -235,6 +235,7 @@ class TestMarketingCampaignV2Routes:
             ("post", "/api/marketing/campaigns-v2/1/provider-stats/snapshots"),
             ("get", "/api/marketing/campaigns-v2/1/provider-stats/snapshots"),
             ("get", "/api/marketing/campaigns-v2/1/provider-stats/snapshots/latest"),
+            ("get", "/api/marketing/campaigns-v2/1/export-package"),
             ("get", "/api/marketing/campaigns-v2/1/recipients"),
             ("get", "/api/marketing/campaigns-v2/1/recipients/2"),
             ("patch", "/api/marketing/campaigns-v2/1/purpose"),
@@ -246,6 +247,60 @@ class TestMarketingCampaignV2Routes:
                 json={} if method in {"post", "put", "patch"} else None,
             )
             assert response.status_code == 401
+
+    def test_delivery_export_package_uses_backend_scope_and_zip_mimetype(self):
+        with self._auth(), patch(
+            "app.routes.marketing_campaign_v2_routes._campaign_v2_allowed_sucursal_keys",
+            return_value=("VILLAS_DEL_REY", "TECNOLOGICO"),
+        ), patch.object(
+            routes,
+            "export_campaign_v2_delivery_package",
+            return_value=(b"zip-bytes", "QA_CAMPANA.zip"),
+        ) as mocked:
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/7/export-package",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert response.data == b"zip-bytes"
+        assert response.mimetype == "application/zip"
+        assert "QA_CAMPANA.zip" in response.headers["Content-Disposition"]
+        kwargs = mocked.call_args.kwargs
+        assert kwargs["campaign_id"] == 7
+        assert kwargs["allowed_sucursal_keys"] == (
+            "VILLAS_DEL_REY",
+            "TECNOLOGICO",
+        )
+
+    def test_delivery_export_package_rejects_unknown_query_params(self):
+        with self._auth(), patch.object(
+            routes,
+            "export_campaign_v2_delivery_package",
+        ) as mocked:
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/7/export-package?foo=bar",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 400
+        mocked.assert_not_called()
+
+    def test_delivery_export_package_hides_out_of_scope_campaign_as_not_found(self):
+        with self._auth(), patch.object(
+            routes,
+            "export_campaign_v2_delivery_package",
+            side_effect=MarketingCampaignV2NotFoundError(
+                "Campaign V2 no encontrada."
+            ),
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/99/export-package",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 404
+        assert response.get_json()["message"] == "Campaign V2 no encontrada."
 
     def test_tariff_classifier_reuses_campaign_v2_management_permission(self):
         access = SimpleNamespace(

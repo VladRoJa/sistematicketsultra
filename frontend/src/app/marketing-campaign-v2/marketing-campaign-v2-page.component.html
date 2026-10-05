@@ -24,13 +24,34 @@
       <div class="section-heading">
         <div>
           <h2 id="campaign-v2-builder">Nueva campaña</h2>
-          <p>El backend aplica automáticamente tu alcance autorizado.</p>
+          <p>Define la audiencia, valida el Preview y congela una cohorte trazable.</p>
         </div>
-        <span class="scope-inline">{{ scopeLabel }}</span>
+      </div>
+
+      <div class="workflow-strip" aria-label="Flujo de creación de campaña">
+        <div class="workflow-step" [class.is-complete]="preview !== null || lastFreezeCompleted" [class.is-active]="preview === null && !lastFreezeCompleted">
+          <span class="workflow-index">1</span>
+          <div><strong>Audiencia</strong><small>Fuente y segmentos</small></div>
+        </div>
+        <div class="workflow-connector"></div>
+        <div class="workflow-step" [class.is-complete]="preview !== null || lastFreezeCompleted" [class.is-active]="preview !== null && !lastFreezeCompleted">
+          <span class="workflow-index">2</span>
+          <div><strong>Preview</strong><small>Validación del cohorte</small></div>
+        </div>
+        <div class="workflow-connector"></div>
+        <div class="workflow-step" [class.is-complete]="lastFreezeCompleted" [class.is-active]="preview !== null && !lastFreezeCompleted">
+          <span class="workflow-index">3</span>
+          <div><strong>Congelar</strong><small>Snapshot trazable</small></div>
+        </div>
+        <div class="workflow-connector"></div>
+        <div class="workflow-step" [class.is-active]="lastFreezeCompleted">
+          <span class="workflow-index">4</span>
+          <div><strong>Descargar</strong><small>Desde campaña congelada</small></div>
+        </div>
       </div>
 
       <div class="builder-grid">
-        <div class="builder-panel">
+        <div class="builder-panel audience-panel">
           <h3>Audiencia</h3>
           <div class="field-grid">
             <mat-form-field appearance="fill">
@@ -81,6 +102,8 @@
             <div class="family-options">
               <mat-checkbox
                 *ngFor="let family of options.selectable_audience_families"
+                class="family-choice"
+                [class.selected]="isFamilySelected(family)"
                 [checked]="isFamilySelected(family)"
                 (change)="setFamilySelected(family, $event)"
               >{{ familyLabel(family) }}</mat-checkbox>
@@ -183,13 +206,27 @@
             </div>
           </section>
 
-          <button mat-stroked-button type="button" (click)="reviewAudience()" [disabled]="!canReviewAudience">
-            {{ loadingPreview ? 'Revisando…' : 'Revisar audiencia' }}
-          </button>
+          <div class="builder-actions">
+            <button
+              mat-flat-button
+              color="primary"
+              class="builder-review-action"
+              type="button"
+              (click)="reviewAudience()"
+              [disabled]="!canReviewAudience"
+            >
+              {{ loadingPreview ? 'Revisando…' : 'Revisar audiencia' }}
+            </button>
+            <span>Genera un Preview nuevo antes de congelar.</span>
+          </div>
         </div>
 
         <div class="builder-panel commercial-panel">
-          <h3>Clasificación comercial</h3>
+          <div class="commercial-panel-heading">
+            <span>Paso 3</span>
+            <h3>Clasificación comercial</h3>
+            <p>Completa los datos de la campaña después de validar la audiencia.</p>
+          </div>
           <mat-form-field appearance="fill">
             <mat-label>Nombre de campaña</mat-label>
             <input matInput maxlength="255" [formControl]="name">
@@ -202,7 +239,21 @@
           </mat-form-field>
           <p class="helper-text">Purpose clasifica la campaña; no cambia la audiencia ni el fingerprint.</p>
           <p *ngIf="isFunnelSource" class="helper-text">Cartera Funnel está orientada a Venta nueva, pero el purpose sigue siendo una clasificación explícita.</p>
-          <button mat-flat-button color="primary" type="button" (click)="freezeCampaign()" [disabled]="!canFreeze">
+
+          <div class="freeze-readiness" [class.ready]="canFreeze">
+            <span>{{ canFreeze ? 'Listo para congelar' : 'Preview requerido' }}</span>
+            <strong *ngIf="preview">{{ preview.unique_recipient_count | number }} destinatarios</strong>
+            <small *ngIf="!preview">Revisa la audiencia para habilitar este paso.</small>
+          </div>
+
+          <button
+            mat-flat-button
+            color="primary"
+            class="freeze-action"
+            type="button"
+            (click)="freezeCampaign()"
+            [disabled]="!canFreeze"
+          >
             {{ creating ? 'Congelando…' : 'Congelar campaña' }}
           </button>
         </div>

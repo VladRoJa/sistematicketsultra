@@ -176,8 +176,28 @@
 
     <section class="recipients-section">
       <div class="section-heading">
-        <div><h3>Destinatarios congelados</h3><p>{{ recipientsTotal | number }} registros</p></div>
-        <span *ngIf="loadingRecipients" class="loading-inline">Cargando…</span>
+        <div>
+          <h3>Destinatarios congelados</h3>
+          <p>{{ recipientsTotal | number }} registros · exportación separada por sucursal y segmento</p>
+        </div>
+        <div class="recipient-actions">
+          <span *ngIf="loadingRecipients" class="loading-inline">Cargando…</span>
+          <button
+            mat-stroked-button
+            type="button"
+            (click)="exportDeliveryPackage()"
+            [disabled]="exportingDeliveryPackage || recipientsTotal <= 0"
+          >
+            {{ exportingDeliveryPackage ? 'Preparando…' : 'Descargar cohorte' }}
+          </button>
+        </div>
+      </div>
+
+      <div *ngIf="deliveryExportError" class="inline-error delivery-feedback" role="alert">
+        {{ deliveryExportError }}
+      </div>
+      <div *ngIf="deliveryExportSuccess" class="inline-success delivery-feedback" role="status">
+        {{ deliveryExportSuccess }}
       </div>
 
       <div class="table-wrap" *ngIf="recipients.length; else emptyRecipients">

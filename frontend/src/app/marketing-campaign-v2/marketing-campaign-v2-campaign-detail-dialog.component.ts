@@ -87,8 +87,11 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   loadingRecipients = false;
   loadingReporting = false;
   exportingReporting = false;
+  exportingDeliveryPackage = false;
   updatingPurpose = false;
   error = '';
+  deliveryExportError = '';
+  deliveryExportSuccess = '';
   reportingError = '';
   reportingSuccess = '';
   purposeUpdated = false;
@@ -195,6 +198,36 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
           this.reportingError = this.errorMessage(
             error,
             'No fue posible exportar el reporte individual.',
+          );
+        },
+      });
+  }
+
+  exportDeliveryPackage(): void {
+    if (this.exportingDeliveryPackage || this.recipientsTotal <= 0) {
+      return;
+    }
+
+    this.exportingDeliveryPackage = true;
+    this.deliveryExportError = '';
+    this.deliveryExportSuccess = '';
+
+    this.service.exportCampaignDeliveryPackage(this.data.campaignId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: blob => {
+          this.exportingDeliveryPackage = false;
+          campaignV2DownloadBlob(
+            blob,
+            this.deliveryPackageFilename(blob),
+          );
+          this.deliveryExportSuccess = 'Cohorte congelado exportado.';
+        },
+        error: (error: HttpErrorResponse) => {
+          this.exportingDeliveryPackage = false;
+          this.deliveryExportError = this.errorMessage(
+            error,
+            'No fue posible exportar el cohorte congelado.',
           );
         },
       });
@@ -411,6 +444,18 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
       });
     }
     return rows;
+  }
+
+  private deliveryPackageFilename(blob: Blob): string {
+    const normalized = (this.campaign?.name || `CAMPANA_V2_${this.data.campaignId}`)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 80) || `CAMPANA_V2_${this.data.campaignId}`;
+    const extension = blob.type === 'application/zip' ? 'zip' : 'xlsx';
+    return `${normalized}.${extension}`;
   }
 
   private formatHistoryObservedAt(value: string): string {

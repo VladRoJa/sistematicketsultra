@@ -773,6 +773,64 @@ test('M30 service consume individual, consolidado y export con builder compartid
   assert.equal(service.includes('rest.iventas.mx'), false);
 });
 
+test('M33 Campaign V2 descarga cohorte congelado por sucursal y segmento', () => {
+  const root = process.cwd();
+  const dir = path.join(root, 'src/app/marketing-campaign-v2');
+  const service = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2.service.ts'),
+    'utf8',
+  );
+  const detail = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-campaign-detail-dialog.component.ts'),
+    'utf8',
+  );
+  const html = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-campaign-detail-dialog.component.html'),
+    'utf8',
+  );
+
+  assert.equal(service.includes('exportCampaignDeliveryPackage(campaignId: number)'), true);
+  assert.equal(service.includes('${this.apiUrl}/${campaignId}/export-package'), true);
+  assert.equal(detail.includes('this.service.exportCampaignDeliveryPackage(this.data.campaignId)'), true);
+  assert.equal(detail.includes("blob.type === 'application/zip' ? 'zip' : 'xlsx'"), true);
+  assert.equal(html.includes('Descargar cohorte'), true);
+  assert.equal(html.includes('exportación separada por sucursal y segmento'), true);
+});
+
+test('M33 UI polish da jerarquía al constructor sin cambiar su contrato', () => {
+  const root = process.cwd();
+  const dir = path.join(root, 'src/app/marketing-campaign-v2');
+  const page = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-page.component.html'),
+    'utf8',
+  );
+  const css = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-page.component.css'),
+    'utf8',
+  );
+  const component = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-page.component.ts'),
+    'utf8',
+  );
+
+  for (const label of [
+    'Audiencia',
+    'Preview',
+    'Congelar',
+    'Descargar',
+    'Revisar audiencia',
+    'Listo para congelar',
+  ]) {
+    assert.equal(page.includes(label), true, label);
+  }
+  assert.equal(page.includes('class="workflow-strip"'), true);
+  assert.equal(page.includes('class="family-choice"'), true);
+  assert.equal(page.includes('<span class="scope-inline">{{ scopeLabel }}</span>'), false);
+  assert.equal(css.includes('grid-template-columns:minmax(0,1fr) 360px'), true);
+  assert.equal(css.includes('.family-choice.selected'), true);
+  assert.equal(component.includes('lastFreezeCompleted = false'), true);
+});
+
 test('M30 UI consolidado pinta backend summary y separa raw provider', () => {
   const root = process.cwd();
   const dir = path.join(root, 'src/app/marketing-campaign-v2');
