@@ -846,6 +846,27 @@ test('M33 UI polish da jerarquía al constructor sin cambiar su contrato', () =>
   assert.equal(component.includes('lastFreezeCompleted = false'), true);
 });
 
+test('Socios vencidos usa el selector compartido de rango de fechas', () => {
+  const root = process.cwd();
+  const dir = path.join(root, 'src/app/marketing-campaign-v2');
+  const html = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-page.component.html'),
+    'utf8',
+  );
+  const component = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-page.component.ts'),
+    'utf8',
+  );
+
+  assert.equal(html.includes('<app-suite-date-range-selector'), true);
+  assert.equal(html.includes('label="Periodo de vencimiento"'), true);
+  assert.equal(html.includes('type="date" [formControl]="expirationDateFrom"'), false);
+  assert.equal(html.includes('type="date" [formControl]="expirationDateTo"'), false);
+  assert.equal(component.includes('DateRangeSelectorComponent'), true);
+  assert.equal(component.includes('onExpirationDateFromChange(value: string)'), true);
+  assert.equal(component.includes('onExpirationDateToChange(value: string)'), true);
+});
+
 test('M30 UI consolidado pinta backend summary y separa raw provider', () => {
   const root = process.cwd();
   const dir = path.join(root, 'src/app/marketing-campaign-v2');

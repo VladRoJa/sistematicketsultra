@@ -64,6 +64,7 @@ import {
 } from './marketing-campaign-v2.models';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
 import { MarketingSalesFunnelService } from '../marketing-sales-funnel/marketing-sales-funnel.service';
+import { DateRangeSelectorComponent } from '../shared/date-range-selector/date-range-selector.component';
 import {
   MarketingCampaignV2PreviewDetailDialogComponent,
   MarketingCampaignV2PreviewDetailDialogData,
@@ -90,6 +91,7 @@ import {
     MatInputModule,
     MatProgressSpinnerModule,
     MatSelectModule,
+    DateRangeSelectorComponent,
   ],
   templateUrl: './marketing-campaign-v2-page.component.html',
   styleUrls: ['./marketing-campaign-v2-page.component.css'],
@@ -475,6 +477,14 @@ export class MarketingCampaignV2PageComponent implements OnInit {
           );
         },
       });
+  }
+
+  onExpirationDateFromChange(value: string): void {
+    this.expirationDateFrom.setValue(value);
+  }
+
+  onExpirationDateToChange(value: string): void {
+    this.expirationDateTo.setValue(value);
   }
 
   setFamilySelected(
