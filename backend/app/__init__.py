@@ -47,6 +47,7 @@ from app.routes.marketing_reactivation_outcome_routes import marketing_reactivat
 from app.routes.marketing_campaign_delivery_routes import marketing_campaign_delivery_bp
 from app.routes.mantenimiento_equipos_routes import mantenimiento_equipos_bp
 from app.routes.contact_center_routes import contact_center_bp
+from app.routes.purchase_requisition_routes import purchase_requisition_bp
 from app.maintenance_planner import maintenance_planner_bp
 from app.control_center import control_center_bp
 from app.utils.maintenance_ticket_update_guard import (
@@ -153,6 +154,10 @@ def create_app():
     app.register_blueprint(
         contact_center_bp,
         url_prefix="/api/contact-center",
+    )
+    app.register_blueprint(
+        purchase_requisition_bp,
+        url_prefix="/api/purchase-requisitions",
     )
     app.register_blueprint(control_center_bp, url_prefix="/api/control")
 
