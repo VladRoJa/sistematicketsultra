@@ -80,17 +80,6 @@
               </mat-select>
             </mat-form-field>
 
-            <mat-form-field *ngIf="showsFunnelFilters" appearance="fill">
-              <mat-label>Corte Funnel</mat-label>
-              <mat-select [formControl]="funnelCutoffDate" [disabled]="loadingFunnelCutoffs || !funnelCutoffDates.length">
-                <mat-option *ngFor="let cutoff of funnelCutoffDates" [value]="cutoff">
-                  {{ formatFunnelCutoffDate(cutoff) }}
-                </mat-option>
-              </mat-select>
-              <mat-hint *ngIf="loadingFunnelCutoffs">Consultando cortes completos…</mat-hint>
-              <mat-hint *ngIf="!loadingFunnelCutoffs && funnelMonth.value && !funnelCutoffDates.length">Sin cortes completos disponibles.</mat-hint>
-              <mat-hint *ngIf="!loadingFunnelCutoffs && funnelCutoffDates.length">{{ funnelCutoffPolicyHint }}</mat-hint>
-            </mat-form-field>
           </div>
 
           <ng-container *ngIf="showsAudienceFamilies">

@@ -620,8 +620,9 @@ test('M24 UI Funnel conserva source-specific + Historical Targeting común', () 
 
   assert.equal(page.includes("FUNNEL_PORTFOLIO: 'Cartera Funnel / Venta Nueva'"), true);
   assert.equal(html.includes('Mes Funnel'), true);
-  assert.equal(html.includes('Corte Funnel'), true);
+  assert.equal(html.includes('<mat-label>Corte Funnel</mat-label>'), false);
   assert.equal(page.includes('funnelService.getDashboard(month)'), true);
+  assert.equal(page.includes('this.funnelCutoffDate.setValue(selected, { emitEvent: false });'), true);
   assert.equal(html.includes('Historial de campañas'), true);
   assert.equal(page.includes("label: 'Coincidieron con historial'"), true);
   assert.equal(page.includes("metric: 'history_included'"), true);
