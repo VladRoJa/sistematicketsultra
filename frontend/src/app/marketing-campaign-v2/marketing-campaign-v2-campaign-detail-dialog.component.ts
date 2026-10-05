@@ -32,6 +32,7 @@ import {
   campaignV2HistoricalTargetingWindowLabel,
   campaignV2HistoryExclusionSummary,
   campaignV2HistoryWindowLabel,
+  campaignV2IventasCurrentStatusLabel,
   campaignV2ReportingCostLabel,
   campaignV2ReportingPercent,
   campaignV2ReportingSnapshotLabel,
@@ -375,6 +376,14 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
     }
     if (definition.filters.expiration_date_to) {
       rows.push({ label: 'Vencimiento hasta', value: definition.filters.expiration_date_to });
+    }
+    if (definition.filters.iventas_current_statuses?.length) {
+      rows.push({
+        label: 'Estado actual en iVentas',
+        value: definition.filters.iventas_current_statuses
+          .map(campaignV2IventasCurrentStatusLabel)
+          .join(', '),
+      });
     }
     if (definition.filters.historical_targeting) {
       const targeting = definition.filters.historical_targeting;

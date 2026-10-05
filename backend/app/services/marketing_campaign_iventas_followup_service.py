@@ -135,6 +135,57 @@ def _contacts_by_phone(
     return dict(grouped)
 
 
+def get_latest_iventas_status_by_phone(
+    *,
+    phones: set[str],
+    session: Any | None = None,
+) -> dict[str, Any]:
+    """Resolve the latest observed iVentas contact status per MX10 phone.
+
+    The lookup is intentionally observational: it reads the most recent
+    canonical iVentas sync and chooses the newest contact row per phone using
+    the same ordering used by the legacy follow-up enrichment.
+    """
+
+    active_session = _session_or_default(session)
+    normalized_phones = {
+        str(phone).strip()
+        for phone in phones
+        if str(phone or "").strip()
+    }
+    run = _latest_canonical_run(session=active_session)
+    if run is None:
+        return {
+            "sync_run_id": None,
+            "period_key": None,
+            "date_from": None,
+            "date_to": None,
+            "finished_at": None,
+            "statuses": {phone: None for phone in sorted(normalized_phones)},
+        }
+
+    contacts_by_phone = _contacts_by_phone(
+        sync_run_id=int(run.id),
+        phones=normalized_phones,
+        session=active_session,
+    )
+    statuses: dict[str, str | None] = {}
+    for phone in sorted(normalized_phones):
+        matches = contacts_by_phone.get(phone, [])
+        raw_status = matches[0].last_message_status if matches else None
+        normalized_status = str(raw_status or "").strip().upper()
+        statuses[phone] = normalized_status or None
+
+    return {
+        "sync_run_id": int(run.id),
+        "period_key": str(run.period_key),
+        "date_from": _iso(run.date_from),
+        "date_to": _iso(run.date_to),
+        "finished_at": _iso(run.finished_at),
+        "statuses": statuses,
+    }
+
+
 def _tags_by_contact_row(
     *,
     contact_row_ids: set[int],

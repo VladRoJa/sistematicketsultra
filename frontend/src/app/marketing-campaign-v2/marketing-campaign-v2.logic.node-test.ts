@@ -100,6 +100,20 @@ test('EXPIRED incluye fechas y ACTIVE las elimina del request', () => {
   });
 });
 
+test('estado actual iVentas viaja separado del historial de campañas', () => {
+  const request = buildCampaignV2AudienceRequest({
+    source: 'ACTIVE_MEMBERS',
+    audienceFamilies: ['DOMICILIADO'],
+    expirationDateFrom: '',
+    expirationDateTo: '',
+    iventasCurrentStatuses: ['VIEWED'],
+    historyTargetingEnabled: false,
+  });
+  assert.deepEqual(request.iventas_current_statuses, ['VIEWED']);
+  assert.equal('historical_targeting' in request, false);
+  assert.equal(campaignV2FieldInvalidatesPreview('iventas_current_statuses'), true);
+});
+
 test('familias son lista OR, seleccionar todas usa Options y cero familias es inválido', () => {
   assert.deepEqual(selectAllCampaignV2Families(allFamilies), allFamilies);
   const selected = toggleCampaignV2Family([], 'DOMICILIADO', true, allFamilies);

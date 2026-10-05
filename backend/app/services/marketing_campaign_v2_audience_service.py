@@ -15,6 +15,9 @@ from app.models.warehouse import (
     SociosVencidosCarteraORM,
 )
 from app.services.marketing_phone import normalize_phone
+from app.services.marketing_campaign_iventas_followup_service import (
+    get_latest_iventas_status_by_phone,
+)
 from app.services import marketing_campaign_v2_funnel_source_service as funnel_source
 from app.services.marketing_campaign_v2_provider_history_service import (
     MarketingCampaignV2ProviderHistoryValidationError,
@@ -54,6 +57,7 @@ HISTORICAL_TARGETING_MATCHES = ("ALL", "ANY")
 HISTORICAL_TARGETING_DELIVERY_BUCKETS = ("SENT", "DELIVERED", "VIEWED")
 HISTORICAL_TARGETING_OUTCOMES = ("SUCCESSFUL", "FAILED")
 HISTORICAL_TARGETING_WINDOW_MODES = ("ALL_HISTORY", "LOOKBACK_DAYS")
+IVENTAS_CURRENT_STATUSES = ("SENT", "DELIVERED", "VIEWED", "FAILED", "NO_DATA")
 
 BUCKET_RECIPIENTS = "RECIPIENTS"
 BUCKET_INVALID_PHONE = "INVALID_PHONE"
@@ -210,6 +214,7 @@ def build_campaign_v2_audience_preview(
     expiration_date_to: Any = None,
     history_exclusion: Any = None,
     historical_targeting: Any = None,
+    iventas_current_statuses: Any = None,
     funnel_month: Any = None,
     funnel_cutoff_date: Any = None,
     marketing_access: Any = None,
@@ -225,6 +230,7 @@ def build_campaign_v2_audience_preview(
         expiration_date_to=expiration_date_to,
         history_exclusion=history_exclusion,
         historical_targeting=historical_targeting,
+        iventas_current_statuses=iventas_current_statuses,
         funnel_month=funnel_month,
         funnel_cutoff_date=funnel_cutoff_date,
         marketing_access=marketing_access,
@@ -245,6 +251,7 @@ def build_campaign_v2_audience_preview_detail(
     expiration_date_to: Any = None,
     history_exclusion: Any = None,
     historical_targeting: Any = None,
+    iventas_current_statuses: Any = None,
     funnel_month: Any = None,
     funnel_cutoff_date: Any = None,
     marketing_access: Any = None,
@@ -272,6 +279,7 @@ def build_campaign_v2_audience_preview_detail(
         expiration_date_to=expiration_date_to,
         history_exclusion=history_exclusion,
         historical_targeting=historical_targeting,
+        iventas_current_statuses=iventas_current_statuses,
         funnel_month=funnel_month,
         funnel_cutoff_date=funnel_cutoff_date,
         marketing_access=marketing_access,
@@ -337,6 +345,7 @@ def _build_campaign_v2_audience_plan(
     expiration_date_to: Any,
     history_exclusion: Any = None,
     historical_targeting: Any = None,
+    iventas_current_statuses: Any = None,
     funnel_month: Any = None,
     funnel_cutoff_date: Any = None,
     marketing_access: Any = None,
@@ -348,6 +357,9 @@ def _build_campaign_v2_audience_plan(
         history_exclusion=history_exclusion,
         historical_targeting=historical_targeting,
     )
+    normalized_iventas_statuses = _normalize_iventas_current_statuses(
+        iventas_current_statuses
+    )
     active_session = session if session is not None else db.session
 
     if normalized_source == SOURCE_FUNNEL_PORTFOLIO:
@@ -357,6 +369,7 @@ def _build_campaign_v2_audience_plan(
             expiration_date_from=expiration_date_from,
             expiration_date_to=expiration_date_to,
             history_resolution=history_resolution,
+            iventas_current_statuses=normalized_iventas_statuses,
             funnel_month=funnel_month,
             funnel_cutoff_date=funnel_cutoff_date,
             marketing_access=marketing_access,
@@ -407,6 +420,10 @@ def _build_campaign_v2_audience_plan(
     if history_resolution.filter_key is not None:
         normalized_filters[history_resolution.filter_key] = (
             history_resolution.filter_value
+        )
+    if normalized_iventas_statuses:
+        normalized_filters["iventas_current_statuses"] = list(
+            normalized_iventas_statuses
         )
 
     tariff_catalog = _read_v2_tariff_catalog(session=active_session)
@@ -465,6 +482,14 @@ def _build_campaign_v2_audience_plan(
         )
         source_metadata["history_evaluation"] = history_evaluation
 
+    if normalized_iventas_statuses:
+        valid_rows, iventas_evaluation = _filter_by_iventas_current_status(
+            candidates=valid_rows,
+            selected_statuses=normalized_iventas_statuses,
+            session=active_session,
+        )
+        source_metadata["iventas_current_status_evaluation"] = iventas_evaluation
+
     recipients, duplicate_rows = _deduplicate_candidates(valid_rows)
 
     return _AudiencePlan(
@@ -495,6 +520,7 @@ def _build_funnel_audience_plan(
     expiration_date_from: Any,
     expiration_date_to: Any,
     history_resolution: _HistoricalTargetingResolution,
+    iventas_current_statuses: tuple[str, ...],
     funnel_month: Any,
     funnel_cutoff_date: Any,
     marketing_access: Any,
@@ -556,6 +582,10 @@ def _build_funnel_audience_plan(
         normalized_filters[history_resolution.filter_key] = (
             history_resolution.filter_value
         )
+    if iventas_current_statuses:
+        normalized_filters["iventas_current_statuses"] = list(
+            iventas_current_statuses
+        )
 
     source_metadata = dict(loaded.metadata)
     history_excluded_rows: tuple[
@@ -587,6 +617,14 @@ def _build_funnel_audience_plan(
         )
         source_metadata["history_evaluation"] = history_evaluation
 
+    if iventas_current_statuses:
+        valid_rows, iventas_evaluation = _filter_by_iventas_current_status(
+            candidates=valid_rows,
+            selected_statuses=iventas_current_statuses,
+            session=session,
+        )
+        source_metadata["iventas_current_status_evaluation"] = iventas_evaluation
+
     recipients, duplicate_rows = _deduplicate_candidates(valid_rows)
 
     return _AudiencePlan(
@@ -614,6 +652,81 @@ def _build_funnel_audience_plan(
         funnel_buyer_excluded_rows=buyer_excluded,
         active_member_suppressed_rows=active_member_suppressed,
     )
+
+
+def _normalize_iventas_current_statuses(value: Any) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, (str, bytes)) or not isinstance(value, Iterable):
+        raise MarketingCampaignV2AudienceValidationError(
+            "iventas_current_statuses debe ser una lista."
+        )
+    normalized = {
+        str(item or "").strip().upper()
+        for item in value
+        if str(item or "").strip()
+    }
+    unsupported = sorted(normalized - set(IVENTAS_CURRENT_STATUSES))
+    if unsupported:
+        raise MarketingCampaignV2AudienceValidationError(
+            "Estados iVentas no soportados: " + ", ".join(unsupported) + "."
+        )
+    return tuple(
+        status for status in IVENTAS_CURRENT_STATUSES if status in normalized
+    )
+
+
+def _filter_by_iventas_current_status(
+    *,
+    candidates: tuple[MarketingCampaignV2AudienceCandidate, ...],
+    selected_statuses: tuple[str, ...],
+    session: Any,
+) -> tuple[
+    tuple[MarketingCampaignV2AudienceCandidate, ...],
+    dict[str, Any],
+]:
+    phones = {
+        str(candidate.phone_mx10)
+        for candidate in candidates
+        if candidate.phone_mx10 is not None
+    }
+    resolved = get_latest_iventas_status_by_phone(
+        phones=phones,
+        session=session,
+    )
+    statuses_by_phone = dict(resolved.get("statuses") or {})
+    observed = {
+        phone: (statuses_by_phone.get(phone) or "NO_DATA")
+        for phone in phones
+    }
+    counts = Counter(observed.values())
+    selected = set(selected_statuses)
+    kept = tuple(
+        candidate
+        for candidate in candidates
+        if candidate.phone_mx10 is not None
+        and observed.get(str(candidate.phone_mx10), "NO_DATA") in selected
+    )
+    matched_phones = {
+        str(candidate.phone_mx10)
+        for candidate in kept
+        if candidate.phone_mx10 is not None
+    }
+    evaluation = {
+        "sync_run_id": resolved.get("sync_run_id"),
+        "period_key": resolved.get("period_key"),
+        "date_from": resolved.get("date_from"),
+        "date_to": resolved.get("date_to"),
+        "finished_at": resolved.get("finished_at"),
+        "selected_statuses": list(selected_statuses),
+        "before_phone_count": len(phones),
+        "matched_phone_count": len(matched_phones),
+        "status_counts": {
+            status: int(counts.get(status, 0))
+            for status in (*IVENTAS_CURRENT_STATUSES,)
+        },
+    }
+    return kept, evaluation
 
 
 def _funnel_candidate(

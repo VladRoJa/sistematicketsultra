@@ -3,6 +3,13 @@ export type CampaignV2Source =
   | 'ACTIVE_MEMBERS'
   | 'FUNNEL_PORTFOLIO';
 
+export type CampaignV2IventasCurrentStatus =
+  | 'SENT'
+  | 'DELIVERED'
+  | 'VIEWED'
+  | 'FAILED'
+  | 'NO_DATA';
+
 export type CampaignV2HistoryDeliveryBucket =
   | 'SENT'
   | 'DELIVERED'
@@ -130,6 +137,7 @@ export interface CampaignV2OptionsResponse {
   non_selectable_classifications: CampaignV2NonSelectableClassification[];
   purposes: CampaignV2Purpose[];
   historical_targeting?: CampaignV2HistoricalTargetingOptions;
+  iventas_current_statuses?: CampaignV2IventasCurrentStatus[];
   tariff_categories: string[];
   scope: CampaignV2Scope;
 }
@@ -143,6 +151,7 @@ export interface CampaignV2AudienceDefinitionRequest {
   funnel_cutoff_date?: string;
   history_exclusion?: CampaignV2HistoryExclusion;
   historical_targeting?: CampaignV2HistoricalTargeting;
+  iventas_current_statuses?: CampaignV2IventasCurrentStatus[];
 }
 
 export interface CampaignV2PreviewDetailRequest
@@ -201,6 +210,7 @@ export interface CampaignV2PreviewFilters {
   funnel_cutoff_date?: string;
   history_exclusion?: CampaignV2HistoryExclusion;
   historical_targeting?: CampaignV2HistoricalTargeting;
+  iventas_current_statuses?: CampaignV2IventasCurrentStatus[];
 }
 
 export interface CampaignV2PreviewSummary {
