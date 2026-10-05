@@ -1,0 +1,117 @@
+<div class="dialog-shell">
+  <header class="dialog-header">
+    <div>
+      <p class="eyebrow">{{ isEditMode ? 'Corrección solicitada' : 'Nueva solicitud' }}</p>
+      <h2>{{ title }}</h2>
+      <p>Equipo de gimnasio · flujo de revisión independiente de Tickets.</p>
+    </div>
+    <button mat-icon-button type="button" [mat-dialog-close]="null" aria-label="Cerrar">
+      <mat-icon>close</mat-icon>
+    </button>
+  </header>
+
+  <form [formGroup]="form" (ngSubmit)="submit()" class="dialog-body">
+    <div class="grid two-columns">
+      <label>
+        <span>Sucursal</span>
+        <select formControlName="sucursal_id">
+          <option [ngValue]="null">Selecciona una sucursal</option>
+          <option *ngFor="let branch of data.branches" [ngValue]="branch.id">
+            {{ branch.name }}
+          </option>
+        </select>
+      </label>
+
+      <label>
+        <span>Motivo</span>
+        <select formControlName="reason">
+          <option *ngFor="let option of reasons" [value]="option.value">
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+
+      <label>
+        <span>Prioridad</span>
+        <select formControlName="priority">
+          <option *ngFor="let option of priorities" [value]="option.value">
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+    </div>
+
+    <label class="full-field">
+      <span>Justificación</span>
+      <textarea
+        rows="4"
+        formControlName="justification"
+        placeholder="Explica por qué se requiere la compra."
+      ></textarea>
+    </label>
+
+    <section class="items-section" formArrayName="items">
+      <div class="section-heading">
+        <div>
+          <h3>Partidas</h3>
+          <p>Agrega al menos un equipo o artículo.</p>
+        </div>
+        <button mat-stroked-button type="button" (click)="addItem()">
+          <mat-icon>add</mat-icon>
+          Agregar partida
+        </button>
+      </div>
+
+      <div
+        *ngFor="let item of items.controls; let i = index"
+        class="item-row"
+        [formGroupName]="i"
+      >
+        <label class="description-field">
+          <span>Descripción</span>
+          <input
+            type="text"
+            formControlName="item_description"
+            placeholder="Ej. Caminadora comercial"
+          />
+        </label>
+
+        <label class="quantity-field">
+          <span>Cantidad</span>
+          <input type="number" min="1" step="1" formControlName="quantity" />
+        </label>
+
+        <label class="notes-field">
+          <span>Notas</span>
+          <input
+            type="text"
+            formControlName="notes"
+            placeholder="Opcional"
+          />
+        </label>
+
+        <button
+          mat-icon-button
+          type="button"
+          aria-label="Eliminar partida"
+          [disabled]="items.length <= 1"
+          (click)="removeItem(i)"
+        >
+          <mat-icon>delete_outline</mat-icon>
+        </button>
+      </div>
+    </section>
+
+    <p *ngIf="errorMessage" class="error-message">{{ errorMessage }}</p>
+
+    <footer class="dialog-actions">
+      <button mat-button type="button" [mat-dialog-close]="null" [disabled]="saving">
+        Cancelar
+      </button>
+      <button mat-flat-button color="primary" type="submit" [disabled]="saving">
+        <mat-icon>send</mat-icon>
+        {{ saving ? 'Guardando…' : submitLabel }}
+      </button>
+    </footer>
+  </form>
+</div>

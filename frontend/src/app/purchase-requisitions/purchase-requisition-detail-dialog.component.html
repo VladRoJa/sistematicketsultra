@@ -1,0 +1,206 @@
+<div class="detail-shell">
+  <header class="detail-header">
+    <div>
+      <p class="eyebrow">Expediente de requisición</p>
+      <h2>{{ requisition?.public_id || 'Requisición' }}</h2>
+      <p *ngIf="requisition">
+        {{ branchLabel(requisition.sucursal_id) }} · {{ statusLabel(requisition.status) }}
+      </p>
+    </div>
+    <button mat-icon-button type="button" aria-label="Cerrar" (click)="close()">
+      <mat-icon>close</mat-icon>
+    </button>
+  </header>
+
+  <div *ngIf="loading" class="state-box">Cargando expediente…</div>
+  <div *ngIf="loadError && !loading" class="state-box error-box">
+    {{ loadError }}
+  </div>
+
+  <main *ngIf="requisition && !loading" class="detail-body">
+    <section class="summary-grid">
+      <div>
+        <span>Estado</span>
+        <strong>{{ statusLabel(requisition.status) }}</strong>
+      </div>
+      <div>
+        <span>Prioridad</span>
+        <strong>{{ priorityLabel(requisition.priority) }}</strong>
+      </div>
+      <div>
+        <span>Motivo</span>
+        <strong>{{ reasonLabel(requisition.reason) }}</strong>
+      </div>
+      <div>
+        <span>Creada</span>
+        <strong>{{ requisition.created_at | date:'dd/MM/yyyy HH:mm' }}</strong>
+      </div>
+    </section>
+
+    <section class="content-section">
+      <div class="section-heading">
+        <h3>Justificación</h3>
+        <button *ngIf="canEdit" mat-stroked-button type="button" (click)="openEdit()">
+          <mat-icon>edit</mat-icon>
+          Corregir
+        </button>
+      </div>
+      <p class="justification">{{ requisition.justification }}</p>
+    </section>
+
+    <section class="content-section">
+      <h3>Partidas</h3>
+      <div class="items-table">
+        <div class="item-row header-row">
+          <span>Descripción</span>
+          <span>Cantidad</span>
+          <span>Notas</span>
+        </div>
+        <div *ngFor="let item of requisition.items || []" class="item-row">
+          <span>{{ item.item_description }}</span>
+          <span>{{ item.quantity }}</span>
+          <span>{{ item.notes || '—' }}</span>
+        </div>
+      </div>
+    </section>
+
+    <section *ngIf="canReview || canResubmit" class="content-section workflow-section">
+      <div class="section-heading">
+        <div>
+          <h3>Acciones</h3>
+          <p>Las transiciones disponibles dependen del estado y de tus permisos.</p>
+        </div>
+      </div>
+
+      <div class="action-buttons">
+        <button
+          *ngIf="canReview"
+          mat-stroked-button
+          type="button"
+          (click)="chooseAction('REQUEST_INFO')"
+        >
+          Solicitar información
+        </button>
+        <button
+          *ngIf="canReview"
+          mat-flat-button
+          color="primary"
+          type="button"
+          (click)="chooseAction('APPROVE')"
+        >
+          Aprobar
+        </button>
+        <button
+          *ngIf="canReview"
+          mat-stroked-button
+          type="button"
+          (click)="chooseAction('REJECT')"
+        >
+          Rechazar
+        </button>
+        <button
+          *ngIf="canResubmit"
+          mat-flat-button
+          color="primary"
+          type="button"
+          (click)="chooseAction('RESUBMIT')"
+        >
+          Reenviar a revisión
+        </button>
+      </div>
+
+      <div *ngIf="actionMode" class="action-panel">
+        <strong>{{ actionTitle }}</strong>
+        <textarea
+          [(ngModel)]="actionComment"
+          rows="3"
+          [placeholder]="actionPlaceholder"
+        ></textarea>
+        <p *ngIf="actionError" class="error-message">{{ actionError }}</p>
+        <div class="panel-actions">
+          <button mat-button type="button" [disabled]="actionBusy" (click)="cancelAction()">
+            Cancelar
+          </button>
+          <button
+            mat-flat-button
+            color="primary"
+            type="button"
+            [disabled]="actionBusy"
+            (click)="submitAction()"
+          >
+            {{ actionBusy ? 'Procesando…' : 'Confirmar' }}
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="content-section">
+      <div class="section-heading">
+        <div>
+          <h3>Adjuntos</h3>
+          <p>Evidencias y cotizaciones privadas del expediente.</p>
+        </div>
+      </div>
+
+      <div *ngIf="canUploadAttachment" class="upload-row">
+        <select [(ngModel)]="attachmentType">
+          <option *ngIf="canUploadEvidence" value="EVIDENCE">Evidencia</option>
+          <option *ngIf="canUploadQuote" value="QUOTE">Cotización</option>
+          <option value="OTHER">Otro</option>
+        </select>
+        <input
+          type="file"
+          accept=".pdf,image/jpeg,image/png,image/webp"
+          (change)="onFileSelected($event)"
+        />
+        <button
+          mat-stroked-button
+          type="button"
+          [disabled]="!selectedFile || attachmentBusy"
+          (click)="uploadAttachment()"
+        >
+          <mat-icon>upload</mat-icon>
+          {{ attachmentBusy ? 'Subiendo…' : 'Subir' }}
+        </button>
+      </div>
+
+      <p *ngIf="attachmentError" class="error-message">{{ attachmentError }}</p>
+
+      <div class="attachment-list">
+        <button
+          *ngFor="let attachment of requisition.attachments || []"
+          type="button"
+          class="attachment-item"
+          (click)="downloadAttachment(attachment)"
+        >
+          <mat-icon>attach_file</mat-icon>
+          <span>
+            <strong>{{ attachment.original_filename }}</strong>
+            <small>
+              {{ attachmentTypeLabel(attachment.attachment_type) }}
+              · {{ fileSizeLabel(attachment.size_bytes) }}
+            </small>
+          </span>
+          <mat-icon>download</mat-icon>
+        </button>
+        <p *ngIf="(requisition.attachments || []).length === 0" class="empty-copy">
+          Sin adjuntos.
+        </p>
+      </div>
+    </section>
+
+    <section class="content-section">
+      <h3>Historial</h3>
+      <div class="timeline">
+        <div *ngFor="let event of requisition.events || []" class="timeline-row">
+          <div class="timeline-dot"></div>
+          <div>
+            <strong>{{ eventLabel(event.event_type) }}</strong>
+            <small>{{ event.created_at | date:'dd/MM/yyyy HH:mm' }}</small>
+            <p *ngIf="event.comment">{{ event.comment }}</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
