@@ -713,11 +713,8 @@ def _filter_by_iventas_current_status(
         if candidate.phone_mx10 is not None
     }
     evaluation = {
-        "sync_run_id": resolved.get("sync_run_id"),
-        "period_key": resolved.get("period_key"),
-        "date_from": resolved.get("date_from"),
-        "date_to": resolved.get("date_to"),
-        "finished_at": resolved.get("finished_at"),
+        "sync_run_ids": list(resolved.get("sync_run_ids") or []),
+        "period_keys": list(resolved.get("period_keys") or []),
         "selected_statuses": list(selected_statuses),
         "before_phone_count": len(phones),
         "matched_phone_count": len(matched_phones),

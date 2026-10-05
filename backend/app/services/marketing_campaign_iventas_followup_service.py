@@ -135,16 +135,29 @@ def _contacts_by_phone(
     return dict(grouped)
 
 
+def _canonical_observation_sort_key(
+    contact: MarketingIventasContactORM,
+    run: MarketingIventasSyncRunORM,
+):
+    return (
+        run.date_to,
+        _as_aware_utc(run.finished_at)
+        or datetime.min.replace(tzinfo=UTC),
+        int(run.id),
+        *_contact_sort_key(contact),
+    )
+
+
 def get_latest_iventas_status_by_phone(
     *,
     phones: set[str],
     session: Any | None = None,
 ) -> dict[str, Any]:
-    """Resolve the latest observed iVentas contact status per MX10 phone.
+    """Resolve the latest observed iVentas status per MX10 phone.
 
-    The lookup is intentionally observational: it reads the most recent
-    canonical iVentas sync and chooses the newest contact row per phone using
-    the same ordering used by the legacy follow-up enrichment.
+    Each phone is resolved independently across every canonical monthly sync.
+    The newest canonical snapshot containing the phone wins; within that
+    snapshot, the newest contact row wins using the legacy contact ordering.
     """
 
     active_session = _session_or_default(session)
@@ -153,36 +166,81 @@ def get_latest_iventas_status_by_phone(
         for phone in phones
         if str(phone or "").strip()
     }
-    run = _latest_canonical_run(session=active_session)
-    if run is None:
+    statuses: dict[str, str | None] = {
+        phone: None for phone in sorted(normalized_phones)
+    }
+    observations: dict[str, dict[str, Any] | None] = {
+        phone: None for phone in sorted(normalized_phones)
+    }
+    if not normalized_phones:
         return {
-            "sync_run_id": None,
-            "period_key": None,
-            "date_from": None,
-            "date_to": None,
-            "finished_at": None,
-            "statuses": {phone: None for phone in sorted(normalized_phones)},
+            "statuses": statuses,
+            "observations": observations,
+            "sync_run_ids": [],
+            "period_keys": [],
         }
 
-    contacts_by_phone = _contacts_by_phone(
-        sync_run_id=int(run.id),
-        phones=normalized_phones,
-        session=active_session,
+    rows = (
+        active_session.query(
+            MarketingIventasContactORM,
+            MarketingIventasSyncRunORM,
+        )
+        .join(
+            MarketingIventasSyncRunORM,
+            MarketingIventasSyncRunORM.id
+            == MarketingIventasContactORM.sync_run_id,
+        )
+        .filter(
+            MarketingIventasSyncRunORM.is_canonical.is_(True),
+            MarketingIventasContactORM.phone_mx10.in_(
+                tuple(sorted(normalized_phones))
+            ),
+        )
+        .all()
     )
-    statuses: dict[str, str | None] = {}
+
+    selected: dict[
+        str,
+        tuple[MarketingIventasContactORM, MarketingIventasSyncRunORM],
+    ] = {}
+    for contact, run in rows:
+        phone = str(contact.phone_mx10 or "").strip()
+        if not phone:
+            continue
+        current = selected.get(phone)
+        if current is None or _canonical_observation_sort_key(
+            contact,
+            run,
+        ) > _canonical_observation_sort_key(*current):
+            selected[phone] = (contact, run)
+
+    used_run_ids: set[int] = set()
+    used_period_keys: set[str] = set()
     for phone in sorted(normalized_phones):
-        matches = contacts_by_phone.get(phone, [])
-        raw_status = matches[0].last_message_status if matches else None
-        normalized_status = str(raw_status or "").strip().upper()
+        match = selected.get(phone)
+        if match is None:
+            continue
+        contact, run = match
+        normalized_status = str(
+            contact.last_message_status or ""
+        ).strip().upper()
         statuses[phone] = normalized_status or None
+        used_run_ids.add(int(run.id))
+        used_period_keys.add(str(run.period_key))
+        observations[phone] = {
+            "sync_run_id": int(run.id),
+            "period_key": str(run.period_key),
+            "date_from": _iso(run.date_from),
+            "date_to": _iso(run.date_to),
+            "finished_at": _iso(run.finished_at),
+            "contact_row_id": int(contact.id),
+        }
 
     return {
-        "sync_run_id": int(run.id),
-        "period_key": str(run.period_key),
-        "date_from": _iso(run.date_from),
-        "date_to": _iso(run.date_to),
-        "finished_at": _iso(run.finished_at),
         "statuses": statuses,
+        "observations": observations,
+        "sync_run_ids": sorted(used_run_ids),
+        "period_keys": sorted(used_period_keys),
     }
 
 
