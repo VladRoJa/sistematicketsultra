@@ -27,6 +27,7 @@ import { trackTiendaCompositionAccessGuard } from './warehouse/track-tienda-comp
 import { MarketingSalesFunnelAccessGuard } from './marketing-sales-funnel/marketing-sales-funnel-access.guard';
 import { contactCenterAccessGuard } from './contact-center/contact-center-access.guard';
 import { sportsAnalysisAccessGuard } from './sports-analysis/sports-analysis-access.guard';
+import { purchaseRequisitionAccessGuard } from './purchase-requisitions/purchase-requisition-access.guard';
 
 
 
@@ -63,6 +64,13 @@ export const routes: Routes = [
           { path: '', redirectTo: 'ver-tickets', pathMatch: 'full' },
           { path: 'crear-ticket', component: CrearTicketRefactorComponent },
           { path: 'ver-tickets', component: PantallaVerTicketsComponent },
+          {
+            path: 'requisiciones',
+            canActivate: [purchaseRequisitionAccessGuard],
+            loadComponent: () =>
+              import('./purchase-requisitions/purchase-requisitions.component')
+                .then(m => m.PurchaseRequisitionsComponent),
+          },
         ],
       },
       {

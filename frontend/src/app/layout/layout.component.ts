@@ -23,6 +23,7 @@ import { RefrescoService } from '../services/refresco.service';
 import { canAccessTrackRegionalOperational } from '../warehouse/track-intelligence-regional-operational/track-regional-operational-access.guard';
 import { canAccessContactCenter } from '../contact-center/contact-center-access.guard';
 import { withCampaignV2MenuItem } from '../marketing-campaign-v2/marketing-campaign-v2-menu';
+import { withPurchaseRequisitionMenuItem } from '../purchase-requisitions/purchase-requisition-menu';
 
 @Component({
   selector: 'app-layout',
@@ -477,6 +478,7 @@ const menuMantenimientoGerencial = [
 
 this.habilitarControlEnMenuSiAplica(menuControl);
 this.habilitarContactCenterEnMenuSiAplica(menuContactCenter);
+this.habilitarPurchaseRequisitionsEnMenuSiAplica();
 this.habilitarMaintenancePlannerEnMenu();
 
 if (
@@ -608,6 +610,29 @@ private habilitarContactCenterEnMenuSiAplica(menuContactCenter: any): void {
       },
       error: () => {
         // El backend es la autoridad. Si responde 401/403 no se publica el menú.
+      },
+    });
+}
+
+private habilitarPurchaseRequisitionsEnMenuSiAplica(): void {
+  this.http
+    .get<{ allowed?: boolean }>(`${environment.apiUrl}/purchase-requisitions/access`)
+    .subscribe({
+      next: (response) => {
+        if (!response?.allowed) {
+          return;
+        }
+
+        const nextMenuItems = withPurchaseRequisitionMenuItem(this.menuItems);
+        if (nextMenuItems === this.menuItems) {
+          return;
+        }
+
+        this.menuItems = nextMenuItems;
+        this.sincronizarMenuConRutaActual();
+      },
+      error: () => {
+        // Backend-authoritative: 401/403 no publica Requisiciones.
       },
     });
 }
