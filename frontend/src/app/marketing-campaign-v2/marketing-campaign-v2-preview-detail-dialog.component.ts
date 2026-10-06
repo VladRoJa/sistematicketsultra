@@ -62,6 +62,7 @@ export class MarketingCampaignV2PreviewDetailDialogComponent implements OnInit {
       UNCLASSIFIED: 'Tarifa sin clasificación',
       FAMILY: 'Familia',
       CURRENT_STATUS_BLOCKED: 'Bloqueados por estado actual',
+      BLACKLIST: 'Bloqueados por lista negra',
       HISTORY_EXCLUDED: 'Excluidos por regla histórica',
       HISTORY_INCLUDED: 'Incluidos por regla histórica',
       FUNNEL_CANDIDATES: 'Leads Funnel',
@@ -72,6 +73,9 @@ export class MarketingCampaignV2PreviewDetailDialogComponent implements OnInit {
   }
 
   get explanation(): string {
+    if (this.data.bucket === 'BLACKLIST') {
+      return 'Teléfonos excluidos por la lista negra global vigente de Campaign V2.';
+    }
     if (this.data.bucket === 'HISTORY_INCLUDED') {
       return 'Contactos que permanecieron después de aplicar la regla histórica.';
     }
