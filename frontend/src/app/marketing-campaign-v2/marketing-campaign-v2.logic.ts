@@ -384,6 +384,7 @@ export function campaignV2MetricBucket(
     | 'out_of_segment'
     | 'unclassified'
     | 'current_status_blocked'
+    | 'blacklist'
     | 'history_excluded'
     | 'history_included'
     | 'funnel_candidates'
@@ -404,6 +405,8 @@ export function campaignV2MetricBucket(
       return 'UNCLASSIFIED';
     case 'current_status_blocked':
       return 'CURRENT_STATUS_BLOCKED';
+    case 'blacklist':
+      return 'BLACKLIST';
     case 'history_excluded':
       return 'HISTORY_EXCLUDED';
     case 'history_included':
