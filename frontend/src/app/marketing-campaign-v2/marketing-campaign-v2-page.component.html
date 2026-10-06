@@ -58,7 +58,7 @@
             <div class="blacklist-copy">
               <strong>Lista negra global</strong>
               <span>
-                {{ blacklistSummary?.total || 0 | number }} teléfonos bloqueados.
+                {{ (blacklistSummary?.total || 0) | number }} teléfonos bloqueados.
                 Se excluyen de las tres carteras y de los Excel, incluso en campañas ya congeladas.
               </span>
             </div>
