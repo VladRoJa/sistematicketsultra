@@ -72,7 +72,7 @@ def get_blacklisted_phones(
         return set()
 
     found: set[str] = set()
-    for chunk in _chunks(normalized, 1000):
+    for chunk in _chunks(normalized, 5000):
         rows = (
             active_session.query(MarketingCampaignV2BlacklistORM.phone_mx10)
             .filter(MarketingCampaignV2BlacklistORM.phone_mx10.in_(tuple(chunk)))
