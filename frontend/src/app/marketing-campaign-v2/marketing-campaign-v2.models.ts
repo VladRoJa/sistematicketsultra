@@ -104,6 +104,7 @@ export type CampaignV2PreviewBucket =
   | 'UNCLASSIFIED'
   | 'FAMILY'
   | 'CURRENT_STATUS_BLOCKED'
+  | 'BLACKLIST'
   | 'HISTORY_EXCLUDED'
   | 'HISTORY_INCLUDED'
   | 'FUNNEL_CANDIDATES'
@@ -221,6 +222,7 @@ export interface CampaignV2PreviewSummary {
   scoped_count: number;
   current_status_counts: Record<string, number>;
   current_status_blocked_count: number;
+  blacklist_excluded_count: number;
   filtered_count: number;
   family_counts: Partial<Record<CampaignV2ObservedFamily, number>>;
   unclassified_family_count: number;
@@ -243,6 +245,23 @@ export interface CampaignV2PreviewSummary {
   excluded_by_delivery_bucket?: Partial<Record<CampaignV2HistoryDeliveryBucket, number>>;
   excluded_by_outcome?: Partial<Record<CampaignV2HistoryOutcome, number>>;
   excluded_by_button_interaction?: number;
+}
+
+export interface CampaignV2BlacklistSummary {
+  total: number;
+  latest_created_at: string | null;
+}
+
+export interface CampaignV2BlacklistImportResult {
+  filename: string;
+  rows_read: number;
+  valid_unique: number;
+  added: number;
+  already_existing: number;
+  duplicates_in_file: number;
+  invalid: number;
+  blacklist_total: number;
+  latest_created_at: string | null;
 }
 
 export interface CampaignV2PreviewResponse extends CampaignV2PreviewSummary {
