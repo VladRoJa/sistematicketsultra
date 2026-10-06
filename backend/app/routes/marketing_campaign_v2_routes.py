@@ -24,6 +24,14 @@ from app.services.marketing_campaign_v2_creation_service import (
     build_campaign_v2_freeze_preview,
     freeze_campaign_v2,
 )
+from app.services.marketing_campaign_v2_blacklist_service import (
+    XLSX_MIMETYPE as BLACKLIST_XLSX_MIMETYPE,
+    MarketingCampaignV2BlacklistPersistenceError,
+    MarketingCampaignV2BlacklistValidationError,
+    export_campaign_v2_blacklist_xlsx,
+    get_campaign_v2_blacklist_summary,
+    import_campaign_v2_blacklist_xlsx,
+)
 from app.services.marketing_campaign_v2_delivery_export_service import (
     campaign_v2_delivery_export_mimetype,
     export_campaign_v2_delivery_package,
@@ -151,6 +159,71 @@ def campaign_v2_options_endpoint():
         return _error(str(exc), 403)
     except Exception:
         return _error("Falló la consulta de opciones de Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/blacklist")
+@jwt_required()
+def campaign_v2_blacklist_summary_endpoint():
+    try:
+        _, access = _resolve_campaign_v2_request()
+        _require_campaign_v2_global_management(access)
+        return jsonify(
+            get_campaign_v2_blacklist_summary(session=db.session)
+        ), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except Exception:
+        return _error("Falló la consulta de lista negra Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/blacklist/import")
+@jwt_required()
+def campaign_v2_blacklist_import_endpoint():
+    try:
+        user, access = _resolve_campaign_v2_request()
+        _require_campaign_v2_global_management(access)
+        upload = request.files.get("file")
+        if upload is None:
+            raise MarketingCampaignV2BlacklistValidationError(
+                "Debes seleccionar un archivo .xlsx."
+            )
+        result = import_campaign_v2_blacklist_xlsx(
+            file_bytes=upload.read(),
+            filename=upload.filename or "",
+            created_by_user_id=int(user.id),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2BlacklistValidationError as exc:
+        return _error(str(exc), 400)
+    except MarketingCampaignV2BlacklistPersistenceError:
+        return _error("No fue posible guardar la lista negra Campaign V2.", 500)
+    except Exception:
+        return _error("Falló la importación de lista negra Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/blacklist/export")
+@jwt_required()
+def campaign_v2_blacklist_export_endpoint():
+    try:
+        _, access = _resolve_campaign_v2_request()
+        _require_campaign_v2_global_management(access)
+        payload, filename = export_campaign_v2_blacklist_xlsx(
+            session=db.session,
+        )
+        return send_file(
+            BytesIO(payload),
+            mimetype=BLACKLIST_XLSX_MIMETYPE,
+            as_attachment=True,
+            download_name=filename,
+            max_age=0,
+        )
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except Exception:
+        return _error("Falló la exportación de lista negra Campaign V2.", 500)
 
 
 @marketing_campaign_v2_bp.post("/campaigns-v2/preview")
@@ -911,6 +984,13 @@ def _require_campaign_v2_management(access) -> None:
     if not getattr(access, "can_edit_inputs", False):
         raise MarketingAuthorizationError(
             "No autorizado para gestionar Campaign V2."
+        )
+
+
+def _require_campaign_v2_global_management(access) -> None:
+    if not getattr(access, "is_global", False):
+        raise MarketingAuthorizationError(
+            "La lista negra Campaign V2 requiere alcance global."
         )
 
 

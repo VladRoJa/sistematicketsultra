@@ -19,6 +19,9 @@ from app.services.marketing_phone import normalize_phone
 from app.services.marketing_campaign_iventas_followup_service import (
     get_latest_iventas_status_by_phone,
 )
+from app.services.marketing_campaign_v2_blacklist_service import (
+    get_blacklisted_phones,
+)
 from app.services import marketing_campaign_v2_funnel_source_service as funnel_source
 from app.services.marketing_campaign_v2_provider_history_service import (
     MarketingCampaignV2ProviderHistoryValidationError,
@@ -67,6 +70,7 @@ BUCKET_OUT_OF_SEGMENT = "OUT_OF_SEGMENT"
 BUCKET_UNCLASSIFIED = "UNCLASSIFIED"
 BUCKET_FAMILY = "FAMILY"
 BUCKET_CURRENT_STATUS_BLOCKED = "CURRENT_STATUS_BLOCKED"
+BUCKET_BLACKLIST = "BLACKLIST"
 BUCKET_HISTORY_EXCLUDED = "HISTORY_EXCLUDED"
 BUCKET_HISTORY_INCLUDED = "HISTORY_INCLUDED"
 BUCKET_FUNNEL_CANDIDATES = "FUNNEL_CANDIDATES"
@@ -81,6 +85,7 @@ SUPPORTED_BUCKETS = frozenset(
         BUCKET_UNCLASSIFIED,
         BUCKET_FAMILY,
         BUCKET_CURRENT_STATUS_BLOCKED,
+        BUCKET_BLACKLIST,
         BUCKET_HISTORY_EXCLUDED,
         BUCKET_HISTORY_INCLUDED,
         BUCKET_FUNNEL_CANDIDATES,
@@ -184,6 +189,10 @@ class _AudiencePlan:
     family_counts: dict[str, int]
     unclassified_family_count: int
     out_of_segment_count: int
+    blacklist_rows: tuple[
+        MarketingCampaignV2AudienceCandidate,
+        ...,
+    ] = field(default_factory=tuple)
     history_excluded_rows: tuple[
         MarketingCampaignV2HistoryExcludedCandidate,
         ...,
@@ -479,6 +488,13 @@ def _build_campaign_v2_audience_plan(
     source_metadata = dict(source_result.metadata)
     if normalized_adeudo_min is not None:
         source_metadata["adeudo_min"] = format(normalized_adeudo_min, "f")
+
+    valid_rows, blacklist_rows = _exclude_blacklisted_candidates(
+        candidates=valid_rows,
+        session=active_session,
+    )
+    source_metadata["blacklist_excluded_count"] = len(blacklist_rows)
+
     history_excluded_rows: tuple[
         MarketingCampaignV2HistoryExcludedCandidate,
         ...,
@@ -533,6 +549,7 @@ def _build_campaign_v2_audience_plan(
         family_counts=family_counts,
         unclassified_family_count=unclassified_count,
         out_of_segment_count=out_of_segment_count,
+        blacklist_rows=blacklist_rows,
         history_excluded_rows=history_excluded_rows,
         historical_decision_rows=historical_decision_rows,
         history_diagnostics=history_diagnostics,
@@ -613,6 +630,12 @@ def _build_funnel_audience_plan(
         )
 
     source_metadata = dict(loaded.metadata)
+    valid_rows, blacklist_rows = _exclude_blacklisted_candidates(
+        candidates=valid_rows,
+        session=session,
+    )
+    source_metadata["blacklist_excluded_count"] = len(blacklist_rows)
+
     history_excluded_rows: tuple[
         MarketingCampaignV2HistoryExcludedCandidate,
         ...,
@@ -670,6 +693,7 @@ def _build_funnel_audience_plan(
         family_counts={family: 0 for family in ALL_AUDIENCE_FAMILIES},
         unclassified_family_count=0,
         out_of_segment_count=0,
+        blacklist_rows=blacklist_rows,
         history_excluded_rows=history_excluded_rows,
         historical_decision_rows=historical_decision_rows,
         history_diagnostics=history_diagnostics,
@@ -729,6 +753,44 @@ def _normalize_iventas_current_statuses(value: Any) -> tuple[str, ...]:
     return tuple(
         status for status in IVENTAS_CURRENT_STATUSES if status in normalized
     )
+
+
+def _exclude_blacklisted_candidates(
+    *,
+    candidates: tuple[MarketingCampaignV2AudienceCandidate, ...],
+    session: Any,
+) -> tuple[
+    tuple[MarketingCampaignV2AudienceCandidate, ...],
+    tuple[MarketingCampaignV2AudienceCandidate, ...],
+]:
+    if not candidates:
+        return (), ()
+
+    blacklisted = get_blacklisted_phones(
+        phones=(
+            candidate.phone_mx10
+            for candidate in candidates
+            if candidate.phone_mx10 is not None
+        ),
+        session=session,
+    )
+    if not blacklisted:
+        return candidates, ()
+
+    excluded_by_phone: dict[str, MarketingCampaignV2AudienceCandidate] = {}
+    kept: list[MarketingCampaignV2AudienceCandidate] = []
+    for candidate in candidates:
+        phone = candidate.phone_mx10
+        if phone is not None and phone in blacklisted:
+            excluded_by_phone.setdefault(phone, candidate)
+            continue
+        kept.append(candidate)
+
+    excluded = tuple(
+        excluded_by_phone[phone]
+        for phone in sorted(excluded_by_phone)
+    )
+    return tuple(kept), excluded
 
 
 def _filter_by_iventas_current_status(
@@ -1682,6 +1744,7 @@ def _serialize_preview(plan: _AudiencePlan) -> dict[str, Any]:
         "scoped_count": plan.scoped_count,
         "current_status_counts": dict(plan.current_status_counts),
         "current_status_blocked_count": len(plan.current_status_blocked),
+        "blacklist_excluded_count": len(plan.blacklist_rows),
         "filtered_count": len(plan.selected_candidates),
         "family_counts": dict(plan.family_counts),
         "unclassified_family_count": plan.unclassified_family_count,
@@ -1740,6 +1803,8 @@ def _bucket_rows(
         ]
     if bucket == BUCKET_CURRENT_STATUS_BLOCKED:
         return list(plan.current_status_blocked)
+    if bucket == BUCKET_BLACKLIST:
+        return list(plan.blacklist_rows)
     if bucket == BUCKET_HISTORY_EXCLUDED:
         if "historical_targeting" in plan.filters:
             return [
@@ -1782,6 +1847,8 @@ def _expected_bucket_total(
         return int((preview["family_counts"] or {}).get(audience_family, 0))
     if bucket == BUCKET_CURRENT_STATUS_BLOCKED:
         return int(preview["current_status_blocked_count"])
+    if bucket == BUCKET_BLACKLIST:
+        return int(preview["blacklist_excluded_count"])
     if bucket == BUCKET_HISTORY_EXCLUDED:
         return int(preview.get("history_excluded_count", 0))
     if bucket == BUCKET_HISTORY_INCLUDED:

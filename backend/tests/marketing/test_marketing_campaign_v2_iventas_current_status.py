@@ -1,8 +1,15 @@
 from datetime import date, datetime, timezone
 from types import SimpleNamespace
 
+import pytest
+
 from app.services import marketing_campaign_iventas_followup_service as followup
 from app.services import marketing_campaign_v2_audience_service as audience
+
+
+@pytest.fixture(autouse=True)
+def _empty_blacklist(monkeypatch):
+    monkeypatch.setattr(audience, "get_blacklisted_phones", lambda **_kwargs: set())
 
 
 def _candidate(phone: str):

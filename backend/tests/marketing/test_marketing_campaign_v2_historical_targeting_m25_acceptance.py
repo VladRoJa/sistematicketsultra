@@ -18,6 +18,11 @@ from app.services import marketing_campaign_v2_funnel_source_service as funnel_s
 from app.services import marketing_campaign_v2_provider_history_service as provider_history
 
 
+@pytest.fixture(autouse=True)
+def _empty_blacklist(monkeypatch):
+    monkeypatch.setattr(audience, "get_blacklisted_phones", lambda **_kwargs: set())
+
+
 BASE = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
 ACCESS = SimpleNamespace(is_global=False, branch_ids=(1,))
 PHONES = {

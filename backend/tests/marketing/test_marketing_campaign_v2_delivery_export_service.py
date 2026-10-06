@@ -10,6 +10,11 @@ import pytest
 from app.services import marketing_campaign_v2_delivery_export_service as service
 
 
+@pytest.fixture(autouse=True)
+def _empty_blacklist(monkeypatch):
+    monkeypatch.setattr(service, "get_blacklisted_phones", lambda **_kwargs: set())
+
+
 def _recipient(
     phone: str,
     branch: str,
@@ -84,13 +89,13 @@ def test_single_branch_segment_exports_one_xlsx(monkeypatch):
         ("telefono", "nombre", "sucursal", "tarifa"),
         (
             "6861000001",
-            "ANA LOPEZ",
+            "ANA",
             "VILLAS DEL REY",
             "MENSUALIDAD",
         ),
         (
             "6861000002",
-            "ROSA MARIA",
+            "ROSA",
             "VILLAS DEL REY",
             "DOMICILIADO 12 MESES $649 HE",
         ),
@@ -236,3 +241,32 @@ def test_delivery_export_sanitizes_formula_like_text(prefix):
     )
     for cell in sheet[2]:
         assert cell.data_type != "f"
+
+
+def test_frozen_campaign_export_uses_current_blacklist(monkeypatch):
+    rows = [
+        _recipient("6861000001", "METEPEC", "DOMICILIADO", "ANA LOPEZ", "MENSUALIDAD"),
+        _recipient("6861000002", "METEPEC", "DOMICILIADO", "JUAN PEREZ", "MENSUALIDAD"),
+    ]
+    monkeypatch.setattr(
+        service,
+        "get_campaign_v2",
+        lambda **_kwargs: {"id": 11, "name": "Frozen"},
+    )
+    monkeypatch.setattr(
+        service,
+        "get_blacklisted_phones",
+        lambda **_kwargs: {"6861000002"},
+    )
+
+    data, filename = service.export_campaign_v2_delivery_package(
+        campaign_id=11,
+        allowed_sucursal_keys=None,
+        session=_Session(rows),
+    )
+
+    assert filename == "FROZEN__METEPEC__DOMICILIADO.xlsx"
+    assert list(load_workbook(BytesIO(data)).active.values) == [
+        ("telefono", "nombre", "sucursal", "tarifa"),
+        ("6861000001", "ANA", "METEPEC", "MENSUALIDAD"),
+    ]

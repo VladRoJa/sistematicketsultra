@@ -6,6 +6,8 @@ import { environment } from 'src/environments/environment';
 
 import {
   CampaignV2AudienceDefinitionRequest,
+  CampaignV2BlacklistImportResult,
+  CampaignV2BlacklistSummary,
   CampaignV2CampaignDetail,
   CampaignV2CampaignPage,
   CampaignV2CampaignQuery,
@@ -36,6 +38,26 @@ export class MarketingCampaignV2Service {
 
   getOptions(): Observable<CampaignV2OptionsResponse> {
     return this.http.get<CampaignV2OptionsResponse>(`${this.apiUrl}/options`);
+  }
+
+  getBlacklistSummary(): Observable<CampaignV2BlacklistSummary> {
+    return this.http.get<CampaignV2BlacklistSummary>(`${this.apiUrl}/blacklist`);
+  }
+
+  importBlacklist(file: File): Observable<CampaignV2BlacklistImportResult> {
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+    return this.http.post<CampaignV2BlacklistImportResult>(
+      `${this.apiUrl}/blacklist/import`,
+      formData,
+    );
+  }
+
+  exportBlacklist(): Observable<Blob> {
+    return this.http.get(
+      `${this.apiUrl}/blacklist/export`,
+      { responseType: 'blob' },
+    );
   }
 
   preview(request: CampaignV2AudienceDefinitionRequest): Observable<CampaignV2PreviewResponse> {

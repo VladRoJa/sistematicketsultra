@@ -282,6 +282,7 @@ def _preview_summary(preview: dict[str, Any]) -> dict[str, Any]:
         "scoped_count",
         "current_status_counts",
         "current_status_blocked_count",
+        "blacklist_excluded_count",
         "filtered_count",
         "family_counts",
         "unclassified_family_count",

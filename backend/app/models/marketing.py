@@ -239,6 +239,45 @@ class MarketingCampaignV2TariffOverrideORM(db.Model):
     )
 
 
+class MarketingCampaignV2BlacklistORM(db.Model):
+    __tablename__ = "marketing_campaign_v2_blacklist"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    phone_mx10 = db.Column(db.String(10), nullable=False)
+    source_filename = db.Column(db.String(255), nullable=True)
+    created_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+
+    created_by_user = db.relationship(
+        "UserORM",
+        foreign_keys=[created_by_user_id],
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "phone_mx10",
+            name="uq_marketing_campaign_v2_blacklist_phone_mx10",
+        ),
+        db.CheckConstraint(
+            "length(phone_mx10) = 10",
+            name="ck_marketing_campaign_v2_blacklist_phone_length",
+        ),
+        db.Index(
+            "ix_marketing_campaign_v2_blacklist_created_at",
+            "created_at",
+        ),
+    )
+
+
 class MarketingCampaignV2ORM(db.Model):
     __tablename__ = "marketing_campaign_v2_campaigns"
 

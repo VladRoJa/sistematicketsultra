@@ -46,6 +46,7 @@ import {
 import {
   CampaignV2AudienceDefinitionRequest,
   CampaignV2AudienceFamily,
+  CampaignV2BlacklistSummary,
   CampaignV2CampaignSummary,
   CampaignV2ConsolidatedReport,
   CampaignV2HistoryDeliveryBucket,
@@ -179,6 +180,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   preview: CampaignV2PreviewResponse | null = null;
   campaigns: CampaignV2CampaignSummary[] = [];
   reporting: CampaignV2ConsolidatedReport | null = null;
+  blacklistSummary: CampaignV2BlacklistSummary | null = null;
   funnelCutoffDates: string[] = [];
 
   loadingOptions = false;
@@ -188,6 +190,9 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   loadingCampaigns = false;
   loadingReporting = false;
   exportingReporting = false;
+  loadingBlacklistSummary = false;
+  importingBlacklist = false;
+  exportingBlacklist = false;
   accessDenied = false;
   lastFreezeCompleted = false;
   error = '';
@@ -413,6 +418,10 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     });
   }
 
+  get canManageBlacklist(): boolean {
+    return Boolean(this.options?.scope.is_global);
+  }
+
   get scopeLabel(): string {
     if (!this.options) {
       return '';
@@ -447,6 +456,11 @@ export class MarketingCampaignV2PageComponent implements OnInit {
           this.options = options;
           this.ensureOptionDefaults(options);
           this.loadCampaigns(1);
+          if (options.scope.is_global) {
+            this.loadBlacklistSummary();
+          } else {
+            this.blacklistSummary = null;
+          }
         },
         error: (error: HttpErrorResponse) => {
           this.loadingOptions = false;
@@ -458,6 +472,93 @@ export class MarketingCampaignV2PageComponent implements OnInit {
             return;
           }
           this.error = this.errorMessage(error, 'No fue posible cargar Campañas V2.');
+        },
+      });
+  }
+
+  loadBlacklistSummary(): void {
+    if (!this.canManageBlacklist || this.loadingBlacklistSummary) {
+      return;
+    }
+    this.loadingBlacklistSummary = true;
+    this.service.getBlacklistSummary()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: summary => {
+          this.loadingBlacklistSummary = false;
+          this.blacklistSummary = summary;
+        },
+        error: (error: HttpErrorResponse) => {
+          this.loadingBlacklistSummary = false;
+          this.error = this.errorMessage(
+            error,
+            'No fue posible consultar la lista negra Campaign V2.',
+          );
+        },
+      });
+  }
+
+  importBlacklist(event: Event): void {
+    if (!this.canManageBlacklist || this.importingBlacklist) {
+      return;
+    }
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) {
+      return;
+    }
+
+    this.importingBlacklist = true;
+    this.error = '';
+    this.success = '';
+    this.service.importBlacklist(file)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: result => {
+          this.importingBlacklist = false;
+          this.blacklistSummary = {
+            total: result.blacklist_total,
+            latest_created_at: result.latest_created_at,
+          };
+          this.invalidatePreview();
+          this.success = [
+            `Lista negra actualizada: ${result.added} agregados`,
+            `${result.already_existing} ya existían`,
+            `${result.duplicates_in_file} duplicados en archivo`,
+            `${result.invalid} inválidos`,
+            `total ${result.blacklist_total}`,
+          ].join(' · ');
+        },
+        error: (error: HttpErrorResponse) => {
+          this.importingBlacklist = false;
+          this.error = this.errorMessage(
+            error,
+            'No fue posible importar la lista negra Campaign V2.',
+          );
+        },
+      });
+  }
+
+  exportBlacklist(): void {
+    if (!this.canManageBlacklist || this.exportingBlacklist) {
+      return;
+    }
+    this.exportingBlacklist = true;
+    this.error = '';
+    this.service.exportBlacklist()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: blob => {
+          this.exportingBlacklist = false;
+          campaignV2DownloadBlob(blob, 'campaign_v2_lista_negra.xlsx');
+        },
+        error: (error: HttpErrorResponse) => {
+          this.exportingBlacklist = false;
+          this.error = this.errorMessage(
+            error,
+            'No fue posible descargar la lista negra Campaign V2.',
+          );
         },
       });
   }
@@ -722,6 +823,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       | 'out_of_segment'
       | 'unclassified'
       | 'current_status_blocked'
+      | 'blacklist'
       | 'history_excluded'
       | 'history_included'
       | 'funnel_candidates'

@@ -220,6 +220,9 @@ class TestMarketingCampaignV2Routes:
     def test_all_endpoints_require_jwt(self):
         paths = [
             ("get", "/api/marketing/campaigns-v2/options"),
+            ("get", "/api/marketing/campaigns-v2/blacklist"),
+            ("post", "/api/marketing/campaigns-v2/blacklist/import"),
+            ("get", "/api/marketing/campaigns-v2/blacklist/export"),
             ("post", "/api/marketing/campaigns-v2/preview"),
             ("post", "/api/marketing/campaigns-v2/preview-detail"),
             ("post", "/api/marketing/campaigns-v2"),
@@ -247,6 +250,84 @@ class TestMarketingCampaignV2Routes:
                 json={} if method in {"post", "put", "patch"} else None,
             )
             assert response.status_code == 401
+
+    def test_blacklist_summary_requires_global_scope(self):
+        with self._auth(self.partial_access), patch.object(
+            routes,
+            "get_campaign_v2_blacklist_summary",
+        ) as mocked:
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/blacklist",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 403
+        mocked.assert_not_called()
+
+    def test_blacklist_summary_global_scope_returns_service_payload(self):
+        with self._auth(self.global_access), patch.object(
+            routes,
+            "get_campaign_v2_blacklist_summary",
+            return_value={
+                "total": 12,
+                "latest_created_at": "2026-10-06T10:00:00+00:00",
+            },
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/blacklist",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert response.get_json()["total"] == 12
+
+    def test_blacklist_import_global_scope_is_incremental_multipart(self):
+        with self._auth(self.global_access), patch.object(
+            routes,
+            "import_campaign_v2_blacklist_xlsx",
+            return_value={
+                "filename": "lista.xlsx",
+                "rows_read": 3,
+                "valid_unique": 2,
+                "added": 1,
+                "already_existing": 1,
+                "duplicates_in_file": 0,
+                "invalid": 1,
+                "blacklist_total": 8,
+                "latest_created_at": None,
+            },
+        ) as mocked:
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/blacklist/import",
+                headers=self.headers,
+                data={
+                    "file": (BytesIO(b"xlsx"), "lista.xlsx"),
+                },
+                content_type="multipart/form-data",
+            )
+
+        assert response.status_code == 200
+        assert response.get_json()["added"] == 1
+        kwargs = mocked.call_args.kwargs
+        assert kwargs["file_bytes"] == b"xlsx"
+        assert kwargs["filename"] == "lista.xlsx"
+        assert kwargs["created_by_user_id"] == 7
+
+    def test_blacklist_export_global_scope_returns_xlsx(self):
+        with self._auth(self.global_access), patch.object(
+            routes,
+            "export_campaign_v2_blacklist_xlsx",
+            return_value=(b"xlsx-bytes", "campaign_v2_lista_negra.xlsx"),
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/blacklist/export",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert response.data == b"xlsx-bytes"
+        assert response.mimetype.endswith("sheet")
+        assert "campaign_v2_lista_negra.xlsx" in response.headers["Content-Disposition"]
 
     def test_delivery_export_package_uses_backend_scope_and_zip_mimetype(self):
         with self._auth(), patch(

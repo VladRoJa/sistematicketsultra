@@ -9,6 +9,11 @@ from app.services import marketing_campaign_v2_audience_service as audience
 from app.services import marketing_campaign_v2_creation_service as creation
 
 
+@pytest.fixture(autouse=True)
+def _empty_blacklist(monkeypatch):
+    monkeypatch.setattr(audience, "get_blacklisted_phones", lambda **_kwargs: set())
+
+
 CUTOFF = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
 
 
