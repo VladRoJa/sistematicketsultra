@@ -274,7 +274,7 @@ function configureWorksheet(worksheet: Worksheet): void {
   worksheet.properties.outlineLevelCol = 1;
 
   for (const [firstColumn, lastColumn] of [
-    [4, 7],
+    [5, 8],
     [13, 16],
   ]) {
     for (
