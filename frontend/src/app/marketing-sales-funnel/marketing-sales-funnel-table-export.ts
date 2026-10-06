@@ -270,6 +270,27 @@ function configureWorksheet(worksheet: Worksheet): void {
   widths.forEach((width, index) => {
     worksheet.getColumn(index + 1).width = width;
   });
+
+  worksheet.properties.outlineLevelCol = 1;
+  worksheet.properties.outlineProperties = {
+    summaryBelow: true,
+    summaryRight: true,
+  };
+
+  for (const [firstColumn, lastColumn] of [
+    [4, 7],
+    [13, 16],
+  ]) {
+    for (
+      let columnNumber = firstColumn;
+      columnNumber <= lastColumn;
+      columnNumber += 1
+    ) {
+      const column = worksheet.getColumn(columnNumber);
+      column.outlineLevel = 1;
+      column.hidden = true;
+    }
+  }
 }
 
 function writeTitle(
