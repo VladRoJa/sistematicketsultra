@@ -847,6 +847,19 @@ test('M33 UI polish da jerarquía al constructor sin cambiar su contrato', () =>
   assert.equal(component.includes('lastFreezeCompleted = false'), true);
 });
 
+test('Adeudo mínimo conserva string en el FormControl y evita NumberValueAccessor', () => {
+  const root = process.cwd();
+  const dir = path.join(root, 'src/app/marketing-campaign-v2');
+  const html = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-page.component.html'),
+    'utf8',
+  );
+
+  assert.equal(html.includes('<mat-label>Adeudo mínimo</mat-label>'), true);
+  assert.equal(html.includes('type="number"\n                min="0"'), false);
+  assert.equal(html.includes('type="text"\n                inputmode="decimal"\n                [formControl]="adeudoMin"'), true);
+});
+
 test('Socios vencidos usa el selector compartido de rango de fechas', () => {
   const root = process.cwd();
   const dir = path.join(root, 'src/app/marketing-campaign-v2');
