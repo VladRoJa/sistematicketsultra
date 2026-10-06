@@ -20,6 +20,11 @@ from app.services import marketing_campaign_v2_creation_service as creation
 from app.services import marketing_campaign_v2_tariff_classifier_service as classifier
 
 
+@pytest.fixture(autouse=True)
+def _empty_blacklist(monkeypatch):
+    monkeypatch.setattr(audience, "get_blacklisted_phones", lambda **_kwargs: set())
+
+
 class _Query:
     def __init__(self, rows):
         self.rows = list(rows)
