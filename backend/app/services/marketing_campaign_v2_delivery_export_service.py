@@ -1,6 +1,7 @@
 """Exports frozen Campaign V2 recipients for manual delivery.
 
-The export is a read-only projection of the frozen Campaign V2 cohort.
+The export is a read-only projection of the frozen Campaign V2 cohort minus
+the current global Campaign V2 blacklist.
 Recipients are split by branch and audience family (commercial segment).
 One branch/segment produces one XLSX; multiple combinations produce a ZIP
 with one XLSX per combination plus a summary workbook.
@@ -19,6 +20,9 @@ from openpyxl import Workbook
 
 from app.extensions import db
 from app.models.marketing import MarketingCampaignV2RecipientORM
+from app.services.marketing_campaign_v2_blacklist_service import (
+    get_blacklisted_phones,
+)
 from app.services.marketing_campaign_v2_query_service import get_campaign_v2
 
 
@@ -68,17 +72,32 @@ def export_campaign_v2_delivery_package(
         )
         .all()
     )
-
-    groups: dict[tuple[str, str], list[MarketingCampaignV2RecipientORM]] = defaultdict(list)
-    for recipient in recipients:
-        branch = _clean_text(recipient.sucursal) or "SIN SUCURSAL"
-        family = _clean_text(recipient.audience_family) or "SIN_CLASIFICAR"
-        groups[(branch, family)].append(recipient)
+    blacklisted = get_blacklisted_phones(
+        phones=(recipient.phone_mx10 for recipient in recipients),
+        session=active_session,
+    )
+    exportable_recipients = [
+        recipient
+        for recipient in recipients
+        if recipient.phone_mx10 not in blacklisted
+    ]
 
     campaign_part = _filename_part(
         campaign.get("name"),
         fallback=f"CAMPANA_V2_{int(campaign_id)}",
     )
+    if not exportable_recipients:
+        return (
+            _recipients_workbook([]),
+            f"{campaign_part}__SIN_DESTINATARIOS.xlsx",
+        )
+
+    groups: dict[tuple[str, str], list[MarketingCampaignV2RecipientORM]] = defaultdict(list)
+    for recipient in exportable_recipients:
+        branch = _clean_text(recipient.sucursal) or "SIN SUCURSAL"
+        family = _clean_text(recipient.audience_family) or "SIN_CLASIFICAR"
+        groups[(branch, family)].append(recipient)
+
     return _build_delivery_package(
         campaign_part=campaign_part,
         groups=groups,
