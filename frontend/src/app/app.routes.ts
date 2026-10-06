@@ -205,9 +205,8 @@ export const routes: Routes = [
       },
       {
         path: 'marketing/reactivation',
-        loadComponent: () =>
-          import('./marketing-reactivation/marketing-reactivation-page.component')
-            .then(m => m.MarketingReactivationPageComponent),
+        redirectTo: 'marketing/campaigns-v2',
+        pathMatch: 'full',
       },
       {
         path: 'marketing/campaigns-v2',
