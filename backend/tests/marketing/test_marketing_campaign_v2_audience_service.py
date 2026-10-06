@@ -10,6 +10,11 @@ import pytest
 from app.services import marketing_campaign_v2_audience_service as service
 
 
+@pytest.fixture(autouse=True)
+def _empty_blacklist(monkeypatch):
+    monkeypatch.setattr(service, "get_blacklisted_phones", lambda **_kwargs: set())
+
+
 def test_v2_module_has_no_reactivation_service_import_boundary():
     source = inspect.getsource(service)
     tree = ast.parse(source)
