@@ -270,6 +270,27 @@ function configureWorksheet(worksheet: Worksheet): void {
   widths.forEach((width, index) => {
     worksheet.getColumn(index + 1).width = width;
   });
+
+  worksheet.properties.outlineLevelCol = 1;
+  worksheet.properties.outlineProperties = {
+    summaryBelow: true,
+    summaryRight: true,
+  };
+
+  for (const [firstColumn, lastColumn] of [
+    [4, 7],
+    [13, 16],
+  ]) {
+    for (
+      let columnNumber = firstColumn;
+      columnNumber <= lastColumn;
+      columnNumber += 1
+    ) {
+      const column = worksheet.getColumn(columnNumber);
+      column.outlineLevel = 1;
+      column.hidden = true;
+    }
+  }
 }
 
 function writeTitle(
@@ -818,10 +839,29 @@ function applyConditionalFormats(
     addCellRule(
       worksheet,
       `I${range.firstRow}:I${range.lastRow}`,
+      'lessThan',
+      0.15,
+      COLORS.redFill,
+      COLORS.redText,
+      true,
+    );
+    addCellRule(
+      worksheet,
+      `I${range.firstRow}:I${range.lastRow}`,
       'greaterThanOrEqual',
       0.15,
       COLORS.greenFill,
       COLORS.greenText,
+    );
+
+    addCellRule(
+      worksheet,
+      `J${range.firstRow}:J${range.lastRow}`,
+      'lessThan',
+      0.30,
+      COLORS.redFill,
+      COLORS.redText,
+      true,
     );
     addCellRule(
       worksheet,
@@ -836,18 +876,9 @@ function applyConditionalFormats(
       worksheet,
       `K${range.firstRow}:K${range.lastRow}`,
       'lessThan',
-      0.015,
+      0.033,
       COLORS.redFill,
       COLORS.redText,
-      true,
-    );
-    addCellRule(
-      worksheet,
-      `K${range.firstRow}:K${range.lastRow}`,
-      'lessThan',
-      0.033,
-      COLORS.amberFill,
-      COLORS.amberText,
       true,
     );
     addCellRule(
