@@ -525,6 +525,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
           this.success = [
             `Lista negra actualizada: ${result.added} agregados`,
             `${result.already_existing} ya existían`,
+            `${result.duplicates_in_file} duplicados en archivo`,
             `${result.invalid} inválidos`,
             `total ${result.blacklist_total}`,
           ].join(' · ');
