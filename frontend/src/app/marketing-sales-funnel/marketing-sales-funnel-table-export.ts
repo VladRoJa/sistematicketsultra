@@ -272,10 +272,6 @@ function configureWorksheet(worksheet: Worksheet): void {
   });
 
   worksheet.properties.outlineLevelCol = 1;
-  worksheet.properties.outlineProperties = {
-    summaryBelow: true,
-    summaryRight: true,
-  };
 
   for (const [firstColumn, lastColumn] of [
     [4, 7],
