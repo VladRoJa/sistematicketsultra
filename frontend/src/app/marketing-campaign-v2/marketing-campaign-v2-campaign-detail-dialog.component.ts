@@ -377,6 +377,12 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
     if (definition.filters.expiration_date_to) {
       rows.push({ label: 'Vencimiento hasta', value: definition.filters.expiration_date_to });
     }
+    if (definition.filters.adeudo_min) {
+      rows.push({
+        label: 'Adeudo mínimo',
+        value: this.currencyLabel(definition.filters.adeudo_min),
+      });
+    }
     if (definition.filters.iventas_current_statuses?.length) {
       rows.push({
         label: 'Estado actual en iVentas',
@@ -465,6 +471,19 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
       .slice(0, 80) || `CAMPANA_V2_${this.data.campaignId}`;
     const extension = blob.type === 'application/zip' ? 'zip' : 'xlsx';
     return `${normalized}.${extension}`;
+  }
+
+  private currencyLabel(value: string): string {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+      return value;
+    }
+    return new Intl.NumberFormat('es-MX', {
+      style: 'currency',
+      currency: 'MXN',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(parsed);
   }
 
   private formatHistoryObservedAt(value: string): string {

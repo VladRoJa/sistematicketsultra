@@ -35,6 +35,7 @@ import {
   campaignV2ReportingValue,
   canFreezeCampaignV2,
   isCampaignV2AudienceValid,
+  isCampaignV2AdeudoMinValid,
   parseCampaignV2LookbackDays,
   selectAllCampaignV2Families,
   toggleCampaignV2Family,
@@ -107,6 +108,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   });
   readonly expirationDateFrom = new FormControl('', { nonNullable: true });
   readonly expirationDateTo = new FormControl('', { nonNullable: true });
+  readonly adeudoMin = new FormControl('', { nonNullable: true });
   readonly funnelMonth = new FormControl('', { nonNullable: true });
   readonly funnelCutoffDate = new FormControl('', { nonNullable: true });
   readonly funnelMonthOptions = this.buildFunnelMonthOptions();
@@ -208,6 +210,9 @@ export class MarketingCampaignV2PageComponent implements OnInit {
           this.expirationDateFrom.setValue('', { emitEvent: false });
           this.expirationDateTo.setValue('', { emitEvent: false });
         }
+        if (!this.showsAdeudoMin) {
+          this.adeudoMin.setValue('', { emitEvent: false });
+        }
         if (source === 'FUNNEL_PORTFOLIO') {
           this.loadFunnelCutoffs();
         }
@@ -218,6 +223,9 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.invalidatePreview());
     this.expirationDateTo.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.invalidatePreview());
+    this.adeudoMin.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.invalidatePreview());
     this.funnelMonth.valueChanges
@@ -288,6 +296,14 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       this.options,
       this.source.value,
       'expiration_date_from',
+    );
+  }
+
+  get showsAdeudoMin(): boolean {
+    return campaignV2FilterApplies(
+      this.options,
+      this.source.value,
+      'adeudo_min',
     );
   }
 
@@ -1047,6 +1063,12 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     if (metadata.expiration_date_to) {
       rows.push({ label: 'Vencimiento hasta', value: String(metadata.expiration_date_to) });
     }
+    if (metadata['adeudo_min']) {
+      rows.push({
+        label: 'Adeudo mínimo',
+        value: this.currencyLabel(String(metadata['adeudo_min'])),
+      });
+    }
     if (metadata.current_status_activos_cutoff_date) {
       rows.push({
         label: 'Corte usado para estado actual',
@@ -1096,6 +1118,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       audienceFamilies: this.selectedFamilies,
       expirationDateFrom: this.expirationDateFrom.value,
       expirationDateTo: this.expirationDateTo.value,
+      adeudoMin: this.adeudoMin.value,
       funnelMonth: this.funnelMonth.value,
       funnelCutoffDate: this.funnelCutoffDate.value,
       iventasCurrentStatuses: this.selectedIventasCurrentStatuses,
@@ -1121,6 +1144,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     this.selectedFamilies = [];
     this.expirationDateFrom.setValue('', { emitEvent: false });
     this.expirationDateTo.setValue('', { emitEvent: false });
+    this.adeudoMin.setValue('', { emitEvent: false });
     this.funnelMonth.setValue('', { emitEvent: false });
     this.funnelCutoffDate.setValue('', { emitEvent: false });
     this.funnelCutoffDates = [];
@@ -1209,6 +1233,9 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     if (this.historyLookbackInvalid) {
       return 'Indica un número entero de días mayor a cero para la ventana histórica.';
     }
+    if (this.showsAdeudoMin && !isCampaignV2AdeudoMinValid(this.adeudoMin.value)) {
+      return 'El adeudo mínimo debe ser un número mayor o igual a cero.';
+    }
     if (this.showsExpirationRange) {
       if (!this.expirationDateFrom.value || !this.expirationDateTo.value) {
         return 'Indica las dos fechas de vencimiento.';
@@ -1218,6 +1245,19 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       }
     }
     return 'Revisa la definición de audiencia.';
+  }
+
+  private currencyLabel(value: string): string {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+      return value;
+    }
+    return new Intl.NumberFormat('es-MX', {
+      style: 'currency',
+      currency: 'MXN',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(parsed);
   }
 
   private formatObservedAt(value: string): string {

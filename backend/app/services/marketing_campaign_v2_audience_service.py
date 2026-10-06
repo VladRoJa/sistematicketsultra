@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
+from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable
 
 from app.extensions import db
@@ -111,6 +112,7 @@ class MarketingCampaignV2AudienceCandidate:
     categoria_tarifa: str | None = None
     audience_family: str | None = None
     fecha_vencimiento: date | None = None
+    adeudo: Decimal | None = None
     current_status: str | None = None
     evidence: tuple[str, ...] = field(default_factory=tuple)
 
@@ -212,6 +214,7 @@ def build_campaign_v2_audience_preview(
     allowed_sucursal_keys: Iterable[Any] | None,
     expiration_date_from: Any = None,
     expiration_date_to: Any = None,
+    adeudo_min: Any = None,
     history_exclusion: Any = None,
     historical_targeting: Any = None,
     iventas_current_statuses: Any = None,
@@ -228,6 +231,7 @@ def build_campaign_v2_audience_preview(
         allowed_sucursal_keys=allowed_sucursal_keys,
         expiration_date_from=expiration_date_from,
         expiration_date_to=expiration_date_to,
+        adeudo_min=adeudo_min,
         history_exclusion=history_exclusion,
         historical_targeting=historical_targeting,
         iventas_current_statuses=iventas_current_statuses,
@@ -249,6 +253,7 @@ def build_campaign_v2_audience_preview_detail(
     page_size: Any = 50,
     expiration_date_from: Any = None,
     expiration_date_to: Any = None,
+    adeudo_min: Any = None,
     history_exclusion: Any = None,
     historical_targeting: Any = None,
     iventas_current_statuses: Any = None,
@@ -277,6 +282,7 @@ def build_campaign_v2_audience_preview_detail(
         allowed_sucursal_keys=allowed_sucursal_keys,
         expiration_date_from=expiration_date_from,
         expiration_date_to=expiration_date_to,
+        adeudo_min=adeudo_min,
         history_exclusion=history_exclusion,
         historical_targeting=historical_targeting,
         iventas_current_statuses=iventas_current_statuses,
@@ -343,6 +349,7 @@ def _build_campaign_v2_audience_plan(
     allowed_sucursal_keys: Iterable[Any] | None,
     expiration_date_from: Any,
     expiration_date_to: Any,
+    adeudo_min: Any = None,
     history_exclusion: Any = None,
     historical_targeting: Any = None,
     iventas_current_statuses: Any = None,
@@ -360,6 +367,11 @@ def _build_campaign_v2_audience_plan(
     normalized_iventas_statuses = _normalize_iventas_current_statuses(
         iventas_current_statuses
     )
+    normalized_adeudo_min = _normalize_adeudo_min(adeudo_min)
+    if normalized_source != SOURCE_EXPIRED_MEMBERS and normalized_adeudo_min is not None:
+        raise MarketingCampaignV2AudienceValidationError(
+            "adeudo_min sólo aplica a EXPIRED_MEMBERS."
+        )
     active_session = session if session is not None else db.session
 
     if normalized_source == SOURCE_FUNNEL_PORTFOLIO:
@@ -400,6 +412,8 @@ def _build_campaign_v2_audience_plan(
             ),
             "audience_families": list(selected_families),
         }
+        if normalized_adeudo_min is not None:
+            normalized_filters["adeudo_min"] = format(normalized_adeudo_min, "f")
     else:
         if expiration_date_from is not None or expiration_date_to is not None:
             raise MarketingCampaignV2AudienceValidationError(
@@ -426,10 +440,19 @@ def _build_campaign_v2_audience_plan(
             normalized_iventas_statuses
         )
 
+    source_candidates = source_result.candidates
+    if normalized_adeudo_min is not None:
+        source_candidates = tuple(
+            candidate
+            for candidate in source_candidates
+            if candidate.adeudo is not None
+            and candidate.adeudo >= normalized_adeudo_min
+        )
+
     tariff_catalog = _read_v2_tariff_catalog(session=active_session)
     classified = tuple(
         _classify_candidate(candidate, tariff_catalog=tariff_catalog)
-        for candidate in source_result.candidates
+        for candidate in source_candidates
     )
     classified = tuple(sorted(classified, key=_candidate_sort_key))
 
@@ -454,6 +477,8 @@ def _build_campaign_v2_audience_plan(
     )
 
     source_metadata = dict(source_result.metadata)
+    if normalized_adeudo_min is not None:
+        source_metadata["adeudo_min"] = format(normalized_adeudo_min, "f")
     history_excluded_rows: tuple[
         MarketingCampaignV2HistoryExcludedCandidate,
         ...,
@@ -652,6 +677,36 @@ def _build_funnel_audience_plan(
         funnel_buyer_excluded_rows=buyer_excluded,
         active_member_suppressed_rows=active_member_suppressed,
     )
+
+
+def _normalize_adeudo_min(value: Any) -> Decimal | None:
+    if value is None or str(value).strip() == "":
+        return None
+    if isinstance(value, bool):
+        raise MarketingCampaignV2AudienceValidationError(
+            "adeudo_min debe ser un número mayor o igual a cero."
+        )
+    try:
+        normalized = Decimal(str(value).strip())
+    except (InvalidOperation, ValueError, TypeError) as exc:
+        raise MarketingCampaignV2AudienceValidationError(
+            "adeudo_min debe ser un número mayor o igual a cero."
+        ) from exc
+    if not normalized.is_finite() or normalized < 0:
+        raise MarketingCampaignV2AudienceValidationError(
+            "adeudo_min debe ser un número mayor o igual a cero."
+        )
+    return normalized
+
+
+def _optional_decimal_value(value: Any) -> Decimal | None:
+    if value is None or str(value).strip() == "":
+        return None
+    try:
+        normalized = Decimal(str(value).strip())
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+    return normalized if normalized.is_finite() else None
 
 
 def _normalize_iventas_current_statuses(value: Any) -> tuple[str, ...]:
@@ -1453,6 +1508,7 @@ def _expired_candidate(
         sucursal_key=sucursal_key,
         tarifa_raw=_optional_text(getattr(row, "tarifa", None)),
         fecha_vencimiento=_row_expiration_date(row),
+        adeudo=_optional_decimal_value(getattr(row, "adeudo", None)),
         current_status=current_status_value,
         evidence=(f"CURRENT_STATUS:{current_status_value}",),
     )
@@ -1815,6 +1871,7 @@ def _serialize_candidate(row: MarketingCampaignV2AudienceCandidate) -> dict[str,
         "categoria_tarifa": row.categoria_tarifa,
         "audience_family": row.audience_family,
         "fecha_vencimiento": _iso_date(row.fecha_vencimiento),
+        "adeudo": (format(row.adeudo, "f") if row.adeudo is not None else None),
         "current_status": row.current_status,
         "evidence": list(row.evidence),
     }

@@ -28,6 +28,7 @@ import {
   campaignV2ReportingValue,
   canFreezeCampaignV2,
   isCampaignV2AudienceValid,
+  isCampaignV2AdeudoMinValid,
   selectAllCampaignV2Families,
   toggleCampaignV2Family,
 } from './marketing-campaign-v2.logic';
@@ -961,4 +962,46 @@ test('M30 modelos Reporting están tipados explícitamente', () => {
     models.includes('provider_raw: CampaignV2ReportingProviderRaw | null;'),
     true,
   );
+});
+
+
+test('Adeudo mínimo sólo aplica a vencidos, es inclusivo en contrato y vacío se omite', () => {
+  const base = {
+    source: 'EXPIRED_MEMBERS' as const,
+    audienceFamilies: ['DOMICILIADO'] as CampaignV2AudienceFamily[],
+    expirationDateFrom: '2020-12-01',
+    expirationDateTo: '2026-09-30',
+    adeudoMin: '3000',
+  };
+  const request = buildCampaignV2AudienceRequest(base);
+  assert.equal(request.adeudo_min, '3000');
+  assert.equal(campaignV2FieldInvalidatesPreview('adeudo_min'), true);
+  assert.equal(isCampaignV2AdeudoMinValid('3000'), true);
+  assert.equal(isCampaignV2AdeudoMinValid('0'), true);
+  assert.equal(isCampaignV2AdeudoMinValid('-1'), false);
+  assert.equal(isCampaignV2AudienceValid(base), true);
+  assert.equal(isCampaignV2AudienceValid({ ...base, adeudoMin: '-1' }), false);
+
+  const empty = buildCampaignV2AudienceRequest({ ...base, adeudoMin: '' });
+  assert.equal('adeudo_min' in empty, false);
+
+  const active = buildCampaignV2AudienceRequest({
+    source: 'ACTIVE_MEMBERS',
+    audienceFamilies: ['DOMICILIADO'],
+    expirationDateFrom: '',
+    expirationDateTo: '',
+    adeudoMin: '3000',
+  });
+  assert.equal('adeudo_min' in active, false);
+
+  const funnel = buildCampaignV2AudienceRequest({
+    source: 'FUNNEL_PORTFOLIO',
+    audienceFamilies: [],
+    expirationDateFrom: '',
+    expirationDateTo: '',
+    adeudoMin: '3000',
+    funnelMonth: '2026-07',
+    funnelCutoffDate: '2026-07-31',
+  });
+  assert.equal('adeudo_min' in funnel, false);
 });

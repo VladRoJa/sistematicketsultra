@@ -33,6 +33,7 @@ def _candidate(
     branch: str = "BRANCH A",
     name: str | None = None,
     source: str = service.SOURCE_EXPIRED_MEMBERS,
+    adeudo: str | None = None,
 ):
     return service.MarketingCampaignV2AudienceCandidate(
         source=source,
@@ -52,6 +53,7 @@ def _candidate(
         sucursal_key=branch,
         tarifa_raw=tariff,
         fecha_vencimiento=date(2026, 8, 15),
+        adeudo=service._optional_decimal_value(adeudo),
         current_status=(
             service.current_status.STATUS_NOT_FOUND
             if source == service.SOURCE_EXPIRED_MEMBERS
@@ -392,3 +394,75 @@ def test_current_status_blocked_has_consistent_drilldown(monkeypatch):
     )
     assert detail["total"] == 1
     assert detail["rows"][0]["source_ref_id"] == 99
+
+
+def test_adeudo_min_is_inclusive_and_combines_with_family_and_iventas(monkeypatch):
+    rows = [
+        _candidate(1, tariff="DOM", phone="6861000001", adeudo="3000.00"),
+        _candidate(2, tariff="DOM", phone="6861000002", adeudo="4500.00"),
+        _candidate(3, tariff="DOM", phone="6861000003", adeudo="2999.99"),
+        _candidate(4, tariff="TRI", phone="6861000004", adeudo="5000.00"),
+        _candidate(5, tariff="DOM", phone="6861000005", adeudo=None),
+    ]
+    _install(monkeypatch, rows)
+    monkeypatch.setattr(
+        service,
+        "get_latest_iventas_status_by_phone",
+        lambda **_kwargs: {
+            "sync_run_ids": [91],
+            "period_keys": ["IVENTAS-2026-09"],
+            "statuses": {
+                "6861000001": "VIEWED",
+                "6861000002": "DELIVERED",
+                "6861000004": "VIEWED",
+            },
+        },
+    )
+
+    preview = service.build_campaign_v2_audience_preview(
+        source=service.SOURCE_EXPIRED_MEMBERS,
+        audience_families=["DOMICILIADO"],
+        allowed_sucursal_keys=None,
+        expiration_date_from="2026-08-01",
+        expiration_date_to="2026-08-31",
+        adeudo_min="3000",
+        iventas_current_statuses=["VIEWED"],
+        session=object(),
+    )
+
+    assert preview["filters"]["adeudo_min"] == "3000"
+    assert preview["source_metadata"]["adeudo_min"] == "3000"
+    assert preview["family_counts"]["DOMICILIADO"] == 2
+    assert preview["family_counts"]["TRIMESTRAL"] == 1
+    assert preview["filtered_count"] == 2
+    assert preview["unique_recipient_count"] == 1
+
+
+@pytest.mark.parametrize("value", ["-1", "NaN", "Infinity", "texto"])
+def test_adeudo_min_rejects_invalid_values(value):
+    with pytest.raises(service.MarketingCampaignV2AudienceValidationError):
+        service._normalize_adeudo_min(value)
+
+
+def test_adeudo_min_only_applies_to_expired_members(monkeypatch):
+    _install(
+        monkeypatch,
+        [_candidate(
+            1,
+            source=service.SOURCE_ACTIVE_MEMBERS,
+            tariff="DOM",
+            phone="6861000001",
+        )],
+        source=service.SOURCE_ACTIVE_MEMBERS,
+    )
+    with pytest.raises(
+        service.MarketingCampaignV2AudienceValidationError,
+        match="sólo aplica a EXPIRED_MEMBERS",
+    ):
+        service.build_campaign_v2_audience_preview(
+            source=service.SOURCE_ACTIVE_MEMBERS,
+            audience_families=["DOMICILIADO"],
+            allowed_sucursal_keys=None,
+            adeudo_min="3000",
+            session=object(),
+        )

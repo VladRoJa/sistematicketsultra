@@ -72,6 +72,19 @@
               (dateToChange)="onExpirationDateToChange($event)">
             </app-suite-date-range-selector>
 
+            <mat-form-field *ngIf="showsAdeudoMin" appearance="fill">
+              <mat-label>Adeudo mínimo</mat-label>
+              <span matPrefix>$&nbsp;</span>
+              <input
+                matInput
+                type="number"
+                min="0"
+                step="0.01"
+                inputmode="decimal"
+                [formControl]="adeudoMin">
+              <mat-hint>Incluye adeudos iguales o mayores al monto.</mat-hint>
+            </mat-form-field>
+
             <mat-form-field *ngIf="showsFunnelFilters" appearance="fill">
               <mat-label>Mes Funnel</mat-label>
               <mat-select [formControl]="funnelMonth">
