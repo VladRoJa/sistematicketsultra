@@ -326,3 +326,27 @@ def test_funnel_history_decision_buckets_never_restore_active_suppression(monkey
         for phone in call["phones"]
     }
     assert "6861000003" not in observed_phones
+
+
+def test_funnel_blacklist_excludes_phone_and_exposes_detail(monkeypatch):
+    _install(monkeypatch)
+    monkeypatch.setattr(
+        audience,
+        "get_blacklisted_phones",
+        lambda **_kwargs: {"6861000001"},
+    )
+    kwargs = _kwargs()
+    kwargs["history_exclusion"] = None
+
+    preview = audience.build_campaign_v2_audience_preview(**kwargs)
+    detail = audience.build_campaign_v2_audience_preview_detail(
+        bucket="BLACKLIST",
+        page=1,
+        page_size=50,
+        **kwargs,
+    )
+
+    assert preview["blacklist_excluded_count"] == 1
+    assert preview["unique_recipient_count"] == 1
+    assert detail["total"] == 1
+    assert detail["rows"][0]["phone_mx10"] == "6861000001"
