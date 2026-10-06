@@ -55,14 +55,14 @@ def test_single_branch_segment_exports_one_xlsx(monkeypatch):
             "6861000002",
             "VILLAS DEL REY",
             "DOMICILIADO",
-            "ROSA MARIA",
+            "ROSA",
             "DOMICILIADO 12 MESES $649 HE",
         ),
         _recipient(
             "6861000001",
             "VILLAS DEL REY",
             "DOMICILIADO",
-            "ANA LOPEZ",
+            "ANA",
             "MENSUALIDAD",
         ),
     ]
@@ -159,8 +159,8 @@ def test_multiple_branch_segment_groups_export_zip_with_summary(monkeypatch):
         )
         assert list(tecnologico.active.values) == [
             ("telefono", "nombre", "sucursal", "tarifa"),
-            ("6861000003", "LUIS GARCIA", "TECNOLOGICO", "COBACH $399"),
-            ("6861000004", "SOFIA RAMIREZ", "TECNOLOGICO", "ESTUDIANTE $599"),
+            ("6861000003", "LUIS", "TECNOLOGICO", "COBACH $399"),
+            ("6861000004", "SOFIA", "TECNOLOGICO", "ESTUDIANTE $599"),
         ]
 
         summary = load_workbook(BytesIO(archive.read("RESUMEN.xlsx")))
@@ -195,6 +195,23 @@ def test_out_of_segment_and_missing_family_use_explicit_names():
         assert "QA__METEPEC__FUERA_DE_SEGMENTO.xlsx" in archive.namelist()
         assert "QA__METEPEC__SIN_CLASIFICAR.xlsx" in archive.namelist()
 
+
+
+@pytest.mark.parametrize(
+    ("raw_name", "expected"),
+    [
+        ("JUAN CARLOS PEREZ", "JUAN"),
+        ("ANA LOPEZ", "ANA"),
+        ("MA CARMEN LOPEZ", "CARMEN"),
+        ("MA. CARMEN LOPEZ", "CARMEN"),
+        ("Mª CARMEN LOPEZ", "CARMEN"),
+        ("MA DEL CARMEN LOPEZ", "CARMEN"),
+        ("", ""),
+        (None, ""),
+    ],
+)
+def test_export_first_name_uses_first_useful_name(raw_name, expected):
+    assert service._export_first_name(raw_name) == expected
 
 
 @pytest.mark.parametrize("prefix", ["=", "+", "-", "@"])
