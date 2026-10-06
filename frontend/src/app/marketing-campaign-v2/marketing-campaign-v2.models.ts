@@ -222,7 +222,7 @@ export interface CampaignV2PreviewSummary {
   scoped_count: number;
   current_status_counts: Record<string, number>;
   current_status_blocked_count: number;
-  blacklist_excluded_count: number;
+  blacklist_excluded_count?: number;
   filtered_count: number;
   family_counts: Partial<Record<CampaignV2ObservedFamily, number>>;
   unclassified_family_count: number;
