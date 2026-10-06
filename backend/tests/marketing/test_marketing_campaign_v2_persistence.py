@@ -12,12 +12,26 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import (
+    MarketingCampaignV2BlacklistORM,
     MarketingCampaignV2ORM,
     MarketingCampaignV2RecipientORM,
     MarketingReactivationCampaignORM,
     MarketingReactivationCampaignRecipientORM,
 )
 from app.services.marketing_phone import normalize_phone
+
+
+def _blacklist_migration():
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "migrations"
+        / "versions"
+        / "c6f4b9a2d7e1_add_campaign_v2_blacklist.py"
+    )
+    spec = importlib.util.spec_from_file_location("campaign_v2_blacklist", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _migration():
@@ -308,5 +322,70 @@ def test_migration_upgrade_downgrade_and_legacy_intact():
                     "WHERE id=901"
                 )
             ) == "legacy-recipient"
+    finally:
+        engine.dispose()
+
+
+def test_campaign_v2_blacklist_orm_contract():
+    table = MarketingCampaignV2BlacklistORM.__table__
+    assert table.name == "marketing_campaign_v2_blacklist"
+    assert table.c.phone_mx10.nullable is False
+    assert table.c.source_filename.nullable is True
+    assert table.c.created_by_user_id.nullable is True
+
+    unique_columns = {
+        tuple(column.name for column in constraint.columns)
+        for constraint in table.constraints
+        if constraint.__class__.__name__ == "UniqueConstraint"
+    }
+    assert ("phone_mx10",) in unique_columns
+
+    fks = {
+        fk.parent.name: (fk.target_fullname, fk.ondelete)
+        for fk in table.foreign_keys
+    }
+    assert fks["created_by_user_id"] == ("users.id", "SET NULL")
+
+
+def test_campaign_v2_blacklist_migration_round_trip_and_parent():
+    migration = _blacklist_migration()
+    assert migration.down_revision == "b5d9e2a7c1f4"
+
+    engine = create_engine("sqlite://")
+    metadata = MetaData()
+    Table("users", metadata, Column("id", Integer, primary_key=True))
+
+    try:
+        with engine.begin() as connection:
+            connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+            metadata.create_all(connection)
+
+            context = MigrationContext.configure(connection)
+            with Operations.context(context):
+                migration.upgrade()
+
+            tables = set(sa_inspect(connection).get_table_names())
+            assert "marketing_campaign_v2_blacklist" in tables
+
+            connection.execute(
+                text(
+                    "INSERT INTO marketing_campaign_v2_blacklist "
+                    "(id, phone_mx10, created_by_user_id) "
+                    "VALUES (1, '6861234567', NULL)"
+                )
+            )
+            assert connection.scalar(
+                text(
+                    "SELECT phone_mx10 FROM marketing_campaign_v2_blacklist "
+                    "WHERE id=1"
+                )
+            ) == "6861234567"
+
+            with Operations.context(context):
+                migration.downgrade()
+
+            assert "marketing_campaign_v2_blacklist" not in set(
+                sa_inspect(connection).get_table_names()
+            )
     finally:
         engine.dispose()
