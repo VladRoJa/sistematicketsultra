@@ -10,6 +10,11 @@ import pytest
 from app.services import marketing_campaign_v2_delivery_export_service as service
 
 
+@pytest.fixture(autouse=True)
+def _empty_blacklist(monkeypatch):
+    monkeypatch.setattr(service, "get_blacklisted_phones", lambda **_kwargs: set())
+
+
 def _recipient(
     phone: str,
     branch: str,
@@ -84,13 +89,13 @@ def test_single_branch_segment_exports_one_xlsx(monkeypatch):
         ("telefono", "nombre", "sucursal", "tarifa"),
         (
             "6861000001",
-            "ANA LOPEZ",
+            "ANA",
             "VILLAS DEL REY",
             "MENSUALIDAD",
         ),
         (
             "6861000002",
-            "ROSA MARIA",
+            "ROSA",
             "VILLAS DEL REY",
             "DOMICILIADO 12 MESES $649 HE",
         ),
