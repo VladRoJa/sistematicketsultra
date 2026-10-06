@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 from flask_jwt_extended import get_jwt_identity
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
+from app.extensions import db
+from app.models.purchase_requisition import (
+    PurchaseRequisitionFinanceApproverORM,
+    PurchaseRequisitionStatus,
+)
 from app.models.user_model import UserORM
 
 
@@ -22,6 +29,16 @@ GLOBAL_READ_ROLES = frozenset({
 NO_CREATE_ROLES = frozenset({
     "LECTOR_GLOBAL",
 })
+MAINTENANCE_VISIBLE_STATUSES = frozenset({
+    PurchaseRequisitionStatus.IN_QUOTATION,
+    PurchaseRequisitionStatus.QUOTE_PENDING_FINANCE_APPROVAL,
+    PurchaseRequisitionStatus.PAYMENT_REQUESTED,
+    PurchaseRequisitionStatus.SHIPPING_IN_PROGRESS,
+    PurchaseRequisitionStatus.IMPORT_IN_PROGRESS,
+    PurchaseRequisitionStatus.FINAL_DESTINATION_SHIPMENT,
+    PurchaseRequisitionStatus.RECEIPT_ISSUE,
+    PurchaseRequisitionStatus.CLOSED,
+})
 
 
 class PurchaseRequisitionAuthorizationError(PermissionError):
@@ -30,6 +47,10 @@ class PurchaseRequisitionAuthorizationError(PermissionError):
 
 def normalize_role(value: object) -> str:
     return str(value or "").strip().upper()
+
+
+def _session(session: Session | None):
+    return session if session is not None else db.session
 
 
 def _positive_int(value: object) -> int | None:
@@ -86,6 +107,65 @@ def can_purchase_requisition_manage_quotation(user: UserORM | None) -> bool:
     return role == "ADMINISTRADOR" or role in MAINTENANCE_ROLES
 
 
+def can_purchase_requisition_manage_logistics(user: UserORM | None) -> bool:
+    return can_purchase_requisition_manage_quotation(user)
+
+
+def can_purchase_requisition_approve_quote(
+    user: UserORM | None,
+    *,
+    session: Session | None = None,
+) -> bool:
+    user_id = _positive_int(getattr(user, "id", None)) if user else None
+    if user_id is None:
+        return False
+
+    target_session = _session(session)
+    approver_id = target_session.execute(
+        select(PurchaseRequisitionFinanceApproverORM.id)
+        .where(
+            PurchaseRequisitionFinanceApproverORM.user_id == user_id,
+            PurchaseRequisitionFinanceApproverORM.is_active.is_(True),
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    return approver_id is not None
+
+
+def can_purchase_requisition_confirm_receipt(
+    user: UserORM | None,
+    requisition=None,
+) -> bool:
+    if user is None:
+        return False
+    if normalize_role(getattr(user, "rol", None)) != "GERENTE":
+        return False
+    if requisition is None:
+        return True
+
+    branch_id = _positive_int(getattr(requisition, "sucursal_id", None))
+    status = str(getattr(requisition, "status", None) or "").strip().upper()
+    return bool(
+        branch_id is not None
+        and branch_id in set(assigned_branch_ids(user))
+        and status == PurchaseRequisitionStatus.FINAL_DESTINATION_SHIPMENT
+    )
+
+
+def can_purchase_requisition_admin_correct(user: UserORM | None) -> bool:
+    if user is None:
+        return False
+    return normalize_role(getattr(user, "rol", None)) == "ADMINISTRADOR"
+
+
+def can_purchase_requisition_configure_finance_approvers(
+    user: UserORM | None,
+) -> bool:
+    if user is None:
+        return False
+    return normalize_role(getattr(user, "rol", None)) == "ADMINISTRADOR"
+
+
 def has_global_purchase_requisition_read(user: UserORM | None) -> bool:
     if user is None:
         return False
@@ -107,7 +187,12 @@ def can_create_for_branch(user: UserORM | None, branch_id: int) -> bool:
     return target in set(assigned_branch_ids(user))
 
 
-def can_purchase_requisition_view(user: UserORM | None, requisition) -> bool:
+def can_purchase_requisition_view(
+    user: UserORM | None,
+    requisition,
+    *,
+    session: Session | None = None,
+) -> bool:
     if user is None or requisition is None:
         return False
 
@@ -122,10 +207,22 @@ def can_purchase_requisition_view(user: UserORM | None, requisition) -> bool:
     role = normalize_role(getattr(user, "rol", None))
     status = str(getattr(requisition, "status", None) or "").strip().upper()
     if role in MAINTENANCE_ROLES:
-        return status == "IN_QUOTATION"
+        return status in MAINTENANCE_VISIBLE_STATUSES
 
     branch_id = _positive_int(getattr(requisition, "sucursal_id", None))
-    return branch_id is not None and branch_id in set(assigned_branch_ids(user))
+    if (
+        branch_id is not None
+        and branch_id in set(assigned_branch_ids(user))
+    ):
+        return True
+
+    if (
+        status == PurchaseRequisitionStatus.QUOTE_PENDING_FINANCE_APPROVAL
+        and can_purchase_requisition_approve_quote(user, session=session)
+    ):
+        return True
+
+    return False
 
 
 def get_current_purchase_requisition_user() -> UserORM:
@@ -174,9 +271,22 @@ def can_upload_purchase_requisition_attachment(
         return normalized_type in {"EVIDENCE", "OTHER"}
 
     if (
-        status == "IN_QUOTATION"
+        status == PurchaseRequisitionStatus.IN_QUOTATION
         and can_purchase_requisition_manage_quotation(user)
     ):
         return normalized_type in {"QUOTE", "OTHER"}
+
+    if (
+        status
+        == PurchaseRequisitionStatus.FINAL_DESTINATION_SHIPMENT
+        and can_purchase_requisition_confirm_receipt(
+            user,
+            requisition,
+        )
+    ):
+        return normalized_type in {
+            "RECEIPT_EVIDENCE",
+            "RECEIPT_ISSUE_EVIDENCE",
+        }
 
     return False

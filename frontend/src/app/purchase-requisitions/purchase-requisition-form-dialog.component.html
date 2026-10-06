@@ -1,117 +1,220 @@
-<div class="dialog-shell">
-  <header class="dialog-header">
+<div class="requisition-form-shell">
+  <header class="requisition-form-header">
     <div>
-      <p class="eyebrow">{{ isEditMode ? 'Corrección solicitada' : 'Nueva solicitud' }}</p>
+      <span class="requisition-form-header__eyebrow">
+        {{ isEditMode ? 'Corrección solicitada' : 'Requisiciones' }}
+      </span>
       <h2>{{ title }}</h2>
-      <p>Equipo de gimnasio · flujo de revisión independiente de Tickets.</p>
+      <p>
+        {{ isEditMode
+          ? 'Actualiza la información solicitada antes de reenviar a revisión.'
+          : 'Registra la solicitud de compra y envíala a revisión.' }}
+      </p>
     </div>
-    <button mat-icon-button type="button" [mat-dialog-close]="null" aria-label="Cerrar">
+
+    <div class="requisition-form-header__badge">
+      <span class="requisition-form-header__badge-icon">🧾</span>
+      <span>
+        <strong>{{ isEditMode ? 'Corrección' : 'Nuevo registro' }}</strong>
+        <small>Captura guiada</small>
+      </span>
+    </div>
+
+    <button
+      mat-icon-button
+      type="button"
+      [mat-dialog-close]="null"
+      aria-label="Cerrar"
+      class="requisition-form-close"
+    >
       <mat-icon>close</mat-icon>
     </button>
   </header>
 
-  <form [formGroup]="form" (ngSubmit)="submit()" class="dialog-body">
-    <div class="grid two-columns">
-      <label>
-        <span>Sucursal</span>
-        <select formControlName="sucursal_id">
-          <option [ngValue]="null">Selecciona una sucursal</option>
-          <option *ngFor="let branch of data.branches" [ngValue]="branch.id">
-            {{ branch.name }}
-          </option>
-        </select>
-      </label>
+  <form
+    [formGroup]="form"
+    (ngSubmit)="submit()"
+    class="requisition-form"
+  >
+    <section class="requisition-form-section">
+      <div class="requisition-form-section__header">
+        <span class="requisition-form-section__number">1</span>
+        <div>
+          <h3>Datos principales</h3>
+          <p>Selecciona la sucursal, el motivo y la prioridad de la solicitud.</p>
+        </div>
+      </div>
 
-      <label>
-        <span>Motivo</span>
-        <select formControlName="reason">
-          <option *ngFor="let option of reasons" [value]="option.value">
-            {{ option.label }}
-          </option>
-        </select>
-      </label>
+      <div class="requisition-form-grid">
+        <mat-form-field appearance="fill" floatLabel="always">
+          <mat-label>Sucursal destino</mat-label>
+          <mat-select
+            formControlName="sucursal_id"
+            placeholder="Selecciona una sucursal"
+          >
+            <mat-option
+              *ngFor="let branch of data.branches"
+              [value]="branch.id"
+            >
+              {{ branch.name }}
+            </mat-option>
+          </mat-select>
+          <mat-error *ngIf="form.get('sucursal_id')?.touched && form.get('sucursal_id')?.invalid">
+            Selecciona una sucursal
+          </mat-error>
+        </mat-form-field>
 
-      <label>
-        <span>Prioridad</span>
-        <select formControlName="priority">
-          <option *ngFor="let option of priorities" [value]="option.value">
-            {{ option.label }}
-          </option>
-        </select>
-      </label>
-    </div>
+        <mat-form-field appearance="fill" floatLabel="always">
+          <mat-label>Motivo</mat-label>
+          <mat-select formControlName="reason">
+            <mat-option *ngFor="let option of reasons" [value]="option.value">
+              {{ option.label }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
 
-    <label class="full-field">
-      <span>Justificación</span>
-      <textarea
-        rows="4"
-        formControlName="justification"
-        placeholder="Explica por qué se requiere la compra."
-      ></textarea>
-    </label>
+        <mat-form-field appearance="fill" floatLabel="always">
+          <mat-label>Prioridad</mat-label>
+          <mat-select formControlName="priority">
+            <mat-option *ngFor="let option of priorities" [value]="option.value">
+              {{ option.label }}
+            </mat-option>
+          </mat-select>
+          <mat-hint>
+            La prioridad no salta el flujo de revisión.
+          </mat-hint>
+        </mat-form-field>
+      </div>
+    </section>
 
-    <section class="items-section" formArrayName="items">
-      <div class="section-heading">
+    <section class="requisition-form-section">
+      <div class="requisition-form-section__header">
+        <span class="requisition-form-section__number">2</span>
+        <div>
+          <h3>Justificación</h3>
+          <p>Explica por qué se necesita la compra y el contexto operativo.</p>
+        </div>
+      </div>
+
+      <mat-form-field appearance="fill" floatLabel="always" class="w-full">
+        <mat-label>Justificación de la compra</mat-label>
+        <textarea
+          matInput
+          rows="4"
+          formControlName="justification"
+          placeholder="Explica qué se requiere, por qué y para qué se utilizará."
+        ></textarea>
+        <mat-hint>
+          Incluye cualquier dato que ayude a revisar la solicitud.
+        </mat-hint>
+        <mat-error *ngIf="form.get('justification')?.touched && form.get('justification')?.invalid">
+          Escribe una justificación
+        </mat-error>
+      </mat-form-field>
+    </section>
+
+    <section class="requisition-form-section requisition-form-section--final" formArrayName="items">
+      <div class="requisition-form-section__header">
+        <span class="requisition-form-section__number">3</span>
         <div>
           <h3>Partidas</h3>
-          <p>Agrega al menos un equipo o artículo.</p>
+          <p>Agrega al menos un equipo o artículo antes de enviar la requisición.</p>
         </div>
-        <button mat-stroked-button type="button" (click)="addItem()">
+
+        <button
+          mat-stroked-button
+          type="button"
+          class="add-item-button"
+          (click)="addItem()"
+        >
           <mat-icon>add</mat-icon>
           Agregar partida
         </button>
       </div>
 
-      <div
-        *ngFor="let item of items.controls; let i = index"
-        class="item-row"
-        [formGroupName]="i"
-      >
-        <label class="description-field">
-          <span>Descripción</span>
-          <input
-            type="text"
-            formControlName="item_description"
-            placeholder="Ej. Caminadora comercial"
-          />
-        </label>
+      <div class="items-list">
+        <div
+          *ngFor="let item of items.controls; let i = index"
+          class="item-card"
+          [formGroupName]="i"
+        >
+          <span class="item-card__number">{{ i + 1 }}</span>
 
-        <label class="quantity-field">
-          <span>Cantidad</span>
-          <input type="number" min="1" step="1" formControlName="quantity" />
-        </label>
+          <mat-form-field appearance="fill" floatLabel="always" class="item-card__description">
+            <mat-label>Descripción</mat-label>
+            <input
+              matInput
+              type="text"
+              formControlName="item_description"
+              placeholder="Ej. Caminadora comercial"
+            />
+            <mat-error *ngIf="item.get('item_description')?.touched && item.get('item_description')?.invalid">
+              Escribe la descripción
+            </mat-error>
+          </mat-form-field>
 
-        <label class="notes-field">
-          <span>Notas</span>
-          <input
-            type="text"
-            formControlName="notes"
-            placeholder="Opcional"
-          />
-        </label>
+          <mat-form-field appearance="fill" floatLabel="always" class="item-card__quantity">
+            <mat-label>Cantidad</mat-label>
+            <input
+              matInput
+              type="number"
+              min="1"
+              step="1"
+              formControlName="quantity"
+            />
+            <mat-error *ngIf="item.get('quantity')?.touched && item.get('quantity')?.invalid">
+              Mínimo 1
+            </mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="fill" floatLabel="always" class="item-card__notes">
+            <mat-label>Notas</mat-label>
+            <input
+              matInput
+              type="text"
+              formControlName="notes"
+              placeholder="Opcional"
+            />
+          </mat-form-field>
+
+          <button
+            mat-icon-button
+            type="button"
+            aria-label="Eliminar partida"
+            class="remove-item-button"
+            [disabled]="items.length <= 1"
+            (click)="removeItem(i)"
+          >
+            <mat-icon>delete_outline</mat-icon>
+          </button>
+        </div>
+      </div>
+
+      <p *ngIf="errorMessage" class="requisition-form-error">
+        {{ errorMessage }}
+      </p>
+
+      <div class="requisition-form-actions">
+        <button
+          mat-button
+          type="button"
+          [mat-dialog-close]="null"
+          [disabled]="saving"
+        >
+          Cancelar
+        </button>
 
         <button
-          mat-icon-button
-          type="button"
-          aria-label="Eliminar partida"
-          [disabled]="items.length <= 1"
-          (click)="removeItem(i)"
+          mat-raised-button
+          color="primary"
+          type="submit"
+          class="requisition-form-submit"
+          [disabled]="saving || form.invalid"
         >
-          <mat-icon>delete_outline</mat-icon>
+          <mat-icon>{{ isEditMode ? 'save' : 'send' }}</mat-icon>
+          {{ saving ? 'Guardando…' : submitLabel }}
         </button>
       </div>
     </section>
-
-    <p *ngIf="errorMessage" class="error-message">{{ errorMessage }}</p>
-
-    <footer class="dialog-actions">
-      <button mat-button type="button" [mat-dialog-close]="null" [disabled]="saving">
-        Cancelar
-      </button>
-      <button mat-flat-button color="primary" type="submit" [disabled]="saving">
-        <mat-icon>send</mat-icon>
-        {{ saving ? 'Guardando…' : submitLabel }}
-      </button>
-    </footer>
   </form>
 </div>

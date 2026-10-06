@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.extensions import db
 from app.models.purchase_requisition import (
     PurchaseRequisitionAttachmentORM,
+    PurchaseRequisitionAttachmentType,
     PurchaseRequisitionEventORM,
     PurchaseRequisitionEventType,
     PurchaseRequisitionORM,
@@ -35,7 +36,7 @@ from app.utils.purchase_requisition_permissions import (
 
 
 MAX_PURCHASE_REQUISITION_ATTACHMENT_BYTES = 15 * 1024 * 1024
-ATTACHMENT_TYPES = ("EVIDENCE", "QUOTE", "OTHER")
+ATTACHMENT_TYPES = PurchaseRequisitionAttachmentType.ALL
 
 _ALLOWED_IMAGE_FORMATS = ("JPEG", "PNG", "WEBP")
 _IMAGE_INFO = {

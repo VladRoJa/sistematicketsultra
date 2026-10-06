@@ -74,6 +74,8 @@ def engine():
             (4, "maint", "MANTENIMIENTO", 1000),
             (5, "reader", "LECTOR_GLOBAL", 1000),
             (6, "other", "RECEPCIONISTA", 20),
+            (7, "manager-origin", "GERENTE", 10),
+            (8, "manager-other", "GERENTE", 20),
         ]
         for user_id, username, role, branch_id in rows:
             connection.exec_driver_sql(
@@ -358,5 +360,76 @@ def test_file_signature_extension_and_mime_are_validated(
                 original_filename="fake.jpg",
                 declared_mime_type="image/jpeg",
                 actor=actor,
+                session=session,
+            )
+
+def test_origin_branch_manager_can_upload_receipt_evidence_only_at_final_destination(
+    engine,
+    storage_root,
+):
+    manager = _user(7, "GERENTE", 10)
+    other_manager = _user(8, "GERENTE", 20)
+    maintenance = _user(4, "MANTENIMIENTO", 1000)
+
+    with Session(engine) as session:
+        row = _create(session)
+        row.status = "FINAL_DESTINATION_SHIPMENT"
+        session.commit()
+
+        receipt = create_purchase_requisition_attachment(
+            requisition_id=row.id,
+            attachment_type="RECEIPT_EVIDENCE",
+            content=_png_bytes(),
+            original_filename="recibido.png",
+            declared_mime_type="image/png",
+            actor=manager,
+            session=session,
+        )
+        issue = create_purchase_requisition_attachment(
+            requisition_id=row.id,
+            attachment_type="RECEIPT_ISSUE_EVIDENCE",
+            content=_pdf_bytes(),
+            original_filename="incidencia.pdf",
+            declared_mime_type="application/pdf",
+            actor=manager,
+            session=session,
+        )
+
+        assert receipt.attachment_type == "RECEIPT_EVIDENCE"
+        assert issue.attachment_type == "RECEIPT_ISSUE_EVIDENCE"
+
+        with pytest.raises(PurchaseRequisitionAuthorizationError):
+            create_purchase_requisition_attachment(
+                requisition_id=row.id,
+                attachment_type="RECEIPT_ISSUE_EVIDENCE",
+                content=_png_bytes(),
+                original_filename="foranea.png",
+                declared_mime_type="image/png",
+                actor=other_manager,
+                session=session,
+            )
+
+        with pytest.raises(PurchaseRequisitionAuthorizationError):
+            create_purchase_requisition_attachment(
+                requisition_id=row.id,
+                attachment_type="RECEIPT_EVIDENCE",
+                content=_png_bytes(),
+                original_filename="mantenimiento.png",
+                declared_mime_type="image/png",
+                actor=maintenance,
+                session=session,
+            )
+
+        row.status = "SHIPPING_IN_PROGRESS"
+        session.flush()
+
+        with pytest.raises(PurchaseRequisitionAuthorizationError):
+            create_purchase_requisition_attachment(
+                requisition_id=row.id,
+                attachment_type="RECEIPT_EVIDENCE",
+                content=_png_bytes(),
+                original_filename="temprano.png",
+                declared_mime_type="image/png",
+                actor=manager,
                 session=session,
             )

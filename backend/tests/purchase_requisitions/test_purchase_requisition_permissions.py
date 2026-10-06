@@ -2,11 +2,23 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from sqlalchemy import Column, Integer, MetaData, Table, create_engine
+from sqlalchemy.orm import Session
+
 from app import create_app
+from app.models.purchase_requisition import (
+    PurchaseRequisitionFinanceApproverORM,
+)
 from app.utils.purchase_requisition_permissions import (
+    MAINTENANCE_VISIBLE_STATUSES,
     assigned_branch_ids,
     can_create_for_branch,
+    can_purchase_requisition_admin_correct,
+    can_purchase_requisition_approve_quote,
+    can_purchase_requisition_configure_finance_approvers,
+    can_purchase_requisition_confirm_receipt,
     can_purchase_requisition_create,
+    can_purchase_requisition_manage_logistics,
     can_purchase_requisition_manage_quotation,
     can_purchase_requisition_review,
     can_purchase_requisition_view,
@@ -141,42 +153,31 @@ def test_maintenance_visibility_starts_only_after_approval():
         role="MANTENIMIENTO",
         branch_id=1000,
     )
-    pending = _requisition(
-        branch_id=10,
-        status="PENDING_REVIEW",
-    )
-    needs_info = _requisition(
-        branch_id=10,
-        status="NEEDS_INFO",
-    )
-    rejected = _requisition(
-        branch_id=10,
-        status="REJECTED",
-    )
-    quotation = _requisition(
-        branch_id=10,
-        status="IN_QUOTATION",
-    )
 
-    assert not can_purchase_requisition_view(
-        maintenance,
-        pending,
-    )
-    assert not can_purchase_requisition_view(
-        maintenance,
-        needs_info,
-    )
-    assert not can_purchase_requisition_view(
-        maintenance,
-        rejected,
-    )
-    assert can_purchase_requisition_view(
-        maintenance,
-        quotation,
-    )
-    assert can_purchase_requisition_manage_quotation(
-        maintenance
-    )
+    for status in ("PENDING_REVIEW", "NEEDS_INFO", "REJECTED"):
+        assert not can_purchase_requisition_view(
+            maintenance,
+            _requisition(branch_id=10, status=status),
+        )
+
+    assert MAINTENANCE_VISIBLE_STATUSES == frozenset({
+        "IN_QUOTATION",
+        "QUOTE_PENDING_FINANCE_APPROVAL",
+        "PAYMENT_REQUESTED",
+        "SHIPPING_IN_PROGRESS",
+        "IMPORT_IN_PROGRESS",
+        "FINAL_DESTINATION_SHIPMENT",
+        "RECEIPT_ISSUE",
+        "CLOSED",
+    })
+    for status in MAINTENANCE_VISIBLE_STATUSES:
+        assert can_purchase_requisition_view(
+            maintenance,
+            _requisition(branch_id=10, status=status),
+        )
+
+    assert can_purchase_requisition_manage_quotation(maintenance)
+    assert can_purchase_requisition_manage_logistics(maintenance)
 
 
 def test_creator_keeps_visibility_even_if_maintenance_role():
@@ -206,3 +207,126 @@ def test_access_route_is_registered_under_independent_namespace():
     assert "GET" in rules[
         "/api/purchase-requisitions/access"
     ]
+
+def _finance_engine():
+    engine = create_engine("sqlite://")
+    metadata = MetaData()
+    Table(
+        "users",
+        metadata,
+        Column("id", Integer, primary_key=True),
+    )
+    PurchaseRequisitionFinanceApproverORM.__table__.to_metadata(metadata)
+    with engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+        metadata.create_all(connection)
+        connection.exec_driver_sql(
+            "INSERT INTO users (id) VALUES (50), (51)"
+        )
+    return engine
+
+
+def test_finance_approval_is_active_user_allowlist_not_role():
+    engine = _finance_engine()
+    try:
+        finance_user = _user(
+            user_id=50,
+            role="RECEPCIONISTA",
+            branch_id=20,
+        )
+        admin_without_assignment = _user(
+            user_id=51,
+            role="ADMINISTRADOR",
+            branch_id=1000,
+        )
+
+        with Session(engine) as session:
+            row = PurchaseRequisitionFinanceApproverORM(
+                user_id=50,
+                is_active=True,
+                added_by_user_id=51,
+            )
+            session.add(row)
+            session.commit()
+
+            assert can_purchase_requisition_approve_quote(
+                finance_user,
+                session=session,
+            )
+            assert not can_purchase_requisition_approve_quote(
+                admin_without_assignment,
+                session=session,
+            )
+            assert can_purchase_requisition_view(
+                finance_user,
+                _requisition(
+                    branch_id=10,
+                    status="QUOTE_PENDING_FINANCE_APPROVAL",
+                ),
+                session=session,
+            )
+            assert not can_purchase_requisition_view(
+                finance_user,
+                _requisition(
+                    branch_id=10,
+                    status="IN_QUOTATION",
+                ),
+                session=session,
+            )
+
+            row.is_active = False
+            session.commit()
+            assert not can_purchase_requisition_approve_quote(
+                finance_user,
+                session=session,
+            )
+    finally:
+        engine.dispose()
+
+
+def test_logistics_receipt_and_admin_correction_capabilities():
+    maintenance = _user(role="MANTENIMIENTO", branch_id=1000)
+    admin = _user(role="ADMINISTRADOR", branch_id=1000)
+    manager = _user(role="GERENTE", branch_id=10)
+    other_manager = _user(role="GERENTE", branch_id=20)
+
+    assert can_purchase_requisition_manage_logistics(maintenance)
+    assert can_purchase_requisition_manage_logistics(admin)
+    assert not can_purchase_requisition_manage_logistics(manager)
+
+    assert can_purchase_requisition_admin_correct(admin)
+    assert not can_purchase_requisition_admin_correct(maintenance)
+    assert not can_purchase_requisition_admin_correct(manager)
+
+    assert can_purchase_requisition_configure_finance_approvers(admin)
+    assert not can_purchase_requisition_configure_finance_approvers(
+        maintenance
+    )
+    assert not can_purchase_requisition_configure_finance_approvers(
+        manager
+    )
+
+    final_delivery = _requisition(
+        branch_id=10,
+        status="FINAL_DESTINATION_SHIPMENT",
+    )
+    assert can_purchase_requisition_confirm_receipt(
+        manager,
+        final_delivery,
+    )
+    assert not can_purchase_requisition_confirm_receipt(
+        other_manager,
+        final_delivery,
+    )
+    assert not can_purchase_requisition_confirm_receipt(
+        maintenance,
+        final_delivery,
+    )
+    assert not can_purchase_requisition_confirm_receipt(
+        admin,
+        final_delivery,
+    )
+    assert not can_purchase_requisition_confirm_receipt(
+        manager,
+        _requisition(branch_id=10, status="SHIPPING_IN_PROGRESS"),
+    )

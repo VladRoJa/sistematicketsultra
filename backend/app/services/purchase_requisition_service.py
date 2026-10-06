@@ -20,14 +20,16 @@ from app.models.purchase_requisition import (
 )
 from app.models.sucursal_model import Sucursal
 from app.utils.purchase_requisition_permissions import (
+    MAINTENANCE_ROLES,
+    MAINTENANCE_VISIBLE_STATUSES,
     PurchaseRequisitionAuthorizationError,
     assigned_branch_ids,
     can_create_for_branch,
+    can_purchase_requisition_approve_quote,
     can_purchase_requisition_create,
     can_purchase_requisition_view,
     has_global_purchase_requisition_read,
     normalize_role,
-    MAINTENANCE_ROLES,
 )
 
 
@@ -223,34 +225,47 @@ def create_purchase_requisition(
     return requisition
 
 
-def _apply_visibility(stmt, actor):
+def _apply_visibility(
+    stmt,
+    actor,
+    *,
+    session: Session | None = None,
+):
     if has_global_purchase_requisition_read(actor):
         return stmt
 
+    target_session = _session(session)
     role = normalize_role(getattr(actor, "rol", None))
     creator_condition = (
         PurchaseRequisitionORM.created_by_user_id == int(actor.id)
     )
 
+    conditions = [creator_condition]
+
     if role in MAINTENANCE_ROLES:
-        return stmt.where(
-            or_(
-                creator_condition,
-                PurchaseRequisitionORM.status
-                == PurchaseRequisitionStatus.IN_QUOTATION,
+        conditions.append(
+            PurchaseRequisitionORM.status.in_(
+                tuple(MAINTENANCE_VISIBLE_STATUSES)
             )
         )
+        return stmt.where(or_(*conditions))
 
     branch_ids = assigned_branch_ids(actor)
-    if not branch_ids:
-        return stmt.where(creator_condition)
-
-    return stmt.where(
-        or_(
-            creator_condition,
-            PurchaseRequisitionORM.sucursal_id.in_(branch_ids),
+    if branch_ids:
+        conditions.append(
+            PurchaseRequisitionORM.sucursal_id.in_(branch_ids)
         )
-    )
+
+    if can_purchase_requisition_approve_quote(
+        actor,
+        session=target_session,
+    ):
+        conditions.append(
+            PurchaseRequisitionORM.status
+            == PurchaseRequisitionStatus.QUOTE_PENDING_FINANCE_APPROVAL
+        )
+
+    return stmt.where(or_(*conditions))
 
 
 def _parse_date(value: object, field: str) -> date | None:
@@ -277,7 +292,11 @@ def list_purchase_requisitions(
 ) -> list[PurchaseRequisitionORM]:
     target_session = _session(session)
     stmt = select(PurchaseRequisitionORM)
-    stmt = _apply_visibility(stmt, actor)
+    stmt = _apply_visibility(
+        stmt,
+        actor,
+        session=target_session,
+    )
 
     if status not in (None, ""):
         normalized_status = _validate_choice(
@@ -357,7 +376,11 @@ def get_purchase_requisition(
         raise PurchaseRequisitionNotFoundError(
             "Requisición no encontrada."
         )
-    if not can_purchase_requisition_view(actor, row):
+    if not can_purchase_requisition_view(
+        actor,
+        row,
+        session=target_session,
+    ):
         raise PurchaseRequisitionAuthorizationError(
             "No tienes acceso a esta requisición."
         )

@@ -13,9 +13,62 @@ def test_purchase_requisition_api_contract_is_registered():
 
     expected = {
         "/api/purchase-requisitions/access": "GET",
+        (
+            "/api/purchase-requisitions/"
+            "config/finance-approvers"
+        ): "GET",
+        (
+            "/api/purchase-requisitions/"
+            "config/finance-approvers"
+        ): "POST",
+        (
+            "/api/purchase-requisitions/"
+            "config/finance-approvers/<int:user_id>"
+        ): "PUT",
         "/api/purchase-requisitions": "POST",
         "/api/purchase-requisitions": "GET",
         "/api/purchase-requisitions/<int:requisition_id>": "GET",
+        (
+            "/api/purchase-requisitions/"
+            "<int:requisition_id>/quotes"
+        ): "POST",
+        (
+            "/api/purchase-requisitions/"
+            "<int:requisition_id>/quotes/"
+            "<int:quote_id>/select"
+        ): "POST",
+        (
+            "/api/purchase-requisitions/"
+            "<int:requisition_id>/submit-quote-for-finance"
+        ): "POST",
+        (
+            "/api/purchase-requisitions/"
+            "<int:requisition_id>/finance/approve-quote"
+        ): "POST",
+        (
+            "/api/purchase-requisitions/"
+            "<int:requisition_id>/finance/reject-quote"
+        ): "POST",
+        (
+            "/api/purchase-requisitions/"
+            "<int:requisition_id>/advance-logistics"
+        ): "POST",
+        (
+            "/api/purchase-requisitions/"
+            "<int:requisition_id>/confirm-receipt"
+        ): "POST",
+        (
+            "/api/purchase-requisitions/"
+            "<int:requisition_id>/report-receipt-issue"
+        ): "POST",
+        (
+            "/api/purchase-requisitions/"
+            "<int:requisition_id>/resume-logistics"
+        ): "POST",
+        (
+            "/api/purchase-requisitions/"
+            "<int:requisition_id>/administrative-correction"
+        ): "POST",
         (
             "/api/purchase-requisitions/"
             "<int:requisition_id>/requester-edit"
