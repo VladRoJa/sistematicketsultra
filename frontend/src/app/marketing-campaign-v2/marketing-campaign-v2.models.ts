@@ -119,6 +119,7 @@ export type CampaignV2AudienceFilterKey =
   | 'audience_families'
   | 'expiration_date_from'
   | 'expiration_date_to'
+  | 'adeudo_min'
   | 'tarifa'
   | 'categoria_tarifa'
   | 'funnel_month'
@@ -147,6 +148,7 @@ export interface CampaignV2AudienceDefinitionRequest {
   audience_families?: CampaignV2AudienceFamily[];
   expiration_date_from?: string;
   expiration_date_to?: string;
+  adeudo_min?: string;
   funnel_month?: string;
   funnel_cutoff_date?: string;
   history_exclusion?: CampaignV2HistoryExclusion;
@@ -206,6 +208,7 @@ export interface CampaignV2PreviewFilters {
   allowed_sucursal_keys: string[] | null;
   expiration_date_from?: string;
   expiration_date_to?: string;
+  adeudo_min?: string;
   funnel_month?: string;
   funnel_cutoff_date?: string;
   history_exclusion?: CampaignV2HistoryExclusion;

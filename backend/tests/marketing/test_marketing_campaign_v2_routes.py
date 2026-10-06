@@ -498,6 +498,7 @@ class TestMarketingCampaignV2Routes:
                 "audience_families",
                 "expiration_date_from",
                 "expiration_date_to",
+                "adeudo_min",
                 "tarifa",
                 "categoria_tarifa",
             ],

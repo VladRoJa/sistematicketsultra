@@ -25,6 +25,7 @@ export interface CampaignV2AudienceState {
   audienceFamilies: CampaignV2AudienceFamily[];
   expirationDateFrom: string;
   expirationDateTo: string;
+  adeudoMin?: string;
   funnelMonth?: string;
   funnelCutoffDate?: string;
   iventasCurrentStatuses?: CampaignV2IventasCurrentStatus[];
@@ -43,6 +44,7 @@ export type CampaignV2AudienceField =
   | 'audience_families'
   | 'expiration_date_from'
   | 'expiration_date_to'
+  | 'adeudo_min'
   | 'funnel_month'
   | 'funnel_cutoff_date'
   | 'iventas_current_statuses'
@@ -67,7 +69,7 @@ export interface CampaignV2FreezeEligibility {
 export function campaignV2FilterApplies(
   options: CampaignV2OptionsResponse | null | undefined,
   source: CampaignV2Source,
-  filter: 'audience_families' | 'expiration_date_from' | 'expiration_date_to' | 'funnel_month' | 'funnel_cutoff_date',
+  filter: 'audience_families' | 'expiration_date_from' | 'expiration_date_to' | 'adeudo_min' | 'funnel_month' | 'funnel_cutoff_date',
 ): boolean {
   const contract = options?.source_filters?.[source];
   if (contract) {
@@ -79,7 +81,11 @@ export function campaignV2FilterApplies(
   if (filter === 'audience_families') {
     return true;
   }
-  if (filter === 'expiration_date_from' || filter === 'expiration_date_to') {
+  if (
+    filter === 'expiration_date_from'
+    || filter === 'expiration_date_to'
+    || filter === 'adeudo_min'
+  ) {
     return source === 'EXPIRED_MEMBERS';
   }
   return false;
@@ -113,6 +119,12 @@ export function buildCampaignV2AudienceRequest(
   }
   if (campaignV2FilterApplies(options, state.source, 'expiration_date_to')) {
     base.expiration_date_to = state.expirationDateTo;
+  }
+  if (
+    campaignV2FilterApplies(options, state.source, 'adeudo_min')
+    && state.adeudoMin?.trim()
+  ) {
+    base.adeudo_min = state.adeudoMin.trim();
   }
   if (campaignV2FilterApplies(options, state.source, 'funnel_month')) {
     base.funnel_month = state.funnelMonth?.trim();
@@ -194,6 +206,13 @@ export function isCampaignV2AudienceValid(
     return false;
   }
 
+  if (
+    campaignV2FilterApplies(options, state.source, 'adeudo_min')
+    && !isCampaignV2AdeudoMinValid(state.adeudoMin ?? '')
+  ) {
+    return false;
+  }
+
   if (!campaignV2FilterApplies(options, state.source, 'expiration_date_from')) {
     return true;
   }
@@ -218,6 +237,15 @@ export function isCampaignV2HistoryFilterValid(
   return parseCampaignV2LookbackDays(state.historyLookbackDays ?? '') !== null;
 }
 
+
+export function isCampaignV2AdeudoMinValid(value: string): boolean {
+  const normalized = value.trim();
+  if (!normalized) {
+    return true;
+  }
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) && parsed >= 0;
+}
 
 export function parseCampaignV2LookbackDays(value: string): number | null {
   const normalized = value.trim();
@@ -307,6 +335,7 @@ export function campaignV2FieldInvalidatesPreview(field: CampaignV2AudienceField
     'audience_families',
     'expiration_date_from',
     'expiration_date_to',
+    'adeudo_min',
     'funnel_month',
     'funnel_cutoff_date',
     'iventas_current_statuses',
