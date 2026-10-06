@@ -139,7 +139,9 @@ def _recipients_workbook(recipients: list[Any]) -> bytes:
         sheet.append(
             [
                 _safe_excel_text(getattr(recipient, "phone_mx10", None)),
-                _safe_excel_text(getattr(recipient, "member_name", None)),
+                _safe_excel_text(
+                    _export_first_name(getattr(recipient, "member_name", None))
+                ),
                 _safe_excel_text(getattr(recipient, "sucursal", None)),
                 _safe_excel_text(getattr(recipient, "tarifa_raw", None)),
             ]
@@ -195,6 +197,31 @@ def _family_filename_part(value: Any) -> str:
 
 def _clean_text(value: Any) -> str:
     return " ".join(str(value or "").split())
+
+
+def _export_first_name(value: Any) -> str:
+    text = _clean_text(value)
+    if not text:
+        return ""
+
+    tokens = text.split(" ")
+    if len(tokens) == 1:
+        return tokens[0]
+
+    def token_key(token: str) -> str:
+        normalized = unicodedata.normalize("NFKD", token)
+        ascii_value = normalized.encode("ascii", "ignore").decode("ascii")
+        return re.sub(r"[^A-Z]", "", ascii_value.upper())
+
+    if token_key(tokens[0]) != "MA":
+        return tokens[0]
+
+    connectors = {"DE", "DEL", "LA", "LAS", "LOS"}
+    for token in tokens[1:]:
+        if token_key(token) not in connectors:
+            return token
+
+    return tokens[0]
 
 
 def _safe_excel_text(value: Any) -> str:
