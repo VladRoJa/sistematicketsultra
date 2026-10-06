@@ -67,6 +67,7 @@ function preview(): CampaignV2PreviewResponse {
     scoped_count: 10,
     current_status_counts: {},
     current_status_blocked_count: 0,
+    blacklist_excluded_count: 0,
     filtered_count: 8,
     family_counts: { DOMICILIADO: 8 },
     unclassified_family_count: 0,
@@ -178,6 +179,7 @@ test('Freeze requiere Preview vigente con audiencia y 409 lo invalida', () => {
 
 test('drill-down mapea buckets backend y purpose patch sólo manda purpose', () => {
   assert.equal(campaignV2MetricBucket('recipients'), 'RECIPIENTS');
+  assert.equal(campaignV2MetricBucket('blacklist'), 'BLACKLIST');
   assert.equal(campaignV2MetricBucket('invalid_phone'), 'INVALID_PHONE');
   assert.equal(campaignV2MetricBucket('duplicates'), 'DUPLICATES');
   assert.equal(campaignV2MetricBucket('out_of_segment'), 'OUT_OF_SEGMENT');
@@ -803,6 +805,41 @@ test('M30 service consume individual, consolidado y export con builder compartid
   assert.equal(service.includes('Authorization'), false);
   assert.equal(service.includes('localStorage'), false);
   assert.equal(service.includes('rest.iventas.mx'), false);
+});
+
+test('lista negra V2 tiene administración global, import incremental y métrica auditable', () => {
+  const root = process.cwd();
+  const dir = path.join(root, 'src/app/marketing-campaign-v2');
+  const service = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2.service.ts'),
+    'utf8',
+  );
+  const component = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-page.component.ts'),
+    'utf8',
+  );
+  const html = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-page.component.html'),
+    'utf8',
+  );
+
+  assert.equal(service.includes('getBlacklistSummary()'), true);
+  assert.equal(service.includes('importBlacklist(file: File)'), true);
+  assert.equal(service.includes("formData.append('file', file, file.name)"), true);
+  assert.equal(service.includes('exportBlacklist()'), true);
+  assert.equal(service.includes('${this.apiUrl}/blacklist/import'), true);
+  assert.equal(service.includes('${this.apiUrl}/blacklist/export'), true);
+
+  assert.equal(component.includes('get canManageBlacklist(): boolean'), true);
+  assert.equal(component.includes('this.options?.scope.is_global'), true);
+  assert.equal(component.includes('this.invalidatePreview();'), true);
+  assert.equal(component.includes("campaignV2DownloadBlob(blob, 'campaign_v2_lista_negra.xlsx')"), true);
+
+  assert.equal(html.includes('Lista negra global'), true);
+  assert.equal(html.includes('Importar Excel'), true);
+  assert.equal(html.includes('Descargar lista negra'), true);
+  assert.equal(html.includes("openMetric('blacklist', preview.blacklist_excluded_count)"), true);
+  assert.equal(html.includes('Bloqueados globalmente'), true);
 });
 
 test('M33 Campaign V2 descarga cohorte congelado por sucursal y segmento', () => {
