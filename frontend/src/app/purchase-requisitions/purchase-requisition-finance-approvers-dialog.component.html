@@ -1,0 +1,219 @@
+<div class="finance-config-shell">
+  <header class="finance-config-header">
+    <div>
+      <span class="finance-config-eyebrow">Configuración</span>
+      <h2>Aprobación financiera</h2>
+      <p>
+        Define qué usuarios pueden aprobar o rechazar la cotización seleccionada
+        antes de iniciar el pago.
+      </p>
+    </div>
+
+    <button
+      mat-icon-button
+      type="button"
+      aria-label="Cerrar"
+      (click)="close()"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </header>
+
+  <div *ngIf="loading" class="finance-config-state">
+    Cargando configuración…
+  </div>
+
+  <div *ngIf="loadError && !loading" class="finance-config-state finance-config-state--error">
+    {{ loadError }}
+  </div>
+
+  <main *ngIf="!loading && !loadError" class="finance-config-content">
+    <section class="finance-config-section">
+      <div class="finance-config-section__header">
+        <span class="finance-config-section__number">1</span>
+        <div>
+          <h3>Agregar aprobador</h3>
+          <p>
+            Busca un usuario del catálogo y agrégalo mediante su user_id real.
+          </p>
+        </div>
+      </div>
+
+      <div class="user-search-box">
+        <label>
+          <span>Buscar usuario</span>
+          <input
+            type="text"
+            [(ngModel)]="userSearch"
+            placeholder="Nombre, correo, rol o ID"
+          />
+        </label>
+
+        <div
+          *ngIf="userSearch.trim().length >= 2 && !selectedUser"
+          class="user-search-results"
+        >
+          <button
+            *ngFor="let user of filteredUsers; trackBy: trackByUser"
+            type="button"
+            class="user-search-result"
+            (click)="chooseUser(user)"
+          >
+            <span>
+              <strong>{{ user.username }}</strong>
+              <small>{{ userSecondaryLabel(user) }}</small>
+            </span>
+            <mat-icon>add_circle_outline</mat-icon>
+          </button>
+
+          <div *ngIf="filteredUsers.length === 0" class="user-search-empty">
+            No hay usuarios disponibles con esa búsqueda.
+          </div>
+        </div>
+      </div>
+
+      <div *ngIf="selectedUser as user" class="selected-user-card">
+        <span class="selected-user-card__icon">
+          <mat-icon>person</mat-icon>
+        </span>
+
+        <span class="selected-user-card__copy">
+          <strong>{{ user.username }}</strong>
+          <small>{{ userSecondaryLabel(user) }}</small>
+        </span>
+
+        <button
+          mat-icon-button
+          type="button"
+          aria-label="Quitar selección"
+          [disabled]="actionBusy"
+          (click)="clearSelectedUser()"
+        >
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <label *ngIf="selectedUser" class="notes-field">
+        <span>Notas</span>
+        <input
+          type="text"
+          [(ngModel)]="notes"
+          placeholder="Opcional"
+        />
+      </label>
+
+      <div *ngIf="selectedUser" class="finance-config-actions">
+        <button
+          mat-raised-button
+          color="primary"
+          type="button"
+          [disabled]="actionBusy"
+          (click)="addSelectedApprover()"
+        >
+          <mat-icon>person_add</mat-icon>
+          {{ actionBusy ? 'Guardando…' : addButtonLabel }}
+        </button>
+      </div>
+
+      <p *ngIf="actionError" class="finance-config-error">
+        {{ actionError }}
+      </p>
+    </section>
+
+    <section class="finance-config-section finance-config-section--list">
+      <div class="finance-config-section__header">
+        <span class="finance-config-section__number">2</span>
+        <div>
+          <h3>Aprobadores configurados</h3>
+          <p>
+            {{ activeCount }} activo(s) de {{ approvers.length }} configurado(s).
+          </p>
+        </div>
+      </div>
+
+      <div class="approver-list">
+        <article
+          *ngFor="let row of approvers; trackBy: trackByApprover"
+          class="approver-card"
+          [class.approver-card--inactive]="!row.is_active"
+        >
+          <span class="approver-card__icon">
+            <mat-icon>{{ row.is_active ? 'verified_user' : 'person_off' }}</mat-icon>
+          </span>
+
+          <div class="approver-card__copy">
+            <strong>{{ row.user?.username || ('Usuario #' + row.user_id) }}</strong>
+            <small>{{ approverSecondaryLabel(row) }}</small>
+            <small *ngIf="row.notes">Nota: {{ row.notes }}</small>
+
+            <button
+              type="button"
+              class="approver-note-edit"
+              [disabled]="actionBusy"
+              (click)="startEditNotes(row)"
+            >
+              <mat-icon>edit_note</mat-icon>
+              Editar nota
+            </button>
+          </div>
+
+          <span
+            class="approver-status"
+            [class.approver-status--inactive]="!row.is_active"
+          >
+            {{ row.is_active ? 'Activo' : 'Inactivo' }}
+          </span>
+
+          <button
+            mat-stroked-button
+            type="button"
+            class="approver-toggle"
+            [disabled]="actionBusy"
+            (click)="toggleApprover(row)"
+          >
+            <mat-icon>{{ row.is_active ? 'block' : 'check_circle' }}</mat-icon>
+            {{ row.is_active ? 'Desactivar' : 'Activar' }}
+          </button>
+
+          <div
+            *ngIf="isEditingNotes(row)"
+            class="approver-note-editor"
+          >
+            <input
+              type="text"
+              [(ngModel)]="editingNotesValue"
+              placeholder="Nota opcional del aprobador"
+            />
+
+            <button
+              mat-button
+              type="button"
+              [disabled]="actionBusy"
+              (click)="cancelEditNotes()"
+            >
+              Cancelar
+            </button>
+
+            <button
+              mat-raised-button
+              color="primary"
+              type="button"
+              [disabled]="actionBusy"
+              (click)="saveApproverNotes(row)"
+            >
+              {{ actionBusy ? 'Guardando…' : 'Guardar nota' }}
+            </button>
+          </div>
+        </article>
+
+        <div *ngIf="approvers.length === 0" class="finance-config-empty">
+          <mat-icon>verified_user</mat-icon>
+          <span>
+            <strong>Sin aprobadores configurados</strong>
+            <small>Agrega el primer usuario autorizado para Finanzas.</small>
+          </span>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>

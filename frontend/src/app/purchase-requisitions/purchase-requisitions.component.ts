@@ -5,6 +5,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { forkJoin } from 'rxjs';
 
 import {
   PurchaseRequisitionAccess,
@@ -19,6 +20,10 @@ import {
   PurchaseRequisitionBranchOption,
 } from './purchase-requisition-form-dialog.component';
 import { PurchaseRequisitionDetailDialogComponent } from './purchase-requisition-detail-dialog.component';
+import {
+  PurchaseRequisitionFinanceApproversDialogComponent,
+} from './purchase-requisition-finance-approvers-dialog.component';
+import { exportPurchaseRequisitionsWorkbook } from './purchase-requisition-export';
 
 interface BranchOption {
   id: number;
@@ -43,10 +48,13 @@ export class PurchaseRequisitionsComponent implements OnInit {
   access: PurchaseRequisitionAccess | null = null;
   rows: PurchaseRequisition[] = [];
   branches: BranchOption[] = [];
+  branchCatalog: BranchOption[] = [];
   createBranches: BranchOption[] = [];
 
   loading = true;
   loadError = false;
+  exportingExcel = false;
+  exportError = '';
 
   statusFilter = '';
   priorityFilter = '';
@@ -56,6 +64,18 @@ export class PurchaseRequisitionsComponent implements OnInit {
     { value: 'PENDING_REVIEW', label: 'Pendiente de revisión' },
     { value: 'NEEDS_INFO', label: 'Requiere información' },
     { value: 'IN_QUOTATION', label: 'En cotización' },
+    {
+      value: 'QUOTE_PENDING_FINANCE_APPROVAL',
+      label: 'Pendiente de aprobación financiera',
+    },
+    { value: 'PAYMENT_REQUESTED', label: 'En solicitud de pago' },
+    { value: 'SHIPPING_IN_PROGRESS', label: 'En proceso de envío' },
+    { value: 'IMPORT_IN_PROGRESS', label: 'En proceso de importación' },
+    {
+      value: 'FINAL_DESTINATION_SHIPMENT',
+      label: 'Envío a destino final',
+    },
+    { value: 'RECEIPT_ISSUE', label: 'Incidencia de recepción' },
     { value: 'REJECTED', label: 'Rechazada' },
     { value: 'CLOSED', label: 'Cerrada' },
   ];
@@ -111,6 +131,55 @@ export class PurchaseRequisitionsComponent implements OnInit {
     return Boolean(this.access?.can_create && this.createBranches.length > 0);
   }
 
+  get canConfigureFinanceApprovers(): boolean {
+    return Boolean(this.access?.can_configure_finance_approvers);
+  }
+
+  openFinanceApproversConfig(): void {
+    if (!this.canConfigureFinanceApprovers) {
+      return;
+    }
+
+    this.dialog.open(PurchaseRequisitionFinanceApproversDialogComponent, {
+      width: '820px',
+      maxWidth: '96vw',
+      autoFocus: false,
+      restoreFocus: false,
+    });
+  }
+
+  exportToExcel(): void {
+    if (!this.rows.length || this.exportingExcel) {
+      return;
+    }
+
+    this.exportingExcel = true;
+    this.exportError = '';
+
+    forkJoin(
+      this.rows.map(row => this.requisitionService.get(row.id)),
+    ).subscribe({
+      next: (responses) => {
+        const exportRows = responses.map(response => ({
+          requisition: response.requisition,
+          branchName: this.branchLabel(response.requisition.sucursal_id),
+        }));
+
+        void exportPurchaseRequisitionsWorkbook(exportRows)
+          .catch(() => {
+            this.exportError = 'No fue posible generar el archivo Excel.';
+          })
+          .finally(() => {
+            this.exportingExcel = false;
+          });
+      },
+      error: () => {
+        this.exportError = 'No fue posible cargar el detalle completo para exportar.';
+        this.exportingExcel = false;
+      },
+    });
+  }
+
   openCreateDialog(): void {
     if (!this.canOpenCreate) {
       return;
@@ -146,7 +215,7 @@ export class PurchaseRequisitionsComponent implements OnInit {
       data: {
         requisitionId: row.id,
         access: this.access,
-        branches: this.branches as PurchaseRequisitionBranchOption[],
+        branches: this.branchCatalog as PurchaseRequisitionBranchOption[],
       },
     });
 
@@ -184,7 +253,7 @@ export class PurchaseRequisitionsComponent implements OnInit {
   }
 
   branchLabel(branchId: number): string {
-    return this.branches.find(branch => branch.id === branchId)?.name
+    return this.branchCatalog.find(branch => branch.id === branchId)?.name
       || `Sucursal #${branchId}`;
   }
 
@@ -214,6 +283,8 @@ export class PurchaseRequisitionsComponent implements OnInit {
           .filter(branch => Number.isFinite(branch.id) && branch.id > 0)
           .sort((a, b) => a.name.localeCompare(b.name, 'es'));
 
+        this.branchCatalog = allBranches;
+
         const canSeeAllBranches = Boolean(
           this.access?.global_read || role === 'ADMINISTRADOR',
         );
@@ -231,6 +302,7 @@ export class PurchaseRequisitionsComponent implements OnInit {
           id,
           name: `Sucursal #${id}`,
         }));
+        this.branchCatalog = fallback;
         this.branches = fallback;
         this.createBranches = fallback;
       },

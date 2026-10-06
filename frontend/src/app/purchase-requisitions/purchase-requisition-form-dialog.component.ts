@@ -14,6 +14,9 @@ import {
 } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
 import { finalize } from 'rxjs';
 
 import {
@@ -43,6 +46,9 @@ export interface PurchaseRequisitionFormDialogData {
     MatButtonModule,
     MatDialogModule,
     MatIconModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatSelectModule,
   ],
 })
 export class PurchaseRequisitionFormDialogComponent {

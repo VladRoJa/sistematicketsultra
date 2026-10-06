@@ -1,170 +1,908 @@
 <div class="detail-shell">
   <header class="detail-header">
-    <div>
-      <p class="eyebrow">Expediente de requisición</p>
+    <div class="detail-header__copy">
+      <span class="detail-header__eyebrow">Expediente de requisición</span>
       <h2>{{ requisition?.public_id || 'Requisición' }}</h2>
-      <p *ngIf="requisition">
-        {{ branchLabel(requisition.sucursal_id) }} · {{ statusLabel(requisition.status) }}
-      </p>
+
+      <div *ngIf="requisition" class="detail-header__meta">
+        <span class="detail-header__branch">
+          <mat-icon>location_on</mat-icon>
+          {{ branchLabel(requisition.sucursal_id) }}
+        </span>
+
+        <span
+          class="detail-status"
+          [attr.data-status]="requisition.status"
+        >
+          {{ statusLabel(requisition.status) }}
+        </span>
+
+        <button
+          *ngIf="canAdminCorrect"
+          mat-stroked-button
+          type="button"
+          class="pill-button detail-header__admin-action"
+          (click)="openAdministrativeCorrection()"
+        >
+          <mat-icon>published_with_changes</mat-icon>
+          Corrección administrativa
+        </button>
+      </div>
     </div>
-    <button mat-icon-button type="button" aria-label="Cerrar" (click)="close()">
+
+    <button
+      mat-icon-button
+      type="button"
+      aria-label="Cerrar"
+      class="detail-close"
+      (click)="close()"
+    >
       <mat-icon>close</mat-icon>
     </button>
   </header>
 
-  <div *ngIf="loading" class="state-box">Cargando expediente…</div>
-  <div *ngIf="loadError && !loading" class="state-box error-box">
+  <section
+    *ngIf="requisition && adminCorrectionOpen"
+    class="admin-correction-panel"
+  >
+    <div class="admin-correction-panel__header">
+      <span class="admin-correction-panel__icon">
+        <mat-icon>admin_panel_settings</mat-icon>
+      </span>
+      <div>
+        <strong>Corrección administrativa</strong>
+        <p>
+          Corrige un avance operativo sin borrar ni modificar el historial previo.
+        </p>
+      </div>
+
+      <button
+        mat-icon-button
+        type="button"
+        aria-label="Cerrar corrección administrativa"
+        [disabled]="adminCorrectionBusy"
+        (click)="cancelAdministrativeCorrection()"
+      >
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+
+    <div class="admin-correction-panel__grid">
+      <label>
+        <span>Estado destino</span>
+        <select [(ngModel)]="adminCorrectionTarget">
+          <option
+            *ngFor="let option of administrativeCorrectionTargets"
+            [value]="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+
+      <label>
+        <span>Motivo</span>
+        <input
+          type="text"
+          [(ngModel)]="adminCorrectionReason"
+          placeholder="Ej. avance capturado por error"
+        />
+      </label>
+
+      <label class="admin-correction-panel__comment">
+        <span>Comentario de auditoría</span>
+        <textarea
+          [(ngModel)]="adminCorrectionComment"
+          rows="3"
+          placeholder="Explica qué ocurrió y por qué se corrige."
+        ></textarea>
+      </label>
+    </div>
+
+    <label
+      *ngIf="administrativeCorrectionReopensClosed"
+      class="admin-correction-confirm"
+    >
+      <input
+        type="checkbox"
+        [(ngModel)]="adminCorrectionClosedConfirmed"
+      />
+      <span>
+        Confirmo que deseo reabrir una requisición cerrada y conservar
+        el evento RECEIVED original en el historial.
+      </span>
+    </label>
+
+    <p *ngIf="adminCorrectionError" class="error-message">
+      {{ adminCorrectionError }}
+    </p>
+
+    <div class="panel-actions">
+      <button
+        mat-button
+        type="button"
+        [disabled]="adminCorrectionBusy"
+        (click)="cancelAdministrativeCorrection()"
+      >
+        Cancelar
+      </button>
+
+      <button
+        mat-raised-button
+        color="primary"
+        type="button"
+        [disabled]="administrativeCorrectionSubmitDisabled"
+        (click)="submitAdministrativeCorrection()"
+      >
+        {{ adminCorrectionBusy ? 'Aplicando…' : 'Aplicar corrección' }}
+      </button>
+    </div>
+  </section>
+
+  <div *ngIf="loading" class="detail-state">
+    Cargando expediente…
+  </div>
+
+  <div *ngIf="loadError && !loading" class="detail-state detail-state--error">
     {{ loadError }}
   </div>
 
-  <main *ngIf="requisition && !loading" class="detail-body">
-    <section class="summary-grid">
+  <section
+    *ngIf="requisition && !loading && (canReview || canResubmit)"
+    class="decision-bar"
+  >
+    <div class="decision-bar__copy">
+      <span class="decision-bar__icon">
+        <mat-icon>{{ canReview ? 'fact_check' : 'refresh' }}</mat-icon>
+      </span>
       <div>
-        <span>Estado</span>
-        <strong>{{ statusLabel(requisition.status) }}</strong>
+        <strong>{{ canReview ? 'Decisión pendiente' : 'Reenvío pendiente' }}</strong>
+        <p>
+          {{ canReview
+            ? 'Revisa el expediente y registra la decisión de Gerencia Deportiva.'
+            : 'La información ya puede reenviarse a revisión.' }}
+        </p>
       </div>
-      <div>
-        <span>Prioridad</span>
-        <strong>{{ priorityLabel(requisition.priority) }}</strong>
-      </div>
-      <div>
-        <span>Motivo</span>
-        <strong>{{ reasonLabel(requisition.reason) }}</strong>
-      </div>
-      <div>
-        <span>Creada</span>
-        <strong>{{ requisition.created_at | date:'dd/MM/yyyy HH:mm' }}</strong>
-      </div>
-    </section>
+    </div>
 
-    <section class="content-section">
-      <div class="section-heading">
-        <h3>Justificación</h3>
-        <button *ngIf="canEdit" mat-stroked-button type="button" (click)="openEdit()">
+    <div class="decision-bar__actions">
+      <button
+        *ngIf="canReview"
+        mat-stroked-button
+        type="button"
+        class="pill-button"
+        (click)="chooseAction('REQUEST_INFO')"
+      >
+        <mat-icon>help_outline</mat-icon>
+        Solicitar información
+      </button>
+
+      <button
+        *ngIf="canReview"
+        mat-stroked-button
+        type="button"
+        class="pill-button action-reject"
+        (click)="chooseAction('REJECT')"
+      >
+        <mat-icon>cancel</mat-icon>
+        Rechazar
+      </button>
+
+      <button
+        *ngIf="canReview"
+        mat-raised-button
+        color="primary"
+        type="button"
+        class="pill-button decision-bar__approve"
+        (click)="chooseAction('APPROVE')"
+      >
+        <mat-icon>check_circle</mat-icon>
+        Aprobar
+      </button>
+
+      <button
+        *ngIf="canResubmit"
+        mat-raised-button
+        color="primary"
+        type="button"
+        class="pill-button"
+        (click)="chooseAction('RESUBMIT')"
+      >
+        <mat-icon>refresh</mat-icon>
+        Reenviar a revisión
+      </button>
+    </div>
+
+    <div *ngIf="actionMode" class="action-panel decision-bar__panel">
+      <div class="action-panel__title">
+        <mat-icon>edit_note</mat-icon>
+        <strong>{{ actionTitle }}</strong>
+      </div>
+
+      <textarea
+        [(ngModel)]="actionComment"
+        rows="3"
+        [placeholder]="actionPlaceholder"
+      ></textarea>
+
+      <p *ngIf="actionError" class="error-message">
+        {{ actionError }}
+      </p>
+
+      <div class="panel-actions">
+        <button
+          mat-button
+          type="button"
+          [disabled]="actionBusy"
+          (click)="cancelAction()"
+        >
+          Cancelar
+        </button>
+
+        <button
+          mat-raised-button
+          color="primary"
+          type="button"
+          [disabled]="actionBusy"
+          (click)="submitAction()"
+        >
+          {{ actionBusy ? 'Procesando…' : 'Confirmar' }}
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section
+    *ngIf="requisition && !loading && canUploadQuote"
+    class="quotation-bar"
+  >
+    <div class="quotation-bar__header">
+      <div class="quotation-bar__copy">
+        <span class="quotation-bar__icon">
+          <mat-icon>request_quote</mat-icon>
+        </span>
+        <div>
+          <strong>Cotización en proceso</strong>
+          <p>
+            Carga propuestas, registra sus datos y selecciona la que se enviará
+            a aprobación financiera.
+          </p>
+        </div>
+      </div>
+
+      <button
+        *ngIf="canSubmitQuoteForFinance"
+        mat-raised-button
+        color="primary"
+        type="button"
+        class="pill-button"
+        [disabled]="quoteBusy"
+        (click)="submitQuoteForFinance()"
+      >
+        <mat-icon>send</mat-icon>
+        {{ quoteBusy ? 'Enviando…' : 'Enviar a Finanzas' }}
+      </button>
+    </div>
+
+    <div class="quotation-upload">
+      <select [(ngModel)]="attachmentType">
+        <option value="QUOTE">Cotización</option>
+        <option value="OTHER">Otro documento</option>
+      </select>
+
+      <input
+        type="file"
+        accept=".pdf,image/jpeg,image/png,image/webp"
+        (change)="onFileSelected($event)"
+      />
+
+      <button
+        mat-stroked-button
+        type="button"
+        class="pill-button"
+        [disabled]="!selectedFile || attachmentBusy"
+        (click)="uploadAttachment()"
+      >
+        <mat-icon>upload</mat-icon>
+        {{ attachmentBusy ? 'Subiendo…' : 'Subir archivo' }}
+      </button>
+    </div>
+
+    <div
+      *ngIf="availableQuoteAttachments.length > 0"
+      class="quote-form"
+    >
+      <div class="quote-form__heading">
+        <strong>Registrar cotización</strong>
+        <small>
+          Completa los datos del archivo para convertirlo en una propuesta
+          comparable.
+        </small>
+      </div>
+
+      <label>
+        <span>Archivo</span>
+        <select [(ngModel)]="quoteAttachmentId">
+          <option [ngValue]="null">Selecciona un archivo</option>
+          <option
+            *ngFor="let attachment of availableQuoteAttachments"
+            [ngValue]="attachment.id"
+          >
+            {{ attachment.original_filename }}
+          </option>
+        </select>
+      </label>
+
+      <label>
+        <span>Proveedor</span>
+        <input
+          type="text"
+          [(ngModel)]="quoteSupplierName"
+          maxlength="255"
+          placeholder="Nombre del proveedor"
+        />
+      </label>
+
+      <label>
+        <span>Monto</span>
+        <input
+          type="number"
+          [(ngModel)]="quoteAmount"
+          min="0.01"
+          step="0.01"
+          placeholder="0.00"
+        />
+      </label>
+
+      <label>
+        <span>Moneda</span>
+        <input
+          type="text"
+          [(ngModel)]="quoteCurrency"
+          maxlength="8"
+          placeholder="MXN"
+        />
+      </label>
+
+      <label>
+        <span>Fecha</span>
+        <input
+          type="date"
+          [(ngModel)]="quoteDate"
+        />
+      </label>
+
+      <label class="quote-form__notes">
+        <span>Observaciones</span>
+        <input
+          type="text"
+          [(ngModel)]="quoteNotes"
+          placeholder="Opcional"
+        />
+      </label>
+
+      <button
+        mat-raised-button
+        color="primary"
+        type="button"
+        class="pill-button quote-form__submit"
+        [disabled]="quoteBusy"
+        (click)="createStructuredQuote()"
+      >
+        <mat-icon>add_circle</mat-icon>
+        {{ quoteBusy ? 'Registrando…' : 'Registrar cotización' }}
+      </button>
+    </div>
+
+    <div
+      *ngIf="(requisition.quotes || []).length > 0"
+      class="quote-list"
+    >
+      <article
+        *ngFor="let quote of requisition.quotes || []"
+        class="quote-card"
+        [class.quote-card--selected]="quote.is_selected"
+      >
+        <div class="quote-card__main">
+          <div class="quote-card__title">
+            <strong>{{ quote.supplier_name }}</strong>
+            <span *ngIf="quote.is_selected" class="quote-selected">
+              Seleccionada
+            </span>
+          </div>
+
+          <div class="quote-card__meta">
+            <span>{{ quote.currency }} {{ quote.amount | number:'1.2-2' }}</span>
+            <span>{{ quote.quote_date | date:'dd/MM/yyyy' }}</span>
+            <span>{{ quoteFinanceStatusLabel(quote.finance_status) }}</span>
+          </div>
+
+          <button
+            type="button"
+            class="quote-file"
+            (click)="downloadQuoteAttachment(quote)"
+          >
+            <mat-icon>description</mat-icon>
+            {{ quoteAttachmentName(quote) }}
+          </button>
+
+          <p *ngIf="quote.notes">{{ quote.notes }}</p>
+          <p *ngIf="quote.finance_comment" class="quote-card__finance-comment">
+            Finanzas: {{ quote.finance_comment }}
+          </p>
+        </div>
+
+        <button
+          *ngIf="canSelectQuote(quote)"
+          mat-stroked-button
+          type="button"
+          class="pill-button"
+          [disabled]="quoteBusy"
+          (click)="selectQuote(quote)"
+        >
+          <mat-icon>check_circle_outline</mat-icon>
+          Seleccionar
+        </button>
+      </article>
+    </div>
+
+    <p *ngIf="attachmentError" class="error-message quotation-bar__error">
+      {{ attachmentError }}
+    </p>
+    <p *ngIf="quoteError" class="error-message quotation-bar__error">
+      {{ quoteError }}
+    </p>
+  </section>
+
+  <section
+    *ngIf="requisition && !loading && canFinanceDecide"
+    class="finance-bar"
+  >
+    <div class="finance-bar__header">
+      <div class="finance-bar__copy">
+        <span class="finance-bar__icon">
+          <mat-icon>verified_user</mat-icon>
+        </span>
+        <div>
+          <strong>Aprobación financiera pendiente</strong>
+          <p>Revisa la cotización seleccionada y registra la decisión.</p>
+        </div>
+      </div>
+
+      <div class="finance-bar__actions">
+        <button
+          mat-stroked-button
+          type="button"
+          class="pill-button action-reject"
+          [disabled]="financeBusy"
+          (click)="chooseFinanceAction('REJECT')"
+        >
+          <mat-icon>cancel</mat-icon>
+          Rechazar
+        </button>
+
+        <button
+          mat-raised-button
+          color="primary"
+          type="button"
+          class="pill-button"
+          [disabled]="financeBusy"
+          (click)="chooseFinanceAction('APPROVE')"
+        >
+          <mat-icon>check_circle</mat-icon>
+          Aprobar
+        </button>
+      </div>
+    </div>
+
+    <article *ngIf="selectedQuote as quote" class="finance-quote-card">
+      <div class="finance-quote-card__main">
+        <strong>{{ quote.supplier_name }}</strong>
+        <div class="finance-quote-card__meta">
+          <span>{{ quote.currency }} {{ quote.amount | number:'1.2-2' }}</span>
+          <span>{{ quote.quote_date | date:'dd/MM/yyyy' }}</span>
+          <span>{{ quoteFinanceStatusLabel(quote.finance_status) }}</span>
+        </div>
+
+        <button
+          type="button"
+          class="quote-file"
+          (click)="downloadQuoteAttachment(quote)"
+        >
+          <mat-icon>description</mat-icon>
+          {{ quoteAttachmentName(quote) }}
+        </button>
+
+        <p *ngIf="quote.notes">{{ quote.notes }}</p>
+      </div>
+    </article>
+
+    <div *ngIf="financeAction" class="action-panel finance-bar__panel">
+      <div class="action-panel__title">
+        <mat-icon>account_balance</mat-icon>
+        <strong>{{ financeActionTitle }}</strong>
+      </div>
+
+      <textarea
+        [(ngModel)]="financeComment"
+        rows="3"
+        [placeholder]="financeActionPlaceholder"
+      ></textarea>
+
+      <small *ngIf="financeActionRequired" class="field-hint">
+        El motivo es obligatorio para rechazar.
+      </small>
+
+      <p *ngIf="financeError" class="error-message">
+        {{ financeError }}
+      </p>
+
+      <div class="panel-actions">
+        <button
+          mat-button
+          type="button"
+          [disabled]="financeBusy"
+          (click)="cancelFinanceAction()"
+        >
+          Cancelar
+        </button>
+
+        <button
+          mat-raised-button
+          color="primary"
+          type="button"
+          [disabled]="financeBusy"
+          (click)="submitFinanceAction()"
+        >
+          {{ financeBusy ? 'Procesando…' : 'Confirmar' }}
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section
+    *ngIf="requisition && !loading && canAdvanceLogistics"
+    class="logistics-bar"
+  >
+    <div class="logistics-bar__copy">
+      <span class="logistics-bar__icon">
+        <mat-icon>local_shipping</mat-icon>
+      </span>
+      <div>
+        <strong>Seguimiento de compra y envío</strong>
+        <p>
+          Estado actual: {{ statusLabel(requisition.status) }}.
+          Selecciona únicamente el siguiente paso operativo.
+        </p>
+      </div>
+    </div>
+
+    <div class="logistics-bar__controls">
+      <select [(ngModel)]="logisticsTarget">
+        <option value="">Selecciona el siguiente estado</option>
+        <option
+          *ngFor="let option of logisticsOptions"
+          [value]="option.value"
+        >
+          {{ option.label }}
+        </option>
+      </select>
+
+      <button
+        mat-raised-button
+        color="primary"
+        type="button"
+        class="pill-button"
+        [disabled]="!logisticsTarget || logisticsBusy"
+        (click)="advanceLogistics()"
+      >
+        <mat-icon>arrow_forward</mat-icon>
+        {{ logisticsBusy ? 'Actualizando…' : 'Avanzar' }}
+      </button>
+    </div>
+
+    <p *ngIf="logisticsError" class="error-message logistics-bar__error">
+      {{ logisticsError }}
+    </p>
+  </section>
+
+  <section
+    *ngIf="requisition && !loading && canReceive"
+    class="receipt-bar"
+  >
+    <div class="receipt-bar__header">
+      <div class="receipt-bar__copy">
+        <span class="receipt-bar__icon">
+          <mat-icon>inventory_2</mat-icon>
+        </span>
+        <div>
+          <strong>Confirmación de recepción</strong>
+          <p>
+            La entrega llegó a {{ branchLabel(requisition.sucursal_id) }}.
+            Confirma si fue recibida conforme o reporta una incidencia.
+          </p>
+        </div>
+      </div>
+
+      <div class="receipt-bar__actions">
+        <button
+          mat-stroked-button
+          type="button"
+          class="pill-button action-reject"
+          [disabled]="receiptBusy"
+          (click)="chooseReceiptAction('ISSUE')"
+        >
+          <mat-icon>report_problem</mat-icon>
+          Reportar incidencia
+        </button>
+
+        <button
+          mat-raised-button
+          color="primary"
+          type="button"
+          class="pill-button"
+          [disabled]="receiptBusy"
+          (click)="chooseReceiptAction('CONFIRM')"
+        >
+          <mat-icon>done_all</mat-icon>
+          Confirmar recibido
+        </button>
+      </div>
+    </div>
+
+    <div *ngIf="receiptAction" class="action-panel receipt-bar__panel">
+      <div class="action-panel__title">
+        <mat-icon>inventory</mat-icon>
+        <strong>{{ receiptActionTitle }}</strong>
+      </div>
+
+      <label *ngIf="receiptIssueActionActive" class="receipt-field">
+        <span>Tipo de incidencia</span>
+        <select [(ngModel)]="receiptIssueType">
+          <option
+            *ngFor="let option of receiptIssueOptions"
+            [value]="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+
+      <textarea
+        [(ngModel)]="receiptComment"
+        rows="3"
+        [placeholder]="receiptActionPlaceholder"
+      ></textarea>
+
+      <label class="receipt-field">
+        <span>
+          Evidencia
+          <small>
+            {{ receiptEvidenceRequired ? 'Obligatoria' : 'Opcional' }}
+          </small>
+        </span>
+        <input
+          type="file"
+          multiple
+          accept=".pdf,image/jpeg,image/png,image/webp"
+          (change)="onReceiptFilesSelected($event)"
+        />
+      </label>
+
+      <small *ngIf="receiptFiles.length > 0" class="field-hint">
+        {{ receiptFiles.length }} archivo(s) seleccionado(s).
+      </small>
+
+      <p *ngIf="receiptError" class="error-message">
+        {{ receiptError }}
+      </p>
+
+      <div class="panel-actions">
+        <button
+          mat-button
+          type="button"
+          [disabled]="receiptBusy"
+          (click)="cancelReceiptAction()"
+        >
+          Cancelar
+        </button>
+
+        <button
+          mat-raised-button
+          color="primary"
+          type="button"
+          [disabled]="receiptBusy"
+          (click)="submitReceiptAction()"
+        >
+          {{ receiptBusy ? 'Procesando…' : 'Confirmar' }}
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section
+    *ngIf="requisition && !loading && canResumeLogistics"
+    class="resolution-bar"
+  >
+    <div class="resolution-bar__copy">
+      <span class="resolution-bar__icon">
+        <mat-icon>build_circle</mat-icon>
+      </span>
+      <div>
+        <strong>Incidencia de recepción pendiente</strong>
+        <p>
+          {{ latestReceiptIssueTypeLabel }}
+          <span *ngIf="latestReceiptIssueEvent?.comment">
+            · {{ latestReceiptIssueEvent?.comment }}
+          </span>
+        </p>
+      </div>
+    </div>
+
+    <div class="resolution-bar__controls">
+      <textarea
+        [(ngModel)]="resolutionComment"
+        rows="2"
+        placeholder="Describe la acción tomada para resolver la incidencia."
+      ></textarea>
+
+      <button
+        mat-raised-button
+        color="primary"
+        type="button"
+        class="pill-button"
+        [disabled]="resolutionBusy"
+        (click)="resumeLogistics()"
+      >
+        <mat-icon>restart_alt</mat-icon>
+        {{ resolutionBusy ? 'Reanudando…' : 'Reanudar logística' }}
+      </button>
+    </div>
+
+    <p *ngIf="resolutionError" class="error-message resolution-bar__error">
+      {{ resolutionError }}
+    </p>
+  </section>
+
+  <main *ngIf="requisition && !loading" class="detail-card">
+    <section class="detail-section">
+      <div class="detail-section__header">
+        <span class="detail-section__number">1</span>
+        <div>
+          <h3>Resumen de la solicitud</h3>
+          <p>Información principal de la requisición.</p>
+        </div>
+
+        <button
+          *ngIf="canEdit"
+          mat-stroked-button
+          type="button"
+          class="pill-button"
+          (click)="openEdit()"
+        >
           <mat-icon>edit</mat-icon>
           Corregir
         </button>
       </div>
-      <p class="justification">{{ requisition.justification }}</p>
+
+      <div class="summary-grid">
+        <article class="summary-card">
+          <span class="summary-card__icon">
+            <mat-icon>flag</mat-icon>
+          </span>
+          <div>
+            <small>Prioridad</small>
+            <strong>{{ priorityLabel(requisition.priority) }}</strong>
+          </div>
+        </article>
+
+        <article class="summary-card">
+          <span class="summary-card__icon">
+            <mat-icon>category</mat-icon>
+          </span>
+          <div>
+            <small>Motivo</small>
+            <strong>{{ reasonLabel(requisition.reason) }}</strong>
+          </div>
+        </article>
+
+        <article class="summary-card">
+          <span class="summary-card__icon">
+            <mat-icon>calendar_today</mat-icon>
+          </span>
+          <div>
+            <small>Creada</small>
+            <strong>{{ requisition.created_at | date:'dd/MM/yyyy HH:mm' }}</strong>
+          </div>
+        </article>
+
+        <article class="summary-card">
+          <span class="summary-card__icon">
+            <mat-icon>format_list_numbered</mat-icon>
+          </span>
+          <div>
+            <small>Partidas</small>
+            <strong>{{ (requisition.items || []).length }}</strong>
+          </div>
+        </article>
+      </div>
+
+      <div class="justification-card">
+        <span class="justification-card__label">
+          <mat-icon>subject</mat-icon>
+          Justificación
+        </span>
+        <p>{{ requisition.justification }}</p>
+      </div>
     </section>
 
-    <section class="content-section">
-      <h3>Partidas</h3>
+    <section class="detail-section">
+      <div class="detail-section__header">
+        <span class="detail-section__number">2</span>
+        <div>
+          <h3>Partidas solicitadas</h3>
+          <p>Equipos o artículos incluidos en la requisición.</p>
+        </div>
+      </div>
+
       <div class="items-table">
         <div class="item-row header-row">
           <span>Descripción</span>
           <span>Cantidad</span>
           <span>Notas</span>
         </div>
+
         <div *ngFor="let item of requisition.items || []" class="item-row">
-          <span>{{ item.item_description }}</span>
-          <span>{{ item.quantity }}</span>
-          <span>{{ item.notes || '—' }}</span>
+          <span class="item-description">{{ item.item_description }}</span>
+          <span class="item-quantity">{{ item.quantity }}</span>
+          <span class="item-notes">{{ item.notes || '—' }}</span>
         </div>
       </div>
     </section>
 
-    <section *ngIf="canReview || canResubmit" class="content-section workflow-section">
-      <div class="section-heading">
-        <div>
-          <h3>Acciones</h3>
-          <p>Las transiciones disponibles dependen del estado y de tus permisos.</p>
-        </div>
-      </div>
-
-      <div class="action-buttons">
-        <button
-          *ngIf="canReview"
-          mat-stroked-button
-          type="button"
-          (click)="chooseAction('REQUEST_INFO')"
-        >
-          Solicitar información
-        </button>
-        <button
-          *ngIf="canReview"
-          mat-flat-button
-          color="primary"
-          type="button"
-          (click)="chooseAction('APPROVE')"
-        >
-          Aprobar
-        </button>
-        <button
-          *ngIf="canReview"
-          mat-stroked-button
-          type="button"
-          (click)="chooseAction('REJECT')"
-        >
-          Rechazar
-        </button>
-        <button
-          *ngIf="canResubmit"
-          mat-flat-button
-          color="primary"
-          type="button"
-          (click)="chooseAction('RESUBMIT')"
-        >
-          Reenviar a revisión
-        </button>
-      </div>
-
-      <div *ngIf="actionMode" class="action-panel">
-        <strong>{{ actionTitle }}</strong>
-        <textarea
-          [(ngModel)]="actionComment"
-          rows="3"
-          [placeholder]="actionPlaceholder"
-        ></textarea>
-        <p *ngIf="actionError" class="error-message">{{ actionError }}</p>
-        <div class="panel-actions">
-          <button mat-button type="button" [disabled]="actionBusy" (click)="cancelAction()">
-            Cancelar
-          </button>
-          <button
-            mat-flat-button
-            color="primary"
-            type="button"
-            [disabled]="actionBusy"
-            (click)="submitAction()"
-          >
-            {{ actionBusy ? 'Procesando…' : 'Confirmar' }}
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <section class="content-section">
-      <div class="section-heading">
+    <section class="detail-section">
+      <div class="detail-section__header">
+        <span class="detail-section__number">3</span>
         <div>
           <h3>Adjuntos</h3>
           <p>Evidencias y cotizaciones privadas del expediente.</p>
         </div>
       </div>
 
-      <div *ngIf="canUploadAttachment" class="upload-row">
-        <select [(ngModel)]="attachmentType">
-          <option *ngIf="canUploadEvidence" value="EVIDENCE">Evidencia</option>
-          <option *ngIf="canUploadQuote" value="QUOTE">Cotización</option>
-          <option value="OTHER">Otro</option>
-        </select>
-        <input
-          type="file"
-          accept=".pdf,image/jpeg,image/png,image/webp"
-          (change)="onFileSelected($event)"
-        />
+      <div *ngIf="canUploadAttachment && !canUploadQuote" class="upload-card">
+        <div class="upload-card__icon">
+          <mat-icon>cloud_upload</mat-icon>
+        </div>
+
+        <div class="upload-card__controls">
+          <select [(ngModel)]="attachmentType">
+            <option *ngIf="canUploadEvidence" value="EVIDENCE">Evidencia</option>
+            <option *ngIf="canUploadQuote" value="QUOTE">Cotización</option>
+            <option value="OTHER">Otro</option>
+          </select>
+
+          <input
+            type="file"
+            accept=".pdf,image/jpeg,image/png,image/webp"
+            (change)="onFileSelected($event)"
+          />
+        </div>
+
         <button
           mat-stroked-button
           type="button"
+          class="pill-button"
           [disabled]="!selectedFile || attachmentBusy"
           (click)="uploadAttachment()"
         >
           <mat-icon>upload</mat-icon>
-          {{ attachmentBusy ? 'Subiendo…' : 'Subir' }}
+          {{ attachmentBusy ? 'Subiendo…' : 'Subir archivo' }}
         </button>
       </div>
 
-      <p *ngIf="attachmentError" class="error-message">{{ attachmentError }}</p>
+      <p *ngIf="attachmentError" class="error-message">
+        {{ attachmentError }}
+      </p>
 
       <div class="attachment-list">
         <button
@@ -173,30 +911,70 @@
           class="attachment-item"
           (click)="downloadAttachment(attachment)"
         >
-          <mat-icon>attach_file</mat-icon>
-          <span>
+          <span class="attachment-item__icon">
+            <mat-icon>attach_file</mat-icon>
+          </span>
+
+          <span class="attachment-item__copy">
             <strong>{{ attachment.original_filename }}</strong>
             <small>
               {{ attachmentTypeLabel(attachment.attachment_type) }}
               · {{ fileSizeLabel(attachment.size_bytes) }}
             </small>
           </span>
-          <mat-icon>download</mat-icon>
+
+          <mat-icon class="attachment-item__download">download</mat-icon>
         </button>
-        <p *ngIf="(requisition.attachments || []).length === 0" class="empty-copy">
-          Sin adjuntos.
-        </p>
+
+        <div
+          *ngIf="(requisition.attachments || []).length === 0"
+          class="empty-card"
+        >
+          <mat-icon>attach_file_off</mat-icon>
+          <span>
+            <strong>Sin adjuntos</strong>
+            <small>Este expediente todavía no tiene archivos.</small>
+          </span>
+        </div>
       </div>
     </section>
 
-    <section class="content-section">
-      <h3>Historial</h3>
+    <section class="detail-section detail-section--history">
+      <div class="detail-section__header">
+        <span class="detail-section__number">4</span>
+        <div>
+          <h3>Historial</h3>
+          <p>Trazabilidad completa de la requisición.</p>
+        </div>
+      </div>
+
       <div class="timeline">
         <div *ngFor="let event of requisition.events || []" class="timeline-row">
-          <div class="timeline-dot"></div>
-          <div>
-            <strong>{{ eventLabel(event.event_type) }}</strong>
-            <small>{{ event.created_at | date:'dd/MM/yyyy HH:mm' }}</small>
+          <div class="timeline-marker">
+            <span class="timeline-dot"></span>
+          </div>
+
+          <div class="timeline-card">
+            <div class="timeline-card__header">
+              <strong>{{ eventLabel(event.event_type) }}</strong>
+              <small>{{ event.created_at | date:'dd/MM/yyyy HH:mm' }}</small>
+            </div>
+
+            <div
+              *ngIf="event.from_status || event.to_status"
+              class="timeline-transition"
+            >
+              <span *ngIf="event.from_status">
+                {{ statusLabel(event.from_status) }}
+              </span>
+              <mat-icon *ngIf="event.from_status && event.to_status">
+                arrow_forward
+              </mat-icon>
+              <span *ngIf="event.to_status">
+                {{ statusLabel(event.to_status) }}
+              </span>
+            </div>
+
             <p *ngIf="event.comment">{{ event.comment }}</p>
           </div>
         </div>

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models.purchase_requisition import (
     PurchaseRequisitionEventORM,
+    PurchaseRequisitionFinanceApproverORM,
     PurchaseRequisitionItemORM,
     PurchaseRequisitionORM,
 )
@@ -46,6 +47,7 @@ def engine():
     PurchaseRequisitionORM.__table__.to_metadata(metadata)
     PurchaseRequisitionItemORM.__table__.to_metadata(metadata)
     PurchaseRequisitionEventORM.__table__.to_metadata(metadata)
+    PurchaseRequisitionFinanceApproverORM.__table__.to_metadata(metadata)
     with value.begin() as connection:
         connection.exec_driver_sql("PRAGMA foreign_keys=ON")
         metadata.create_all(connection)
@@ -54,7 +56,8 @@ def engine():
             "(1, 'branch-user', 'RECEPCIONISTA'), "
             "(2, 'sports', 'GERENCIA DEPORTIVA'), "
             "(3, 'maintenance', 'MANTENIMIENTO'), "
-            "(4, 'other-branch', 'RECEPCIONISTA')"
+            "(4, 'other-branch', 'RECEPCIONISTA'), "
+            "(5, 'finance', 'RECEPCIONISTA')"
         )
         connection.exec_driver_sql(
             "INSERT INTO sucursales (sucursal_id) VALUES (10), (20)"
@@ -274,3 +277,86 @@ def test_temporary_public_id_fits_database_column():
     temporary = _temporary_public_id()
     assert temporary.startswith("TMP-")
     assert len(temporary) <= 32
+
+def test_maintenance_lists_all_post_approval_states(engine):
+    creator = _user(1, "RECEPCIONISTA", 10)
+    maintenance = _user(3, "MANTENIMIENTO", 1000)
+    visible_statuses = (
+        "IN_QUOTATION",
+        "QUOTE_PENDING_FINANCE_APPROVAL",
+        "PAYMENT_REQUESTED",
+        "SHIPPING_IN_PROGRESS",
+        "IMPORT_IN_PROGRESS",
+        "FINAL_DESTINATION_SHIPMENT",
+        "RECEIPT_ISSUE",
+        "CLOSED",
+    )
+
+    with Session(engine) as session:
+        row = create_purchase_requisition(
+            _payload(),
+            creator,
+            session=session,
+        )
+        session.commit()
+
+        for status in visible_statuses:
+            row.status = status
+            session.commit()
+
+            listed = list_purchase_requisitions(
+                maintenance,
+                session=session,
+            )
+            assert [item.id for item in listed] == [row.id]
+            assert get_purchase_requisition(
+                row.id,
+                maintenance,
+                session=session,
+            ).id == row.id
+
+
+def test_finance_approver_sees_only_pending_finance_outside_branch(engine):
+    creator = _user(1, "RECEPCIONISTA", 10)
+    finance = _user(5, "RECEPCIONISTA", 20)
+
+    with Session(engine) as session:
+        row = create_purchase_requisition(
+            _payload(),
+            creator,
+            session=session,
+        )
+        row.status = "QUOTE_PENDING_FINANCE_APPROVAL"
+        session.add(
+            PurchaseRequisitionFinanceApproverORM(
+                user_id=5,
+                is_active=True,
+                added_by_user_id=2,
+            )
+        )
+        session.commit()
+
+        listed = list_purchase_requisitions(
+            finance,
+            session=session,
+        )
+        assert [item.id for item in listed] == [row.id]
+        assert get_purchase_requisition(
+            row.id,
+            finance,
+            session=session,
+        ).id == row.id
+
+        row.status = "IN_QUOTATION"
+        session.commit()
+
+        assert list_purchase_requisitions(
+            finance,
+            session=session,
+        ) == []
+        with pytest.raises(PurchaseRequisitionAuthorizationError):
+            get_purchase_requisition(
+                row.id,
+                finance,
+                session=session,
+            )

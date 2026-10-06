@@ -1,136 +1,201 @@
 <section class="requisitions-page">
-  <header class="page-header">
+  <header class="requisitions-page__header">
     <div>
-      <p class="eyebrow">Tickets · Requisiciones</p>
-      <h1>Requisiciones</h1>
-      <p class="page-copy">
+      <span class="requisitions-page__eyebrow">Tickets</span>
+      <h1 class="requisitions-page__title">Requisiciones</h1>
+      <p class="requisitions-page__subtitle">
         Solicitudes de compra con revisión, seguimiento y expediente independiente.
       </p>
     </div>
 
-    <button
-      *ngIf="canOpenCreate"
-      mat-flat-button
-      color="primary"
-      type="button"
-      (click)="openCreateDialog()"
-    >
-      <mat-icon>add</mat-icon>
-      Nueva requisición
-    </button>
   </header>
 
-  <div *ngIf="access" class="access-summary">
-    <span *ngIf="access.can_create">
-      <mat-icon>add_circle</mat-icon>
-      Puede crear
-    </span>
-    <span *ngIf="access.can_review">
-      <mat-icon>fact_check</mat-icon>
-      Puede revisar
-    </span>
-    <span *ngIf="access.can_manage_quotation">
-      <mat-icon>request_quote</mat-icon>
-      Puede gestionar cotización
-    </span>
-    <span *ngIf="access.global_read">
-      <mat-icon>visibility</mat-icon>
-      Lectura global
-    </span>
-  </div>
+  <mat-card class="requisitions-card">
+    <section class="requisitions-section requisitions-section--toolbar">
+      <div class="requisitions-section__header">
+        <span class="requisitions-section__number">1</span>
+        <div>
+          <h2>Consulta de requisiciones</h2>
+          <p>Filtra el expediente por estado, prioridad o sucursal.</p>
+        </div>
 
-  <mat-card class="filters-card">
-    <div class="filters-grid">
-      <label>
-        <span>Estado</span>
-        <select [(ngModel)]="statusFilter">
-          <option value="">Todos</option>
-          <option *ngFor="let option of statuses" [value]="option.value">
-            {{ option.label }}
-          </option>
-        </select>
-      </label>
+        <div class="requisitions-toolbar-actions">
+          <button
+            *ngIf="canConfigureFinanceApprovers"
+            mat-stroked-button
+            type="button"
+            (click)="openFinanceApproversConfig()"
+          >
+            <mat-icon>settings</mat-icon>
+            Configuración financiera
+          </button>
 
-      <label>
-        <span>Prioridad</span>
-        <select [(ngModel)]="priorityFilter">
-          <option value="">Todas</option>
-          <option *ngFor="let option of priorities" [value]="option.value">
-            {{ option.label }}
-          </option>
-        </select>
-      </label>
+          <button
+            mat-stroked-button
+            type="button"
+            [disabled]="rows.length === 0 || exportingExcel"
+            (click)="exportToExcel()"
+          >
+            <mat-icon>download</mat-icon>
+            {{ exportingExcel ? 'Exportando…' : 'Exportar Excel' }}
+          </button>
 
-      <label>
-        <span>Sucursal</span>
-        <select [(ngModel)]="branchFilter">
-          <option [ngValue]="null">Todas</option>
-          <option *ngFor="let branch of branches" [ngValue]="branch.id">
-            {{ branch.name }}
-          </option>
-        </select>
-      </label>
-
-      <div class="filter-actions">
-        <button mat-flat-button color="primary" type="button" (click)="loadRows()">
-          Aplicar
-        </button>
-        <button mat-button type="button" (click)="clearFilters()">
-          Limpiar
-        </button>
+          <button
+            *ngIf="canOpenCreate"
+            mat-raised-button
+            color="primary"
+            type="button"
+            (click)="openCreateDialog()"
+          >
+            <mat-icon>add</mat-icon>
+            Nueva requisición
+          </button>
+        </div>
       </div>
-    </div>
-  </mat-card>
 
-  <mat-card *ngIf="loading" class="state-card">
-    Cargando requisiciones…
-  </mat-card>
+      <div *ngIf="access" class="access-summary">
+        <span *ngIf="access.can_create">
+          <mat-icon>add_circle</mat-icon>
+          Puede crear
+        </span>
+        <span *ngIf="access.can_review">
+          <mat-icon>fact_check</mat-icon>
+          Puede revisar
+        </span>
+        <span *ngIf="access.can_manage_quotation">
+          <mat-icon>request_quote</mat-icon>
+          Puede gestionar cotización
+        </span>
+        <span *ngIf="access.can_approve_requisition_quote">
+          <mat-icon>account_balance</mat-icon>
+          Puede aprobar cotización
+        </span>
+        <span *ngIf="access.can_manage_requisition_logistics">
+          <mat-icon>local_shipping</mat-icon>
+          Puede gestionar logística
+        </span>
+        <span *ngIf="access.can_confirm_receipt">
+          <mat-icon>inventory_2</mat-icon>
+          Puede confirmar recepción
+        </span>
+        <span *ngIf="access.can_configure_finance_approvers">
+          <mat-icon>settings</mat-icon>
+          Configura aprobación financiera
+        </span>
+        <span *ngIf="access.global_read">
+          <mat-icon>visibility</mat-icon>
+          Lectura global
+        </span>
+      </div>
 
-  <mat-card *ngIf="loadError && !loading" class="state-card error-state">
-    No fue posible cargar las requisiciones.
-    <button mat-button type="button" (click)="loadRows()">Reintentar</button>
-  </mat-card>
+      <div class="filters-panel">
+        <label>
+          <span>Estado</span>
+          <select [(ngModel)]="statusFilter">
+            <option value="">Todos</option>
+            <option *ngFor="let option of statuses" [value]="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
 
-  <mat-card *ngIf="!loading && !loadError && rows.length === 0" class="state-card">
-    No hay requisiciones visibles con los filtros actuales.
-  </mat-card>
+        <label>
+          <span>Prioridad</span>
+          <select [(ngModel)]="priorityFilter">
+            <option value="">Todas</option>
+            <option *ngFor="let option of priorities" [value]="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
 
-  <div *ngIf="!loading && rows.length > 0" class="table-card">
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Folio</th>
-            <th>Sucursal</th>
-            <th>Motivo</th>
-            <th>Prioridad</th>
-            <th>Estado</th>
-            <th>Partidas</th>
-            <th>Creada</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let row of rows; trackBy: trackById">
-            <td class="folio">{{ row.public_id }}</td>
-            <td>{{ branchLabel(row.sucursal_id) }}</td>
-            <td>{{ reasonLabel(row.reason) }}</td>
-            <td>{{ priorityLabel(row.priority) }}</td>
-            <td>
-              <span [class]="statusClass(row.status)">
-                {{ statusLabel(row.status) }}
-              </span>
-            </td>
-            <td>{{ row.items?.length || 0 }}</td>
-            <td>{{ row.created_at | date:'dd/MM/yyyy HH:mm' }}</td>
-            <td>
-              <button mat-button type="button" (click)="openDetail(row)">
-                Ver detalle
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
+        <label>
+          <span>Sucursal</span>
+          <select [(ngModel)]="branchFilter">
+            <option [ngValue]="null">Todas</option>
+            <option *ngFor="let branch of branches" [ngValue]="branch.id">
+              {{ branch.name }}
+            </option>
+          </select>
+        </label>
+
+        <div class="filter-actions">
+          <button mat-raised-button color="primary" type="button" (click)="loadRows()">
+            Aplicar
+          </button>
+          <button mat-button type="button" (click)="clearFilters()">
+            Limpiar
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="requisitions-section requisitions-section--list">
+      <div class="requisitions-section__header">
+        <span class="requisitions-section__number">2</span>
+        <div>
+          <h2>Expedientes</h2>
+          <p>
+            Revisa el estado actual, las partidas y el historial de cada requisición.
+          </p>
+        </div>
+      </div>
+
+      <div *ngIf="exportError" class="state-box state-box--error">
+        {{ exportError }}
+      </div>
+
+      <div *ngIf="loading" class="state-box">
+        Cargando requisiciones…
+      </div>
+
+      <div *ngIf="loadError && !loading" class="state-box state-box--error">
+        <span>No fue posible cargar las requisiciones.</span>
+        <button mat-button type="button" (click)="loadRows()">Reintentar</button>
+      </div>
+
+      <div *ngIf="!loading && !loadError && rows.length === 0" class="state-box">
+        No hay requisiciones visibles con los filtros actuales.
+      </div>
+
+      <div *ngIf="!loading && rows.length > 0" class="table-card">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Folio</th>
+                <th>Sucursal</th>
+                <th>Motivo</th>
+                <th>Prioridad</th>
+                <th>Estado</th>
+                <th>Partidas</th>
+                <th>Creada</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of rows; trackBy: trackById">
+                <td class="folio">{{ row.public_id }}</td>
+                <td>{{ branchLabel(row.sucursal_id) }}</td>
+                <td>{{ reasonLabel(row.reason) }}</td>
+                <td>{{ priorityLabel(row.priority) }}</td>
+                <td>
+                  <span [class]="statusClass(row.status)">
+                    {{ statusLabel(row.status) }}
+                  </span>
+                </td>
+                <td>{{ row.items?.length || 0 }}</td>
+                <td>{{ row.created_at | date:'dd/MM/yyyy HH:mm' }}</td>
+                <td class="detail-cell">
+                  <button mat-button type="button" (click)="openDetail(row)">
+                    Ver detalle
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </mat-card>
 </section>

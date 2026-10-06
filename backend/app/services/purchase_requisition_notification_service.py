@@ -12,8 +12,10 @@ from app.extensions import db
 from app.models.purchase_requisition import (
     PurchaseRequisitionEventORM,
     PurchaseRequisitionEventType,
+    PurchaseRequisitionFinanceApproverORM,
     PurchaseRequisitionNotificationORM,
     PurchaseRequisitionORM,
+    PurchaseRequisitionStatus,
 )
 from app.models.user_model import UserORM
 from app.utils.email_sender import send_email_html
@@ -51,6 +53,48 @@ def _users_by_roles(
     rows = target_session.execute(
         select(UserORM.id, UserORM.email).where(
             func.upper(func.trim(UserORM.rol)).in_(roles),
+            UserORM.email.is_not(None),
+            func.length(func.trim(UserORM.email)) > 0,
+        )
+    ).all()
+    return [
+        (int(user_id), email)
+        for user_id, raw_email in rows
+        if (email := _normalized_email(raw_email))
+    ]
+
+
+def _branch_managers(
+    target_session,
+    branch_id: int,
+) -> list[tuple[int, str]]:
+    rows = target_session.execute(
+        select(UserORM.id, UserORM.email).where(
+            func.upper(func.trim(UserORM.rol)) == "GERENTE",
+            UserORM.sucursal_id == int(branch_id),
+            UserORM.email.is_not(None),
+            func.length(func.trim(UserORM.email)) > 0,
+        )
+    ).all()
+    return [
+        (int(user_id), email)
+        for user_id, raw_email in rows
+        if (email := _normalized_email(raw_email))
+    ]
+
+
+def _finance_approvers(
+    target_session,
+) -> list[tuple[int, str]]:
+    rows = target_session.execute(
+        select(UserORM.id, UserORM.email)
+        .join(
+            PurchaseRequisitionFinanceApproverORM,
+            PurchaseRequisitionFinanceApproverORM.user_id
+            == UserORM.id,
+        )
+        .where(
+            PurchaseRequisitionFinanceApproverORM.is_active.is_(True),
             UserORM.email.is_not(None),
             func.length(func.trim(UserORM.email)) > 0,
         )
@@ -108,6 +152,98 @@ def resolve_notification_recipients(
                 MAINTENANCE_RECIPIENT_ROLES,
             )
         )
+    elif event_type == (
+        PurchaseRequisitionEventType
+        .QUOTE_SUBMITTED_FOR_FINANCE_APPROVAL
+    ):
+        candidates = _finance_approvers(target_session)
+    elif event_type in {
+        PurchaseRequisitionEventType.QUOTE_APPROVED_BY_FINANCE,
+        PurchaseRequisitionEventType.QUOTE_REJECTED_BY_FINANCE,
+    }:
+        candidates = _users_by_roles(
+            target_session,
+            MAINTENANCE_RECIPIENT_ROLES,
+        )
+    elif event_type == (
+        PurchaseRequisitionEventType
+        .FINAL_DESTINATION_SHIPMENT_STARTED
+    ):
+        candidates = _branch_managers(
+            target_session,
+            requisition.sucursal_id,
+        )
+    elif event_type == (
+        PurchaseRequisitionEventType.RECEIPT_ISSUE_REPORTED
+    ):
+        candidates = _users_by_roles(
+            target_session,
+            MAINTENANCE_RECIPIENT_ROLES,
+        )
+    elif event_type == PurchaseRequisitionEventType.RECEIVED:
+        candidates = (
+            _users_by_roles(
+                target_session,
+                MAINTENANCE_RECIPIENT_ROLES,
+            )
+            + _users_by_roles(
+                target_session,
+                REVIEW_RECIPIENT_ROLES,
+            )
+        )
+    elif event_type == (
+        PurchaseRequisitionEventType.ADMINISTRATIVE_CORRECTION
+    ):
+        if requisition.status == PurchaseRequisitionStatus.PENDING_REVIEW:
+            candidates = _users_by_roles(
+                target_session,
+                REVIEW_RECIPIENT_ROLES,
+            )
+        elif requisition.status in {
+            PurchaseRequisitionStatus.IN_QUOTATION,
+            PurchaseRequisitionStatus.PAYMENT_REQUESTED,
+            PurchaseRequisitionStatus.SHIPPING_IN_PROGRESS,
+            PurchaseRequisitionStatus.IMPORT_IN_PROGRESS,
+            PurchaseRequisitionStatus.RECEIPT_ISSUE,
+        }:
+            candidates = _users_by_roles(
+                target_session,
+                MAINTENANCE_RECIPIENT_ROLES,
+            )
+        elif requisition.status == (
+            PurchaseRequisitionStatus.QUOTE_PENDING_FINANCE_APPROVAL
+        ):
+            candidates = _finance_approvers(target_session)
+        elif requisition.status == (
+            PurchaseRequisitionStatus.FINAL_DESTINATION_SHIPMENT
+        ):
+            latest_correction = target_session.execute(
+                select(PurchaseRequisitionEventORM)
+                .where(
+                    PurchaseRequisitionEventORM.requisition_id
+                    == int(requisition.id),
+                    PurchaseRequisitionEventORM.event_type
+                    == PurchaseRequisitionEventType.ADMINISTRATIVE_CORRECTION,
+                )
+                .order_by(PurchaseRequisitionEventORM.id.desc())
+                .limit(1)
+            ).scalar_one_or_none()
+
+            candidates = _branch_managers(
+                target_session,
+                requisition.sucursal_id,
+            )
+            if (
+                latest_correction is not None
+                and latest_correction.from_status
+                == PurchaseRequisitionStatus.CLOSED
+            ):
+                candidates += _users_by_roles(
+                    target_session,
+                    MAINTENANCE_RECIPIENT_ROLES,
+                )
+        else:
+            candidates = []
     else:
         candidates = []
 
@@ -134,6 +270,29 @@ def _subject(
         ),
         PurchaseRequisitionEventType.REJECTED: (
             "Requisición rechazada"
+        ),
+        (
+            PurchaseRequisitionEventType
+            .QUOTE_SUBMITTED_FOR_FINANCE_APPROVAL
+        ): "Cotización pendiente de aprobación",
+        PurchaseRequisitionEventType.QUOTE_APPROVED_BY_FINANCE: (
+            "Cotización financiera aprobada"
+        ),
+        PurchaseRequisitionEventType.QUOTE_REJECTED_BY_FINANCE: (
+            "Cotización financiera rechazada"
+        ),
+        (
+            PurchaseRequisitionEventType
+            .FINAL_DESTINATION_SHIPMENT_STARTED
+        ): "Envío listo para confirmación de sucursal",
+        PurchaseRequisitionEventType.RECEIPT_ISSUE_REPORTED: (
+            "Incidencia de recepción reportada"
+        ),
+        PurchaseRequisitionEventType.RECEIVED: (
+            "Requisición recibida y cerrada"
+        ),
+        PurchaseRequisitionEventType.ADMINISTRATIVE_CORRECTION: (
+            "Corrección administrativa de requisición"
         ),
     }
     label = labels.get(event_type, "Actualización de requisición")
