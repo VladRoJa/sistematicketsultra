@@ -322,13 +322,6 @@ ngOnInit(): void {
     );
   }
 
-  if (this.puedeVerMarketingReactivacionPorRol()) {
-    marketingConversionSubmenu.push({
-      label: 'Campañas',
-      path: '/marketing/reactivation',
-    });
-  }
-
   const menuMarketingConversion = {
     label: 'Marketing y Conversión',
     path: marketingConversionSubmenu[0]?.path || '/main/ver-tickets',

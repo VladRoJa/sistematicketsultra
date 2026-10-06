@@ -187,7 +187,7 @@ test('drill-down mapea buckets backend y purpose patch sólo manda purpose', () 
   assert.deepEqual(campaignV2PurposePatch('REACTIVATION'), { purpose: 'REACTIVATION' });
 });
 
-test('menu V2 crea grupo cuando falta, conserva legacy y no duplica submenu', () => {
+test('menu V2 reemplaza Campaign V1 y no duplica submenu', () => {
   const created = withCampaignV2MenuItem([{ label: 'Tickets', path: '/main/ver-tickets', submenu: [] }]);
   const marketing = created.find(item => item.label === 'Marketing y Conversión');
   assert.deepEqual(marketing?.submenu, [CAMPAIGN_V2_MENU_ITEM]);
@@ -199,13 +199,29 @@ test('menu V2 crea grupo cuando falta, conserva legacy y no duplica submenu', ()
       submenu: [{ label: 'Campañas', path: '/marketing/reactivation' }],
     },
   ]);
-  assert.deepEqual(withLegacy[0].submenu?.map(item => item.path), [
-    '/marketing/reactivation',
-    '/marketing/campaigns-v2',
-  ]);
+  assert.equal(withLegacy[0].path, '/marketing/campaigns-v2');
+  assert.deepEqual(withLegacy[0].submenu, [CAMPAIGN_V2_MENU_ITEM]);
+  assert.equal(
+    withLegacy[0].submenu?.some(item => item.path === '/marketing/reactivation'),
+    false,
+  );
 
   const repeated = withCampaignV2MenuItem(withLegacy);
-  assert.equal(repeated[0].submenu?.filter(item => item.path === '/marketing/campaigns-v2').length, 1);
+  assert.equal(repeated, withLegacy);
+});
+
+test('ruta legacy de campañas redirige a Campaign V2 sin cargar frontend V1', () => {
+  const routes = fs.readFileSync(
+    path.join(process.cwd(), 'src/app/app.routes.ts'),
+    'utf8',
+  );
+
+  assert.equal(routes.includes("path: 'marketing/reactivation'"), true);
+  assert.equal(routes.includes("redirectTo: 'marketing/campaigns-v2'"), true);
+  assert.equal(
+    routes.includes("import('./marketing-reactivation/marketing-reactivation-page.component')"),
+    false,
+  );
 });
 
 test('service y page conservan contrato M5 sin auth manual y builder intacto', () => {
