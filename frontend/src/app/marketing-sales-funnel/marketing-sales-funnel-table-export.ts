@@ -818,10 +818,29 @@ function applyConditionalFormats(
     addCellRule(
       worksheet,
       `I${range.firstRow}:I${range.lastRow}`,
+      'lessThan',
+      0.15,
+      COLORS.redFill,
+      COLORS.redText,
+      true,
+    );
+    addCellRule(
+      worksheet,
+      `I${range.firstRow}:I${range.lastRow}`,
       'greaterThanOrEqual',
       0.15,
       COLORS.greenFill,
       COLORS.greenText,
+    );
+
+    addCellRule(
+      worksheet,
+      `J${range.firstRow}:J${range.lastRow}`,
+      'lessThan',
+      0.30,
+      COLORS.redFill,
+      COLORS.redText,
+      true,
     );
     addCellRule(
       worksheet,
@@ -836,18 +855,9 @@ function applyConditionalFormats(
       worksheet,
       `K${range.firstRow}:K${range.lastRow}`,
       'lessThan',
-      0.015,
+      0.033,
       COLORS.redFill,
       COLORS.redText,
-      true,
-    );
-    addCellRule(
-      worksheet,
-      `K${range.firstRow}:K${range.lastRow}`,
-      'lessThan',
-      0.033,
-      COLORS.amberFill,
-      COLORS.amberText,
       true,
     );
     addCellRule(
