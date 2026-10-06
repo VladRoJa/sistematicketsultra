@@ -38,13 +38,8 @@ from app.routes.rpa_gasca_sms_routes import rpa_gasca_sms_bp
 from app.routes.routine_control_routes import routine_control_bp
 from app.routes.sports_analysis_routes import sports_analysis_bp
 from app.routes.marketing_routes import marketing_bp
-from app.routes.marketing_campaign_export_routes import marketing_campaign_export_bp
-from app.routes.marketing_campaign_source_status_routes import marketing_campaign_source_status_bp
-from app.routes.marketing_campaign_preview_detail_routes import marketing_campaign_preview_detail_bp
 from app.routes.marketing_campaign_v2_routes import marketing_campaign_v2_bp
 from app.routes.marketing_sales_funnel_routes import marketing_sales_funnel_bp
-from app.routes.marketing_reactivation_outcome_routes import marketing_reactivation_outcome_bp
-from app.routes.marketing_campaign_delivery_routes import marketing_campaign_delivery_bp
 from app.routes.mantenimiento_equipos_routes import mantenimiento_equipos_bp
 from app.routes.contact_center_routes import contact_center_bp
 from app.routes.purchase_requisition_routes import purchase_requisition_bp
@@ -140,13 +135,8 @@ def create_app():
     app.register_blueprint(routine_control_bp, url_prefix="/api/routine-control")
     app.register_blueprint(sports_analysis_bp, url_prefix="/api/sports-analysis")
     app.register_blueprint(marketing_bp, url_prefix="/api/marketing")
-    app.register_blueprint(marketing_campaign_export_bp, url_prefix="/api/marketing")
-    app.register_blueprint(marketing_campaign_source_status_bp, url_prefix="/api/marketing")
-    app.register_blueprint(marketing_campaign_preview_detail_bp, url_prefix="/api/marketing")
     app.register_blueprint(marketing_campaign_v2_bp, url_prefix="/api/marketing")
     app.register_blueprint(marketing_sales_funnel_bp, url_prefix="/api/marketing")
-    app.register_blueprint(marketing_reactivation_outcome_bp, url_prefix="/api/marketing")
-    app.register_blueprint(marketing_campaign_delivery_bp, url_prefix="/api/marketing")
     app.register_blueprint(
         mantenimiento_equipos_bp,
         url_prefix="/api/mantenimiento-equipos",
