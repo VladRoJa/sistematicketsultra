@@ -376,12 +376,12 @@ function writeSection(
   }
 
   const lastDataRow = rowNumber - 1;
+  const subtotalRow = rowNumber;
   dataRanges.push({
     firstRow: firstDataRow,
-    lastRow: lastDataRow,
+    lastRow: subtotalRow,
   });
 
-  const subtotalRow = rowNumber;
   const totals = buildTotals(branches, investmentByBranch);
 
   writeSubtotalRow(
@@ -872,7 +872,7 @@ function applyConditionalFormats(
       worksheet,
       `K${range.firstRow}:K${range.lastRow}`,
       'lessThan',
-      0.033,
+      0.05,
       COLORS.redFill,
       COLORS.redText,
       true,
@@ -881,7 +881,7 @@ function applyConditionalFormats(
       worksheet,
       `K${range.firstRow}:K${range.lastRow}`,
       'greaterThanOrEqual',
-      0.033,
+      0.05,
       COLORS.greenFill,
       COLORS.greenText,
     );
@@ -907,7 +907,11 @@ function addCellRule(
         stopIfTrue,
         style: {
           font: { color: { argb: fontColor } },
-          fill: solidFill(fillColor),
+          fill: {
+            type: 'pattern',
+            pattern: 'solid',
+            bgColor: { argb: fillColor },
+          },
         },
       } as any,
     ],
