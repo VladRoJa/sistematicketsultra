@@ -6,6 +6,11 @@ from app.services import marketing_campaign_v2_audience_service as audience
 from app.services import marketing_campaign_v2_funnel_source_service as funnel_source
 
 
+@pytest.fixture(autouse=True)
+def _empty_blacklist(monkeypatch):
+    monkeypatch.setattr(audience, "get_blacklisted_phones", lambda **_kwargs: set())
+
+
 ACCESS = SimpleNamespace(is_global=False, branch_ids=(1,))
 
 
