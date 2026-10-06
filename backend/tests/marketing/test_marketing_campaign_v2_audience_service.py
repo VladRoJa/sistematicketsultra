@@ -471,3 +471,50 @@ def test_adeudo_min_only_applies_to_expired_members(monkeypatch):
             adeudo_min="3000",
             session=object(),
         )
+
+
+@pytest.mark.parametrize(
+    "source",
+    [service.SOURCE_EXPIRED_MEMBERS, service.SOURCE_ACTIVE_MEMBERS],
+)
+def test_blacklist_excludes_phone_from_member_sources_and_exposes_detail(
+    monkeypatch,
+    source,
+):
+    rows = [
+        _candidate(1, tariff="DOM", phone="6861000001", source=source),
+        _candidate(2, tariff="DOM", phone="6861000002", source=source),
+    ]
+    _install(monkeypatch, rows, source=source)
+    monkeypatch.setattr(
+        service,
+        "get_blacklisted_phones",
+        lambda **_kwargs: {"6861000002"},
+    )
+
+    kwargs = {
+        "source": source,
+        "audience_families": ["DOMICILIADO"],
+        "allowed_sucursal_keys": None,
+        "session": object(),
+    }
+    if source == service.SOURCE_EXPIRED_MEMBERS:
+        kwargs.update(
+            {
+                "expiration_date_from": "2026-08-01",
+                "expiration_date_to": "2026-08-31",
+            }
+        )
+
+    preview = service.build_campaign_v2_audience_preview(**kwargs)
+    detail = service.build_campaign_v2_audience_preview_detail(
+        bucket="BLACKLIST",
+        page=1,
+        page_size=50,
+        **kwargs,
+    )
+
+    assert preview["blacklist_excluded_count"] == 1
+    assert preview["unique_recipient_count"] == 1
+    assert detail["total"] == 1
+    assert detail["rows"][0]["phone_mx10"] == "6861000002"
