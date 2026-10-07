@@ -33,6 +33,9 @@ from app.warehouse.jobs.reactivation_sources_daily_job import (
 from app.warehouse.jobs.reactivation_outcomes_daily_job import (
     run_job as run_reactivation_outcomes_daily_job,
 )
+from app.warehouse.jobs.commercial_daily_reports_job import (
+    run_job as run_commercial_daily_reports_job,
+)
 from app.warehouse.services.scheduler_priority_service import (
     get_nightly_report_capture_block_reason,
     get_secondary_job_block_reason,
@@ -928,6 +931,72 @@ def _run_cobranza_recurrente_if_due(now: datetime) -> None:
     )
 
 
+def _run_commercial_daily_reports_if_due(now: datetime) -> None:
+    """Publish previous day's closed Track data, never today's preview."""
+    job_key = "commercial_daily_reports"
+    if not _env_bool("COMMERCIAL_DAILY_REPORTS_ENABLED", False):
+        return
+
+    business_date = now.date() - timedelta(days=1)
+    run_key = _job_date_key(job_key, business_date)
+    if run_key in _COMPLETED_BY_JOB_AND_DATE:
+        return
+
+    scheduled = _scheduled_datetime(
+        now=now,
+        hour_env="COMMERCIAL_DAILY_REPORTS_RUN_HOUR",
+        minute_env="COMMERCIAL_DAILY_REPORTS_RUN_MINUTE",
+        default_hour=1,
+        default_minute=20,
+    )
+    if now < scheduled:
+        return
+
+    retry_at = _NEXT_RETRY_BY_JOB_AND_DATE.get(run_key)
+    if retry_at is not None and now < retry_at:
+        return
+
+    completion = _find_persisted_scheduler_job_completion(
+        job_key=job_key, business_date=business_date
+    )
+    if completion is not None:
+        _mark_job_as_completed(job_key, business_date)
+        return
+
+    block_reason = get_secondary_job_block_reason(now)
+    if block_reason is not None:
+        return
+
+    retry_minutes = max(
+        _env_int("COMMERCIAL_DAILY_REPORTS_RETRY_MINUTES", 30), 5
+    )
+    try:
+        result = run_commercial_daily_reports_job(business_date=business_date)
+        completion_id = _persist_scheduler_job_completion(
+            job_key=job_key, business_date=business_date
+        )
+    except Exception:
+        db.session.rollback()
+        logger.exception(
+            "%s failed for %s; retry in %s minutes",
+            job_key, business_date.isoformat(), retry_minutes
+        )
+        _schedule_retry(
+            job_key=job_key,
+            business_date=business_date,
+            now=now,
+            retry_minutes=retry_minutes,
+            reason="technical_or_source_not_ready",
+        )
+        return
+
+    _mark_job_as_completed(job_key, business_date)
+    logger.info(
+        "%s completed for %s audit=%s reports=%s",
+        job_key, business_date.isoformat(), completion_id, len(result["reports"])
+    )
+
+
 def run_scheduler_loop() -> None:
     enabled = _env_bool("REPORTS_SCHEDULER_ENABLED", True)
     sleep_seconds = max(_env_int("REPORTS_SCHEDULER_SLEEP_SECONDS", 60), 10)
@@ -958,6 +1027,7 @@ def run_scheduler_loop() -> None:
             _run_reactivation_sources_if_due(now)
             _run_reactivation_outcomes_if_due(now)
             _run_cobranza_recurrente_if_due(now)
+            _run_commercial_daily_reports_if_due(now)
 
         except Exception:  # noqa: BLE001
             logger.exception("Error no controlado en ciclo de reports-scheduler.")
