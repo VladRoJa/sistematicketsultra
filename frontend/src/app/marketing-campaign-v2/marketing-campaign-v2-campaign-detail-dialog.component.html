@@ -217,6 +217,99 @@
         Cohorte congelada = evidencia histórica exacta. Lista para envío = esa misma cohorte menos supresiones vigentes como lista negra.
       </p>
 
+      <section class="dispatch-preflight-section">
+        <div class="section-heading">
+          <div>
+            <h3>Revisar envío</h3>
+            <p>Preflight M1: revisa el plan que usaría Suite. Esta acción no envía mensajes.</p>
+          </div>
+        </div>
+
+        <div class="dispatch-preflight-controls">
+          <mat-form-field appearance="fill">
+            <mat-label>Template</mat-label>
+            <mat-select
+              [formControl]="dispatchTemplateControl"
+              [disabled]="loadingDispatchTemplates || dispatchTemplates.length === 0"
+            >
+              <mat-option *ngFor="let template of dispatchTemplates" [value]="template.id">
+                {{ template.label }}
+              </mat-option>
+            </mat-select>
+          </mat-form-field>
+          <button
+            mat-stroked-button
+            type="button"
+            (click)="reviewDispatch()"
+            [disabled]="!canReviewDispatch"
+          >
+            {{ preflighting ? 'Revisando…' : 'Revisar envío' }}
+          </button>
+        </div>
+
+        <p *ngIf="loadingDispatchTemplates" class="muted">Cargando templates permitidos…</p>
+        <p *ngIf="!loadingDispatchTemplates && dispatchTemplates.length === 0 && !preflightError" class="muted">
+          No hay templates activos compatibles con el purpose de esta campaña.
+        </p>
+        <div *ngIf="preflightError" class="inline-error" role="alert">{{ preflightError }}</div>
+
+        <ng-container *ngIf="preflight as plan">
+          <div class="preflight-state" [class.preflight-ready]="plan.ready" [class.preflight-blocked]="!plan.ready">
+            <strong>{{ plan.ready ? 'Plan listo para revisión' : 'Plan bloqueado' }}</strong>
+            <span>{{ plan.ready ? 'Sin bloqueos detectados por preflight.' : 'Corrige los bloqueos antes de habilitar una fase de envío.' }}</span>
+          </div>
+
+          <div class="preflight-summary-grid">
+            <div><span>Cohorte congelada</span><strong>{{ plan.frozen_count | number }}</strong></div>
+            <div><span>Blacklist vigente</span><strong>{{ plan.suppressed.blacklist | number }}</strong></div>
+            <div><span>Enviables</span><strong>{{ plan.sendable_count | number }}</strong></div>
+            <div><span>Provider campaigns</span><strong>{{ plan.provider_campaign_count | number }}</strong></div>
+          </div>
+
+          <div *ngIf="preflightBlockedTotal() > 0" class="preflight-blockers">
+            <strong>Bloqueos</strong>
+            <span *ngIf="plan.blocked.missing_branch">Sucursal no resoluble: {{ plan.blocked.missing_branch }}</span>
+            <span *ngIf="plan.blocked.missing_channel">Sin channel: {{ plan.blocked.missing_channel }}</span>
+            <span *ngIf="plan.blocked.missing_required_variable">Variable requerida faltante: {{ plan.blocked.missing_required_variable }}</span>
+            <span *ngIf="plan.blocked.invalid_phone">Teléfono inválido: {{ plan.blocked.invalid_phone }}</span>
+            <span *ngIf="plan.blocked.template_channel_mismatch">Template/channel incompatible: {{ plan.blocked.template_channel_mismatch }}</span>
+          </div>
+
+          <div class="table-wrap preflight-batches" *ngIf="plan.batches.length">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sucursal</th>
+                  <th>Channel</th>
+                  <th>Template</th>
+                  <th>Destinatarios</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let batch of plan.batches">
+                  <td>{{ batch.track_label }} <span class="muted">({{ batch.sucursal_canon }})</span></td>
+                  <td class="mono">{{ batch.provider_channel_id || '—' }}</td>
+                  <td>{{ batch.template_name }}</td>
+                  <td>{{ batch.recipient_count | number }}</td>
+                  <td>
+                    <strong *ngIf="batch.ready" class="batch-ready">Ready</strong>
+                    <span *ngIf="!batch.ready" class="batch-blocked">
+                      {{ batch.blocked_reasons.length ? batchBlockLabel(batch.blocked_reasons[0]) : 'Bloqueado' }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="preflight-fingerprint">
+            <span>Dispatch fingerprint · {{ plan.dispatch_fingerprint_version }}</span>
+            <strong class="mono">{{ plan.dispatch_fingerprint }}</strong>
+          </div>
+        </ng-container>
+      </section>
+
       <div class="table-wrap" *ngIf="recipients.length; else emptyRecipients">
         <table>
           <thead><tr><th>Teléfono</th><th>Nombre</th><th>Sucursal</th><th>Tarifa</th><th>Familia</th><th>Conflictos</th><th>Evidence</th><th></th></tr></thead>

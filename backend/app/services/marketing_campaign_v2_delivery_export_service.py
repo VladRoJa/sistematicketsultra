@@ -68,6 +68,37 @@ def export_campaign_v2_delivery_package(
     )
 
 
+def build_campaign_v2_sendable_projection(
+    *,
+    campaign_id: int,
+    allowed_sucursal_keys,
+    session: Any | None = None,
+) -> dict[str, Any]:
+    """Build the current safety projection from frozen recipients only."""
+
+    active_session = session if session is not None else db.session
+    campaign, frozen_recipients = _load_frozen_campaign_recipients(
+        campaign_id=campaign_id,
+        allowed_sucursal_keys=allowed_sucursal_keys,
+        session=active_session,
+    )
+    blacklisted_phones = get_blacklisted_phones(
+        phones=(recipient.phone_mx10 for recipient in frozen_recipients),
+        session=active_session,
+    )
+    sendable_recipients = [
+        recipient
+        for recipient in frozen_recipients
+        if recipient.phone_mx10 not in blacklisted_phones
+    ]
+    return {
+        "campaign": campaign,
+        "frozen_recipients": frozen_recipients,
+        "blacklisted_phones": tuple(sorted(blacklisted_phones)),
+        "sendable_recipients": sendable_recipients,
+    }
+
+
 def export_campaign_v2_sendable_package(
     *,
     campaign_id: int,
@@ -76,25 +107,15 @@ def export_campaign_v2_sendable_package(
 ) -> tuple[bytes, str]:
     """Export the current sendable projection of the frozen cohort."""
 
-    active_session = session if session is not None else db.session
-    campaign, recipients = _load_frozen_campaign_recipients(
+    projection = build_campaign_v2_sendable_projection(
         campaign_id=campaign_id,
         allowed_sucursal_keys=allowed_sucursal_keys,
-        session=active_session,
+        session=session,
     )
-    blacklisted = get_blacklisted_phones(
-        phones=(recipient.phone_mx10 for recipient in recipients),
-        session=active_session,
-    )
-    sendable_recipients = [
-        recipient
-        for recipient in recipients
-        if recipient.phone_mx10 not in blacklisted
-    ]
     return _package_campaign_recipients(
-        campaign=campaign,
+        campaign=projection["campaign"],
         campaign_id=campaign_id,
-        recipients=sendable_recipients,
+        recipients=projection["sendable_recipients"],
         filename_tag="LISTA_ENVIO",
         empty_suffix="SIN_DESTINATARIOS_ENVIABLES",
     )
@@ -271,7 +292,9 @@ def _clean_text(value: Any) -> str:
     return " ".join(str(value or "").split())
 
 
-def _export_first_name(value: Any) -> str:
+def campaign_v2_first_name(value: Any) -> str:
+    """Return the exact first-name projection used by Campaign V2 exports/vars."""
+
     text = _clean_text(value)
     if not text:
         return ""
@@ -294,6 +317,10 @@ def _export_first_name(value: Any) -> str:
             return token
 
     return tokens[0]
+
+
+def _export_first_name(value: Any) -> str:
+    return campaign_v2_first_name(value)
 
 
 def _safe_excel_text(value: Any) -> str:

@@ -17,8 +17,10 @@ import { MatSelectModule } from '@angular/material/select';
 import {
   CampaignV2AudienceDefinition,
   CampaignV2CampaignDetail,
+  CampaignV2DispatchTemplate,
   CampaignV2IndividualReport,
   CampaignV2ObservedFamily,
+  CampaignV2PreflightResponse,
   CampaignV2Purpose,
   CampaignV2RecipientSummary,
   CampaignV2Source,
@@ -75,9 +77,12 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   readonly purposeControl = new FormControl<CampaignV2Purpose>('UNCLASSIFIED', {
     nonNullable: true,
   });
+  readonly dispatchTemplateControl = new FormControl<number | null>(null);
 
   campaign: CampaignV2CampaignDetail | null = null;
   reporting: CampaignV2IndividualReport | null = null;
+  dispatchTemplates: CampaignV2DispatchTemplate[] = [];
+  preflight: CampaignV2PreflightResponse | null = null;
   recipients: CampaignV2RecipientSummary[] = [];
   recipientsPage = 1;
   readonly recipientsPageSize = 25;
@@ -87,11 +92,14 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   loadingCampaignDetail = false;
   loadingRecipients = false;
   loadingReporting = false;
+  loadingDispatchTemplates = false;
+  preflighting = false;
   exportingReporting = false;
   exportingDeliveryPackage = false;
   exportingSendablePackage = false;
   updatingPurpose = false;
   error = '';
+  preflightError = '';
   deliveryExportError = '';
   deliveryExportSuccess = '';
   sendableExportError = '';
@@ -106,6 +114,12 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   ) {}
 
   ngOnInit(): void {
+    this.dispatchTemplateControl.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.preflight = null;
+        this.preflightError = '';
+      });
     this.loadCampaign();
   }
 
@@ -120,6 +134,7 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
           this.campaign = campaign;
           this.purposeControl.setValue(campaign.purpose, { emitEvent: false });
           this.loadRecipients(1);
+          this.loadDispatchTemplates(campaign.purpose);
         },
         error: (error: HttpErrorResponse) => {
           this.loadingCampaignDetail = false;
@@ -151,6 +166,93 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
       });
   }
 
+  loadDispatchTemplates(purpose: CampaignV2Purpose): void {
+    if (this.loadingDispatchTemplates) {
+      return;
+    }
+    this.loadingDispatchTemplates = true;
+    this.preflight = null;
+    this.preflightError = '';
+    this.dispatchTemplates = [];
+    this.dispatchTemplateControl.setValue(null, { emitEvent: false });
+
+    this.service.listDispatchTemplates(purpose)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: result => {
+          this.loadingDispatchTemplates = false;
+          this.dispatchTemplates = result.rows;
+          if (result.rows.length === 1) {
+            this.dispatchTemplateControl.setValue(result.rows[0].id);
+          }
+        },
+        error: (error: HttpErrorResponse) => {
+          this.loadingDispatchTemplates = false;
+          this.preflightError = this.errorMessage(
+            error,
+            'No fue posible cargar los templates de envío.',
+          );
+        },
+      });
+  }
+
+  reviewDispatch(): void {
+    const templateId = this.dispatchTemplateControl.value;
+    if (!this.campaign || templateId === null || this.preflighting) {
+      return;
+    }
+
+    this.preflighting = true;
+    this.preflight = null;
+    this.preflightError = '';
+    this.service.preflightCampaign(this.campaign.id, templateId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: result => {
+          this.preflighting = false;
+          this.preflight = result;
+        },
+        error: (error: HttpErrorResponse) => {
+          this.preflighting = false;
+          this.preflightError = this.errorMessage(
+            error,
+            'No fue posible preparar la revisión de envío.',
+          );
+        },
+      });
+  }
+
+  get canReviewDispatch(): boolean {
+    return Boolean(
+      this.campaign
+      && this.dispatchTemplateControl.value !== null
+      && !this.loadingDispatchTemplates
+      && !this.preflighting,
+    );
+  }
+
+  preflightBlockedTotal(): number {
+    const blocked = this.preflight?.blocked;
+    if (!blocked) {
+      return 0;
+    }
+    return (
+      blocked.missing_branch
+      + blocked.missing_channel
+      + blocked.missing_required_variable
+      + blocked.invalid_phone
+      + blocked.template_channel_mismatch
+    );
+  }
+
+  batchBlockLabel(reason: string): string {
+    const labels: Record<string, string> = {
+      MISSING_CHANNEL: 'Sin channel configurado',
+      MISSING_REQUIRED_VARIABLE: 'Falta variable requerida',
+      TEMPLATE_CHANNEL_MISMATCH: 'Template incompatible con channel',
+    };
+    return labels[reason] || reason;
+  }
 
   loadReporting(): void {
     if (this.loadingReporting) {
@@ -318,6 +420,7 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
           this.updatingPurpose = false;
           this.campaign = campaign;
           this.purposeUpdated = true;
+          this.loadDispatchTemplates(campaign.purpose);
         },
         error: (error: HttpErrorResponse) => {
           this.updatingPurpose = false;

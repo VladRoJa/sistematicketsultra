@@ -300,3 +300,70 @@ def test_sendable_export_applies_current_blacklist(monkeypatch):
         ("telefono", "nombre", "sucursal", "tarifa"),
         ("6861000001", "ANA", "METEPEC", "MENSUALIDAD"),
     ]
+
+
+def test_sendable_projection_is_single_source_for_export_and_preserves_frozen_cohort(
+    monkeypatch,
+):
+    rows = [
+        _recipient(f"686100000{index}", "METEPEC", "DOMICILIADO", f"SOCIO {index}", "MENSUALIDAD")
+        for index in range(1, 6)
+    ]
+    monkeypatch.setattr(
+        service,
+        "get_campaign_v2",
+        lambda **_kwargs: {"id": 12, "name": "Parity"},
+    )
+    monkeypatch.setattr(
+        service,
+        "get_blacklisted_phones",
+        lambda **_kwargs: {"6861000002", "6861000004"},
+    )
+    session = _Session(rows)
+
+    projection = service.build_campaign_v2_sendable_projection(
+        campaign_id=12,
+        allowed_sucursal_keys=None,
+        session=session,
+    )
+    frozen_data, _ = service.export_campaign_v2_delivery_package(
+        campaign_id=12,
+        allowed_sucursal_keys=None,
+        session=session,
+    )
+    sendable_data, _ = service.export_campaign_v2_sendable_package(
+        campaign_id=12,
+        allowed_sucursal_keys=None,
+        session=session,
+    )
+
+    projection_phones = {
+        row.phone_mx10 for row in projection["sendable_recipients"]
+    }
+    frozen_phones = {
+        row[0]
+        for row in list(load_workbook(BytesIO(frozen_data)).active.values)[1:]
+    }
+    exported_sendable_phones = {
+        row[0]
+        for row in list(load_workbook(BytesIO(sendable_data)).active.values)[1:]
+    }
+
+    assert len(projection["frozen_recipients"]) == 5
+    assert projection["blacklisted_phones"] == (
+        "6861000002",
+        "6861000004",
+    )
+    assert projection_phones == {
+        "6861000001",
+        "6861000003",
+        "6861000005",
+    }
+    assert exported_sendable_phones == projection_phones
+    assert frozen_phones == {
+        "6861000001",
+        "6861000002",
+        "6861000003",
+        "6861000004",
+        "6861000005",
+    }

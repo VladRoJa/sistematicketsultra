@@ -8,6 +8,7 @@ from sqlalchemy import BigInteger, Column, Integer, MetaData, Table, create_engi
 from sqlalchemy.orm import Session
 
 from app.models.marketing import (
+    MarketingCampaignV2BlacklistORM,
     MarketingCampaignV2ORM,
     MarketingCampaignV2ProviderRecipientObservationORM,
     MarketingCampaignV2ProviderStatsSnapshotORM,
@@ -65,6 +66,7 @@ def session():
         metadata,
         Column("id", BigInteger, primary_key=True),
     )
+    MarketingCampaignV2BlacklistORM.__table__.to_metadata(metadata)
     MarketingCampaignV2ORM.__table__.to_metadata(metadata)
     MarketingCampaignV2RecipientORM.__table__.to_metadata(metadata)
     MarketingCampaignV2RecipientEvidenceORM.__table__.to_metadata(metadata)

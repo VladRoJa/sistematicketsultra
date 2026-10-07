@@ -288,7 +288,7 @@ test('catalogador trabaja por tarifa única, usa categorías backend e invalida 
     page.includes("this.success = 'Clasificación guardada. Revisa la audiencia nuevamente antes de congelar.'"),
     true,
   );
-  assert.equal(layout.includes("path: '/marketing/reactivation'"), true);
+  assert.equal(layout.includes("'/marketing/campaigns-v2'"), true);
 });
 
 
@@ -838,7 +838,7 @@ test('lista negra V2 tiene administración global, import incremental y métrica
   assert.equal(html.includes('Lista negra global'), true);
   assert.equal(html.includes('Importar Excel'), true);
   assert.equal(html.includes('Descargar lista negra'), true);
-  assert.equal(html.includes("openMetric('blacklist', preview.blacklist_excluded_count)"), true);
+  assert.equal(html.includes("openMetric('blacklist', preview.blacklist_excluded_count || 0)"), true);
   assert.equal(html.includes('Bloqueados globalmente'), true);
 });
 
@@ -918,8 +918,10 @@ test('Adeudo mínimo conserva string en el FormControl y evita NumberValueAccess
   );
 
   assert.equal(html.includes('<mat-label>Adeudo mínimo</mat-label>'), true);
-  assert.equal(html.includes('type="number"\n                min="0"'), false);
-  assert.equal(html.includes('type="text"\n                inputmode="decimal"\n                [formControl]="adeudoMin"'), true);
+  assert.equal(html.includes('type="number"'), false);
+  assert.equal(html.includes('type="text"'), true);
+  assert.equal(html.includes('inputmode="decimal"'), true);
+  assert.equal(html.includes('[formControl]="adeudoMin"'), true);
 });
 
 test('Socios vencidos usa el selector compartido de rango de fechas', () => {

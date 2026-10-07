@@ -198,11 +198,19 @@ class TestMarketingCampaignV2Routes:
             is_global=True,
             branch_ids=(),
             can_edit_inputs=True,
+            can_manage_campaigns=True,
+            can_preflight_campaigns=True,
+            can_manage_dispatch_config=True,
+            can_send_campaigns=True,
         )
         self.partial_access = SimpleNamespace(
             is_global=False,
             branch_ids=(11, 22),
             can_edit_inputs=True,
+            can_manage_campaigns=True,
+            can_preflight_campaigns=True,
+            can_manage_dispatch_config=True,
+            can_send_campaigns=False,
         )
 
     def _auth(self, access=None):
@@ -244,6 +252,13 @@ class TestMarketingCampaignV2Routes:
             ("get", "/api/marketing/campaigns-v2/1/recipients/2"),
             ("patch", "/api/marketing/campaigns-v2/1/purpose"),
             ("put", "/api/marketing/campaigns-v2/1/provider-binding"),
+            ("get", "/api/marketing/campaigns-v2/dispatch/templates"),
+            ("post", "/api/marketing/campaigns-v2/dispatch/templates"),
+            ("put", "/api/marketing/campaigns-v2/dispatch/templates/1"),
+            ("get", "/api/marketing/campaigns-v2/dispatch/channel-bindings"),
+            ("post", "/api/marketing/campaigns-v2/dispatch/channel-bindings"),
+            ("put", "/api/marketing/campaigns-v2/dispatch/channel-bindings/1"),
+            ("post", "/api/marketing/campaigns-v2/1/preflight"),
         ]
         for method, path in paths:
             response = getattr(self.client, method)(
@@ -1968,3 +1983,129 @@ class TestMarketingCampaignV2Routes:
                 headers=self.headers,
             )
         assert response.status_code == 400
+
+
+    def test_m1_preflight_accepts_only_backend_config_reference(self):
+        plan = SimpleNamespace()
+        with (
+            self._auth(),
+            patch.object(
+                routes,
+                "_campaign_v2_allowed_sucursal_keys",
+                return_value=("TEC MXL",),
+            ),
+            patch.object(
+                routes,
+                "build_campaign_v2_preflight",
+                return_value=plan,
+            ) as mocked,
+            patch.object(
+                routes,
+                "serialize_campaign_v2_preflight",
+                return_value={
+                    "campaign_id": 7,
+                    "sendable_count": 3,
+                    "ready": True,
+                },
+            ),
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/7/preflight",
+                headers=self.headers,
+                json={"template_id": 10},
+            )
+
+        assert response.status_code == 200
+        assert response.get_json()["ready"] is True
+        kwargs = mocked.call_args.kwargs
+        assert kwargs["campaign_id"] == 7
+        assert kwargs["template_id"] == 10
+        assert kwargs["allowed_sucursal_keys"] == ("TEC MXL",)
+        assert kwargs["provider"] == "IVENTAS"
+        assert "phones" not in kwargs
+        assert "channelId" not in kwargs
+        assert "vars" not in kwargs
+
+    @pytest.mark.parametrize(
+        "forbidden_field",
+        ["phones", "channelId", "channel_id", "vars", "provider_channel_id"],
+    )
+    def test_m1_preflight_rejects_browser_authority_fields(
+        self,
+        forbidden_field,
+    ):
+        with self._auth(), patch.object(
+            routes,
+            "build_campaign_v2_preflight",
+        ) as mocked:
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/7/preflight",
+                headers=self.headers,
+                json={
+                    "template_id": 10,
+                    forbidden_field: ["6861000001"],
+                },
+            )
+
+        assert response.status_code == 400
+        mocked.assert_not_called()
+        assert forbidden_field in response.get_json()["message"]
+
+    def test_m1_preflight_requires_explicit_preflight_capability(self):
+        access = SimpleNamespace(
+            is_global=True,
+            branch_ids=(),
+            can_manage_campaigns=True,
+            can_preflight_campaigns=False,
+            can_manage_dispatch_config=False,
+            can_send_campaigns=False,
+        )
+        with self._auth(access), patch.object(
+            routes,
+            "build_campaign_v2_preflight",
+        ) as mocked:
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/7/preflight",
+                headers=self.headers,
+                json={"template_id": 10},
+            )
+
+        assert response.status_code == 403
+        mocked.assert_not_called()
+
+    def test_m1_dispatch_config_requires_global_config_capability(self):
+        with self._auth(self.partial_access), patch.object(
+            routes,
+            "list_channel_bindings",
+        ) as mocked:
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/dispatch/channel-bindings",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 403
+        mocked.assert_not_called()
+
+    def test_m1_template_list_uses_purpose_and_preflight_capability(self):
+        with self._auth(), patch.object(
+            routes,
+            "list_templates",
+            return_value=[
+                {
+                    "id": 10,
+                    "provider": "IVENTAS",
+                    "template_name": "reactivacion_v1",
+                    "label": "Reactivación",
+                }
+            ],
+        ) as mocked:
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/dispatch/templates"
+                "?purpose=REACTIVATION",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert response.get_json()["rows"][0]["id"] == 10
+        assert mocked.call_args.kwargs["purpose"] == "REACTIVATION"
+        assert mocked.call_args.kwargs["provider"] == "IVENTAS"

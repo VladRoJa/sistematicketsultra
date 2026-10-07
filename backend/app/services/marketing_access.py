@@ -45,6 +45,30 @@ MARKETING_REACTIVATION_ROLES = frozenset(
     }
 )
 
+MARKETING_CAMPAIGN_MANAGEMENT_ROLES = frozenset(
+    {
+        *ROOT_ADMIN_ROLES,
+        "EDITOR_CORPORATIVO",
+        "MARKETING",
+    }
+)
+
+MARKETING_CAMPAIGN_PREFLIGHT_ROLES = MARKETING_CAMPAIGN_MANAGEMENT_ROLES
+
+MARKETING_CAMPAIGN_DISPATCH_CONFIG_ROLES = frozenset(
+    {
+        *ROOT_ADMIN_ROLES,
+        "MARKETING",
+    }
+)
+
+MARKETING_CAMPAIGN_SEND_ROLES = frozenset(
+    {
+        *ROOT_ADMIN_ROLES,
+        "MARKETING",
+    }
+)
+
 
 class MarketingAuthorizationError(PermissionError):
     pass
@@ -57,6 +81,10 @@ class MarketingAccess:
     branch_ids: tuple[int, ...]
     role: str
     can_edit_inputs: bool
+    can_manage_campaigns: bool = False
+    can_preflight_campaigns: bool = False
+    can_manage_dispatch_config: bool = False
+    can_send_campaigns: bool = False
     can_view_reactivation: bool = True
     fallback_used: bool = False
 
@@ -111,6 +139,12 @@ def resolve_marketing_access(user) -> MarketingAccess:
 
     username = str(getattr(user, "username", "") or "").strip().upper()
     can_edit_inputs = role in MARKETING_INPUT_EDIT_ROLES
+    campaign_capabilities = {
+        "can_manage_campaigns": role in MARKETING_CAMPAIGN_MANAGEMENT_ROLES,
+        "can_preflight_campaigns": role in MARKETING_CAMPAIGN_PREFLIGHT_ROLES,
+        "can_manage_dispatch_config": role in MARKETING_CAMPAIGN_DISPATCH_CONFIG_ROLES,
+        "can_send_campaigns": role in MARKETING_CAMPAIGN_SEND_ROLES,
+    }
     can_view_reactivation = (
         username == "ADMICORP"
         or role in MARKETING_REACTIVATION_ROLES
@@ -128,6 +162,7 @@ def resolve_marketing_access(user) -> MarketingAccess:
             branch_ids=(),
             role=role,
             can_edit_inputs=can_edit_inputs,
+            **campaign_capabilities,
             can_view_reactivation=can_view_reactivation,
         )
 
@@ -143,6 +178,7 @@ def resolve_marketing_access(user) -> MarketingAccess:
             branch_ids=(primary_branch_id,),
             role=role,
             can_edit_inputs=can_edit_inputs,
+            **campaign_capabilities,
             can_view_reactivation=can_view_reactivation,
         )
 
@@ -155,6 +191,7 @@ def resolve_marketing_access(user) -> MarketingAccess:
                 branch_ids=assigned_branch_ids,
                 role=role,
                 can_edit_inputs=can_edit_inputs,
+                **campaign_capabilities,
                 can_view_reactivation=can_view_reactivation,
             )
 
@@ -169,6 +206,7 @@ def resolve_marketing_access(user) -> MarketingAccess:
             branch_ids=(primary_branch_id,),
             role=role,
             can_edit_inputs=can_edit_inputs,
+            **campaign_capabilities,
             can_view_reactivation=can_view_reactivation,
             fallback_used=True,
         )
@@ -181,6 +219,7 @@ def resolve_marketing_access(user) -> MarketingAccess:
             branch_ids=(),
             role=role,
             can_edit_inputs=can_edit_inputs,
+            **campaign_capabilities,
             can_view_reactivation=can_view_reactivation,
         )
 
@@ -199,5 +238,6 @@ def resolve_marketing_access(user) -> MarketingAccess:
         branch_ids=shared_scope.branch_ids,
         role=role,
         can_edit_inputs=can_edit_inputs,
+        **campaign_capabilities,
         can_view_reactivation=can_view_reactivation,
     )
