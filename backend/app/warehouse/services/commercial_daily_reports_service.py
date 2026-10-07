@@ -163,7 +163,7 @@ def render_commercial_daily_xlsx(
                           if start + timedelta(days=i) <= cutoff]
             values = [daily[b].get(d) for d in valid_days]
             weekly_cells[b].append(
-                sum(values) if len(valid_days) == 7 and all(v is not None for v in values)
+                sum(values) if valid_days and all(v is not None for v in values)
                 else None
             )
         monthly_cells[b] = []
@@ -179,7 +179,7 @@ def render_commercial_daily_xlsx(
     book = xlsxwriter.Workbook(stream, {"in_memory": True})
     book.set_properties({"title": f"Reporte {METRICS[metric][1]} {cutoff.isoformat()}"})
     _format_sheet(book, "Diario", ["Sucursal"] + [d.strftime("%d/%m/%Y") for d in day_headers], branches, daily_cells)
-    _format_sheet(book, "Semanal", ["Sucursal"] + [f"{w:%d/%m}-{w + timedelta(days=6):%d/%m}" for w in weeks], branches, weekly_cells)
+    _format_sheet(book, "Semanal", ["Sucursal"] + [f"{w:%d/%m}-{w + timedelta(days=6):%d/%m}" + (f" (corte {cutoff:%d/%m})" if w == week and cutoff < w + timedelta(days=6) else "") for w in weeks], branches, weekly_cells)
     _format_sheet(book, "Totales Mensuales", ["Sucursal"] + [m.strftime("%m/%Y") for m in months], branches, monthly_cells)
     book.close()
     return stream.getvalue()
