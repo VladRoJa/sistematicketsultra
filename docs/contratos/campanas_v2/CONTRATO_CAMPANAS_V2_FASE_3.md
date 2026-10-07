@@ -1,609 +1,293 @@
 # Contrato Campañas V2 — Fase 3
 
-Estado: DESBLOQUEADA / PENDIENTE DE IMPLEMENTACIÓN; FASE 2 ACCEPTED MEDIANTE M32
-Dependencia de ejecución: el gate de Fase 2 quedó satisfecho mediante M32. Antes de implementar Fase 3 debe revalidarse que `main` conserve 2A + 2B + Historical Targeting + 2C + 2D ACCEPTED; este archivo es autosuficiente como contexto.
-Objetivo: permitir que Suite Ultra envíe campañas mediante iVentas sin romper la trazabilidad construida previamente.
+Estado: DESBLOQUEADA / DIVIDIDA EN TRES MILESTONES  
+Dependencia: Fase 2 ACCEPTED mediante M32.  
+Regla de ejecución: **este archivo es paraguas; no se implementa Fase 3 directamente desde aquí**. Cada conversación nueva debe trabajar exactamente uno de los contratos M1, M2 o M3.
 
-## 0. Contexto autosuficiente para una conversación nueva
+## 0. Estado real de partida
 
-Este archivo puede entregarse **por sí solo** a una conversación nueva. M32 comprobó en el repositorio que Fase 2 está completamente aceptada: 2A + 2B + Historical Targeting transversal + 2C cerrados y 2D PASS. Por tanto Fase 3 está desbloqueada para iniciar implementación, pero todavía no está implementada.
+Antes de iniciar cualquier milestone se debe inspeccionar `main` y revalidar este estado:
 
-Contexto fijo:
+- Fase 1 congela audiencias Campaign V2.
+- Fase 2 está ACCEPTED: iVentas/histórico recipient-level, Funnel, Historical Targeting y Campaign BI/Reporting.
+- Existe lista negra global incremental de Campaign V2.
+- La lista negra aplica a Vencidos, Activos y Funnel y también a la proyección operativa de envío.
+- La **cohorte congelada** y la **lista para envío** son conceptos distintos:
+  - cohorte congelada = evidencia histórica exacta persistida al Freeze;
+  - lista para envío = proyección de esa cohorte con supresiones de seguridad vigentes.
+- Ambos archivos se pueden descargar por separado.
+- Campañas V1 fue retirada de la superficie operativa de frontend/API, pero persisten datos, modelos, jobs históricos e infraestructura compartida que no deben borrarse por implicación.
+- No existe todavía envío automático Campaign V2 por `POST /v2/broadcast`.
 
-- Suite Ultra usa Angular + Flask + PostgreSQL y Alembic.
-- Fase 1 construye y congela audiencias.
-- Fase 2 aporta iVentas/histórico recipient-level, `FUNNEL_PORTFOLIO`, Historical Targeting transversal y Campaign BI/Reporting/Excel, todos cerrados antes de habilitar envío.
-- Funnel debe haber aplicado la lógica vigente de compradores/no compradores y `ACTIVE_MEMBER_SUPPRESSION` contra Socios Activos antes de congelar la audiencia.
-- Fase 3 **no recalcula fuentes, familias, compras, socios activos ni Historical Targeting**: envía exactamente la audiencia congelada y validada después de aplicar en Fase 2 las reglas históricas que correspondían.
-- No crear tablas espejo de Socios Activos/Vencidos.
-- No crear un tercer normalizador de teléfonos ni un mapping duplicado de sucursales/canales.
-- Un Campaign V2 puede requerir N provider campaigns porque iVentas envía por `channelId`.
-- Backend es autoridad para permisos, channel binding, plantilla, variables e idempotencia.
-- No retirar el legacy dentro de esta fase.
+## 1. Principio de seguridad rector
 
-Modo de trabajo:
+Un error de Fase 3 puede enviar mensajes reales a destinatarios incorrectos. Por tanto:
 
-1. inspeccionar `main` y confirmar que Fase 1/Fase 2 están completas;
-2. revisar provider abstraction, delivery y mappings existentes;
-3. explicar un solo cambio mínimo y prueba;
-4. probar primero un flujo controlado;
-5. no mezclar en el mismo cambio rediseños del constructor de audiencia.
+1. **Freeze nunca se recalcula.**
+2. **La cohorte congelada nunca se muta ni se reescribe por blacklist, cambios de socio, Funnel, tarifa o historial.**
+3. **La descarga de cohorte congelada se conserva aun después de habilitar envío automático.**
+4. **La descarga de lista para envío también se conserva como respaldo operativo y oráculo de QA.**
+5. El plan de envío se construye únicamente desde recipients congelados más supresiones de seguridad explícitas vigentes.
+6. Actualmente la supresión dinámica aprobada es la blacklist global. Agregar otra exige contrato explícito.
+7. Antes de cualquier POST real, backend reconstruye el plan y compara un fingerprint de dispatch confirmado por el usuario.
+8. Si cambió el plan entre confirmación y submit, se aborta sin enviar nada.
+9. El navegador nunca puede suministrar una lista arbitraria de teléfonos, channelId o provider_campaign_id como autoridad.
+10. Un timeout/5xx ambiguo en creación de campaña **no autoriza retry ciego**.
 
-## 1. Alcance exacto
+## 2. Distinción canónica: histórico vs operativo
 
-Fase 3 agrega envío de campañas desde Suite.
+### 2.1 Cohorte congelada
 
-Debe permitir:
+Fuente exclusiva:
 
-- seleccionar plantilla aprobada;
-- seleccionar sucursal/canal válido;
-- construir variables por destinatario;
-- validar audiencia congelada;
-- enviar inmediatamente o programar;
-- llamar POST /v2/broadcast;
-- guardar el campaign_id devuelto por iVentas;
-- enlazar ese ID con la campaña V2;
-- habilitar sincronización posterior usando Fase 2;
-- manejar errores/reintentos de forma segura;
-- mantener auditoría de quién envió, cuándo y con qué configuración.
+`marketing_campaign_v2_recipients` y su evidence persistida.
 
-Fase 3 NO debe:
+Propiedades:
 
-- rehacer el constructor de audiencias;
-- recalcular una audiencia al momento de enviar;
-- meter credenciales en frontend;
-- saltarse permisos backend;
-- borrar el legacy automáticamente;
-- duplicar branch resolution ya existente.
+- inmutable;
+- descargable;
+- auditable;
+- no consulta blacklist;
+- no consulta Activos/Vencidos/Funnel;
+- no consulta provider;
+- representa exactamente lo aprobado en Freeze.
 
-## 2. API iVentas conocida
+### 2.2 Lista para envío
 
-Endpoint:
+Fuente:
 
-    POST https://rest.iventas.mx/v2/broadcast
+`cohorte congelada -> supresiones de seguridad vigentes -> sendable recipients`
 
-Autenticación:
+Propiedades:
 
-    Authorization: Bearer <integration key>
+- no recalcula fuentes;
+- puede variar si cambia una supresión de seguridad;
+- debe mostrar diferencias respecto a Freeze;
+- es la población máxima que un dispatch puede intentar enviar;
+- debe poder descargarse antes del envío.
 
-La integration key entregada a Ultra tiene, según documentación recibida:
+### 2.3 Plan de dispatch
 
-- send:campaigns
-- read:campaign-stats
+El plan agrega a la lista para envío:
 
-El request soporta, entre otros:
-
-- templateName;
-- leads;
-- channelId;
-- token legacy;
-- fileUrl;
-- name;
-- sendAt;
-- tag;
-- tagId;
-- type;
-- phonesToNotify;
-- actions;
-- botIntents.
-
-Fase 3 debe usar el flujo moderno con integration key y channelId, no el legacy static token, salvo decisión explícita posterior.
-
-## 3. Respuesta de creación
-
-Respuesta exitosa:
-
-    {
-      "campaign": "<provider campaign id>"
-    }
-
-Puede aparecer:
-
-    deduplicated = true
-
-en ciertos escenarios programados.
-
-Regla:
-- provider_campaign_id debe persistirse inmediatamente después de una creación exitosa;
-- no marcar campaña como enviada antes de tener confirmación válida del proveedor;
-- si la respuesta es ambigua/error, no inventar campaign_id.
-
-## 4. Reutilización obligatoria del repo
-
-Antes de implementar, inspeccionar main actual y reutilizar cuando aplique:
-
-- backend/app/services/marketing_iventas_service.py
-- backend/app/services/marketing_iventas_branch_service.py
-- backend/app/services/marketing_campaign_delivery_service.py
-- backend/app/models/marketing_campaign_delivery.py
-- backend/app/services/marketing_campaign_export_service.py
-- backend/app/services/marketing_reactivation_outcome_service.py
-- infraestructura de permisos de Marketing;
-- scheduler/job patterns existentes si se requieren envíos diferidos o retries.
-
-No crear otro normalizador de teléfono ni otro mapa branch -> sucursal.
-
-## 5. Audiencia inmutable al enviar
-
-El envío usa exclusivamente la audiencia congelada de la campaña V2.
-
-Está prohibido:
-
-- volver a consultar socios activos;
-- volver a consultar socios vencidos;
-- volver a ejecutar el Funnel;
-- recalcular familias;
-- reevaluar `historical_targeting`;
-- reinterpretar `history_exclusion` legacy;
-- agregar o quitar destinatarios silenciosamente
-
-en el momento del POST.
-
-La audiencia que llega a Fase 3 ya debe haber atravesado en Fase 2, cuando aplique:
-
-    source-specific rules
-      -> scope backend
-      -> supresiones obligatorias
-      -> Historical Targeting
-      -> dedupe
-      -> Preview
-      -> Freeze
-
-Fase 3 consume ese resultado congelado; no vuelve a decidir quién cumple historia.
-
-Si el usuario necesita cambiar audiencia:
-- crear nueva versión/campaña según política que se defina;
-- no mutar una cohorte ya aprobada/enviada sin trazabilidad.
-
-## 6. Validación pre-envío
-
-Antes de llamar iVentas, backend debe validar:
-
-- campaña existe;
-- usuario tiene permiso;
-- campaña está en estado permitido;
-- audiencia no está vacía;
-- todos los recipients sendables tienen teléfono normalizado;
-- sucursal/canal o política de dispatch está resuelta explícitamente;
-- recipients `PHONE_ONLY` sin dispatch resoluble están bloqueados y visibles, no reasignados arbitrariamente;
-- plantilla está definida;
-- variables requeridas pueden construirse;
-- provider binding no indica envío previo;
-- no existe operación concurrente incompatible.
-
-La UI debe mostrar preview final de envío, pero backend vuelve a validar todo.
-
-## 7. Plantilla WhatsApp
-
-Plantilla WhatsApp es independiente de audience_family.
-
-Ejemplo:
-
-    purpose = REACTIVATION
-    families = DOMICILIADO + TRIMESTRAL
-    whatsapp_template = reactivacion_octubre_v2
-
-No asumir que cada familia siempre corresponde a una sola plantilla.
-
-El catálogo de plantillas deberá representar al menos:
-
-- provider;
-- templateName;
-- label de negocio;
-- estado activo;
-- uso comercial;
-- metadata de variables requeridas si se conoce;
-- compatibilidad por canal/sucursal si aplica.
-
-No duplicar templates hardcodeados en Angular.
-
-## 8. Obtención/listado de plantillas
-
-La documentación recibida describe cómo enviar templateName, pero no incluye en este contrato un endpoint confirmado para listar plantillas aprobadas.
-
-Por lo tanto hay dos caminos permitidos:
-
-### Camino A — API de templates confirmada
-
-Si iVentas entrega endpoint de catálogo:
-- crear capability;
-- sincronizar/cachear;
-- no hardcodear.
-
-### Camino B — catálogo administrado en Suite
-
-Mientras no exista API:
-- mantener catálogo backend/DB controlado;
-- carga/edición por rol autorizado;
-- validar templateName por proveedor/canal tanto como sea posible.
-
-No inventar endpoint de templates.
-
-## 9. Channel binding
-
-La documentación de iVentas exige channelId para integration keys salvo flujo opcional alterno.
-
-Suite ya puede resolver branch iVentas -> sucursal Suite mediante aliases, pero eso no garantiza que exista una tabla canónica de channelId actual para envío.
-
-Antes de crear una nueva entidad, investigar:
-- MarketingIventasContactORM.channel_id observado;
-- si ese channel_id es estable y suficiente por sucursal;
-- si existe más de un canal activo;
-- si iVentas entrega un catálogo oficial.
-
-### Regla de diseño
-
-No hardcodear channelId en un service ni en Angular.
-
-Si no existe una fuente canónica estable, es pertinente crear una configuración/binding de proveedor, por ejemplo conceptualmente:
-
-    provider
-    sucursal_id
-    provider_branch_code
-    provider_channel_id
-    is_active
-    valid_from
-    valid_to / metadata
-
-La entidad exacta se define en implementación.
-
-El caso Tecnológico debe respetar la migración/alias actual que dejó tecnologico-2 como canal/código activo hacia TEC_MXL.
-
-## 10. Variables por destinatario
-
-Cada lead iVentas puede incluir:
-
-- phone;
-- vars[];
-- urlVars[].
-
-La construcción de variables pertenece al backend.
-
-Debe existir contrato por plantilla:
-
-    variable 1 -> nombre
-    variable 2 -> fecha
-    variable 3 -> monto
-
-o equivalente.
-
-No montar arrays de vars manualmente en componentes Angular.
-
-Si falta una variable obligatoria:
-- bloquear pre-envío;
-- mostrar error comprensible;
-- no mandar una campaña parcialmente mal formada por default.
-
-## 11. Media
-
-fileUrl puede adjuntar media según tipos soportados por proveedor.
-
-No implementar soporte de archivos en el primer cambio de Fase 3 salvo necesidad real.
-
-Si se implementa:
-- URL accesible por iVentas;
-- archivo permitido;
-- seguridad;
-- expiración;
-- trazabilidad.
-
-No reutilizar URLs temporales de Warehouse sin comprobar que el proveedor pueda accederlas.
-
-## 12. Programación sendAt
-
-Sin sendAt:
-- envío inmediato según contrato iVentas.
-
-Con sendAt:
-- campaña programada.
-
-Suite debe decidir timezone de UX y convertir de manera explícita al formato esperado por proveedor.
-
-No mezclar America/Tijuana con America/Mexico_City por inferencia.
-
-La UI muestra hora local de negocio; backend persiste:
-- valor local/origen;
-- valor enviado al proveedor;
-- timezone usado.
-
-## 13. Deduplicación del proveedor
-
-iVentas documenta protección de duplicados para campañas programadas dentro de una ventana corta.
-
-Esto NO sustituye idempotencia de Suite.
-
-Suite debe crear su propia llave/idempotency state conceptual para impedir doble click/doble request concurrente.
-
-Escenarios:
-- primer request éxito;
-- retry por timeout;
-- proveedor devuelve deduplicated;
-- error antes de persistir provider_campaign_id.
-
-Cada escenario debe tener prueba.
-
-## 14. Estados internos de campaña
-
-Los estados exactos se definirán al implementar, pero deben distinguir al menos:
-
-- DRAFT;
-- READY;
-- SENDING / SUBMITTING;
-- SCHEDULED;
-- SENT / SUBMITTED;
-- FAILED / PROVIDER_ERROR;
-- CANCELLED cuando aplique.
-
-No reutilizar sin análisis los estados DRAFT/EXPORTED/SENT/CANCELLED de MarketingReactivationCampaignORM porque su semántica está ligada al legacy de exportación manual.
-
-## 15. Registro de envío por sucursal
-
-El legacy ya tiene:
-
-    MarketingReactivationCampaignBranchSendORM
-    marketing_campaign_delivery_service.py
-
-Fase 3 debe investigar si:
-- se puede extraer un modelo/servicio común de delivery;
-- o V2 necesita persistencia propia.
-
-No duplicar “sent_at por sucursal” si una abstracción común resuelve ambos modelos sin romper legacy.
-
-Si V2 puede contener más de una sucursal en una campaña, el diseño debe reflejar cardinalidad real del proveedor:
-- una llamada por channelId/sucursal;
-- o varias provider campaigns ligadas a una campaña lógica Suite.
-
-Esto debe confirmarse antes de asumir que una campaña V2 = un solo campaign_id externo.
-
-## 16. Punto crítico: campaña multísucursal
-
-POST /v2/broadcast recibe un channelId.
-
-Eso implica que una audiencia con múltiples sucursales probablemente requiera:
-- dividir por sucursal/canal;
-- crear un broadcast por cada canal;
-- almacenar varios provider_campaign_id bajo una campaña lógica Suite.
-
-Por lo tanto el modelo V2 debe soportar conceptualmente:
-
-    Campaign V2
-        1
-        |
-        N ProviderCampaign
-
-Cada ProviderCampaign:
-- sucursal;
-- provider;
-- channel;
-- provider_campaign_id;
-- send status;
-- cost/stats propios.
-
-No modelar provider_campaign_id directamente como único campo en campaign_v2 si eso impide multísucursal.
-
-Esta regla debe revisarse en Fase 2 también al importar históricos.
-
-## 17. Resultado del envío y Fase 2
-
-Después de crear provider campaigns:
-
-1. persistir IDs;
-2. registrar estado de submit;
-3. no esperar analytics sincrónicamente;
-4. Fase 2 consulta stats;
-5. si analyticsStatus = not_synced, mostrar pendiente;
-6. reintentar de forma controlada.
-
-No bloquear un request web durante minutos esperando analytics.
-
-## 18. Programación y background jobs
-
-Si Suite programa mediante sendAt, el proveedor se encarga del horario de envío.
-
-Si Suite necesita:
-- sync posterior;
-- retries;
-- backfill;
-
-usar jobs separados cuando la duración pueda comprometer Gunicorn.
-
-No crear loops infinitos dentro del proceso web.
-
-Seguir patrones de scheduler/jobs existentes y limpiar db.session por ciclo cuando aplique.
-
-## 19. Errores de iVentas
-
-El endpoint documenta errores como:
-- FORBIDDEN;
-- INVALID_CHANNEL_TOKEN;
-- MISSING_CHANNEL;
-- TEMPLATE_NOT_FOUND;
-- DUPLICATE_BROADCAST_IN_PROGRESS;
-- errores internos con supportRef.
-
-Reglas:
-- conservar código y supportRef sanitizado;
-- no exponer secretos;
-- errores 4xx de configuración no se reintentan ciegamente;
-- errores transitorios pueden reintentarse de forma limitada;
-- un 500 no significa “no se envió” ni “sí se envió”: debe quedar estado de conciliación si el resultado es incierto.
-
-## 20. Observabilidad
-
-Registrar:
-- campaign_v2_id;
-- provider campaign binding id;
-- sucursal_id;
-- provider;
-- operación;
-- status;
-- supportRef;
-- duración;
-- count recipients.
-
-No registrar:
-- Authorization;
-- credencial;
-- payload completo con datos personales si no es necesario;
-- teléfonos completos en logs generales.
-
-## 21. Permisos
-
-Enviar campañas es una acción de mayor riesgo que consultar.
-
-Fase 3 debe identificar un permiso explícito de envío.
-
-Backend valida:
-- usuario;
-- alcance de sucursal;
-- capacidad de enviar;
-- acceso a plantilla/canal.
-
-Ocultar botón en frontend no sustituye autorización.
-
-## 22. Confirmación de envío
-
-La UI debe requerir confirmación final con:
-- nombre;
-- propósito;
-- sucursal(es);
 - template;
-- destinatarios;
+- variables;
+- sucursal;
+- channel binding;
+- agrupación por provider channel;
+- estado de resolución;
+- fingerprint/idempotencia.
+
+El plan **no puede agregar teléfonos** que no estén en lista para envío.
+
+## 3. Cardinalidad obligatoria del proveedor
+
+iVentas `POST /v2/broadcast` recibe un solo `channelId`.
+
+Por tanto el modelo debe soportar:
+
+```
+Campaign V2
+    1
+    |
+    N ProviderCampaign / DispatchBatch
+```
+
+Cada provider campaign debe conservar como mínimo:
+
+- Campaign V2 padre;
+- provider;
+- sucursal/canal;
+- template;
+- recipient_count;
+- dispatch fingerprint/idempotency key;
+- estado;
+- provider_campaign_id cuando exista;
+- submitted/scheduled metadata;
+- resultado/error sanitizado.
+
+No usar el campo histórico `campaign_v2.provider_campaign_id` como única relación de Fase 3 si impide multisucursal.
+
+## 4. API iVentas conocida
+
+Creación:
+
+`POST https://rest.iventas.mx/v2/broadcast`
+
+Autenticación backend:
+
+`Authorization: Bearer <integration key>`
+
+Respuesta exitosa conocida:
+
+```json
+{
+  "campaign": "<provider campaign id>"
+}
+```
+
+Puede existir `deduplicated = true` en escenarios soportados por proveedor.
+
+Fase 3 usa integration key + channelId. No mover credenciales a Angular.
+
+## 5. Tres milestones obligatorios
+
+### F3-M1 — Foundation & Preflight
+
+Contrato:
+
+`CONTRATO_CAMPANAS_V2_FASE_3_M1.md`
+
+Objetivo:
+
+construir toda la base segura de dispatch, resolución de canales/templates, modelo 1:N, permisos, sendable projection reutilizable, preflight y fingerprint.
+
+**Prohibido hacer POST /v2/broadcast.**
+
+Estado inicial: PENDIENTE.
+
+Gate de salida:
+
+un plan de envío determinístico y auditable puede construirse para campañas mono y multisucursal y coincide exactamente con la lista para envío.
+
+### F3-M2 — Controlled Submit
+
+Contrato:
+
+`CONTRATO_CAMPANAS_V2_FASE_3_M2.md`
+
+Objetivo:
+
+implementar submit inmediato real con provider adapter, idempotencia, feature flag, estados seguros y persistencia inmediata de provider IDs.
+
+No incluye scheduling ni retry automático de resultados ambiguos.
+
+Estado inicial: BLOQUEADO por M1.
+
+Gate de salida:
+
+un envío controlado explícitamente aprobado puede ejecutarse sin divergencia entre preflight y payload enviado, y queda completamente auditado.
+
+### F3-M3 — Productionization & Final Acceptance
+
+Contrato:
+
+`CONTRATO_CAMPANAS_V2_FASE_3_M3.md`
+
+Objetivo:
+
+scheduling, conciliación/retries seguros, integración N provider campaigns con stats/costo de Fase 2, observabilidad, multisucursal real y acceptance final.
+
+Estado inicial: BLOQUEADO por M2.
+
+Gate de salida:
+
+Fase 3 ACCEPTED para operación productiva controlada.
+
+## 6. Gates entre conversaciones
+
+Una conversación de M2 debe detenerse si M1 no está marcado ACCEPTED en `main`.
+
+Una conversación de M3 debe detenerse si M2 no está marcado ACCEPTED en `main`.
+
+No basta con que exista código parcial. El contrato del milestone previo debe declarar su acceptance y las pruebas exigidas deben estar verdes.
+
+## 7. Capacidades que deben reutilizarse
+
+Inspeccionar antes de crear piezas nuevas:
+
+- `backend/app/services/marketing_phone.py`
+- `backend/app/services/marketing_iventas_service.py`
+- `backend/app/services/marketing_iventas_branch_service.py`
+- modelos `MarketingIventas*`
+- infraestructura de permisos de Marketing;
+- Campaign V2 recipients/evidence;
+- blacklist Campaign V2;
+- export de cohorte congelada;
+- export de lista para envío;
+- provider stats/history de Fase 2;
+- patrones scheduler/jobs si M3 los necesita.
+
+No crear un tercer normalizador de teléfono ni un diccionario paralelo branch -> sucursal.
+
+## 8. Invariantes que ningún milestone puede romper
+
+- No volver a consultar Vencidos/Activos/Funnel al enviar.
+- No reevaluar Historical Targeting.
+- No modificar recipients congelados.
+- No retirar las dos descargas manuales.
+- No enviar con teléfono inválido.
+- No inventar channelId.
+- No aceptar channelId desde Angular como autoridad.
+- No aceptar teléfonos desde Angular como autoridad.
+- No hardcodear templates en Angular.
+- No loggear credenciales ni payloads completos con PII.
+- No bloquear Gunicorn esperando analytics.
+- No borrar legacy histórico ni infraestructura compartida.
+- No asumir costo cero cuando provider no tiene costo disponible.
+- No marcar enviado sin provider ID válido o estado explícitamente conciliable.
+
+## 9. Regla de confirmación antes de cualquier envío real
+
+La UI debe mostrar como mínimo:
+
+- campaña;
+- propósito;
+- cohorte congelada;
+- supresiones vigentes;
+- destinatarios enviables;
+- sucursal(es);
+- channel(s) resueltos;
+- template;
+- variables;
 - inmediato/programado;
-- fecha/hora si aplica.
+- fingerprint de dispatch o versión equivalente.
 
-No mostrar el costo como exacto antes de que proveedor lo confirme, salvo que iVentas exponga una cotización explícita con semántica documentada.
+Backend reconstruye y valida de nuevo.
 
-## 23. Envío por varias familias
+Si el fingerprint no coincide, responde conflicto y obliga a revisar de nuevo.
 
-Las familias son parte de la audiencia, no lotes de envío obligatorios.
+## 10. Kill switch
 
-Ejemplo válido:
+La capacidad de enviar debe tener un control backend/entorno default OFF durante M2.
 
-    DOMICILIADO + TRIMESTRAL
-    -> misma plantilla
-    -> misma sucursal
-    -> un broadcast de ese canal
+Desactivar el kill switch:
 
-Siempre deduplicando teléfonos antes de crear leads.
+- impide nuevos submits;
+- no modifica campañas ya enviadas;
+- no cancela campañas ya aceptadas por iVentas.
 
-## 24. Plantillas y cinco rubros
+Nunca colocar este control únicamente en frontend.
 
-El catálogo comercial actual orienta plantillas aproximadamente a:
-- Domiciliado;
-- Trimestral;
-- Convenio;
-- Semestre;
-- Estudiante.
+## 11. Regla de acceptance real
 
-Esto sirve para sugerir/filtrar templates, pero no debe impedir manualmente una combinación autorizada de familias si negocio decide usar una plantilla transversal.
+Ninguna conversación debe ejecutar un POST real a iVentas sin aprobación explícita del usuario en ese momento.
 
-La relación template <-> audience_family debe ser configurable, no lógica hardcodeada.
+Las pruebas unitarias/mockeadas pueden avanzar sin esa aprobación.
 
-## 25. Auditoría
+Los casos live deben usar una campaña QA deliberada, pequeña y revisada manualmente contra su lista para envío.
 
-Persistir:
-- created_by;
-- approved/sent_by según flujo final;
-- submitted_at;
-- scheduled_for;
-- provider IDs;
-- template usado;
-- snapshot de configuración crítica;
-- resultado de submit;
-- supportRef si aplica.
+## 12. Retiro de legacy
 
-El template puede cambiar en iVentas en el futuro; la campaña debe conservar suficiente metadata para saber qué se intentó enviar.
+El decommission operativo de V1 ya ocurrió antes de esta subdivisión.
 
-## 26. Relación con costos
+Fase 3 **no autoriza**:
 
-Después de enviar:
-- Fase 2 obtiene costo real por provider campaign;
-- Campaign V2 agrega costos de sus N provider campaigns.
+- drop de tablas legacy;
+- borrado de histórico;
+- eliminación de jobs históricos;
+- eliminación de servicios iVentas compartidos.
 
-Para una campaña multísucursal:
+Cualquier limpieza física posterior requiere contrato/PR separado.
 
-    campaign_total_cost
-    = suma de provider_campaign costs válidos
+## 13. Cómo iniciar una conversación nueva
 
-Si un provider campaign está pendiente/unavailable:
-- total debe marcarse incompleto;
-- no asumir costo cero.
+No pegar este paraguas como único contrato para implementar.
 
-## 27. Pruebas mínimas
+Usar exactamente el archivo del milestone activo:
 
-Pre-envío:
-- audiencia vacía;
-- phone inválido;
-- template ausente;
-- channel ausente;
-- permiso denegado;
-- sucursal fuera de alcance.
+- M1: `CONTRATO_CAMPANAS_V2_FASE_3_M1.md`
+- M2: `CONTRATO_CAMPANAS_V2_FASE_3_M2.md`
+- M3: `CONTRATO_CAMPANAS_V2_FASE_3_M3.md`
 
-Provider:
-- éxito;
-- deduplicated;
-- template not found;
-- invalid channel;
-- forbidden;
-- timeout;
-- 500 con supportRef.
-
-Idempotencia:
-- doble click;
-- retry después de timeout;
-- dos workers intentando enviar la misma campaña.
-
-Multísucursal:
-- divide por sucursal;
-- N provider campaigns;
-- un fallo no borra éxitos previos;
-- resumen parcial claro.
-
-Seguridad:
-- credencial no aparece en frontend/logs;
-- channelId no puede sustituirse arbitrariamente por request del navegador.
-
-## 28. Criterio de aceptación de Fase 3
-
-Debe poder ejecutarse un caso controlado:
-
-1. crear campaña V2 desde Fase 1;
-2. tener audiencia congelada;
-3. seleccionar plantilla;
-4. confirmar sucursal/canal;
-5. enviar;
-6. recibir campaign_id;
-7. persistir provider campaign;
-8. mostrar estado de submit;
-9. ejecutar sync de Fase 2;
-10. visualizar delivery/costo cuando estén disponibles.
-
-También debe probarse un caso multísucursal si Campañas V2 permite audiencia multísucursal.
-
-## 29. Retiro del legacy
-
-Terminar Fase 3 NO autoriza automáticamente borrar legacy.
-
-Antes:
-- validar campañas reales;
-- comparar conteos;
-- validar Reactivaciones;
-- validar socios activos;
-- validar Venta nueva;
-- confirmar exportaciones pendientes;
-- definir migración/consulta histórica;
-- acordar fecha de corte.
-
-El retiro debe tener contrato/PR separado.
-
-## 30. Instrucción de arranque recomendada para una conversación nueva de Fase 3
-
-    Estamos implementando únicamente Campañas V2 Fase 3.
-    Este archivo es autosuficiente; no asumas contexto de conversaciones anteriores.
-    M32 dejó Fase 2 ACCEPTED y Fase 3 desbloqueada; revalida en main que ese gate siga vigente antes de implementar.
-    Inspecciona la integración actual y reutiliza normalización,
-    branch resolution, permisos, delivery y provider abstraction.
-    No recalcules audiencias al enviar.
-    Diseña primero el caso multísucursal porque POST /v2/broadcast usa un channelId.
-    Propón un solo primer cambio mínimo y su prueba.
+La primera acción de la conversación debe ser inspeccionar `main` y confirmar que el gate previo sigue vigente.
