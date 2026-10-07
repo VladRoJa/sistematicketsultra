@@ -89,10 +89,13 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   loadingReporting = false;
   exportingReporting = false;
   exportingDeliveryPackage = false;
+  exportingSendablePackage = false;
   updatingPurpose = false;
   error = '';
   deliveryExportError = '';
   deliveryExportSuccess = '';
+  sendableExportError = '';
+  sendableExportSuccess = '';
   reportingError = '';
   reportingSuccess = '';
   purposeUpdated = false;
@@ -222,13 +225,43 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
             blob,
             this.deliveryPackageFilename(blob),
           );
-          this.deliveryExportSuccess = 'Cohorte congelado exportado.';
+          this.deliveryExportSuccess = 'Cohorte congelada exportada sin supresiones dinámicas.';
         },
         error: (error: HttpErrorResponse) => {
           this.exportingDeliveryPackage = false;
           this.deliveryExportError = this.errorMessage(
             error,
-            'No fue posible exportar el cohorte congelado.',
+            'No fue posible exportar la cohorte congelada.',
+          );
+        },
+      });
+  }
+
+  exportSendablePackage(): void {
+    if (this.exportingSendablePackage || this.recipientsTotal <= 0) {
+      return;
+    }
+
+    this.exportingSendablePackage = true;
+    this.sendableExportError = '';
+    this.sendableExportSuccess = '';
+
+    this.service.exportCampaignSendablePackage(this.data.campaignId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: blob => {
+          this.exportingSendablePackage = false;
+          campaignV2DownloadBlob(
+            blob,
+            this.deliveryPackageFilename(blob),
+          );
+          this.sendableExportSuccess = 'Lista para envío exportada con supresiones vigentes.';
+        },
+        error: (error: HttpErrorResponse) => {
+          this.exportingSendablePackage = false;
+          this.sendableExportError = this.errorMessage(
+            error,
+            'No fue posible exportar la lista para envío.',
           );
         },
       });
