@@ -239,6 +239,7 @@ class TestMarketingCampaignV2Routes:
             ("get", "/api/marketing/campaigns-v2/1/provider-stats/snapshots"),
             ("get", "/api/marketing/campaigns-v2/1/provider-stats/snapshots/latest"),
             ("get", "/api/marketing/campaigns-v2/1/export-package"),
+            ("get", "/api/marketing/campaigns-v2/1/sendable-export-package"),
             ("get", "/api/marketing/campaigns-v2/1/recipients"),
             ("get", "/api/marketing/campaigns-v2/1/recipients/2"),
             ("patch", "/api/marketing/campaigns-v2/1/purpose"),
@@ -347,6 +348,31 @@ class TestMarketingCampaignV2Routes:
         assert response.data == b"zip-bytes"
         assert response.mimetype == "application/zip"
         assert "QA_CAMPANA.zip" in response.headers["Content-Disposition"]
+        kwargs = mocked.call_args.kwargs
+        assert kwargs["campaign_id"] == 7
+        assert kwargs["allowed_sucursal_keys"] == (
+            "VILLAS_DEL_REY",
+            "TECNOLOGICO",
+        )
+
+    def test_sendable_export_package_uses_backend_scope_and_zip_mimetype(self):
+        with self._auth(), patch(
+            "app.routes.marketing_campaign_v2_routes._campaign_v2_allowed_sucursal_keys",
+            return_value=("VILLAS_DEL_REY", "TECNOLOGICO"),
+        ), patch.object(
+            routes,
+            "export_campaign_v2_sendable_package",
+            return_value=(b"zip-bytes", "QA_CAMPANA__LISTA_ENVIO.zip"),
+        ) as mocked:
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/7/sendable-export-package",
+                headers=self.headers,
+            )
+
+        assert response.status_code == 200
+        assert response.data == b"zip-bytes"
+        assert response.mimetype == "application/zip"
+        assert "LISTA_ENVIO" in response.headers["Content-Disposition"]
         kwargs = mocked.call_args.kwargs
         assert kwargs["campaign_id"] == 7
         assert kwargs["allowed_sucursal_keys"] == (

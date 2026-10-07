@@ -178,7 +178,7 @@
       <div class="section-heading">
         <div>
           <h3>Destinatarios congelados</h3>
-          <p>{{ recipientsTotal | number }} registros · exportación separada por sucursal y segmento</p>
+          <p>{{ recipientsTotal | number }} registros · la cohorte congelada no se recalcula</p>
         </div>
         <div class="recipient-actions">
           <span *ngIf="loadingRecipients" class="loading-inline">Cargando…</span>
@@ -188,7 +188,15 @@
             (click)="exportDeliveryPackage()"
             [disabled]="exportingDeliveryPackage || recipientsTotal <= 0"
           >
-            {{ exportingDeliveryPackage ? 'Preparando…' : 'Descargar cohorte' }}
+            {{ exportingDeliveryPackage ? 'Preparando…' : 'Descargar cohorte congelada' }}
+          </button>
+          <button
+            mat-stroked-button
+            type="button"
+            (click)="exportSendablePackage()"
+            [disabled]="exportingSendablePackage || recipientsTotal <= 0"
+          >
+            {{ exportingSendablePackage ? 'Preparando…' : 'Descargar lista para envío' }}
           </button>
         </div>
       </div>
@@ -199,6 +207,15 @@
       <div *ngIf="deliveryExportSuccess" class="inline-success delivery-feedback" role="status">
         {{ deliveryExportSuccess }}
       </div>
+      <div *ngIf="sendableExportError" class="inline-error delivery-feedback" role="alert">
+        {{ sendableExportError }}
+      </div>
+      <div *ngIf="sendableExportSuccess" class="inline-success delivery-feedback" role="status">
+        {{ sendableExportSuccess }}
+      </div>
+      <p class="muted delivery-feedback">
+        Cohorte congelada = evidencia histórica exacta. Lista para envío = esa misma cohorte menos supresiones vigentes como lista negra.
+      </p>
 
       <div class="table-wrap" *ngIf="recipients.length; else emptyRecipients">
         <table>

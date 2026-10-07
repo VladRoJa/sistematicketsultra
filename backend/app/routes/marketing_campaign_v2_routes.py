@@ -35,6 +35,7 @@ from app.services.marketing_campaign_v2_blacklist_service import (
 from app.services.marketing_campaign_v2_delivery_export_service import (
     campaign_v2_delivery_export_mimetype,
     export_campaign_v2_delivery_package,
+    export_campaign_v2_sendable_package,
 )
 from app.services.marketing_campaign_v2_query_service import (
     CAMPAIGN_V2_PURPOSES,
@@ -848,6 +849,38 @@ def export_campaign_v2_delivery_package_endpoint(campaign_id: int):
         return _error(str(exc), 400)
     except Exception:
         return _error("Falló la exportación manual de Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.get(
+    "/campaigns-v2/<int:campaign_id>/sendable-export-package"
+)
+@jwt_required()
+def export_campaign_v2_sendable_package_endpoint(campaign_id: int):
+    try:
+        _, access = _resolve_campaign_v2_request()
+        _validate_query_args(set())
+        file_bytes, filename = export_campaign_v2_sendable_package(
+            campaign_id=campaign_id,
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return send_file(
+            BytesIO(file_bytes),
+            as_attachment=True,
+            download_name=filename,
+            mimetype=campaign_v2_delivery_export_mimetype(filename),
+        )
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2NotFoundError:
+        return _error("Campaign V2 no encontrada.", 404)
+    except (
+        MarketingCampaignV2RouteValidationError,
+        MarketingCampaignV2QueryValidationError,
+    ) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("Falló la exportación de lista para envío.", 500)
 
 
 @marketing_campaign_v2_bp.get("/campaigns-v2/<int:campaign_id>/recipients")

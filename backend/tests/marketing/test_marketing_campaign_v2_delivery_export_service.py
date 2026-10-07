@@ -83,7 +83,7 @@ def test_single_branch_segment_exports_one_xlsx(monkeypatch):
         session=_Session(rows),
     )
 
-    assert filename == "QA_OCTUBRE__VILLAS_DEL_REY__DOMICILIADO.xlsx"
+    assert filename == "QA_OCTUBRE__COHORTE_CONGELADA__VILLAS_DEL_REY__DOMICILIADO.xlsx"
     assert service.campaign_v2_delivery_export_mimetype(filename).endswith("sheet")
     assert list(load_workbook(BytesIO(data)).active.values) == [
         ("telefono", "nombre", "sucursal", "tarifa"),
@@ -145,20 +145,20 @@ def test_multiple_branch_segment_groups_export_zip_with_summary(monkeypatch):
         session=_Session(rows),
     )
 
-    assert filename == "REACTIVACION_OCTUBRE.zip"
+    assert filename == "REACTIVACION_OCTUBRE__COHORTE_CONGELADA.zip"
     assert service.campaign_v2_delivery_export_mimetype(filename) == "application/zip"
 
     with ZipFile(BytesIO(data)) as archive:
         assert set(archive.namelist()) == {
-            "REACTIVACION_OCTUBRE__TECNOLOGICO__ESTUDIANTE.xlsx",
-            "REACTIVACION_OCTUBRE__VILLAS_DEL_REY__CONVENIO.xlsx",
-            "REACTIVACION_OCTUBRE__VILLAS_DEL_REY__DOMICILIADO.xlsx",
+            "REACTIVACION_OCTUBRE__COHORTE_CONGELADA__TECNOLOGICO__ESTUDIANTE.xlsx",
+            "REACTIVACION_OCTUBRE__COHORTE_CONGELADA__VILLAS_DEL_REY__CONVENIO.xlsx",
+            "REACTIVACION_OCTUBRE__COHORTE_CONGELADA__VILLAS_DEL_REY__DOMICILIADO.xlsx",
             "RESUMEN.xlsx",
         }
         tecnologico = load_workbook(
             BytesIO(
                 archive.read(
-                    "REACTIVACION_OCTUBRE__TECNOLOGICO__ESTUDIANTE.xlsx"
+                    "REACTIVACION_OCTUBRE__COHORTE_CONGELADA__TECNOLOGICO__ESTUDIANTE.xlsx"
                 )
             )
         )
@@ -243,7 +243,7 @@ def test_delivery_export_sanitizes_formula_like_text(prefix):
         assert cell.data_type != "f"
 
 
-def test_frozen_campaign_export_uses_current_blacklist(monkeypatch):
+def test_frozen_cohort_export_ignores_current_blacklist(monkeypatch):
     rows = [
         _recipient("6861000001", "METEPEC", "DOMICILIADO", "ANA LOPEZ", "MENSUALIDAD"),
         _recipient("6861000002", "METEPEC", "DOMICILIADO", "JUAN PEREZ", "MENSUALIDAD"),
@@ -265,7 +265,37 @@ def test_frozen_campaign_export_uses_current_blacklist(monkeypatch):
         session=_Session(rows),
     )
 
-    assert filename == "FROZEN__METEPEC__DOMICILIADO.xlsx"
+    assert filename == "FROZEN__COHORTE_CONGELADA__METEPEC__DOMICILIADO.xlsx"
+    assert list(load_workbook(BytesIO(data)).active.values) == [
+        ("telefono", "nombre", "sucursal", "tarifa"),
+        ("6861000001", "ANA", "METEPEC", "MENSUALIDAD"),
+        ("6861000002", "JUAN", "METEPEC", "MENSUALIDAD"),
+    ]
+
+
+def test_sendable_export_applies_current_blacklist(monkeypatch):
+    rows = [
+        _recipient("6861000001", "METEPEC", "DOMICILIADO", "ANA LOPEZ", "MENSUALIDAD"),
+        _recipient("6861000002", "METEPEC", "DOMICILIADO", "JUAN PEREZ", "MENSUALIDAD"),
+    ]
+    monkeypatch.setattr(
+        service,
+        "get_campaign_v2",
+        lambda **_kwargs: {"id": 11, "name": "Frozen"},
+    )
+    monkeypatch.setattr(
+        service,
+        "get_blacklisted_phones",
+        lambda **_kwargs: {"6861000002"},
+    )
+
+    data, filename = service.export_campaign_v2_sendable_package(
+        campaign_id=11,
+        allowed_sucursal_keys=None,
+        session=_Session(rows),
+    )
+
+    assert filename == "FROZEN__LISTA_ENVIO__METEPEC__DOMICILIADO.xlsx"
     assert list(load_workbook(BytesIO(data)).active.values) == [
         ("telefono", "nombre", "sucursal", "tarifa"),
         ("6861000001", "ANA", "METEPEC", "MENSUALIDAD"),

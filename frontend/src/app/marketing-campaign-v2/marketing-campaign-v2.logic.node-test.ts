@@ -842,7 +842,7 @@ test('lista negra V2 tiene administración global, import incremental y métrica
   assert.equal(html.includes('Bloqueados globalmente'), true);
 });
 
-test('M33 Campaign V2 descarga cohorte congelado por sucursal y segmento', () => {
+test('Campaign V2 separa cohorte congelada de lista para envío', () => {
   const root = process.cwd();
   const dir = path.join(root, 'src/app/marketing-campaign-v2');
   const service = fs.readFileSync(
@@ -860,10 +860,19 @@ test('M33 Campaign V2 descarga cohorte congelado por sucursal y segmento', () =>
 
   assert.equal(service.includes('exportCampaignDeliveryPackage(campaignId: number)'), true);
   assert.equal(service.includes('${this.apiUrl}/${campaignId}/export-package'), true);
+  assert.equal(service.includes('exportCampaignSendablePackage(campaignId: number)'), true);
+  assert.equal(service.includes('${this.apiUrl}/${campaignId}/sendable-export-package'), true);
+
   assert.equal(detail.includes('this.service.exportCampaignDeliveryPackage(this.data.campaignId)'), true);
+  assert.equal(detail.includes('this.service.exportCampaignSendablePackage(this.data.campaignId)'), true);
+  assert.equal(detail.includes("'COHORTE_CONGELADA'"), true);
+  assert.equal(detail.includes("'LISTA_ENVIO'"), true);
   assert.equal(detail.includes("blob.type === 'application/zip' ? 'zip' : 'xlsx'"), true);
-  assert.equal(html.includes('Descargar cohorte'), true);
-  assert.equal(html.includes('exportación separada por sucursal y segmento'), true);
+
+  assert.equal(html.includes('Descargar cohorte congelada'), true);
+  assert.equal(html.includes('Descargar lista para envío'), true);
+  assert.equal(html.includes('Cohorte congelada = evidencia histórica exacta.'), true);
+  assert.equal(html.includes('Lista para envío = esa misma cohorte menos supresiones vigentes'), true);
 });
 
 test('M33 UI polish da jerarquía al constructor sin cambiar su contrato', () => {

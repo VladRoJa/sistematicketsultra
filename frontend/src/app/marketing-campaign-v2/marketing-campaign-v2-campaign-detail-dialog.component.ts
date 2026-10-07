@@ -89,10 +89,13 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   loadingReporting = false;
   exportingReporting = false;
   exportingDeliveryPackage = false;
+  exportingSendablePackage = false;
   updatingPurpose = false;
   error = '';
   deliveryExportError = '';
   deliveryExportSuccess = '';
+  sendableExportError = '';
+  sendableExportSuccess = '';
   reportingError = '';
   reportingSuccess = '';
   purposeUpdated = false;
@@ -220,15 +223,45 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
           this.exportingDeliveryPackage = false;
           campaignV2DownloadBlob(
             blob,
-            this.deliveryPackageFilename(blob),
+            this.deliveryPackageFilename(blob, 'COHORTE_CONGELADA'),
           );
-          this.deliveryExportSuccess = 'Cohorte congelado exportado.';
+          this.deliveryExportSuccess = 'Cohorte congelada exportada sin supresiones dinámicas.';
         },
         error: (error: HttpErrorResponse) => {
           this.exportingDeliveryPackage = false;
           this.deliveryExportError = this.errorMessage(
             error,
-            'No fue posible exportar el cohorte congelado.',
+            'No fue posible exportar la cohorte congelada.',
+          );
+        },
+      });
+  }
+
+  exportSendablePackage(): void {
+    if (this.exportingSendablePackage || this.recipientsTotal <= 0) {
+      return;
+    }
+
+    this.exportingSendablePackage = true;
+    this.sendableExportError = '';
+    this.sendableExportSuccess = '';
+
+    this.service.exportCampaignSendablePackage(this.data.campaignId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: blob => {
+          this.exportingSendablePackage = false;
+          campaignV2DownloadBlob(
+            blob,
+            this.deliveryPackageFilename(blob, 'LISTA_ENVIO'),
+          );
+          this.sendableExportSuccess = 'Lista para envío exportada con supresiones vigentes.';
+        },
+        error: (error: HttpErrorResponse) => {
+          this.exportingSendablePackage = false;
+          this.sendableExportError = this.errorMessage(
+            error,
+            'No fue posible exportar la lista para envío.',
           );
         },
       });
@@ -461,7 +494,10 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
     return rows;
   }
 
-  private deliveryPackageFilename(blob: Blob): string {
+  private deliveryPackageFilename(
+    blob: Blob,
+    label: 'COHORTE_CONGELADA' | 'LISTA_ENVIO',
+  ): string {
     const normalized = (this.campaign?.name || `CAMPANA_V2_${this.data.campaignId}`)
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
@@ -470,7 +506,7 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
       .replace(/^_+|_+$/g, '')
       .slice(0, 80) || `CAMPANA_V2_${this.data.campaignId}`;
     const extension = blob.type === 'application/zip' ? 'zip' : 'xlsx';
-    return `${normalized}.${extension}`;
+    return `${normalized}__${label}.${extension}`;
   }
 
   private currencyLabel(value: string): string {

@@ -103,6 +103,13 @@ export class MarketingCampaignV2Service {
     );
   }
 
+  exportCampaignSendablePackage(campaignId: number): Observable<Blob> {
+    return this.http.get(
+      `${this.apiUrl}/${campaignId}/sendable-export-package`,
+      { responseType: 'blob' },
+    );
+  }
+
   listRecipients(
     campaignId: number,
     page: number,
