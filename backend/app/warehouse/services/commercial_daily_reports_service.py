@@ -88,6 +88,11 @@ def _load_series(metric: str, cutoff: date) -> dict[str, dict[date, int | None]]
             by_branch[branch][row.track_date] = getattr(row, field)
     if not by_branch:
         raise CommercialDailyReportError("Track mart has no commercial rows")
+    missing = [branch for branch, series in by_branch.items() if series.get(cutoff) is None]
+    if missing:
+        raise CommercialDailyReportError(
+            f"Missing commercial MTD on cutoff {cutoff.isoformat()}: {missing}"
+        )
     return dict(by_branch)
 
 
