@@ -64,6 +64,7 @@ def export_campaign_v2_delivery_package(
         campaign=campaign,
         campaign_id=campaign_id,
         recipients=recipients,
+        filename_tag="COHORTE_CONGELADA",
     )
 
 
@@ -94,6 +95,7 @@ def export_campaign_v2_sendable_package(
         campaign=campaign,
         campaign_id=campaign_id,
         recipients=sendable_recipients,
+        filename_tag="LISTA_ENVIO",
         empty_suffix="SIN_DESTINATARIOS_ENVIABLES",
     )
 
@@ -129,12 +131,14 @@ def _package_campaign_recipients(
     campaign: dict[str, Any],
     campaign_id: int,
     recipients: list[MarketingCampaignV2RecipientORM],
+    filename_tag: str,
     empty_suffix: str = "SIN_DESTINATARIOS",
 ) -> tuple[bytes, str]:
     campaign_part = _filename_part(
         campaign.get("name"),
         fallback=f"CAMPANA_V2_{int(campaign_id)}",
     )
+    campaign_part = f"{campaign_part}__{filename_tag}"
     if not recipients:
         return (
             _recipients_workbook([]),
