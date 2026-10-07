@@ -48,7 +48,7 @@ def test_mtd_decrease_rejected():
         })
 
 
-def test_report_has_three_sheets_and_weekly_missing_not_zero():
+def test_report_has_three_sheets_and_week_to_date_value():
     cutoff = date(2026, 10, 7)
     d = date(2026, 10, 1)
     series = {}
@@ -64,4 +64,4 @@ def test_report_has_three_sheets_and_weekly_missing_not_zero():
     assert wb["Diario"]["A3"].value == "VILLA_VERDE"
     assert wb["Diario"]["B3"].value == 1
     weekly = wb["Semanal"]
-    assert weekly.cell(row=3, column=weekly.max_column).value is None
+    assert weekly.cell(row=3, column=weekly.max_column).value == 4
