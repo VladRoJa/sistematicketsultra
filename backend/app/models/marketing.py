@@ -640,7 +640,21 @@ class MarketingCampaignV2ProviderCampaignORM(db.Model):
         onupdate=_utc_now,
         server_default=db.text("CURRENT_TIMESTAMP"),
     )
+    submit_started_at = db.Column(db.DateTime(timezone=True), nullable=True)
     submitted_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    provider_deduplicated = db.Column(db.Boolean, nullable=True)
+    request_snapshot_json = db.Column(
+        db.JSON,
+        nullable=False,
+        default=dict,
+        server_default=db.text("'{}'"),
+    )
+    provider_response_json = db.Column(
+        db.JSON,
+        nullable=False,
+        default=dict,
+        server_default=db.text("'{}'"),
+    )
     error_code = db.Column(db.String(100), nullable=True)
     support_ref = db.Column(db.String(200), nullable=True)
 

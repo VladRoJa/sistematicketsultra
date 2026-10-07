@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any
 
-from flask import Blueprint, jsonify, request, send_file
+from flask import Blueprint, current_app, jsonify, request, send_file
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.extensions import db
@@ -51,6 +51,22 @@ from app.services.marketing_campaign_v2_dispatch_config_service import (
 from app.services.marketing_campaign_v2_preflight_service import (
     build_campaign_v2_preflight,
     serialize_campaign_v2_preflight,
+)
+from app.services.marketing_campaign_v2_provider import (
+    CampaignProviderConfigurationError,
+)
+from app.services.marketing_campaign_v2_submit_service import (
+    MarketingCampaignV2SubmitConflictError,
+    MarketingCampaignV2SubmitDisabledError,
+    MarketingCampaignV2SubmitPersistenceError,
+    MarketingCampaignV2SubmitPreconditionError,
+    MarketingCampaignV2SubmitValidationError,
+    get_campaign_v2_submit_state,
+    serialize_campaign_v2_submit_result,
+    submit_campaign_v2,
+)
+from app.integrations.iventas.broadcast_provider import (
+    IVentasBroadcastProvider,
 )
 from app.services.marketing_campaign_v2_query_service import (
     CAMPAIGN_V2_PURPOSES,
@@ -1223,7 +1239,24 @@ def campaign_v2_preflight_endpoint(campaign_id: int):
             provider=CAMPAIGN_V2_DISPATCH_PROVIDER,
             session=db.session,
         )
-        return jsonify(serialize_campaign_v2_preflight(plan)), 200
+        result = serialize_campaign_v2_preflight(plan)
+        submit_state = get_campaign_v2_submit_state(
+            campaign_id=campaign_id,
+            session=db.session,
+        )
+        result["submission"] = {
+            "enabled": bool(
+                current_app.config.get(
+                    "CAMPAIGN_V2_PROVIDER_SEND_ENABLED",
+                    False,
+                )
+            ),
+            "can_send": bool(
+                getattr(access, "can_send_campaigns", False)
+            ),
+            **submit_state,
+        }
+        return jsonify(result), 200
     except MarketingAuthorizationError as exc:
         return _error(str(exc), 403)
     except MarketingCampaignV2NotFoundError:
@@ -1239,6 +1272,79 @@ def campaign_v2_preflight_endpoint(campaign_id: int):
         return _error(str(exc), 400)
     except Exception:
         return _error("Falló el preflight Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.post(
+    "/campaigns-v2/<int:campaign_id>/submit"
+)
+@jwt_required()
+def campaign_v2_submit_endpoint(campaign_id: int):
+    try:
+        user, access = _resolve_campaign_v2_send_request()
+        payload = _parse_payload(
+            {"template_id", "expected_dispatch_fingerprint"}
+        )
+        send_enabled = bool(
+            current_app.config.get(
+                "CAMPAIGN_V2_PROVIDER_SEND_ENABLED",
+                False,
+            )
+        )
+        if not send_enabled:
+            raise MarketingCampaignV2SubmitDisabledError(
+                "El envío Campaign V2 está deshabilitado por kill switch."
+            )
+
+        provider = IVentasBroadcastProvider(
+            api_key=current_app.config.get(
+                "IVENTAS_CAMPAIGN_SEND_API_KEY",
+                "",
+            ),
+            base_url=current_app.config.get(
+                "IVENTAS_CAMPAIGN_SEND_API_BASE_URL",
+                "https://rest.iventas.mx",
+            ),
+        )
+        result = submit_campaign_v2(
+            campaign_id=campaign_id,
+            template_id=payload.get("template_id"),
+            expected_dispatch_fingerprint=payload.get(
+                "expected_dispatch_fingerprint"
+            ),
+            actor_user_id=int(user.id),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            provider=provider,
+            send_enabled=send_enabled,
+            session=db.session,
+        )
+        body = serialize_campaign_v2_submit_result(result)
+        status = 200 if result.all_submitted else 502
+        return jsonify(body), status
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2NotFoundError:
+        return _error("Campaign V2 no encontrada.", 404)
+    except MarketingCampaignV2SubmitDisabledError as exc:
+        return _error(str(exc), 423)
+    except CampaignProviderConfigurationError as exc:
+        return _error(str(exc), 503)
+    except (
+        MarketingCampaignV2RouteValidationError,
+        MarketingCampaignV2SubmitValidationError,
+    ) as exc:
+        return _error(str(exc), 400)
+    except (
+        MarketingCampaignV2SubmitPreconditionError,
+        MarketingCampaignV2SubmitConflictError,
+        MarketingCampaignV2DispatchConfigValidationError,
+    ) as exc:
+        return _error(str(exc), 409)
+    except MarketingCampaignV2DispatchConfigNotFoundError as exc:
+        return _error(str(exc), 404)
+    except MarketingCampaignV2SubmitPersistenceError:
+        return _error("No fue posible persistir el submit Campaign V2.", 500)
+    except Exception:
+        return _error("Falló el submit Campaign V2.", 500)
 
 
 def _get_current_campaign_v2_user() -> UserORM:
@@ -1278,6 +1384,12 @@ def _resolve_campaign_v2_dispatch_config_request():
     return user, access
 
 
+def _resolve_campaign_v2_send_request():
+    user, access = _resolve_request_access()
+    _require_campaign_v2_send(access)
+    return user, access
+
+
 def _require_campaign_v2_management(access) -> None:
     if not getattr(access, "can_manage_campaigns", False):
         raise MarketingAuthorizationError(
@@ -1296,6 +1408,13 @@ def _require_campaign_v2_dispatch_config(access) -> None:
     if not getattr(access, "can_manage_dispatch_config", False):
         raise MarketingAuthorizationError(
             "No autorizado para configurar dispatch Campaign V2."
+        )
+
+
+def _require_campaign_v2_send(access) -> None:
+    if not getattr(access, "can_send_campaigns", False):
+        raise MarketingAuthorizationError(
+            "No autorizado para enviar Campaign V2."
         )
 
 

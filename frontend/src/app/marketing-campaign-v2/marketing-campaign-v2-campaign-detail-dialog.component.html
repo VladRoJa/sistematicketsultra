@@ -307,6 +307,61 @@
             <span>Dispatch fingerprint · {{ plan.dispatch_fingerprint_version }}</span>
             <strong class="mono">{{ plan.dispatch_fingerprint }}</strong>
           </div>
+
+          <div class="submit-gate" [class.submit-gate-ready]="canSubmitDispatch">
+            <div>
+              <strong>Controlled Submit M2</strong>
+              <span>{{ submitAvailabilityLabel() }}</span>
+            </div>
+            <button
+              *ngIf="plan.submission.can_send"
+              mat-flat-button
+              color="warn"
+              type="button"
+              (click)="confirmAndSubmitDispatch()"
+              [disabled]="!canSubmitDispatch"
+            >
+              {{ submitting ? 'Enviando…' : 'Enviar mensajes ahora' }}
+            </button>
+          </div>
+
+          <div *ngIf="submitError" class="inline-error submit-feedback" role="alert">
+            {{ submitError }}
+          </div>
+          <div *ngIf="submitSuccess" class="inline-success submit-feedback" role="status">
+            {{ submitSuccess }}
+          </div>
+
+          <div class="provider-submit-state" *ngIf="plan.submission.has_provider_campaigns">
+            <div class="section-heading compact-heading">
+              <div>
+                <h4>Estado de provider campaigns</h4>
+                <p>{{ plan.submission.status }}</p>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Sucursal</th>
+                    <th>Destinatarios</th>
+                    <th>Estado</th>
+                    <th>Provider ID</th>
+                    <th>Referencia</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let child of plan.submission.batches">
+                    <td>{{ child.sucursal_canon }}</td>
+                    <td>{{ child.recipient_count | number }}</td>
+                    <td>{{ child.status }}</td>
+                    <td class="mono">{{ child.provider_campaign_id || '—' }}</td>
+                    <td class="mono">{{ child.support_ref || child.error_code || '—' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </ng-container>
       </section>
 

@@ -1,0 +1,49 @@
+<h2 mat-dialog-title>Confirmar envío inmediato</h2>
+
+<mat-dialog-content>
+  <div class="warning-box">
+    <strong>Esta acción enviará mensajes reales por WhatsApp.</strong>
+    <span>El envío es inmediato. No es una simulación ni una exportación.</span>
+  </div>
+
+  <dl class="summary">
+    <div><dt>Campaña</dt><dd>{{ data.campaignName }}</dd></div>
+    <div><dt>Purpose</dt><dd>{{ data.purposeLabel }}</dd></div>
+    <div><dt>Template</dt><dd>{{ data.templateName }}</dd></div>
+    <div><dt>Cohorte congelada</dt><dd>{{ data.frozenCount | number }}</dd></div>
+    <div><dt>Blacklist vigente</dt><dd>{{ data.blacklistedCount | number }}</dd></div>
+    <div><dt>Lista para envío</dt><dd>{{ data.recipientCount | number }}</dd></div>
+    <div><dt>Provider campaigns</dt><dd>{{ data.providerCampaignCount | number }}</dd></div>
+    <div><dt>Modo</dt><dd>Inmediato</dd></div>
+  </dl>
+
+  <div class="batch-list">
+    <div class="batch-row" *ngFor="let batch of data.batches">
+      <div>
+        <strong>{{ batch.trackLabel }}</strong>
+        <span>{{ batch.sucursalCanon }}</span>
+      </div>
+      <div>
+        <span>{{ batch.recipientCount | number }} destinatarios</span>
+        <code>{{ batch.channelId }}</code>
+      </div>
+    </div>
+  </div>
+
+  <div class="fingerprint">
+    <span>Dispatch fingerprint aprobado · {{ data.fingerprintVersion }}</span>
+    <code>{{ data.fingerprint }}</code>
+  </div>
+
+  <p class="guard-note">
+    Suite volverá a construir el preflight antes de enviar. Si cambió blacklist,
+    template, channel, variables o phone set, el submit se bloqueará.
+  </p>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="cancel()">Cancelar</button>
+  <button mat-flat-button color="warn" type="button" (click)="confirm()">
+    Sí, enviar mensajes ahora
+  </button>
+</mat-dialog-actions>

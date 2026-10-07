@@ -1082,3 +1082,101 @@ test('Adeudo mínimo sólo aplica a vencidos, es inclusivo en contrato y vacío 
   });
   assert.equal('adeudo_min' in funnel, false);
 });
+
+test('F3-M2 submit service sólo envía template_id y fingerprint esperado', () => {
+  const root = process.cwd();
+  const dir = path.join(root, 'src/app/marketing-campaign-v2');
+  const service = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2.service.ts'),
+    'utf8',
+  );
+  const start = service.indexOf('submitCampaign(');
+  const end = service.indexOf('exportCampaignDeliveryPackage(', start);
+  const source = service.slice(start, end);
+
+  assert.equal(start >= 0, true);
+  assert.equal(source.includes('template_id: templateId'), true);
+  assert.equal(
+    source.includes('expected_dispatch_fingerprint: expectedDispatchFingerprint'),
+    true,
+  );
+  for (const forbidden of [
+    'phone_mx10',
+    'phones',
+    'provider_channel_id',
+    'channelId',
+    'vars',
+    'urlVars',
+    'sendAt',
+    'provider_campaign_id',
+  ]) {
+    assert.equal(source.includes(forbidden), false, forbidden);
+  }
+});
+
+test('F3-M2 detalle exige preflight ready, gate backend y confirmación explícita', () => {
+  const root = process.cwd();
+  const dir = path.join(root, 'src/app/marketing-campaign-v2');
+  const component = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-campaign-detail-dialog.component.ts'),
+    'utf8',
+  );
+  const html = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-campaign-detail-dialog.component.html'),
+    'utf8',
+  );
+
+  assert.equal(component.includes('state.enabled'), true);
+  assert.equal(component.includes('state.can_send'), true);
+  assert.equal(component.includes("state.status === 'NOT_STARTED'"), true);
+  assert.equal(component.includes('MarketingCampaignV2SubmitConfirmDialogComponent'), true);
+  assert.equal(component.includes('plan.dispatch_fingerprint'), true);
+  assert.equal(component.includes('this.service.submitCampaign('), true);
+  assert.equal(html.includes('Controlled Submit M2'), true);
+  assert.equal(html.includes('Enviar mensajes ahora'), true);
+  assert.equal(html.includes('*ngIf="plan.submission.can_send"'), true);
+  assert.equal(html.includes('[disabled]="!canSubmitDispatch"'), true);
+});
+
+test('F3-M2 confirmación muestra impacto real y no ofrece scheduling', () => {
+  const root = process.cwd();
+  const dir = path.join(root, 'src/app/marketing-campaign-v2');
+  const html = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-submit-confirm-dialog.component.html'),
+    'utf8',
+  );
+
+  for (const label of [
+    'Esta acción enviará mensajes reales por WhatsApp.',
+    'Cohorte congelada',
+    'Blacklist vigente',
+    'Lista para envío',
+    'Provider campaigns',
+    'Modo',
+    'Inmediato',
+    'Dispatch fingerprint aprobado',
+    'Sí, enviar mensajes ahora',
+  ]) {
+    assert.equal(html.includes(label), true, label);
+  }
+  assert.equal(html.includes('sendAt'), false);
+  assert.equal(html.includes('Programar'), false);
+});
+
+test('F3-M2 conserva ambas descargas manuales después de agregar submit', () => {
+  const root = process.cwd();
+  const dir = path.join(root, 'src/app/marketing-campaign-v2');
+  const html = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-campaign-detail-dialog.component.html'),
+    'utf8',
+  );
+  const component = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-campaign-detail-dialog.component.ts'),
+    'utf8',
+  );
+
+  assert.equal(html.includes('Descargar cohorte congelada'), true);
+  assert.equal(html.includes('Descargar lista para envío'), true);
+  assert.equal(component.includes('exportDeliveryPackage()'), true);
+  assert.equal(component.includes('exportSendablePackage()'), true);
+});

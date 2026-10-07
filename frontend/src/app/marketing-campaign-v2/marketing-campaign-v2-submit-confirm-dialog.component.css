@@ -1,0 +1,96 @@
+:host {
+  display: block;
+}
+
+.warning-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.summary div {
+  padding: 9px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.summary dt {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.summary dd {
+  margin: 4px 0 0;
+  font-weight: 700;
+}
+
+.batch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.batch-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.batch-row > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.batch-row span {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.fingerprint {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.fingerprint span,
+.guard-note {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.fingerprint code {
+  overflow-wrap: anywhere;
+  font-size: 10px;
+}
+
+.guard-note {
+  margin: 12px 0 0;
+}
+
+@media (max-width: 620px) {
+  .summary {
+    grid-template-columns: 1fr;
+  }
+
+  .batch-row {
+    flex-direction: column;
+  }
+}

@@ -77,6 +77,23 @@ class Config:
     UPLOADS_PUBLIC_PATH = os.getenv("UPLOADS_PUBLIC_PATH", "/uploads/reportes")
     MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))
 
+    # Campaign V2 provider submit kill switch. Default OFF by contract.
+    CAMPAIGN_V2_PROVIDER_SEND_ENABLED = os.getenv(
+        "CAMPAIGN_V2_PROVIDER_SEND_ENABLED",
+        "false",
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+    # Dedicated integration key for write-capable Campaign V2 broadcasts.
+    # No fallback to legacy/static credentials.
+    IVENTAS_CAMPAIGN_SEND_API_KEY = os.getenv(
+        "IVENTAS_CAMPAIGN_SEND_API_KEY",
+        "",
+    ).strip()
+    IVENTAS_CAMPAIGN_SEND_API_BASE_URL = os.getenv(
+        "IVENTAS_CAMPAIGN_SEND_API_BASE_URL",
+        "https://rest.iventas.mx",
+    ).strip()
+
     # ──────────────────────────────────────
     # Warehouse / Gasca runtime config
     # ──────────────────────────────────────
