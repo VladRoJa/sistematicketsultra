@@ -1,0 +1,434 @@
+# Contrato — Checklist Diario de Sistemas V1 / M2
+## Captura responsive, evidencias y gate de uso
+
+Estado: BLOQUEADO POR M1  
+Gate de entrada: M1 ACCEPTED en main.  
+Gate de salida: captura completa y enforcement diario usable en móvil/escritorio.
+
+## 0. Uso de este contrato
+
+Este archivo es autosuficiente para una conversación nueva.
+
+La conversación debe implementar **únicamente M2**.
+
+Antes de tocar código:
+
+1. inspeccionar main;
+2. confirmar M1 ACCEPTED;
+3. probar endpoints reales de status/postpone/submit;
+4. revisar routing, layout, guards e interceptors vigentes;
+5. revisar patrón actual de uploads/adjuntos;
+6. explicar un cambio y una prueba a la vez.
+
+Está prohibido adelantar:
+
+- dashboard BI;
+- rankings/tendencias;
+- bridge automático a Tickets V2.
+
+## 1. Objetivo
+
+Entregar una experiencia diaria extremadamente simple para gerente:
+
+```text
+Login
+  ↓
+¿check de hoy completado?
+  ├─ sí → Suite normal
+  └─ no
+      ↓
+    mostrar check
+      ├─ completar
+      └─ aplazar si backend lo permite
+```
+
+Después del segundo aplazamiento y vencidos 5 minutos:
+
+```text
+check pendiente
+   ↓
+mandatory = true
+   ↓
+no se puede continuar usando Suite
+hasta submit válido
+```
+
+## 2. Principio UX
+
+> El gerente solo debe decidir si algo sirve o no.
+
+La interfaz no debe exponer:
+
+- árbol técnico;
+- causa probable;
+- pieza;
+- componente interno;
+- diagnóstico;
+- campos innecesarios.
+
+## 3. Mobile-first
+
+La pantalla debe diseñarse primero para teléfono.
+
+Requisitos:
+
+- controles táctiles grandes;
+- lectura rápida;
+- una mano;
+- scroll vertical natural;
+- sin tablas horizontales;
+- sin hover como requisito;
+- cámara/archivo accesible desde móvil;
+- rendimiento razonable en red móvil.
+
+Desktop reutiliza el mismo componente responsive.
+
+## 4. Estructura visual
+
+La captura debe agrupar preguntas por bloques claros:
+
+- Equipo de cómputo;
+- Conectividad y sistemas;
+- Control de acceso;
+- Sistemas auxiliares.
+
+Cada pregunta muestra opciones visibles:
+
+- Sí;
+- No;
+- No aplica.
+
+No usar un select si tres botones/chips ofrecen mejor velocidad.
+
+Ninguna opción preseleccionada.
+
+## 5. Progreso
+
+La UI debe comunicar progreso, por ejemplo:
+
+```text
+8 de 13 revisados
+```
+
+No debe permitir submit si faltan preguntas.
+
+La lógica de validez principal vive también en backend.
+
+## 6. Comportamiento de NO
+
+Al seleccionar NO, la misma pregunta o un panel inmediatamente asociado muestra el detalle de incidencia.
+
+Campos:
+
+- Uno / Varios, solo si aplica;
+- ¿Reportado a Soporte? Sí / No;
+- descripción breve;
+- evidencia opcional.
+
+Texto de ayuda:
+
+> No necesitas identificar la causa técnica.
+
+No enviar al usuario a otra pantalla técnica.
+
+## 7. Cambio de NO a YES/NA
+
+Si el usuario cambia una respuesta NO a YES o NA antes de enviar:
+
+- la UI debe ocultar detalle;
+- no debe enviar una incidencia huérfana;
+- decidir si conserva temporalmente el texto en memoria durante la edición solo si no genera confusión;
+- backend sigue siendo autoridad y no debe persistir issue para YES/NA.
+
+## 8. Evidencias
+
+M2 implementa carga/adjunto según infraestructura definida en M1.
+
+Requisitos:
+
+- foto desde móvil;
+- archivo existente;
+- feedback de carga;
+- error recuperable;
+- evidencia asociada a la incidencia correcta;
+- no confundir archivos entre dos NO diferentes.
+
+La evidencia sigue siendo opcional.
+
+## 9. Primera presentación
+
+Cuando status backend indique:
+
+```text
+completed = false
+can_postpone = true
+mandatory = false
+```
+
+la UI presenta:
+
+- Realizar ahora;
+- Ahora no.
+
+El copy debe comunicar que es una revisión breve.
+
+## 10. Primer aplazamiento
+
+Al tocar `Ahora no`:
+
+1. llamar endpoint backend;
+2. esperar confirmación;
+3. ocultar flujo;
+4. respetar `next_prompt_at`.
+
+No calcular autoridad únicamente con un timer frontend.
+
+La UI puede usar timer para UX, pero al momento de decidir debe consultar/obedecer backend.
+
+## 11. Segunda presentación
+
+Cuando vuelve a ser elegible y aún puede aplazar:
+
+- mostrar checklist;
+- indicar de forma discreta que queda un último aplazamiento;
+- permitir `Ahora no` una vez más.
+
+No crear mensajes alarmistas.
+
+## 12. Segundo aplazamiento
+
+Después del segundo postpone:
+
+- Suite puede continuar hasta `mandatory_from_at`;
+- al vencerse debe volver a consultar estado;
+- desde mandatory, entra gate obligatorio.
+
+No asumir que el navegador permaneció abierto exactamente 5 minutos.
+
+## 13. Tercera presentación / mandatory
+
+Cuando backend indique `mandatory = true`:
+
+- no mostrar `Ahora no`;
+- no permitir cerrar;
+- ESC no cierra;
+- click exterior no cierra;
+- navegación normal no debe saltarlo;
+- refresh no lo evade;
+- logout/login posterior no reinicia estado;
+- otra ruta directa no lo evade.
+
+El usuario debe poder:
+
+- contestar;
+- adjuntar evidencia;
+- enviar;
+- recuperarse de errores de red.
+
+No se debe dejar atrapado por un error técnico irrecuperable.
+
+## 14. Modal vs pantalla
+
+La implementación puede usar modal full-screen, overlay o ruta dedicada.
+
+Debe elegirse la solución más robusta tras inspeccionar Angular actual.
+
+Criterio:
+
+> mandatory debe bloquear navegación funcional sin romper auth ni crear loops.
+
+No elegir un modal pequeño si degrada móvil.
+
+## 15. Integración con login/layout
+
+Revisar:
+
+- `frontend/src/app/layout/layout.component.ts`;
+- auth/session services;
+- guards;
+- interceptors;
+- app.routes;
+- hash routing.
+
+No introducir un tercer origen de token.
+
+No duplicar lógica de sesión si ya existe una fuente canónica.
+
+## 16. Evitar loops
+
+Casos a probar:
+
+- login -> status pendiente;
+- status endpoint 401;
+- submit exitoso;
+- submit falla 400;
+- submit falla 500;
+- refresh en mandatory;
+- navegación usando back;
+- deep link;
+- logout voluntario;
+- login de otro usuario.
+
+No crear un guard que bloquee también los endpoints/pantallas necesarias para resolver el checklist.
+
+## 17. Estado local
+
+Frontend puede mantener estado efímero de formulario.
+
+No puede ser autoridad para:
+
+- postpone_count;
+- can_postpone;
+- mandatory;
+- business_date;
+- completed.
+
+Esos valores vienen del backend.
+
+## 18. Submit
+
+Antes de submit:
+
+- las 13 preguntas respondidas;
+- cada NO tiene detalle requerido;
+- estado general seleccionado/derivado;
+- uploads terminados o marcados con error.
+
+El body no debe usar branch_id/usuario/fecha como autoridad.
+
+## 19. Estado general UX
+
+Si no hay NO:
+
+- UI puede fijar/sugerir Operación normal.
+
+Si hay NO:
+
+- mostrar:
+  - Falla menor, operación continúa;
+  - Falla que afecta la operación.
+
+No permitir NORMAL visualmente si hay NO, pero backend valida igualmente.
+
+## 20. N/A
+
+NO APLICA debe ser visible pero no convertirse en escape automático.
+
+M2 no inventa reglas adicionales de cuándo aplica N/A salvo contrato.
+
+El BI distinguirá NA de YES.
+
+## 21. Accesibilidad y claridad
+
+Requisitos razonables:
+
+- labels legibles;
+- estados seleccionados evidentes;
+- no depender solo del color;
+- foco usable;
+- mensajes de error junto al campo;
+- botones con tamaño táctil adecuado.
+
+## 22. Pruebas frontend mínimas
+
+### Render
+
+- 13 preguntas;
+- agrupaciones correctas;
+- sin preselección.
+
+### Validación
+
+- no submit incompleto;
+- NO muestra detalle;
+- YES/NA ocultan detalle;
+- múltiples NO mantienen detalles independientes.
+
+### Postpone
+
+- primera aparición permite aplazar;
+- primer postpone desaparece tras backend OK;
+- segunda elegible permite último postpone;
+- después de segundo no inventa un tercero;
+- mandatory elimina botón.
+
+### Gate
+
+- mandatory no cierra con ESC;
+- no cierra por backdrop;
+- navegación interna no evade;
+- refresh conserva enforcement al reconsultar backend.
+
+### Responsive
+
+Probar tamaños representativos:
+
+- móvil angosto;
+- móvil estándar;
+- tablet;
+- desktop.
+
+## 23. Pruebas de integración
+
+M2 debe comprobar contra backend real de test:
+
+- status -> UI;
+- postpone -> status actualizado;
+- submit -> completed;
+- invalid submit -> errores;
+- evidencia -> issue correcto.
+
+## 24. Manejo de red
+
+Si falla postpone:
+
+- no asumir que fue exitoso;
+- reconsultar estado si el resultado es ambiguo.
+
+Si falla submit:
+
+- preservar formulario local en lo razonable;
+- no marcar completed;
+- permitir retry seguro según contrato M1.
+
+## 25. Privacidad / evidencia
+
+No mostrar evidencias de otra incidencia por errores de indexación.
+
+No exponer rutas físicas del servidor.
+
+Respetar permisos backend para lectura/descarga.
+
+## 26. Fuera de alcance M2
+
+- dashboard global;
+- rankings;
+- tendencias;
+- export BI;
+- SLA;
+- creación automática de tickets;
+- diagnóstico;
+- cambios al catálogo técnico salvo necesidad explícita aprobada.
+
+## 27. Gate de salida
+
+M2 queda ACCEPTED solo si:
+
+1. captura de 13 preguntas funciona;
+2. responsive móvil/escritorio validado;
+3. NO genera UI de detalle sencilla;
+4. evidencia queda ligada correctamente;
+5. primer y segundo postpone funcionan;
+6. separación de 5 min se respeta mediante backend;
+7. mandatory no puede evadirse por navegación normal;
+8. submit exitoso libera gate;
+9. errores de red no dejan estado falso;
+10. pruebas frontend/integración están verdes.
+
+## 28. Estado final esperado
+
+```text
+M1 — ACCEPTED
+M2 — ACCEPTED
+M3 — DESBLOQUEADO
+```
