@@ -223,7 +223,7 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
           this.exportingDeliveryPackage = false;
           campaignV2DownloadBlob(
             blob,
-            this.deliveryPackageFilename(blob),
+            this.deliveryPackageFilename(blob, 'COHORTE_CONGELADA'),
           );
           this.deliveryExportSuccess = 'Cohorte congelada exportada sin supresiones dinámicas.';
         },
@@ -253,7 +253,7 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
           this.exportingSendablePackage = false;
           campaignV2DownloadBlob(
             blob,
-            this.deliveryPackageFilename(blob),
+            this.deliveryPackageFilename(blob, 'LISTA_ENVIO'),
           );
           this.sendableExportSuccess = 'Lista para envío exportada con supresiones vigentes.';
         },
@@ -494,7 +494,10 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
     return rows;
   }
 
-  private deliveryPackageFilename(blob: Blob): string {
+  private deliveryPackageFilename(
+    blob: Blob,
+    label: 'COHORTE_CONGELADA' | 'LISTA_ENVIO',
+  ): string {
     const normalized = (this.campaign?.name || `CAMPANA_V2_${this.data.campaignId}`)
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
@@ -503,7 +506,7 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
       .replace(/^_+|_+$/g, '')
       .slice(0, 80) || `CAMPANA_V2_${this.data.campaignId}`;
     const extension = blob.type === 'application/zip' ? 'zip' : 'xlsx';
-    return `${normalized}.${extension}`;
+    return `${normalized}__${label}.${extension}`;
   }
 
   private currencyLabel(value: string): string {
