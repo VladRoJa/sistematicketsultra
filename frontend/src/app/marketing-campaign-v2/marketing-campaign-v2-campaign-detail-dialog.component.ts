@@ -22,6 +22,7 @@ import {
   CampaignV2ObservedFamily,
   CampaignV2PreflightResponse,
   CampaignV2Purpose,
+  CampaignV2SubmitResponse,
   CampaignV2RecipientSummary,
   CampaignV2Source,
   CampaignV2SourceMetadata,
@@ -45,6 +46,10 @@ import {
   MarketingCampaignV2RecipientDetailDialogComponent,
   MarketingCampaignV2RecipientDetailDialogData,
 } from './marketing-campaign-v2-recipient-detail-dialog.component';
+import {
+  MarketingCampaignV2SubmitConfirmDialogComponent,
+  MarketingCampaignV2SubmitConfirmDialogData,
+} from './marketing-campaign-v2-submit-confirm-dialog.component';
 
 export interface MarketingCampaignV2CampaignDetailDialogData {
   campaignId: number;
@@ -83,6 +88,7 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   reporting: CampaignV2IndividualReport | null = null;
   dispatchTemplates: CampaignV2DispatchTemplate[] = [];
   preflight: CampaignV2PreflightResponse | null = null;
+  submitResult: CampaignV2SubmitResponse | null = null;
   recipients: CampaignV2RecipientSummary[] = [];
   recipientsPage = 1;
   readonly recipientsPageSize = 25;
@@ -94,12 +100,15 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   loadingReporting = false;
   loadingDispatchTemplates = false;
   preflighting = false;
+  submitting = false;
   exportingReporting = false;
   exportingDeliveryPackage = false;
   exportingSendablePackage = false;
   updatingPurpose = false;
   error = '';
   preflightError = '';
+  submitError = '';
+  submitSuccess = '';
   deliveryExportError = '';
   deliveryExportSuccess = '';
   sendableExportError = '';
@@ -118,7 +127,10 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
         this.preflight = null;
+        this.submitResult = null;
         this.preflightError = '';
+        this.submitError = '';
+        this.submitSuccess = '';
       });
     this.loadCampaign();
   }
@@ -229,6 +241,127 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
       && !this.loadingDispatchTemplates
       && !this.preflighting,
     );
+  }
+
+  get canSubmitDispatch(): boolean {
+    const plan = this.preflight;
+    if (!plan || !plan.ready || this.submitting) {
+      return false;
+    }
+    const state = plan.submission;
+    return Boolean(
+      state.enabled
+      && state.can_send
+      && (state.status === 'NOT_STARTED' || state.status === 'READY'),
+    );
+  }
+
+  submitAvailabilityLabel(): string {
+    const plan = this.preflight;
+    if (!plan) {
+      return '';
+    }
+    if (!plan.submission.can_send) {
+      return 'Tu usuario no tiene permiso de envío Campaign V2.';
+    }
+    if (!plan.submission.enabled) {
+      return 'Envío real deshabilitado por kill switch backend.';
+    }
+    if (!plan.ready) {
+      return 'El preflight tiene bloqueos.';
+    }
+    if (plan.submission.status === 'SUBMITTED') {
+      return 'Los provider campaigns de este plan ya fueron enviados.';
+    }
+    if (plan.submission.status === 'SUBMITTING') {
+      return 'Hay un provider campaign en proceso; no se permite otro submit.';
+    }
+    if (plan.submission.status === 'RECONCILIATION_REQUIRED') {
+      return 'Existe un resultado ambiguo que requiere reconciliación antes de reintentar.';
+    }
+    if (plan.submission.status === 'PROVIDER_ERROR' || plan.submission.status === 'PARTIAL') {
+      return 'Existe una operación parcial o fallida; M2 no permite retry automático.';
+    }
+    return 'El plan puede pasar a confirmación de envío inmediato.';
+  }
+
+  confirmAndSubmitDispatch(): void {
+    const plan = this.preflight;
+    if (!plan || !this.canSubmitDispatch || !plan.template) {
+      return;
+    }
+
+    const ref = this.dialog.open<
+      MarketingCampaignV2SubmitConfirmDialogComponent,
+      MarketingCampaignV2SubmitConfirmDialogData,
+      boolean
+    >(MarketingCampaignV2SubmitConfirmDialogComponent, {
+      width: 'min(720px, 96vw)',
+      maxWidth: '96vw',
+      maxHeight: '90vh',
+      disableClose: true,
+      data: {
+        campaignName: plan.campaign_name,
+        purposeLabel: this.purposeLabel(plan.campaign_purpose),
+        templateName: plan.template.template_name,
+        frozenCount: plan.frozen_count,
+        blacklistedCount: plan.suppressed.blacklist,
+        recipientCount: plan.sendable_count,
+        providerCampaignCount: plan.provider_campaign_count,
+        fingerprintVersion: plan.dispatch_fingerprint_version,
+        fingerprint: plan.dispatch_fingerprint,
+        batches: plan.batches.map(batch => ({
+          trackLabel: batch.track_label,
+          sucursalCanon: batch.sucursal_canon,
+          channelId: batch.provider_channel_id || '—',
+          recipientCount: batch.recipient_count,
+        })),
+      },
+    });
+
+    ref.afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(confirmed => {
+        if (confirmed === true) {
+          this.submitDispatch();
+        }
+      });
+  }
+
+  submitDispatch(): void {
+    const plan = this.preflight;
+    const templateId = this.dispatchTemplateControl.value;
+    if (!plan || templateId === null || !this.canSubmitDispatch) {
+      return;
+    }
+
+    this.submitting = true;
+    this.submitError = '';
+    this.submitSuccess = '';
+    this.submitResult = null;
+
+    this.service.submitCampaign(
+      plan.campaign_id,
+      templateId,
+      plan.dispatch_fingerprint,
+    )
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: result => {
+          this.submitting = false;
+          this.submitResult = result;
+          this.submitSuccess = 'Submit aceptado y auditado por Suite.';
+          this.reviewDispatch();
+        },
+        error: (error: HttpErrorResponse) => {
+          this.submitting = false;
+          this.submitError = this.errorMessage(
+            error,
+            'El submit no terminó completamente. Revisa el estado de los provider campaigns antes de cualquier otra acción.',
+          );
+          this.reviewDispatch();
+        },
+      });
   }
 
   preflightBlockedTotal(): number {

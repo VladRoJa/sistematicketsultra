@@ -25,6 +25,7 @@ import {
   CampaignV2RecipientDetail,
   CampaignV2RecipientPage,
   CampaignV2ReportingFilters,
+  CampaignV2SubmitResponse,
   CampaignV2TariffClassificationRequest,
   CampaignV2TariffClassificationResult,
   CampaignV2UnclassifiedTariffsResponse,
@@ -115,6 +116,20 @@ export class MarketingCampaignV2Service {
     return this.http.post<CampaignV2PreflightResponse>(
       `${this.apiUrl}/${campaignId}/preflight`,
       { template_id: templateId },
+    );
+  }
+
+  submitCampaign(
+    campaignId: number,
+    templateId: number,
+    expectedDispatchFingerprint: string,
+  ): Observable<CampaignV2SubmitResponse> {
+    return this.http.post<CampaignV2SubmitResponse>(
+      `${this.apiUrl}/${campaignId}/submit`,
+      {
+        template_id: templateId,
+        expected_dispatch_fingerprint: expectedDispatchFingerprint,
+      },
     );
   }
 

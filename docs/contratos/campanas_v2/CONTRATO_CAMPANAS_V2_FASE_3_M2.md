@@ -1,9 +1,9 @@
 # Contrato Campañas V2 — Fase 3 / M2
 ## Controlled Submit
 
-Estado: BLOQUEADO HASTA M1 ACCEPTED  
-Gate de entrada: `CONTRATO_CAMPANAS_V2_FASE_3_M1.md` marcado ACCEPTED en main.  
-Gate de salida: submit inmediato controlado, idempotente y auditable, con un caso live explícitamente aprobado.
+Estado: IMPLEMENTADO / PENDIENTE DE ACCEPTANCE LIVE — 2026-10-07
+Gate de entrada: CUMPLIDO — `CONTRATO_CAMPANAS_V2_FASE_3_M1.md` está ACCEPTED en main.
+Gate de salida: PENDIENTE únicamente del primer caso live controlado con autorización explícita. La implementación, mocks y regresión están cerrados.
 
 ## 0. Uso de este contrato
 
@@ -530,6 +530,66 @@ Al aceptar:
 - desbloquear M3.
 
 No empezar M3 en la misma conversación.
+
+### 24.1 Cierre de implementación — 2026-10-07
+
+Implementación completada, sin ejecutar todavía el primer POST live.
+
+Decisiones finales:
+
+- **Kill switch:** `CAMPAIGN_V2_PROVIDER_SEND_ENABLED` existe en backend y su default es `false`. El endpoint de submit se bloquea antes de construir el provider cuando está OFF.
+- **Credencial write-only:** el submit usa únicamente `IVENTAS_CAMPAIGN_SEND_API_KEY`; no existe fallback al token legacy. Se exige integration key con prefijo `ivk_live_`.
+- **Base URL:** `IVENTAS_CAMPAIGN_SEND_API_BASE_URL`, default `https://rest.iventas.mx`.
+- **Provider adapter:** `IVentasBroadcastProvider` encapsula URL, Authorization, timeout, payload y clasificación de errores. `POST /v2/broadcast` vive únicamente en ese adapter.
+- **Sin retry automático:** create campaign hace un solo POST. Timeout, 5xx, 409 ambiguo, JSON inválido o 2xx sin `campaign` terminan en `RECONCILIATION_REQUIRED` y no se reintentan automáticamente.
+- **Payload inmediato:** `templateName`, `leads[{phone, vars}]`, `channelId`, `name`; M2 omite `sendAt`.
+- **Phone:** `marketing_phone.normalize_phone()` sigue siendo la única normalización; `format_mexico_international_phone()` es únicamente la proyección de transporte `MX10 -> 52+MX10` para iVentas.
+- **TOCTOU:** submit recibe solo `template_id` + `expected_dispatch_fingerprint`, reconstruye el preflight completo en backend y responde conflicto si el fingerprint cambió.
+- **Autoridad del browser:** Angular no puede enviar phones, vars, urlVars, channelId, provider ID ni `sendAt`.
+- **Idempotencia/concurrencia:** child rows se preparan con `idempotency_key` única y cada batch hace transición atómica `READY -> SUBMITTING` antes del provider POST. Un segundo request ante `SUBMITTING`, `SUBMITTED` o estado incompatible hace 0 provider calls.
+- **Política multibatch:** orden determinístico y secuencial. Se persiste cada éxito inmediatamente. Al primer error determinístico o resultado ambiguo se detienen los batches restantes; no se revierte un batch ya `SUBMITTED`.
+- **Auditoría child:** se agregan `submit_started_at`, `provider_deduplicated`, `request_snapshot_json` y `provider_response_json`; se conserva `provider_campaign_id`, `submitted_at`, `submitted_by`, `error_code` y `support_ref`.
+- **Observabilidad:** logs de transición contienen campaign id, child id, provider, sucursal, channel binding id, recipient count, operación, estado, duración, clase HTTP, error code y supportRef sanitizado. No se loggean teléfonos, vars, payload completo ni bearer token.
+- **UI:** el detalle muestra gate de Controlled Submit, estado de provider campaigns y confirmación explícita `Sí, enviar mensajes ahora`. La confirmación incluye campaña, purpose, frozen count, blacklist vigente, sendable count, sucursales/channels, template, batches, modo inmediato, fingerprint y versión.
+- **Exports:** `Descargar cohorte congelada` y `Descargar lista para envío` permanecen disponibles.
+
+Persistencia / migración:
+
+- `d2f8a4c6b1e7_extend_campaign_v2_m2_submit_audit.py`
+- `down_revision = c1f7e9a4b6d2`
+- Heads Alembic finales:
+  - Campaign V2: `d2f8a4c6b1e7`
+  - Requisiciones: `e1a7c4d2b9f6`
+
+Endpoint M2:
+
+- `POST /api/marketing/campaigns-v2/<campaign_id>/submit`
+- body permitido: `template_id`, `expected_dispatch_fingerprint`
+- `can_send_campaigns` es obligatorio y separado de preflight/gestión.
+
+Variables de despliegue backend (`.env.docker` en producción):
+
+- `CAMPAIGN_V2_PROVIDER_SEND_ENABLED=false` por defecto.
+- `IVENTAS_CAMPAIGN_SEND_API_KEY=<integration key>`.
+- `IVENTAS_CAMPAIGN_SEND_API_BASE_URL=https://rest.iventas.mx` salvo override explícito.
+
+Evidencia de implementación:
+
+- Suite Campaign V2 + iVentas + phone: **579 passed**.
+- Suite enfocada M2 tras observabilidad: **39 passed**.
+- Frontend Campaign V2 node tests: **47/47 passed**.
+- Angular template/type compilation (`ngc`): **exit code 0**.
+- `ng build` del worktree no llegó a bundle por bloqueo del entorno al compartir `node_modules`; no emitió error de TypeScript/template. `ngc` sí compiló completamente el frontend M2.
+- Alembic: grafo válido, sin colisiones/ciclos; head Campaign V2 `d2f8a4c6b1e7`.
+- Primer POST real a iVentas en esta implementación: **0 ejecutados**.
+
+Estado de salida actual:
+
+`F3-M2 — IMPLEMENTADO / PENDIENTE DE ACCEPTANCE LIVE`
+
+Para cambiar a `ACCEPTED` todavía falta exclusivamente el procedimiento de §15–16: seleccionar campaña QA pequeña, revisar cohorte y lista para envío, demostrar paridad del phone set, mostrar template/channel/count y recibir autorización explícita en esta conversación antes del POST real.
+
+`F3-M3 — BLOQUEADO HASTA M2 ACCEPTED`
 
 ## 25. Prompt de arranque para una conversación nueva
 

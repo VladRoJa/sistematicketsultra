@@ -259,6 +259,7 @@ class TestMarketingCampaignV2Routes:
             ("post", "/api/marketing/campaigns-v2/dispatch/channel-bindings"),
             ("put", "/api/marketing/campaigns-v2/dispatch/channel-bindings/1"),
             ("post", "/api/marketing/campaigns-v2/1/preflight"),
+            ("post", "/api/marketing/campaigns-v2/1/submit"),
         ]
         for method, path in paths:
             response = getattr(self.client, method)(
@@ -2008,6 +2009,15 @@ class TestMarketingCampaignV2Routes:
                     "ready": True,
                 },
             ),
+            patch.object(
+                routes,
+                "get_campaign_v2_submit_state",
+                return_value={
+                    "status": "NOT_STARTED",
+                    "has_provider_campaigns": False,
+                    "batches": [],
+                },
+            ),
         ):
             response = self.client.post(
                 "/api/marketing/campaigns-v2/7/preflight",
@@ -2109,3 +2119,242 @@ class TestMarketingCampaignV2Routes:
         assert response.get_json()["rows"][0]["id"] == 10
         assert mocked.call_args.kwargs["purpose"] == "REACTIVATION"
         assert mocked.call_args.kwargs["provider"] == "IVENTAS"
+
+    def test_m2_preflight_exposes_backend_submit_gate(self):
+        self.app.config["CAMPAIGN_V2_PROVIDER_SEND_ENABLED"] = False
+        with (
+            self._auth(),
+            patch.object(
+                routes,
+                "build_campaign_v2_preflight",
+                return_value=SimpleNamespace(),
+            ),
+            patch.object(
+                routes,
+                "serialize_campaign_v2_preflight",
+                return_value={"campaign_id": 7, "ready": True},
+            ),
+            patch.object(
+                routes,
+                "get_campaign_v2_submit_state",
+                return_value={
+                    "status": "NOT_STARTED",
+                    "has_provider_campaigns": False,
+                    "batches": [],
+                },
+            ),
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/7/preflight",
+                headers=self.headers,
+                json={"template_id": 10},
+            )
+
+        assert response.status_code == 200
+        submission = response.get_json()["submission"]
+        assert submission["enabled"] is False
+        assert submission["can_send"] is True
+        assert submission["status"] == "NOT_STARTED"
+
+    def test_m2_submit_requires_explicit_send_capability(self):
+        with self._auth(self.partial_access), patch.object(
+            routes,
+            "submit_campaign_v2",
+        ) as mocked:
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/7/submit",
+                headers=self.headers,
+                json={
+                    "template_id": 10,
+                    "expected_dispatch_fingerprint": "a" * 64,
+                },
+            )
+
+        assert response.status_code == 403
+        mocked.assert_not_called()
+
+    def test_m2_kill_switch_off_blocks_before_provider_construction(self):
+        self.app.config["CAMPAIGN_V2_PROVIDER_SEND_ENABLED"] = False
+        with (
+            self._auth(),
+            patch.object(routes, "IVentasBroadcastProvider") as provider,
+            patch.object(routes, "submit_campaign_v2") as submit,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/7/submit",
+                headers=self.headers,
+                json={
+                    "template_id": 10,
+                    "expected_dispatch_fingerprint": "a" * 64,
+                },
+            )
+
+        assert response.status_code == 423
+        provider.assert_not_called()
+        submit.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "forbidden_field",
+        [
+            "phones",
+            "channelId",
+            "channel_id",
+            "vars",
+            "urlVars",
+            "provider_channel_id",
+            "sendAt",
+            "provider_campaign_id",
+        ],
+    )
+    def test_m2_submit_rejects_browser_authority_fields(
+        self,
+        forbidden_field,
+    ):
+        self.app.config["CAMPAIGN_V2_PROVIDER_SEND_ENABLED"] = True
+        with (
+            self._auth(),
+            patch.object(routes, "IVentasBroadcastProvider") as provider,
+            patch.object(routes, "submit_campaign_v2") as submit,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/7/submit",
+                headers=self.headers,
+                json={
+                    "template_id": 10,
+                    "expected_dispatch_fingerprint": "a" * 64,
+                    forbidden_field: "browser-value",
+                },
+            )
+
+        assert response.status_code == 400
+        provider.assert_not_called()
+        submit.assert_not_called()
+
+    def test_m2_submit_passes_only_template_and_expected_fingerprint(self):
+        self.app.config.update(
+            CAMPAIGN_V2_PROVIDER_SEND_ENABLED=True,
+            IVENTAS_CAMPAIGN_SEND_API_KEY="ivk_live_test",
+            IVENTAS_CAMPAIGN_SEND_API_BASE_URL="https://provider.test",
+        )
+        provider_instance = object()
+        result = SimpleNamespace(all_submitted=True)
+        with (
+            self._auth(),
+            patch.object(
+                routes,
+                "_campaign_v2_allowed_sucursal_keys",
+                return_value=("TEC MXL",),
+            ),
+            patch.object(
+                routes,
+                "IVentasBroadcastProvider",
+                return_value=provider_instance,
+            ) as provider_ctor,
+            patch.object(
+                routes,
+                "submit_campaign_v2",
+                return_value=result,
+            ) as submit,
+            patch.object(
+                routes,
+                "serialize_campaign_v2_submit_result",
+                return_value={
+                    "campaign_id": 7,
+                    "status": "SUBMITTED",
+                    "all_submitted": True,
+                },
+            ),
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/7/submit",
+                headers=self.headers,
+                json={
+                    "template_id": 10,
+                    "expected_dispatch_fingerprint": "a" * 64,
+                },
+            )
+
+        assert response.status_code == 200
+        provider_ctor.assert_called_once_with(
+            api_key="ivk_live_test",
+            base_url="https://provider.test",
+        )
+        kwargs = submit.call_args.kwargs
+        assert kwargs["campaign_id"] == 7
+        assert kwargs["template_id"] == 10
+        assert kwargs["expected_dispatch_fingerprint"] == "a" * 64
+        assert kwargs["actor_user_id"] == 7
+        assert kwargs["allowed_sucursal_keys"] == ("TEC MXL",)
+        assert kwargs["provider"] is provider_instance
+        assert kwargs["send_enabled"] is True
+        for forbidden in (
+            "phones",
+            "vars",
+            "channelId",
+            "provider_channel_id",
+            "sendAt",
+        ):
+            assert forbidden not in kwargs
+
+    def test_m2_stale_fingerprint_maps_to_409_without_provider_result(self):
+        self.app.config.update(
+            CAMPAIGN_V2_PROVIDER_SEND_ENABLED=True,
+            IVENTAS_CAMPAIGN_SEND_API_KEY="ivk_live_test",
+        )
+        with (
+            self._auth(),
+            patch.object(routes, "IVentasBroadcastProvider", return_value=object()),
+            patch.object(
+                routes,
+                "submit_campaign_v2",
+                side_effect=routes.MarketingCampaignV2SubmitPreconditionError(
+                    "fingerprint cambió"
+                ),
+            ),
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/7/submit",
+                headers=self.headers,
+                json={
+                    "template_id": 10,
+                    "expected_dispatch_fingerprint": "a" * 64,
+                },
+            )
+
+        assert response.status_code == 409
+        assert "fingerprint" in response.get_json()["message"]
+
+    def test_m2_partial_provider_result_returns_502_with_persisted_state(self):
+        self.app.config.update(
+            CAMPAIGN_V2_PROVIDER_SEND_ENABLED=True,
+            IVENTAS_CAMPAIGN_SEND_API_KEY="ivk_live_test",
+        )
+        result = SimpleNamespace(all_submitted=False)
+        with (
+            self._auth(),
+            patch.object(routes, "IVentasBroadcastProvider", return_value=object()),
+            patch.object(routes, "submit_campaign_v2", return_value=result),
+            patch.object(
+                routes,
+                "serialize_campaign_v2_submit_result",
+                return_value={
+                    "campaign_id": 7,
+                    "status": "RECONCILIATION_REQUIRED",
+                    "all_submitted": False,
+                    "batches": [
+                        {"status": "RECONCILIATION_REQUIRED"}
+                    ],
+                },
+            ),
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/7/submit",
+                headers=self.headers,
+                json={
+                    "template_id": 10,
+                    "expected_dispatch_fingerprint": "a" * 64,
+                },
+            )
+
+        assert response.status_code == 502
+        assert response.get_json()["status"] == "RECONCILIATION_REQUIRED"

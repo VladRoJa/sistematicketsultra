@@ -406,6 +406,46 @@ export interface CampaignV2PreflightBatch {
   ready: boolean;
 }
 
+export type CampaignV2SubmitStatus =
+  | 'NOT_STARTED'
+  | 'READY'
+  | 'SUBMITTING'
+  | 'SUBMITTED'
+  | 'PROVIDER_ERROR'
+  | 'RECONCILIATION_REQUIRED'
+  | 'PARTIAL';
+
+export interface CampaignV2SubmitBatch {
+  child_id: number;
+  sucursal_id: number;
+  sucursal_canon: string;
+  provider_channel_id: string;
+  template_name: string;
+  recipient_count: number;
+  status: string;
+  provider_campaign_id: string | null;
+  provider_deduplicated: boolean | null;
+  error_code: string | null;
+  support_ref: string | null;
+}
+
+export interface CampaignV2SubmitState {
+  enabled: boolean;
+  can_send: boolean;
+  status: CampaignV2SubmitStatus;
+  has_provider_campaigns: boolean;
+  batches: CampaignV2SubmitBatch[];
+}
+
+export interface CampaignV2SubmitResponse {
+  campaign_id: number;
+  dispatch_fingerprint: string;
+  status: CampaignV2SubmitStatus;
+  all_submitted: boolean;
+  stopped_after_child_id: number | null;
+  batches: CampaignV2SubmitBatch[];
+}
+
 export interface CampaignV2PreflightResponse {
   campaign_id: number;
   campaign_name: string;
@@ -433,6 +473,7 @@ export interface CampaignV2PreflightResponse {
   dispatch_fingerprint_version: string;
   dispatch_fingerprint: string;
   ready: boolean;
+  submission: CampaignV2SubmitState;
 }
 
 export interface CampaignV2RecipientSummary {

@@ -31,6 +31,19 @@ def normalize_member_phone(
     return normalize_phone(f"{lada or ''}{telefono or ''}")
 
 
+def format_mexico_international_phone(raw_value: Any) -> str | None:
+    """Project canonical MX10 identity to provider transport digits.
+
+    This is deliberately a formatter, not another normalizer: validity and
+    canonical identity continue to come exclusively from normalize_phone().
+    """
+
+    phone_mx10 = normalize_phone(raw_value)
+    if phone_mx10 is None:
+        return None
+    return f"52{phone_mx10}"
+
+
 def mask_phone(raw_value: Any) -> str:
     digits = re.sub(r"\D", "", str(raw_value or ""))
     if not digits:

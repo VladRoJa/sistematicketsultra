@@ -35,6 +35,9 @@ dt { color:#64748b; font-size:11px; } dd { margin:0; font-size:12px; overflow-wr
 .preflight-blockers { display:flex; gap:7px; align-items:center; flex-wrap:wrap; margin-top:10px; font-size:11px; }.preflight-blockers span { padding:4px 7px; border:1px solid #fed7aa; border-radius:999px; background:#fff7ed; color:#9a3412; }
 .preflight-batches { background:#fff; }.batch-ready { color:#166534; }.batch-blocked { color:#9a3412; font-weight:700; }
 .preflight-fingerprint { margin-top:10px; display:flex; flex-direction:column; gap:4px; }.preflight-fingerprint span { color:#64748b; font-size:10px; font-weight:700; }.preflight-fingerprint strong { overflow-wrap:anywhere; }
+.submit-gate { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:12px; padding:11px 12px; border:1px solid #e2e8f0; border-radius:9px; background:#fff; }
+.submit-gate>div { display:flex; flex-direction:column; gap:3px; }.submit-gate span { color:#64748b; font-size:11px; }.submit-gate-ready { border-color:#fed7aa; background:#fff7ed; }
+.submit-feedback { margin-top:10px; margin-bottom:0; }.provider-submit-state { margin-top:12px; }.compact-heading h4,.compact-heading p { margin:0; }.compact-heading h4 { font-size:13px; }
 .table-wrap { overflow:auto; margin-top:10px; border:1px solid #e2e8f0; border-radius:10px; }
 table { width:100%; border-collapse:collapse; }
 th,td { padding:8px 9px; border-bottom:1px solid #e2e8f0; white-space:nowrap; text-align:left; font-size:12px; }
