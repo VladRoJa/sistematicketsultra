@@ -1,7 +1,8 @@
-"""Exports frozen Campaign V2 recipients for manual delivery.
+"""Exports frozen Campaign V2 recipients and sendable delivery packages.
 
-The export is a read-only projection of the frozen Campaign V2 cohort minus
-the current global Campaign V2 blacklist.
+Frozen-cohort export is an exact read-only projection of persisted recipients.
+Sendable export starts from that same frozen cohort and applies only the
+current global Campaign V2 blacklist.
 Recipients are split by branch and audience family (commercial segment).
 One branch/segment produces one XLSX; multiple combinations produce a ZIP
 with one XLSX per combination plus a summary workbook.
@@ -52,15 +53,63 @@ def export_campaign_v2_delivery_package(
     allowed_sucursal_keys,
     session: Any | None = None,
 ) -> tuple[bytes, str]:
-    """Build a manual-delivery package strictly from frozen recipients."""
+    """Export the exact frozen cohort without dynamic suppressions."""
 
+    campaign, recipients = _load_frozen_campaign_recipients(
+        campaign_id=campaign_id,
+        allowed_sucursal_keys=allowed_sucursal_keys,
+        session=session,
+    )
+    return _package_campaign_recipients(
+        campaign=campaign,
+        campaign_id=campaign_id,
+        recipients=recipients,
+    )
+
+
+def export_campaign_v2_sendable_package(
+    *,
+    campaign_id: int,
+    allowed_sucursal_keys,
+    session: Any | None = None,
+) -> tuple[bytes, str]:
+    """Export the current sendable projection of the frozen cohort."""
+
+    active_session = session if session is not None else db.session
+    campaign, recipients = _load_frozen_campaign_recipients(
+        campaign_id=campaign_id,
+        allowed_sucursal_keys=allowed_sucursal_keys,
+        session=active_session,
+    )
+    blacklisted = get_blacklisted_phones(
+        phones=(recipient.phone_mx10 for recipient in recipients),
+        session=active_session,
+    )
+    sendable_recipients = [
+        recipient
+        for recipient in recipients
+        if recipient.phone_mx10 not in blacklisted
+    ]
+    return _package_campaign_recipients(
+        campaign=campaign,
+        campaign_id=campaign_id,
+        recipients=sendable_recipients,
+        empty_suffix="SIN_DESTINATARIOS_ENVIABLES",
+    )
+
+
+def _load_frozen_campaign_recipients(
+    *,
+    campaign_id: int,
+    allowed_sucursal_keys,
+    session: Any | None,
+) -> tuple[dict[str, Any], list[MarketingCampaignV2RecipientORM]]:
     active_session = session if session is not None else db.session
     campaign = get_campaign_v2(
         campaign_id=campaign_id,
         allowed_sucursal_keys=allowed_sucursal_keys,
         session=active_session,
     )
-
     recipients = (
         active_session.query(MarketingCampaignV2RecipientORM)
         .filter(MarketingCampaignV2RecipientORM.campaign_id == int(campaign_id))
@@ -72,28 +121,28 @@ def export_campaign_v2_delivery_package(
         )
         .all()
     )
-    blacklisted = get_blacklisted_phones(
-        phones=(recipient.phone_mx10 for recipient in recipients),
-        session=active_session,
-    )
-    exportable_recipients = [
-        recipient
-        for recipient in recipients
-        if recipient.phone_mx10 not in blacklisted
-    ]
+    return campaign, recipients
 
+
+def _package_campaign_recipients(
+    *,
+    campaign: dict[str, Any],
+    campaign_id: int,
+    recipients: list[MarketingCampaignV2RecipientORM],
+    empty_suffix: str = "SIN_DESTINATARIOS",
+) -> tuple[bytes, str]:
     campaign_part = _filename_part(
         campaign.get("name"),
         fallback=f"CAMPANA_V2_{int(campaign_id)}",
     )
-    if not exportable_recipients:
+    if not recipients:
         return (
             _recipients_workbook([]),
-            f"{campaign_part}__SIN_DESTINATARIOS.xlsx",
+            f"{campaign_part}__{empty_suffix}.xlsx",
         )
 
     groups: dict[tuple[str, str], list[MarketingCampaignV2RecipientORM]] = defaultdict(list)
-    for recipient in exportable_recipients:
+    for recipient in recipients:
         branch = _clean_text(recipient.sucursal) or "SIN SUCURSAL"
         family = _clean_text(recipient.audience_family) or "SIN_CLASIFICAR"
         groups[(branch, family)].append(recipient)
