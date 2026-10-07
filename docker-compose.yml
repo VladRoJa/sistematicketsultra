@@ -206,6 +206,10 @@ services:
       COBRANZA_RECURRENTE_ENABLED: "true"
       COBRANZA_RECURRENTE_RUN_HOUR: "8"
       COBRANZA_RECURRENTE_RUN_MINUTE: "40"
+      COMMERCIAL_DAILY_REPORTS_ENABLED: "true"
+      COMMERCIAL_DAILY_REPORTS_RUN_HOUR: "1"
+      COMMERCIAL_DAILY_REPORTS_RUN_MINUTE: "20"
+      COMMERCIAL_DAILY_REPORTS_RETRY_MINUTES: "30"
     command: python -m app.warehouse.scheduler.reports_scheduler_worker
     restart: unless-stopped
     init: true
