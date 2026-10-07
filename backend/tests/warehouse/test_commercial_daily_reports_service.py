@@ -65,3 +65,43 @@ def test_report_has_three_sheets_and_week_to_date_value():
     assert wb["Diario"]["B3"].value == 1
     weekly = wb["Semanal"]
     assert weekly.cell(row=3, column=weekly.max_column).value == 4
+
+def test_subtotals_and_region_summary_follow_catalog_metadata():
+    cutoff = date(2026, 10, 7)
+    days = [date(2026, 10, i) for i in range(1, 8)]
+    data = {
+        "VILLAS": {day: i for i, day in enumerate(days, 1)},
+        "SERRANIA": {day: 2 * i for i, day in enumerate(days, 1)},
+    }
+    metadata = {
+        "VILLAS": {
+            "order": 1, "label": "VILLAS DEL REY",
+            "group": "Subtotal 21 gyms", "region": "Mexicali"
+        },
+        "SERRANIA": {
+            "order": 26, "label": "SERRANIA",
+            "group": "Subtotal gyms nuevos", "region": "Costa"
+        },
+    }
+    book = load_workbook(
+        BytesIO(render_commercial_daily_xlsx(
+            metric="reactivaciones",
+            cutoff=cutoff,
+            mtd_series=data,
+            branch_metadata=metadata,
+        )),
+        data_only=True,
+    )
+    daily = book["Diario"]
+    assert [daily[f"A{row}"].value for row in range(3, 8)] == [
+        "VILLAS DEL REY", "Subtotal 21 gyms",
+        "SERRANIA", "Subtotal gyms nuevos", "TOTAL",
+    ]
+    weekly = book["Semanal"]
+    assert weekly["A9"].value == "REGIONES"
+    assert weekly["A10"].value == "Costa"
+    assert weekly["A11"].value == "Mexicali"
+    last = weekly.max_column
+    assert weekly.cell(row=7, column=last).value == 12
+    assert weekly.cell(row=10, column=last).value == 8
+    assert weekly.cell(row=11, column=last).value == 4
