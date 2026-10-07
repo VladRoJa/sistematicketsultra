@@ -1,7 +1,7 @@
 # Contrato global — Campañas V2
 
 Estado: BASE CONTRACTUAL PARA IMPLEMENTACIÓN POR FASES  
-Fecha: 2026-09-30  
+Fecha: 2026-10-06  
 Alcance: arquitectura global, convivencia con legacy y límites entre Fase 1, Fase 2 y Fase 3.
 
 ## Cómo usar este documento en una conversación nueva
@@ -19,7 +19,7 @@ Reglas de trabajo obligatorias:
 - Trabajar un cambio y una prueba a la vez.
 - Antes de crear una pieza nueva, investigar si existe una capacidad equivalente y reutilizarla cuando su semántica realmente coincida.
 - No inventar respuestas para puntos marcados como pendientes.
-- Campañas V2 convive con el módulo legacy durante estas fases; no se retira por implicación.
+- La superficie operativa de Campañas V1 ya fue decommissionada de frontend/API; datos, modelos, jobs históricos e infraestructura compartida permanecen y no se eliminan por implicación.
 
 ## 1. Objetivo
 
@@ -47,11 +47,21 @@ El objetivo arquitectónico es que las APIs nuevas de iVentas entren como una in
 - Fase 2 puede incluir costos e importación histórica cuando exista evidencia suficiente, pero Reporting no llama al provider para generar reportes.
 - Fase 2 no envía campañas desde Suite ni autoriza POST /v2/broadcast.
 
-### Fase 3 — Envío por iVentas — DESBLOQUEADA / PENDIENTE DE IMPLEMENTACIÓN
+### Fase 3 — Envío por iVentas — DESBLOQUEADA / DIVIDIDA EN 3 MILESTONES
 
-- Selección de plantilla, variables, canal, programación y POST /v2/broadcast.
-- Guarda provider_campaign_id y enlaza automáticamente con Fase 2.
-- Solo después se evalúa retirar el legacy.
+La implementación de Fase 3 se divide obligatoriamente en tres contratos independientes:
+
+- **F3-M1 — Foundation & Preflight:** modelo 1:N provider campaigns, sendable projection, channel/template resolution, permisos, preflight y fingerprint. **No puede llamar POST /v2/broadcast.**
+- **F3-M2 — Controlled Submit:** submit inmediato real con kill switch backend default OFF, idempotencia, estados seguros y primer caso live controlado con aprobación explícita.
+- **F3-M3 — Productionization & Final Acceptance:** scheduling, reconciliación/retries seguros, stats/costo N-child, observabilidad, multisucursal live y acceptance final.
+
+Contratos:
+
+- `CONTRATO_CAMPANAS_V2_FASE_3_M1.md`
+- `CONTRATO_CAMPANAS_V2_FASE_3_M2.md`
+- `CONTRATO_CAMPANAS_V2_FASE_3_M3.md`
+
+El paraguas `CONTRATO_CAMPANAS_V2_FASE_3.md` define invariantes comunes, pero no autoriza implementar Fase 3 completa en una sola conversación.
 
 Regla: no adelantar trabajo de una fase si la fase anterior no tiene sus criterios de aceptación cerrados.
 
@@ -366,6 +376,26 @@ Si una campaña se creó con 3,842 destinatarios, esos 3,842 no cambian porque d
 
 El preview se puede recalcular mientras la campaña no se confirme. La campaña confirmada no.
 
+### 9.1 Cohorte congelada vs lista para envío
+
+Desde octubre 2026 existen dos proyecciones distintas y ambas deben preservarse:
+
+**Cohorte congelada**
+
+- evidencia histórica exacta de `marketing_campaign_v2_recipients`;
+- no aplica blacklist dinámica;
+- no recalcula fuentes;
+- permanece descargable durante Fase 3.
+
+**Lista para envío**
+
+- parte exclusivamente de la cohorte congelada;
+- aplica supresiones de seguridad vigentes, actualmente blacklist global;
+- tampoco recalcula Vencidos, Activos, Funnel, familias ni Historical Targeting;
+- permanece descargable como respaldo operativo y oráculo de QA.
+
+Fase 3 debe construir su preflight/dispatch desde la misma semántica de lista para envío. Un dispatch nunca puede agregar recipients fuera de la cohorte congelada.
+
 ## 10. Capa de proveedores
 
 El núcleo de V2 debe depender de una interfaz conceptual CampaignProvider y capacidades declaradas.
@@ -399,20 +429,22 @@ Los documentos recibidos con credenciales no deben copiarse al repositorio.
 
 La credencial usada durante integración debe poder rotarse sin cambio de código.
 
-## 12. Convivencia con legacy
+## 12. Estado del legacy
 
-Ruta de transición:
+La superficie operativa de Campañas V1 ya fue decommissionada antes de iniciar Fase 3:
 
-1. legacy sigue operativo;
-2. V2 Fase 1 disponible;
-3. V2 Fase 2 disponible;
-4. V2 Fase 3 disponible;
-5. campañas reales validadas;
-6. se bloquea creación nueva en legacy;
-7. legacy queda solo lectura;
-8. retiro futuro explícito.
+- menú/ruta frontend retirados o redirigidos a V2;
+- endpoints operativos V1 retirados;
+- Campaign V2 es la superficie activa.
 
-No borrar ni migrar datos legacy durante estas tres fases salvo decisión separada.
+Sin embargo permanecen:
+
+- tablas/modelos históricos V1;
+- jobs históricos que todavía tengan referencias;
+- servicios iVentas compartidos;
+- datos necesarios para auditoría/atribución histórica.
+
+Fase 3 no autoriza borrar estas piezas. Cualquier drop de tablas, retiro de jobs o cleanup físico requiere contrato y PR separados.
 
 ## 13. Preguntas abiertas que no pueden resolverse por inferencia
 
@@ -431,11 +463,12 @@ Si una conversación posterior necesita una de estas respuestas, debe pedir evid
 Antes de modificar código:
 
 1. leer este contrato global;
-2. leer únicamente el contrato de la fase activa;
-3. inspeccionar los archivos existentes mencionados;
-4. comparar contra main actual porque el repo puede haber cambiado;
-5. proponer un solo cambio mínimo;
-6. ejecutar pruebas específicas;
-7. continuar solo si el resultado coincide con el contrato.
+2. leer el contrato de la fase activa;
+3. si la fase activa es Fase 3, leer **únicamente el contrato M1, M2 o M3 que esté desbloqueado**;
+4. inspeccionar los archivos existentes mencionados;
+5. comparar contra main actual porque el repo puede haber cambiado;
+6. proponer un solo cambio mínimo;
+7. ejecutar pruebas específicas;
+8. continuar solo si el resultado coincide con el contrato.
 
-Los contratos de fases posteriores sirven para preparar interfaces, no para adelantar implementación.
+No implementar dos milestones de Fase 3 dentro de una misma conversación. Los contratos posteriores sirven para preparar interfaces, no para adelantar implementación.
