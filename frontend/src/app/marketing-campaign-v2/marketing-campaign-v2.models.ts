@@ -375,6 +375,66 @@ export interface CampaignV2CampaignDetail extends CampaignV2CampaignSummary {
   audience_definition: CampaignV2AudienceDefinition;
 }
 
+export interface CampaignV2DispatchTemplate {
+  id: number;
+  provider: string;
+  template_name: string;
+  label: string;
+  is_active: boolean;
+  purposes: CampaignV2Purpose[];
+  variables: Record<string, string>;
+  compatible_channel_ids: string[];
+  metadata: Record<string, unknown>;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface CampaignV2DispatchTemplatesResponse {
+  rows: CampaignV2DispatchTemplate[];
+}
+
+export interface CampaignV2PreflightBatch {
+  sucursal_id: number;
+  sucursal_canon: string;
+  track_label: string;
+  channel_binding_id: number | null;
+  provider_channel_id: string | null;
+  template_id: number;
+  template_name: string;
+  recipient_count: number;
+  blocked_reasons: string[];
+  ready: boolean;
+}
+
+export interface CampaignV2PreflightResponse {
+  campaign_id: number;
+  campaign_name: string;
+  campaign_purpose: CampaignV2Purpose;
+  provider: string;
+  mode: 'IMMEDIATE';
+  frozen_count: number;
+  suppressed: {
+    blacklist: number;
+  };
+  sendable_count: number;
+  template: {
+    id: number;
+    template_name: string;
+  } | null;
+  batches: CampaignV2PreflightBatch[];
+  blocked: {
+    missing_branch: number;
+    missing_channel: number;
+    missing_required_variable: number;
+    invalid_phone: number;
+    template_channel_mismatch: number;
+  };
+  provider_campaign_count: number;
+  dispatch_fingerprint_version: string;
+  dispatch_fingerprint: string;
+  ready: boolean;
+}
+
 export interface CampaignV2RecipientSummary {
   id: number;
   phone_mx10: string;

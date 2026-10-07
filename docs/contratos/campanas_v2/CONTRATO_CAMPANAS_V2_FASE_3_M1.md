@@ -1,9 +1,10 @@
 # Contrato Campañas V2 — Fase 3 / M1
 ## Foundation & Preflight
 
-Estado: PENDIENTE DE IMPLEMENTACIÓN  
-Gate de entrada: Fase 2 ACCEPTED y Fase 3 desbloqueada.  
-Gate de salida: preflight determinístico, auditable y sin llamadas de creación al provider.
+Estado: ACCEPTED — 2026-10-07
+Gate de entrada: Fase 2 ACCEPTED y Fase 3 desbloqueada.
+Gate de salida: ACCEPTED — preflight determinístico, auditable y sin llamadas de creación al provider.
+Siguiente milestone: M2 DESBLOQUEADO, NO IMPLEMENTADO en esta conversación.
 
 ## 0. Uso de este contrato
 
@@ -475,6 +476,57 @@ Al aceptar:
 - dejar M2 como `DESBLOQUEADO`.
 
 No empezar M2 dentro de la misma conversación.
+
+### 22.1 Cierre implementado — 2026-10-07
+
+Decisiones finales:
+
+- **Sendable projection única:** `build_campaign_v2_sendable_projection()` es la fuente compartida para la descarga `Lista para envío` y para preflight. Parte exclusivamente de recipients congelados y aplica blacklist vigente como supresión dinámica; la cohorte congelada nunca se modifica.
+- **Sucursal de dispatch:** se resuelve desde evidencia congelada/recipient y catálogos Track (`track_branch_catalog` + aliases activos). `Tecnológico`, `tecnologico-2`, `TEC_MXL` y label Track convergen a la misma sucursal canónica cuando el catálogo lo soporta. Un recipient sin sucursal resoluble queda bloqueado y nunca se reasigna.
+- **Phone:** se reutiliza `app.services.marketing_phone.normalize_phone`; M1 no crea un tercer normalizador.
+- **Channel binding:** no existe autoridad de `channelId` en Angular. Suite persiste bindings por provider+sucursal, permite múltiples channels históricos/activos y exige como máximo un `is_default=true` activo para resolución determinística de dispatch.
+- **Templates:** al no existir evidencia confirmada en el repo de un endpoint oficial de iVentas para listar templates, M1 usa catálogo administrado por Suite. El browser selecciona `template_id`; backend resuelve `template_name`, compatibilidad de channel y mapping de variables.
+- **Vars:** se construyen exclusivamente en backend desde datos congelados/canónicos. `first_name` reutiliza exactamente la semántica vigente del export (`MA DEL CARMEN -> CARMEN`). Una variable requerida sin fuente válida bloquea recipient/batch; no se inventan valores.
+- **Modelo provider 1:N:** `MarketingCampaignV2ORM.provider/provider_campaign_id` se conserva por compatibilidad histórica de Fase 2. El dispatch nuevo usa `MarketingCampaignV2ProviderCampaignORM`, relación 1 Campaign V2 -> N ProviderCampaign, con snapshot de channel/template, recipient_count, fingerprint, idempotency key y estados base. M1 no crea estados `SUBMITTING/SUBMITTED` en ejecución.
+- **Permisos:** `can_manage_campaigns`, `can_preflight_campaigns`, `can_manage_dispatch_config` y `can_send_campaigns` quedan separados en backend. Preflight no deriva de `can_edit_inputs`; configuración global requiere capability específica + scope global. M1 no expone operación de envío real.
+- **Fingerprint/idempotencia:** backend genera fingerprint determinístico con phone set/recipient ids, grouping, channel binding, template, vars y configuración de dispatch; el orden accidental no cambia el hash. La identidad por provider campaign queda preparada para M2 mediante `idempotency_key` único.
+- **Frontend M1:** el detalle de Campaign V2 permite seleccionar únicamente templates devueltos por backend y ejecutar `Revisar envío`. Muestra frozen count, blacklist, sendable count, batches, bloqueos y fingerprint. No existe botón habilitado ni llamada de envío real.
+
+Persistencia / migración:
+
+- `c1f7e9a4b6d2_add_campaign_v2_m1_dispatch_foundation.py`
+- `down_revision = b9e2f7a4d3c5`, head natural de la rama Campaign V2 en `main` al implementar M1.
+- Tablas nuevas:
+  - `marketing_campaign_v2_channel_bindings`
+  - `marketing_campaign_v2_templates`
+  - `marketing_campaign_v2_provider_campaigns`
+- El head independiente de Requisiciones `e1a7c4d2b9f6` se conserva sin modificación.
+
+Endpoints M1:
+
+- `GET /api/marketing/campaigns-v2/dispatch/templates`
+- `POST /api/marketing/campaigns-v2/dispatch/templates`
+- `PUT /api/marketing/campaigns-v2/dispatch/templates/<template_id>`
+- `GET /api/marketing/campaigns-v2/dispatch/channel-bindings`
+- `POST /api/marketing/campaigns-v2/dispatch/channel-bindings`
+- `PUT /api/marketing/campaigns-v2/dispatch/channel-bindings/<binding_id>`
+- `POST /api/marketing/campaigns-v2/<campaign_id>/preflight`
+
+No se agregó endpoint de `send`, `submit` ni provider POST.
+
+Evidencia de aceptación:
+
+- Backend Campaign V2 + cliente iVentas read-only + normalización iVentas: **525 passed**.
+- Acceptance específica M1 incluida en la suite: paridad exacta de phone set entre sendable export y preflight, 1:N persistente, browser sin autoridad de phones/vars/channel, ausencia de provider POST y UI sin acción real de envío.
+- Frontend Campaign V2 node tests: **43/43 passed**.
+- Angular `ng build`: **exit code 0**.
+- Alembic: grafo válido sin IDs duplicados ni ciclos; heads finales `c1f7e9a4b6d2` (Campaign V2) y `e1a7c4d2b9f6` (Requisiciones).
+- `POST /v2/broadcast`: **0 llamadas / 0 superficies M1**.
+
+Resultado final:
+
+`F3-M1 — ACCEPTED`
+`F3-M2 — DESBLOQUEADO / NO IMPLEMENTADO`
 
 ## 23. Prompt de arranque para una conversación nueva
 

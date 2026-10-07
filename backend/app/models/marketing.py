@@ -278,6 +278,193 @@ class MarketingCampaignV2BlacklistORM(db.Model):
     )
 
 
+class MarketingCampaignV2ChannelBindingORM(db.Model):
+    __tablename__ = "marketing_campaign_v2_channel_bindings"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    provider = db.Column(db.String(50), nullable=False)
+    sucursal_id = db.Column(
+        db.Integer,
+        db.ForeignKey("sucursales.sucursal_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    sucursal_canon = db.Column(
+        db.String(100),
+        db.ForeignKey("track_branch_catalog.sucursal_canon", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    provider_channel_id = db.Column(db.String(255), nullable=False)
+    is_active = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True,
+        server_default=db.true(),
+    )
+    is_default = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True,
+        server_default=db.true(),
+    )
+    metadata_json = db.Column(
+        db.JSON,
+        nullable=False,
+        default=dict,
+        server_default=db.text("'{}'"),
+    )
+    created_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    updated_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        onupdate=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+
+    sucursal = db.relationship("Sucursal")
+    created_by_user = db.relationship("UserORM", foreign_keys=[created_by_user_id])
+    updated_by_user = db.relationship("UserORM", foreign_keys=[updated_by_user_id])
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "provider",
+            "provider_channel_id",
+            name="uq_marketing_campaign_v2_channel_provider_identity",
+        ),
+        db.CheckConstraint(
+            "length(trim(provider)) > 0 AND provider = upper(trim(provider))",
+            name="ck_marketing_campaign_v2_channel_provider",
+        ),
+        db.CheckConstraint(
+            "length(trim(sucursal_canon)) > 0",
+            name="ck_marketing_campaign_v2_channel_sucursal_canon",
+        ),
+        db.CheckConstraint(
+            "length(trim(provider_channel_id)) > 0",
+            name="ck_marketing_campaign_v2_channel_provider_channel_id",
+        ),
+        db.Index(
+            "ix_marketing_campaign_v2_channel_sucursal",
+            "provider",
+            "sucursal_id",
+            "is_active",
+        ),
+        db.Index(
+            "uq_marketing_campaign_v2_channel_default_active",
+            "provider",
+            "sucursal_id",
+            unique=True,
+            postgresql_where=db.text("is_active = true AND is_default = true"),
+            sqlite_where=db.text("is_active = 1 AND is_default = 1"),
+        ),
+    )
+
+
+class MarketingCampaignV2TemplateORM(db.Model):
+    __tablename__ = "marketing_campaign_v2_templates"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    provider = db.Column(db.String(50), nullable=False)
+    template_name = db.Column(db.String(255), nullable=False)
+    label = db.Column(db.String(255), nullable=False)
+    is_active = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True,
+        server_default=db.true(),
+    )
+    purposes_json = db.Column(
+        db.JSON,
+        nullable=False,
+        default=list,
+        server_default=db.text("'[]'"),
+    )
+    variables_json = db.Column(
+        db.JSON,
+        nullable=False,
+        default=dict,
+        server_default=db.text("'{}'"),
+    )
+    compatible_channel_ids_json = db.Column(
+        db.JSON,
+        nullable=False,
+        default=list,
+        server_default=db.text("'[]'"),
+    )
+    metadata_json = db.Column(
+        db.JSON,
+        nullable=False,
+        default=dict,
+        server_default=db.text("'{}'"),
+    )
+    created_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    updated_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        onupdate=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+
+    created_by_user = db.relationship("UserORM", foreign_keys=[created_by_user_id])
+    updated_by_user = db.relationship("UserORM", foreign_keys=[updated_by_user_id])
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "provider",
+            "template_name",
+            name="uq_marketing_campaign_v2_template_provider_name",
+        ),
+        db.CheckConstraint(
+            "length(trim(provider)) > 0 AND provider = upper(trim(provider))",
+            name="ck_marketing_campaign_v2_template_provider",
+        ),
+        db.CheckConstraint(
+            "length(trim(template_name)) > 0 AND template_name = trim(template_name)",
+            name="ck_marketing_campaign_v2_template_name",
+        ),
+        db.CheckConstraint(
+            "length(trim(label)) > 0",
+            name="ck_marketing_campaign_v2_template_label",
+        ),
+        db.Index(
+            "ix_marketing_campaign_v2_template_active",
+            "provider",
+            "is_active",
+        ),
+    )
+
+
 class MarketingCampaignV2ORM(db.Model):
     __tablename__ = "marketing_campaign_v2_campaigns"
 
@@ -343,6 +530,13 @@ class MarketingCampaignV2ORM(db.Model):
             "MarketingCampaignV2ProviderStatsSnapshotORM.fetched_at"
         ),
     )
+    provider_campaigns = db.relationship(
+        "MarketingCampaignV2ProviderCampaignORM",
+        back_populates="campaign",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="MarketingCampaignV2ProviderCampaignORM.id",
+    )
 
     __table_args__ = (
         db.CheckConstraint(
@@ -375,6 +569,126 @@ class MarketingCampaignV2ORM(db.Model):
         db.Index(
             "ix_marketing_campaign_v2_campaigns_source",
             "source",
+        ),
+    )
+
+
+class MarketingCampaignV2ProviderCampaignORM(db.Model):
+    __tablename__ = "marketing_campaign_v2_provider_campaigns"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    campaign_v2_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_campaigns.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    provider = db.Column(db.String(50), nullable=False)
+    sucursal_id = db.Column(
+        db.Integer,
+        db.ForeignKey("sucursales.sucursal_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    sucursal_canon = db.Column(db.String(100), nullable=False)
+    channel_binding_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_channel_bindings.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    provider_channel_id = db.Column(db.String(255), nullable=False)
+    template_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_templates.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    template_name = db.Column(db.String(255), nullable=False)
+    template_snapshot_json = db.Column(
+        db.JSON,
+        nullable=False,
+        default=dict,
+        server_default=db.text("'{}'"),
+    )
+    recipient_count = db.Column(db.Integer, nullable=False)
+    dispatch_fingerprint = db.Column(db.String(64), nullable=False)
+    idempotency_key = db.Column(db.String(64), nullable=False)
+    status = db.Column(
+        db.String(30),
+        nullable=False,
+        default="PREPARED",
+        server_default=db.text("'PREPARED'"),
+    )
+    provider_campaign_id = db.Column(db.String(255), nullable=True)
+    created_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    submitted_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        onupdate=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+    submitted_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    error_code = db.Column(db.String(100), nullable=True)
+    support_ref = db.Column(db.String(200), nullable=True)
+
+    campaign = db.relationship(
+        "MarketingCampaignV2ORM",
+        back_populates="provider_campaigns",
+    )
+    channel_binding = db.relationship("MarketingCampaignV2ChannelBindingORM")
+    template = db.relationship("MarketingCampaignV2TemplateORM")
+    sucursal = db.relationship("Sucursal")
+    created_by_user = db.relationship("UserORM", foreign_keys=[created_by_user_id])
+    submitted_by_user = db.relationship("UserORM", foreign_keys=[submitted_by_user_id])
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "idempotency_key",
+            name="uq_marketing_campaign_v2_provider_campaign_idempotency",
+        ),
+        db.UniqueConstraint(
+            "provider",
+            "provider_campaign_id",
+            name="uq_marketing_campaign_v2_provider_campaign_external_identity",
+        ),
+        db.CheckConstraint(
+            "recipient_count >= 0",
+            name="ck_marketing_campaign_v2_provider_campaign_recipient_count",
+        ),
+        db.CheckConstraint(
+            "length(dispatch_fingerprint) = 64 AND length(idempotency_key) = 64",
+            name="ck_marketing_campaign_v2_provider_campaign_fingerprints",
+        ),
+        db.CheckConstraint(
+            "status IN ('PREPARED', 'READY', 'BLOCKED', 'SUBMITTING', "
+            "'SUBMITTED', 'PROVIDER_ERROR', 'RECONCILIATION_REQUIRED')",
+            name="ck_marketing_campaign_v2_provider_campaign_status",
+        ),
+        db.CheckConstraint(
+            "length(trim(provider)) > 0 AND provider = upper(trim(provider))",
+            name="ck_marketing_campaign_v2_provider_campaign_provider",
+        ),
+        db.Index(
+            "ix_marketing_campaign_v2_provider_campaign_parent",
+            "campaign_v2_id",
+            "sucursal_id",
+        ),
+        db.Index(
+            "ix_marketing_campaign_v2_provider_campaign_status",
+            "status",
         ),
     )
 

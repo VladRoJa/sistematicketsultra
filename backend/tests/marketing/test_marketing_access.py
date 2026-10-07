@@ -64,3 +64,42 @@ def test_marketing_role_has_global_scope_and_can_edit():
     assert access.branch_ids == ()
     assert access.visible_branch_ids([3, 1, 2]) == (1, 2, 3)
     assert access.can_edit_inputs is True
+
+
+def test_campaign_v2_capabilities_distinguish_management_from_send():
+    editor = resolve_marketing_access(
+        SimpleNamespace(
+            rol="EDITOR_CORPORATIVO",
+            sucursal_id=100,
+            sucursales_ids=[],
+        )
+    )
+    marketing = resolve_marketing_access(
+        SimpleNamespace(
+            rol="MARKETING",
+            sucursal_id=100,
+            sucursales_ids=[],
+        )
+    )
+    manager = resolve_marketing_access(
+        SimpleNamespace(
+            rol="GERENTE",
+            sucursal_id=7,
+            sucursales_ids=[7],
+        )
+    )
+
+    assert editor.can_manage_campaigns is True
+    assert editor.can_preflight_campaigns is True
+    assert editor.can_manage_dispatch_config is False
+    assert editor.can_send_campaigns is False
+
+    assert marketing.can_manage_campaigns is True
+    assert marketing.can_preflight_campaigns is True
+    assert marketing.can_manage_dispatch_config is True
+    assert marketing.can_send_campaigns is True
+
+    assert manager.can_manage_campaigns is False
+    assert manager.can_preflight_campaigns is False
+    assert manager.can_manage_dispatch_config is False
+    assert manager.can_send_campaigns is False

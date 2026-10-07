@@ -37,6 +37,21 @@ from app.services.marketing_campaign_v2_delivery_export_service import (
     export_campaign_v2_delivery_package,
     export_campaign_v2_sendable_package,
 )
+from app.services.marketing_campaign_v2_dispatch_config_service import (
+    DEFAULT_PROVIDER as CAMPAIGN_V2_DISPATCH_PROVIDER,
+    MarketingCampaignV2DispatchConfigConflictError,
+    MarketingCampaignV2DispatchConfigError,
+    MarketingCampaignV2DispatchConfigNotFoundError,
+    MarketingCampaignV2DispatchConfigValidationError,
+    list_channel_bindings,
+    list_templates,
+    save_channel_binding,
+    save_template,
+)
+from app.services.marketing_campaign_v2_preflight_service import (
+    build_campaign_v2_preflight,
+    serialize_campaign_v2_preflight,
+)
 from app.services.marketing_campaign_v2_query_service import (
     CAMPAIGN_V2_PURPOSES,
     MarketingCampaignV2NotFoundError,
@@ -989,6 +1004,243 @@ def bind_campaign_v2_provider_endpoint(campaign_id: int):
         return _error("Falló el provider binding de Campaign V2.", 500)
 
 
+@marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/templates")
+@jwt_required()
+def list_campaign_v2_dispatch_templates_endpoint():
+    try:
+        _, access = _resolve_campaign_v2_preflight_request()
+        _validate_query_args({"purpose"})
+        rows = list_templates(
+            provider=CAMPAIGN_V2_DISPATCH_PROVIDER,
+            active_only=True,
+            purpose=request.args.get("purpose"),
+            session=db.session,
+        )
+        return jsonify({"rows": rows}), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2DispatchConfigValidationError as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("Falló la consulta de templates Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/dispatch/templates")
+@jwt_required()
+def create_campaign_v2_dispatch_template_endpoint():
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        payload = _parse_payload(
+            {
+                "provider",
+                "template_name",
+                "label",
+                "is_active",
+                "purposes",
+                "variables",
+                "compatible_channel_ids",
+                "metadata",
+            }
+        )
+        result = save_template(
+            provider=payload.get("provider", CAMPAIGN_V2_DISPATCH_PROVIDER),
+            template_name=payload.get("template_name"),
+            label=payload.get("label"),
+            is_active=payload.get("is_active"),
+            purposes=payload.get("purposes"),
+            variables=payload.get("variables"),
+            compatible_channel_ids=payload.get("compatible_channel_ids"),
+            metadata=payload.get("metadata"),
+            actor_user_id=int(user.id),
+            session=db.session,
+        )
+        return jsonify(result), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2DispatchConfigValidationError as exc:
+        return _error(str(exc), 400)
+    except MarketingCampaignV2DispatchConfigConflictError as exc:
+        return _error(str(exc), 409)
+    except MarketingCampaignV2DispatchConfigError:
+        return _error("No fue posible guardar el template Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.put(
+    "/campaigns-v2/dispatch/templates/<int:template_id>"
+)
+@jwt_required()
+def update_campaign_v2_dispatch_template_endpoint(template_id: int):
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        payload = _parse_payload(
+            {
+                "provider",
+                "template_name",
+                "label",
+                "is_active",
+                "purposes",
+                "variables",
+                "compatible_channel_ids",
+                "metadata",
+            }
+        )
+        result = save_template(
+            template_id=template_id,
+            provider=payload.get("provider", CAMPAIGN_V2_DISPATCH_PROVIDER),
+            template_name=payload.get("template_name"),
+            label=payload.get("label"),
+            is_active=payload.get("is_active"),
+            purposes=payload.get("purposes"),
+            variables=payload.get("variables"),
+            compatible_channel_ids=payload.get("compatible_channel_ids"),
+            metadata=payload.get("metadata"),
+            actor_user_id=int(user.id),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2DispatchConfigNotFoundError as exc:
+        return _error(str(exc), 404)
+    except MarketingCampaignV2DispatchConfigValidationError as exc:
+        return _error(str(exc), 400)
+    except MarketingCampaignV2DispatchConfigConflictError as exc:
+        return _error(str(exc), 409)
+    except MarketingCampaignV2DispatchConfigError:
+        return _error("No fue posible guardar el template Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/channel-bindings")
+@jwt_required()
+def list_campaign_v2_channel_bindings_endpoint():
+    try:
+        _, access = _resolve_campaign_v2_dispatch_config_request()
+        _validate_query_args(set())
+        return jsonify(
+            {
+                "rows": list_channel_bindings(
+                    provider=CAMPAIGN_V2_DISPATCH_PROVIDER,
+                    active_only=False,
+                    session=db.session,
+                )
+            }
+        ), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except Exception:
+        return _error("Falló la consulta de channels Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/dispatch/channel-bindings")
+@jwt_required()
+def create_campaign_v2_channel_binding_endpoint():
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        payload = _parse_payload(
+            {
+                "provider",
+                "sucursal_id",
+                "provider_channel_id",
+                "is_active",
+                "is_default",
+                "metadata",
+            }
+        )
+        result = save_channel_binding(
+            provider=payload.get("provider", CAMPAIGN_V2_DISPATCH_PROVIDER),
+            sucursal_id=payload.get("sucursal_id"),
+            provider_channel_id=payload.get("provider_channel_id"),
+            is_active=payload.get("is_active"),
+            is_default=payload.get("is_default"),
+            metadata=payload.get("metadata"),
+            actor_user_id=int(user.id),
+            session=db.session,
+        )
+        return jsonify(result), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2DispatchConfigValidationError as exc:
+        return _error(str(exc), 400)
+    except MarketingCampaignV2DispatchConfigConflictError as exc:
+        return _error(str(exc), 409)
+    except MarketingCampaignV2DispatchConfigError:
+        return _error("No fue posible guardar el channel Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.put(
+    "/campaigns-v2/dispatch/channel-bindings/<int:binding_id>"
+)
+@jwt_required()
+def update_campaign_v2_channel_binding_endpoint(binding_id: int):
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        payload = _parse_payload(
+            {
+                "provider",
+                "sucursal_id",
+                "provider_channel_id",
+                "is_active",
+                "is_default",
+                "metadata",
+            }
+        )
+        result = save_channel_binding(
+            binding_id=binding_id,
+            provider=payload.get("provider", CAMPAIGN_V2_DISPATCH_PROVIDER),
+            sucursal_id=payload.get("sucursal_id"),
+            provider_channel_id=payload.get("provider_channel_id"),
+            is_active=payload.get("is_active"),
+            is_default=payload.get("is_default"),
+            metadata=payload.get("metadata"),
+            actor_user_id=int(user.id),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2DispatchConfigNotFoundError as exc:
+        return _error(str(exc), 404)
+    except MarketingCampaignV2DispatchConfigValidationError as exc:
+        return _error(str(exc), 400)
+    except MarketingCampaignV2DispatchConfigConflictError as exc:
+        return _error(str(exc), 409)
+    except MarketingCampaignV2DispatchConfigError:
+        return _error("No fue posible guardar el channel Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.post(
+    "/campaigns-v2/<int:campaign_id>/preflight"
+)
+@jwt_required()
+def campaign_v2_preflight_endpoint(campaign_id: int):
+    try:
+        _, access = _resolve_campaign_v2_preflight_request()
+        payload = _parse_payload({"template_id"})
+        plan = build_campaign_v2_preflight(
+            campaign_id=campaign_id,
+            template_id=payload.get("template_id"),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            provider=CAMPAIGN_V2_DISPATCH_PROVIDER,
+            session=db.session,
+        )
+        return jsonify(serialize_campaign_v2_preflight(plan)), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2NotFoundError:
+        return _error("Campaign V2 no encontrada.", 404)
+    except MarketingCampaignV2DispatchConfigNotFoundError as exc:
+        return _error(str(exc), 404)
+    except MarketingCampaignV2DispatchConfigValidationError as exc:
+        return _error(str(exc), 409)
+    except (
+        MarketingCampaignV2RouteValidationError,
+        MarketingCampaignV2QueryValidationError,
+    ) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("Falló el preflight Campaign V2.", 500)
+
+
 def _get_current_campaign_v2_user() -> UserORM:
     try:
         user_id = int(get_jwt_identity())
@@ -1013,17 +1265,44 @@ def _resolve_campaign_v2_request():
     return user, access
 
 
+def _resolve_campaign_v2_preflight_request():
+    user, access = _resolve_request_access()
+    _require_campaign_v2_preflight(access)
+    return user, access
+
+
+def _resolve_campaign_v2_dispatch_config_request():
+    user, access = _resolve_request_access()
+    _require_campaign_v2_dispatch_config(access)
+    _require_campaign_v2_global_management(access)
+    return user, access
+
+
 def _require_campaign_v2_management(access) -> None:
-    if not getattr(access, "can_edit_inputs", False):
+    if not getattr(access, "can_manage_campaigns", False):
         raise MarketingAuthorizationError(
             "No autorizado para gestionar Campaign V2."
+        )
+
+
+def _require_campaign_v2_preflight(access) -> None:
+    if not getattr(access, "can_preflight_campaigns", False):
+        raise MarketingAuthorizationError(
+            "No autorizado para preparar envíos Campaign V2."
+        )
+
+
+def _require_campaign_v2_dispatch_config(access) -> None:
+    if not getattr(access, "can_manage_dispatch_config", False):
+        raise MarketingAuthorizationError(
+            "No autorizado para configurar dispatch Campaign V2."
         )
 
 
 def _require_campaign_v2_global_management(access) -> None:
     if not getattr(access, "is_global", False):
         raise MarketingAuthorizationError(
-            "La lista negra Campaign V2 requiere alcance global."
+            "La operación Campaign V2 requiere alcance global."
         )
 
 

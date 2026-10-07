@@ -12,10 +12,12 @@ import {
   CampaignV2CampaignPage,
   CampaignV2CampaignQuery,
   CampaignV2ConsolidatedReport,
+  CampaignV2DispatchTemplatesResponse,
   CampaignV2FreezeRequest,
   CampaignV2FreezeResponse,
   CampaignV2IndividualReport,
   CampaignV2OptionsResponse,
+  CampaignV2PreflightResponse,
   CampaignV2PreviewDetailRequest,
   CampaignV2PreviewDetailResponse,
   CampaignV2PreviewResponse,
@@ -94,6 +96,26 @@ export class MarketingCampaignV2Service {
 
   getCampaign(campaignId: number): Observable<CampaignV2CampaignDetail> {
     return this.http.get<CampaignV2CampaignDetail>(`${this.apiUrl}/${campaignId}`);
+  }
+
+  listDispatchTemplates(
+    purpose: CampaignV2Purpose,
+  ): Observable<CampaignV2DispatchTemplatesResponse> {
+    const params = new HttpParams().set('purpose', purpose);
+    return this.http.get<CampaignV2DispatchTemplatesResponse>(
+      `${this.apiUrl}/dispatch/templates`,
+      { params },
+    );
+  }
+
+  preflightCampaign(
+    campaignId: number,
+    templateId: number,
+  ): Observable<CampaignV2PreflightResponse> {
+    return this.http.post<CampaignV2PreflightResponse>(
+      `${this.apiUrl}/${campaignId}/preflight`,
+      { template_id: templateId },
+    );
   }
 
   exportCampaignDeliveryPackage(campaignId: number): Observable<Blob> {
