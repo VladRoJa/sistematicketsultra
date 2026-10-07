@@ -25,7 +25,7 @@ def test_reject_global_existing_document(monkeypatch):
 def test_reject_other_user_rule(monkeypatch):
     doc = SimpleNamespace(id=3, visibility_mode="CUSTOM", is_sensitive=True)
     rules = [SimpleNamespace(visibility_type="USER", user_id=8)]
-    monkeypatch.setattr(job.InternalDocumentVisibilityORM, "query", FakeVisibilityQuery(rules))
+    monkeypatch.setattr(job, "InternalDocumentVisibilityORM", SimpleNamespace(query=FakeVisibilityQuery(rules)))
     with pytest.raises(job.CommercialDailyPublicationError):
         job._validate_exclusive_access(doc, 7)
 
@@ -33,7 +33,7 @@ def test_reject_other_user_rule(monkeypatch):
 def test_accept_exact_one_admicorp_user_rule(monkeypatch):
     doc = SimpleNamespace(id=3, visibility_mode="CUSTOM", is_sensitive=True)
     rules = [SimpleNamespace(visibility_type="USER", user_id=7)]
-    monkeypatch.setattr(job.InternalDocumentVisibilityORM, "query", FakeVisibilityQuery(rules))
+    monkeypatch.setattr(job, "InternalDocumentVisibilityORM", SimpleNamespace(query=FakeVisibilityQuery(rules)))
     job._validate_exclusive_access(doc, 7)
 
 
