@@ -7,7 +7,8 @@ from io import BytesIO
 
 import xlsxwriter
 
-from app.models.warehouse import TrackDailyMartORM
+from app.models.warehouse import TrackDailyMartORM, TrackBranchCatalogORM
+from app.models.suite_governance import SuiteSucursalRegionAssignmentORM
 from app.warehouse.services.track_daily_version_service import (
     get_current_track_daily_version,
 )
@@ -96,43 +97,141 @@ def _load_series(metric: str, cutoff: date) -> dict[str, dict[date, int | None]]
     return dict(by_branch)
 
 
-def _format_sheet(book, name, headers, branches, cells):
+def _load_branch_metadata() -> dict[str, dict]:
+    """Use existing opening order and current Suite governance region."""
+    metadata = {}
+    for row in TrackBranchCatalogORM.query.filter_by(is_track_active=True).all():
+        opening_order = getattr(getattr(row, "sucursal", None), "orden_apertura", None)
+        group = None
+        if opening_order is not None:
+            group = "Subtotal 21 gyms" if opening_order <= 21 else "Subtotal gyms nuevos"
+        metadata[row.sucursal_canon] = {
+            "order": row.display_order,
+            "label": row.track_label,
+            "group": group,
+            "region": None,
+            "sucursal_id": row.sucursal_id,
+        }
+    region_assignments = (
+        SuiteSucursalRegionAssignmentORM.query
+        .filter_by(is_current=True)
+        .all()
+    )
+    regions = {
+        assignment.sucursal_id: assignment.region.region_label
+        for assignment in region_assignments
+        if assignment.region is not None and assignment.region.is_active
+    }
+    for data in metadata.values():
+        data["region"] = regions.get(data["sucursal_id"])
+    return metadata
+
+
+def _format_sheet(book, name, headers, branches, cells, branch_metadata=None):
     sheet = book.add_worksheet(name)
     sheet.freeze_panes(2, 1)
-    sheet.set_column(0, 0, 28)
-    sheet.set_column(1, max(1, len(headers) - 1), 13)
-    title = book.add_format({"bold": True, "font_color": "#FFFFFF", "bg_color": "#153E63", "font_size": 14})
-    heading = book.add_format({"bold": True, "bg_color": "#D8E8F4", "border": 1})
+    sheet.set_column(0, 0, 31)
+    sheet.set_column(1, max(1, len(headers) - 1), 15)
+    title = book.add_format({
+        "bold": True, "font_color": "#FFFFFF",
+        "bg_color": "#153E63", "font_size": 14
+    })
+    heading = book.add_format({
+        "bold": True, "bg_color": "#D8E8F4", "border": 1
+    })
     numeric = book.add_format({"num_format": "#,##0", "align": "center"})
     missing = book.add_format({"bg_color": "#FFF0CC", "align": "center"})
     sheet.merge_range(0, 0, 0, len(headers) - 1, name.upper(), title)
     for col, header in enumerate(headers):
         sheet.write(1, col, header, heading)
-    for index, branch in enumerate(branches, 2):
-        sheet.write(index, 0, branch)
-        for col, value in enumerate(cells[branch], 1):
-            if value is None:
-                sheet.write_blank(index, col, None, missing)
-            else:
-                sheet.write_number(index, col, int(value), numeric)
-    total_row = len(branches) + 2
-    sheet.write(total_row, 0, "TOTAL", heading)
+
+    branch_metadata = branch_metadata or {}
+    groups: list[tuple[str | None, list[str]]] = []
+    if any(branch_metadata.get(b, {}).get("group") for b in branches):
+        for group_title in ("Subtotal 21 gyms", "Subtotal gyms nuevos"):
+            members = [
+                b for b in branches
+                if branch_metadata.get(b, {}).get("group") == group_title
+            ]
+            if members:
+                groups.append((group_title, members))
+        other = [
+            b for b in branches
+            if branch_metadata.get(b, {}).get("group") not in {
+                "Subtotal 21 gyms", "Subtotal gyms nuevos"
+            }
+        ]
+        if other:
+            groups.append(("Subtotal sin clasificar", other))
+    else:
+        groups = [(None, branches)]
+
+    current_row = 2
+    for group_title, members in groups:
+        for branch in members:
+            sheet.write(
+                current_row, 0,
+                branch_metadata.get(branch, {}).get("label") or branch
+            )
+            for col, value in enumerate(cells[branch], 1):
+                if value is None:
+                    sheet.write_blank(current_row, col, None, missing)
+                else:
+                    sheet.write_number(current_row, col, int(value), numeric)
+            current_row += 1
+        if group_title:
+            sheet.write(current_row, 0, group_title, heading)
+            for col in range(1, len(headers)):
+                vals = [cells[b][col - 1] for b in members]
+                if any(v is None for v in vals):
+                    sheet.write_blank(current_row, col, None, missing)
+                else:
+                    sheet.write_number(current_row, col, sum(vals), heading)
+            current_row += 1
+
+    sheet.write(current_row, 0, "TOTAL", heading)
     for col in range(1, len(headers)):
         vals = [cells[branch][col - 1] for branch in branches]
         if any(v is None for v in vals):
-            sheet.write_blank(total_row, col, None, missing)
+            sheet.write_blank(current_row, col, None, missing)
         else:
-            sheet.write_number(total_row, col, sum(vals), heading)
-    sheet.autofilter(1, 0, len(branches) + 1, len(headers) - 1)
+            sheet.write_number(current_row, col, sum(vals), heading)
+
+    if name == "Semanal":
+        by_region: dict[str, list[str]] = defaultdict(list)
+        for branch in branches:
+            region = branch_metadata.get(branch, {}).get("region")
+            if region:
+                by_region[region].append(branch)
+        if by_region:
+            current_row += 2
+            sheet.write(current_row, 0, "REGIONES", heading)
+            current_row += 1
+            for region in sorted(by_region):
+                sheet.write(current_row, 0, region, heading)
+                for col in range(1, len(headers)):
+                    vals = [cells[b][col - 1] for b in by_region[region]]
+                    if any(v is None for v in vals):
+                        sheet.write_blank(current_row, col, None, missing)
+                    else:
+                        sheet.write_number(current_row, col, sum(vals), numeric)
+                current_row += 1
+
+
 
 
 def render_commercial_daily_xlsx(
-    *, metric: str, cutoff: date, mtd_series: dict[str, dict[date, int | None]]
+    *, metric: str, cutoff: date, mtd_series: dict[str, dict[date, int | None]],
+    branch_metadata: dict[str, dict] | None = None,
 ) -> bytes:
     """Pure rendering layer, with explicit gaps and Sunday-Saturday buckets."""
     if metric not in METRICS:
         raise ValueError(f"Unsupported report metric: {metric}")
-    branches = sorted(mtd_series)
+    branch_metadata = branch_metadata or {}
+    branches = sorted(
+        mtd_series,
+        key=lambda b: (branch_metadata.get(b, {}).get('order') or 9999, b),
+    )
     if not branches:
         raise CommercialDailyReportError("No branches")
 
@@ -178,9 +277,9 @@ def render_commercial_daily_xlsx(
     stream = BytesIO()
     book = xlsxwriter.Workbook(stream, {"in_memory": True})
     book.set_properties({"title": f"Reporte {METRICS[metric][1]} {cutoff.isoformat()}"})
-    _format_sheet(book, "Diario", ["Sucursal"] + [d.strftime("%d/%m/%Y") for d in day_headers], branches, daily_cells)
-    _format_sheet(book, "Semanal", ["Sucursal"] + [f"{w:%d/%m}-{w + timedelta(days=6):%d/%m}" + (f" (corte {cutoff:%d/%m})" if w == week and cutoff < w + timedelta(days=6) else "") for w in weeks], branches, weekly_cells)
-    _format_sheet(book, "Totales Mensuales", ["Sucursal"] + [m.strftime("%m/%Y") for m in months], branches, monthly_cells)
+    _format_sheet(book, "Diario", ["Sucursal"] + [d.strftime("%d/%m/%Y") for d in day_headers], branches, daily_cells, branch_metadata)
+    _format_sheet(book, "Semanal", ["Sucursal"] + [f"{w:%d/%m}-{w + timedelta(days=6):%d/%m}" + (f" (corte {cutoff:%d/%m})" if w == week and cutoff < w + timedelta(days=6) else "") for w in weeks], branches, weekly_cells, branch_metadata)
+    _format_sheet(book, "Totales Mensuales", ["Sucursal"] + [m.strftime("%m/%Y") for m in months], branches, monthly_cells, branch_metadata)
     book.close()
     return stream.getvalue()
 
@@ -189,5 +288,6 @@ def build_commercial_daily_xlsx(*, metric: str, cutoff: date) -> bytes:
     if metric not in METRICS:
         raise ValueError(metric)
     return render_commercial_daily_xlsx(
-        metric=metric, cutoff=cutoff, mtd_series=_load_series(metric, cutoff)
+        metric=metric, cutoff=cutoff, mtd_series=_load_series(metric, cutoff),
+        branch_metadata=_load_branch_metadata()
     )
