@@ -355,6 +355,30 @@ Antes del POST real:
 
 No interpretar "prueba", "va" o una aprobación anterior como permiso permanente para futuros sends reales.
 
+### 15.1 Soporte interno para campaign QA controlada
+
+Para ejecutar el acceptance sin alterar una cohorte comercial real se permite un flujo interno `QA_MANUAL` exclusivamente para smoke tests de M2.
+
+Reglas:
+
+- no se expone como source seleccionable del Audience Builder comercial;
+- no se expone en Angular ni como endpoint público de carga arbitraria de teléfonos;
+- se ejecuta desde un comando interno versionado del backend;
+- exige `preview -> fingerprint -> freeze`, igual que el principio de evidencia congelada de Campaign V2;
+- máximo 10 destinatarios;
+- exactamente una sucursal Track activa por campaña QA;
+- los destinatarios quedan persistidos como `MarketingCampaignV2RecipientORM` + evidence `QA_MANUAL_SMOKE`;
+- el snapshot persiste `filters.allowed_sucursal_keys`, por lo que respeta el mismo scope/query contract que campañas normales;
+- después del freeze, export sendable, blacklist, preflight, fingerprint, ProviderCampaign e idempotencia usan exactamente el flujo M1/M2 normal;
+- el submit sigue sin aceptar teléfonos desde navegador;
+- este helper no habilita el kill switch ni constituye autorización para un POST real.
+
+Implementación de soporte:
+
+- `backend/app/services/marketing_campaign_v2_qa_manual_service.py`;
+- `backend/scripts/marketing/campaign_v2_qa_smoke.py` con modos `preview` y `freeze` leyendo JSON por stdin;
+- los tests usan números sintéticos; ningún teléfono QA real se versiona en el repositorio.
+
 ## 16. Tamaño del primer caso live
 
 Usar la mínima población útil.
