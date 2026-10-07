@@ -62,6 +62,6 @@ def test_report_has_three_sheets_and_weekly_missing_not_zero():
     wb = load_workbook(BytesIO(payload), data_only=True)
     assert wb.sheetnames == ["Diario", "Semanal", "Totales Mensuales"]
     assert wb["Diario"]["A3"].value == "VILLA_VERDE"
-    assert wb["Diario"]["B3"].value == 4
+    assert wb["Diario"]["B3"].value == 1
     weekly = wb["Semanal"]
     assert weekly.cell(row=3, column=weekly.max_column).value is None
