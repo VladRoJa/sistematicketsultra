@@ -41,12 +41,14 @@ def _template(
     name: str = "reactivacion_v1",
     variables=None,
     compatible=None,
+    metadata=None,
 ):
     return NS(
         id=template_id,
         template_name=name,
         variables_json=variables or {"1": "first_name"},
         compatible_channel_ids_json=compatible or [],
+        metadata_json=metadata or {},
     )
 
 
@@ -292,7 +294,7 @@ def test_fingerprint_is_order_independent(monkeypatch):
     assert first.dispatch_fingerprint == second.dispatch_fingerprint
 
 
-@pytest.mark.parametrize("change", ["phone", "template", "channel"])
+@pytest.mark.parametrize("change", ["phone", "template", "channel", "media"])
 def test_fingerprint_changes_with_material_dispatch_inputs(monkeypatch, change):
     rows = [_recipient(1, "6861000001", 1)]
     template = _template()
@@ -314,6 +316,10 @@ def test_fingerprint_changes_with_material_dispatch_inputs(monkeypatch, change):
         rows = [_recipient(1, "6861000099", 1)]
     elif change == "template":
         template = _template(template_id=11, name="reactivacion_v2")
+    elif change == "media":
+        template = _template(
+            metadata={"file_url": "https://media.example.test/header.png"}
+        )
     else:
         channels = {1: NS(id=201, provider_channel_id="channel-2")}
 
@@ -331,6 +337,29 @@ def test_fingerprint_changes_with_material_dispatch_inputs(monkeypatch, change):
     ).dispatch_fingerprint
 
     assert changed != baseline
+
+
+def test_preflight_carries_optional_template_media(monkeypatch):
+    rows = [_recipient(1, "6861000001", 1)]
+    _install(
+        monkeypatch,
+        rows,
+        template=_template(
+            metadata={"file_url": "https://media.example.test/header.png"}
+        ),
+    )
+
+    plan = service.build_campaign_v2_preflight(
+        campaign_id=7,
+        template_id=10,
+        allowed_sucursal_keys=None,
+        session=NS(),
+    )
+
+    assert plan.batches[0].file_url == "https://media.example.test/header.png"
+    payload = service.serialize_campaign_v2_preflight(plan)
+    assert payload["template"]["file_url"] == "https://media.example.test/header.png"
+    assert payload["batches"][0]["file_url"] == "https://media.example.test/header.png"
 
 
 def test_idempotency_key_is_deterministic_for_batch(monkeypatch):

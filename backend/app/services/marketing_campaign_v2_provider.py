@@ -65,6 +65,7 @@ class CampaignProviderDispatchBatch:
     provider_channel_id: str
     template_name: str
     leads: tuple[CampaignProviderLead, ...]
+    file_url: str | None = None
 
 
 @dataclass(frozen=True)

@@ -42,7 +42,7 @@ class _Session:
         return response
 
 
-def _batch():
+def _batch(*, file_url=None):
     return CampaignProviderDispatchBatch(
         provider="IVENTAS",
         campaign_name="QA M2 · TEC_MXL",
@@ -58,6 +58,7 @@ def _batch():
                 variables=("JUAN", "2026-10-31"),
             ),
         ),
+        file_url=file_url,
     )
 
 
@@ -100,8 +101,25 @@ def test_create_campaign_posts_exact_immediate_payload_once():
     }
     assert "sendAt" not in kwargs["json"]
     assert "token" not in kwargs["json"]
+    assert "fileUrl" not in kwargs["json"]
     assert kwargs["headers"]["Authorization"] == "Bearer ivk_live_test_secret"
     assert kwargs["timeout"] == (10.0, 30.0)
+
+
+def test_create_campaign_includes_optional_file_url():
+    provider, session = _provider([
+        _Response(200, {"campaign": "provider-media"}),
+    ])
+
+    result = provider.create_campaign(
+        _batch(file_url="https://media.example.test/header.png")
+    )
+
+    assert result.provider_campaign_id == "provider-media"
+    assert len(session.calls) == 1
+    _, kwargs = session.calls[0]
+    assert kwargs["json"]["fileUrl"] == "https://media.example.test/header.png"
+    assert "sendAt" not in kwargs["json"]
 
 
 def test_success_deduplicated_requires_campaign_id():

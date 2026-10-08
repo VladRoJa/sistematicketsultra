@@ -1,9 +1,9 @@
 # Contrato Campañas V2 — Fase 3 / M2
 ## Controlled Submit
 
-Estado: IMPLEMENTADO / PENDIENTE DE RE-ACCEPTANCE LIVE — 2026-10-07
+Estado: IMPLEMENTADO / PENDIENTE DE RE-ACCEPTANCE LIVE — 2026-10-08
 Gate de entrada: CUMPLIDO — `CONTRATO_CAMPANAS_V2_FASE_3_M1.md` está ACCEPTED en main.
-Gate de salida: REABIERTO — el primer POST live creó el broadcast y persistió `SUBMITTED`, pero iVentas reportó `successfulMessages=0` y `failedMessages=5`; se corrigió la proyección telefónica de transporte y falta repetir el smoke live antes de aceptar M2.
+Gate de salida: REABIERTO — el primer smoke descubrió la proyección telefónica `52+MX10`; el segundo smoke ya usó `521+MX10` pero también terminó `successfulMessages=0` / `failedMessages=5`. La investigación posterior confirmó que el template usado tiene header multimedia y M2 no transportaba `fileUrl`. El soporte de media queda implementado y requiere un nuevo smoke live antes de aceptar M2.
 
 ## 0. Uso de este contrato
 
@@ -123,7 +123,10 @@ Usar:
 - integration key;
 - channelId resuelto backend;
 - templateName resuelto backend;
-- leads construidos backend.
+- leads construidos backend;
+- `fileUrl` **solo** cuando el template tenga media configurado por backend.
+
+`fileUrl` es un campo top-level del broadcast y se resuelve desde `MarketingCampaignV2TemplateORM.metadata_json["file_url"]`. Si el template no tiene media, el campo se omite completamente y el payload conserva el comportamiento previo.
 
 No usar token legacy salvo decisión contractual posterior.
 
@@ -138,7 +141,8 @@ Nunca aceptar desde Angular:
 - phones;
 - vars;
 - urlVars;
-- channelId.
+- channelId;
+- fileUrl.
 
 Angular puede seleccionar template/configuración autorizada y confirmar fingerprint.
 
@@ -156,6 +160,7 @@ Usuario ve:
 - batches;
 - channels;
 - template;
+- media configurado (`file_url` o ausencia);
 - variables/bloqueos;
 - fingerprint.
 
@@ -164,13 +169,15 @@ Submit recibe el fingerprint esperado.
 En submit backend:
 
 1. reconstruye sendable projection;
-2. reconstruye channel/template/vars;
+2. reconstruye channel/template/vars/media;
 3. recalcula fingerprint;
 4. compara;
 5. si difiere -> 409 / PRECONDITION FAILED;
 6. no hace POST.
 
-Esto protege cambios de blacklist/config entre revisión y envío.
+Desde el soporte de media, `DISPATCH_FINGERPRINT_VERSION = campaign-v2-dispatch-v2` y el `file_url` forma parte del material firmado. Cambiar, agregar o retirar el media después del preflight invalida el fingerprint.
+
+Esto protege cambios de blacklist/config/media entre revisión y envío.
 
 ## 8. Idempotencia Suite
 
@@ -487,7 +494,8 @@ La auditoría debe distinguir el momento de submit.
 - coincide -> puede avanzar;
 - blacklist cambió -> 409, 0 calls;
 - template cambió -> 409;
-- channel cambió -> 409.
+- channel cambió -> 409;
+- media/file_url cambió -> fingerprint distinto y submit debe exigir nueva revisión.
 
 ### Idempotencia
 
@@ -500,6 +508,8 @@ La auditoría debe distinguir el momento de submit.
 
 - éxito + campaign id;
 - deduplicated + campaign id;
+- template sin media -> payload sin `fileUrl`;
+- template con media -> payload con `fileUrl` exacto;
 - template not found;
 - invalid channel;
 - forbidden;
@@ -567,7 +577,7 @@ Decisiones finales:
 - **Base URL:** `IVENTAS_CAMPAIGN_SEND_API_BASE_URL`, default `https://rest.iventas.mx`.
 - **Provider adapter:** `IVentasBroadcastProvider` encapsula URL, Authorization, timeout, payload y clasificación de errores. `POST /v2/broadcast` vive únicamente en ese adapter.
 - **Sin retry automático:** create campaign hace un solo POST. Timeout, 5xx, 409 ambiguo, JSON inválido o 2xx sin `campaign` terminan en `RECONCILIATION_REQUIRED` y no se reintentan automáticamente.
-- **Payload inmediato:** `templateName`, `leads[{phone, vars}]`, `channelId`, `name`; M2 omite `sendAt`.
+- **Payload inmediato:** `templateName`, `leads[{phone, vars}]`, `channelId`, `name` y, desde la corrección de media, `fileUrl` opcional cuando el template lo requiera; M2 omite `sendAt`.
 - **Phone:** `marketing_phone.normalize_phone()` sigue siendo la única normalización; `format_mexico_international_phone()` es únicamente la proyección de transporte para iVentas. Evidencia live del 2026-10-07 mostró que campañas exitosas usan `521+MX10` (13 dígitos, sin `+`), mientras el primer smoke con `52+MX10` (12 dígitos) terminó 0 successful / 5 failed. La proyección corregida es `MX10 -> 521+MX10`.
 - **TOCTOU:** submit recibe solo `template_id` + `expected_dispatch_fingerprint`, reconstruye el preflight completo en backend y responde conflicto si el fingerprint cambió.
 - **Autoridad del browser:** Angular no puede enviar phones, vars, urlVars, channelId, provider ID ni `sendAt`.
@@ -634,9 +644,37 @@ Evidencia del primer smoke live — NO ACEPTADO:
 - Al terminar el smoke, `CAMPAIGN_V2_PROVIDER_SEND_ENABLED` fue restaurado y verificado en `False`.
 - No reintentar Campaign 9: su child ya está `SUBMITTED` e idempotencia debe impedir duplicados. El re-acceptance debe usar una nueva campaña QA controlada.
 
+### 24.2 Segundo intento live y corrección de media — 2026-10-08
+
+El segundo smoke se ejecutó únicamente después de desplegar y verificar la corrección `MX10 -> 521+MX10`. Tampoco cerró acceptance.
+
+Evidencia del segundo smoke live — NO ACEPTADO:
+
+- Campaign V2 QA: `10`, source `QA_MANUAL`, purpose `NEW_SALE`, una sola sucursal `AZAHARES_CUL`.
+- Cohorte congelada: **5**; blacklist: **0**; lista para envío: **5**; un batch y **0 blockers**.
+- Preflight `ready=true`; igualdad exacta del phone set entre frozen/sendable/batch.
+- Los 5 teléfonos proyectados al provider se verificaron como **13 dígitos**, solo numéricos y prefijo `521`.
+- Template: `invita_y_gana_4800`; channel iVentas: `6a2201f802ec4b00086b8bb2`.
+- Dispatch fingerprint del segundo smoke: `5faa2972d52a6935575755c75ab731fa60775ced6a4fb90b1d04c8fc79dac694`.
+- Hubo autorización explícita específica para Campaign 10 antes del POST.
+- `POST /v2/broadcast`: **1 ejecución**, HTTP **200**, child **2**, provider campaign id `6ac6ea0c3b9c6200085354da`, estado local `SUBMITTED`, recipient_count **5**.
+- El kill switch fue restaurado y verificado en `False` inmediatamente después.
+- Stats provider posteriores: `successfulMessages=0`, `failedMessages=5`, `sentMessages=0`, `deliveredMessages=0`, `viewedMessages=0`, `analyticsStatus=not_synced`.
+- La documentación iVentas confirma que un HTTP 200 solo crea/encola el broadcast y que ciertos errores pueden aparecer después en stats.
+- Inspección del template real en iVentas: body estático sin placeholders visibles y **header de imagen**. La URL del media se verificó desde producción con HTTP **200** y `Content-Type: image/png`.
+- Gap confirmado en Suite: `CampaignProviderDispatchBatch` y `IVentasBroadcastProvider._request_payload()` no tenían ninguna ruta para transportar el `fileUrl` del header multimedia.
+- Corrección implementada: `metadata_json["file_url"]` es configuración opcional backend-owned del template; preflight la resuelve, el fingerprint v2 la firma, submit la audita y el adapter iVentas emite `fileUrl` solo cuando existe.
+- Templates sin media conservan el payload previo y **no** envían `fileUrl`.
+- `metadata.file_url` se valida como URL HTTPS absoluta; no se hardcodea media por template dentro del adapter.
+- No hay cambio de esquema ni migración Alembic para esta corrección: se reutiliza `metadata_json`.
+- Validación local de la corrección: **49/49** pruebas enfocadas PASS. Regresión Campaign V2: **498 passed**; el único caso que no pudo ejecutar por permisos del directorio temporal de pytest pasó **1/1** al repetirse con `--basetemp` controlado.
+- Campaign 10 no debe reintentarse: su child ya está `SUBMITTED`.
+- Antes del siguiente smoke debe desplegarse el cambio, configurar `file_url` en el template correspondiente, generar una **nueva Campaign QA**, recalcular preflight/fingerprint v2 y obtener una nueva autorización explícita.
+- El gap de media es la causa técnica más consistente con la evidencia disponible, pero no se declara causa definitiva ni M2 ACCEPTED hasta que un nuevo smoke confirme `successfulMessages > 0`.
+
 Estado de salida actual:
 
-`F3-M2 — IMPLEMENTADO / PENDIENTE DE RE-ACCEPTANCE LIVE — 2026-10-07`
+`F3-M2 — IMPLEMENTADO / PENDIENTE DE RE-ACCEPTANCE LIVE — 2026-10-08`
 
 `F3-M3 — BLOQUEADO HASTA RE-ACCEPTANCE DE M2`
 

@@ -174,12 +174,20 @@ class IVentasBroadcastProvider:
             leads.append(lead.to_payload())
 
         # M2 intentionally omits sendAt: all sends are immediate.
-        return {
+        payload: dict[str, Any] = {
             "templateName": template_name,
             "leads": leads,
             "channelId": channel_id,
             "name": campaign_name,
         }
+        if batch.file_url is not None:
+            file_url = str(batch.file_url).strip()
+            if not file_url:
+                raise CampaignProviderConfigurationError(
+                    "file_url no puede estar vacío cuando está configurado."
+                )
+            payload["fileUrl"] = file_url
+        return payload
 
     def _parse_success(
         self,

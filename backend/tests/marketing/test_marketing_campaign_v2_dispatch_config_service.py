@@ -169,6 +169,55 @@ def test_template_catalog_normalizes_mapping_and_filters_by_purpose(session):
     ) == []
 
 
+def test_template_catalog_normalizes_optional_file_url(session):
+    saved = service.save_template(
+        provider="IVENTAS",
+        template_name="media_template",
+        label="Media template",
+        is_active=True,
+        purposes=["NEW_SALE"],
+        variables={},
+        compatible_channel_ids=["channel-current"],
+        metadata={
+            "approval_status": "APPROVED",
+            "file_url": "  https://media.example.test/header.png  ",
+        },
+        actor_user_id=7,
+        session=session,
+        now=NOW,
+    )
+
+    assert saved["metadata"]["approval_status"] == "APPROVED"
+    assert saved["metadata"]["file_url"] == "https://media.example.test/header.png"
+
+    row = service.resolve_dispatch_template(
+        template_id=saved["id"],
+        provider="IVENTAS",
+        purpose="NEW_SALE",
+        session=session,
+    )
+    assert service.template_file_url(row) == "https://media.example.test/header.png"
+
+
+def test_template_catalog_rejects_non_https_file_url(session):
+    with pytest.raises(
+        service.MarketingCampaignV2DispatchConfigValidationError,
+        match="URL HTTPS absoluta",
+    ):
+        service.save_template(
+            provider="IVENTAS",
+            template_name="bad_media",
+            label="Bad media",
+            is_active=True,
+            purposes=["NEW_SALE"],
+            variables={},
+            compatible_channel_ids=[],
+            metadata={"file_url": "http://media.example.test/header.png"},
+            actor_user_id=7,
+            session=session,
+        )
+
+
 def test_template_catalog_rejects_unknown_variable_source(session):
     with pytest.raises(
         service.MarketingCampaignV2DispatchConfigValidationError,

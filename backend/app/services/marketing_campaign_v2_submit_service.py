@@ -443,6 +443,7 @@ def _prepare_provider_campaign_rows(
             template_snapshot_json={
                 "template_id": batch.template_id,
                 "template_name": batch.template_name,
+                "file_url": batch.file_url,
                 "dispatch_fingerprint_version": DISPATCH_FINGERPRINT_VERSION,
             },
             recipient_count=len(batch.recipients),
@@ -644,6 +645,7 @@ def _provider_dispatch_batch(
         provider_channel_id=str(batch.provider_channel_id or ""),
         template_name=batch.template_name,
         leads=tuple(leads),
+        file_url=batch.file_url,
     )
 
 
@@ -668,6 +670,7 @@ def _request_snapshot(
         "campaign_name": batch.campaign_name,
         "provider_channel_id": batch.provider_channel_id,
         "template_name": batch.template_name,
+        "file_url": batch.file_url,
         "leads": [
             {
                 "phone": lead.phone,

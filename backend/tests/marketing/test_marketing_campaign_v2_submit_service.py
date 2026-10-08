@@ -109,6 +109,8 @@ def _batch(
     channel: str,
     recipient_id: int,
     phone: str,
+    *,
+    file_url: str | None = None,
 ):
     return CampaignV2DispatchBatchPlan(
         sucursal_id=branch_id,
@@ -122,13 +124,33 @@ def _batch(
             _recipient(recipient_id, phone, f"SOCIO {recipient_id}"),
         ),
         blocked_reasons=(),
+        file_url=file_url,
     )
 
 
-def _plan(*, fingerprint: str = FINGERPRINT, ready: bool = True):
+def _plan(
+    *,
+    fingerprint: str = FINGERPRINT,
+    ready: bool = True,
+    file_url: str | None = None,
+):
     batches = (
-        _batch(1, "TEC_MXL", "channel-1", 1, "6861000001"),
-        _batch(2, "VILLAS_MXL", "channel-2", 2, "6861000002"),
+        _batch(
+            1,
+            "TEC_MXL",
+            "channel-1",
+            1,
+            "6861000001",
+            file_url=file_url,
+        ),
+        _batch(
+            2,
+            "VILLAS_MXL",
+            "channel-2",
+            2,
+            "6861000002",
+            file_url=file_url,
+        ),
     )
     if not ready:
         batches = (
@@ -282,6 +304,22 @@ def test_success_submits_batches_sequentially_and_persists_exact_snapshot(
     assert tec.provider_response_json["campaign"] in {"provider-a", "provider-b"}
     assert tec.submit_started_at is not None
     assert tec.submitted_at is not None
+
+
+def test_media_is_forwarded_and_persisted_in_snapshot(session, monkeypatch):
+    file_url = "https://media.example.test/header.png"
+    _install_plan(monkeypatch, _plan(file_url=file_url))
+    provider = _Provider([
+        _success("provider-a"),
+        _success("provider-b"),
+    ])
+
+    _submit(session, provider)
+
+    assert [call.file_url for call in provider.calls] == [file_url, file_url]
+    rows = session.query(MarketingCampaignV2ProviderCampaignORM).all()
+    assert {row.request_snapshot_json["file_url"] for row in rows} == {file_url}
+    assert {row.template_snapshot_json["file_url"] for row in rows} == {file_url}
 
 
 def test_second_submit_after_success_is_conflict_and_makes_zero_new_calls(
