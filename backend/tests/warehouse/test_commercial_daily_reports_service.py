@@ -243,3 +243,74 @@ def test_reactivaciones_ignores_retired_historical_club_but_requires_current_one
             cutoff,
             active_branches={"VILLA_VERDE", "SERRANIA", "MISSING_CLUB"},
         )
+
+
+def test_jan_apr_reactivaciones_historical_baseline_has_all_branches():
+    from app.warehouse.services.reactivaciones_monthly_baseline_service import (
+        load_early_reactivaciones_monthly,
+    )
+    snapshot = load_early_reactivaciones_monthly()
+    assert len(snapshot) == 26
+    assert snapshot["VILLA_VERDE"][date(2026, 1, 1)] == 169
+    for month, expected in (
+        (1, 4311), (2, 2684), (3, 3789), (4, 2684)
+    ):
+        assert sum(
+            values[date(2026, month, 1)]
+            for values in snapshot.values()
+        ) == expected
+
+
+def test_jan_apr_reactivaciones_fills_only_missing_monthly_track_data():
+    from app.warehouse.services.reactivaciones_monthly_baseline_service import (
+        load_early_reactivaciones_monthly,
+    )
+    snapshot = load_early_reactivaciones_monthly()
+    series = {
+        branch: {
+            date(2026, 5, 31): 27,
+            **{date(2026, 10, day): day * 2 for day in range(1, 8)},
+        }
+        for branch in snapshot
+    }
+    payload = render_commercial_daily_xlsx(
+        metric="reactivaciones",
+        cutoff=date(2026, 10, 7),
+        mtd_series=series,
+        historical_monthly_by_branch=snapshot,
+    )
+    book = load_workbook(BytesIO(payload), data_only=True)
+    monthly = book["Totales Mensuales"]
+    total_row = next(
+        row for row in range(3, monthly.max_row + 1)
+        if monthly.cell(row, 1).value == "TOTAL"
+    )
+    assert [
+        monthly.cell(total_row, col).value for col in range(2, 6)
+    ] == [4311, 2684, 3789, 2684]
+    assert monthly.cell(total_row, 6).value == 26 * 27
+    assert monthly.cell(total_row, 11).value == 26 * 14
+
+
+def test_jan_apr_reactivaciones_rejects_conflict_with_existing_canonical_close():
+    from app.warehouse.services.reactivaciones_monthly_baseline_service import (
+        load_early_reactivaciones_monthly,
+    )
+    snapshot = load_early_reactivaciones_monthly()
+    series = {
+        branch: {
+            date(2026, 10, 1): 2,
+            date(2026, 10, 2): 4,
+            date(2026, 10, 3): 6,
+            date(2026, 10, 4): 8,
+        }
+        for branch in snapshot
+    }
+    series["VILLA_VERDE"][date(2026, 1, 31)] = 170
+    with pytest.raises(CommercialDailyReportError, match="Historical Reactivaciones conflict"):
+        render_commercial_daily_xlsx(
+            metric="reactivaciones",
+            cutoff=date(2026, 10, 4),
+            mtd_series=series,
+            historical_monthly_by_branch=snapshot,
+        )
