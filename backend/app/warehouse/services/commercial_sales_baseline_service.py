@@ -28,6 +28,47 @@ class SalesBaselineError(RuntimeError):
     pass
 
 
+MONTHS_ES = (
+    "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO",
+    "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE",
+)
+MONTHS_ABBR_ES = (
+    "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+    "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
+)
+
+
+def _span_title(start: date, end: date) -> str:
+    """Calendar-correct Spanish title for Sunday–Saturday reporting weeks."""
+    if (start.year, start.month) == (end.year, end.month):
+        return (
+            f"{start.day:02d} AL {end.day:02d} DE "
+            f"{MONTHS_ES[end.month - 1]} DE {end.year}"
+        )
+    first = f"{start.day:02d} DE {MONTHS_ES[start.month - 1]}"
+    if start.year != end.year:
+        first += f" DE {start.year}"
+    return (
+        f"{first} AL {end.day:02d} DE "
+        f"{MONTHS_ES[end.month - 1]} DE {end.year}"
+    )
+
+
+def _week_header(start: date) -> str:
+    end = start + timedelta(days=6)
+    if (start.year, start.month) == (end.year, end.month):
+        return f"{start.day:02d} - {end.day:02d} {MONTHS_ABBR_ES[end.month - 1]}"
+    if start.year != end.year:
+        return (
+            f"{start.day:02d} {MONTHS_ABBR_ES[start.month - 1]} {start.year} - "
+            f"{end.day:02d} {MONTHS_ABBR_ES[end.month - 1]} {end.year}"
+        )
+    return (
+        f"{start.day:02d} {MONTHS_ABBR_ES[start.month - 1]} - "
+        f"{end.day:02d} {MONTHS_ABBR_ES[end.month - 1]}"
+    )
+
+
 def _canon(value):
     text = unicodedata.normalize("NFKD", str(value or "")).upper()
     return "".join(ch for ch in text if ch.isalnum() and not unicodedata.combining(ch))
@@ -228,10 +269,15 @@ def build_sales_from_baseline(*, cutoff: date) -> bytes:
         daily.cell(30, col).value = sum(daily.cell(r, col).value or 0 for r in range(25, 30))
         daily.cell(31, col).value = daily.cell(24, col).value + daily.cell(30, col).value
 
-    daily['B1'] = (
-        f'CONTRATOS NUEVOS POR DÍA - SEMANA '
-        f'{current_week:%d DE %m} AL {(current_week + timedelta(days=6)):%d DE %m}'
+    # The source workbook only merged B1:C1; that clips the full-week title.
+    # Preserve its anchor/style while extending the visible heading to the week.
+    daily.unmerge_cells("B1:C1")
+    daily.merge_cells("B1:I1")
+    daily["B1"] = (
+        "CONTRATOS NUEVOS POR DÍA - SEMANA DEL "
+        + _span_title(current_week, current_week + timedelta(days=6))
     )
+    daily.title = f"DIARIO {current_week.day:02d} {MONTHS_ABBR_ES[current_week.month - 1].upper()}"
 
     # Do not modify any baseline historical week; append only new weeks.
     cursor = FIRST_WEEK
@@ -245,7 +291,7 @@ def build_sales_from_baseline(*, cutoff: date) -> bytes:
             target = weekly.cell(row, weekly_col)
             if source.has_style:
                 target._style = copy(source._style)
-        weekly.cell(2, weekly_col).value = f"{cursor:%d/%m} - {cursor + timedelta(days=6):%d/%m}"
+        weekly.cell(2, weekly_col).value = _week_header(cursor)
         for key, row in wrows.items():
             branch = resolve(key)
             values = []
@@ -270,6 +316,16 @@ def build_sales_from_baseline(*, cutoff: date) -> bytes:
             weekly.cell(target_row, weekly_col).value = sum(v or 0 for v in vals)
         weekly_col += 1
         cursor += timedelta(days=7)
+
+    weekly.unmerge_cells("A1:AJ1")
+    weekly.merge_cells(
+        start_row=1, start_column=1,
+        end_row=1, end_column=weekly_col - 1,
+    )
+    weekly["A1"] = (
+        "CONTRATOS NUEVOS - SEMANA DEL "
+        + _span_title(current_week, current_week + timedelta(days=6))
+    )
 
     # Monthly historical cells Jan 2025–Aug 2026 remain byte-equivalent in
     # value. September 2026 and later are sourced from canonical Track MTD.
@@ -303,6 +359,16 @@ def build_sales_from_baseline(*, cutoff: date) -> bytes:
         monthly.cell(32, month_col).value = monthly.cell(25, month_col).value + monthly.cell(31, month_col).value
         month_col += 1
         month = next_month
+
+    monthly.unmerge_cells("B1:V1")
+    monthly.merge_cells(
+        start_row=1, start_column=2,
+        end_row=1, end_column=month_col - 1,
+    )
+    monthly["B1"] = (
+        "REPORTE DE VENTA DE CONTRATOS NUEVOS - CORTE AL "
+        f"{cutoff.day:02d} DE {MONTHS_ES[cutoff.month - 1]} DE {cutoff.year}"
+    )
 
     output = BytesIO()
     workbook.save(output)
