@@ -23,9 +23,7 @@ SCHEDULE_CONSTRAINT = (
 SCHEDULED_INDEX = (
     "ix_marketing_campaign_v2_provider_campaign_scheduled_for"
 )
-SCHEDULED_BY_FK = (
-    "fk_marketing_campaign_v2_provider_campaign_scheduled_by_user_id_users"
-)
+SCHEDULED_BY_FK = "fk_mkt_v2_provider_campaign_scheduled_by_user"
 
 
 def upgrade():

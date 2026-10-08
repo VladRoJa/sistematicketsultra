@@ -58,3 +58,16 @@ def test_m3_scheduling_migration_extends_channel_seed_head():
 
     assert module.revision == "f3d9b2c4e5f7"
     assert module.down_revision == "f3c8a1b2d4e6"
+
+
+def test_m3_scheduling_postgresql_identifiers_fit_limit():
+    module = _migration_module()
+
+    names = (
+        module.STATUS_CONSTRAINT,
+        module.SCHEDULE_CONSTRAINT,
+        module.SCHEDULED_INDEX,
+        module.SCHEDULED_BY_FK,
+    )
+
+    assert all(len(name) <= 63 for name in names)
