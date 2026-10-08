@@ -14,6 +14,8 @@ import os
 import subprocess
 import sys
 import threading
+import time
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -542,5 +544,129 @@ def test_scheduler_container_restarts_preserve_stats_without_duplicates():
                 assert session.query(Observation).count() == expected
         assert results == [(1, 0, 1), (1, 1, 0), (0, 2, 0)]
     finally:
+        metadata.drop_all(engine)
+        engine.dispose()
+
+
+@pytest.mark.skipif(
+    not URL or not os.getenv("M3_TEST_DOCKER_IMAGE"),
+    reason="Requires isolated PostgreSQL and QA Docker image",
+)
+def test_scheduler_docker_compose_service_health_restart_and_persistence():
+    """Actual worker loop as an isolated Compose service across stop/restart.
+
+    No production compose file is used; no real provider or contact numbers.
+    """
+    _guard_isolated_url(URL)
+    assert os.environ["M3_TEST_DOCKER_IMAGE"] == "suite-m3-scheduler-qa:ci"
+    compose_file = Path(__file__).with_name("compose.m3_scheduler_qa.yml")
+    compose_cmd = [
+        "docker", "compose", "-p", "suite_m3_qa_812",
+        "-f", str(compose_file),
+    ]
+    engine = sa.create_engine(URL, pool_pre_ping=True)
+    metadata = _setup_schema(engine)
+
+    def compose(*args, phase: str):
+        env = {
+            key: value for key, value in os.environ.items()
+            if not any(blocked in key.upper() for blocked in
+                       ("IVENTAS", "META_ACCESS", "PROVIDER_TOKEN"))
+        }
+        env.update({
+            "M3_TEST_POSTGRES_URL": URL,
+            "M3_QA_PHASE": phase,
+            "CAMPAIGN_V2_PROVIDER_SEND_ENABLED": "false",
+        })
+        result = subprocess.run(
+            [*compose_cmd, *args], env=env, text=True,
+            capture_output=True, timeout=90, check=False,
+        )
+        assert result.returncode == 0, (
+            f"Docker Compose failed: {result.stdout[-700:]} {result.stderr[-1400:]}"
+        )
+        return result.stdout
+
+    def running_container(phase: str):
+        container_id = compose("ps", "-q", "marketing-scheduler-qa", phase=phase).strip()
+        assert container_id, "QA scheduler container missing"
+        return container_id
+
+    def await_fresh_health(phase: str, launched_after: float):
+        deadline = time.monotonic() + 43
+        recent = None
+        while time.monotonic() < deadline:
+            container_id = running_container(phase)
+            payload = subprocess.run(
+                ["docker", "exec", container_id, "cat",
+                 "/tmp/m3-marketing-scheduler-health.json"],
+                text=True, capture_output=True, timeout=8, check=False,
+            )
+            if payload.returncode == 0:
+                try:
+                    recent = json.loads(payload.stdout)
+                except ValueError:
+                    pass
+                else:
+                    if (
+                        recent.get("phase") == phase
+                        and recent.get("epoch", 0) >= launched_after
+                    ):
+                        health = subprocess.run(
+                            ["docker", "inspect", "--format",
+                             "{{.State.Health.Status}}", container_id],
+                            text=True, capture_output=True, timeout=8,
+                        )
+                        if health.stdout.strip() == "healthy":
+                            return recent
+            time.sleep(1)
+        pytest.fail(f"QA Compose worker never became healthy: {recent}")
+
+    try:
+        for phase, expected in (
+            ("fail-b", 2),
+            ("recover", 3),
+            ("steady", 3),
+        ):
+            # A new service/container with the same persistent DB per phase.
+            launched_after = time.time() - 0.1
+            compose("up", "-d", "--no-build", phase=phase)
+            try:
+                first = await_fresh_health(phase, launched_after)
+                assert first["ticks"] >= 1
+                with Session(engine) as session:
+                    assert session.query(Snapshot).count() == expected
+                    assert session.query(Observation).count() == expected
+
+                if phase == "fail-b":
+                    # Confirm two real poll intervals, plus graceful SIGTERM.
+                    cid = running_container(phase)
+                    deadline = time.monotonic() + 27
+                    while time.monotonic() < deadline:
+                        result = subprocess.run(
+                            ["docker", "exec", cid, "cat",
+                             "/tmp/m3-marketing-scheduler-health.json"],
+                            text=True, capture_output=True, timeout=8,
+                        )
+                        if result.returncode == 0 and json.loads(result.stdout)["ticks"] >= 2:
+                            break
+                        time.sleep(1)
+                    else:
+                        pytest.fail("Worker did not execute a second poll interval")
+
+                    launched_after = time.time()
+                    compose("restart", phase=phase)
+                    restarted = await_fresh_health(phase, launched_after - 0.1)
+                    assert restarted["ticks"] >= 1
+                    with Session(engine) as session:
+                        assert session.query(Snapshot).count() == 2
+            finally:
+                logs = compose("logs", "--no-color", phase=phase)
+                assert "M3_COMPOSE_CYCLE:" in logs
+                compose("down", "--remove-orphans", phase=phase)
+                assert "Marketing scheduler detenido correctamente." in logs or phase != "fail-b"
+    finally:
+        # Safe even if setup/startup fails; only the unique CI QA project.
+        compose("down", "--remove-orphans", phase="steady")
         metadata.drop_all(engine)
         engine.dispose()
