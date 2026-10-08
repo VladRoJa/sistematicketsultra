@@ -1287,7 +1287,11 @@ def campaign_v2_submit_endpoint(campaign_id: int):
     try:
         user, access = _resolve_campaign_v2_send_request()
         payload = _parse_payload(
-            {"template_id", "expected_dispatch_fingerprint"}
+            {
+                "template_id",
+                "expected_dispatch_fingerprint",
+                "schedule",
+            }
         )
         send_enabled = bool(
             current_app.config.get(
@@ -1319,11 +1323,12 @@ def campaign_v2_submit_endpoint(campaign_id: int):
             actor_user_id=int(user.id),
             allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
             provider=provider,
+            schedule=payload.get("schedule"),
             send_enabled=send_enabled,
             session=db.session,
         )
         body = serialize_campaign_v2_submit_result(result)
-        status = 200 if result.all_submitted else 502
+        status = 200 if result.all_accepted else 502
         return jsonify(body), status
     except MarketingAuthorizationError as exc:
         return _error(str(exc), 403)
@@ -1336,6 +1341,7 @@ def campaign_v2_submit_endpoint(campaign_id: int):
     except (
         MarketingCampaignV2RouteValidationError,
         MarketingCampaignV2SubmitValidationError,
+        MarketingCampaignV2ScheduleValidationError,
     ) as exc:
         return _error(str(exc), 400)
     except (

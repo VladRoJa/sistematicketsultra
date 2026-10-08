@@ -1,4 +1,4 @@
-"""Controlled, idempotent Campaign V2 immediate submit."""
+"""Controlled, idempotent Campaign V2 immediate/scheduled submit."""
 
 from __future__ import annotations
 
@@ -80,6 +80,10 @@ class CampaignV2SubmittedBatchResult:
     status: str
     provider_campaign_id: str | None
     provider_deduplicated: bool | None
+    scheduled_timezone: str | None
+    scheduled_local_at: str | None
+    scheduled_for: str | None
+    provider_send_at: str | None
     error_code: str | None
     support_ref: str | None
 
@@ -91,6 +95,13 @@ class CampaignV2SubmitResult:
     status: str
     batches: tuple[CampaignV2SubmittedBatchResult, ...]
     stopped_after_child_id: int | None
+
+    @property
+    def all_accepted(self) -> bool:
+        return bool(self.batches) and all(
+            batch.status in {"SUBMITTED", "SCHEDULED"}
+            for batch in self.batches
+        )
 
     @property
     def all_submitted(self) -> bool:
@@ -108,6 +119,7 @@ def submit_campaign_v2(
     actor_user_id: int,
     allowed_sucursal_keys,
     provider: CampaignProvider,
+    schedule: Any = None,
     send_enabled: bool = False,
     session: Any | None = None,
     now: datetime | None = None,
@@ -136,7 +148,9 @@ def submit_campaign_v2(
         campaign_id=normalized_campaign_id,
         template_id=template_id,
         allowed_sucursal_keys=allowed_sucursal_keys,
+        schedule=schedule,
         session=session if session is not None else db.session,
+        now=timestamp,
     )
     if not plan.ready:
         raise MarketingCampaignV2SubmitPreconditionError(
@@ -169,6 +183,7 @@ def submit_campaign_v2(
             campaign_id=normalized_campaign_id,
             child_id=int(row.id),
             batch=batch,
+            mode=plan.mode,
             state="SUBMITTING",
             error_code=None,
         )
@@ -198,6 +213,7 @@ def submit_campaign_v2(
                 campaign_id=normalized_campaign_id,
                 child_id=int(row.id),
                 batch=batch,
+                mode=plan.mode,
                 state="PROVIDER_ERROR",
                 error_code=exc.code,
                 duration_ms=_duration_ms(attempt_started),
@@ -222,6 +238,7 @@ def submit_campaign_v2(
                 campaign_id=normalized_campaign_id,
                 child_id=int(row.id),
                 batch=batch,
+                mode=plan.mode,
                 state="RECONCILIATION_REQUIRED",
                 error_code=exc.code,
                 duration_ms=_duration_ms(attempt_started),
@@ -249,6 +266,7 @@ def submit_campaign_v2(
                 campaign_id=normalized_campaign_id,
                 child_id=int(row.id),
                 batch=batch,
+                mode=plan.mode,
                 state="PROVIDER_ERROR",
                 error_code="PROVIDER_CONFIGURATION",
                 duration_ms=_duration_ms(attempt_started),
@@ -275,6 +293,7 @@ def submit_campaign_v2(
                 campaign_id=normalized_campaign_id,
                 child_id=int(row.id),
                 batch=batch,
+                mode=plan.mode,
                 state="RECONCILIATION_REQUIRED",
                 error_code="UNEXPECTED_PROVIDER_RESULT",
                 duration_ms=_duration_ms(attempt_started),
@@ -283,11 +302,17 @@ def submit_campaign_v2(
             )
             break
 
+        accepted_status = (
+            "SCHEDULED"
+            if plan.mode == "SCHEDULED"
+            else "SUBMITTED"
+        )
         row = _persist_provider_success(
             row_id=int(row.id),
             provider_campaign_id=provider_result.provider_campaign_id,
             deduplicated=provider_result.deduplicated,
             response_metadata=provider_result.response_metadata,
+            accepted_status=accepted_status,
             actor_user_id=normalized_actor,
             session=active_session,
             now=_normalize_now(None),
@@ -297,7 +322,8 @@ def submit_campaign_v2(
             campaign_id=normalized_campaign_id,
             child_id=int(row.id),
             batch=batch,
-            state="SUBMITTED",
+            mode=plan.mode,
+            state=accepted_status,
             error_code=None,
             duration_ms=_duration_ms(attempt_started),
             http_status=provider_result.http_status,
@@ -352,6 +378,7 @@ def serialize_campaign_v2_submit_result(
         "campaign_id": result.campaign_id,
         "dispatch_fingerprint": result.dispatch_fingerprint,
         "status": result.status,
+        "all_accepted": result.all_accepted,
         "all_submitted": result.all_submitted,
         "stopped_after_child_id": result.stopped_after_child_id,
         "batches": [
@@ -365,6 +392,10 @@ def serialize_campaign_v2_submit_result(
                 "status": batch.status,
                 "provider_campaign_id": batch.provider_campaign_id,
                 "provider_deduplicated": batch.provider_deduplicated,
+                "scheduled_timezone": batch.scheduled_timezone,
+                "scheduled_local_at": batch.scheduled_local_at,
+                "scheduled_for": batch.scheduled_for,
+                "provider_send_at": batch.provider_send_at,
                 "error_code": batch.error_code,
                 "support_ref": batch.support_ref,
             }
@@ -451,6 +482,19 @@ def _prepare_provider_campaign_rows(
             idempotency_key=idempotency_key,
             status="READY",
             created_by_user_id=actor_user_id,
+            scheduled_by_user_id=(
+                actor_user_id
+                if plan.mode == "SCHEDULED"
+                else None
+            ),
+            scheduled_timezone=plan.schedule.timezone_name,
+            scheduled_local_at=(
+                datetime.fromisoformat(plan.schedule.local_datetime)
+                if plan.schedule.local_datetime is not None
+                else None
+            ),
+            scheduled_for=plan.schedule.scheduled_for_utc,
+            provider_send_at=plan.schedule.provider_send_at,
             request_snapshot_json=_request_snapshot(dispatch_batch),
             provider_response_json={},
             created_at=now,
@@ -525,6 +569,7 @@ def _persist_provider_success(
     provider_campaign_id: str,
     deduplicated: bool,
     response_metadata: dict[str, Any],
+    accepted_status: str,
     actor_user_id: int,
     session: Any,
     now: datetime,
@@ -535,13 +580,18 @@ def _persist_provider_success(
             "El provider no devolvió campaign id persistible."
         )
 
+    if accepted_status not in {"SUBMITTED", "SCHEDULED"}:
+        raise MarketingCampaignV2SubmitPersistenceError(
+            "Estado de aceptación provider inválido."
+        )
+
     row = session.get(MarketingCampaignV2ProviderCampaignORM, row_id)
     if row is None or row.status != "SUBMITTING":
         raise MarketingCampaignV2SubmitConflictError(
             "El provider campaign cambió de estado antes de persistir éxito."
         )
 
-    row.status = "SUBMITTED"
+    row.status = accepted_status
     row.provider_campaign_id = provider_id
     row.provider_deduplicated = bool(deduplicated)
     row.provider_response_json = _safe_provider_response(response_metadata)
@@ -646,6 +696,7 @@ def _provider_dispatch_batch(
         template_name=batch.template_name,
         leads=tuple(leads),
         file_url=batch.file_url,
+        send_at=plan.schedule.provider_send_at,
     )
 
 
@@ -671,6 +722,7 @@ def _request_snapshot(
         "provider_channel_id": batch.provider_channel_id,
         "template_name": batch.template_name,
         "file_url": batch.file_url,
+        "send_at": batch.send_at,
         "leads": [
             {
                 "phone": lead.phone,
@@ -739,6 +791,8 @@ def _aggregate_status(
     statuses = {str(row.status) for row in rows}
     if statuses == {"SUBMITTED"}:
         return "SUBMITTED"
+    if statuses == {"SCHEDULED"}:
+        return "SCHEDULED"
     if "RECONCILIATION_REQUIRED" in statuses:
         return "RECONCILIATION_REQUIRED"
     if "PROVIDER_ERROR" in statuses:
@@ -771,6 +825,10 @@ def _serialize_row_result(
             if row.provider_deduplicated is not None
             else None
         ),
+        scheduled_timezone=row.scheduled_timezone,
+        scheduled_local_at=_iso_datetime(row.scheduled_local_at),
+        scheduled_for=_iso_datetime(row.scheduled_for),
+        provider_send_at=row.provider_send_at,
         error_code=row.error_code,
         support_ref=row.support_ref,
     )
@@ -790,6 +848,10 @@ def _serialize_row_result_dict(
         "status": result.status,
         "provider_campaign_id": result.provider_campaign_id,
         "provider_deduplicated": result.provider_deduplicated,
+        "scheduled_timezone": result.scheduled_timezone,
+        "scheduled_local_at": result.scheduled_local_at,
+        "scheduled_for": result.scheduled_for,
+        "provider_send_at": result.provider_send_at,
         "error_code": result.error_code,
         "support_ref": result.support_ref,
     }
@@ -800,6 +862,7 @@ def _log_transition(
     campaign_id: int,
     child_id: int,
     batch: CampaignV2DispatchBatchPlan,
+    mode: str,
     state: str,
     error_code: str | None,
     duration_ms: float | None = None,
@@ -815,7 +878,11 @@ def _log_transition(
             "sucursal_id": batch.sucursal_id,
             "channel_binding_id": batch.channel_binding_id,
             "recipient_count": len(batch.recipients),
-            "operation": "IMMEDIATE_SUBMIT",
+            "operation": (
+                "SCHEDULED_SUBMIT"
+                if mode == "SCHEDULED"
+                else "IMMEDIATE_SUBMIT"
+            ),
             "state": state,
             "duration_ms": duration_ms,
             "http_class": (
@@ -872,6 +939,15 @@ def _normalize_now(value: datetime | None) -> datetime:
     if current.tzinfo is None or current.utcoffset() is None:
         current = current.replace(tzinfo=timezone.utc)
     return current.astimezone(timezone.utc)
+
+
+def _iso_datetime(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.isoformat()
+    formatter = getattr(value, "isoformat", None)
+    return formatter() if callable(formatter) else str(value)
 
 
 def _safe_text(value: Any, max_length: int) -> str | None:

@@ -23,6 +23,9 @@ from app.services.marketing_campaign_v2_provider import (
     CampaignProviderCreateResult,
     CampaignProviderDeterministicError,
 )
+from app.services.marketing_campaign_v2_schedule_service import (
+    normalize_campaign_v2_schedule,
+)
 
 
 @compiles(BigInteger, "sqlite")
@@ -133,6 +136,7 @@ def _plan(
     fingerprint: str = FINGERPRINT,
     ready: bool = True,
     file_url: str | None = None,
+    schedule=None,
 ):
     batches = (
         _batch(
@@ -161,12 +165,17 @@ def _plan(
                 }
             ),
         )
+    schedule_plan = normalize_campaign_v2_schedule(
+        schedule,
+        now=NOW,
+    )
     return CampaignV2PreflightPlan(
         campaign_id=77,
         campaign_name="QA M2",
         campaign_purpose="REACTIVATION",
         provider="IVENTAS",
-        mode="IMMEDIATE",
+        mode=schedule_plan.mode,
+        schedule=schedule_plan,
         frozen_count=2,
         blacklisted_phones=(),
         sendable_phones=("6861000001", "6861000002"),
@@ -509,3 +518,81 @@ def test_non_contiguous_template_variables_block_before_provider(
         _submit(session, provider)
 
     assert provider.calls == []
+
+
+def test_scheduled_submit_persists_schedule_and_provider_send_at(
+    session,
+    monkeypatch,
+):
+    schedule = {
+        "local_datetime": "2026-10-07T12:30:00",
+        "timezone": "America/Tijuana",
+    }
+    _install_plan(monkeypatch, _plan(schedule=schedule))
+    provider = _Provider([
+        _success("provider-scheduled-a"),
+        _success("provider-scheduled-b"),
+    ])
+
+    result = _submit(
+        session,
+        provider,
+        schedule=schedule,
+    )
+
+    assert result.status == "SCHEDULED"
+    assert result.all_accepted is True
+    assert result.all_submitted is False
+    assert len(provider.calls) == 2
+    assert {
+        call.send_at
+        for call in provider.calls
+    } == {"2026-10-07T19:30:00.000Z"}
+
+    rows = (
+        session.query(MarketingCampaignV2ProviderCampaignORM)
+        .order_by(MarketingCampaignV2ProviderCampaignORM.sucursal_canon.asc())
+        .all()
+    )
+    assert {row.status for row in rows} == {"SCHEDULED"}
+    assert {row.scheduled_timezone for row in rows} == {"America/Tijuana"}
+    assert {
+        row.scheduled_local_at.isoformat()
+        for row in rows
+    } == {"2026-10-07T12:30:00"}
+    assert all(row.scheduled_for is not None for row in rows)
+    assert {
+        row.provider_send_at
+        for row in rows
+    } == {"2026-10-07T19:30:00.000Z"}
+    assert {row.scheduled_by_user_id for row in rows} == {7}
+    assert {
+        row.request_snapshot_json["send_at"]
+        for row in rows
+    } == {"2026-10-07T19:30:00.000Z"}
+    assert all(row.provider_campaign_id for row in rows)
+    assert all(row.submitted_at is not None for row in rows)
+
+
+def test_immediate_submit_keeps_schedule_fields_empty(
+    session,
+    monkeypatch,
+):
+    _install_plan(monkeypatch, _plan())
+    provider = _Provider([
+        _success("provider-a"),
+        _success("provider-b"),
+    ])
+
+    result = _submit(session, provider)
+
+    assert result.status == "SUBMITTED"
+    assert all(call.send_at is None for call in provider.calls)
+
+    rows = session.query(MarketingCampaignV2ProviderCampaignORM).all()
+    assert all(row.scheduled_timezone is None for row in rows)
+    assert all(row.scheduled_local_at is None for row in rows)
+    assert all(row.scheduled_for is None for row in rows)
+    assert all(row.provider_send_at is None for row in rows)
+    assert all(row.scheduled_by_user_id is None for row in rows)
+    assert all(row.request_snapshot_json["send_at"] is None for row in rows)
