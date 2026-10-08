@@ -5,6 +5,10 @@ from collections import defaultdict
 from datetime import date, timedelta
 from io import BytesIO
 
+from app.warehouse.services.reactivaciones_monthly_baseline_service import (
+    load_early_reactivaciones_monthly,
+)
+
 import xlsxwriter
 
 from app.models.warehouse import TrackDailyMartORM, TrackBranchCatalogORM
@@ -248,6 +252,7 @@ def _format_sheet(
 def render_commercial_daily_xlsx(
     *, metric: str, cutoff: date, mtd_series: dict[str, dict[date, int | None]],
     branch_metadata: dict[str, dict] | None = None,
+    historical_monthly_by_branch: dict[str, dict[date, int]] | None = None,
 ) -> bytes:
     """Pure rendering layer, with explicit gaps and Sunday-Saturday buckets."""
     if metric not in METRICS:
@@ -309,12 +314,29 @@ def render_commercial_daily_xlsx(
             )
         monthly_cells[b] = []
         for month in months:
-            days = [d for d in mtd_series[b] if d.year == month.year and d.month == month.month and d <= cutoff]
-            expected_day = cutoff if (month.year, month.month) == (cutoff.year, cutoff.month) else (month.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
-            monthly_cells[b].append(
-                mtd_series[b].get(expected_day)
-                if expected_day in days else None
+            expected_day = (
+                cutoff if (month.year, month.month) == (cutoff.year, cutoff.month)
+                else (month.replace(day=28) + timedelta(days=4)).replace(day=1)
+                - timedelta(days=1)
             )
+            current = mtd_series[b].get(expected_day)
+            if (
+                metric == "reactivaciones"
+                and historical_monthly_by_branch is not None
+                and date(2026, 1, 1) <= month <= date(2026, 4, 1)
+            ):
+                historical = historical_monthly_by_branch.get(b, {}).get(month)
+                if historical is None:
+                    raise CommercialDailyReportError(
+                        f"Historical Reactivaciones baseline missing: {b} {month}"
+                    )
+                if current is not None and int(current) != int(historical):
+                    raise CommercialDailyReportError(
+                        f"Historical Reactivaciones conflict with Track: "
+                        f"{b} {month} track={current} baseline={historical}"
+                    )
+                current = historical
+            monthly_cells[b].append(current)
 
     stream = BytesIO()
     book = xlsxwriter.Workbook(stream, {"in_memory": True})
@@ -367,4 +389,8 @@ def build_commercial_daily_xlsx(*, metric: str, cutoff: date) -> bytes:
             metric, cutoff, active_branches=set(branch_metadata),
         ),
         branch_metadata=branch_metadata,
+        historical_monthly_by_branch=(
+            load_early_reactivaciones_monthly()
+            if metric == "reactivaciones" else None
+        ),
     )
