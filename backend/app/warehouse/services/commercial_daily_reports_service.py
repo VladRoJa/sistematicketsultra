@@ -65,7 +65,12 @@ def _resolve_canonical_version(day: date):
     return None
 
 
-def _load_series(metric: str, cutoff: date) -> dict[str, dict[date, int | None]]:
+def _load_series(
+    metric: str,
+    cutoff: date,
+    *,
+    active_branches: set[str] | None = None,
+) -> dict[str, dict[date, int | None]]:
     field, _ = METRICS[metric]
     start = FIRST_SUPPORTED_DATE
     versions = {}
@@ -91,9 +96,22 @@ def _load_series(metric: str, cutoff: date) -> dict[str, dict[date, int | None]]
         branch = str(row.sucursal_canon)
         if row.track_date in versions and row.track_daily_version_id == versions[row.track_date]:
             by_branch[branch][row.track_date] = getattr(row, field)
+    if active_branches is not None:
+        # Historical marts can contain retired clubs. Exclude them without
+        # suppressing a genuinely missing current active-club cutoff.
+        by_branch = {
+            branch: series for branch, series in by_branch.items()
+            if branch in active_branches
+        }
+        required = set(active_branches)
+    else:
+        required = set(by_branch)
     if not by_branch:
         raise CommercialDailyReportError("Track mart has no commercial rows")
-    missing = [branch for branch, series in by_branch.items() if series.get(cutoff) is None]
+    missing = [
+        branch for branch in sorted(required)
+        if by_branch.get(branch, {}).get(cutoff) is None
+    ]
     if missing:
         raise CommercialDailyReportError(
             f"Missing commercial MTD on cutoff {cutoff.isoformat()}: {missing}"
@@ -141,7 +159,7 @@ def _format_sheet(
     sheet.set_column(1, max(1, len(headers) - 1), 15)
     title = book.add_format({
         "bold": True, "font_color": "#FFFFFF",
-        "bg_color": "#153E63", "font_size": 14
+        "bg_color": "#153E63", "font_size": 14, "shrink": True,
     })
     heading = book.add_format({
         "bold": True, "bg_color": "#D8E8F4", "border": 1
@@ -307,8 +325,7 @@ def render_commercial_daily_xlsx(
         if metric == "reactivaciones" else None
     )
     weekly_title = (
-        "REACTIVACIONES · DETALLE SEMANAL VERIFICABLE "
-        "DESDE 04/10/2026"
+        "REACTIVACIONES · SEMANAL DESDE 04/10/2026"
         if metric == "reactivaciones" else None
     )
     monthly_title = (
@@ -342,7 +359,12 @@ def render_commercial_daily_xlsx(
 def build_commercial_daily_xlsx(*, metric: str, cutoff: date) -> bytes:
     if metric not in METRICS:
         raise ValueError(metric)
+    branch_metadata = _load_branch_metadata()
     return render_commercial_daily_xlsx(
-        metric=metric, cutoff=cutoff, mtd_series=_load_series(metric, cutoff),
-        branch_metadata=_load_branch_metadata()
+        metric=metric,
+        cutoff=cutoff,
+        mtd_series=_load_series(
+            metric, cutoff, active_branches=set(branch_metadata),
+        ),
+        branch_metadata=branch_metadata,
     )
