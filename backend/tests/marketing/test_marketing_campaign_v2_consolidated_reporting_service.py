@@ -61,6 +61,11 @@ def session():
         Column("id", BigInteger, primary_key=True),
     )
     MarketingCampaignV2ORM.__table__.to_metadata(metadata)
+    Table(
+        "marketing_campaign_v2_provider_campaigns",
+        metadata,
+        Column("id", BigInteger, primary_key=True),
+    )
     MarketingCampaignV2RecipientORM.__table__.to_metadata(metadata)
     MarketingCampaignV2RecipientEvidenceORM.__table__.to_metadata(metadata)
     MarketingCampaignV2ProviderStatsSnapshotORM.__table__.to_metadata(metadata)
