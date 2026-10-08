@@ -202,6 +202,15 @@ def build_sales_from_baseline(*, cutoff: date) -> bytes:
     baseline_oct4 = {key: daily.cell(row, 3).value for key, row in drows.items()}
     new_days = [current_week + timedelta(days=i) for i in range(7)]
     for col, business_day in enumerate(new_days, start=3):
+        if col > 3:
+            daily.column_dimensions[daily.cell(2, col).column_letter].width = daily.column_dimensions['C'].width
+            for row in range(2, 32):
+                source = daily.cell(row, 3)
+                target = daily.cell(row, col)
+                if source.has_style:
+                    target._style = copy(source._style)
+                if source.number_format:
+                    target.number_format = source.number_format
         daily.cell(2, col).value = business_day
         if business_day == BASELINE_DAY:
             continue
@@ -219,12 +228,23 @@ def build_sales_from_baseline(*, cutoff: date) -> bytes:
         daily.cell(30, col).value = sum(daily.cell(r, col).value or 0 for r in range(25, 30))
         daily.cell(31, col).value = daily.cell(24, col).value + daily.cell(30, col).value
 
+    daily['B1'] = (
+        f'CONTRATOS NUEVOS POR DÍA - SEMANA '
+        f'{current_week:%d DE %m} AL {(current_week + timedelta(days=6)):%d DE %m}'
+    )
+
     # Do not modify any baseline historical week; append only new weeks.
     cursor = FIRST_WEEK
     last_closed_week = cutoff - timedelta(days=(cutoff.weekday() + 1) % 7)
     weekly_col = 37  # AK onward: retain AJ original average in place.
     while cursor <= last_closed_week:
         end = min(cursor + timedelta(days=6), cutoff)
+        weekly.column_dimensions[weekly.cell(2, weekly_col).column_letter].width = weekly.column_dimensions['AI'].width
+        for row in range(2, 42):
+            source = weekly.cell(row, 35)
+            target = weekly.cell(row, weekly_col)
+            if source.has_style:
+                target._style = copy(source._style)
         weekly.cell(2, weekly_col).value = f"{cursor:%d/%m} - {cursor + timedelta(days=6):%d/%m}"
         for key, row in wrows.items():
             branch = resolve(key)
@@ -265,6 +285,12 @@ def build_sales_from_baseline(*, cutoff: date) -> bytes:
             month_col += 1
             month = next_month
             continue
+        monthly.column_dimensions[monthly.cell(2, month_col).column_letter].width = monthly.column_dimensions['V'].width
+        for row in range(2, 33):
+            source = monthly.cell(row, 22)
+            target = monthly.cell(row, month_col)
+            if source.has_style:
+                target._style = copy(source._style)
         monthly.cell(2, month_col).value = month
         for key, row in mrows.items():
             resolved = resolve(key)
