@@ -273,7 +273,7 @@ def test_success_submits_batches_sequentially_and_persists_exact_snapshot(
     tec = next(row for row in rows if row.sucursal_canon == "TEC_MXL")
     assert tec.request_snapshot_json["leads"] == [
         {
-            "phone": "526861000001",
+            "phone": "5216861000001",
             "variables": ["SOCIO 1", "2026-10-31"],
             "url_variables": [],
         }
@@ -427,7 +427,7 @@ def test_logs_do_not_contain_phones_or_variables(session, monkeypatch, caplog):
 
     text = "\n".join(record.getMessage() for record in caplog.records)
     assert "6861000001" not in text
-    assert "526861000001" not in text
+    assert "5216861000001" not in text
     assert "SOCIO 1" not in text
     assert "channel-1" not in text
     assert "campaign_v2_provider_transition" in text
