@@ -494,6 +494,33 @@ def _sample_iventas_contact() -> dict:
     }
 
 
+@pytest.mark.parametrize(
+    "invalid_name",
+    [
+        "AGOAdata:image/svg+xml,%3csvg%20width='9'" + "x" * 260,
+        "Nombre demasiado largo " + "x" * 260,
+    ],
+)
+def test_contact_with_invalid_long_name_keeps_identity(invalid_name: str) -> None:
+    contact = _sample_iventas_contact()
+    contact["name"] = invalid_name
+    result = normalize_iventas_contact(
+        contact=contact, branch_code="tlalnepantla", sucursal_id=23,
+    )
+    assert result.name is None
+    assert result.contact_id == "contact-001"
+    assert result.phone_mx10 == "6861234567"
+
+
+def test_contact_with_valid_255_character_name_is_preserved() -> None:
+    contact = _sample_iventas_contact()
+    contact["name"] = "N" * 255
+    result = normalize_iventas_contact(
+        contact=contact, branch_code="tlalnepantla", sucursal_id=23,
+    )
+    assert result.name == contact["name"]
+
+
 def test_contact_normalizes_complete_structure() -> None:
     result = normalize_iventas_contact(
         contact=_sample_iventas_contact(),
