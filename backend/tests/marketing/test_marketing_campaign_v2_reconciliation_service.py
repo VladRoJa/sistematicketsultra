@@ -375,3 +375,49 @@ def test_unknown_child_is_404_domain_error(session):
             session=session,
             now=NOW,
         )
+
+
+def test_not_created_after_first_retry_applies_backoff(session):
+    row = _ambiguous_child(session)
+    row.retry_attempt_count = 1
+    session.commit()
+
+    result = service.reconcile_campaign_v2_provider_child(
+        child_id=row.id,
+        resolution="NOT_CREATED_CONFIRMED",
+        note="Proveedor confirmó nuevamente que no se creó.",
+        actor_user_id=7,
+        session=session,
+        now=NOW,
+    )
+
+    assert result["status"] == "RETRY_ELIGIBLE"
+    assert result["retry"]["attempt_count"] == 1
+    assert result["retry"]["next_allowed_at"] == (
+        "2026-10-08T18:01:00"
+        if session.bind.dialect.name == "sqlite"
+        else "2026-10-08T18:01:00+00:00"
+    )
+
+
+def test_not_created_after_third_retry_closes_as_exhausted(session):
+    row = _ambiguous_child(session)
+    row.retry_attempt_count = 3
+    session.commit()
+
+    result = service.reconcile_campaign_v2_provider_child(
+        child_id=row.id,
+        resolution="NOT_CREATED_CONFIRMED",
+        note="Tercer intento confirmado como no creado.",
+        actor_user_id=7,
+        session=session,
+        now=NOW,
+    )
+
+    assert result["status"] == "RETRY_EXHAUSTED"
+    assert result["retry"]["attempt_count"] == 3
+    assert result["retry"]["next_allowed_at"] is None
+
+    persisted = session.get(MarketingCampaignV2ProviderCampaignORM, row.id)
+    assert persisted.status == "RETRY_EXHAUSTED"
+    assert persisted.error_code == "RETRY_LIMIT_REACHED"

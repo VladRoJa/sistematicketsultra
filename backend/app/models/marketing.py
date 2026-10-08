@@ -656,6 +656,31 @@ class MarketingCampaignV2ProviderCampaignORM(db.Model):
         nullable=True,
     )
     reconciled_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    retry_attempt_count = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+        server_default=db.text("0"),
+    )
+    retry_last_attempt_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+    retry_next_allowed_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+    retry_last_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    retry_history_json = db.Column(
+        db.JSON,
+        nullable=False,
+        default=list,
+        server_default=db.text("'[]'"),
+    )
     created_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
@@ -698,6 +723,7 @@ class MarketingCampaignV2ProviderCampaignORM(db.Model):
     submitted_by_user = db.relationship("UserORM", foreign_keys=[submitted_by_user_id])
     scheduled_by_user = db.relationship("UserORM", foreign_keys=[scheduled_by_user_id])
     reconciled_by_user = db.relationship("UserORM", foreign_keys=[reconciled_by_user_id])
+    retry_last_by_user = db.relationship("UserORM", foreign_keys=[retry_last_by_user_id])
 
     __table_args__ = (
         db.UniqueConstraint(
@@ -720,7 +746,8 @@ class MarketingCampaignV2ProviderCampaignORM(db.Model):
         db.CheckConstraint(
             "status IN ('PREPARED', 'READY', 'BLOCKED', 'SUBMITTING', "
             "'SUBMITTED', 'SCHEDULED', 'RETRY_ELIGIBLE', "
-            "'PROVIDER_ERROR', 'RECONCILIATION_REQUIRED')",
+            "'RETRY_EXHAUSTED', 'PROVIDER_ERROR', "
+            "'RECONCILIATION_REQUIRED')",
             name="ck_marketing_campaign_v2_provider_campaign_status",
         ),
         db.CheckConstraint(
@@ -749,11 +776,24 @@ class MarketingCampaignV2ProviderCampaignORM(db.Model):
             name="ck_mkt_v2_provider_campaign_reconciled_found",
         ),
         db.CheckConstraint(
+            "retry_attempt_count >= 0 AND retry_attempt_count <= 3",
+            name="ck_mkt_v2_provider_campaign_retry_attempts",
+        ),
+        db.CheckConstraint(
             "status <> 'RETRY_ELIGIBLE' OR ("
             "reconciliation_resolution = 'NOT_CREATED_CONFIRMED' "
-            "AND provider_campaign_id IS NULL"
+            "AND provider_campaign_id IS NULL "
+            "AND retry_attempt_count < 3"
             ")",
             name="ck_mkt_v2_provider_campaign_retry_eligible",
+        ),
+        db.CheckConstraint(
+            "status <> 'RETRY_EXHAUSTED' OR ("
+            "reconciliation_resolution = 'NOT_CREATED_CONFIRMED' "
+            "AND provider_campaign_id IS NULL "
+            "AND retry_attempt_count >= 3"
+            ")",
+            name="ck_mkt_v2_provider_campaign_retry_exhausted",
         ),
         db.CheckConstraint(
             "("
@@ -781,6 +821,10 @@ class MarketingCampaignV2ProviderCampaignORM(db.Model):
         db.Index(
             "ix_marketing_campaign_v2_provider_campaign_scheduled_for",
             "scheduled_for",
+        ),
+        db.Index(
+            "ix_mkt_v2_provider_campaign_retry_next",
+            "retry_next_allowed_at",
         ),
     )
 

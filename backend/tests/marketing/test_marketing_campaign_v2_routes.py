@@ -264,6 +264,10 @@ class TestMarketingCampaignV2Routes:
                 "post",
                 "/api/marketing/campaigns-v2/provider-campaigns/1/reconcile",
             ),
+            (
+                "post",
+                "/api/marketing/campaigns-v2/provider-campaigns/1/retry",
+            ),
         ]
         for method, path in paths:
             response = getattr(self.client, method)(
@@ -2686,3 +2690,162 @@ class TestMarketingCampaignV2Routes:
 
         assert response.status_code == 409
         assert "resolución" in response.get_json()["message"]
+
+
+    def test_m3_retry_requires_global_send_scope(self):
+        non_global_sender = SimpleNamespace(
+            **{
+                **self.partial_access.__dict__,
+                "can_send_campaigns": True,
+            }
+        )
+        with self._auth(non_global_sender), patch.object(
+            routes,
+            "retry_campaign_v2_provider_child",
+        ) as mocked:
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/provider-campaigns/10/retry",
+                headers=self.headers,
+                json={},
+            )
+
+        assert response.status_code == 403
+        mocked.assert_not_called()
+
+    def test_m3_retry_requires_kill_switch_on(self):
+        self.app.config["CAMPAIGN_V2_PROVIDER_SEND_ENABLED"] = False
+        with self._auth(self.global_access), patch.object(
+            routes,
+            "retry_campaign_v2_provider_child",
+        ) as mocked:
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/provider-campaigns/10/retry",
+                headers=self.headers,
+                json={},
+            )
+
+        assert response.status_code == 423
+        mocked.assert_not_called()
+
+    def test_m3_retry_rejects_any_browser_dispatch_fields(self):
+        self.app.config["CAMPAIGN_V2_PROVIDER_SEND_ENABLED"] = True
+        with self._auth(self.global_access), patch.object(
+            routes,
+            "retry_campaign_v2_provider_child",
+        ) as mocked:
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/provider-campaigns/10/retry",
+                headers=self.headers,
+                json={"sendAt": "2026-10-09T18:00:00.000Z"},
+            )
+
+        assert response.status_code == 400
+        mocked.assert_not_called()
+        assert "sendAt" in response.get_json()["message"]
+
+    def test_m3_retry_acceptance_returns_200_and_backend_owns_provider(self):
+        self.app.config.update(
+            CAMPAIGN_V2_PROVIDER_SEND_ENABLED=True,
+            IVENTAS_CAMPAIGN_SEND_API_KEY="ivk_live_test",
+        )
+        provider = object()
+        expected = {
+            "child_id": 10,
+            "campaign_id": 77,
+            "status": "SUBMITTED",
+            "provider_campaign_id": "provider-retry",
+            "retry": {"attempt_count": 1},
+        }
+        with (
+            self._auth(self.global_access),
+            patch.object(
+                routes,
+                "IVentasBroadcastProvider",
+                return_value=provider,
+            ) as provider_factory,
+            patch.object(
+                routes,
+                "retry_campaign_v2_provider_child",
+                return_value=expected,
+            ) as mocked,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/provider-campaigns/10/retry",
+                headers=self.headers,
+                json={},
+            )
+
+        assert response.status_code == 200
+        assert response.get_json()["status"] == "SUBMITTED"
+        kwargs = mocked.call_args.kwargs
+        assert kwargs["child_id"] == 10
+        assert kwargs["actor_user_id"] == 7
+        assert kwargs["provider"] is provider
+        assert kwargs["send_enabled"] is True
+        provider_factory.assert_called_once()
+        assert "phones" not in kwargs
+        assert "template_id" not in kwargs
+        assert "sendAt" not in kwargs
+
+    def test_m3_retry_ambiguous_result_returns_502(self):
+        self.app.config.update(
+            CAMPAIGN_V2_PROVIDER_SEND_ENABLED=True,
+            IVENTAS_CAMPAIGN_SEND_API_KEY="ivk_live_test",
+        )
+        expected = {
+            "child_id": 10,
+            "campaign_id": 77,
+            "status": "RECONCILIATION_REQUIRED",
+            "provider_campaign_id": None,
+            "retry": {"attempt_count": 1},
+        }
+        with (
+            self._auth(self.global_access),
+            patch.object(
+                routes,
+                "IVentasBroadcastProvider",
+                return_value=object(),
+            ),
+            patch.object(
+                routes,
+                "retry_campaign_v2_provider_child",
+                return_value=expected,
+            ),
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/provider-campaigns/10/retry",
+                headers=self.headers,
+                json={},
+            )
+
+        assert response.status_code == 502
+        assert response.get_json()["status"] == "RECONCILIATION_REQUIRED"
+
+    def test_m3_retry_precondition_maps_to_409(self):
+        self.app.config.update(
+            CAMPAIGN_V2_PROVIDER_SEND_ENABLED=True,
+            IVENTAS_CAMPAIGN_SEND_API_KEY="ivk_live_test",
+        )
+        with (
+            self._auth(self.global_access),
+            patch.object(
+                routes,
+                "IVentasBroadcastProvider",
+                return_value=object(),
+            ),
+            patch.object(
+                routes,
+                "retry_campaign_v2_provider_child",
+                side_effect=routes.MarketingCampaignV2SafeRetryPreconditionError(
+                    "El retry está dentro de la ventana de backoff."
+                ),
+            ),
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/provider-campaigns/10/retry",
+                headers=self.headers,
+                json={},
+            )
+
+        assert response.status_code == 409
+        assert "backoff" in response.get_json()["message"]

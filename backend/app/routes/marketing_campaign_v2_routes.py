@@ -65,6 +65,15 @@ from app.services.marketing_campaign_v2_reconciliation_service import (
     MarketingCampaignV2ReconciliationValidationError,
     reconcile_campaign_v2_provider_child,
 )
+from app.services.marketing_campaign_v2_retry_service import (
+    MarketingCampaignV2SafeRetryConflictError,
+    MarketingCampaignV2SafeRetryDisabledError,
+    MarketingCampaignV2SafeRetryNotFoundError,
+    MarketingCampaignV2SafeRetryPersistenceError,
+    MarketingCampaignV2SafeRetryPreconditionError,
+    MarketingCampaignV2SafeRetryValidationError,
+    retry_campaign_v2_provider_child,
+)
 from app.services.marketing_campaign_v2_submit_service import (
     MarketingCampaignV2SubmitConflictError,
     MarketingCampaignV2SubmitDisabledError,
@@ -1275,6 +1284,76 @@ def campaign_v2_provider_child_reconcile_endpoint(child_id: int):
         )
     except Exception:
         return _error("Falló la reconciliación Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.post(
+    "/campaigns-v2/provider-campaigns/<int:child_id>/retry"
+)
+@jwt_required()
+def campaign_v2_provider_child_retry_endpoint(child_id: int):
+    try:
+        user, access = _resolve_campaign_v2_reconciliation_request()
+        _parse_payload(set())
+
+        send_enabled = bool(
+            current_app.config.get(
+                "CAMPAIGN_V2_PROVIDER_SEND_ENABLED",
+                False,
+            )
+        )
+        if not send_enabled:
+            raise MarketingCampaignV2SafeRetryDisabledError(
+                "El retry Campaign V2 está deshabilitado por kill switch."
+            )
+
+        provider = IVentasBroadcastProvider(
+            api_key=current_app.config.get(
+                "IVENTAS_CAMPAIGN_SEND_API_KEY",
+                "",
+            ),
+            base_url=current_app.config.get(
+                "IVENTAS_CAMPAIGN_SEND_API_BASE_URL",
+                "https://rest.iventas.mx",
+            ),
+        )
+        result = retry_campaign_v2_provider_child(
+            child_id=child_id,
+            actor_user_id=int(user.id),
+            provider=provider,
+            send_enabled=send_enabled,
+            session=db.session,
+        )
+        status = (
+            200
+            if result.get("status") in {"SUBMITTED", "SCHEDULED"}
+            else 502
+        )
+        return jsonify(result), status
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2SafeRetryNotFoundError as exc:
+        return _error(str(exc), 404)
+    except MarketingCampaignV2SafeRetryDisabledError as exc:
+        return _error(str(exc), 423)
+    except CampaignProviderConfigurationError as exc:
+        return _error(str(exc), 503)
+    except (
+        MarketingCampaignV2RouteValidationError,
+        MarketingCampaignV2SafeRetryValidationError,
+    ) as exc:
+        return _error(str(exc), 400)
+    except (
+        MarketingCampaignV2SafeRetryPreconditionError,
+        MarketingCampaignV2SafeRetryConflictError,
+    ) as exc:
+        return _error(str(exc), 409)
+    except MarketingCampaignV2SafeRetryPersistenceError:
+        return _error(
+            "No fue posible persistir el retry Campaign V2.",
+            500,
+        )
+    except Exception:
+        return _error("Falló el retry Campaign V2.", 500)
 
 
 @marketing_campaign_v2_bp.post(
