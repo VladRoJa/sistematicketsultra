@@ -9,8 +9,12 @@ import json
 import os
 from pathlib import Path
 import signal
+import sys
 import time
 from datetime import datetime, timedelta, timezone
+
+# Direct QA script execution must resolve the actual backend package.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import sqlalchemy as sa
 from flask import Flask
