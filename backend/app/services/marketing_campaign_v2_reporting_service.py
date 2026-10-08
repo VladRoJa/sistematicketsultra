@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from numbers import Real
+from types import SimpleNamespace
 from typing import Any, Iterable, Mapping
 
 from sqlalchemy import func
@@ -102,20 +103,26 @@ def build_campaign_v2_consolidated_report(
             for snapshot in latest_snapshots
         }
 
+        child_aggregates = load_campaign_v2_provider_children_aggregates(
+            campaign_ids=campaign_ids,
+            session=active_session,
+        )
         selected_campaigns = [
             campaign
             for campaign in campaigns
             if _campaign_matches_snapshot_filters(
                 campaign=campaign,
                 latest_snapshot=latest_by_campaign.get(int(campaign.id)),
+                provider_children=child_aggregates.get(int(campaign.id)),
                 filters=normalized_filters,
             )
         ]
         selected_ids = [int(campaign.id) for campaign in selected_campaigns]
-        child_aggregates = load_campaign_v2_provider_children_aggregates(
-            campaign_ids=selected_ids,
-            session=active_session,
-        )
+        child_aggregates = {
+            campaign_id: value
+            for campaign_id, value in child_aggregates.items()
+            if campaign_id in selected_ids
+        }
         selected_id_set = set(selected_ids)
         latest_by_campaign = {
             campaign_id: snapshot
@@ -211,7 +218,11 @@ def build_campaign_v2_consolidated_report(
             observations=latest_observations,
         )
         if campaign_id in child_aggregates:
-            row["provider_children"] = child_aggregates[campaign_id]
+            merged = _apply_child_reporting(
+                row=row,
+                provider_children=child_aggregates[campaign_id],
+            )
+            latest_observations = merged
         campaign_rows.append(row)
         campaign_contexts.append(
             (
@@ -453,6 +464,69 @@ def _build_compact_campaign_report_row(
     }
 
 
+def _apply_child_reporting(
+    *,
+    row: dict[str, Any],
+    provider_children: dict[str, Any],
+) -> list[Any]:
+    """Project N-child evidence as the primary report, never a single latest child.
+
+    The temporary recipient rows are used only for offline dimension accounting
+    and are removed from the serialized provider-children payload.
+    """
+    rows = [
+        SimpleNamespace(**item)
+        for item in provider_children.pop("_recipient_observations", [])
+    ]
+    aggregate = provider_children["summary"]
+    status = aggregate["provider_raw_status"]
+    total = int(row["audience"]["total_recipients"])
+    normalized = _normalized_metrics(rows)
+    matched = int(aggregate["matched_frozen_recipients_unique"])
+    unmatched = int(aggregate["unmatched_provider_count_observed"])
+    row["provider_children"] = provider_children
+    row["normalized"] = normalized
+    row["rates"] = (
+        _rates(total_recipients=total, normalized=normalized)
+        if status == "complete"
+        else {
+            "successful_rate": None,
+            "reach_rate": None,
+            "read_rate": None,
+            "failure_rate": None,
+        }
+    )
+    row["coverage"] = {
+        "matched_recipient_count": matched,
+        "unmatched_provider_count": unmatched,
+        "frozen_recipient_without_provider_status_count": max(0, total - matched),
+        "status_coverage_rate": (
+            _safe_rate(matched, total) if status == "complete" else None
+        ),
+    }
+    row["provider_raw"] = aggregate["provider_raw"]
+    row["cost"] = aggregate["cost"]
+    interactions = _interactions(snapshot=None, observations=rows)
+    row["interactions"] = {
+        **interactions,
+        "responders_aggregate": None,
+        "free_text_aggregate": None,
+    }
+    children = provider_children["children"]
+    snapshot_ids = [
+        child["snapshot_id"] for child in children
+        if child["snapshot_id"] is not None
+    ]
+    row["observation"] = {
+        "snapshot_id": snapshot_ids[0] if len(snapshot_ids) == 1 else None,
+        "snapshot_ids": snapshot_ids,
+        "latest_observed_at": aggregate["latest_observed_at"],
+        "analytics_status": status,
+        "source": "PROVIDER_CHILDREN",
+    }
+    return rows
+
+
 def _consolidated_summary(
     campaign_rows: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -463,10 +537,21 @@ def _consolidated_summary(
     normalized = _sum_normalized(
         row["normalized"] for row in campaign_rows
     )
+    has_partial_children = any(
+        row.get("provider_children") is not None
+        and row["provider_children"]["summary"]["provider_raw_status"] != "complete"
+        for row in campaign_rows
+    )
     campaigns_with_snapshot = sum(
         1
         for row in campaign_rows
-        if row["observation"]["snapshot_id"] is not None
+        if (
+            row["observation"]["snapshot_id"] is not None
+            or any(
+                value is not None
+                for value in row["observation"].get("snapshot_ids", [])
+            )
+        )
     )
     coverage = {
         "matched_recipient_count": sum(
@@ -486,9 +571,9 @@ def _consolidated_summary(
             for row in campaign_rows
         ),
     }
-    coverage["status_coverage_rate"] = _safe_rate(
-        int(coverage["matched_recipient_count"]),
-        total_recipients,
+    coverage["status_coverage_rate"] = (
+        _safe_rate(int(coverage["matched_recipient_count"]), total_recipients)
+        if not has_partial_children else None
     )
 
     provider_raw = {
@@ -508,6 +593,14 @@ def _consolidated_summary(
             "interaction_items",
         )
     }
+    if has_partial_children and not any(
+        row["provider_raw"] is not None for row in campaign_rows
+    ):
+        provider_raw = None
+    raw_status = (
+        "unavailable" if provider_raw is None else
+        "partial" if has_partial_children else "complete"
+    )
     responders_values = [
         row["interactions"]["responders_aggregate"]
         for row in campaign_rows
@@ -527,12 +620,18 @@ def _consolidated_summary(
         ),
         "total_recipients": total_recipients,
         "normalized": normalized,
-        "rates": _rates(
-            total_recipients=total_recipients,
-            normalized=normalized,
+        "rates": (
+            _rates(total_recipients=total_recipients, normalized=normalized)
+            if not has_partial_children
+            else {
+                "successful_rate": None, "reach_rate": None,
+                "read_rate": None, "failure_rate": None,
+            }
         ),
+        "normalized_status": "partial" if has_partial_children else "complete",
         "coverage": coverage,
         "provider_raw": provider_raw,
+        "provider_raw_status": raw_status,
         "interactions": {
             "button_interaction_recipient_exposures": sum(
                 int(row["interactions"]["unique_button_recipients"])
@@ -865,21 +964,34 @@ def _campaign_matches_snapshot_filters(
     campaign: Any,
     latest_snapshot: Any | None,
     filters: Mapping[str, Any],
+    provider_children: Mapping[str, Any] | None = None,
 ) -> bool:
     status = filters["snapshot_status"]
-    if status == _SNAPSHOT_WITH and latest_snapshot is None:
+    if provider_children is not None:
+        # Child-bound campaigns use their own latest evidence, never a
+        # potentially stale provider binding on the parent.
+        observed_value = provider_children["summary"]["latest_observed_at"]
+        observed_at = (
+            datetime.fromisoformat(observed_value)
+            if observed_value is not None else None
+        )
+    else:
+        observed_at = (
+            _as_utc_datetime(latest_snapshot.fetched_at)
+            if latest_snapshot is not None else None
+        )
+    if status == _SNAPSHOT_WITH and observed_at is None:
         return False
-    if status == _SNAPSHOT_WITHOUT and latest_snapshot is not None:
+    if status == _SNAPSHOT_WITHOUT and observed_at is not None:
         return False
 
     observed_from = filters["observed_from"]
     observed_to = filters["observed_to"]
     if observed_from is None and observed_to is None:
         return True
-    if latest_snapshot is None:
+    if observed_at is None:
         return False
 
-    observed_at = _as_utc_datetime(latest_snapshot.fetched_at)
     if observed_from is not None and observed_at < observed_from:
         return False
     if observed_to is not None and observed_at > observed_to:
@@ -1022,7 +1134,7 @@ def build_campaign_v2_individual_report(
         session=active_session,
     ).get(normalized_id)
 
-    return {
+    report = {
         "campaign": {
             "id": int(campaign.id),
             "name": campaign.name,
@@ -1088,6 +1200,13 @@ def build_campaign_v2_individual_report(
             for snapshot in snapshots
         ],
     }
+    if provider_children is not None:
+        _apply_child_reporting(
+            row=report,
+            provider_children=provider_children,
+        )
+        report["observation"]["fingerprint"] = None
+    return report
 
 
 def _normalized_metrics(observations: Iterable[Any]) -> dict[str, int]:
@@ -1345,6 +1464,8 @@ def _evolution_point(
 ) -> dict[str, Any]:
     return {
         "snapshot_id": int(snapshot.id),
+        "provider_campaign_child_id": getattr(snapshot, "provider_campaign_child_id", None),
+        "provider_campaign_id": snapshot.provider_campaign_id,
         "observed_at": _iso_datetime(snapshot.fetched_at),
         "normalized": _normalized_metrics(observations),
         "provider_raw": {

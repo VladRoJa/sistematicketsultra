@@ -65,14 +65,13 @@ def build_campaign_v2_provider_children_aggregate(
         if existing is None or _sort_snapshot(snapshot) > _sort_snapshot(existing):
             latest[linked_id] = snapshot
 
-    observations_by_snapshot: dict[int, set[int]] = defaultdict(set)
+    observations_by_snapshot: dict[int, list[Any]] = defaultdict(list)
     for observation in observations:
-        recipient_id = getattr(observation, "campaign_recipient_id", None)
-        if recipient_id is not None:
-            observations_by_snapshot[int(observation.snapshot_id)].add(int(recipient_id))
+        observations_by_snapshot[int(observation.snapshot_id)].append(observation)
 
     result_children: list[dict[str, Any]] = []
     matched_unique: set[int] = set()
+    recipient_states: dict[int, dict[str, Any]] = {}
     raw_totals = {key: 0 for key in _RAW_FIELDS}
     usable_stats_count = 0
     known_costs: list[tuple[str, Decimal]] = []
@@ -90,9 +89,32 @@ def build_campaign_v2_provider_children_aggregate(
             usable_stats_count += 1
             for field, value in raw.items():
                 raw_totals[field] += value
-            matched_unique.update(
-                observations_by_snapshot.get(int(snapshot.id), set())
-            )
+            for row in observations_by_snapshot.get(int(snapshot.id), ()):
+                recipient_id = getattr(row, "campaign_recipient_id", None)
+                if recipient_id is None:
+                    continue
+                recipient_id = int(recipient_id)
+                matched_unique.add(recipient_id)
+                outcome = str(getattr(row, "outcome", "") or "").upper()
+                delivery = str(getattr(row, "delivery_bucket", "") or "").upper()
+                labels = getattr(row, "button_labels_json", None)
+                state = recipient_states.setdefault(
+                    recipient_id, {"successful": False, "failed": False,
+                                   "delivery": None, "labels": set()}
+                )
+                if outcome == "SUCCESSFUL":
+                    state["successful"] = True
+                    if delivery in ("SENT", "DELIVERED", "VIEWED"):
+                        old_rank = {"SENT": 1, "DELIVERED": 2, "VIEWED": 3}
+                        if old_rank[delivery] > old_rank.get(state["delivery"], 0):
+                            state["delivery"] = delivery
+                elif outcome == "FAILED":
+                    state["failed"] = True
+                if isinstance(labels, list):
+                    state["labels"].update(
+                        label for label in labels
+                        if isinstance(label, str) and label.strip()
+                    )
 
         cost_projection = (
             cost_projector(snapshot.analytics_json)
@@ -109,6 +131,9 @@ def build_campaign_v2_provider_children_aggregate(
             "status": status,
             "recipient_count": int(child.recipient_count),
             "snapshot_id": int(snapshot.id) if snapshot is not None else None,
+            "observed_at": (
+                _sort_snapshot(snapshot)[0].isoformat() if snapshot is not None else None
+            ),
             "analytics_status": analytics_status,
             "provider_raw": raw,
             "cost": dict(cost_projection),
@@ -119,6 +144,30 @@ def build_campaign_v2_provider_children_aggregate(
         for child in result_children
     )
     pending_stats = len(ordered_children) - usable_stats_count
+    normalized = {
+        "successful": sum(state["successful"] for state in recipient_states.values()),
+        "failed": sum(
+            state["failed"] and not state["successful"]
+            for state in recipient_states.values()
+        ),
+        "sent": sum(
+            state["successful"] and state["delivery"] == "SENT"
+            for state in recipient_states.values()
+        ),
+        "delivered": sum(
+            state["successful"] and state["delivery"] == "DELIVERED"
+            for state in recipient_states.values()
+        ),
+        "viewed": sum(
+            state["successful"] and state["delivery"] == "VIEWED"
+            for state in recipient_states.values()
+        ),
+        "reach_count": sum(
+            state["successful"] and state["delivery"] in ("DELIVERED", "VIEWED")
+            for state in recipient_states.values()
+        ),
+    }
+    button_unique = sum(bool(state["labels"]) for state in recipient_states.values())
     cost = _aggregate_cost(
         known_costs=known_costs,
         child_count=len(ordered_children),
@@ -145,8 +194,22 @@ def build_campaign_v2_provider_children_aggregate(
                 and bool(child["provider_campaign_id"])
             ),
             "matched_frozen_recipients_unique": len(matched_unique),
+            "normalized": normalized,
+            "unique_button_recipients": button_unique,
+            "unmatched_provider_count_observed": sum(
+                int(getattr(latest[int(child.id)], "unmatched_provider_count", 0))
+                for child in ordered_children
+                if int(child.id) in latest and
+                latest[int(child.id)].analytics_status == "ok" and
+                child.status in _ACCEPTED
+            ),
             "batches_with_usable_stats": usable_stats_count,
             "batches_without_usable_stats": pending_stats,
+            "latest_observed_at": max(
+                (child["observed_at"] for child in result_children
+                 if child["observed_at"] is not None),
+                default=None,
+            ),
             "provider_raw": raw_totals if usable_stats_count else None,
             "provider_raw_status": (
                 "unavailable" if not usable_stats_count else
@@ -155,6 +218,17 @@ def build_campaign_v2_provider_children_aggregate(
             "cost": cost,
         },
         "children": result_children,
+        # Internal only: stripped before returning the public Reporting JSON.
+        "_recipient_observations": [
+            {
+                "campaign_recipient_id": recipient_id,
+                "outcome": "SUCCESSFUL" if state["successful"] else "FAILED",
+                "delivery_bucket": state["delivery"] if state["successful"] else None,
+                "button_labels_json": sorted(state["labels"]),
+            }
+            for recipient_id, state in sorted(recipient_states.items())
+            if state["successful"] or state["failed"]
+        ],
     }
 
 
@@ -297,7 +371,13 @@ def load_campaign_v2_provider_children_aggregates(
         )
         snapshot_ids = [int(item.id) for item in snapshots]
         observations = (
-            session.query(Observation.snapshot_id, Observation.campaign_recipient_id)
+            session.query(
+                Observation.snapshot_id,
+                Observation.campaign_recipient_id,
+                Observation.outcome,
+                Observation.delivery_bucket,
+                Observation.button_labels_json,
+            )
             .filter(Observation.snapshot_id.in_(snapshot_ids))
             .all() if snapshot_ids else []
         )

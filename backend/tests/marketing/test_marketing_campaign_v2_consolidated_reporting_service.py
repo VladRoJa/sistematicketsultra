@@ -1157,3 +1157,47 @@ def test_consolidated_report_includes_child_breakdown_without_n_plus_one(session
     assert report["summary"]["provider_children"]["campaigns_with_children"] == 1
     assert report["summary"]["provider_children"]["batch_count"] == 2
     assert "provider_children" not in rows[3]
+
+
+def test_consolidated_child_partial_stats_do_not_publish_definitive_rates(session):
+    session.execute(text("""
+        INSERT INTO marketing_campaign_v2_provider_campaigns
+            (id, campaign_v2_id, provider, provider_campaign_id,
+             status, recipient_count, sucursal_canon)
+        VALUES
+            (101, 1, 'IVENTAS', 'external-1', 'SUBMITTED', 3, 'BRANCH A'),
+            (102, 1, 'IVENTAS', 'external-unobserved', 'SUBMITTED', 2, 'BRANCH B')
+    """))
+    session.commit()
+    report = build_campaign_v2_consolidated_report(
+        allowed_sucursal_keys=None, session=session,
+    )
+    row = next(r for r in report["campaigns"] if r["campaign"]["id"] == 1)
+    assert row["observation"]["analytics_status"] == "partial"
+    assert row["provider_raw"] is not None
+    assert all(value is None for value in row["rates"].values())
+    assert row["coverage"]["status_coverage_rate"] is None
+    assert report["summary"]["normalized_status"] == "partial"
+    assert report["summary"]["provider_raw_status"] == "partial"
+    assert all(value is None for value in report["summary"]["rates"].values())
+    assert report["summary"]["coverage"]["status_coverage_rate"] is None
+
+
+def test_snapshot_filters_follow_provider_children_not_stale_parent(session):
+    session.execute(text("""
+        INSERT INTO marketing_campaign_v2_provider_campaigns
+            (id, campaign_v2_id, provider, provider_campaign_id,
+             status, recipient_count, sucursal_canon)
+        VALUES (101, 1, 'IVENTAS', 'external-new', 'SUBMITTED', 3, 'BRANCH A')
+    """))
+    session.commit()
+    without = build_campaign_v2_consolidated_report(
+        allowed_sucursal_keys=None,
+        filters={"snapshot_status": "WITHOUT_SNAPSHOT"}, session=session,
+    )
+    with_snapshot = build_campaign_v2_consolidated_report(
+        allowed_sucursal_keys=None,
+        filters={"snapshot_status": "WITH_SNAPSHOT"}, session=session,
+    )
+    assert 1 in {row["campaign"]["id"] for row in without["campaigns"]}
+    assert 1 not in {row["campaign"]["id"] for row in with_snapshot["campaigns"]}
