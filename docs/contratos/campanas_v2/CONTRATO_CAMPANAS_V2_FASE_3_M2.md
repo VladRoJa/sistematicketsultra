@@ -1,9 +1,9 @@
 # Contrato Campañas V2 — Fase 3 / M2
 ## Controlled Submit
 
-Estado: IMPLEMENTADO / PENDIENTE DE RE-ACCEPTANCE LIVE — 2026-10-08
+Estado: ACCEPTED LIVE — 2026-10-08
 Gate de entrada: CUMPLIDO — `CONTRATO_CAMPANAS_V2_FASE_3_M1.md` está ACCEPTED en main.
-Gate de salida: REABIERTO — el primer smoke descubrió la proyección telefónica `52+MX10`; el segundo smoke ya usó `521+MX10` pero también terminó `successfulMessages=0` / `failedMessages=5`. La investigación posterior confirmó que el template usado tiene header multimedia y M2 no transportaba `fileUrl`. El soporte de media queda implementado y requiere un nuevo smoke live antes de aceptar M2.
+Gate de salida: CUMPLIDO — Campaign 11 validó el flujo corregido con media: `successfulMessages=4`, `failedMessages=1`, evidencia downstream de entrega/vista y recepción física confirmada. M2 queda ACCEPTED y M3 desbloqueado.
 
 ## 0. Uso de este contrato
 
@@ -672,28 +672,69 @@ Evidencia del segundo smoke live — NO ACEPTADO:
 - Antes del siguiente smoke debe desplegarse el cambio, configurar `file_url` en el template correspondiente, generar una **nueva Campaign QA**, recalcular preflight/fingerprint v2 y obtener una nueva autorización explícita.
 - El gap de media es la causa técnica más consistente con la evidencia disponible, pero no se declara causa definitiva ni M2 ACCEPTED hasta que un nuevo smoke confirme `successfulMessages > 0`.
 
+### 24.3 Tercer intento live — ACCEPTED — 2026-10-08
+
+Después de desplegar el soporte de media, configurar el `file_url` backend-owned del template y recalcular el preflight con `campaign-v2-dispatch-v2`, se ejecutó una nueva Campaign QA controlada.
+
+Evidencia del smoke aceptado:
+
+- Campaign V2 QA: `11`, source `QA_MANUAL`, purpose `NEW_SALE`, una sola sucursal `AZAHARES_CUL`.
+- Preview/freeze fingerprint: `5957e2b92bbaf5d4bf4c147e253eab3a49df2eb850395e5c377c34785e14768d`.
+- Cohorte congelada: **5**; blacklist: **0**; sendable: **5**.
+- Preflight: `ready=true`, **1** batch, **0 blockers**.
+- Dispatch fingerprint v2: `e866cb90de541cdeabaa35908a52563ac81dd17129b662110304e20cd41cc967`.
+- Template: `invita_y_gana_4800`.
+- Channel iVentas: `6a2201f802ec4b00086b8bb2`.
+- El batch resolvió `file_url` desde configuración backend y el payload final incluyó `fileUrl`.
+- Los 5 teléfonos se proyectaron como **13 dígitos**, solo numéricos, con prefijo `521`.
+- El payload final no incluyó `sendAt`.
+- Antes del submit: `can_send_campaigns=true`, credencial write configurada, cero provider campaigns existentes y estado `NOT_STARTED`.
+- Se recibió autorización explícita específica para Campaign 11 antes del único submit real.
+- El submit se ejecutó con habilitación efímera del kill switch únicamente en el proceso controlado; no se modificó `.env.docker` ni se habilitaron los workers web de forma permanente.
+- Provider campaign child: `3`; estado local: `SUBMITTED`.
+- Provider campaign id: `6ac7baae121a700008d0a069`.
+- Stats oficiales posteriores: `successfulMessages=4`, `failedMessages=1`, `sentMessages=0`, `deliveredMessages=2`, `viewedMessages=2`, `answeredMessages=0`, `analyticsStatus=not_synced`.
+- La invariante downstream se cumple: `successful = sent ∪ delivered ∪ viewed` y los buckets observados suman **4 successful**.
+- Se confirmó además recepción física de al menos uno de los mensajes controlados.
+- El único recipient fallido no se reintentó; el smoke no requiere 100% de entrega, sino evidencia downstream real `successfulMessages > 0`.
+- Comparado con Campaign 10, que ya usaba `521+MX10` pero no transportaba media y terminó 0/5, Campaign 11 mantuvo el mismo caso controlado y añadió `fileUrl`, obteniendo 4/5 successful. Esto confirma que la ausencia de `fileUrl` era el bloqueo restante para este template multimedia.
+
+Conclusión de aceptación:
+
+- Se cumplen los criterios de §23, incluido el caso live autorizado con evidencia recipient-level real.
+- Campaign 9 y Campaign 10 permanecen históricos y **no deben reintentarse**.
+- Campaign 11 tampoco debe reintentarse; su child ya está `SUBMITTED`.
+- **F3-M2 queda ACCEPTED LIVE.**
+- **F3-M3 queda desbloqueado**, pero debe iniciarse en una conversación/flujo separado conforme al contrato de trabajo.
+
 Estado de salida actual:
 
-`F3-M2 — IMPLEMENTADO / PENDIENTE DE RE-ACCEPTANCE LIVE — 2026-10-08`
+`F3-M2 — ACCEPTED LIVE — 2026-10-08`
 
-`F3-M3 — BLOQUEADO HASTA RE-ACCEPTANCE DE M2`
+`F3-M3 — DESBLOQUEADO`
 
 ## 25. Prompt de arranque para una conversación nueva
 
 ```
-Estamos implementando únicamente Campañas V2 Fase 3 / M2 — Controlled Submit.
+Campañas V2 Fase 3 / M2 — Controlled Submit está ACCEPTED LIVE.
 
-Lee docs/contratos/campanas_v2/CONTRATO_CAMPANAS_V2_FASE_3_M2.md y verifica que M1 esté ACCEPTED en main antes de tocar código.
+Lee docs/contratos/campanas_v2/CONTRATO_CAMPANAS_V2_FASE_3_M2.md y conserva M2 como baseline cerrada.
 
-Reglas críticas:
-- preservar cohorte congelada y lista para envío;
-- no aceptar phones/channelId desde frontend como autoridad;
-- submit exige dispatch fingerprint vigente;
-- kill switch backend default OFF;
-- sin scheduling;
-- sin retry automático de timeout/5xx ambiguo;
-- N provider campaigns por Campaign V2;
-- el primer POST real a iVentas requiere autorización explícita del usuario en esta conversación.
+Evidencia de cierre:
+- Campaign 11 QA_MANUAL;
+- preflight campaign-v2-dispatch-v2;
+- fileUrl backend-owned;
+- 5 recipients controlados;
+- successfulMessages=4 / failedMessages=1;
+- entrega/vista downstream y recepción física confirmada.
 
-Trabaja un cambio/prueba a la vez y no adelantes M3.
+Reglas críticas que M3 debe preservar:
+- cohorte congelada y lista para envío;
+- backend como autoridad de phones/channel/template/media;
+- dispatch fingerprint vigente;
+- kill switch default OFF;
+- idempotencia y no retry ciego ante ambigüedad;
+- N provider campaigns por Campaign V2.
+
+Inicia M3 únicamente con su propio contrato y trabaja un cambio/prueba a la vez.
 ```
