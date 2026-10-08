@@ -3,7 +3,13 @@ from __future__ import annotations
 
 import os
 from datetime import date
+from hashlib import sha256
+from io import BytesIO
+from pathlib import Path
 from typing import Any
+from zipfile import BadZipFile, ZipFile
+
+from flask import current_app
 
 from app.internal_documents.services.internal_document_publication_service import (
     add_internal_document_version_from_warehouse_upload,
@@ -11,6 +17,7 @@ from app.internal_documents.services.internal_document_publication_service impor
 )
 from app.models import (
     InternalDocumentORM,
+    InternalDocumentVersionORM,
     InternalDocumentStatus,
     InternalDocumentVisibilityORM,
 )
@@ -60,6 +67,82 @@ def _validate_exclusive_access(document: InternalDocumentORM, admicorp_id: int):
         )
 
 
+def _report_content_fingerprint(payload: bytes) -> str:
+    """Compare XLSX report content without volatile Office modification metadata.
+
+    Hash the actual XML parts rather than the ZIP container timestamps.
+    This also detects corrections to styles, formulas, and worksheet values.
+    """
+    digest = sha256()
+    try:
+        with ZipFile(BytesIO(payload)) as archive:
+            names = sorted(
+                item.filename for item in archive.infolist()
+                if not item.is_dir() and item.filename != "docProps/core.xml"
+            )
+            if not names:
+                raise CommercialDailyPublicationError("Empty report XLSX")
+            for name in names:
+                digest.update(name.encode("utf-8"))
+                digest.update(b"\\0")
+                digest.update(archive.read(name))
+                digest.update(b"\\0")
+    except (BadZipFile, OSError) as exc:
+        raise CommercialDailyPublicationError(
+            "Cannot fingerprint the generated report XLSX"
+        ) from exc
+    return digest.hexdigest()
+
+
+def _current_document_file(document: InternalDocumentORM) -> bytes:
+    """Read the active Warehouse file; never rely on ZIP binary hashes alone."""
+    version = document.current_version
+    upload = version.warehouse_upload if version is not None else None
+    if upload is None or not upload.stored_path or not upload.stored_filename:
+        raise CommercialDailyPublicationError(
+            "The current document has no readable Warehouse upload"
+        )
+    root = Path(current_app.root_path).parent.parent.resolve()
+    path = (root / upload.stored_path / upload.stored_filename).resolve()
+    if not path.is_relative_to(root) or not path.is_file():
+        raise CommercialDailyPublicationError(
+            "The current document file is missing or outside Warehouse storage"
+        )
+    content = path.read_bytes()
+    if version.file_hash_sha256 and sha256(content).hexdigest() != version.file_hash_sha256:
+        raise CommercialDailyPublicationError(
+            "The current document file checksum does not match its version"
+        )
+    return content
+
+
+def _next_cutoff_version_label(
+    *, cutoff: date, versions: list[InternalDocumentVersionORM]
+) -> str:
+    base = cutoff.isoformat()
+    labels = {version.version_label for version in versions}
+    if base not in labels:
+        return base
+    revision = 2
+    while f"{base}-r{revision}" in labels:
+        revision += 1
+    return f"{base}-r{revision}"
+
+
+def _existing_report_is_equivalent(
+    document: InternalDocumentORM, payload: bytes
+) -> bool:
+    current = document.current_version
+    if current is None:
+        return False
+    if current.file_hash_sha256 == sha256(payload).hexdigest():
+        return True
+    return (
+        _report_content_fingerprint(_current_document_file(document))
+        == _report_content_fingerprint(payload)
+    )
+
+
 def _publish_one(
     *, metric: str, cutoff: date, automation_id: int, admicorp_id: int
 ) -> dict[str, Any]:
@@ -78,6 +161,39 @@ def _publish_one(
         payload = build_sales_from_baseline(cutoff=cutoff)
     else:
         payload = build_commercial_daily_xlsx(metric=metric, cutoff=cutoff)
+    document = (
+        InternalDocumentORM.query
+        .filter(
+            InternalDocumentORM.title == title,
+            InternalDocumentORM.status != InternalDocumentStatus.ARCHIVED,
+        )
+        .order_by(InternalDocumentORM.id.asc())
+        .first()
+    )
+    version_label = cutoff.isoformat()
+    if document is not None:
+        _validate_exclusive_access(document, admicorp_id)
+        current = document.current_version
+        if current is not None and str(current.version_label)[:10] > version_label:
+            raise CommercialDailyPublicationError(
+                "Cannot replace a newer report with an older cutoff"
+            )
+        if _existing_report_is_equivalent(document, payload):
+            return {
+                "metric": metric,
+                "warehouse_upload_id": current.warehouse_upload_id,
+                "publication": {
+                    "created": False,
+                    "document_id": document.id,
+                    "version_id": current.id,
+                    "version_label": current.version_label,
+                    "message": "Current report already has the same content.",
+                },
+            }
+        version_label = _next_cutoff_version_label(
+            cutoff=cutoff, versions=document.versions
+        )
+
     upload_result = create_warehouse_document_upload(
         report_type_key=report_type_key,
         original_filename=f"{report_type_key}_{cutoff.isoformat()}.xlsx",
@@ -93,15 +209,6 @@ def _publish_one(
         },
     )
     upload_id = int(upload_result["warehouse_upload_id"])
-    document = (
-        InternalDocumentORM.query
-        .filter(
-            InternalDocumentORM.title == title,
-            InternalDocumentORM.status != InternalDocumentStatus.ARCHIVED,
-        )
-        .order_by(InternalDocumentORM.id.asc())
-        .first()
-    )
     metadata = {
         "origin": "automation",
         "job_key": "commercial_daily_reports",
@@ -115,7 +222,7 @@ def _publish_one(
             document_id=document.id,
             warehouse_upload_id=upload_id,
             created_by_user_id=automation_id,
-            version_label=cutoff.isoformat(),
+            version_label=version_label,
             change_notes=f"Actualización diaria de {label} {cutoff.isoformat()}",
             audit_metadata=metadata,
         )
@@ -143,7 +250,7 @@ def _publish_one(
                 "is_primary": True,
             }],
             publish_now=True,
-            version_label=cutoff.isoformat(),
+            version_label=version_label,
             audit_metadata=metadata,
         )
     return {
