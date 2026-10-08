@@ -26,11 +26,16 @@ from app.services.marketing_campaign_v2_dispatch_config_service import (
     template_allows_channel,
     template_file_url,
 )
+from app.services.marketing_campaign_v2_schedule_service import (
+    CampaignV2DispatchSchedule,
+    IMMEDIATE_MODE,
+    normalize_campaign_v2_schedule,
+)
 from app.services.marketing_phone import normalize_phone
 
 
-DISPATCH_FINGERPRINT_VERSION = "campaign-v2-dispatch-v2"
-DISPATCH_MODE = "IMMEDIATE"
+DISPATCH_FINGERPRINT_VERSION = "campaign-v2-dispatch-v3"
+DISPATCH_MODE = IMMEDIATE_MODE
 
 
 @dataclass(frozen=True)
@@ -65,6 +70,7 @@ class CampaignV2PreflightPlan:
     campaign_purpose: str
     provider: str
     mode: str
+    schedule: CampaignV2DispatchSchedule
     frozen_count: int
     blacklisted_phones: tuple[str, ...]
     sendable_phones: tuple[str, ...]
@@ -95,7 +101,9 @@ def build_campaign_v2_preflight(
     template_id: Any,
     allowed_sucursal_keys,
     provider: Any = DEFAULT_PROVIDER,
+    schedule: Any = None,
     session: Any | None = None,
+    now: datetime | None = None,
 ) -> CampaignV2PreflightPlan:
     active_session = session if session is not None else db.session
     projection = build_campaign_v2_sendable_projection(
@@ -106,6 +114,10 @@ def build_campaign_v2_preflight(
     campaign = projection["campaign"]
     purpose = str(campaign.get("purpose") or "").strip().upper()
     provider_name = str(provider or DEFAULT_PROVIDER).strip().upper()
+    schedule_plan = normalize_campaign_v2_schedule(
+        schedule,
+        now=now,
+    )
 
     template = resolve_dispatch_template(
         template_id=template_id,
@@ -259,7 +271,8 @@ def build_campaign_v2_preflight(
     fingerprint = _dispatch_fingerprint(
         campaign_id=int(campaign_id),
         provider=provider_name,
-        mode=DISPATCH_MODE,
+        mode=schedule_plan.mode,
+        schedule=schedule_plan,
         template=template,
         sendable_phones=sendable_phones,
         batches=tuple(batches),
@@ -272,7 +285,8 @@ def build_campaign_v2_preflight(
         campaign_name=str(campaign.get("name") or ""),
         campaign_purpose=purpose,
         provider=provider_name,
-        mode=DISPATCH_MODE,
+        mode=schedule_plan.mode,
+        schedule=schedule_plan,
         frozen_count=len(frozen_recipients),
         blacklisted_phones=blacklisted_phones,
         sendable_phones=sendable_phones,
@@ -297,6 +311,7 @@ def serialize_campaign_v2_preflight(
         "campaign_purpose": plan.campaign_purpose,
         "provider": plan.provider,
         "mode": plan.mode,
+        "schedule": plan.schedule.serialize(),
         "frozen_count": plan.frozen_count,
         "suppressed": {
             "blacklist": len(plan.blacklisted_phones),
@@ -403,6 +418,7 @@ def _dispatch_fingerprint(
     campaign_id: int,
     provider: str,
     mode: str,
+    schedule: CampaignV2DispatchSchedule,
     template: Any,
     sendable_phones: tuple[str, ...],
     batches: tuple[CampaignV2DispatchBatchPlan, ...],
@@ -414,6 +430,7 @@ def _dispatch_fingerprint(
         "campaign_id": campaign_id,
         "provider": provider,
         "mode": mode,
+        "schedule": schedule.fingerprint_payload(),
         "template": {
             "id": int(template.id),
             "template_name": str(template.template_name),

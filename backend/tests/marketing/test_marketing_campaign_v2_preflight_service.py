@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from types import SimpleNamespace as NS
 
 import pytest
@@ -385,3 +385,106 @@ def test_idempotency_key_is_deterministic_for_batch(monkeypatch):
 
     assert len(first) == 64
     assert first == second
+
+
+def test_scheduled_preflight_serializes_schedule_and_changes_fingerprint(
+    monkeypatch,
+):
+    rows = [_recipient(1, "6861000001", 1)]
+    _install(monkeypatch, rows)
+
+    now = datetime(2026, 10, 8, 16, 0, tzinfo=timezone.utc)
+    immediate = service.build_campaign_v2_preflight(
+        campaign_id=7,
+        template_id=10,
+        allowed_sucursal_keys=None,
+        session=NS(),
+        now=now,
+    )
+    scheduled = service.build_campaign_v2_preflight(
+        campaign_id=7,
+        template_id=10,
+        allowed_sucursal_keys=None,
+        schedule={
+            "local_datetime": "2026-10-08T10:30:00",
+            "timezone": "America/Tijuana",
+        },
+        session=NS(),
+        now=now,
+    )
+
+    assert immediate.mode == "IMMEDIATE"
+    assert immediate.schedule.serialize() is None
+    assert scheduled.mode == "SCHEDULED"
+    assert scheduled.schedule.provider_send_at == "2026-10-08T17:30:00.000Z"
+    assert scheduled.dispatch_fingerprint != immediate.dispatch_fingerprint
+
+    payload = service.serialize_campaign_v2_preflight(scheduled)
+    assert payload["dispatch_fingerprint_version"] == "campaign-v2-dispatch-v3"
+    assert payload["mode"] == "SCHEDULED"
+    assert payload["schedule"] == {
+        "timezone": "America/Tijuana",
+        "local_datetime": "2026-10-08T10:30:00",
+        "scheduled_for_utc": "2026-10-08T17:30:00+00:00",
+        "provider_send_at": "2026-10-08T17:30:00.000Z",
+    }
+
+
+def test_scheduled_fingerprint_changes_when_schedule_changes(monkeypatch):
+    rows = [_recipient(1, "6861000001", 1)]
+    _install(monkeypatch, rows)
+
+    now = datetime(2026, 10, 8, 16, 0, tzinfo=timezone.utc)
+    first = service.build_campaign_v2_preflight(
+        campaign_id=7,
+        template_id=10,
+        allowed_sucursal_keys=None,
+        schedule={
+            "local_datetime": "2026-10-08T10:30:00",
+            "timezone": "America/Tijuana",
+        },
+        session=NS(),
+        now=now,
+    )
+    second = service.build_campaign_v2_preflight(
+        campaign_id=7,
+        template_id=10,
+        allowed_sucursal_keys=None,
+        schedule={
+            "local_datetime": "2026-10-08T11:00:00",
+            "timezone": "America/Tijuana",
+        },
+        session=NS(),
+        now=now,
+    )
+
+    assert first.dispatch_fingerprint != second.dispatch_fingerprint
+
+
+def test_scheduled_fingerprint_is_deterministic_for_same_schedule(monkeypatch):
+    rows = [_recipient(1, "6861000001", 1)]
+    _install(monkeypatch, rows)
+
+    now = datetime(2026, 10, 8, 16, 0, tzinfo=timezone.utc)
+    schedule = {
+        "local_datetime": "2026-10-08T10:30:00",
+        "timezone": "America/Tijuana",
+    }
+    first = service.build_campaign_v2_preflight(
+        campaign_id=7,
+        template_id=10,
+        allowed_sucursal_keys=None,
+        schedule=schedule,
+        session=NS(),
+        now=now,
+    )
+    second = service.build_campaign_v2_preflight(
+        campaign_id=7,
+        template_id=10,
+        allowed_sucursal_keys=None,
+        schedule=dict(schedule),
+        session=NS(),
+        now=now,
+    )
+
+    assert first.dispatch_fingerprint == second.dispatch_fingerprint

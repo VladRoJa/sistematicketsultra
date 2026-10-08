@@ -55,6 +55,9 @@ from app.services.marketing_campaign_v2_preflight_service import (
 from app.services.marketing_campaign_v2_provider import (
     CampaignProviderConfigurationError,
 )
+from app.services.marketing_campaign_v2_schedule_service import (
+    MarketingCampaignV2ScheduleValidationError,
+)
 from app.services.marketing_campaign_v2_submit_service import (
     MarketingCampaignV2SubmitConflictError,
     MarketingCampaignV2SubmitDisabledError,
@@ -1231,12 +1234,13 @@ def update_campaign_v2_channel_binding_endpoint(binding_id: int):
 def campaign_v2_preflight_endpoint(campaign_id: int):
     try:
         _, access = _resolve_campaign_v2_preflight_request()
-        payload = _parse_payload({"template_id"})
+        payload = _parse_payload({"template_id", "schedule"})
         plan = build_campaign_v2_preflight(
             campaign_id=campaign_id,
             template_id=payload.get("template_id"),
             allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
             provider=CAMPAIGN_V2_DISPATCH_PROVIDER,
+            schedule=payload.get("schedule"),
             session=db.session,
         )
         result = serialize_campaign_v2_preflight(plan)
@@ -1268,6 +1272,7 @@ def campaign_v2_preflight_endpoint(campaign_id: int):
     except (
         MarketingCampaignV2RouteValidationError,
         MarketingCampaignV2QueryValidationError,
+        MarketingCampaignV2ScheduleValidationError,
     ) as exc:
         return _error(str(exc), 400)
     except Exception:
