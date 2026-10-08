@@ -122,7 +122,7 @@ def session():
                 autoload_with=engine,
             ).insert().values(id=10)
         )
-        for campaign_id in (9, 77):
+        for campaign_id in (9, 10, 11, 77):
             value.add(
                 MarketingCampaignV2ORM(
                     id=campaign_id,
@@ -459,11 +459,13 @@ def test_scheduled_retry_with_expired_send_at_is_blocked(
     assert provider.calls == 0
 
 
+@pytest.mark.parametrize("campaign_id", [9, 10, 11])
 def test_never_retry_campaign_ids_are_blocked_even_if_state_is_eligible(
     session,
     monkeypatch,
+    campaign_id,
 ):
-    row = _retry_child(session, campaign_id=9)
+    row = _retry_child(session, campaign_id=campaign_id)
     _install_current_plan(monkeypatch, row)
     provider = SuccessProvider()
 
