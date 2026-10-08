@@ -1,0 +1,56 @@
+name: Campaign V2 M3 PostgreSQL Migration
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/models/marketing.py"
+      - "backend/migrations/versions/**"
+      - "backend/tests/marketing/test_marketing_campaign_v2_stats_child_postgresql.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_stats_child_migration.py"
+      - ".github/workflows/campaign-v2-m3-postgresql.yml"
+  push:
+    branches:
+      - "feat/campaign-v2-m3-nchild-reporting"
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-m3-child-snapshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: m3_test
+          POSTGRES_PASSWORD: m3_test_only
+          POSTGRES_DB: m3_child_snapshots
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U m3_test -d m3_child_snapshots"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install migration test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install \
+            "SQLAlchemy==2.0.40" \
+            "alembic==1.15.2" \
+            "psycopg2-binary==2.9.10" \
+            "pytest==8.3.5"
+      - name: PostgreSQL upgrade and downgrade
+        working-directory: backend
+        env:
+          M3_TEST_POSTGRES_URL: postgresql+psycopg2://m3_test:m3_test_only@127.0.0.1:5432/m3_child_snapshots
+        run: |
+          python -m pytest -q \
+            tests/marketing/test_marketing_campaign_v2_stats_child_postgresql.py \
+            tests/marketing/test_marketing_campaign_v2_stats_child_migration.py
