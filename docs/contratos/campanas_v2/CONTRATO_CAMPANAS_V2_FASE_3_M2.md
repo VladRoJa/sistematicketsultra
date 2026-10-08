@@ -1,9 +1,9 @@
 # Contrato Campañas V2 — Fase 3 / M2
 ## Controlled Submit
 
-Estado: IMPLEMENTADO / PENDIENTE DE ACCEPTANCE LIVE — 2026-10-07
+Estado: ACCEPTED — 2026-10-07
 Gate de entrada: CUMPLIDO — `CONTRATO_CAMPANAS_V2_FASE_3_M1.md` está ACCEPTED en main.
-Gate de salida: PENDIENTE únicamente del primer caso live controlado con autorización explícita. La implementación, mocks y regresión están cerrados.
+Gate de salida: CUMPLIDO — primer caso live controlado ejecutado con autorización explícita, phone set revisado, persistencia `SUBMITTED` verificada y kill switch restaurado a OFF.
 
 ## 0. Uso de este contrato
 
@@ -555,9 +555,9 @@ Al aceptar:
 
 No empezar M3 en la misma conversación.
 
-### 24.1 Cierre de implementación — 2026-10-07
+### 24.1 Cierre de implementación y acceptance live — 2026-10-07
 
-Implementación completada, sin ejecutar todavía el primer POST live.
+Implementación completada y primer POST live controlado ejecutado con autorización explícita.
 
 Decisiones finales:
 
@@ -605,15 +605,35 @@ Evidencia de implementación:
 - Angular template/type compilation (`ngc`): **exit code 0**.
 - `ng build` del worktree no llegó a bundle por bloqueo del entorno al compartir `node_modules`; no emitió error de TypeScript/template. `ngc` sí compiló completamente el frontend M2.
 - Alembic: grafo válido, sin colisiones/ciclos; head Campaign V2 `d2f8a4c6b1e7`.
-- Primer POST real a iVentas en esta implementación: **0 ejecutados**.
+- Soporte QA controlado agregado posteriormente: **7/7** pruebas del helper `QA_MANUAL`, **494/494** regresión Campaign V2 y **28/28** pruebas enfocadas M2/iVentas.
+
+Evidencia de acceptance live:
+
+- Campaign V2 QA: `9`, source `QA_MANUAL`, purpose `NEW_SALE`, una sola sucursal `AZAHARES_CUL`.
+- Preview/freeze fingerprint: `cf8be4f9ca619e14e6c0d74d9c3700588e9a64625e74773be6526e138cff2df1`.
+- Cohorte congelada: **5**; blacklist: **0**; lista para envío: **5**.
+- La cohorte congelada, la lista para envío y el batch de preflight tuvieron igualdad exacta de phone set; no se documenta PII en este contrato.
+- Preflight: **1** provider campaign, **0 blockers**, `ready=true`.
+- Template: `invita_y_gana_4800`.
+- Channel iVentas: `6a2201f802ec4b00086b8bb2`.
+- Dispatch fingerprint: `acc14a6443684c7395c0140044056a96bd0f4a559aa214caf893de5938275850`.
+- Autorización explícita recibida antes del POST real.
+- `POST /v2/broadcast`: **1 ejecución**, respuesta HTTP **200**.
+- Provider campaign child: `1`; estado final persistido: `SUBMITTED`.
+- Provider campaign id: `6ac6e3b081b13a00078a5f20`.
+- Recipient count persistido: **5**.
+- `provider_deduplicated=false`; `error_code=None`; `support_ref=None`.
+- `submitted_by_user_id=47`.
+- `submit_started_at=2026-10-07 17:28:31.851831-07:00`; `submitted_at=2026-10-07 17:28:32.284605-07:00`.
+- Payload live sanitizado conforme al contrato: `templateName`, `leads` (5), `channelId`, `name`; sin `sendAt`. No se guardan teléfonos ni secretos en este documento.
+- No se observó error real del provider en el smoke exitoso. La clasificación y persistencia de errores determinísticos/ambiguos permanecen cubiertas por la suite automatizada; no se provocó un fallo live deliberadamente.
+- Al terminar, `CAMPAIGN_V2_PROVIDER_SEND_ENABLED` fue restaurado y verificado en `False`.
 
 Estado de salida actual:
 
-`F3-M2 — IMPLEMENTADO / PENDIENTE DE ACCEPTANCE LIVE`
+`F3-M2 — ACCEPTED — 2026-10-07`
 
-Para cambiar a `ACCEPTED` todavía falta exclusivamente el procedimiento de §15–16: seleccionar campaña QA pequeña, revisar cohorte y lista para envío, demostrar paridad del phone set, mostrar template/channel/count y recibir autorización explícita en esta conversación antes del POST real.
-
-`F3-M3 — BLOQUEADO HASTA M2 ACCEPTED`
+M3 queda **desbloqueado por contrato**, pero no se inicia en esta conversación.
 
 ## 25. Prompt de arranque para una conversación nueva
 
