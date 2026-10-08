@@ -84,6 +84,10 @@ class CampaignV2SubmittedBatchResult:
     scheduled_local_at: str | None
     scheduled_for: str | None
     provider_send_at: str | None
+    reconciliation_resolution: str | None
+    reconciliation_note: str | None
+    reconciled_by_user_id: int | None
+    reconciled_at: str | None
     error_code: str | None
     support_ref: str | None
 
@@ -396,6 +400,12 @@ def serialize_campaign_v2_submit_result(
                 "scheduled_local_at": batch.scheduled_local_at,
                 "scheduled_for": batch.scheduled_for,
                 "provider_send_at": batch.provider_send_at,
+                "reconciliation_resolution": (
+                    batch.reconciliation_resolution
+                ),
+                "reconciliation_note": batch.reconciliation_note,
+                "reconciled_by_user_id": batch.reconciled_by_user_id,
+                "reconciled_at": batch.reconciled_at,
                 "error_code": batch.error_code,
                 "support_ref": batch.support_ref,
             }
@@ -793,6 +803,8 @@ def _aggregate_status(
         return "SUBMITTED"
     if statuses == {"SCHEDULED"}:
         return "SCHEDULED"
+    if statuses == {"RETRY_ELIGIBLE"}:
+        return "RETRY_ELIGIBLE"
     if "RECONCILIATION_REQUIRED" in statuses:
         return "RECONCILIATION_REQUIRED"
     if "PROVIDER_ERROR" in statuses:
@@ -829,6 +841,10 @@ def _serialize_row_result(
         scheduled_local_at=_iso_datetime(row.scheduled_local_at),
         scheduled_for=_iso_datetime(row.scheduled_for),
         provider_send_at=row.provider_send_at,
+        reconciliation_resolution=row.reconciliation_resolution,
+        reconciliation_note=row.reconciliation_note,
+        reconciled_by_user_id=row.reconciled_by_user_id,
+        reconciled_at=_iso_datetime(row.reconciled_at),
         error_code=row.error_code,
         support_ref=row.support_ref,
     )
@@ -852,6 +868,10 @@ def _serialize_row_result_dict(
         "scheduled_local_at": result.scheduled_local_at,
         "scheduled_for": result.scheduled_for,
         "provider_send_at": result.provider_send_at,
+        "reconciliation_resolution": result.reconciliation_resolution,
+        "reconciliation_note": result.reconciliation_note,
+        "reconciled_by_user_id": result.reconciled_by_user_id,
+        "reconciled_at": result.reconciled_at,
         "error_code": result.error_code,
         "support_ref": result.support_ref,
     }

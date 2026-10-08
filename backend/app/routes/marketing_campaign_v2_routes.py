@@ -58,6 +58,13 @@ from app.services.marketing_campaign_v2_provider import (
 from app.services.marketing_campaign_v2_schedule_service import (
     MarketingCampaignV2ScheduleValidationError,
 )
+from app.services.marketing_campaign_v2_reconciliation_service import (
+    MarketingCampaignV2ReconciliationConflictError,
+    MarketingCampaignV2ReconciliationNotFoundError,
+    MarketingCampaignV2ReconciliationPersistenceError,
+    MarketingCampaignV2ReconciliationValidationError,
+    reconcile_campaign_v2_provider_child,
+)
 from app.services.marketing_campaign_v2_submit_service import (
     MarketingCampaignV2SubmitConflictError,
     MarketingCampaignV2SubmitDisabledError,
@@ -1228,6 +1235,49 @@ def update_campaign_v2_channel_binding_endpoint(binding_id: int):
 
 
 @marketing_campaign_v2_bp.post(
+    "/campaigns-v2/provider-campaigns/<int:child_id>/reconcile"
+)
+@jwt_required()
+def campaign_v2_provider_child_reconcile_endpoint(child_id: int):
+    try:
+        user, access = _resolve_campaign_v2_reconciliation_request()
+        payload = _parse_payload(
+            {
+                "resolution",
+                "provider_campaign_id",
+                "note",
+            }
+        )
+        result = reconcile_campaign_v2_provider_child(
+            child_id=child_id,
+            resolution=payload.get("resolution"),
+            provider_campaign_id=payload.get("provider_campaign_id"),
+            note=payload.get("note"),
+            actor_user_id=int(user.id),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2ReconciliationNotFoundError as exc:
+        return _error(str(exc), 404)
+    except (
+        MarketingCampaignV2RouteValidationError,
+        MarketingCampaignV2ReconciliationValidationError,
+    ) as exc:
+        return _error(str(exc), 400)
+    except MarketingCampaignV2ReconciliationConflictError as exc:
+        return _error(str(exc), 409)
+    except MarketingCampaignV2ReconciliationPersistenceError:
+        return _error(
+            "No fue posible persistir la reconciliación Campaign V2.",
+            500,
+        )
+    except Exception:
+        return _error("Falló la reconciliación Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.post(
     "/campaigns-v2/<int:campaign_id>/preflight"
 )
 @jwt_required()
@@ -1398,6 +1448,13 @@ def _resolve_campaign_v2_dispatch_config_request():
 def _resolve_campaign_v2_send_request():
     user, access = _resolve_request_access()
     _require_campaign_v2_send(access)
+    return user, access
+
+
+def _resolve_campaign_v2_reconciliation_request():
+    user, access = _resolve_request_access()
+    _require_campaign_v2_send(access)
+    _require_campaign_v2_global_management(access)
     return user, access
 
 
