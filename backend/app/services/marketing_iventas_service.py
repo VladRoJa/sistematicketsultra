@@ -365,7 +365,7 @@ def normalize_iventas_contact(
         contact.get("tags")
     )
 
-    name = _optional_text(
+    name = _normalize_iventas_contact_name(
         contact.get("name")
     )
 
@@ -584,6 +584,20 @@ def _normalize_iventas_tags(
         )
 
     return tuple(result)
+
+
+def _normalize_iventas_contact_name(value: Any) -> str | None:
+    """Omite nombres SVG o mayores a la capacidad estructurada de 255.
+
+    El payload completo sigue disponible en la captura raw-first.
+    No se truncan nombres reales ni se descarta el contacto.
+    """
+    name = _optional_text(value)
+    if name is None:
+        return None
+    if "data:image/svg+xml" in name.lower() or len(name) > 255:
+        return None
+    return name
 
 
 def _optional_text(
