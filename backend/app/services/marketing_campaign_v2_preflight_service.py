@@ -24,6 +24,7 @@ from app.services.marketing_campaign_v2_dispatch_config_service import (
     resolve_dispatch_channel_binding,
     resolve_dispatch_template,
     template_allows_channel,
+    template_file_url,
 )
 from app.services.marketing_phone import normalize_phone
 
@@ -50,6 +51,7 @@ class CampaignV2DispatchBatchPlan:
     template_name: str
     recipients: tuple[CampaignV2DispatchRecipientPlan, ...]
     blocked_reasons: tuple[str, ...]
+    file_url: str | None = None
 
     @property
     def ready(self) -> bool:
@@ -111,6 +113,7 @@ def build_campaign_v2_preflight(
         provider=provider_name,
         session=active_session,
     )
+    file_url = template_file_url(template)
 
     frozen_recipients = list(projection["frozen_recipients"])
     sendable_recipients = list(projection["sendable_recipients"])
@@ -242,6 +245,7 @@ def build_campaign_v2_preflight(
                     )
                 ),
                 blocked_reasons=tuple(sorted(set(reasons))),
+                file_url=file_url,
             )
         )
 
@@ -302,6 +306,7 @@ def serialize_campaign_v2_preflight(
             {
                 "id": plan.batches[0].template_id,
                 "template_name": plan.batches[0].template_name,
+                "file_url": plan.batches[0].file_url,
             }
             if plan.batches
             else None
@@ -315,6 +320,7 @@ def serialize_campaign_v2_preflight(
                 "provider_channel_id": batch.provider_channel_id,
                 "template_id": batch.template_id,
                 "template_name": batch.template_name,
+                "file_url": batch.file_url,
                 "recipient_count": len(batch.recipients),
                 "blocked_reasons": list(batch.blocked_reasons),
                 "ready": batch.ready,
@@ -426,6 +432,7 @@ def _dispatch_fingerprint(
                 "provider_channel_id": batch.provider_channel_id,
                 "template_id": batch.template_id,
                 "template_name": batch.template_name,
+                "file_url": batch.file_url,
                 "blocked_reasons": list(batch.blocked_reasons),
                 "recipients": [
                     {
