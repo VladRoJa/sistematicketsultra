@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import urlparse
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -105,7 +106,7 @@ def save_channel_binding(
     if not normalized_is_active:
         normalized_is_default = False
     normalized_actor = _positive_int(actor_user_id, "actor_user_id")
-    normalized_metadata = _dict_value(metadata, "metadata")
+    normalized_metadata = _normalize_template_metadata(metadata)
     timestamp = _normalize_now(now)
     catalog = _resolve_active_catalog_branch(
         sucursal_id=normalized_sucursal_id,
@@ -346,6 +347,23 @@ def resolve_dispatch_template(
     return row
 
 
+def template_file_url(
+    template: MarketingCampaignV2TemplateORM,
+) -> str | None:
+    metadata = dict(getattr(template, "metadata_json", None) or {})
+    raw_value = metadata.get("file_url")
+    if raw_value is None:
+        return None
+    if not isinstance(raw_value, str):
+        raise MarketingCampaignV2DispatchConfigValidationError(
+            "metadata.file_url debe ser texto."
+        )
+    normalized = raw_value.strip()
+    if not normalized:
+        return None
+    return _validate_template_file_url(normalized)
+
+
 def template_allows_channel(
     template: MarketingCampaignV2TemplateORM,
     provider_channel_id: str,
@@ -487,6 +505,46 @@ def _dict_value(value: Any, field_name: str) -> dict[str, Any]:
             f"{field_name} debe ser un objeto."
         )
     return dict(value)
+
+
+def _normalize_template_metadata(value: Any) -> dict[str, Any]:
+    metadata = _dict_value(value, "metadata")
+    if "file_url" not in metadata:
+        return metadata
+
+    raw_file_url = metadata.get("file_url")
+    if raw_file_url is None:
+        metadata.pop("file_url", None)
+        return metadata
+    if not isinstance(raw_file_url, str):
+        raise MarketingCampaignV2DispatchConfigValidationError(
+            "metadata.file_url debe ser texto."
+        )
+
+    normalized = raw_file_url.strip()
+    if not normalized:
+        metadata.pop("file_url", None)
+        return metadata
+
+    metadata["file_url"] = _validate_template_file_url(normalized)
+    return metadata
+
+
+def _validate_template_file_url(value: str) -> str:
+    if len(value) > 2048:
+        raise MarketingCampaignV2DispatchConfigValidationError(
+            "metadata.file_url excede 2048 caracteres."
+        )
+    parsed = urlparse(value)
+    if parsed.scheme.lower() != "https" or not parsed.netloc:
+        raise MarketingCampaignV2DispatchConfigValidationError(
+            "metadata.file_url debe ser una URL HTTPS absoluta."
+        )
+    if parsed.username is not None or parsed.password is not None:
+        raise MarketingCampaignV2DispatchConfigValidationError(
+            "metadata.file_url no admite credenciales embebidas."
+        )
+    return value
 
 
 def _strict_bool(value: Any, field_name: str) -> bool:
