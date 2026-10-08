@@ -330,12 +330,21 @@ def render_commercial_daily_xlsx(
                     raise CommercialDailyReportError(
                         f"Historical Reactivaciones baseline missing: {b} {month}"
                     )
-                if current is not None and int(current) != int(historical):
-                    raise CommercialDailyReportError(
-                        f"Historical Reactivaciones conflict with Track: "
-                        f"{b} {month} track={current} baseline={historical}"
-                    )
-                current = historical
+                if month in (date(2026, 1, 1), date(2026, 2, 1)):
+                    # Explicit historical-source exception. January/February
+                    # Track KPI snapshots (176/162, 2026-05-06) diverge from
+                    # the later archived BI workbook's underlying "Sheet" data.
+                    # This applies to *this report only*; Track remains intact.
+                    current = historical
+                else:
+                    # March/April agree with the original Excel historical
+                    # evidence. Fail closed if a non-null Track close diverges.
+                    if current is not None and int(current) != int(historical):
+                        raise CommercialDailyReportError(
+                            f"Historical Reactivaciones conflict with Track: "
+                            f"{b} {month} track={current} baseline={historical}"
+                        )
+                    current = historical
             monthly_cells[b].append(current)
 
     stream = BytesIO()
@@ -374,6 +383,47 @@ def render_commercial_daily_xlsx(
         ["Sucursal"] + [m.strftime("%m/%Y") for m in months],
         branches, monthly_cells, branch_metadata, title_text=monthly_title,
     )
+    if metric == "reactivaciones" and historical_monthly_by_branch is not None:
+        # Make the Jan/Feb exception visible in the workbook itself. Do not
+        # quietly replace the canonical KPI/Track values.
+        monthly_sheet = book.get_worksheet_by_name("Totales Mensuales")
+        historical_note = (
+            "FUENTES: Ene-Feb 2026: Excel BI historico "
+            "(Reactivaciones, hoja Sheet, SHA256 aea6d4ef...); "
+            "Track KPI 176/162 conserva cierres diferentes. "
+            "Mar-Abr conciliados con Track; May en adelante: Track."
+        )
+        notes_row = len(branches) + (
+            3 if not any(
+                branch_metadata.get(branch, {}).get("group")
+                for branch in branches
+            ) else 6
+        )
+        # The TOTAL row can vary with branch groups. Place the note below the
+        # actual used area rather than assuming a fixed row position.
+        notes_row = max(notes_row, monthly_sheet.dim_rowmax + 2)
+        monthly_sheet.merge_range(
+            notes_row, 0, notes_row, len(months),
+            historical_note,
+            book.add_format({
+                "italic": True,
+                "font_color": "#6E4C00",
+                "bg_color": "#FFF0CC",
+                "text_wrap": True,
+                "valign": "vcenter",
+            }),
+        )
+        monthly_sheet.set_row(notes_row, 34)
+        for column, month in enumerate(months, start=1):
+            if month in (date(2026, 1, 1), date(2026, 2, 1)):
+                monthly_sheet.write_comment(
+                    1, column,
+                    "Fuente: Excel historico BI, hoja Sheet y Reactivaciones "
+                    "(no snapshot canonico Track). "
+                    "Cierres KPI Track existentes: "
+                    + ("snapshot 176" if month.month == 1 else "snapshot 162"),
+                )
+
     book.close()
     return stream.getvalue()
 
