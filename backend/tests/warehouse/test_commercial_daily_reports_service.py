@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from io import BytesIO
 
 import pytest
@@ -127,9 +127,10 @@ def test_reactivaciones_february_correction_does_not_fake_negative_daily():
     monthly = book["Totales Mensuales"]
 
     assert book.sheetnames == ["Diario", "Semanal", "Totales Mensuales"]
-    assert weekly.max_column == 2  # Only Sunday October 4 onwards; no false Jan-Sep weekly totals.
-    assert weekly["B2"].value == "04/10-10/10 (corte 07/10)"
-    assert weekly["B3"].value == 8
+    assert weekly.max_column == 12  # August partial week through October current week.
+    assert weekly["B2"].value == "01/08 (parcial)"
+    assert weekly["L2"].value == "04/10-10/10 (corte 07/10)"
+    assert weekly["L3"].value == 8
     assert daily["B3"].value == 2
     assert daily["E3"].value == 2
     assert daily["F3"].value is None  # Future day never counted as zero.
@@ -137,7 +138,7 @@ def test_reactivaciones_february_correction_does_not_fake_negative_daily():
     assert monthly["J3"].value == 150  # September historical monthly close.
     assert monthly["K3"].value == 14  # October MTD at cutoff.
     assert "04/10/2026" in daily["A1"].value
-    assert "DESDE 04/10/2026" in weekly["A1"].value
+    assert "01/08/2026 AL 07/10/2026" in weekly["A1"].value
     assert "07/10/2026" in monthly["A1"].value
 
 
@@ -173,7 +174,7 @@ def test_reactivaciones_monthly_history_without_old_daily_dates():
         )),
         data_only=True,
     )
-    assert report["Semanal"]["B3"].value == 1
+    assert report["Semanal"].cell(row=3, column=12).value == 1
     assert report["Totales Mensuales"]["B3"].value == 80
     assert report["Totales Mensuales"]["C3"].value == 90
     assert report["Totales Mensuales"]["K3"].value == 7
@@ -375,3 +376,72 @@ def test_january_february_explicit_historical_source_overrides_old_track_unchang
         for row in range(total + 1, monthly.max_row + 1)
     )
     assert workbook.sheetnames == ["Diario", "Semanal", "Totales Mensuales"]
+
+
+def test_weekly_reactivaciones_comparison_covers_august_september_october():
+    start = date(2026, 8, 1)
+    cutoff = date(2026, 10, 7)
+    days = [start + timedelta(days=i) for i in range((cutoff - start).days + 1)]
+    data = {
+        "VILLA_VERDE": {day: day.day for day in days},
+        "VILLAS_DEL_REY": {day: day.day * 2 for day in days},
+    }
+    workbook = load_workbook(
+        BytesIO(render_commercial_daily_xlsx(
+            metric="reactivaciones",
+            cutoff=cutoff,
+            mtd_series=data,
+        )),
+        data_only=True,
+    )
+    weekly = workbook["Semanal"]
+    assert weekly.max_column == 12
+    assert weekly["B2"].value == "01/08 (parcial)"
+    assert weekly["C2"].value == "02/08-08/08"
+    assert weekly["G2"].value == "30/08-05/09"
+    assert weekly["K2"].value == "27/09-03/10"
+    assert weekly["L2"].value == "04/10-10/10 (corte 07/10)"
+    assert weekly["B3"].value == 1
+    assert weekly["C3"].value == 7
+    assert weekly["L3"].value == 4
+    assert weekly["L4"].value == 8
+    assert weekly["L5"].value == 12
+    assert workbook["Totales Mensuales"]["I3"].value == 31
+    assert workbook["Totales Mensuales"]["J3"].value == 30
+    assert workbook["Totales Mensuales"]["K3"].value == 7
+    assert "01/08/2026 AL 07/10/2026" in weekly["A1"].value
+
+
+def test_older_negative_reactivaciones_is_blank_not_negative_or_zero():
+    start = date(2026, 8, 1)
+    cutoff = date(2026, 10, 7)
+    days = [start + timedelta(days=i) for i in range((cutoff - start).days + 1)]
+    values = {day: day.day for day in days}
+    values[date(2026, 8, 10)] = 4  # corrected down from 9
+    report = load_workbook(
+        BytesIO(render_commercial_daily_xlsx(
+            metric="reactivaciones",
+            cutoff=cutoff,
+            mtd_series={"VILLA_VERDE": values},
+        )),
+        data_only=True,
+    )
+    weekly = report["Semanal"]
+    assert weekly["D2"].value == "09/08-15/08"
+    assert weekly["D3"].value is None
+    assert weekly["D4"].value is None  # no misleading subtotal
+    assert weekly["E3"].value == 7
+    assert weekly["L3"].value == 4
+    assert any(
+        "no representan cero" in str(weekly.cell(row, 1).value)
+        for row in range(5, weekly.max_row + 1)
+    )
+
+
+def test_reactivaciones_three_month_window_rolls_at_calendar_year():
+    from app.warehouse.services.commercial_daily_reports_service import (
+        _three_month_window_start,
+    )
+    assert _three_month_window_start(date(2026, 10, 7)) == date(2026, 8, 1)
+    assert _three_month_window_start(date(2027, 1, 7)) == date(2026, 11, 1)
+    assert _three_month_window_start(date(2026, 1, 7)) == date(2026, 1, 1)
