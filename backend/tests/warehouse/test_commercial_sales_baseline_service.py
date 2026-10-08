@@ -41,3 +41,22 @@ def test_new_daily_cut_requires_previous_mtd(monkeypatch):
 
 def test_baseline_hash_matches_original():
     assert service._load_source()["Semanal"]["A1"].value is not None
+
+def test_october_5_appends_without_touching_historical_week(monkeypatch):
+    source = service._load_source()
+    weekly, monthly, daily = service._source_rows(source)
+    names = set(weekly) | set(monthly) | set(daily)
+    readings = {
+        date(2026, 9, 30): {name: 30 for name in names},
+        date(2026, 10, 4): {name: 8 for name in names},
+        date(2026, 10, 5): {name: 10 for name in names},
+    }
+    output = _render(monkeypatch, date(2026, 10, 5), readings)
+    assert output["DIARIO 04 OCT"].cell(daily["VILLASDELREY"], 3).value == source["DIARIO 04 OCT"].cell(daily["VILLASDELREY"], 3).value
+    assert output["DIARIO 04 OCT"].cell(daily["VILLASDELREY"], 4).value == 2
+    assert output["Semanal"].cell(weekly["VILLASDELREY"], 35).value == source["Semanal"].cell(weekly["VILLASDELREY"], 35).value
+    assert output["Semanal"].cell(weekly["VILLASDELREY"], 37).value == (
+        source["DIARIO 04 OCT"].cell(daily["VILLASDELREY"], 3).value + 2
+    )
+    assert output["Totales Mensuales"].cell(monthly["VILLASDELREY"], 22).value == source["Totales Mensuales"].cell(monthly["VILLASDELREY"], 22).value
+    assert output["Totales Mensuales"].cell(monthly["VILLASDELREY"], 24).value == 10
