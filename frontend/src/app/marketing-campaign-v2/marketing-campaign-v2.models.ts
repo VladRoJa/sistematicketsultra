@@ -616,11 +616,51 @@ export interface CampaignV2ReportingProviderRaw {
 export interface CampaignV2ReportingCost {
   status: string;
   currency: string | null;
-  total: number | null;
+  total: number | string | null;
+  known_total?: string | null;
+  known_children?: number;
+  missing_children?: number;
+}
+
+export type CampaignV2ProviderStatsCompleteness = 'complete' | 'partial' | 'unavailable';
+
+export interface CampaignV2ProviderChildReportingRow {
+  id: number;
+  sucursal_canon: string | null;
+  provider: string;
+  provider_campaign_id: string | null;
+  status: string;
+  recipient_count: number;
+  snapshot_id: number | null;
+  observed_at: string | null;
+  analytics_status: string | null;
+  provider_raw: CampaignV2ReportingProviderRaw | null;
+  cost: CampaignV2ReportingCost;
+}
+
+export interface CampaignV2ProviderChildrenReporting {
+  campaign_id: number;
+  summary: {
+    status: string;
+    child_count: number;
+    accepted_batches: number;
+    scheduled_batches: number;
+    failed_batches: number;
+    reconciliation_required_batches: number;
+    batches_with_usable_stats: number;
+    batches_without_usable_stats: number;
+    provider_raw_status: CampaignV2ProviderStatsCompleteness;
+    latest_observed_at: string | null;
+    provider_raw: CampaignV2ReportingProviderRaw | null;
+    cost: CampaignV2ReportingCost;
+  };
+  children: CampaignV2ProviderChildReportingRow[];
 }
 
 export interface CampaignV2ReportingObservation {
   snapshot_id: number | null;
+  snapshot_ids?: number[];
+  source?: 'PROVIDER_CHILDREN' | string;
   latest_observed_at: string | null;
   analytics_status: string | null;
   fingerprint?: string | null;
@@ -689,12 +729,14 @@ export interface CampaignV2IndividualReport {
   provider_raw: CampaignV2ReportingProviderRaw | null;
   interactions: CampaignV2ReportingInteractions;
   cost: CampaignV2ReportingCost;
+  provider_children?: CampaignV2ProviderChildrenReporting | null;
   dimensions: CampaignV2ReportingDimensions;
   evolution: CampaignV2ReportingEvolutionPoint[];
 }
 
 export interface CampaignV2ConsolidatedCampaignRow {
   campaign: CampaignV2ReportingCampaignIdentity;
+  provider_children?: CampaignV2ProviderChildrenReporting | null;
   observation: CampaignV2ReportingObservation;
   audience: {
     total_recipients: number;
@@ -715,7 +757,10 @@ export interface CampaignV2ConsolidatedSummary {
   normalized: CampaignV2ReportingNormalized;
   rates: CampaignV2ReportingRates;
   coverage: CampaignV2ReportingCoverage;
-  provider_raw: CampaignV2ReportingProviderRaw;
+  provider_raw: CampaignV2ReportingProviderRaw | null;
+  normalized_status?: CampaignV2ProviderStatsCompleteness;
+  provider_raw_status?: CampaignV2ProviderStatsCompleteness;
+  provider_children?: { campaigns_with_children: number; batch_count: number; batch_metrics_complete: boolean | null };
   interactions: CampaignV2ReportingInteractions;
   cost: CampaignV2ReportingCost;
 }

@@ -113,3 +113,5 @@ dl { margin:0; }.metadata-panel dl div { display:grid; grid-template-columns:170
   .reporting-actions { align-items:stretch; flex-direction:column; }
   .reporting-filters,.reporting-metric-grid,.reporting-rate-grid,.reporting-secondary-grid { grid-template-columns:1fr; }
 }
+
+.reporting-completeness-notice { margin:0; border-left:3px solid #d97706; border-radius:4px; background:#fffbeb; padding:10px 12px; color:#92400e; font-size:12px; line-height:1.5; }

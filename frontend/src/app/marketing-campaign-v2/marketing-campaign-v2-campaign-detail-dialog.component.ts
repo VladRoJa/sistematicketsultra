@@ -22,6 +22,8 @@ import {
   CampaignV2ObservedFamily,
   CampaignV2PreflightResponse,
   CampaignV2Purpose,
+  CampaignV2ProviderChildReportingRow,
+  CampaignV2ProviderStatsCompleteness,
   CampaignV2SubmitResponse,
   CampaignV2RecipientSummary,
   CampaignV2Source,
@@ -37,6 +39,9 @@ import {
   campaignV2HistoryWindowLabel,
   campaignV2IventasCurrentStatusLabel,
   campaignV2ReportingCostLabel,
+  campaignV2ProviderBatchLabel,
+  campaignV2ProviderBatchStatsLabel,
+  campaignV2ProviderStatsLabel,
   campaignV2ReportingPercent,
   campaignV2ReportingSnapshotLabel,
   campaignV2ReportingValue,
@@ -522,6 +527,18 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
 
   reportingCostLabel(status: string): string {
     return campaignV2ReportingCostLabel(status);
+  }
+
+  providerStatsLabel(status: CampaignV2ProviderStatsCompleteness): string {
+    return campaignV2ProviderStatsLabel(status);
+  }
+
+  providerBatchLabel(status: string): string {
+    return campaignV2ProviderBatchLabel(status);
+  }
+
+  providerBatchStatsLabel(batch: CampaignV2ProviderChildReportingRow): string {
+    return campaignV2ProviderBatchStatsLabel(batch);
   }
 
   previousRecipientsPage(): void {

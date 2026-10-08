@@ -90,7 +90,7 @@
       </p>
 
       <ng-container *ngIf="reporting as report">
-        <p *ngIf="report.observation.snapshot_id === null" class="reporting-empty">
+        <p *ngIf="!report.observation.latest_observed_at" class="reporting-empty">
           Aún no hay observaciones persistidas para esta campaña.
         </p>
 
@@ -105,6 +105,53 @@
           <div><span>Viewed</span><strong>{{ report.normalized.viewed | number }}</strong></div>
           <div><span>Reach</span><strong>{{ report.normalized.reach_count | number }}</strong></div>
         </div>
+
+        <section *ngIf="report.provider_children as childReport" class="reporting-children">
+          <div class="reporting-children-heading">
+            <h4>Envíos por sucursal</h4>
+            <p>{{ childReport.summary.child_count | number }} envíos ·
+              {{ childReport.summary.accepted_batches | number }} aceptados ·
+              {{ childReport.summary.batches_with_usable_stats | number }} con estadísticas
+            </p>
+          </div>
+          <p class="reporting-children-notice" *ngIf="childReport.summary.provider_raw_status !== 'complete'" role="status">
+            {{ providerStatsLabel(childReport.summary.provider_raw_status) }}.
+            Los indicadores mostrados corresponden a la evidencia disponible; las tasas generales permanecen sin confirmar.
+          </p>
+          <p class="muted">Un envío programado no significa que los mensajes ya se entregaron.
+            Los costos no se estiman cuando iVentas no proporciona evidencia verificable.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sucursal</th><th>Estado del envío</th><th>Destinatarios</th>
+                  <th>Estadísticas</th><th>Successful</th><th>Delivered</th>
+                  <th>Viewed</th><th>Última observación</th><th>Costo</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let batch of childReport.children">
+                  <td>{{ batch.sucursal_canon || 'Sin sucursal' }}</td>
+                  <td>{{ providerBatchLabel(batch.status) }}</td>
+                  <td>{{ batch.recipient_count | number }}</td>
+                  <td>{{ providerBatchStatsLabel(batch) }}</td>
+                  <td>{{ reportingValue(batch.provider_raw?.successful) }}</td>
+                  <td>{{ reportingValue(batch.provider_raw?.delivered) }}</td>
+                  <td>{{ reportingValue(batch.provider_raw?.viewed) }}</td>
+                  <td>{{ reportingObservedAt(batch.observed_at) }}</td>
+                  <td>
+                    {{ reportingCostLabel(batch.cost.status) }}
+                    <span *ngIf="batch.cost.total !== null">
+                      · {{ batch.cost.total }} {{ batch.cost.currency }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="muted">Costo general: {{ reportingCostLabel(childReport.summary.cost.status) }}.
+            No se presenta un total si algún envío carece de costo confirmado.</p>
+        </section>
 
         <div class="reporting-rate-grid">
           <div><span>Successful rate</span><strong>{{ reportingPercent(report.rates.successful_rate) }}</strong></div>
