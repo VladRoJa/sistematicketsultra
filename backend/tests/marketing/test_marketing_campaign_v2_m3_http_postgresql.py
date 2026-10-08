@@ -382,9 +382,11 @@ def test_scheduler_multiple_postgresql_cycles_isolate_failures_and_dedupe():
             observations_before = session.query(Observation).count()
             assert snapshots_before == 3
             assert observations_before == 3  # seeded + one per child
+            # A child with no snapshots is prioritized. In cycles 1/2,
+            # B is first; once both have evidence, oldest A is first.
             assert calls == [
-                "ci-fake-batch-a", "ci-fake-batch-b",
-                "ci-fake-batch-a", "ci-fake-batch-b",
+                "ci-fake-batch-b", "ci-fake-batch-a",
+                "ci-fake-batch-b", "ci-fake-batch-a",
                 "ci-fake-batch-a", "ci-fake-batch-b",
             ]
 
