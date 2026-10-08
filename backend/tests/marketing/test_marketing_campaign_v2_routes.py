@@ -260,6 +260,10 @@ class TestMarketingCampaignV2Routes:
             ("put", "/api/marketing/campaigns-v2/dispatch/channel-bindings/1"),
             ("post", "/api/marketing/campaigns-v2/1/preflight"),
             ("post", "/api/marketing/campaigns-v2/1/submit"),
+            (
+                "post",
+                "/api/marketing/campaigns-v2/provider-campaigns/1/reconcile",
+            ),
         ]
         for method, path in paths:
             response = getattr(self.client, method)(
@@ -2554,3 +2558,131 @@ class TestMarketingCampaignV2Routes:
         assert response.get_json()["all_submitted"] is False
         kwargs = submit.call_args.kwargs
         assert kwargs["schedule"] == schedule
+
+
+    def test_m3_reconciliation_requires_global_send_scope(self):
+        non_global_sender = SimpleNamespace(
+            **{
+                **self.partial_access.__dict__,
+                "can_send_campaigns": True,
+            }
+        )
+        with self._auth(non_global_sender), patch.object(
+            routes,
+            "reconcile_campaign_v2_provider_child",
+        ) as mocked:
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/provider-campaigns/10/reconcile",
+                headers=self.headers,
+                json={
+                    "resolution": "NOT_CREATED_CONFIRMED",
+                    "note": "Confirmado manualmente.",
+                },
+            )
+
+        assert response.status_code == 403
+        mocked.assert_not_called()
+
+    def test_m3_reconciliation_works_with_kill_switch_off(self):
+        self.app.config["CAMPAIGN_V2_PROVIDER_SEND_ENABLED"] = False
+        expected = {
+            "child_id": 10,
+            "campaign_id": 7,
+            "status": "RETRY_ELIGIBLE",
+            "provider_campaign_id": None,
+            "reconciliation": {
+                "resolution": "NOT_CREATED_CONFIRMED",
+            },
+        }
+        with self._auth(self.global_access), patch.object(
+            routes,
+            "reconcile_campaign_v2_provider_child",
+            return_value=expected,
+        ) as mocked:
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/provider-campaigns/10/reconcile",
+                headers=self.headers,
+                json={
+                    "resolution": "NOT_CREATED_CONFIRMED",
+                    "note": "Proveedor confirmó que no se creó.",
+                },
+            )
+
+        assert response.status_code == 200
+        assert response.get_json()["status"] == "RETRY_ELIGIBLE"
+        kwargs = mocked.call_args.kwargs
+        assert kwargs["child_id"] == 10
+        assert kwargs["resolution"] == "NOT_CREATED_CONFIRMED"
+        assert kwargs["provider_campaign_id"] is None
+        assert kwargs["actor_user_id"] == 7
+
+    def test_m3_reconciliation_found_passes_only_manual_evidence(self):
+        expected = {
+            "child_id": 10,
+            "campaign_id": 7,
+            "status": "SUBMITTED",
+            "provider_campaign_id": "provider-found",
+            "reconciliation": {
+                "resolution": "PROVIDER_CAMPAIGN_FOUND",
+            },
+        }
+        with self._auth(self.global_access), patch.object(
+            routes,
+            "reconcile_campaign_v2_provider_child",
+            return_value=expected,
+        ) as mocked:
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/provider-campaigns/10/reconcile",
+                headers=self.headers,
+                json={
+                    "resolution": "PROVIDER_CAMPAIGN_FOUND",
+                    "provider_campaign_id": "provider-found",
+                    "note": "Visible y validada manualmente en iVentas.",
+                },
+            )
+
+        assert response.status_code == 200
+        kwargs = mocked.call_args.kwargs
+        assert kwargs["provider_campaign_id"] == "provider-found"
+        assert "phones" not in kwargs
+        assert "channelId" not in kwargs
+        assert "sendAt" not in kwargs
+
+    def test_m3_reconciliation_rejects_browser_authority_fields(self):
+        with self._auth(self.global_access), patch.object(
+            routes,
+            "reconcile_campaign_v2_provider_child",
+        ) as mocked:
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/provider-campaigns/10/reconcile",
+                headers=self.headers,
+                json={
+                    "resolution": "NOT_CREATED_CONFIRMED",
+                    "note": "Confirmado.",
+                    "status": "READY",
+                },
+            )
+
+        assert response.status_code == 400
+        mocked.assert_not_called()
+        assert "status" in response.get_json()["message"]
+
+    def test_m3_reconciliation_conflict_maps_to_409(self):
+        with self._auth(self.global_access), patch.object(
+            routes,
+            "reconcile_campaign_v2_provider_child",
+            side_effect=routes.MarketingCampaignV2ReconciliationConflictError(
+                "El child ya tiene resolución."
+            ),
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/provider-campaigns/10/reconcile",
+                headers=self.headers,
+                json={
+                    "resolution": "NOT_CREATED_CONFIRMED",
+                    "note": "Confirmado.",
+                },
+            )
+
+        assert response.status_code == 409
+        assert "resolución" in response.get_json()["message"]

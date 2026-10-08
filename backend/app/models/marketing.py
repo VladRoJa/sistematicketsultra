@@ -642,6 +642,20 @@ class MarketingCampaignV2ProviderCampaignORM(db.Model):
         nullable=True,
     )
     provider_send_at = db.Column(db.String(64), nullable=True)
+    reconciliation_resolution = db.Column(db.String(40), nullable=True)
+    reconciliation_note = db.Column(db.Text, nullable=True)
+    reconciliation_snapshot_json = db.Column(
+        db.JSON,
+        nullable=False,
+        default=dict,
+        server_default=db.text("'{}'"),
+    )
+    reconciled_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    reconciled_at = db.Column(db.DateTime(timezone=True), nullable=True)
     created_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
@@ -683,6 +697,7 @@ class MarketingCampaignV2ProviderCampaignORM(db.Model):
     created_by_user = db.relationship("UserORM", foreign_keys=[created_by_user_id])
     submitted_by_user = db.relationship("UserORM", foreign_keys=[submitted_by_user_id])
     scheduled_by_user = db.relationship("UserORM", foreign_keys=[scheduled_by_user_id])
+    reconciled_by_user = db.relationship("UserORM", foreign_keys=[reconciled_by_user_id])
 
     __table_args__ = (
         db.UniqueConstraint(
@@ -704,9 +719,41 @@ class MarketingCampaignV2ProviderCampaignORM(db.Model):
         ),
         db.CheckConstraint(
             "status IN ('PREPARED', 'READY', 'BLOCKED', 'SUBMITTING', "
-            "'SUBMITTED', 'SCHEDULED', 'PROVIDER_ERROR', "
-            "'RECONCILIATION_REQUIRED')",
+            "'SUBMITTED', 'SCHEDULED', 'RETRY_ELIGIBLE', "
+            "'PROVIDER_ERROR', 'RECONCILIATION_REQUIRED')",
             name="ck_marketing_campaign_v2_provider_campaign_status",
+        ),
+        db.CheckConstraint(
+            "reconciliation_resolution IS NULL OR "
+            "reconciliation_resolution IN ("
+            "'PROVIDER_CAMPAIGN_FOUND', 'NOT_CREATED_CONFIRMED'"
+            ")",
+            name="ck_mkt_v2_provider_campaign_reconciliation_resolution",
+        ),
+        db.CheckConstraint(
+            "("
+            "reconciliation_resolution IS NULL "
+            "AND reconciled_at IS NULL "
+            "AND reconciliation_note IS NULL"
+            ") OR ("
+            "reconciliation_resolution IS NOT NULL "
+            "AND reconciled_at IS NOT NULL "
+            "AND reconciliation_note IS NOT NULL "
+            "AND length(trim(reconciliation_note)) > 0"
+            ")",
+            name="ck_mkt_v2_provider_campaign_reconciliation_audit",
+        ),
+        db.CheckConstraint(
+            "reconciliation_resolution <> 'PROVIDER_CAMPAIGN_FOUND' "
+            "OR provider_campaign_id IS NOT NULL",
+            name="ck_mkt_v2_provider_campaign_reconciled_found",
+        ),
+        db.CheckConstraint(
+            "status <> 'RETRY_ELIGIBLE' OR ("
+            "reconciliation_resolution = 'NOT_CREATED_CONFIRMED' "
+            "AND provider_campaign_id IS NULL"
+            ")",
+            name="ck_mkt_v2_provider_campaign_retry_eligible",
         ),
         db.CheckConstraint(
             "("
