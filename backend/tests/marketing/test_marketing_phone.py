@@ -56,9 +56,9 @@ def test_normalize_member_phone_prefers_complete_telefono():
 
 
 def test_format_mexico_international_phone_projects_canonical_mx10():
-    assert format_mexico_international_phone("6861234567") == "526861234567"
-    assert format_mexico_international_phone("+52 686 123 4567") == "526861234567"
-    assert format_mexico_international_phone("+521 686 123 4567") == "526861234567"
+    assert format_mexico_international_phone("6861234567") == "5216861234567"
+    assert format_mexico_international_phone("+52 686 123 4567") == "5216861234567"
+    assert format_mexico_international_phone("+521 686 123 4567") == "5216861234567"
 
 
 def test_format_mexico_international_phone_rejects_non_canonical_phone():

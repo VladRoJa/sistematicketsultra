@@ -1,9 +1,9 @@
 # Contrato Campañas V2 — Fase 3 / M2
 ## Controlled Submit
 
-Estado: ACCEPTED — 2026-10-07
+Estado: IMPLEMENTADO / PENDIENTE DE RE-ACCEPTANCE LIVE — 2026-10-07
 Gate de entrada: CUMPLIDO — `CONTRATO_CAMPANAS_V2_FASE_3_M1.md` está ACCEPTED en main.
-Gate de salida: CUMPLIDO — primer caso live controlado ejecutado con autorización explícita, phone set revisado, persistencia `SUBMITTED` verificada y kill switch restaurado a OFF.
+Gate de salida: REABIERTO — el primer POST live creó el broadcast y persistió `SUBMITTED`, pero iVentas reportó `successfulMessages=0` y `failedMessages=5`; se corrigió la proyección telefónica de transporte y falta repetir el smoke live antes de aceptar M2.
 
 ## 0. Uso de este contrato
 
@@ -538,9 +538,10 @@ M2 puede marcarse ACCEPTED solo si:
 9. no hay retries ciegos;
 10. exports manuales permanecen;
 11. suite específica y regresión Campaign V2 están verdes;
-12. se ejecutó al menos un caso live controlado **con autorización explícita** y phone set revisado.
+12. se ejecutó al menos un caso live controlado **con autorización explícita** y phone set revisado;
+13. después del POST, `GET /v2/broadcast/stats/{campaign_id}` confirma evidencia recipient-level de ejecución real: `successfulMessages > 0`. HTTP 200 al crear el broadcast y estado local `SUBMITTED` no bastan por sí solos.
 
-Si no se realiza el caso live, M2 queda IMPLEMENTADO / PENDIENTE DE ACCEPTANCE LIVE, no ACCEPTED.
+Si no se realiza el caso live o el provider termina con `successfulMessages=0` para toda la cohorte controlada, M2 queda IMPLEMENTADO / PENDIENTE DE RE-ACCEPTANCE LIVE, no ACCEPTED.
 
 ## 24. Cierre documental M2
 
@@ -555,9 +556,9 @@ Al aceptar:
 
 No empezar M3 en la misma conversación.
 
-### 24.1 Cierre de implementación y acceptance live — 2026-10-07
+### 24.1 Cierre de implementación y primer intento live — 2026-10-07
 
-Implementación completada y primer POST live controlado ejecutado con autorización explícita.
+Implementación completada y primer POST live controlado ejecutado con autorización explícita; el intento no cerró acceptance porque el provider reportó 0 successful / 5 failed.
 
 Decisiones finales:
 
@@ -567,7 +568,7 @@ Decisiones finales:
 - **Provider adapter:** `IVentasBroadcastProvider` encapsula URL, Authorization, timeout, payload y clasificación de errores. `POST /v2/broadcast` vive únicamente en ese adapter.
 - **Sin retry automático:** create campaign hace un solo POST. Timeout, 5xx, 409 ambiguo, JSON inválido o 2xx sin `campaign` terminan en `RECONCILIATION_REQUIRED` y no se reintentan automáticamente.
 - **Payload inmediato:** `templateName`, `leads[{phone, vars}]`, `channelId`, `name`; M2 omite `sendAt`.
-- **Phone:** `marketing_phone.normalize_phone()` sigue siendo la única normalización; `format_mexico_international_phone()` es únicamente la proyección de transporte `MX10 -> 52+MX10` para iVentas.
+- **Phone:** `marketing_phone.normalize_phone()` sigue siendo la única normalización; `format_mexico_international_phone()` es únicamente la proyección de transporte para iVentas. Evidencia live del 2026-10-07 mostró que campañas exitosas usan `521+MX10` (13 dígitos, sin `+`), mientras el primer smoke con `52+MX10` (12 dígitos) terminó 0 successful / 5 failed. La proyección corregida es `MX10 -> 521+MX10`.
 - **TOCTOU:** submit recibe solo `template_id` + `expected_dispatch_fingerprint`, reconstruye el preflight completo en backend y responde conflicto si el fingerprint cambió.
 - **Autoridad del browser:** Angular no puede enviar phones, vars, urlVars, channelId, provider ID ni `sendAt`.
 - **Idempotencia/concurrencia:** child rows se preparan con `idempotency_key` única y cada batch hace transición atómica `READY -> SUBMITTING` antes del provider POST. Un segundo request ante `SUBMITTING`, `SUBMITTED` o estado incompatible hace 0 provider calls.
@@ -607,7 +608,7 @@ Evidencia de implementación:
 - Alembic: grafo válido, sin colisiones/ciclos; head Campaign V2 `d2f8a4c6b1e7`.
 - Soporte QA controlado agregado posteriormente: **7/7** pruebas del helper `QA_MANUAL`, **494/494** regresión Campaign V2 y **28/28** pruebas enfocadas M2/iVentas.
 
-Evidencia de acceptance live:
+Evidencia del primer smoke live — NO ACEPTADO:
 
 - Campaign V2 QA: `9`, source `QA_MANUAL`, purpose `NEW_SALE`, una sola sucursal `AZAHARES_CUL`.
 - Preview/freeze fingerprint: `cf8be4f9ca619e14e6c0d74d9c3700588e9a64625e74773be6526e138cff2df1`.
@@ -619,21 +620,25 @@ Evidencia de acceptance live:
 - Dispatch fingerprint: `acc14a6443684c7395c0140044056a96bd0f4a559aa214caf893de5938275850`.
 - Autorización explícita recibida antes del POST real.
 - `POST /v2/broadcast`: **1 ejecución**, respuesta HTTP **200**.
-- Provider campaign child: `1`; estado final persistido: `SUBMITTED`.
+- Provider campaign child: `1`; estado local persistido: `SUBMITTED`.
 - Provider campaign id: `6ac6e3b081b13a00078a5f20`.
 - Recipient count persistido: **5**.
 - `provider_deduplicated=false`; `error_code=None`; `support_ref=None`.
 - `submitted_by_user_id=47`.
 - `submit_started_at=2026-10-07 17:28:31.851831-07:00`; `submitted_at=2026-10-07 17:28:32.284605-07:00`.
-- Payload live sanitizado conforme al contrato: `templateName`, `leads` (5), `channelId`, `name`; sin `sendAt`. No se guardan teléfonos ni secretos en este documento.
-- No se observó error real del provider en el smoke exitoso. La clasificación y persistencia de errores determinísticos/ambiguos permanecen cubiertas por la suite automatizada; no se provocó un fallo live deliberadamente.
-- Al terminar, `CAMPAIGN_V2_PROVIDER_SEND_ENABLED` fue restaurado y verificado en `False`.
+- Payload live sanitizado: `templateName`, `leads` (5), `channelId`, `name`; sin `sendAt`.
+- La UI iVentas mostró la campaña `Finalizada` pero sin `Último envío`, y `GET /v2/broadcast/stats/6ac6e3b081b13a00078a5f20` confirmó `successfulMessages=0`, `failedMessages=5`, `sentMessages=0`, `deliveredMessages=0`, `viewedMessages=0`, `analyticsStatus=not_synced`.
+- Comparación contra una campaña iVentas exitosa de referencia: los 497 `successfulMessages` observados tienen 13 dígitos y prefijo `521`; los 5 `failedMessages` del smoke tienen 12 dígitos y prefijo `52`. Ninguno usa signo `+`.
+- Causa técnica identificada: la proyección de transporte M2 usaba `52+MX10`; se corrige a `521+MX10` manteniendo MX10 como identidad canónica interna.
+- La corrección quedó validada con **37/37** tests enfocados y **494/494** regresión Campaign V2.
+- Al terminar el smoke, `CAMPAIGN_V2_PROVIDER_SEND_ENABLED` fue restaurado y verificado en `False`.
+- No reintentar Campaign 9: su child ya está `SUBMITTED` e idempotencia debe impedir duplicados. El re-acceptance debe usar una nueva campaña QA controlada.
 
 Estado de salida actual:
 
-`F3-M2 — ACCEPTED — 2026-10-07`
+`F3-M2 — IMPLEMENTADO / PENDIENTE DE RE-ACCEPTANCE LIVE — 2026-10-07`
 
-M3 queda **desbloqueado por contrato**, pero no se inicia en esta conversación.
+`F3-M3 — BLOQUEADO HASTA RE-ACCEPTANCE DE M2`
 
 ## 25. Prompt de arranque para una conversación nueva
 

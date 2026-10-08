@@ -41,7 +41,7 @@ def format_mexico_international_phone(raw_value: Any) -> str | None:
     phone_mx10 = normalize_phone(raw_value)
     if phone_mx10 is None:
         return None
-    return f"52{phone_mx10}"
+    return f"521{phone_mx10}"
 
 
 def mask_phone(raw_value: Any) -> str:
