@@ -71,7 +71,13 @@ def _publish_one(
     else:
         report_type_key = "comercial_reactivaciones_daily"
 
-    payload = build_commercial_daily_xlsx(metric=metric, cutoff=cutoff)
+    if metric == "venta_nueva":
+        from app.warehouse.services.commercial_sales_baseline_service import (
+            build_sales_from_baseline,
+        )
+        payload = build_sales_from_baseline(cutoff=cutoff)
+    else:
+        payload = build_commercial_daily_xlsx(metric=metric, cutoff=cutoff)
     upload_result = create_warehouse_document_upload(
         report_type_key=report_type_key,
         original_filename=f"{report_type_key}_{cutoff.isoformat()}.xlsx",
