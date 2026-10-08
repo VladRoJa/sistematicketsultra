@@ -137,5 +137,63 @@ def test_new_cells_inherit_template_styles(monkeypatch):
     assert monthly["W4"].style_id == monthly["V4"].style_id
     assert monthly["W31"].style_id == monthly["V31"].style_id
     assert monthly["X4"].style_id == monthly["V4"].style_id
-    assert "04 DE 10" in daily["B1"].value
+    assert "04 AL 10 DE OCTUBRE DE 2026" in daily["B1"].value
     assert source["Semanal"]["AJ3"].value == weekly["AJ3"].value
+
+
+def test_titles_and_merge_ranges_for_october_7(monkeypatch):
+    names = {service._canon(key) for key in CANONICAL_BRANCHES}
+    readings = {
+        date(2026, 9, 30): {key: 70 for key in names},
+        **{
+            date(2026, 10, day): {key: day + 10 for key in names}
+            for day in range(4, 8)
+        },
+    }
+    book = _render(monkeypatch, date(2026, 10, 7), readings)
+    daily = book["DIARIO 04 OCT"]
+    weekly = book["Semanal"]
+    monthly = book["Totales Mensuales"]
+
+    assert "04 AL 10 DE OCTUBRE DE 2026" in daily["B1"].value
+    assert "B1:I1" in {str(item) for item in daily.merged_cells.ranges}
+    assert "04 AL 10 DE OCTUBRE DE 2026" in weekly["A1"].value
+    assert weekly["AK2"].value == "04 - 10 Oct"
+    assert "A1:AK1" in {str(item) for item in weekly.merged_cells.ranges}
+    assert monthly["B1"].value.endswith("CORTE AL 07 DE OCTUBRE DE 2026")
+    assert "B1:X1" in {str(item) for item in monthly.merged_cells.ranges}
+
+
+def test_titles_rotate_to_next_week_without_touching_october_4(monkeypatch):
+    original = service._load_source()
+    keys = {service._canon(key) for key in CANONICAL_BRANCHES}
+    readings = {
+        date(2026, 9, 30): {key: 70 for key in keys},
+        **{
+            date(2026, 10, day): {key: day + 10 for key in keys}
+            for day in range(4, 12)
+        },
+    }
+    book = _render(monkeypatch, date(2026, 10, 11), readings)
+
+    daily = book["DIARIO 11 OCT"]
+    weekly = book["Semanal"]
+    assert "11 AL 17 DE OCTUBRE DE 2026" in daily["B1"].value
+    assert "11 AL 17 DE OCTUBRE DE 2026" in weekly["A1"].value
+    assert weekly["AK2"].value == "04 - 10 Oct"
+    assert weekly["AL2"].value == "11 - 17 Oct"
+    assert "A1:AL1" in {str(item) for item in weekly.merged_cells.ranges}
+    assert weekly["AJ3"].value == original["Semanal"]["AJ3"].value
+    assert book["Totales Mensuales"]["V3"].value == original["Totales Mensuales"]["V3"].value
+
+
+@pytest.mark.parametrize(
+    "start,end,label",
+    [
+        (date(2026, 10, 4), date(2026, 10, 10), "04 AL 10 DE OCTUBRE DE 2026"),
+        (date(2026, 9, 27), date(2026, 10, 3), "27 DE SEPTIEMBRE AL 03 DE OCTUBRE DE 2026"),
+        (date(2026, 12, 27), date(2027, 1, 2), "27 DE DICIEMBRE DE 2026 AL 02 DE ENERO DE 2027"),
+    ],
+)
+def test_span_title_handles_same_month_cross_month_and_year(start, end, label):
+    assert service._span_title(start, end) == label
