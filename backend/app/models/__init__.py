@@ -60,6 +60,7 @@ from .marketing import (
     MarketingCampaignV2ORM,
     MarketingCampaignV2ProviderCampaignORM,
     MarketingCampaignV2RecipientORM,
+    MarketingCampaignV2RecipientDispatchExclusionORM,
     MarketingCampaignV2RecipientEvidenceORM,
     MarketingCampaignV2ProviderStatsSnapshotORM,
     MarketingCampaignV2ProviderRecipientObservationORM,

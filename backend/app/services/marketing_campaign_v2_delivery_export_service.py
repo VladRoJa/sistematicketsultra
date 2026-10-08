@@ -1,8 +1,8 @@
 """Exports frozen Campaign V2 recipients and sendable delivery packages.
 
 Frozen-cohort export is an exact read-only projection of persisted recipients.
-Sendable export starts from that same frozen cohort and applies only the
-current global Campaign V2 blacklist.
+Sendable export starts from the frozen cohort, then applies both the
+current global blacklist and campaign-scoped dispatch exclusions.
 Recipients are split by branch and audience family (commercial segment).
 One branch/segment produces one XLSX; multiple combinations produce a ZIP
 with one XLSX per combination plus a summary workbook.
@@ -23,6 +23,9 @@ from app.extensions import db
 from app.models.marketing import MarketingCampaignV2RecipientORM
 from app.services.marketing_campaign_v2_blacklist_service import (
     get_blacklisted_phones,
+)
+from app.services.marketing_campaign_v2_dispatch_exclusion_service import (
+    get_campaign_v2_excluded_recipient_ids,
 )
 from app.services.marketing_campaign_v2_query_service import get_campaign_v2
 
@@ -86,15 +89,21 @@ def build_campaign_v2_sendable_projection(
         phones=(recipient.phone_mx10 for recipient in frozen_recipients),
         session=active_session,
     )
+    excluded_ids = get_campaign_v2_excluded_recipient_ids(
+        campaign_id=campaign_id,
+        session=active_session,
+    )
     sendable_recipients = [
         recipient
         for recipient in frozen_recipients
         if recipient.phone_mx10 not in blacklisted_phones
+        and int(recipient.id) not in excluded_ids
     ]
     return {
         "campaign": campaign,
         "frozen_recipients": frozen_recipients,
         "blacklisted_phones": tuple(sorted(blacklisted_phones)),
+        "campaign_excluded_recipient_ids": tuple(sorted(excluded_ids)),
         "sendable_recipients": sendable_recipients,
     }
 
