@@ -9,6 +9,7 @@ on:
       - "backend/tests/marketing/test_marketing_campaign_v2_stats_child_migration.py"
       - "backend/tests/marketing/test_marketing_campaign_v2_m3_http_postgresql.py"
       - "backend/tests/marketing/m3_scheduler_process_probe.py"
+      - "backend/tests/marketing/Dockerfile.m3_scheduler_qa"
       - ".github/workflows/campaign-v2-m3-postgresql.yml"
   push:
     branches:
@@ -20,7 +21,7 @@ permissions:
 jobs:
   postgres-m3-child-snapshots:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16
@@ -61,11 +62,18 @@ jobs:
         run: |
           python -m pip install -r backend/requirements.txt
           python -m pip install "pytest==8.3.5"
+      - name: Build isolated M3 scheduler QA container
+        run: |
+          docker build \
+            --file backend/tests/marketing/Dockerfile.m3_scheduler_qa \
+            --tag suite-m3-scheduler-qa:ci \
+            backend
       - name: Ephemeral Flask HTTP + PostgreSQL smoke (send OFF)
         working-directory: backend
         env:
           M3_TEST_POSTGRES_URL: postgresql+psycopg2://m3_test:m3_test_only@127.0.0.1:5432/m3_child_snapshots
           CAMPAIGN_V2_PROVIDER_SEND_ENABLED: "false"
+          M3_TEST_DOCKER_IMAGE: "suite-m3-scheduler-qa:ci"
           APP_ENV: "ci"
           SECRET_KEY: "isolated-m3-http-secret"
           JWT_SECRET_KEY: "isolated-m3-http-jwt"

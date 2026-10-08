@@ -1,0 +1,18 @@
+# Isolated Campaign V2 M3 container restart QA, never production deployment.
+# Same Python dependencies and marketing scheduler service code, without
+# browsers, .env.docker, production volumes, Docker Compose or real iVentas.
+FROM python:3.11-slim
+
+WORKDIR /app
+COPY requirements.txt /app/requirements.txt
+RUN python -m pip install --no-cache-dir -r /app/requirements.txt
+
+COPY app /app/app
+COPY tests/marketing/m3_scheduler_process_probe.py /app/tests/marketing/m3_scheduler_process_probe.py
+
+ENV PYTHONUNBUFFERED=1 \
+    CAMPAIGN_V2_PROVIDER_SEND_ENABLED=false \
+    CAMPAIGN_V2_PROVIDER_STATS_AUTO_CAPTURE_ENABLED=false
+
+USER 65534:65534
+ENTRYPOINT ["python", "/app/tests/marketing/m3_scheduler_process_probe.py"]

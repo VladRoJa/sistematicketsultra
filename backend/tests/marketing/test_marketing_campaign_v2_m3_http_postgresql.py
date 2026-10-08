@@ -480,3 +480,64 @@ def test_scheduler_process_restart_retains_postgres_snapshots_and_cleans_session
     finally:
         metadata.drop_all(engine)
         engine.dispose()
+
+
+@pytest.mark.skipif(
+    not URL or not os.getenv("M3_TEST_DOCKER_IMAGE"),
+    reason="Requires dedicated PostgreSQL and isolated QA Docker image",
+)
+def test_scheduler_container_restarts_preserve_stats_without_duplicates():
+    """Three separate ephemeral Docker containers, same isolated PostgreSQL.
+
+    Runs real scheduler orchestration but mock stats provider; never uses
+    Docker Compose, production credentials, network APIs, or a live cohort.
+    """
+    _guard_isolated_url(URL)
+    image = os.environ["M3_TEST_DOCKER_IMAGE"]
+    assert image == "suite-m3-scheduler-qa:ci"
+
+    engine = sa.create_engine(URL, pool_pre_ping=True)
+    metadata = _setup_schema(engine)
+    try:
+        results = []
+        for stage in ("fail-b", "recover", "steady"):
+            finished = subprocess.run(
+                [
+                    "docker", "run", "--rm", "--network", "host",
+                    "--env", "M3_TEST_POSTGRES_URL",
+                    "--env", "CAMPAIGN_V2_PROVIDER_SEND_ENABLED=false",
+                    "--env", "CAMPAIGN_V2_PROVIDER_STATS_AUTO_CAPTURE_ENABLED=false",
+                    image, stage,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=90,
+                check=False,
+            )
+            assert finished.returncode == 0, (
+                f"QA container {stage} failed: {finished.stderr[-2400:]}"
+            )
+            markers = [
+                line.partition("M3_PROBE_JSON:")[2]
+                for line in finished.stdout.splitlines()
+                if line.startswith("M3_PROBE_JSON:")
+            ]
+            assert len(markers) == 1, finished.stdout[-1800:]
+            result = json.loads(markers[0])
+            assert result["stage"] == stage
+            assert result["selected"] == 2
+            assert result["attempted"] == 2
+            assert result["provider_stats_calls"] == 2
+            assert result["cleanup_calls"] >= 1
+            results.append((
+                result["created"], result["unchanged"], result["failed"],
+            ))
+            # The host and all three containers see the same persistent DB.
+            with Session(engine) as session:
+                expected = {"fail-b": 2, "recover": 3, "steady": 3}[stage]
+                assert session.query(Snapshot).count() == expected
+                assert session.query(Observation).count() == expected
+        assert results == [(1, 0, 1), (1, 1, 0), (0, 2, 0)]
+    finally:
+        metadata.drop_all(engine)
+        engine.dispose()
