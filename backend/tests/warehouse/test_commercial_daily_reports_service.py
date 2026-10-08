@@ -401,14 +401,18 @@ def test_weekly_reactivaciones_comparison_covers_august_september_october():
     assert weekly["G2"].value == "30/08-05/09"
     assert weekly["K2"].value == "27/09-03/10"
     assert weekly["L2"].value == "04/10-10/10 (corte 07/10)"
-    assert weekly["B3"].value == 1
-    assert weekly["C3"].value == 7
-    assert weekly["L3"].value == 4
-    assert weekly["L4"].value == 8
+    # Branch order is deterministic but alphabetical: VILLAS_DEL_REY
+    # precedes VILLA_VERDE in this synthetic fixture.
+    assert weekly["A3"].value == "VILLAS_DEL_REY"
+    assert weekly["A4"].value == "VILLA_VERDE"
+    assert weekly["B3"].value == 2
+    assert weekly["C3"].value == 14
+    assert weekly["L3"].value == 8
+    assert weekly["L4"].value == 4
     assert weekly["L5"].value == 12
-    assert workbook["Totales Mensuales"]["I3"].value == 31
-    assert workbook["Totales Mensuales"]["J3"].value == 30
-    assert workbook["Totales Mensuales"]["K3"].value == 7
+    assert workbook["Totales Mensuales"]["I3"].value == 62
+    assert workbook["Totales Mensuales"]["J3"].value == 60
+    assert workbook["Totales Mensuales"]["K3"].value == 14
     assert "01/08/2026 AL 07/10/2026" in weekly["A1"].value
 
 
