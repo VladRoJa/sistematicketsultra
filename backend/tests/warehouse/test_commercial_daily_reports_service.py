@@ -134,8 +134,8 @@ def test_reactivaciones_february_correction_does_not_fake_negative_daily():
     assert daily["E3"].value == 2
     assert daily["F3"].value is None  # Future day never counted as zero.
     assert monthly["C3"].value == 99  # February closing MTD, not daily net deltas.
-    assert monthly["K3"].value == 150  # September historical monthly close.
-    assert monthly["L3"].value == 14  # October MTD at cutoff.
+    assert monthly["J3"].value == 150  # September historical monthly close.
+    assert monthly["K3"].value == 14  # October MTD at cutoff.
     assert "04/10/2026" in daily["A1"].value
     assert "DESDE 04/10/2026" in weekly["A1"].value
     assert "07/10/2026" in monthly["A1"].value
@@ -176,4 +176,4 @@ def test_reactivaciones_monthly_history_without_old_daily_dates():
     assert report["Semanal"]["B3"].value == 1
     assert report["Totales Mensuales"]["B3"].value == 80
     assert report["Totales Mensuales"]["C3"].value == 90
-    assert report["Totales Mensuales"]["L3"].value == 7
+    assert report["Totales Mensuales"]["K3"].value == 7
