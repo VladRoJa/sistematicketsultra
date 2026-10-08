@@ -120,7 +120,7 @@ def _setup_existing_doc(monkeypatch, *, cutoff_label="2026-10-07"):
         job, "InternalDocumentORM",
         SimpleNamespace(
             query=FakeDocumentQuery(doc), title="title",
-            status="status", id="id",
+            status="status", id=SimpleNamespace(asc=lambda: "id"),
         ),
     )
     monkeypatch.setattr(job, "_validate_exclusive_access", lambda d, u: None)
