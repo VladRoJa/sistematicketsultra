@@ -81,6 +81,7 @@ class CampaignV2PreflightPlan:
     blocked_invalid_phone: tuple[int, ...]
     blocked_template_channel_mismatch: tuple[int, ...]
     dispatch_fingerprint: str
+    campaign_excluded_recipient_ids: tuple[int, ...] = ()
 
     @property
     def ready(self) -> bool:
@@ -299,6 +300,9 @@ def build_campaign_v2_preflight(
             sorted(template_channel_mismatch)
         ),
         dispatch_fingerprint=fingerprint,
+        campaign_excluded_recipient_ids=tuple(
+            projection.get('campaign_excluded_recipient_ids', ())
+        ),
     )
 
 
@@ -315,6 +319,7 @@ def serialize_campaign_v2_preflight(
         "frozen_count": plan.frozen_count,
         "suppressed": {
             "blacklist": len(plan.blacklisted_phones),
+            "campaign_exclusions": len(plan.campaign_excluded_recipient_ids),
         },
         "sendable_count": len(plan.sendable_phones),
         "template": (

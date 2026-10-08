@@ -829,6 +829,51 @@ class MarketingCampaignV2ProviderCampaignORM(db.Model):
     )
 
 
+class MarketingCampaignV2RecipientDispatchExclusionORM(db.Model):
+    """Audit-only exclusion from one campaign's sendable projection.
+
+    The original recipient and its evidence remain immutable.
+    """
+
+    __tablename__ = "marketing_campaign_v2_recipient_dispatch_exclusions"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    campaign_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_campaigns.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    recipient_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_recipients.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    reason = db.Column(db.String(80), nullable=False)
+    created_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "campaign_id", "recipient_id",
+            name="uq_mkt_v2_recipient_dispatch_exclusions_campaign_recipient",
+        ),
+        db.CheckConstraint(
+            "reason = 'AMBIGUOUS_BRANCH_EVIDENCE'",
+            name="ck_mkt_v2_recipient_dispatch_exclusion_reason",
+        ),
+        db.Index("ix_mkt_v2_dispatch_exclusions_recipient_id", "recipient_id"),
+    )
+
+
 class MarketingCampaignV2RecipientORM(db.Model):
     __tablename__ = "marketing_campaign_v2_recipients"
 

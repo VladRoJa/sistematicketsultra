@@ -13,6 +13,7 @@ from app.services import marketing_campaign_v2_delivery_export_service as servic
 @pytest.fixture(autouse=True)
 def _empty_blacklist(monkeypatch):
     monkeypatch.setattr(service, "get_blacklisted_phones", lambda **_kwargs: set())
+    monkeypatch.setattr(service, "get_campaign_v2_excluded_recipient_ids", lambda **_kwargs: set())
 
 
 def _recipient(
