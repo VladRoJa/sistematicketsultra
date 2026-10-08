@@ -7,7 +7,7 @@ Authorization identities are simulated, but JWT is verified by Flask.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 import os
 import threading
@@ -277,5 +277,130 @@ def test_real_http_routes_use_postgres_and_enforce_kill_switch():
         thread.join(timeout=5)
         with app.app_context():
             db.session.remove()
+        metadata.drop_all(engine)
+        engine.dispose()
+
+
+@pytest.mark.skipif(not URL, reason="Dedicated PostgreSQL test DB is required")
+def test_scheduler_multiple_postgresql_cycles_isolate_failures_and_dedupe():
+    """Three real DB cycles, with only a simulated stats reader; never send."""
+    from app.services.marketing_campaign_provider import (
+        CampaignProviderRawCounts,
+        CampaignProviderStats,
+    )
+    from app.services.marketing_campaign_v2_provider_stats_scheduler_service import (
+        run_campaign_v2_provider_stats_capture_cycle,
+    )
+    from app.services.marketing_campaign_v2_provider_stats_service import (
+        MarketingCampaignV2ProviderStatsUpstreamError,
+    )
+    from app.services.marketing_campaign_v2_provider_stats_snapshot_service import (
+        capture_campaign_v2_provider_stats_snapshot,
+    )
+    from app.services.marketing_campaign_v2_reporting_service import (
+        build_campaign_v2_individual_report,
+    )
+
+    _guard_isolated_url(URL)
+    engine = sa.create_engine(URL, pool_pre_ping=True)
+    metadata = _setup_schema(engine)
+    now = UTC + timedelta(hours=1)
+    calls = []
+    state = {"fail_child_b": True}
+
+    def provider_stats(phone: str) -> CampaignProviderStats:
+        return CampaignProviderStats(
+            analytics_status="ok",
+            analytics={"responders": 0},
+            raw_counts=CampaignProviderRawCounts(
+                successful=1, failed=0, sent=0, delivered=1, viewed=0,
+                answered=0, interaction_groups=0, interaction_items=0,
+            ),
+            successful_phones=frozenset({phone}),
+            failed_phones=frozenset(),
+            sent_phones=frozenset(),
+            delivered_phones=frozenset({phone}),
+            viewed_phones=frozenset(),
+            button_interactions=(),
+        )
+
+    stats_by_child = {
+        "ci-fake-batch-a": provider_stats("mx10:6860000701"),
+        "ci-fake-batch-b": provider_stats("mx10:6860000702"),
+    }
+
+    class FakeStatsProvider:
+        def get_campaign_stats(self, provider_campaign_id):
+            calls.append(provider_campaign_id)
+            if provider_campaign_id == "ci-fake-batch-b" and state["fail_child_b"]:
+                raise MarketingCampaignV2ProviderStatsUpstreamError(
+                    "test-only upstream failure", retryable=True,
+                )
+            return stats_by_child[provider_campaign_id]
+
+    provider = FakeStatsProvider()
+    try:
+        with Session(engine) as session:
+            def capture(**kwargs):
+                return capture_campaign_v2_provider_stats_snapshot(
+                    **kwargs, provider_resolver=lambda _key: provider,
+                )
+
+            first = run_campaign_v2_provider_stats_capture_cycle(
+                now=now, horizon_hours=48, max_campaigns=10,
+                session=session, capture_func=capture,
+            )
+            assert (first.selected, first.attempted, first.created,
+                    first.unchanged, first.failed) == (2, 2, 1, 0, 1)
+            # The successful child persists even when its sibling errors.
+            assert session.query(Snapshot).filter_by(
+                provider_campaign_child_id=901,
+            ).count() == 2  # one seeded snapshot plus the newly captured one
+            assert session.query(Snapshot).filter_by(
+                provider_campaign_child_id=902,
+            ).count() == 0
+
+            state["fail_child_b"] = False
+            second = run_campaign_v2_provider_stats_capture_cycle(
+                now=now + timedelta(hours=1), horizon_hours=48, max_campaigns=10,
+                session=session, capture_func=capture,
+            )
+            assert (second.selected, second.created, second.unchanged,
+                    second.failed) == (2, 1, 1, 0)
+            assert session.query(Snapshot).filter_by(
+                provider_campaign_child_id=902,
+            ).count() == 1
+
+            third = run_campaign_v2_provider_stats_capture_cycle(
+                now=now + timedelta(hours=2), horizon_hours=48, max_campaigns=10,
+                session=session, capture_func=capture,
+            )
+            assert (third.selected, third.created, third.unchanged,
+                    third.failed) == (2, 0, 2, 0)
+
+            snapshots_before = session.query(Snapshot).count()
+            observations_before = session.query(Observation).count()
+            assert snapshots_before == 3
+            assert observations_before == 3  # seeded + one per child
+            assert calls == [
+                "ci-fake-batch-a", "ci-fake-batch-b",
+                "ci-fake-batch-a", "ci-fake-batch-b",
+                "ci-fake-batch-a", "ci-fake-batch-b",
+            ]
+
+            report = build_campaign_v2_individual_report(
+                campaign_id=91, allowed_sucursal_keys=None, session=session,
+            )
+            assert report["provider_children"]["summary"]["child_count"] == 2
+            assert report["provider_children"]["summary"]["provider_raw_status"] == "complete"
+            assert report["normalized"]["successful"] == 2
+            assert report["provider_raw"]["successful"] == 2
+            assert report["rates"]["successful_rate"] == 1
+            assert report["cost"]["total"] is None
+
+            # Verify persisted data remains unchanged by read-only reporting.
+            assert session.query(Snapshot).count() == snapshots_before
+            assert session.query(Observation).count() == observations_before
+    finally:
         metadata.drop_all(engine)
         engine.dispose()
