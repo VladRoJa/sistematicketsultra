@@ -106,7 +106,7 @@ def save_channel_binding(
     if not normalized_is_active:
         normalized_is_default = False
     normalized_actor = _positive_int(actor_user_id, "actor_user_id")
-    normalized_metadata = _normalize_template_metadata(metadata)
+    normalized_metadata = _dict_value(metadata, "metadata")
     timestamp = _normalize_now(now)
     catalog = _resolve_active_catalog_branch(
         sucursal_id=normalized_sucursal_id,
@@ -258,7 +258,7 @@ def save_template(
     normalized_variables = _normalize_variables(variables)
     normalized_channels = _normalize_channel_ids(compatible_channel_ids)
     normalized_actor = _positive_int(actor_user_id, "actor_user_id")
-    normalized_metadata = _dict_value(metadata, "metadata")
+    normalized_metadata = _normalize_template_metadata(metadata)
     timestamp = _normalize_now(now)
 
     row = None
