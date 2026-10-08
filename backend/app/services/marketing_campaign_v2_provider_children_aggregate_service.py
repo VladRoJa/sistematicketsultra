@@ -236,3 +236,92 @@ def _aggregate_status(children: list[dict[str, Any]]) -> str:
     if accepted:
         return "PARTIALLY_SUBMITTED"
     return "READY"
+
+
+def load_campaign_v2_provider_children_aggregates(
+    *, campaign_ids: Iterable[int], session,
+) -> dict[int, dict[str, Any]]:
+    """Bulk-read child analytics for pre-authorized campaigns, without HTTP.
+
+    The caller must enforce user/branch visibility before passing campaign_ids.
+    Returns only campaigns with provider children; legacy callers can keep
+    their existing reporting projection for campaigns without child rows.
+    """
+    from sqlalchemy import func
+
+    from app.models.marketing import (
+        MarketingCampaignV2ProviderCampaignORM as Child,
+        MarketingCampaignV2ProviderRecipientObservationORM as Observation,
+        MarketingCampaignV2ProviderStatsSnapshotORM as Snapshot,
+    )
+
+    ids = sorted({int(value) for value in campaign_ids})
+    if not ids:
+        return {}
+
+    with session.no_autoflush:
+        children = (
+            session.query(
+                Child.id, Child.campaign_v2_id, Child.provider,
+                Child.provider_campaign_id, Child.status,
+                Child.recipient_count, Child.sucursal_canon,
+            )
+            .filter(Child.campaign_v2_id.in_(ids))
+            .order_by(Child.campaign_v2_id, Child.id)
+            .all()
+        )
+        if not children:
+            return {}
+
+        child_campaign_ids = sorted({int(child.campaign_v2_id) for child in children})
+        ranked = (
+            session.query(
+                Snapshot.id.label("snapshot_id"),
+                func.row_number().over(
+                    partition_by=(
+                        Snapshot.campaign_v2_id,
+                        Snapshot.provider,
+                        Snapshot.provider_campaign_id,
+                    ),
+                    order_by=(Snapshot.fetched_at.desc(), Snapshot.id.desc()),
+                ).label("snapshot_rank"),
+            )
+            .filter(Snapshot.campaign_v2_id.in_(child_campaign_ids))
+            .subquery()
+        )
+        snapshots = (
+            session.query(Snapshot)
+            .join(ranked, Snapshot.id == ranked.c.snapshot_id)
+            .filter(ranked.c.snapshot_rank == 1)
+            .all()
+        )
+        snapshot_ids = [int(item.id) for item in snapshots]
+        observations = (
+            session.query(Observation.snapshot_id, Observation.campaign_recipient_id)
+            .filter(Observation.snapshot_id.in_(snapshot_ids))
+            .all() if snapshot_ids else []
+        )
+
+    children_by_campaign: dict[int, list[Any]] = defaultdict(list)
+    for child in children:
+        children_by_campaign[int(child.campaign_v2_id)].append(child)
+    snapshots_by_campaign: dict[int, list[Any]] = defaultdict(list)
+    for snapshot in snapshots:
+        snapshots_by_campaign[int(snapshot.campaign_v2_id)].append(snapshot)
+    observations_by_snapshot: dict[int, list[Any]] = defaultdict(list)
+    for observation in observations:
+        observations_by_snapshot[int(observation.snapshot_id)].append(observation)
+
+    return {
+        campaign_id: build_campaign_v2_provider_children_aggregate(
+            campaign_id=campaign_id,
+            children=campaign_children,
+            snapshots=snapshots_by_campaign.get(campaign_id, ()),
+            observations=(
+                item
+                for snapshot in snapshots_by_campaign.get(campaign_id, ())
+                for item in observations_by_snapshot.get(int(snapshot.id), ())
+            ),
+        )
+        for campaign_id, campaign_children in children_by_campaign.items()
+    }

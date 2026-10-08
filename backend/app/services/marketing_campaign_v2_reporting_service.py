@@ -32,6 +32,9 @@ from app.services.marketing_campaign_v2_provider_binding_service import (
 from app.services.marketing_campaign_v2_reporting_cost_service import (
     extract_campaign_cost_projection,
 )
+from app.services.marketing_campaign_v2_provider_children_aggregate_service import (
+    load_campaign_v2_provider_children_aggregates,
+)
 
 
 _UNKNOWN_DIMENSION = "UNKNOWN"
@@ -109,6 +112,10 @@ def build_campaign_v2_consolidated_report(
             )
         ]
         selected_ids = [int(campaign.id) for campaign in selected_campaigns]
+        child_aggregates = load_campaign_v2_provider_children_aggregates(
+            campaign_ids=selected_ids,
+            session=active_session,
+        )
         selected_id_set = set(selected_ids)
         latest_by_campaign = {
             campaign_id: snapshot
@@ -203,6 +210,8 @@ def build_campaign_v2_consolidated_report(
             snapshot=snapshot,
             observations=latest_observations,
         )
+        if campaign_id in child_aggregates:
+            row["provider_children"] = child_aggregates[campaign_id]
         campaign_rows.append(row)
         campaign_contexts.append(
             (
@@ -219,6 +228,17 @@ def build_campaign_v2_consolidated_report(
         campaign_contexts=campaign_contexts,
         evidence_by_recipient=evidence_by_recipient,
     )
+    summary["provider_children"] = {
+        "campaigns_with_children": len(child_aggregates),
+        "batch_count": sum(
+            int(value["summary"]["child_count"])
+            for value in child_aggregates.values()
+        ),
+        "batch_metrics_complete": all(
+            value["summary"]["provider_raw_status"] == "complete"
+            for value in child_aggregates.values()
+        ) if child_aggregates else None,
+    }
 
     return {
         "filters": _serialize_consolidated_filters(normalized_filters),
@@ -997,6 +1017,10 @@ def build_campaign_v2_individual_report(
         if latest_snapshot is not None
         else None
     )
+    provider_children = load_campaign_v2_provider_children_aggregates(
+        campaign_ids=[normalized_id],
+        session=active_session,
+    ).get(normalized_id)
 
     return {
         "campaign": {
@@ -1050,6 +1074,7 @@ def build_campaign_v2_individual_report(
             ),
         },
         "cost": extract_campaign_cost_projection(analytics),
+        "provider_children": provider_children,
         "dimensions": _dimensions(
             campaign=campaign,
             recipients=recipients,

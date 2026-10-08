@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
-from sqlalchemy import BigInteger, Column, Integer, MetaData, Table, create_engine, event
+from sqlalchemy import BigInteger, Column, Integer, String, MetaData, Table, create_engine, event, text
 from sqlalchemy.orm import Session
 
 from app.models.marketing import (
@@ -64,6 +64,12 @@ def session():
         "marketing_campaign_v2_provider_campaigns",
         metadata,
         Column("id", BigInteger, primary_key=True),
+        Column("campaign_v2_id", BigInteger, nullable=False),
+        Column("provider", String, nullable=False),
+        Column("provider_campaign_id", String),
+        Column("status", String, nullable=False),
+        Column("recipient_count", Integer, nullable=False),
+        Column("sucursal_canon", String, nullable=False),
     )
     MarketingCampaignV2RecipientORM.__table__.to_metadata(metadata)
     MarketingCampaignV2RecipientEvidenceORM.__table__.to_metadata(metadata)
@@ -579,4 +585,35 @@ def test_individual_report_uses_bulk_query_pattern_without_n_plus_one(session):
         )
 
     assert report["audience"]["total_recipients"] == 5
-    assert len(statements) <= 5
+    # One constant additional query discovers provider children; no N+1.
+    assert len(statements) <= 6
+
+
+def test_individual_report_exposes_two_provider_children_without_losing_legacy(session):
+    session.execute(text("""
+        INSERT INTO marketing_campaign_v2_provider_campaigns
+            (id, campaign_v2_id, provider, provider_campaign_id,
+             status, recipient_count, sucursal_canon)
+        VALUES
+            (101, 1, 'IVENTAS', 'external-1', 'SUBMITTED', 3, 'BRANCH A'),
+            (102, 1, 'IVENTAS', 'external-other', 'SUBMITTED', 2, 'BRANCH B')
+    """))
+    newer = _snapshot(
+        201, campaign_id=1, fetched_at=BASE + timedelta(hours=2),
+        fingerprint="c" * 64, raw=(2, 0, 0, 2, 0, 0, 0, 0),
+        coverage=(2, 0, 3), analytics=None,
+    )
+    newer.provider_campaign_child_id = 102
+    newer.provider_campaign_id = "external-other"
+    session.add(newer)
+    session.commit()
+
+    report = _report(session)
+    child_report = report["provider_children"]
+    assert child_report["summary"]["child_count"] == 2
+    assert child_report["summary"]["provider_raw"]["successful"] == 8
+    assert child_report["summary"]["provider_raw_status"] == "complete"
+    assert [row["id"] for row in child_report["children"]] == [101, 102]
+    assert child_report["summary"]["cost"]["total"] is None
+    # Historical report values still exist for backward compatibility.
+    assert report["campaign"]["id"] == 1
