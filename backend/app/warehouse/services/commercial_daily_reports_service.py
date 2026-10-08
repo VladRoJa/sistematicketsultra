@@ -18,6 +18,10 @@ METRICS = {
     "reactivaciones": ("reactivaciones_real_mtd", "REACTIVACIONES"),
 }
 FIRST_SUPPORTED_DATE = date(2026, 1, 1)
+# Until a complete validated daily archive is available, do not derive
+# historical reactivations from corrected monthly cumulative snapshots.
+REACTIVATIONS_DAILY_FROM = date(2026, 10, 1)
+REACTIVATIONS_WEEKLY_FROM = date(2026, 10, 4)
 
 
 class CommercialDailyReportError(RuntimeError):
@@ -127,7 +131,10 @@ def _load_branch_metadata() -> dict[str, dict]:
     return metadata
 
 
-def _format_sheet(book, name, headers, branches, cells, branch_metadata=None):
+def _format_sheet(
+    book, name, headers, branches, cells,
+    branch_metadata=None, title_text=None,
+):
     sheet = book.add_worksheet(name)
     sheet.freeze_panes(2, 1)
     sheet.set_column(0, 0, 31)
@@ -141,7 +148,7 @@ def _format_sheet(book, name, headers, branches, cells, branch_metadata=None):
     })
     numeric = book.add_format({"num_format": "#,##0", "align": "center"})
     missing = book.add_format({"bg_color": "#FFF0CC", "align": "center"})
-    sheet.merge_range(0, 0, 0, len(headers) - 1, name.upper(), title)
+    sheet.merge_range(0, 0, 0, len(headers) - 1, title_text or name.upper(), title)
     for col, header in enumerate(headers):
         sheet.write(1, col, header, heading)
 
@@ -235,10 +242,27 @@ def render_commercial_daily_xlsx(
     if not branches:
         raise CommercialDailyReportError("No branches")
 
-    daily = {b: _daily_deltas(mtd_series[b]) for b in branches}
+    # Monthly historical MTD is authoritative at month close. Daily MTD
+    # differences are NOT a safe reconstruction of historical activations:
+    # corrections can make the series decrease, e.g. 13 February 2026.
+    # Reactivaciones is therefore intentionally daily/weekly from October.
+    if metric == "reactivaciones":
+        daily = {
+            branch: _daily_deltas({
+                day: value for day, value in mtd_series[branch].items()
+                if REACTIVATIONS_DAILY_FROM <= day <= cutoff
+            })
+            for branch in branches
+        }
+    else:
+        daily = {b: _daily_deltas(mtd_series[b]) for b in branches}
     week = _week_start(cutoff)
     weeks = []
-    cursor = _week_start(FIRST_SUPPORTED_DATE)
+    cursor = (
+        REACTIVATIONS_WEEKLY_FROM
+        if metric == "reactivaciones" and cutoff >= REACTIVATIONS_WEEKLY_FROM
+        else _week_start(FIRST_SUPPORTED_DATE)
+    )
     while cursor <= week:
         weeks.append(cursor)
         cursor += timedelta(days=7)
@@ -277,9 +301,40 @@ def render_commercial_daily_xlsx(
     stream = BytesIO()
     book = xlsxwriter.Workbook(stream, {"in_memory": True})
     book.set_properties({"title": f"Reporte {METRICS[metric][1]} {cutoff.isoformat()}"})
-    _format_sheet(book, "Diario", ["Sucursal"] + [d.strftime("%d/%m/%Y") for d in day_headers], branches, daily_cells, branch_metadata)
-    _format_sheet(book, "Semanal", ["Sucursal"] + [f"{w:%d/%m}-{w + timedelta(days=6):%d/%m}" + (f" (corte {cutoff:%d/%m})" if w == week and cutoff < w + timedelta(days=6) else "") for w in weeks], branches, weekly_cells, branch_metadata)
-    _format_sheet(book, "Totales Mensuales", ["Sucursal"] + [m.strftime("%m/%Y") for m in months], branches, monthly_cells, branch_metadata)
+    daily_title = (
+        f"REACTIVACIONES · SEMANA {week:%d/%m/%Y} - "
+        f"{week + timedelta(days=6):%d/%m/%Y} · CORTE {cutoff:%d/%m/%Y}"
+        if metric == "reactivaciones" else None
+    )
+    weekly_title = (
+        "REACTIVACIONES · DETALLE SEMANAL VERIFICABLE "
+        "DESDE 04/10/2026"
+        if metric == "reactivaciones" else None
+    )
+    monthly_title = (
+        f"REACTIVACIONES · ACUMULADO MENSUAL AL {cutoff:%d/%m/%Y}"
+        if metric == "reactivaciones" else None
+    )
+    _format_sheet(
+        book, "Diario",
+        ["Sucursal"] + [d.strftime("%d/%m/%Y") for d in day_headers],
+        branches, daily_cells, branch_metadata, title_text=daily_title,
+    )
+    _format_sheet(
+        book, "Semanal",
+        ["Sucursal"] + [
+            f"{w:%d/%m}-{w + timedelta(days=6):%d/%m}"
+            + (f" (corte {cutoff:%d/%m})"
+               if w == week and cutoff < w + timedelta(days=6) else "")
+            for w in weeks
+        ],
+        branches, weekly_cells, branch_metadata, title_text=weekly_title,
+    )
+    _format_sheet(
+        book, "Totales Mensuales",
+        ["Sucursal"] + [m.strftime("%m/%Y") for m in months],
+        branches, monthly_cells, branch_metadata, title_text=monthly_title,
+    )
     book.close()
     return stream.getvalue()
 
