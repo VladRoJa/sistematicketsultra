@@ -1,5 +1,6 @@
 from datetime import date
 from io import BytesIO
+from types import SimpleNamespace
 
 import pytest
 from openpyxl import load_workbook
@@ -15,7 +16,7 @@ class FakeCatalogQuery:
 
 
 def _render(monkeypatch, cutoff, data=None):
-    monkeypatch.setattr(service.TrackBranchCatalogORM, "query", FakeCatalogQuery())
+    monkeypatch.setattr(service, "TrackBranchCatalogORM", SimpleNamespace(query=FakeCatalogQuery()))
     monkeypatch.setattr(service, "_fetch_new_data", lambda cutoff, keys: data or {})
     return load_workbook(BytesIO(service.build_sales_from_baseline(cutoff=cutoff)), data_only=True)
 
