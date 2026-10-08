@@ -42,7 +42,7 @@ class _Session:
         return response
 
 
-def _batch(*, file_url=None):
+def _batch(*, file_url=None, send_at=None):
     return CampaignProviderDispatchBatch(
         provider="IVENTAS",
         campaign_name="QA M2 · TEC_MXL",
@@ -59,6 +59,7 @@ def _batch(*, file_url=None):
             ),
         ),
         file_url=file_url,
+        send_at=send_at,
     )
 
 
@@ -244,3 +245,18 @@ def test_legacy_static_token_is_rejected():
         match="integration key",
     ):
         IVentasBroadcastProvider(api_key="legacy-static-token")
+
+
+def test_create_campaign_includes_exact_scheduled_send_at():
+    provider, session = _provider([
+        _Response(200, {"campaign": "provider-scheduled"}),
+    ])
+
+    result = provider.create_campaign(
+        _batch(send_at="2026-10-08T17:30:00.000Z")
+    )
+
+    assert result.provider_campaign_id == "provider-scheduled"
+    assert len(session.calls) == 1
+    _, kwargs = session.calls[0]
+    assert kwargs["json"]["sendAt"] == "2026-10-08T17:30:00.000Z"

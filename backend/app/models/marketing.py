@@ -627,6 +627,21 @@ class MarketingCampaignV2ProviderCampaignORM(db.Model):
         db.ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
+    scheduled_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    scheduled_timezone = db.Column(db.String(100), nullable=True)
+    scheduled_local_at = db.Column(
+        db.DateTime(timezone=False),
+        nullable=True,
+    )
+    scheduled_for = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+    )
+    provider_send_at = db.Column(db.String(64), nullable=True)
     created_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
@@ -667,6 +682,7 @@ class MarketingCampaignV2ProviderCampaignORM(db.Model):
     sucursal = db.relationship("Sucursal")
     created_by_user = db.relationship("UserORM", foreign_keys=[created_by_user_id])
     submitted_by_user = db.relationship("UserORM", foreign_keys=[submitted_by_user_id])
+    scheduled_by_user = db.relationship("UserORM", foreign_keys=[scheduled_by_user_id])
 
     __table_args__ = (
         db.UniqueConstraint(
@@ -688,8 +704,19 @@ class MarketingCampaignV2ProviderCampaignORM(db.Model):
         ),
         db.CheckConstraint(
             "status IN ('PREPARED', 'READY', 'BLOCKED', 'SUBMITTING', "
-            "'SUBMITTED', 'PROVIDER_ERROR', 'RECONCILIATION_REQUIRED')",
+            "'SUBMITTED', 'SCHEDULED', 'PROVIDER_ERROR', "
+            "'RECONCILIATION_REQUIRED')",
             name="ck_marketing_campaign_v2_provider_campaign_status",
+        ),
+        db.CheckConstraint(
+            "("
+            "scheduled_timezone IS NULL AND scheduled_local_at IS NULL "
+            "AND scheduled_for IS NULL AND provider_send_at IS NULL"
+            ") OR ("
+            "scheduled_timezone IS NOT NULL AND scheduled_local_at IS NOT NULL "
+            "AND scheduled_for IS NOT NULL AND provider_send_at IS NOT NULL"
+            ")",
+            name="ck_marketing_campaign_v2_provider_campaign_schedule_complete",
         ),
         db.CheckConstraint(
             "length(trim(provider)) > 0 AND provider = upper(trim(provider))",
@@ -703,6 +730,10 @@ class MarketingCampaignV2ProviderCampaignORM(db.Model):
         db.Index(
             "ix_marketing_campaign_v2_provider_campaign_status",
             "status",
+        ),
+        db.Index(
+            "ix_marketing_campaign_v2_provider_campaign_scheduled_for",
+            "scheduled_for",
         ),
     )
 

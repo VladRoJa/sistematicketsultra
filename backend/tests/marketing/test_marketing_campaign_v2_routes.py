@@ -2237,7 +2237,7 @@ class TestMarketingCampaignV2Routes:
             IVENTAS_CAMPAIGN_SEND_API_BASE_URL="https://provider.test",
         )
         provider_instance = object()
-        result = SimpleNamespace(all_submitted=True)
+        result = SimpleNamespace(all_submitted=True, all_accepted=True)
         with (
             self._auth(),
             patch.object(
@@ -2286,6 +2286,7 @@ class TestMarketingCampaignV2Routes:
         assert kwargs["actor_user_id"] == 7
         assert kwargs["allowed_sucursal_keys"] == ("TEC MXL",)
         assert kwargs["provider"] is provider_instance
+        assert kwargs["schedule"] is None
         assert kwargs["send_enabled"] is True
         for forbidden in (
             "phones",
@@ -2329,7 +2330,7 @@ class TestMarketingCampaignV2Routes:
             CAMPAIGN_V2_PROVIDER_SEND_ENABLED=True,
             IVENTAS_CAMPAIGN_SEND_API_KEY="ivk_live_test",
         )
-        result = SimpleNamespace(all_submitted=False)
+        result = SimpleNamespace(all_submitted=False, all_accepted=False)
         with (
             self._auth(),
             patch.object(routes, "IVentasBroadcastProvider", return_value=object()),
@@ -2358,3 +2359,198 @@ class TestMarketingCampaignV2Routes:
 
         assert response.status_code == 502
         assert response.get_json()["status"] == "RECONCILIATION_REQUIRED"
+
+
+    def test_m3_preflight_passes_schedule_as_backend_time_contract(self):
+        plan = SimpleNamespace()
+        schedule = {
+            "local_datetime": "2026-10-08T10:30:00",
+            "timezone": "America/Tijuana",
+        }
+        with (
+            self._auth(),
+            patch.object(
+                routes,
+                "_campaign_v2_allowed_sucursal_keys",
+                return_value=("TEC MXL",),
+            ),
+            patch.object(
+                routes,
+                "build_campaign_v2_preflight",
+                return_value=plan,
+            ) as mocked,
+            patch.object(
+                routes,
+                "serialize_campaign_v2_preflight",
+                return_value={
+                    "campaign_id": 7,
+                    "mode": "SCHEDULED",
+                    "ready": True,
+                },
+            ),
+            patch.object(
+                routes,
+                "get_campaign_v2_submit_state",
+                return_value={
+                    "status": "NOT_STARTED",
+                    "has_provider_campaigns": False,
+                    "batches": [],
+                },
+            ),
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/7/preflight",
+                headers=self.headers,
+                json={
+                    "template_id": 10,
+                    "schedule": schedule,
+                },
+            )
+
+        assert response.status_code == 200
+        kwargs = mocked.call_args.kwargs
+        assert kwargs["schedule"] == schedule
+        assert kwargs["template_id"] == 10
+        assert "sendAt" not in kwargs
+
+    def test_m3_preflight_schedule_validation_maps_to_400(self):
+        with (
+            self._auth(),
+            patch.object(
+                routes,
+                "build_campaign_v2_preflight",
+                side_effect=routes.MarketingCampaignV2ScheduleValidationError(
+                    "La fecha/hora programada debe estar en el futuro."
+                ),
+            ),
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/7/preflight",
+                headers=self.headers,
+                json={
+                    "template_id": 10,
+                    "schedule": {
+                        "local_datetime": "2026-10-08T08:00:00",
+                        "timezone": "America/Tijuana",
+                    },
+                },
+            )
+
+        assert response.status_code == 400
+        assert "futuro" in response.get_json()["message"]
+
+
+    def test_m3_submit_passes_schedule_but_never_accepts_raw_send_at(self):
+        self.app.config.update(
+            CAMPAIGN_V2_PROVIDER_SEND_ENABLED=True,
+            IVENTAS_CAMPAIGN_SEND_API_KEY="ivk_live_test",
+            IVENTAS_CAMPAIGN_SEND_API_BASE_URL="https://provider.test",
+        )
+        provider_instance = object()
+        result = SimpleNamespace(all_submitted=True, all_accepted=True)
+        schedule = {
+            "local_datetime": "2026-10-08T10:30:00",
+            "timezone": "America/Tijuana",
+        }
+
+        with (
+            self._auth(),
+            patch.object(
+                routes,
+                "_campaign_v2_allowed_sucursal_keys",
+                return_value=("TEC MXL",),
+            ),
+            patch.object(
+                routes,
+                "IVentasBroadcastProvider",
+                return_value=provider_instance,
+            ),
+            patch.object(
+                routes,
+                "submit_campaign_v2",
+                return_value=result,
+            ) as submit,
+            patch.object(
+                routes,
+                "serialize_campaign_v2_submit_result",
+                return_value={
+                    "campaign_id": 7,
+                    "status": "SCHEDULED",
+                    "all_submitted": True,
+                },
+            ),
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/7/submit",
+                headers=self.headers,
+                json={
+                    "template_id": 10,
+                    "expected_dispatch_fingerprint": "a" * 64,
+                    "schedule": schedule,
+                },
+            )
+
+        assert response.status_code == 200
+        kwargs = submit.call_args.kwargs
+        assert kwargs["schedule"] == schedule
+        assert "sendAt" not in kwargs
+
+
+    def test_m3_scheduled_submit_uses_all_accepted_not_all_submitted(self):
+        self.app.config.update(
+            CAMPAIGN_V2_PROVIDER_SEND_ENABLED=True,
+            IVENTAS_CAMPAIGN_SEND_API_KEY="ivk_live_test",
+        )
+        schedule = {
+            "local_datetime": "2026-10-08T10:30:00",
+            "timezone": "America/Tijuana",
+        }
+        result = SimpleNamespace(
+            all_accepted=True,
+            all_submitted=False,
+        )
+        with (
+            self._auth(),
+            patch.object(
+                routes,
+                "_campaign_v2_allowed_sucursal_keys",
+                return_value=("TEC MXL",),
+            ),
+            patch.object(
+                routes,
+                "IVentasBroadcastProvider",
+                return_value=object(),
+            ),
+            patch.object(
+                routes,
+                "submit_campaign_v2",
+                return_value=result,
+            ) as submit,
+            patch.object(
+                routes,
+                "serialize_campaign_v2_submit_result",
+                return_value={
+                    "campaign_id": 7,
+                    "status": "SCHEDULED",
+                    "all_accepted": True,
+                    "all_submitted": False,
+                    "batches": [{"status": "SCHEDULED"}],
+                },
+            ),
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/7/submit",
+                headers=self.headers,
+                json={
+                    "template_id": 10,
+                    "expected_dispatch_fingerprint": "a" * 64,
+                    "schedule": schedule,
+                },
+            )
+
+        assert response.status_code == 200
+        assert response.get_json()["status"] == "SCHEDULED"
+        assert response.get_json()["all_accepted"] is True
+        assert response.get_json()["all_submitted"] is False
+        kwargs = submit.call_args.kwargs
+        assert kwargs["schedule"] == schedule
