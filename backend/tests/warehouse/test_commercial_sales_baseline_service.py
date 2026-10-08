@@ -114,3 +114,28 @@ def test_missing_required_canonical_is_refused():
     rows = [row for row in _catalog() if row.sucursal_canon != "VILLA_VERDE"]
     with pytest.raises(service.SalesBaselineError, match="VILLA_VERDE"):
         service._branch_alias_map(rows)
+
+
+def test_new_cells_inherit_template_styles(monkeypatch):
+    source = service._load_source()
+    keys = {service._canon(k) for k in CANONICAL_BRANCHES}
+    readings = {
+        date(2026, 9, 30): {k: 25 for k in keys},
+        date(2026, 10, 4): {k: 6 for k in keys},
+        date(2026, 10, 5): {k: 8 for k in keys},
+    }
+    output = _render(monkeypatch, date(2026, 10, 5), readings)
+    daily = output["DIARIO 04 OCT"]
+    weekly = output["Semanal"]
+    monthly = output["Totales Mensuales"]
+    assert daily["D4"].style_id == daily["C4"].style_id
+    assert daily["D24"].style_id == daily["C24"].style_id
+    assert daily["D2"].style_id == daily["C2"].style_id
+    assert weekly["AK4"].style_id == weekly["AI4"].style_id
+    assert weekly["AK24"].style_id == weekly["AI24"].style_id
+    assert weekly["AK2"].style_id == weekly["AI2"].style_id
+    assert monthly["W4"].style_id == monthly["V4"].style_id
+    assert monthly["W31"].style_id == monthly["V31"].style_id
+    assert monthly["X4"].style_id == monthly["V4"].style_id
+    assert "04 DE 10" in daily["B1"].value
+    assert source["Semanal"]["AJ3"].value == weekly["AJ3"].value
