@@ -177,3 +177,69 @@ def test_reactivaciones_monthly_history_without_old_daily_dates():
     assert report["Totales Mensuales"]["B3"].value == 80
     assert report["Totales Mensuales"]["C3"].value == 90
     assert report["Totales Mensuales"]["K3"].value == 7
+
+
+def test_reactivaciones_ignores_retired_historical_club_but_requires_current_ones(monkeypatch):
+    from types import SimpleNamespace
+    from app.warehouse.services import commercial_daily_reports_service as service
+
+    jan31 = date(2026, 1, 31)
+    cutoff = date(2026, 10, 7)
+    version_by_day = {
+        jan31: SimpleNamespace(id=11, status="success"),
+        cutoff: SimpleNamespace(id=27, status="success"),
+    }
+    monkeypatch.setattr(service, "_resolve_canonical_version", version_by_day.get)
+
+    class FakeColumn:
+        def in_(self, keys):
+            return True
+
+    class FakeQuery:
+        def __init__(self, rows):
+            self.rows = rows
+        def filter(self, *args):
+            return self
+        def all(self):
+            return self.rows
+
+    rows = [
+        SimpleNamespace(
+            sucursal_canon="LA_VIGA", track_date=jan31,
+            track_daily_version_id=11, reactivaciones_real_mtd=40,
+        ),
+        SimpleNamespace(
+            sucursal_canon="VILLA_VERDE", track_date=jan31,
+            track_daily_version_id=11, reactivaciones_real_mtd=30,
+        ),
+        SimpleNamespace(
+            sucursal_canon="VILLA_VERDE", track_date=cutoff,
+            track_daily_version_id=27, reactivaciones_real_mtd=15,
+        ),
+        SimpleNamespace(
+            sucursal_canon="SERRANIA", track_date=cutoff,
+            track_daily_version_id=27, reactivaciones_real_mtd=8,
+        ),
+    ]
+    monkeypatch.setattr(
+        service, "TrackDailyMartORM",
+        SimpleNamespace(
+            track_daily_version_id=FakeColumn(),
+            query=FakeQuery(rows),
+        ),
+    )
+    output = service._load_series(
+        "reactivaciones",
+        cutoff,
+        active_branches={"VILLA_VERDE", "SERRANIA"},
+    )
+    assert set(output) == {"VILLA_VERDE", "SERRANIA"}
+    assert output["VILLA_VERDE"][jan31] == 30
+    assert output["SERRANIA"][cutoff] == 8
+
+    with pytest.raises(CommercialDailyReportError, match="MISSING_CLUB"):
+        service._load_series(
+            "reactivaciones",
+            cutoff,
+            active_branches={"VILLA_VERDE", "SERRANIA", "MISSING_CLUB"},
+        )
