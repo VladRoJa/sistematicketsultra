@@ -8,6 +8,7 @@ on:
       - "backend/tests/marketing/test_marketing_campaign_v2_stats_child_postgresql.py"
       - "backend/tests/marketing/test_marketing_campaign_v2_stats_child_migration.py"
       - "backend/tests/marketing/test_marketing_campaign_v2_m3_http_postgresql.py"
+      - "backend/tests/marketing/m3_scheduler_process_probe.py"
       - ".github/workflows/campaign-v2-m3-postgresql.yml"
   push:
     branches:

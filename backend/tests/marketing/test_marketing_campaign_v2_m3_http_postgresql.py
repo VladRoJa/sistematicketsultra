@@ -9,7 +9,10 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
+import json
 import os
+import subprocess
+import sys
 import threading
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -403,6 +406,77 @@ def test_scheduler_multiple_postgresql_cycles_isolate_failures_and_dedupe():
             # Verify persisted data remains unchanged by read-only reporting.
             assert session.query(Snapshot).count() == snapshots_before
             assert session.query(Observation).count() == observations_before
+    finally:
+        metadata.drop_all(engine)
+        engine.dispose()
+
+
+@pytest.mark.skipif(not URL, reason="Dedicated PostgreSQL test DB is required")
+def test_scheduler_process_restart_retains_postgres_snapshots_and_cleans_session():
+    """Three independent Python worker processes against the same QA database.
+
+    One child errors in process 1 and recovers in process 2. Restarted process
+    3 must report unchanged without duplicating rows. Provider stats are mocked.
+    """
+    _guard_isolated_url(URL)
+    engine = sa.create_engine(URL, pool_pre_ping=True)
+    metadata = _setup_schema(engine)
+    worker_path = __file__.replace(
+        "test_marketing_campaign_v2_m3_http_postgresql.py",
+        "m3_scheduler_process_probe.py",
+    )
+
+    try:
+        results = []
+        for stage in ("fail-b", "recover", "steady"):
+            env = {
+                key: value for key, value in os.environ.items()
+                if not any(
+                    prohibited in key.upper()
+                    for prohibited in ("IVENTAS", "META_ACCESS", "PROVIDER_TOKEN")
+                )
+            }
+            env.update({
+                "M3_TEST_POSTGRES_URL": URL,
+                "CAMPAIGN_V2_PROVIDER_SEND_ENABLED": "false",
+                "CAMPAIGN_V2_PROVIDER_STATS_AUTO_CAPTURE_ENABLED": "false",
+            })
+            finished = subprocess.run(
+                [sys.executable, worker_path, stage],
+                cwd=str(__import__("pathlib").Path(__file__).resolve().parents[2]),
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=45,
+                check=False,
+            )
+            assert finished.returncode == 0, (
+                f"Subprocess {stage} failed: {finished.stderr[-2400:]}"
+            )
+            markers = [
+                line.partition("M3_PROBE_JSON:")[2]
+                for line in finished.stdout.splitlines()
+                if line.startswith("M3_PROBE_JSON:")
+            ]
+            assert len(markers) == 1, finished.stdout[-1800:]
+            result = json.loads(markers[0])
+            assert result["stage"] == stage
+            assert result["selected"] == 2
+            assert result["attempted"] == 2
+            assert result["provider_stats_calls"] == 2
+            assert result["cleanup_calls"] >= 1
+            results.append((
+                result["created"], result["unchanged"], result["failed"],
+            ))
+
+            with Session(engine) as session:
+                persisted_snapshots = session.query(Snapshot).count()
+                persisted_observations = session.query(Observation).count()
+                expected = {"fail-b": 2, "recover": 3, "steady": 3}[stage]
+                assert persisted_snapshots == expected
+                assert persisted_observations == expected
+
+        assert results == [(1, 0, 1), (1, 1, 0), (0, 2, 0)]
     finally:
         metadata.drop_all(engine)
         engine.dispose()
