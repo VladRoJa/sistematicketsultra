@@ -17,6 +17,7 @@ import {
   CampaignV2Purpose,
   CampaignV2ReportingFilters,
   CampaignV2ReportingObservation,
+  CampaignV2DispatchScheduleRequest,
   CampaignV2ProviderChildReportingRow,
   CampaignV2ProviderStatsCompleteness,
   CampaignV2Source,
@@ -671,6 +672,28 @@ export function buildCampaignV2ReportingQuery(
     query.snapshot_status = state.snapshotStatus;
   }
   return query;
+}
+
+export function campaignV2DispatchScheduleInput(
+  mode: 'IMMEDIATE' | 'SCHEDULED',
+  localDatetime: string,
+  timezone: string,
+): { schedule: CampaignV2DispatchScheduleRequest | null; error: string } {
+  if (mode === 'IMMEDIATE') {
+    return { schedule: null, error: '' };
+  }
+  const local = localDatetime.trim();
+  if (!local) {
+    return { schedule: null, error: 'Indica la fecha y hora local para programar el envío.' };
+  }
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(local)) {
+    return { schedule: null, error: 'La fecha/hora debe tener un formato local válido.' };
+  }
+  if (!timezone.trim()) {
+    return { schedule: null, error: 'Selecciona la zona horaria del envío.' };
+  }
+  // Backend remains authoritative for IANA timezone, DST and future validation.
+  return { schedule: { local_datetime: local, timezone: timezone.trim() }, error: '' };
 }
 
 export function campaignV2ReportingPercent(value: number | null | undefined): string {

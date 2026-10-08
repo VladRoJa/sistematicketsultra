@@ -13,6 +13,7 @@ import {
   CampaignV2CampaignQuery,
   CampaignV2ConsolidatedReport,
   CampaignV2DispatchTemplatesResponse,
+  CampaignV2DispatchScheduleRequest,
   CampaignV2FreezeRequest,
   CampaignV2FreezeResponse,
   CampaignV2IndividualReport,
@@ -112,10 +113,11 @@ export class MarketingCampaignV2Service {
   preflightCampaign(
     campaignId: number,
     templateId: number,
+    schedule: CampaignV2DispatchScheduleRequest | null = null,
   ): Observable<CampaignV2PreflightResponse> {
     return this.http.post<CampaignV2PreflightResponse>(
       `${this.apiUrl}/${campaignId}/preflight`,
-      { template_id: templateId },
+      schedule ? { template_id: templateId, schedule } : { template_id: templateId },
     );
   }
 
@@ -123,12 +125,14 @@ export class MarketingCampaignV2Service {
     campaignId: number,
     templateId: number,
     expectedDispatchFingerprint: string,
+    schedule: CampaignV2DispatchScheduleRequest | null = null,
   ): Observable<CampaignV2SubmitResponse> {
     return this.http.post<CampaignV2SubmitResponse>(
       `${this.apiUrl}/${campaignId}/submit`,
       {
         template_id: templateId,
         expected_dispatch_fingerprint: expectedDispatchFingerprint,
+        ...(schedule ? { schedule } : {}),
       },
     );
   }

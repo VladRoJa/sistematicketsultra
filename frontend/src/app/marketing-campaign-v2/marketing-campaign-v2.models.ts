@@ -406,11 +406,22 @@ export interface CampaignV2PreflightBatch {
   ready: boolean;
 }
 
+export interface CampaignV2DispatchScheduleRequest {
+  local_datetime: string;
+  timezone: string;
+}
+
+export interface CampaignV2DispatchSchedulePlan extends CampaignV2DispatchScheduleRequest {
+  scheduled_for_utc: string;
+  provider_send_at: string;
+}
+
 export type CampaignV2SubmitStatus =
   | 'NOT_STARTED'
   | 'READY'
   | 'SUBMITTING'
   | 'SUBMITTED'
+  | 'SCHEDULED'
   | 'PROVIDER_ERROR'
   | 'RECONCILIATION_REQUIRED'
   | 'PARTIAL';
@@ -451,7 +462,8 @@ export interface CampaignV2PreflightResponse {
   campaign_name: string;
   campaign_purpose: CampaignV2Purpose;
   provider: string;
-  mode: 'IMMEDIATE';
+  mode: 'IMMEDIATE' | 'SCHEDULED';
+  schedule: CampaignV2DispatchSchedulePlan | null;
   frozen_count: number;
   suppressed: {
     blacklist: number;

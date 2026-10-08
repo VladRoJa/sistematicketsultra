@@ -284,6 +284,13 @@
               </mat-option>
             </mat-select>
           </mat-form-field>
+          <mat-form-field appearance="fill">
+            <mat-label>Modo de envío</mat-label>
+            <mat-select [formControl]="dispatchModeControl">
+              <mat-option value="IMMEDIATE">Inmediato</mat-option>
+              <mat-option value="SCHEDULED">Programado</mat-option>
+            </mat-select>
+          </mat-form-field>
           <button
             mat-stroked-button
             type="button"
@@ -294,6 +301,20 @@
           </button>
         </div>
 
+        <div *ngIf="dispatchModeControl.value === 'SCHEDULED'" class="dispatch-schedule-controls">
+          <mat-form-field appearance="fill">
+            <mat-label>Fecha y hora local</mat-label>
+            <input matInput type="datetime-local" [formControl]="dispatchLocalDateTimeControl" />
+          </mat-form-field>
+          <mat-form-field appearance="fill">
+            <mat-label>Zona horaria explícita</mat-label>
+            <mat-select [formControl]="dispatchTimezoneControl">
+              <mat-option *ngFor="let zone of dispatchTimezones" [value]="zone.value">{{ zone.label }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+          <p class="muted">La fecha se interpreta en la zona seleccionada. Suite validará horario de verano y convertirá a UTC.</p>
+          <p *ngIf="dispatchScheduleError" class="inline-error" role="alert">{{ dispatchScheduleError }}</p>
+        </div>
         <p *ngIf="loadingDispatchTemplates" class="muted">Cargando templates permitidos…</p>
         <p *ngIf="!loadingDispatchTemplates && dispatchTemplates.length === 0 && !preflightError" class="muted">
           No hay templates activos compatibles con el purpose de esta campaña.
@@ -304,6 +325,12 @@
           <div class="preflight-state" [class.preflight-ready]="plan.ready" [class.preflight-blocked]="!plan.ready">
             <strong>{{ plan.ready ? 'Plan listo para revisión' : 'Plan bloqueado' }}</strong>
             <span>{{ plan.ready ? 'Sin bloqueos detectados por preflight.' : 'Corrige los bloqueos antes de habilitar una fase de envío.' }}</span>
+          </div>
+
+          <div *ngIf="plan.schedule as schedule" class="dispatch-schedule-review" role="status">
+            <strong>Programación revisada</strong>
+            <span>{{ schedule.local_datetime }} · {{ schedule.timezone }}</span>
+            <span>UTC: {{ schedule.scheduled_for_utc }}</span>
           </div>
 
           <div class="preflight-summary-grid">
@@ -368,7 +395,7 @@
               (click)="confirmAndSubmitDispatch()"
               [disabled]="!canSubmitDispatch"
             >
-              {{ submitting ? 'Enviando…' : 'Enviar mensajes ahora' }}
+              {{ submitting ? 'Procesando…' : plan.mode === 'SCHEDULED' ? 'Programar envío' : 'Enviar mensajes ahora' }}
             </button>
           </div>
 
@@ -401,7 +428,7 @@
                   <tr *ngFor="let child of plan.submission.batches">
                     <td>{{ child.sucursal_canon }}</td>
                     <td>{{ child.recipient_count | number }}</td>
-                    <td>{{ child.status }}</td>
+                    <td>{{ providerBatchLabel(child.status) }}</td>
                     <td class="mono">{{ child.provider_campaign_id || '—' }}</td>
                     <td class="mono">{{ child.support_ref || child.error_code || '—' }}</td>
                   </tr>

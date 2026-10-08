@@ -1,9 +1,13 @@
-<h2 mat-dialog-title>Confirmar envío inmediato</h2>
+<h2 mat-dialog-title>
+  <span *ngIf="!isScheduled">Confirmar envío inmediato</span>
+  <span *ngIf="isScheduled">Confirmar envío programado</span>
+</h2>
 
 <mat-dialog-content>
   <div class="warning-box">
     <strong>Esta acción enviará mensajes reales por WhatsApp.</strong>
-    <span>El envío es inmediato. No es una simulación ni una exportación.</span>
+    <span *ngIf="!isScheduled">El envío es inmediato. No es una simulación ni una exportación.</span>
+    <span *ngIf="isScheduled">Se crearán envíos programados que el proveedor ejecutará en la fecha indicada. No es una simulación.</span>
   </div>
 
   <dl class="summary">
@@ -14,7 +18,13 @@
     <div><dt>Blacklist vigente</dt><dd>{{ data.blacklistedCount | number }}</dd></div>
     <div><dt>Lista para envío</dt><dd>{{ data.recipientCount | number }}</dd></div>
     <div><dt>Provider campaigns</dt><dd>{{ data.providerCampaignCount | number }}</dd></div>
-    <div><dt>Modo</dt><dd>Inmediato</dd></div>
+    <div><dt>Modo</dt><dd>{{ isScheduled ? 'Programado' : 'Inmediato' }}</dd></div>
+    <ng-container *ngIf="data.schedule as schedule">
+      <div><dt>Fecha y hora local</dt><dd>{{ schedule.local_datetime }}</dd></div>
+      <div><dt>Zona horaria</dt><dd>{{ schedule.timezone }}</dd></div>
+      <div><dt>Programación UTC</dt><dd>{{ schedule.scheduled_for_utc }}</dd></div>
+    </ng-container>
+    <div><dt>Kill switch</dt><dd>{{ data.sendEnabled ? 'Habilitado (sujeto a validación backend)' : 'Deshabilitado' }}</dd></div>
   </dl>
 
   <div class="batch-list">
@@ -36,14 +46,15 @@
   </div>
 
   <p class="guard-note">
-    Suite volverá a construir el preflight antes de enviar. Si cambió blacklist,
-    template, channel, variables o phone set, el submit se bloqueará.
+    Suite volverá a construir el preflight antes de enviar o programar. Si cambió blacklist,
+    template, channel, variables, phone set, fecha, hora o zona horaria, el submit se bloqueará.
   </p>
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
   <button mat-button type="button" (click)="cancel()">Cancelar</button>
-  <button mat-flat-button color="warn" type="button" (click)="confirm()">
-    Sí, enviar mensajes ahora
+  <button mat-flat-button color="warn" type="button" (click)="confirm()" [disabled]="!data.sendEnabled">
+    <span *ngIf="!isScheduled">Sí, enviar mensajes ahora</span>
+    <span *ngIf="isScheduled">Sí, programar envío</span>
   </button>
 </mat-dialog-actions>

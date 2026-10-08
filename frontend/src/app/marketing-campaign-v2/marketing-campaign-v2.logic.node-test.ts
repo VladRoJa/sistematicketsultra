@@ -8,6 +8,7 @@ import {
   buildCampaignV2FreezeRequest,
   buildCampaignV2HistoricalTargeting,
   buildCampaignV2ReportingQuery,
+  campaignV2DispatchScheduleInput,
   campaignV2HistoryBreakdownRows,
   campaignV2HistoryDecisionLabel,
   campaignV2HistoryMatchedLabel,
@@ -1219,4 +1220,21 @@ test('M3 reporting 1:N distinguishes complete/partial/unavailable stats', () => 
   }), 'Pendiente de sincronizar');
   assert.equal(campaignV2ReportingCostLabel('partial'), 'Costo parcial, total no confirmado');
   assert.equal(campaignV2ReportingCostLabel('unavailable'), 'Costos no disponibles');
+});
+
+
+test('F3-M3 scheduling preserves immediate payload and checks local schedule', () => {
+  assert.deepEqual(campaignV2DispatchScheduleInput('IMMEDIATE', '', 'America/Tijuana'), {
+    schedule: null, error: '',
+  });
+  assert.deepEqual(campaignV2DispatchScheduleInput('SCHEDULED', '2026-10-21T08:20', 'America/Tijuana'), {
+    schedule: { local_datetime: '2026-10-21T08:20', timezone: 'America/Tijuana' },
+    error: '',
+  });
+  assert.deepEqual(campaignV2DispatchScheduleInput('SCHEDULED', '2026-10-21T09:20', 'America/Mexico_City').schedule, {
+    local_datetime: '2026-10-21T09:20', timezone: 'America/Mexico_City',
+  });
+  assert.match(campaignV2DispatchScheduleInput('SCHEDULED', '', 'America/Tijuana').error, /fecha y hora/);
+  assert.match(campaignV2DispatchScheduleInput('SCHEDULED', '21-10-2026', 'America/Tijuana').error, /formato/);
+  assert.match(campaignV2DispatchScheduleInput('SCHEDULED', '2026-10-21T08:20', '').error, /zona horaria/);
 });
