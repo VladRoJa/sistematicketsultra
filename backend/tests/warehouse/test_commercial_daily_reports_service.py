@@ -306,7 +306,7 @@ def test_jan_apr_reactivaciones_rejects_conflict_with_existing_canonical_close()
         }
         for branch in snapshot
     }
-    series["VILLA_VERDE"][date(2026, 1, 31)] = 170
+    series["VILLA_VERDE"][date(2026, 3, 31)] = 144
     with pytest.raises(CommercialDailyReportError, match="Historical Reactivaciones conflict"):
         render_commercial_daily_xlsx(
             metric="reactivaciones",
@@ -314,3 +314,64 @@ def test_jan_apr_reactivaciones_rejects_conflict_with_existing_canonical_close()
             mtd_series=series,
             historical_monthly_by_branch=snapshot,
         )
+
+
+def test_january_february_explicit_historical_source_overrides_old_track_unchanged():
+    from app.warehouse.services.reactivaciones_monthly_baseline_service import (
+        load_early_reactivaciones_monthly,
+    )
+
+    historical = load_early_reactivaciones_monthly()
+    series = {
+        branch: {
+            date(2026, 10, 1): 3,
+            date(2026, 10, 2): 5,
+            date(2026, 10, 3): 8,
+            date(2026, 10, 4): 11,
+            date(2026, 10, 5): 14,
+            date(2026, 10, 6): 17,
+            date(2026, 10, 7): 20,
+        }
+        for branch in historical
+    }
+    # Actual historical canon: snapshots 176/162 were older than the BI book.
+    series["VILLAS_DEL_REY"][date(2026, 1, 31)] = 184
+    series["VILLAS_DEL_REY"][date(2026, 2, 28)] = 123
+    series["VILLA_VERDE"][date(2026, 1, 31)] = 161
+    series["VILLA_VERDE"][date(2026, 2, 28)] = 121
+    series["VILLA_VERDE"][date(2026, 3, 31)] = 143
+    series["VILLA_VERDE"][date(2026, 4, 30)] = 116
+
+    workbook = load_workbook(
+        BytesIO(render_commercial_daily_xlsx(
+            metric="reactivaciones",
+            cutoff=date(2026, 10, 7),
+            mtd_series=series,
+            historical_monthly_by_branch=historical,
+        )),
+        data_only=False,
+    )
+    monthly = workbook["Totales Mensuales"]
+    row_by_name = {
+        str(monthly.cell(row, 1).value): row
+        for row in range(3, monthly.max_row + 1)
+    }
+    villas = row_by_name["VILLAS_DEL_REY"]
+    verde = row_by_name["VILLA_VERDE"]
+    total = row_by_name["TOTAL"]
+    assert monthly.cell(villas, 2).value == 211
+    assert monthly.cell(verde, 2).value == 169
+    assert monthly.cell(verde, 3).value == 123
+    assert monthly.cell(total, 2).value == 4311
+    assert monthly.cell(total, 3).value == 2684
+    assert monthly.cell(total, 4).value == 3789
+    assert monthly.cell(total, 5).value == 2684
+    assert monthly["B2"].comment is not None
+    assert monthly["C2"].comment is not None
+    assert "Excel historico" in monthly["B2"].comment.text
+    assert any(
+        isinstance(monthly.cell(row, 1).value, str)
+        and "FUENTES: Ene-Feb 2026" in monthly.cell(row, 1).value
+        for row in range(total + 1, monthly.max_row + 1)
+    )
+    assert workbook.sheetnames == ["Diario", "Semanal", "Totales Mensuales"]
