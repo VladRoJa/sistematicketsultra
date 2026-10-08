@@ -33,6 +33,61 @@ def _canon(value):
     return "".join(ch for ch in text if ch.isalnum() and not unicodedata.combining(ch))
 
 
+# Historical Excel labels that differ from Suite Track's canonical branch names.
+# These are document-specific correspondences, not fuzzy matching.
+_EXCEL_TO_TRACK = {
+    "VILLAVERDEMEXICALI": "VILLA_VERDE",
+    "TECMEXICALI": "TEC_MXL",
+    "SENDEROMEXICALI": "SEND_MXL",
+    "PABELLONROSARITO": "PABELLON_RTO",
+    "MISIONENSENADA": "MISION_ENS",
+    "CARROUSELTIJUANA": "CARROUSEL_TJ",
+    "PAPALOTETIJUANA": "PAPALOTE_TJ",
+    "SENDEROCULIACAN": "SEND_CUL",
+    "SANISIDROCULIACAN": "SAN_ISIDRO_CUL",
+    "AZAHARESCULIACAN": "AZAHARES_CUL",
+    "SANTACATARINA": "STA_CATARINA",
+    "SENDEROSALTILLO": "SEND_SALTILLO",
+    "SENDEROCHIHUAHUA": "SEND_CHIH",
+    "PASEOLAPAZ": "PASEO_LA_PAZ",
+}
+
+
+def _branch_alias_map(catalogs):
+    """Map source labels and Track keys to one validated active canonical key."""
+    lookup = {}
+    active = set()
+
+    def register(label, canonical):
+        key = _canon(label)
+        existing = lookup.get(key)
+        if existing is not None and existing != canonical:
+            raise SalesBaselineError(
+                f"Ambiguous branch alias {label!r}: {existing} / {canonical}"
+            )
+        lookup[key] = canonical
+
+    for entry in catalogs:
+        canonical = _canon(entry.sucursal_canon)
+        if not canonical:
+            raise SalesBaselineError("Track branch catalog contains an empty key")
+        if canonical in active:
+            raise SalesBaselineError(f"Duplicate active canonical key: {canonical}")
+        active.add(canonical)
+        register(entry.sucursal_canon, canonical)
+        register(entry.track_label, canonical)
+
+    for historical_label, track_key in _EXCEL_TO_TRACK.items():
+        canonical = _canon(track_key)
+        if canonical not in active:
+            raise SalesBaselineError(
+                f"Required canonical Track branch is missing: {track_key}"
+            )
+        register(historical_label, canonical)
+
+    return lookup
+
+
 def _load_source():
     if not BASELINE.is_file():
         raise SalesBaselineError(f"Missing immutable sales workbook: {BASELINE}")
@@ -92,17 +147,32 @@ def build_sales_from_baseline(*, cutoff: date) -> bytes:
     daily = workbook["DIARIO 04 OCT"]
     wrows, mrows, drows = _source_rows(workbook)
     catalogs = TrackBranchCatalogORM.query.filter_by(is_track_active=True).all()
-    # Prefer canonical branch key, falling back to the display label and
-    # the old workbook's visible branch name.
-    aliases = {}
-    for entry in catalogs:
-        names = [_canon(entry.sucursal_canon), _canon(entry.track_label)]
-        for name in names:
-            if name:
-                aliases[name] = _canon(entry.track_label)
+    aliases = _branch_alias_map(catalogs)
+
     def resolve(row_name):
         key = _canon(row_name)
-        return aliases.get(key, key)
+        canonical = aliases.get(key)
+        if canonical is None:
+            raise SalesBaselineError(
+                f"Unmapped Excel/Track branch: {row_name!r}"
+            )
+        return canonical
+
+    # The same branch may appear under different labels, but never twice in
+    # the same sheet, where it would double-count the business metric.
+    for sheet_name, rows in (
+        ("Semanal", wrows),
+        ("Totales Mensuales", mrows),
+        ("DIARIO 04 OCT", drows),
+    ):
+        used = set()
+        for name in rows:
+            canonical = resolve(name)
+            if canonical in used:
+                raise SalesBaselineError(
+                    f"Duplicate canonical branch {canonical} in {sheet_name}"
+                )
+            used.add(canonical)
 
     source_keys = {resolve(k) for k in set(wrows) | set(mrows) | set(drows)}
     by_day_raw = _fetch_new_data(cutoff, source_keys)
