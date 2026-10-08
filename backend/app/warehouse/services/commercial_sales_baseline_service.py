@@ -128,11 +128,13 @@ def build_sales_from_baseline(*, cutoff: date) -> bytes:
 
     # Build the current-week daily sheet. Leave the immutable 4 October value
     # untouched, and append daily cuts for Oct 5 onwards.
-    new_days = [FIRST_WEEK + timedelta(days=i) for i in range(7)]
+    current_week = cutoff - timedelta(days=(cutoff.weekday() + 1) % 7)
+    baseline_oct4 = {key: daily.cell(row, 3).value for key, row in drows.items()}
+    new_days = [current_week + timedelta(days=i) for i in range(7)]
     for col, business_day in enumerate(new_days, start=3):
+        daily.cell(2, col).value = business_day
         if business_day == BASELINE_DAY:
             continue
-        daily.cell(2, col).value = business_day
         if business_day > cutoff:
             continue
         changes = daily_changes.get(business_day)
@@ -160,7 +162,7 @@ def build_sales_from_baseline(*, cutoff: date) -> bytes:
             values = []
             for d in (cursor + timedelta(days=i) for i in range((end - cursor).days + 1)):
                 if d == BASELINE_DAY:
-                    original = daily.cell(drows[key], 3).value if key in drows else None
+                    original = baseline_oct4.get(key)
                     values.append(original)
                 elif d in daily_changes:
                     values.append(daily_changes[d].get(branch))
