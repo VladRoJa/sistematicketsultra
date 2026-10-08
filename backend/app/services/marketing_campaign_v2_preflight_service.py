@@ -29,7 +29,7 @@ from app.services.marketing_campaign_v2_dispatch_config_service import (
 from app.services.marketing_phone import normalize_phone
 
 
-DISPATCH_FINGERPRINT_VERSION = "campaign-v2-dispatch-v1"
+DISPATCH_FINGERPRINT_VERSION = "campaign-v2-dispatch-v2"
 DISPATCH_MODE = "IMMEDIATE"
 
 
