@@ -80,21 +80,26 @@ def get_campaign_v2_provider_stats(
     *,
     campaign_id: Any,
     allowed_sucursal_keys: Iterable[str] | None,
+    provider_campaign_child_id: Any | None = None,
     session=None,
     provider_resolver: ProviderResolver = resolve_campaign_provider,
 ) -> dict[str, Any]:
     fetched = fetch_campaign_v2_provider_stats(
         campaign_id=campaign_id,
         allowed_sucursal_keys=allowed_sucursal_keys,
+        provider_campaign_child_id=provider_campaign_child_id,
         session=session,
         provider_resolver=provider_resolver,
     )
-    return _serialize_provider_stats(
+    result = _serialize_provider_stats(
         campaign_id=fetched.campaign_id,
         provider=fetched.provider,
         provider_campaign_id=fetched.provider_campaign_id,
         stats=fetched.stats,
     )
+    if fetched.provider_campaign_child_id is not None:
+        result["provider_campaign_child_id"] = fetched.provider_campaign_child_id
+    return result
 
 
 def fetch_campaign_v2_provider_stats(

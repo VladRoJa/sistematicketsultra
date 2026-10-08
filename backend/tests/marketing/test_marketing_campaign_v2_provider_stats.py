@@ -432,3 +432,42 @@ def test_provider_stats_fetch_resolves_child_and_rejects_foreign_child(session):
             provider_resolver=lambda key: provider,
         )
     assert provider.calls == ['child-external-101']
+
+
+def test_m3_get_child_stats_uses_exact_internal_binding_and_frozen_scope(session):
+    session.execute(text("""
+        INSERT INTO marketing_campaign_v2_provider_campaigns
+        (id, campaign_v2_id, provider, provider_campaign_id, status)
+        VALUES (101, 1, 'IVENTAS', 'child-external-101', 'SUBMITTED'),
+               (102, 2, 'IVENTAS', 'foreign-child', 'SUBMITTED')
+    """))
+    session.commit()
+    provider = FakeProvider(stats=_stats())
+    result = get_campaign_v2_provider_stats(
+        campaign_id=1,
+        provider_campaign_child_id=101,
+        allowed_sucursal_keys=('BRANCH A',),
+        session=session,
+        provider_resolver=lambda key: provider,
+    )
+    assert result["provider_campaign_child_id"] == 101
+    assert result["provider_campaign_id"] == 'child-external-101'
+    assert provider.calls == ['child-external-101']
+
+    with pytest.raises(MarketingCampaignV2NotFoundError):
+        get_campaign_v2_provider_stats(
+            campaign_id=1,
+            provider_campaign_child_id=101,
+            allowed_sucursal_keys=('BRANCH B',),
+            session=session,
+            provider_resolver=lambda key: provider,
+        )
+    with pytest.raises(MarketingCampaignV2ProviderStatsUnboundError):
+        get_campaign_v2_provider_stats(
+            campaign_id=1,
+            provider_campaign_child_id=102,
+            allowed_sucursal_keys=('BRANCH A',),
+            session=session,
+            provider_resolver=lambda key: provider,
+        )
+    assert provider.calls == ['child-external-101']
