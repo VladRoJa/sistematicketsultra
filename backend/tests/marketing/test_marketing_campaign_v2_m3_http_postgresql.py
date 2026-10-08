@@ -81,7 +81,7 @@ def _setup_schema(engine: sa.Engine) -> sa.MetaData:
         session.add(Campaign(
             id=91, name="M3 QA CI - artificial two-branch cohort",
             source="EXPIRED_MEMBERS", purpose="REACTIVATION",
-            provider="IVENTAS", provider_campaign_id=None,
+            provider=None, provider_campaign_id=None,
             audience_definition_json={
                 "filters": {"allowed_sucursal_keys": ["BRANCH A", "BRANCH B"]},
                 "preview": {"fingerprint": "test-only", "fingerprint_version": "campaign-v2-freeze-v1"},
