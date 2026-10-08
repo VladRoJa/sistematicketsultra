@@ -12,6 +12,9 @@ on:
       - "backend/tests/marketing/Dockerfile.m3_scheduler_qa"
       - "backend/tests/marketing/m3_scheduler_compose_service.py"
       - "backend/tests/marketing/compose.m3_scheduler_qa.yml"
+      - "backend/tests/marketing/m3_qa_readiness_gate.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_m3_qa_readiness.py"
+      - "docs/contratos/campanas_v2/M3_GO_NO_GO_STAGING_AND_LIVE_QA.md"
       - ".github/workflows/campaign-v2-m3-postgresql.yml"
   push:
     branches:
@@ -51,6 +54,9 @@ jobs:
             "alembic==1.15.2" \
             "psycopg2-binary==2.9.10" \
             "pytest==8.3.5"
+      - name: Offline M3 QA GO-NO-GO evidence gate
+        working-directory: backend
+        run: python -m pytest -q tests/marketing/test_marketing_campaign_v2_m3_qa_readiness.py
       - name: PostgreSQL upgrade and downgrade
         working-directory: backend
         env:
