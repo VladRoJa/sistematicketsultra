@@ -24,8 +24,8 @@ METRICS = {
 FIRST_SUPPORTED_DATE = date(2026, 1, 1)
 # Until a complete validated daily archive is available, do not derive
 # historical reactivations from corrected monthly cumulative snapshots.
-REACTIVATIONS_DAILY_FROM = date(2026, 10, 1)
-REACTIVATIONS_WEEKLY_FROM = date(2026, 10, 4)
+# Reactivaciones weekly comparison always uses the last three calendar
+# months, including the reporting month. Never fabricate historical days.
 
 
 class CommercialDailyReportError(RuntimeError):
@@ -36,7 +36,17 @@ def _week_start(day: date) -> date:
     return day - timedelta(days=(day.weekday() + 1) % 7)
 
 
-def _daily_deltas(mtd_by_day: dict[date, int | None]) -> dict[date, int | None]:
+def _three_month_window_start(cutoff: date) -> date:
+    """First day of the current month and the two preceding months."""
+    month_number = cutoff.year * 12 + cutoff.month - 1 - 2
+    start = date(month_number // 12, month_number % 12 + 1, 1)
+    return max(start, FIRST_SUPPORTED_DATE)
+
+
+def _daily_deltas(
+    mtd_by_day: dict[date, int | None],
+    *, historical_corrections_before: date | None = None,
+) -> dict[date, int | None]:
     """No silently convert missing business dates to zero."""
     result: dict[date, int | None] = {}
     for day in sorted(mtd_by_day):
@@ -50,6 +60,14 @@ def _daily_deltas(mtd_by_day: dict[date, int | None]) -> dict[date, int | None]:
         elif previous in mtd_by_day and mtd_by_day[previous] is not None:
             delta = current - mtd_by_day[previous]
             if delta < 0:
+                if (
+                    historical_corrections_before is not None
+                    and day < historical_corrections_before
+                ):
+                    # Older corrected MTD is not evidence of negative
+                    # activity. Mark this day/its week unavailable.
+                    result[day] = None
+                    continue
                 raise CommercialDailyReportError(
                     f"MTD decreasing within month for {day.isoformat()}"
                 )
@@ -265,27 +283,29 @@ def render_commercial_daily_xlsx(
     if not branches:
         raise CommercialDailyReportError("No branches")
 
-    # Monthly historical MTD is authoritative at month close. Daily MTD
-    # differences are NOT a safe reconstruction of historical activations:
-    # corrections can make the series decrease, e.g. 13 February 2026.
-    # Reactivaciones is therefore intentionally daily/weekly from October.
+    # Monthly historical MTD is authoritative at month close. Weekly
+    # comparison covers the previous two calendar months and the current one;
+    # it does not reconstruct the unreliable January-February daily history.
+    comparison_start = (
+        _three_month_window_start(cutoff)
+        if metric == "reactivaciones" else FIRST_SUPPORTED_DATE
+    )
     if metric == "reactivaciones":
         daily = {
-            branch: _daily_deltas({
-                day: value for day, value in mtd_series[branch].items()
-                if REACTIVATIONS_DAILY_FROM <= day <= cutoff
-            })
+            branch: _daily_deltas(
+                {
+                    day: value for day, value in mtd_series[branch].items()
+                    if comparison_start <= day <= cutoff
+                },
+                historical_corrections_before=cutoff.replace(day=1),
+            )
             for branch in branches
         }
     else:
         daily = {b: _daily_deltas(mtd_series[b]) for b in branches}
     week = _week_start(cutoff)
     weeks = []
-    cursor = (
-        REACTIVATIONS_WEEKLY_FROM
-        if metric == "reactivaciones" and cutoff >= REACTIVATIONS_WEEKLY_FROM
-        else _week_start(FIRST_SUPPORTED_DATE)
-    )
+    cursor = _week_start(comparison_start)
     while cursor <= week:
         weeks.append(cursor)
         cursor += timedelta(days=7)
@@ -305,8 +325,10 @@ def render_commercial_daily_xlsx(
     for b in branches:
         weekly_cells[b] = []
         for start in weeks:
-            valid_days = [start + timedelta(days=i) for i in range(7)
-                          if start + timedelta(days=i) <= cutoff]
+            valid_days = [
+                start + timedelta(days=i) for i in range(7)
+                if comparison_start <= start + timedelta(days=i) <= cutoff
+            ]
             values = [daily[b].get(d) for d in valid_days]
             weekly_cells[b].append(
                 sum(values) if valid_days and all(v is not None for v in values)
@@ -356,7 +378,8 @@ def render_commercial_daily_xlsx(
         if metric == "reactivaciones" else None
     )
     weekly_title = (
-        "REACTIVACIONES · SEMANAL DESDE 04/10/2026"
+        "REACTIVACIONES · COMPARATIVO SEMANAL "
+        f"{comparison_start:%d/%m/%Y} AL {cutoff:%d/%m/%Y}"
         if metric == "reactivaciones" else None
     )
     monthly_title = (
@@ -371,13 +394,37 @@ def render_commercial_daily_xlsx(
     _format_sheet(
         book, "Semanal",
         ["Sucursal"] + [
-            f"{w:%d/%m}-{w + timedelta(days=6):%d/%m}"
-            + (f" (corte {cutoff:%d/%m})"
-               if w == week and cutoff < w + timedelta(days=6) else "")
+            (
+                f"{comparison_start:%d/%m} (parcial)"
+                if metric == "reactivaciones" and w < comparison_start
+                else f"{w:%d/%m}-{w + timedelta(days=6):%d/%m}"
+                + (
+                    f" (corte {cutoff:%d/%m})"
+                    if w == week and cutoff < w + timedelta(days=6)
+                    else ""
+                )
+            )
             for w in weeks
         ],
         branches, weekly_cells, branch_metadata, title_text=weekly_title,
     )
+    if metric == "reactivaciones":
+        # A missing/negative historical correction is NOT zero. The cell and
+        # its affected subtotals remain blank, and the report explains why.
+        week_sheet = book.get_worksheet_by_name("Semanal")
+        note_row = week_sheet.dim_rowmax + 2
+        week_sheet.merge_range(
+            note_row, 0, note_row, len(weeks),
+            "Nota: las celdas vacías significan datos diarios faltantes "
+            "o correcciones históricas; no representan cero. "
+            "La primera semana puede ser parcial.",
+            book.add_format({
+                "italic": True, "font_color": "#6E4C00",
+                "bg_color": "#FFF0CC", "text_wrap": True,
+                "valign": "vcenter",
+            }),
+        )
+        week_sheet.set_row(note_row, 34)
     _format_sheet(
         book, "Totales Mensuales",
         ["Sucursal"] + [m.strftime("%m/%Y") for m in months],
