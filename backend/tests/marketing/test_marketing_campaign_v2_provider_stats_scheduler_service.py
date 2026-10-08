@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import BigInteger, Column, Integer, MetaData, Table, create_engine
+from sqlalchemy import BigInteger, Column, Integer, String, MetaData, Table, create_engine, text
 from sqlalchemy.orm import Session
 
 from app.models.marketing import (
@@ -63,6 +63,14 @@ def session():
         Column("id", BigInteger, primary_key=True),
     )
     MarketingCampaignV2ORM.__table__.to_metadata(metadata)
+    Table(
+        "marketing_campaign_v2_provider_campaigns", metadata,
+        Column("id", BigInteger, primary_key=True),
+        Column("campaign_v2_id", BigInteger, nullable=False),
+        Column("provider", String, nullable=False),
+        Column("provider_campaign_id", String),
+        Column("status", String, nullable=False),
+    )
     MarketingCampaignV2RecipientORM.__table__.to_metadata(metadata)
     MarketingCampaignV2ProviderStatsSnapshotORM.__table__.to_metadata(metadata)
     MarketingCampaignV2ProviderRecipientObservationORM.__table__.to_metadata(metadata)
@@ -391,3 +399,84 @@ def test_default_db_session_is_removed_after_each_campaign(monkeypatch):
     assert result.attempted == 2
     assert result.unchanged == 2
     assert cleanups == ["remove", "remove"]
+
+def _insert_child(session, *, child_id, campaign_id, provider_campaign_id, status="SUBMITTED"):
+    session.execute(
+        text("""
+            INSERT INTO marketing_campaign_v2_provider_campaigns
+                (id, campaign_v2_id, provider, provider_campaign_id, status)
+            VALUES (:child_id, :campaign_id, 'IVENTAS', :provider_campaign_id, :status)
+        """),
+        {
+            "child_id": child_id,
+            "campaign_id": campaign_id,
+            "provider_campaign_id": provider_campaign_id,
+            "status": status,
+        },
+    )
+
+
+def test_selection_targets_children_independently_and_applies_global_limit(session):
+    _insert_child(session, child_id=101, campaign_id=1, provider_campaign_id="child-a")
+    _insert_child(session, child_id=102, campaign_id=1, provider_campaign_id="child-b")
+    _insert_child(session, child_id=103, campaign_id=1, provider_campaign_id=None, status="PROVIDER_ERROR")
+    _insert_child(session, child_id=201, campaign_id=2, provider_campaign_id="external-2")
+    session.commit()
+
+    selection = select_campaign_v2_provider_stats_candidates(
+        now=NOW, horizon_hours=24, max_campaigns=4, session=session,
+    )
+    # Parent-bound campaigns 1 and 2 must not be scheduled again as legacy.
+    assert selection.bound_count == 6
+    assert selection.eligible_count == 5
+    assert selection.campaign_ids == (1, 1, 6, 2)
+    assert selection.provider_child_ids == (101, 102, None, 201)
+    assert selection.skipped_by_limit == 1
+
+
+def test_child_horizon_uses_provider_identity_even_for_legacy_snapshot(session):
+    _insert_child(session, child_id=101, campaign_id=1, provider_campaign_id="child-a")
+    _insert_child(session, child_id=102, campaign_id=1, provider_campaign_id="child-b")
+    _add_snapshot(
+        session, campaign_id=1,
+        fetched_at=NOW - timedelta(hours=30), fingerprint="a" * 64,
+    )
+    old_snapshot = (
+        session.query(MarketingCampaignV2ProviderStatsSnapshotORM)
+        .filter_by(campaign_v2_id=1).one()
+    )
+    old_snapshot.provider_campaign_id = "child-a"
+    # Historical snapshot has NULL child FK, but must still count for horizon.
+    session.commit()
+
+    selection = select_campaign_v2_provider_stats_candidates(
+        now=NOW, horizon_hours=24, max_campaigns=10, session=session,
+    )
+    assert selection.skipped_outside_horizon == 2  # child-a and legacy campaign 3
+    assert 101 not in selection.provider_child_ids
+    assert 102 in selection.provider_child_ids
+
+
+def test_capture_cycle_isolates_child_failure_and_continues(session, caplog):
+    _insert_child(session, child_id=101, campaign_id=1, provider_campaign_id="child-a")
+    _insert_child(session, child_id=102, campaign_id=1, provider_campaign_id="child-b")
+    session.commit()
+    calls = []
+
+    def capture(**kwargs):
+        calls.append((kwargs["campaign_id"], kwargs.get("provider_campaign_child_id")))
+        if kwargs.get("provider_campaign_child_id") == 101:
+            raise MarketingCampaignV2ProviderStatsUpstreamError(
+                "secret-provider-error", retryable=True,
+            )
+        return {"created": True}
+
+    result = run_campaign_v2_provider_stats_capture_cycle(
+        now=NOW, horizon_hours=24, max_campaigns=3,
+        session=session, capture_func=capture,
+    )
+    assert calls == [(1, 101), (1, 102), (6, None)]
+    assert result.attempted == 3
+    assert result.created == 2
+    assert result.failed == 1
+    assert "secret-provider-error" not in caplog.text

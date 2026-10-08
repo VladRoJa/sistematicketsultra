@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import BigInteger, Column, Integer, MetaData, Table, create_engine
+from sqlalchemy import BigInteger, Column, Integer, String, MetaData, Table, create_engine, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -57,6 +57,15 @@ def session():
         Column("id", BigInteger, primary_key=True),
     )
     MarketingCampaignV2ORM.__table__.to_metadata(metadata)
+    Table(
+        "marketing_campaign_v2_provider_campaigns",
+        metadata,
+        Column("id", BigInteger, primary_key=True),
+        Column("campaign_v2_id", BigInteger, nullable=False),
+        Column("provider", String, nullable=False),
+        Column("provider_campaign_id", String),
+        Column("status", String, nullable=False),
+    )
     MarketingCampaignV2RecipientORM.__table__.to_metadata(metadata)
     MarketingCampaignV2ProviderStatsSnapshotORM.__table__.to_metadata(metadata)
     MarketingCampaignV2ProviderRecipientObservationORM.__table__.to_metadata(metadata)
@@ -382,3 +391,30 @@ def test_snapshot_unique_constraint_supports_idempotency(session):
     with pytest.raises(IntegrityError):
         session.commit()
     session.rollback()
+
+
+def test_independent_snapshots_for_two_provider_children(session):
+    session.execute(text("""
+        INSERT INTO marketing_campaign_v2_provider_campaigns
+        (id, campaign_v2_id, provider, provider_campaign_id, status)
+        VALUES (101, 1, 'IVENTAS', 'provider-child-a', 'SUBMITTED'),
+               (102, 1, 'IVENTAS', 'provider-child-b', 'SUBMITTED')
+    """))
+    session.commit()
+    provider = FakeProvider(_stats())
+    results = [
+        capture_campaign_v2_provider_stats_snapshot(
+            campaign_id=1,
+            provider_campaign_child_id=child_id,
+            allowed_sucursal_keys=('BRANCH A',),
+            session=session,
+            provider_resolver=lambda key: provider,
+            now=NOW,
+        )
+        for child_id in (101, 102)
+    ]
+    assert provider.calls == ['provider-child-a', 'provider-child-b']
+    assert all(result['created'] for result in results)
+    assert results[0]['id'] != results[1]['id']
+    assert [result['provider_campaign_child_id'] for result in results] == [101, 102]
+    assert session.query(MarketingCampaignV2ProviderStatsSnapshotORM).count() == 2

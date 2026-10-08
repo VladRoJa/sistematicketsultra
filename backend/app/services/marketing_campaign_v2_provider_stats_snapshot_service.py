@@ -45,6 +45,7 @@ def capture_campaign_v2_provider_stats_snapshot(
     *,
     campaign_id: Any,
     allowed_sucursal_keys: Iterable[str] | None,
+    provider_campaign_child_id: Any | None = None,
     session=None,
     provider_resolver: ProviderResolver = resolve_campaign_provider,
     now: datetime | None = None,
@@ -53,6 +54,7 @@ def capture_campaign_v2_provider_stats_snapshot(
     fetched = fetch_campaign_v2_provider_stats(
         campaign_id=campaign_id,
         allowed_sucursal_keys=allowed_sucursal_keys,
+        provider_campaign_child_id=provider_campaign_child_id,
         session=active_session,
         provider_resolver=provider_resolver,
     )
@@ -99,6 +101,7 @@ def capture_campaign_v2_provider_stats_snapshot(
     raw = fetched.stats.raw_counts
     snapshot = MarketingCampaignV2ProviderStatsSnapshotORM(
         campaign_v2_id=fetched.campaign_id,
+        provider_campaign_child_id=fetched.provider_campaign_child_id,
         provider=fetched.provider,
         provider_campaign_id=fetched.provider_campaign_id,
         analytics_status=fetched.stats.analytics_status,
@@ -397,6 +400,7 @@ def _serialize_snapshot(snapshot, *, created: bool) -> dict[str, Any]:
         "campaign_id": int(snapshot.campaign_v2_id),
         "provider": snapshot.provider,
         "provider_campaign_id": snapshot.provider_campaign_id,
+        "provider_campaign_child_id": snapshot.provider_campaign_child_id,
         "analytics_status": snapshot.analytics_status,
         "fetched_at": _iso_datetime(snapshot.fetched_at),
         "created_at": _iso_datetime(snapshot.created_at),

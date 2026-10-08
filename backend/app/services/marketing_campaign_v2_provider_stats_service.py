@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Iterable
 
 from app.extensions import db
+from app.models.marketing import MarketingCampaignV2ProviderCampaignORM
 from app.integrations.iventas.campaigns_client import (
     IVentasCampaignsClientError,
     IVentasCampaignsProviderError,
@@ -72,6 +73,7 @@ class CampaignV2ProviderStatsFetch:
     provider: str
     provider_campaign_id: str
     stats: CampaignProviderStats
+    provider_campaign_child_id: int | None = None
 
 
 def get_campaign_v2_provider_stats(
@@ -99,6 +101,7 @@ def fetch_campaign_v2_provider_stats(
     *,
     campaign_id: Any,
     allowed_sucursal_keys: Iterable[str] | None,
+    provider_campaign_child_id: Any | None = None,
     session=None,
     provider_resolver: ProviderResolver = resolve_campaign_provider,
 ) -> CampaignV2ProviderStatsFetch:
@@ -116,10 +119,44 @@ def fetch_campaign_v2_provider_stats(
             session=active_session,
         )
 
-    provider_key = _clean_required(campaign.provider)
-    provider_campaign_id = _clean_required(
-        campaign.provider_campaign_id
+    normalized_child_id = (
+        _positive_int(
+            provider_campaign_child_id,
+            field_name="provider_campaign_child_id",
+            maximum=None,
+        )
+        if provider_campaign_child_id is not None
+        else None
     )
+    if normalized_child_id is None:
+        provider_key = _clean_required(campaign.provider)
+        provider_campaign_id = _clean_required(campaign.provider_campaign_id)
+    else:
+        with active_session.no_autoflush:
+            child = (
+                active_session.query(
+                    MarketingCampaignV2ProviderCampaignORM.provider,
+                    MarketingCampaignV2ProviderCampaignORM.provider_campaign_id,
+                    MarketingCampaignV2ProviderCampaignORM.status,
+                )
+                .filter(
+                    MarketingCampaignV2ProviderCampaignORM.id
+                    == normalized_child_id,
+                    MarketingCampaignV2ProviderCampaignORM.campaign_v2_id
+                    == normalized_campaign_id,
+                )
+                .one_or_none()
+            )
+        if child is None:
+            raise MarketingCampaignV2ProviderStatsUnboundError(
+                "Provider child no pertenece a la campaña visible."
+            )
+        if child.status not in {"SUBMITTED", "SCHEDULED"}:
+            raise MarketingCampaignV2ProviderStatsUnboundError(
+                "Provider child aún no tiene un envío aceptado."
+            )
+        provider_key = _clean_required(child.provider)
+        provider_campaign_id = _clean_required(child.provider_campaign_id)
 
     if provider_key is None or provider_campaign_id is None:
         raise MarketingCampaignV2ProviderStatsUnboundError(
@@ -167,6 +204,7 @@ def fetch_campaign_v2_provider_stats(
         provider=provider_key,
         provider_campaign_id=provider_campaign_id,
         stats=stats,
+        provider_campaign_child_id=normalized_child_id,
     )
 
 

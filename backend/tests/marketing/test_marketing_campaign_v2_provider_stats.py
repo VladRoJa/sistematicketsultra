@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 import pytest
-from sqlalchemy import Column, Integer, MetaData, Table, create_engine, event
+from sqlalchemy import Column, Integer, String, MetaData, Table, create_engine, event, text
 from sqlalchemy.orm import Session
 
 from app.integrations.iventas.campaigns_client import (
@@ -31,6 +31,7 @@ from app.services.marketing_campaign_v2_provider_stats_service import (
     MarketingCampaignV2ProviderStatsUnsupportedError,
     MarketingCampaignV2ProviderStatsUpstreamError,
     get_campaign_v2_provider_stats,
+    fetch_campaign_v2_provider_stats,
 )
 from app.services.marketing_campaign_v2_query_service import (
     MarketingCampaignV2NotFoundError,
@@ -53,6 +54,14 @@ def session():
     metadata = MetaData()
     Table("users", metadata, Column("id", Integer, primary_key=True))
     MarketingCampaignV2ORM.__table__.to_metadata(metadata)
+    Table(
+        "marketing_campaign_v2_provider_campaigns", metadata,
+        Column("id", Integer, primary_key=True),
+        Column("campaign_v2_id", Integer, nullable=False),
+        Column("provider", String, nullable=False),
+        Column("provider_campaign_id", String),
+        Column("status", String, nullable=False),
+    )
     metadata.create_all(engine)
 
     with Session(engine) as value:
@@ -392,3 +401,34 @@ def test_read_through_executes_only_selects_and_never_commits(session):
     assert not session.new
     assert unrelated in session.dirty
     assert not session.deleted
+
+
+def test_provider_stats_fetch_resolves_child_and_rejects_foreign_child(session):
+    session.execute(text("""
+        INSERT INTO marketing_campaign_v2_provider_campaigns
+        (id, campaign_v2_id, provider, provider_campaign_id, status)
+        VALUES (101, 1, 'IVENTAS', 'child-external-101', 'SUBMITTED'),
+               (102, 2, 'IVENTAS', 'other-campaign', 'SUBMITTED')
+    """))
+    session.commit()
+    provider = FakeProvider(stats=_stats())
+    fetched = fetch_campaign_v2_provider_stats(
+        campaign_id=1,
+        provider_campaign_child_id=101,
+        allowed_sucursal_keys=['BRANCH A'],
+        session=session,
+        provider_resolver=lambda key: provider,
+    )
+    assert fetched.provider_campaign_child_id == 101
+    assert fetched.provider_campaign_id == 'child-external-101'
+    assert provider.calls == ['child-external-101']
+
+    with pytest.raises(MarketingCampaignV2ProviderStatsUnboundError):
+        fetch_campaign_v2_provider_stats(
+            campaign_id=1,
+            provider_campaign_child_id=102,
+            allowed_sucursal_keys=['BRANCH A'],
+            session=session,
+            provider_resolver=lambda key: provider,
+        )
+    assert provider.calls == ['child-external-101']
