@@ -18,7 +18,7 @@ class FakeCatalogQuery:
 def _render(monkeypatch, cutoff, data=None):
     monkeypatch.setattr(service, "TrackBranchCatalogORM", SimpleNamespace(query=FakeCatalogQuery()))
     monkeypatch.setattr(service, "_fetch_new_data", lambda cutoff, keys: data or {})
-    return load_workbook(BytesIO(service.build_sales_from_baseline(cutoff=cutoff)), data_only=True)
+    return load_workbook(BytesIO(service.build_sales_from_baseline(cutoff=cutoff)), data_only=False)
 
 
 def test_original_history_unchanged(monkeypatch):
