@@ -8,11 +8,31 @@ from openpyxl import load_workbook
 from app.warehouse.services import commercial_sales_baseline_service as service
 
 
+# Track catalog keys come from the seeded canonical branch catalog.
+CANONICAL_BRANCHES = (
+    "VILLAS_DEL_REY", "VILLA_VERDE", "INDEPENDENCIA", "TEC_MXL",
+    "SEND_MXL", "SAN_LUIS", "PABELLON_RTO", "MISION_ENS",
+    "PASEO_2000", "LOMA_BONITA", "SANTA_FE", "CARROUSEL_TJ",
+    "PAPALOTE_TJ", "SEND_CUL", "SAN_ISIDRO_CUL", "AZAHARES_CUL",
+    "STA_CATARINA", "SEND_SALTILLO", "SEND_CHIH", "PASEO_LA_PAZ",
+    "IXTAPALUCA", "INSURGENTES", "TLALNEPANTLA",
+    "SALTILLO_VILLALTA", "METEPEC", "SERRANIA",
+)
+
+
+def _catalog():
+    return [
+        SimpleNamespace(sucursal_canon=key, track_label=key.replace("_", " "))
+        for key in CANONICAL_BRANCHES
+    ]
+
+
 class FakeCatalogQuery:
     def filter_by(self, **kwargs):
         return self
+
     def all(self):
-        return []
+        return _catalog()
 
 
 def _render(monkeypatch, cutoff, data=None):
@@ -45,11 +65,17 @@ def test_baseline_hash_matches_original():
 def test_october_5_appends_without_touching_historical_week(monkeypatch):
     source = service._load_source()
     weekly, monthly, daily = service._source_rows(source)
-    names = set(weekly) | set(monthly) | set(daily)
+    # Real Track data is keyed by canonical branch names, not Excel labels.
     readings = {
-        date(2026, 9, 30): {name: 30 for name in names},
-        date(2026, 10, 4): {name: 8 for name in names},
-        date(2026, 10, 5): {name: 10 for name in names},
+        date(2026, 9, 30): {
+            service._canon(branch): 30 for branch in CANONICAL_BRANCHES
+        },
+        date(2026, 10, 4): {
+            service._canon(branch): 8 for branch in CANONICAL_BRANCHES
+        },
+        date(2026, 10, 5): {
+            service._canon(branch): 10 for branch in CANONICAL_BRANCHES
+        },
     }
     output = _render(monkeypatch, date(2026, 10, 5), readings)
     assert output["DIARIO 04 OCT"].cell(daily["VILLASDELREY"], 3).value == source["DIARIO 04 OCT"].cell(daily["VILLASDELREY"], 3).value
@@ -60,3 +86,31 @@ def test_october_5_appends_without_touching_historical_week(monkeypatch):
     )
     assert output["Totales Mensuales"].cell(monthly["VILLASDELREY"], 22).value == source["Totales Mensuales"].cell(monthly["VILLASDELREY"], 22).value
     assert output["Totales Mensuales"].cell(monthly["VILLASDELREY"], 24).value == 10
+
+
+def test_all_historical_branch_labels_resolve_to_exactly_26_canonicals():
+    workbook = service._load_source()
+    weekly, monthly, daily = service._source_rows(workbook)
+    aliases = service._branch_alias_map(_catalog())
+    for rows in (weekly, monthly, daily):
+        mapped = [aliases.get(service._canon(label)) for label in rows]
+        assert None not in mapped
+        assert set(mapped) == {service._canon(k) for k in CANONICAL_BRANCHES}
+        assert len(set(mapped)) == 26
+
+    assert aliases["VILLAVERDEMEXICALI"] == "VILLAVERDE"
+    assert aliases["TECMEXICALI"] == "TECMXL"
+    assert aliases["SENDEROMEXICALI"] == "SENDMXL"
+
+
+def test_ambiguous_catalog_label_is_refused():
+    rows = _catalog()
+    rows[1].track_label = rows[0].track_label
+    with pytest.raises(service.SalesBaselineError, match="Ambiguous branch"):
+        service._branch_alias_map(rows)
+
+
+def test_missing_required_canonical_is_refused():
+    rows = [row for row in _catalog() if row.sucursal_canon != "VILLA_VERDE"]
+    with pytest.raises(service.SalesBaselineError, match="VILLA_VERDE"):
+        service._branch_alias_map(rows)
