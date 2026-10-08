@@ -18,6 +18,10 @@ METRICS = {
     "reactivaciones": ("reactivaciones_real_mtd", "REACTIVACIONES"),
 }
 FIRST_SUPPORTED_DATE = date(2026, 1, 1)
+# Until a complete validated daily archive is available, do not derive
+# historical reactivations from corrected monthly cumulative snapshots.
+REACTIVATIONS_DAILY_FROM = date(2026, 10, 1)
+REACTIVATIONS_WEEKLY_FROM = date(2026, 10, 4)
 
 
 class CommercialDailyReportError(RuntimeError):
@@ -61,7 +65,12 @@ def _resolve_canonical_version(day: date):
     return None
 
 
-def _load_series(metric: str, cutoff: date) -> dict[str, dict[date, int | None]]:
+def _load_series(
+    metric: str,
+    cutoff: date,
+    *,
+    active_branches: set[str] | None = None,
+) -> dict[str, dict[date, int | None]]:
     field, _ = METRICS[metric]
     start = FIRST_SUPPORTED_DATE
     versions = {}
@@ -87,9 +96,22 @@ def _load_series(metric: str, cutoff: date) -> dict[str, dict[date, int | None]]
         branch = str(row.sucursal_canon)
         if row.track_date in versions and row.track_daily_version_id == versions[row.track_date]:
             by_branch[branch][row.track_date] = getattr(row, field)
+    if active_branches is not None:
+        # Historical marts can contain retired clubs. Exclude them without
+        # suppressing a genuinely missing current active-club cutoff.
+        by_branch = {
+            branch: series for branch, series in by_branch.items()
+            if branch in active_branches
+        }
+        required = set(active_branches)
+    else:
+        required = set(by_branch)
     if not by_branch:
         raise CommercialDailyReportError("Track mart has no commercial rows")
-    missing = [branch for branch, series in by_branch.items() if series.get(cutoff) is None]
+    missing = [
+        branch for branch in sorted(required)
+        if by_branch.get(branch, {}).get(cutoff) is None
+    ]
     if missing:
         raise CommercialDailyReportError(
             f"Missing commercial MTD on cutoff {cutoff.isoformat()}: {missing}"
@@ -127,21 +149,24 @@ def _load_branch_metadata() -> dict[str, dict]:
     return metadata
 
 
-def _format_sheet(book, name, headers, branches, cells, branch_metadata=None):
+def _format_sheet(
+    book, name, headers, branches, cells,
+    branch_metadata=None, title_text=None,
+):
     sheet = book.add_worksheet(name)
     sheet.freeze_panes(2, 1)
     sheet.set_column(0, 0, 31)
     sheet.set_column(1, max(1, len(headers) - 1), 15)
     title = book.add_format({
         "bold": True, "font_color": "#FFFFFF",
-        "bg_color": "#153E63", "font_size": 14
+        "bg_color": "#153E63", "font_size": 14, "shrink": True,
     })
     heading = book.add_format({
         "bold": True, "bg_color": "#D8E8F4", "border": 1
     })
     numeric = book.add_format({"num_format": "#,##0", "align": "center"})
     missing = book.add_format({"bg_color": "#FFF0CC", "align": "center"})
-    sheet.merge_range(0, 0, 0, len(headers) - 1, name.upper(), title)
+    sheet.merge_range(0, 0, 0, len(headers) - 1, title_text or name.upper(), title)
     for col, header in enumerate(headers):
         sheet.write(1, col, header, heading)
 
@@ -235,10 +260,27 @@ def render_commercial_daily_xlsx(
     if not branches:
         raise CommercialDailyReportError("No branches")
 
-    daily = {b: _daily_deltas(mtd_series[b]) for b in branches}
+    # Monthly historical MTD is authoritative at month close. Daily MTD
+    # differences are NOT a safe reconstruction of historical activations:
+    # corrections can make the series decrease, e.g. 13 February 2026.
+    # Reactivaciones is therefore intentionally daily/weekly from October.
+    if metric == "reactivaciones":
+        daily = {
+            branch: _daily_deltas({
+                day: value for day, value in mtd_series[branch].items()
+                if REACTIVATIONS_DAILY_FROM <= day <= cutoff
+            })
+            for branch in branches
+        }
+    else:
+        daily = {b: _daily_deltas(mtd_series[b]) for b in branches}
     week = _week_start(cutoff)
     weeks = []
-    cursor = _week_start(FIRST_SUPPORTED_DATE)
+    cursor = (
+        REACTIVATIONS_WEEKLY_FROM
+        if metric == "reactivaciones" and cutoff >= REACTIVATIONS_WEEKLY_FROM
+        else _week_start(FIRST_SUPPORTED_DATE)
+    )
     while cursor <= week:
         weeks.append(cursor)
         cursor += timedelta(days=7)
@@ -277,9 +319,39 @@ def render_commercial_daily_xlsx(
     stream = BytesIO()
     book = xlsxwriter.Workbook(stream, {"in_memory": True})
     book.set_properties({"title": f"Reporte {METRICS[metric][1]} {cutoff.isoformat()}"})
-    _format_sheet(book, "Diario", ["Sucursal"] + [d.strftime("%d/%m/%Y") for d in day_headers], branches, daily_cells, branch_metadata)
-    _format_sheet(book, "Semanal", ["Sucursal"] + [f"{w:%d/%m}-{w + timedelta(days=6):%d/%m}" + (f" (corte {cutoff:%d/%m})" if w == week and cutoff < w + timedelta(days=6) else "") for w in weeks], branches, weekly_cells, branch_metadata)
-    _format_sheet(book, "Totales Mensuales", ["Sucursal"] + [m.strftime("%m/%Y") for m in months], branches, monthly_cells, branch_metadata)
+    daily_title = (
+        f"REACTIVACIONES · SEMANA {week:%d/%m/%Y} - "
+        f"{week + timedelta(days=6):%d/%m/%Y} · CORTE {cutoff:%d/%m/%Y}"
+        if metric == "reactivaciones" else None
+    )
+    weekly_title = (
+        "REACTIVACIONES · SEMANAL DESDE 04/10/2026"
+        if metric == "reactivaciones" else None
+    )
+    monthly_title = (
+        f"REACTIVACIONES · ACUMULADO MENSUAL AL {cutoff:%d/%m/%Y}"
+        if metric == "reactivaciones" else None
+    )
+    _format_sheet(
+        book, "Diario",
+        ["Sucursal"] + [d.strftime("%d/%m/%Y") for d in day_headers],
+        branches, daily_cells, branch_metadata, title_text=daily_title,
+    )
+    _format_sheet(
+        book, "Semanal",
+        ["Sucursal"] + [
+            f"{w:%d/%m}-{w + timedelta(days=6):%d/%m}"
+            + (f" (corte {cutoff:%d/%m})"
+               if w == week and cutoff < w + timedelta(days=6) else "")
+            for w in weeks
+        ],
+        branches, weekly_cells, branch_metadata, title_text=weekly_title,
+    )
+    _format_sheet(
+        book, "Totales Mensuales",
+        ["Sucursal"] + [m.strftime("%m/%Y") for m in months],
+        branches, monthly_cells, branch_metadata, title_text=monthly_title,
+    )
     book.close()
     return stream.getvalue()
 
@@ -287,7 +359,12 @@ def render_commercial_daily_xlsx(
 def build_commercial_daily_xlsx(*, metric: str, cutoff: date) -> bytes:
     if metric not in METRICS:
         raise ValueError(metric)
+    branch_metadata = _load_branch_metadata()
     return render_commercial_daily_xlsx(
-        metric=metric, cutoff=cutoff, mtd_series=_load_series(metric, cutoff),
-        branch_metadata=_load_branch_metadata()
+        metric=metric,
+        cutoff=cutoff,
+        mtd_series=_load_series(
+            metric, cutoff, active_branches=set(branch_metadata),
+        ),
+        branch_metadata=branch_metadata,
     )

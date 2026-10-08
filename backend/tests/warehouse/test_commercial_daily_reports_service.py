@@ -105,3 +105,141 @@ def test_subtotals_and_region_summary_follow_catalog_metadata():
     assert weekly.cell(row=7, column=last).value == 12
     assert weekly.cell(row=10, column=last).value == 8
     assert weekly.cell(row=11, column=last).value == 4
+
+
+def test_reactivaciones_february_correction_does_not_fake_negative_daily():
+    """Monthly historical snapshots stay readable despite old MTD corrections."""
+    series = {
+        date(2026, 2, 12): 33,
+        date(2026, 2, 13): 31,  # A corrected cumulative total, not -2 visits.
+        date(2026, 2, 28): 99,
+        date(2026, 9, 30): 150,
+        **{date(2026, 10, day): 2 * day for day in range(1, 8)},
+    }
+    payload = render_commercial_daily_xlsx(
+        metric="reactivaciones",
+        cutoff=date(2026, 10, 7),
+        mtd_series={"VILLA_VERDE": series},
+    )
+    book = load_workbook(BytesIO(payload), data_only=True)
+    weekly = book["Semanal"]
+    daily = book["Diario"]
+    monthly = book["Totales Mensuales"]
+
+    assert book.sheetnames == ["Diario", "Semanal", "Totales Mensuales"]
+    assert weekly.max_column == 2  # Only Sunday October 4 onwards; no false Jan-Sep weekly totals.
+    assert weekly["B2"].value == "04/10-10/10 (corte 07/10)"
+    assert weekly["B3"].value == 8
+    assert daily["B3"].value == 2
+    assert daily["E3"].value == 2
+    assert daily["F3"].value is None  # Future day never counted as zero.
+    assert monthly["C3"].value == 99  # February closing MTD, not daily net deltas.
+    assert monthly["J3"].value == 150  # September historical monthly close.
+    assert monthly["K3"].value == 14  # October MTD at cutoff.
+    assert "04/10/2026" in daily["A1"].value
+    assert "DESDE 04/10/2026" in weekly["A1"].value
+    assert "07/10/2026" in monthly["A1"].value
+
+
+def test_reactivaciones_current_period_correction_fails_closed():
+    days = {
+        date(2026, 10, 1): 11,
+        date(2026, 10, 2): 8,
+        date(2026, 10, 3): 15,
+        date(2026, 10, 4): 18,
+    }
+    with pytest.raises(CommercialDailyReportError, match="2026-10-02"):
+        render_commercial_daily_xlsx(
+            metric="reactivaciones",
+            cutoff=date(2026, 10, 4),
+            mtd_series={"VILLA_VERDE": days},
+        )
+
+
+def test_reactivaciones_monthly_history_without_old_daily_dates():
+    series = {
+        date(2026, 1, 31): 80,
+        date(2026, 2, 28): 90,
+        date(2026, 10, 1): 3,
+        date(2026, 10, 2): 4,
+        date(2026, 10, 3): 6,
+        date(2026, 10, 4): 7,
+    }
+    report = load_workbook(
+        BytesIO(render_commercial_daily_xlsx(
+            metric="reactivaciones",
+            cutoff=date(2026, 10, 4),
+            mtd_series={"VILLA_VERDE": series},
+        )),
+        data_only=True,
+    )
+    assert report["Semanal"]["B3"].value == 1
+    assert report["Totales Mensuales"]["B3"].value == 80
+    assert report["Totales Mensuales"]["C3"].value == 90
+    assert report["Totales Mensuales"]["K3"].value == 7
+
+
+def test_reactivaciones_ignores_retired_historical_club_but_requires_current_ones(monkeypatch):
+    from types import SimpleNamespace
+    from app.warehouse.services import commercial_daily_reports_service as service
+
+    jan31 = date(2026, 1, 31)
+    cutoff = date(2026, 10, 7)
+    version_by_day = {
+        jan31: SimpleNamespace(id=11, status="success"),
+        cutoff: SimpleNamespace(id=27, status="success"),
+    }
+    monkeypatch.setattr(service, "_resolve_canonical_version", version_by_day.get)
+
+    class FakeColumn:
+        def in_(self, keys):
+            return True
+
+    class FakeQuery:
+        def __init__(self, rows):
+            self.rows = rows
+        def filter(self, *args):
+            return self
+        def all(self):
+            return self.rows
+
+    rows = [
+        SimpleNamespace(
+            sucursal_canon="LA_VIGA", track_date=jan31,
+            track_daily_version_id=11, reactivaciones_real_mtd=40,
+        ),
+        SimpleNamespace(
+            sucursal_canon="VILLA_VERDE", track_date=jan31,
+            track_daily_version_id=11, reactivaciones_real_mtd=30,
+        ),
+        SimpleNamespace(
+            sucursal_canon="VILLA_VERDE", track_date=cutoff,
+            track_daily_version_id=27, reactivaciones_real_mtd=15,
+        ),
+        SimpleNamespace(
+            sucursal_canon="SERRANIA", track_date=cutoff,
+            track_daily_version_id=27, reactivaciones_real_mtd=8,
+        ),
+    ]
+    monkeypatch.setattr(
+        service, "TrackDailyMartORM",
+        SimpleNamespace(
+            track_daily_version_id=FakeColumn(),
+            query=FakeQuery(rows),
+        ),
+    )
+    output = service._load_series(
+        "reactivaciones",
+        cutoff,
+        active_branches={"VILLA_VERDE", "SERRANIA"},
+    )
+    assert set(output) == {"VILLA_VERDE", "SERRANIA"}
+    assert output["VILLA_VERDE"][jan31] == 30
+    assert output["SERRANIA"][cutoff] == 8
+
+    with pytest.raises(CommercialDailyReportError, match="MISSING_CLUB"):
+        service._load_series(
+            "reactivaciones",
+            cutoff,
+            active_branches={"VILLA_VERDE", "SERRANIA", "MISSING_CLUB"},
+        )
