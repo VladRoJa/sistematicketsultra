@@ -88,6 +88,10 @@ class CampaignV2SubmittedBatchResult:
     reconciliation_note: str | None
     reconciled_by_user_id: int | None
     reconciled_at: str | None
+    retry_attempt_count: int
+    retry_last_attempt_at: str | None
+    retry_next_allowed_at: str | None
+    retry_last_by_user_id: int | None
     error_code: str | None
     support_ref: str | None
 
@@ -192,7 +196,7 @@ def submit_campaign_v2(
             error_code=None,
         )
 
-        dispatch_batch = _provider_dispatch_batch(
+        dispatch_batch = build_campaign_v2_provider_dispatch_batch(
             plan=plan,
             batch=batch,
         )
@@ -406,6 +410,10 @@ def serialize_campaign_v2_submit_result(
                 "reconciliation_note": batch.reconciliation_note,
                 "reconciled_by_user_id": batch.reconciled_by_user_id,
                 "reconciled_at": batch.reconciled_at,
+                "retry_attempt_count": batch.retry_attempt_count,
+                "retry_last_attempt_at": batch.retry_last_attempt_at,
+                "retry_next_allowed_at": batch.retry_next_allowed_at,
+                "retry_last_by_user_id": batch.retry_last_by_user_id,
                 "error_code": batch.error_code,
                 "support_ref": batch.support_ref,
             }
@@ -468,7 +476,7 @@ def _prepare_provider_campaign_rows(
                 "El batch no tiene channel resuelto."
             )
 
-        dispatch_batch = _provider_dispatch_batch(
+        dispatch_batch = build_campaign_v2_provider_dispatch_batch(
             plan=plan,
             batch=batch,
         )
@@ -505,7 +513,7 @@ def _prepare_provider_campaign_rows(
             ),
             scheduled_for=plan.schedule.scheduled_for_utc,
             provider_send_at=plan.schedule.provider_send_at,
-            request_snapshot_json=_request_snapshot(dispatch_batch),
+            request_snapshot_json=serialize_campaign_v2_provider_request_snapshot(dispatch_batch),
             provider_response_json={},
             created_at=now,
             updated_at=now,
@@ -658,7 +666,7 @@ def _commit_outcome(session: Any) -> None:
         ) from exc
 
 
-def _provider_dispatch_batch(
+def build_campaign_v2_provider_dispatch_batch(
     *,
     plan: CampaignV2PreflightPlan,
     batch: CampaignV2DispatchBatchPlan,
@@ -723,7 +731,7 @@ def _provider_campaign_name(
     return f"{base[:available]}{suffix}"
 
 
-def _request_snapshot(
+def serialize_campaign_v2_provider_request_snapshot(
     batch: CampaignProviderDispatchBatch,
 ) -> dict[str, Any]:
     return {
@@ -805,6 +813,8 @@ def _aggregate_status(
         return "SCHEDULED"
     if statuses == {"RETRY_ELIGIBLE"}:
         return "RETRY_ELIGIBLE"
+    if statuses == {"RETRY_EXHAUSTED"}:
+        return "RETRY_EXHAUSTED"
     if "RECONCILIATION_REQUIRED" in statuses:
         return "RECONCILIATION_REQUIRED"
     if "PROVIDER_ERROR" in statuses:
@@ -845,6 +855,10 @@ def _serialize_row_result(
         reconciliation_note=row.reconciliation_note,
         reconciled_by_user_id=row.reconciled_by_user_id,
         reconciled_at=_iso_datetime(row.reconciled_at),
+        retry_attempt_count=int(row.retry_attempt_count or 0),
+        retry_last_attempt_at=_iso_datetime(row.retry_last_attempt_at),
+        retry_next_allowed_at=_iso_datetime(row.retry_next_allowed_at),
+        retry_last_by_user_id=row.retry_last_by_user_id,
         error_code=row.error_code,
         support_ref=row.support_ref,
     )
@@ -872,6 +886,10 @@ def _serialize_row_result_dict(
         "reconciliation_note": result.reconciliation_note,
         "reconciled_by_user_id": result.reconciled_by_user_id,
         "reconciled_at": result.reconciled_at,
+        "retry_attempt_count": result.retry_attempt_count,
+        "retry_last_attempt_at": result.retry_last_attempt_at,
+        "retry_next_allowed_at": result.retry_next_allowed_at,
+        "retry_last_by_user_id": result.retry_last_by_user_id,
         "error_code": result.error_code,
         "support_ref": result.support_ref,
     }

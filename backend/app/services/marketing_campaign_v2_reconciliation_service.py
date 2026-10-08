@@ -10,6 +10,10 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.extensions import db
 from app.models.marketing import MarketingCampaignV2ProviderCampaignORM
+from app.services.marketing_campaign_v2_retry_policy import (
+    next_retry_allowed_at,
+    retry_is_exhausted,
+)
 
 
 RESOLUTION_PROVIDER_CAMPAIGN_FOUND = "PROVIDER_CAMPAIGN_FOUND"
@@ -147,12 +151,26 @@ def reconcile_campaign_v2_provider_child(
         )
         row.provider_campaign_id = normalized_provider_id
         row.status = target_status
+        row.retry_next_allowed_at = None
         row.error_code = None
         row.support_ref = None
     else:
-        target_status = "RETRY_ELIGIBLE"
+        attempts = int(row.retry_attempt_count or 0)
+        if retry_is_exhausted(attempts):
+            target_status = "RETRY_EXHAUSTED"
+            retry_next_at = None
+            error_code = "RETRY_LIMIT_REACHED"
+        else:
+            target_status = "RETRY_ELIGIBLE"
+            retry_next_at = next_retry_allowed_at(
+                completed_attempts=attempts,
+                resolved_at=timestamp,
+            )
+            error_code = "RECONCILED_NOT_CREATED"
+
         row.status = target_status
-        row.error_code = "RECONCILED_NOT_CREATED"
+        row.retry_next_allowed_at = retry_next_at
+        row.error_code = error_code
         row.support_ref = None
 
     row.reconciliation_resolution = normalized_resolution
@@ -163,6 +181,10 @@ def reconcile_campaign_v2_provider_child(
         "previous": deepcopy(previous),
         "resolution": normalized_resolution,
         "target_status": target_status,
+        "retry_attempt_count": int(row.retry_attempt_count or 0),
+        "retry_next_allowed_at": _iso_datetime(
+            row.retry_next_allowed_at
+        ),
         "resolved_provider_campaign_id": (
             normalized_provider_id
             if normalized_resolution == RESOLUTION_PROVIDER_CAMPAIGN_FOUND
@@ -212,6 +234,13 @@ def serialize_campaign_v2_reconciliation(
             if row.provider_campaign_id is not None
             else None
         ),
+        "retry": {
+            "attempt_count": int(row.retry_attempt_count or 0),
+            "next_allowed_at": _iso_datetime(
+                row.retry_next_allowed_at
+            ),
+            "exhausted": str(row.status) == "RETRY_EXHAUSTED",
+        },
         "reconciliation": {
             "resolution": row.reconciliation_resolution,
             "note": row.reconciliation_note,
