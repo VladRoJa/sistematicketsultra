@@ -1,4 +1,4 @@
-name: Campaign V2 M3 PostgreSQL Migration
+name: Campaign V2 M3 PostgreSQL and HTTP Integration
 
 on:
   pull_request:
@@ -7,6 +7,7 @@ on:
       - "backend/migrations/versions/**"
       - "backend/tests/marketing/test_marketing_campaign_v2_stats_child_postgresql.py"
       - "backend/tests/marketing/test_marketing_campaign_v2_stats_child_migration.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_m3_http_postgresql.py"
       - ".github/workflows/campaign-v2-m3-postgresql.yml"
   push:
     branches:
@@ -54,3 +55,18 @@ jobs:
           python -m pytest -q \
             tests/marketing/test_marketing_campaign_v2_stats_child_postgresql.py \
             tests/marketing/test_marketing_campaign_v2_stats_child_migration.py
+
+      - name: Install Flask runtime for isolated HTTP integration
+        run: |
+          python -m pip install -r backend/requirements.txt
+          python -m pip install "pytest==8.3.5"
+      - name: Ephemeral Flask HTTP + PostgreSQL smoke (send OFF)
+        working-directory: backend
+        env:
+          M3_TEST_POSTGRES_URL: postgresql+psycopg2://m3_test:m3_test_only@127.0.0.1:5432/m3_child_snapshots
+          CAMPAIGN_V2_PROVIDER_SEND_ENABLED: "false"
+          APP_ENV: "ci"
+          SECRET_KEY: "isolated-m3-http-secret"
+          JWT_SECRET_KEY: "isolated-m3-http-jwt"
+        run: |
+          python -m pytest -q tests/marketing/test_marketing_campaign_v2_m3_http_postgresql.py
