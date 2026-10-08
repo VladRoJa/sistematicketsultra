@@ -152,9 +152,8 @@ def build_sales_from_baseline(*, cutoff: date) -> bytes:
     # Do not modify any baseline historical week; append only new weeks.
     cursor = FIRST_WEEK
     last_closed_week = cutoff - timedelta(days=(cutoff.weekday() + 1) % 7)
-    weekly_col = 36  # AJ was the last-week average in the original.
+    weekly_col = 37  # AK onward: retain AJ original average in place.
     while cursor <= last_closed_week:
-        weekly.insert_cols(weekly_col)
         end = min(cursor + timedelta(days=6), cutoff)
         weekly.cell(2, weekly_col).value = f"{cursor:%d/%m} - {cursor + timedelta(days=6):%d/%m}"
         for key, row in wrows.items():
