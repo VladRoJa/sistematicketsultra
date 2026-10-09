@@ -76,6 +76,21 @@ from app.services.marketing_visit_conversion_service import (
     _serialize_summary as _serialize_visit_conversion_summary,
 )
 
+VISIT_CONVERSION_EXPORT_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("branch", "Sucursal KPI"),
+    ("date", "Fecha visita"),
+    ("phone", "Teléfono"),
+    ("origin", "Origen del pase"),
+    ("sale_origin", "Origen de la compra"),
+    ("visit_type", "Tipo"),
+    ("conversion_status", "Conversión"),
+    ("sale_date", "Fecha venta"),
+    ("sale_member_id", "ID socio"),
+    ("sale_revenue", "Ingreso venta"),
+    ("source", "Fuente"),
+)
+
+
 ORIGINAL_VISIT_EXPORT_COLUMNS: tuple[tuple[str, str], ...] = (
     ("branch", "Sucursal KPI"),
     ("date", "Fecha"),
@@ -730,7 +745,7 @@ def _normalized_visit_conversion_bundle(
     bundle = _build_bundle_from_loaded_data(loaded=loaded, today=cutoff_date)
     return VisitConversionBundle(
         rows=tuple(
-            replace(row, sale=None)
+            replace(row, sale=None, sale_origin=None)
             if row.sale is not None and row.sale.payment_date > cutoff_date
             else row
             for row in bundle.rows
@@ -1028,7 +1043,9 @@ def build_marketing_sales_funnel_cutoff_export(
         rows=rows,
         metric=detail["metric"],
         columns_override=(
-            ORIGINAL_VISIT_EXPORT_COLUMNS
+            VISIT_CONVERSION_EXPORT_COLUMNS
+            if detail["metric"] in VISIT_CONVERSION_METRICS
+            else ORIGINAL_VISIT_EXPORT_COLUMNS
             if (
                 not include_direct_purchases
                 and detail["kind"] == "visits"
