@@ -413,6 +413,7 @@ def render_commercial_daily_xlsx(
         book, "Diario",
         ["Sucursal"] + [d.strftime("%d/%m/%Y") for d in day_headers],
         branches, daily_cells, branch_metadata, title_text=daily_title,
+        center_summary_numbers=(metric == "reactivaciones"),
     )
     _format_sheet(
         book, "Semanal",
@@ -426,6 +427,7 @@ def render_commercial_daily_xlsx(
             for w in weeks
         ],
         branches, weekly_cells, branch_metadata, title_text=weekly_title,
+        center_summary_numbers=(metric == "reactivaciones"),
     )
     if metric == "reactivaciones":
         # A missing/negative historical correction is NOT zero. The cell and
