@@ -122,6 +122,7 @@ def test_real_postgres_migration_and_concurrency(monkeypatch):
             assert inspector.has_table("system_daily_checks")
             assert inspector.has_table("system_daily_check_answers")
             assert inspector.has_table("system_daily_check_issues")
+            assert inspector.has_table("system_daily_check_issue_attachments")
             assert inspector.has_table("system_daily_check_prompt_states")
 
         first_barrier = Barrier(2)
@@ -265,6 +266,7 @@ def test_real_postgres_migration_and_concurrency(monkeypatch):
 
             inspector = sa.inspect(connection)
             assert not inspector.has_table("system_daily_check_prompt_states")
+            assert not inspector.has_table("system_daily_check_issue_attachments")
             assert not inspector.has_table("system_daily_check_issues")
             assert not inspector.has_table("system_daily_check_answers")
             assert not inspector.has_table("system_daily_checks")

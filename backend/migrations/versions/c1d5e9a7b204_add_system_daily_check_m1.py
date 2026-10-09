@@ -150,6 +150,61 @@ def upgrade():
     )
 
     op.create_table(
+        "system_daily_check_issue_attachments",
+        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        sa.Column("issue_id", sa.BigInteger(), nullable=False),
+        sa.Column("original_filename", sa.String(length=255), nullable=False),
+        sa.Column("storage_key", sa.String(length=500), nullable=False),
+        sa.Column("mime_type", sa.String(length=100), nullable=False),
+        sa.Column("file_size_bytes", sa.BigInteger(), nullable=False),
+        sa.Column("sha256", sa.String(length=64), nullable=False),
+        sa.Column("uploaded_by_user_id", sa.Integer(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("CURRENT_TIMESTAMP"),
+        ),
+        sa.ForeignKeyConstraint(
+            ["issue_id"],
+            ["system_daily_check_issues.id"],
+            ondelete="CASCADE",
+            name="fk_system_daily_check_issue_attachments_issue",
+        ),
+        sa.ForeignKeyConstraint(
+            ["uploaded_by_user_id"],
+            ["users.id"],
+            ondelete="RESTRICT",
+            name="fk_system_daily_check_issue_attachments_user",
+        ),
+        sa.UniqueConstraint(
+            "storage_key",
+            name="uq_system_daily_check_issue_attachments_storage_key",
+        ),
+        sa.CheckConstraint(
+            "length(trim(original_filename)) > 0",
+            name="ck_system_daily_check_issue_attachments_filename_nonempty",
+        ),
+        sa.CheckConstraint(
+            "length(trim(storage_key)) > 0",
+            name="ck_system_daily_check_issue_attachments_storage_key_nonempty",
+        ),
+        sa.CheckConstraint(
+            "file_size_bytes >= 0",
+            name="ck_system_daily_check_issue_attachments_size_nonnegative",
+        ),
+        sa.CheckConstraint(
+            "length(sha256) = 64",
+            name="ck_system_daily_check_issue_attachments_sha256_length",
+        ),
+    )
+    op.create_index(
+        "ix_system_daily_check_issue_attachments_issue",
+        "system_daily_check_issue_attachments",
+        ["issue_id"],
+    )
+
+    op.create_table(
         "system_daily_check_prompt_states",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column("sucursal_id", sa.Integer(), nullable=False),
@@ -205,6 +260,12 @@ def downgrade():
         table_name="system_daily_check_prompt_states",
     )
     op.drop_table("system_daily_check_prompt_states")
+
+    op.drop_index(
+        "ix_system_daily_check_issue_attachments_issue",
+        table_name="system_daily_check_issue_attachments",
+    )
+    op.drop_table("system_daily_check_issue_attachments")
 
     op.drop_index(
         "ix_system_daily_check_issues_reported",

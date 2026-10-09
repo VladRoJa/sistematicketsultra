@@ -12,6 +12,7 @@ from app.models import (
     SystemDailyCheckAnswerORM,
     SystemDailyCheckAnswerValue,
     SystemDailyCheckGeneralStatus,
+    SystemDailyCheckIssueAttachmentORM,
     SystemDailyCheckIssueORM,
     SystemDailyCheckORM,
     SystemDailyCheckPromptStateORM,
@@ -30,6 +31,7 @@ def _engine():
     SystemDailyCheckORM.__table__.to_metadata(metadata)
     SystemDailyCheckAnswerORM.__table__.to_metadata(metadata)
     SystemDailyCheckIssueORM.__table__.to_metadata(metadata)
+    SystemDailyCheckIssueAttachmentORM.__table__.to_metadata(metadata)
     SystemDailyCheckPromptStateORM.__table__.to_metadata(metadata)
 
     with engine.begin() as connection:
@@ -86,12 +88,14 @@ def test_tables_are_independent_from_ticket_v1():
         SystemDailyCheckORM.__tablename__,
         SystemDailyCheckAnswerORM.__tablename__,
         SystemDailyCheckIssueORM.__tablename__,
+        SystemDailyCheckIssueAttachmentORM.__tablename__,
         SystemDailyCheckPromptStateORM.__tablename__,
     }
     assert tables == {
         "system_daily_checks",
         "system_daily_check_answers",
         "system_daily_check_issues",
+        "system_daily_check_issue_attachments",
         "system_daily_check_prompt_states",
     }
 
@@ -101,6 +105,7 @@ def test_tables_are_independent_from_ticket_v1():
             SystemDailyCheckORM.__table__,
             SystemDailyCheckAnswerORM.__table__,
             SystemDailyCheckIssueORM.__table__,
+            SystemDailyCheckIssueAttachmentORM.__table__,
             SystemDailyCheckPromptStateORM.__table__,
         )
         for fk in table.foreign_keys
@@ -110,6 +115,7 @@ def test_tables_are_independent_from_ticket_v1():
     assert "sucursales.sucursal_id" in fk_targets
     assert "system_daily_checks.id" in fk_targets
     assert "system_daily_check_answers.id" in fk_targets
+    assert "system_daily_check_issues.id" in fk_targets
 
 
 def test_database_enforces_one_check_per_branch_and_business_date():
@@ -232,6 +238,79 @@ def test_database_enforces_issue_constraints():
                     affected_scope=None,
                     reported_to_support=False,
                     description="   ",
+                )
+            )
+            with pytest.raises(IntegrityError):
+                session.commit()
+            session.rollback()
+    finally:
+        engine.dispose()
+
+
+def test_database_enforces_issue_attachment_metadata_constraints():
+    engine = _engine()
+    try:
+        with Session(engine) as session:
+            session.add(_check())
+            session.flush()
+            session.add(
+                _answer(
+                    answer=SystemDailyCheckAnswerValue.NO,
+                )
+            )
+            session.flush()
+            session.add(
+                SystemDailyCheckIssueORM(
+                    id=1,
+                    answer_id=1,
+                    affected_scope=SystemDailyCheckAffectedScope.ONE,
+                    reported_to_support=True,
+                    description="Falla visible.",
+                )
+            )
+            session.flush()
+            session.add(
+                SystemDailyCheckIssueAttachmentORM(
+                    id=1,
+                    issue_id=1,
+                    original_filename="evidencia.jpg",
+                    storage_key="system-daily-checks/1/evidencia.jpg",
+                    mime_type="image/jpeg",
+                    file_size_bytes=1234,
+                    sha256="a" * 64,
+                    uploaded_by_user_id=1,
+                )
+            )
+            session.commit()
+
+        with Session(engine) as session:
+            session.add(
+                SystemDailyCheckIssueAttachmentORM(
+                    id=2,
+                    issue_id=1,
+                    original_filename="duplicada.jpg",
+                    storage_key="system-daily-checks/1/evidencia.jpg",
+                    mime_type="image/jpeg",
+                    file_size_bytes=1234,
+                    sha256="b" * 64,
+                    uploaded_by_user_id=2,
+                )
+            )
+            with pytest.raises(IntegrityError):
+                session.commit()
+            session.rollback()
+
+        with Session(engine) as session:
+            session.add(
+                SystemDailyCheckIssueAttachmentORM(
+                    id=3,
+                    issue_id=1,
+                    original_filename="mala.jpg",
+                    storage_key="system-daily-checks/1/mala.jpg",
+                    mime_type="image/jpeg",
+                    file_size_bytes=-1,
+                    sha256="bad",
+                    uploaded_by_user_id=1,
                 )
             )
             with pytest.raises(IntegrityError):

@@ -36,6 +36,7 @@ def test_m1_postgres_ddl_contains_domain_constraints(monkeypatch):
     assert "CREATE TABLE system_daily_checks" in sql
     assert "CREATE TABLE system_daily_check_answers" in sql
     assert "CREATE TABLE system_daily_check_issues" in sql
+    assert "CREATE TABLE system_daily_check_issue_attachments" in sql
     assert "CREATE TABLE system_daily_check_prompt_states" in sql
 
     assert "UNIQUE (sucursal_id, business_date)" in sql
@@ -46,6 +47,9 @@ def test_m1_postgres_ddl_contains_domain_constraints(monkeypatch):
     assert "REFERENCES users (id)" in sql
     assert "REFERENCES system_daily_checks (id)" in sql
     assert "REFERENCES system_daily_check_answers (id)" in sql
+    assert "REFERENCES system_daily_check_issues (id)" in sql
+    assert "UNIQUE (storage_key)" in sql
+    assert "length(sha256) = 64" in sql
 
 
 def test_m1_postgres_downgrade_drops_all_domain_tables(monkeypatch):
@@ -60,6 +64,7 @@ def test_m1_postgres_downgrade_drops_all_domain_tables(monkeypatch):
     sql = output.getvalue()
 
     assert "DROP TABLE system_daily_check_prompt_states" in sql
+    assert "DROP TABLE system_daily_check_issue_attachments" in sql
     assert "DROP TABLE system_daily_check_issues" in sql
     assert "DROP TABLE system_daily_check_answers" in sql
     assert "DROP TABLE system_daily_checks" in sql

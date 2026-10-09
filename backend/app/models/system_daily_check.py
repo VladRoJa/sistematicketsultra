@@ -178,6 +178,12 @@ class SystemDailyCheckIssueORM(db.Model):
         "SystemDailyCheckAnswerORM",
         back_populates="issue",
     )
+    attachments = db.relationship(
+        "SystemDailyCheckIssueAttachmentORM",
+        back_populates="issue",
+        cascade="all, delete-orphan",
+        order_by="SystemDailyCheckIssueAttachmentORM.id",
+    )
 
     __table_args__ = (
         db.CheckConstraint(
@@ -192,6 +198,65 @@ class SystemDailyCheckIssueORM(db.Model):
         db.Index(
             "ix_system_daily_check_issues_reported",
             "reported_to_support",
+        ),
+    )
+
+
+class SystemDailyCheckIssueAttachmentORM(db.Model):
+    __tablename__ = "system_daily_check_issue_attachments"
+
+    id = db.Column(
+        db.BigInteger().with_variant(db.Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
+    issue_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("system_daily_check_issues.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    original_filename = db.Column(db.String(255), nullable=False)
+    storage_key = db.Column(db.String(500), nullable=False, unique=True)
+    mime_type = db.Column(db.String(100), nullable=False)
+    file_size_bytes = db.Column(db.BigInteger, nullable=False)
+    sha256 = db.Column(db.String(64), nullable=False)
+    uploaded_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+    )
+
+    issue = db.relationship(
+        "SystemDailyCheckIssueORM",
+        back_populates="attachments",
+    )
+    uploaded_by_user = db.relationship("UserORM")
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "length(trim(original_filename)) > 0",
+            name="ck_system_daily_check_issue_attachments_filename_nonempty",
+        ),
+        db.CheckConstraint(
+            "length(trim(storage_key)) > 0",
+            name="ck_system_daily_check_issue_attachments_storage_key_nonempty",
+        ),
+        db.CheckConstraint(
+            "file_size_bytes >= 0",
+            name="ck_system_daily_check_issue_attachments_size_nonnegative",
+        ),
+        db.CheckConstraint(
+            "length(sha256) = 64",
+            name="ck_system_daily_check_issue_attachments_sha256_length",
+        ),
+        db.Index(
+            "ix_system_daily_check_issue_attachments_issue",
+            "issue_id",
         ),
     )
 
