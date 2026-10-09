@@ -19,7 +19,9 @@
 
 ## Pruebas requeridas antes de merge
 
-- Compilar Angular (`npm ci` y `npm run build`) con entorno funcional. En el QA remoto inicial `npm ci` falló por `ERR_INVALID_ARG_TYPE` y error de limpieza `EPERM` bajo Windows, antes de llegar a compilar. No tratarlo como prueba superada.
+- QA 2026-10-09: instalación aislada `npm ci --ignore-scripts --no-audit --no-fund --legacy-peer-deps`: 1091 paquetes instalados. El intento normal de `npm ci` en Windows falló por script `postinstall` de npm 11 (`ERR_INVALID_ARG_TYPE`), sin cambios en el repo.
+- `node node_modules/typescript/bin/tsc --noEmit --project tsconfig.app.json`: **PASS**, código TS válido.
+- `node node_modules/@angular/cli/bin/ng.js build --optimization=false --build-optimizer=false --aot=true --source-map=false --progress=false`: **PASS**, salida generada con chunk `google-ads-google-ads-admin-component`. Advertencias CSS/CommonJS preexistentes en otros módulos; cero errores de template. El build de producción optimizado completo todavía no se confirmó en ese equipo.
 - Verificar navegación y estado desconectado en móvil y escritorio.
 - Validar que usuario no ADMINISTRADOR no acceda a la ruta ni vea el menú; corroborar 403 del backend.
 - Revisar configuración privada de cliente OAuth y developer-token antes del consentimiento real.
