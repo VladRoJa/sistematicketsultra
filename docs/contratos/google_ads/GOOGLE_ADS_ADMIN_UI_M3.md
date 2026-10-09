@@ -24,7 +24,7 @@
 - `node node_modules/@angular/cli/bin/ng.js build --optimization=false --build-optimizer=false --aot=true --source-map=false --progress=false`: **PASS**, salida generada con chunk `google-ads-google-ads-admin-component`. Advertencias CSS/CommonJS preexistentes en otros módulos; cero errores de template. El build de producción optimizado completo todavía no se confirmó en ese equipo.
 - Verificar navegación y estado desconectado en móvil y escritorio.
 - Validar que usuario no ADMINISTRADOR no acceda a la ruta ni vea el menú; corroborar 403 del backend.
-- Revisar configuración privada de cliente OAuth y developer-token antes del consentimiento real.
+- Revisar cliente OAuth y acceso Explorer del proyecto Google Cloud antes del consentimiento real. El Developer Token ya no se requiere desde el 2026-09-09.
 - Demostrar con datos auténticos el flujo de consentimiento, cuenta y consulta para el video de Google; no simular accesos.
 
 ## No incluido

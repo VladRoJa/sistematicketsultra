@@ -9,7 +9,7 @@ Se implementan dos rutas administrativas:
 1. `GET /api/integrations/google-ads/account-check`: comprueba acceso REAL al customer configurado mediante GAQL `FROM customer`; también obtiene los IDs con acceso directo mediante `customers:listAccessibleCustomers`. Un cliente bajo MCC puede ser accesible aunque **no aparezca** en la lista de acceso directo. El resultado distingue estos casos.
 2. `GET /api/integrations/google-ads/campaign-daily?date_from=2026-10-01&date_to=2026-10-09`: consulta métricas por fecha/campaña mediante `googleAds:searchStream` y devuelve desglose, moneda/horario de la cuenta y totales exactos.
 
-Ambos endpoints requieren JWT válido y rol **ADMINISTRADOR** consultado en backend. El resultado no expone refresh token, developer token, secretos OAuth ni access token.
+Ambos endpoints requieren JWT válido y rol **ADMINISTRADOR** consultado en backend. El resultado no expone refresh token, secretos OAuth ni access token.
 
 ## Contrato de datos
 
@@ -27,7 +27,7 @@ Ambos endpoints requieren JWT válido y rol **ADMINISTRADOR** consultado en back
 Todas las variables del M1 siguen siendo necesarias para autorizar y leer. Adicionalmente:
 
 - `GOOGLE_ADS_READONLY_ENABLED=true` habilita **solo** estas consultas. Sin la variable quedan deshabilitadas (503).
-- `GOOGLE_ADS_DEVELOPER_TOKEN`: token API aprobado por Google Ads, secreto. El acceso **Explorer** puede utilizarse en cuentas de producción pero está limitado por cuota.
+- **Sin Developer Token:** Desde 2026-09-09, Google ya no utiliza developer tokens. Google Cloud determina el acceso mediante el proyecto asociado a OAuth. La Suite no necesita enviar la cabecera developer-token. El proyecto suite-ultra tiene acceso Explorer para cuentas de produccion con cuota diaria. Referencia: https://developers.google.com/google-ads/api/docs/api-policy/developer-token
 - `GOOGLE_ADS_API_VERSION=v25`: versión mayor documentada en octubre 2026. Si se omite, M2 usa v25; mantenerla actualizada antes del sunset.
 - `GOOGLE_ADS_LOGIN_CUSTOMER_ID=XXXXXXXXXX` (opcional): obligatorio cuando el acceso a la cuenta destino sea a través de un administrador/MCC que deba enviarse en la cabecera `login-customer-id`; usar ID del **manager**, no del cliente.
 - `GOOGLE_ADS_OAUTH_CUSTOMER_ID=2739125201` debe coincidir exactamente con la identidad autorizada en M1. No se permite cambiar de cliente sin revisar su vínculo y reconectar según corresponda.
