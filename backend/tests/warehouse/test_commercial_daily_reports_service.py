@@ -588,3 +588,81 @@ def test_reactivaciones_month_names_add_year_only_when_ambiguous():
     assert monthly["C2"].value == "FEBRERO"
     assert monthly["M2"].value == "DICIEMBRE"
     assert monthly["N2"].value == "ENERO 2027"
+
+
+def test_reactivaciones_daily_and_weekly_subtotal_numbers_centered():
+    cutoff = date(2026, 10, 7)
+    days = [date(2026, 10, n) for n in range(1, 8)]
+    series = {
+        "VILLA_VERDE": {day: n for n, day in enumerate(days, 1)},
+        "SERRANIA": {day: 2 * n for n, day in enumerate(days, 1)},
+    }
+    branch_metadata = {
+        "VILLA_VERDE": {
+            "order": 1, "label": "VILLA VERDE",
+            "group": "Subtotal 21 gyms", "region": "Mexicali",
+        },
+        "SERRANIA": {
+            "order": 26, "label": "SERRANIA",
+            "group": "Subtotal gyms nuevos", "region": "Costa",
+        },
+    }
+    wb = load_workbook(
+        BytesIO(render_commercial_daily_xlsx(
+            metric="reactivaciones", cutoff=cutoff,
+            mtd_series=series, branch_metadata=branch_metadata,
+        )),
+        data_only=False,
+    )
+    for sheet_name, column, expected in (
+        ("Diario", 2, {
+            "Subtotal 21 gyms": 1,
+            "Subtotal gyms nuevos": 2,
+            "TOTAL": 3,
+        }),
+        ("Semanal", 12, {
+            "Subtotal 21 gyms": 4,
+            "Subtotal gyms nuevos": 8,
+            "TOTAL": 12,
+        }),
+    ):
+        sheet = wb[sheet_name]
+        labels = {
+            str(sheet.cell(row, 1).value): row
+            for row in range(3, sheet.max_row + 1)
+        }
+        for label, value in expected.items():
+            row = labels[label]
+            cell = sheet.cell(row, column)
+            assert cell.value == value
+            assert cell.alignment.horizontal == "center"
+            assert sheet.cell(row, 1).alignment.horizontal != "center"
+        assert sheet["A3"].value == "VILLA VERDE"
+
+    weekly = wb["Semanal"]
+    assert weekly["L10"].value == 8
+    assert weekly["L11"].value == 4
+    assert weekly["L10"].alignment.horizontal == "center"
+    assert weekly["L11"].alignment.horizontal == "center"
+    assert wb["Totales Mensuales"]["K2"].value == "OCTUBRE"
+
+
+def test_venta_nueva_daily_and_weekly_summary_format_not_changed():
+    cutoff = date(2026, 10, 7)
+    data = {
+        "VILLA_VERDE": {
+            date(2026, 10, d): d for d in range(1, 8)
+        }
+    }
+    wb = load_workbook(
+        BytesIO(render_commercial_daily_xlsx(
+            metric="venta_nueva", cutoff=cutoff, mtd_series=data,
+        ))
+    )
+    for name in ("Diario", "Semanal"):
+        sheet = wb[name]
+        total_row = next(
+            r for r in range(3, sheet.max_row + 1)
+            if sheet.cell(r, 1).value == "TOTAL"
+        )
+        assert sheet.cell(total_row, 2).alignment.horizontal != "center"
