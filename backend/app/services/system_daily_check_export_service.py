@@ -38,6 +38,12 @@ STATUS_COLORS = {
     "YES": "DCFCE7",
     "NO": "FEE2E2",
     "NA": "F1F5F9",
+    "Sin fallas": "DCFCE7",
+    "Falla menor": "FEF3C7",
+    "Afecta la operación": "FEE2E2",
+    "Sí": "DCFCE7",
+    "No": "FEE2E2",
+    "No aplica": "F1F5F9",
 }
 
 
@@ -136,11 +142,16 @@ def _table_sheet(
     return ws
 
 
-def _collect_pages(fetch_page, *, size: int) -> list[dict]:
+def _collect_pages(
+    fetch_page, *, size: int, first_page: dict | None = None,
+) -> list[dict]:
     page = 1
     items: list[dict] = []
     while True:
-        payload = fetch_page(page, size)
+        payload = (
+            first_page if page == 1 and first_page is not None
+            else fetch_page(page, size)
+        )
         batch = payload["items"]
         items.extend(batch)
         if len(items) >= payload["total"] or not batch:
@@ -182,16 +193,13 @@ def export_system_daily_check_bi_workbook(
             "El rango supera 2500 checklists; acota fechas o sucursal."
         )
 
-    history = list(first_history["items"])
-    if len(history) < first_history["total"]:
-        history.extend(
-            _collect_pages(
-                lambda page, size: list_system_daily_check_bi_history(
-                    actor, **options, page=page, page_size=size,
-                ),
-                size=HISTORY_PAGE_SIZE,
-            )[len(history):]
-        )
+    history = _collect_pages(
+        lambda page, size: list_system_daily_check_bi_history(
+            actor, **options, page=page, page_size=size,
+        ),
+        size=HISTORY_PAGE_SIZE,
+        first_page=first_history,
+    )
 
     issues = _collect_pages(
         lambda page, size: list_system_daily_check_bi_issues(
@@ -273,6 +281,7 @@ def export_system_daily_check_bi_workbook(
         ],
         (12, 18, 32, 27, 26, 24, 17, 17),
         dates + " · Historial de capturas, incluidas fuera del rollout.",
+        color_columns=(5,),
     )
     _table_sheet(
         book, "Incidencias",
@@ -316,6 +325,7 @@ def export_system_daily_check_bi_workbook(
          "Alcance afectado", "Reportada a soporte", "Evidencias"),
         answers, (17, 20, 29, 25, 21, 46, 17, 64, 30, 24, 15),
         dates + " · Todas las respuestas de capturas visibles.",
+        color_columns=(7,),
     )
     book.active = 0
     buffer = BytesIO()
