@@ -57,3 +57,36 @@ def test_historical_visit_conversion_is_null_without_touching_totals():
     assert quality["visit_conversion_mode"] is None
     assert quality["visit_conversion_cohort_complete"] is None
     assert quality["visit_conversion_sales_snapshot_ids"] == []
+
+
+def test_dependent_meta_rates_reconcile_after_reclassification():
+    from app.routes.marketing_sales_funnel_routes import (
+        _refresh_dependent_visit_rates,
+    )
+
+    payload = {
+        "summary": {
+            "visits_iventas_meta": 15,
+            "leads_meta": 50,
+            "sales_iventas_meta": 6,
+        },
+        "branches": [
+            {
+                "visits_iventas_meta": 0,
+                "leads_meta": 12,
+                "sales_iventas_meta": 0,
+            },
+            {
+                "visits_iventas_meta": 4,
+                "leads_meta": 8,
+                "sales_iventas_meta": 2,
+            },
+        ],
+    }
+    _refresh_dependent_visit_rates(payload)
+    assert payload["summary"]["meta_lead_to_visit_rate"] == 0.3
+    assert payload["summary"]["meta_visit_to_sale_rate"] == 0.4
+    assert payload["branches"][0]["meta_lead_to_visit_rate"] == 0
+    assert payload["branches"][0]["meta_visit_to_sale_rate"] is None
+    assert payload["branches"][1]["meta_lead_to_visit_rate"] == 0.5
+    assert payload["branches"][1]["meta_visit_to_sale_rate"] == 0.5
