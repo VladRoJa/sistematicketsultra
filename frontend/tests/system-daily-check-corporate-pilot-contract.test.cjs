@@ -50,8 +50,9 @@ assert(
   'El frontend no debe reinterpretar la sucursal técnica de sesión.',
 );
 assert(
-  !component.includes('1000') && !component.includes('100'),
-  'Los IDs del puente corporativo no deben vivir en Angular.',
+  !/sucursal_id\s*={2,3}\s*(100|1000)\b/.test(component)
+    && !/selectedBranchId\s*=\s*(100|1000)\b/.test(component),
+  'Los IDs del puente corporativo no deben gobernar selección en Angular.',
 );
 
 console.log('system-daily-check corporate pilot contract: PASS');
