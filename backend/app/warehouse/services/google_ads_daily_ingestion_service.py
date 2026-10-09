@@ -17,6 +17,7 @@ from flask import current_app
 from app.extensions import db
 from app.models.google_ads_daily import GoogleAdsDailyMetricORM
 from app.models.warehouse import WarehouseUploadORM
+from app.utils.warehouse_audit import log_warehouse_audit
 from app.warehouse.services.google_ads_daily_xlsx_parser import (
     GoogleAdsXlsxValidationError,
     parse_google_ads_daily_xlsx,
@@ -132,6 +133,21 @@ def import_google_ads_warehouse_upload(*, warehouse_upload_id: int) -> dict:
 
     try:
         db.session.add_all(new_rows)
+        log_warehouse_audit(
+            action="GOOGLE_ADS_IMPORT",
+            performed_by_user_id=upload.uploaded_by_user_id,
+            upload_id=upload.id,
+            details={
+                "customer_id": customer_id,
+                "source": "WAREHOUSE_XLSX",
+                "date_from": parsed.date_from.isoformat(),
+                "date_to": parsed.date_to.isoformat(),
+                "campaign_day_rows": len(parsed.rows),
+                "created_rows": len(new_rows),
+                "unchanged_rows": unchanged,
+                "total_cost_in_file": str(parsed.total_cost),
+            },
+        )
         db.session.commit()
     except Exception:
         db.session.rollback()
