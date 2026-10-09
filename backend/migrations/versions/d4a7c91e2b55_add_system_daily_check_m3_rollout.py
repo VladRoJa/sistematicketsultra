@@ -1,7 +1,7 @@
 """add system daily check m3 rollout branches
 
 Revision ID: d4a7c91e2b55
-Revises: c1d5e9a7b204
+Revises: a9d2f6c7b108
 Create Date: 2026-10-09
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision = "d4a7c91e2b55"
-down_revision = "c1d5e9a7b204"
+down_revision = "a9d2f6c7b108"
 branch_labels = None
 depends_on = None
 

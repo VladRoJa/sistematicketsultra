@@ -16,7 +16,7 @@ def _revision():
     return ScriptDirectory(str(MIGRATIONS)).get_revision(REVISION)
 
 
-def test_m3_rollout_migration_extends_m1_and_keeps_single_head():
+def test_m3_rollout_migration_extends_current_main_head():
     scripts = ScriptDirectory(str(MIGRATIONS))
     heads = scripts.get_heads()
     assert len(heads) == 1
@@ -25,7 +25,7 @@ def test_m3_rollout_migration_extends_m1_and_keeps_single_head():
         for revision in scripts.iterate_revisions(heads[0], "base")
     }
     assert REVISION in ancestry
-    assert _revision().down_revision == "c1d5e9a7b204"
+    assert _revision().down_revision == "a9d2f6c7b108"
 
 
 def test_m3_rollout_postgres_ddl_is_auditable(monkeypatch):

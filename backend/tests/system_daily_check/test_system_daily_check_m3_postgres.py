@@ -13,6 +13,7 @@ from alembic.script import ScriptDirectory
 URL = os.getenv("SYSTEM_DAILY_CHECK_TEST_POSTGRES_URL")
 MIGRATIONS = Path(__file__).resolve().parents[2] / "migrations"
 M1_REVISION = "c1d5e9a7b204"
+GOOGLE_ADS_REVISION = "a9d2f6c7b108"
 M3_REVISION = "d4a7c91e2b55"
 
 
@@ -58,6 +59,7 @@ def test_m3_rollout_migration_on_real_postgres(monkeypatch):
     )
 
     m1 = _revision(M1_REVISION)
+    google_ads = _revision(GOOGLE_ADS_REVISION)
     m3 = _revision(M3_REVISION)
 
     try:
@@ -72,6 +74,15 @@ def test_m3_rollout_migration_on_real_postgres(monkeypatch):
                 ),
             )
             m1.module.upgrade()
+
+            monkeypatch.setattr(
+                google_ads.module,
+                "op",
+                Operations(
+                    MigrationContext.configure(connection)
+                ),
+            )
+            google_ads.module.upgrade()
 
             monkeypatch.setattr(
                 m3.module,
@@ -139,6 +150,15 @@ def test_m3_rollout_migration_on_real_postgres(monkeypatch):
             assert not inspector.has_table(
                 "system_daily_check_rollout_branches"
             )
+
+            monkeypatch.setattr(
+                google_ads.module,
+                "op",
+                Operations(
+                    MigrationContext.configure(connection)
+                ),
+            )
+            google_ads.module.downgrade()
 
             monkeypatch.setattr(
                 m1.module,
