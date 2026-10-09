@@ -1,0 +1,1149 @@
+<section class="systems-health-page">
+  <header class="systems-health-header">
+    <div class="systems-health-header__copy">
+      <div class="systems-health-header__meta">
+        <span class="systems-health-eyebrow">Checklist diario</span>
+        <span class="pilot-badge">Piloto · Sistemas / ADMICORP</span>
+      </div>
+
+      <h1>Salud de Sistemas</h1>
+      <p>
+        Cumplimiento, fallas observadas, recurrencia y trazabilidad del checklist diario.
+      </p>
+    </div>
+
+    <div
+      *ngIf="context"
+      class="systems-health-header__date"
+    >
+      <span>Fecha operativa</span>
+      <strong>{{ formatBusinessDate(businessDate) }}</strong>
+    </div>
+  </header>
+
+  <div
+    *ngIf="errorMessage"
+    class="systems-alert systems-alert--error"
+    role="alert"
+  >
+    <span>{{ errorMessage }}</span>
+    <button
+      type="button"
+      aria-label="Cerrar mensaje de error"
+      (click)="errorMessage = ''"
+    >
+      ×
+    </button>
+  </div>
+
+  <div
+    *ngIf="rolloutMessage"
+    class="systems-alert systems-alert--success"
+    role="status"
+  >
+    <span>{{ rolloutMessage }}</span>
+    <button
+      type="button"
+      aria-label="Cerrar mensaje"
+      (click)="rolloutMessage = ''"
+    >
+      ×
+    </button>
+  </div>
+
+  <div
+    *ngIf="loadingContext"
+    class="systems-loading"
+    aria-live="polite"
+  >
+    <span class="systems-spinner" aria-hidden="true"></span>
+    <span>Preparando Salud de Sistemas…</span>
+  </div>
+
+  <ng-container *ngIf="context && !loadingContext">
+    <section class="systems-filter-panel systems-filter-panel--dashboard">
+      <div class="systems-quick-ranges" aria-label="Rangos rápidos">
+        <button
+          type="button"
+          [class.systems-quick-ranges__button--active]="quickRange === 'TODAY'"
+          (click)="setQuickRange('TODAY')"
+        >
+          Hoy
+        </button>
+        <button
+          type="button"
+          [class.systems-quick-ranges__button--active]="quickRange === '7D'"
+          (click)="setQuickRange('7D')"
+        >
+          7 días
+        </button>
+        <button
+          type="button"
+          [class.systems-quick-ranges__button--active]="quickRange === '30D'"
+          (click)="setQuickRange('30D')"
+        >
+          30 días
+        </button>
+      </div>
+
+      <label class="systems-field">
+        <span>Desde</span>
+        <input
+          type="date"
+          [(ngModel)]="dateFrom"
+        />
+      </label>
+
+      <label class="systems-field">
+        <span>Hasta</span>
+        <input
+          type="date"
+          [(ngModel)]="dateTo"
+        />
+      </label>
+
+      <label class="systems-field systems-field--branch">
+        <span>Sucursal</span>
+        <select
+          [ngModel]="selectedBranchId"
+          (ngModelChange)="setBranch($event)"
+        >
+          <option [ngValue]="null">Todas las participantes</option>
+          <option
+            *ngFor="let branch of potentialBranches"
+            [ngValue]="branch.sucursal_id"
+          >
+            {{ branch.sucursal }}
+          </option>
+        </select>
+      </label>
+
+      <label class="systems-field">
+        <span>Agrupación</span>
+        <select
+          [(ngModel)]="granularity"
+          (ngModelChange)="onGranularityChange()"
+        >
+          <option value="DAY">Día</option>
+          <option value="WEEK">Semana</option>
+          <option value="MONTH">Mes</option>
+        </select>
+      </label>
+
+      <div class="systems-filter-panel__actions">
+        <button
+          type="button"
+          class="systems-button systems-button--primary"
+          [disabled]="loadingData"
+          (click)="applyFilters()"
+        >
+          Actualizar
+        </button>
+
+        <button
+          type="button"
+          class="systems-button systems-button--ghost"
+          (click)="toggleRolloutPanel()"
+        >
+          Configurar piloto
+        </button>
+      </div>
+    </section>
+
+    <div
+      *ngIf="loadingData"
+      class="systems-loading"
+      aria-live="polite"
+    >
+      <span class="systems-spinner" aria-hidden="true"></span>
+      <span>Actualizando indicadores…</span>
+    </div>
+
+    <ng-container *ngIf="!loadingData && todaySummary">
+      <section
+        *ngIf="todaySummary.universe.expected_checklists === 0"
+        class="systems-empty-state"
+      >
+        <span class="systems-empty-state__icon">◎</span>
+        <h2>El piloto aún no tiene sucursales esperadas</h2>
+        <p>
+          El universo productivo está separado del universo del piloto. Configura las sucursales participantes antes de medir cumplimiento.
+        </p>
+        <button
+          type="button"
+          class="systems-button systems-button--primary"
+          (click)="toggleRolloutPanel()"
+        >
+          Configurar participantes
+        </button>
+      </section>
+
+      <ng-container *ngIf="todaySummary.universe.expected_checklists > 0">
+        <section class="systems-kpi-grid">
+          <article class="systems-kpi-card">
+            <span class="systems-kpi-card__label">Esperados hoy</span>
+            <strong>{{ todaySummary.universe.expected_checklists }}</strong>
+            <small>
+              {{ todaySummary.universe.expected_branches }} sucursales del piloto
+            </small>
+          </article>
+
+          <article class="systems-kpi-card">
+            <span class="systems-kpi-card__label">Completados</span>
+            <strong>{{ todaySummary.summary.completed }}</strong>
+            <small>
+              {{ formatPercent(todaySummary.summary.compliance_pct) }} de cumplimiento
+            </small>
+          </article>
+
+          <button
+            type="button"
+            class="systems-kpi-card systems-kpi-card--button systems-kpi-card--pending"
+            (click)="openTodayPending()"
+          >
+            <span class="systems-kpi-card__label">Pendientes</span>
+            <strong>{{ todaySummary.summary.pending }}</strong>
+            <small>Ver sucursal y estado del prompt</small>
+          </button>
+
+          <button
+            type="button"
+            class="systems-kpi-card systems-kpi-card--button systems-kpi-card--normal"
+            (click)="openTodayHistory('NORMAL')"
+          >
+            <span class="systems-kpi-card__label">Operación normal</span>
+            <strong>{{ todaySummary.summary.normal }}</strong>
+            <small>Sin respuestas NO</small>
+          </button>
+
+          <button
+            type="button"
+            class="systems-kpi-card systems-kpi-card--button systems-kpi-card--warning"
+            (click)="openTodayHistory('MINOR_FAILURE')"
+          >
+            <span class="systems-kpi-card__label">Falla menor</span>
+            <strong>{{ todaySummary.summary.minor_failure }}</strong>
+            <small>La operación continúa</small>
+          </button>
+
+          <button
+            type="button"
+            class="systems-kpi-card systems-kpi-card--button systems-kpi-card--critical"
+            (click)="openTodayHistory('OPERATIONAL_IMPACT')"
+          >
+            <span class="systems-kpi-card__label">Afectación operativa</span>
+            <strong>{{ todaySummary.summary.operational_impact }}</strong>
+            <small>Requiere atención prioritaria</small>
+          </button>
+        </section>
+
+        <section class="systems-insight-grid">
+          <article class="systems-panel">
+            <div class="systems-panel__header">
+              <div>
+                <span class="systems-panel__eyebrow">Fallas observadas</span>
+                <h2>Incidencias y Soporte</h2>
+              </div>
+            </div>
+
+            <div class="systems-mini-grid">
+              <div>
+                <span>Respuestas NO</span>
+                <strong>{{ todaySummary.failures.no_answers }}</strong>
+              </div>
+              <div>
+                <span>Checks con falla</span>
+                <strong>{{ todaySummary.failures.checks_with_failure }}</strong>
+              </div>
+              <button
+                type="button"
+                class="systems-mini-metric"
+                (click)="openSupportIssues(true)"
+              >
+                <span>Reportadas</span>
+                <strong>{{ todaySummary.failures.reported }}</strong>
+                <small>Ver incidencias</small>
+              </button>
+              <button
+                type="button"
+                class="systems-mini-metric"
+                (click)="openSupportIssues(false)"
+              >
+                <span>No reportadas</span>
+                <strong>{{ todaySummary.failures.unreported }}</strong>
+                <small>Ver incidencias</small>
+              </button>
+            </div>
+
+            <div class="systems-meter">
+              <div class="systems-meter__header">
+                <span>Incidencias reportadas a Soporte</span>
+                <strong>{{ formatPercent(todaySummary.failures.reported_pct) }}</strong>
+              </div>
+              <div class="systems-meter__track">
+                <div
+                  class="systems-meter__fill"
+                  [style.width.%]="todaySummary.failures.reported_pct || 0"
+                ></div>
+              </div>
+            </div>
+
+            <p class="systems-panel__note">
+              Reportado a Soporte es un dato del checklist; no implica que exista un Ticket V2.
+            </p>
+          </article>
+
+          <article class="systems-panel">
+            <div class="systems-panel__header">
+              <div>
+                <span class="systems-panel__eyebrow">Comportamiento del prompt</span>
+                <h2>Aplazamientos</h2>
+              </div>
+            </div>
+
+            <div class="systems-deferral-list">
+              <div>
+                <span>Sin aplazar</span>
+                <strong>{{ todaySummary.postponements.completed_without_postpone }}</strong>
+              </div>
+              <div>
+                <span>Tras 1 aplazamiento</span>
+                <strong>{{ todaySummary.postponements.completed_after_1 }}</strong>
+              </div>
+              <div>
+                <span>Tras 2 aplazamientos</span>
+                <strong>{{ todaySummary.postponements.completed_after_2 }}</strong>
+              </div>
+              <div class="systems-deferral-list__mandatory">
+                <span>Alcanzaron obligatorio</span>
+                <strong>{{ todaySummary.postponements.reached_mandatory }}</strong>
+              </div>
+            </div>
+
+            <p class="systems-panel__note">
+              “Alcanzó obligatorio” significa que <code>mandatory_from_at</code> ocurrió antes del envío, o que el checklist sigue pendiente después de ese momento.
+            </p>
+          </article>
+        </section>
+
+        <section
+          *ngIf="matrix"
+          class="systems-panel systems-matrix-panel"
+        >
+          <div class="systems-panel__header systems-panel__header--wrap">
+            <div>
+              <span class="systems-panel__eyebrow">Semáforo diario</span>
+              <h2>Matriz por sucursal · {{ formatBusinessDate(matrix.business_date) }}</h2>
+            </div>
+
+            <div class="systems-legend" aria-label="Leyenda del semáforo">
+              <span><i class="legend-dot legend-dot--green"></i>Sin falla</span>
+              <span><i class="legend-dot legend-dot--yellow"></i>Falla menor</span>
+              <span><i class="legend-dot legend-dot--red"></i>Afecta operación</span>
+              <span><i class="legend-dot legend-dot--gray"></i>Pendiente</span>
+              <span><i class="legend-dot legend-dot--na"></i>No aplica</span>
+            </div>
+          </div>
+
+          <div
+            *ngIf="matrix.rows.length === 0"
+            class="systems-inline-empty"
+          >
+            No hay sucursales esperadas para esta fecha y filtro.
+          </div>
+
+          <div class="systems-branch-matrix">
+            <button
+              *ngFor="let row of matrix.rows"
+              type="button"
+              class="systems-branch-card systems-branch-card--button"
+              (click)="openMatrixRow(row)"
+            >
+              <header class="systems-branch-card__header">
+                <div>
+                  <strong>{{ row.sucursal }}</strong>
+                  <span>
+                    {{ row.check_id ? ('Checklist #' + row.check_id) : 'Checklist pendiente' }}
+                  </span>
+                </div>
+
+                <span
+                  class="status-chip"
+                  [ngClass]="generalStatusClass(row.general_status)"
+                >
+                  {{ generalStatusLabel(row.general_status) }}
+                </span>
+              </header>
+
+              <div class="systems-branch-card__cells">
+                <div
+                  *ngFor="let group of matrix.groups"
+                  class="systems-matrix-cell"
+                  [ngClass]="matrixCellClass(row.cells[group.key])"
+                  [title]="row.cells[group.key]?.label || 'Dato incompleto'"
+                >
+                  <span>{{ group.label }}</span>
+                  <strong>
+                    {{ row.cells[group.key]?.label || 'Dato incompleto' }}
+                  </strong>
+                </div>
+              </div>
+
+              <footer class="systems-branch-card__footer">
+                <span>Aplazamientos: {{ row.postpone_count }}</span>
+                <span *ngIf="row.submitted_at">
+                  Enviado: {{ formatTimestamp(row.submitted_at) }}
+                </span>
+              </footer>
+            </button>
+          </div>
+        </section>
+      </ng-container>
+    </ng-container>
+
+    <section class="systems-chart-grid">
+      <article class="systems-panel systems-chart-panel">
+        <div class="systems-panel__header">
+          <div>
+            <span class="systems-panel__eyebrow">Evolución</span>
+            <h2>Cumplimiento</h2>
+          </div>
+        </div>
+
+        <div
+          *ngIf="!hasTrendData"
+          class="systems-inline-empty"
+        >
+          No hay tendencia disponible para el rango.
+        </div>
+
+        <div
+          *ngIf="hasTrendData"
+          echarts
+          class="systems-chart"
+          [options]="complianceChartOption"
+        ></div>
+      </article>
+
+      <article class="systems-panel systems-chart-panel">
+        <div class="systems-panel__header">
+          <div>
+            <span class="systems-panel__eyebrow">Evolución</span>
+            <h2>Fallas y reporte a Soporte</h2>
+          </div>
+        </div>
+
+        <div
+          *ngIf="!hasTrendData"
+          class="systems-inline-empty"
+        >
+          No hay fallas observadas en el rango.
+        </div>
+
+        <div
+          *ngIf="hasTrendData"
+          echarts
+          class="systems-chart"
+          [options]="failuresChartOption"
+        ></div>
+      </article>
+    </section>
+
+    <section
+      *ngIf="trends"
+      class="systems-ranking-grid"
+    >
+      <article class="systems-panel">
+        <div class="systems-panel__header">
+          <div>
+            <span class="systems-panel__eyebrow">Ranking</span>
+            <h2>Preguntas / sistemas</h2>
+          </div>
+        </div>
+
+        <div
+          *ngIf="topQuestionRanking.length === 0"
+          class="systems-inline-empty"
+        >
+          Sin respuestas NO en el rango.
+        </div>
+
+        <button
+          *ngFor="let row of topQuestionRanking"
+          type="button"
+          class="systems-ranking-row"
+          (click)="drillQuestion(row.question_key)"
+        >
+          <span class="systems-ranking-row__main">
+            <strong>{{ row.question_label }}</strong>
+            <small>
+              {{ row.affected_branches }} sucursales · {{ row.distinct_days }} días
+            </small>
+          </span>
+
+          <span class="systems-ranking-row__metric">
+            <strong>{{ row.no_answers }}</strong>
+            <small>fallas</small>
+          </span>
+
+          <span class="systems-ranking-row__metric">
+            <strong>{{ formatPercent(row.reported_pct) }}</strong>
+            <small>reportado</small>
+          </span>
+        </button>
+      </article>
+
+      <article class="systems-panel">
+        <div class="systems-panel__header">
+          <div>
+            <span class="systems-panel__eyebrow">Ranking</span>
+            <h2>Sucursales</h2>
+          </div>
+        </div>
+
+        <div
+          *ngIf="trends.branch_ranking.length === 0"
+          class="systems-inline-empty"
+        >
+          Sin sucursales esperadas en el rango.
+        </div>
+
+        <button
+          *ngFor="let row of trends.branch_ranking.slice(0, 8)"
+          type="button"
+          class="systems-ranking-row"
+          (click)="drillBranch(row.sucursal_id)"
+        >
+          <span class="systems-ranking-row__main">
+            <strong>{{ row.sucursal || ('Sucursal ' + row.sucursal_id) }}</strong>
+            <small>
+              {{ row.completed }}/{{ row.expected }} completados · {{ row.pending }} pendientes
+            </small>
+          </span>
+
+          <span class="systems-ranking-row__metric">
+            <strong>{{ row.no_answers }}</strong>
+            <small>fallas</small>
+          </span>
+
+          <span class="systems-ranking-row__metric">
+            <strong>{{ formatPercent(row.reported_pct) }}</strong>
+            <small>reportado</small>
+          </span>
+        </button>
+      </article>
+    </section>
+
+    <section
+      *ngIf="trends"
+      class="systems-panel"
+    >
+      <div class="systems-panel__header">
+        <div>
+          <span class="systems-panel__eyebrow">Señal repetida</span>
+          <h2>Recurrencia por sucursal y pregunta</h2>
+        </div>
+      </div>
+
+      <div
+        *ngIf="topRecurrence.length === 0"
+        class="systems-inline-empty"
+      >
+        No hay combinaciones sucursal + pregunta repetidas en varios días.
+      </div>
+
+      <div class="systems-recurrence-grid">
+        <button
+          *ngFor="let row of topRecurrence"
+          type="button"
+          class="systems-recurrence-card systems-recurrence-card--button"
+          (click)="drillRecurrence(row)"
+        >
+          <span class="systems-recurrence-card__days">
+            {{ row.distinct_days }} días
+          </span>
+          <strong>{{ row.sucursal || ('Sucursal ' + row.sucursal_id) }}</strong>
+          <p>{{ row.question_label }}</p>
+          <small>
+            {{ formatBusinessDate(row.first_business_date) }} →
+            {{ formatBusinessDate(row.last_business_date) }}
+          </small>
+        </button>
+      </div>
+    </section>
+
+    <section class="systems-panel">
+      <div class="systems-panel__header systems-panel__header--wrap">
+        <div>
+          <span class="systems-panel__eyebrow">Fuente</span>
+          <h2>Historial de checklists</h2>
+        </div>
+        <span class="systems-count-badge">
+          {{ history?.total || 0 }} registros
+        </span>
+      </div>
+
+      <div class="systems-history-filters">
+        <label class="systems-field">
+          <span>Estado general</span>
+          <select [(ngModel)]="historyStatus">
+            <option [ngValue]="null">Todos</option>
+            <option value="NORMAL">Operación normal</option>
+            <option value="MINOR_FAILURE">Falla menor</option>
+            <option value="OPERATIONAL_IMPACT">Afectación operativa</option>
+          </select>
+        </label>
+
+        <label class="systems-field">
+          <span>Pregunta / sistema</span>
+          <select [(ngModel)]="historyQuestionKey">
+            <option [ngValue]="null">Todas</option>
+            <option
+              *ngFor="let question of context.questions"
+              [value]="question.question_key"
+            >
+              {{ question.label }}
+            </option>
+          </select>
+        </label>
+
+        <label class="systems-field">
+          <span>Resultado</span>
+          <select [(ngModel)]="historyAnswer">
+            <option [ngValue]="null">Todos</option>
+            <option value="YES">Sí</option>
+            <option value="NO">No</option>
+            <option value="NA">No aplica</option>
+          </select>
+        </label>
+
+        <div class="systems-history-filters__actions">
+          <button
+            type="button"
+            class="systems-button systems-button--primary"
+            [disabled]="loadingHistory"
+            (click)="applyHistoryFilters()"
+          >
+            Aplicar
+          </button>
+          <button
+            type="button"
+            class="systems-button systems-button--ghost"
+            [disabled]="loadingHistory"
+            (click)="clearHistoryFilters()"
+          >
+            Limpiar
+          </button>
+        </div>
+      </div>
+
+      <div
+        *ngIf="loadingHistory"
+        class="systems-loading systems-loading--compact"
+      >
+        <span class="systems-spinner" aria-hidden="true"></span>
+        <span>Actualizando historial…</span>
+      </div>
+
+      <div
+        *ngIf="!loadingHistory && (!history || history.items.length === 0)"
+        class="systems-inline-empty"
+      >
+        No hay checklists que coincidan con los filtros.
+      </div>
+
+      <div
+        *ngIf="!loadingHistory"
+        class="systems-history-list"
+      >
+        <button
+          *ngFor="let item of history?.items || []"
+          type="button"
+          class="systems-history-row"
+          (click)="openDetail(item.id)"
+        >
+          <span class="systems-history-row__date">
+            <strong>{{ formatBusinessDate(item.business_date) }}</strong>
+            <small>{{ formatTimestamp(item.submitted_at) }}</small>
+          </span>
+
+          <span class="systems-history-row__branch">
+            <strong>{{ item.sucursal }}</strong>
+            <small>{{ item.performed_by_username || 'Usuario no disponible' }}</small>
+          </span>
+
+          <span
+            class="status-chip"
+            [ngClass]="generalStatusClass(item.general_status)"
+          >
+            {{ generalStatusLabel(item.general_status) }}
+          </span>
+
+          <span class="systems-history-row__prompt">
+            <small>Aplazamientos</small>
+            <strong>{{ item.postpone_count }}</strong>
+            <em *ngIf="item.reached_mandatory">Llegó a obligatorio</em>
+          </span>
+
+          <span class="systems-history-row__arrow">›</span>
+        </button>
+      </div>
+
+      <footer
+        *ngIf="history && history.total > history.page_size"
+        class="systems-pagination"
+      >
+        <button
+          type="button"
+          class="systems-button systems-button--ghost"
+          [disabled]="historyPage <= 1"
+          (click)="historyPreviousPage()"
+        >
+          Anterior
+        </button>
+
+        <span>
+          Página {{ historyPage }} de {{ historyTotalPages }}
+        </span>
+
+        <button
+          type="button"
+          class="systems-button systems-button--ghost"
+          [disabled]="historyPage >= historyTotalPages"
+          (click)="historyNextPage()"
+        >
+          Siguiente
+        </button>
+      </footer>
+    </section>
+  </ng-container>
+</section>
+
+<!-- PILOTO -->
+<div
+  *ngIf="rolloutOpen && context"
+  class="systems-modal-backdrop"
+>
+  <section
+    class="systems-modal systems-modal--wide"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="rollout-title"
+  >
+    <header class="systems-modal__header">
+      <div>
+        <span class="systems-panel__eyebrow">Denominador del MVP</span>
+        <h2 id="rollout-title">Sucursales participantes del piloto</h2>
+      </div>
+      <button
+        type="button"
+        class="systems-modal__close"
+        aria-label="Cerrar configuración del piloto"
+        (click)="toggleRolloutPanel()"
+      >
+        ×
+      </button>
+    </header>
+
+    <div class="systems-modal__body">
+      <div class="systems-rollout-explainer">
+        <p>
+          El cumplimiento usa únicamente las sucursales seleccionadas aquí. No se incluyen automáticamente todas las sucursales activas y este cambio no habilita a GERENTE.
+        </p>
+        <p>
+          Los cambios entran en vigor desde el business_date actual y preservan días anteriores.
+        </p>
+      </div>
+
+      <div class="systems-universe-summary systems-universe-summary--modal">
+        <span>
+          <strong>{{ context.universe.potential_count }}</strong>
+          potenciales
+        </span>
+        <span>
+          <strong>{{ context.universe.expected_count }}</strong>
+          esperadas hoy
+        </span>
+      </div>
+
+      <div class="systems-rollout-grid">
+        <button
+          *ngFor="let branch of potentialBranches"
+          type="button"
+          class="systems-rollout-card"
+          [class.systems-rollout-card--selected]="isRolloutSelected(branch.sucursal_id)"
+          (click)="toggleRolloutBranch(branch.sucursal_id)"
+        >
+          <span class="systems-rollout-card__check" aria-hidden="true">✓</span>
+          <span class="systems-rollout-card__copy">
+            <strong>{{ branch.sucursal }}</strong>
+            <small>{{ branch.serie }} · {{ branch.operational_status }}</small>
+          </span>
+        </button>
+      </div>
+    </div>
+
+    <footer class="systems-modal__footer">
+      <span>
+        {{ rolloutSelection.size }} sucursales seleccionadas
+      </span>
+      <button
+        type="button"
+        class="systems-button systems-button--primary"
+        [disabled]="savingRollout || !rolloutDirty"
+        (click)="saveRollout()"
+      >
+        {{ savingRollout ? 'Guardando…' : 'Guardar participantes' }}
+      </button>
+    </footer>
+  </section>
+</div>
+
+<!-- PENDIENTES -->
+<div
+  *ngIf="pendingOpen"
+  class="systems-modal-backdrop"
+>
+  <section
+    class="systems-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="pending-title"
+  >
+    <header class="systems-modal__header">
+      <div>
+        <span class="systems-panel__eyebrow">Drill-down</span>
+        <h2 id="pending-title">Checklists pendientes</h2>
+      </div>
+      <button
+        type="button"
+        class="systems-modal__close"
+        aria-label="Cerrar pendientes"
+        (click)="closePending()"
+      >
+        ×
+      </button>
+    </header>
+
+    <div class="systems-modal__body">
+      <div
+        *ngIf="loadingPending"
+        class="systems-loading systems-loading--modal"
+      >
+        <span class="systems-spinner" aria-hidden="true"></span>
+        <span>Consultando pendientes…</span>
+      </div>
+
+      <div
+        *ngIf="!loadingPending && (!pending || pending.items.length === 0)"
+        class="systems-inline-empty"
+      >
+        No hay pendientes para este filtro.
+      </div>
+
+      <article
+        *ngFor="let item of pending?.items || []"
+        class="systems-pending-row"
+      >
+        <div>
+          <strong>{{ item.sucursal || ('Sucursal ' + item.sucursal_id) }}</strong>
+          <span>{{ formatBusinessDate(item.business_date) }}</span>
+        </div>
+
+        <div class="systems-pending-row__status">
+          <span>Aplazamientos: {{ item.postpone_count }}</span>
+          <strong *ngIf="item.mandatory">Obligatorio</strong>
+          <small *ngIf="item.next_prompt_at">
+            Próxima aparición: {{ formatTimestamp(item.next_prompt_at) }}
+          </small>
+        </div>
+      </article>
+    </div>
+  </section>
+</div>
+
+
+
+<!-- INCIDENCIAS DE SOPORTE -->
+<div
+  *ngIf="issuesOpen"
+  class="systems-modal-backdrop"
+>
+  <section
+    class="systems-modal systems-modal--wide"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="issues-title"
+  >
+    <header class="systems-modal__header">
+      <div>
+        <span class="systems-panel__eyebrow">Drill-down exacto</span>
+        <h2 id="issues-title">{{ issuesTitle }}</h2>
+      </div>
+      <button
+        type="button"
+        class="systems-modal__close"
+        aria-label="Cerrar incidencias"
+        (click)="closeIssues()"
+      >
+        ×
+      </button>
+    </header>
+
+    <div class="systems-modal__body">
+      <div
+        *ngIf="loadingIssues"
+        class="systems-loading systems-loading--modal"
+      >
+        <span class="systems-spinner" aria-hidden="true"></span>
+        <span>Consultando incidencias fuente…</span>
+      </div>
+
+      <div
+        *ngIf="!loadingIssues && (!issues || issues.items.length === 0)"
+        class="systems-inline-empty"
+      >
+        No hay incidencias que coincidan con este filtro.
+      </div>
+
+      <div
+        *ngIf="!loadingIssues"
+        class="systems-issues-list"
+      >
+        <button
+          *ngFor="let issue of issues?.items || []"
+          type="button"
+          class="systems-issue-row"
+          (click)="openIssueCheck(issue.check_id)"
+        >
+          <span class="systems-issue-row__date">
+            <strong>{{ formatBusinessDate(issue.business_date) }}</strong>
+            <small>Checklist #{{ issue.check_id }}</small>
+          </span>
+
+          <span class="systems-issue-row__main">
+            <strong>{{ issue.sucursal }}</strong>
+            <small>{{ issue.question_label }}</small>
+            <em>{{ issue.description }}</em>
+          </span>
+
+          <span class="systems-issue-row__meta">
+            <strong>
+              {{ issue.reported_to_support ? 'Reportada' : 'No reportada' }}
+            </strong>
+            <small>
+              {{ issue.attachment_count }} evidencia(s)
+            </small>
+          </span>
+
+          <span class="systems-history-row__arrow">›</span>
+        </button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- DETALLE -->
+<div
+  *ngIf="detailOpen"
+  class="systems-modal-backdrop"
+>
+  <section
+    class="systems-modal systems-modal--wide"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="detail-title"
+  >
+    <header class="systems-modal__header">
+      <div>
+        <span class="systems-panel__eyebrow">Registro fuente</span>
+        <h2 id="detail-title">
+          {{ detail ? (detail.sucursal + ' · ' + formatBusinessDate(detail.business_date)) : 'Cargando checklist' }}
+        </h2>
+      </div>
+      <button
+        type="button"
+        class="systems-modal__close"
+        aria-label="Cerrar detalle"
+        (click)="closeDetail()"
+      >
+        ×
+      </button>
+    </header>
+
+    <div class="systems-modal__body">
+      <div
+        *ngIf="loadingDetail"
+        class="systems-loading systems-loading--modal"
+      >
+        <span class="systems-spinner" aria-hidden="true"></span>
+        <span>Reconstruyendo checklist…</span>
+      </div>
+
+      <ng-container *ngIf="detail && !loadingDetail">
+        <div class="systems-detail-summary">
+          <div>
+            <span>Estado general</span>
+            <strong
+              class="status-chip"
+              [ngClass]="generalStatusClass(detail.general_status)"
+            >
+              {{ generalStatusLabel(detail.general_status) }}
+            </strong>
+          </div>
+          <div>
+            <span>Respondió</span>
+            <strong>{{ detail.performed_by_username || '—' }}</strong>
+          </div>
+          <div>
+            <span>Enviado</span>
+            <strong>{{ formatTimestamp(detail.submitted_at) }}</strong>
+          </div>
+          <div>
+            <span>Aplazamientos</span>
+            <strong>{{ detail.prompt.postpone_count }}</strong>
+          </div>
+          <div>
+            <span>Alcanzó obligatorio</span>
+            <strong>{{ detail.prompt.reached_mandatory ? 'Sí' : 'No' }}</strong>
+          </div>
+        </div>
+
+        <div class="systems-answer-list">
+          <article
+            *ngFor="let answer of detail.answers"
+            class="systems-answer-card"
+            [class.systems-answer-card--issue]="answer.answer === 'NO'"
+          >
+            <header class="systems-answer-card__header">
+              <div>
+                <small>{{ answer.category_key || 'Sin categoría' }}</small>
+                <strong>{{ answer.question_label }}</strong>
+              </div>
+
+              <span
+                class="answer-chip"
+                [ngClass]="answerClass(answer.answer)"
+              >
+                {{ answerLabel(answer.answer) }}
+              </span>
+            </header>
+
+            <div
+              *ngIf="answer.issue"
+              class="systems-issue-detail"
+            >
+              <div class="systems-issue-detail__meta">
+                <span>
+                  Reportada a Soporte:
+                  <strong>
+                    {{ answer.issue.reported_to_support ? 'Sí' : 'No' }}
+                  </strong>
+                </span>
+                <span *ngIf="answer.issue.affected_scope">
+                  Alcance:
+                  <strong>
+                    {{ answer.issue.affected_scope === 'MULTIPLE' ? 'Varios equipos' : 'Un equipo' }}
+                  </strong>
+                </span>
+              </div>
+
+              <p>{{ answer.issue.description }}</p>
+
+              <div
+                *ngIf="answer.issue.attachments.length > 0"
+                class="systems-attachment-list"
+              >
+                <button
+                  *ngFor="let attachment of answer.issue.attachments"
+                  type="button"
+                  class="systems-attachment"
+                  (click)="openEvidence(attachment)"
+                >
+                  <span class="systems-attachment__icon">↗</span>
+                  <span>
+                    <strong>{{ attachment.original_filename }}</strong>
+                    <small>
+                      {{ attachment.mime_type }} · {{ formatFileSize(attachment.file_size_bytes) }}
+                    </small>
+                  </span>
+                </button>
+              </div>
+            </div>
+          </article>
+        </div>
+      </ng-container>
+    </div>
+  </section>
+</div>
+
+<!-- EVIDENCIA -->
+<div
+  *ngIf="evidenceOpen"
+  class="systems-modal-backdrop systems-modal-backdrop--evidence"
+>
+  <section
+    class="systems-modal systems-modal--evidence"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="evidence-title"
+  >
+    <header class="systems-modal__header">
+      <div>
+        <span class="systems-panel__eyebrow">Evidencia</span>
+        <h2 id="evidence-title">{{ evidenceName || 'Archivo' }}</h2>
+      </div>
+      <button
+        type="button"
+        class="systems-modal__close"
+        aria-label="Cerrar evidencia"
+        (click)="closeEvidence()"
+      >
+        ×
+      </button>
+    </header>
+
+    <div class="systems-modal__body systems-evidence-body">
+      <div
+        *ngIf="evidenceLoading"
+        class="systems-loading systems-loading--modal"
+      >
+        <span class="systems-spinner" aria-hidden="true"></span>
+        <span>Cargando evidencia…</span>
+      </div>
+
+      <img
+        *ngIf="!evidenceLoading && isEvidenceImage && evidenceObjectUrl"
+        class="systems-evidence-image"
+        [src]="evidenceObjectUrl"
+        [alt]="evidenceName"
+      />
+
+      <iframe
+        *ngIf="!evidenceLoading && isEvidencePdf && evidenceSafeUrl"
+        class="systems-evidence-pdf"
+        [src]="evidenceSafeUrl"
+        title="Vista previa de evidencia PDF"
+      ></iframe>
+
+      <div
+        *ngIf="!evidenceLoading && !isEvidenceImage && !isEvidencePdf"
+        class="systems-inline-empty"
+      >
+        Este tipo de archivo no tiene vista previa integrada.
+      </div>
+    </div>
+
+    <footer class="systems-modal__footer">
+      <span>{{ evidenceMime || 'Archivo' }}</span>
+      <button
+        type="button"
+        class="systems-button systems-button--primary"
+        [disabled]="!evidenceObjectUrl"
+        (click)="downloadEvidence()"
+      >
+        Descargar
+      </button>
+    </footer>
+  </section>
+</div>

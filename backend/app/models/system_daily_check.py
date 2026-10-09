@@ -261,6 +261,77 @@ class SystemDailyCheckIssueAttachmentORM(db.Model):
     )
 
 
+class SystemDailyCheckRolloutBranchORM(db.Model):
+    __tablename__ = "system_daily_check_rollout_branches"
+
+    id = db.Column(
+        db.BigInteger().with_variant(db.Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
+    sucursal_id = db.Column(
+        db.Integer,
+        db.ForeignKey("sucursales.sucursal_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    enabled_from = db.Column(db.Date, nullable=False)
+    disabled_from = db.Column(db.Date, nullable=True)
+    configured_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    disabled_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        onupdate=_utc_now,
+    )
+
+    sucursal = db.relationship("Sucursal")
+    configured_by_user = db.relationship(
+        "UserORM",
+        foreign_keys=[configured_by_user_id],
+    )
+    disabled_by_user = db.relationship(
+        "UserORM",
+        foreign_keys=[disabled_by_user_id],
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "sucursal_id",
+            "enabled_from",
+            name="uq_system_daily_check_rollout_branch_start",
+        ),
+        db.CheckConstraint(
+            "disabled_from IS NULL OR disabled_from >= enabled_from",
+            name="ck_system_daily_check_rollout_date_order",
+        ),
+        db.Index(
+            "ix_system_daily_check_rollout_effective_dates",
+            "enabled_from",
+            "disabled_from",
+        ),
+        db.Index(
+            "ix_system_daily_check_rollout_branch_dates",
+            "sucursal_id",
+            "enabled_from",
+            "disabled_from",
+        ),
+    )
+
+
 class SystemDailyCheckPromptStateORM(db.Model):
     __tablename__ = "system_daily_check_prompt_states"
 

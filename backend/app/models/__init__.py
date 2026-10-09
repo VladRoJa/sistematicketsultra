@@ -158,6 +158,7 @@ from .system_daily_check import (
     SystemDailyCheckIssueORM,
     SystemDailyCheckORM,
     SystemDailyCheckPromptStateORM,
+    SystemDailyCheckRolloutBranchORM,
 )
 
 from .purchase_requisition import (
@@ -306,6 +307,7 @@ __all__ = [
     "SystemDailyCheckIssueORM",
     "SystemDailyCheckORM",
     "SystemDailyCheckPromptStateORM",
+    "SystemDailyCheckRolloutBranchORM",
     "PurchaseRequisitionAttachmentORM",
     "PurchaseRequisitionAttachmentType",
     "PurchaseRequisitionCategory",
