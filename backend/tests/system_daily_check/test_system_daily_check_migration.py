@@ -16,9 +16,15 @@ def _revision():
     return ScriptDirectory(str(MIGRATIONS)).get_revision(REVISION)
 
 
-def test_m1_migration_is_single_head_and_extends_current_main_head():
+def test_m1_migration_remains_in_current_revision_chain():
     scripts = ScriptDirectory(str(MIGRATIONS))
-    assert scripts.get_heads() == [REVISION]
+    heads = scripts.get_heads()
+    assert len(heads) == 1
+    ancestry = {
+        revision.revision
+        for revision in scripts.iterate_revisions(heads[0], "base")
+    }
+    assert REVISION in ancestry
     assert _revision().down_revision == "d8f1c3a9b204"
 
 
