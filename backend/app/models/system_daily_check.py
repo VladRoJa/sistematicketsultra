@@ -36,7 +36,11 @@ class SystemDailyCheckAffectedScope:
 class SystemDailyCheckORM(db.Model):
     __tablename__ = "system_daily_checks"
 
-    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    id = db.Column(
+        db.BigInteger().with_variant(db.Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
     sucursal_id = db.Column(
         db.Integer,
         db.ForeignKey("sucursales.sucursal_id", ondelete="RESTRICT"),
@@ -90,7 +94,11 @@ class SystemDailyCheckORM(db.Model):
 class SystemDailyCheckAnswerORM(db.Model):
     __tablename__ = "system_daily_check_answers"
 
-    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    id = db.Column(
+        db.BigInteger().with_variant(db.Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
     check_id = db.Column(
         db.BigInteger,
         db.ForeignKey("system_daily_checks.id", ondelete="CASCADE"),
@@ -146,7 +154,11 @@ class SystemDailyCheckAnswerORM(db.Model):
 class SystemDailyCheckIssueORM(db.Model):
     __tablename__ = "system_daily_check_issues"
 
-    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    id = db.Column(
+        db.BigInteger().with_variant(db.Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
     answer_id = db.Column(
         db.BigInteger,
         db.ForeignKey("system_daily_check_answers.id", ondelete="CASCADE"),
@@ -187,7 +199,11 @@ class SystemDailyCheckIssueORM(db.Model):
 class SystemDailyCheckPromptStateORM(db.Model):
     __tablename__ = "system_daily_check_prompt_states"
 
-    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    id = db.Column(
+        db.BigInteger().with_variant(db.Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
     sucursal_id = db.Column(
         db.Integer,
         db.ForeignKey("sucursales.sucursal_id", ondelete="RESTRICT"),
