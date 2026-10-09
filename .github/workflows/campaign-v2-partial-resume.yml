@@ -1,0 +1,41 @@
+name: Campaign V2 Partial Resume Safety
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/services/marketing_campaign_v2_partial_resume_service.py"
+      - "backend/scripts/resume_campaign8_pending.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_partial_resume.py"
+      - ".github/workflows/campaign-v2-partial-resume.yml"
+  push:
+    branches: ["fix/campaign-v2-8-partial-resume"]
+
+permissions:
+  contents: read
+
+jobs:
+  offline-safety-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install test runtime
+        run: |
+          python -m pip install -r backend/requirements.txt
+          python -m pip install "pytest==8.3.5"
+      - name: Offline provider safety and M2 regression
+        working-directory: backend
+        env:
+          SECRET_KEY: isolated-resume-qa-secret
+          JWT_SECRET_KEY: isolated-resume-qa-jwt
+          CAMPAIGN_V2_PROVIDER_SEND_ENABLED: "false"
+        run: |
+          python -m pytest -q --tb=short \
+            tests/marketing/test_marketing_campaign_v2_partial_resume.py \
+            tests/marketing/test_marketing_campaign_v2_submit_service.py \
+            tests/marketing/test_marketing_campaign_v2_retry_service.py \
+            tests/marketing/test_marketing_campaign_v2_preflight_service.py \
+            tests/marketing/test_marketing_campaign_v2_scoped_dispatch_exclusions.py
