@@ -681,3 +681,17 @@ M2 — ACCEPTED EN MAIN / PR #830 MERGEADO
 M3 — ACCEPTED EN MAIN / PR #832 MERGEADO
 ROLLOUT GERENTES — BLOQUEADO POR APROBACIÓN DE SISTEMAS
 ```
+
+
+## Excepción temporal del piloto — Corporativo
+
+Mientras el MVP sea validado únicamente por **SISTEMAS / ADMICORP**, el Checklist aplica un puente temporal y acotado al dominio:
+
+- `sucursal_id=100` (**Corporativo**) puede participar en el rollout y en Salud de Sistemas;
+- `sucursal_id=1000` (**Administrador/Root**) no se considera una sede independiente;
+- para captura del Checklist, un actor cuya sucursal de sesión sea 1000 se canoniza a Corporativo 100;
+- Angular no conoce ni transforma estos IDs: consume el catálogo y `preferred_branch_id` definidos por backend;
+- `TECHNICAL_SUCURSAL_IDS` global no se modifica;
+- GERENTE continúa fuera del rollout MVP.
+
+Esta excepción está marcada en código como `PILOT TEMPORARY` y **debe retirarse al concluir las pruebas de Sistemas**, antes del rollout definitivo a gerentes.
