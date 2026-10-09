@@ -87,7 +87,5 @@ jobs:
             tests/system-daily-check-gate-state.test.ts
           node .tmp-system-daily-check-tests/tests/system-daily-check-gate-state.test.js
           rm -rf .tmp-system-daily-check-tests
-      - name: Test checklist gate state
-        run: npm run test:system-daily-check-gate
       - name: Build Angular
-        run: npm run build -- --progress=false
+        run: npm run build
