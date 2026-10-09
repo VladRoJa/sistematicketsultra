@@ -44,6 +44,7 @@ from app.routes.mantenimiento_equipos_routes import mantenimiento_equipos_bp
 from app.routes.contact_center_routes import contact_center_bp
 from app.routes.purchase_requisition_routes import purchase_requisition_bp
 from app.routes.system_daily_check_routes import system_daily_check_bp
+from app.routes.google_ads_oauth_routes import google_ads_oauth_bp
 from app.maintenance_planner import maintenance_planner_bp
 from app.control_center import control_center_bp
 from app.utils.maintenance_ticket_update_guard import (
@@ -155,6 +156,10 @@ def create_app():
         url_prefix="/api/system-daily-checks",
     )
     app.register_blueprint(control_center_bp, url_prefix="/api/control")
+    app.register_blueprint(
+        google_ads_oauth_bp,
+        url_prefix="/api/integrations/google-ads/oauth",
+    )
 
     app.config['DEBUG'] = True
     app.config['PROPAGATE_EXCEPTIONS'] = True
