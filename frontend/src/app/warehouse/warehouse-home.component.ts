@@ -408,7 +408,22 @@ submitUpload(): void {
 
   this.warehouseUploadsService.createUpload(payload).subscribe({
     next: (response) => {
-      this.uploadSuccessMessage = `Upload creado correctamente con id ${response.upload_id}.`;
+      if (response.report_type_key === 'google_ads_campaign_daily') {
+        const ingestion = response.manual_structured_result;
+        const detail = ingestion?.structured_result;
+        if (ingestion?.ingestion_status !== 'ingested' || !detail) {
+          this.uploadErrorMessage =
+            'Archivo raw guardado, pero no se confirmó la ingesta estructurada de Google Ads.';
+          this.loadUploads();
+          return;
+        }
+        this.uploadSuccessMessage =
+          `Google Ads: ${detail.created_rows} filas nuevas, ${detail.unchanged_rows} ` +
+          `ya existentes; ${detail.campaign_day_rows} filas revisadas. ` +
+          `Costo total del archivo: ${detail.total_cost_in_file} MXN.`;
+      } else {
+        this.uploadSuccessMessage = `Upload creado correctamente con id ${response.upload_id}.`;
+      }
       this.resetUploadForm();
       this.loadUploads();
     },
