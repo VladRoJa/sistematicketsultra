@@ -205,6 +205,13 @@ export const routes: Routes = [
             .then(m => m.MarketingSalesFunnelOriginalComponent),
       },
       {
+        path: 'marketing/google-ads',
+        canActivate: [AdminGuard],
+        loadComponent: () =>
+          import('./google-ads/google-ads-admin.component')
+            .then(m => m.GoogleAdsAdminComponent),
+      },
+      {
         path: 'marketing/reactivation',
         redirectTo: 'marketing/campaigns-v2',
         pathMatch: 'full',

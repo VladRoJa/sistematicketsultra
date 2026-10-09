@@ -333,6 +333,13 @@ ngOnInit(): void {
     );
   }
 
+  if (this.esAdmin) {
+    marketingConversionSubmenu.push({
+      label: 'Google Ads · Administración',
+      path: '/marketing/google-ads',
+    });
+  }
+
   const menuMarketingConversion = {
     label: 'Marketing y Conversión',
     path: marketingConversionSubmenu[0]?.path || '/main/ver-tickets',

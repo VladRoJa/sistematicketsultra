@@ -1,0 +1,33 @@
+# Google Ads M3 — Interfaz administrativa
+
+## Alcance
+
+- Nueva ruta Angular `/#/marketing/google-ads` con `AdminGuard` y enlace en Marketing y Conversión solo para administradores.
+- Componentes separados: `.ts`, `.html`, `.css`; servicios HTTP tipados.
+- Estado de OAuth M1; botón Conectar/Reconectar en la **misma pestaña** para conservar nonce cookie; URL de Google autorizada mediante lista estricta.
+- Comprobación de acceso real vía M2 y consulta diaria con máximo 31 días.
+- Indicadores de inversión, clics, impresiones y conversiones reportadas por Google Ads; conversiones no equivalen a ventas pagadas validadas.
+- Respuestas únicamente reales: no introducir cifras ficticias en producción.
+
+## Seguridad
+
+- La UI no almacena secretos, tokens ni códigos OAuth.
+- El backend M1/M2 continúa validando administrador, configuración y cuenta.
+- Kill switches de backend desactivados por defecto: sin credenciales, los botones de consulta no proporcionan información real.
+- Ningún endpoint muta campañas Google Ads ni persiste los resultados en Warehouse.
+- Finalizado el consentimiento, el callback M1 devuelve una página de confirmación. El administrador regresa a la pantalla y presiona Actualizar estado.
+
+## Pruebas requeridas antes de merge
+
+- QA 2026-10-09: instalación aislada `npm ci --ignore-scripts --no-audit --no-fund --legacy-peer-deps`: 1091 paquetes instalados. El intento normal de `npm ci` en Windows falló por script `postinstall` de npm 11 (`ERR_INVALID_ARG_TYPE`), sin cambios en el repo.
+- `node node_modules/typescript/bin/tsc --noEmit --project tsconfig.app.json`: **PASS**, código TS válido.
+- `node node_modules/@angular/cli/bin/ng.js build --optimization=false --build-optimizer=false --aot=true --source-map=false --progress=false`: **PASS**, salida generada con chunk `google-ads-google-ads-admin-component`. Advertencias CSS/CommonJS preexistentes en otros módulos; cero errores de template. El build de producción optimizado completo todavía no se confirmó en ese equipo.
+- Verificar navegación y estado desconectado en móvil y escritorio.
+- Validar que usuario no ADMINISTRADOR no acceda a la ruta ni vea el menú; corroborar 403 del backend.
+- Revisar configuración privada de cliente OAuth y developer-token antes del consentimiento real.
+- Demostrar con datos auténticos el flujo de consentimiento, cuenta y consulta para el video de Google; no simular accesos.
+
+## No incluido
+
+- No hay migraciones, cron, ingesta Warehouse, Funnel ni cambios en los permisos de backend.
+- No se genera video, no se envía todavía solicitud de verificación OAuth.
