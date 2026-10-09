@@ -1,4 +1,4 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
@@ -152,6 +152,19 @@ export class SystemDailyCheckBiService {
   ): Observable<SystemDailyCheckDetail> {
     return this.http.get<SystemDailyCheckDetail>(
       `${this.baseUrl}/checks/${checkId}`,
+    );
+  }
+
+  exportExcel(
+    filters: SystemDailyCheckFilters,
+  ): Observable<HttpResponse<Blob>> {
+    return this.http.get(
+      `${this.baseUrl}/export.xlsx`,
+      {
+        params: this.buildRangeParams(filters),
+        responseType: 'blob',
+        observe: 'response',
+      },
     );
   }
 
