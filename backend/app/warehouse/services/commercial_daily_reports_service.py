@@ -290,12 +290,19 @@ def render_commercial_daily_xlsx(
         _three_month_window_start(cutoff)
         if metric == "reactivaciones" else FIRST_SUPPORTED_DATE
     )
+    # Every weekly column must begin on Sunday and end on Saturday,
+    # including the week which contains the 1st of the earliest month.
+    # Include the day before that Sunday's MTD to derive its true delta.
+    first_week_start = _week_start(comparison_start)
     if metric == "reactivaciones":
+        series_start = max(
+            FIRST_SUPPORTED_DATE, first_week_start - timedelta(days=1)
+        )
         daily = {
             branch: _daily_deltas(
                 {
                     day: value for day, value in mtd_series[branch].items()
-                    if comparison_start <= day <= cutoff
+                    if series_start <= day <= cutoff
                 },
                 historical_corrections_before=cutoff.replace(day=1),
             )
@@ -305,7 +312,7 @@ def render_commercial_daily_xlsx(
         daily = {b: _daily_deltas(mtd_series[b]) for b in branches}
     week = _week_start(cutoff)
     weeks = []
-    cursor = _week_start(comparison_start)
+    cursor = first_week_start
     while cursor <= week:
         weeks.append(cursor)
         cursor += timedelta(days=7)
@@ -327,7 +334,10 @@ def render_commercial_daily_xlsx(
         for start in weeks:
             valid_days = [
                 start + timedelta(days=i) for i in range(7)
-                if comparison_start <= start + timedelta(days=i) <= cutoff
+                if (
+                    (first_week_start if metric == "reactivaciones" else comparison_start)
+                    <= start + timedelta(days=i) <= cutoff
+                )
             ]
             values = [daily[b].get(d) for d in valid_days]
             weekly_cells[b].append(
@@ -379,7 +389,7 @@ def render_commercial_daily_xlsx(
     )
     weekly_title = (
         "REACTIVACIONES · COMPARATIVO SEMANAL "
-        f"{comparison_start:%d/%m/%Y} AL {cutoff:%d/%m/%Y}"
+        f"{first_week_start:%d/%m/%Y} AL {cutoff:%d/%m/%Y}"
         if metric == "reactivaciones" else None
     )
     monthly_title = (
@@ -394,15 +404,11 @@ def render_commercial_daily_xlsx(
     _format_sheet(
         book, "Semanal",
         ["Sucursal"] + [
-            (
-                f"{comparison_start:%d/%m} (parcial)"
-                if metric == "reactivaciones" and w < comparison_start
-                else f"{w:%d/%m}-{w + timedelta(days=6):%d/%m}"
-                + (
-                    f" (corte {cutoff:%d/%m})"
-                    if w == week and cutoff < w + timedelta(days=6)
-                    else ""
-                )
+            f"{w:%d/%m}-{w + timedelta(days=6):%d/%m}"
+            + (
+                f" (corte {cutoff:%d/%m})"
+                if w == week and cutoff < w + timedelta(days=6)
+                else ""
             )
             for w in weeks
         ],
@@ -417,7 +423,8 @@ def render_commercial_daily_xlsx(
             note_row, 0, note_row, len(weeks),
             "Nota: las celdas vacías significan datos diarios faltantes "
             "o correcciones históricas; no representan cero. "
-            "La primera semana puede ser parcial.",
+            "Todas las semanas son domingo-sábado. "
+            "La última puede tener datos solo hasta el corte.",
             book.add_format({
                 "italic": True, "font_color": "#6E4C00",
                 "bg_color": "#FFF0CC", "text_wrap": True,
