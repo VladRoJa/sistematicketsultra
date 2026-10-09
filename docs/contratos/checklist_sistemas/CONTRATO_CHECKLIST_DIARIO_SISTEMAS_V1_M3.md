@@ -28,7 +28,7 @@ Está fuera de alcance:
 
 ## 1. Objetivo
 
-Convertir el histórico del checklist en una vista operacional de **Salud de Sistemas**.
+Convertir el histórico del checklist en una vista operacional de **Salud de Sistemas** para validar el MVP con Sistemas antes de abrirlo a gerentes.
 
 M3 debe permitir responder, sin exportaciones manuales:
 
@@ -146,9 +146,17 @@ Métricas mínimas:
 - cumplimiento por sucursal;
 - cumplimiento por periodo.
 
-“Esperados” debe derivar de sucursales activas elegibles, no de un número hardcodeado.
+Durante el MVP, “esperados” **no puede significar automáticamente todas las sucursales activas**, porque GERENTE todavía no está habilitado.
 
-M3 debe investigar fuente canónica de sucursales activas.
+M3 debe distinguir:
+
+- universo productivo potencial;
+- universo elegible del rollout vigente;
+- participantes/checklists esperados del piloto.
+
+El denominador de cumplimiento MVP se calcula únicamente sobre el universo elegible/configurado para el piloto.
+
+M3 debe investigar la fuente canónica de sucursales activas para dejar preparado el rollout posterior, sin contaminar el KPI MVP.
 
 ## 9. Fallas
 
@@ -257,22 +265,20 @@ Si existe concepto regional canónico y permisos lo permiten, puede añadirse re
 
 M3 debe investigar y definir scopes reales.
 
-Conceptualmente:
+### MVP
 
-### Sistemas / Administrador
+Solo:
 
-- vista global;
-- todas las sucursales;
-- detalle completo.
+- SISTEMAS;
+- ADMICORP.
 
-### Gerente
+deben poder ver el módulo BI/historial, con el alcance explícitamente aprobado para el piloto.
 
-- su sucursal;
-- su histórico si el negocio lo requiere.
+### Fuera del MVP
 
-### Regional
+GERENTE, Regional y otros perfiles permanecen sin acceso hasta aprobación de Sistemas y cambio de rollout.
 
-- sucursales bajo su alcance si existe fuente canónica.
+La estructura puede quedar preparada para futuros scopes por sucursal/región, pero no deben habilitarse implícitamente.
 
 Backend valida todos los filtros y scopes.
 
@@ -409,7 +415,7 @@ Validar agregados contra conteo manual.
 
 ## 27. Acceptance integral V1
 
-Además de M3, ejecutar smoke del flujo completo:
+Además de M3, ejecutar smoke del flujo completo con un usuario piloto SISTEMAS/ADMICORP:
 
 ```text
 login
@@ -471,7 +477,10 @@ M3 y V1 quedan ACCEPTED solo si:
 9. día/semana/mes respetan timezone;
 10. drill-down coincide con agregados;
 11. permisos backend están probados;
-12. smoke integral V1 está verde.
+12. smoke integral V1 está verde;
+13. BI/historial solo es visible para SISTEMAS/ADMICORP durante MVP;
+14. GERENTE no aparece como usuario obligado ni contamina el denominador de cumplimiento;
+15. Sistemas puede revisar el piloto sin habilitar todavía el rollout productivo a gerentes.
 
 ## 31. Estado final esperado
 
@@ -479,5 +488,6 @@ M3 y V1 quedan ACCEPTED solo si:
 M1 — ACCEPTED
 M2 — ACCEPTED
 M3 — ACCEPTED
-CHECKLIST DIARIO DE SISTEMAS V1 — ACCEPTED
+CHECKLIST DIARIO DE SISTEMAS V1 MVP — ACCEPTED
+ROLLOUT A GERENTES — PENDIENTE DE APROBACIÓN DE SISTEMAS
 ```

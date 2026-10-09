@@ -28,7 +28,11 @@ Está prohibido adelantar:
 
 ## 1. Objetivo
 
-Entregar una experiencia diaria extremadamente simple para gerente:
+Entregar una experiencia diaria extremadamente simple para el usuario piloto autorizado.
+
+Durante el MVP, esta experiencia solo se habilita a SISTEMAS y ADMICORP. GERENTE no debe verla ni quedar sujeto a enforcement.
+
+Flujo:
 
 ```text
 Login
@@ -55,7 +59,9 @@ hasta submit válido
 
 ## 2. Principio UX
 
-> El gerente solo debe decidir si algo sirve o no.
+> El usuario que realiza el checklist solo debe decidir si algo sirve o no.
+
+La UX se diseña para el futuro gerente, pero el rollout MVP permanece restringido a SISTEMAS/ADMICORP.
 
 La interfaz no debe exponer:
 
@@ -239,7 +245,7 @@ Criterio:
 
 No elegir un modal pequeño si degrada móvil.
 
-## 15. Integración con login/layout
+## 15. Integración con login/layout y rollout MVP
 
 Revisar:
 
@@ -254,6 +260,14 @@ No introducir un tercer origen de token.
 
 No duplicar lógica de sesión si ya existe una fuente canónica.
 
+Durante el MVP:
+
+- solo SISTEMAS/ADMICORP elegibles reciben la evaluación diaria;
+- GERENTE no debe disparar status/postpone/mandatory;
+- ocultar menú en frontend no es suficiente: backend debe negar el acceso;
+- no implementar el rollout a GERENTE detrás de una condición frontend fácil de activar;
+- la futura apertura debe realizarse mediante una política/configuración backend explícita y testeada.
+
 ## 16. Evitar loops
 
 Casos a probar:
@@ -267,7 +281,9 @@ Casos a probar:
 - navegación usando back;
 - deep link;
 - logout voluntario;
-- login de otro usuario.
+- login de otro usuario;
+- login GERENTE durante MVP -> Suite normal, sin checklist;
+- login SISTEMAS/ADMICORP elegible -> aplica flujo según status.
 
 No crear un guard que bloquee también los endpoints/pantallas necesarias para resolver el checklist.
 
@@ -423,7 +439,9 @@ M2 queda ACCEPTED solo si:
 7. mandatory no puede evadirse por navegación normal;
 8. submit exitoso libera gate;
 9. errores de red no dejan estado falso;
-10. pruebas frontend/integración están verdes.
+10. GERENTE no ve ni sufre el gate durante MVP;
+11. SISTEMAS/ADMICORP sí respetan el gate;
+12. pruebas frontend/integración están verdes.
 
 ## 28. Estado final esperado
 
