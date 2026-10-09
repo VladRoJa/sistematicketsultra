@@ -42,6 +42,16 @@ export class SystemDailyCheckBiService {
     );
   }
 
+  exportExcel(filters: SystemDailyCheckFilters): Observable<Blob> {
+    return this.http.get(
+      `${this.baseUrl}/export.xlsx`,
+      {
+        params: this.buildRangeParams(filters),
+        responseType: 'blob',
+      },
+    );
+  }
+
   getMatrix(
     businessDate: string,
     branchId: number | null,

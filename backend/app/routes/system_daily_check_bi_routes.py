@@ -19,6 +19,9 @@ from app.services.system_daily_check_bi_service import (
     list_system_daily_check_bi_pending,
     resolve_system_daily_check_branch_universe,
 )
+from app.services.system_daily_check_export_service import (
+    export_system_daily_check_bi_workbook,
+)
 from app.services.system_daily_check_service import (
     SystemDailyCheckAuthorizationError,
     SystemDailyCheckNotFoundError,
@@ -157,6 +160,44 @@ def bi_context():
         return _error_response(exc)
 
 
+
+
+@system_daily_check_bi_bp.get("/export.xlsx")
+@jwt_required()
+def bi_export_excel():
+    """Exportar los cuatro conjuntos de datos con los filtros del dashboard."""
+    try:
+        actor = _current_user()
+        _require_bi_access(actor)
+        business_date = resolve_business_date()
+        date_from = _parse_date_arg("date_from", default=business_date)
+        date_to = _parse_date_arg("date_to", default=date_from)
+        file_buffer = export_system_daily_check_bi_workbook(
+            actor,
+            date_from=date_from,
+            date_to=date_to,
+            branch_id=_parse_branch_id_arg(),
+        )
+        response = send_file(
+            file_buffer,
+            as_attachment=True,
+            download_name=(
+                f"checklist_operativo_{date_from.isoformat()}_"
+                f"{date_to.isoformat()}.xlsx"
+            ),
+            mimetype=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+        )
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
+    except (
+        SystemDailyCheckAuthorizationError,
+        SystemDailyCheckValidationError,
+    ) as exc:
+        return _error_response(exc)
 
 
 @system_daily_check_bi_bp.get("/summary")
