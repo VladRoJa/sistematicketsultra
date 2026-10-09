@@ -258,11 +258,17 @@ export class MarketingSalesFunnelOriginalDetailDialogComponent implements OnInit
   ): DetailColumn[] {
     if (kind === 'visits') {
       if (this.isVisitConversionMetric(metric)) {
+        const boughtMetric = metric === 'visits_iventas_bought'
+          || metric === 'visits_not_iventas_bought';
         return [
           { key: 'branch', label: 'Sucursal KPI', widthClass: 'medium' },
           { key: 'date', label: 'Fecha visita', widthClass: 'compact' },
           { key: 'phone', label: 'Teléfono', widthClass: 'compact' },
-          { key: 'origin', label: 'Trazabilidad', widthClass: 'medium' },
+          {
+            key: boughtMetric ? 'sale_origin' : 'origin',
+            label: boughtMetric ? 'Origen compra' : 'Origen pase',
+            widthClass: 'medium',
+          },
           { key: 'conversion_status', label: 'Conversión', widthClass: 'compact' },
           { key: 'sale_date', label: 'Fecha venta', widthClass: 'compact' },
           { key: 'sale_member_id', label: 'ID socio', widthClass: 'compact' },
