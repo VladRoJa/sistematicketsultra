@@ -25,8 +25,8 @@ def oauth_client(monkeypatch):
     app = Flask(__name__)
     app.config.update(
         TESTING=True,
-        SECRET_KEY="secret-for-oauth-test-only",
-        JWT_SECRET_KEY="secret-for-jwt-test-only",
+        SECRET_KEY="oauth-qa-only-secret-key-at-least-32-bytes",
+        JWT_SECRET_KEY="jwt-qa-only-secret-key-at-least-32-bytes",
     )
     JWTManager(app)
     app.register_blueprint(oauth.google_ads_oauth_bp, url_prefix="/oauth")
