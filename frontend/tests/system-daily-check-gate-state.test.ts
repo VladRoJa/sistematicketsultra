@@ -1,6 +1,7 @@
 import {
   buildSystemDailyCheckQuestionGroups,
   canSystemDailyCheckPostpone,
+  isSystemDailyCheckMvpCandidate,
   isSystemDailyCheckQuestionComplete,
   resolveSystemDailyCheckGatePresentation,
 } from '../src/app/system-daily-check/system-daily-check-gate-state';
@@ -10,6 +11,35 @@ function assert(condition: boolean, message: string): void {
     throw new Error(message);
   }
 }
+
+assert(
+  isSystemDailyCheckMvpCandidate({
+    username: 'sistemas.user',
+    rol: 'SISTEMAS',
+  }),
+  'SISTEMAS debe participar en el rollout MVP.',
+);
+assert(
+  isSystemDailyCheckMvpCandidate({
+    username: 'admicorp',
+    rol: 'ADMINISTRADOR',
+  }),
+  'ADMICORP debe participar en el rollout MVP.',
+);
+assert(
+  !isSystemDailyCheckMvpCandidate({
+    username: 'gerente.demo',
+    rol: 'GERENTE',
+  }),
+  'GERENTE debe permanecer fuera del rollout MVP.',
+);
+assert(
+  !isSystemDailyCheckMvpCandidate({
+    username: 'admin.demo',
+    rol: 'ADMINISTRADOR',
+  }),
+  'ADMINISTRADOR genérico no debe entrar al rollout por accidente.',
+);
 
 const questions = [
   {

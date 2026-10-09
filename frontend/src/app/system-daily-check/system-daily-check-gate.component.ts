@@ -26,6 +26,7 @@ import {
 import {
   buildSystemDailyCheckQuestionGroups,
   canSystemDailyCheckPostpone,
+  isSystemDailyCheckMvpCandidate,
   isSystemDailyCheckQuestionComplete,
   resolveSystemDailyCheckGatePresentation,
   SystemDailyCheckGateQuestionGroup,
@@ -93,7 +94,9 @@ export class SystemDailyCheckGateComponent
     private readonly renderer: Renderer2,
     @Inject(DOCUMENT) private readonly document: Document,
   ) {
-    this.isPilotUser = this.isMvpCandidate();
+    this.isPilotUser = isSystemDailyCheckMvpCandidate(
+      this.session.getUser(),
+    );
   }
 
   ngOnInit(): void {
@@ -738,18 +741,6 @@ export class SystemDailyCheckGateComponent
     }
 
     return null;
-  }
-
-  private isMvpCandidate(): boolean {
-    const user = this.session.getUser();
-    const role = String(
-      user?.rol ?? user?.role ?? '',
-    ).trim().toUpperCase();
-    const username = String(
-      user?.username ?? '',
-    ).trim().toUpperCase();
-
-    return role === 'SISTEMAS' || username === 'ADMICORP';
   }
 
   private apiErrorMessage(

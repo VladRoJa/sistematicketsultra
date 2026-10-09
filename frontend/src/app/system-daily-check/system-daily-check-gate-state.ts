@@ -32,6 +32,12 @@ export interface SystemDailyCheckGateStatusLike {
   can_postpone: boolean;
 }
 
+export interface SystemDailyCheckMvpUserLike {
+  username?: unknown;
+  rol?: unknown;
+  role?: unknown;
+}
+
 export interface SystemDailyCheckGatePresentation {
   visible: boolean;
   screen: SystemDailyCheckGateScreen;
@@ -62,6 +68,19 @@ export const SYSTEM_DAILY_CHECK_CATEGORY_LABELS: Record<
   ACCESS_CONTROL: 'Control de acceso',
   AUXILIARY_SYSTEMS: 'Sistemas auxiliares',
 };
+
+export function isSystemDailyCheckMvpCandidate(
+  user: SystemDailyCheckMvpUserLike | null | undefined,
+): boolean {
+  const role = String(
+    user?.rol ?? user?.role ?? '',
+  ).trim().toUpperCase();
+  const username = String(
+    user?.username ?? '',
+  ).trim().toUpperCase();
+
+  return role === 'SISTEMAS' || username === 'ADMICORP';
+}
 
 export function buildSystemDailyCheckQuestionGroups<
   T extends SystemDailyCheckGateQuestionLike,
