@@ -554,8 +554,8 @@ def test_reactivaciones_monthly_subtotals_centered_without_affecting_labels():
     assert sheet["J2"].value == "SEPTIEMBRE"
     assert sheet["K2"].value == "OCTUBRE"
     assert all(
-        sheet.cell(row, col).comment is None
-        for row in sheet for col in range(1, 12)
+        cell.comment is None
+        for row in sheet.iter_rows() for cell in row
     )
 
 
