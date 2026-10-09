@@ -26,7 +26,12 @@
                         "src/android-chrome-192x192.png",
                         "src/android-chrome-512x512.png",
                         "src/assets",
-                        "src/_redirects"
+                        "src/_redirects",
+                        {
+                          "glob": "**/*",
+                          "input": "src/public",
+                          "output": "/"
+                        }
                       ],
             "styles": ["src/styles.scss", "src/styles.compact.scss", "src/styles.compact-75.scss", "src/styles.compact-modules.scss"],
             "scripts": []
