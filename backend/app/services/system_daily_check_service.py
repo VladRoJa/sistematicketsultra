@@ -99,6 +99,11 @@ QUESTIONS: tuple[SystemDailyCheckQuestion, ...] = (
         category_key="CONNECTIVITY_SYSTEMS",
     ),
     SystemDailyCheckQuestion(
+        key="BI_REPORTS_WORKING",
+        label="¿Los reportes BI que utiliza la sucursal abren y permiten consultar información?",
+        category_key="CONNECTIVITY_SYSTEMS",
+    ),
+    SystemDailyCheckQuestion(
         key="TURNSTILES_WORKING",
         label="¿Los torniquetes permiten la entrada y salida?",
         category_key="ACCESS_CONTROL",

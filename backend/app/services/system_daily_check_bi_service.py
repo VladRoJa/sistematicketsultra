@@ -610,6 +610,11 @@ SYSTEM_DAILY_CHECK_MATRIX_GROUPS = (
         "question_keys": ("SUITE_ULTRA_WORKING",),
     },
     {
+        "key": "BI_REPORTS",
+        "label": "Reportes BI",
+        "question_keys": ("BI_REPORTS_WORKING",),
+    },
+    {
         "key": "ACCESS",
         "label": "Acceso",
         "question_keys": (

@@ -128,6 +128,7 @@ Mínimo:
 - INTERNET_WORKING;
 - GASCA_WORKING;
 - SUITE_ULTRA_WORKING;
+- BI_REPORTS_WORKING;
 - TURNSTILES_WORKING;
 - ACCESS_READERS_WORKING;
 - TURNSTILE_SCREENS_WORKING;
@@ -495,8 +496,8 @@ M1 queda ACCEPTED solo si:
 
 - Autoridad MVP: `rol == SISTEMAS` o `username == ADMICORP`. La excepción por username se conserva porque el modelo actual no expone un rol/capability canónico de ADMICORP; no se extiende a ADMINISTRADOR, TECNICO, department_id 7 genérico ni GERENTE.
 - Los usuarios del piloto pueden seleccionar como contexto cualquier sucursal existente; el backend valida la sucursal y ningún perfil fuera del piloto puede activar el flujo. La futura apertura a GERENTE requiere contrato y scope nuevo.
-- Las 13 preguntas viven como definición backend estable y cada respuesta persiste `question_key` + snapshot del label.
-- `affected_scope` es obligatorio únicamente en preguntas donde UNO/VARIOS tiene sentido operativo; Gasca, Suite Ultra y música ambiental no lo requieren.
+- Las 14 preguntas viven como definición backend estable y cada respuesta persiste `question_key` + snapshot del label.
+- `affected_scope` es obligatorio únicamente en preguntas donde UNO/VARIOS tiene sentido operativo; Gasca, Suite Ultra, Reportes BI y música ambiental no lo requieren.
 - M1 prepara `SystemDailyCheckIssueAttachmentORM` y su metadata auditable por incidencia. La carga/descarga física queda fuera de M1; M2 deberá reutilizar el patrón seguro de almacenamiento existente en lugar de duplicarlo.
 - La concurrencia se serializa bloqueando la fila canónica de sucursal antes de mutar prompt/checklist, además de las restricciones únicas en DB.
 
@@ -513,6 +514,6 @@ M1 queda ACCEPTED solo si:
 
 ```text
 M1 — ACCEPTED EN MAIN
-M2 — DESBLOQUEADO
-M3 — BLOQUEADO POR M2
+M2 — ACCEPTED EN MAIN
+M3 — ACCEPTED EN MAIN
 ```

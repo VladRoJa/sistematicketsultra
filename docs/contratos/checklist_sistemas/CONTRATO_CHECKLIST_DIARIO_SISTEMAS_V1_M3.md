@@ -1,7 +1,7 @@
 # Contrato — Checklist Diario de Sistemas V1 / M3
 ## Historial, BI y Salud Operativa
 
-Estado: ACCEPTED TÉCNICAMENTE EN PR #832 / PENDIENTE MERGE A MAIN
+Estado: ACCEPTED EN MAIN / PR #832 MERGEADO
 Gate de entrada: M2 ACCEPTED en main.  
 Gate de salida: V1 ACCEPTED de extremo a extremo con BI operativo.
 
@@ -80,7 +80,7 @@ Debe mostrar:
 - business_date;
 - submitted_at;
 - estado general;
-- 13 respuestas;
+- 14 respuestas;
 - incidencias asociadas;
 - reported_to_support;
 - descripción;
@@ -115,6 +115,7 @@ Agrupaciones sugeridas:
 - Internet;
 - Gasca;
 - Suite Ultra;
+- Reportes BI;
 - Acceso;
 - Audio;
 - Video;
@@ -569,7 +570,7 @@ La prueba forma parte de la suite M3 ejecutada por CI sobre PostgreSQL 16.
 - System Daily Check M2 regression: **SUCCESS**;
 - System Daily Check M1 regression: **SUCCESS**;
 - Campaign V2 Scoped Exclusions: **SUCCESS**;
-- PR #832: mergeable contra `main`.
+- PR #832: mergeado en `main` mediante `087e9c5e`.
 
 ### Rollout
 

@@ -108,7 +108,7 @@ def _payload(
 
 def test_question_catalog_matches_contract_and_scope_semantics():
     payload = list_system_daily_check_questions()
-    assert len(payload) == 13
+    assert len(payload) == 14
     assert [row["question_key"] for row in payload] == [
         "COMPUTERS_WORKING",
         "PERIPHERALS_WORKING",
@@ -117,6 +117,7 @@ def test_question_catalog_matches_contract_and_scope_semantics():
         "INTERNET_WORKING",
         "GASCA_WORKING",
         "SUITE_ULTRA_WORKING",
+        "BI_REPORTS_WORKING",
         "TURNSTILES_WORKING",
         "ACCESS_READERS_WORKING",
         "TURNSTILE_SCREENS_WORKING",
@@ -129,6 +130,7 @@ def test_question_catalog_matches_contract_and_scope_semantics():
     assert by_key["INTERNET_WORKING"]["requires_affected_scope"] is True
     assert by_key["GASCA_WORKING"]["requires_affected_scope"] is False
     assert by_key["SUITE_ULTRA_WORKING"]["requires_affected_scope"] is False
+    assert by_key["BI_REPORTS_WORKING"]["requires_affected_scope"] is False
     assert by_key["AMBIENT_AUDIO_WORKING"]["requires_affected_scope"] is False
 
 
@@ -429,7 +431,7 @@ def test_submit_persists_answers_independent_issues_and_marks_completed():
             assert check.sucursal_id == 10
             assert check.performed_by_user_id == 1
             assert check.general_status == "MINOR_FAILURE"
-            assert len(answers) == 13
+            assert len(answers) == 14
             assert len(issues) == 2
             assert {
                 answer.question_key

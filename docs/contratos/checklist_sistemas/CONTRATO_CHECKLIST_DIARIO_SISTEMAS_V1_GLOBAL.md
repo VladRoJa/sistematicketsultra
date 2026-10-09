@@ -1,6 +1,6 @@
 # Contrato Global — Checklist Diario de Sistemas V1
 
-Estado: APROBADO PARA IMPLEMENTACIÓN POR MILESTONES  
+Estado: MVP ACCEPTED EN MAIN / ROLLOUT A GERENTES PENDIENTE DE APROBACIÓN DE SISTEMAS
 Autoridad: este documento define el alcance global de V1.  
 Regla de ejecución: **no implementar V1 directamente desde este archivo**. Cada conversación debe trabajar únicamente uno de los contratos M1, M2 o M3.
 
@@ -252,18 +252,19 @@ Todas las preguntas principales son obligatorias.
 5. ¿Las computadoras tienen conexión a internet?
 6. ¿Gasca abre y permite realizar las operaciones necesarias?
 7. ¿Suite Ultra permite realizar las operaciones necesarias de la sucursal?
+8. ¿Los reportes BI que utiliza la sucursal abren y permiten consultar información?
 
 ### Control de acceso
 
-8. ¿Los torniquetes permiten la entrada y salida?
-9. ¿Los lectores de acceso permiten validar correctamente a los usuarios?
-10. ¿Las pantallas de los torniquetes funcionan?
+9. ¿Los torniquetes permiten la entrada y salida?
+10. ¿Los lectores de acceso permiten validar correctamente a los usuarios?
+11. ¿Las pantallas de los torniquetes funcionan?
 
 ### Sistemas auxiliares
 
-11. ¿La música ambiental funciona?
-12. ¿Las pantallas/TV funcionan?
-13. ¿El sistema de cámaras funciona?
+12. ¿La música ambiental funciona?
+13. ¿Las pantallas/TV funcionan?
+14. ¿El sistema de cámaras funciona?
 
 Agregar nuevas preguntas requiere cambio explícito de contrato.
 
@@ -359,6 +360,7 @@ Las preguntas deben tener claves estables, por ejemplo:
 - INTERNET_WORKING;
 - GASCA_WORKING;
 - SUITE_ULTRA_WORKING;
+- BI_REPORTS_WORKING;
 - TURNSTILES_WORKING;
 - ACCESS_READERS_WORKING;
 - TURNSTILE_SCREENS_WORKING;
@@ -673,9 +675,9 @@ Al terminar M3, V1 debe estar operativa de extremo a extremo **en modo MVP restr
 
 ```text
 Checklist Diario de Sistemas V1
-GLOBAL — MVP ACCEPTED TÉCNICAMENTE / PENDIENTE MERGE DE M3 A MAIN
+GLOBAL — MVP ACCEPTED EN MAIN
 M1 — ACCEPTED EN MAIN / PR #829 MERGEADO
 M2 — ACCEPTED EN MAIN / PR #830 MERGEADO
-M3 — ACCEPTED TÉCNICAMENTE EN PR #832 / PENDIENTE MERGE A MAIN
+M3 — ACCEPTED EN MAIN / PR #832 MERGEADO
 ROLLOUT GERENTES — BLOQUEADO POR APROBACIÓN DE SISTEMAS
 ```

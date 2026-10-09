@@ -135,6 +135,7 @@ def test_matrix_distinguishes_failure_na_and_pending():
         assert alpha["postpone_count"] == 1
         assert alpha["cells"]["COMPUTING"]["state"] == "GREEN"
         assert alpha["cells"]["INTERNET"]["state"] == "GREEN"
+        assert alpha["cells"]["BI_REPORTS"]["state"] == "GREEN"
         assert alpha["cells"]["GASCA"] == {
             "state": "YELLOW",
             "label": "Falla menor",
