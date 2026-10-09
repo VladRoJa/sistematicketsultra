@@ -287,6 +287,10 @@ textarea.mat-mdc-input-element {
   z-index: 3000 !important;
 }
 
+body.suite-reauth-active .cdk-overlay-container {
+  z-index: 20000 !important;
+}
+
 .espaciado-formulario {
   display: flex;
   flex-direction: column;

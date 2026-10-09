@@ -10,7 +10,9 @@ on:
       - "backend/tests/system_daily_check/**"
       - "frontend/src/app/layout/layout.component.ts"
       - "frontend/src/app/layout/layout.component.html"
+      - "frontend/src/app/reauth-modal/reauth-modal.component.ts"
       - "frontend/src/app/system-daily-check/**"
+      - "frontend/src/styles.scss"
       - ".github/workflows/system-daily-check-m2.yml"
   push:
     branches:

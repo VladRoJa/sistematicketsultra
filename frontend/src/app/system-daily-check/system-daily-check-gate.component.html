@@ -2,6 +2,8 @@
   *ngIf="visible"
   class="daily-check-gate"
   [class.daily-check-gate--mandatory]="isMandatory"
+  cdkTrapFocus
+  [cdkTrapFocusAutoCapture]="true"
   aria-live="polite"
 >
   <div class="daily-check-shell">

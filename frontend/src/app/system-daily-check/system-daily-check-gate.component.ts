@@ -8,6 +8,7 @@ import {
 } from '@angular/core';
 import { CommonModule, DOCUMENT } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { A11yModule } from '@angular/cdk/a11y';
 import { forkJoin } from 'rxjs';
 
 import { SessionService } from '../core/auth/session.service';
@@ -68,6 +69,7 @@ const ALLOWED_EVIDENCE_TYPES = new Set([
   imports: [
     CommonModule,
     FormsModule,
+    A11yModule,
   ],
   templateUrl: './system-daily-check-gate.component.html',
   styleUrls: ['./system-daily-check-gate.component.css'],
