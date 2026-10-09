@@ -660,20 +660,19 @@ def submit_today(
             answer=parsed_answer["answer"],
             created_at=now_utc,
         )
-        target_session.add(answer_row)
+        check.answers.append(answer_row)
         target_session.flush()
 
         issue = parsed_answer["issue"]
         if issue is not None:
-            target_session.add(
-                SystemDailyCheckIssueORM(
-                    answer_id=answer_row.id,
-                    affected_scope=issue["affected_scope"],
-                    reported_to_support=issue["reported_to_support"],
-                    description=issue["description"],
-                    created_at=now_utc,
-                )
+            answer_row.issue = SystemDailyCheckIssueORM(
+                answer_id=answer_row.id,
+                affected_scope=issue["affected_scope"],
+                reported_to_support=issue["reported_to_support"],
+                description=issue["description"],
+                created_at=now_utc,
             )
+            target_session.flush()
 
     prompt_state = _get_or_create_prompt_state(
         target_session,

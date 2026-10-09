@@ -1,4 +1,6 @@
 from datetime import date, datetime, timezone
+from io import BytesIO
+import json
 from types import SimpleNamespace
 import unittest
 from unittest.mock import MagicMock, patch
@@ -42,12 +44,22 @@ class SystemDailyCheckRoutesTest(unittest.TestCase):
             token = create_access_token(identity=str(self.actor.id))
         return {"Authorization": f"Bearer {token}"}
 
-    def _request(self, path, *, method="GET", json=None):
+    def _request(
+        self,
+        path,
+        *,
+        method="GET",
+        json=None,
+        data=None,
+        content_type=None,
+    ):
         with self.app.test_request_context(
             path,
             method=method,
             headers=self._headers(),
             json=json,
+            data=data,
+            content_type=content_type,
         ):
             return self.app.full_dispatch_request()
 
@@ -281,6 +293,259 @@ class SystemDailyCheckRoutesTest(unittest.TestCase):
         )
         self.session.commit.assert_called_once_with()
         self.session.rollback.assert_not_called()
+
+    def test_submit_multipart_attaches_evidence_to_matching_no(self):
+        issue = SimpleNamespace(id=77, attachments=[])
+        answer = SimpleNamespace(
+            question_key="GASCA_WORKING",
+            issue=issue,
+        )
+        check = SimpleNamespace(
+            id=44,
+            sucursal_id=11,
+            business_date=date(2026, 10, 9),
+            performed_by_user_id=self.actor.id,
+            general_status="MINOR_FAILURE",
+            submitted_at=datetime(
+                2026,
+                10,
+                9,
+                16,
+                0,
+                tzinfo=timezone.utc,
+            ),
+            answers=[answer],
+        )
+        body = {
+            "answers": [
+                {
+                    "question_key": "GASCA_WORKING",
+                    "answer": "NO",
+                    "issue": {
+                        "reported_to_support": True,
+                        "description": "Gasca no abre.",
+                    },
+                }
+            ],
+            "general_status": "MINOR_FAILURE",
+        }
+        attachment = SimpleNamespace(id=501)
+
+        with (
+            patch.object(
+                routes.UserORM,
+                "get_by_id",
+                return_value=self.actor,
+            ),
+            patch.object(
+                routes,
+                "submit_today",
+                return_value=check,
+            ),
+            patch.object(
+                routes,
+                "create_system_daily_check_issue_attachment",
+                return_value=(attachment, "system-daily-checks/issues/77/a.png"),
+            ) as create_attachment,
+            patch.object(
+                routes,
+                "cleanup_system_daily_check_attachments",
+            ) as cleanup,
+        ):
+            response = self._request(
+                "/api/system-daily-checks/today/submit?sucursal_id=11",
+                method="POST",
+                data={
+                    "payload": json.dumps(body),
+                    "evidence__GASCA_WORKING": (
+                        BytesIO(b"png"),
+                        "gasca.png",
+                        "image/png",
+                    ),
+                },
+                content_type="multipart/form-data",
+            )
+
+        self.assertEqual(response.status_code, 201)
+        create_attachment.assert_called_once()
+        kwargs = create_attachment.call_args.kwargs
+        self.assertEqual(kwargs["issue_id"], 77)
+        self.assertEqual(kwargs["original_filename"], "gasca.png")
+        self.assertEqual(kwargs["declared_mime_type"], "image/png")
+        self.assertEqual(kwargs["actor"], self.actor)
+        self.assertEqual(issue.attachments, [attachment])
+        cleanup.assert_not_called()
+        self.session.commit.assert_called_once_with()
+
+    def test_submit_multipart_rejects_evidence_for_yes_and_rolls_back(self):
+        answer = SimpleNamespace(
+            question_key="GASCA_WORKING",
+            issue=None,
+        )
+        check = SimpleNamespace(
+            id=44,
+            sucursal_id=11,
+            business_date=date(2026, 10, 9),
+            performed_by_user_id=self.actor.id,
+            general_status="NORMAL",
+            submitted_at=datetime(
+                2026,
+                10,
+                9,
+                16,
+                0,
+                tzinfo=timezone.utc,
+            ),
+            answers=[answer],
+        )
+        body = {
+            "answers": [
+                {
+                    "question_key": "GASCA_WORKING",
+                    "answer": "YES",
+                }
+            ],
+            "general_status": "NORMAL",
+        }
+
+        with (
+            patch.object(
+                routes.UserORM,
+                "get_by_id",
+                return_value=self.actor,
+            ),
+            patch.object(
+                routes,
+                "submit_today",
+                return_value=check,
+            ),
+            patch.object(
+                routes,
+                "create_system_daily_check_issue_attachment",
+            ) as create_attachment,
+            patch.object(
+                routes,
+                "cleanup_system_daily_check_attachments",
+            ) as cleanup,
+        ):
+            response = self._request(
+                "/api/system-daily-checks/today/submit",
+                method="POST",
+                data={
+                    "payload": json.dumps(body),
+                    "evidence__GASCA_WORKING": (
+                        BytesIO(b"png"),
+                        "gasca.png",
+                        "image/png",
+                    ),
+                },
+                content_type="multipart/form-data",
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(
+            "solo puede adjuntarse a una respuesta NO",
+            response.get_json()["detail"],
+        )
+        create_attachment.assert_not_called()
+        self.session.commit.assert_not_called()
+        self.session.rollback.assert_called_once_with()
+        cleanup.assert_called_once_with([])
+
+    def test_submit_multipart_cleans_written_file_if_next_evidence_fails(self):
+        issue = SimpleNamespace(id=77, attachments=[])
+        answer = SimpleNamespace(
+            question_key="GASCA_WORKING",
+            issue=issue,
+        )
+        check = SimpleNamespace(
+            id=44,
+            sucursal_id=11,
+            business_date=date(2026, 10, 9),
+            performed_by_user_id=self.actor.id,
+            general_status="MINOR_FAILURE",
+            submitted_at=datetime(
+                2026,
+                10,
+                9,
+                16,
+                0,
+                tzinfo=timezone.utc,
+            ),
+            answers=[answer],
+        )
+        body = {
+            "answers": [
+                {
+                    "question_key": "GASCA_WORKING",
+                    "answer": "NO",
+                    "issue": {
+                        "reported_to_support": True,
+                        "description": "Gasca no abre.",
+                    },
+                }
+            ],
+            "general_status": "MINOR_FAILURE",
+        }
+        first_attachment = SimpleNamespace(id=501)
+        failure = routes.SystemDailyCheckValidationError(
+            "El segundo archivo es inválido."
+        )
+
+        with (
+            patch.object(
+                routes.UserORM,
+                "get_by_id",
+                return_value=self.actor,
+            ),
+            patch.object(
+                routes,
+                "submit_today",
+                return_value=check,
+            ),
+            patch.object(
+                routes,
+                "create_system_daily_check_issue_attachment",
+                side_effect=[
+                    (
+                        first_attachment,
+                        "system-daily-checks/issues/77/a.png",
+                    ),
+                    failure,
+                ],
+            ),
+            patch.object(
+                routes,
+                "cleanup_system_daily_check_attachments",
+            ) as cleanup,
+        ):
+            response = self._request(
+                "/api/system-daily-checks/today/submit",
+                method="POST",
+                data={
+                    "payload": json.dumps(body),
+                    "evidence__GASCA_WORKING": [
+                        (
+                            BytesIO(b"one"),
+                            "one.png",
+                            "image/png",
+                        ),
+                        (
+                            BytesIO(b"two"),
+                            "two.png",
+                            "image/png",
+                        ),
+                    ],
+                },
+                content_type="multipart/form-data",
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.session.commit.assert_not_called()
+        self.session.rollback.assert_called_once_with()
+        cleanup.assert_called_once_with(
+            ["system-daily-checks/issues/77/a.png"]
+        )
 
     def test_missing_user_is_not_eligible(self):
         with patch.object(
