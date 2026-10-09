@@ -135,6 +135,7 @@ def test_m3_rollout_migration_on_real_postgres(monkeypatch):
                 ),
             )
             m3.module.downgrade()
+            inspector = sa.inspect(connection)
             assert not inspector.has_table(
                 "system_daily_check_rollout_branches"
             )
