@@ -1,0 +1,86 @@
+<section class="attachment-preview">
+  <header class="attachment-preview__header">
+    <div class="attachment-preview__identity">
+      <span class="attachment-preview__icon">
+        <mat-icon>description</mat-icon>
+      </span>
+
+      <div>
+        <h2>{{ data.attachment.original_filename }}</h2>
+        <p>
+          {{ data.attachment.mime_type || 'Archivo' }}
+          · {{ fileSizeLabel }}
+        </p>
+      </div>
+    </div>
+
+    <button
+      mat-icon-button
+      type="button"
+      aria-label="Cerrar visor"
+      (click)="close()"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </header>
+
+  <main class="attachment-preview__body">
+    <div *ngIf="loading" class="attachment-preview__state">
+      <mat-icon>hourglass_top</mat-icon>
+      <strong>Cargando archivo…</strong>
+      <span>Preparando la vista previa.</span>
+    </div>
+
+    <div *ngIf="error && !loading" class="attachment-preview__state attachment-preview__state--error">
+      <mat-icon>error_outline</mat-icon>
+      <strong>No se pudo abrir el archivo</strong>
+      <span>{{ error }}</span>
+    </div>
+
+    <img
+      *ngIf="!loading && !error && isImage"
+      class="attachment-preview__image"
+      [src]="objectUrl"
+      [alt]="data.attachment.original_filename"
+    />
+
+    <iframe
+      *ngIf="!loading && !error && isPdf && safeResourceUrl"
+      class="attachment-preview__pdf"
+      [src]="safeResourceUrl"
+      [title]="data.attachment.original_filename"
+    ></iframe>
+
+    <div
+      *ngIf="!loading && !error && !isImage && !isPdf"
+      class="attachment-preview__state"
+    >
+      <mat-icon>insert_drive_file</mat-icon>
+      <strong>Vista previa no disponible</strong>
+      <span>
+        Este tipo de archivo puede descargarse desde el botón inferior.
+      </span>
+    </div>
+  </main>
+
+  <footer class="attachment-preview__footer">
+    <button
+      mat-button
+      type="button"
+      (click)="close()"
+    >
+      Cerrar
+    </button>
+
+    <button
+      mat-raised-button
+      color="primary"
+      type="button"
+      [disabled]="!canDownload"
+      (click)="download()"
+    >
+      <mat-icon>download</mat-icon>
+      Descargar
+    </button>
+  </footer>
+</section>

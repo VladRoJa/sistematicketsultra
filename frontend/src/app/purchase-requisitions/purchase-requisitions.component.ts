@@ -30,6 +30,8 @@ interface BranchOption {
   name: string;
 }
 
+type RequisitionScope = 'ACTIVE' | 'FINALIZED' | 'ALL';
+
 @Component({
   selector: 'app-purchase-requisitions',
   standalone: true,
@@ -59,6 +61,7 @@ export class PurchaseRequisitionsComponent implements OnInit {
   statusFilter = '';
   priorityFilter = '';
   branchFilter: number | null = null;
+  requisitionScope: RequisitionScope = 'ACTIVE';
 
   readonly statuses = [
     { value: 'PENDING_REVIEW', label: 'Pendiente de revisión' },
@@ -109,6 +112,7 @@ export class PurchaseRequisitionsComponent implements OnInit {
   loadRows(): void {
     this.loading = true;
     this.loadError = false;
+    this.syncScopeWithStatusFilter();
 
     this.requisitionService.list({
       status: this.statusFilter || undefined,
@@ -116,7 +120,7 @@ export class PurchaseRequisitionsComponent implements OnInit {
       sucursal_id: this.branchFilter,
     }).subscribe({
       next: (response) => {
-        this.rows = response.rows || [];
+        this.rows = this.sortRowsForCurrentUser(response.rows || []);
         this.loading = false;
       },
       error: () => {
@@ -125,6 +129,31 @@ export class PurchaseRequisitionsComponent implements OnInit {
         this.loading = false;
       },
     });
+  }
+
+  get visibleRows(): PurchaseRequisition[] {
+    if (this.requisitionScope === 'ALL') {
+      return this.rows;
+    }
+
+    return this.rows.filter(row => {
+      const finalized = this.isFinalizedStatus(row.status);
+      return this.requisitionScope === 'FINALIZED'
+        ? finalized
+        : !finalized;
+    });
+  }
+
+  get activeCount(): number {
+    return this.rows.filter(row => !this.isFinalizedStatus(row.status)).length;
+  }
+
+  get finalizedCount(): number {
+    return this.rows.filter(row => this.isFinalizedStatus(row.status)).length;
+  }
+
+  get allCount(): number {
+    return this.rows.length;
   }
 
   get canOpenCreate(): boolean {
@@ -149,7 +178,7 @@ export class PurchaseRequisitionsComponent implements OnInit {
   }
 
   exportToExcel(): void {
-    if (!this.rows.length || this.exportingExcel) {
+    if (!this.visibleRows.length || this.exportingExcel) {
       return;
     }
 
@@ -157,7 +186,7 @@ export class PurchaseRequisitionsComponent implements OnInit {
     this.exportError = '';
 
     forkJoin(
-      this.rows.map(row => this.requisitionService.get(row.id)),
+      this.visibleRows.map(row => this.requisitionService.get(row.id)),
     ).subscribe({
       next: (responses) => {
         const exportRows = responses.map(response => ({
@@ -230,7 +259,32 @@ export class PurchaseRequisitionsComponent implements OnInit {
     this.statusFilter = '';
     this.priorityFilter = '';
     this.branchFilter = null;
+    this.requisitionScope = 'ACTIVE';
     this.loadRows();
+  }
+
+  setRequisitionScope(scope: RequisitionScope): void {
+    const selectedStatusIsFinalized = this.statusFilter
+      ? this.isFinalizedStatus(this.statusFilter)
+      : null;
+    const incompatibleStatus = Boolean(
+      this.statusFilter
+      && (
+        (scope === 'ACTIVE' && selectedStatusIsFinalized)
+        || (scope === 'FINALIZED' && !selectedStatusIsFinalized)
+      )
+    );
+
+    this.requisitionScope = scope;
+
+    if (incompatibleStatus) {
+      this.statusFilter = '';
+      this.loadRows();
+    }
+  }
+
+  isRequisitionScope(scope: RequisitionScope): boolean {
+    return this.requisitionScope === scope;
   }
 
   statusLabel(status: string): string {
@@ -261,8 +315,42 @@ export class PurchaseRequisitionsComponent implements OnInit {
     return `status-pill status-${String(status || '').toLowerCase()}`;
   }
 
+  requiresFinanceAction(row: PurchaseRequisition): boolean {
+    return Boolean(
+      this.access?.can_approve_requisition_quote
+      && row.status === 'QUOTE_PENDING_FINANCE_APPROVAL',
+    );
+  }
+
   trackById(_index: number, row: PurchaseRequisition): number {
     return row.id;
+  }
+
+  private isFinalizedStatus(status: string): boolean {
+    return ['CLOSED', 'REJECTED'].includes(status);
+  }
+
+  private syncScopeWithStatusFilter(): void {
+    if (!this.statusFilter) {
+      return;
+    }
+
+    this.requisitionScope = this.isFinalizedStatus(this.statusFilter)
+      ? 'FINALIZED'
+      : 'ACTIVE';
+  }
+
+  private sortRowsForCurrentUser(
+    rows: PurchaseRequisition[],
+  ): PurchaseRequisition[] {
+    if (!this.access?.can_approve_requisition_quote) {
+      return rows;
+    }
+
+    return [...rows].sort((left, right) => (
+      Number(this.requiresFinanceAction(right))
+      - Number(this.requiresFinanceAction(left))
+    ));
   }
 
   private loadBranches(): void {
