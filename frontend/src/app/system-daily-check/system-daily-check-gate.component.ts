@@ -490,7 +490,7 @@ export class SystemDailyCheckGateComponent
         this.questionGroups = buildSystemDailyCheckQuestionGroups(
           this.questions,
         );
-        this.branches = (branches || [])
+        this.branches = (branches.branches || [])
           .filter((branch) => !branch.is_demo)
           .sort((a, b) => (
             String(a.sucursal || '').localeCompare(
@@ -500,8 +500,15 @@ export class SystemDailyCheckGateComponent
           ));
         this.initializeAnswerStates();
 
-        const preferredBranchId = this.resolvePreferredBranchId();
-        if (preferredBranchId) {
+        const preferredBranchId = Number(
+          branches.preferred_branch_id || 0,
+        );
+        if (
+          preferredBranchId > 0
+          && this.branches.some(
+            (branch) => branch.sucursal_id === preferredBranchId,
+          )
+        ) {
           this.selectedBranchId = preferredBranchId;
           this.refreshStatus(true);
           return;
@@ -719,26 +726,6 @@ export class SystemDailyCheckGateComponent
           'NORMAL'
         >,
     };
-  }
-
-  private resolvePreferredBranchId(): number | null {
-    const user = this.session.getUser();
-    const sessionBranchId = Number(user?.sucursal_id || 0);
-
-    if (
-      sessionBranchId > 0
-      && this.branches.some(
-        (branch) => branch.sucursal_id === sessionBranchId,
-      )
-    ) {
-      return sessionBranchId;
-    }
-
-    if (this.branches.length === 1) {
-      return this.branches[0].sucursal_id;
-    }
-
-    return null;
   }
 
   private apiErrorMessage(
