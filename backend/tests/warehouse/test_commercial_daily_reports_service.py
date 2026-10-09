@@ -367,14 +367,16 @@ def test_january_february_explicit_historical_source_overrides_old_track_unchang
     assert monthly.cell(total, 3).value == 2684
     assert monthly.cell(total, 4).value == 3789
     assert monthly.cell(total, 5).value == 2684
-    assert monthly["B2"].comment is not None
-    assert monthly["C2"].comment is not None
-    assert "Excel historico" in monthly["B2"].comment.text
-    assert any(
-        isinstance(monthly.cell(row, 1).value, str)
-        and "FUENTES: Ene-Feb 2026" in monthly.cell(row, 1).value
-        for row in range(total + 1, monthly.max_row + 1)
-    )
+    assert [monthly.cell(2, col).value for col in range(2, 12)] == [
+        "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO",
+        "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE",
+    ]
+    assert monthly["B2"].comment is None
+    assert monthly["C2"].comment is None
+    assert monthly.max_row == total  # no extra source/provenance ribbon
+    assert monthly.cell(total, 2).alignment.horizontal == "center"
+    assert monthly.cell(total, 11).alignment.horizontal == "center"
+    assert monthly["B2"].alignment.horizontal == "center"
     assert workbook.sheetnames == ["Diario", "Semanal", "Totales Mensuales"]
 
 
@@ -503,3 +505,86 @@ def test_reactivaciones_missing_previous_day_does_not_invent_july_26():
     assert weekly["B3"].value is None
     assert weekly["B4"].value is None
     assert weekly["C3"].value == 7
+
+
+def test_reactivaciones_monthly_subtotals_centered_without_affecting_labels():
+    data = {
+        "VILLA_VERDE": {
+            date(2026, 9, 30): 100,
+            date(2026, 10, 1): 1,
+            date(2026, 10, 2): 3,
+        },
+        "SERRANIA": {
+            date(2026, 9, 30): 25,
+            date(2026, 10, 1): 2,
+            date(2026, 10, 2): 5,
+        },
+    }
+    metadata = {
+        "VILLA_VERDE": {
+            "order": 1, "label": "VILLA VERDE",
+            "group": "Subtotal 21 gyms", "region": "Mexicali",
+        },
+        "SERRANIA": {
+            "order": 26, "label": "SERRANIA",
+            "group": "Subtotal gyms nuevos", "region": "Costa",
+        },
+    }
+    payload = render_commercial_daily_xlsx(
+        metric="reactivaciones", cutoff=date(2026, 10, 2),
+        mtd_series=data, branch_metadata=metadata,
+    )
+    wb = load_workbook(BytesIO(payload), data_only=False)
+    sheet = wb["Totales Mensuales"]
+    rows = {
+        sheet.cell(row, 1).value: row
+        for row in range(3, sheet.max_row + 1)
+    }
+    for title, september, october in [
+        ("Subtotal 21 gyms", 100, 3),
+        ("Subtotal gyms nuevos", 25, 5),
+        ("TOTAL", 125, 8),
+    ]:
+        row = rows[title]
+        assert sheet.cell(row, 10).value == september
+        assert sheet.cell(row, 11).value == october
+        assert sheet.cell(row, 10).alignment.horizontal == "center"
+        assert sheet.cell(row, 11).alignment.horizontal == "center"
+        assert sheet.cell(row, 1).alignment.horizontal != "center"
+    assert sheet["J2"].value == "SEPTIEMBRE"
+    assert sheet["K2"].value == "OCTUBRE"
+    assert all(
+        cell.comment is None
+        for row in sheet.iter_rows() for cell in row
+    )
+
+
+def test_venta_nueva_monthly_headers_unchanged_by_reactivaciones_styling():
+    wb = load_workbook(
+        BytesIO(render_commercial_daily_xlsx(
+            metric="venta_nueva", cutoff=date(2026, 10, 2),
+            mtd_series={"VILLA_VERDE": {
+                date(2026, 10, 1): 1,
+                date(2026, 10, 2): 3,
+            }},
+        )),
+        data_only=True,
+    )
+    assert wb["Totales Mensuales"]["B2"].value == "01/2026"
+    assert wb["Totales Mensuales"]["K2"].value == "10/2026"
+    assert wb["Diario"]["B2"].value == "27/09/2026"
+
+
+def test_reactivaciones_month_names_add_year_only_when_ambiguous():
+    payload = render_commercial_daily_xlsx(
+        metric="reactivaciones", cutoff=date(2027, 1, 2),
+        mtd_series={"VILLA_VERDE": {
+            date(2027, 1, 1): 1,
+            date(2027, 1, 2): 2,
+        }},
+    )
+    monthly = load_workbook(BytesIO(payload), data_only=True)["Totales Mensuales"]
+    assert monthly["B2"].value == "ENERO 2026"
+    assert monthly["C2"].value == "FEBRERO"
+    assert monthly["M2"].value == "DICIEMBRE"
+    assert monthly["N2"].value == "ENERO 2027"
