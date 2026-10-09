@@ -473,7 +473,7 @@ def test_reactivaciones_week_labels_always_span_sunday_to_saturday():
     assert sheet.max_column - 1 == 11
     for col in range(2, sheet.max_column + 1):
         label = sheet.cell(2, col).value
-        match = re.match(r"^(\\d{2})/(\\d{2})-(\\d{2})/(\\d{2})", label)
+        match = re.match(r"^(\d{2})/(\d{2})-(\d{2})/(\d{2})", label)
         assert match is not None, label
         start_day, start_month, end_day, end_month = map(int, match.groups())
         sunday = date(2026, start_month, start_day)
