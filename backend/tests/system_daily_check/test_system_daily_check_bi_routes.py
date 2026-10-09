@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -612,4 +613,57 @@ def test_bi_issues_passes_issue_level_support_filter():
         reported_to_support=False,
         page=1,
         page_size=100,
+    )
+
+
+def test_bi_export_excel_returns_attachment_with_selected_filters():
+    app = _app()
+    actor = _actor()
+    content = BytesIO(b"fake-xlsx")
+
+    with (
+        patch.object(
+            routes.UserORM,
+            "get_by_id",
+            return_value=actor,
+        ),
+        patch.object(
+            routes,
+            "resolve_business_date",
+            return_value=date(2026, 10, 9),
+        ),
+        patch.object(
+            routes,
+            "build_system_daily_check_excel_export",
+            return_value=(
+                content,
+                "salud_sistemas_2026-10-01_2026-10-09.xlsx",
+            ),
+        ) as export,
+    ):
+        response = app.test_client().get(
+            (
+                "/api/system-daily-checks/bi/export.xlsx"
+                "?date_from=2026-10-01"
+                "&date_to=2026-10-09"
+                "&branch_id=100"
+            ),
+            headers=_headers(app, actor),
+        )
+
+    assert response.status_code == 200
+    assert response.data == b"fake-xlsx"
+    assert (
+        response.mimetype
+        == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    assert (
+        'attachment; filename=salud_sistemas_2026-10-01_2026-10-09.xlsx'
+        in response.headers["Content-Disposition"]
+    )
+    export.assert_called_once_with(
+        actor,
+        date_from=date(2026, 10, 1),
+        date_to=date(2026, 10, 9),
+        branch_id=100,
     )

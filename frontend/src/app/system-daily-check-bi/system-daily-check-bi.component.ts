@@ -93,6 +93,7 @@ export class SystemDailyCheckBiComponent
   loadingIssues = false;
   loadingDetail = false;
   savingRollout = false;
+  exportingExcel = false;
   errorMessage = '';
   rolloutMessage = '';
 
@@ -299,6 +300,86 @@ export class SystemDailyCheckBiComponent
   applyFilters(): void {
     this.historyPage = 1;
     this.loadDashboard();
+  }
+
+  exportExcel(): void {
+    if (this.exportingExcel || !this.validateRange()) {
+      return;
+    }
+
+    this.exportingExcel = true;
+    this.errorMessage = '';
+
+    this.biService.exportExcel({
+      dateFrom: this.dateFrom,
+      dateTo: this.dateTo,
+      branchId: this.selectedBranchId,
+    })
+      .pipe(finalize(() => {
+        this.exportingExcel = false;
+      }))
+      .subscribe({
+        next: (response) => {
+          if (!response.body) {
+            this.errorMessage =
+              'El reporte Excel llegó vacío.';
+            return;
+          }
+
+          const contentDisposition = (
+            response.headers.get('content-disposition')
+            || ''
+          );
+          const filename = this.exportFilename(
+            contentDisposition,
+          );
+          const objectUrl = URL.createObjectURL(
+            response.body,
+          );
+          const anchor = document.createElement('a');
+          anchor.href = objectUrl;
+          anchor.download = filename;
+          anchor.rel = 'noopener';
+          anchor.click();
+          URL.revokeObjectURL(objectUrl);
+        },
+        error: (error) => {
+          this.errorMessage = this.apiErrorMessage(
+            error,
+            'No se pudo generar el reporte Excel.',
+          );
+        },
+      });
+  }
+
+  private exportFilename(
+    contentDisposition: string,
+  ): string {
+    const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(
+      contentDisposition,
+    );
+    if (utf8Match?.[1]) {
+      try {
+        return decodeURIComponent(utf8Match[1]);
+      } catch {
+        return utf8Match[1];
+      }
+    }
+
+    const regularMatch = /filename="?([^";]+)"?/i.exec(
+      contentDisposition,
+    );
+    if (regularMatch?.[1]) {
+      return regularMatch[1];
+    }
+
+    return (
+      'salud_sistemas_'
+      + this.dateFrom
+      + '_'
+      + this.dateTo
+      + '.xlsx'
+    );
   }
 
   setQuickRange(range: SystemDailyCheckQuickRange): void {

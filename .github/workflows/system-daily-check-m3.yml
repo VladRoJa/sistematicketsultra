@@ -12,6 +12,7 @@ on:
       - "backend/app/services/system_daily_check_attachment_service.py"
       - "backend/app/services/system_daily_check_attachment_storage_service.py"
       - "backend/app/services/system_daily_check_bi_service.py"
+      - "backend/app/services/system_daily_check_export_service.py"
       - "backend/migrations/versions/**"
       - "backend/tests/system_daily_check/**"
       - "frontend/src/app/app.routes.ts"
@@ -94,5 +95,7 @@ jobs:
           rm -rf .tmp-system-daily-check-m3
       - name: Test M3 UI contract
         run: node tests/system-daily-check-bi-ui-contract.test.cjs
+      - name: Test M3 Excel export contract
+        run: node tests/system-daily-check-bi-export-contract.test.cjs
       - name: Build Angular
         run: npm run build -- --progress=false
