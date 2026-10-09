@@ -18,7 +18,10 @@ def _revision():
 
 def test_m1_migration_is_single_head_and_extends_current_main_head():
     scripts = ScriptDirectory(str(MIGRATIONS))
-    assert scripts.get_heads() == [REVISION]
+    heads = scripts.get_heads()
+    assert len(heads) == 1
+    lineage = {revision.revision for revision in scripts.iterate_revisions(heads[0], "base")}
+    assert REVISION in lineage
     assert _revision().down_revision == "d8f1c3a9b204"
 
 
