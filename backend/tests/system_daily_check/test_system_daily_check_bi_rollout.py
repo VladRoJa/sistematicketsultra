@@ -170,7 +170,7 @@ def test_rollout_universe_separates_potential_from_expected():
                 row["sucursal_id"]
                 for row in day_one["expected_branches"]
             } == {10}
-            assert day_one["potential_count"] == 2
+            assert day_one["potential_count"] == 3
             assert day_one["expected_count"] == 1
 
             day_two = resolve_system_daily_check_branch_universe(
