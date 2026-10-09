@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.extensions import db
 from app.models import (
@@ -2077,4 +2077,166 @@ def list_system_daily_check_bi_pending(
         "page_size": parsed_page_size,
         "total": total,
         "items": items,
+    }
+
+
+def list_system_daily_check_bi_issues(
+    actor,
+    *,
+    date_from: date,
+    date_to: date,
+    branch_id: object = None,
+    question_key: object = None,
+    reported_to_support: bool | None = None,
+    page: object = 1,
+    page_size: object = 100,
+    session: Session | None = None,
+) -> dict:
+    """Return issue-level drill-down rows reconciled to the BI rollout universe."""
+    _require_mvp_access(actor)
+    _validate_date_range(date_from, date_to)
+    target_session = _session(session)
+    resolved_branch_id = _normalize_summary_branch_id(
+        branch_id,
+        session=target_session,
+    )
+
+    normalized_question = str(question_key or "").strip().upper() or None
+    if normalized_question is not None:
+        from app.services.system_daily_check_service import QUESTION_BY_KEY
+
+        if normalized_question not in QUESTION_BY_KEY:
+            raise SystemDailyCheckValidationError(
+                "question_key no reconocido."
+            )
+
+    if reported_to_support is not None and not isinstance(
+        reported_to_support,
+        bool,
+    ):
+        raise SystemDailyCheckValidationError(
+            "reported_to_support debe ser booleano."
+        )
+
+    try:
+        resolved_page = int(page)
+        resolved_page_size = int(page_size)
+    except (TypeError, ValueError) as exc:
+        raise SystemDailyCheckValidationError(
+            "page y page_size deben ser enteros."
+        ) from exc
+
+    if resolved_page <= 0 or resolved_page_size <= 0:
+        raise SystemDailyCheckValidationError(
+            "page y page_size deben ser mayores que cero."
+        )
+    resolved_page_size = min(resolved_page_size, 200)
+
+    expected_pairs = _expected_branch_days(
+        target_session,
+        date_from=date_from,
+        date_to=date_to,
+        branch_id=resolved_branch_id,
+    )
+
+    check_stmt = select(SystemDailyCheckORM).where(
+        SystemDailyCheckORM.business_date >= date_from,
+        SystemDailyCheckORM.business_date <= date_to,
+    )
+    if resolved_branch_id is not None:
+        check_stmt = check_stmt.where(
+            SystemDailyCheckORM.sucursal_id == resolved_branch_id
+        )
+
+    expected_checks = [
+        check
+        for check in target_session.scalars(check_stmt).all()
+        if (
+            int(check.sucursal_id),
+            check.business_date,
+        ) in expected_pairs
+    ]
+    check_ids = [int(check.id) for check in expected_checks]
+
+    rows = []
+    if check_ids:
+        stmt = (
+            select(
+                SystemDailyCheckIssueORM,
+                SystemDailyCheckAnswerORM,
+                SystemDailyCheckORM,
+                Sucursal,
+            )
+            .join(
+                SystemDailyCheckAnswerORM,
+                SystemDailyCheckIssueORM.answer_id
+                == SystemDailyCheckAnswerORM.id,
+            )
+            .join(
+                SystemDailyCheckORM,
+                SystemDailyCheckAnswerORM.check_id
+                == SystemDailyCheckORM.id,
+            )
+            .join(
+                Sucursal,
+                SystemDailyCheckORM.sucursal_id
+                == Sucursal.sucursal_id,
+            )
+            .where(
+                SystemDailyCheckAnswerORM.check_id.in_(check_ids)
+            )
+            .options(
+                selectinload(
+                    SystemDailyCheckIssueORM.attachments
+                )
+            )
+        )
+        if normalized_question is not None:
+            stmt = stmt.where(
+                SystemDailyCheckAnswerORM.question_key
+                == normalized_question
+            )
+        if reported_to_support is not None:
+            stmt = stmt.where(
+                SystemDailyCheckIssueORM.reported_to_support
+                == reported_to_support
+            )
+        stmt = stmt.order_by(
+            SystemDailyCheckORM.business_date.desc(),
+            SystemDailyCheckIssueORM.id.desc(),
+        )
+
+        for issue, answer, check, branch in target_session.execute(stmt).all():
+            rows.append({
+                "issue_id": int(issue.id),
+                "check_id": int(check.id),
+                "sucursal_id": int(check.sucursal_id),
+                "sucursal": branch.sucursal,
+                "business_date": check.business_date.isoformat(),
+                "question_key": answer.question_key,
+                "question_label": answer.question_label_snapshot,
+                "reported_to_support": bool(
+                    issue.reported_to_support
+                ),
+                "affected_scope": issue.affected_scope,
+                "description": issue.description,
+                "attachment_count": len(issue.attachments),
+            })
+
+    total = len(rows)
+    start = (resolved_page - 1) * resolved_page_size
+    end = start + resolved_page_size
+
+    return {
+        "filters": {
+            "date_from": date_from.isoformat(),
+            "date_to": date_to.isoformat(),
+            "branch_id": resolved_branch_id,
+            "question_key": normalized_question,
+            "reported_to_support": reported_to_support,
+        },
+        "page": resolved_page,
+        "page_size": resolved_page_size,
+        "total": total,
+        "items": rows[start:end],
     }

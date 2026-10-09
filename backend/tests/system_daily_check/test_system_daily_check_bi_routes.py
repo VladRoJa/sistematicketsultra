@@ -555,3 +555,61 @@ def test_bi_pending_passes_range_and_pagination():
         page="1",
         page_size="20",
     )
+
+
+def test_bi_issues_passes_issue_level_support_filter():
+    app = _app()
+    actor = _actor()
+    expected = {
+        "filters": {
+            "date_from": "2026-10-09",
+            "date_to": "2026-10-09",
+            "branch_id": None,
+            "question_key": None,
+            "reported_to_support": False,
+        },
+        "page": 1,
+        "page_size": 100,
+        "total": 1,
+        "items": [{"issue_id": 22}],
+    }
+
+    with (
+        patch.object(
+            routes.UserORM,
+            "get_by_id",
+            return_value=actor,
+        ),
+        patch.object(
+            routes,
+            "resolve_business_date",
+            return_value=date(2026, 10, 9),
+        ),
+        patch.object(
+            routes,
+            "list_system_daily_check_bi_issues",
+            return_value=expected,
+        ) as issues,
+    ):
+        response = app.test_client().get(
+            (
+                "/api/system-daily-checks/bi/issues"
+                "?date_from=2026-10-09"
+                "&date_to=2026-10-09"
+                "&reported_to_support=false"
+            ),
+            headers=_headers(app, actor),
+        )
+
+    assert response.status_code == 200
+    assert response.get_json() == expected
+    issues.assert_called_once_with(
+        actor,
+        date_from=date(2026, 10, 9),
+        date_to=date(2026, 10, 9),
+        branch_id=None,
+        question_key=None,
+        reported_to_support=False,
+        page=1,
+        page_size=100,
+    )

@@ -15,6 +15,7 @@ from app.services.system_daily_check_bi_service import (
     get_system_daily_check_bi_attachment,
     get_system_daily_check_bi_detail,
     list_system_daily_check_bi_history,
+    list_system_daily_check_bi_issues,
     list_system_daily_check_bi_pending,
     resolve_system_daily_check_branch_universe,
 )
@@ -88,6 +89,19 @@ def _parse_branch_id_arg():
             "branch_id inválido."
         )
     return value
+
+
+def _parse_optional_bool_arg(name: str):
+    raw = str(request.args.get(name) or "").strip().lower()
+    if not raw:
+        return None
+    if raw in {"true", "1", "yes"}:
+        return True
+    if raw in {"false", "0", "no"}:
+        return False
+    raise SystemDailyCheckValidationError(
+        f"{name} debe ser booleano."
+    )
 
 
 def _error_response(error: Exception):
@@ -294,6 +308,43 @@ def bi_history():
             answer=request.args.get("answer"),
             page=request.args.get("page", 1),
             page_size=request.args.get("page_size", 50),
+        )
+        return jsonify(result), 200
+    except (
+        SystemDailyCheckAuthorizationError,
+        SystemDailyCheckValidationError,
+    ) as exc:
+        return _error_response(exc)
+
+
+
+
+@system_daily_check_bi_bp.get("/issues")
+@jwt_required()
+def bi_issues():
+    try:
+        actor = _current_user()
+        _require_bi_access(actor)
+        business_date = resolve_business_date()
+        date_from = _parse_date_arg(
+            "date_from",
+            default=business_date,
+        )
+        date_to = _parse_date_arg(
+            "date_to",
+            default=date_from,
+        )
+        result = list_system_daily_check_bi_issues(
+            actor,
+            date_from=date_from,
+            date_to=date_to,
+            branch_id=_parse_branch_id_arg(),
+            question_key=request.args.get("question_key"),
+            reported_to_support=_parse_optional_bool_arg(
+                "reported_to_support"
+            ),
+            page=request.args.get("page", 1),
+            page_size=request.args.get("page_size", 100),
         )
         return jsonify(result), 200
     except (

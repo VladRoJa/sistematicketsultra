@@ -28,6 +28,7 @@ import { MarketingSalesFunnelAccessGuard } from './marketing-sales-funnel/market
 import { contactCenterAccessGuard } from './contact-center/contact-center-access.guard';
 import { sportsAnalysisAccessGuard } from './sports-analysis/sports-analysis-access.guard';
 import { purchaseRequisitionAccessGuard } from './purchase-requisitions/purchase-requisition-access.guard';
+import { systemDailyCheckBiAccessGuard } from './system-daily-check-bi/system-daily-check-bi-access.guard';
 
 
 
@@ -291,6 +292,13 @@ export const routes: Routes = [
         loadChildren: () =>
           import('./routine-control/routine-control.routes')
             .then((m) => m.ROUTINE_CONTROL_ROUTES),
+      },
+      {
+        path: 'sistemas/salud',
+        canActivate: [systemDailyCheckBiAccessGuard],
+        loadComponent: () =>
+          import('./system-daily-check-bi/system-daily-check-bi.component')
+            .then((m) => m.SystemDailyCheckBiComponent),
       },
     ],
   },

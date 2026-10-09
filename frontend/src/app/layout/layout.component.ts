@@ -60,6 +60,7 @@ export class LayoutComponent implements OnInit, AfterViewInit, OnDestroy {
 
 private readonly mainMenuPriority: string[] = [
   'Control',
+  'Sistemas',
   'Tickets',
   'Contact Center',
   'Mantenimiento',
@@ -168,6 +169,14 @@ ngOnInit(): void {
     path: '/control',
     submenu: [
       { label: 'Centro de Control', path: '/control' },
+    ],
+  };
+
+  const menuSistemas = {
+    label: 'Sistemas',
+    path: '/sistemas/salud',
+    submenu: [
+      { label: 'Salud de Sistemas', path: '/sistemas/salud' },
     ],
   };
 
@@ -472,6 +481,7 @@ const menuMantenimientoGerencial = [
   }
 
 this.habilitarControlEnMenuSiAplica(menuControl);
+this.habilitarSistemasEnMenuSiAplica(menuSistemas);
 this.habilitarContactCenterEnMenuSiAplica(menuContactCenter);
 this.habilitarPurchaseRequisitionsEnMenuSiAplica();
 this.habilitarMaintenancePlannerEnMenu();
@@ -570,6 +580,35 @@ private habilitarControlEnMenuSiAplica(menuControl: any): void {
       },
       error: () => {
         // El backend es la autoridad. Si responde 401/403 no se publica el menú.
+      },
+    });
+}
+
+private habilitarSistemasEnMenuSiAplica(menuSistemas: any): void {
+  if (this.menuItems.some((item) => item.label === 'Sistemas')) {
+    return;
+  }
+
+  this.http
+    .get<any>(`${environment.apiUrl}/system-daily-checks/bi/context`)
+    .subscribe({
+      next: (response) => {
+        if (!response?.allowed) {
+          return;
+        }
+
+        if (this.menuItems.some((item) => item.label === 'Sistemas')) {
+          return;
+        }
+
+        this.menuItems = [
+          ...this.menuItems,
+          menuSistemas,
+        ];
+        this.sincronizarMenuConRutaActual();
+      },
+      error: () => {
+        // El backend es la autoridad del rollout MVP.
       },
     });
 }
@@ -1520,6 +1559,7 @@ getMenuIcon(label: string): string {
 
   const iconsByLabel: Record<string, string> = {
     control: 'dashboard',
+    sistemas: 'health_and_safety',
     tickets: 'confirmation_number',
     mantenimiento: 'build',
     inventario: 'inventory_2',
@@ -1541,6 +1581,10 @@ getMenuIcon(label: string): string {
 
 getSubmenuIcon(label: string): string {
   const normalizedLabel = String(label || '').toLowerCase();
+
+  if (normalizedLabel.includes('salud de sistemas')) {
+    return 'health_and_safety';
+  }
 
   if (normalizedLabel.includes('planner')) {
     return 'event_note';
@@ -1646,6 +1690,10 @@ getSubmenuDescription(label: string): string {
 
   if (normalizedLabel === 'crear ticket') {
     return 'Crea un nuevo ticket para soporte o solicitud.';
+  }
+
+  if (normalizedLabel.includes('salud de sistemas')) {
+    return 'Revisa cumplimiento, fallas, recurrencia y trazabilidad del checklist diario.';
   }
 
   if (normalizedLabel.includes('planner')) {
