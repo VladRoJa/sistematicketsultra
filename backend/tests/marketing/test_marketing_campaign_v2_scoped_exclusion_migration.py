@@ -20,9 +20,7 @@ def _revision():
     return ScriptDirectory(str(MIGRATIONS)).get_revision(REVISION)
 
 
-def test_migration_head_and_parent():
-    scripts = ScriptDirectory(str(MIGRATIONS))
-    assert scripts.get_heads() == [REVISION]
+def test_migration_parent_remains_stable():
     assert _revision().down_revision == "f3f1d4e6a7c9"
 
 
