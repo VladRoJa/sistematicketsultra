@@ -420,9 +420,9 @@
           <button
             type="button"
             class="quote-file"
-            (click)="downloadQuoteAttachment(quote)"
+            (click)="openQuoteAttachmentPreview(quote)"
           >
-            <mat-icon>description</mat-icon>
+            <mat-icon>visibility</mat-icon>
             {{ quoteAttachmentName(quote) }}
           </button>
 
@@ -507,9 +507,9 @@
         <button
           type="button"
           class="quote-file"
-          (click)="downloadQuoteAttachment(quote)"
+          (click)="openQuoteAttachmentPreview(quote)"
         >
-          <mat-icon>description</mat-icon>
+          <mat-icon>visibility</mat-icon>
           {{ quoteAttachmentName(quote) }}
         </button>
 
@@ -578,11 +578,16 @@
     </div>
 
     <div class="logistics-bar__controls">
-      <select [(ngModel)]="logisticsTarget">
-        <option value="">Selecciona el siguiente estado</option>
+      <select
+        [(ngModel)]="logisticsTarget"
+        (ngModelChange)="onLogisticsTargetChange($event)"
+      >
+        <option [ngValue]="''" disabled>
+          Selecciona el siguiente estado
+        </option>
         <option
           *ngFor="let option of logisticsOptions"
-          [value]="option.value"
+          [ngValue]="option.value"
         >
           {{ option.label }}
         </option>
@@ -593,7 +598,7 @@
         color="primary"
         type="button"
         class="pill-button"
-        [disabled]="!logisticsTarget || logisticsBusy"
+        [disabled]="!canSubmitLogisticsAdvance"
         (click)="advanceLogistics()"
       >
         <mat-icon>arrow_forward</mat-icon>
@@ -909,7 +914,7 @@
           *ngFor="let attachment of requisition.attachments || []"
           type="button"
           class="attachment-item"
-          (click)="downloadAttachment(attachment)"
+          (click)="openAttachmentPreview(attachment)"
         >
           <span class="attachment-item__icon">
             <mat-icon>attach_file</mat-icon>
@@ -923,7 +928,7 @@
             </small>
           </span>
 
-          <mat-icon class="attachment-item__download">download</mat-icon>
+          <mat-icon class="attachment-item__download">visibility</mat-icon>
         </button>
 
         <div

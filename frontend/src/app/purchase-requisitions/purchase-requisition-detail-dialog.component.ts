@@ -26,6 +26,9 @@ import {
   PurchaseRequisitionBranchOption,
   PurchaseRequisitionFormDialogComponent,
 } from './purchase-requisition-form-dialog.component';
+import {
+  PurchaseRequisitionAttachmentPreviewDialogComponent,
+} from './purchase-requisition-attachment-preview-dialog.component';
 
 type WorkflowAction = 'REQUEST_INFO' | 'APPROVE' | 'REJECT' | 'RESUBMIT' | null;
 type FinanceAction = 'APPROVE' | 'REJECT' | null;
@@ -245,6 +248,16 @@ export class PurchaseRequisitionDetailDialogComponent implements OnInit {
     return [];
   }
 
+  get canSubmitLogisticsAdvance(): boolean {
+    return Boolean(
+      !this.logisticsBusy
+      && this.logisticsTarget
+      && this.logisticsOptions.some(
+        option => option.value === this.logisticsTarget,
+      ),
+    );
+  }
+
   get canReceive(): boolean {
     if (
       !this.requisition
@@ -439,6 +452,7 @@ export class PurchaseRequisitionDetailDialogComponent implements OnInit {
     this.requisitionService.get(this.data.requisitionId).subscribe({
       next: (response) => {
         this.requisition = response.requisition;
+        this.normalizeLogisticsTarget();
         this.loading = false;
         this.normalizeAttachmentType();
       },
@@ -730,13 +744,31 @@ export class PurchaseRequisitionDetailDialogComponent implements OnInit {
       });
   }
 
+  onLogisticsTargetChange(
+    candidate: PurchaseRequisitionStatus | '',
+  ): void {
+    this.logisticsTarget = this.logisticsOptions.some(
+      option => option.value === candidate,
+    )
+      ? candidate
+      : '';
+    this.logisticsError = '';
+  }
+
   advanceLogistics(): void {
-    if (!this.requisition || !this.canAdvanceLogistics || !this.logisticsTarget) {
+    if (
+      !this.requisition
+      || !this.canAdvanceLogistics
+      || !this.canSubmitLogisticsAdvance
+    ) {
       return;
     }
 
     const target = this.logisticsTarget;
-    if (!this.logisticsOptions.some(option => option.value === target)) {
+    if (
+      !target
+      || !this.logisticsOptions.some(option => option.value === target)
+    ) {
       this.logisticsError = 'Selecciona el siguiente estado permitido.';
       return;
     }
@@ -967,12 +999,12 @@ export class PurchaseRequisitionDetailDialogComponent implements OnInit {
     )?.original_filename || `Adjunto #${quote.attachment_id}`;
   }
 
-  downloadQuoteAttachment(quote: PurchaseRequisitionQuote): void {
+  openQuoteAttachmentPreview(quote: PurchaseRequisitionQuote): void {
     const attachment = (this.requisition?.attachments || []).find(
       item => item.id === quote.attachment_id,
     );
     if (attachment) {
-      this.downloadAttachment(attachment);
+      this.openAttachmentPreview(attachment);
     }
   }
 
@@ -986,25 +1018,22 @@ export class PurchaseRequisitionDetailDialogComponent implements OnInit {
     return labels[status] || status;
   }
 
-  downloadAttachment(attachment: PurchaseRequisitionAttachment): void {
+  openAttachmentPreview(
+    attachment: PurchaseRequisitionAttachment,
+  ): void {
     if (!this.requisition) {
       return;
     }
 
-    this.requisitionService.downloadAttachment(
-      this.requisition.id,
-      attachment.id,
-    ).subscribe({
-      next: (blob) => {
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement('a');
-        anchor.href = url;
-        anchor.download = attachment.original_filename;
-        anchor.click();
-        URL.revokeObjectURL(url);
-      },
-      error: () => {
-        this.attachmentError = 'No fue posible descargar el adjunto.';
+    this.dialog.open(PurchaseRequisitionAttachmentPreviewDialogComponent, {
+      width: '960px',
+      maxWidth: '96vw',
+      maxHeight: '92vh',
+      autoFocus: false,
+      restoreFocus: false,
+      data: {
+        requisitionId: this.requisition.id,
+        attachment,
       },
     });
   }
@@ -1094,6 +1123,17 @@ export class PurchaseRequisitionDetailDialogComponent implements OnInit {
       return `${Math.max(1, Math.round(sizeBytes / 1024))} KB`;
     }
     return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  private normalizeLogisticsTarget(): void {
+    if (
+      this.logisticsTarget
+      && !this.logisticsOptions.some(
+        option => option.value === this.logisticsTarget,
+      )
+    ) {
+      this.logisticsTarget = '';
+    }
   }
 
   private uploadReceiptFiles(

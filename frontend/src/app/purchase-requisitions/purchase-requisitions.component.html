@@ -138,6 +138,41 @@
           <p>
             Revisa el estado actual, las partidas y el historial de cada requisición.
           </p>
+
+          <div class="requisition-scope" role="group" aria-label="Vista de expedientes">
+            <button
+              type="button"
+              class="requisition-scope__pill"
+              [class.requisition-scope__pill--active]="isRequisitionScope('ACTIVE')"
+              [attr.aria-pressed]="isRequisitionScope('ACTIVE')"
+              (click)="setRequisitionScope('ACTIVE')"
+            >
+              Activas
+              <span>{{ activeCount }}</span>
+            </button>
+
+            <button
+              type="button"
+              class="requisition-scope__pill"
+              [class.requisition-scope__pill--active]="isRequisitionScope('FINALIZED')"
+              [attr.aria-pressed]="isRequisitionScope('FINALIZED')"
+              (click)="setRequisitionScope('FINALIZED')"
+            >
+              Finalizadas
+              <span>{{ finalizedCount }}</span>
+            </button>
+
+            <button
+              type="button"
+              class="requisition-scope__pill"
+              [class.requisition-scope__pill--active]="isRequisitionScope('ALL')"
+              [attr.aria-pressed]="isRequisitionScope('ALL')"
+              (click)="setRequisitionScope('ALL')"
+            >
+              Todas
+              <span>{{ allCount }}</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -154,11 +189,11 @@
         <button mat-button type="button" (click)="loadRows()">Reintentar</button>
       </div>
 
-      <div *ngIf="!loading && !loadError && rows.length === 0" class="state-box">
+      <div *ngIf="!loading && !loadError && visibleRows.length === 0" class="state-box">
         No hay requisiciones visibles con los filtros actuales.
       </div>
 
-      <div *ngIf="!loading && rows.length > 0" class="table-card">
+      <div *ngIf="!loading && visibleRows.length > 0" class="table-card">
         <div class="table-scroll">
           <table>
             <thead>
@@ -170,12 +205,29 @@
                 <th>Estado</th>
                 <th>Partidas</th>
                 <th>Creada</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let row of rows; trackBy: trackById">
-                <td class="folio">{{ row.public_id }}</td>
+              <tr
+                *ngFor="let row of visibleRows; trackBy: trackById"
+                class="requisition-row"
+                [class.finance-action-row]="requiresFinanceAction(row)"
+                role="button"
+                tabindex="0"
+                [attr.aria-label]="'Abrir detalle de ' + row.public_id"
+                (click)="openDetail(row)"
+                (keydown.enter)="openDetail(row)"
+              >
+                <td class="folio">
+                  <span>{{ row.public_id }}</span>
+                  <span
+                    *ngIf="requiresFinanceAction(row)"
+                    class="finance-action-badge"
+                  >
+                    <mat-icon>priority_high</mat-icon>
+                    Requiere tu aprobación
+                  </span>
+                </td>
                 <td>{{ branchLabel(row.sucursal_id) }}</td>
                 <td>{{ reasonLabel(row.reason) }}</td>
                 <td>{{ priorityLabel(row.priority) }}</td>
@@ -186,11 +238,6 @@
                 </td>
                 <td>{{ row.items?.length || 0 }}</td>
                 <td>{{ row.created_at | date:'dd/MM/yyyy HH:mm' }}</td>
-                <td class="detail-cell">
-                  <button mat-button type="button" (click)="openDetail(row)">
-                    Ver detalle
-                  </button>
-                </td>
               </tr>
             </tbody>
           </table>
