@@ -127,8 +127,8 @@ def test_reactivaciones_february_correction_does_not_fake_negative_daily():
     monthly = book["Totales Mensuales"]
 
     assert book.sheetnames == ["Diario", "Semanal", "Totales Mensuales"]
-    assert weekly.max_column == 12  # August partial week through October current week.
-    assert weekly["B2"].value == "01/08 (parcial)"
+    assert weekly.max_column == 12  # July 26–August 1 through the October current week.
+    assert weekly["B2"].value == "26/07-01/08"
     assert weekly["L2"].value == "04/10-10/10 (corte 07/10)"
     assert weekly["L3"].value == 8
     assert daily["B3"].value == 2
@@ -138,7 +138,7 @@ def test_reactivaciones_february_correction_does_not_fake_negative_daily():
     assert monthly["J3"].value == 150  # September historical monthly close.
     assert monthly["K3"].value == 14  # October MTD at cutoff.
     assert "04/10/2026" in daily["A1"].value
-    assert "01/08/2026 AL 07/10/2026" in weekly["A1"].value
+    assert "26/07/2026 AL 07/10/2026" in weekly["A1"].value
     assert "07/10/2026" in monthly["A1"].value
 
 
@@ -379,7 +379,7 @@ def test_january_february_explicit_historical_source_overrides_old_track_unchang
 
 
 def test_weekly_reactivaciones_comparison_covers_august_september_october():
-    start = date(2026, 8, 1)
+    start = date(2026, 7, 25)  # preceding MTD for the first Sunday
     cutoff = date(2026, 10, 7)
     days = [start + timedelta(days=i) for i in range((cutoff - start).days + 1)]
     data = {
@@ -396,7 +396,7 @@ def test_weekly_reactivaciones_comparison_covers_august_september_october():
     )
     weekly = workbook["Semanal"]
     assert weekly.max_column == 12
-    assert weekly["B2"].value == "01/08 (parcial)"
+    assert weekly["B2"].value == "26/07-01/08"
     assert weekly["C2"].value == "02/08-08/08"
     assert weekly["G2"].value == "30/08-05/09"
     assert weekly["K2"].value == "27/09-03/10"
@@ -405,7 +405,9 @@ def test_weekly_reactivaciones_comparison_covers_august_september_october():
     # precedes VILLA_VERDE in this synthetic fixture.
     assert weekly["A3"].value == "VILLAS_DEL_REY"
     assert weekly["A4"].value == "VILLA_VERDE"
-    assert weekly["B3"].value == 2
+    assert weekly["B3"].value == 14
+    assert weekly["B4"].value == 7
+    assert weekly["B5"].value == 21
     assert weekly["C3"].value == 14
     assert weekly["L3"].value == 8
     assert weekly["L4"].value == 4
@@ -413,7 +415,7 @@ def test_weekly_reactivaciones_comparison_covers_august_september_october():
     assert workbook["Totales Mensuales"]["I3"].value == 62
     assert workbook["Totales Mensuales"]["J3"].value == 60
     assert workbook["Totales Mensuales"]["K3"].value == 14
-    assert "01/08/2026 AL 07/10/2026" in weekly["A1"].value
+    assert "26/07/2026 AL 07/10/2026" in weekly["A1"].value
 
 
 def test_older_negative_reactivaciones_is_blank_not_negative_or_zero():
@@ -449,3 +451,55 @@ def test_reactivaciones_three_month_window_rolls_at_calendar_year():
     assert _three_month_window_start(date(2026, 10, 7)) == date(2026, 8, 1)
     assert _three_month_window_start(date(2027, 1, 7)) == date(2026, 11, 1)
     assert _three_month_window_start(date(2026, 1, 7)) == date(2026, 1, 1)
+
+
+def test_reactivaciones_week_labels_always_span_sunday_to_saturday():
+    import re
+    start = date(2026, 7, 25)
+    cutoff = date(2026, 10, 7)
+    dates = (
+        start + timedelta(days=i)
+        for i in range((cutoff - start).days + 1)
+    )
+    data = {day: day.day for day in dates}
+    report = load_workbook(
+        BytesIO(render_commercial_daily_xlsx(
+            metric="reactivaciones", cutoff=cutoff,
+            mtd_series={"VILLA_VERDE": data},
+        )),
+        data_only=True,
+    )
+    sheet = report["Semanal"]
+    assert sheet.max_column - 1 == 11
+    for col in range(2, sheet.max_column + 1):
+        label = sheet.cell(2, col).value
+        match = re.match(r"^(\\d{2})/(\\d{2})-(\\d{2})/(\\d{2})", label)
+        assert match is not None, label
+        start_day, start_month, end_day, end_month = map(int, match.groups())
+        sunday = date(2026, start_month, start_day)
+        saturday = date(2026, end_month, end_day)
+        assert sunday.weekday() == 6
+        assert saturday.weekday() == 5
+        assert saturday - sunday == timedelta(days=6)
+    assert sheet["B3"].value == 7
+
+
+def test_reactivaciones_missing_previous_day_does_not_invent_july_26():
+    start = date(2026, 7, 26)  # July 25 not included: Sunday delta unknown
+    cutoff = date(2026, 10, 7)
+    series = {
+        start + timedelta(days=i): (start + timedelta(days=i)).day
+        for i in range((cutoff - start).days + 1)
+    }
+    report = load_workbook(
+        BytesIO(render_commercial_daily_xlsx(
+            metric="reactivaciones", cutoff=cutoff,
+            mtd_series={"VILLA_VERDE": series},
+        )),
+        data_only=True,
+    )
+    weekly = report["Semanal"]
+    assert weekly["B2"].value == "26/07-01/08"
+    assert weekly["B3"].value is None
+    assert weekly["B4"].value is None
+    assert weekly["C3"].value == 7
