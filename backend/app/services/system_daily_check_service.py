@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.extensions import db
-from app.models.sucursal_model import Sucursal
+from app.models.sucursal_model import Sucursal, SucursalOperationalStatus
 from app.models.system_daily_check import (
     SystemDailyCheckAffectedScope,
     SystemDailyCheckAnswerORM,
@@ -18,11 +18,20 @@ from app.models.system_daily_check import (
     SystemDailyCheckORM,
     SystemDailyCheckPromptStateORM,
 )
+from app.utils.scope_utils import CORPORATE_BRANCH_ID, ROOT_BRANCH_ID
 from app.utils.system_daily_check_access import has_system_daily_check_mvp_access
 
 
 BUSINESS_TZ = ZoneInfo("America/Tijuana")
 POSTPONE_INTERVAL = timedelta(minutes=5)
+
+# PILOT TEMPORARY:
+# Durante la prueba con SISTEMAS/ADMICORP, el nodo técnico Administrador
+# (1000) representa la misma obligación diaria que Corporativo (100).
+# Retirar este puente al terminar el piloto; no modifica la política global
+# de sucursales técnicas.
+SYSTEM_DAILY_CHECK_PILOT_CORPORATE_BRANCH_ID = CORPORATE_BRANCH_ID
+SYSTEM_DAILY_CHECK_PILOT_ROOT_BRANCH_ID = ROOT_BRANCH_ID
 
 
 class SystemDailyCheckAuthorizationError(PermissionError):
@@ -191,6 +200,70 @@ def _positive_int(value: object, field: str) -> int:
     return parsed
 
 
+def canonicalize_system_daily_check_branch_id(
+    value: object,
+) -> int:
+    branch_id = _positive_int(value, "sucursal_id")
+    if branch_id == SYSTEM_DAILY_CHECK_PILOT_ROOT_BRANCH_ID:
+        return SYSTEM_DAILY_CHECK_PILOT_CORPORATE_BRANCH_ID
+    return branch_id
+
+
+def list_system_daily_check_branches(
+    actor,
+    *,
+    session: Session | None = None,
+) -> dict:
+    """Checklist-only branch catalog for the temporary corporate pilot bridge."""
+    _require_mvp_access(actor)
+    target_session = _session(session)
+
+    branches = list(
+        target_session.scalars(
+            select(Sucursal)
+            .where(
+                Sucursal.is_demo.is_(False),
+                Sucursal.operational_status
+                == SucursalOperationalStatus.ACTIVA,
+                Sucursal.sucursal_id
+                != SYSTEM_DAILY_CHECK_PILOT_ROOT_BRANCH_ID,
+            )
+            .order_by(Sucursal.sucursal.asc())
+        ).all()
+    )
+
+    branch_ids = {
+        int(branch.sucursal_id)
+        for branch in branches
+    }
+
+    preferred_branch_id = None
+    raw_primary = getattr(actor, "sucursal_id", None)
+    if raw_primary not in (None, ""):
+        candidate = canonicalize_system_daily_check_branch_id(
+            raw_primary
+        )
+        if candidate in branch_ids:
+            preferred_branch_id = candidate
+
+    if preferred_branch_id is None and len(branches) == 1:
+        preferred_branch_id = int(branches[0].sucursal_id)
+
+    return {
+        "branches": [
+            {
+                "sucursal_id": int(branch.sucursal_id),
+                "sucursal": branch.sucursal,
+                "serie": branch.serie,
+                "operational_status": branch.operational_status,
+                "is_demo": bool(branch.is_demo),
+            }
+            for branch in branches
+        ],
+        "preferred_branch_id": preferred_branch_id,
+    }
+
+
 def resolve_branch_id(
     actor,
     requested_branch_id: object = None,
@@ -206,7 +279,7 @@ def resolve_branch_id(
             "No fue posible resolver la sucursal del checklist."
         )
 
-    return _positive_int(raw_value, "sucursal_id")
+    return canonicalize_system_daily_check_branch_id(raw_value)
 
 
 def _assert_branch_exists(

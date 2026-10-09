@@ -14,6 +14,7 @@ on:
       - "frontend/src/app/system-daily-check/**"
       - "frontend/tests/system-daily-check-gate-state.test.ts"
       - "frontend/tests/system-daily-check-no-freeze-contract.test.cjs"
+      - "frontend/tests/system-daily-check-corporate-pilot-contract.test.cjs"
       - "frontend/src/styles.scss"
       - "docs/contratos/checklist_sistemas/**"
       - ".github/workflows/system-daily-check-m2.yml"
@@ -91,5 +92,7 @@ jobs:
           rm -rf .tmp-system-daily-check-tests
       - name: Run checklist no-freeze render contract
         run: node tests/system-daily-check-no-freeze-contract.test.cjs
+      - name: Run checklist corporate pilot contract
+        run: node tests/system-daily-check-corporate-pilot-contract.test.cjs
       - name: Build Angular
         run: npm run build

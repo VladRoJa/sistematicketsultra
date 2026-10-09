@@ -24,6 +24,7 @@ from app.services.system_daily_check_attachment_storage_service import (
 )
 from app.services.system_daily_check_service import (
     QUESTION_BY_KEY,
+    SYSTEM_DAILY_CHECK_PILOT_CORPORATE_BRANCH_ID,
     SystemDailyCheckAuthorizationError,
     SystemDailyCheckNotFoundError,
     SystemDailyCheckValidationError,
@@ -31,6 +32,15 @@ from app.services.system_daily_check_service import (
 )
 from app.utils.sucursal_audience import TECHNICAL_SUCURSAL_IDS
 from app.utils.system_daily_check_access import has_system_daily_check_mvp_access
+
+
+# PILOT TEMPORARY: Corporativo (100) participa en Salud de Sistemas aunque
+# siga siendo nodo técnico para el resto de Suite Ultra. Administrador (1000)
+# permanece excluido. Retirar junto con el puente del piloto.
+SYSTEM_DAILY_CHECK_PILOT_EXCLUDED_BRANCH_IDS = frozenset(
+    TECHNICAL_SUCURSAL_IDS
+    - {SYSTEM_DAILY_CHECK_PILOT_CORPORATE_BRANCH_ID}
+)
 
 
 def _session(session: Session | None):
@@ -57,7 +67,7 @@ def resolve_system_daily_check_branch_universe(
         raise ValueError("as_of_date debe ser datetime.date.")
 
     target_session = _session(session)
-    technical_ids = tuple(sorted(TECHNICAL_SUCURSAL_IDS))
+    technical_ids = tuple(sorted(SYSTEM_DAILY_CHECK_PILOT_EXCLUDED_BRANCH_IDS))
 
     potential_stmt = (
         select(Sucursal)
@@ -154,7 +164,7 @@ def _normalize_branch_ids(branch_ids: object) -> list[int]:
             raise SystemDailyCheckValidationError(
                 "branch_ids contiene un valor inválido."
             )
-        if branch_id in TECHNICAL_SUCURSAL_IDS:
+        if branch_id in SYSTEM_DAILY_CHECK_PILOT_EXCLUDED_BRANCH_IDS:
             raise SystemDailyCheckValidationError(
                 "branch_ids contiene una sucursal técnica no seleccionable."
             )
@@ -287,7 +297,7 @@ def _normalize_summary_branch_id(
         raise SystemDailyCheckValidationError(
             "branch_id debe ser entero."
         ) from exc
-    if parsed <= 0 or parsed in TECHNICAL_SUCURSAL_IDS:
+    if parsed <= 0 or parsed in SYSTEM_DAILY_CHECK_PILOT_EXCLUDED_BRANCH_IDS:
         raise SystemDailyCheckValidationError(
             "branch_id inválido."
         )
@@ -337,7 +347,7 @@ def _expected_branch_days(
             ),
         )
     )
-    technical_ids = tuple(sorted(TECHNICAL_SUCURSAL_IDS))
+    technical_ids = tuple(sorted(SYSTEM_DAILY_CHECK_PILOT_EXCLUDED_BRANCH_IDS))
     if technical_ids:
         stmt = stmt.where(
             ~Sucursal.sucursal_id.in_(technical_ids)
@@ -998,7 +1008,7 @@ def list_system_daily_check_bi_history(
             Sucursal.is_demo.is_(False),
         )
     )
-    technical_ids = tuple(sorted(TECHNICAL_SUCURSAL_IDS))
+    technical_ids = tuple(sorted(SYSTEM_DAILY_CHECK_PILOT_EXCLUDED_BRANCH_IDS))
     if technical_ids:
         stmt = stmt.where(
             ~Sucursal.sucursal_id.in_(technical_ids)
@@ -1168,7 +1178,7 @@ def get_system_daily_check_bi_detail(
         branch is None
         or bool(branch.is_demo)
         or int(branch.sucursal_id)
-        in TECHNICAL_SUCURSAL_IDS
+        in SYSTEM_DAILY_CHECK_PILOT_EXCLUDED_BRANCH_IDS
     ):
         raise SystemDailyCheckNotFoundError(
             "Checklist no encontrado."
@@ -1393,7 +1403,7 @@ def get_system_daily_check_bi_attachment(
         or branch is None
         or bool(branch.is_demo)
         or int(branch.sucursal_id)
-        in TECHNICAL_SUCURSAL_IDS
+        in SYSTEM_DAILY_CHECK_PILOT_EXCLUDED_BRANCH_IDS
     ):
         raise SystemDailyCheckNotFoundError(
             "Evidencia no encontrada."

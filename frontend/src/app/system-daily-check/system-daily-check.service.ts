@@ -41,6 +41,11 @@ export interface SystemDailyCheckBranch {
   is_demo?: boolean;
 }
 
+export interface SystemDailyCheckBranchCatalog {
+  branches: SystemDailyCheckBranch[];
+  preferred_branch_id: number | null;
+}
+
 export interface SystemDailyCheckIssuePayload {
   affected_scope?: SystemDailyCheckAffectedScope | null;
   reported_to_support: boolean;
@@ -70,7 +75,6 @@ export interface SystemDailyCheckSubmitResponse {
 @Injectable({ providedIn: 'root' })
 export class SystemDailyCheckService {
   private readonly apiUrl = `${environment.apiUrl}/system-daily-checks`;
-  private readonly branchesUrl = `${environment.apiUrl}/sucursales/listar`;
 
   constructor(private http: HttpClient) {}
 
@@ -84,9 +88,9 @@ export class SystemDailyCheckService {
     }>(`${this.apiUrl}/questions`);
   }
 
-  getBranches(): Observable<SystemDailyCheckBranch[]> {
-    return this.http.get<SystemDailyCheckBranch[]>(
-      this.branchesUrl,
+  getBranches(): Observable<SystemDailyCheckBranchCatalog> {
+    return this.http.get<SystemDailyCheckBranchCatalog>(
+      `${this.apiUrl}/branches`,
     );
   }
 

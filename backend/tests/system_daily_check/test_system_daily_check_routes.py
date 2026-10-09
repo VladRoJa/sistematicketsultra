@@ -101,6 +101,39 @@ class SystemDailyCheckRoutesTest(unittest.TestCase):
             requested_branch_id="11",
         )
 
+    def test_branches_uses_checklist_catalog(self):
+        expected = {
+            "branches": [
+                {
+                    "sucursal_id": 100,
+                    "sucursal": "CORPORATIVO",
+                    "serie": "CORP",
+                    "operational_status": "ACTIVA",
+                    "is_demo": False,
+                }
+            ],
+            "preferred_branch_id": 100,
+        }
+        with (
+            patch.object(
+                routes.UserORM,
+                "get_by_id",
+                return_value=self.actor,
+            ),
+            patch.object(
+                routes,
+                "list_system_daily_check_branches",
+                return_value=expected,
+            ) as service,
+        ):
+            response = self._request(
+                "/api/system-daily-checks/branches"
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), expected)
+        service.assert_called_once_with(self.actor)
+
     def test_questions_rejects_manager_during_mvp(self):
         self.actor.rol = "GERENTE"
         self.actor.username = "manager"
