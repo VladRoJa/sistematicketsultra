@@ -1,7 +1,7 @@
 # Contrato — Checklist Diario de Sistemas V1 / M3
 ## Historial, BI y Salud Operativa
 
-Estado: BLOQUEADO POR M2  
+Estado: ACCEPTED TÉCNICAMENTE EN PR #832 / PENDIENTE MERGE A MAIN
 Gate de entrada: M2 ACCEPTED en main.  
 Gate de salida: V1 ACCEPTED de extremo a extremo con BI operativo.
 
@@ -491,3 +491,93 @@ M3 — ACCEPTED
 CHECKLIST DIARIO DE SISTEMAS V1 MVP — ACCEPTED
 ROLLOUT A GERENTES — PENDIENTE DE APROBACIÓN DE SISTEMAS
 ```
+
+
+## 32. Evidencia de aceptación técnica — 2026-10-09
+
+Implementación validada en PR #832 sobre el head de runtime `785c5203`.
+
+### Migraciones
+
+Durante M3, `main` avanzó con la migración de Google Ads OAuth. La cadena final se reconcilió de forma lineal, sin merge revision:
+
+```text
+c1d5e9a7b204  System Daily Check M1
+      ↓
+a9d2f6c7b108  Google Ads OAuth credentials
+      ↓
+d4a7c91e2b55  System Daily Check M3 rollout branches (head)
+```
+
+Validación:
+
+- `flask db heads` → `d4a7c91e2b55 (head)`;
+- prueba M3 exige `down_revision = a9d2f6c7b108`;
+- prueba PostgreSQL M3 ejecuta la secuencia real M1 → Google Ads → M3 y downgrade inverso;
+- migraciones M1/M3 + regresión Google Ads local: `16 passed, 1 skipped`;
+- el skip local requiere PostgreSQL aislado y está cubierto por CI.
+
+### Backend / BI
+
+Validación local después de reconciliar `main`:
+
+- `tests/system_daily_check + tests/google_ads`: **100 passed, 2 skipped**;
+- los dos skips son pruebas PostgreSQL dedicadas cubiertas por CI;
+- denominador por branch-day esperado;
+- envíos fuera del rollout no inflan cumplimiento;
+- NA no suma como falla;
+- pendientes no cuentan como normal;
+- reported/no reported tiene drill-down a incidencia fuente;
+- 0/1/2 aplazamientos y mandatory reconciliados;
+- día/semana/mes usa `business_date`;
+- historial, detalle, matriz, tendencias, rankings, recurrencia y evidencia protegida probados.
+
+### Smoke integral V1
+
+`backend/tests/system_daily_check/test_system_daily_check_m3_integral_flow.py` cubre:
+
+```text
+login
+→ postpone 1
+→ +5 min
+→ postpone 2
+→ +5 min
+→ mandatory
+→ respuesta NO + incidencia + PNG
+→ submit
+→ gate liberado
+→ historial
+→ summary BI
+→ issues reported
+→ detalle
+→ evidencia
+```
+
+La prueba forma parte de la suite M3 ejecutada por CI sobre PostgreSQL 16.
+
+### Frontend
+
+- test puro de `system-daily-check-bi-state.ts`: exit code 0;
+- `ngc -p tsconfig.app.json --noEmit`: sin errores del módulo M3;
+- contrato UI exige KPIs, matriz semántica, responsive sin scroll horizontal destructivo, pendientes, incidencias reportadas/no reportadas y drill-down al checklist;
+- build Angular de producción: SUCCESS en GitHub Actions M3.
+
+### CI head `785c5203`
+
+- System Daily Check M3 / pull_request: **SUCCESS**;
+- System Daily Check M3 / push: **SUCCESS**;
+- System Daily Check M2 regression: **SUCCESS**;
+- System Daily Check M1 regression: **SUCCESS**;
+- Campaign V2 Scoped Exclusions: **SUCCESS**;
+- PR #832: mergeable contra `main`.
+
+### Rollout
+
+M3 cierra técnicamente el MVP, pero **no habilita GERENTE**.
+
+```text
+MVP_ACCESS = SISTEMAS | ADMICORP
+GERENTE_ACCESS = OFF
+```
+
+La apertura a gerentes sigue requiriendo aprobación explícita de Sistemas y un cambio posterior de rollout.
