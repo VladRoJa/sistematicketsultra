@@ -93,6 +93,7 @@ export class SystemDailyCheckBiComponent
   loadingIssues = false;
   loadingDetail = false;
   savingRollout = false;
+  exportingExcel = false;
   errorMessage = '';
   rolloutMessage = '';
 
@@ -299,6 +300,43 @@ export class SystemDailyCheckBiComponent
   applyFilters(): void {
     this.historyPage = 1;
     this.loadDashboard();
+  }
+
+  exportExcel(): void {
+    if (this.exportingExcel || !this.context || !this.validateRange()) {
+      return;
+    }
+
+    this.exportingExcel = true;
+    this.errorMessage = '';
+    const dateFrom = this.dateFrom;
+    const dateTo = this.dateTo;
+    this.biService.exportExcel({
+      dateFrom,
+      dateTo,
+      branchId: this.selectedBranchId,
+    })
+      .pipe(finalize(() => {
+        this.exportingExcel = false;
+      }))
+      .subscribe({
+        next: (file) => {
+          const url = URL.createObjectURL(file);
+          const anchor = document.createElement('a');
+          anchor.href = url;
+          anchor.download = `checklist_operativo_${dateFrom}_${dateTo}.xlsx`;
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        },
+        error: (error) => {
+          this.errorMessage = this.apiErrorMessage(
+            error,
+            'No se pudo exportar el reporte a Excel.',
+          );
+        },
+      });
   }
 
   setQuickRange(range: SystemDailyCheckQuickRange): void {
