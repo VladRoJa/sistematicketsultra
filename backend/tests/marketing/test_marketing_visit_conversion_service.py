@@ -6,6 +6,7 @@ import app.services.marketing_visit_conversion_service as visit_conversion_servi
 from app.services.marketing_attribution import SaleRecord
 from app.services.marketing_sales_funnel_service import (
     ORIGIN_IVENTAS_META,
+    ORIGIN_IVENTAS_OTHER,
     MarketingSalesFunnelLoadedData,
     _CommercialVisit,
     _IventasEvidence,
@@ -308,3 +309,125 @@ def test_summary_from_loaded_data_preserves_missing_venta_total(monkeypatch):
     assert result["summary"]["visits_iventas_bought"] == 0
     assert result["summary"]["visits_not_iventas_bought"] == 0
     assert result["data_quality"]["visit_conversion_cohort_complete"] is False
+
+
+def test_sale_origin_matches_contact_between_visit_and_purchase(monkeypatch):
+    """Pase 5/oct, contacto CRM 6/oct, compra 7/oct: venta CRM, pase no."""
+    source = _visit_source_row(id_orden="200", visit_date="2026-10-05")
+    loaded = MarketingSalesFunnelLoadedData(
+        month_start=date(2026, 10, 1),
+        branch_ids=(4,),
+        venta_total_rows=(source,),
+        alias_map={"VILLAS DEL REY": 4},
+        visits=(
+            _CommercialVisit(
+                event_key="id_orden:4:200",
+                branch_id=4,
+                visit_date=date(2026, 10, 5),
+                phone="6861234567",
+            ),
+        ),
+        evidence={
+            (4, "6861234567"): [
+                _IventasEvidence(
+                    branch_id=4,
+                    phone="6861234567",
+                    interaction_date=date(2026, 10, 6),
+                    has_meta_ad=False,
+                ),
+            ],
+        },
+    )
+    sale = SaleRecord(
+        sale_key="sale:oct",
+        branch_id=4,
+        payment_date=date(2026, 10, 7),
+        phone="6861234567",
+        member_id="456",
+        revenue=Decimal("599"),
+    )
+    monkeypatch.setattr(
+        visit_conversion_service,
+        "_load_attribution_sales",
+        lambda **_: SimpleNamespace(sales=(sale,), snapshot_ids=(90,)),
+    )
+
+    bundle = visit_conversion_service._build_bundle_from_loaded_data(
+        loaded=loaded,
+    )
+    assert len(bundle.rows) == 1
+    row = bundle.rows[0]
+    assert row.origin is None
+    assert row.sale_origin == ORIGIN_IVENTAS_OTHER
+    assert row.sale == sale
+    assert _serialize_detail_row(row, {4: "Villas del Rey"})["sale_origin"] == (
+        "iVentas / Otro"
+    )
+    # La cohorte de visitas se mantiene intacta; su venta se audita aparte.
+    assert _serialize_metrics(list(bundle.rows))["visits_not_iventas_bought"] == 1
+
+    from app.services.marketing_sales_funnel_cutoff_detail_service import (
+        _normalized_visit_conversion_bundle,
+    )
+
+    earlier_cutoff = _normalized_visit_conversion_bundle(
+        loaded=loaded,
+        cutoff_date=date(2026, 10, 6),
+    )
+    assert earlier_cutoff.rows[0].sale is None
+    assert earlier_cutoff.rows[0].sale_origin is None
+
+
+def test_sale_origin_does_not_match_contact_after_purchase(monkeypatch):
+    source = _visit_source_row(id_orden="201", visit_date="2026-10-05")
+    loaded = MarketingSalesFunnelLoadedData(
+        month_start=date(2026, 10, 1),
+        branch_ids=(4,),
+        venta_total_rows=(source,),
+        alias_map={"VILLAS DEL REY": 4},
+        visits=(
+            _CommercialVisit(
+                event_key="id_orden:4:201",
+                branch_id=4,
+                visit_date=date(2026, 10, 5),
+                phone="6861234567",
+            ),
+        ),
+        evidence={
+            (4, "6861234567"): [
+                _IventasEvidence(
+                    branch_id=4,
+                    phone="6861234567",
+                    interaction_date=date(2026, 10, 8),
+                    has_meta_ad=False,
+                ),
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        visit_conversion_service,
+        "_load_attribution_sales",
+        lambda **_: SimpleNamespace(
+            sales=(
+                SaleRecord(
+                    sale_key="sale:early",
+                    branch_id=4,
+                    payment_date=date(2026, 10, 7),
+                    phone="6861234567",
+                    member_id="457",
+                    revenue=Decimal("599"),
+                ),
+            ),
+            snapshot_ids=(91,),
+        ),
+    )
+
+    row = visit_conversion_service._build_bundle_from_loaded_data(
+        loaded=loaded,
+    ).rows[0]
+    assert row.sale is not None
+    assert row.origin is None
+    assert row.sale_origin is None
+    assert _serialize_detail_row(row, {4: "Villas del Rey"})["sale_origin"] == (
+        "Sin match iVentas"
+    )
