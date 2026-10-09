@@ -1,0 +1,58 @@
+name: Google Ads Warehouse M1
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/models/google_ads_daily.py'
+      - 'backend/app/models/__init__.py'
+      - 'backend/app/warehouse/services/google_ads_daily_*.py'
+      - 'backend/app/warehouse/services/warehouse_manual_ingestion_dispatcher.py'
+      - 'backend/migrations/versions/e8b9c4d2a701_google_ads_warehouse_manual_daily.py'
+      - 'backend/tests/google_ads/**'
+      - '.github/workflows/google-ads-warehouse-m1.yml'
+  push:
+    branches:
+      - feat/google-ads-warehouse-manual-m1-20261009
+
+permissions:
+  contents: read
+
+jobs:
+  google-ads-import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install requirements
+        run: |
+          python -m pip install -r backend/requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Verify Python syntax
+        run: |
+          python -m compileall -q backend/app/models/google_ads_daily.py backend/app/warehouse/services/google_ads_daily_xlsx_parser.py backend/app/warehouse/services/google_ads_daily_ingestion_service.py backend/app/warehouse/services/warehouse_manual_ingestion_dispatcher.py backend/tests/google_ads/test_google_ads_manual_warehouse_import.py
+      - name: Run Google Ads suite
+        working-directory: backend
+        env:
+          SECRET_KEY: google-ads-warehouse-ci-secret
+          JWT_SECRET_KEY: google-ads-warehouse-ci-jwt
+        run: python -m pytest -q --tb=short tests/google_ads
+
+  warehouse-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install Angular dependencies
+        working-directory: frontend
+        run: npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - name: Compile Angular TypeScript
+        working-directory: frontend
+        run: node node_modules/typescript/bin/tsc --noEmit --project tsconfig.app.json

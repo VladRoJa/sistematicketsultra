@@ -8,6 +8,7 @@ from .ticket_model import Ticket
 from .ticket_attachment import TicketAttachmentORM
 from .user_model import UserORM
 from .google_ads_oauth import GoogleAdsOAuthCredentialORM
+from .google_ads_daily import GoogleAdsDailyMetricORM
 from .sucursal_model import Sucursal, SucursalOperationalStatus
 from .inventario import (
     InventarioGeneral,
@@ -187,6 +188,7 @@ __all__ = [
     "TicketAttachmentORM",
     "UserORM",
     "GoogleAdsOAuthCredentialORM",
+    "GoogleAdsDailyMetricORM",
     "Sucursal",
     "InventarioGeneral",
     "InventarioSucursal",

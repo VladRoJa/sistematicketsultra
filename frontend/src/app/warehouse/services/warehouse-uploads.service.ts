@@ -131,6 +131,15 @@ export interface WarehouseCreateUploadResponse {
   date_to: string;
   duplicate_detected: boolean;
   duplicate_upload_id: number | null;
+  manual_structured_result?: {
+    ingestion_status: string;
+    structured_result?: {
+      campaign_day_rows: number;
+      created_rows: number;
+      unchanged_rows: number;
+      total_cost_in_file: string;
+    };
+  };
 }
 
 
