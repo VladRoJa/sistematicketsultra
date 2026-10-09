@@ -1,0 +1,376 @@
+<section
+  *ngIf="visible"
+  class="daily-check-gate"
+  [class.daily-check-gate--mandatory]="isMandatory"
+  aria-live="polite"
+>
+  <div class="daily-check-shell">
+    <header class="daily-check-header">
+      <div>
+        <span class="daily-check-eyebrow">Suite Ultra · Sistemas</span>
+        <h1>{{ introTitle }}</h1>
+        <p>{{ introSubtitle }}</p>
+      </div>
+
+      <div class="daily-check-header__meta" *ngIf="selectedBranch">
+        <strong>{{ selectedBranch?.sucursal }}</strong>
+        <span *ngIf="status?.business_date">
+          {{ formatBusinessDate(status?.business_date) }}
+        </span>
+      </div>
+    </header>
+
+    <div *ngIf="loading" class="daily-check-loading">
+      <span class="daily-check-spinner" aria-hidden="true"></span>
+      <strong>Preparando revisión…</strong>
+      <span>Estamos consultando el estado del día.</span>
+    </div>
+
+    <div
+      *ngIf="!loading && errorMessage"
+      class="daily-check-message daily-check-message--error"
+      role="alert"
+    >
+      {{ errorMessage }}
+    </div>
+
+    <section
+      *ngIf="!loading && screen === 'branch'"
+      class="daily-check-step daily-check-branch"
+    >
+      <div class="daily-check-step__copy">
+        <span class="daily-check-step__number">Piloto MVP</span>
+        <h2>¿Qué sucursal vas a revisar?</h2>
+        <p>
+          Durante el piloto de Sistemas puedes elegir la sucursal.
+          Cuando se habilite a gerentes, este dato vendrá fijo desde su sesión.
+        </p>
+      </div>
+
+      <label class="daily-check-field">
+        <span>Sucursal</span>
+        <select [(ngModel)]="selectedBranchId">
+          <option [ngValue]="null">Selecciona una sucursal</option>
+          <option
+            *ngFor="let branch of branches"
+            [ngValue]="branch.sucursal_id"
+          >
+            {{ branch.sucursal }}
+          </option>
+        </select>
+      </label>
+
+      <button
+        type="button"
+        class="daily-check-primary"
+        [disabled]="!selectedBranchId"
+        (click)="chooseBranch()"
+      >
+        Continuar
+      </button>
+    </section>
+
+    <section
+      *ngIf="!loading && screen === 'intro'"
+      class="daily-check-step daily-check-intro"
+    >
+      <div class="daily-check-intro__badge">
+        <span *ngIf="status?.postpone_count === 0">Primera revisión del día</span>
+        <span *ngIf="status?.postpone_count === 1">Último aplazamiento disponible</span>
+      </div>
+
+      <div class="daily-check-step__copy">
+        <h2>Solo necesitamos saber si funciona o no.</h2>
+        <p>
+          No necesitas diagnosticar la causa. Si algo falla, describe brevemente
+          qué observas y, si quieres, agrega una foto o archivo.
+        </p>
+      </div>
+
+      <div class="daily-check-intro__actions">
+        <button
+          type="button"
+          class="daily-check-primary"
+          (click)="startReview()"
+        >
+          Realizar ahora
+        </button>
+
+        <button
+          *ngIf="canPostpone"
+          type="button"
+          class="daily-check-secondary"
+          [disabled]="postponing"
+          (click)="postpone()"
+        >
+          {{ postponing ? 'Aplazando…' : 'Ahora no' }}
+        </button>
+      </div>
+    </section>
+
+    <section
+      *ngIf="!loading && screen === 'form'"
+      class="daily-check-form"
+    >
+      <div class="daily-check-progress-card">
+        <div class="daily-check-progress-card__row">
+          <div>
+            <strong>{{ answeredCount }} de {{ questions.length }} revisados</strong>
+            <span>Responde todas las preguntas para enviar.</span>
+          </div>
+          <span class="daily-check-progress-card__percent">
+            {{ progressPercent }}%
+          </span>
+        </div>
+
+        <div class="daily-check-progress" aria-hidden="true">
+          <div
+            class="daily-check-progress__value"
+            [style.width.%]="progressPercent"
+          ></div>
+        </div>
+      </div>
+
+      <section
+        *ngFor="let group of questionGroups"
+        class="daily-check-group"
+      >
+        <header class="daily-check-group__header">
+          <span>{{ group.label }}</span>
+        </header>
+
+        <article
+          *ngFor="let question of group.questions"
+          class="daily-check-question"
+          [class.daily-check-question--no]="isAnswerSelected(question.question_key, 'NO')"
+        >
+          <div class="daily-check-question__top">
+            <p>{{ question.label }}</p>
+
+            <div class="daily-check-answer-options" role="group">
+              <button
+                type="button"
+                class="daily-check-answer daily-check-answer--yes"
+                [class.is-selected]="isAnswerSelected(question.question_key, 'YES')"
+                (click)="setAnswer(question, 'YES')"
+              >
+                Sí
+              </button>
+              <button
+                type="button"
+                class="daily-check-answer daily-check-answer--no"
+                [class.is-selected]="isAnswerSelected(question.question_key, 'NO')"
+                (click)="setAnswer(question, 'NO')"
+              >
+                No
+              </button>
+              <button
+                type="button"
+                class="daily-check-answer daily-check-answer--na"
+                [class.is-selected]="isAnswerSelected(question.question_key, 'NA')"
+                (click)="setAnswer(question, 'NA')"
+              >
+                No aplica
+              </button>
+            </div>
+          </div>
+
+          <div
+            *ngIf="isAnswerSelected(question.question_key, 'NO')"
+            class="daily-check-issue"
+          >
+            <p class="daily-check-issue__help">
+              No necesitas identificar la causa técnica.
+            </p>
+
+            <div
+              *ngIf="question.requires_affected_scope"
+              class="daily-check-control-block"
+            >
+              <span>¿Afecta a uno o varios equipos?</span>
+              <div class="daily-check-mini-options">
+                <button
+                  type="button"
+                  [class.is-selected]="answerState(question.question_key).affectedScope === 'ONE'"
+                  (click)="setAffectedScope(question.question_key, 'ONE')"
+                >
+                  Uno
+                </button>
+                <button
+                  type="button"
+                  [class.is-selected]="answerState(question.question_key).affectedScope === 'MULTIPLE'"
+                  (click)="setAffectedScope(question.question_key, 'MULTIPLE')"
+                >
+                  Varios
+                </button>
+              </div>
+            </div>
+
+            <div class="daily-check-control-block">
+              <span>¿La falla fue reportada a Soporte?</span>
+              <div class="daily-check-mini-options">
+                <button
+                  type="button"
+                  [class.is-selected]="answerState(question.question_key).reportedToSupport === true"
+                  (click)="setReportedToSupport(question.question_key, true)"
+                >
+                  Sí
+                </button>
+                <button
+                  type="button"
+                  [class.is-selected]="answerState(question.question_key).reportedToSupport === false"
+                  (click)="setReportedToSupport(question.question_key, false)"
+                >
+                  No
+                </button>
+              </div>
+            </div>
+
+            <label class="daily-check-field">
+              <span>Descripción breve</span>
+              <textarea
+                rows="3"
+                maxlength="1000"
+                placeholder="Ej. La impresora no imprime aunque está encendida."
+                [ngModel]="answerState(question.question_key).description"
+                (ngModelChange)="onDescriptionChange(question.question_key, $event)"
+              ></textarea>
+            </label>
+
+            <div class="daily-check-evidence">
+              <div class="daily-check-evidence__heading">
+                <span>Evidencia <small>opcional</small></span>
+                <span>JPG, PNG, WEBP o PDF · máx. 15 MB</span>
+              </div>
+
+              <div class="daily-check-evidence__actions">
+                <input
+                  class="daily-check-file-input"
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  [attr.id]="'camera-' + question.question_key"
+                  (change)="onEvidenceSelected(question.question_key, $event)"
+                />
+                <label
+                  class="daily-check-file-button"
+                  [attr.for]="'camera-' + question.question_key"
+                >
+                  Tomar foto
+                </label>
+
+                <input
+                  class="daily-check-file-input"
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"
+                  [attr.id]="'file-' + question.question_key"
+                  (change)="onEvidenceSelected(question.question_key, $event)"
+                />
+                <label
+                  class="daily-check-file-button"
+                  [attr.for]="'file-' + question.question_key"
+                >
+                  Adjuntar archivo
+                </label>
+              </div>
+
+              <div
+                *ngIf="answerState(question.question_key).evidence"
+                class="daily-check-evidence__selected"
+              >
+                <span>{{ answerState(question.question_key).evidence?.name }}</span>
+                <button
+                  type="button"
+                  (click)="removeEvidence(question.question_key)"
+                >
+                  Quitar
+                </button>
+              </div>
+
+              <p
+                *ngIf="answerState(question.question_key).evidenceError"
+                class="daily-check-inline-error"
+              >
+                {{ answerState(question.question_key).evidenceError }}
+              </p>
+            </div>
+          </div>
+
+          <p
+            *ngIf="showQuestionError(question)"
+            class="daily-check-inline-error"
+          >
+            {{ questionErrorText(question) }}
+          </p>
+        </article>
+      </section>
+
+      <section
+        *ngIf="noCount > 0"
+        class="daily-check-general-status"
+      >
+        <div>
+          <span class="daily-check-step__number">Estado general</span>
+          <h2>¿La sucursal puede seguir operando?</h2>
+        </div>
+
+        <div class="daily-check-general-status__options">
+          <button
+            type="button"
+            [class.is-selected]="generalStatus === 'MINOR_FAILURE'"
+            (click)="setGeneralStatus('MINOR_FAILURE')"
+          >
+            <strong>Falla menor</strong>
+            <span>La operación puede continuar.</span>
+          </button>
+          <button
+            type="button"
+            [class.is-selected]="generalStatus === 'OPERATIONAL_IMPACT'"
+            (click)="setGeneralStatus('OPERATIONAL_IMPACT')"
+          >
+            <strong>Afecta la operación</strong>
+            <span>La falla impide o limita una operación necesaria.</span>
+          </button>
+        </div>
+
+        <p
+          *ngIf="attemptedSubmit && !generalStatus"
+          class="daily-check-inline-error"
+        >
+          Selecciona el estado general de la sucursal.
+        </p>
+      </section>
+
+      <footer class="daily-check-footer">
+        <div class="daily-check-footer__copy">
+          <strong *ngIf="isMandatory">Esta revisión ya es obligatoria.</strong>
+          <span *ngIf="isMandatory">Completa y envía para continuar.</span>
+          <span *ngIf="!isMandatory && status?.postpone_count === 1">
+            Te queda un aplazamiento.
+          </span>
+        </div>
+
+        <div class="daily-check-footer__actions">
+          <button
+            *ngIf="canPostpone"
+            type="button"
+            class="daily-check-secondary"
+            [disabled]="postponing || submitting"
+            (click)="postpone()"
+          >
+            {{ postponing ? 'Aplazando…' : 'Ahora no' }}
+          </button>
+
+          <button
+            type="button"
+            class="daily-check-primary"
+            [disabled]="submitting"
+            (click)="submit()"
+          >
+            {{ submitLabel }}
+          </button>
+        </div>
+      </footer>
+    </section>
+  </div>
+</section>
