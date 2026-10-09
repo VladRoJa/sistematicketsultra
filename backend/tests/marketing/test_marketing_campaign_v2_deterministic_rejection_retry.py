@@ -124,9 +124,10 @@ def test_single_attempt_audits_original_error_before_http(monkeypatch):
 
     class Session:
         commits = 0
+        rollbacks = 0
         def query(self, _model): return Query()
         def commit(self): self.commits += 1
-        def rollback(self): pytest.fail("no rollback expected")
+        def rollback(self): self.rollbacks += 1
 
     session = Session()
     svc._mark_la_paz_retry_started(review=review, actor_user_id=7, session=session)
@@ -139,6 +140,8 @@ def test_single_attempt_audits_original_error_before_http(monkeypatch):
     assert evidence["support_ref"] == "bc-mv09582n-ly0gq0"
     with pytest.raises(svc.Campaign8DeterministicRetryError):
         svc._mark_la_paz_retry_started(review=review, actor_user_id=7, session=session)
+    assert session.commits == 1
+    assert session.rollbacks == 1
 
 
 def test_real_send_requires_process_switch(monkeypatch):
