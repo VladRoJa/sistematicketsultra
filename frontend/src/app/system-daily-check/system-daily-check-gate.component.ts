@@ -71,6 +71,9 @@ export class SystemDailyCheckGateComponent
 
   screen: SystemDailyCheckGateScreen = 'branch';
   questions: SystemDailyCheckQuestion[] = [];
+  questionGroups: SystemDailyCheckGateQuestionGroup<
+    SystemDailyCheckQuestion
+  >[] = [];
   branches: SystemDailyCheckBranch[] = [];
   selectedBranchId: number | null = null;
   status: SystemDailyCheckStatus | null = null;
@@ -130,14 +133,6 @@ export class SystemDailyCheckGateComponent
       event.preventDefault();
       event.stopImmediatePropagation();
     }
-  }
-
-  get questionGroups(): SystemDailyCheckGateQuestionGroup<
-    SystemDailyCheckQuestion
-  >[] {
-    return buildSystemDailyCheckQuestionGroups(
-      this.questions,
-    );
   }
 
   get answeredCount(): number {
@@ -492,6 +487,9 @@ export class SystemDailyCheckGateComponent
       next: ({ questions, branches }) => {
         this.loading = false;
         this.questions = questions.questions || [];
+        this.questionGroups = buildSystemDailyCheckQuestionGroups(
+          this.questions,
+        );
         this.branches = (branches || [])
           .filter((branch) => !branch.is_demo)
           .sort((a, b) => (

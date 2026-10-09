@@ -13,6 +13,7 @@ on:
       - "frontend/src/app/reauth-modal/reauth-modal.component.ts"
       - "frontend/src/app/system-daily-check/**"
       - "frontend/tests/system-daily-check-gate-state.test.ts"
+      - "frontend/tests/system-daily-check-no-freeze-contract.test.cjs"
       - "frontend/src/styles.scss"
       - "docs/contratos/checklist_sistemas/**"
       - ".github/workflows/system-daily-check-m2.yml"
@@ -88,5 +89,7 @@ jobs:
             tests/system-daily-check-gate-state.test.ts
           node .tmp-system-daily-check-tests/tests/system-daily-check-gate-state.test.js
           rm -rf .tmp-system-daily-check-tests
+      - name: Run checklist no-freeze render contract
+        run: node tests/system-daily-check-no-freeze-contract.test.cjs
       - name: Build Angular
         run: npm run build
