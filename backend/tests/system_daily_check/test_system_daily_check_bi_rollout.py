@@ -17,7 +17,10 @@ from app.services.system_daily_check_bi_service import (
 )
 from app.services.system_daily_check_service import (
     SystemDailyCheckAuthorizationError,
+    SystemDailyCheckValidationError,
+    list_system_daily_check_branches,
 )
+from app.utils.scope_utils import CORPORATE_BRANCH_ID, ROOT_BRANCH_ID
 from app.utils.sucursal_audience import TECHNICAL_SUCURSAL_IDS
 
 
@@ -162,7 +165,7 @@ def test_rollout_universe_separates_potential_from_expected():
             assert {
                 row["sucursal_id"]
                 for row in day_one["potential_branches"]
-            } == {10, 11}
+            } == {10, 11, CORPORATE_BRANCH_ID}
             assert {
                 row["sucursal_id"]
                 for row in day_one["expected_branches"]
@@ -200,11 +203,17 @@ def test_rollout_universe_rejects_non_date_cutoff():
         engine.dispose()
 
 
-def _actor(*, role="SISTEMAS", username="sistemas-user"):
+def _actor(
+    *,
+    role="SISTEMAS",
+    username="sistemas-user",
+    branch_id=ROOT_BRANCH_ID,
+):
     return SimpleNamespace(
         id=1,
         rol=role,
         username=username,
+        sucursal_id=branch_id,
     )
 
 
@@ -261,6 +270,60 @@ def test_configure_rollout_today_replaces_forward_without_rewriting_history():
                 row["sucursal_id"]
                 for row in prior["expected_branches"]
             } == {10}
+    finally:
+        engine.dispose()
+
+
+def test_checklist_branch_catalog_canonicalizes_root_to_corporate():
+    engine = _engine()
+    try:
+        with Session(engine) as session:
+            catalog = list_system_daily_check_branches(
+                _actor(branch_id=ROOT_BRANCH_ID),
+                session=session,
+            )
+            branch_ids = {
+                row["sucursal_id"]
+                for row in catalog["branches"]
+            }
+            assert CORPORATE_BRANCH_ID in branch_ids
+            assert ROOT_BRANCH_ID not in branch_ids
+            assert (
+                catalog["preferred_branch_id"]
+                == CORPORATE_BRANCH_ID
+            )
+    finally:
+        engine.dispose()
+
+
+def test_corporate_is_selectable_but_root_remains_excluded():
+    engine = _engine()
+    now = datetime(2026, 10, 9, 16, 0, tzinfo=timezone.utc)
+    try:
+        with Session(engine) as session:
+            result = configure_system_daily_check_rollout_today(
+                _actor(),
+                branch_ids=[CORPORATE_BRANCH_ID],
+                now=now,
+                session=session,
+            )
+            session.commit()
+            assert {
+                row["sucursal_id"]
+                for row in result["expected_branches"]
+            } == {CORPORATE_BRANCH_ID}
+
+        with Session(engine) as session:
+            with pytest.raises(
+                SystemDailyCheckValidationError,
+                match="técnica no seleccionable",
+            ):
+                configure_system_daily_check_rollout_today(
+                    _actor(),
+                    branch_ids=[ROOT_BRANCH_ID],
+                    now=now,
+                    session=session,
+                )
     finally:
         engine.dispose()
 
