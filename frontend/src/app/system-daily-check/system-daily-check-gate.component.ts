@@ -23,8 +23,14 @@ import {
   SystemDailyCheckStatus,
   SystemDailyCheckSubmitPayload,
 } from './system-daily-check.service';
-
-type GateScreen = 'branch' | 'intro' | 'form';
+import {
+  buildSystemDailyCheckQuestionGroups,
+  canSystemDailyCheckPostpone,
+  isSystemDailyCheckQuestionComplete,
+  resolveSystemDailyCheckGatePresentation,
+  SystemDailyCheckGateQuestionGroup,
+  SystemDailyCheckGateScreen,
+} from './system-daily-check-gate-state';
 
 interface AnswerState {
   answer: SystemDailyCheckAnswerValue | null;
@@ -34,26 +40,6 @@ interface AnswerState {
   evidence: File | null;
   evidenceError: string;
 }
-
-interface QuestionGroup {
-  key: string;
-  label: string;
-  questions: SystemDailyCheckQuestion[];
-}
-
-const CATEGORY_ORDER = [
-  'COMPUTING',
-  'CONNECTIVITY_SYSTEMS',
-  'ACCESS_CONTROL',
-  'AUXILIARY_SYSTEMS',
-];
-
-const CATEGORY_LABELS: Record<string, string> = {
-  COMPUTING: 'Equipo de cómputo',
-  CONNECTIVITY_SYSTEMS: 'Conectividad y sistemas',
-  ACCESS_CONTROL: 'Control de acceso',
-  AUXILIARY_SYSTEMS: 'Sistemas auxiliares',
-};
 
 const MAX_EVIDENCE_BYTES = 15 * 1024 * 1024;
 const ALLOWED_EVIDENCE_TYPES = new Set([
@@ -82,7 +68,7 @@ export class SystemDailyCheckGateComponent
   postponing = false;
   attemptedSubmit = false;
 
-  screen: GateScreen = 'branch';
+  screen: SystemDailyCheckGateScreen = 'branch';
   questions: SystemDailyCheckQuestion[] = [];
   branches: SystemDailyCheckBranch[] = [];
   selectedBranchId: number | null = null;
@@ -143,16 +129,12 @@ export class SystemDailyCheckGateComponent
     }
   }
 
-  get questionGroups(): QuestionGroup[] {
-    return CATEGORY_ORDER
-      .map((key) => ({
-        key,
-        label: CATEGORY_LABELS[key] || key,
-        questions: this.questions.filter(
-          (question) => question.category_key === key,
-        ),
-      }))
-      .filter((group) => group.questions.length > 0);
+  get questionGroups(): SystemDailyCheckGateQuestionGroup<
+    SystemDailyCheckQuestion
+  >[] {
+    return buildSystemDailyCheckQuestionGroups(
+      this.questions,
+    );
   }
 
   get answeredCount(): number {
@@ -195,7 +177,10 @@ export class SystemDailyCheckGateComponent
     }
 
     const allQuestionsValid = this.questions.every(
-      (question) => this.isQuestionComplete(question),
+      (question) => isSystemDailyCheckQuestionComplete(
+        question,
+        this.answerState(question.question_key),
+      ),
     );
     if (!allQuestionsValid) {
       return false;
@@ -208,11 +193,9 @@ export class SystemDailyCheckGateComponent
   }
 
   get canPostpone(): boolean {
-    return !!(
-      this.status?.can_postpone
-      && !this.status?.mandatory
-      && !this.postponing
-      && !this.submitting
+    return canSystemDailyCheckPostpone(
+      this.status,
+      this.postponing || this.submitting,
     );
   }
 
@@ -451,7 +434,10 @@ export class SystemDailyCheckGateComponent
   ): boolean {
     return (
       this.attemptedSubmit
-      && !this.isQuestionComplete(question)
+      && !isSystemDailyCheckQuestionComplete(
+        question,
+        this.answerState(question.question_key),
+      )
     );
   }
 
@@ -587,25 +573,16 @@ export class SystemDailyCheckGateComponent
     this.status = status;
     this.clearRefreshTimer();
 
-    if (status.completed) {
-      this.setVisible(false);
-      return;
-    }
+    const presentation = resolveSystemDailyCheckGatePresentation(
+      status,
+      this.screen,
+    );
 
-    if (!status.should_prompt) {
-      this.setVisible(false);
+    this.screen = presentation.screen;
+    this.setVisible(presentation.visible);
+
+    if (presentation.scheduleRetry) {
       this.scheduleStatusRetry(status.next_prompt_at);
-      return;
-    }
-
-    this.setVisible(true);
-    if (status.mandatory) {
-      this.screen = 'form';
-      return;
-    }
-
-    if (this.screen !== 'form') {
-      this.screen = 'intro';
     }
   }
 
@@ -708,28 +685,6 @@ export class SystemDailyCheckGateComponent
       evidence: null,
       evidenceError: '',
     };
-  }
-
-  private isQuestionComplete(
-    question: SystemDailyCheckQuestion,
-  ): boolean {
-    const state = this.answerState(question.question_key);
-    if (!state.answer) {
-      return false;
-    }
-    if (state.answer !== 'NO') {
-      return true;
-    }
-    if (
-      question.requires_affected_scope
-      && !state.affectedScope
-    ) {
-      return false;
-    }
-    if (state.reportedToSupport === null) {
-      return false;
-    }
-    return !!state.description.trim();
   }
 
   private buildSubmitPayload(): SystemDailyCheckSubmitPayload {

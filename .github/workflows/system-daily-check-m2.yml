@@ -12,6 +12,7 @@ on:
       - "frontend/src/app/layout/layout.component.html"
       - "frontend/src/app/reauth-modal/reauth-modal.component.ts"
       - "frontend/src/app/system-daily-check/**"
+      - "frontend/tests/system-daily-check-gate-state.test.ts"
       - "frontend/src/styles.scss"
       - ".github/workflows/system-daily-check-m2.yml"
   push:
@@ -72,5 +73,21 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend dependencies
         run: npm ci
+      - name: Run checklist gate state tests
+        run: |
+          rm -rf .tmp-system-daily-check-tests
+          ./node_modules/.bin/tsc \
+            --target ES2020 \
+            --module commonjs \
+            --moduleResolution node \
+            --strict \
+            --skipLibCheck \
+            --outDir .tmp-system-daily-check-tests \
+            src/app/system-daily-check/system-daily-check-gate-state.ts \
+            tests/system-daily-check-gate-state.test.ts
+          node .tmp-system-daily-check-tests/tests/system-daily-check-gate-state.test.js
+          rm -rf .tmp-system-daily-check-tests
+      - name: Test checklist gate state
+        run: npm run test:system-daily-check-gate
       - name: Build Angular
-        run: npm run build
+        run: npm run build -- --progress=false
