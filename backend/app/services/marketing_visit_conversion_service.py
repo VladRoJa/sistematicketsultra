@@ -84,6 +84,7 @@ class VisitConversionRow:
     origin: str | None
     sale: SaleRecord | None
     visit_kind: str = "REGISTERED"
+    sale_origin: str | None = None
 
     @property
     def is_iventas(self) -> bool:
@@ -142,6 +143,7 @@ def _normalize_sort(
         "date",
         "phone",
         "origin",
+        "sale_origin",
         "visit_type",
         "conversion_status",
         "sale_date",
@@ -307,6 +309,7 @@ def _build_bundle_from_loaded_data(
 
     result: list[VisitConversionRow] = []
     for visit in loaded.visits:
+        # El origen del pase se conserva independiente del origen de la compra.
         origin = _match_iventas(
             loaded.evidence,
             visit.branch_id,
@@ -333,6 +336,17 @@ def _build_bundle_from_loaded_data(
                 else None
             )
 
+        sale_origin = (
+            _match_iventas(
+                loaded.evidence,
+                sale.branch_id,
+                sale.phone,
+                sale.payment_date,
+            )
+            if sale is not None
+            else None
+        )
+
         result.append(
             VisitConversionRow(
                 event_key=visit.event_key,
@@ -342,6 +356,7 @@ def _build_bundle_from_loaded_data(
                 origin=origin,
                 sale=sale,
                 visit_kind=visit.kind,
+                sale_origin=sale_origin,
             )
         )
 
@@ -530,6 +545,12 @@ def _serialize_detail_row(
             ORIGIN_LABELS.get(row.origin, row.origin)
             if row.origin is not None
             else "Sin match iVentas"
+        ),
+        "sale_origin_key": row.sale_origin if sale is not None else None,
+        "sale_origin": (
+            ORIGIN_LABELS.get(row.sale_origin, row.sale_origin)
+            if row.sale_origin is not None
+            else "Sin match iVentas" if sale is not None else None
         ),
         "visit_type": (
             "Compra directa"
