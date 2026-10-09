@@ -22,6 +22,10 @@ METRICS = {
     "reactivaciones": ("reactivaciones_real_mtd", "REACTIVACIONES"),
 }
 FIRST_SUPPORTED_DATE = date(2026, 1, 1)
+MONTH_NAMES_ES = (
+    "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO",
+    "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE",
+)
 # Until a complete validated daily archive is available, do not derive
 # historical reactivations from corrected monthly cumulative snapshots.
 # Reactivaciones weekly comparison always uses the last three calendar
@@ -174,6 +178,7 @@ def _load_branch_metadata() -> dict[str, dict]:
 def _format_sheet(
     book, name, headers, branches, cells,
     branch_metadata=None, title_text=None,
+    center_summary_numbers=False, center_headers=False,
 ):
     sheet = book.add_worksheet(name)
     sheet.freeze_panes(2, 1)
@@ -186,11 +191,19 @@ def _format_sheet(
     heading = book.add_format({
         "bold": True, "bg_color": "#D8E8F4", "border": 1
     })
+    centered_heading = book.add_format({
+        "bold": True, "bg_color": "#D8E8F4", "border": 1,
+        "align": "center", "num_format": "#,##0",
+    })
+    summary_number = centered_heading if center_summary_numbers else heading
     numeric = book.add_format({"num_format": "#,##0", "align": "center"})
     missing = book.add_format({"bg_color": "#FFF0CC", "align": "center"})
     sheet.merge_range(0, 0, 0, len(headers) - 1, title_text or name.upper(), title)
     for col, header in enumerate(headers):
-        sheet.write(1, col, header, heading)
+        sheet.write(
+            1, col, header,
+            centered_heading if center_headers and col > 0 else heading,
+        )
 
     branch_metadata = branch_metadata or {}
     groups: list[tuple[str | None, list[str]]] = []
@@ -233,7 +246,7 @@ def _format_sheet(
                 if any(v is None for v in vals):
                     sheet.write_blank(current_row, col, None, missing)
                 else:
-                    sheet.write_number(current_row, col, sum(vals), heading)
+                    sheet.write_number(current_row, col, sum(vals), summary_number)
             current_row += 1
 
     sheet.write(current_row, 0, "TOTAL", heading)
@@ -242,7 +255,7 @@ def _format_sheet(
         if any(v is None for v in vals):
             sheet.write_blank(current_row, col, None, missing)
         else:
-            sheet.write_number(current_row, col, sum(vals), heading)
+            sheet.write_number(current_row, col, sum(vals), summary_number)
 
     if name == "Semanal":
         by_region: dict[str, list[str]] = defaultdict(list)
@@ -434,50 +447,15 @@ def render_commercial_daily_xlsx(
         week_sheet.set_row(note_row, 34)
     _format_sheet(
         book, "Totales Mensuales",
-        ["Sucursal"] + [m.strftime("%m/%Y") for m in months],
+        ["Sucursal"] + [
+            MONTH_NAMES_ES[m.month - 1] if metric == "reactivaciones"
+            else m.strftime("%m/%Y")
+            for m in months
+        ],
         branches, monthly_cells, branch_metadata, title_text=monthly_title,
+        center_summary_numbers=(metric == "reactivaciones"),
+        center_headers=(metric == "reactivaciones"),
     )
-    if metric == "reactivaciones" and historical_monthly_by_branch is not None:
-        # Make the Jan/Feb exception visible in the workbook itself. Do not
-        # quietly replace the canonical KPI/Track values.
-        monthly_sheet = book.get_worksheet_by_name("Totales Mensuales")
-        historical_note = (
-            "FUENTES: Ene-Feb 2026: Excel BI historico "
-            "(Reactivaciones, hoja Sheet, SHA256 aea6d4ef...); "
-            "Track KPI 176/162 conserva cierres diferentes. "
-            "Mar-Abr conciliados con Track; May en adelante: Track."
-        )
-        notes_row = len(branches) + (
-            3 if not any(
-                branch_metadata.get(branch, {}).get("group")
-                for branch in branches
-            ) else 6
-        )
-        # The TOTAL row can vary with branch groups. Place the note below the
-        # actual used area rather than assuming a fixed row position.
-        notes_row = max(notes_row, monthly_sheet.dim_rowmax + 2)
-        monthly_sheet.merge_range(
-            notes_row, 0, notes_row, len(months),
-            historical_note,
-            book.add_format({
-                "italic": True,
-                "font_color": "#6E4C00",
-                "bg_color": "#FFF0CC",
-                "text_wrap": True,
-                "valign": "vcenter",
-            }),
-        )
-        monthly_sheet.set_row(notes_row, 34)
-        for column, month in enumerate(months, start=1):
-            if month in (date(2026, 1, 1), date(2026, 2, 1)):
-                monthly_sheet.write_comment(
-                    1, column,
-                    "Fuente: Excel historico BI, hoja Sheet y Reactivaciones "
-                    "(no snapshot canonico Track). "
-                    "Cierres KPI Track existentes: "
-                    + ("snapshot 176" if month.month == 1 else "snapshot 162"),
-                )
-
     book.close()
     return stream.getvalue()
 
