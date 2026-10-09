@@ -143,6 +143,15 @@
         <button
           type="button"
           class="systems-button systems-button--ghost"
+          [disabled]="exportingExcel"
+          (click)="exportExcel()"
+        >
+          {{ exportingExcel ? 'Generando…' : 'Exportar Excel' }}
+        </button>
+
+        <button
+          type="button"
+          class="systems-button systems-button--ghost"
           (click)="toggleRolloutPanel()"
         >
           Configurar piloto
