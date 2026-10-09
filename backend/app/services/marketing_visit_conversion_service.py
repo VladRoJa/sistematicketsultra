@@ -87,12 +87,21 @@ class VisitConversionRow:
     sale_origin: str | None = None
 
     @property
-    def is_iventas(self) -> bool:
-        return self.origin in {ORIGIN_IVENTAS_META, ORIGIN_IVENTAS_OTHER}
-
-    @property
     def bought(self) -> bool:
         return self.sale is not None
+
+    @property
+    def attribution_origin(self) -> str | None:
+        # Una venta usa su fecha de compra; una visita sin compra, su fecha.
+        # origin y sale_origin se conservan separados para auditoría.
+        return self.sale_origin if self.bought else self.origin
+
+    @property
+    def is_iventas(self) -> bool:
+        return self.attribution_origin in {
+            ORIGIN_IVENTAS_META,
+            ORIGIN_IVENTAS_OTHER,
+        }
 
 
 @dataclass(frozen=True)
@@ -421,6 +430,12 @@ def _build_bundle(
 
 def _empty_metrics() -> dict[str, Any]:
     return {
+        "visits_total": 0,
+        "visits_iventas": 0,
+        "visits_iventas_meta": 0,
+        "visits_iventas_other": 0,
+        "visits_not_iventas": 0,
+        "iventas_visit_share": None,
         "visits_iventas_bought": 0,
         "visits_iventas_not_bought": 0,
         "visits_not_iventas_bought": 0,
@@ -432,14 +447,21 @@ def _empty_metrics() -> dict[str, Any]:
 
 def _serialize_metrics(rows: list[VisitConversionRow]) -> dict[str, Any]:
     metrics = _empty_metrics()
+    metrics["visits_total"] = len(rows)
     for row in rows:
         if row.is_iventas:
+            metrics["visits_iventas"] += 1
+            if row.attribution_origin == ORIGIN_IVENTAS_META:
+                metrics["visits_iventas_meta"] += 1
+            else:
+                metrics["visits_iventas_other"] += 1
             key = (
                 "visits_iventas_bought"
                 if row.bought
                 else "visits_iventas_not_bought"
             )
         else:
+            metrics["visits_not_iventas"] += 1
             key = (
                 "visits_not_iventas_bought"
                 if row.bought
@@ -454,6 +476,11 @@ def _serialize_metrics(rows: list[VisitConversionRow]) -> dict[str, Any]:
     not_iventas_total = (
         metrics["visits_not_iventas_bought"]
         + metrics["visits_not_iventas_not_bought"]
+    )
+    metrics["iventas_visit_share"] = (
+        iventas_total / metrics["visits_total"]
+        if metrics["visits_total"] > 0
+        else None
     )
     metrics["iventas_visit_conversion_rate"] = (
         metrics["visits_iventas_bought"] / iventas_total
@@ -486,7 +513,7 @@ def _serialize_summary(
             for branch_id in branch_ids
         },
         "data_quality": {
-            "visit_conversion_mode": "exact_phone_same_branch_30d",
+            "visit_conversion_mode": "purchase_if_bought_visit_if_not_bought_same_branch_30d",
             "visit_conversion_cohort_complete": bundle.cohort_complete,
             "visit_conversion_sales_snapshot_ids": list(
                 bundle.sales_snapshot_ids
