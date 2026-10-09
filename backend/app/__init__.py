@@ -46,6 +46,7 @@ from app.routes.purchase_requisition_routes import purchase_requisition_bp
 from app.routes.system_daily_check_routes import system_daily_check_bp
 from app.routes.system_daily_check_bi_routes import system_daily_check_bi_bp
 from app.routes.google_ads_oauth_routes import google_ads_oauth_bp
+from app.routes.google_ads_readonly_routes import google_ads_readonly_bp
 from app.maintenance_planner import maintenance_planner_bp
 from app.control_center import control_center_bp
 from app.utils.maintenance_ticket_update_guard import (
@@ -164,6 +165,10 @@ def create_app():
     app.register_blueprint(
         google_ads_oauth_bp,
         url_prefix="/api/integrations/google-ads/oauth",
+    )
+    app.register_blueprint(
+        google_ads_readonly_bp,
+        url_prefix="/api/integrations/google-ads",
     )
 
     app.config['DEBUG'] = True
