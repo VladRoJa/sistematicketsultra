@@ -305,7 +305,7 @@ Esos valores vienen del backend.
 
 Antes de submit:
 
-- las 13 preguntas respondidas;
+- las 14 preguntas respondidas;
 - cada NO tiene detalle requerido;
 - estado general seleccionado/derivado;
 - uploads terminados o marcados con error.
@@ -349,7 +349,7 @@ Requisitos razonables:
 
 ### Render
 
-- 13 preguntas;
+- 14 preguntas;
 - agrupaciones correctas;
 - sin preselección.
 
@@ -430,7 +430,7 @@ Respetar permisos backend para lectura/descarga.
 
 M2 queda ACCEPTED solo si:
 
-1. captura de 13 preguntas funciona;
+1. captura de 14 preguntas funciona;
 2. responsive móvil/escritorio validado;
 3. NO genera UI de detalle sencilla;
 4. evidencia queda ligada correctamente;
@@ -474,6 +474,6 @@ M2 queda ACCEPTED solo si:
 
 ```text
 M1 — ACCEPTED EN MAIN
-M2 — ACCEPTED TÉCNICAMENTE / PENDIENTE MERGE A MAIN
-M3 — DESBLOQUEADO AL MERGEAR M2 EN MAIN
+M2 — ACCEPTED EN MAIN
+M3 — ACCEPTED EN MAIN
 ```
