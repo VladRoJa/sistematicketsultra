@@ -1,7 +1,7 @@
 """Deterministic daily/weekly/monthly commercial XLSX from canonical Track MTD."""
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import date, timedelta
 from io import BytesIO
 
@@ -445,11 +445,14 @@ def render_commercial_daily_xlsx(
             }),
         )
         week_sheet.set_row(note_row, 34)
+    monthly_number_counts = Counter(m.month for m in months)
     _format_sheet(
         book, "Totales Mensuales",
         ["Sucursal"] + [
-            MONTH_NAMES_ES[m.month - 1] if metric == "reactivaciones"
-            else m.strftime("%m/%Y")
+            (
+                MONTH_NAMES_ES[m.month - 1]
+                + (f" {m.year}" if monthly_number_counts[m.month] > 1 else "")
+            ) if metric == "reactivaciones" else m.strftime("%m/%Y")
             for m in months
         ],
         branches, monthly_cells, branch_metadata, title_text=monthly_title,
