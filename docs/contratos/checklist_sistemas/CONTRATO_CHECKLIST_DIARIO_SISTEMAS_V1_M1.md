@@ -1,9 +1,9 @@
 # Contrato — Checklist Diario de Sistemas V1 / M1
 ## Core backend, persistencia y reglas
 
-Estado: PENDIENTE DE IMPLEMENTACIÓN  
+Estado: ACCEPTED — implementación validada en PR #829
 Gate de entrada: contrato global aprobado.  
-Gate de salida: backend autoritativo para estado diario, aplazamiento y envío válido.
+Gate de salida: CUMPLIDO técnicamente; M2 permanece bloqueado hasta que M1 esté mergeado en `main`.
 
 ## 0. Uso de este contrato
 
@@ -491,10 +491,28 @@ M1 queda ACCEPTED solo si:
 11. GERENTE no puede activar status/postpone/submit del flujo diario;
 12. no existe dependencia de localStorage para autoridad.
 
+### 24.1 Decisiones implementadas
+
+- Autoridad MVP: `rol == SISTEMAS` o `username == ADMICORP`. La excepción por username se conserva porque el modelo actual no expone un rol/capability canónico de ADMICORP; no se extiende a ADMINISTRADOR, TECNICO, department_id 7 genérico ni GERENTE.
+- Los usuarios del piloto pueden seleccionar como contexto cualquier sucursal existente; el backend valida la sucursal y ningún perfil fuera del piloto puede activar el flujo. La futura apertura a GERENTE requiere contrato y scope nuevo.
+- Las 13 preguntas viven como definición backend estable y cada respuesta persiste `question_key` + snapshot del label.
+- `affected_scope` es obligatorio únicamente en preguntas donde UNO/VARIOS tiene sentido operativo; Gasca, Suite Ultra y música ambiental no lo requieren.
+- M1 prepara `SystemDailyCheckIssueAttachmentORM` y su metadata auditable por incidencia. La carga/descarga física queda fuera de M1; M2 deberá reutilizar el patrón seguro de almacenamiento existente en lugar de duplicarlo.
+- La concurrencia se serializa bloqueando la fila canónica de sucursal antes de mutar prompt/checklist, además de las restricciones únicas en DB.
+
+### 24.2 Evidencia de aceptación
+
+- Suite local combinada M1 + regresión de migración Campaign V2: `43 passed, 2 skipped`; los skips corresponden a pruebas PostgreSQL aisladas que se ejecutan en CI.
+- Head de implementación validado: `8b01e052`.
+- GitHub Actions M1 con PostgreSQL 16 efímero: SUCCESS, incluyendo upgrade/downgrade real y solicitudes concurrentes de postpone/submit.
+- Regresión Campaign V2 Scoped Exclusions sobre ese mismo head: SUCCESS.
+- Smoke de `create_app()`: registradas exactamente las rutas `questions`, `today/status`, `today/postpone` y `today/submit`.
+- PR #829 mergeable contra el mismo SHA de `main` usado como base.
+
 ## 25. Estado final esperado
 
 ```text
 M1 — ACCEPTED
-M2 — DESBLOQUEADO
+M2 — DESBLOQUEADO AL MERGEAR M1 EN MAIN
 M3 — BLOQUEADO POR M2
 ```
