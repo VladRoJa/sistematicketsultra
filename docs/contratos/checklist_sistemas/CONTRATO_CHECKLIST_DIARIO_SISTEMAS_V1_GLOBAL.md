@@ -73,15 +73,58 @@ No se debe depender del texto visible como identidad lógica. Cuando existan IDs
 
 No forzar clasificaciones incorrectas para preguntas que todavía no tengan categoría definitiva, como Gasca o Suite Ultra.
 
-## 4. Usuario objetivo
+## 4. Usuario objetivo y rollout MVP
 
-Usuario principal:
+Usuario objetivo final del producto:
 
 - GERENTE con alcance sobre una sucursal.
+
+**Rollout MVP inicial:**
+
+- SISTEMAS;
+- ADMICORP.
+
+Durante el MVP, únicamente usuarios que el backend reconozca dentro de los perfiles/capacidades efectivas de **SISTEMAS o ADMICORP** pueden:
+
+- ver el módulo;
+- recibir el prompt diario;
+- aplazar;
+- completar el checklist;
+- quedar sujetos al gate obligatorio;
+- consultar historial/BI según el alcance definido.
+
+Durante el MVP, GERENTE y cualquier otro perfil quedan explícitamente fuera:
+
+- no ven menú ni acceso;
+- no reciben prompt;
+- no acumulan aplazamientos;
+- no pueden quedar bloqueados por mandatory;
+- no participan en el denominador operativo del piloto salvo datos QA deliberados.
 
 La autorización real debe validarse en backend.
 
 El frontend puede ocultar o guiar, pero no sustituye permisos backend.
+
+No hardcodear un username como sustituto de una política estable si el modelo actual permite resolver el perfil/capacidad correctamente. M1 debe inspeccionar cómo se representa hoy SISTEMAS y ADMICORP y documentar la fuente de autoridad usada.
+
+### Gate de apertura a gerentes
+
+Terminar M1/M2/M3 **no habilita automáticamente a GERENTE**.
+
+La apertura a gerentes requiere:
+
+1. piloto MVP funcional;
+2. validación de Sistemas sobre UX, flujo, bloqueo y BI;
+3. aprobación explícita para rollout;
+4. cambio de contrato/configuración de acceso;
+5. pruebas de permisos antes de producción.
+
+Hasta entonces:
+
+```text
+MVP_ACCESS = SISTEMAS | ADMICORP
+GERENTE_ACCESS = OFF
+```
 
 ## 5. Frecuencia y unicidad
 
@@ -117,11 +160,16 @@ Debe conservarse al menos:
 
 ## 7. Presentación diaria y aplazamiento controlado
 
-Al iniciar sesión, Suite debe consultar el estado del checklist diario de la sucursal.
+Al iniciar sesión, Suite debe consultar el estado del checklist diario **solo para usuarios incluidos en el rollout vigente**.
+
+Durante el MVP:
+
+- SISTEMAS y ADMICORP pueden entrar al flujo;
+- GERENTE no debe recibir ninguna consulta/prompt que pueda activar enforcement sobre su sesión.
 
 Si está pendiente, se presenta el flujo.
 
-El gerente puede aplazarlo **máximo dos veces por día**.
+El usuario piloto puede aplazarlo **máximo dos veces por día**.
 
 Reglas:
 
@@ -551,7 +599,7 @@ Objetivo:
 
 Gate:
 
-un gerente puede completar el flujo en móvil/escritorio y no puede evadir el estado obligatorio mediante navegación normal.
+un usuario piloto autorizado de SISTEMAS/ADMICORP puede completar el flujo en móvil/escritorio y no puede evadir el estado obligatorio mediante navegación normal; un GERENTE no autorizado por el rollout MVP no ve ni sufre el gate.
 
 ### M3 — Historial y BI
 
@@ -575,7 +623,7 @@ Objetivo:
 
 Gate:
 
-Suite puede responder operacionalmente qué está fallando, dónde, con qué frecuencia y si los gerentes están cumpliendo el check.
+Suite puede responder operacionalmente qué está fallando, dónde, con qué frecuencia y cómo se comporta el piloto. La apertura a gerentes sigue bloqueada hasta aprobación explícita de Sistemas.
 
 ## 27. Gates entre milestones
 
@@ -610,7 +658,7 @@ Si una nueva funcionalidad obliga al gerente a diagnosticar técnicamente, debe 
 
 ## 29. Resultado esperado de V1
 
-Al terminar M3, V1 debe estar operativa de extremo a extremo y permitir responder:
+Al terminar M3, V1 debe estar operativa de extremo a extremo **en modo MVP restringido a SISTEMAS/ADMICORP** y permitir responder:
 
 - ¿todas las sucursales hicieron su revisión?;
 - ¿cuáles no?;
@@ -618,7 +666,7 @@ Al terminar M3, V1 debe estar operativa de extremo a extremo y permitir responde
 - ¿qué sistemas fallan de forma recurrente?;
 - ¿qué sucursales concentran incidencias?;
 - ¿qué porcentaje se reporta a Soporte?;
-- ¿cuántos gerentes aplazan y cuántas veces?;
+- ¿cuántos usuarios piloto aplazan y cuántas veces?;
 - ¿la salud operativa mejora o empeora?
 
 ## 30. Estado
@@ -629,4 +677,5 @@ GLOBAL — APROBADO
 M1 — PENDIENTE
 M2 — BLOQUEADO POR M1
 M3 — BLOQUEADO POR M2
+ROLLOUT GERENTES — BLOQUEADO POR APROBACIÓN DE SISTEMAS
 ```
