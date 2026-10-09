@@ -37,13 +37,13 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: m3_test
-          POSTGRES_PASSWORD: m3_test_only
-          POSTGRES_DB: system_daily_check_m3_test
+          POSTGRES_USER: m1_test
+          POSTGRES_PASSWORD: m1_test_only
+          POSTGRES_DB: system_daily_check_m1_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U m3_test -d system_daily_check_m3_test"
+          --health-cmd "pg_isready -U m1_test -d system_daily_check_m1_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -61,7 +61,7 @@ jobs:
         env:
           SECRET_KEY: isolated-system-daily-check-secret
           JWT_SECRET_KEY: isolated-system-daily-check-jwt
-          SYSTEM_DAILY_CHECK_TEST_POSTGRES_URL: postgresql+psycopg2://m3_test:m3_test_only@127.0.0.1:5432/system_daily_check_m3_test
+          SYSTEM_DAILY_CHECK_TEST_POSTGRES_URL: postgresql+psycopg2://m1_test:m1_test_only@127.0.0.1:5432/system_daily_check_m1_test
         run: |
           python -m pytest -q --tb=short tests/system_daily_check
 
