@@ -1,0 +1,198 @@
+<section class="ads-page">
+  <header class="ads-heading">
+    <div>
+      <p class="eyebrow">Marketing · Integraciones</p>
+      <h1>Google Ads</h1>
+      <p class="intro">Conexión administrativa y consulta de campañas de Ultra Gym. Esta pantalla utiliza datos reales de Google Ads API, nunca datos de demostración.</p>
+    </div>
+    <button type="button" class="btn btn-outline"
+            (click)="reloadStatus()" [disabled]="loadingStatus || connecting">
+      {{ loadingStatus ? 'Consultando...' : 'Actualizar estado' }}
+    </button>
+  </header>
+
+  <div class="ads-alert" role="alert" *ngIf="statusError">{{ statusError }}</div>
+
+  <section class="ads-card">
+    <div class="card-heading">
+      <div>
+        <h2>1. Autorización de la cuenta</h2>
+        <p>Solo administradores. Las credenciales y tokens permanecen en el backend.</p>
+      </div>
+      <span class="status-chip" [class.status-chip--good]="isAuthorized">
+        {{ connectionLabel }}
+      </span>
+    </div>
+
+    <dl class="metadata" *ngIf="status">
+      <div>
+        <dt>Cuenta objetivo configurada</dt>
+        <dd>{{ status.customer_id || 'Sin configurar' }}</dd>
+      </div>
+      <div>
+        <dt>Última autorización</dt>
+        <dd>{{ formatDateTime(status.last_authorized_at) }}</dd>
+      </div>
+      <div>
+        <dt>Estado OAuth</dt>
+        <dd>{{ status.enabled ? 'Habilitado' : 'Pendiente de configuración' }}</dd>
+      </div>
+    </dl>
+
+    <p class="callout" *ngIf="status && !status.enabled">
+      OAuth M1 está instalado pero deshabilitado. Un administrador del servidor debe configurar
+      las variables privadas antes de iniciar la conexión; no ingreses secretos aquí.
+    </p>
+    <p class="callout" *ngIf="isAuthorized">
+      La autorización está almacenada. Esto no garantiza que Google Ads permita consultar
+      la cuenta hasta que realices la comprobación del siguiente paso.
+    </p>
+
+    <div class="actions">
+      <button type="button" class="btn btn-primary" (click)="connect()"
+              [disabled]="status?.enabled !== true || connecting || loadingStatus">
+        {{ connecting ? 'Preparando Google...' : (isAuthorized ? 'Reconectar con Google' : 'Conectar con Google') }}
+      </button>
+      <a href="https://suiteultragym.com/privacidad/google-ads/" target="_blank" rel="noopener noreferrer">
+        Política de privacidad
+      </a>
+    </div>
+    <p class="hint">Google se abrirá en esta misma pestaña. Cuando concluya la autorización,
+      regresa a <strong>Marketing y Conversión → Google Ads</strong> y actualiza el estado.</p>
+    <div class="ads-alert" role="alert" *ngIf="connectError">{{ connectError }}</div>
+  </section>
+
+  <section class="ads-card">
+    <div class="card-heading">
+      <div>
+        <h2>2. Comprobar acceso a Google Ads</h2>
+        <p>Valida el ID exacto de la cuenta; también contempla conexiones a través de MCC.</p>
+      </div>
+      <button type="button" class="btn btn-outline"
+              (click)="verifyAccess()" [disabled]="!canCheckAccount">
+        {{ checkingAccount ? 'Comprobando...' : 'Comprobar acceso' }}
+      </button>
+    </div>
+
+    <div class="ads-alert" role="alert" *ngIf="accountError">{{ accountError }}</div>
+    <div *ngIf="accountCheck as access" class="account-result">
+      <p class="success-line">Acceso verificado mediante consulta real de Google Ads API.</p>
+      <dl class="metadata">
+        <div>
+          <dt>Cuenta</dt>
+          <dd>{{ access.account.descriptive_name || access.account.customer_id }}</dd>
+        </div>
+        <div>
+          <dt>Customer ID</dt>
+          <dd>{{ access.account.customer_id }}</dd>
+        </div>
+        <div>
+          <dt>Moneda</dt>
+          <dd>{{ access.account.currency_code }}</dd>
+        </div>
+        <div>
+          <dt>Zona horaria</dt>
+          <dd>{{ access.account.timezone }}</dd>
+        </div>
+        <div>
+          <dt>Acceso mediante MCC</dt>
+          <dd>{{ access.login_customer_id || 'Sin MCC configurado' }}</dd>
+        </div>
+        <div>
+          <dt>Versión API</dt>
+          <dd>{{ access.api_version }}</dd>
+        </div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="ads-card">
+    <div class="card-heading">
+      <div>
+        <h2>3. Consultar campañas</h2>
+        <p>Rango máximo de 31 días. No se ejecutan modificaciones ni se guardan snapshots.</p>
+      </div>
+    </div>
+
+    <div class="date-form">
+      <label>
+        Desde
+        <input type="date" [(ngModel)]="dateFrom" [disabled]="loadingReport"/>
+      </label>
+      <label>
+        Hasta
+        <input type="date" [(ngModel)]="dateTo" [disabled]="loadingReport"/>
+      </label>
+      <button type="button" class="btn btn-primary"
+              (click)="loadReport()" [disabled]="isReportDisabled">
+        {{ loadingReport ? 'Consultando...' : 'Consultar Google Ads' }}
+      </button>
+    </div>
+
+    <p class="callout" *ngIf="!isAccountVerified">
+      Comprueba primero el acceso a la cuenta para habilitar el reporte.
+    </p>
+    <div class="ads-alert" role="alert" *ngIf="reportError">{{ reportError }}</div>
+
+    <ng-container *ngIf="report as data">
+      <p class="source-note">
+        Fuente: Google Ads API en vivo · {{ data.date_from }} al {{ data.date_to }} ·
+        Zona horaria: {{ data.account.timezone }} · No persistido en Warehouse
+      </p>
+
+      <div class="totals">
+        <div>
+          <span>Inversión</span>
+          <strong>{{ formatCost(data.totals.cost, data.account.currency_code) }}</strong>
+        </div>
+        <div>
+          <span>Clics</span>
+          <strong>{{ formatInteger(data.totals.clicks) }}</strong>
+        </div>
+        <div>
+          <span>Impresiones</span>
+          <strong>{{ formatInteger(data.totals.impressions) }}</strong>
+        </div>
+        <div>
+          <span>Conversiones Google Ads</span>
+          <strong>{{ data.totals.conversions }}</strong>
+        </div>
+      </div>
+
+      <p class="conversion-warning">{{ data.conversions_note }}</p>
+      <p class="source-note">{{ reportRowCount }} filas de campaña/fecha</p>
+
+      <div class="table-scroll" *ngIf="data.rows.length > 0">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Campaña</th>
+              <th>Estado</th>
+              <th>Canal</th>
+              <th class="num">Impresiones</th>
+              <th class="num">Clics</th>
+              <th class="num">Inversión</th>
+              <th class="num">Conversiones Google</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of data.rows">
+              <td>{{ row.date }}</td>
+              <td>{{ row.campaign_name || row.campaign_id }}</td>
+              <td>{{ row.campaign_status }}</td>
+              <td>{{ row.advertising_channel_type }}</td>
+              <td class="num">{{ formatInteger(row.impressions) }}</td>
+              <td class="num">{{ formatInteger(row.clicks) }}</td>
+              <td class="num">{{ formatCost(row.cost, data.account.currency_code) }}</td>
+              <td class="num">{{ row.conversions }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="empty" *ngIf="data.rows.length === 0">
+        Google Ads no devolvió filas para el intervalo seleccionado.
+      </p>
+    </ng-container>
+  </section>
+</section>
