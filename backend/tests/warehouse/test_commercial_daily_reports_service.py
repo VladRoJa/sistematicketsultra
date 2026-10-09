@@ -573,3 +573,18 @@ def test_venta_nueva_monthly_headers_unchanged_by_reactivaciones_styling():
     assert wb["Totales Mensuales"]["B2"].value == "01/2026"
     assert wb["Totales Mensuales"]["K2"].value == "10/2026"
     assert wb["Diario"]["B2"].value == "27/09/2026"
+
+
+def test_reactivaciones_month_names_add_year_only_when_ambiguous():
+    payload = render_commercial_daily_xlsx(
+        metric="reactivaciones", cutoff=date(2027, 1, 2),
+        mtd_series={"VILLA_VERDE": {
+            date(2027, 1, 1): 1,
+            date(2027, 1, 2): 2,
+        }},
+    )
+    monthly = load_workbook(BytesIO(payload), data_only=True)["Totales Mensuales"]
+    assert monthly["B2"].value == "ENERO 2026"
+    assert monthly["C2"].value == "FEBRERO"
+    assert monthly["M2"].value == "DICIEMBRE"
+    assert monthly["N2"].value == "ENERO 2027"
