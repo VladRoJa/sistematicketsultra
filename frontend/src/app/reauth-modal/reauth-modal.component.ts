@@ -1,6 +1,7 @@
 // frontend/src/app/reauth-modal/reauth-modal.component.ts
 
-import { Component } from '@angular/core';
+import { Component, Inject, OnDestroy, Renderer2 } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
 import { MatDialogRef } from '@angular/material/dialog';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
@@ -22,7 +23,7 @@ import { AuthService } from '../services/auth.service';
   templateUrl: './reauth-modal.component.html',
   styleUrls: ['./reauth-modal.component.css'],
 })
-export class ReauthModalComponent {
+export class ReauthModalComponent implements OnDestroy {
   form: FormGroup;
   loading = false;
   errorMessage = '';
@@ -31,12 +32,25 @@ export class ReauthModalComponent {
   constructor(
     private dialogRef: MatDialogRef<ReauthModalComponent>,
     private fb: FormBuilder,
-    private authService: AuthService
+    private authService: AuthService,
+    private renderer: Renderer2,
+    @Inject(DOCUMENT) private document: Document,
   ) {
+    this.renderer.addClass(
+      this.document.body,
+      'suite-reauth-active',
+    );
     this.form = this.fb.group({
       username: [this.getStoredUsername(), Validators.required],
       password: ['', Validators.required],
     });
+  }
+
+  ngOnDestroy(): void {
+    this.renderer.removeClass(
+      this.document.body,
+      'suite-reauth-active',
+    );
   }
 
   reauthenticate(): void {

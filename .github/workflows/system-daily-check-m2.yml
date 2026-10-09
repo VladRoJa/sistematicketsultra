@@ -1,0 +1,92 @@
+name: System Daily Check M2
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/routes/system_daily_check_routes.py"
+      - "backend/app/services/system_daily_check_service.py"
+      - "backend/app/services/system_daily_check_attachment_service.py"
+      - "backend/app/services/system_daily_check_attachment_storage_service.py"
+      - "backend/tests/system_daily_check/**"
+      - "frontend/src/app/layout/layout.component.ts"
+      - "frontend/src/app/layout/layout.component.html"
+      - "frontend/src/app/reauth-modal/reauth-modal.component.ts"
+      - "frontend/src/app/system-daily-check/**"
+      - "frontend/tests/system-daily-check-gate-state.test.ts"
+      - "frontend/src/styles.scss"
+      - "docs/contratos/checklist_sistemas/**"
+      - ".github/workflows/system-daily-check-m2.yml"
+  push:
+    branches:
+      - "feat/checklist-sistemas-v1-m2"
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: m1_test
+          POSTGRES_PASSWORD: m1_test_only
+          POSTGRES_DB: system_daily_check_m1_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U m1_test -d system_daily_check_m1_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend test runtime
+        run: |
+          python -m pip install -r backend/requirements.txt
+          python -m pip install "pytest==8.3.5"
+      - name: Run checklist backend tests
+        working-directory: backend
+        env:
+          SECRET_KEY: isolated-system-daily-check-secret
+          JWT_SECRET_KEY: isolated-system-daily-check-jwt
+          SYSTEM_DAILY_CHECK_TEST_POSTGRES_URL: postgresql+psycopg2://m1_test:m1_test_only@127.0.0.1:5432/system_daily_check_m1_test
+        run: |
+          python -m pytest -q --tb=short tests/system_daily_check
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Run checklist gate state tests
+        run: |
+          rm -rf .tmp-system-daily-check-tests
+          ./node_modules/.bin/tsc \
+            --target ES2020 \
+            --module commonjs \
+            --moduleResolution node \
+            --strict \
+            --skipLibCheck \
+            --outDir .tmp-system-daily-check-tests \
+            src/app/system-daily-check/system-daily-check-gate-state.ts \
+            tests/system-daily-check-gate-state.test.ts
+          node .tmp-system-daily-check-tests/tests/system-daily-check-gate-state.test.js
+          rm -rf .tmp-system-daily-check-tests
+      - name: Build Angular
+        run: npm run build

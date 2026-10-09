@@ -24,6 +24,7 @@ import { canAccessTrackRegionalOperational } from '../warehouse/track-intelligen
 import { canAccessContactCenter } from '../contact-center/contact-center-access.guard';
 import { withCampaignV2MenuItem } from '../marketing-campaign-v2/marketing-campaign-v2-menu';
 import { withPurchaseRequisitionMenuItem } from '../purchase-requisitions/purchase-requisition-menu';
+import { SystemDailyCheckGateComponent } from '../system-daily-check/system-daily-check-gate.component';
 
 @Component({
   selector: 'app-layout',
@@ -38,7 +39,8 @@ import { withPurchaseRequisitionMenuItem } from '../purchase-requisitions/purcha
     MatIconModule,
     MatButtonModule,
     MatDialogModule,
-    DragDropModule
+    DragDropModule,
+    SystemDailyCheckGateComponent
   ]
 })
 export class LayoutComponent implements OnInit, AfterViewInit, OnDestroy {
