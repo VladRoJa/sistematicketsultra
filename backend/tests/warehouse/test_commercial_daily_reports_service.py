@@ -665,4 +665,10 @@ def test_venta_nueva_daily_and_weekly_summary_format_not_changed():
             r for r in range(3, sheet.max_row + 1)
             if sheet.cell(r, 1).value == "TOTAL"
         )
-        assert sheet.cell(total_row, 2).alignment.horizontal != "center"
+        # Choose a populated current-week total, not the intentionally
+        # centered blank placeholder in an old week.
+        last_col = sheet.max_column if name == "Semanal" else 2
+        assert sheet.cell(total_row, last_col).value == (
+            4 if name == "Semanal" else 1
+        )
+        assert sheet.cell(total_row, last_col).alignment.horizontal != "center"
