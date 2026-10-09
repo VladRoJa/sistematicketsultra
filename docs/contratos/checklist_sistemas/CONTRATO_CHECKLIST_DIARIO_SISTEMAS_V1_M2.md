@@ -1,9 +1,9 @@
 # Contrato — Checklist Diario de Sistemas V1 / M2
 ## Captura responsive, evidencias y gate de uso
 
-Estado: BLOQUEADO POR M1  
-Gate de entrada: M1 ACCEPTED en main.  
-Gate de salida: captura completa y enforcement diario usable en móvil/escritorio.
+Estado: ACCEPTED TÉCNICAMENTE — PR #830 pendiente de merge a `main`
+Gate de entrada: CUMPLIDO — M1 ACCEPTED en `main`.
+Gate de salida: CUMPLIDO técnicamente; M3 permanece bloqueado hasta que M2 esté mergeado en `main`.
 
 ## 0. Uso de este contrato
 
@@ -443,10 +443,37 @@ M2 queda ACCEPTED solo si:
 11. SISTEMAS/ADMICORP sí respetan el gate;
 12. pruebas frontend/integración están verdes.
 
+### 27.1 Decisiones implementadas
+
+- La captura vive en un componente standalone full-screen montado dentro de `LayoutComponent`, no en un route guard ni en un `MatDialog`. Esto permite cubrir deep-links autenticados sin crear loops de navegación o de autenticación.
+- El frontend reutiliza `SessionService` y los interceptors existentes. M2 no introduce otro origen de token ni autoridad local para `postpone_count`, `mandatory`, `business_date` o `completed`.
+- Durante el MVP, únicamente SISTEMAS/ADMICORP candidatos inicializan el flujo en frontend; backend sigue siendo la autoridad y rechaza perfiles fuera del piloto. GERENTE, ADMINISTRADOR genérico y TECNICO permanecen fuera.
+- Para el piloto, un usuario autorizado puede seleccionar una sucursal existente cuando su sesión no trae una sucursal válida. Esta selección es contexto de QA/MVP y no amplía permisos. La futura apertura a GERENTE debe retirar esa libertad y aplicar el scope contratado para gerencia.
+- Las evidencias se envían dentro del mismo `today/submit`: JSON puro cuando no hay archivos o `multipart/form-data` con `payload` + campos `evidence__<question_key>`. No se crean drafts ni adjuntos huérfanos previos al submit.
+- La evidencia se valida por contenido y no solo por extensión: JPG/JPEG, PNG, WEBP y PDF, máximo 15 MB, SHA-256, `storage_key` restringido al árbol del checklist y cleanup físico cuando la transacción falla.
+- Cada archivo se liga a la incidencia de su `question_key`; evidencia sobre una respuesta sin incidencia/NO se rechaza y hace rollback.
+- El gate usa `cdkTrapFocus`, bloquea scroll de fondo y queda sobre las capas normales de Suite. La reautenticación por sesión expirada conserva una capa superior temporal para evitar que un mandatory impida renovar la sesión.
+- Si todavía no se conoce el estado diario y falla la consulta técnica, el flujo no bloquea Suite indefinidamente y reintenta. Si ya se conocía `mandatory=true`, una falla posterior de red conserva el gate hasta recuperar conexión.
+- La máquina de estados visible se deriva del status backend: completado libera Suite; espera de aplazamiento oculta y programa reconsulta; mandatory fuerza captura; una reconsulta no borra respuestas si el usuario ya empezó.
+- No se implementó BI, historial visual ni bridge a Tickets V2 en M2.
+
+### 27.2 Evidencia de aceptación
+
+- Suite local `backend/tests/system_daily_check`: `56 passed, 1 skipped`; el único skip requiere PostgreSQL dedicado y se ejecuta en CI.
+- La suite incluye pruebas de evidencia/multipart mediante `Flask.test_client`, validación por contenido, asociación por `question_key` y cleanup transaccional.
+- Prueba frontend pura y tipada de la máquina de estados y rollout del gate: compilación TypeScript + ejecución Node con exit code 0; SISTEMAS/ADMICORP entran al MVP y GERENTE/ADMINISTRADOR genérico permanecen fuera.
+- Angular completo después de integración en `LayoutComponent`, hardening de focus/layers y refactor de estado: `EXITCODE:0`.
+- GitHub Actions `System Daily Check M2`: SUCCESS sobre el head de implementación `83855a77`; incluye backend PostgreSQL 16, prueba frontend de estados/rollout y Angular build.
+- GitHub Actions `System Daily Check M1` sobre el mismo head `83855a77`: SUCCESS.
+- Smoke de `create_app()`: exactamente cuatro rutas `/api/system-daily-checks` registradas.
+- Smoke backend de rollout MVP: SISTEMAS y ADMICORP elegibles; GERENTE, ADMINISTRADOR genérico y TECNICO no elegibles; exit code 0.
+- `git diff --check`: sin errores antes del commit documental de aceptación.
+- PR #830 verificado `mergeable=true` contra `main` sobre el head `83855a77` antes del commit documental de aceptación.
+
 ## 28. Estado final esperado
 
 ```text
-M1 — ACCEPTED
-M2 — ACCEPTED
-M3 — DESBLOQUEADO
+M1 — ACCEPTED EN MAIN
+M2 — ACCEPTED TÉCNICAMENTE / PENDIENTE MERGE A MAIN
+M3 — DESBLOQUEADO AL MERGEAR M2 EN MAIN
 ```

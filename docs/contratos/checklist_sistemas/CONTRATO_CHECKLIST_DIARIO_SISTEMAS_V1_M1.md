@@ -1,9 +1,9 @@
 # Contrato — Checklist Diario de Sistemas V1 / M1
 ## Core backend, persistencia y reglas
 
-Estado: ACCEPTED — implementación validada en PR #829
+Estado: ACCEPTED — PR #829 mergeado en `main`
 Gate de entrada: contrato global aprobado.  
-Gate de salida: CUMPLIDO técnicamente; M2 permanece bloqueado hasta que M1 esté mergeado en `main`.
+Gate de salida: CUMPLIDO. M1 forma parte de `main` desde el merge commit `b5e71b0f`.
 
 ## 0. Uso de este contrato
 
@@ -512,7 +512,7 @@ M1 queda ACCEPTED solo si:
 ## 25. Estado final esperado
 
 ```text
-M1 — ACCEPTED
-M2 — DESBLOQUEADO AL MERGEAR M1 EN MAIN
+M1 — ACCEPTED EN MAIN
+M2 — DESBLOQUEADO
 M3 — BLOQUEADO POR M2
 ```

@@ -14,6 +14,7 @@ on:
       - "frontend/src/app/system-daily-check/**"
       - "frontend/tests/system-daily-check-gate-state.test.ts"
       - "frontend/src/styles.scss"
+      - "docs/contratos/checklist_sistemas/**"
       - ".github/workflows/system-daily-check-m2.yml"
   push:
     branches:
