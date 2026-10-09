@@ -55,7 +55,7 @@ def ctx(monkeypatch):
     monkeypatch.setenv("GOOGLE_ADS_OAUTH_CLIENT_SECRET", "qa-client-secret")
     monkeypatch.setenv("GOOGLE_ADS_OAUTH_CUSTOMER_ID", "273-912-5201")
     monkeypatch.setenv("GOOGLE_ADS_OAUTH_TOKEN_ENCRYPTION_KEY", fernet_key.decode())
-    monkeypatch.setenv("GOOGLE_ADS_DEVELOPER_TOKEN", "qa-developer-token")
+    monkeypatch.delenv("GOOGLE_ADS_DEVELOPER_TOKEN", raising=False)
     monkeypatch.setenv("GOOGLE_ADS_API_VERSION", "v25")
     monkeypatch.delenv("GOOGLE_ADS_LOGIN_CUSTOMER_ID", raising=False)
 
@@ -77,6 +77,7 @@ def ctx(monkeypatch):
         calls.append(("GET", url, kwargs))
         assert url == "https://googleads.googleapis.com/v25/customers:listAccessibleCustomers"
         assert "login-customer-id" not in kwargs["headers"]
+        assert "developer-token" not in kwargs["headers"]
         return Reply({"resourceNames": ["customers/1234567890"]})
 
     def fake_post(url, **kwargs):
@@ -86,7 +87,7 @@ def ctx(monkeypatch):
             return Reply({"access_token": "fake-access-token"})
         assert url == "https://googleads.googleapis.com/v25/customers/2739125201/googleAds:searchStream"
         assert kwargs["headers"]["Authorization"] == "Bearer fake-access-token"
-        assert kwargs["headers"]["developer-token"] == "qa-developer-token"
+        assert "developer-token" not in kwargs["headers"]
         query = kwargs["json"]["query"]
         if "FROM customer" in query:
             return Reply([{"results": [{
@@ -155,6 +156,26 @@ def test_m2_disabled_independently_of_m1(ctx, monkeypatch):
     assert ctx.calls == []
 
 
+def test_developer_token_is_optional_and_never_sent(ctx, monkeypatch):
+    monkeypatch.delenv("GOOGLE_ADS_DEVELOPER_TOKEN", raising=False)
+    result = ctx.client.get("/google-ads/account-check", headers=ctx.headers)
+    assert result.status_code == 200
+    assert all(
+        "developer-token" not in kwargs["headers"]
+        for method, url, kwargs in ctx.calls
+        if url.startswith(service.ADS_API_ORIGIN)
+    )
+    ctx.calls.clear()
+    monkeypatch.setenv("GOOGLE_ADS_DEVELOPER_TOKEN", "legacy-token-must-not-be-used")
+    result = ctx.client.get("/google-ads/account-check", headers=ctx.headers)
+    assert result.status_code == 200
+    assert all(
+        "developer-token" not in kwargs["headers"]
+        for method, url, kwargs in ctx.calls
+        if url.startswith(service.ADS_API_ORIGIN)
+    )
+
+
 def test_live_account_verification_allows_child_managed_by_mcc(ctx):
     res = ctx.client.get("/google-ads/account-check", headers=ctx.headers)
     assert res.status_code == 200
@@ -166,7 +187,6 @@ def test_live_account_verification_allows_child_managed_by_mcc(ctx):
     assert res.json["api_version"] == "v25"
     assert "fake-access-token" not in res.text
     assert "fake-refresh-token" not in res.text
-    assert "qa-developer-token" not in res.text
     assert res.headers["Cache-Control"] == "no-store"
     assert [x[0] for x in ctx.calls] == ["POST", "GET", "POST"]
 
@@ -279,7 +299,6 @@ def test_provider_rate_limit_is_not_hidden(ctx, monkeypatch):
     res = ctx.client.get("/google-ads/account-check", headers=ctx.headers)
     assert res.status_code == 503
     assert res.json["code"] == "GOOGLE_ADS_API_QUOTA_OR_RATE_LIMIT"
-    assert "qa-developer-token" not in res.text
 
 
 def test_expired_refresh_requires_reauthorization(ctx, monkeypatch):

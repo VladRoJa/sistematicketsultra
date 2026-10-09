@@ -46,10 +46,6 @@ def _read_settings() -> dict:
     if oauth_settings is None:
         raise GoogleAdsReadError("GOOGLE_ADS_OAUTH_DISABLED_OR_UNCONFIGURED", 503)
 
-    developer_token = os.getenv("GOOGLE_ADS_DEVELOPER_TOKEN", "").strip()
-    if not developer_token:
-        raise GoogleAdsReadError("GOOGLE_ADS_DEVELOPER_TOKEN_MISSING", 503)
-
     version = os.getenv("GOOGLE_ADS_API_VERSION", API_VERSION_DEFAULT).strip()
     if not re.fullmatch(r"v[0-9]{1,2}", version):
         raise GoogleAdsReadError("GOOGLE_ADS_API_VERSION_INVALID", 503)
@@ -60,7 +56,6 @@ def _read_settings() -> dict:
 
     return {
         **oauth_settings,
-        "developer_token": developer_token,
         "api_version": version,
         "login_customer_id": login_customer_id or None,
     }
@@ -124,7 +119,6 @@ def _access_token(settings: dict, refresh_token: str) -> str:
 def _headers(settings: dict, access_token: str, *, for_manager: bool) -> dict:
     headers = {
         "Authorization": "Bearer " + access_token,
-        "developer-token": settings["developer_token"],
         "Content-Type": "application/json",
     }
     if for_manager and settings["login_customer_id"]:
