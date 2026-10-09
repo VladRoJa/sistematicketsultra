@@ -15,6 +15,7 @@ MANUAL_STRUCTURED_TRACK_MONTHLY_TARGETS_REPORT_TYPE_KEY = "track_monthly_targets
 MANUAL_STRUCTURED_VENTA_TOTAL_REPORT_TYPE_KEY = "venta_total"
 MANUAL_STRUCTURED_SOCIOS_VENCIDOS_REPORT_TYPE_KEY = "socios_vencidos"
 MANUAL_STRUCTURED_SOCIOS_ACTIVOS_REPORT_TYPE_KEY = "socios_activos"
+MANUAL_STRUCTURED_GOOGLE_ADS_REPORT_TYPE_KEY = "google_ads_campaign_daily"
 
 SUPPORTED_MANUAL_STRUCTURED_REPORT_TYPES = frozenset(
     {
@@ -24,6 +25,7 @@ SUPPORTED_MANUAL_STRUCTURED_REPORT_TYPES = frozenset(
         MANUAL_STRUCTURED_VENTA_TOTAL_REPORT_TYPE_KEY,
         MANUAL_STRUCTURED_SOCIOS_VENCIDOS_REPORT_TYPE_KEY,
         MANUAL_STRUCTURED_SOCIOS_ACTIVOS_REPORT_TYPE_KEY,
+        MANUAL_STRUCTURED_GOOGLE_ADS_REPORT_TYPE_KEY,
     }
 )
 
@@ -477,6 +479,24 @@ def dispatch_manual_structured_ingestion(
         )
         return {
             "ingestion_status": ingestion_result.get("status", "ingested"),
+            "warehouse_upload_id": warehouse_upload_id,
+            "report_type_key": report_type_key,
+            "structured_result": ingestion_result,
+        }
+
+    if report_type_key == MANUAL_STRUCTURED_GOOGLE_ADS_REPORT_TYPE_KEY:
+        from app.warehouse.services.google_ads_daily_ingestion_service import (
+            GoogleAdsDailyIngestionError,
+            import_google_ads_warehouse_upload,
+        )
+        try:
+            ingestion_result = import_google_ads_warehouse_upload(
+                warehouse_upload_id=warehouse_upload_id,
+            )
+        except GoogleAdsDailyIngestionError as exc:
+            raise WarehouseManualIngestionDispatcherError(str(exc)) from exc
+        return {
+            "ingestion_status": ingestion_result["status"],
             "warehouse_upload_id": warehouse_upload_id,
             "report_type_key": report_type_key,
             "structured_result": ingestion_result,
