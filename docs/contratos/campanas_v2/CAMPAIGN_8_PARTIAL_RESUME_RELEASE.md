@@ -65,3 +65,55 @@ en `PASEO_LA_PAZ` (170 contactos, soporte
   `PROVIDER_ERROR` por la fila omitida; esto NO indica que las 25 aceptadas
   hayan fallado. Se deben revisar children individualmente.
 - El interruptor del backend web debe mantenerse apagado.
+
+
+## Actualización: Paseo La Paz con plantilla ya cargada
+
+El operador confirmó posteriormente que `invita_y_gana_4800` ya está
+cargada en el canal iVentas de Paseo La Paz y solicitó incluir los 170
+destinatarios originales. **No se modifica ni borra el error registrado.**
+
+Por seguridad hay dos etapas distintas, con verificaciones y autorizaciones
+operativas separadas antes de cada POST:
+
+- **Etapa A**: ejecutar el hotfix existente `resume_campaign8_pending.py`
+  para los **14 READY / 7,979**. Conservar el estado
+  `PASEO_LA_PAZ = PROVIDER_ERROR` durante esta etapa.
+- **Etapa B**: después de confirmar **25 SUBMITTED / 13,829** y que
+  Paseo La Paz es el único `PROVIDER_ERROR`, ejecutar
+  `retry_campaign8_la_paz.py` para **un único intento de 170**.
+  La etapa B rechaza cualquier variación en los 26 children, en el
+  fingerprint, los 11 provider IDs originales o los conteos.
+  El rechazo determinístico previo (`TEMPLATE_NOT_FOUND`, supportRef
+  `bc-mv09582n-ly0gq0`) se preserva en `retry_history_json`
+  **antes de llamar a iVentas**. Se usa la infraestructura de auditoría
+  de retry ya existente, sin nueva migración ni endpoint.
+  Si no hay éxito verificable, no repetir la ejecución.
+
+Importante: **ambos scripts son DRY_RUN por defecto**; no llamar nunca
+`--apply` antes de revisar el dry-run correspondiente.
+
+### Ejecutar dry-run por separado, siempre con PYTHONPATH
+
+```bash
+cd /home/adminrdp/sistematicketsultra
+
+# Antes de iniciar etapa A
+docker compose exec -T -e PYTHONPATH=/app backend \
+  python scripts/resume_campaign8_pending.py
+
+# Después de terminar etapa A y confirmar 25 SUBMITTED, antes de etapa B
+docker compose exec -T -e PYTHONPATH=/app backend \
+  python scripts/retry_campaign8_la_paz.py
+```
+
+Para el comando `--apply`, el interruptor se habilita solo en el
+proceso aislado, con `-e CAMPAIGN_V2_PROVIDER_SEND_ENABLED=true`,
+además de `-e PYTHONPATH=/app`. Nunca alterar el .env del backend web.
+
+Si la primera etapa falla o queda inconclusa, **NO intentar la segunda**.
+La segunda etapa está programada para fallar cerrada si una sola de las
+otras 25 campañas no está aceptada.
+
+Resultado esperado si ambas etapas son aceptadas: **26 SUBMITTED / 13,999
+aceptados por proveedor**. No equivale a entrega de 13,999 mensajes.
