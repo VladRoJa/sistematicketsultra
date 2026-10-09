@@ -73,7 +73,8 @@ Antes de definir tablas/endpoints, inspeccionar:
 - almacenamiento de adjuntos reutilizable;
 - patrones de auditoría;
 - convenciones Alembic;
-- cómo se identifica GERENTE y alcance de sucursal;
+- cómo se representan actualmente los perfiles/capacidades de SISTEMAS y ADMICORP;
+- cómo se identifica GERENTE y alcance de sucursal para dejar explícitamente deshabilitado su rollout;
 - si existen usuarios multi-sucursal que puedan requerir tratamiento especial.
 
 Documentar cualquier supuesto que cambie el diseño.
@@ -292,13 +293,19 @@ M1 debe definir quién puede:
 - enviar checklist;
 - consultar un checklist específico si se requiere para pruebas/admin.
 
-Mínimo:
+MVP obligatorio:
 
-- GERENTE con alcance válido puede llenar para su sucursal;
-- ADMINISTRADOR puede tener acceso especial si el producto lo requiere;
+- SISTEMAS autorizado puede consultar status, aplazar y enviar;
+- ADMICORP autorizado puede consultar status, aplazar y enviar;
+- GERENTE queda rechazado/no elegible durante el MVP;
+- otros perfiles quedan rechazados/no elegibles;
 - ningún usuario puede falsificar otra sucursal desde payload.
 
-No hardcodear username.
+El backend debe exponer una decisión de elegibilidad inequívoca para que M2 no tenga que inferir permisos.
+
+No hardcodear un username como sustituto de una política estable si el modelo actual permite identificar SISTEMAS/ADMICORP mediante rol, departamento, capability o guard existente.
+
+La apertura futura a GERENTE requiere cambio explícito posterior; M1 no debe dejarlo activo “por anticipado”.
 
 ## 16. Endpoints mínimos conceptuales
 
@@ -434,9 +441,12 @@ Acceptance exige:
 
 ### Permisos
 
-- usuario autorizado funciona;
+- SISTEMAS autorizado funciona;
+- ADMICORP autorizado funciona;
+- GERENTE queda no elegible/rechazado durante MVP;
+- otro perfil queda no elegible/rechazado;
 - sucursal falsificada se ignora/rechaza;
-- usuario sin permiso rechaza.
+- un cambio frontend no puede ampliar el acceso.
 
 ### Timezone
 
@@ -477,7 +487,9 @@ M1 queda ACCEPTED solo si:
 7. submit válido persiste checklist/respuestas/incidencias;
 8. duplicados/concurrencia están protegidos;
 9. permisos backend están probados;
-10. no existe dependencia de localStorage para autoridad.
+10. solo SISTEMAS/ADMICORP resultan elegibles durante MVP;
+11. GERENTE no puede activar status/postpone/submit del flujo diario;
+12. no existe dependencia de localStorage para autoridad.
 
 ## 25. Estado final esperado
 
