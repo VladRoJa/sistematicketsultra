@@ -18,6 +18,7 @@ from app.services.system_daily_check_service import (
     SystemDailyCheckNotFoundError,
     SystemDailyCheckValidationError,
     get_today_status,
+    list_system_daily_check_branches,
     list_system_daily_check_questions,
     postpone_today,
     submit_today,
@@ -224,6 +225,22 @@ def questions():
             "eligible": True,
             "questions": list_system_daily_check_questions(),
         }), 200
+    except (
+        SystemDailyCheckAuthorizationError,
+        SystemDailyCheckValidationError,
+        SystemDailyCheckConflictError,
+    ) as exc:
+        return _error_response(exc)
+
+
+@system_daily_check_bp.route("/branches", methods=["GET"])
+@jwt_required()
+def branches():
+    try:
+        actor = _current_user()
+        return jsonify(
+            list_system_daily_check_branches(actor)
+        ), 200
     except (
         SystemDailyCheckAuthorizationError,
         SystemDailyCheckValidationError,
