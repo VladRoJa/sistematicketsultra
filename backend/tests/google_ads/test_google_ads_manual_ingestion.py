@@ -7,7 +7,7 @@ from app.warehouse.services import google_ads_daily_ingestion_service as service
 from app.warehouse.services.google_ads_daily_xlsx_parser import (
     parse_google_ads_daily_xlsx,
 )
-from tests.google_ads.test_google_ads_manual_warehouse_import import make_export
+from test_google_ads_manual_warehouse_import import make_export
 
 
 def test_reimport_and_conflict(monkeypatch):
