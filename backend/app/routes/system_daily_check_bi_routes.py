@@ -7,6 +7,9 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.extensions import db
 from app.models.user_model import UserORM
+from app.services.system_daily_check_export_service import (
+    build_system_daily_check_excel_export,
+)
 from app.services.system_daily_check_bi_service import (
     build_system_daily_check_bi_matrix,
     build_system_daily_check_bi_summary,
@@ -374,6 +377,43 @@ def bi_check_detail(check_id: int):
         return _error_response(exc)
 
 
+
+
+@system_daily_check_bi_bp.get("/export.xlsx")
+@jwt_required()
+def bi_export_excel():
+    try:
+        actor = _current_user()
+        _require_bi_access(actor)
+        business_date = resolve_business_date()
+        date_from = _parse_date_arg(
+            "date_from",
+            default=business_date,
+        )
+        date_to = _parse_date_arg(
+            "date_to",
+            default=date_from,
+        )
+        output, filename = build_system_daily_check_excel_export(
+            actor,
+            date_from=date_from,
+            date_to=date_to,
+            branch_id=_parse_branch_id_arg(),
+        )
+        return send_file(
+            output,
+            mimetype=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+            as_attachment=True,
+            download_name=filename,
+        )
+    except (
+        SystemDailyCheckAuthorizationError,
+        SystemDailyCheckValidationError,
+    ) as exc:
+        return _error_response(exc)
 
 
 @system_daily_check_bi_bp.get("/attachments/<int:attachment_id>")
