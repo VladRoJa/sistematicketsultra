@@ -27,7 +27,7 @@ class GoogleAdsDailyMetricORM(db.Model):
     conversion_value = db.Column(db.Numeric(18, 2), nullable=False)
     source_kind = db.Column(db.String(32), nullable=False, default="WAREHOUSE_XLSX")
     source_upload_id = db.Column(
-        db.BigInteger, db.ForeignKey("warehouse_uploads.id", ondelete="RESTRICT"),
+        db.Integer, db.ForeignKey("warehouse_uploads.id", ondelete="RESTRICT"),
         nullable=False,
     )
     created_at = db.Column(
