@@ -48,7 +48,7 @@ def _engine():
             "INSERT INTO users (id) VALUES (1), (2), (3)"
         )
         connection.exec_driver_sql(
-            "INSERT INTO sucursales (sucursal_id) VALUES (10), (11)"
+            "INSERT INTO sucursales (sucursal_id) VALUES (10), (11), (100), (1000)"
         )
     return engine
 
@@ -229,6 +229,27 @@ def test_general_status_consistency(no_keys, general_status, valid):
     else:
         with pytest.raises(SystemDailyCheckValidationError):
             validate_submission_payload(payload)
+
+
+def test_root_actor_is_canonicalized_to_corporate_for_pilot():
+    engine = _engine()
+    try:
+        with Session(engine) as session:
+            status = get_today_status(
+                _actor(branch_id=1000),
+                now=datetime(
+                    2026,
+                    10,
+                    9,
+                    16,
+                    0,
+                    tzinfo=timezone.utc,
+                ),
+                session=session,
+            )
+            assert status["sucursal_id"] == 100
+    finally:
+        engine.dispose()
 
 
 def test_initial_status_and_requested_branch_are_backend_validated():
