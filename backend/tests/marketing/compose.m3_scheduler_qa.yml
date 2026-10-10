@@ -1,0 +1,27 @@
+services:
+  marketing-scheduler-qa:
+    image: suite-m3-scheduler-qa:ci
+    entrypoint: ["python", "/app/tests/marketing/m3_scheduler_compose_service.py"]
+    network_mode: host
+    read_only: true
+    user: "65534:65534"
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 20s
+    tmpfs:
+      - /tmp
+    environment:
+      APP_ENV: ci
+      SECRET_KEY: isolated-compose-fake-secret
+      JWT_SECRET_KEY: isolated-compose-fake-jwt
+      M3_TEST_POSTGRES_URL:
+      M3_QA_PHASE:
+      CAMPAIGN_V2_PROVIDER_SEND_ENABLED: "false"
+      CAMPAIGN_V2_PROVIDER_STATS_AUTO_CAPTURE_ENABLED: "false"
+      PYTHONDONTWRITEBYTECODE: "1"
+    healthcheck:
+      test: ["CMD", "python", "-c", "from pathlib import Path; import time; p=Path('/tmp/m3-marketing-scheduler-health.json'); raise SystemExit(0 if p.exists() and time.time()-p.stat().st_mtime < 35 else 1)"]
+      interval: 3s
+      timeout: 3s
+      start_period: 20s
+      retries: 3

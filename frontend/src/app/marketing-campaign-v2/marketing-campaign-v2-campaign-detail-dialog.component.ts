@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, Inject, OnInit, inject } from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { merge } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import {
@@ -11,6 +12,7 @@ import {
   MatDialogRef,
 } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 
@@ -18,10 +20,13 @@ import {
   CampaignV2AudienceDefinition,
   CampaignV2CampaignDetail,
   CampaignV2DispatchTemplate,
+  CampaignV2DispatchScheduleRequest,
   CampaignV2IndividualReport,
   CampaignV2ObservedFamily,
   CampaignV2PreflightResponse,
   CampaignV2Purpose,
+  CampaignV2ProviderChildReportingRow,
+  CampaignV2ProviderStatsCompleteness,
   CampaignV2SubmitResponse,
   CampaignV2RecipientSummary,
   CampaignV2Source,
@@ -37,6 +42,10 @@ import {
   campaignV2HistoryWindowLabel,
   campaignV2IventasCurrentStatusLabel,
   campaignV2ReportingCostLabel,
+  campaignV2DispatchScheduleInput,
+  campaignV2ProviderBatchLabel,
+  campaignV2ProviderBatchStatsLabel,
+  campaignV2ProviderStatsLabel,
   campaignV2ReportingPercent,
   campaignV2ReportingSnapshotLabel,
   campaignV2ReportingValue,
@@ -65,6 +74,7 @@ export interface MarketingCampaignV2CampaignDetailDialogData {
     MatButtonModule,
     MatDialogModule,
     MatFormFieldModule,
+    MatInputModule,
     MatProgressSpinnerModule,
     MatSelectModule,
   ],
@@ -83,6 +93,15 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
     nonNullable: true,
   });
   readonly dispatchTemplateControl = new FormControl<number | null>(null);
+  readonly dispatchModeControl = new FormControl<'IMMEDIATE' | 'SCHEDULED'>('IMMEDIATE', { nonNullable: true });
+  readonly dispatchLocalDateTimeControl = new FormControl('', { nonNullable: true });
+  readonly dispatchTimezoneControl = new FormControl('America/Tijuana', { nonNullable: true });
+  readonly dispatchTimezones = [
+    { value: 'America/Tijuana', label: 'Baja California (America/Tijuana)' },
+    { value: 'America/Mexico_City', label: 'Centro (America/Mexico_City)' },
+    { value: 'America/Mazatlan', label: 'Sinaloa (America/Mazatlan)' },
+  ];
+  private dispatchInputsRevision = 0;
 
   campaign: CampaignV2CampaignDetail | null = null;
   reporting: CampaignV2IndividualReport | null = null;
@@ -123,16 +142,40 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   ) {}
 
   ngOnInit(): void {
-    this.dispatchTemplateControl.valueChanges
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => {
-        this.preflight = null;
-        this.submitResult = null;
-        this.preflightError = '';
-        this.submitError = '';
-        this.submitSuccess = '';
-      });
+    merge(
+      this.dispatchTemplateControl.valueChanges,
+      this.dispatchModeControl.valueChanges,
+      this.dispatchLocalDateTimeControl.valueChanges,
+      this.dispatchTimezoneControl.valueChanges,
+    ).pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.invalidateDispatchReview());
     this.loadCampaign();
+  }
+
+  private invalidateDispatchReview(): void {
+    // Schedule, template and timezone are fingerprint inputs.
+    this.dispatchInputsRevision++;
+    this.preflight = null;
+    this.submitResult = null;
+    this.preflightError = '';
+    this.submitError = '';
+    this.submitSuccess = '';
+  }
+
+  get dispatchScheduleError(): string {
+    return this.dispatchScheduleInput().error;
+  }
+
+  private dispatchSchedulePayload(): CampaignV2DispatchScheduleRequest | null {
+    return this.dispatchScheduleInput().schedule;
+  }
+
+  private dispatchScheduleInput() {
+    return campaignV2DispatchScheduleInput(
+      this.dispatchModeControl.value,
+      this.dispatchLocalDateTimeControl.value,
+      this.dispatchTimezoneControl.value,
+    );
   }
 
   loadCampaign(): void {
@@ -210,22 +253,29 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
 
   reviewDispatch(): void {
     const templateId = this.dispatchTemplateControl.value;
-    if (!this.campaign || templateId === null || this.preflighting) {
+    if (!this.campaign || templateId === null || this.preflighting || this.dispatchScheduleError) {
       return;
     }
+    const revision = this.dispatchInputsRevision;
+    const schedule = this.dispatchSchedulePayload();
 
     this.preflighting = true;
     this.preflight = null;
     this.preflightError = '';
-    this.service.preflightCampaign(this.campaign.id, templateId)
+    this.service.preflightCampaign(this.campaign.id, templateId, schedule)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: result => {
           this.preflighting = false;
-          this.preflight = result;
+          if (revision === this.dispatchInputsRevision) {
+            this.preflight = result;
+          }
         },
         error: (error: HttpErrorResponse) => {
           this.preflighting = false;
+          if (revision !== this.dispatchInputsRevision) {
+            return;
+          }
           this.preflightError = this.errorMessage(
             error,
             'No fue posible preparar la revisión de envío.',
@@ -239,13 +289,14 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
       this.campaign
       && this.dispatchTemplateControl.value !== null
       && !this.loadingDispatchTemplates
-      && !this.preflighting,
+      && !this.preflighting
+      && !this.dispatchScheduleError,
     );
   }
 
   get canSubmitDispatch(): boolean {
     const plan = this.preflight;
-    if (!plan || !plan.ready || this.submitting) {
+    if (!plan || !plan.ready || this.submitting || plan.mode !== this.dispatchModeControl.value) {
       return false;
     }
     const state = plan.submission;
@@ -270,8 +321,8 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
     if (!plan.ready) {
       return 'El preflight tiene bloqueos.';
     }
-    if (plan.submission.status === 'SUBMITTED') {
-      return 'Los provider campaigns de este plan ya fueron enviados.';
+    if (plan.submission.status === 'SUBMITTED' || plan.submission.status === 'SCHEDULED') {
+      return 'Los provider campaigns de este plan ya fueron aceptados o programados.';
     }
     if (plan.submission.status === 'SUBMITTING') {
       return 'Hay un provider campaign en proceso; no se permite otro submit.';
@@ -282,7 +333,9 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
     if (plan.submission.status === 'PROVIDER_ERROR' || plan.submission.status === 'PARTIAL') {
       return 'Existe una operación parcial o fallida; M2 no permite retry automático.';
     }
-    return 'El plan puede pasar a confirmación de envío inmediato.';
+    return plan.mode === 'SCHEDULED'
+      ? 'El plan programado puede pasar a confirmación. Aún no se enviarán mensajes.'
+      : 'El plan puede pasar a confirmación de envío inmediato.';
   }
 
   confirmAndSubmitDispatch(): void {
@@ -303,6 +356,9 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
       data: {
         campaignName: plan.campaign_name,
         purposeLabel: this.purposeLabel(plan.campaign_purpose),
+        mode: plan.mode,
+        schedule: plan.schedule,
+        sendEnabled: plan.submission.enabled,
         templateName: plan.template.template_name,
         frozenCount: plan.frozen_count,
         blacklistedCount: plan.suppressed.blacklist,
@@ -334,6 +390,12 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
     if (!plan || templateId === null || !this.canSubmitDispatch) {
       return;
     }
+    const schedule = plan.mode === 'SCHEDULED' && plan.schedule
+      ? { local_datetime: plan.schedule.local_datetime, timezone: plan.schedule.timezone }
+      : null;
+    if (plan.mode === 'SCHEDULED' && !schedule) {
+      return;
+    }
 
     this.submitting = true;
     this.submitError = '';
@@ -344,13 +406,16 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
       plan.campaign_id,
       templateId,
       plan.dispatch_fingerprint,
+      schedule,
     )
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: result => {
           this.submitting = false;
           this.submitResult = result;
-          this.submitSuccess = 'Submit aceptado y auditado por Suite.';
+          this.submitSuccess = plan.mode === 'SCHEDULED'
+            ? 'Programación aceptada y auditada por Suite. Los mensajes aún no se han enviado.'
+            : 'Submit aceptado y auditado por Suite.';
           this.reviewDispatch();
         },
         error: (error: HttpErrorResponse) => {
@@ -522,6 +587,18 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
 
   reportingCostLabel(status: string): string {
     return campaignV2ReportingCostLabel(status);
+  }
+
+  providerStatsLabel(status: CampaignV2ProviderStatsCompleteness): string {
+    return campaignV2ProviderStatsLabel(status);
+  }
+
+  providerBatchLabel(status: string): string {
+    return campaignV2ProviderBatchLabel(status);
+  }
+
+  providerBatchStatsLabel(batch: CampaignV2ProviderChildReportingRow): string {
+    return campaignV2ProviderBatchStatsLabel(batch);
   }
 
   previousRecipientsPage(): void {

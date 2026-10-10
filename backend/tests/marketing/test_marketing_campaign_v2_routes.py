@@ -1755,6 +1755,57 @@ class TestMarketingCampaignV2Routes:
         assert service.call_args.kwargs["campaign_id"] == 1
         assert service.call_args.kwargs["allowed_sucursal_keys"] is None
 
+    def test_m3_stats_read_child_id_uses_backend_scope(self):
+        expected = {
+            "campaign_id": 7,
+            "provider_campaign_child_id": 101,
+            "provider_campaign_id": "child-external",
+        }
+        with (
+            self._auth(),
+            patch.object(
+                routes, "_campaign_v2_allowed_sucursal_keys",
+                return_value=("TEC MXL",),
+            ),
+            patch.object(
+                routes, "get_campaign_v2_provider_stats",
+                return_value=expected,
+            ) as read,
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/7/provider-stats"
+                "?provider_campaign_child_id=101",
+                headers=self.headers,
+            )
+        assert response.status_code == 200
+        assert response.get_json() == expected
+        assert read.call_args.kwargs["campaign_id"] == 7
+        assert read.call_args.kwargs["provider_campaign_child_id"] == 101
+        assert read.call_args.kwargs["allowed_sucursal_keys"] == ("TEC MXL",)
+        assert "provider_campaign_id" not in read.call_args.kwargs
+
+    @pytest.mark.parametrize(
+        "suffix",
+        [
+            "?provider_campaign_child_id=0",
+            "?provider_campaign_child_id=-1",
+            "?provider_campaign_child_id=abc",
+            "?provider_campaign_child_id=1.1",
+            "?provider_campaign_child_id=101&provider_campaign_child_id=102",
+            "?provider_campaign_child_id=101&provider_campaign_id=forged",
+        ],
+    )
+    def test_m3_stats_read_rejects_untrusted_child_id(self, suffix):
+        with self._auth(), patch.object(
+            routes, "get_campaign_v2_provider_stats"
+        ) as read:
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/7/provider-stats" + suffix,
+                headers=self.headers,
+            )
+        assert response.status_code == 400
+        read.assert_not_called()
+
     def test_provider_stats_rejects_external_id_or_provider_query_override(self):
         with self._auth():
             response = self.client.get(
@@ -1882,6 +1933,109 @@ class TestMarketingCampaignV2Routes:
                 headers=self.headers,
             )
         assert invalid.status_code == 400
+
+    def test_m3_capture_explicit_child_uses_backend_scoped_identity(self):
+        expected = {
+            "id": 201,
+            "campaign_id": 7,
+            "provider_campaign_child_id": 101,
+            "created": True,
+        }
+        with (
+            self._auth(),
+            patch.object(
+                routes, "_campaign_v2_allowed_sucursal_keys",
+                return_value=("TEC MXL",),
+            ),
+            patch.object(
+                routes, "capture_campaign_v2_provider_stats_snapshot",
+                return_value=expected,
+            ) as capture,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/7/provider-stats/snapshots",
+                json={"provider_campaign_child_id": 101},
+                headers=self.headers,
+            )
+        assert response.status_code == 200
+        assert response.get_json() == expected
+        assert capture.call_args.kwargs["campaign_id"] == 7
+        assert capture.call_args.kwargs["provider_campaign_child_id"] == 101
+        assert capture.call_args.kwargs["allowed_sucursal_keys"] == ("TEC MXL",)
+        assert "provider_campaign_id" not in capture.call_args.kwargs
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"provider_campaign_child_id": 0},
+            {"provider_campaign_child_id": -1},
+            {"provider_campaign_child_id": True},
+            {"provider_campaign_child_id": "101"},
+            {"provider_campaign_child_id": 1.0},
+            {"provider_campaign_child_id": None},
+            {"provider_campaign_child_id": 101, "provider_campaign_id": "fake"},
+            {"phones": ["6861111111"]},
+            ["101"],
+        ],
+    )
+    def test_m3_capture_rejects_untrusted_child_payload(self, payload):
+        with self._auth(), patch.object(
+            routes, "capture_campaign_v2_provider_stats_snapshot"
+        ) as capture:
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/7/provider-stats/snapshots",
+                json=payload,
+                headers=self.headers,
+            )
+        assert response.status_code == 400
+        capture.assert_not_called()
+
+    def test_m3_capture_child_permission_before_provider_access(self):
+        access = SimpleNamespace(
+            is_global=True,
+            branch_ids=(),
+            can_edit_inputs=False,
+        )
+        with self._auth(access), patch.object(
+            routes, "capture_campaign_v2_provider_stats_snapshot"
+        ) as capture:
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/7/provider-stats/snapshots",
+                json={"provider_campaign_child_id": 101},
+                headers=self.headers,
+            )
+        assert response.status_code == 403
+        capture.assert_not_called()
+
+    def test_m3_capture_rejects_malformed_json_without_legacy_fallback(self):
+        with self._auth(), patch.object(
+            routes, "capture_campaign_v2_provider_stats_snapshot"
+        ) as capture:
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/7/provider-stats/snapshots",
+                data='{"provider_campaign_child_id": ',
+                content_type="application/json",
+                headers=self.headers,
+            )
+        assert response.status_code == 400
+        capture.assert_not_called()
+
+    def test_m3_explicit_child_read_permission_before_provider_access(self):
+        access = SimpleNamespace(
+            is_global=True,
+            branch_ids=(),
+            can_edit_inputs=False,
+        )
+        with self._auth(access), patch.object(
+            routes, "get_campaign_v2_provider_stats"
+        ) as read:
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/7/provider-stats"
+                "?provider_campaign_child_id=101",
+                headers=self.headers,
+            )
+        assert response.status_code == 403
+        read.assert_not_called()
 
     def test_provider_stats_snapshot_capture_maps_provider_errors(self):
         with (

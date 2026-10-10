@@ -1100,6 +1100,12 @@ class MarketingCampaignV2RecipientEvidenceORM(db.Model):
 class MarketingCampaignV2ProviderStatsSnapshotORM(db.Model):
     __tablename__ = "marketing_campaign_v2_provider_stats_snapshots"
 
+    provider_campaign_child_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_provider_campaigns.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     id = db.Column(
         db.BigInteger().with_variant(db.Integer, "sqlite"),
         primary_key=True,

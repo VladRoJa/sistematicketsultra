@@ -29,6 +29,9 @@ import {
   campaignV2ReportingAudienceFamilyLabel,
   campaignV2ReportingBranchLabel,
   campaignV2ReportingCostLabel,
+  campaignV2ProviderBatchLabel,
+  campaignV2ProviderBatchStatsLabel,
+  campaignV2ProviderStatsLabel,
   campaignV2ReportingFilterValidation,
   campaignV2ReportingPercent,
   campaignV2ReportingSnapshotLabel,
@@ -60,6 +63,8 @@ import {
   CampaignV2PreviewBucket,
   CampaignV2PreviewResponse,
   CampaignV2Purpose,
+  CampaignV2ProviderChildReportingRow,
+  CampaignV2ProviderStatsCompleteness,
   CampaignV2ReportingSnapshotStatus,
   CampaignV2Source,
   CampaignV2SourceMetadata,
@@ -1022,6 +1027,18 @@ export class MarketingCampaignV2PageComponent implements OnInit {
 
   reportingCostLabel(status: string): string {
     return campaignV2ReportingCostLabel(status);
+  }
+
+  providerStatsLabel(status: CampaignV2ProviderStatsCompleteness): string {
+    return campaignV2ProviderStatsLabel(status);
+  }
+
+  providerBatchLabel(status: string): string {
+    return campaignV2ProviderBatchLabel(status);
+  }
+
+  providerBatchStatsLabel(batch: CampaignV2ProviderChildReportingRow): string {
+    return campaignV2ProviderBatchStatsLabel(batch);
   }
 
   private reportingQuery() {

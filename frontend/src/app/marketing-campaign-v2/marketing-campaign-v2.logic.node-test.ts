@@ -8,6 +8,7 @@ import {
   buildCampaignV2FreezeRequest,
   buildCampaignV2HistoricalTargeting,
   buildCampaignV2ReportingQuery,
+  campaignV2DispatchScheduleInput,
   campaignV2HistoryBreakdownRows,
   campaignV2HistoryDecisionLabel,
   campaignV2HistoryMatchedLabel,
@@ -22,6 +23,9 @@ import {
   campaignV2ReportingAudienceFamilyLabel,
   campaignV2ReportingBranchLabel,
   campaignV2ReportingCostLabel,
+  campaignV2ProviderBatchLabel,
+  campaignV2ProviderBatchStatsLabel,
+  campaignV2ProviderStatsLabel,
   campaignV2ReportingFilterValidation,
   campaignV2ReportingPercent,
   campaignV2ReportingSnapshotLabel,
@@ -1179,4 +1183,58 @@ test('F3-M2 conserva ambas descargas manuales después de agregar submit', () =>
   assert.equal(html.includes('Descargar lista para envío'), true);
   assert.equal(component.includes('exportDeliveryPackage()'), true);
   assert.equal(component.includes('exportSendablePackage()'), true);
+});
+
+
+test('M3 reporting 1:N distinguishes complete/partial/unavailable stats', () => {
+  assert.equal(campaignV2ReportingSnapshotLabel({
+    snapshot_id: null,
+    snapshot_ids: [101, 102],
+    source: 'PROVIDER_CHILDREN',
+    latest_observed_at: '2026-10-08T19:00:00+00:00',
+    analytics_status: 'complete',
+  }), 'Estadísticas completas');
+  assert.equal(campaignV2ReportingSnapshotLabel({
+    snapshot_id: null,
+    snapshot_ids: [101],
+    source: 'PROVIDER_CHILDREN',
+    latest_observed_at: '2026-10-08T19:00:00+00:00',
+    analytics_status: 'partial',
+  }), 'Estadísticas parciales');
+  assert.equal(campaignV2ReportingSnapshotLabel({
+    snapshot_id: null,
+    snapshot_ids: [],
+    source: 'PROVIDER_CHILDREN',
+    latest_observed_at: null,
+    analytics_status: 'unavailable',
+  }), 'Sin estadísticas disponibles');
+  assert.equal(campaignV2ProviderStatsLabel('unavailable'), 'Sin estadísticas disponibles');
+  assert.equal(campaignV2ProviderBatchLabel('SCHEDULED'), 'Programado (no enviado aún)');
+  assert.equal(campaignV2ProviderBatchLabel('RECONCILIATION_REQUIRED'), 'Requiere conciliación');
+  assert.equal(campaignV2ProviderBatchStatsLabel({
+    id: 1, sucursal_canon: 'BRANCH A', provider: 'IVENTAS',
+    provider_campaign_id: 'campaign-provider-id', status: 'SUBMITTED',
+    recipient_count: 5, snapshot_id: null, observed_at: null,
+    analytics_status: 'not_synced', provider_raw: null,
+    cost: { status: 'unavailable', currency: null, total: null },
+  }), 'Pendiente de sincronizar');
+  assert.equal(campaignV2ReportingCostLabel('partial'), 'Costo parcial, total no confirmado');
+  assert.equal(campaignV2ReportingCostLabel('unavailable'), 'Costos no disponibles');
+});
+
+
+test('F3-M3 scheduling preserves immediate payload and checks local schedule', () => {
+  assert.deepEqual(campaignV2DispatchScheduleInput('IMMEDIATE', '', 'America/Tijuana'), {
+    schedule: null, error: '',
+  });
+  assert.deepEqual(campaignV2DispatchScheduleInput('SCHEDULED', '2026-10-21T08:20', 'America/Tijuana'), {
+    schedule: { local_datetime: '2026-10-21T08:20', timezone: 'America/Tijuana' },
+    error: '',
+  });
+  assert.deepEqual(campaignV2DispatchScheduleInput('SCHEDULED', '2026-10-21T09:20', 'America/Mexico_City').schedule, {
+    local_datetime: '2026-10-21T09:20', timezone: 'America/Mexico_City',
+  });
+  assert.match(campaignV2DispatchScheduleInput('SCHEDULED', '', 'America/Tijuana').error, /fecha y hora/);
+  assert.match(campaignV2DispatchScheduleInput('SCHEDULED', '21-10-2026', 'America/Tijuana').error, /formato/);
+  assert.match(campaignV2DispatchScheduleInput('SCHEDULED', '2026-10-21T08:20', '').error, /zona horaria/);
 });

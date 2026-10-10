@@ -1,0 +1,89 @@
+name: Campaign V2 M3 PostgreSQL and HTTP Integration
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/models/marketing.py"
+      - "backend/migrations/versions/**"
+      - "backend/tests/marketing/test_marketing_campaign_v2_stats_child_postgresql.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_stats_child_migration.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_m3_http_postgresql.py"
+      - "backend/tests/marketing/m3_scheduler_process_probe.py"
+      - "backend/tests/marketing/Dockerfile.m3_scheduler_qa"
+      - "backend/tests/marketing/m3_scheduler_compose_service.py"
+      - "backend/tests/marketing/compose.m3_scheduler_qa.yml"
+      - "backend/tests/marketing/m3_qa_readiness_gate.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_m3_qa_readiness.py"
+      - "docs/contratos/campanas_v2/M3_GO_NO_GO_STAGING_AND_LIVE_QA.md"
+      - ".github/workflows/campaign-v2-m3-postgresql.yml"
+  push:
+    branches:
+      - "feat/campaign-v2-m3-nchild-reporting"
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-m3-child-snapshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: m3_test
+          POSTGRES_PASSWORD: m3_test_only
+          POSTGRES_DB: m3_child_snapshots
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U m3_test -d m3_child_snapshots"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install migration test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install \
+            "SQLAlchemy==2.0.40" \
+            "alembic==1.15.2" \
+            "psycopg2-binary==2.9.10" \
+            "pytest==8.3.5"
+      - name: Offline M3 QA GO-NO-GO evidence gate
+        working-directory: backend
+        run: python -m pytest -q tests/marketing/test_marketing_campaign_v2_m3_qa_readiness.py
+      - name: PostgreSQL upgrade and downgrade
+        working-directory: backend
+        env:
+          M3_TEST_POSTGRES_URL: postgresql+psycopg2://m3_test:m3_test_only@127.0.0.1:5432/m3_child_snapshots
+        run: |
+          python -m pytest -q \
+            tests/marketing/test_marketing_campaign_v2_stats_child_postgresql.py \
+            tests/marketing/test_marketing_campaign_v2_stats_child_migration.py
+
+      - name: Install Flask runtime for isolated HTTP integration
+        run: |
+          python -m pip install -r backend/requirements.txt
+          python -m pip install "pytest==8.3.5"
+      - name: Build isolated M3 scheduler QA container
+        run: |
+          docker build \
+            --file backend/tests/marketing/Dockerfile.m3_scheduler_qa \
+            --tag suite-m3-scheduler-qa:ci \
+            backend
+      - name: Ephemeral Flask HTTP + PostgreSQL smoke (send OFF)
+        working-directory: backend
+        env:
+          M3_TEST_POSTGRES_URL: postgresql+psycopg2://m3_test:m3_test_only@127.0.0.1:5432/m3_child_snapshots
+          CAMPAIGN_V2_PROVIDER_SEND_ENABLED: "false"
+          M3_TEST_DOCKER_IMAGE: "suite-m3-scheduler-qa:ci"
+          APP_ENV: "ci"
+          SECRET_KEY: "isolated-m3-http-secret"
+          JWT_SECRET_KEY: "isolated-m3-http-jwt"
+        run: |
+          python -m pytest -q tests/marketing/test_marketing_campaign_v2_m3_http_postgresql.py

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
-from sqlalchemy import BigInteger, Column, Integer, MetaData, Table, create_engine, event
+from sqlalchemy import BigInteger, Column, Integer, String, MetaData, Table, create_engine, event, text
 from sqlalchemy.orm import Session
 
 from app.models.marketing import (
@@ -60,6 +60,17 @@ def session():
         Column("id", BigInteger, primary_key=True),
     )
     MarketingCampaignV2ORM.__table__.to_metadata(metadata)
+    Table(
+        "marketing_campaign_v2_provider_campaigns",
+        metadata,
+        Column("id", BigInteger, primary_key=True),
+        Column("campaign_v2_id", BigInteger, nullable=False),
+        Column("provider", String, nullable=False),
+        Column("provider_campaign_id", String),
+        Column("status", String, nullable=False),
+        Column("recipient_count", Integer, nullable=False),
+        Column("sucursal_canon", String, nullable=False),
+    )
     MarketingCampaignV2RecipientORM.__table__.to_metadata(metadata)
     MarketingCampaignV2RecipientEvidenceORM.__table__.to_metadata(metadata)
     MarketingCampaignV2ProviderStatsSnapshotORM.__table__.to_metadata(metadata)
@@ -574,4 +585,133 @@ def test_individual_report_uses_bulk_query_pattern_without_n_plus_one(session):
         )
 
     assert report["audience"]["total_recipients"] == 5
-    assert len(statements) <= 5
+    # One constant additional query discovers provider children; no N+1.
+    assert len(statements) <= 6
+
+
+def test_individual_report_exposes_two_provider_children_without_losing_legacy(session):
+    session.execute(text("""
+        INSERT INTO marketing_campaign_v2_provider_campaigns
+            (id, campaign_v2_id, provider, provider_campaign_id,
+             status, recipient_count, sucursal_canon)
+        VALUES
+            (101, 1, 'IVENTAS', 'external-1', 'SUBMITTED', 3, 'BRANCH A'),
+            (102, 1, 'IVENTAS', 'external-other', 'SUBMITTED', 2, 'BRANCH B')
+    """))
+    newer = _snapshot(
+        201, campaign_id=1, fetched_at=BASE + timedelta(hours=2),
+        fingerprint="c" * 64, raw=(2, 0, 0, 2, 0, 0, 0, 0),
+        coverage=(2, 0, 3), analytics=None,
+    )
+    newer.provider_campaign_child_id = 102
+    newer.provider_campaign_id = "external-other"
+    session.add(newer)
+    session.commit()
+
+    report = _report(session)
+    child_report = report["provider_children"]
+    assert child_report["summary"]["child_count"] == 2
+    assert child_report["summary"]["provider_raw"]["successful"] == 8
+    assert child_report["summary"]["provider_raw_status"] == "complete"
+    assert [row["id"] for row in child_report["children"]] == [101, 102]
+    assert child_report["summary"]["cost"]["total"] is None
+    # Historical report values still exist for backward compatibility.
+    assert report["campaign"]["id"] == 1
+
+
+def test_primary_individual_metrics_use_all_child_snapshots(session):
+    session.execute(text("""
+        INSERT INTO marketing_campaign_v2_provider_campaigns
+            (id, campaign_v2_id, provider, provider_campaign_id,
+             status, recipient_count, sucursal_canon)
+        VALUES
+            (101, 1, 'IVENTAS', 'external-1', 'SUBMITTED', 3, 'BRANCH A'),
+            (102, 1, 'IVENTAS', 'external-other', 'SUBMITTED', 2, 'BRANCH B')
+    """))
+    newer = _snapshot(
+        201, campaign_id=1, fetched_at=BASE + timedelta(hours=2),
+        fingerprint="c" * 64, raw=(2, 0, 0, 2, 0, 0, 0, 0),
+        coverage=(2, 0, 3), analytics=None,
+    )
+    newer.provider_campaign_child_id = 102
+    newer.provider_campaign_id = "external-other"
+    session.add(newer)
+    session.flush()
+    session.add(_obs(201, "mx10:6861111111", 10, "SUCCESSFUL", "VIEWED"))
+    session.commit()
+
+    report = _report(session)
+    assert report["normalized"] == {
+        "successful": 3, "failed": 1, "sent": 0,
+        "delivered": 1, "viewed": 2, "reach_count": 3,
+    }
+    assert report["rates"]["successful_rate"] == 3 / 5
+    assert report["coverage"]["matched_recipient_count"] == 4
+    assert report["provider_raw"]["successful"] == 8
+    assert report["observation"]["source"] == "PROVIDER_CHILDREN"
+    assert report["observation"]["snapshot_id"] is None
+    assert report["observation"]["analytics_status"] == "complete"
+    assert "_recipient_observations" not in report["provider_children"]
+    assert report["cost"]["total"] is None
+
+
+def test_partial_child_stats_do_not_produce_definitive_rates(session):
+    session.execute(text("""
+        INSERT INTO marketing_campaign_v2_provider_campaigns
+            (id, campaign_v2_id, provider, provider_campaign_id,
+             status, recipient_count, sucursal_canon)
+        VALUES
+            (101, 1, 'IVENTAS', 'external-1', 'SUBMITTED', 3, 'BRANCH A'),
+            (102, 1, 'IVENTAS', 'external-missing', 'SUBMITTED', 2, 'BRANCH B')
+    """))
+    session.commit()
+    report = _report(session)
+    assert report["observation"]["analytics_status"] == "partial"
+    assert report["provider_raw"]["successful"] == 6
+    assert report["normalized"]["successful"] == 3
+    assert all(rate is None for rate in report["rates"].values())
+    assert report["coverage"]["status_coverage_rate"] is None
+    assert report["cost"]["total"] is None
+    assert report["provider_children"]["summary"]["batches_without_usable_stats"] == 1
+
+
+def test_individual_excel_discloses_partial_provider_batches(session):
+    from datetime import datetime, timezone
+    from openpyxl import load_workbook
+    from app.services.marketing_campaign_v2_reporting_excel_service import (
+        build_campaign_v2_reporting_excel,
+    )
+    session.execute(text("""
+        INSERT INTO marketing_campaign_v2_provider_campaigns
+            (id, campaign_v2_id, provider, provider_campaign_id,
+             status, recipient_count, sucursal_canon)
+        VALUES
+            (101, 1, 'IVENTAS', 'external-1', 'SUBMITTED', 3, 'BRANCH A'),
+            (102, 1, 'IVENTAS', 'external-pending', 'SUBMITTED', 2, 'BRANCH B')
+    """))
+    session.commit()
+    report = _report(session)
+    content, _filename = build_campaign_v2_reporting_excel(
+        report_type="INDIVIDUAL", report=report, evolution=[],
+        scope={"is_global": True, "allowed_sucursal_keys": None},
+        generated_at=datetime(2026, 10, 8, tzinfo=timezone.utc),
+    )
+    book = load_workbook(content, data_only=True)
+    assert "Envíos proveedor" in book.sheetnames
+    sheet = book["Envíos proveedor"]
+    columns = [cell.value for cell in sheet[1]]
+    rows = [
+        dict(zip(columns, (cell.value for cell in sheet[row_no])))
+        for row_no in (2, 3)
+    ]
+    assert {r["child_id"] for r in rows} == {101, 102}
+    assert {r["campaign_stats_completeness"] for r in rows} == {"partial"}
+    pending = next(r for r in rows if r["child_id"] == 102)
+    assert pending["raw_successful"] is None
+    assert pending["cost_total"] is None
+    summary = {
+        book["Resumen"].cell(i, 1).value: book["Resumen"].cell(i, 2).value
+        for i in range(1, book["Resumen"].max_row + 1)
+    }
+    assert summary["stats_completeness"] == "partial"
+    assert summary["successful_rate"] is None

@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 from openpyxl import load_workbook
-from sqlalchemy import BigInteger, Column, Integer, MetaData, Table, create_engine, event
+from sqlalchemy import BigInteger, Column, Integer, String, MetaData, Table, create_engine, event, text
 from sqlalchemy.orm import Session
 
 from app.models.marketing import (
@@ -61,6 +61,17 @@ def session():
         Column("id", BigInteger, primary_key=True),
     )
     MarketingCampaignV2ORM.__table__.to_metadata(metadata)
+    Table(
+        "marketing_campaign_v2_provider_campaigns",
+        metadata,
+        Column("id", BigInteger, primary_key=True),
+        Column("campaign_v2_id", BigInteger, nullable=False),
+        Column("provider", String, nullable=False),
+        Column("provider_campaign_id", String),
+        Column("status", String, nullable=False),
+        Column("recipient_count", Integer, nullable=False),
+        Column("sucursal_canon", String, nullable=False),
+    )
     MarketingCampaignV2RecipientORM.__table__.to_metadata(metadata)
     MarketingCampaignV2RecipientEvidenceORM.__table__.to_metadata(metadata)
     MarketingCampaignV2ProviderStatsSnapshotORM.__table__.to_metadata(metadata)
@@ -815,8 +826,9 @@ def test_export_dataset_query_count_is_bulk_not_per_campaign(session):
 
     assert one["report"]["summary"]["campaign_count"] == 1
     assert many["report"]["summary"]["campaign_count"] == 6
-    assert one_count <= 7
-    assert many_count <= 7
+    # Child discovery adds one bulk query irrespective of campaign count.
+    assert one_count <= 8
+    assert many_count <= 8
     assert many_count <= one_count + 1
 
 
@@ -1114,3 +1126,78 @@ def test_individual_json_and_xlsx_have_phase2c_parity(session):
         )
         for point in report["evolution"]
     ]
+
+
+def test_consolidated_report_includes_child_breakdown_without_n_plus_one(session):
+    session.execute(text("""
+        INSERT INTO marketing_campaign_v2_provider_campaigns
+            (id, campaign_v2_id, provider, provider_campaign_id,
+             status, recipient_count, sucursal_canon)
+        VALUES
+            (101, 1, 'IVENTAS', 'external-1', 'SUBMITTED', 3, 'BRANCH A'),
+            (102, 1, 'IVENTAS', 'external-extra', 'SUBMITTED', 2, 'BRANCH B')
+    """))
+    extra = _snapshot(
+        301, campaign_id=1, fetched_at=BASE + timedelta(hours=3),
+        fingerprint="f" * 64, raw=(2, 0, 0, 2, 0, 0, 0, 0),
+        coverage=(2, 0, 3), analytics=None,
+    )
+    extra.provider_campaign_child_id = 102
+    extra.provider_campaign_id = "external-extra"
+    session.add(extra)
+    session.commit()
+
+    report = build_campaign_v2_consolidated_report(
+        allowed_sucursal_keys=None, session=session,
+    )
+    rows = {row["campaign"]["id"]: row for row in report["campaigns"]}
+    assert rows[1]["provider_children"]["summary"]["child_count"] == 2
+    assert rows[1]["provider_children"]["summary"]["provider_raw_status"] == "complete"
+    assert rows[1]["provider_children"]["summary"]["provider_raw"]["successful"] >= 2
+    assert report["summary"]["provider_children"]["campaigns_with_children"] == 1
+    assert report["summary"]["provider_children"]["batch_count"] == 2
+    assert "provider_children" not in rows[3]
+
+
+def test_consolidated_child_partial_stats_do_not_publish_definitive_rates(session):
+    session.execute(text("""
+        INSERT INTO marketing_campaign_v2_provider_campaigns
+            (id, campaign_v2_id, provider, provider_campaign_id,
+             status, recipient_count, sucursal_canon)
+        VALUES
+            (101, 1, 'IVENTAS', 'external-1', 'SUBMITTED', 3, 'BRANCH A'),
+            (102, 1, 'IVENTAS', 'external-unobserved', 'SUBMITTED', 2, 'BRANCH B')
+    """))
+    session.commit()
+    report = build_campaign_v2_consolidated_report(
+        allowed_sucursal_keys=None, session=session,
+    )
+    row = next(r for r in report["campaigns"] if r["campaign"]["id"] == 1)
+    assert row["observation"]["analytics_status"] == "partial"
+    assert row["provider_raw"] is not None
+    assert all(value is None for value in row["rates"].values())
+    assert row["coverage"]["status_coverage_rate"] is None
+    assert report["summary"]["normalized_status"] == "partial"
+    assert report["summary"]["provider_raw_status"] == "partial"
+    assert all(value is None for value in report["summary"]["rates"].values())
+    assert report["summary"]["coverage"]["status_coverage_rate"] is None
+
+
+def test_snapshot_filters_follow_provider_children_not_stale_parent(session):
+    session.execute(text("""
+        INSERT INTO marketing_campaign_v2_provider_campaigns
+            (id, campaign_v2_id, provider, provider_campaign_id,
+             status, recipient_count, sucursal_canon)
+        VALUES (101, 1, 'IVENTAS', 'external-new', 'SUBMITTED', 3, 'BRANCH A')
+    """))
+    session.commit()
+    without = build_campaign_v2_consolidated_report(
+        allowed_sucursal_keys=None,
+        filters={"snapshot_status": "WITHOUT_SNAPSHOT"}, session=session,
+    )
+    with_snapshot = build_campaign_v2_consolidated_report(
+        allowed_sucursal_keys=None,
+        filters={"snapshot_status": "WITH_SNAPSHOT"}, session=session,
+    )
+    assert 1 in {row["campaign"]["id"] for row in without["campaigns"]}
+    assert 1 not in {row["campaign"]["id"] for row in with_snapshot["campaigns"]}

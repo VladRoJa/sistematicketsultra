@@ -51,6 +51,11 @@ def build_campaign_v2_reporting_excel(
         report_type=normalized_type,
         report=report,
     )
+    _build_provider_children_sheet(
+        workbook,
+        report_type=normalized_type,
+        report=report,
+    )
     _build_kpis_sheet(
         workbook,
         report_type=normalized_type,
@@ -118,6 +123,7 @@ def _build_summary_sheet(
             ]
         )
         rows.extend(_summary_metric_rows(summary))
+        rows.append(("stats_completeness", summary.get("normalized_status"), None))
         rows.extend(_filter_rows(report.get("filters") or {}))
     else:
         rows.extend(
@@ -137,6 +143,12 @@ def _build_summary_sheet(
             ]
         )
         rows.extend(_individual_metric_rows(report))
+        if report.get("provider_children") is not None:
+            rows.append((
+                "stats_completeness",
+                report["provider_children"]["summary"]["provider_raw_status"],
+                None,
+            ))
 
     _write_key_value_sheet(sheet, rows)
 
@@ -289,6 +301,9 @@ _CAMPAIGN_COLUMNS = (
     ("snapshot_id", "observation.snapshot_id"),
     ("latest_observed_at", "observation.latest_observed_at"),
     ("analytics_status", "observation.analytics_status"),
+    ("stats_source", "observation.source"),
+    ("provider_batches", "provider_children.summary.child_count"),
+    ("provider_stats_completeness", "provider_children.summary.provider_raw_status"),
     ("total_recipients", "audience.total_recipients"),
     ("successful", "normalized.successful"),
     ("failed", "normalized.failed"),
@@ -353,6 +368,61 @@ def _build_campaigns_sheet(
     for index, (column, _path) in enumerate(_CAMPAIGN_COLUMNS, start=1):
         if column in _CAMPAIGN_PERCENT_COLUMNS:
             _format_column(sheet, index, _PERCENT_FORMAT)
+
+
+def _build_provider_children_sheet(
+    workbook: Workbook,
+    *,
+    report_type: str,
+    report: Mapping[str, Any],
+) -> None:
+    """A breakdown appears only for campaigns with provider children."""
+    campaign_rows = (
+        [report]
+        if report_type == "INDIVIDUAL"
+        else list(report.get("campaigns") or [])
+    )
+    batches = []
+    for campaign in campaign_rows:
+        projection = campaign.get("provider_children")
+        if projection is None:
+            continue
+        for child in projection.get("children") or ():
+            batches.append((
+                campaign["campaign"]["id"],
+                campaign["campaign"]["name"],
+                child.get("id"),
+                child.get("sucursal_canon"),
+                child.get("provider"),
+                child.get("provider_campaign_id"),
+                child.get("status"),
+                child.get("recipient_count"),
+                child.get("snapshot_id"),
+                child.get("observed_at"),
+                child.get("analytics_status"),
+                projection["summary"]["provider_raw_status"],
+                (child.get("provider_raw") or {}).get("successful"),
+                (child.get("provider_raw") or {}).get("failed"),
+                (child.get("provider_raw") or {}).get("sent"),
+                (child.get("provider_raw") or {}).get("delivered"),
+                (child.get("provider_raw") or {}).get("viewed"),
+                (child.get("cost") or {}).get("status"),
+                (child.get("cost") or {}).get("currency"),
+                (child.get("cost") or {}).get("total"),
+            ))
+    if not batches:
+        return
+
+    sheet = workbook.create_sheet("Envíos proveedor")
+    _write_table(sheet, [
+        "campaign_id", "campaign_name", "child_id", "sucursal",
+        "provider", "provider_campaign_id", "status", "recipients",
+        "snapshot_id", "observed_at", "analytics_status",
+        "campaign_stats_completeness",
+        "raw_successful", "raw_failed", "raw_sent",
+        "raw_delivered", "raw_viewed", "cost_status",
+        "currency", "cost_total",
+    ], batches)
 
 
 _KPI_DEFINITIONS = (
@@ -523,6 +593,8 @@ _EVOLUTION_COLUMNS = (
     ("campaign_id", "campaign_id"),
     ("campaign_name", "campaign_name"),
     ("snapshot_id", "snapshot_id"),
+    ("provider_campaign_child_id", "provider_campaign_child_id"),
+    ("provider_campaign_id", "provider_campaign_id"),
     ("observed_at", "observed_at"),
     ("normalized_successful", "normalized.successful"),
     ("normalized_failed", "normalized.failed"),

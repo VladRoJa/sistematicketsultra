@@ -17,6 +17,9 @@ import {
   CampaignV2Purpose,
   CampaignV2ReportingFilters,
   CampaignV2ReportingObservation,
+  CampaignV2DispatchScheduleRequest,
+  CampaignV2ProviderChildReportingRow,
+  CampaignV2ProviderStatsCompleteness,
   CampaignV2Source,
 } from './marketing-campaign-v2.models';
 
@@ -671,6 +674,28 @@ export function buildCampaignV2ReportingQuery(
   return query;
 }
 
+export function campaignV2DispatchScheduleInput(
+  mode: 'IMMEDIATE' | 'SCHEDULED',
+  localDatetime: string,
+  timezone: string,
+): { schedule: CampaignV2DispatchScheduleRequest | null; error: string } {
+  if (mode === 'IMMEDIATE') {
+    return { schedule: null, error: '' };
+  }
+  const local = localDatetime.trim();
+  if (!local) {
+    return { schedule: null, error: 'Indica la fecha y hora local para programar el envío.' };
+  }
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(local)) {
+    return { schedule: null, error: 'La fecha/hora debe tener un formato local válido.' };
+  }
+  if (!timezone.trim()) {
+    return { schedule: null, error: 'Selecciona la zona horaria del envío.' };
+  }
+  // Backend remains authoritative for IANA timezone, DST and future validation.
+  return { schedule: { local_datetime: local, timezone: timezone.trim() }, error: '' };
+}
+
 export function campaignV2ReportingPercent(value: number | null | undefined): string {
   if (value === null || value === undefined) {
     return '—';
@@ -690,6 +715,11 @@ export function campaignV2ReportingValue(
 export function campaignV2ReportingSnapshotLabel(
   observation: CampaignV2ReportingObservation,
 ): string {
+  if (observation.source === 'PROVIDER_CHILDREN') {
+    return campaignV2ProviderStatsLabel(
+      (observation.analytics_status as CampaignV2ProviderStatsCompleteness) || 'unavailable',
+    );
+  }
   if (observation.snapshot_id === null) {
     return 'Sin observación';
   }
@@ -704,10 +734,46 @@ export function campaignV2ReportingAudienceFamilyLabel(value: string): string {
   return value === 'UNKNOWN' ? 'Sin clasificación' : value;
 }
 
+export function campaignV2ProviderStatsLabel(status: CampaignV2ProviderStatsCompleteness): string {
+  const labels: Record<CampaignV2ProviderStatsCompleteness, string> = {
+    complete: 'Estadísticas completas',
+    partial: 'Estadísticas parciales',
+    unavailable: 'Sin estadísticas disponibles',
+  };
+  return labels[status] || 'Estado desconocido';
+}
+
+export function campaignV2ProviderBatchLabel(status: string): string {
+  const labels: Record<string, string> = {
+    SUBMITTED: 'Aceptado por iVentas',
+    SCHEDULED: 'Programado (no enviado aún)',
+    RECONCILIATION_REQUIRED: 'Requiere conciliación',
+    RETRY_ELIGIBLE: 'Elegible para reintento seguro',
+    PROVIDER_ERROR: 'Error del proveedor',
+    SUBMITTING: 'En proceso',
+    PREPARED: 'Preparado',
+  };
+  return labels[status] || status || 'Desconocido';
+}
+
+export function campaignV2ProviderBatchStatsLabel(row: CampaignV2ProviderChildReportingRow): string {
+  if (row.analytics_status === 'ok' && row.snapshot_id !== null) {
+    return 'Estadísticas disponibles';
+  }
+  if (row.analytics_status === 'not_synced') {
+    return 'Pendiente de sincronizar';
+  }
+  return 'Sin estadísticas';
+}
+
 export function campaignV2ReportingCostLabel(status: string): string {
-  return status === 'unavailable'
-    ? 'Costos no disponibles'
-    : status;
+  const labels: Record<string, string> = {
+    complete: 'Costo completo',
+    available: 'Costo disponible',
+    partial: 'Costo parcial, total no confirmado',
+    unavailable: 'Costos no disponibles',
+  };
+  return labels[status] || 'Costo sin confirmar';
 }
 
 export function campaignV2DownloadBlob(

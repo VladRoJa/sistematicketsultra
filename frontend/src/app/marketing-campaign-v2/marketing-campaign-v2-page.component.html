@@ -526,6 +526,11 @@
             </div>
           </div>
 
+          <p class="reporting-completeness-notice" *ngIf="report.summary.normalized_status === 'partial'" role="status">
+            Hay envíos sin estadísticas completas. Los conteos corresponden a la evidencia disponible
+            y las tasas consolidadas no se consideran definitivas.
+          </p>
+
           <div class="reporting-metric-grid">
             <div class="reporting-metric"><span>Campañas</span><strong>{{ report.summary.campaign_count | number }}</strong></div>
             <div class="reporting-metric"><span>Con observación</span><strong>{{ report.summary.campaigns_with_snapshot | number }}</strong></div>
@@ -580,6 +585,7 @@
                   <th>Propósito</th>
                   <th>Fuente</th>
                   <th>Estado de observación</th>
+                  <th>Envíos</th>
                   <th>Última observación de Suite</th>
                   <th>Exposiciones</th>
                   <th>Successful</th>
@@ -597,6 +603,7 @@
                   <td>{{ purposeLabel(campaign.campaign.purpose) }}</td>
                   <td>{{ sourceLabel(campaign.campaign.source) }}</td>
                   <td>{{ reportingSnapshotLabel(campaign.observation) }}</td>
+                  <td>{{ reportingValue(campaign.provider_children?.summary?.child_count) }}</td>
                   <td>{{ reportingObservedAt(campaign.observation.latest_observed_at) }}</td>
                   <td>{{ campaign.audience.total_recipients | number }}</td>
                   <td>{{ campaign.normalized.successful | number }}</td>
@@ -607,6 +614,43 @@
                   <td>{{ reportingPercent(campaign.rates.read_rate) }}</td>
                   <td>{{ reportingPercent(campaign.coverage.status_coverage_rate) }}</td>
                 </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div *ngIf="report.summary.provider_children?.batch_count" class="reporting-section-title secondary">
+            <div>
+              <h3>Envíos por sucursal</h3>
+              <p>{{ report.summary.provider_children?.batch_count | number }} envíos de provider.
+                Las cifras raw son exposiciones por envío, no personas únicas.</p>
+            </div>
+          </div>
+          <div *ngIf="report.summary.provider_children?.batch_count" class="table-wrapper reporting-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Campaña</th><th>Sucursal</th><th>Estado</th><th>Destinatarios</th>
+                  <th>Estadísticas</th><th>Successful raw</th><th>Delivered raw</th>
+                  <th>Viewed raw</th><th>Observado por Suite</th><th>Costo</th>
+                </tr>
+              </thead>
+              <tbody>
+                <ng-container *ngFor="let campaign of report.campaigns">
+                  <ng-container *ngIf="campaign.provider_children as childReport">
+                    <tr *ngFor="let batch of childReport.children">
+                      <td>{{ campaign.campaign.name }}</td>
+                      <td>{{ batch.sucursal_canon || 'Sin sucursal' }}</td>
+                      <td>{{ providerBatchLabel(batch.status) }}</td>
+                      <td>{{ batch.recipient_count | number }}</td>
+                      <td>{{ providerBatchStatsLabel(batch) }}</td>
+                      <td>{{ reportingValue(batch.provider_raw?.successful) }}</td>
+                      <td>{{ reportingValue(batch.provider_raw?.delivered) }}</td>
+                      <td>{{ reportingValue(batch.provider_raw?.viewed) }}</td>
+                      <td>{{ reportingObservedAt(batch.observed_at) }}</td>
+                      <td>{{ reportingCostLabel(batch.cost.status) }}</td>
+                    </tr>
+                  </ng-container>
+                </ng-container>
               </tbody>
             </table>
           </div>

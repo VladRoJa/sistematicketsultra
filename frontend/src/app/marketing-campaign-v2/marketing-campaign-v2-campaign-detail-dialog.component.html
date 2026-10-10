@@ -90,7 +90,7 @@
       </p>
 
       <ng-container *ngIf="reporting as report">
-        <p *ngIf="report.observation.snapshot_id === null" class="reporting-empty">
+        <p *ngIf="!report.observation.latest_observed_at" class="reporting-empty">
           Aún no hay observaciones persistidas para esta campaña.
         </p>
 
@@ -105,6 +105,53 @@
           <div><span>Viewed</span><strong>{{ report.normalized.viewed | number }}</strong></div>
           <div><span>Reach</span><strong>{{ report.normalized.reach_count | number }}</strong></div>
         </div>
+
+        <section *ngIf="report.provider_children as childReport" class="reporting-children">
+          <div class="reporting-children-heading">
+            <h4>Envíos por sucursal</h4>
+            <p>{{ childReport.summary.child_count | number }} envíos ·
+              {{ childReport.summary.accepted_batches | number }} aceptados ·
+              {{ childReport.summary.batches_with_usable_stats | number }} con estadísticas
+            </p>
+          </div>
+          <p class="reporting-children-notice" *ngIf="childReport.summary.provider_raw_status !== 'complete'" role="status">
+            {{ providerStatsLabel(childReport.summary.provider_raw_status) }}.
+            Los indicadores mostrados corresponden a la evidencia disponible; las tasas generales permanecen sin confirmar.
+          </p>
+          <p class="muted">Un envío programado no significa que los mensajes ya se entregaron.
+            Los costos no se estiman cuando iVentas no proporciona evidencia verificable.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sucursal</th><th>Estado del envío</th><th>Destinatarios</th>
+                  <th>Estadísticas</th><th>Successful</th><th>Delivered</th>
+                  <th>Viewed</th><th>Última observación</th><th>Costo</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let batch of childReport.children">
+                  <td>{{ batch.sucursal_canon || 'Sin sucursal' }}</td>
+                  <td>{{ providerBatchLabel(batch.status) }}</td>
+                  <td>{{ batch.recipient_count | number }}</td>
+                  <td>{{ providerBatchStatsLabel(batch) }}</td>
+                  <td>{{ reportingValue(batch.provider_raw?.successful) }}</td>
+                  <td>{{ reportingValue(batch.provider_raw?.delivered) }}</td>
+                  <td>{{ reportingValue(batch.provider_raw?.viewed) }}</td>
+                  <td>{{ reportingObservedAt(batch.observed_at) }}</td>
+                  <td>
+                    {{ reportingCostLabel(batch.cost.status) }}
+                    <span *ngIf="batch.cost.total !== null">
+                      · {{ batch.cost.total }} {{ batch.cost.currency }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="muted">Costo general: {{ reportingCostLabel(childReport.summary.cost.status) }}.
+            No se presenta un total si algún envío carece de costo confirmado.</p>
+        </section>
 
         <div class="reporting-rate-grid">
           <div><span>Successful rate</span><strong>{{ reportingPercent(report.rates.successful_rate) }}</strong></div>
@@ -237,6 +284,13 @@
               </mat-option>
             </mat-select>
           </mat-form-field>
+          <mat-form-field appearance="fill">
+            <mat-label>Modo de envío</mat-label>
+            <mat-select [formControl]="dispatchModeControl">
+              <mat-option value="IMMEDIATE">Inmediato</mat-option>
+              <mat-option value="SCHEDULED">Programado</mat-option>
+            </mat-select>
+          </mat-form-field>
           <button
             mat-stroked-button
             type="button"
@@ -247,6 +301,20 @@
           </button>
         </div>
 
+        <div *ngIf="dispatchModeControl.value === 'SCHEDULED'" class="dispatch-schedule-controls">
+          <mat-form-field appearance="fill">
+            <mat-label>Fecha y hora local</mat-label>
+            <input matInput type="datetime-local" [formControl]="dispatchLocalDateTimeControl" />
+          </mat-form-field>
+          <mat-form-field appearance="fill">
+            <mat-label>Zona horaria explícita</mat-label>
+            <mat-select [formControl]="dispatchTimezoneControl">
+              <mat-option *ngFor="let zone of dispatchTimezones" [value]="zone.value">{{ zone.label }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+          <p class="muted">La fecha se interpreta en la zona seleccionada. Suite validará horario de verano y convertirá a UTC.</p>
+          <p *ngIf="dispatchScheduleError" class="inline-error" role="alert">{{ dispatchScheduleError }}</p>
+        </div>
         <p *ngIf="loadingDispatchTemplates" class="muted">Cargando templates permitidos…</p>
         <p *ngIf="!loadingDispatchTemplates && dispatchTemplates.length === 0 && !preflightError" class="muted">
           No hay templates activos compatibles con el purpose de esta campaña.
@@ -257,6 +325,12 @@
           <div class="preflight-state" [class.preflight-ready]="plan.ready" [class.preflight-blocked]="!plan.ready">
             <strong>{{ plan.ready ? 'Plan listo para revisión' : 'Plan bloqueado' }}</strong>
             <span>{{ plan.ready ? 'Sin bloqueos detectados por preflight.' : 'Corrige los bloqueos antes de habilitar una fase de envío.' }}</span>
+          </div>
+
+          <div *ngIf="plan.schedule as schedule" class="dispatch-schedule-review" role="status">
+            <strong>Programación revisada</strong>
+            <span>{{ schedule.local_datetime }} · {{ schedule.timezone }}</span>
+            <span>UTC: {{ schedule.scheduled_for_utc }}</span>
           </div>
 
           <div class="preflight-summary-grid">
@@ -321,7 +395,7 @@
               (click)="confirmAndSubmitDispatch()"
               [disabled]="!canSubmitDispatch"
             >
-              {{ submitting ? 'Enviando…' : 'Enviar mensajes ahora' }}
+              {{ submitting ? 'Procesando…' : plan.mode === 'SCHEDULED' ? 'Programar envío' : 'Enviar mensajes ahora' }}
             </button>
           </div>
 
@@ -354,7 +428,7 @@
                   <tr *ngFor="let child of plan.submission.batches">
                     <td>{{ child.sucursal_canon }}</td>
                     <td>{{ child.recipient_count | number }}</td>
-                    <td>{{ child.status }}</td>
+                    <td>{{ providerBatchLabel(child.status) }}</td>
                     <td class="mono">{{ child.provider_campaign_id || '—' }}</td>
                     <td class="mono">{{ child.support_ref || child.error_code || '—' }}</td>
                   </tr>

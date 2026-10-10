@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, Inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
+import { CampaignV2DispatchSchedulePlan } from './marketing-campaign-v2.models';
 import {
   MAT_DIALOG_DATA,
   MatDialogModule,
@@ -17,6 +18,9 @@ export interface MarketingCampaignV2SubmitConfirmBatch {
 export interface MarketingCampaignV2SubmitConfirmDialogData {
   campaignName: string;
   purposeLabel: string;
+  mode: 'IMMEDIATE' | 'SCHEDULED';
+  schedule: CampaignV2DispatchSchedulePlan | null;
+  sendEnabled: boolean;
   templateName: string;
   frozenCount: number;
   blacklistedCount: number;
@@ -47,6 +51,10 @@ export class MarketingCampaignV2SubmitConfirmDialogComponent {
       boolean
     >,
   ) {}
+
+  get isScheduled(): boolean {
+    return this.data.mode === 'SCHEDULED';
+  }
 
   cancel(): void {
     this.dialogRef.close(false);

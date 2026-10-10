@@ -758,10 +758,21 @@ def get_campaign_v2_report_endpoint(campaign_id: int):
 def get_campaign_v2_provider_stats_endpoint(campaign_id: int):
     try:
         _, access = _resolve_campaign_v2_request()
-        _validate_query_args(set())
+        _validate_query_args({"provider_campaign_child_id"})
+        child_id = request.args.get("provider_campaign_child_id")
+        if child_id is not None:
+            if len(request.args.getlist("provider_campaign_child_id")) != 1:
+                raise MarketingCampaignV2RouteValidationError(
+                    "provider_campaign_child_id solo puede indicarse una vez."
+                )
+            child_id = _parse_positive_query_int(
+                child_id,
+                field_name="provider_campaign_child_id",
+            )
         result = get_campaign_v2_provider_stats(
             campaign_id=campaign_id,
             allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            provider_campaign_child_id=child_id,
             session=db.session,
         )
         return jsonify(result), 200
@@ -793,13 +804,31 @@ def capture_campaign_v2_provider_stats_snapshot_endpoint(campaign_id: int):
         _, access = _resolve_campaign_v2_request()
         _validate_query_args(set())
         payload = request.get_json(silent=True)
-        if payload not in (None, {}):
+        if payload is None:
+            if request.is_json and request.get_data():
+                raise MarketingCampaignV2RouteValidationError(
+                    "El payload JSON debe ser un objeto válido."
+                )
+            payload = {}
+        if not isinstance(payload, dict):
             raise MarketingCampaignV2RouteValidationError(
-                "La captura de provider stats no acepta payload."
+                "El payload JSON debe ser un objeto."
+            )
+        if set(payload) - {"provider_campaign_child_id"}:
+            raise MarketingCampaignV2RouteValidationError(
+                "La captura solo acepta provider_campaign_child_id."
+            )
+        child_id = payload.get("provider_campaign_child_id")
+        if "provider_campaign_child_id" in payload and (
+            type(child_id) is not int or child_id <= 0
+        ):
+            raise MarketingCampaignV2RouteValidationError(
+                "provider_campaign_child_id debe ser entero positivo."
             )
         result = capture_campaign_v2_provider_stats_snapshot(
             campaign_id=campaign_id,
             allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            provider_campaign_child_id=child_id,
             session=db.session,
         )
         return jsonify(result), 200
