@@ -9,6 +9,7 @@ from .ticket_attachment import TicketAttachmentORM
 from .user_model import UserORM
 from .google_ads_oauth import GoogleAdsOAuthCredentialORM
 from .google_ads_daily import GoogleAdsDailyMetricORM
+from .google_ads_ad_group_daily import GoogleAdsAdGroupDailyMetricORM
 from .sucursal_model import Sucursal, SucursalOperationalStatus
 from .inventario import (
     InventarioGeneral,
