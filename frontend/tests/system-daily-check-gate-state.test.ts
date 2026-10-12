@@ -13,25 +13,25 @@ function assert(condition: boolean, message: string): void {
 }
 
 assert(
-  isSystemDailyCheckMvpCandidate({
+  !isSystemDailyCheckMvpCandidate({
     username: 'sistemas.user',
     rol: 'SISTEMAS',
   }),
-  'SISTEMAS debe participar en el rollout MVP.',
-);
-assert(
-  isSystemDailyCheckMvpCandidate({
-    username: 'admicorp',
-    rol: 'ADMINISTRADOR',
-  }),
-  'ADMICORP debe participar en el rollout MVP.',
+  'SISTEMAS no debe capturar el checklist; conserva acceso a BI.',
 );
 assert(
   !isSystemDailyCheckMvpCandidate({
+    username: 'admicorp',
+    rol: 'ADMINISTRADOR',
+  }),
+  'ADMICORP no debe capturar; administra rollout y consulta BI.',
+);
+assert(
+  isSystemDailyCheckMvpCandidate({
     username: 'gerente.demo',
     rol: 'GERENTE',
   }),
-  'GERENTE debe permanecer fuera del rollout MVP.',
+  'GERENTE debe poder capturar el checklist diario.',
 );
 assert(
   !isSystemDailyCheckMvpCandidate({
