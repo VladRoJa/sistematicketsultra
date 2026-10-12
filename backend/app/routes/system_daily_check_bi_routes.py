@@ -30,7 +30,7 @@ from app.services.system_daily_check_service import (
     resolve_business_date,
 )
 from app.utils.system_daily_check_access import (
-    has_system_daily_check_mvp_access,
+    has_system_daily_check_bi_access,
 )
 
 
@@ -57,7 +57,7 @@ def _current_user():
 
 
 def _require_bi_access(actor) -> None:
-    if not has_system_daily_check_mvp_access(actor):
+    if not has_system_daily_check_bi_access(actor):
         raise SystemDailyCheckAuthorizationError(
             "El usuario no está habilitado para BI del checklist diario."
         )
