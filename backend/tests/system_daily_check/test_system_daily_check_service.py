@@ -272,7 +272,7 @@ def test_initial_status_and_requested_branch_are_backend_validated():
                     session=session,
                 )
 
-            with pytest.raises(SystemDailyCheckValidationError, match="no existe"):
+            with pytest.raises(SystemDailyCheckAuthorizationError, match="sucursal asignada"):
                 get_today_status(
                     _actor(),
                     requested_branch_id=999,
