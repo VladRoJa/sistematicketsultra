@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 import sqlalchemy as sa
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 
 
 MIGRATION_PATH = (
@@ -69,6 +71,13 @@ def _schema():
         ), nullable=False),
         sa.Column("is_active", sa.Boolean, nullable=False),
         sa.Column("notes", sa.Text),
+        # Match the real post-iVentas source-family CHECK in production.
+        sa.CheckConstraint(
+            "source_family IN ('manual_targets', 'gasca_family', "
+            "'domiciliados_total', 'domiciliados_recep', 'venta_tienda', "
+            "'totalpass_family', 'wellhub_family', 'iventas_family')",
+            name="ck_track_branch_aliases_source_family",
+        ),
     )
     return metadata, branches, catalog, alias
 
@@ -112,9 +121,15 @@ def test_postgres_seed_is_idempotent_and_rollback_preserves_other_families(
                 ],
             )
             monkeypatch.setattr(
-                migration.op, "get_bind", lambda: connection,
+                migration, "op", Operations(MigrationContext.configure(connection)),
+            )
+            migration._assert_source_family_domain(
+                connection, migration.SOURCE_FAMILIES_BEFORE,
             )
             migration.upgrade()
+            migration._assert_source_family_domain(
+                connection, migration.SOURCE_FAMILIES_AFTER,
+            )
             migration.upgrade()  # same mapping must not create extra rows
             rows = connection.execute(
                 sa.select(alias).where(
@@ -130,6 +145,9 @@ def test_postgres_seed_is_idempotent_and_rollback_preserves_other_families(
             }
 
             migration.downgrade()
+            migration._assert_source_family_domain(
+                connection, migration.SOURCE_FAMILIES_BEFORE,
+            )
             assert connection.execute(
                 sa.select(sa.func.count()).select_from(alias).where(
                     alias.c.source_family == "google_ads_family"
@@ -176,13 +194,72 @@ def test_postgres_rejects_inactive_branch_before_writes(monkeypatch):
                 ],
             )
             monkeypatch.setattr(
-                migration.op, "get_bind", lambda: connection,
+                migration, "op", Operations(MigrationContext.configure(connection)),
             )
             with pytest.raises(RuntimeError, match="no elegible"):
                 migration.upgrade()
             assert connection.execute(
                 sa.select(sa.func.count()).select_from(alias)
             ).scalar_one() == 0
+            migration._assert_source_family_domain(
+                connection, migration.SOURCE_FAMILIES_BEFORE,
+            )
+            metadata.drop_all(connection)
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.skipif(not DB_URL, reason="Requiere PostgreSQL aislado M4.")
+def test_postgres_rejects_unexpected_check_without_writes(monkeypatch):
+    engine = _isolated_engine()
+    metadata, branches, catalog, alias = _schema()
+    try:
+        with engine.begin() as connection:
+            metadata.create_all(connection)
+            connection.execute(
+                branches.insert(),
+                [
+                    {"sucursal_id": id_, "operational_status": "ACTIVA"}
+                    for _, _, id_ in migration.APPROVED_ALIASES
+                ],
+            )
+            connection.execute(
+                catalog.insert(),
+                [
+                    {
+                        "sucursal_canon": canon,
+                        "sucursal_id": id_,
+                        "is_track_active": True,
+                    }
+                    for _, canon, id_ in migration.APPROVED_ALIASES
+                ],
+            )
+            # An extra unapproved family must halt M4 instead of
+            # overwriting the CHECK or accidentally dropping it.
+            connection.execute(sa.text(
+                "ALTER TABLE track_branch_aliases "
+                "DROP CONSTRAINT ck_track_branch_aliases_source_family"
+            ))
+            allowed = ", ".join(
+                f"'{name}'"
+                for name in (*migration.SOURCE_FAMILIES_BEFORE, "unknown_family")
+            )
+            connection.execute(sa.text(
+                "ALTER TABLE track_branch_aliases "
+                "ADD CONSTRAINT ck_track_branch_aliases_source_family "
+                f"CHECK (source_family IN ({allowed}))"
+            ))
+            monkeypatch.setattr(
+                migration, "op", Operations(MigrationContext.configure(connection)),
+            )
+            with pytest.raises(RuntimeError, match="Dominio CHECK"):
+                migration.upgrade()
+            assert connection.execute(
+                sa.select(sa.func.count()).select_from(alias)
+            ).scalar_one() == 0
+            assert migration._source_families_in_database(connection) == set(
+                (*migration.SOURCE_FAMILIES_BEFORE, "unknown_family")
+            )
             metadata.drop_all(connection)
     finally:
         engine.dispose()
