@@ -165,12 +165,12 @@ def test_rollout_universe_separates_potential_from_expected():
             assert {
                 row["sucursal_id"]
                 for row in day_one["potential_branches"]
-            } == {10, 11, CORPORATE_BRANCH_ID}
+            } == {10, 11}
             assert {
                 row["sucursal_id"]
                 for row in day_one["expected_branches"]
             } == {10}
-            assert day_one["potential_count"] == 3
+            assert day_one["potential_count"] == 2
             assert day_one["expected_count"] == 1
 
             day_two = resolve_system_daily_check_branch_universe(
@@ -206,7 +206,7 @@ def test_rollout_universe_rejects_non_date_cutoff():
 def _actor(
     *,
     role="SISTEMAS",
-    username="sistemas-user",
+    username="ADMICORP",
     branch_id=ROOT_BRANCH_ID,
 ):
     return SimpleNamespace(
@@ -274,56 +274,34 @@ def test_configure_rollout_today_replaces_forward_without_rewriting_history():
         engine.dispose()
 
 
-def test_checklist_branch_catalog_canonicalizes_root_to_corporate():
+def test_checklist_branch_catalog_only_contains_managers_assigned_branch():
     engine = _engine()
     try:
         with Session(engine) as session:
             catalog = list_system_daily_check_branches(
-                _actor(branch_id=ROOT_BRANCH_ID),
+                _actor(role="GERENTE", username="gerente", branch_id=10),
                 session=session,
             )
-            branch_ids = {
-                row["sucursal_id"]
-                for row in catalog["branches"]
-            }
-            assert CORPORATE_BRANCH_ID in branch_ids
-            assert ROOT_BRANCH_ID not in branch_ids
-            assert (
-                catalog["preferred_branch_id"]
-                == CORPORATE_BRANCH_ID
-            )
+            assert [row["sucursal_id"] for row in catalog["branches"]] == [10]
+            assert catalog["preferred_branch_id"] == 10
+            with pytest.raises(SystemDailyCheckAuthorizationError):
+                list_system_daily_check_branches(
+                    _actor(role="SISTEMAS"), session=session,
+                )
     finally:
         engine.dispose()
 
 
-def test_corporate_is_selectable_but_root_remains_excluded():
+def test_corporate_and_root_cannot_be_configured_for_rollout():
     engine = _engine()
-    now = datetime(2026, 10, 9, 16, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 10, 9, 16, tzinfo=timezone.utc)
     try:
         with Session(engine) as session:
-            result = configure_system_daily_check_rollout_today(
-                _actor(),
-                branch_ids=[CORPORATE_BRANCH_ID],
-                now=now,
-                session=session,
-            )
-            session.commit()
-            assert {
-                row["sucursal_id"]
-                for row in result["expected_branches"]
-            } == {CORPORATE_BRANCH_ID}
-
-        with Session(engine) as session:
-            with pytest.raises(
-                SystemDailyCheckValidationError,
-                match="técnica no seleccionable",
-            ):
-                configure_system_daily_check_rollout_today(
-                    _actor(),
-                    branch_ids=[ROOT_BRANCH_ID],
-                    now=now,
-                    session=session,
-                )
+            for branch_id in (CORPORATE_BRANCH_ID, ROOT_BRANCH_ID):
+                with pytest.raises(SystemDailyCheckValidationError):
+                    configure_system_daily_check_rollout_today(
+                        _actor(), branch_ids=[branch_id], now=now, session=session,
+                    )
     finally:
         engine.dispose()
 
