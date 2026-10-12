@@ -408,7 +408,22 @@ submitUpload(): void {
 
   this.warehouseUploadsService.createUpload(payload).subscribe({
     next: (response) => {
-      if (response.report_type_key === 'google_ads_campaign_daily') {
+      if (response.report_type_key === 'google_ads_ad_group_daily') {
+        const ingestion = response.manual_structured_result;
+        const detail = ingestion?.structured_result;
+        if (ingestion?.ingestion_status !== 'ingested' || !detail) {
+          this.uploadErrorMessage =
+            'Archivo raw guardado, pero no se confirmó la ingesta por grupos de Google Ads.';
+          this.loadUploads();
+          return;
+        }
+        this.uploadSuccessMessage =
+          `Google Ads por grupo: ${detail.created_rows} filas nuevas, ` +
+          `${detail.unchanged_rows} existentes; ${detail.group_day_rows} ` +
+          `filas revisadas. Inversión: ${detail.total_cost_in_file} MXN; ` +
+          `pases Ads: ${detail.passes_ads}; compras web Ads: ${detail.web_purchases_ads}. ` +
+          'Gasto NO sumado al histórico de campañas ni asignado aún a clubes.';
+      } else if (response.report_type_key === 'google_ads_campaign_daily') {
         const ingestion = response.manual_structured_result;
         const detail = ingestion?.structured_result;
         if (ingestion?.ingestion_status !== 'ingested' || !detail) {
