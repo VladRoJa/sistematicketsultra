@@ -180,7 +180,7 @@ def parse_google_ads_daily_xlsx(content: bytes) -> GoogleAdsDailyParsedFile:
             status = str(values[1] or "").strip()
             day = values[index["dia"]]
             if status.startswith("Total:"):
-                if status == "Total: Cuenta" and day not in (None, "--"):
+                if status == "Total: Cuenta" and day is not None and str(day).strip() not in ("", "--"):
                     parsed_day = _date_value(day)
                     if parsed_day in account_totals:
                         raise GoogleAdsXlsxValidationError("Total de cuenta duplicado.")

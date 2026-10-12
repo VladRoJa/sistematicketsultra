@@ -12,7 +12,7 @@ from app.warehouse.services.google_ads_daily_xlsx_parser import (
 )
 
 
-def make_export(cost=12.50, currency="MXN", repeated=False):
+def make_export(cost=12.50, currency="MXN", repeated=False, grand_total_day=" "):
     wb = Workbook()
     sheet = wb.active
     sheet.append(["Informe de campaña"])
@@ -43,6 +43,12 @@ def make_export(cost=12.50, currency="MXN", repeated=False):
             None, None, None, None, 12.50, 0.5,
             None, None, 2, None, 4, 100,
         ])
+    # Google Ads includes an undated account grand total before other totals.
+    # A whitespace-only cell must never be parsed as a campaign date.
+    sheet.append([
+        grand_total_day, "Total: Cuenta", None, None, None, None, "MXN",
+        None, None, None, None, 25, 1, None, None, 4, None, 8, 200,
+    ])
     sheet.append([
         "--", "Total: Campañas", "--", None, None, None, "MXN",
         None, None, None, None, 25, 1, None, None, 4, None, 8, 200,
@@ -70,6 +76,22 @@ def test_campaign_daily_export_parses_without_subtotals():
 def test_invalid_daily_export_fails_closed(kwargs):
     with pytest.raises(GoogleAdsXlsxValidationError):
         parse_google_ads_daily_xlsx(make_export(**kwargs))
+
+
+def test_blank_account_grand_total_dates_are_ignored():
+    for empty in ("", " ", "  ", None, "--"):
+        parsed = parse_google_ads_daily_xlsx(
+            make_export(grand_total_day=empty)
+        )
+        assert len(parsed.rows) == 4
+        assert parsed.total_cost == Decimal("25.00")
+
+
+def test_invalid_account_grand_total_date_is_not_ignored():
+    with pytest.raises(GoogleAdsXlsxValidationError, match="columna Día"):
+        parse_google_ads_daily_xlsx(
+            make_export(grand_total_day="fecha inválida")
+        )
 
 
 def test_non_xlsx_bytes_fail_closed():
