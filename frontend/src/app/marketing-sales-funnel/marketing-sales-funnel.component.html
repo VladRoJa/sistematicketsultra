@@ -121,6 +121,36 @@
   </section>
 
   <ng-container *ngIf="showDashboard">
+    <section
+      *ngIf="investmentSourcesView as ads"
+      class="ads-source-strip"
+      aria-label="Inversión por fuente de publicidad"
+    >
+      <div class="ads-source-strip__head">
+        <h2>Inversión publicitaria por fuente</h2>
+        <span>Importes MXN · corte seleccionado</span>
+      </div>
+      <div class="ads-source-strip__totals">
+        <div class="ads-source-strip__metric">
+          <span>Meta Ads · asignada a sucursales</span>
+          <strong>{{ ads.metaValue }}</strong>
+        </div>
+        <div class="ads-source-strip__metric">
+          <span>Google Ads · cuenta completa</span>
+          <strong>{{ ads.googleValue }}</strong>
+        </div>
+        <div class="ads-source-strip__metric">
+          <span>Meta asignada + Google · mismo corte</span>
+          <strong>{{ ads.totalValue }}</strong>
+        </div>
+      </div>
+      <p class="ads-source-strip__coverage">{{ ads.googleCoverage }}</p>
+      <p *ngIf="ads.googleMetrics" class="ads-source-strip__coverage">
+        {{ ads.googleMetrics }}
+      </p>
+      <p class="ads-source-strip__note">{{ ads.note }}</p>
+    </section>
+
     <app-marketing-sales-funnel-story
       [month]="selectedMonth"
       [cutoffDate]="dashboard?.selected_cutoff_date || null"
@@ -170,7 +200,7 @@
               <th colspan="2">Eficiencia</th>
             </tr>
             <tr class="branch-performance-table__columns">
-              <th class="group-start">Inversión</th>
+              <th class="group-start">Meta asignada</th>
               <th>Leads CRM</th>
               <th>Visitas CRM</th>
 

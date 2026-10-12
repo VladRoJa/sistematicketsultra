@@ -1035,3 +1035,63 @@
   }
 }
 /* END POLISH: summary economic story */
+
+/* M2 Google Ads: separate account-level spend, never mixed into branch KPIs. */
+.ads-source-strip {
+  margin: 0 0 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--story-border);
+  border-radius: 14px;
+  background: var(--story-surface);
+  color: var(--story-navy);
+}
+.ads-source-strip__head {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.ads-source-strip__head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+}
+.ads-source-strip__head span,
+.ads-source-strip__coverage,
+.ads-source-strip__note {
+  font-size: 12px;
+  color: var(--story-muted);
+}
+.ads-source-strip__totals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.ads-source-strip__metric {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 9px;
+  background: var(--story-page);
+}
+.ads-source-strip__metric span {
+  font-size: 12px;
+  font-weight: 600;
+}
+.ads-source-strip__metric strong {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.ads-source-strip__coverage {
+  margin: 10px 0 0;
+}
+.ads-source-strip__note {
+  margin: 6px 0 0;
+}
+@media (max-width: 760px) {
+  .ads-source-strip__totals {
+    grid-template-columns: 1fr;
+  }
+}

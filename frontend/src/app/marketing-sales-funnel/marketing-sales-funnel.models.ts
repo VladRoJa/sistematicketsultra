@@ -115,12 +115,39 @@ export interface MarketingSalesFunnelQuality {
   limitations: string[];
 }
 
+export interface MarketingGoogleAdsFunnelInvestment {
+  status: 'scope_unavailable' | 'not_configured' | 'no_data' | 'complete' | 'partial';
+  currency: string;
+  amount: number | null;
+  complete_to_cutoff: boolean;
+  clicks?: number;
+  impressions?: number;
+  conversions?: number;
+  data_from?: string;
+  data_to?: string;
+  requested_from?: string;
+  requested_to?: string;
+  covered_days?: number;
+  expected_days?: number;
+  missing_days?: number;
+}
+
+export interface MarketingFunnelInvestmentSources {
+  meta_assigned: number | null;
+  google_ads: MarketingGoogleAdsFunnelInvestment;
+  combined: number | null;
+  combined_available: boolean;
+  combined_definition: string;
+  existing_cpl_cpt_cac_basis: 'META_ASSIGNED_ONLY';
+}
+
 export interface MarketingSalesFunnelResponse {
   month: string;
   selected_cutoff_date: string;
   available_cutoff_dates: string[];
   scope: Record<string, unknown>;
   scope_options?: MarketingSalesFunnelScopeOption[];
+  investment_sources?: MarketingFunnelInvestmentSources;
   summary: MarketingSalesFunnelMetrics;
   branches: MarketingSalesFunnelBranch[];
   source: MarketingSalesFunnelSource;
