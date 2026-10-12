@@ -24,7 +24,6 @@ from app.services.system_daily_check_attachment_storage_service import (
 )
 from app.services.system_daily_check_service import (
     QUESTION_BY_KEY,
-    SYSTEM_DAILY_CHECK_PILOT_CORPORATE_BRANCH_ID,
     SystemDailyCheckAuthorizationError,
     SystemDailyCheckNotFoundError,
     SystemDailyCheckValidationError,
