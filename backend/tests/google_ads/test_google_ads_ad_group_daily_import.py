@@ -60,3 +60,72 @@ def test_ad_group_export_parses_and_keeps_action_columns():
 def test_ad_group_invalid_exports_fail_closed(kwargs):
     with pytest.raises(GoogleAdsXlsxValidationError):
         parse_google_ads_ad_group_daily_xlsx(export(**kwargs))
+
+
+def test_reimport_is_idempotent_and_changed_value_is_rejected(monkeypatch):
+    from datetime import date
+    from types import SimpleNamespace
+    from app.warehouse.services import (
+        google_ads_ad_group_daily_ingestion_service as svc,
+    )
+
+    parsed = parse_google_ads_ad_group_daily_xlsx(export())
+    upload = SimpleNamespace(
+        id=901, date_from=date(2026, 9, 24), date_to=date(2026, 9, 25),
+        uploaded_by_user_id=47,
+    )
+    monkeypatch.setattr(svc, "_upload_content", lambda *a, **k: (upload, b"xlsx"))
+    monkeypatch.setattr(
+        svc, "parse_google_ads_ad_group_daily_xlsx", lambda _: parsed,
+    )
+    monkeypatch.setattr(svc, "_customer_id", lambda: "2739125201")
+    monkeypatch.setattr(
+        svc, "_assert_campaign_reconciliation", lambda **kw: {},
+    )
+    monkeypatch.setattr(svc, "log_warehouse_audit", lambda **kw: None)
+
+    class Session:
+        def __init__(self):
+            self.previous = []
+            self.added = []
+            self.commits = 0
+        def query(self, model):
+            return self
+        def filter(self, *args):
+            return self
+        def all(self):
+            return self.previous
+        def add_all(self, rows):
+            self.added.extend(rows)
+        def commit(self):
+            self.commits += 1
+        def rollback(self):
+            pass
+
+    session = Session()
+    monkeypatch.setattr(svc, "db", SimpleNamespace(session=session))
+    result = svc.import_google_ads_ad_group_warehouse_upload(
+        warehouse_upload_id=901,
+    )
+    assert result["created_rows"] == 2
+    assert result["unchanged_rows"] == 0
+    assert session.commits == 1
+    assert len(session.added) == 2
+
+    session.previous = list(session.added)
+    session.added = []
+    second = svc.import_google_ads_ad_group_warehouse_upload(
+        warehouse_upload_id=901,
+    )
+    assert second["created_rows"] == 0
+    assert second["unchanged_rows"] == 2
+    assert session.added == []
+    assert session.commits == 2
+
+    session.previous[0].cost = Decimal("999.00")
+    with pytest.raises(svc.GoogleAdsAdGroupDailyIngestionError, match="corrección tardía"):
+        svc.import_google_ads_ad_group_warehouse_upload(
+            warehouse_upload_id=901,
+        )
+    assert session.commits == 2
+    assert session.added == []
