@@ -152,6 +152,7 @@
         <button
           type="button"
           class="systems-button systems-button--ghost"
+          *ngIf="canConfigureRollout"
           (click)="toggleRolloutPanel()"
         >
           Configurar piloto
