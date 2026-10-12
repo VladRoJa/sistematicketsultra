@@ -14,10 +14,16 @@ def has_system_daily_check_mvp_access(user) -> bool:
 
 
 def has_system_daily_check_bi_access(user) -> bool:
-    """BI y configuración del rollout: administración, sin cuenta piloto."""
+    """Acceso a panel Salud de Sistemas: SISTEMAS o ADMICORP."""
+    return user is not None and (
+        _normalize(getattr(user, "rol", None)) == "SISTEMAS"
+        or _normalize(getattr(user, "username", None)) == "ADMICORP"
+    )
+
+
+def has_system_daily_check_rollout_access(user) -> bool:
+    """Sólo la cuenta ADMICORP administra las sucursales del checklist."""
     return (
         user is not None
-        and _normalize(getattr(user, "rol", None))
-        in {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN"}
-        and _normalize(getattr(user, "username", None)) != "ADMICORP"
+        and _normalize(getattr(user, "username", None)) == "ADMICORP"
     )
