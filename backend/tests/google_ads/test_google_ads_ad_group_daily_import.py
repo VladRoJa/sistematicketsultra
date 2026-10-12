@@ -129,3 +129,51 @@ def test_reimport_is_idempotent_and_changed_value_is_rejected(monkeypatch):
         )
     assert session.commits == 2
     assert session.added == []
+
+
+def test_campaign_ledger_reconciliation_keeps_zero_cost_missing_campaign(monkeypatch):
+    from datetime import date
+    from types import SimpleNamespace
+    from app.warehouse.services import (
+        google_ads_ad_group_daily_ingestion_service as svc,
+    )
+    from app.warehouse.services.google_ads_daily_xlsx_parser import _campaign_key
+
+    parsed = parse_google_ads_ad_group_daily_xlsx(export())
+    actual = _campaign_key("UG | Local | Centro")
+    zero = _campaign_key("UG | Otra campaña")
+    campaign_rows = []
+    for day in (date(2026, 9, 24), date(2026, 9, 25)):
+        campaign_rows.append(SimpleNamespace(
+            report_date=day, campaign_key=actual,
+            campaign_name="UG | Local | Centro",
+            cost=Decimal("10.00"), clicks=4, impressions=100,
+        ))
+        campaign_rows.append(SimpleNamespace(
+            report_date=day, campaign_key=zero,
+            campaign_name="UG | Otra campaña",
+            cost=Decimal("0.00"), clicks=0, impressions=0,
+        ))
+
+    class Query:
+        def filter(self, *args):
+            return self
+        def all(self):
+            return campaign_rows
+    monkeypatch.setattr(
+        svc, "db", SimpleNamespace(
+            session=SimpleNamespace(query=lambda _model: Query())
+        ),
+    )
+
+    result = svc._assert_campaign_reconciliation(
+        customer_id="2739125201", parsed=parsed,
+    )
+    assert result["referenced_campaign_day_rows"] == 4
+    campaign_rows[0].cost = Decimal("11.00")
+    with pytest.raises(
+        svc.GoogleAdsAdGroupDailyIngestionError, match="No coincide"
+    ):
+        svc._assert_campaign_reconciliation(
+            customer_id="2739125201", parsed=parsed,
+        )
