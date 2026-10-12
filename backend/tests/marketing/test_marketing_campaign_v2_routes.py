@@ -1026,6 +1026,35 @@ class TestMarketingCampaignV2Routes:
             "outcomes": ["FAILED"],
         }
 
+    def test_winback_freeze_accepts_same_branch_filters_as_preview(self):
+        expected = {"campaign_id": 55, "recipient_count": 1}
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.freeze_campaign_v2",
+                return_value=expected,
+            ) as service,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2",
+                json={
+                    "name": "BCN Octubre",
+                    "purpose": "REACTIVATION",
+                    "source": "EXPIRED_MEMBERS",
+                    "audience_families": ["DOMICILIADO"],
+                    "expiration_date_from": "2020-01-01",
+                    "expiration_date_to": "2026-09-30",
+                    "adeudo_min": "3000",
+                    "excluded_sucursal_keys": ["SERRANIA", "PAPALOTE"],
+                    "expected_preview_fingerprint": "a" * 64,
+                },
+                headers=self.headers,
+            )
+        assert response.status_code == 201
+        assert service.call_args.kwargs["excluded_sucursal_keys"] == ["SERRANIA", "PAPALOTE"]
+        assert service.call_args.kwargs["selected_sucursal_keys"] is None
+        assert service.call_args.kwargs["adeudo_min"] == "3000"
+
     def test_freeze_uses_authenticated_user_and_backend_scope(self):
         expected = {"campaign_id": 44, "recipient_count": 10}
         with (
