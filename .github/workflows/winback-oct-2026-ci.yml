@@ -12,7 +12,7 @@ on:
       - "backend/tests/marketing/test_marketing_campaign_v2_*"
       - "backend/tests/marketing/test_iventas_template_inventory.py"
       - "frontend/src/app/marketing-campaign-v2/**"
-      - "frontend/tests/marketing-campaign-v2.logic.node-test.ts"
+      - "frontend/src/app/marketing-campaign-v2/marketing-campaign-v2.logic.node-test.ts"
       - ".github/workflows/winback-oct-2026-ci.yml"
 
 permissions:
@@ -63,7 +63,7 @@ jobs:
         run: node node_modules/typescript/bin/tsc --noEmit --project tsconfig.app.json
       - name: Test Campaign V2 audience logic
         run: |
-          node node_modules/esbuild/bin/esbuild tests/marketing-campaign-v2.logic.node-test.ts --bundle --platform=node --format=cjs --outfile=/tmp/winback-logic-tests.cjs
+          node node_modules/esbuild/bin/esbuild src/app/marketing-campaign-v2/marketing-campaign-v2.logic.node-test.ts --bundle --platform=node --format=cjs --outfile=/tmp/winback-logic-tests.cjs
           node --test /tmp/winback-logic-tests.cjs
       - name: Build Angular production
         run: npm run build -- --configuration production --progress=false
