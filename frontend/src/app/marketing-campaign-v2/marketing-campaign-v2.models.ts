@@ -121,6 +121,7 @@ export type CampaignV2AudienceFilterKey =
   | 'expiration_date_from'
   | 'expiration_date_to'
   | 'adeudo_min'
+  | 'adeudo_max'
   | 'tarifa'
   | 'categoria_tarifa'
   | 'funnel_month'
@@ -142,6 +143,7 @@ export interface CampaignV2OptionsResponse {
   iventas_current_statuses?: CampaignV2IventasCurrentStatus[];
   tariff_categories: string[];
   scope: CampaignV2Scope;
+  branch_options?: string[];
 }
 
 export interface CampaignV2AudienceDefinitionRequest {
@@ -150,6 +152,9 @@ export interface CampaignV2AudienceDefinitionRequest {
   expiration_date_from?: string;
   expiration_date_to?: string;
   adeudo_min?: string;
+  adeudo_max?: string;
+  selected_sucursal_keys?: string[];
+  excluded_sucursal_keys?: string[];
   funnel_month?: string;
   funnel_cutoff_date?: string;
   history_exclusion?: CampaignV2HistoryExclusion;
@@ -210,6 +215,9 @@ export interface CampaignV2PreviewFilters {
   expiration_date_from?: string;
   expiration_date_to?: string;
   adeudo_min?: string;
+  adeudo_max?: string;
+  selected_sucursal_keys?: string[];
+  excluded_sucursal_keys?: string[];
   funnel_month?: string;
   funnel_cutoff_date?: string;
   history_exclusion?: CampaignV2HistoryExclusion;

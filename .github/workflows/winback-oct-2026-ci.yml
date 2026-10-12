@@ -1,0 +1,69 @@
+name: Winback October 2026 CI
+
+on:
+  push:
+    branches:
+      - feat/winback-oct-2026-audience
+  pull_request:
+    paths:
+      - "backend/app/services/marketing_campaign_v2_*"
+      - "backend/app/routes/marketing_campaign_v2_routes.py"
+      - "backend/app/integrations/iventas/template_inventory.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_*"
+      - "backend/tests/marketing/test_iventas_template_inventory.py"
+      - "frontend/src/app/marketing-campaign-v2/**"
+      - "frontend/src/app/marketing-campaign-v2/marketing-campaign-v2.logic.node-test.ts"
+      - ".github/workflows/winback-oct-2026-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend requirements
+        run: |
+          python -m pip install -r backend/requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Marketing audience, creation, route and inventory tests
+        working-directory: backend
+        env:
+          SECRET_KEY: winback-ci-synthetic-only
+          JWT_SECRET_KEY: winback-ci-jwt-synthetic-only
+          CAMPAIGN_V2_PROVIDER_SEND_ENABLED: "false"
+        run: |
+          python -m pytest -q --tb=short \
+            tests/marketing/test_marketing_campaign_v2_audience_service.py \
+            tests/marketing/test_marketing_campaign_v2_creation_service.py \
+            tests/marketing/test_marketing_campaign_v2_routes.py \
+            tests/marketing/test_iventas_template_inventory.py
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - name: Compile Angular application
+        run: node node_modules/typescript/bin/tsc --noEmit --project tsconfig.app.json
+      - name: Test Campaign V2 audience logic
+        run: |
+          node node_modules/esbuild/bin/esbuild src/app/marketing-campaign-v2/marketing-campaign-v2.logic.node-test.ts --bundle --platform=node --format=cjs --outfile=/tmp/winback-logic-tests.cjs
+          node --test /tmp/winback-logic-tests.cjs
+      - name: Build Angular production
+        run: npm run build -- --configuration production --progress=false

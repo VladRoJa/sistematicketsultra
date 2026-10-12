@@ -14,6 +14,8 @@ from app.models.marketing import (
 from app.models.warehouse import (
     SociosActivosSnapshotRowORM,
     SociosVencidosCarteraORM,
+    TrackBranchAliasORM,
+    TrackBranchCatalogORM,
 )
 from app.services.marketing_phone import normalize_phone
 from app.services.marketing_campaign_iventas_followup_service import (
@@ -224,6 +226,9 @@ def build_campaign_v2_audience_preview(
     expiration_date_from: Any = None,
     expiration_date_to: Any = None,
     adeudo_min: Any = None,
+    adeudo_max: Any = None,
+    selected_sucursal_keys: Any = None,
+    excluded_sucursal_keys: Any = None,
     history_exclusion: Any = None,
     historical_targeting: Any = None,
     iventas_current_statuses: Any = None,
@@ -241,6 +246,9 @@ def build_campaign_v2_audience_preview(
         expiration_date_from=expiration_date_from,
         expiration_date_to=expiration_date_to,
         adeudo_min=adeudo_min,
+        adeudo_max=adeudo_max,
+        selected_sucursal_keys=selected_sucursal_keys,
+        excluded_sucursal_keys=excluded_sucursal_keys,
         history_exclusion=history_exclusion,
         historical_targeting=historical_targeting,
         iventas_current_statuses=iventas_current_statuses,
@@ -263,6 +271,9 @@ def build_campaign_v2_audience_preview_detail(
     expiration_date_from: Any = None,
     expiration_date_to: Any = None,
     adeudo_min: Any = None,
+    adeudo_max: Any = None,
+    selected_sucursal_keys: Any = None,
+    excluded_sucursal_keys: Any = None,
     history_exclusion: Any = None,
     historical_targeting: Any = None,
     iventas_current_statuses: Any = None,
@@ -292,6 +303,9 @@ def build_campaign_v2_audience_preview_detail(
         expiration_date_from=expiration_date_from,
         expiration_date_to=expiration_date_to,
         adeudo_min=adeudo_min,
+        adeudo_max=adeudo_max,
+        selected_sucursal_keys=selected_sucursal_keys,
+        excluded_sucursal_keys=excluded_sucursal_keys,
         history_exclusion=history_exclusion,
         historical_targeting=historical_targeting,
         iventas_current_statuses=iventas_current_statuses,
@@ -359,6 +373,9 @@ def _build_campaign_v2_audience_plan(
     expiration_date_from: Any,
     expiration_date_to: Any,
     adeudo_min: Any = None,
+    adeudo_max: Any = None,
+    selected_sucursal_keys: Any = None,
+    excluded_sucursal_keys: Any = None,
     history_exclusion: Any = None,
     historical_targeting: Any = None,
     iventas_current_statuses: Any = None,
@@ -369,6 +386,23 @@ def _build_campaign_v2_audience_plan(
 ) -> _AudiencePlan:
     normalized_source = _normalize_source(source)
     normalized_scope = _normalize_scope(allowed_sucursal_keys)
+    included = _normalize_commercial_branch_keys(selected_sucursal_keys)
+    excluded = _normalize_commercial_branch_keys(excluded_sucursal_keys)
+    if included is not None and excluded is not None:
+        raise MarketingCampaignV2AudienceValidationError(
+            "No combines sucursales incluidas y excluidas."
+        )
+    if normalized_scope is not None and included is not None:
+        if not set(included).issubset(set(normalized_scope)):
+            raise MarketingCampaignV2AudienceValidationError(
+                "La selección de sucursales excede el alcance autorizado."
+            )
+    if normalized_source == SOURCE_FUNNEL_PORTFOLIO and (
+        included is not None or excluded is not None
+    ):
+        raise MarketingCampaignV2AudienceValidationError(
+            "El filtro de sucursales no aplica a FUNNEL_PORTFOLIO."
+        )
     history_resolution = _resolve_historical_targeting_input(
         history_exclusion=history_exclusion,
         historical_targeting=historical_targeting,
@@ -377,9 +411,20 @@ def _build_campaign_v2_audience_plan(
         iventas_current_statuses
     )
     normalized_adeudo_min = _normalize_adeudo_min(adeudo_min)
-    if normalized_source != SOURCE_EXPIRED_MEMBERS and normalized_adeudo_min is not None:
+    normalized_adeudo_max = _normalize_adeudo_max(adeudo_max)
+    if normalized_source != SOURCE_EXPIRED_MEMBERS and (
+        normalized_adeudo_min is not None or normalized_adeudo_max is not None
+    ):
         raise MarketingCampaignV2AudienceValidationError(
             "adeudo_min sólo aplica a EXPIRED_MEMBERS."
+        )
+    if (
+        normalized_adeudo_min is not None
+        and normalized_adeudo_max is not None
+        and normalized_adeudo_min > normalized_adeudo_max
+    ):
+        raise MarketingCampaignV2AudienceValidationError(
+            "adeudo_min no puede ser mayor que adeudo_max."
         )
     active_session = session if session is not None else db.session
 
@@ -423,6 +468,8 @@ def _build_campaign_v2_audience_plan(
         }
         if normalized_adeudo_min is not None:
             normalized_filters["adeudo_min"] = format(normalized_adeudo_min, "f")
+        if normalized_adeudo_max is not None:
+            normalized_filters["adeudo_max"] = format(normalized_adeudo_max, "f")
     else:
         if expiration_date_from is not None or expiration_date_to is not None:
             raise MarketingCampaignV2AudienceValidationError(
@@ -440,6 +487,11 @@ def _build_campaign_v2_audience_plan(
             "audience_families": list(selected_families),
         }
 
+    if included is not None:
+        normalized_filters["selected_sucursal_keys"] = list(included)
+    if excluded is not None:
+        normalized_filters["excluded_sucursal_keys"] = list(excluded)
+
     if history_resolution.filter_key is not None:
         normalized_filters[history_resolution.filter_key] = (
             history_resolution.filter_value
@@ -450,12 +502,36 @@ def _build_campaign_v2_audience_plan(
         )
 
     source_candidates = source_result.candidates
-    if normalized_adeudo_min is not None:
+    if included is not None or excluded is not None:
+        branch_index = _campaign_branch_identity_index(session=active_session)
+        requested = included if included is not None else excluded
+        resolved = {branch_index.get(key) for key in requested}
+        if None in resolved:
+            raise MarketingCampaignV2AudienceValidationError(
+                "La selecci?n contiene una sucursal sin identidad can?nica v?lida."
+            )
+        source_candidates = tuple(
+            row for row in source_candidates
+            if (
+                (identity := branch_index.get(
+                    current_status.normalize_socios_vencidos_branch_key(
+                        row.sucursal_key or row.sucursal
+                    )
+                )) is not None
+                and (
+                    (identity in resolved)
+                    if included is not None
+                    else (identity not in resolved)
+                )
+            )
+        )
+    if normalized_adeudo_min is not None or normalized_adeudo_max is not None:
         source_candidates = tuple(
             candidate
             for candidate in source_candidates
             if candidate.adeudo is not None
-            and candidate.adeudo >= normalized_adeudo_min
+            and (normalized_adeudo_min is None or candidate.adeudo >= normalized_adeudo_min)
+            and (normalized_adeudo_max is None or candidate.adeudo <= normalized_adeudo_max)
         )
 
     tariff_catalog = _read_v2_tariff_catalog(session=active_session)
@@ -486,8 +562,14 @@ def _build_campaign_v2_audience_plan(
     )
 
     source_metadata = dict(source_result.metadata)
+    if included is not None:
+        source_metadata["selected_sucursal_keys"] = list(included)
+    if excluded is not None:
+        source_metadata["excluded_sucursal_keys"] = list(excluded)
     if normalized_adeudo_min is not None:
         source_metadata["adeudo_min"] = format(normalized_adeudo_min, "f")
+    if normalized_adeudo_max is not None:
+        source_metadata["adeudo_max"] = format(normalized_adeudo_max, "f")
 
     valid_rows, blacklist_rows = _exclude_blacklisted_candidates(
         candidates=valid_rows,
@@ -719,6 +801,26 @@ def _normalize_adeudo_min(value: Any) -> Decimal | None:
     if not normalized.is_finite() or normalized < 0:
         raise MarketingCampaignV2AudienceValidationError(
             "adeudo_min debe ser un número mayor o igual a cero."
+        )
+    return normalized
+
+
+def _normalize_adeudo_max(value: Any) -> Decimal | None:
+    if value is None or str(value).strip() == "":
+        return None
+    if isinstance(value, bool):
+        raise MarketingCampaignV2AudienceValidationError(
+            "adeudo_max debe ser un número mayor o igual a cero."
+        )
+    try:
+        normalized = Decimal(str(value).strip())
+    except (InvalidOperation, ValueError, TypeError) as exc:
+        raise MarketingCampaignV2AudienceValidationError(
+            "adeudo_max debe ser un número mayor o igual a cero."
+        ) from exc
+    if not normalized.is_finite() or normalized < 0:
+        raise MarketingCampaignV2AudienceValidationError(
+            "adeudo_max debe ser un número mayor o igual a cero."
         )
     return normalized
 
@@ -2019,6 +2121,65 @@ def _normalize_scope(value: Iterable[Any] | None) -> tuple[str, ...] | None:
         if key:
             normalized.add(key)
     return tuple(sorted(normalized))
+
+
+def _campaign_branch_identity_index(*, session: Any) -> dict[str, str]:
+    """Resolve candidate and user-selected branch aliases to one canonical identity.
+
+    A conflicting alias is removed from the index (fail closed).
+    """
+    catalogs = (
+        session.query(TrackBranchCatalogORM)
+        .filter(
+            TrackBranchCatalogORM.is_track_active.is_(True),
+            TrackBranchCatalogORM.sucursal_id.isnot(None),
+        )
+        .all()
+    )
+    canonical = {str(row.sucursal_canon): row for row in catalogs}
+    index: dict[str, str] = {}
+    ambiguous: set[str] = set()
+
+    def register(raw: Any, canon: str) -> None:
+        key = current_status.normalize_socios_vencidos_branch_key(raw)
+        if not key or key in ambiguous:
+            return
+        if key in index and index[key] != canon:
+            index.pop(key)
+            ambiguous.add(key)
+        else:
+            index[key] = canon
+
+    for canon, row in canonical.items():
+        register(canon, canon)
+        register(row.track_label, canon)
+
+    aliases = (
+        session.query(TrackBranchAliasORM)
+        .filter(TrackBranchAliasORM.is_active.is_(True))
+        .all()
+    )
+    for alias in aliases:
+        canon = str(alias.sucursal_canon)
+        if canon in canonical:
+            register(alias.raw_branch_name, canon)
+
+    return index
+
+
+def _normalize_commercial_branch_keys(value: Any) -> tuple[str, ...] | None:
+    if value is None:
+        return None
+    if not isinstance(value, (list, tuple, set)) or not value:
+        raise MarketingCampaignV2AudienceValidationError(
+            "Selecciona al menos una sucursal válida."
+        )
+    normalized = _normalize_scope(value)
+    if not normalized or len(normalized) != len(set(value)):
+        raise MarketingCampaignV2AudienceValidationError(
+            "Las sucursales seleccionadas deben ser válidas y únicas."
+        )
+    return normalized
 
 
 def _row_in_scope(row: Any, allowed_sucursal_keys: tuple[str, ...] | None) -> bool:

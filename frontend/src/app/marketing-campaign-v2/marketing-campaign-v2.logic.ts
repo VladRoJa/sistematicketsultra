@@ -26,6 +26,9 @@ export interface CampaignV2AudienceState {
   expirationDateFrom: string;
   expirationDateTo: string;
   adeudoMin?: string;
+  adeudoMax?: string;
+  branchFilterMode?: 'ALL' | 'INCLUDE' | 'EXCLUDE';
+  branchKeys?: string[];
   funnelMonth?: string;
   funnelCutoffDate?: string;
   iventasCurrentStatuses?: CampaignV2IventasCurrentStatus[];
@@ -45,6 +48,9 @@ export type CampaignV2AudienceField =
   | 'expiration_date_from'
   | 'expiration_date_to'
   | 'adeudo_min'
+  | 'adeudo_max'
+  | 'branch_filter_mode'
+  | 'branch_keys'
   | 'funnel_month'
   | 'funnel_cutoff_date'
   | 'iventas_current_statuses'
@@ -69,7 +75,7 @@ export interface CampaignV2FreezeEligibility {
 export function campaignV2FilterApplies(
   options: CampaignV2OptionsResponse | null | undefined,
   source: CampaignV2Source,
-  filter: 'audience_families' | 'expiration_date_from' | 'expiration_date_to' | 'adeudo_min' | 'funnel_month' | 'funnel_cutoff_date',
+  filter: 'audience_families' | 'expiration_date_from' | 'expiration_date_to' | 'adeudo_min' | 'adeudo_max' | 'funnel_month' | 'funnel_cutoff_date',
 ): boolean {
   const contract = options?.source_filters?.[source];
   if (contract) {
@@ -85,6 +91,7 @@ export function campaignV2FilterApplies(
     filter === 'expiration_date_from'
     || filter === 'expiration_date_to'
     || filter === 'adeudo_min'
+    || filter === 'adeudo_max'
   ) {
     return source === 'EXPIRED_MEMBERS';
   }
@@ -125,6 +132,20 @@ export function buildCampaignV2AudienceRequest(
     && state.adeudoMin?.trim()
   ) {
     base.adeudo_min = state.adeudoMin.trim();
+  }
+  if (
+    campaignV2FilterApplies(options, state.source, 'adeudo_max')
+    && state.adeudoMax?.trim()
+  ) {
+    base.adeudo_max = state.adeudoMax.trim();
+  }
+  if (state.source !== 'FUNNEL_PORTFOLIO' && state.branchKeys?.length) {
+    if (state.branchFilterMode === 'INCLUDE') {
+      base.selected_sucursal_keys = [...state.branchKeys];
+    }
+    if (state.branchFilterMode === 'EXCLUDE') {
+      base.excluded_sucursal_keys = [...state.branchKeys];
+    }
   }
   if (campaignV2FilterApplies(options, state.source, 'funnel_month')) {
     base.funnel_month = state.funnelMonth?.trim();
@@ -188,6 +209,22 @@ export function isCampaignV2AudienceValid(
   if (!isCampaignV2HistoryFilterValid(state)) {
     return false;
   }
+  if (
+    state.source !== 'FUNNEL_PORTFOLIO'
+    && state.branchFilterMode !== 'ALL'
+    && state.branchFilterMode !== undefined
+    && !state.branchKeys?.length
+  ) {
+    return false;
+  }
+  if (
+    state.source !== 'FUNNEL_PORTFOLIO'
+    && state.branchKeys?.length
+    && options?.branch_options
+    && state.branchKeys.some(key => !options.branch_options!.includes(key))
+  ) {
+    return false;
+  }
 
   if (
     campaignV2FilterApplies(options, state.source, 'audience_families')
@@ -209,6 +246,20 @@ export function isCampaignV2AudienceValid(
   if (
     campaignV2FilterApplies(options, state.source, 'adeudo_min')
     && !isCampaignV2AdeudoMinValid(state.adeudoMin ?? '')
+  ) {
+    return false;
+  }
+  if (
+    campaignV2FilterApplies(options, state.source, 'adeudo_max')
+    && !isCampaignV2AdeudoMinValid(state.adeudoMax ?? '')
+  ) {
+    return false;
+  }
+  if (
+    state.source === 'EXPIRED_MEMBERS'
+    && state.adeudoMin?.trim()
+    && state.adeudoMax?.trim()
+    && Number(state.adeudoMin) > Number(state.adeudoMax)
   ) {
     return false;
   }
@@ -336,6 +387,9 @@ export function campaignV2FieldInvalidatesPreview(field: CampaignV2AudienceField
     'expiration_date_from',
     'expiration_date_to',
     'adeudo_min',
+    'adeudo_max',
+    'branch_filter_mode',
+    'branch_keys',
     'funnel_month',
     'funnel_cutoff_date',
     'iventas_current_statuses',

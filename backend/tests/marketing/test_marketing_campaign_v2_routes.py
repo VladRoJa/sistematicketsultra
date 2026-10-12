@@ -611,7 +611,11 @@ class TestMarketingCampaignV2Routes:
             routes.tariff_classifier,
             "list_canonical_tariff_categories",
             return_value=tuple(categories),
-        ) as mocked:
+        ) as mocked, patch.object(
+            routes,
+            "_campaign_v2_branch_options",
+            return_value=["LOMA BONITA", "VILLA VERDE"],
+        ):
             response = self.client.get(
                 "/api/marketing/campaigns-v2/options",
                 headers=self.headers,
@@ -623,6 +627,7 @@ class TestMarketingCampaignV2Routes:
             "ACTIVE_MEMBERS",
             "FUNNEL_PORTFOLIO",
         ]
+        assert body["branch_options"] == ["LOMA BONITA", "VILLA VERDE"]
         assert body["source_filters"]["FUNNEL_PORTFOLIO"] == {
             "required": ["funnel_month", "funnel_cutoff_date"],
             "not_applicable": [
@@ -630,6 +635,9 @@ class TestMarketingCampaignV2Routes:
                 "expiration_date_from",
                 "expiration_date_to",
                 "adeudo_min",
+                "adeudo_max",
+                "selected_sucursal_keys",
+                "excluded_sucursal_keys",
                 "tarifa",
                 "categoria_tarifa",
             ],
@@ -1017,6 +1025,35 @@ class TestMarketingCampaignV2Routes:
         assert service.call_args.kwargs["history_exclusion"] == {
             "outcomes": ["FAILED"],
         }
+
+    def test_winback_freeze_accepts_same_branch_filters_as_preview(self):
+        expected = {"campaign_id": 55, "recipient_count": 1}
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.freeze_campaign_v2",
+                return_value=expected,
+            ) as service,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2",
+                json={
+                    "name": "BCN Octubre",
+                    "purpose": "REACTIVATION",
+                    "source": "EXPIRED_MEMBERS",
+                    "audience_families": ["DOMICILIADO"],
+                    "expiration_date_from": "2020-01-01",
+                    "expiration_date_to": "2026-09-30",
+                    "adeudo_min": "3000",
+                    "excluded_sucursal_keys": ["SERRANIA", "PAPALOTE"],
+                    "expected_preview_fingerprint": "a" * 64,
+                },
+                headers=self.headers,
+            )
+        assert response.status_code == 201
+        assert service.call_args.kwargs["excluded_sucursal_keys"] == ["SERRANIA", "PAPALOTE"]
+        assert service.call_args.kwargs["selected_sucursal_keys"] is None
+        assert service.call_args.kwargs["adeudo_min"] == "3000"
 
     def test_freeze_uses_authenticated_user_and_backend_scope(self):
         expected = {"campaign_id": 44, "recipient_count": 10}
