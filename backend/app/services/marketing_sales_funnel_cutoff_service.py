@@ -35,6 +35,10 @@ from app.services.marketing_meta_dashboard_service import (
     build_meta_campaign_insights_statement,
     build_meta_month_period_key,
 )
+from app.services.marketing_google_ads_funnel_service import (
+    build_funnel_investment_sources,
+    read_google_ads_funnel_investment,
+)
 from app.services.marketing_sales_funnel_service import (
     MATCH_WINDOW_DAYS,
     ORIGIN_IVENTAS_META,
@@ -815,6 +819,16 @@ def build_marketing_sales_funnel_at_cutoff(
         for branch_payload in payload["branches"]:
             branch_payload["investment"] = None
         payload["summary"]["investment"] = None
+
+    google_ads_investment = read_google_ads_funnel_investment(
+        month_start=month_start,
+        cutoff_date=selected_cutoff,
+        is_global=access.is_global,
+    )
+    payload["investment_sources"] = build_funnel_investment_sources(
+        meta_assigned=payload["summary"]["investment"],
+        google_ads=google_ads_investment,
+    )
 
     payload["selected_cutoff_date"] = selected_cutoff.isoformat()
     payload["available_cutoff_dates"] = [
