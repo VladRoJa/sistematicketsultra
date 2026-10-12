@@ -97,6 +97,33 @@ def _apply_unavailable_crm_visit_conversion(
         )
 
 
+def _refresh_dependent_visit_rates(result: dict[str, object]) -> None:
+    """Recalcula ratios del funnel que dependen de la nueva cohorte CRM."""
+    summary = result.get("summary")
+    branches = result.get("branches")
+    containers: list[dict[str, object]] = []
+    if isinstance(summary, dict):
+        containers.append(summary)
+    if isinstance(branches, list):
+        containers.extend(
+            branch for branch in branches if isinstance(branch, dict)
+        )
+    for stats in containers:
+        meta_visits = stats.get("visits_iventas_meta")
+        meta_leads = stats.get("leads_meta")
+        meta_sales = stats.get("sales_iventas_meta")
+        stats["meta_lead_to_visit_rate"] = (
+            meta_visits / meta_leads
+            if meta_visits is not None and meta_leads
+            else None
+        )
+        stats["meta_visit_to_sale_rate"] = (
+            meta_sales / meta_visits
+            if meta_sales is not None and meta_visits
+            else None
+        )
+
+
 def _include_direct_purchases_from_request() -> bool:
     value = str(
         request.args.get("visit_mode") or VISIT_MODE_ADJUSTED
@@ -286,6 +313,7 @@ def get_marketing_sales_funnel_endpoint():
                         {},
                     )
                 )
+            _refresh_dependent_visit_rates(result)
             result["data_quality"].update(
                 visit_conversion["data_quality"]
             )

@@ -254,38 +254,32 @@ def _visit_rows(
     branch_id_filter: int | None,
     loaded: Any,
 ) -> list[dict[str, Any]]:
+    # El detalle de visitas reutiliza exactamente la cohorte y el corte
+    # del resumen, incluyendo los matches CRM posteriores al pase.
+    bundle = _normalized_visit_conversion_bundle(
+        loaded=loaded,
+        cutoff_date=cutoff_date,
+    )
     rows: list[dict[str, Any]] = []
-    for visit in loaded.visits:
+    for visit in bundle.rows:
         if visit.visit_date > cutoff_date:
             continue
         if branch_id_filter is not None and visit.branch_id != branch_id_filter:
             continue
 
-        origin = _match_iventas(
-            loaded.evidence,
-            visit.branch_id,
-            visit.phone,
-            visit.visit_date,
-        )
+        origin = visit.attribution_origin
         if not _visit_matches_metric(metric, origin):
             continue
 
-        rows.append(
-            {
-                "branch_id": visit.branch_id,
-                "branch": branch_names.get(visit.branch_id, ""),
-                "date": visit.visit_date.isoformat(),
-                "phone": visit.phone,
-                "origin_key": origin,
-                "origin": (
-                    ORIGIN_LABELS.get(origin, origin)
-                    if origin is not None
-                    else "Sin match iVentas"
-                ),
-                "visit_type": _visit_type_label(visit),
-                "source": _visit_source_label(visit),
-            }
+        item = _serialize_visit_conversion_row(visit, branch_names)
+        item["visit_origin"] = item["origin"]
+        item["origin_key"] = origin
+        item["origin"] = (
+            ORIGIN_LABELS.get(origin, origin)
+            if origin is not None
+            else "Sin match iVentas"
         )
+        rows.append(item)
     return rows
 
 

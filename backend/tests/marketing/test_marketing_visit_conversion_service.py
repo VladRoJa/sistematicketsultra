@@ -44,6 +44,7 @@ def _row(
         phone="6861234567",
         origin=origin,
         sale=_sale() if bought else None,
+        sale_origin=origin if bought else None,
     )
 
 
@@ -363,8 +364,12 @@ def test_sale_origin_matches_contact_between_visit_and_purchase(monkeypatch):
     assert _serialize_detail_row(row, {4: "Villas del Rey"})["sale_origin"] == (
         "iVentas / Otro"
     )
-    # La cohorte de visitas se mantiene intacta; su venta se audita aparte.
-    assert _serialize_metrics(list(bundle.rows))["visits_not_iventas_bought"] == 1
+    # El origen del pase se audita, pero la compra cambia la cohorte efectiva.
+    metrics = _serialize_metrics(list(bundle.rows))
+    assert metrics["visits_iventas_bought"] == 1
+    assert metrics["visits_not_iventas_bought"] == 0
+    assert metrics["visits_iventas"] == 1
+    assert metrics["visits_not_iventas"] == 0
 
     from app.services.marketing_sales_funnel_cutoff_detail_service import (
         _normalized_visit_conversion_bundle,
@@ -431,3 +436,133 @@ def test_sale_origin_does_not_match_contact_after_purchase(monkeypatch):
     assert _serialize_detail_row(row, {4: "Villas del Rey"})["sale_origin"] == (
         "Sin match iVentas"
     )
+
+
+def test_reclassification_preserves_total_and_moves_six_bought_visits():
+    """54 visitas: 6 compraron tras contacto CRM, sin duplicar compradores."""
+    rows = []
+    def add(count, *, visit_origin, bought, purchase_origin=None):
+        for _ in range(count):
+            rows.append(
+                VisitConversionRow(
+                    event_key=f"visit:{len(rows)}",
+                    branch_id=9,
+                    visit_date=date(2026, 10, 5),
+                    phone="6633298580",
+                    origin=visit_origin,
+                    sale=_sale() if bought else None,
+                    sale_origin=purchase_origin,
+                )
+            )
+
+    add(3, visit_origin=ORIGIN_IVENTAS_META, bought=True,
+        purchase_origin=ORIGIN_IVENTAS_META)
+    add(8, visit_origin=ORIGIN_IVENTAS_META, bought=False)
+    add(6, visit_origin=None, bought=True,
+        purchase_origin=ORIGIN_IVENTAS_OTHER)
+    add(4, visit_origin=None, bought=True)
+    add(33, visit_origin=None, bought=False)
+
+    metrics = _serialize_metrics(rows)
+    assert metrics["visits_total"] == 54
+    assert metrics["visits_iventas"] == 17
+    assert metrics["visits_iventas_bought"] == 9
+    assert metrics["visits_iventas_not_bought"] == 8
+    assert metrics["visits_not_iventas"] == 37
+    assert metrics["visits_not_iventas_bought"] == 4
+    assert metrics["visits_not_iventas_not_bought"] == 33
+    assert metrics["visits_iventas_meta"] == 11
+    assert metrics["visits_iventas_other"] == 6
+    assert metrics["iventas_visit_conversion_rate"] == 9 / 17
+    assert metrics["not_iventas_visit_conversion_rate"] == 4 / 37
+    assert sum(metrics[key] for key in (
+        "visits_iventas_bought", "visits_iventas_not_bought",
+        "visits_not_iventas_bought", "visits_not_iventas_not_bought",
+    )) == metrics["visits_total"]
+
+
+def test_nonbuyer_stays_in_visit_cohort_and_sale_without_crm_is_untraced():
+    crm_visit_without_sale = VisitConversionRow(
+        event_key="crm-no-sale",
+        branch_id=9,
+        visit_date=date(2026, 10, 5),
+        phone="6633298580",
+        origin=ORIGIN_IVENTAS_META,
+        sale=None,
+    )
+    expired_crm_at_purchase = VisitConversionRow(
+        event_key="crm-sale-no-match",
+        branch_id=9,
+        visit_date=date(2026, 10, 5),
+        phone="6633298580",
+        origin=ORIGIN_IVENTAS_META,
+        sale=_sale(),
+        sale_origin=None,
+    )
+    assert _metric_matches(
+        crm_visit_without_sale, "visits_iventas_not_bought"
+    )
+    assert _metric_matches(
+        expired_crm_at_purchase, "visits_not_iventas_bought"
+    )
+    assert expired_crm_at_purchase.origin == ORIGIN_IVENTAS_META
+
+
+def test_cutoff_visit_drilldowns_follow_effective_purchase_origin(monkeypatch):
+    from app.services.marketing_sales_funnel_cutoff_detail_service import (
+        _visit_rows,
+    )
+    rows = (
+        VisitConversionRow(
+            event_key="reclassified",
+            branch_id=9,
+            visit_date=date(2026, 10, 5),
+            phone="6633298580",
+            origin=None,
+            sale=SaleRecord(
+                sale_key="purchase",
+                branch_id=9,
+                payment_date=date(2026, 10, 7),
+                phone="6633298580",
+                member_id="388624",
+                revenue=Decimal("599"),
+            ),
+            sale_origin=ORIGIN_IVENTAS_OTHER,
+        ),
+    )
+    from app.services.marketing_sales_funnel_cutoff_detail_service import (
+        VisitConversionBundle, 
+    )
+    import app.services.marketing_sales_funnel_cutoff_detail_service as cutoff
+    monkeypatch.setattr(
+        cutoff,
+        "_normalized_visit_conversion_bundle",
+        lambda **_: VisitConversionBundle(
+            rows=rows, sales_snapshot_ids=(), cohort_complete=False
+        ),
+    )
+    filtered = _visit_rows(
+        cutoff_date=date(2026, 10, 9),
+        metric="visits_iventas",
+        branch_names={9: "Paseo 2000"},
+        branch_id_filter=None,
+        loaded=None,
+    )
+    assert len(filtered) == 1
+    assert filtered[0]["origin"] == "iVentas / Otro"
+    assert filtered[0]["visit_origin"] == "Sin match iVentas"
+    assert filtered[0]["sale_origin"] == "iVentas / Otro"
+    assert _visit_rows(
+        cutoff_date=date(2026, 10, 9),
+        metric="visits_not_iventas",
+        branch_names={9: "Paseo 2000"},
+        branch_id_filter=None,
+        loaded=None,
+    ) == []
+    assert _visit_rows(
+        cutoff_date=date(2026, 10, 9),
+        metric="visits_iventas",
+        branch_names={9: "Paseo 2000"},
+        branch_id_filter=10,
+        loaded=None,
+    ) == []
