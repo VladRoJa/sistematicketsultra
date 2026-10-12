@@ -1824,3 +1824,108 @@ button.systems-recurrence-card:hover {
     bottom: 10px;
   }
 }
+
+
+/* Salud de Sistemas: matriz compacta de sucursales (26+ sedes).
+   Se preservan los estados, tooltips y apertura del detalle existente. */
+.systems-matrix-panel .systems-branch-matrix {
+  gap: 5px;
+}
+
+.systems-matrix-panel .systems-branch-card {
+  display: grid;
+  grid-template-columns: minmax(155px, 1.6fr) minmax(0, 7fr) minmax(85px, .75fr);
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  min-height: 66px;
+  border-radius: 10px;
+}
+
+.systems-matrix-panel .systems-branch-card__header {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  margin: 0;
+  min-width: 0;
+}
+
+.systems-matrix-panel .systems-branch-card__header > div {
+  min-width: 0;
+}
+
+.systems-matrix-panel .systems-branch-card__header strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.systems-matrix-panel .systems-branch-card__header .status-chip {
+  width: fit-content;
+  font-size: 9px;
+  padding: 3px 7px;
+}
+
+.systems-matrix-panel .systems-branch-card__cells {
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 4px;
+  min-width: 0;
+}
+
+.systems-matrix-panel .systems-matrix-cell {
+  min-width: 0;
+  min-height: 42px;
+  padding: 4px 3px;
+  gap: 3px;
+  text-align: center;
+  border-radius: 6px;
+}
+
+.systems-matrix-panel .systems-matrix-cell span,
+.systems-matrix-panel .systems-matrix-cell strong {
+  font-size: 9px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.systems-matrix-panel .systems-branch-card__footer {
+  display: grid;
+  align-content: center;
+  justify-items: end;
+  gap: 4px;
+  margin: 0;
+  font-size: 9px;
+  text-align: right;
+}
+
+@media (max-width: 1280px) {
+  .systems-matrix-panel .systems-branch-card {
+    grid-template-columns: minmax(145px, 1fr) minmax(0, 5fr);
+  }
+  .systems-matrix-panel .systems-branch-card__footer {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 760px) {
+  .systems-matrix-panel .systems-branch-card {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 7px;
+    padding: 10px;
+  }
+  .systems-matrix-panel .systems-branch-card__header {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .systems-matrix-panel .systems-branch-card__cells {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .systems-matrix-panel .systems-branch-card__footer {
+    grid-column: auto;
+    justify-content: space-between;
+  }
+}
