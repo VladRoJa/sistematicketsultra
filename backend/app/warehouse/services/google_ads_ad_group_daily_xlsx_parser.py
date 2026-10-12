@@ -213,11 +213,22 @@ def parse_google_ads_ad_group_daily_xlsx(content: bytes) -> GoogleAdsAdGroupDail
             raise GoogleAdsXlsxValidationError(
                 "No coincide el catálogo de grupos entre días."
             )
+        # Google rounds attributed conversions and conversion values when
+        # reporting day subtotals. Monetary spend and integer traffic must
+        # reconcile exactly; attribution metrics have <= 0.01 tolerance.
         for day in expected:
-            if daily[day] != daily_groups[day] or daily[day] != daily_account[day]:
-                raise GoogleAdsXlsxValidationError(
-                    f"No concilian los totales de Google Ads del {day.isoformat()}."
-                )
+            for official in (daily_groups[day], daily_account[day]):
+                if daily[day][:3] != official[:3]:
+                    raise GoogleAdsXlsxValidationError(
+                        f"No concilian coste, clics o impresiones del {day.isoformat()}."
+                    )
+                if any(
+                    abs(daily[day][i] - official[i]) > Decimal("0.01")
+                    for i in range(3, 7)
+                ):
+                    raise GoogleAdsXlsxValidationError(
+                        f"No concilian las conversiones del {day.isoformat()}."
+                    )
         return GoogleAdsAdGroupDailyFile(
             date_from=start, date_to=end, currency_code="MXN",
             rows=tuple(parsed),
