@@ -849,6 +849,11 @@ class MarketingCampaignV2RecipientDispatchExclusionORM(db.Model):
         nullable=False,
     )
     reason = db.Column(db.String(80), nullable=False)
+    related_campaign_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_campaigns.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
     created_by_user_id = db.Column(
         db.Integer,
         db.ForeignKey("users.id", ondelete="RESTRICT"),
@@ -867,8 +872,13 @@ class MarketingCampaignV2RecipientDispatchExclusionORM(db.Model):
             name="uq_mkt_v2_recipient_dispatch_exclusions_campaign_recipient",
         ),
         db.CheckConstraint(
-            "reason = 'AMBIGUOUS_BRANCH_EVIDENCE'",
+            "(reason = 'AMBIGUOUS_BRANCH_EVIDENCE' AND related_campaign_id IS NULL) "
+            "OR (reason = 'PREVIOUS_CAMPAIGN_CONTACT' AND related_campaign_id IS NOT NULL)",
             name="ck_mkt_v2_recipient_dispatch_exclusion_reason",
+        ),
+        db.CheckConstraint(
+            "related_campaign_id IS NULL OR related_campaign_id <> campaign_id",
+            name="ck_mkt_v2_recipient_dispatch_exclusion_source_diff",
         ),
         db.Index("ix_mkt_v2_dispatch_exclusions_recipient_id", "recipient_id"),
     )
