@@ -134,28 +134,16 @@ class SystemDailyCheckRoutesTest(unittest.TestCase):
         self.assertEqual(response.get_json(), expected)
         service.assert_called_once_with(self.actor)
 
-    def test_questions_rejects_manager_during_mvp(self):
+    def test_questions_allow_manager_and_reject_sistemas(self):
         self.actor.rol = "GERENTE"
         self.actor.username = "manager"
-
-        with patch.object(
-            routes.UserORM,
-            "get_by_id",
-            return_value=self.actor,
-        ):
-            response = self._request(
-                "/api/system-daily-checks/questions"
-            )
-
+        with patch.object(routes.UserORM, "get_by_id", return_value=self.actor):
+            response = self._request("/api/system-daily-checks/questions")
+        self.assertEqual(response.status_code, 200)
+        self.actor.rol = "SISTEMAS"
+        with patch.object(routes.UserORM, "get_by_id", return_value=self.actor):
+            response = self._request("/api/system-daily-checks/questions")
         self.assertEqual(response.status_code, 403)
-        self.assertEqual(
-            response.get_json()["code"],
-            "SYSTEM_DAILY_CHECK_NOT_ELIGIBLE",
-        )
-        self.assertIs(
-            response.get_json()["eligible"],
-            False,
-        )
 
     def test_postpone_commits_and_returns_service_status(self):
         expected = {
