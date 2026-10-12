@@ -89,7 +89,9 @@ def _metrics(values: tuple, index: dict[str, int]) -> tuple:
         str(values[i] or "").strip().upper()
         for i in index["_currency_positions"]
     ]
-    if any(item != "MXN" for item in currencies):
+    # Footer totals omit the first currency column; the second remains MXN.
+    present = [item for item in currencies if item]
+    if not present or any(item != "MXN" for item in present):
         raise GoogleAdsXlsxValidationError("Solo se admite moneda MXN.")
     return (
         _number(cell("coste"), "coste", "0.01"),
