@@ -1,0 +1,51 @@
+name: Campaign V2 Previous Submit Exclusions CI
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/models/marketing.py"
+      - "backend/app/services/marketing_campaign_v2_dispatch_exclusion_service.py"
+      - "backend/migrations/versions/c29f6a8d1e70_previous_campaign_contact_exclusions.py"
+      - "backend/scripts/apply_winback_general_previous_submit_exclusions.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_previous_submit_exclusions.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_scoped_dispatch_exclusions.py"
+      - ".github/workflows/campaign-v2-previous-submit-exclusions-ci.yml"
+  push:
+    branches:
+      - feat/campaign-v2-previous-submit-exclusions
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend dependencies
+        run: |
+          python -m pip install -r backend/requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Ensure source and migration compile
+        run: |
+          python -m py_compile \
+            backend/app/models/marketing.py \
+            backend/app/services/marketing_campaign_v2_dispatch_exclusion_service.py \
+            backend/migrations/versions/c29f6a8d1e70_previous_campaign_contact_exclusions.py \
+            backend/scripts/apply_winback_general_previous_submit_exclusions.py
+      - name: Campaign V2 exclusion regression suite
+        working-directory: backend
+        env:
+          SECRET_KEY: synthetic-exclusion-ci
+          JWT_SECRET_KEY: synthetic-jwt-ci
+          CAMPAIGN_V2_PROVIDER_SEND_ENABLED: "false"
+        run: |
+          python -m pytest -q --tb=short \
+            tests/marketing/test_marketing_campaign_v2_previous_submit_exclusions.py \
+            tests/marketing/test_marketing_campaign_v2_scoped_dispatch_exclusions.py \
+            tests/marketing/test_marketing_campaign_v2_scoped_exclusion_migration.py \
+            tests/marketing/test_marketing_campaign_v2_preflight_service.py
