@@ -79,7 +79,7 @@ export function isSystemDailyCheckMvpCandidate(
     user?.username ?? '',
   ).trim().toUpperCase();
 
-  return role === 'SISTEMAS' || username === 'ADMICORP';
+  return role === 'GERENTE';
 }
 
 export function buildSystemDailyCheckQuestionGroups<
