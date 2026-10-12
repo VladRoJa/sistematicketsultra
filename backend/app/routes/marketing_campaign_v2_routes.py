@@ -406,6 +406,8 @@ def freeze_campaign_v2_endpoint():
                 "expiration_date_to",
                 "adeudo_min",
                 "adeudo_max",
+                "selected_sucursal_keys",
+                "excluded_sucursal_keys",
                 "history_exclusion",
                 "historical_targeting",
                 "iventas_current_statuses",
