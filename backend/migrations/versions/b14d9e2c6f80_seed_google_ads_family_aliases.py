@@ -10,6 +10,8 @@ subsequent attribution must bind Google customer + campaign + group IDs/keys.
 """
 from __future__ import annotations
 
+import re
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -20,6 +22,19 @@ branch_labels = None
 depends_on = None
 
 FAMILY = "google_ads_family"
+SOURCE_FAMILY_CHECK_NAME = "ck_track_branch_aliases_source_family"
+# Approved database state immediately before M4, established by iVentas.
+SOURCE_FAMILIES_BEFORE = (
+    "manual_targets",
+    "gasca_family",
+    "domiciliados_total",
+    "domiciliados_recep",
+    "venta_tienda",
+    "totalpass_family",
+    "wellhub_family",
+    "iventas_family",
+)
+SOURCE_FAMILIES_AFTER = (*SOURCE_FAMILIES_BEFORE, FAMILY)
 NOTES = (
     "Google Ads grupos-día: catálogo aprobado 2026-10-12; "
     "requiere validar customer_id, campaign_key y ad_group_key "
@@ -57,6 +72,49 @@ APPROVED_ALIASES = (
     ("Metepec", "METEPEC", 25),
     ("Serranía", "SERRANIA", 26),
 )
+
+
+def _source_families_in_database(bind) -> set[str]:
+    definition = bind.execute(
+        sa.text(
+            """
+            SELECT pg_get_constraintdef(c.oid, true)
+            FROM pg_constraint c
+            WHERE c.conrelid = 'track_branch_aliases'::regclass
+              AND c.contype = 'c'
+              AND c.conname = :name
+            """
+        ),
+        {"name": SOURCE_FAMILY_CHECK_NAME},
+    ).scalar_one_or_none()
+    if not definition:
+        raise RuntimeError("Falta el CHECK de source_family de Track.")
+    # PostgreSQL renders IN clauses as ANY(ARRAY['x'::text, ...]).
+    return set(re.findall(r"'([^']+)'", definition))
+
+
+def _assert_source_family_domain(bind, expected: tuple[str, ...]) -> None:
+    observed = _source_families_in_database(bind)
+    if observed != set(expected):
+        raise RuntimeError(
+            "Dominio CHECK source_family inesperado: "
+            f"actual={sorted(observed)!r}, esperado={sorted(expected)!r}."
+        )
+
+
+def _replace_check_domain(
+    bind, *, before: tuple[str, ...], after: tuple[str, ...],
+) -> None:
+    _assert_source_family_domain(bind, before)
+    op.drop_constraint(
+        SOURCE_FAMILY_CHECK_NAME, "track_branch_aliases", type_="check",
+    )
+    allowed = ", ".join(f"'{family}'" for family in after)
+    op.create_check_constraint(
+        SOURCE_FAMILY_CHECK_NAME, "track_branch_aliases",
+        f"source_family IN ({allowed})",
+    )
+    _assert_source_family_domain(bind, after)
 
 
 def _validate_manifest() -> None:
@@ -135,6 +193,15 @@ def upgrade():
     bind = op.get_bind()
     _validate_real_branches(bind)
     _check_existing_aliases(bind)
+    actual_domain = _source_families_in_database(bind)
+    if actual_domain == set(SOURCE_FAMILIES_BEFORE):
+        _replace_check_domain(
+            bind, before=SOURCE_FAMILIES_BEFORE,
+            after=SOURCE_FAMILIES_AFTER,
+        )
+    else:
+        # Fail closed on an unexpected constraint, including one missing M4.
+        _assert_source_family_domain(bind, SOURCE_FAMILIES_AFTER)
 
     sql = sa.text(
         """
@@ -167,13 +234,41 @@ def upgrade():
 
 
 def downgrade():
-    # Do not remove mappings changed independently after original approval.
-    op.get_bind().execute(
+    bind = op.get_bind()
+    _assert_source_family_domain(bind, SOURCE_FAMILIES_AFTER)
+    # A downgrade must not silently remove independently changed mappings.
+    rows = bind.execute(
         sa.text(
-            """
-            DELETE FROM track_branch_aliases
-            WHERE source_family = :family AND notes = :notes
-            """
+            "SELECT raw_branch_name, notes "
+            "FROM track_branch_aliases WHERE source_family = :family"
+        ),
+        {"family": FAMILY},
+    ).mappings().all()
+    expected_names = {raw for raw, _, _ in APPROVED_ALIASES}
+    if (
+        len(rows) != 26
+        or {r["raw_branch_name"] for r in rows} != expected_names
+        or any(r["notes"] != NOTES for r in rows)
+    ):
+        raise RuntimeError(
+            "No es seguro revertir Google Ads M4: el catálogo fue modificado."
+        )
+    bind.execute(
+        sa.text(
+            "DELETE FROM track_branch_aliases "
+            "WHERE source_family = :family AND notes = :notes"
         ),
         {"family": FAMILY, "notes": NOTES},
+    )
+    remaining = bind.execute(
+        sa.text(
+            "SELECT COUNT(*) FROM track_branch_aliases "
+            "WHERE source_family = :family"
+        ),
+        {"family": FAMILY},
+    ).scalar_one()
+    if remaining:
+        raise RuntimeError("Persisten alias Google Ads después del downgrade.")
+    _replace_check_domain(
+        bind, before=SOURCE_FAMILIES_AFTER, after=SOURCE_FAMILIES_BEFORE,
     )
