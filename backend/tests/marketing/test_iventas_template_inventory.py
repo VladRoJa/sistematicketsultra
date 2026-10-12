@@ -65,10 +65,8 @@ def test_denied_does_not_count_as_accepted():
     assert matrix["bcn"]["x"] == "denied"
 
 
-def test_duplicate_conflicting_statuses_fail_closed_at_evaluation():
-    inventory = parse_template_inventory(
-        [_row("bcn", "x", "accepted"), _row("bcn", "x", "denied")]
-    )
-    assert evaluate_template_coverage(
-        inventory=inventory, expected_channel_ids=["x"], template_names=["bcn"]
-    )["bcn"]["x"] == "conflict"
+def test_duplicate_conflicting_statuses_reject_inventory_before_evaluation():
+    with pytest.raises(TemplateInventoryValidationError, match="Conflicting template"):
+        parse_template_inventory(
+            [_row("bcn", "x", "accepted"), _row("bcn", "x", "denied")]
+        )
