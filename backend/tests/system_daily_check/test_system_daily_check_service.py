@@ -56,8 +56,8 @@ def _engine():
 def _actor(
     *,
     user_id=1,
-    username="sistemas-user",
-    role="SISTEMAS",
+    username="gerente-user",
+    role="GERENTE",
     branch_id=10,
 ):
     return SimpleNamespace(
@@ -231,23 +231,17 @@ def test_general_status_consistency(no_keys, general_status, valid):
             validate_submission_payload(payload)
 
 
-def test_root_actor_is_canonicalized_to_corporate_for_pilot():
+def test_technical_branches_are_rejected_even_for_managers():
     engine = _engine()
     try:
         with Session(engine) as session:
-            status = get_today_status(
-                _actor(branch_id=1000),
-                now=datetime(
-                    2026,
-                    10,
-                    9,
-                    16,
-                    0,
-                    tzinfo=timezone.utc,
-                ),
-                session=session,
-            )
-            assert status["sucursal_id"] == 100
+            for branch_id in (100, 1000):
+                with pytest.raises(SystemDailyCheckValidationError):
+                    get_today_status(
+                        _actor(branch_id=branch_id),
+                        now=datetime(2026, 10, 9, 16, tzinfo=timezone.utc),
+                        session=session,
+                    )
     finally:
         engine.dispose()
 
@@ -258,19 +252,27 @@ def test_initial_status_and_requested_branch_are_backend_validated():
         with Session(engine) as session:
             status = get_today_status(
                 _actor(),
-                requested_branch_id=11,
+                requested_branch_id=10,
                 now=datetime(2026, 10, 9, 16, 0, tzinfo=timezone.utc),
                 session=session,
             )
             assert status["eligible"] is True
-            assert status["sucursal_id"] == 11
+            assert status["sucursal_id"] == 10
             assert status["completed"] is False
             assert status["postpone_count"] == 0
             assert status["can_postpone"] is True
             assert status["should_prompt"] is True
             assert status["mandatory"] is False
 
-            with pytest.raises(SystemDailyCheckValidationError, match="no existe"):
+            with pytest.raises(SystemDailyCheckAuthorizationError):
+                get_today_status(
+                    _actor(),
+                    requested_branch_id=11,
+                    now=datetime(2026, 10, 9, 16, tzinfo=timezone.utc),
+                    session=session,
+                )
+
+            with pytest.raises(SystemDailyCheckAuthorizationError, match="sucursal asignada"):
                 get_today_status(
                     _actor(),
                     requested_branch_id=999,
@@ -287,7 +289,7 @@ def test_unauthorized_roles_cannot_activate_daily_flow():
         with Session(engine) as session:
             with pytest.raises(SystemDailyCheckAuthorizationError):
                 get_today_status(
-                    _actor(role="GERENTE"),
+                    _actor(role="SISTEMAS"),
                     now=datetime(2026, 10, 9, 16, 0, tzinfo=timezone.utc),
                     session=session,
                 )

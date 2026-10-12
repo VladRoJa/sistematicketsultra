@@ -122,11 +122,18 @@ def test_integral_v1_flow_login_to_bi_drilldown(
         db.session.add(
             UserORM(
                 id=1,
-                username="sistemas",
+                username="gerente",
                 password=generate_password_hash("secret"),
-                rol="SISTEMAS",
+                rol="GERENTE",
                 sucursal_id=10,
                 department_id=1,
+            )
+        )
+        db.session.add(
+            UserORM(
+                id=2, username="sistemas",
+                password=generate_password_hash("secret"),
+                rol="SISTEMAS", sucursal_id=10, department_id=1,
             )
         )
         db.session.flush()
@@ -143,7 +150,7 @@ def test_integral_v1_flow_login_to_bi_drilldown(
     login = client.post(
         "/api/auth/login",
         json={
-            "username": "sistemas",
+            "username": "gerente",
             "password": "secret",
         },
     )
@@ -224,6 +231,19 @@ def test_integral_v1_flow_login_to_bi_drilldown(
     assert released.get_json()["completed"] is True
     assert released.get_json()["should_prompt"] is False
 
+    # El gerente captura pero no puede consultar BI.
+    denied = client.get("/api/system-daily-checks/bi/history", headers=headers)
+    assert denied.status_code == 403
+
+    bi_login = client.post(
+        "/api/auth/login",
+        json={"username": "sistemas", "password": "secret"},
+    )
+    assert bi_login.status_code == 200
+    bi_headers = {
+        "Authorization": f"Bearer {bi_login.get_json()['token']}"
+    }
+
     history = client.get(
         "/api/system-daily-checks/bi/history",
         query_string={
@@ -231,7 +251,7 @@ def test_integral_v1_flow_login_to_bi_drilldown(
             "date_to": business_date.isoformat(),
             "answer": "NO",
         },
-        headers=headers,
+        headers=bi_headers,
     )
     assert history.status_code == 200
     assert history.get_json()["total"] == 1
@@ -243,7 +263,7 @@ def test_integral_v1_flow_login_to_bi_drilldown(
             "date_from": business_date.isoformat(),
             "date_to": business_date.isoformat(),
         },
-        headers=headers,
+        headers=bi_headers,
     )
     assert summary.status_code == 200
     summary_payload = summary.get_json()
@@ -262,7 +282,7 @@ def test_integral_v1_flow_login_to_bi_drilldown(
             "date_to": business_date.isoformat(),
             "reported_to_support": "true",
         },
-        headers=headers,
+        headers=bi_headers,
     )
     assert issues.status_code == 200
     assert issues.get_json()["total"] == 1
@@ -270,7 +290,7 @@ def test_integral_v1_flow_login_to_bi_drilldown(
 
     detail = client.get(
         f"/api/system-daily-checks/bi/checks/{check_id}",
-        headers=headers,
+        headers=bi_headers,
     )
     assert detail.status_code == 200
     detail_payload = detail.get_json()

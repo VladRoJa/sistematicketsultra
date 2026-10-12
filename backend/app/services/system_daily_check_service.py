@@ -25,14 +25,10 @@ from app.utils.system_daily_check_access import has_system_daily_check_mvp_acces
 BUSINESS_TZ = ZoneInfo("America/Tijuana")
 POSTPONE_INTERVAL = timedelta(minutes=5)
 
-# PILOT TEMPORARY:
-# Durante la prueba con SISTEMAS/ADMICORP, el nodo técnico Administrador
-# (1000) representa la misma obligación diaria que Corporativo (100).
-# Retirar este puente al terminar el piloto; no modifica la política global
-# de sucursales técnicas.
-SYSTEM_DAILY_CHECK_PILOT_CORPORATE_BRANCH_ID = CORPORATE_BRANCH_ID
-SYSTEM_DAILY_CHECK_PILOT_ROOT_BRANCH_ID = ROOT_BRANCH_ID
-
+# Los nodos técnicos nunca representan sucursales donde se capture checklist.
+SYSTEM_DAILY_CHECK_EXCLUDED_BRANCH_IDS = frozenset({
+    ROOT_BRANCH_ID, CORPORATE_BRANCH_ID,
+})
 
 class SystemDailyCheckAuthorizationError(PermissionError):
     pass
@@ -200,12 +196,12 @@ def _positive_int(value: object, field: str) -> int:
     return parsed
 
 
-def canonicalize_system_daily_check_branch_id(
-    value: object,
-) -> int:
+def canonicalize_system_daily_check_branch_id(value: object) -> int:
     branch_id = _positive_int(value, "sucursal_id")
-    if branch_id == SYSTEM_DAILY_CHECK_PILOT_ROOT_BRANCH_ID:
-        return SYSTEM_DAILY_CHECK_PILOT_CORPORATE_BRANCH_ID
+    if branch_id in SYSTEM_DAILY_CHECK_EXCLUDED_BRANCH_IDS:
+        raise SystemDailyCheckValidationError(
+            "No se puede capturar checklist en sucursales técnicas."
+        )
     return branch_id
 
 
@@ -214,7 +210,7 @@ def list_system_daily_check_branches(
     *,
     session: Session | None = None,
 ) -> dict:
-    """Checklist-only branch catalog for the temporary corporate pilot bridge."""
+    """Sucursal propia activa del gerente, nunca nodos técnicos."""
     _require_mvp_access(actor)
     target_session = _session(session)
 
@@ -225,29 +221,23 @@ def list_system_daily_check_branches(
                 Sucursal.is_demo.is_(False),
                 Sucursal.operational_status
                 == SucursalOperationalStatus.ACTIVA,
-                Sucursal.sucursal_id
-                != SYSTEM_DAILY_CHECK_PILOT_ROOT_BRANCH_ID,
+                ~Sucursal.sucursal_id.in_(
+                    tuple(sorted(SYSTEM_DAILY_CHECK_EXCLUDED_BRANCH_IDS))
+                ),
             )
             .order_by(Sucursal.sucursal.asc())
         ).all()
     )
 
-    branch_ids = {
-        int(branch.sucursal_id)
-        for branch in branches
-    }
-
-    preferred_branch_id = None
-    raw_primary = getattr(actor, "sucursal_id", None)
-    if raw_primary not in (None, ""):
-        candidate = canonicalize_system_daily_check_branch_id(
-            raw_primary
-        )
-        if candidate in branch_ids:
-            preferred_branch_id = candidate
-
-    if preferred_branch_id is None and len(branches) == 1:
-        preferred_branch_id = int(branches[0].sucursal_id)
+    # Nunca ofrecer otras sucursales para capturar ni permitir su selección.
+    own_id = canonicalize_system_daily_check_branch_id(
+        getattr(actor, "sucursal_id", None)
+    )
+    branches = [
+        branch for branch in branches
+        if int(branch.sucursal_id) == own_id
+    ]
+    preferred_branch_id = own_id if branches else None
 
     return {
         "branches": [
@@ -279,7 +269,15 @@ def resolve_branch_id(
             "No fue posible resolver la sucursal del checklist."
         )
 
-    return canonicalize_system_daily_check_branch_id(raw_value)
+    resolved = canonicalize_system_daily_check_branch_id(raw_value)
+    assigned = canonicalize_system_daily_check_branch_id(
+        getattr(actor, "sucursal_id", None)
+    )
+    if resolved != assigned:
+        raise SystemDailyCheckAuthorizationError(
+            "El checklist sólo puede capturarse en la sucursal asignada."
+        )
+    return resolved
 
 
 def _assert_branch_exists(

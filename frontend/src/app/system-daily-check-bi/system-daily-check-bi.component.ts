@@ -93,6 +93,7 @@ export class SystemDailyCheckBiComponent
   loadingIssues = false;
   loadingDetail = false;
   savingRollout = false;
+  canConfigureRollout = false;
   exportingExcel = false;
   errorMessage = '';
   rolloutMessage = '';
@@ -209,6 +210,7 @@ export class SystemDailyCheckBiComponent
       .subscribe({
         next: (context) => {
           this.context = context;
+          this.canConfigureRollout = String(context.user?.username || '').trim().toUpperCase() === 'ADMICORP';
           this.rolloutSelection =
             buildSystemDailyCheckRolloutSelection(
               context.universe.expected_branches,
@@ -509,6 +511,7 @@ export class SystemDailyCheckBiComponent
   }
 
   toggleRolloutPanel(): void {
+    if (!this.canConfigureRollout) { return; }
     this.rolloutOpen = !this.rolloutOpen;
     this.rolloutMessage = '';
   }
@@ -702,6 +705,7 @@ export class SystemDailyCheckBiComponent
   }
 
   saveRollout(): void {
+    if (!this.canConfigureRollout) { return; }
     if (!this.context || !this.rolloutDirty) {
       return;
     }

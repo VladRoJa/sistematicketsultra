@@ -24,22 +24,21 @@ from app.services.system_daily_check_attachment_storage_service import (
 )
 from app.services.system_daily_check_service import (
     QUESTION_BY_KEY,
-    SYSTEM_DAILY_CHECK_PILOT_CORPORATE_BRANCH_ID,
     SystemDailyCheckAuthorizationError,
     SystemDailyCheckNotFoundError,
     SystemDailyCheckValidationError,
     resolve_business_date,
 )
 from app.utils.sucursal_audience import TECHNICAL_SUCURSAL_IDS
-from app.utils.system_daily_check_access import has_system_daily_check_mvp_access
+from app.utils.system_daily_check_access import (
+    has_system_daily_check_bi_access,
+    has_system_daily_check_rollout_access,
+)
 
 
-# PILOT TEMPORARY: Corporativo (100) participa en Salud de Sistemas aunque
-# siga siendo nodo técnico para el resto de Suite Ultra. Administrador (1000)
-# permanece excluido. Retirar junto con el puente del piloto.
+# En la operación real se excluyen los dos nodos técnicos.
 SYSTEM_DAILY_CHECK_PILOT_EXCLUDED_BRANCH_IDS = frozenset(
     TECHNICAL_SUCURSAL_IDS
-    - {SYSTEM_DAILY_CHECK_PILOT_CORPORATE_BRANCH_ID}
 )
 
 
@@ -139,7 +138,7 @@ def resolve_system_daily_check_branch_universe(
 
 
 def _require_mvp_access(actor) -> None:
-    if not has_system_daily_check_mvp_access(actor):
+    if not has_system_daily_check_bi_access(actor):
         raise SystemDailyCheckAuthorizationError(
             "El usuario no está habilitado para BI del checklist diario."
         )
@@ -183,6 +182,10 @@ def configure_system_daily_check_rollout_today(
 ) -> dict:
     """Replace the expected pilot branch set from today's business date forward."""
     _require_mvp_access(actor)
+    if not has_system_daily_check_rollout_access(actor):
+        raise SystemDailyCheckAuthorizationError(
+            "Sólo ADMICORP puede configurar las sucursales del checklist."
+        )
     target_session = _session(session)
     business_date = resolve_business_date(now)
     selected_ids = _normalize_branch_ids(branch_ids)
