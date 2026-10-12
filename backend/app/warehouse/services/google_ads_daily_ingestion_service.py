@@ -32,11 +32,11 @@ class GoogleAdsDailyIngestionError(RuntimeError):
     pass
 
 
-def _upload_content(warehouse_upload_id: int) -> tuple[WarehouseUploadORM, bytes]:
+def _upload_content(warehouse_upload_id: int, *, report_type_key: str = REPORT_TYPE_KEY) -> tuple[WarehouseUploadORM, bytes]:
     upload = db.session.get(WarehouseUploadORM, warehouse_upload_id)
     if (
         upload is None or upload.status != "ACTIVE"
-        or upload.report_type is None or upload.report_type.key != REPORT_TYPE_KEY
+        or upload.report_type is None or upload.report_type.key != report_type_key
     ):
         raise GoogleAdsDailyIngestionError("Upload Google Ads inexistente o inactivo.")
     if upload.extension.lower() != "xlsx":
