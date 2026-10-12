@@ -27,6 +27,7 @@ import {
 
 import { MarketingDashboardResponse } from '../marketing-conversion/marketing.models';
 import {
+  MarketingFunnelInvestmentSources,
   MarketingSalesFunnelBranch,
   MarketingSalesFunnelMetrics,
   MarketingSalesFunnelResponse,
@@ -97,6 +98,15 @@ interface SalesFunnelBranchTotalsView {
   cac_display: string;
 }
 
+interface FunnelAdsInvestmentView {
+  metaValue: string;
+  googleValue: string;
+  totalValue: string;
+  googleCoverage: string;
+  googleMetrics: string;
+  note: string;
+}
+
 interface DashboardRequest {
   month: string;
   cutoffDate: string | null;
@@ -160,6 +170,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
   cutoffOptions: Array<{ value: string; label: string }> = [];
 
   dashboard: MarketingSalesFunnelResponse | null = null;
+  investmentSourcesView: FunnelAdsInvestmentView | null = null;
   summaryCards: SummaryCard[] = [];
   branchRows: SalesFunnelBranchView[] = [];
   branchTotals: SalesFunnelBranchTotalsView | null = null;
@@ -430,6 +441,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
 
   private applyDashboard(data: MarketingSalesFunnelResponse): void {
     this.dashboard = data;
+    this.investmentSourcesView = this.buildInvestmentSourcesView(data.investment_sources);
     this.cutoffOptions = (data.available_cutoff_dates || []).map((value) => ({
       value,
       label: this.formatDate(value),
@@ -502,6 +514,54 @@ export class MarketingSalesFunnelComponent implements OnInit {
     );
   }
 
+  private buildInvestmentSourcesView(
+    sources: MarketingFunnelInvestmentSources | undefined,
+  ): FunnelAdsInvestmentView | null {
+    if (!sources) {
+      return null;
+    }
+
+    const google = sources.google_ads;
+    const hasSpend = google.amount !== null;
+    let coverage = 'Google Ads sin datos para el corte.';
+    if (google.status === 'scope_unavailable') {
+      coverage = 'Campañas multiclub: el gasto de Google Ads no puede asignarse a esta región o sucursal.';
+    } else if (google.status === 'not_configured') {
+      coverage = 'Cuenta Google Ads no configurada.';
+    } else if (hasSpend && google.data_from && google.data_to) {
+      coverage = `Datos Google Ads: ${this.formatDate(google.data_from)} a ${this.formatDate(google.data_to)}. ` +
+        `${google.covered_days ?? 0} de ${google.expected_days ?? 0} días del corte` +
+        (google.complete_to_cutoff ? ' (completo).' : ' (parcial).');
+    }
+
+    return {
+      metaValue: sources.meta_assigned === null
+        ? '—' : this.formatMoneyPrecise(sources.meta_assigned),
+      googleValue: hasSpend
+        ? this.formatMoneyPrecise(google.amount) : '—',
+      totalValue: sources.combined_available && sources.combined !== null
+        ? this.formatMoneyPrecise(sources.combined) : '—',
+      googleCoverage: coverage,
+      googleMetrics: hasSpend
+        ? `${this.formatInteger(google.clicks)} clics · ` +
+          `${this.formatInteger(google.impressions)} impresiones · ` +
+          `${this.formatInteger(google.conversions)} conv. Ads`
+        : '',
+      note: sources.combined_available
+        ? 'Suma Meta asignada a sucursales + Google Ads de cuenta; no incluye gasto Meta sin asignación. CPL, CPT y CAC existentes siguen basados en Meta.'
+        : 'Sin total combinado comparable para este alcance/corte. Google Ads no está distribuido por sucursal y no se incluye en CPL, CPT ni CAC actuales.',
+    };
+  }
+
+  private formatMoneyPrecise(amount: number): string {
+    return new Intl.NumberFormat('es-MX', {
+      style: 'currency',
+      currency: 'MXN',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  }
+
   private buildSummaryCards(summary: MarketingSalesFunnelMetrics): SummaryCard[] {
     const investment = this.resolveIventasCost();
     const costPerLead = this.safeRatio(investment, summary.leads_meta);
@@ -513,7 +573,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
 
     return [
       {
-        label: 'Inversión',
+        label: 'Inversión Meta',
         value: investment !== null
           ? this.formatCurrency(investment)
           : (
@@ -521,7 +581,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
                 ? '—'
                 : 'Sin corte'
             ),
-        supportingText: 'Inversión del alcance',
+        supportingText: 'Meta asignada al alcance',
         metric: null,
         icon: 'account_balance_wallet',
         cssClass: 'summary-kpi--purple',
