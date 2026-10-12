@@ -545,7 +545,7 @@ export class MarketingSalesFunnelComponent implements OnInit {
       googleMetrics: hasSpend
         ? `${this.formatInteger(google.clicks)} clics · ` +
           `${this.formatInteger(google.impressions)} impresiones · ` +
-          `${this.formatInteger(google.conversions)} conv. Ads`
+          `${new Intl.NumberFormat('es-MX', { maximumFractionDigits: 4 }).format(google.conversions ?? 0)} conv. Ads`
         : '',
       note: sources.combined_available
         ? 'Suma Meta asignada a sucursales + Google Ads de cuenta; no incluye gasto Meta sin asignación. CPL, CPT y CAC existentes siguen basados en Meta.'
