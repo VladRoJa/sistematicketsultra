@@ -611,7 +611,11 @@ class TestMarketingCampaignV2Routes:
             routes.tariff_classifier,
             "list_canonical_tariff_categories",
             return_value=tuple(categories),
-        ) as mocked:
+        ) as mocked, patch.object(
+            routes,
+            "_campaign_v2_branch_options",
+            return_value=["LOMA BONITA", "VILLA VERDE"],
+        ):
             response = self.client.get(
                 "/api/marketing/campaigns-v2/options",
                 headers=self.headers,
@@ -623,6 +627,7 @@ class TestMarketingCampaignV2Routes:
             "ACTIVE_MEMBERS",
             "FUNNEL_PORTFOLIO",
         ]
+        assert body["branch_options"] == ["LOMA BONITA", "VILLA VERDE"]
         assert body["source_filters"]["FUNNEL_PORTFOLIO"] == {
             "required": ["funnel_month", "funnel_cutoff_date"],
             "not_applicable": [
@@ -630,6 +635,9 @@ class TestMarketingCampaignV2Routes:
                 "expiration_date_from",
                 "expiration_date_to",
                 "adeudo_min",
+                "adeudo_max",
+                "selected_sucursal_keys",
+                "excluded_sucursal_keys",
                 "tarifa",
                 "categoria_tarifa",
             ],

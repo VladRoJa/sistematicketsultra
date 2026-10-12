@@ -518,3 +518,128 @@ def test_blacklist_excludes_phone_from_member_sources_and_exposes_detail(
     assert preview["unique_recipient_count"] == 1
     assert detail["total"] == 1
     assert detail["rows"][0]["phone_mx10"] == "6861000002"
+
+
+def test_winback_adeudo_max_zero_is_exact_and_unknown_is_not_zero(monkeypatch):
+    rows = [
+        _candidate(1, tariff="DOM", phone="6861000001", adeudo="0"),
+        _candidate(2, tariff="DOM", phone="6861000002", adeudo="0.01"),
+        _candidate(3, tariff="DOM", phone="6861000003", adeudo=None),
+        _candidate(4, tariff="DOM", phone="6861000004", adeudo="2999.99"),
+        _candidate(5, tariff="DOM", phone="6861000005", adeudo="3000"),
+    ]
+    _install(monkeypatch, rows)
+    base = {
+        "source": service.SOURCE_EXPIRED_MEMBERS,
+        "audience_families": ["DOMICILIADO"],
+        "allowed_sucursal_keys": None,
+        "expiration_date_from": "2020-01-01",
+        "expiration_date_to": "2026-09-30",
+        "session": object(),
+    }
+    zero = service.build_campaign_v2_audience_preview(
+        **base, adeudo_min="0", adeudo_max="0"
+    )
+    low = service.build_campaign_v2_audience_preview(
+        **base, adeudo_min="0.01", adeudo_max="2999.99"
+    )
+    high = service.build_campaign_v2_audience_preview(
+        **base, adeudo_min="3000"
+    )
+    assert (zero["unique_recipient_count"], low["unique_recipient_count"], high["unique_recipient_count"]) == (1, 2, 1)
+    assert zero["filters"]["adeudo_max"] == "0"
+    assert zero["source_metadata"]["adeudo_max"] == "0"
+
+
+@pytest.mark.parametrize("max_value", ["-1", "NaN", "Infinity", "texto", True])
+def test_winback_adeudo_max_rejects_invalid(max_value):
+    with pytest.raises(service.MarketingCampaignV2AudienceValidationError):
+        service._normalize_adeudo_max(max_value)
+
+
+def test_winback_range_reversed_is_rejected_before_loading_source(monkeypatch):
+    _install(monkeypatch, [])
+    with pytest.raises(service.MarketingCampaignV2AudienceValidationError, match="mayor"):
+        service.build_campaign_v2_audience_preview(
+            source=service.SOURCE_EXPIRED_MEMBERS,
+            audience_families=["DOMICILIADO"],
+            allowed_sucursal_keys=None,
+            expiration_date_from="2020-01-01",
+            expiration_date_to="2026-09-30",
+            adeudo_min="3000",
+            adeudo_max="2999.99",
+            session=object(),
+        )
+
+
+def test_winback_branch_include_exclude_and_scope_guard(monkeypatch):
+    rows = [
+        _candidate(101, tariff="DOM", phone="6860000101", branch="BRANCH A", adeudo="3200"),
+        _candidate(102, tariff="DOM", phone="6860000102", branch="BRANCH B", adeudo="3500"),
+        _candidate(103, tariff="DOM", phone="6860000103", branch="BRANCH A", adeudo="2800"),
+    ]
+    _install(monkeypatch, rows)
+    monkeypatch.setattr(
+        service,
+        "_campaign_branch_identity_index",
+        lambda **_: {"BRANCH A": "CANON A", "BRANCH B": "CANON B"},
+    )
+    base = {
+        "source": service.SOURCE_EXPIRED_MEMBERS,
+        "audience_families": ["DOMICILIADO"],
+        "allowed_sucursal_keys": None,
+        "expiration_date_from": "2020-01-01",
+        "expiration_date_to": "2026-09-30",
+        "adeudo_min": "3000",
+        "session": object(),
+    }
+    included = service.build_campaign_v2_audience_preview(
+        **base, selected_sucursal_keys=["BRANCH A"]
+    )
+    excluded = service.build_campaign_v2_audience_preview(
+        **base, excluded_sucursal_keys=["BRANCH A"]
+    )
+    assert included["unique_recipient_count"] == 1
+    assert excluded["unique_recipient_count"] == 1
+    assert included["filters"]["selected_sucursal_keys"] == ["BRANCH A"]
+    assert excluded["filters"]["excluded_sucursal_keys"] == ["BRANCH A"]
+    with pytest.raises(service.MarketingCampaignV2AudienceValidationError, match="excede"):
+        service.build_campaign_v2_audience_preview(
+            **(base | {"allowed_sucursal_keys": ["BRANCH A"]}),
+            selected_sucursal_keys=["BRANCH B"],
+        )
+    with pytest.raises(service.MarketingCampaignV2AudienceValidationError, match="combines"):
+        service.build_campaign_v2_audience_preview(
+            **base,
+            selected_sucursal_keys=["BRANCH A"],
+            excluded_sucursal_keys=["BRANCH B"],
+        )
+
+
+def test_winback_canonical_branch_index_accepts_aliases_and_rejects_collisions():
+    from types import SimpleNamespace
+    catalogs = [
+        SimpleNamespace(sucursal_canon="A", track_label="TRACK A", sucursal_id=1),
+        SimpleNamespace(sucursal_canon="B", track_label="TRACK B", sucursal_id=2),
+    ]
+    aliases = [
+        SimpleNamespace(sucursal_canon="A", raw_branch_name="ALIAS A"),
+        SimpleNamespace(sucursal_canon="A", raw_branch_name="SHARED"),
+        SimpleNamespace(sucursal_canon="B", raw_branch_name="SHARED"),
+    ]
+    class FakeQuery:
+        def __init__(self, rows):
+            self.rows = rows
+        def filter(self, *args):
+            return self
+        def all(self):
+            return self.rows
+    class FakeSession:
+        def query(self, model):
+            return FakeQuery(
+                catalogs if model is service.TrackBranchCatalogORM else aliases
+            )
+    branch_index = service._campaign_branch_identity_index(session=FakeSession())
+    assert branch_index["ALIAS A"] == "A"
+    assert branch_index["TRACK B"] == "B"
+    assert "SHARED" not in branch_index

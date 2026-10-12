@@ -110,6 +110,9 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   readonly expirationDateFrom = new FormControl('', { nonNullable: true });
   readonly expirationDateTo = new FormControl('', { nonNullable: true });
   readonly adeudoMin = new FormControl('', { nonNullable: true });
+  readonly adeudoMax = new FormControl('', { nonNullable: true });
+  readonly branchFilterMode = new FormControl<'ALL' | 'INCLUDE' | 'EXCLUDE'>('ALL', { nonNullable: true });
+  readonly branchKeys = new FormControl<string[]>([], { nonNullable: true });
   readonly funnelMonth = new FormControl('', { nonNullable: true });
   readonly funnelCutoffDate = new FormControl('', { nonNullable: true });
   readonly funnelMonthOptions = this.buildFunnelMonthOptions();
@@ -215,8 +218,13 @@ export class MarketingCampaignV2PageComponent implements OnInit {
           this.expirationDateFrom.setValue('', { emitEvent: false });
           this.expirationDateTo.setValue('', { emitEvent: false });
         }
+        if (source === 'FUNNEL_PORTFOLIO') {
+          this.branchFilterMode.setValue('ALL', { emitEvent: false });
+          this.branchKeys.setValue([], { emitEvent: false });
+        }
         if (!this.showsAdeudoMin) {
           this.adeudoMin.setValue('', { emitEvent: false });
+          this.adeudoMax.setValue('', { emitEvent: false });
         }
         if (source === 'FUNNEL_PORTFOLIO') {
           this.loadFunnelCutoffs();
@@ -231,6 +239,15 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.invalidatePreview());
     this.adeudoMin.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.invalidatePreview());
+    this.adeudoMax.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.invalidatePreview());
+    this.branchFilterMode.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.invalidatePreview());
+    this.branchKeys.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.invalidatePreview());
     this.funnelMonth.valueChanges
@@ -1165,10 +1182,22 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     if (metadata.expiration_date_to) {
       rows.push({ label: 'Vencimiento hasta', value: String(metadata.expiration_date_to) });
     }
-    if (metadata['adeudo_min']) {
+    if (metadata['adeudo_min'] !== undefined) {
       rows.push({
         label: 'Adeudo mínimo',
         value: this.currencyLabel(String(metadata['adeudo_min'])),
+      });
+    }
+    if (metadata['selected_sucursal_keys']) {
+      rows.push({ label: 'Sucursales incluidas', value: String(metadata['selected_sucursal_keys']) });
+    }
+    if (metadata['excluded_sucursal_keys']) {
+      rows.push({ label: 'Sucursales excluidas', value: String(metadata['excluded_sucursal_keys']) });
+    }
+    if (metadata['adeudo_max'] !== undefined) {
+      rows.push({
+        label: 'Adeudo máximo',
+        value: this.currencyLabel(String(metadata['adeudo_max'])),
       });
     }
     if (metadata.current_status_activos_cutoff_date) {
@@ -1221,6 +1250,9 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       expirationDateFrom: this.expirationDateFrom.value,
       expirationDateTo: this.expirationDateTo.value,
       adeudoMin: this.adeudoMin.value,
+      adeudoMax: this.adeudoMax.value,
+      branchFilterMode: this.branchFilterMode.value,
+      branchKeys: this.branchKeys.value,
       funnelMonth: this.funnelMonth.value,
       funnelCutoffDate: this.funnelCutoffDate.value,
       iventasCurrentStatuses: this.selectedIventasCurrentStatuses,
@@ -1247,6 +1279,9 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     this.expirationDateFrom.setValue('', { emitEvent: false });
     this.expirationDateTo.setValue('', { emitEvent: false });
     this.adeudoMin.setValue('', { emitEvent: false });
+    this.adeudoMax.setValue('', { emitEvent: false });
+    this.branchFilterMode.setValue('ALL', { emitEvent: false });
+    this.branchKeys.setValue([], { emitEvent: false });
     this.funnelMonth.setValue('', { emitEvent: false });
     this.funnelCutoffDate.setValue('', { emitEvent: false });
     this.funnelCutoffDates = [];
@@ -1335,8 +1370,17 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     if (this.historyLookbackInvalid) {
       return 'Indica un número entero de días mayor a cero para la ventana histórica.';
     }
+    if (this.source.value !== 'FUNNEL_PORTFOLIO' && this.branchFilterMode.value !== 'ALL' && !this.branchKeys.value.length) {
+      return 'Selecciona al menos una sucursal.';
+    }
     if (this.showsAdeudoMin && !isCampaignV2AdeudoMinValid(this.adeudoMin.value)) {
       return 'El adeudo mínimo debe ser un número mayor o igual a cero.';
+    }
+    if (this.showsAdeudoMin && !isCampaignV2AdeudoMinValid(this.adeudoMax.value)) {
+      return 'El adeudo máximo debe ser un número mayor o igual a cero.';
+    }
+    if (this.showsAdeudoMin && this.adeudoMin.value.trim() && this.adeudoMax.value.trim() && Number(this.adeudoMin.value) > Number(this.adeudoMax.value)) {
+      return 'El adeudo mínimo no puede ser mayor al máximo.';
     }
     if (this.showsExpirationRange) {
       if (!this.expirationDateFrom.value || !this.expirationDateTo.value) {

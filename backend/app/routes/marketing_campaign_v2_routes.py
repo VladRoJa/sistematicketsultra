@@ -9,6 +9,7 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.extensions import db
 from app.models.user_model import UserORM
+from app.models.warehouse import TrackBranchCatalogORM
 from app.services.marketing_access import (
     MarketingAuthorizationError,
     resolve_marketing_access,
@@ -144,6 +145,7 @@ def campaign_v2_options_endpoint():
     try:
         _, access = _resolve_campaign_v2_request()
         allowed = _campaign_v2_allowed_sucursal_keys(access)
+        branch_options = _campaign_v2_branch_options(allowed)
         return jsonify(
             {
                 "sources": [
@@ -162,6 +164,9 @@ def campaign_v2_options_endpoint():
                             "expiration_date_from",
                             "expiration_date_to",
                             "adeudo_min",
+                "adeudo_max",
+                "selected_sucursal_keys",
+                "excluded_sucursal_keys",
                             "tarifa",
                             "categoria_tarifa",
                         ],
@@ -198,6 +203,7 @@ def campaign_v2_options_endpoint():
                         session=db.session,
                     )
                 ),
+                "branch_options": branch_options,
                 "scope": {
                     "is_global": bool(access.is_global),
                     "allowed_sucursal_keys": (
@@ -289,6 +295,9 @@ def campaign_v2_preview_endpoint():
                 "expiration_date_from",
                 "expiration_date_to",
                 "adeudo_min",
+                "adeudo_max",
+                "selected_sucursal_keys",
+                "excluded_sucursal_keys",
                 "history_exclusion",
                 "historical_targeting",
                 "iventas_current_statuses",
@@ -304,6 +313,9 @@ def campaign_v2_preview_endpoint():
             expiration_date_from=payload.get("expiration_date_from"),
             expiration_date_to=payload.get("expiration_date_to"),
             adeudo_min=payload.get("adeudo_min"),
+            adeudo_max=payload.get("adeudo_max"),
+            selected_sucursal_keys=payload.get("selected_sucursal_keys"),
+            excluded_sucursal_keys=payload.get("excluded_sucursal_keys"),
             history_exclusion=payload.get("history_exclusion"),
             historical_targeting=payload.get("historical_targeting"),
             iventas_current_statuses=payload.get("iventas_current_statuses"),
@@ -332,6 +344,9 @@ def campaign_v2_preview_detail_endpoint():
                 "expiration_date_from",
                 "expiration_date_to",
                 "adeudo_min",
+                "adeudo_max",
+                "selected_sucursal_keys",
+                "excluded_sucursal_keys",
                 "bucket",
                 "audience_family",
                 "page",
@@ -355,6 +370,9 @@ def campaign_v2_preview_detail_endpoint():
             expiration_date_from=payload.get("expiration_date_from"),
             expiration_date_to=payload.get("expiration_date_to"),
             adeudo_min=payload.get("adeudo_min"),
+            adeudo_max=payload.get("adeudo_max"),
+            selected_sucursal_keys=payload.get("selected_sucursal_keys"),
+            excluded_sucursal_keys=payload.get("excluded_sucursal_keys"),
             history_exclusion=payload.get("history_exclusion"),
             historical_targeting=payload.get("historical_targeting"),
             iventas_current_statuses=payload.get("iventas_current_statuses"),
@@ -387,6 +405,7 @@ def freeze_campaign_v2_endpoint():
                 "expiration_date_from",
                 "expiration_date_to",
                 "adeudo_min",
+                "adeudo_max",
                 "history_exclusion",
                 "historical_targeting",
                 "iventas_current_statuses",
@@ -407,6 +426,9 @@ def freeze_campaign_v2_endpoint():
             expiration_date_from=payload.get("expiration_date_from"),
             expiration_date_to=payload.get("expiration_date_to"),
             adeudo_min=payload.get("adeudo_min"),
+            adeudo_max=payload.get("adeudo_max"),
+            selected_sucursal_keys=payload.get("selected_sucursal_keys"),
+            excluded_sucursal_keys=payload.get("excluded_sucursal_keys"),
             history_exclusion=payload.get("history_exclusion"),
             historical_targeting=payload.get("historical_targeting"),
             iventas_current_statuses=payload.get("iventas_current_statuses"),
@@ -1570,6 +1592,24 @@ def _require_campaign_v2_global_management(access) -> None:
         raise MarketingAuthorizationError(
             "La operación Campaign V2 requiere alcance global."
         )
+
+
+def _campaign_v2_branch_options(allowed_sucursal_keys: tuple[str, ...] | None) -> list[str]:
+    rows = (
+        db.session.query(TrackBranchCatalogORM)
+        .filter(TrackBranchCatalogORM.is_track_active.is_(True))
+        .all()
+    )
+    return sorted({
+        str(row.track_label).strip()
+        for row in rows
+        if row.track_label
+        and (
+            allowed_sucursal_keys is None
+            or audience.current_status.normalize_socios_vencidos_branch_key(row.track_label)
+            in allowed_sucursal_keys
+        )
+    })
 
 
 def _campaign_v2_allowed_sucursal_keys(access) -> tuple[str, ...] | None:

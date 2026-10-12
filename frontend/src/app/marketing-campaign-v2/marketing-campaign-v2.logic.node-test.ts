@@ -1180,3 +1180,55 @@ test('F3-M2 conserva ambas descargas manuales después de agregar submit', () =>
   assert.equal(component.includes('exportDeliveryPackage()'), true);
   assert.equal(component.includes('exportSendablePackage()'), true);
 });
+
+
+test('Winback deuda en intervalos cero, bajo y alto y control de rango inverso', () => {
+  const base = {
+    source: 'EXPIRED_MEMBERS' as const,
+    audienceFamilies: ['DOMICILIADO' as const],
+    expirationDateFrom: '2020-01-01',
+    expirationDateTo: '2026-09-30',
+  };
+  assert.equal(
+    buildCampaignV2AudienceRequest({ ...base, adeudoMin: '0', adeudoMax: '0' }).adeudo_max,
+    '0',
+  );
+  assert.equal(
+    buildCampaignV2AudienceRequest({ ...base, adeudoMin: '0.01', adeudoMax: '2999.99' }).adeudo_max,
+    '2999.99',
+  );
+  assert.equal(
+    buildCampaignV2AudienceRequest({ ...base, adeudoMin: '3000' }).adeudo_max,
+    undefined,
+  );
+  assert.equal(isCampaignV2AudienceValid({ ...base, adeudoMin: '3000', adeudoMax: '2999.99' }), false);
+  assert.equal(isCampaignV2AudienceValid({ ...base, adeudoMin: '0', adeudoMax: '0' }), true);
+  assert.equal(isCampaignV2AudienceValid({ ...base, adeudoMax: '-1' }), false);
+});
+
+
+test('Winback scope comercial viaja en preview/freeze y no amplía permisos de frontend', () => {
+  const base = {
+    source: 'EXPIRED_MEMBERS' as const,
+    audienceFamilies: ['DOMICILIADO' as const],
+    expirationDateFrom: '2020-01-01',
+    expirationDateTo: '2026-09-30',
+  };
+  const opts = { branch_options: ['BRANCH A', 'BRANCH B'] } as CampaignV2OptionsResponse;
+  assert.deepEqual(
+    buildCampaignV2AudienceRequest({ ...base, branchFilterMode: 'INCLUDE', branchKeys: ['BRANCH A'] }).selected_sucursal_keys,
+    ['BRANCH A'],
+  );
+  assert.deepEqual(
+    buildCampaignV2AudienceRequest({ ...base, branchFilterMode: 'EXCLUDE', branchKeys: ['BRANCH B'] }).excluded_sucursal_keys,
+    ['BRANCH B'],
+  );
+  assert.equal(
+    isCampaignV2AudienceValid({ ...base, branchFilterMode: 'INCLUDE', branchKeys: [] }, opts),
+    false,
+  );
+  assert.equal(
+    isCampaignV2AudienceValid({ ...base, branchFilterMode: 'INCLUDE', branchKeys: ['FORGED'] }, opts),
+    false,
+  );
+});
