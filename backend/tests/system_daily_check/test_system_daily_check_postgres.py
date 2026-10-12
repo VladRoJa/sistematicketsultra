@@ -49,8 +49,8 @@ def _revision():
 def _actor(*, user_id: int = 1, branch_id: int = 10):
     return SimpleNamespace(
         id=user_id,
-        username="SISTEMAS",
-        rol="SISTEMAS",
+        username=f"gerente.test.{user_id}",
+        rol="GERENTE",
         sucursal_id=branch_id,
         sucursales_ids=[],
     )
