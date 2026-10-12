@@ -31,15 +31,12 @@ from app.services.system_daily_check_service import (
     resolve_business_date,
 )
 from app.utils.sucursal_audience import TECHNICAL_SUCURSAL_IDS
-from app.utils.system_daily_check_access import has_system_daily_check_mvp_access
+from app.utils.system_daily_check_access import has_system_daily_check_bi_access
 
 
-# PILOT TEMPORARY: Corporativo (100) participa en Salud de Sistemas aunque
-# siga siendo nodo técnico para el resto de Suite Ultra. Administrador (1000)
-# permanece excluido. Retirar junto con el puente del piloto.
+# En la operación real se excluyen los dos nodos técnicos.
 SYSTEM_DAILY_CHECK_PILOT_EXCLUDED_BRANCH_IDS = frozenset(
     TECHNICAL_SUCURSAL_IDS
-    - {SYSTEM_DAILY_CHECK_PILOT_CORPORATE_BRANCH_ID}
 )
 
 
@@ -139,7 +136,7 @@ def resolve_system_daily_check_branch_universe(
 
 
 def _require_mvp_access(actor) -> None:
-    if not has_system_daily_check_mvp_access(actor):
+    if not has_system_daily_check_bi_access(actor):
         raise SystemDailyCheckAuthorizationError(
             "El usuario no está habilitado para BI del checklist diario."
         )
