@@ -134,10 +134,13 @@ export interface WarehouseCreateUploadResponse {
   manual_structured_result?: {
     ingestion_status: string;
     structured_result?: {
-      campaign_day_rows: number;
+      campaign_day_rows?: number;
+      group_day_rows?: number;
       created_rows: number;
       unchanged_rows: number;
       total_cost_in_file: string;
+      passes_ads?: string;
+      web_purchases_ads?: string;
     };
   };
 }
