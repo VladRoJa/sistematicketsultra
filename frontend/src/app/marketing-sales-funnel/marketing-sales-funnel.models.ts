@@ -141,6 +141,37 @@ export interface MarketingFunnelInvestmentSources {
   existing_cpl_cpt_cac_basis: 'META_ASSIGNED_ONLY';
 }
 
+export interface MarketingGoogleAdsBranchAttributionRow {
+  sucursal_id: number;
+  cost: number;
+  clicks: number;
+  impressions: number;
+  free_pass_ads: number;
+  web_purchase_ads: number;
+}
+
+export interface MarketingGoogleAdsBranchAttribution {
+  status: 'scope_unavailable' | 'pending_mapping' | 'complete'
+    | 'partial' | 'requires_review' | 'unavailable';
+  currency: 'MXN';
+  allocation_basis: 'APPROVED_PROVISIONAL_XLSX';
+  requested_from: string;
+  requested_to: string;
+  historical_from: string;
+  historical_to: string;
+  complete_to_cutoff: boolean;
+  covered_days: number;
+  expected_days: number;
+  missing_days: number;
+  rows: MarketingGoogleAdsBranchAttributionRow[];
+  scope_attributed_cost: number | null;
+  observed_from?: string;
+  observed_to?: string;
+  account_cost_observed?: number;
+  unassigned_cost_observed?: number;
+  account_reconciled?: boolean;
+}
+
 export interface MarketingSalesFunnelResponse {
   month: string;
   selected_cutoff_date: string;
@@ -148,6 +179,7 @@ export interface MarketingSalesFunnelResponse {
   scope: Record<string, unknown>;
   scope_options?: MarketingSalesFunnelScopeOption[];
   investment_sources?: MarketingFunnelInvestmentSources;
+  google_ads_branch_attribution?: MarketingGoogleAdsBranchAttribution;
   summary: MarketingSalesFunnelMetrics;
   branches: MarketingSalesFunnelBranch[];
   source: MarketingSalesFunnelSource;
