@@ -44,6 +44,8 @@ def context(child_status="SUBMITTING", exec_status="IN_FLIGHT",
             q.filter.return_value.with_for_update.return_value.one_or_none.return_value = approval
         elif model is svc.MarketingCampaignV2GovernedExecutionORM:
             q.filter.return_value.with_for_update.return_value.one_or_none.return_value = execution
+        elif model is svc.MarketingCampaignV2ProviderCampaignORM.id:
+            q.filter.return_value.first.return_value = None
         elif model is svc.MarketingCampaignV2ProviderCampaignORM:
             q.filter.return_value.with_for_update.return_value.one_or_none.return_value = child
             q.filter.return_value.first.return_value = None
