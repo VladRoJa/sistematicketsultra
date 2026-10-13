@@ -6,6 +6,8 @@ No inferred fallback: every channel needs a current, explicit revision.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
+import json
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
 
@@ -243,7 +245,13 @@ def estimate_preflight_cost(
         plan.ready and not missing and unassigned == 0
         and bool(batches) and sum(len(b.recipients) for b in batches) == count
     )
+    quote_fingerprint = hashlib.sha256(json.dumps({
+        "version": "QUOTE_V1", "campaign_id": plan.campaign_id,
+        "dispatch_fingerprint": plan.dispatch_fingerprint,
+        "status": complete, "breakdown": breakdown,
+    }, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     return {
+        "quote_fingerprint": quote_fingerprint,
         "status": "COMPLETE" if complete else "INCOMPLETE",
         "currency": "MXN",
         "basis": "MANUAL_OPERATOR_RATE_NOT_PROVIDER_QUOTE",
