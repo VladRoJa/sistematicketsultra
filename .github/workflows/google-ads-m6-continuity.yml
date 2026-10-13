@@ -8,6 +8,9 @@ on:
       - 'backend/migrations/versions/b3e7c2d9a104_google_ads_m6_branch_continuity.py'
       - 'backend/app/warehouse/services/google_ads_m6_continuity_approval_service.py'
       - 'backend/scripts/apply_google_ads_m6_continuity.py'
+      - 'backend/app/routes/google_ads_m6_continuity_routes.py'
+      - 'backend/app/__init__.py'
+      - 'backend/tests/google_ads/test_google_ads_m6_authenticated_approval.py'
       - 'backend/tests/google_ads/test_google_ads_m6_continuity_*.py'
       - '.github/workflows/google-ads-m6-continuity.yml'
   push:
@@ -55,5 +58,6 @@ jobs:
           python -m pytest -q --tb=short \
             tests/google_ads/test_google_ads_m6_continuity_schema.py \
             tests/google_ads/test_google_ads_m6_continuity_approval.py \
+            tests/google_ads/test_google_ads_m6_authenticated_approval.py \
             tests/google_ads/test_google_ads_m6_continuity_postgres.py \
             tests/google_ads/test_google_ads_m5_branch_attribution_readonly.py
