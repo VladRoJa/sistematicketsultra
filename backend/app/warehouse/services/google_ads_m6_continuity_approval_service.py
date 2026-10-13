@@ -154,14 +154,28 @@ def _verify_facts(conn, campaigns, groups, identities: list[dict]) -> dict:
         "grupos estructurados difieren del XLSX original",
     )
 
-    all_keys = {(r.ad_group_key, r.campaign_key) for r in groups.rows}
-    _require(len(all_keys) == 43, "catálogo de grupos fuera de M5")
+    all_keys = {(r.campaign_key, r.ad_group_key) for r in groups.rows}
+    historical_keys = {
+        (r["campaign_key"], r["ad_group_key"])
+        for r in conn.execute(sa.text("""
+            SELECT DISTINCT campaign_key, ad_group_key
+            FROM google_ads_ad_group_daily_metrics
+            WHERE customer_id = :customer
+              AND source_upload_id = 21499
+              AND report_date BETWEEN DATE '2026-09-24' AND DATE '2026-10-08'
+        """), {"customer": CUSTOMER_ID}).mappings().all()
+    }
+    _require(
+        len(all_keys) == len(historical_keys) == 43
+        and all_keys == historical_keys,
+        "identidad nueva, perdida o renombrada frente al catálogo M5",
+    )
     for day in DAYS:
         _require(
             {r.campaign_key for r in campaigns.rows if r.report_date == day}
             == {r.campaign_key for r in campaigns.rows}
             and {
-                (r.ad_group_key, r.campaign_key) for r in groups.rows if r.report_date == day
+                (r.campaign_key, r.ad_group_key) for r in groups.rows if r.report_date == day
             } == all_keys,
             "cobertura diaria de campañas/grupos incompleta",
         )
@@ -316,6 +330,7 @@ def run_on_connection(conn, *, apply: bool, approved_by_user_id: int | None, par
             """), [{"approval_version_id": version_id, **r} for r in identities])
             verified_id, _ = _check_existing(conn, identities)
             _require(verified_id == version_id, "aprobación M6 incompleta")
+            existing_id = int(version_id)
 
     return {
         "action": "APPLY" if apply else "CHECK_ONLY",
