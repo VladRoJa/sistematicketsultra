@@ -1,0 +1,149 @@
+/* M5 Google Ads: compact historical evidence, isolated from Funnel KPIs. */
+.google-branch-attribution {
+  margin: 0 0 14px;
+  padding: 15px 17px;
+  border: 1px solid var(--story-border);
+  border-radius: 14px;
+  background: var(--story-surface);
+  color: var(--story-navy);
+}
+
+.google-branch-attribution__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.google-branch-attribution__kicker {
+  margin: 0 0 3px;
+  font-size: 10px;
+  font-weight: 750;
+  color: var(--story-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.055em;
+}
+
+.google-branch-attribution__heading h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.google-branch-attribution__status {
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid #d3dbe6;
+  color: #56667c;
+  background: #f5f7fa;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.google-branch-attribution__status--complete {
+  color: #246a42;
+  border-color: #b8dec4;
+  background: #eef8f0;
+}
+
+.google-branch-attribution__status--partial {
+  color: #825a12;
+  border-color: #ecd79b;
+  background: #fff9e9;
+}
+
+.google-branch-attribution__coverage {
+  margin: 7px 0 10px;
+  font-size: 11px;
+  color: var(--story-muted);
+}
+
+.google-branch-attribution__totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.google-branch-attribution__total {
+  display: grid;
+  min-width: 175px;
+  gap: 3px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  border: 1px solid #e5eaf0;
+  background: #f8fafc;
+}
+
+.google-branch-attribution__total span {
+  font-size: 10px;
+  font-weight: 650;
+  color: var(--story-muted);
+}
+
+.google-branch-attribution__total strong {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.google-branch-attribution__table-wrap {
+  max-height: 242px;
+  overflow: auto;
+  margin-top: 11px;
+  border: 1px solid #e5eaf0;
+  border-radius: 9px;
+}
+
+.google-branch-attribution__table {
+  width: 100%;
+  min-width: 670px;
+  border-collapse: collapse;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.google-branch-attribution__table thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f3f6fa;
+}
+
+.google-branch-attribution__table th,
+.google-branch-attribution__table td {
+  padding: 7px 11px;
+  border-bottom: 1px solid #ebeff4;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.google-branch-attribution__table th:first-child {
+  min-width: 140px;
+  text-align: left;
+}
+
+.google-branch-attribution__table tbody th {
+  font-weight: 750;
+}
+
+.google-branch-attribution__table tbody tr:last-child th,
+.google-branch-attribution__table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.google-branch-attribution__note {
+  margin: 10px 0 0;
+  color: var(--story-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .google-branch-attribution {
+    padding: 12px;
+  }
+
+  .google-branch-attribution__total {
+    flex: 1 1 100%;
+  }
+}
