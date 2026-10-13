@@ -60,8 +60,10 @@ def review_partial_resume(
     expected_failed: Mapping[str, tuple[int, str, str]],
     expected_ready: Mapping[str, int],
     session: Any,
+    expected_held: Mapping[str, tuple[int, str]] | None = None,
 ) -> PartialResumeReview:
     """Read-only check of EVERY persisted child against the approved manifest."""
+    held = dict(expected_held or {})
     plan = build_campaign_v2_preflight(
         campaign_id=campaign_id,
         template_id=template_id,
@@ -78,10 +80,12 @@ def review_partial_resume(
         )
     expected_names = (
         set(expected_submitted) | set(expected_failed) | set(expected_ready)
+        | set(held)
     )
     if (
         len(expected_names)
-        != len(expected_submitted) + len(expected_failed) + len(expected_ready)
+        != len(expected_submitted) + len(expected_failed)
+        + len(expected_ready) + len(held)
         or len(plan.batches) != len(expected_names)
     ):
         raise MarketingCampaignV2SubmitPreconditionError(
@@ -150,6 +154,23 @@ def review_partial_resume(
             ):
                 raise MarketingCampaignV2SubmitPreconditionError(
                     f"Authorized skip no longer matches original error: {name}."
+                )
+        elif name in held:
+            count, reason = held[name]
+            if (
+                str(row.status) != "HELD"
+                or int(row.recipient_count) != count
+                or str(row.hold_reason) != reason
+                or row.held_at is None
+                or row.held_by_user_id is None
+                or not isinstance(row.hold_evidence_json, dict)
+                or not row.hold_evidence_json
+                or row.provider_campaign_id is not None
+                or row.submit_started_at is not None
+                or row.submitted_at is not None
+            ):
+                raise MarketingCampaignV2SubmitPreconditionError(
+                    f"Held child mutated or attempted: {name}."
                 )
         else:
             count = expected_ready[name]
