@@ -523,14 +523,7 @@ class MarketingCampaignV2QuotaPolicyRevisionORM(db.Model):
     __tablename__ = "marketing_campaign_v2_quota_policy_revisions"
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
-    provider_channel_id = db.Column(
-        db.String(255),
-        db.ForeignKey(
-            "marketing_campaign_v2_channel_bindings.provider_channel_id",
-            ondelete="RESTRICT",
-        ),
-        nullable=False,
-    )
+    provider_channel_id = db.Column(db.String(255), nullable=False)
     portfolio_key = db.Column(db.String(128), nullable=False)
     account_key = db.Column(db.String(128), nullable=False)
     phone_alias = db.Column(db.String(128), nullable=False)
