@@ -6,11 +6,16 @@
     <dt>Corte</dt><dd>{{ data.observation.business_date || 'Sin fecha' }}</dd>
     <dt>Inicio (Tijuana)</dt><dd>{{ formatDate(data.observation.started_at_utc) }}</dd>
     <dt>Fin (Tijuana)</dt><dd>{{ formatDate(data.observation.finished_at_utc) }}</dd>
+    <ng-container *ngIf="data.observation.evidence_type==='COMPLETION_AUDIT'">
+      <dt>Marca de finalización</dt><dd>{{ formatDate(data.observation.observed_at_utc || null) }}</dd>
+      <dt>Fuente</dt><dd>Auditoría JOB_COMPLETED (no incluye inicio ni errores)</dd>
+    </ng-container>
   </dl>
   <p *ngIf="data.observation.error_available" class="notice">
     Error registrado; diagnóstico seguro pendiente de instrumentación.
   </p>
 </mat-dialog-content>
 <mat-dialog-actions align="end">
+  <button type="button" *ngIf="canDiagnose()" (click)="openDiagnostic()">Ver diagnóstico</button>
   <button type="button" (click)="close()">Cerrar</button>
 </mat-dialog-actions>

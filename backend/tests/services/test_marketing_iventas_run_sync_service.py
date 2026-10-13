@@ -383,6 +383,9 @@ def test_partial_continues_after_operational_failure(
         == "MarketingIventasBranchSyncError"
     )
 
+    assert finalize_calls[0]["branch_failures"] == (
+        ("branch-b", "MarketingIventasBranchSyncError"),
+    )
     assert finalize_calls[0][
         "status"
     ] == "PARTIAL"
@@ -547,6 +550,9 @@ def test_alias_incomplete_fails_before_http(
 
     assert result.failed_branches == (
         alias_failure,
+    )
+    assert finalize_calls[0]["branch_failures"] == (
+        ("branch-c", "ALIAS_UNRESOLVED"),
     )
 
     assert finalize_calls[0][

@@ -2,16 +2,20 @@ import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatIconModule } from '@angular/material/icon';
 import { AutomationObservationDialogComponent, AutomationObservationDialogData } from './automation-observation-dialog.component';
+import { AutomationErrorDetailDialogComponent, AutomationErrorDialogData } from './automation-error-detail-dialog.component';
 import { forkJoin, Subject, takeUntil } from 'rxjs';
 import { AutomationControlService } from './automation-control.service';
+import { classifyObservationRuns, classifyReferenceHour, currentTijuanaClock, ObservationState, ReferenceState } from './automation-control-timeline-display';
 import { Job, Run, Summary, Dataset, TimelineWorker, TimelineJob, TimelineObservation } from './automation-control.models';
 
-@Component({ selector:'app-automation-control',standalone:true,imports:[CommonModule,FormsModule,MatDialogModule],
+@Component({ selector:'app-automation-control',standalone:true,imports:[CommonModule,FormsModule,MatDialogModule,MatIconModule],
   templateUrl:'./automation-control.component.html',styleUrls:['./automation-control.component.css'] })
 export class AutomationControlComponent implements OnInit,OnDestroy {
   readonly pageSize=20;
   readonly hours=Array.from({length:24},(_,i)=>String(i).padStart(2,'0')+':00');
+  tijuanaClock=currentTijuanaClock(new Date());
   timelineDate=new Date().toLocaleDateString('en-CA',{timeZone:'America/Tijuana'});
   timelineWorkers:TimelineWorker[]=[];
   loadingTimeline=false;
@@ -49,6 +53,7 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
       });
   }
   loadTimeline():void {
+    this.tijuanaClock=currentTijuanaClock(new Date());
     if (!this.timelineDate) {return;}
     this.loadingTimeline=true;this.timelineError='';this.timelineWorkers=[];
     this.api.timeline(this.timelineDate).pipe(takeUntil(this.destroyed$)).subscribe({
@@ -59,23 +64,68 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
   timelineRuns(job:TimelineJob,hour:string):TimelineObservation[] {
     return job.observed[hour] || [];
   }
-  timelineState(job:TimelineJob,hour:string):string {
+  timelineState(job:TimelineJob,hour:string):ObservationState {
+    return classifyObservationRuns(this.timelineRuns(job,hour));
+  }
+  timelineIcon(job:TimelineJob,hour:string):string {
+    const icons:Record<ObservationState,string>={
+      completed:'check_circle',replaced:'history',running:'sync',
+      partial:'warning_amber',error:'cancel',unknown:'help_outline',
+    };
+    return icons[this.timelineState(job,hour)];
+  }
+  timelineObservationTitle(job:TimelineJob,hour:string):string {
     const runs=this.timelineRuns(job,hour);
-    if(!runs.length)return 'unknown';
-    if(runs.some(r=>['failed','error'].includes(r.status_raw.toLowerCase())))return 'error';
-    if(runs.some(r=>['partial','running'].includes(r.status_raw.toLowerCase())))return 'partial';
-    if(runs.some(r=>['completed','success','succeeded','replaced'].includes(r.status_raw.toLowerCase())))return 'observed';
-    return 'unknown';
+    const label:Record<ObservationState,string>={
+      completed:'Ejecución finalizada. Frescura de datos no verificada',
+      replaced:'Versión sustituida, no es fallo',
+      running:'Estado RUNNING registrado; actividad actual no verificada',
+      partial:'Resultado parcial registrado',
+      error:'Fallo registrado',
+      unknown:'Estado de ejecución no reconocido',
+    };
+    return label[this.timelineState(job,hour)]+' · último resultado: '
+      +(runs[0]?.status_raw||'desconocido')
+      +' · '+runs.length+' ejecución(es) observada(s).';
+  }
+  referenceIcon(job:TimelineJob,hour:string):string {
+    const state=this.referenceState(job,hour);
+    return state==='FUTURE_REFERENCE'?'schedule'
+      :state==='PAST_REFERENCE_UNVERIFIED'?'help_outline':'';
   }
   showObservation(job:TimelineJob,hour:string):void {
     const runs=this.timelineRuns(job,hour);
     if(!runs.length)return;
-    const data: AutomationObservationDialogData = {jobLabel:job.label, observation:runs[0]};
+    const data: AutomationObservationDialogData = {jobLabel:job.label,jobKey:job.job_key,observation:runs[0]};
     this.dialog.open(AutomationObservationDialogComponent, {data, width:'min(560px, 96vw)', maxWidth:'96vw', autoFocus:false});
   }
   closeObservation():void {this.selectedObservation=null;this.selectedObservationJob='';}
-  hasReferenceHour(job:TimelineJob,hour:string):boolean {
-    return job.reference_slots.some(s=>s.slice(0,2)===hour.slice(0,2));
+  referenceState(job:TimelineJob,hour:string):ReferenceState {
+    return classifyReferenceHour(this.timelineDate,hour,job.reference_slots,this.tijuanaClock);
+  }
+  referenceTitle(job:TimelineJob,hour:string):string {
+    const state=this.referenceState(job,hour);
+    if(state==='FUTURE_REFERENCE')return 'Horario de referencia futuro. Todavía no corresponde evaluarlo.';
+    if(state==='PAST_REFERENCE_UNVERIFIED')return 'Horario de referencia pasado sin ejecución atribuible. No confirma fallo ni atraso.';
+    return 'Sin ejecución observada en esta hora.';
+  }
+  openLastError(job:Job):void {
+    const data:AutomationErrorDialogData={jobKey:job.key,jobLabel:job.label};
+    this.dialog.open(AutomationErrorDetailDialogComponent,{
+      data,width:'min(610px,96vw)',maxWidth:'96vw',autoFocus:false,
+    });
+  }
+  openRunDiagnostic(run:Run):void {
+    if(!this.selected)return;
+    const data:AutomationErrorDialogData={
+      jobKey:this.selected.key,jobLabel:this.selected.label,runId:run.run_id,
+    };
+    this.dialog.open(AutomationErrorDetailDialogComponent,{
+      data,width:'min(610px,96vw)',maxWidth:'96vw',autoFocus:false,
+    });
+  }
+  canDiagnose(run:Run):boolean {
+    return ['FAILED','ERROR','TIMED_OUT','PARTIAL'].includes(run.status_raw.toUpperCase());
   }
   select(job:Job):void {this.selected=job;this.offset=0;this.loadRuns();}
   close():void {this.sequence++;this.selected=null;this.runs=[];this.runsError='';this.loadingRuns=false;}

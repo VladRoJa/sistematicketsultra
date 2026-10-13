@@ -69,7 +69,7 @@ def test_explicit_whitelist_can_read(api, username, role):
         response = client.get("/api/automation-control/summary", headers=headers)
     assert response.status_code == 200
     payload = response.get_json()
-    assert payload["job_count"] == 10
+    assert payload["job_count"] == 18
     assert payload["dataset_count"] == 2
     assert payload["worker_health"] == "UNKNOWN"
     assert payload["manual_actions_enabled"] is False
