@@ -21,12 +21,12 @@ def access(*, global_=False, branch_ids=(1,)):
     )
 
 
-def mapping():
+def mapping(branch_id=1):
     return SimpleNamespace(
-        id=11, customer_id=service.CUSTOMER_ID,
-        campaign_key="name:" + "a" * 64,
-        ad_group_key="name:" + "b" * 64,
-        sucursal_canon="VILLAS_DEL_REY",
+        id=branch_id + 10, customer_id=service.CUSTOMER_ID,
+        campaign_key="name:" + ("a" * 64 if branch_id == 1 else f"{branch_id:064x}"),
+        ad_group_key="name:" + ("b" * 64 if branch_id == 1 else f"{branch_id + 100:064x}"),
+        sucursal_canon="VILLAS_DEL_REY" if branch_id == 1 else f"BRANCH_{branch_id}",
         source_upload_id=21499,
         valid_from=date(2026, 9, 24),
         valid_to=date(2026, 10, 8),
@@ -36,19 +36,20 @@ def mapping():
     )
 
 
-def catalog():
+def catalog(branch_id=1):
     return SimpleNamespace(
-        sucursal_id=1, sucursal_canon="VILLAS_DEL_REY",
+        sucursal_id=branch_id,
+        sucursal_canon="VILLAS_DEL_REY" if branch_id == 1 else f"BRANCH_{branch_id}",
         is_track_active=True,
     )
 
 
-def branch():
-    return SimpleNamespace(sucursal_id=1, operational_status="ACTIVA")
+def branch(branch_id=1):
+    return SimpleNamespace(sucursal_id=branch_id, operational_status="ACTIVA")
 
 
-def fact(day, cost=1):
-    m = mapping()
+def fact(day, cost=1, branch_id=1):
+    m = mapping(branch_id)
     return SimpleNamespace(
         customer_id=service.CUSTOMER_ID,
         campaign_key=m.campaign_key,
@@ -71,11 +72,17 @@ def prepare(monkeypatch, *, global_=False, mappings=None, facts=None,
         service, "load_visible_marketing_branches",
         lambda _access: ([], tuple(permitted), {}),
     )
+    if global_ and permitted == (1,):
+        permitted = tuple(range(1, 27))
     if mappings is None:
-        mappings = [(mapping(), catalog(), branch())]
+        mappings = [
+            (mapping(i), catalog(i), branch(i))
+            for i in (range(1, 27) if global_ else (1,))
+        ]
     if facts is None:
         facts = [
-            (fact(date(2026, 10, day)), mapping(), catalog())
+            (fact(date(2026, 10, day), branch_id=i), mapping(i), catalog(i))
+            for i in (range(1, 27) if global_ else (1,))
             for day in range(1, 9)
         ]
     def scoped_mappings(ids):
@@ -95,7 +102,7 @@ def prepare(monkeypatch, *, global_=False, mappings=None, facts=None,
             return ledger
         return [
             SimpleNamespace(report_date=date(2026,10,day),
-                            currency_code="MXN", cost=Decimal("2.00"))
+                            currency_code="MXN", cost=Decimal("27.00"))
             for day in range(1,9)
         ]
     def validate(*args, **kwargs):
@@ -106,7 +113,15 @@ def prepare(monkeypatch, *, global_=False, mappings=None, facts=None,
     monkeypatch.setattr(service, "_load_scoped_fact_rows", scoped_facts)
     monkeypatch.setattr(service, "_load_global_ledger_rows", ledger_rows)
     monkeypatch.setattr(service, "_validate_historical_source", validate)
-    monkeypatch.setattr(service, "_load_approved_manifest", lambda: {"id": "test"})
+    approved_rows = [
+        ["Campaign", "Group", mapping(i).campaign_key,
+         mapping(i).ad_group_key, mapping(i).sucursal_canon, i, "0.00"]
+        for i in range(1, 27)
+    ]
+    monkeypatch.setattr(
+        service, "_load_approved_manifest",
+        lambda: {"id": "test", "rows": approved_rows},
+    )
     monkeypatch.setattr(
         service, "db",
         SimpleNamespace(session=SimpleNamespace(connection=lambda: object())),
@@ -180,6 +195,8 @@ def test_missing_historical_day_fails_closed(monkeypatch):
     ("valid_to", date(2026,10,12)),
     ("source_upload_id", 100),
     ("sucursal_canon", "VILLA_VERDE"),
+    ("campaign_key", "name:" + "f" * 64),
+    ("ad_group_key", "name:" + "f" * 64),
 ])
 def test_unauthorized_mapping_fails_closed(monkeypatch, field, value):
     m = mapping()
@@ -218,8 +235,8 @@ def test_global_read_reconciles_without_double_counting(monkeypatch):
     calls = prepare(monkeypatch, global_=True)
     result = read(global_=True)
     assert result["status"] == "complete"
-    assert result["account_cost_observed"] == 16.0
-    assert result["scope_attributed_cost"] == 8.0
+    assert result["account_cost_observed"] == 216.0
+    assert result["scope_attributed_cost"] == 208.0
     assert result["unassigned_cost_observed"] == 8.0
     assert result["account_reconciled"] is True
     assert calls["ledger"] == calls["validation"] == 1
@@ -251,3 +268,23 @@ def test_wrong_fact_source_fails_closed(monkeypatch):
 def test_invalid_dates_rejected():
     with pytest.raises(ValueError, match="Rango M5"):
         read(month_start=date(2026,10,2), cutoff=date(2026,10,1))
+
+
+def test_global_requires_all_26_exactly_approved_mappings(monkeypatch):
+    mappings = [
+        (mapping(i), catalog(i), branch(i))
+        for i in range(1, 26)
+    ]
+    calls = prepare(monkeypatch, global_=True, mappings=mappings)
+    result = read(global_=True)
+    assert result["status"] == "pending_mapping"
+    assert result["rows"] == []
+    assert calls["ledger"] == 0
+
+
+def test_regional_partial_mapping_is_not_exposed_as_complete(monkeypatch):
+    calls = prepare(monkeypatch, permitted=(1, 2))
+    result = read(branch_ids=(1, 2))
+    assert result["status"] == "pending_mapping"
+    assert result["scope_attributed_cost"] is None
+    assert calls["ledger"] == calls["validation"] == 0
