@@ -203,3 +203,14 @@ def test_failed_attempt_requires_explicit_reconciliation(monkeypatch, error, sta
     assert len(outcomes) == 1
     assert outcomes[0]["status"] == status
     assert outcomes[0]["attempt_number"] == 1
+
+
+@pytest.fixture(autouse=True)
+def mock_shared_contact_gate_for_legacy_unit_tests(monkeypatch):
+    """Legacy unit fixtures use SQLite or isolated session stubs.
+
+    PostgreSQL concurrency and contact admissions are verified separately
+    in test_marketing_campaign_v2_quota_cross_campaign_gate_pg.py.
+    """
+    monkeypatch.setattr(svc, "acquire_campaign_v2_contact_gate", lambda session: None)
+    monkeypatch.setattr(svc, "verify_outbound_contact_admission", lambda **kwargs: None)
