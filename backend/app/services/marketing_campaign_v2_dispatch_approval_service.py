@@ -48,12 +48,15 @@ def _timestamp(value: datetime | None) -> datetime:
 
 
 def _validate_confirmation(
-    expected_dispatch_fingerprint: Any, expected_recipients: Any,
-    expected_total_mxn: Any, actor_user_id: Any,
+    expected_dispatch_fingerprint: Any, expected_quote_fingerprint: Any,
+    expected_recipients: Any, expected_total_mxn: Any, actor_user_id: Any,
 ) -> tuple[str, int, Decimal, int]:
     if (not isinstance(expected_dispatch_fingerprint, str)
             or re.fullmatch(r"[0-9a-f]{64}", expected_dispatch_fingerprint) is None):
         raise CampaignV2ApprovalValidationError("Fingerprint SHA256 exacto requerido.")
+    if (not isinstance(expected_quote_fingerprint, str) or
+            re.fullmatch(r"[0-9a-f]{64}", expected_quote_fingerprint) is None):
+        raise CampaignV2ApprovalValidationError("Huella exacta de cotización requerida.")
     if type(expected_recipients) is not int or expected_recipients <= 0:
         raise CampaignV2ApprovalValidationError("Confirma un volumen entero positivo.")
     if (not isinstance(expected_total_mxn, str)
@@ -61,8 +64,8 @@ def _validate_confirmation(
         raise CampaignV2ApprovalValidationError("Confirma monto MXN con dos decimales.")
     if type(actor_user_id) is not int or actor_user_id <= 0:
         raise CampaignV2ApprovalValidationError("Actor inválido.")
-    return (expected_dispatch_fingerprint, expected_recipients,
-            Decimal(expected_total_mxn), actor_user_id)
+    return (expected_dispatch_fingerprint, expected_quote_fingerprint,
+            expected_recipients, Decimal(expected_total_mxn), actor_user_id)
 
 
 def _assess_scopes(plan: Any, *, session: Any, timestamp: datetime):
@@ -107,12 +110,13 @@ def _reserve_locked(
     session: Any, timestamp: datetime, quantities: dict,
     evidence_ids: dict, quota_rows: dict,
 ) -> dict[str, Any]:
-    expected_fingerprint, expected_count, expected_cost, actor = confirmation
+    expected_fingerprint, expected_quote, expected_count, expected_cost, actor = confirmation
     if plan.dispatch_fingerprint != expected_fingerprint:
         raise CampaignV2ApprovalConflictError("Fingerprint cambió; vuelve a revisar.")
     if len(plan.sendable_phones) != expected_count:
         raise CampaignV2ApprovalConflictError("Volumen cambió; vuelve a revisar.")
-    if (budget["status"] != "COMPLETE" or budget["currency"] != "MXN" or
+    if (budget["quote_fingerprint"] != expected_quote or
+            budget["status"] != "COMPLETE" or budget["currency"] != "MXN" or
             budget["sendable_recipients"] != expected_count or
             budget["total_estimated_mxn"] is None or
             Decimal(budget["total_estimated_mxn"]) != expected_cost):
@@ -171,6 +175,7 @@ def _reserve_locked(
         approved_estimated_mxn=expected_cost,
         manifest_json={
             "version": "D2A_ALL_READY_V1",
+            "quote_fingerprint": expected_quote,
             "basis": "OPERATOR_ATTESTED_NOT_META_VERIFIED",
             "send_authorized": False,
             "schedule_mode": plan.mode,
@@ -193,6 +198,7 @@ def _reserve_locked(
     return {
         "approval_id": int(approval.id), "campaign_id": int(plan.campaign_id),
         "dispatch_fingerprint": plan.dispatch_fingerprint,
+        "quote_fingerprint": expected_quote,
         "approved_recipients": expected_count,
         "approved_estimated_mxn": format(expected_cost, ".2f"),
         "currency": "MXN", "approved_at": timestamp.isoformat(),
@@ -206,7 +212,7 @@ def _reserve_locked(
 
 def approve_dispatch_reservation(
     *, campaign_id: int, template_id: int, expected_dispatch_fingerprint: Any,
-    expected_recipients: Any, expected_total_mxn: Any, actor_user_id: Any,
+    expected_quote_fingerprint: Any, expected_recipients: Any, expected_total_mxn: Any, actor_user_id: Any,
     allowed_sucursal_keys: Any, session: Any | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -216,8 +222,8 @@ def approve_dispatch_reservation(
     if type(template_id) is not int or template_id <= 0:
         raise CampaignV2ApprovalValidationError("template_id inválido.")
     confirmation = _validate_confirmation(
-        expected_dispatch_fingerprint, expected_recipients,
-        expected_total_mxn, actor_user_id,
+        expected_dispatch_fingerprint, expected_quote_fingerprint,
+        expected_recipients, expected_total_mxn, actor_user_id,
     )
     timestamp = _timestamp(now)
     active = session if session is not None else db.session
