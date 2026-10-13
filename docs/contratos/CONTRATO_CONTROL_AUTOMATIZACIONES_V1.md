@@ -46,7 +46,7 @@ Ficha con descripción, propósito, fuente de datos, habilitación efectiva, hor
 
 Separar cada solicitud de ejecución de sus intentos. Mostrar origen PROGRAMADO / MANUAL / REINTENTO / RECUPERACIÓN; persona solicitante si aplica; actor worker; parámetros tipados; corte/alcance; timestamps UTC con representación Tijuana; duración; resultado; errores sanitizados; decisiones de bloqueo; correlación con tablas existentes y enlaces internos a evidencias.
 
-Histórico paginado, filtros por rango, estado y job. Los resultados de los jobs existentes se consultarán desde sus tablas reales; está prohibido inventar SUCCESS retrospectivos cuando solo haya logs parciales.
+Histórico paginado, filtros por rango, estado y job. Los resultados de los jobs existentes se consultarán desde sus tablas reales; está prohibido inventar SUCCESS retrospectivos cuando solo haya logs parciales. Los eventos FAILED, PARTIAL o TIMED_OUT enlazan a un diagnóstico seguro de la corrida concreta, si existe; las ejecuciones antiguas sin diagnóstico persistido deben marcarse como `LOG_NOT_AVAILABLE`, no fabricarse a partir del último error de otro run.
 
 ### 3.4 Semáforo global de actualización de datos en cada pantalla (M1, transversal)
 
@@ -90,6 +90,27 @@ El cálculo del **corte esperado exigible** es responsabilidad backend y depende
 
 Cada botón muestra confirmación con job, business_date, alcance, dependencias, efectos y posibilidad de reutilizar un resultado. El estado inicial visible tras aceptar es SOLICITADO/EN_COLA; solo el worker puede marcar ÉXITO.
 
+### 3.6 «Ver último error» — diagnóstico inmediato (M1, lectura)
+
+**Necesidad operativa:** en las filas del Control de Automatizaciones que presenten fallo, exponer un botón discreto **«Ver último error»** (`alert-circle` / `file-text`) para consultar inmediatamente qué falló sin entrar por SSH ni buscar manualmente entre logs de varios contenedores.
+
+**Comportamiento UX:**
+1. Al pulsarlo, abrir un diálogo o panel lateral, no navegar fuera del módulo: cabecera `Job / Fecha de negocio / Estado / Hora local / Último intento # / run_id`.
+2. Mostrar primero **«Causa del fallo»** (`error_code`, resumen legible y etapa/fuente, si se conoce). Debajo: fragmento de log relacionado, con timestamp, severidad, texto técnico saneado y una marca visible de truncamiento si corresponde.
+3. Acciones de solo lectura: **Copiar diagnóstico** (texto saneado con run_id/correlation_id y fecha) y **Ver historial** (acceso a todos los intentos del mismo job/corte). Sin disparar reintentos ni ejecutar comandos desde la ventana del log.
+4. El error que se muestra debe corresponder a **la ejecución más reciente fallida pertinente al job y alcance seleccionado**. La interfaz debe informar si se trata de un fallo ACTIVO o un fallo HISTÓRICO que ya fue resuelto; un SUCCESS posterior no puede heredar estado rojo por un error antiguo. Orden por tiempo y desempate por ID; nunca tomar el último error de otro worker, branch_id o periodo.
+5. Si el semáforo de una pantalla de negocio está amarillo/rojo por **falta de corte** pero no hubo run FAILED, ofrecer **«Ver diagnóstico»** con fuente pendiente y motivo (`NO_SNAPSHOT`, `NOT_EXECUTED`, `WAITING_DEPENDENCY`, `UNKNOWN`, etc.). No inventar un «último error» técnico. En pantallas de negocio, solo usuarios con permiso de lectura técnica pueden abrir el log; los demás ven explicación de frescura sin datos sensibles.
+6. Si el log no existe, el diagnóstico está fuera de retención o la ejecución es legacy sin instrumentación, decir explícitamente `No hay log registrado para esta ejecución` y ofrecer metadatos/correlación disponibles. Nunca mostrar un log no atribuible para llenar el espacio.
+
+**Contenido seguro del diagnóstico:** `run_id`, `job_key`, `worker_key`, `business_date`, `scope_key` autorizado, `status`, `trigger_source`, `attempt_number`, `started_at`, `finished_at`, `failed_stage`, `error_code`, `sanitized_message`, `correlation_id`, `log_lines` limitadas y `truncated`. Stack trace técnico **solo saneado** y exclusivamente para permiso de diagnóstico. Por defecto devolver un máximo de **200 líneas o 32 KiB**, lo que se alcance primero. No retornar stdout completo ni contenidos raw de proveedores.
+
+**Captura y persistencia:** preferir excepción/resultado estructurado generado por el propio worker y referenciado por `run_id`; guardar un extracto saneado de las últimas líneas de contexto relevantes, no un volcado indiscriminado de `docker logs`. El log puede originarse en `LOGGER.exception`, en auditorías ya persistidas o en adaptadores de jobs; hay que instrumentar progresivamente sin bloquear el worker ni cambiar la ejecución productiva. Si falla la persistencia del diagnóstico, el job mantiene su resultado real y se registra una advertencia local, sin marcar falso éxito. La retención del detalle técnico será configurable (propuesta inicial 30 días, a ratificar), conservando por más tiempo el código/resultado y la auditoría requerida.
+
+**Seguridad obligatoria:** sanitización en backend **antes de almacenar y antes de entregar** (defensa en profundidad); eliminar contraseñas, `Authorization`, cookies, JWT, API keys, datos personales como teléfonos y correos, URLs firmadas, payloads CRM y rutas confidenciales. No confiar en una regex única: logging estructurado y allowlists de campos cuando sea posible. El endpoint exige JWT, permiso explícito `AUTOMATIONS_LOG_READ` restringido inicialmente a SISTEMAS/ADMICORP y validación de alcance por sucursal; no equivale a la autorización de ver un semáforo ni a poder ejecutar un job. Auditar apertura/consulta y aplicar paginación/límites/rate-limit. No dar al backend acceso al socket Docker ni ejecutar shell para leer logs.
+
+**Resultado de M1:** la UI y endpoint de diagnóstico funcionan con evidencias realmente disponibles, mostrando ausencia con honestidad. La cobertura técnica de cada job se certifica de forma incremental. No se anuncia «log del último error disponible» para todos los schedulers hasta haber probado su captura, redacción y asociación a corrida.
+
+
 ## 4. Semántica de estados (tres ejes obligatorios)
 
 **Worker:** HEALTHY, DEGRADED, UNREACHABLE, DISABLED, UNKNOWN. Se calcula con latido persistido y plazo configurado; no depende de que el navegador vea un contenedor Docker. Sin instrumentación no se puede afirmar HEALTHY: usar UNKNOWN.
@@ -118,7 +139,7 @@ Ejemplo obligatorio: Funnel Venta Nueva solo es completo en un día con intersec
 - Visualización: usuarios de ADMICORP y SISTEMAS mediante autorización explícita validada en backend. Ocultar menú a otros roles no es control suficiente.
 - Solicitar ejecución manual: solo ADMICORP con permiso específico AUTOMATIONS_RUN; no derivarlo del rol genérico ADMINISTRADOR. Permiso distinto AUTOMATIONS_REPROCESS para reproceso futuro.
 - Autorizar cada solicitud por acción, job y scope; resolver identidad del JWT en servidor, sin aceptar triggered_by del cliente.
-- Registrar aceptación, denegación, duplicado, cambios de estado, intentos y decisiones de prioridad. Errores técnicos sanitizados al frontend; logs detallados solo en backend.
+- Registrar aceptación, denegación, duplicado, cambios de estado, intentos y decisiones de prioridad. Errores técnicos sanitizados al frontend; diagnósticos ampliados solo en el endpoint protegido de §3.6 con permiso AUTOMATIONS_LOG_READ, alcance validado y redacción antes de persistencia y entrega.
 - Confirmación obligatoria en acciones manuales; límites/rate-limit, protección CSRF/Origin según esquema de autenticación realmente utilizado y validación estricta de entrada.
 - Catálogo de acciones manuales permitido por defecto: vacío. La primera habilitación depende de auditoría y pruebas de cada adaptador.
 
@@ -133,6 +154,7 @@ Nuevos recursos PostgreSQL, exclusivamente con migraciones Alembic:
 - system_job_runs: id, job_key, worker_key, business_date, scope_key, slot_key, trigger_source, request_id nullable, started_at, finished_at, status, attempt_number, duration_ms, upstream_run_ref, output_ref, counters_json, error_code, sanitized_error, created_at.
 - system_job_requests: id, job_key, action, business_date, scope_key, typed_parameters_json, requested_by_user_id, idempotency_key, status, queued_at, claimed_at, finished_at, worker_key, denial_or_block_reason, last_run_id. Correlación y unicidad defensiva por operación lógica; no deduplicar solicitudes de distintos usuarios sin una respuesta explícita.
 - system_job_audit_events: event_id, request_id nullable, run_id nullable, actor_user_id nullable, event_type, decision, reason_code, created_at, metadata_json sanitizada.
+- system_job_diagnostics (si los artefactos existentes no cubren la necesidad): id, run_id FK, failed_stage, error_code, sanitized_message, correlation_id, sanitized_excerpt_json/text limitado, log_truncated, created_at, expires_at, last_access_at opcional. Aislar fragmentos con permisos y retención diferentes de la auditoría. No usar un contenedor de texto arbitrario sin redacción en origen.
 
 Definir CHECK constraints, FKs, índices por job/status/date y estrategia de retención de metadatos sin borrar auditorías críticas ni evidencias de Warehouse. Los registros nuevos no reemplazan ni reescriben las tablas del dominio; guardan referencias a ellas.
 
@@ -150,6 +172,8 @@ Asegurar UTC en timestamps persistidos y business_date/calendarios en America/Ti
 - GET /api/automation-control/jobs → catálogo, permisos/capacidades efectivas, filtros y paginación.
 - GET /api/automation-control/jobs/<job_key> → configuración efectiva, dependencias y detalle.
 - GET /api/automation-control/jobs/<job_key>/runs → historial paginado, errores saneados y evidencias.
+- GET /api/automation-control/jobs/<job_key>/last-error?business_date=...&scope_key=... → diagnóstico sanitizado del último intento fallido pertinente (activo o histórico identificado), o razón explícita de ausencia; requiere AUTOMATIONS_LOG_READ. Resolver el scope desde la autorización backend, no confiar en scope_key arbitrario del cliente.
+- GET /api/automation-control/jobs/<job_key>/runs/<run_id>/diagnostic → log saneado y correlación del intento indicado, con máximo 200 líneas/32 KiB y marca de truncamiento; requiere AUTOMATIONS_LOG_READ y acceso al job/scope.
 - GET /api/automation-control/requests/<request_id> → avance de una solicitud manual.
 - POST /api/automation-control/jobs/<job_key>/requests → body tipado: action, business_date, scope permitido, idempotency_key, confirmación. Responde 202 con request_id y estado, o 409 para conflicto real, o 403 ante denegación. No despacha trabajo pesado en HTTP.
 
@@ -163,6 +187,8 @@ Angular standalone en archivos separados .ts / .html / .css. Reglas, acciones, p
 
 Resumen compacto y adaptable a 26+ sucursales sin tarjetas gigantes; lista agrupada por worker/dominio y detalle con tabs Estado, Ejecuciones, Fuentes y Auditoría. Los botones se deshabilitan mostrando el motivo concreto, no desaparecen sin explicación para perfiles autorizados de lectura. Refresh controlado con backoff para no saturar Flask/PostgreSQL.
 
+**Diálogo técnico M1:** componente standalone `automation-error-detail-dialog` en TS/HTML/CSS, accesible desde la fila del job y desde los semáforos de módulos solo si el rol tiene permiso explícito; botón «Copiar diagnóstico» con datos saneados, estado de error/ausencia de registros, y enlace al historial. Presentación legible en móvil y desktop.
+
 **Componente transversal M1:** `frontend/src/app/shared/data-freshness-indicator/` con `data-freshness-indicator.component.ts`, `.html` y `.css`, y servicio tipado compartido. Las pantallas existentes lo integran por etapas sin duplicar reglas: en la vista del Funnel, el semáforo toma el corte común de sus cinco fuentes; en Track, las fuentes concretas de cada mart/panel; en otros módulos, el adaptador específico. El backend autoriza el scope y entrega la decisión, el TS presenta estado y detalle, el HTML únicamente estructura y bindings. No reescribir pantallas completas para agregar el indicador.
 
 ## 10. Fases e hitos independientes
@@ -170,6 +196,7 @@ Resumen compacto y adaptable a 26+ sucursales sin tarjetas gigantes; lista agrup
 ### M1 — Observabilidad (solo lectura)
 - Auditoría del inventario: jobs reales, propiedad, schedules efectivos, tablas de evidencia, dependencias, salud y cobertura.
 - Registro/catálogo, API GET, Angular resumen/detalle/historial y lectura de fuentes.
+- Botón «Ver último error» y diálogo de diagnóstico seguro en jobs con error. Auditoría por job de la disponibilidad real de errores estructurados; donde no existan, estado explícito de log no disponible y plan de instrumentación sin modificar las reglas de ejecución.
 - Incluir semáforo transversal (§3.4) mediante adaptadores de frescura y componente compartido, con adopción incremental por pantallas que consuman datos programados y matriz `pantalla → datasets → jobs → regla de corte exigible`.
 - Sin POST de ejecución ni cambios de comportamiento en schedulers productivos.
 - PASS requiere demostrar NO false-green: worker sano + fuente incompleta = LAGGING/LATE según SLA; reporte de corte al día conforme a su propia regla = UP_TO_DATE, aun si el dato es de ayer.
@@ -208,6 +235,10 @@ Cada fase pasa por rama/PR, pruebas, revisión y merge por separado. Ninguna fas
 - AC17: antes del horario/SLA de publicación no se genera alarma prematura; umbrales de ROJO y feriados/periodicidades se definen por dataset.
 - AC18: para datasets compuestos el color obedece a la intersección de cortes completos requeridos; no se infiere éxito del scheduler ni se mezcla scope de sucursales.
 - AC19: error de API, falta de evidencia o permisos limitados nunca generan falso verde; la respuesta para usuarios no administradores filtra detalles, y pruebas de accesibilidad verifican texto además del color.
+- AC20: un job con FAILED muestra «Ver último error» y abre un diálogo con la corrida exacta, causa, fecha, etapa, extracto saneado, run_id y acción Copiar diagnóstico.
+- AC21: dos fallos de jobs/cortes/scopes distintos no cruzan logs; un SUCCESS posterior al fallo se reconoce como recuperación y no produce falsa alerta activa.
+- AC22: los permisos del semáforo no conceden acceso a logs técnicos; 403 en API directa sin AUTOMATIONS_LOG_READ o sin alcance autorizado; nunca aparecen tokens, secretos ni PII en persistencia, respuesta o portapapeles.
+- AC23: una ejecución legacy, log vencido o persistencia fallida muestra estado diagnóstico no disponible sin sustituirlo por un log ajeno; consultas se limitan a 200 líneas/32 KiB y no bloquean Gunicorn.
 
 ## 12. Exclusiones y decisiones pendientes
 
@@ -218,7 +249,7 @@ Cada fase pasa por rama/PR, pruebas, revisión y merge por separado. Ninguna fas
 ## 13. Archivos objetivo estimados (no creados por el contrato)
 
 - backend/app/routes/automation_control_routes.py: API segura y de solo lectura en M1; POST diferido a M2.
-- backend/app/services/automation_control/: catálogo y adaptadores de salud/frescura; cola y dispatcher solo en M2.
+- backend/app/services/automation_control/: catálogo y adaptadores de salud/frescura/diagnósticos; sanitización, correlación y cuotas de lectura de logs en M1, cola y dispatcher solo en M2.
 - backend/app/models/automation_control.py y backend/migrations/versions/: persistencia nueva mediante Alembic (fase correspondiente).
 - backend/app/warehouse/scheduler/track_scheduler_worker.py, backend/app/warehouse/scheduler/reports_scheduler_worker.py, backend/app/services/marketing_scheduler_worker.py, backend/app/routine_control/scheduler/routine_control_scheduler_worker.py y backend/app/services/ticket_attachment_cleanup_worker.py: instrumentación mínima progresiva, sin cambiar reglas en M1.
 - frontend/src/app/automation-control/: componentes .ts/.html/.css y service separados.
