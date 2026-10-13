@@ -10,11 +10,12 @@
 2. El operador autorizado consulta `GET /api/marketing/campaigns-v2/{campaign_id}/dispatch/execution`, que muestra el manifiesto y `manifest_digest`.
 3. `POST /api/marketing/campaigns-v2/{campaign_id}/dispatch/authorize` exige `approval_id`, `expected_manifest_digest`, `expected_ready_recipients` y `confirm_dispatch: true`. Revalida plan, cotización, quota y reservas antes de crear **una sola** autorización por aprobación. No crea campañas iVentas.
 4. Cada envío es deliberadamente individual: `POST /api/marketing/campaigns-v2/{campaign_id}/dispatch/execute` exige `execution_id`, `child_id` y `expected_manifest_digest`. Solo procesa el siguiente child `READY` en orden y con snapshots inalterados.
-5. Para ejecutar se requieren simultáneamente `CAMPAIGN_V2_PROVIDER_SEND_ENABLED=true` y `CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED=true`. El segundo es nuevo y está **apagado por defecto** en `backend/app/config.py`. El frontend no puede establecerlos por payload.
-6. Las rutas requieren JWT, permiso `can_manage_dispatch_config`, `can_send_campaigns` y alcance `is_global`, comprobados en backend. Los gerentes sin estos permisos reciben 403.
-7. El claim de ejecución `IN_FLIGHT` y el cambio del child a `SUBMITTING` ocurren en una única transacción durable antes de HTTP. Una caída entre claim y respuesta no permite retry automático. Una aceptación `SUBMITTED` habilita únicamente el siguiente child tras otra validación; un fallo o resultado ambiguo deja la ejecución `REVIEW_REQUIRED`.
-8. El servicio de retry heredado rechaza cualquier child cuya campaña tenga aprobación gobernada. El submit heredado ya estaba bloqueado desde D2b; no se cambian campañas históricas sin aprobación.
-9. Antes de enviar se revalidan vigencia de aprobación/reserva, plan y tarifa, evidencia de canal/portafolio y actividad externa. Los intentos previos de **la misma campaña** se excluyen exclusivamente del chequeo de nueva actividad externa, no del control de historial de children.
+5. **Exclusividad web:** con el modo gobernado ON, las rutas de submit y retry legado retornan HTTP 423 incluso si su kill switch está ON; no se abren campañas antiguas accidentalmente. Cuando el modo gobernado está OFF, conservan su comportamiento original.
+6. Para ejecutar se requieren simultáneamente `CAMPAIGN_V2_PROVIDER_SEND_ENABLED=true` y `CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED=true`. El segundo es nuevo y está **apagado por defecto** en `backend/app/config.py`. El frontend no puede establecerlos por payload.
+7. Las rutas requieren JWT, permiso `can_manage_dispatch_config`, `can_send_campaigns` y alcance `is_global`, comprobados en backend. Los gerentes sin estos permisos reciben 403.
+8. El claim de ejecución `IN_FLIGHT` y el cambio del child a `SUBMITTING` ocurren en una única transacción durable antes de HTTP. Una caída entre claim y respuesta no permite retry automático. Una aceptación `SUBMITTED` habilita únicamente el siguiente child tras otra validación; un fallo o resultado ambiguo deja la ejecución `REVIEW_REQUIRED`.
+9. El servicio de retry heredado rechaza cualquier child cuya campaña tenga aprobación gobernada. El submit heredado ya estaba bloqueado desde D2b; no se cambian campañas históricas sin aprobación.
+10. Antes de enviar se revalidan vigencia de aprobación/reserva, plan y tarifa, evidencia de canal/portafolio y actividad externa. Los intentos previos de **la misma campaña** se excluyen exclusivamente del chequeo de nueva actividad externa, no del control de historial de children.
 
 ### Restricciones y pendientes
 
