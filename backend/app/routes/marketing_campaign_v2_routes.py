@@ -1306,12 +1306,14 @@ def campaign_v2_dispatch_approval_endpoint(campaign_id: int):
         _require_campaign_v2_send(access)
         payload = _parse_payload({
             "template_id", "expected_dispatch_fingerprint",
+            "expected_quote_fingerprint",
             "expected_recipients", "expected_total_mxn",
         })
         row = approve_dispatch_reservation(
             campaign_id=campaign_id,
             template_id=payload.get("template_id"),
             expected_dispatch_fingerprint=payload.get("expected_dispatch_fingerprint"),
+            expected_quote_fingerprint=payload.get("expected_quote_fingerprint"),
             expected_recipients=payload.get("expected_recipients"),
             expected_total_mxn=payload.get("expected_total_mxn"),
             actor_user_id=int(user.id),
@@ -1323,7 +1325,7 @@ def campaign_v2_dispatch_approval_endpoint(campaign_id: int):
         return _error(str(exc), 403)
     except (MarketingCampaignV2RouteValidationError, CampaignV2ApprovalValidationError) as exc:
         return _error(str(exc), 400)
-    except CampaignV2ApprovalConflictError as exc:
+    except (CampaignV2ApprovalConflictError, CampaignV2BudgetValidationError) as exc:
         return _error(str(exc), 409)
     except Exception:
         db.session.rollback()
