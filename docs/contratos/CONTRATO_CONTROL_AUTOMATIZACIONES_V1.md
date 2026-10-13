@@ -48,7 +48,41 @@ Separar cada solicitud de ejecución de sus intentos. Mostrar origen PROGRAMADO 
 
 Histórico paginado, filtros por rango, estado y job. Los resultados de los jobs existentes se consultarán desde sus tablas reales; está prohibido inventar SUCCESS retrospectivos cuando solo haya logs parciales.
 
-### 3.4 Botones de acción
+### 3.4 Semáforo global de actualización de datos en cada pantalla (M1, transversal)
+
+**Decisión funcional:** toda pantalla de Suite Ultra que presente información alimentada o regenerada automáticamente por uno o varios jobs debe mostrar un indicador **pequeño, reutilizable y consistente**, cerca del título o junto a la fecha del reporte. No se limita a la página Control de Automatizaciones: aplica a Funnel de Venta Nueva, Track/BI, Aforo/Asistencia, reportes automáticos, Control de Rutinas y cualquier otra vista vinculada a un scheduler, según auditoría de dependencias. No se incluye por esta regla una pantalla sin datos automatizados (p. ej., una pantalla de captura manual) ni un worker de mantenimiento sin dataset visual.
+
+**Semántica requerida (evaluación por job/dataset, no por la hora de la última ejecución):**
+
+| Color / etiqueta | Condición |
+|---|---|
+| 🟢 **Al día** | La **última fecha de negocio completa** es igual o posterior al **corte esperado exigible ahora** por el contrato de ese dataset. |
+| 🟡 **Pendiente / 1 corte de atraso** | Ya venció el corte esperado del dataset, hay evidencia válida de un corte anterior y falta exactamente un corte exigible, o una fuente requerida de ese corte está incompleta. Debe indicar cuál. |
+| 🔴 **Atrasado / Error** | Supera la tolerancia de atraso definida para ese dataset, faltan dos o más cortes exigibles por política de referencia, o hay fallo crítico que impide entregar el dato exigible. La tolerancia por dataset tiene precedencia; no usar 2 días como regla universal. |
+| ⚪ **Sin información / Aún no vence / Deshabilitado** | No hay evidencia verificable, no es exigible todavía el corte siguiente, fuente deshabilitada o aplicación no puede consultar el indicador. Diferenciar estas causas en el texto; no fingir verde ni llamar error a algo aún no exigible. |
+
+**Ejemplos obligatorios con hora de negocio America/Tijuana:**
+- Hoy **13/10**, regla del reporte = hasta **12/10**, último corte completo **12/10** → **verde**.
+- Hoy **13/10**, regla del reporte = hasta **13/10**, corte **13/10** ya exigible y último completo **12/10** → **amarillo**.
+- Hoy **13/10**, próxima captura que produciría el **13/10** está programada para la noche y aún **no ha vencido su SLA** → último corte exigible **12/10**: **verde** si existe ese corte. No amarillo por anticipación.
+- Hoy **13/10**, regla exige **13/10** pero la evidencia completa solo llega al **11/10** y excede la tolerancia contractual → **rojo**.
+- Un proceso reporta SUCCESS pero solo cuatro de cinco fuentes del Funnel coinciden → **amarillo/rojo según SLA**, **nunca verde**.
+
+El cálculo del **corte esperado exigible** es responsabilidad backend y depende de calendario de negocio, zona horaria, hora de cierre/publicación, periodicidad (cada hora/diaria/semanal/mensual), margen de gracia, días no operativos si aplican, dependencias y política de SLA. Un reporte de ayer no es inherentemente atrasado; uno con fecha de hoy tampoco es inherentemente completo. Para los reportes que permiten correcciones retroactivas, el adaptador conserva evidencia de revisión/canonicalidad sin confundir modificación reciente con fecha de negocio reciente.
+
+**Contrato de datos mínimo del semáforo (JSON conceptual):**
+- `module_key`, `dataset_key`, `job_key`, `status` (`UP_TO_DATE`, `LAGGING`, `LATE`, `NOT_DUE`, `UNKNOWN`, `DISABLED`).
+- `expected_business_date` (corte exigible al consultar), `latest_complete_business_date`, `next_due_at`, `due_at`, `checked_at`, `timezone` y `reason_code`.
+- `sources`: resumen autorizado por fuente con `expected_business_date`, `latest_complete_business_date`, `complete` y `reason_code`; únicamente las fuentes necesarias para explicar incompletitud. No exponer datos personales ni detalles administrativos a roles que solo ven una pantalla de negocio.
+- `label` breve y `detail` descriptivo sin secretos. El frontend no inferirá estado a partir de `finished_at`, del color del worker o de comparaciones ad hoc contra `new Date()`.
+
+**Contrato visual:** componente standalone compartido de Angular en archivos separados TS/HTML/CSS, sin lógica de negocio en HTML. Un punto cromático de ~8–10 px y etiqueta corta «Al día», «Pendiente», «Atrasado» o «Sin datos», con tooltip/popover accesible: «Esperado: 13/oct; disponible: 12/oct; fuente pendiente: Ventas Nuevos Socios». Acompañar el color con icono/texto, `aria-label` legible y estado de carga neutro; no depender solo del color. Adaptable a móviles, sin ocupar una tarjeta grande, sin cambiar el ancho de tablas ni causar scroll lateral.
+
+**Varias fuentes en una pantalla:** un semáforo único en cabecera representa el **último corte completo conjunto** solamente cuando el contenido es un indicador compuesto que exige simultáneamente esas fuentes; si la pantalla mezcla widgets independientes se coloca un semáforo pequeño por bloque/dataset, evitando un verde global engañoso. La política de agregación se declara por pantalla. Los distintos alcances por sucursal/región/corporativo mantienen su scope y permisos: no extrapolar la frescura de una sucursal a toda la empresa.
+
+**Funcionamiento:** vista de solo lectura; carga al entrar y refresco moderado/caché con TTL y invalidación por finalización; consultas eficientes agrupadas (evitar N+1 por 26 sucursales). Ante API fallida, indicador gris con «No se pudo verificar», nunca conservar verde indefinidamente. Click o tooltip puede llevar al detalle de ejecución para usuarios con permiso de Control de Automatizaciones; otros usuarios solo ven datos de frescura pertinentes a su módulo.
+
+### 3.5 Botones de acción
 
 - **Ejecutar ahora:** solicitar un job declarado manualmente habilitado e idempotente. No equivale a ejecutar inmediatamente: valida reglas y encola para el worker dueño.
 - **Reintentar fallo:** conserva corte, parámetros y contexto verificable del intento fallido; genera nuevo intento ligado a la misma operación lógica.
@@ -62,7 +96,7 @@ Cada botón muestra confirmación con job, business_date, alcance, dependencias,
 
 **Ejecución/solicitud:** QUEUED, WAITING_WINDOW, WAITING_DEPENDENCY, CLAIMED, RUNNING, SUCCEEDED, PARTIAL, FAILED, SKIPPED_ALREADY_DONE, REJECTED, CANCELLED_BEFORE_START, TIMED_OUT y UNKNOWN_LEGACY. No convertir PARTIAL en éxito; reintentos y recuperaciones quedan correlacionados.
 
-**Frescura de datos:** UP_TO_DATE, INCOMPLETE, LATE, NOT_DUE, DISABLED, UNKNOWN. Cada adaptador define calendario de negocio, corte esperado y criterios de completitud. La evaluación considera la hora local y margen permitido; no señalar atraso antes del vencimiento del SLA del job.
+**Frescura de datos:** UP_TO_DATE, LAGGING, LATE, NOT_DUE, DISABLED, UNKNOWN. Cada adaptador define calendario de negocio, corte esperado, fecha exigible, fuentes necesarias, política de tolerancia y criterios de completitud. LAGGING representa pendiente/incompleto del corte exigible, LATE representa atraso o fallo crítico más allá de la tolerancia; el contrato visual se detalla en §3.4. INCOMPLETE se conserva como razón técnica de una o varias fuentes, no como séptimo color/estado del semáforo. La evaluación considera la hora local y margen permitido; no señalar atraso antes del vencimiento del SLA del job.
 
 Ejemplo obligatorio: Funnel Venta Nueva solo es completo en un día con intersección de cinco fuentes —iVentas, Meta, Venta Total, Ventas Nuevos Socios y KPI Desempeño—. Si cuatro alcanzan el 13/oct y una el 12/oct, mostrar último corte completo 12/oct, fuente faltante y NO marcar verde por tener el worker Marketing activo.
 
@@ -111,6 +145,7 @@ Asegurar UTC en timestamps persistidos y business_date/calendarios en America/Ti
 
 ## 8. API propuesta (bajo /api, autenticación JWT y guards backend)
 
+- GET /api/automation-control/freshness?module_key=...&scope=... → estado del semáforo por dataset autorizado, reusable por módulos, con cortes esperados/exigibles y fechas completas; no requiere permiso administrativo global para consultar el dataset que el usuario ya puede ver.
 - GET /api/automation-control/summary → resumen de salud/frescura.
 - GET /api/automation-control/jobs → catálogo, permisos/capacidades efectivas, filtros y paginación.
 - GET /api/automation-control/jobs/<job_key> → configuración efectiva, dependencias y detalle.
@@ -128,13 +163,16 @@ Angular standalone en archivos separados .ts / .html / .css. Reglas, acciones, p
 
 Resumen compacto y adaptable a 26+ sucursales sin tarjetas gigantes; lista agrupada por worker/dominio y detalle con tabs Estado, Ejecuciones, Fuentes y Auditoría. Los botones se deshabilitan mostrando el motivo concreto, no desaparecen sin explicación para perfiles autorizados de lectura. Refresh controlado con backoff para no saturar Flask/PostgreSQL.
 
+**Componente transversal M1:** `frontend/src/app/shared/data-freshness-indicator/` con `data-freshness-indicator.component.ts`, `.html` y `.css`, y servicio tipado compartido. Las pantallas existentes lo integran por etapas sin duplicar reglas: en la vista del Funnel, el semáforo toma el corte común de sus cinco fuentes; en Track, las fuentes concretas de cada mart/panel; en otros módulos, el adaptador específico. El backend autoriza el scope y entrega la decisión, el TS presenta estado y detalle, el HTML únicamente estructura y bindings. No reescribir pantallas completas para agregar el indicador.
+
 ## 10. Fases e hitos independientes
 
 ### M1 — Observabilidad (solo lectura)
 - Auditoría del inventario: jobs reales, propiedad, schedules efectivos, tablas de evidencia, dependencias, salud y cobertura.
 - Registro/catálogo, API GET, Angular resumen/detalle/historial y lectura de fuentes.
+- Incluir semáforo transversal (§3.4) mediante adaptadores de frescura y componente compartido, con adopción incremental por pantallas que consuman datos programados y matriz `pantalla → datasets → jobs → regla de corte exigible`.
 - Sin POST de ejecución ni cambios de comportamiento en schedulers productivos.
-- PASS requiere demostrar NO false-green: worker sano + fuente incompleta = INCOMPLETE.
+- PASS requiere demostrar NO false-green: worker sano + fuente incompleta = LAGGING/LATE según SLA; reporte de corte al día conforme a su propia regla = UP_TO_DATE, aun si el dato es de ayer.
 
 ### M2 — Ejecución manual segura
 - Migraciones y modelo duradero de solicitudes/intentos/locks/latidos.
@@ -165,6 +203,11 @@ Cada fase pasa por rama/PR, pruebas, revisión y merge por separado. Ninguna fas
 - AC12: ningún job destructivo, de envío masivo o de publicación/cierre sensible expone acción manual sin adaptador y autorización propia.
 - AC13: todos los cambios de esquema pasan Alembic; pruebas backend, Angular, permisos, migración y despliegue aislado.
 - AC14: las pantallas y endpoints de este módulo no alteran el estado del Funnel por el mero hecho de consultarlo.
+- AC15: toda pantalla auditada que muestre datasets actualizados por scheduler presenta un semáforo compacto y accesible, sin duplicar cálculo de frescura en Angular.
+- AC16: si hoy es 13/oct y la regla exige 12/oct, disponibilidad hasta 12/oct da VERDE; si exige 13/oct ya vencido y disponibilidad hasta 12/oct, da AMARILLO.
+- AC17: antes del horario/SLA de publicación no se genera alarma prematura; umbrales de ROJO y feriados/periodicidades se definen por dataset.
+- AC18: para datasets compuestos el color obedece a la intersección de cortes completos requeridos; no se infiere éxito del scheduler ni se mezcla scope de sucursales.
+- AC19: error de API, falta de evidencia o permisos limitados nunca generan falso verde; la respuesta para usuarios no administradores filtra detalles, y pruebas de accesibilidad verifican texto además del color.
 
 ## 12. Exclusiones y decisiones pendientes
 
@@ -179,6 +222,7 @@ Cada fase pasa por rama/PR, pruebas, revisión y merge por separado. Ninguna fas
 - backend/app/models/automation_control.py y backend/migrations/versions/: persistencia nueva mediante Alembic (fase correspondiente).
 - backend/app/warehouse/scheduler/track_scheduler_worker.py, backend/app/warehouse/scheduler/reports_scheduler_worker.py, backend/app/services/marketing_scheduler_worker.py, backend/app/routine_control/scheduler/routine_control_scheduler_worker.py y backend/app/services/ticket_attachment_cleanup_worker.py: instrumentación mínima progresiva, sin cambiar reglas en M1.
 - frontend/src/app/automation-control/: componentes .ts/.html/.css y service separados.
+- frontend/src/app/shared/data-freshness-indicator/: componente de semáforo compartido y service; cambios puntuales en las pantallas con datos actualizados automáticamente.
 - frontend/src/app/app.routes.ts y frontend/src/app/layout/layout.component.ts: ruta/menú protegidos por permisos reales.
 - backend/tests/ y frontend tests: verificación de semántica, seguridad, idempotencia y no regresión.
 
