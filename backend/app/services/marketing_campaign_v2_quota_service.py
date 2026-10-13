@@ -281,7 +281,8 @@ def assess_preflight_capacity(
         elif total_by_portfolio[policy.portfolio_key] > int(p.remaining_messages):
             reason = "SHARED_PORTFOLIO_REMAINING_EXCEEDED"
         elif any(
-            latest_policies.get(evt.provider_channel_id) is not None
+            evt.status in ("SUBMITTING", "SUBMITTED", "SCHEDULED", "RECONCILIATION_REQUIRED")
+            and latest_policies.get(evt.provider_channel_id) is not None
             and latest_policies[evt.provider_channel_id].portfolio_key == policy.portfolio_key
             and _database_date(evt.submit_started_at or evt.submitted_at or evt.created_at)
             >= _database_date(p.observed_at)
