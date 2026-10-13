@@ -42,6 +42,8 @@ jobs:
             tests/marketing/test_marketing_campaign_v2_audience_service.py \
             tests/marketing/test_marketing_campaign_v2_creation_service.py \
             tests/marketing/test_marketing_campaign_v2_routes.py \
+            tests/marketing/test_marketing_campaign_v2_budget_service.py \
+            tests/marketing/test_marketing_campaign_v2_budget_migration.py \
             tests/marketing/test_marketing_campaign_v2_dispatch_config_service.py \
             tests/marketing/test_iventas_template_inventory.py
 
