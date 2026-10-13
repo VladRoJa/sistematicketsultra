@@ -198,6 +198,7 @@ def register_quota_capacity(
 def assess_preflight_capacity(
     *, plan: Any, session: Any | None = None,
     now: datetime | None = None,
+    ignore_campaign_id: int | None = None,
 ) -> dict[str, Any]:
     """Fail-closed display only: never reserves capacity or authorizes submit."""
     active = session if session is not None else db.session
@@ -261,6 +262,10 @@ def assess_preflight_capacity(
             ),
             MarketingCampaignV2ProviderCampaignORM.status.in_(
                 ("SUBMITTING", "SUBMITTED", "SCHEDULED", "RECONCILIATION_REQUIRED"),
+            ),
+            *(
+                (MarketingCampaignV2ProviderCampaignORM.campaign_v2_id != ignore_campaign_id,)
+                if ignore_campaign_id is not None else ()
             ),
         ).all()
     rows = []
