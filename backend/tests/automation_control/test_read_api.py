@@ -45,6 +45,7 @@ def test_all_endpoints_require_jwt(api, path):
     ("GERENTE", "branch_user"),
     ("LECTOR_GLOBAL", "reader"),
     ("MARKETING", "marketer"),
+    ("SISTEMAS", "other_systems"),
 ])
 def test_non_authorized_roles_rejected_even_with_valid_jwt(api, role, username):
     client, headers = api
@@ -59,7 +60,6 @@ def test_non_authorized_roles_rejected_even_with_valid_jwt(api, role, username):
 
 @pytest.mark.parametrize("username,role", [
     ("ADMICORP", "ADMINISTRADOR"),
-    ("other_systems", "SISTEMAS"),
     (" admicorp ", "LECTOR_GLOBAL"),
 ])
 def test_explicit_whitelist_can_read(api, username, role):

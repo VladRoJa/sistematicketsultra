@@ -177,7 +177,6 @@ ngOnInit(): void {
     path: '/sistemas/salud',
     submenu: [
       { label: 'Salud de Sistemas', path: '/sistemas/salud' },
-      { label: 'Control de Automatizaciones', path: '/sistemas/automatizaciones' },
     ],
   };
 
@@ -609,6 +608,10 @@ private habilitarSistemasEnMenuSiAplica(menuSistemas: any): void {
           return;
         }
 
+        const isAdmicorp = String(this.session.getUser()?.username || '').trim().toUpperCase() === 'ADMICORP';
+        if (isAdmicorp) {
+          menuSistemas.submenu.push({ label: 'Control de Automatizaciones', path: '/sistemas/automatizaciones' });
+        }
         this.menuItems = [
           ...this.menuItems,
           menuSistemas,
