@@ -112,6 +112,50 @@ export class MarketingCampaignV2PreparationDialogComponent {
       'EXCLUIR ' + this.previousReview.new_exclusions);
   }
 
+  applyBranches(): void {
+    const review = this.branchReview;
+    if (!review || !this.canApplyBranches) { return; }
+    this.busy = true;
+    this.error = '';
+    this.api.applyAmbiguousBranches(this.data.campaignId, {
+      expected_fingerprint: review.review_fingerprint,
+      expected_count: review.new_exclusions,
+      allow_bulk: review.new_exclusions >= 10,
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: result => {
+        this.busy = false;
+        this.changed = true;
+        this.success = result.added + ' exclusiones auditadas. Revisa nuevamente el preflight.';
+        this.branchReview = null;
+        this.previousReview = null;
+        this.confirmBranchControl.setValue('');
+      },
+      error: error => this.onError(error),
+    });
+  }
+
+  applyPrevious(): void {
+    const review = this.previousReview;
+    if (!review || !this.canApplyPrevious) { return; }
+    this.busy = true;
+    this.error = '';
+    this.api.applyPreviousContacts(this.data.campaignId, this.sourceIds, {
+      expected_fingerprint: review.review_fingerprint,
+      expected_count: review.new_exclusions,
+      allow_bulk: review.new_exclusions >= 10,
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: result => {
+        this.busy = false;
+        this.changed = true;
+        this.success = result.added + ' contactos anteriores excluidos; el preflight anterior ya no sirve.';
+        this.branchReview = null;
+        this.previousReview = null;
+        this.confirmPreviousControl.setValue('');
+      },
+      error: error => this.onError(error),
+    });
+  }
+
   private onError(error: HttpErrorResponse): void {
     this.busy = false;
     this.error = String(error.error?.message || 'No se pudo completar la operación.');
