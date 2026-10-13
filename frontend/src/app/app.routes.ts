@@ -29,6 +29,7 @@ import { contactCenterAccessGuard } from './contact-center/contact-center-access
 import { sportsAnalysisAccessGuard } from './sports-analysis/sports-analysis-access.guard';
 import { purchaseRequisitionAccessGuard } from './purchase-requisitions/purchase-requisition-access.guard';
 import { systemDailyCheckBiAccessGuard } from './system-daily-check-bi/system-daily-check-bi-access.guard';
+import { automationControlAccessGuard } from './automation-control/automation-control-access.guard';
 
 
 
@@ -299,6 +300,12 @@ export const routes: Routes = [
         loadChildren: () =>
           import('./routine-control/routine-control.routes')
             .then((m) => m.ROUTINE_CONTROL_ROUTES),
+      },
+      {
+        path: 'sistemas/automatizaciones',
+        canActivate: [automationControlAccessGuard],
+        loadComponent: () => import('./automation-control/automation-control.component')
+          .then(m => m.AutomationControlComponent),
       },
       {
         path: 'sistemas/salud',

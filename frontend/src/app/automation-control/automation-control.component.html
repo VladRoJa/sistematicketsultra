@@ -1,0 +1,52 @@
+<section class="auto-page">
+  <header class="auto-head"><div><small>SISTEMAS · OBSERVABILIDAD</small><h1>Control de Automatizaciones</h1>
+  <p>Catálogo e historial de ejecución · Solo lectura</p></div>
+  <button type="button" (click)="refresh()" [disabled]="loading">Actualizar</button></header>
+  <p *ngIf="error" role="alert" class="alert">{{ error }}</p>
+  <p *ngIf="loading" role="status">Consultando automatizaciones…</p>
+  <ng-container *ngIf="summary && !loading">
+    <div class="metrics">
+      <div>Workers<strong>{{summary.worker_count}}</strong></div>
+      <div>Jobs<strong>{{summary.job_count}}</strong></div>
+      <div>Datasets<strong>{{summary.dataset_count}}</strong></div>
+      <div>Salud del worker<strong class="unknown">No verificada</strong></div>
+    </div>
+    <p class="disclaimer">Horarios de referencia, no configuración efectiva. No se admiten ejecuciones manuales ni diagnóstico de logs en esta fase.</p>
+    <div class="filters"><label>Dominio <select [(ngModel)]="domain"><option value="">Todos</option>
+      <option *ngFor="let d of domains" [value]="d">{{d}}</option></select></label>
+      <label>Buscar <input [(ngModel)]="search" placeholder="Job o worker"></label>
+      <span>{{visibleJobs.length}} jobs</span></div>
+    <div class="columns" [class.with-detail]="selected">
+      <section class="panel"><h2>Jobs registrados</h2><div class="table-wrap"><table>
+        <thead><tr><th>Job</th><th>Worker</th><th>Horario referencia</th><th>Salud</th><th></th></tr></thead>
+        <tbody><tr *ngFor="let job of visibleJobs">
+          <td><b>{{job.label}}</b><small>{{job.key}}</small></td><td>{{job.worker_key}}</td>
+          <td>{{job.schedule_reference}}</td><td class="unknown">No verificada</td>
+          <td><button type="button" (click)="select(job)">Historial</button></td>
+        </tr><tr *ngIf="!visibleJobs.length"><td colspan="5">Sin resultados.</td></tr></tbody>
+      </table></div></section>
+      <section class="panel" *ngIf="selected"><div class="detail-head"><h2>{{selected.label}}</h2>
+        <button type="button" (click)="close()">Cerrar</button></div>
+        <p>{{selected.key}} · {{selected.priority_policy}}</p>
+        <p *ngIf="loadingRuns" role="status">Cargando ejecuciones…</p>
+        <p *ngIf="runsError" role="alert" class="alert">{{runsError}}</p>
+        <p *ngIf="!loadingRuns&&!runsError&&coverage==='NOT_INSTRUMENTED'">
+          Historial no instrumentado. No implica éxito ni fallo.</p>
+        <div class="table-wrap" *ngIf="!loadingRuns&&!runsError&&coverage==='DOMAIN_RUNS'"><table>
+          <thead><tr><th>Corte</th><th>Estado original</th><th>Inicio (Tijuana)</th><th>Fin (Tijuana)</th></tr></thead>
+          <tbody><tr *ngFor="let run of runs"><td>{{run.business_date||'—'}}</td>
+          <td>{{run.status_raw}}<small *ngIf="run.error_available">Error registrado; detalle pendiente</small></td>
+          <td>{{formatDate(run.started_at_utc)}}</td><td>{{formatDate(run.finished_at_utc)}}</td></tr>
+          <tr *ngIf="!runs.length"><td colspan="4">Sin ejecuciones registradas.</td></tr></tbody>
+        </table></div><div class="pager" *ngIf="coverage==='DOMAIN_RUNS'&&!runsError">
+          <button type="button" [disabled]="!offset||loadingRuns" (click)="pageBy(-1)">Anterior</button>
+          <span>Página {{page}}</span><button type="button" [disabled]="!hasMore||loadingRuns" (click)="pageBy(1)">Siguiente</button>
+        </div>
+      </section>
+    </div>
+    <section class="panel"><h2>Datasets vinculados</h2><div class="datasets">
+      <article *ngFor="let dataset of datasets"><b>{{dataset.label}}</b>
+        <p>Corte completo: No verificado</p><p class="unknown">Frescura desconocida</p>
+        <small>{{dataset.sources.length}} fuentes</small></article></div></section>
+  </ng-container>
+</section>
