@@ -161,3 +161,74 @@ def test_derived_module_cannot_invoke_provider_or_old_approval():
     assert "IVentasBroadcastProvider" not in code
     assert "approve_dispatch_reservation(" not in code
     assert "child.status =" not in code
+
+
+def test_preflight_rejects_unlinked_derived_source_before_template_access():
+    from app.services import marketing_campaign_v2_preflight_service as preflight
+    from app.services.marketing_campaign_v2_dispatch_config_service import (
+        MarketingCampaignV2DispatchConfigValidationError,
+    )
+    projection = {
+        "campaign":{"source":guard.DERIVED_SOURCE,"purpose":"REACTIVATION"},
+        "frozen_recipients":[NS(id=501,phone_mx10="6861234567")],
+        "sendable_recipients":[NS(id=501,phone_mx10="6861234567")],
+    }
+    session = MagicMock()
+    session.get.return_value = NS(audience_definition_json={"filters":{}})
+    with patch.object(preflight, "build_campaign_v2_sendable_projection",
+                      return_value=projection), \
+         patch.object(preflight, "resolve_dispatch_template") as template:
+        with pytest.raises(MarketingCampaignV2DispatchConfigValidationError, match="trazabilidad"):
+            preflight.build_campaign_v2_preflight(
+                campaign_id=999, template_id=2,
+                allowed_sucursal_keys=None, session=session, now=NOW,
+            )
+    template.assert_not_called()
+
+
+def test_preflight_derived_rechecks_suppression_and_persisted_intent():
+    from app.services import marketing_campaign_v2_preflight_service as preflight
+    from app.services.marketing_campaign_v2_dispatch_config_service import (
+        MarketingCampaignV2DispatchConfigValidationError,
+    )
+    projection = {
+        "campaign":{"source":guard.DERIVED_SOURCE,"purpose":"REACTIVATION"},
+        "frozen_recipients":[NS(id=501,phone_mx10="6861234567")],
+        "sendable_recipients":[],
+    }
+    session = MagicMock()
+    derived = NS(audience_definition_json={"derived_release":{
+        "version":"d3c2-held-frozen-v1", "intent_id":55,
+        "source_campaign_id":77,"source_child_id":100,
+        "candidate_fingerprint":FINGERPRINT,
+    }})
+    intent = NS(status="FROZEN_DERIVED",derived_campaign_id=999,
+                source_campaign_id=77,source_child_id=100,
+                candidate_fingerprint=FINGERPRINT)
+    def get(cls, ident):
+        if cls is preflight.MarketingCampaignV2ORM:
+            return derived
+        if cls is preflight.MarketingCampaignV2HeldReleaseIntentORM:
+            return intent
+        raise AssertionError("unhandled lookup")
+    session.get.side_effect = get
+    with patch.object(preflight, "build_campaign_v2_sendable_projection",
+                      return_value=projection), \
+         patch.object(preflight, "assert_no_prior_or_pending_contact") as guard_call:
+        with pytest.raises(MarketingCampaignV2DispatchConfigValidationError, match="reducida"):
+            preflight.build_campaign_v2_preflight(
+                campaign_id=999, template_id=2,
+                allowed_sucursal_keys=None, session=session, now=NOW,
+            )
+    guard_call.assert_not_called()
+    projection["sendable_recipients"] = list(projection["frozen_recipients"])
+    with patch.object(preflight, "build_campaign_v2_sendable_projection",
+                      return_value=projection), \
+         patch.object(preflight, "assert_no_prior_or_pending_contact",
+                      side_effect=guard.DerivedContactConflict("cross-campaign")):
+        with pytest.raises(MarketingCampaignV2DispatchConfigValidationError,
+                           match="cross-campaign"):
+            preflight.build_campaign_v2_preflight(
+                campaign_id=999, template_id=2,
+                allowed_sucursal_keys=None, session=session, now=NOW,
+            )
