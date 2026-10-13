@@ -172,3 +172,20 @@ def test_budget_missing_all_prices_is_not_zero_cost(session):
     assert value["total_estimated_mxn"] is None
     assert value["priced_subtotal_mxn"] == "0.00"
     assert value["priced_recipients"] == 0
+
+
+def test_rounding_each_branch_before_total_reconciles_visible_rows(session):
+    _quote(session, "0.825")
+    plan = _plan()
+    plan.batches.append(SimpleNamespace(
+        template_id=1, provider_channel_id="channel-tec",
+        sucursal_canon="SECOND_TEST_BRANCH",
+        recipients=[object()] * 3,
+    ))
+    plan.sendable_phones.extend(["y"] * 3)
+    quote = budget.estimate_preflight_cost(
+        plan=plan, session=session, now=NOW + timedelta(minutes=1),
+    )
+    assert quote["status"] == "COMPLETE"
+    assert [x["estimated_mxn"] for x in quote["batches"]] == ["2.48", "2.48"]
+    assert quote["total_estimated_mxn"] == "4.96"
