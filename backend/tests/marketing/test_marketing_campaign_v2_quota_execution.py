@@ -191,3 +191,27 @@ def test_ambiguous_provider_result_stops_further_execution():
     assert response["status"] == "RECONCILIATION_REQUIRED"
     assert response["execution_status"] == "REVIEW_REQUIRED"
     assert fail.call_args.kwargs["status"] == "RECONCILIATION_REQUIRED"
+
+
+def test_expiration_while_waiting_for_lock_stops_before_provider_or_claim():
+    e = execution()
+    session = fake_authorized_session(e)
+    provider = MagicMock()
+    after_wait = NOW + timedelta(minutes=20)
+    # _locked_review is a stub here, but the clock keeps moving in production.
+    # First reading: request arrival. Second reading: after campaign/portfolio locks.
+    with patch.object(svc, "_utc", side_effect=[NOW, after_wait]) as clock, \
+         patch.object(svc, "_locked_review", return_value=review()), \
+         patch.object(svc, "_check_child_identities") as identities:
+        with pytest.raises(svc.GovernedDispatchConflict, match="vencida"):
+            svc.execute_governed_child(
+                campaign_id=99, execution_id=41, child_id=100,
+                expected_digest=DIGEST, actor_user_id=7, provider=provider,
+                send_enabled=True, governed_enabled=True,
+                allowed_sucursal_keys=None, session=session, now=None,
+            )
+    assert clock.call_count == 2
+    identities.assert_not_called()
+    provider.create_campaign.assert_not_called()
+    session.commit.assert_not_called()
+    session.rollback.assert_called_once()
