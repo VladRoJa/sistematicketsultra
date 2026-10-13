@@ -842,7 +842,7 @@ def test_governed_approval_cannot_use_legacy_submit_even_with_kill_switch_on(
         manifest_json={"version": "D2B_READY_HELD_V1", "send_authorized": False},
         approved_by_user_id=7,
         approved_at=NOW,
-        expires_at=NOW,
+        expires_at=NOW.replace(day=NOW.day + 1),
     ))
     session.commit()
     provider = _Provider([_success("never-call")])
