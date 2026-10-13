@@ -177,6 +177,7 @@ ngOnInit(): void {
     path: '/sistemas/salud',
     submenu: [
       { label: 'Salud de Sistemas', path: '/sistemas/salud' },
+      { label: 'Control de Automatizaciones', path: '/sistemas/automatizaciones' },
     ],
   };
 

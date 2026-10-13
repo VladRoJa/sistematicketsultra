@@ -1,0 +1,21 @@
+:host{display:block;color:#172033}.auto-page{padding:20px;background:#f6f7f9;min-height:calc(100vh - 110px)}
+.auto-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:18px}
+.auto-head h1{font-size:25px;margin:4px 0}.auto-head p,.auto-head small{color:#64748b}
+button,select,input{font:inherit}button{background:white;border:1px solid #cbd5e1;border-radius:5px;padding:7px 10px;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
+.metrics div,.panel{background:#fff;border:1px solid #dce2e9;padding:12px}.metrics div{font-size:12px;color:#64748b}
+.metrics strong{display:block;color:#172033;font-size:22px;margin-top:7px}.metrics .unknown{font-size:15px}
+.unknown{color:#9a6700!important}.disclaimer{font-size:12px;color:#64748b;margin:13px 0}
+.filters{display:flex;gap:12px;align-items:end;margin-bottom:12px;flex-wrap:wrap}.filters label{display:grid;gap:4px;font-size:12px}
+.filters input,.filters select{padding:7px;border:1px solid #cbd5e1;border-radius:4px}.filters span{margin-left:auto;font-size:12px}
+.columns{display:grid;grid-template-columns:1fr;gap:12px}.columns.with-detail{grid-template-columns:minmax(0,1.5fr) minmax(350px,1fr)}
+.panel{min-width:0;margin-bottom:12px}.panel h2{font-size:16px;margin:0 0 12px}
+.table-wrap{overflow:auto}table{border-collapse:collapse;width:100%;font-size:12px}
+th,td{padding:9px 7px;text-align:left;border-bottom:1px solid #e2e8f0;vertical-align:top}
+th{background:#f8fafc}td small{display:block;color:#64748b;overflow-wrap:anywhere;margin-top:3px}
+td button{white-space:nowrap}.detail-head{display:flex;justify-content:space-between}.pager{display:flex;justify-content:center;gap:12px;align-items:center;margin-top:10px}
+.alert{background:#fff1f2;border:1px solid #fecdd3;color:#9f1239;padding:10px}
+.datasets{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+.datasets article{padding:10px;border:1px solid #e2e8f0;font-size:12px}.datasets p{margin:6px 0}
+@media(max-width:1100px){.columns.with-detail{grid-template-columns:1fr}}
+@media(max-width:640px){.auto-page{padding:10px}.metrics{grid-template-columns:repeat(2,1fr)}}
