@@ -167,6 +167,20 @@ def materialize_approved_manifest(
             active.execute(text(
                 "SELECT pg_advisory_xact_lock(hashtextextended(:scope, 0))"
             ), {"scope": "mkt_v2_quota:" + kind + ":" + key})
+        # A lock may wait past expiry or a cost-rate change; recalculate.
+        if now is None:
+            timestamp = datetime.now(timezone.utc)
+        if _database_date(approval.expires_at) <= timestamp:
+            raise CampaignV2ApprovalConflictError("Aprobación vencida durante bloqueo.")
+        plan = build_campaign_v2_preflight(
+            campaign_id=campaign_id, template_id=int(approval.template_id),
+            allowed_sucursal_keys=allowed_sucursal_keys, session=active, now=timestamp,
+        )
+        budget = estimate_preflight_cost(plan=plan, session=active, now=timestamp)
+        by_name = _assert_manifest(plan, budget, approval)
+        ready = tuple(b for b in plan.batches
+                      if by_name[b.sucursal_canon]["planned_status"] == "READY")
+        ready_plan = replace(plan, batches=ready)
         # Capacity and mapping must still be current after acquiring the locks.
         _, locked_scopes, locked_evidence, locked_quota = _assess_scopes(
             ready_plan, session=active, timestamp=timestamp,
