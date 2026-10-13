@@ -465,6 +465,58 @@ class MarketingCampaignV2TemplateORM(db.Model):
     )
 
 
+
+
+class MarketingCampaignV2CostRateRevisionORM(db.Model):
+    """Append-only *operator* estimates; not provider invoices or Meta quotes."""
+
+    __tablename__ = "marketing_campaign_v2_cost_rate_revisions"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    template_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_templates.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    provider_channel_id = db.Column(db.String(255), nullable=False)
+    unit_cost_mxn = db.Column(db.Numeric(12, 6), nullable=False)
+    valid_from = db.Column(db.DateTime(timezone=True), nullable=False)
+    source_reference = db.Column(db.String(255), nullable=False)
+    created_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="RESTRICT"), nullable=False,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False,
+        default=_utc_now, server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+
+    template = db.relationship("MarketingCampaignV2TemplateORM")
+    created_by_user = db.relationship("UserORM")
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "unit_cost_mxn > 0 AND unit_cost_mxn <= 1000",
+            name="ck_mkt_v2_cost_rate_positive_mxn",
+        ),
+        db.CheckConstraint(
+            "length(trim(provider_channel_id)) > 0",
+            name="ck_mkt_v2_cost_rate_channel",
+        ),
+        db.CheckConstraint(
+            "length(trim(source_reference)) > 0",
+            name="ck_mkt_v2_cost_rate_source",
+        ),
+        db.UniqueConstraint(
+            "template_id", "provider_channel_id", "valid_from",
+            name="uq_mkt_v2_cost_rate_revision",
+        ),
+        db.Index(
+            "ix_mkt_v2_cost_rate_lookup",
+            "template_id", "provider_channel_id", "valid_from",
+        ),
+    )
+
+
 class MarketingCampaignV2ORM(db.Model):
     __tablename__ = "marketing_campaign_v2_campaigns"
 
