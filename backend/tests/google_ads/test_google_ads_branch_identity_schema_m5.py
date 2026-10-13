@@ -12,6 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
+from alembic.script import ScriptDirectory
 
 from app.models.google_ads_branch_identity_mapping import GoogleAdsBranchIdentityMappingORM
 
@@ -51,6 +52,16 @@ def test_static_manifest_and_model():
     assert doc["scope"] == "HISTORICAL_XLSX_ONLY"
     assert migration.down_revision == "d92c15a8f63b"
     assert GoogleAdsBranchIdentityMappingORM.__tablename__ == migration.TABLE
+
+
+def test_m5_revision_is_in_single_alembic_head():
+    scripts = ScriptDirectory(str(ROOT / "backend" / "migrations"))
+    heads = scripts.get_heads()
+    assert len(heads) == 1, f"Alembic heads divergentes: {heads}"
+    ancestry = {
+        r.revision for r in scripts.iterate_revisions(heads[0], "base")
+    }
+    assert migration.revision in ancestry
 
 
 @pytest.fixture()
