@@ -19,7 +19,7 @@
         Sin sucursal consolidada: <strong>{{ review.unresolved_count | number }}</strong>.
         Evidencia múltiple: <strong>{{ review.counts['AMBIGUOUS_EVIDENCE'] || 0 }}</strong>.
         Sin evidencia: {{ review.counts['MISSING_EVIDENCE'] || 0 }}.
-        Evidencia única sin consolidar: {{ review.counts['SINGLE_EVIDENCE_UNRESOLVED'] || 0 }}.
+        Alias no mapeado: {{ review.counts['UNMAPPED_BRANCH_ALIAS'] || 0 }}. Evidencia única resoluble: {{ review.counts['SINGLE_EVIDENCE_RESOLVABLE'] || 0 }}.
       </p>
       <p>
         Excluibles nuevos: <strong>{{ review.new_exclusions | number }}</strong>.
