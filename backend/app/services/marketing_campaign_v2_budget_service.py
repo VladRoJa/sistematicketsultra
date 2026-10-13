@@ -221,7 +221,9 @@ def estimate_preflight_cost(
         revision = rates.get(channel)
         amount = None
         if revision is not None:
-            amount = Decimal(revision["unit_cost_mxn"]) * count
+            amount = (Decimal(revision["unit_cost_mxn"]) * count).quantize(
+                CENT, rounding=ROUND_HALF_UP,
+            )
             subtotal += amount
             priced += count
         else:
