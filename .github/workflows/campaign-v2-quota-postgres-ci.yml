@@ -1,0 +1,56 @@
+name: Campaign V2 Quota PostgreSQL CI
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/models/marketing.py"
+      - "backend/app/services/marketing_campaign_v2_quota_service.py"
+      - "backend/migrations/versions/f4d856a1b20c_campaign_v2_quota_policy_capacity.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_quota_*.py"
+      - ".github/workflows/campaign-v2-quota-postgres-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-quota:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: quota_ci
+          POSTGRES_PASSWORD: synthetic-quota-only
+          POSTGRES_DB: quota_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U quota_ci -d quota_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install backend packages
+        run: |
+          python -m pip install -r backend/requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Compile service and migration
+        run: |
+          python -m py_compile backend/app/services/marketing_campaign_v2_quota_service.py
+          python -m py_compile backend/migrations/versions/f4d856a1b20c_campaign_v2_quota_policy_capacity.py
+      - name: Run synthetic PostgreSQL quota tests
+        working-directory: backend
+        env:
+          SECRET_KEY: synthetic-quota-ci
+          JWT_SECRET_KEY: synthetic-quota-jwt
+          QUOTA_TEST_POSTGRES_URL: postgresql://quota_ci:synthetic-quota-only@127.0.0.1:5432/quota_ci
+          CAMPAIGN_V2_PROVIDER_SEND_ENABLED: "false"
+        run: |
+          python -m pytest -q --tb=short \
+            tests/marketing/test_marketing_campaign_v2_quota_service.py \
+            tests/marketing/test_marketing_campaign_v2_quota_migration.py
