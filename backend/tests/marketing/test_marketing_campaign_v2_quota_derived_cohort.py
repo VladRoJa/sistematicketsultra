@@ -78,9 +78,6 @@ def test_derived_freeze_clones_only_held_recipient_and_evidence_atomically():
     session.query.side_effect = query
     original_recipient = Recipient(
         id=501, campaign_id=77, phone_mx10="6861234567", source="EXPIRED",
-        sucursal="Sucursal B", audiencia_ficticia=None,
-    ) if False else Recipient(
-        id=501, campaign_id=77, phone_mx10="6861234567", source="EXPIRED",
         sucursal="Sucursal B",
     )
     original_recipient.evidence_rows.append(Evidence(
