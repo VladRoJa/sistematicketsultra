@@ -512,6 +512,26 @@ def finalize_iventas_sync_run(
                 counters=counters,
                 make_canonical=make_canonical,
             ):
+                # La idempotencia incluye también la evidencia persistida
+                # por sucursal, no solo status y contadores agregados.
+                # Una llamada divergente debe fallar sin escribir ni
+                # simular una finalización correcta.
+                if status_value != SYNC_STATUS_COMPLETED:
+                    persisted = (
+                        session_value.query(MarketingIventasBranchFailureORM)
+                        .filter_by(sync_run_id=sync_run_id)
+                        .all()
+                    )
+                    stored = {
+                        row.branch_code: row.error_type
+                        for row in persisted
+                    }
+                    if stored != dict(branch_failures):
+                        raise MarketingIventasRunLifecycleError(
+                            "El sync_run ya fue finalizado con "
+                            "evidencia de sucursales diferente."
+                        )
+
                 return MarketingIventasFinalizeResult(
                     sync_run_id=int(
                         run.id

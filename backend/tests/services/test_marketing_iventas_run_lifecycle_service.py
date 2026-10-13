@@ -6,7 +6,7 @@ from datetime import (
 
 import pytest
 
-from app.models import MarketingIventasSyncRunORM
+from app.models import MarketingIventasSyncRunORM, MarketingIventasBranchFailureORM
 from app.services.marketing_iventas_run_lifecycle_service import (
     MarketingIventasRunCounters,
     MarketingIventasRunLifecycleError,
@@ -685,3 +685,74 @@ def test_failure_insert_error_rolls_back_without_commit():
             branch_failures=(("BRANCH_A", "IventasClientError"),),
         )
     assert session.events == ["add_all", "rollback"]
+
+
+@pytest.mark.parametrize(
+    ("stored_evidence", "retry_evidence", "expect_equal"),
+    [
+        (
+            (("BRANCH_A", "IventasClientError"),),
+            (("BRANCH_A", "IventasClientError"),),
+            True,
+        ),
+        (
+            (("BRANCH_A", "IventasClientError"),),
+            (("BRANCH_A", "MarketingIventasBranchSyncError"),),
+            False,
+        ),
+        (
+            (("BRANCH_A", "IventasClientError"),),
+            (),
+            False,
+        ),
+        (
+            (),
+            (("BRANCH_A", "IventasClientError"),),
+            False,
+        ),
+        ((), (), True),  # Corrida heredada sin evidencia desglosada.
+    ],
+)
+def test_partial_terminal_retry_validates_exact_branch_evidence(
+    stored_evidence, retry_evidence, expect_equal,
+):
+    current = _run(status=SYNC_STATUS_PARTIAL)
+    counters = _partial_counters()
+    for field_name, value in vars(counters).items():
+        setattr(current, field_name, value)
+
+    class FailureRows:
+        def filter_by(self, **kwargs):
+            assert kwargs == {"sync_run_id": 2}
+            return self
+
+        def all(self):
+            return [
+                MarketingIventasBranchFailureORM(
+                    sync_run_id=2, branch_code=code, error_type=kind
+                )
+                for code, kind in stored_evidence
+            ]
+
+    class RetrySession(FakeSession):
+        def query(self, model):
+            assert model is MarketingIventasBranchFailureORM
+            self.query_count += 1
+            return FailureRows()
+
+    session = RetrySession(run=current)
+    kwargs = dict(
+        sync_run_id=2, status=SYNC_STATUS_PARTIAL, counters=counters,
+        make_canonical=False, finished_at=_finished(), session=session,
+        branch_failures=retry_evidence,
+    )
+
+    if expect_equal:
+        result = finalize_iventas_sync_run(**kwargs)
+        assert result.was_already_finalized is True
+        assert session.events == []
+    else:
+        with pytest.raises(MarketingIventasRunLifecycleError, match="evidencia"):
+            finalize_iventas_sync_run(**kwargs)
+        assert session.events == ["rollback"]
+    assert session.query_count == 1
