@@ -117,6 +117,7 @@ def test_approval_needs_both_capabilities_and_global_scope(
     endpoint = "/api/marketing/campaigns-v2/99/dispatch/approval"
     payload = {
         "template_id": 2, "expected_dispatch_fingerprint": "a" * 64,
+        "expected_quote_fingerprint": "b" * 64,
         "expected_recipients": 12, "expected_total_mxn": "3.60",
     }
     with auth(partial_access), patch.object(routes, "approve_dispatch_reservation") as approve:
