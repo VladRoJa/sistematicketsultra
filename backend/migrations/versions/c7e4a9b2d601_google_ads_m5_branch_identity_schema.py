@@ -1,7 +1,7 @@
 """M5 Google Ads: schema for explicitly approved branch identities.
 
 Revision ID: c7e4a9b2d601
-Revises: b14d9e2c6f80
+Revises: c29f6a8d1e70
 Create Date: 2026-10-12
 
 Schema only. NO seed, attribution, Funnel change, or Warehouse fact updates.
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 revision = "c7e4a9b2d601"
-down_revision = "b14d9e2c6f80"
+down_revision = "c29f6a8d1e70"
 branch_labels = None
 depends_on = None
 
