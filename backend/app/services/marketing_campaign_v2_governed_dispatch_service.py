@@ -248,3 +248,123 @@ def review_execution(*, campaign_id: int, session: Any | None = None) -> dict:
         "expires_at": _database_date(approval.expires_at).isoformat(),
         "send_authorized": False,
     }
+
+
+def execute_governed_child(
+    *, campaign_id: int, execution_id: int, child_id: int,
+    expected_digest: str, actor_user_id: int, provider: Any,
+    send_enabled: bool, governed_enabled: bool,
+    allowed_sucursal_keys: Any, session: Any | None = None,
+    now: datetime | None = None,
+) -> dict:
+    """Dispatch exactly the next READY child. Never auto-resume failed attempts."""
+    if send_enabled is not True or governed_enabled is not True:
+        raise GovernedDispatchDisabled("Kill switch o gate D2c deshabilitado.")
+    if any(type(x) is not int or x <= 0
+           for x in (campaign_id, execution_id, child_id, actor_user_id)):
+        raise GovernedDispatchConflict("Identidad de despacho inválida.")
+    active = session if session is not None else db.session
+    timestamp = _utc(now)
+    try:
+        approval, plan, manifest, children, digest = _locked_review(
+            campaign_id=campaign_id, session=active, now=timestamp,
+            allowed_sucursal_keys=allowed_sucursal_keys, ignore_self=True,
+        )
+        execution = active.query(MarketingCampaignV2GovernedExecutionORM).filter(
+            MarketingCampaignV2GovernedExecutionORM.id == execution_id,
+            MarketingCampaignV2GovernedExecutionORM.approval_id == approval.id,
+        ).with_for_update().one_or_none()
+        if (execution is None or execution.status != "AUTHORIZED" or
+                digest != execution.manifest_digest or digest != expected_digest or
+                _database_date(execution.expires_at) <= timestamp):
+            raise GovernedDispatchConflict("Autorización de despacho inexistente, usada o vencida.")
+        _check_child_identities(plan=plan, manifest=manifest, children=children)
+        by_branch = {r.sucursal_canon: r for r in children}
+        original_ready = [b for b in plan.batches
+                          if manifest[b.sucursal_canon]["planned_status"] == "READY"]
+        pending = [b for b in original_ready if by_branch[b.sucursal_canon].status == "READY"]
+        if not pending:
+            raise GovernedDispatchConflict("No existen children READY autorizables.")
+        # A prior accepted child must be immutable. Other states are blocked
+        # by _check_child_identities. No out-of-order or parallel sends.
+        first_pending = pending[0]
+        row = by_branch[first_pending.sucursal_canon]
+        if int(row.id) != child_id:
+            raise GovernedDispatchConflict("Solo se permite el siguiente READY en orden.")
+        if any(by_branch[b.sucursal_canon].status != "SUBMITTED"
+               for b in original_ready
+               if b.sucursal_canon != first_pending.sucursal_canon
+               and b not in pending):
+            raise GovernedDispatchConflict("El historial anterior requiere revisión.")
+
+        dispatch = build_campaign_v2_provider_dispatch_batch(
+            plan=plan, batch=first_pending,
+        )
+        # Both claims are committed together, before any HTTP to the provider.
+        # If the process crashes after commit, IN_FLIGHT blocks all replays.
+        row.status = "SUBMITTING"
+        row.submit_started_at = timestamp
+        row.submitted_by_user_id = actor_user_id
+        row.updated_at = timestamp
+        row.error_code = None
+        row.support_ref = None
+        execution.status = "IN_FLIGHT"
+        execution.last_child_id = child_id
+        execution.updated_at = timestamp
+        active.commit()
+    except (GovernedDispatchConflict, SQLAlchemyError):
+        active.rollback()
+        raise
+
+    # This part is reached only after durable authorization + child claim.
+    try:
+        outcome = provider.create_campaign(dispatch)
+    except CampaignProviderDeterministicError as exc:
+        result_status, code, http, ref = "PROVIDER_ERROR", exc.code, exc.http_status, exc.support_ref
+    except CampaignProviderAmbiguousError as exc:
+        result_status, code, http, ref = "RECONCILIATION_REQUIRED", exc.code, exc.http_status, exc.support_ref
+    except CampaignProviderConfigurationError:
+        result_status, code, http, ref = "PROVIDER_ERROR", "PROVIDER_CONFIGURATION", None, None
+    except Exception:
+        # Any unexpected exception may mean that the provider accepted HTTP.
+        result_status, code, http, ref = "RECONCILIATION_REQUIRED", "UNEXPECTED_PROVIDER_RESULT", None, None
+    else:
+        result_status, code, http, ref = "SUBMITTED", None, outcome.http_status, None
+
+    if result_status == "SUBMITTED":
+        _persist_provider_success(
+            row_id=child_id, provider_campaign_id=outcome.provider_campaign_id,
+            deduplicated=outcome.deduplicated,
+            response_metadata=outcome.response_metadata,
+            accepted_status="SUBMITTED", actor_user_id=actor_user_id,
+            session=active, now=_utc(None),
+        )
+    else:
+        _persist_provider_failure(
+            row_id=child_id, status=result_status, error_code=code,
+            support_ref=ref, http_status=http,
+            actor_user_id=actor_user_id, session=active, now=_utc(None),
+        )
+
+    # A failure stops the entire execution; no automatic retry or continuation.
+    # On crash in this block, persisted IN_FLIGHT still blocks further calls.
+    execution = active.get(MarketingCampaignV2GovernedExecutionORM, execution_id)
+    if execution is None or execution.status != "IN_FLIGHT" or execution.last_child_id != child_id:
+        raise GovernedDispatchConflict("Resultado persistido; ejecución requiere revisión.")
+    execution.status = (
+        "AUTHORIZED" if result_status == "SUBMITTED" and len(pending) > 1
+        else "COMPLETE" if result_status == "SUBMITTED"
+        else "REVIEW_REQUIRED"
+    )
+    execution.updated_at = _utc(None)
+    active.commit()
+    return {
+        "execution_id": execution_id, "campaign_id": campaign_id,
+        "child_id": child_id, "status": result_status,
+        "execution_status": execution.status,
+        "provider_campaign_id": (
+            outcome.provider_campaign_id if result_status == "SUBMITTED" else None
+        ),
+        "error_code": code,
+        "next_child_requires_fresh_validation": True,
+    }
