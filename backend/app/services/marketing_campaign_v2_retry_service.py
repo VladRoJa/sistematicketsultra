@@ -26,6 +26,11 @@ from app.services.marketing_campaign_v2_retry_policy import (
     MAX_SAFE_RETRY_ATTEMPTS,
     retry_is_exhausted,
 )
+from app.services.marketing_campaign_v2_contact_gate_service import (
+    CampaignV2ContactGateConflict,
+    acquire_campaign_v2_contact_gate,
+    verify_outbound_contact_admission,
+)
 from app.services.marketing_campaign_v2_submit_service import (
     MarketingCampaignV2SubmitPreconditionError,
     build_campaign_v2_provider_dispatch_batch,
@@ -375,6 +380,11 @@ def _mark_retry_submitting(
     now: datetime,
     session: Any,
 ) -> MarketingCampaignV2ProviderCampaignORM:
+    try:
+        acquire_campaign_v2_contact_gate(session)
+    except CampaignV2ContactGateConflict as exc:
+        session.rollback()
+        raise MarketingCampaignV2SafeRetryConflictError(str(exc)) from exc
     row = (
         session.query(MarketingCampaignV2ProviderCampaignORM)
         .filter(MarketingCampaignV2ProviderCampaignORM.id == row_id)
@@ -395,6 +405,11 @@ def _mark_retry_submitting(
             "El child cambió antes de iniciar el retry."
         )
 
+    try:
+        verify_outbound_contact_admission(child=row, session=session)
+    except CampaignV2ContactGateConflict as exc:
+        session.rollback()
+        raise MarketingCampaignV2SafeRetryConflictError(str(exc)) from exc
     attempt_number = expected_attempt_count + 1
     history = list(row.retry_history_json or [])
     history.append(

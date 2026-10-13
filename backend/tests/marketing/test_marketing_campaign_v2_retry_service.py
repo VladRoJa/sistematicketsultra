@@ -595,3 +595,14 @@ def test_governed_approval_disables_legacy_retry_even_after_reconciliation(
             send_enabled=True, session=session, now=NOW,
         )
     assert provider.calls == 0
+
+
+@pytest.fixture(autouse=True)
+def mock_shared_contact_gate_for_legacy_unit_tests(monkeypatch):
+    """Legacy unit fixtures use SQLite or isolated session stubs.
+
+    PostgreSQL concurrency and contact admissions are verified separately
+    in test_marketing_campaign_v2_quota_cross_campaign_gate_pg.py.
+    """
+    monkeypatch.setattr(service, "acquire_campaign_v2_contact_gate", lambda session: None)
+    monkeypatch.setattr(service, "verify_outbound_contact_admission", lambda **kwargs: None)

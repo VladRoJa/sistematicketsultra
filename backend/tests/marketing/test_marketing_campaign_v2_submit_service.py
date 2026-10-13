@@ -865,3 +865,14 @@ def test_shared_transition_cannot_bypass_governed_authorization():
         )
     session.query.return_value.filter.return_value.update.assert_not_called()
     session.commit.assert_not_called()
+
+
+@pytest.fixture(autouse=True)
+def mock_shared_contact_gate_for_legacy_unit_tests(monkeypatch):
+    """Legacy unit fixtures use SQLite or isolated session stubs.
+
+    PostgreSQL concurrency and contact admissions are verified separately
+    in test_marketing_campaign_v2_quota_cross_campaign_gate_pg.py.
+    """
+    monkeypatch.setattr(service, "acquire_campaign_v2_contact_gate", lambda session: None)
+    monkeypatch.setattr(service, "verify_outbound_contact_admission", lambda **kwargs: None)

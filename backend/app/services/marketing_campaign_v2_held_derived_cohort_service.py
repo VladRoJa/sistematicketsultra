@@ -11,7 +11,6 @@ from datetime import datetime, timezone
 import re
 from typing import Any
 
-from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.extensions import db
@@ -28,6 +27,9 @@ from app.services.marketing_campaign_v2_held_release_intent_service import (
     _evaluate, _required_id, _utc,
 )
 from app.services.marketing_campaign_v2_preflight_service import build_campaign_v2_preflight
+from app.services.marketing_campaign_v2_contact_gate_service import (
+    acquire_campaign_v2_contact_gate,
+)
 from app.services.marketing_campaign_v2_derived_contact_guard import (
     DERIVED_SOURCE, DerivedContactConflict, assert_no_prior_or_pending_contact,
 )
@@ -81,9 +83,7 @@ def freeze_derived_held_cohort(
     try:
         # Serialize other D3c2 derivations before checking global contact use.
         # Campaign locking follows the same campaign->approval->child order as D3c1.
-        active.execute(text(
-            "SELECT pg_advisory_xact_lock(hashtextextended(:scope, 0))"
-        ), {"scope": "mkt_v2_d3c2:freeze_all_derived"})
+        acquire_campaign_v2_contact_gate(active)
         timestamp = _utc(now)
         fresh = _evaluate(
             campaign_id=source_campaign_id, child_id=source_child_id,
