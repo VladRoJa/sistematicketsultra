@@ -246,8 +246,8 @@ def estimate_preflight_cost(
         and bool(batches) and sum(len(b.recipients) for b in batches) == count
     )
     quote_fingerprint = hashlib.sha256(json.dumps({
-        "version": "QUOTE_V1", "campaign_id": plan.campaign_id,
-        "dispatch_fingerprint": plan.dispatch_fingerprint,
+        "version": "QUOTE_V1", "campaign_id": getattr(plan, "campaign_id", None),
+        "dispatch_fingerprint": getattr(plan, "dispatch_fingerprint", None),
         "status": complete, "breakdown": breakdown,
     }, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     return {
