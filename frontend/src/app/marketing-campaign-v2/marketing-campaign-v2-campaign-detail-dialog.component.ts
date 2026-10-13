@@ -17,6 +17,8 @@ import { MatSelectModule } from '@angular/material/select';
 import {
   CampaignV2AudienceDefinition,
   CampaignV2CampaignDetail,
+  CampaignV2PreflightBudget,
+  CampaignV2BudgetBatch,
   CampaignV2DispatchTemplate,
   CampaignV2IndividualReport,
   CampaignV2ObservedFamily,
@@ -364,6 +366,22 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
       });
   }
 
+  budgetTotalLabel(budget: CampaignV2PreflightBudget): string {
+    return budget.total_estimated_mxn === null ? 'Sin cotización completa' : 'MXN $' + budget.total_estimated_mxn;
+  }
+
+  budgetRevisionLabel(batch: CampaignV2BudgetBatch): string {
+    return batch.revision_id === null ? 'Sin tarifa' : '#' + batch.revision_id;
+  }
+
+  budgetAmountLabel(batch: CampaignV2BudgetBatch): string {
+    return batch.estimated_mxn === null ? '—' : '$' + batch.estimated_mxn;
+  }
+
+  budgetRateLabel(batch: CampaignV2BudgetBatch): string {
+    return batch.unit_cost_mxn || '—';
+  }
+
   preflightBlockedTotal(): number {
     const blocked = this.preflight?.blocked;
     if (!blocked) {
@@ -651,6 +669,15 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
         label: 'Adeudo mínimo',
         value: this.currencyLabel(definition.filters.adeudo_min),
       });
+    }
+    if (definition.filters.adeudo_max !== undefined && definition.filters.adeudo_max !== null && definition.filters.adeudo_max !== '') {
+      rows.push({ label: 'Adeudo máximo', value: this.currencyLabel(definition.filters.adeudo_max) });
+    }
+    if (definition.filters.selected_sucursal_keys?.length) {
+      rows.push({ label: 'Solo sucursales incluidas', value: definition.filters.selected_sucursal_keys.join(', ') });
+    }
+    if (definition.filters.excluded_sucursal_keys?.length) {
+      rows.push({ label: 'Sucursales excluidas', value: definition.filters.excluded_sucursal_keys.join(', ') });
     }
     if (definition.filters.iventas_current_statuses?.length) {
       rows.push({

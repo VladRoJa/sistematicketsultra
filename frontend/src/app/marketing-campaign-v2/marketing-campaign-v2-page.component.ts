@@ -48,6 +48,8 @@ import {
   CampaignV2AudienceFamily,
   CampaignV2BlacklistSummary,
   CampaignV2CampaignSummary,
+  CampaignV2BudgetRateRevision,
+  CampaignV2DispatchTemplate,
   CampaignV2ConsolidatedReport,
   CampaignV2HistoryDeliveryBucket,
   CampaignV2HistoricalTargetingMatch,
@@ -65,6 +67,9 @@ import {
   CampaignV2SourceMetadata,
 } from './marketing-campaign-v2.models';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
+import {
+  campaignV2IndicativeBudget,
+} from './marketing-campaign-v2-budget.logic';
 import { MarketingSalesFunnelService } from '../marketing-sales-funnel/marketing-sales-funnel.service';
 import { DateRangeSelectorComponent } from '../shared/date-range-selector/date-range-selector.component';
 import {
@@ -182,6 +187,11 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     return this.options?.historical_targeting?.window_modes ?? [];
   }
   preview: CampaignV2PreviewResponse | null = null;
+  readonly budgetTemplate = new FormControl<number | null>(null);
+  pricingTemplates: CampaignV2DispatchTemplate[] = [];
+  pricingRevisions: CampaignV2BudgetRateRevision[] = [];
+  pricingLoaded = false;
+  pricingError = '';
   campaigns: CampaignV2CampaignSummary[] = [];
   reporting: CampaignV2ConsolidatedReport | null = null;
   blacklistSummary: CampaignV2BlacklistSummary | null = null;
@@ -212,6 +222,14 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   private previewRequest: CampaignV2AudienceDefinitionRequest | null = null;
 
   ngOnInit(): void {
+    this.purpose.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.budgetTemplate.setValue(null);
+        if (this.canManageDispatchConfig) {
+          this.loadPreliminaryPricing();
+        }
+      });
     this.source.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(source => {
@@ -444,6 +462,48 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     return Boolean(this.options?.scope.is_global && this.options?.scope.can_manage_dispatch_config);
   }
 
+  get previewBudgetEstimate() {
+    const selected = this.pricingTemplates.find(row => row.id === this.budgetTemplate.value);
+    return campaignV2IndicativeBudget(
+      selected, this.pricingRevisions, this.preview?.unique_recipient_count ?? 0,
+      new Date().toISOString(),
+    );
+  }
+
+  loadPreliminaryPricing(): void {
+    this.pricingLoaded = false;
+    this.pricingError = '';
+    if (!this.canManageDispatchConfig) { return; }
+    // Pricing access is global-only. An error never blocks preview/freeze.
+    this.service.listDispatchTemplates(this.purpose.value)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: result => {
+          this.pricingTemplates = result.rows;
+          const current = this.budgetTemplate.value;
+          if (!result.rows.some(row => row.id === current)) {
+            this.budgetTemplate.setValue(result.rows[0]?.id ?? null);
+          }
+          this.service.listBudgetRateRevisions()
+            .pipe(takeUntilDestroyed(this.destroyRef))
+            .subscribe({
+              next: rates => {
+                this.pricingRevisions = rates.rows;
+                this.pricingLoaded = true;
+              },
+              error: () => {
+                this.pricingError = 'No se pudo obtener el catálogo de tarifas de referencia.';
+                this.pricingRevisions = [];
+              },
+            });
+        },
+        error: () => {
+          this.pricingTemplates = [];
+          this.pricingError = 'No se pudo obtener el catálogo de plantillas para cotizar.';
+        },
+      });
+  }
+
   openDispatchConfiguration(): void {
     if (!this.canManageDispatchConfig) {
       return;
@@ -492,6 +552,9 @@ export class MarketingCampaignV2PageComponent implements OnInit {
           this.loadCampaigns(1);
           if (options.scope.is_global) {
             this.loadBlacklistSummary();
+            if (this.canManageDispatchConfig) {
+              this.loadPreliminaryPricing();
+            }
           } else {
             this.blacklistSummary = null;
           }

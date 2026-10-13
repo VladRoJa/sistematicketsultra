@@ -49,6 +49,13 @@ from app.services.marketing_campaign_v2_dispatch_config_service import (
     save_channel_binding,
     save_template,
 )
+from app.services.marketing_campaign_v2_budget_service import (
+    CampaignV2BudgetValidationError,
+    CampaignV2BudgetConflictError,
+    estimate_preflight_cost,
+    list_cost_rate_revisions,
+    register_cost_rate_revision,
+)
 from app.services.marketing_campaign_v2_preflight_service import (
     build_campaign_v2_preflight,
     serialize_campaign_v2_preflight,
@@ -1217,6 +1224,57 @@ def update_campaign_v2_dispatch_template_endpoint(template_id: int):
         return _error("No fue posible guardar el template Campaign V2.", 500)
 
 
+@marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/cost-rates")
+@jwt_required()
+def list_campaign_v2_cost_rate_revisions_endpoint():
+    try:
+        _resolve_campaign_v2_dispatch_config_request()
+        _validate_query_args({"template_id"})
+        raw_id = request.args.get("template_id")
+        template_id = (
+            _parse_positive_query_int(raw_id, field_name="template_id")
+            if raw_id is not None else None
+        )
+        return jsonify({
+            "rows": list_cost_rate_revisions(
+                template_id=template_id, session=db.session,
+            )
+        }), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (CampaignV2BudgetValidationError, MarketingCampaignV2RouteValidationError) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("Falló el listado de cotizaciones.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/dispatch/cost-rates")
+@jwt_required()
+def create_campaign_v2_cost_rate_revision_endpoint():
+    try:
+        user, _ = _resolve_campaign_v2_dispatch_config_request()
+        payload = _parse_payload({
+            "template_id", "provider_channel_id", "unit_cost_mxn",
+            "source_reference",
+        })
+        row = register_cost_rate_revision(
+            template_id=payload.get("template_id"),
+            provider_channel_id=payload.get("provider_channel_id"),
+            unit_cost_mxn=payload.get("unit_cost_mxn"),
+            source_reference=payload.get("source_reference"),
+            actor_user_id=int(user.id), session=db.session,
+        )
+        return jsonify(row), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (CampaignV2BudgetValidationError, MarketingCampaignV2RouteValidationError) as exc:
+        return _error(str(exc), 400)
+    except CampaignV2BudgetConflictError as exc:
+        return _error(str(exc), 409)
+    except Exception:
+        return _error("Falló el registro de cotización.", 500)
+
+
 @marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/channel-bindings")
 @jwt_required()
 def list_campaign_v2_channel_bindings_endpoint():
@@ -1447,6 +1505,12 @@ def campaign_v2_preflight_endpoint(campaign_id: int):
             session=db.session,
         )
         result = serialize_campaign_v2_preflight(plan)
+        # Quote is read-only and never changes the dispatch fingerprint.
+        # Protect existing tests/tools that inject a serialized plan stub.
+        if hasattr(plan, "batches") and hasattr(plan, "sendable_phones"):
+            result["budget"] = estimate_preflight_cost(
+                plan=plan, session=db.session,
+            )
         submit_state = get_campaign_v2_submit_state(
             campaign_id=campaign_id,
             session=db.session,

@@ -173,6 +173,73 @@
         </div>
       </ng-container>
     </section>
+    <section class="catalog" aria-label="Tarifas estimadas">
+      <div class="section-heading">
+        <div>
+          <h3>Presupuestos · tarifas de referencia</h3>
+          <p>Costos manuales en MXN por mensaje, versión por plantilla y canal. No son cargos confirmados por iVentas.</p>
+        </div>
+      </div>
+      <div class="catalog-table">
+        <table>
+          <thead>
+            <tr><th>Plantilla</th><th>Canal</th><th>MXN por contacto</th><th>Fuente</th><th>Vigente desde</th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of latestBudgetRates">
+              <td>{{ row.template_id }}</td>
+              <td>{{ row.provider_channel_id }}</td>
+              <td>{{ row.unit_cost_mxn }}</td>
+              <td>{{ row.source_reference }}</td>
+              <td>{{ row.valid_from | date:'short' }}</td>
+            </tr>
+            <tr *ngIf="!latestBudgetRates.length">
+              <td colspan="5">Sin cotizaciones registradas. El sistema no asignará costos ficticios.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="editor">
+        <h4>Registrar nueva versión de tarifa</h4>
+        <div class="form-grid">
+          <mat-form-field appearance="outline">
+            <mat-label>Plantilla activa</mat-label>
+            <mat-select [formControl]="pricingTemplateId">
+              <mat-option *ngFor="let row of templates" [value]="row.id" [disabled]="!row.is_active">
+                {{ row.label }} ({{ row.template_name }})
+              </mat-option>
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Canal</mat-label>
+            <mat-select [formControl]="pricingChannelId">
+              <mat-option *ngFor="let row of availableChannels" [value]="row.provider_channel_id">
+                {{ row.sucursal_canon }} · {{ row.provider_channel_id }}
+              </mat-option>
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Costo unitario estimado MXN</mat-label>
+            <input matInput inputmode="decimal" placeholder="0.850000" [formControl]="pricingUnitCostMxn">
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Fuente de cotización / aprobación</mat-label>
+            <input matInput maxlength="255" placeholder="Cotización interna autorizada #..." [formControl]="pricingSourceReference">
+          </mat-form-field>
+        </div>
+        <p class="muted">
+          Cada registro genera una revisión histórica inmutable; actualizar el precio requiere registrar otra revisión.
+          Sin precio para un canal, el preflight mostrará presupuesto incompleto.
+        </p>
+        <p *ngIf="budgetRateSuccess" role="status">{{ budgetRateSuccess }}</p>
+        <div class="editor-actions">
+          <button mat-flat-button color="primary" type="button"
+            [disabled]="!canSaveBudgetRate" (click)="registerBudgetRate()">
+            {{ savingBudgetRate ? 'Guardando…' : 'Registrar revisión' }}
+          </button>
+        </div>
+      </div>
+    </section>
   </ng-container>
 </mat-dialog-content>
 

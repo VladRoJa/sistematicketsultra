@@ -113,3 +113,15 @@ dl { margin:0; }.metadata-panel dl div { display:grid; grid-template-columns:170
   .reporting-actions { align-items:stretch; flex-direction:column; }
   .reporting-filters,.reporting-metric-grid,.reporting-rate-grid,.reporting-secondary-grid { grid-template-columns:1fr; }
 }
+
+/* Issue #856 / B — compact breakdown and indicative cost reference. */
+.budget-dimension-scroll { max-height: 245px; overflow-y: auto; }
+.budget-preview-panel {
+  border: 1px solid var(--mat-sys-outline-variant, #ddd);
+  border-radius: 10px;
+  padding: 16px;
+  margin: 16px 0;
+}
+.budget-preview-panel > h4 { margin-top: 0; }
+.budget-preview-panel > p { font-size: 12px; color: var(--mat-sys-on-surface-variant, #666); }
+.budget-preview-panel mat-form-field { width: min(360px, 100%); }

@@ -1855,6 +1855,28 @@ def _serialize_preview(plan: _AudiencePlan) -> dict[str, Any]:
         "duplicate_count": len(plan.duplicate_rows),
         "unique_recipient_count": len(plan.recipients),
     }
+    # Unique recipients (not pre-deduped candidates): diagnostic dimensions.
+    # These are presentation-only; do not enter the frozen fingerprint summary.
+    by_branch = defaultdict(int)
+    by_family = defaultdict(int)
+    for recipient in plan.recipients:
+        branch = (
+            "SUCURSAL_AMBIGUA" if "sucursal" in recipient.conflict_fields
+            else str(recipient.sucursal or "SIN_SUCURSAL").strip()
+        )
+        family = str(recipient.audience_family or "SIN_FAMILIA").strip()
+        by_branch[branch] += 1
+        by_family[family] += 1
+    payload["recipient_dimensions"] = {
+        "branches": [
+            {"label": key, "count": by_branch[key]}
+            for key in sorted(by_branch)
+        ],
+        "families": [
+            {"label": key, "count": by_family[key]}
+            for key in sorted(by_family)
+        ],
+    }
     if plan.source == SOURCE_FUNNEL_PORTFOLIO:
         payload.update(
             {

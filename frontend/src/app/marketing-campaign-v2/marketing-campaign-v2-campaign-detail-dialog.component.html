@@ -266,6 +266,33 @@
             <div><span>Provider campaigns</span><strong>{{ plan.provider_campaign_count | number }}</strong></div>
           </div>
 
+          <section *ngIf="plan.budget as budget" class="budget-preview" aria-label="Presupuesto estimado">
+            <h4>Presupuesto de referencia — MXN</h4>
+            <p class="muted">Costo estimado con tarifas registradas por el operador. No es factura ni precio confirmado por iVentas/Meta.</p>
+            <div class="preflight-summary-grid">
+              <div><span>Cobertura cotizada</span><strong>{{ budget.priced_recipients | number }} / {{ budget.sendable_recipients | number }}</strong></div>
+              <div><span>Subtotal conocido</span><strong>MXN ${{ budget.priced_subtotal_mxn }}</strong></div>
+              <div><span>Total estimado</span><strong>{{ budgetTotalLabel(budget) }}</strong></div>
+            </div>
+            <p *ngIf="budget.status !== 'COMPLETE'" class="muted">
+              Presupuesto incompleto: {{ budget.missing_rate_channels.length }} lotes sin tarifa
+              y {{ budget.unassigned_recipients | number }} destinatarios sin lote.
+            </p>
+            <div class="table-wrap preflight-batches" *ngIf="budget.batches.length">
+              <table>
+                <thead><tr><th>Sucursal</th><th>Contactos</th><th>Revisión</th><th>Unitario MXN</th><th>Estimado MXN</th></tr></thead>
+                <tbody>
+                  <tr *ngFor="let batch of budget.batches">
+                    <td>{{ batch.sucursal_canon }}</td>
+                    <td>{{ batch.recipients | number }}</td>
+                    <td>{{ budgetRevisionLabel(batch) }}</td>
+                    <td>{{ budgetRateLabel(batch) }}</td>
+                    <td>{{ budgetAmountLabel(batch) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
           <div *ngIf="preflightBlockedTotal() > 0" class="preflight-blockers">
             <strong>Bloqueos</strong>
             <span *ngIf="plan.blocked.missing_branch">Sucursal no resoluble: {{ plan.blocked.missing_branch }}</span>
