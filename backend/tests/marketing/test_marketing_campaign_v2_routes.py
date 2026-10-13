@@ -660,7 +660,7 @@ class TestMarketingCampaignV2Routes:
         }
         assert body["tariff_categories"] == categories
         mocked.assert_called_once()
-        assert body["scope"] == {"is_global": True, "allowed_sucursal_keys": None}
+        assert body["scope"] == {"is_global": True, "allowed_sucursal_keys": None, "can_manage_dispatch_config": True}
 
     def test_partial_scope_is_derived_from_backend_branch_ids(self):
         expected = {11: "BRANCH A", 22: "BRANCH B"}
@@ -2912,7 +2912,7 @@ class TestMarketingCampaignV2Routes:
         assert result.status_code == 200
         assert result.get_json()["rows"] == [{"id": 5, "is_active": False}]
         assert mocked.call_args.kwargs["active_only"] is False
-        assert mocked.call_args.kwargs["purpose"] if "purpose" in mocked.call_args.kwargs else True
+        assert "purpose" not in mocked.call_args.kwargs
 
     def test_admin_routes_no_unprivileged_catalog_or_mutation(self):
         urls = (
