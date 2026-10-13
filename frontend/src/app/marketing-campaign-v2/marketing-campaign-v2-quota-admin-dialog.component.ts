@@ -15,6 +15,7 @@ import {
   CampaignV2ChannelBinding,
 } from './marketing-campaign-v2.models';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
+import { isCampaignV2NominalLimitValid, isCampaignV2RemainingCountValid, isCampaignV2ZonedDateString } from './marketing-campaign-v2-admin-validation.logic';
 
 @Component({
   selector: 'app-marketing-campaign-v2-quota-admin-dialog',
@@ -33,6 +34,8 @@ export class MarketingCampaignV2QuotaAdminDialogComponent implements OnInit {
   busy = false;
   error = '';
   success = '';
+  showPolicyForm = false;
+  showCapacityForm = false;
 
   readonly channelId = new FormControl('', { nonNullable: true });
   readonly portfolioKey = new FormControl('', { nonNullable: true });
@@ -52,6 +55,12 @@ export class MarketingCampaignV2QuotaAdminDialogComponent implements OnInit {
 
   ngOnInit(): void { this.reload(); }
   close(): void { this.dialogRef.close(); }
+  togglePolicyForm(): void {
+    if (!this.busy) { this.showPolicyForm = !this.showPolicyForm; }
+  }
+  toggleCapacityForm(): void {
+    if (!this.busy) { this.showCapacityForm = !this.showCapacityForm; }
+  }
 
   get canSavePolicy(): boolean {
     const n = this.nominalLimit.value.trim();
@@ -59,7 +68,7 @@ export class MarketingCampaignV2QuotaAdminDialogComponent implements OnInit {
       c.provider_channel_id === this.channelId.value)
       && [this.portfolioKey, this.accountKey, this.phoneAlias,
         this.timezone, this.policySource].every(c => c.value.trim().length > 0)
-      && (!n || (/^[1-9]\\d*$/.test(n) && Number.isSafeInteger(Number(n))));
+      && isCampaignV2NominalLimitValid(n);
   }
 
   get canSaveCapacity(): boolean {
@@ -70,8 +79,8 @@ export class MarketingCampaignV2QuotaAdminDialogComponent implements OnInit {
     const registered = (this.evidence?.policies || []).some(p =>
       (this.scopeKind.value === 'CHANNEL' ? p.provider_channel_id : p.portfolio_key) === key);
     return !this.busy && registered && this.capacitySource.value.trim().length > 0
-      && /^\\d+$/.test(n) && Number.isSafeInteger(Number(n))
-      && iso.every(s => /(Z|[+-]\\d\\d:\\d\\d)$/.test(s))
+      && isCampaignV2RemainingCountValid(n)
+      && iso.every(isCampaignV2ZonedDateString)
       && times.every(t => Number.isFinite(t))
       && times[0] < times[1] && times[1] <= times[2]
       && times[0] <= Date.now() && times[1] - times[0] <= 24 * 3600_000;
@@ -112,6 +121,7 @@ export class MarketingCampaignV2QuotaAdminDialogComponent implements OnInit {
       next: row => {
         this.busy = false;
         this.success = 'Política #' + row.revision_id + ' registrada. Cupo real pendiente de observar.';
+        this.showPolicyForm = false;
         this.reload();
       },
       error: err => this.handleError(err),
@@ -134,6 +144,7 @@ export class MarketingCampaignV2QuotaAdminDialogComponent implements OnInit {
       next: row => {
         this.busy = false;
         this.success = 'Evidencia #' + row.attestation_id + ' guardada; no equivale a verificación automática con Meta.';
+        this.showCapacityForm = false;
         this.reload();
       },
       error: err => this.handleError(err),

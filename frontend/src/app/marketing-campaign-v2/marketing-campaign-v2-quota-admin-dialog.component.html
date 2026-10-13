@@ -1,17 +1,23 @@
 <h2 mat-dialog-title>Control de capacidad WhatsApp · evidencia operativa</h2>
 <mat-dialog-content class="quota-admin">
-  <p>Registro manual de la capacidad reportada por un operador.
-    Suite no consulta en tiempo real a Meta ni garantiza disponibilidad.
-    No se habilita ningún envío desde esta pantalla.</p>
+  <p class="quota-intro"><strong>Evidencia manual, no cupo en tiempo real.</strong>
+    Suite no consulta a Meta ni garantiza disponibilidad. Esta pantalla nunca habilita envíos.</p>
+  <div class="evidence-summary" *ngIf="evidence as summary" aria-label="Registros de capacidad">
+    <span><strong>{{ summary.policies.length }}</strong> políticas registradas</span>
+    <span><strong>{{ summary.attestations.length }}</strong> observaciones históricas</span>
+  </div>
   <p *ngIf="error" class="error" role="alert">{{ error }}</p>
   <p *ngIf="success" role="status">{{ success }}</p>
   <p *ngIf="busy" role="status">Cargando o guardando…</p>
 
   <section class="quota-section">
-    <h3>1. Asociación canal / portafolio</h3>
-    <p>Registra la cuenta, el número y el portafolio compartido. Si varios
-      canales usan el mismo portafolio, utiliza exactamente la misma clave.</p>
-    <div class="quota-grid">
+    <div class="quota-heading">
+      <div><h3>1. Asociación canal / portafolio</h3>
+        <p>Vincula los canales al portafolio compartido. Usa la misma clave si varios canales pertenecen al mismo portafolio.</p></div>
+      <button mat-stroked-button type="button" (click)="togglePolicyForm()" [disabled]="busy"
+        [attr.aria-expanded]="showPolicyForm">{{ showPolicyForm ? 'Ocultar formulario' : 'Nueva política' }}</button>
+    </div>
+    <div class="quota-grid" *ngIf="showPolicyForm">
       <mat-form-field appearance="outline">
         <mat-label>Canal iVentas activo</mat-label>
         <mat-select [formControl]="channelId">
@@ -47,16 +53,19 @@
         <input matInput maxlength="255" [formControl]="policySource">
       </mat-form-field>
     </div>
-    <button mat-flat-button color="primary" type="button" (click)="savePolicy()"
+    <button *ngIf="showPolicyForm" mat-flat-button color="primary" type="button" (click)="savePolicy()"
       [disabled]="!canSavePolicy">Registrar revisión de política</button>
   </section>
 
   <section class="quota-section">
-    <h3>2. Cupo real reportado: canal y portafolio</h3>
-    <p>Para diagnosticar cada lote se requiere evidencia vigente <strong>del canal y del
-      portafolio</strong>. Registra ambas observaciones con el cupo realmente
-      restante, fuente, cierre de ventana y caducidad.</p>
-    <div class="quota-grid">
+    <div class="quota-heading">
+      <div><h3>2. Cupo reportado por canal y portafolio</h3>
+        <p>Registra evidencia vigente de ambos ámbitos, con mensajes restantes, fuente y caducidad.</p></div>
+      <button mat-stroked-button type="button" (click)="toggleCapacityForm()" [disabled]="busy"
+        [attr.aria-expanded]="showCapacityForm">{{ showCapacityForm ? 'Ocultar formulario' : 'Nueva observación' }}</button>
+    </div>
+    <p class="quota-tip" *ngIf="showCapacityForm">Primero registra la política del canal; después utiliza la clave exacta del canal o portafolio y fechas ISO con zona horaria.</p>
+    <div class="quota-grid" *ngIf="showCapacityForm">
       <mat-form-field appearance="outline">
         <mat-label>Ámbito</mat-label>
         <mat-select [formControl]="scopeKind">
@@ -89,7 +98,7 @@
         <input matInput maxlength="255" [formControl]="capacitySource">
       </mat-form-field>
     </div>
-    <button mat-flat-button color="primary" type="button" (click)="saveCapacity()"
+    <button *ngIf="showCapacityForm" mat-flat-button color="primary" type="button" (click)="saveCapacity()"
       [disabled]="!canSaveCapacity">Registrar observación</button>
   </section>
 
@@ -97,7 +106,8 @@
     <h3>Histórico de referencia</h3>
     <p>{{ data.policies.length }} políticas y {{ data.attestations.length }} observaciones
       en las últimas revisiones. Los registros son históricos; actualizar no los elimina.</p>
-    <div class="quota-scroll">
+    <p class="quota-empty" *ngIf="!data.policies.length && !data.attestations.length">Aún no hay evidencias. Registra una política y luego las observaciones verificadas del canal y portafolio.</p>
+    <div class="quota-scroll" *ngIf="data.policies.length">
       <table>
         <thead><tr><th>Canal</th><th>Portafolio</th><th>Cuenta/número</th><th>Nominal</th><th>Fuente</th></tr></thead>
         <tbody>
@@ -111,7 +121,7 @@
         </tbody>
       </table>
     </div>
-    <div class="quota-scroll">
+    <div class="quota-scroll" *ngIf="data.attestations.length">
       <table>
         <thead><tr><th>Ámbito</th><th>Clave</th><th>Restantes</th><th>Caduca</th><th>Fuente</th></tr></thead>
         <tbody>
