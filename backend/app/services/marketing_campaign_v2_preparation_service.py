@@ -27,6 +27,9 @@ from app.services.marketing_campaign_v2_dispatch_exclusion_service import (
     add_campaign_v2_ambiguous_branch_exclusions,
     find_previous_campaign_contact_ids,
 )
+from app.services.marketing_campaign_v2_dispatch_branch_service import (
+    resolve_dispatch_branch_key,
+)
 from app.services.marketing_campaign_v2_query_service import get_campaign_v2
 from app.warehouse.services.socios_vencidos_current_status_resolver import (
     normalize_socios_vencidos_branch_key,
@@ -53,16 +56,26 @@ def _ambiguous_rows(*, campaign_id: int, allowed_sucursal_keys, session: Any):
         MarketingCampaignV2RecipientORM.sucursal.is_(None),
     ).order_by(MarketingCampaignV2RecipientORM.id).all()
     grouped = []
+    branch_lookup: dict[str, bool] = {}
     for recipient in rows:
         keys = sorted({
             key for evidence in recipient.evidence_rows
             if (key := normalize_socios_vencidos_branch_key(evidence.sucursal_key))
         })
-        kind = (
-            "AMBIGUOUS_EVIDENCE" if len(keys) >= 2
-            else "MISSING_EVIDENCE" if not keys
-            else "SINGLE_EVIDENCE_UNRESOLVED"
-        )
+        if len(keys) >= 2:
+            kind = "AMBIGUOUS_EVIDENCE"
+        elif not keys:
+            kind = "MISSING_EVIDENCE"
+        else:
+            key = keys[0]
+            if key not in branch_lookup:
+                branch_lookup[key] = resolve_dispatch_branch_key(
+                    key, session=session,
+                ) is not None
+            kind = (
+                "SINGLE_EVIDENCE_RESOLVABLE" if branch_lookup[key]
+                else "UNMAPPED_BRANCH_ALIAS"
+            )
         grouped.append({
             "recipient_id": int(recipient.id),
             "kind": kind,
