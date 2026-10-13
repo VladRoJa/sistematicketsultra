@@ -322,6 +322,10 @@ def approve_dispatch_reservation(
             active.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:scope, 0))"),
                            {"scope": "mkt_v2_quota:" + kind + ":" + key})
 
+        # Never reuse the pre-lock clock after waiting for another operator.
+        # Keep injected test timestamps deterministic.
+        if now is None:
+            timestamp = _timestamp(None)
         # Recheck after waiting for other approvals and before reserving.
         plan = current_plan()
         if not plan.ready or plan.mode != "IMMEDIATE":
