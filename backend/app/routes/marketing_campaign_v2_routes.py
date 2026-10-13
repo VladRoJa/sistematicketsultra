@@ -57,6 +57,13 @@ from app.services.marketing_campaign_v2_quota_service import (
     register_quota_capacity,
     assess_preflight_capacity,
 )
+from app.services.marketing_campaign_v2_governed_dispatch_service import (
+    GovernedDispatchConflict,
+    GovernedDispatchDisabled,
+    authorize_governed_dispatch,
+    execute_governed_child,
+    review_execution,
+)
 from app.services.marketing_campaign_v2_manifest_service import (
     materialize_approved_manifest,
 )
@@ -1375,6 +1382,98 @@ def campaign_v2_materialize_manifest_endpoint(campaign_id: int):
     except Exception:
         db.session.rollback()
         return _error("No fue posible materializar manifiesto Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/<int:campaign_id>/dispatch/execution")
+@jwt_required()
+def campaign_v2_execution_review_endpoint(campaign_id: int):
+    try:
+        _, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        _validate_query_args(set())
+        return jsonify(review_execution(campaign_id=campaign_id, session=db.session)), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except Exception:
+        return _error("No fue posible consultar autorización D2c.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/<int:campaign_id>/dispatch/authorize")
+@jwt_required()
+def campaign_v2_governed_authorize_endpoint(campaign_id: int):
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        payload = _parse_payload({
+            "approval_id", "expected_manifest_digest",
+            "expected_ready_recipients", "confirm_dispatch",
+        })
+        result = authorize_governed_dispatch(
+            campaign_id=campaign_id, approval_id=payload.get("approval_id"),
+            expected_digest=payload.get("expected_manifest_digest"),
+            expected_ready_recipients=payload.get("expected_ready_recipients"),
+            confirmed=payload.get("confirm_dispatch"),
+            actor_user_id=int(user.id),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(result), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2RouteValidationError as exc:
+        return _error(str(exc), 400)
+    except GovernedDispatchConflict as exc:
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible autorizar ejecución D2c.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/<int:campaign_id>/dispatch/execute")
+@jwt_required()
+def campaign_v2_governed_execute_endpoint(campaign_id: int):
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        payload = _parse_payload({
+            "execution_id", "child_id", "expected_manifest_digest",
+        })
+        send_enabled = current_app.config.get("CAMPAIGN_V2_PROVIDER_SEND_ENABLED") is True
+        governed_enabled = current_app.config.get(
+            "CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED", False,
+        ) is True
+        if not (send_enabled and governed_enabled):
+            raise GovernedDispatchDisabled("Envío gobernado deshabilitado.")
+        provider = IVentasBroadcastProvider(
+            api_key=current_app.config.get("IVENTAS_CAMPAIGN_SEND_API_KEY", ""),
+            base_url=current_app.config.get(
+                "IVENTAS_CAMPAIGN_SEND_API_BASE_URL", "https://rest.iventas.mx",
+            ),
+        )
+        result = execute_governed_child(
+            campaign_id=campaign_id,
+            execution_id=payload.get("execution_id"),
+            child_id=payload.get("child_id"),
+            expected_digest=payload.get("expected_manifest_digest"),
+            actor_user_id=int(user.id),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            provider=provider, send_enabled=send_enabled,
+            governed_enabled=governed_enabled, session=db.session,
+        )
+        return jsonify(result), 200 if result["status"] == "SUBMITTED" else 502
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2RouteValidationError as exc:
+        return _error(str(exc), 400)
+    except GovernedDispatchDisabled as exc:
+        return _error(str(exc), 423)
+    except GovernedDispatchConflict as exc:
+        return _error(str(exc), 409)
+    except CampaignProviderConfigurationError as exc:
+        return _error(str(exc), 503)
+    except Exception:
+        db.session.rollback()
+        return _error("Error en despacho gobernado; revisar estado antes de reintentar.", 500)
 
 
 @marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/quota-evidence")
