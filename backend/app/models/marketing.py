@@ -732,6 +732,49 @@ class MarketingCampaignV2GovernedReconciliationEventORM(db.Model):
     )
 
 
+class MarketingCampaignV2HeldReleaseIntentORM(db.Model):
+    """Immutable authorization request, not a child state transition or send grant."""
+
+    __tablename__ = "marketing_campaign_v2_held_release_intents"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    source_campaign_id = db.Column(
+        db.BigInteger, db.ForeignKey("marketing_campaign_v2_campaigns.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    source_approval_id = db.Column(
+        db.BigInteger, db.ForeignKey("marketing_campaign_v2_dispatch_approvals.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    source_child_id = db.Column(
+        db.BigInteger, db.ForeignKey("marketing_campaign_v2_provider_campaigns.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    source_manifest_digest = db.Column(db.String(64), nullable=False)
+    candidate_fingerprint = db.Column(db.String(64), nullable=False)
+    candidate_recipients = db.Column(db.Integer, nullable=False)
+    evidence_json = db.Column(db.JSON, nullable=False)
+    source_reference = db.Column(db.String(255), nullable=False)
+    reason = db.Column(db.Text, nullable=False)
+    requested_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="RESTRICT"), nullable=False,
+    )
+    requested_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    status = db.Column(db.String(35), nullable=False, default="PENDING_FRESH_COHORT")
+
+    __table_args__ = (
+        db.UniqueConstraint("source_child_id", name="uq_mkt_v2_held_release_child"),
+        db.CheckConstraint("length(source_manifest_digest) = 64 AND length(candidate_fingerprint) = 64",
+                           name="ck_mkt_v2_held_release_fingerprints"),
+        db.CheckConstraint("candidate_recipients > 0",
+                           name="ck_mkt_v2_held_release_positive"),
+        db.CheckConstraint("status = 'PENDING_FRESH_COHORT'",
+                           name="ck_mkt_v2_held_release_intent_status"),
+        db.CheckConstraint("length(trim(source_reference)) > 0 AND length(trim(reason)) > 0",
+                           name="ck_mkt_v2_held_release_audit"),
+    )
+
+
 class MarketingCampaignV2CapacityReservationORM(db.Model):
     """Per-scope capacity ledger; never interpreted as Meta-verified availability."""
 
