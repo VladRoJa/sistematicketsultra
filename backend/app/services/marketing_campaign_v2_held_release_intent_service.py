@@ -136,12 +136,16 @@ def _load_source(*, campaign_id: int, child_id: int, session: Any, lock: bool):
 
 
 def _evaluate(*, campaign_id: int, child_id: int, allowed_sucursal_keys: Any,
-              session: Any, timestamp: datetime, lock: bool) -> dict:
+              session: Any, timestamp: datetime, lock: bool,
+              refresh_after_lock: bool = False) -> dict:
     if session.get_bind().dialect.name != "postgresql":
         raise HeldReleaseConflict("La evaluación D3c requiere PostgreSQL.")
     _, approval, _, child, original, last_sent = _load_source(
         campaign_id=campaign_id, child_id=child_id, session=session, lock=lock,
     )
+    # A competing operator may hold the campaign lock past quota expiry.
+    if lock and refresh_after_lock:
+        timestamp = _utc(None)
     plan = build_campaign_v2_preflight(
         campaign_id=campaign_id, template_id=int(approval.template_id),
         allowed_sucursal_keys=allowed_sucursal_keys, session=session, now=timestamp,
@@ -257,6 +261,7 @@ def request_held_release_intent(
             campaign_id=campaign_id, child_id=child_id,
             allowed_sucursal_keys=allowed_sucursal_keys, session=active,
             timestamp=_utc(now), lock=True,
+            refresh_after_lock=now is None,
         )
         if (preview["candidate_fingerprint"] != expected_candidate_fingerprint or
                 preview["recipient_count"] != expected_recipient_count):
