@@ -597,6 +597,18 @@ def _apply_crm_history_availability(
     data_quality["survey_fallback_only_after_no_iventas_match"] = None
 
 
+def _attach_google_ads_branch_attribution(
+    *, payload: dict, month_start: date, cutoff_date: date,
+    access: MarketingAccess,
+) -> None:
+    """Append M5 evidence without modifying any existing Funnel metric."""
+    payload["google_ads_branch_attribution"] = read_google_ads_branch_attribution(
+        month_start=month_start,
+        cutoff_date=cutoff_date,
+        access=access,
+    )
+
+
 def build_marketing_sales_funnel_at_cutoff(
     *,
     month: str,
@@ -832,9 +844,9 @@ def build_marketing_sales_funnel_at_cutoff(
         meta_assigned=payload["summary"]["investment"],
         google_ads=google_ads_investment,
     )
-    # M5: independent, permission-scoped historical evidence. Never mutate
-    # summary, branches[].investment or the existing Meta CPL/CPT/CAC basis.
-    payload["google_ads_branch_attribution"] = read_google_ads_branch_attribution(
+    # M5 is supplementary; existing Meta/Funnel metrics remain unchanged.
+    _attach_google_ads_branch_attribution(
+        payload=payload,
         month_start=month_start,
         cutoff_date=selected_cutoff,
         access=access,
