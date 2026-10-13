@@ -157,22 +157,36 @@ def test_cost_drift_is_rejected():
         service._verify_facts(conn, campaigns, groups, mapping)
 
 
-def test_approval_requires_admin_admicorp(monkeypatch):
-    conn, campaigns, groups, mapping = _fake_facts()
-    manifest = {
-        "id": service.M5_REFERENCE, "customer_id": service.CUSTOMER_ID,
-        "rows": [
-            [None, None, item["campaign_key"], item["ad_group_key"],
-             item["sucursal_canon"], i + 1, "0"]
-            for i, item in enumerate(mapping)
-        ],
-    }
-    monkeypatch.setattr(service, "_load_m5", lambda: manifest)
-    monkeypatch.setattr(service, "_m5_preflight", lambda conn, apply: {
-        "previous_identities": 26, "approved_identities": 26,
-    })
-    monkeypatch.setattr(service, "_check_existing", lambda conn, identities: (None, None))
-    monkeypatch.setattr(service, "_verify_facts", lambda conn, c, g, ids: {})
-    with pytest.raises(RuntimeError, match="requiere identificador"):
-        service.run_on_connection(conn, apply=True, approved_by_user_id=None,
-                                  parsed_files=(campaigns, groups))
+def test_direct_apply_is_blocked_even_with_admicorp_user_id():
+    # An arbitrary numeric user ID does not authenticate the CLI operator.
+    for actor_id in (None, 47, 1):
+        with pytest.raises(RuntimeError, match="APPLY deshabilitado"):
+            service.run_on_connection(
+                None, apply=True, approved_by_user_id=actor_id,
+                parsed_files=None,
+            )
+
+
+def test_public_approval_entry_rejects_all_write_attempts(monkeypatch):
+    def should_not_be_called(*args, **kwargs):
+        raise AssertionError("No file or DB reads should occur for rejected APPLY")
+
+    monkeypatch.setattr(service, "_load_m5", should_not_be_called)
+    monkeypatch.setattr(service, "_load_files", should_not_be_called)
+    for actor_id in (None, 47, 1):
+        with pytest.raises(RuntimeError, match="APPLY deshabilitado"):
+            service.run_approval(apply=True, approved_by_user_id=actor_id)
+
+
+def test_cli_has_no_apply_option():
+    from pathlib import Path
+
+    cli_path = (
+        Path(__file__).resolve().parents[2]
+        / "scripts/apply_google_ads_m6_continuity.py"
+    )
+    code = cli_path.read_text(encoding="utf-8")
+    assert "parser.add_argument(\"--apply\"" not in code
+    assert "parser.add_argument(\"--approved-by-user-id\"" not in code
+    assert "parser.parse_args()" in code
+    assert 'result = run_approval()' in code
