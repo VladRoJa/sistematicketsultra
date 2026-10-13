@@ -32,7 +32,7 @@ def test_ambiguous_review_classifies_and_requires_bulk_confirmation(monkeypatch,
         campaign_id=15, allowed_sucursal_keys=None, session=session,
         page=1, page_size=25,
     )
-    assert result["counts"]["AMBIGUOUS_EVIDENCE"] == count
+    assert result["counts"].get("AMBIGUOUS_EVIDENCE", 0) == count
     assert result["counts"]["MISSING_EVIDENCE"] == 2
     assert result["new_exclusions"] == count
     assert result["requires_bulk_confirmation"] is bulk
