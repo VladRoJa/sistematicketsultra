@@ -11,6 +11,10 @@
         (click)="openDispatchConfiguration()">
         Configuración · plantillas y canales
       </button>
+      <button *ngIf="canManageDispatchConfig" mat-stroked-button type="button"
+        (click)="openQuotaEvidence()">
+        Control de cupos · evidencia
+      </button>
     </div>
   </header>
 
