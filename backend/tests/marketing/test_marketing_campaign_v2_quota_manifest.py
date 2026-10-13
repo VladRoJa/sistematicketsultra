@@ -139,7 +139,10 @@ def test_all_held_manifest_never_allowed():
     a = synthetic_approval()
     a.manifest_json["batches"][0].update({
         "planned_status": "HELD", "hold_reason": "CHANNEL_DAILY_QUOTA",
-        "hold_evidence": {"dispatch_fingerprint": FP, "quote_fingerprint": QUOTE},
+        "hold_evidence": {
+            "dispatch_fingerprint": FP, "quote_fingerprint": QUOTE,
+            "source_reference": "synthetic quota limit",
+        },
     })
     with pytest.raises(approval.CampaignV2ApprovalConflictError, match="completamente HELD"):
         manifest._assert_manifest(synthetic_plan(), synthetic_quote(), a)
