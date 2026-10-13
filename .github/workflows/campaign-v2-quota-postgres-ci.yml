@@ -71,4 +71,5 @@ jobs:
             tests/marketing/test_marketing_campaign_v2_submit_service.py \
             tests/marketing/test_marketing_campaign_v2_retry_service.py \
             tests/marketing/test_marketing_campaign_v2_quota_execution.py \
-            tests/marketing/test_marketing_campaign_v2_quota_execution_postgres.py
+            tests/marketing/test_marketing_campaign_v2_quota_execution_postgres.py \
+            tests/marketing/test_marketing_campaign_v2_quota_dispatch_real_pg.py
