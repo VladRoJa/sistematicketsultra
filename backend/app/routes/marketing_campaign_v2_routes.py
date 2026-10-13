@@ -1549,7 +1549,10 @@ def campaign_v2_exclude_ambiguous_branches_endpoint(campaign_id: int):
         return _error(str(exc), 403)
     except MarketingCampaignV2NotFoundError:
         return _error("Campaign V2 no encontrada.", 404)
-    except (CampaignV2PreparationValidationError, MarketingCampaignV2RouteValidationError) as exc:
+    except MarketingCampaignV2RouteValidationError as exc:
+        db.session.rollback()
+        return _error(str(exc), 400)
+    except CampaignV2PreparationValidationError as exc:
         db.session.rollback()
         return _error(str(exc), 409)
     except Exception:
@@ -1608,7 +1611,10 @@ def campaign_v2_previous_contacts_apply_endpoint(campaign_id: int):
         return _error(str(exc), 403)
     except MarketingCampaignV2NotFoundError:
         return _error("Campaign V2 no encontrada.", 404)
-    except (CampaignV2PreparationValidationError, MarketingCampaignV2RouteValidationError) as exc:
+    except MarketingCampaignV2RouteValidationError as exc:
+        db.session.rollback()
+        return _error(str(exc), 400)
+    except CampaignV2PreparationValidationError as exc:
         db.session.rollback()
         return _error(str(exc), 409)
     except Exception:
