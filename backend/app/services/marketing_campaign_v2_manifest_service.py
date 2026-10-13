@@ -107,6 +107,11 @@ def _validate_existing(plan: Any, by_name: dict, rows: list):
             build_campaign_v2_provider_dispatch_batch(plan=plan, batch=batch)
         )
         if (row.status != definition["planned_status"] or
+                int(row.campaign_v2_id) != int(plan.campaign_id) or
+                row.provider != plan.provider or
+                int(row.sucursal_id) != int(batch.sucursal_id) or
+                int(row.channel_binding_id) != int(batch.channel_binding_id or 0) or
+                row.template_name != batch.template_name or
                 row.dispatch_fingerprint != plan.dispatch_fingerprint or
                 row.idempotency_key != expected_key or
                 row.provider_channel_id != batch.provider_channel_id or
@@ -114,8 +119,15 @@ def _validate_existing(plan: Any, by_name: dict, rows: list):
                 int(row.template_id) != int(batch.template_id) or
                 dict(row.request_snapshot_json or {}) != expected_snapshot or
                 row.provider_campaign_id is not None or
-                row.submit_started_at is not None or row.submitted_at is not None):
+                row.submit_started_at is not None or row.submitted_at is not None or
+                row.submitted_by_user_id is not None or
+                row.error_code is not None):
             raise CampaignV2ApprovalConflictError("Child modificado; no se reescribe.")
+        if definition["planned_status"] == "READY" and (
+            row.hold_reason is not None or row.held_at is not None or
+            row.held_by_user_id is not None or dict(row.hold_evidence_json or {})
+        ):
+            raise CampaignV2ApprovalConflictError("READY alterado con campos de retención.")
         if definition["planned_status"] == "HELD" and (
             row.hold_reason != "CHANNEL_DAILY_QUOTA" or
             dict(row.hold_evidence_json or {}) != definition["hold_evidence"] or
