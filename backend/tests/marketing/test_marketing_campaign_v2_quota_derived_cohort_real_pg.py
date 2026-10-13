@@ -125,7 +125,19 @@ def test_real_postgres_freeze_clones_and_records_one_authorized_intent(monkeypat
                 requested_by_user_id=7, requested_at=NOW,
                 status="PENDING_FRESH_COHORT",
             )
-            session.add_all([campaign, recipient, evidence, approval, child, intent])
+            # Scalar FK IDs are intentional in this isolated fixture.
+            # Explicit flush order establishes every parent before its child.
+            session.add(campaign)
+            session.flush()
+            session.add(recipient)
+            session.flush()
+            session.add(evidence)
+            session.flush()
+            session.add(approval)
+            session.flush()
+            session.add(child)
+            session.flush()
+            session.add(intent)
             session.commit()
 
             fresh = {
