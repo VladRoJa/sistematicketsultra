@@ -489,6 +489,58 @@ export interface CampaignV2BudgetBatch {
   estimated_mxn: string | null;
 }
 
+export interface CampaignV2BranchDiagnosticRow {
+  recipient_id: number;
+  kind: 'AMBIGUOUS_EVIDENCE' | 'MISSING_EVIDENCE' | 'SINGLE_EVIDENCE_RESOLVABLE' | 'UNMAPPED_BRANCH_ALIAS';
+  branch_keys: string[];
+  existing_exclusion_reason: string | null;
+}
+
+export interface CampaignV2BranchReview {
+  campaign_id: number;
+  review_fingerprint: string;
+  unresolved_count: number;
+  counts: Record<string, number>;
+  candidate_count: number;
+  already_excluded_count: number;
+  conflict_count: number;
+  new_exclusions: number;
+  requires_bulk_confirmation: boolean;
+  can_apply: boolean;
+  page: number;
+  page_size: number;
+  rows: CampaignV2BranchDiagnosticRow[];
+}
+
+export interface CampaignV2PreviousContactReview {
+  campaign_id: number;
+  source_campaign_ids: number[];
+  matched: number;
+  review_fingerprint: string;
+  source_breakdown: Array<{
+    source_campaign_id: number;
+    submitted_contacts: number;
+    overlap_contacts: number;
+    unique_assigned: number;
+  }>;
+  new_exclusions: number;
+  already_excluded_count: number;
+  conflict_count: number;
+  can_apply: boolean;
+}
+
+export interface CampaignV2PreparationApplyResponse {
+  campaign_id: number;
+  added: number;
+  already_present: number;
+}
+
+export interface CampaignV2PreparationApplyRequest {
+  expected_fingerprint: string;
+  expected_count: number;
+  allow_bulk: boolean;
+}
+
 export interface CampaignV2PreflightBudget {
   status: 'COMPLETE' | 'INCOMPLETE';
   currency: 'MXN';
@@ -523,6 +575,10 @@ export type CampaignV2SubmitStatus =
   | 'SUBMITTED'
   | 'PROVIDER_ERROR'
   | 'RECONCILIATION_REQUIRED'
+  | 'HELD'
+  | 'SCHEDULED'
+  | 'RETRY_ELIGIBLE'
+  | 'RETRY_EXHAUSTED'
   | 'PARTIAL';
 
 export interface CampaignV2SubmitBatch {
@@ -565,6 +621,7 @@ export interface CampaignV2PreflightResponse {
   frozen_count: number;
   suppressed: {
     blacklist: number;
+    campaign_exclusions: number;
   };
   sendable_count: number;
   template: {

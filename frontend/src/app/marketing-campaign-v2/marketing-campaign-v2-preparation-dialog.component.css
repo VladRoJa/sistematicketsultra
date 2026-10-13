@@ -1,0 +1,17 @@
+:host { display: block; }
+.preparation { min-width: min(850px, 90vw); max-height: 72vh; }
+.preparation-section { padding: 12px 0; border-top: 1px solid #ddd; }
+.heading, .pagination, .input-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.preparation-section h3 { margin: 6px 0; }
+.preparation-section p { font-size: 13px; }
+.scroll-table { width: 100%; max-height: 240px; overflow: auto; margin: 12px 0; }
+table { width: 100%; min-width: 540px; border-collapse: collapse; font-size: 12px; }
+td, th { text-align: left; border-bottom: 1px solid #ddd; padding: 9px 12px; }
+.confirmation { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px; border-radius: 8px; }
+.confirmation p { width: 100%; }
+.confirmation mat-form-field { flex: 1 1 200px; }
+.input-row mat-form-field { min-width: 340px; }
+.error { color: #b3261e; }
+.success { font-weight: 600; }
+.muted { font-size: 12px; opacity: .8; }
+@media (max-width: 700px) { .preparation { min-width: 0; } .input-row mat-form-field { min-width: 0; width: 100%; } }

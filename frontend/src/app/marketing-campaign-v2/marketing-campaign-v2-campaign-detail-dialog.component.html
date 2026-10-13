@@ -217,6 +217,12 @@
         Cohorte congelada = evidencia histórica exacta. Lista para envío = esa misma cohorte menos supresiones vigentes como lista negra.
       </p>
 
+      <div class="recipient-actions">
+        <button mat-stroked-button type="button" (click)="openPreparationCenter()">
+          Centro de preparación · Ambigüedades y duplicados
+        </button>
+        <p class="muted">Revisar exclusiones no modifica la cohorte congelada ni envía mensajes.</p>
+      </div>
       <section class="dispatch-preflight-section">
         <div class="section-heading">
           <div>
@@ -262,6 +268,7 @@
           <div class="preflight-summary-grid">
             <div><span>Cohorte congelada</span><strong>{{ plan.frozen_count | number }}</strong></div>
             <div><span>Blacklist vigente</span><strong>{{ plan.suppressed.blacklist | number }}</strong></div>
+            <div><span>Exclusiones de campaña</span><strong>{{ plan.suppressed.campaign_exclusions | number }}</strong></div>
             <div><span>Enviables</span><strong>{{ plan.sendable_count | number }}</strong></div>
             <div><span>Provider campaigns</span><strong>{{ plan.provider_campaign_count | number }}</strong></div>
           </div>

@@ -45,6 +45,10 @@ import {
 } from './marketing-campaign-v2.logic';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
 import {
+  MarketingCampaignV2PreparationDialogComponent,
+  CampaignV2PreparationDialogData,
+} from './marketing-campaign-v2-preparation-dialog.component';
+import {
   MarketingCampaignV2RecipientDetailDialogComponent,
   MarketingCampaignV2RecipientDetailDialogData,
 } from './marketing-campaign-v2-recipient-detail-dialog.component';
@@ -56,6 +60,7 @@ import {
 export interface MarketingCampaignV2CampaignDetailDialogData {
   campaignId: number;
   purposes: CampaignV2Purpose[];
+  canManageDispatchConfig: boolean;
 }
 
 @Component({
@@ -208,6 +213,31 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
           );
         },
       });
+  }
+
+  openPreparationCenter(): void {
+    const ref = this.dialog.open<
+      MarketingCampaignV2PreparationDialogComponent,
+      CampaignV2PreparationDialogData,
+      boolean
+    >(MarketingCampaignV2PreparationDialogComponent, {
+      width: 'min(1020px, 96vw)',
+      maxWidth: '96vw',
+      maxHeight: '94vh',
+      data: {
+        campaignId: this.data.campaignId,
+        canManageDispatchConfig: this.data.canManageDispatchConfig,
+      },
+    });
+    ref.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(changed => {
+      if (changed) {
+        // The exclusion projection may have changed. Never reuse a stale hash.
+        this.preflight = null;
+        this.submitResult = null;
+        this.preflightError = 'Revisión modificada: vuelve a generar preflight.';
+        this.loadRecipients(1);
+      }
+    });
   }
 
   reviewDispatch(): void {

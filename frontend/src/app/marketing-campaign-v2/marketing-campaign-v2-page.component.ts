@@ -1197,6 +1197,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       data: {
         campaignId: campaign.id,
         purposes: this.options?.purposes ?? [],
+        canManageDispatchConfig: this.canManageDispatchConfig,
       },
     });
 

@@ -14,6 +14,10 @@ import {
   CampaignV2ConsolidatedReport,
   CampaignV2DispatchTemplatesResponse,
   CampaignV2BudgetRateRevision,
+  CampaignV2BranchReview,
+  CampaignV2PreviousContactReview,
+  CampaignV2PreparationApplyResponse,
+  CampaignV2PreparationApplyRequest,
   CampaignV2BudgetRateRequest,
   CampaignV2BudgetRatesResponse,
   CampaignV2DispatchTemplate,
@@ -170,6 +174,40 @@ export class MarketingCampaignV2Service {
   registerBudgetRateRevision(request: CampaignV2BudgetRateRequest): Observable<CampaignV2BudgetRateRevision> {
     return this.http.post<CampaignV2BudgetRateRevision>(
       `${this.apiUrl}/dispatch/cost-rates`, request,
+    );
+  }
+
+  reviewAmbiguousBranches(campaignId: number, page = 1): Observable<CampaignV2BranchReview> {
+    return this.http.get<CampaignV2BranchReview>(
+      `${this.apiUrl}/${campaignId}/preparation/branches`,
+      { params: new HttpParams().set('page', String(page)).set('page_size', '25') },
+    );
+  }
+
+  applyAmbiguousBranches(
+    campaignId: number, request: CampaignV2PreparationApplyRequest,
+  ): Observable<CampaignV2PreparationApplyResponse> {
+    return this.http.post<CampaignV2PreparationApplyResponse>(
+      `${this.apiUrl}/${campaignId}/preparation/branches/exclude`, request,
+    );
+  }
+
+  reviewPreviousContacts(
+    campaignId: number, sourceCampaignIds: number[],
+  ): Observable<CampaignV2PreviousContactReview> {
+    return this.http.post<CampaignV2PreviousContactReview>(
+      `${this.apiUrl}/${campaignId}/preparation/previous/review`,
+      { source_campaign_ids: sourceCampaignIds },
+    );
+  }
+
+  applyPreviousContacts(
+    campaignId: number, sourceCampaignIds: number[],
+    request: CampaignV2PreparationApplyRequest,
+  ): Observable<CampaignV2PreparationApplyResponse> {
+    return this.http.post<CampaignV2PreparationApplyResponse>(
+      `${this.apiUrl}/${campaignId}/preparation/previous/exclude`,
+      { ...request, source_campaign_ids: sourceCampaignIds },
     );
   }
 

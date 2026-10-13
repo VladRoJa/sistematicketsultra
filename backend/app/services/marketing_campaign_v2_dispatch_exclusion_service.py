@@ -159,26 +159,54 @@ def _submitted_phone_set(
     """Proof of actual provider submissions, never the source frozen cohort.
 
     Each accepted provider child retains the exact leads in request_snapshot_json.
-    Reject partial/ambiguous dispatches and incomplete snapshots rather than
-    guessing which recipient the prior provider accepted.
+    Accept only proven SUBMITTED snapshots; audited HELD children contributed
+    zero submitted contacts. Other partial/ambiguous states fail closed.
     """
     children = (
         session.query(MarketingCampaignV2ProviderCampaignORM)
         .filter(MarketingCampaignV2ProviderCampaignORM.campaign_v2_id == source_campaign_id)
         .all()
     )
-    if not children or any(
-        child.status != "SUBMITTED"
-        or not child.provider_campaign_id
-        or child.submitted_at is None
-        for child in children
-    ):
+    if not children:
         raise CampaignV2ScopedExclusionValidationError(
-            "La campaña de origen no tiene todos sus lotes SUBMITTED."
+            "La campaña origen no tiene lotes auditados."
+        )
+
+    submitted = []
+    for child in children:
+        if child.status == "HELD":
+            # A held batch is an intentional *non-send*, not a prior contact.
+            # Require its persisted audit; reject any provider attempt/identity.
+            if (
+                child.hold_reason != "CHANNEL_DAILY_QUOTA"
+                or not child.held_by_user_id
+                or child.held_at is None
+                or not isinstance(child.hold_evidence_json, dict)
+                or not child.hold_evidence_json
+                or child.provider_campaign_id is not None
+                or child.submit_started_at is not None
+                or child.submitted_at is not None
+            ):
+                raise CampaignV2ScopedExclusionValidationError(
+                    "Origen con lote HELD sin auditoría íntegra o con intento de envío."
+                )
+            continue
+        if (
+            child.status != "SUBMITTED"
+            or not child.provider_campaign_id
+            or child.submitted_at is None
+        ):
+            raise CampaignV2ScopedExclusionValidationError(
+                "Origen contiene lotes sin aceptación demostrada por iVentas."
+            )
+        submitted.append(child)
+    if not submitted:
+        raise CampaignV2ScopedExclusionValidationError(
+            "El origen no tiene contactos SUBMITTED demostrables."
         )
 
     phones: set[str] = set()
-    for child in children:
+    for child in submitted:
         snapshot = child.request_snapshot_json
         leads = snapshot.get("leads") if isinstance(snapshot, dict) else None
         if (

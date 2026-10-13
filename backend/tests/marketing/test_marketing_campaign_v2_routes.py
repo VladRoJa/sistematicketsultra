@@ -3094,3 +3094,99 @@ class TestMarketingCampaignV2Routes:
         assert data["submission"]["enabled"] is False
         assert quoted.call_args.kwargs["plan"] is fake_plan
         provider.assert_not_called()
+
+
+    def test_phase_c_review_is_readonly_but_requires_preflight_access(self):
+        with (
+            self._auth(self.partial_access),
+            patch.object(routes, "_campaign_v2_allowed_sucursal_keys",
+                         return_value=("TEC_MXL",)),
+            patch.object(routes, "review_ambiguous_branches", return_value={
+                "candidate_count": 3, "rows": [], "review_fingerprint": "a" * 64,
+            }) as review,
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/15/preparation/branches",
+                headers=self.headers,
+            )
+        assert response.status_code == 200
+        assert review.call_args.kwargs["allowed_sucursal_keys"] == ("TEC_MXL",)
+        with self._auth(self.global_access), patch.object(
+            routes, "review_ambiguous_branches", return_value={
+                "candidate_count": 3, "rows": [], "review_fingerprint": "a" * 64,
+            },
+        ) as review:
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/15/preparation/branches?page=1&page_size=25",
+                headers=self.headers,
+            )
+        assert response.status_code == 200
+        assert response.get_json()["candidate_count"] == 3
+        assert review.call_args.kwargs["campaign_id"] == 15
+
+    def test_phase_c_mutations_require_global_admin_and_never_call_provider(self):
+        endpoints = [
+            ("/api/marketing/campaigns-v2/15/preparation/branches/exclude",
+             {"expected_fingerprint": "a" * 64, "expected_count": 3, "allow_bulk": False}),
+            ("/api/marketing/campaigns-v2/15/preparation/previous/exclude",
+             {"source_campaign_ids": [14], "expected_fingerprint": "b" * 64,
+              "expected_count": 2, "allow_bulk": False}),
+        ]
+        for url, payload in endpoints:
+            with (
+                self._auth(self.partial_access),
+                patch.object(routes, "apply_ambiguous_branch_exclusions") as apply_ambiguous,
+                patch.object(routes, "apply_previous_contacts") as apply_previous,
+            ):
+                denied = self.client.post(url, json=payload, headers=self.headers)
+            assert denied.status_code == 403
+            apply_ambiguous.assert_not_called()
+            apply_previous.assert_not_called()
+
+        with (
+            self._auth(self.global_access),
+            patch.object(routes, "apply_ambiguous_branch_exclusions",
+                         return_value={"added": 3}) as applied,
+            patch.object(routes, "IVentasBroadcastProvider") as provider,
+        ):
+            ok = self.client.post(
+                endpoints[0][0], json=endpoints[0][1], headers=self.headers,
+            )
+        assert ok.status_code == 200
+        assert applied.call_args.kwargs["actor_user_id"] == 7
+        assert applied.call_args.kwargs["expected_count"] == 3
+        provider.assert_not_called()
+
+    def test_phase_c_source_review_does_not_write_or_contact_provider(self):
+        with (
+            self._auth(self.global_access),
+            patch.object(routes, "review_previous_contacts", return_value={
+                "matched": 2, "new_exclusions": 2,
+                "review_fingerprint": "f" * 64,
+            }) as review,
+            patch.object(routes, "IVentasBroadcastProvider") as provider,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/20/preparation/previous/review",
+                json={"source_campaign_ids": [14, 15]},
+                headers=self.headers,
+            )
+        assert response.status_code == 200
+        assert response.get_json()["matched"] == 2
+        assert review.call_args.kwargs["source_campaign_ids"] == [14, 15]
+        provider.assert_not_called()
+
+    def test_phase_c_browser_cannot_set_exclusion_ids_or_send_flags(self):
+        with (
+            self._auth(self.global_access),
+            patch.object(routes, "apply_previous_contacts") as applied,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/20/preparation/previous/exclude",
+                json={"source_campaign_ids": [14], "expected_count": 1,
+                      "expected_fingerprint": "f"*64,
+                      "recipient_ids": [100], "allow_bulk": True},
+                headers=self.headers,
+            )
+        assert response.status_code == 400
+        applied.assert_not_called()

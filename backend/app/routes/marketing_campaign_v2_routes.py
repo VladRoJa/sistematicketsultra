@@ -56,6 +56,13 @@ from app.services.marketing_campaign_v2_budget_service import (
     list_cost_rate_revisions,
     register_cost_rate_revision,
 )
+from app.services.marketing_campaign_v2_preparation_service import (
+    ValidationError as CampaignV2PreparationValidationError,
+    review_ambiguous_branches,
+    apply_ambiguous_branch_exclusions,
+    review_previous_contacts,
+    apply_previous_contacts,
+)
 from app.services.marketing_campaign_v2_preflight_service import (
     build_campaign_v2_preflight,
     serialize_campaign_v2_preflight,
@@ -1486,6 +1493,133 @@ def campaign_v2_provider_child_retry_endpoint(child_id: int):
         )
     except Exception:
         return _error("Falló el retry Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.get(
+    "/campaigns-v2/<int:campaign_id>/preparation/branches"
+)
+@jwt_required()
+def campaign_v2_branch_diagnostics_endpoint(campaign_id: int):
+    try:
+        _, access = _resolve_campaign_v2_preflight_request()
+        _validate_query_args({"page", "page_size"})
+        page = _parse_positive_query_int(
+            request.args.get("page", "1"), field_name="page",
+        )
+        page_size = _parse_positive_query_int(
+            request.args.get("page_size", "25"), field_name="page_size",
+        )
+        report = review_ambiguous_branches(
+            campaign_id=campaign_id, page=page, page_size=page_size,
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(report), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2NotFoundError:
+        return _error("Campaign V2 no encontrada.", 404)
+    except (CampaignV2PreparationValidationError, MarketingCampaignV2RouteValidationError) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("Falló diagnóstico de sucursales congeladas.", 500)
+
+
+@marketing_campaign_v2_bp.post(
+    "/campaigns-v2/<int:campaign_id>/preparation/branches/exclude"
+)
+@jwt_required()
+def campaign_v2_exclude_ambiguous_branches_endpoint(campaign_id: int):
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        payload = _parse_payload({
+            "expected_fingerprint", "expected_count", "allow_bulk",
+        })
+        result = apply_ambiguous_branch_exclusions(
+            campaign_id=campaign_id,
+            expected_fingerprint=payload.get("expected_fingerprint"),
+            expected_count=payload.get("expected_count"),
+            actor_user_id=int(user.id),
+            allow_bulk=payload.get("allow_bulk", False),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2NotFoundError:
+        return _error("Campaign V2 no encontrada.", 404)
+    except MarketingCampaignV2RouteValidationError as exc:
+        db.session.rollback()
+        return _error(str(exc), 400)
+    except CampaignV2PreparationValidationError as exc:
+        db.session.rollback()
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("Falló exclusión auditada de sucursales ambiguas.", 500)
+
+
+@marketing_campaign_v2_bp.post(
+    "/campaigns-v2/<int:campaign_id>/preparation/previous/review"
+)
+@jwt_required()
+def campaign_v2_previous_contacts_review_endpoint(campaign_id: int):
+    try:
+        _, access = _resolve_campaign_v2_preflight_request()
+        payload = _parse_payload({"source_campaign_ids"})
+        result = review_previous_contacts(
+            campaign_id=campaign_id,
+            source_campaign_ids=payload.get("source_campaign_ids"),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2NotFoundError:
+        return _error("Campaign V2 no encontrada.", 404)
+    except (CampaignV2PreparationValidationError, MarketingCampaignV2RouteValidationError) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("Falló la revisión de contactos previos.", 500)
+
+
+@marketing_campaign_v2_bp.post(
+    "/campaigns-v2/<int:campaign_id>/preparation/previous/exclude"
+)
+@jwt_required()
+def campaign_v2_previous_contacts_apply_endpoint(campaign_id: int):
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        payload = _parse_payload({
+            "source_campaign_ids", "expected_fingerprint",
+            "expected_count", "allow_bulk",
+        })
+        result = apply_previous_contacts(
+            campaign_id=campaign_id,
+            source_campaign_ids=payload.get("source_campaign_ids"),
+            expected_fingerprint=payload.get("expected_fingerprint"),
+            expected_count=payload.get("expected_count"),
+            actor_user_id=int(user.id),
+            allow_bulk=payload.get("allow_bulk", False),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2NotFoundError:
+        return _error("Campaign V2 no encontrada.", 404)
+    except MarketingCampaignV2RouteValidationError as exc:
+        db.session.rollback()
+        return _error(str(exc), 400)
+    except CampaignV2PreparationValidationError as exc:
+        db.session.rollback()
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("Falló exclusión auditada de campañas anteriores.", 500)
 
 
 @marketing_campaign_v2_bp.post(
