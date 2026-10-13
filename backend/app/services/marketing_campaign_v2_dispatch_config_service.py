@@ -97,6 +97,10 @@ def save_channel_binding(
 ) -> dict[str, Any]:
     active_session = session if session is not None else db.session
     normalized_provider = _normalize_provider(provider)
+    if require_immutable_history and normalized_provider != DEFAULT_PROVIDER:
+        raise MarketingCampaignV2DispatchConfigValidationError(
+            "La administración Campaign V2 sólo admite IVENTAS."
+        )
     normalized_sucursal_id = _positive_int(sucursal_id, "sucursal_id")
     normalized_channel_id = _required_text(
         provider_channel_id,
@@ -287,6 +291,10 @@ def save_template(
 ) -> dict[str, Any]:
     active_session = session if session is not None else db.session
     normalized_provider = _normalize_provider(provider)
+    if require_explicit_channels and normalized_provider != DEFAULT_PROVIDER:
+        raise MarketingCampaignV2DispatchConfigValidationError(
+            "La administración Campaign V2 sólo admite IVENTAS."
+        )
     normalized_name = _required_text(template_name, "template_name", 255)
     normalized_label = _required_text(label, "label", 255)
     normalized_is_active = _strict_bool(is_active, "is_active")
