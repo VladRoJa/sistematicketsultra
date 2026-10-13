@@ -108,12 +108,18 @@ def _hold_sources(held_names: set[str], supplied: Any) -> dict[str, str]:
     return normalized
 
 
-def _assess_scopes(plan: Any, *, session: Any, timestamp: datetime):
+def _assess_scopes(
+    plan: Any, *, session: Any, timestamp: datetime,
+    ignore_campaign_id: int | None = None,
+):
     if not plan.ready or plan.mode != "IMMEDIATE" or not plan.batches:
         raise CampaignV2ApprovalConflictError(
             "Solo preflight IMMEDIATE totalmente conciliado puede aprobarse."
         )
-    quota = assess_preflight_capacity(plan=plan, session=session, now=timestamp)
+    quota = assess_preflight_capacity(
+        plan=plan, session=session, now=timestamp,
+        ignore_campaign_id=ignore_campaign_id,
+    )
     if (quota["status"] != "REVIEWABLE" or
             not all(x["recommendation"] == "CAPACITY_REVIEWED" for x in quota["batches"]) or
             len(quota["batches"]) != len(plan.batches)):

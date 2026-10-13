@@ -186,3 +186,88 @@ def test_governed_materialization_rejects_provider_or_kill_switch_override(
         )
     assert response.status_code == 400
     m.assert_not_called()
+
+
+def test_dispatch_execution_requires_global_permissions_and_both_switches(
+    client, global_access, partial_access,
+):
+    browser, headers = client
+    url = "/api/marketing/campaigns-v2/99/dispatch/execute"
+    payload = {
+        "execution_id": 41, "child_id": 100,
+        "expected_manifest_digest": "a"*64,
+    }
+    with auth(partial_access), patch.object(routes, "IVentasBroadcastProvider") as provider:
+        response = browser.post(url, json=payload, headers=headers)
+    assert response.status_code == 403
+    provider.assert_not_called()
+
+    with auth(global_access), patch.object(routes, "IVentasBroadcastProvider") as provider:
+        response = browser.post(url, json=payload, headers=headers)
+    assert response.status_code == 423
+    provider.assert_not_called()
+
+    # Existing send flag alone must never enable new governed dispatch.
+    with auth(global_access), patch.object(routes, "IVentasBroadcastProvider") as provider:
+        browser.application.config["CAMPAIGN_V2_PROVIDER_SEND_ENABLED"] = True
+        response = browser.post(url, json=payload, headers=headers)
+    assert response.status_code == 423
+    provider.assert_not_called()
+
+
+def test_dispatch_authorize_is_independent_and_does_not_instantiate_provider(
+    client, global_access,
+):
+    browser, headers = client
+    url = "/api/marketing/campaigns-v2/99/dispatch/authorize"
+    payload = {
+        "approval_id": 9, "expected_manifest_digest": "a"*64,
+        "expected_ready_recipients": 5, "confirm_dispatch": True,
+    }
+    with auth(global_access), patch.object(
+        routes, "authorize_governed_dispatch",
+        return_value={"execution_id":41,"status":"AUTHORIZED","provider_calls":0},
+    ) as authorize, patch.object(routes, "IVentasBroadcastProvider") as provider:
+        response = browser.post(url, json=payload, headers=headers)
+    assert response.status_code == 201
+    assert response.json["provider_calls"] == 0
+    authorize.assert_called_once()
+    provider.assert_not_called()
+
+
+def test_dispatch_execute_rejects_extra_send_enabled_from_browser(
+    client, global_access,
+):
+    browser, headers = client
+    with auth(global_access), patch.object(routes, "execute_governed_child") as dispatch:
+        response = browser.post(
+            "/api/marketing/campaigns-v2/99/dispatch/execute",
+            json={"execution_id":41, "child_id":100,
+                  "send_enabled":True, "expected_manifest_digest":"a"*64},
+            headers=headers,
+        )
+    assert response.status_code == 400
+    dispatch.assert_not_called()
+
+
+def test_governed_mode_does_not_unlock_legacy_web_submit_or_retry(
+    client, global_access,
+):
+    browser, headers = client
+    browser.application.config.update(
+        CAMPAIGN_V2_PROVIDER_SEND_ENABLED=True,
+        CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED=True,
+    )
+    with auth(global_access), patch.object(routes, "IVentasBroadcastProvider") as provider:
+        submit = browser.post(
+            "/api/marketing/campaigns-v2/99/submit",
+            json={"template_id": 2, "expected_dispatch_fingerprint": "a"*64},
+            headers=headers,
+        )
+        retry = browser.post(
+            "/api/marketing/campaigns-v2/provider-campaigns/100/retry",
+            json={}, headers=headers,
+        )
+    assert submit.status_code == 423
+    assert retry.status_code == 423
+    provider.assert_not_called()

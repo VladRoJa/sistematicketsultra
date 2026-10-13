@@ -440,6 +440,7 @@ def _prepare_provider_campaign_rows(
     session: Any,
     now: datetime,
     held_batches: Mapping[str, dict[str, Any]] | None = None,
+    commit_rows: bool = True,
 ) -> list[MarketingCampaignV2ProviderCampaignORM]:
     # Used only by an explicitly approved, isolated partial-dispatch operator.
     # All children, including HELD, commit in ONE transaction, before HTTP.
@@ -566,6 +567,11 @@ def _prepare_provider_campaign_rows(
         rows.append(row)
 
     try:
+        if not commit_rows:
+            # Governed path: the caller must validate the complete persisted
+            # manifest before committing any child or returning authorization.
+            session.flush()
+            return rows
         session.commit()
     except IntegrityError as exc:
         session.rollback()
@@ -591,6 +597,15 @@ def _transition_ready_to_submitting(
     session: Any,
     now: datetime,
 ) -> None:
+    # Shared with the isolated partial-resume script. Neither the web
+    # submit nor that script may bypass the D2c independent authorization.
+    existing = session.get(MarketingCampaignV2ProviderCampaignORM, row_id)
+    if existing is not None and session.query(MarketingCampaignV2DispatchApprovalORM.id).filter(
+        MarketingCampaignV2DispatchApprovalORM.campaign_v2_id == int(existing.campaign_v2_id)
+    ).first() is not None:
+        raise MarketingCampaignV2SubmitConflictError(
+            "Transición heredada bloqueada para aprobación gobernada."
+        )
     try:
         updated = (
             session.query(MarketingCampaignV2ProviderCampaignORM)

@@ -9,7 +9,10 @@ from typing import Any
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.extensions import db
-from app.models.marketing import MarketingCampaignV2ProviderCampaignORM
+from app.models.marketing import (
+    MarketingCampaignV2ProviderCampaignORM,
+    MarketingCampaignV2DispatchApprovalORM,
+)
 from app.services.marketing_campaign_v2_preflight_service import (
     build_campaign_v2_preflight,
 )
@@ -97,6 +100,12 @@ def retry_campaign_v2_provider_child(
         child_id=normalized_child_id,
         session=active_session,
     )
+    if active_session.query(MarketingCampaignV2DispatchApprovalORM.id).filter(
+        MarketingCampaignV2DispatchApprovalORM.campaign_v2_id == int(row.campaign_v2_id)
+    ).first() is not None:
+        raise MarketingCampaignV2SafeRetryConflictError(
+            "Retry legado prohibido para campañas con aprobación gobernada."
+        )
     _validate_retry_candidate(row=row, now=timestamp)
 
     schedule = _schedule_payload(row)
