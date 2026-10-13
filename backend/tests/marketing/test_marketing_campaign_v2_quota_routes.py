@@ -108,3 +108,48 @@ def test_quota_attestation_rejects_unknown_fields_and_partial_scope(
         )
     assert response.status_code == 403
     register.assert_not_called()
+
+
+def test_approval_needs_both_capabilities_and_global_scope(
+    client, global_access, partial_access,
+):
+    browser, headers = client
+    endpoint = "/api/marketing/campaigns-v2/99/dispatch/approval"
+    payload = {
+        "template_id": 2, "expected_dispatch_fingerprint": "a" * 64,
+        "expected_quote_fingerprint": "b" * 64,
+        "expected_recipients": 12, "expected_total_mxn": "3.60",
+    }
+    with auth(partial_access), patch.object(routes, "approve_dispatch_reservation") as approve:
+        response = browser.post(endpoint, json=payload, headers=headers)
+    assert response.status_code == 403
+    approve.assert_not_called()
+
+    no_send = SimpleNamespace(**vars(global_access))
+    no_send.can_send_campaigns = False
+    with auth(no_send), patch.object(routes, "approve_dispatch_reservation") as approve:
+        response = browser.post(endpoint, json=payload, headers=headers)
+    assert response.status_code == 403
+    approve.assert_not_called()
+
+    with auth(global_access), patch.object(
+        routes, "approve_dispatch_reservation",
+        return_value={"status": "RESERVED_NOT_DISPATCHED", "send_authorized": False},
+    ) as approve, patch.object(routes, "IVentasBroadcastProvider") as provider:
+        response = browser.post(endpoint, json=payload, headers=headers)
+    assert response.status_code == 201
+    assert response.json["send_authorized"] is False
+    assert approve.call_args.kwargs["actor_user_id"] == 7
+    provider.assert_not_called()
+
+
+def test_approval_rejects_client_supplied_send_override(client, global_access):
+    browser, headers = client
+    with auth(global_access), patch.object(routes, "approve_dispatch_reservation") as approve:
+        response = browser.post(
+            "/api/marketing/campaigns-v2/99/dispatch/approval",
+            json={"template_id": 2, "send_enabled": True},
+            headers=headers,
+        )
+    assert response.status_code == 400
+    approve.assert_not_called()
