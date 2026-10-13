@@ -113,6 +113,7 @@ export type CampaignV2PreviewBucket =
 
 export interface CampaignV2Scope {
   is_global: boolean;
+  can_manage_dispatch_config?: boolean;
   allowed_sucursal_keys: string[] | null;
 }
 
@@ -399,6 +400,53 @@ export interface CampaignV2DispatchTemplate {
 
 export interface CampaignV2DispatchTemplatesResponse {
   rows: CampaignV2DispatchTemplate[];
+}
+
+export interface CampaignV2ChannelBinding {
+  id: number;
+  provider: string;
+  sucursal_id: number;
+  sucursal_canon: string;
+  provider_channel_id: string;
+  is_active: boolean;
+  is_default: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface CampaignV2CatalogBranch {
+  sucursal_id: number;
+  sucursal_canon: string;
+  track_label: string;
+}
+
+export interface CampaignV2ChannelBindingsResponse {
+  rows: CampaignV2ChannelBinding[];
+}
+
+export interface CampaignV2CatalogBranchesResponse {
+  rows: CampaignV2CatalogBranch[];
+}
+
+export interface CampaignV2TemplateConfigRequest {
+  provider: 'IVENTAS';
+  template_name: string;
+  label: string;
+  purposes: CampaignV2Purpose[];
+  variables: Record<string, string>;
+  compatible_channel_ids: string[];
+  is_active: boolean;
+  metadata: Record<string, unknown>;
+}
+
+export interface CampaignV2ChannelBindingRequest {
+  provider: 'IVENTAS';
+  sucursal_id: number;
+  provider_channel_id: string;
+  is_active: boolean;
+  is_default: boolean;
+  metadata: Record<string, unknown>;
 }
 
 export interface CampaignV2PreflightBatch {
