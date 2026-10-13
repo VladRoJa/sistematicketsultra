@@ -645,6 +645,46 @@ class MarketingCampaignV2DispatchApprovalORM(db.Model):
     )
 
 
+class MarketingCampaignV2GovernedExecutionORM(db.Model):
+    """Independent dispatch authorization; never implied by quota approval."""
+
+    __tablename__ = "marketing_campaign_v2_governed_executions"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    approval_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_dispatch_approvals.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    manifest_digest = db.Column(db.String(64), nullable=False)
+    confirmed_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="RESTRICT"), nullable=False,
+    )
+    confirmed_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    status = db.Column(db.String(25), nullable=False, default="AUTHORIZED")
+    last_child_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_provider_campaigns.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint("approval_id", name="uq_mkt_v2_governed_execution_approval"),
+        db.CheckConstraint("length(manifest_digest) = 64",
+                           name="ck_mkt_v2_execution_digest"),
+        db.CheckConstraint(
+            "status IN ('AUTHORIZED','IN_FLIGHT','REVIEW_REQUIRED','COMPLETE')",
+            name="ck_mkt_v2_execution_status",
+        ),
+        db.CheckConstraint("confirmed_at < expires_at", name="ck_mkt_v2_execution_expiry"),
+    )
+
+
 class MarketingCampaignV2CapacityReservationORM(db.Model):
     """Per-scope capacity ledger; never interpreted as Meta-verified availability."""
 
