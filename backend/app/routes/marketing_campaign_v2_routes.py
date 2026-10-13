@@ -1714,6 +1714,10 @@ def campaign_v2_provider_child_retry_endpoint(child_id: int):
                 False,
             )
         )
+        if current_app.config.get("CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED") is True:
+            raise MarketingCampaignV2SafeRetryDisabledError(
+                "Retry legado deshabilitado durante despacho gobernado."
+            )
         if not send_enabled:
             raise MarketingCampaignV2SafeRetryDisabledError(
                 "El retry Campaign V2 está deshabilitado por kill switch."
@@ -1978,6 +1982,12 @@ def campaign_v2_submit_endpoint(campaign_id: int):
                 False,
             )
         )
+        # Web mode is exclusive: enabling D2c must not open legacy
+        # provider endpoints for unrelated historical campaigns.
+        if current_app.config.get("CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED") is True:
+            raise MarketingCampaignV2SubmitDisabledError(
+                "Submit legado deshabilitado durante despacho gobernado."
+            )
         if not send_enabled:
             raise MarketingCampaignV2SubmitDisabledError(
                 "El envío Campaign V2 está deshabilitado por kill switch."
