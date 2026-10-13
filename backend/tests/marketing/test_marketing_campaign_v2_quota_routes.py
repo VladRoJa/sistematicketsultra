@@ -271,3 +271,42 @@ def test_governed_mode_does_not_unlock_legacy_web_submit_or_retry(
     assert submit.status_code == 423
     assert retry.status_code == 423
     provider.assert_not_called()
+
+
+def test_d3_monitor_is_global_read_only_no_provider(
+    client, global_access, partial_access,
+):
+    browser, headers = client
+    url = "/api/marketing/campaigns-v2/99/dispatch/monitor"
+    with auth(partial_access), patch.object(routes, "read_governed_dispatch_monitor") as monitor:
+        response = browser.get(url, headers=headers)
+    assert response.status_code == 403
+    monitor.assert_not_called()
+
+    no_send = SimpleNamespace(**vars(global_access))
+    no_send.can_send_campaigns = False
+    with auth(no_send), patch.object(routes, "read_governed_dispatch_monitor") as monitor:
+        response = browser.get(url, headers=headers)
+    assert response.status_code == 403
+    monitor.assert_not_called()
+
+    with auth(global_access), patch.object(
+        routes, "read_governed_dispatch_monitor",
+        return_value={"status": "IN_FLIGHT_STALE", "send_authorized": False},
+    ) as monitor, patch.object(routes, "IVentasBroadcastProvider") as provider:
+        response = browser.get(url, headers=headers)
+    assert response.status_code == 200
+    assert response.json["send_authorized"] is False
+    monitor.assert_called_once()
+    provider.assert_not_called()
+
+
+def test_d3_monitor_rejects_query_override(client, global_access):
+    browser, headers = client
+    with auth(global_access), patch.object(routes, "read_governed_dispatch_monitor") as monitor:
+        response = browser.get(
+            "/api/marketing/campaigns-v2/99/dispatch/monitor?auto_retry=true",
+            headers=headers,
+        )
+    assert response.status_code == 400
+    monitor.assert_not_called()

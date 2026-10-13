@@ -57,6 +57,11 @@ from app.services.marketing_campaign_v2_quota_service import (
     register_quota_capacity,
     assess_preflight_capacity,
 )
+from app.services.marketing_campaign_v2_governed_monitor_service import (
+    GovernedMonitorNotFound,
+    GovernedMonitorValidation,
+    read_governed_dispatch_monitor,
+)
 from app.services.marketing_campaign_v2_governed_dispatch_service import (
     GovernedDispatchConflict,
     GovernedDispatchDisabled,
@@ -1382,6 +1387,28 @@ def campaign_v2_materialize_manifest_endpoint(campaign_id: int):
     except Exception:
         db.session.rollback()
         return _error("No fue posible materializar manifiesto Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/<int:campaign_id>/dispatch/monitor")
+@jwt_required()
+def campaign_v2_governed_monitor_endpoint(campaign_id: int):
+    """Read-only D3a monitor. Never retries, releases HELD or calls provider."""
+    try:
+        _, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        _validate_query_args(set())
+        return jsonify(read_governed_dispatch_monitor(
+            campaign_id=campaign_id, session=db.session,
+        )), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except GovernedMonitorNotFound as exc:
+        return _error(str(exc), 404)
+    except (GovernedMonitorValidation, MarketingCampaignV2RouteValidationError) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible consultar monitor gobernado.", 500)
 
 
 @marketing_campaign_v2_bp.get("/campaigns-v2/<int:campaign_id>/dispatch/execution")
