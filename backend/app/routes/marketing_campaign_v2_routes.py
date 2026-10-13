@@ -57,6 +57,9 @@ from app.services.marketing_campaign_v2_quota_service import (
     register_quota_capacity,
     assess_preflight_capacity,
 )
+from app.services.marketing_campaign_v2_manifest_service import (
+    materialize_approved_manifest,
+)
 from app.services.marketing_campaign_v2_dispatch_approval_service import (
     CampaignV2ApprovalValidationError,
     CampaignV2ApprovalConflictError,
@@ -1307,7 +1310,8 @@ def campaign_v2_dispatch_approval_endpoint(campaign_id: int):
         payload = _parse_payload({
             "template_id", "expected_dispatch_fingerprint",
             "expected_quote_fingerprint",
-            "expected_recipients", "expected_total_mxn",
+            "expected_recipients", "expected_total_mxn", "held_sucursal_canons",
+            "held_source_references",
         })
         row = approve_dispatch_reservation(
             campaign_id=campaign_id,
@@ -1316,6 +1320,8 @@ def campaign_v2_dispatch_approval_endpoint(campaign_id: int):
             expected_quote_fingerprint=payload.get("expected_quote_fingerprint"),
             expected_recipients=payload.get("expected_recipients"),
             expected_total_mxn=payload.get("expected_total_mxn"),
+            held_sucursal_canons=payload.get("held_sucursal_canons"),
+            held_source_references=payload.get("held_source_references"),
             actor_user_id=int(user.id),
             allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
             session=db.session,
@@ -1344,6 +1350,31 @@ def campaign_v2_dispatch_approval_state_endpoint(campaign_id: int):
         return _error(str(exc), 403)
     except Exception:
         return _error("No fue posible consultar aprobación Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/<int:campaign_id>/dispatch/materialize")
+@jwt_required()
+def campaign_v2_materialize_manifest_endpoint(campaign_id: int):
+    """Persist READY/HELD children ONLY. No provider call, even with kill switch ON."""
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        _parse_payload(set())
+        return jsonify(materialize_approved_manifest(
+            campaign_id=campaign_id,
+            actor_user_id=int(user.id),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2RouteValidationError as exc:
+        return _error(str(exc), 400)
+    except CampaignV2ApprovalConflictError as exc:
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible materializar manifiesto Campaign V2.", 500)
 
 
 @marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/quota-evidence")
