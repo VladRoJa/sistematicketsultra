@@ -89,6 +89,25 @@ def _ready_plan_and_holds(plan: Any, held_sucursal_canons: Any):
     return replace(plan, batches=ready_batches), holds
 
 
+def _hold_sources(held_names: set[str], supplied: Any) -> dict[str, str]:
+    """Every HELD requires an operator-sourced reference, never inferred quota."""
+    if not held_names and supplied is None:
+        return {}
+    if not isinstance(supplied, dict) or set(supplied) != held_names:
+        raise CampaignV2ApprovalValidationError(
+            "Indica evidencia de cuota por cada sucursal HELD."
+        )
+    normalized = {}
+    for name, source in supplied.items():
+        if (not isinstance(source, str) or
+                not source.strip() or len(source.strip()) > 255):
+            raise CampaignV2ApprovalValidationError(
+                "Cada HELD requiere referencia documental/manual de cuota."
+            )
+        normalized[name] = source.strip()
+    return normalized
+
+
 def _assess_scopes(plan: Any, *, session: Any, timestamp: datetime):
     if not plan.ready or plan.mode != "IMMEDIATE" or not plan.batches:
         raise CampaignV2ApprovalConflictError(
@@ -131,6 +150,7 @@ def _reserve_locked(
     session: Any, timestamp: datetime, quantities: dict,
     evidence_ids: dict, quota_rows: dict,
     held_names: frozenset[str] = frozenset(),
+    held_sources: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     expected_fingerprint, expected_quote, expected_count, expected_cost, actor = confirmation
     if plan.dispatch_fingerprint != expected_fingerprint:
@@ -174,6 +194,8 @@ def _reserve_locked(
     manifest_batches = []
     for batch in plan.batches:
         held = batch.sucursal_canon in held_names
+        if held and not (held_sources or {}).get(batch.sucursal_canon):
+            raise CampaignV2ApprovalConflictError("HELD sin fuente documentada.")
         item = None if held else quota_rows[batch.sucursal_canon]
         price = prices[batch.sucursal_canon]
         if price["recipients"] != len(batch.recipients):
@@ -186,6 +208,7 @@ def _reserve_locked(
             "hold_reason": "CHANNEL_DAILY_QUOTA" if held else None,
             "hold_evidence": {
                 "source": "EXPLICIT_OPERATOR_DECISION",
+                "source_reference": (held_sources or {})[batch.sucursal_canon],
                 "approved_by_user_id": actor,
                 "approved_at": timestamp.isoformat(),
                 "dispatch_fingerprint": expected_fingerprint,
@@ -246,7 +269,8 @@ def _reserve_locked(
 def approve_dispatch_reservation(
     *, campaign_id: int, template_id: int, expected_dispatch_fingerprint: Any,
     expected_quote_fingerprint: Any, expected_recipients: Any, expected_total_mxn: Any, actor_user_id: Any,
-    allowed_sucursal_keys: Any, held_sucursal_canons: Any = None, session: Any | None = None,
+    allowed_sucursal_keys: Any, held_sucursal_canons: Any = None,
+    held_source_references: Any = None, session: Any | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Reserve only, with PostgreSQL transaction-scoped locks; never dispatch."""
@@ -291,6 +315,7 @@ def approve_dispatch_reservation(
         if not plan.ready or plan.mode != "IMMEDIATE":
             raise CampaignV2ApprovalConflictError("Preflight bloqueado o no inmediato.")
         ready_plan, held_names = _ready_plan_and_holds(plan, held_sucursal_canons)
+        held_sources = _hold_sources(held_names, held_source_references)
         _, scopes, _, _ = _assess_scopes(ready_plan, session=active, timestamp=timestamp)
         initial_scope_names = set(scopes)
         for kind, key in sorted(initial_scope_names):
@@ -317,6 +342,7 @@ def approve_dispatch_reservation(
             session=active, timestamp=timestamp, quantities=quantities,
             evidence_ids=evidence_ids, quota_rows=quota_rows,
             held_names=frozenset(held_names),
+            held_sources=held_sources,
         )
     except (CampaignV2ApprovalValidationError, CampaignV2ApprovalConflictError):
         active.rollback()
