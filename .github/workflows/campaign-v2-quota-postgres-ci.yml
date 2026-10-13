@@ -57,4 +57,5 @@ jobs:
           python -m pytest -q --tb=short \
             tests/marketing/test_marketing_campaign_v2_quota_service.py \
             tests/marketing/test_marketing_campaign_v2_quota_migration.py \
-            tests/marketing/test_marketing_campaign_v2_quota_approval.py
+            tests/marketing/test_marketing_campaign_v2_quota_approval.py \
+            tests/marketing/test_marketing_campaign_v2_quota_approval_postgres.py
