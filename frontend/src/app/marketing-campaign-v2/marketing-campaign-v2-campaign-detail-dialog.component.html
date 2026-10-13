@@ -272,7 +272,7 @@
             <div class="preflight-summary-grid">
               <div><span>Cobertura cotizada</span><strong>{{ budget.priced_recipients | number }} / {{ budget.sendable_recipients | number }}</strong></div>
               <div><span>Subtotal conocido</span><strong>MXN ${{ budget.priced_subtotal_mxn }}</strong></div>
-              <div><span>Total estimado</span><strong>{{ budget.total_estimated_mxn === null ? "Sin cotización completa" : "MXN $" + budget.total_estimated_mxn }}</strong></div>
+              <div><span>Total estimado</span><strong>{{ budgetTotalLabel(budget) }}</strong></div>
             </div>
             <p *ngIf="budget.status !== 'COMPLETE'" class="muted">
               Presupuesto incompleto: {{ budget.missing_rate_channels.length }} lotes sin tarifa
@@ -285,9 +285,9 @@
                   <tr *ngFor="let batch of budget.batches">
                     <td>{{ batch.sucursal_canon }}</td>
                     <td>{{ batch.recipients | number }}</td>
-                    <td>{{ batch.revision_id === null ? "Sin tarifa" : "#" + batch.revision_id }}</td>
-                    <td>{{ batch.unit_cost_mxn || "—" }}</td>
-                    <td>{{ batch.estimated_mxn === null ? "—" : "$" + batch.estimated_mxn }}</td>
+                    <td>{{ budgetRevisionLabel(batch) }}</td>
+                    <td>{{ budgetRateLabel(batch) }}</td>
+                    <td>{{ budgetAmountLabel(batch) }}</td>
                   </tr>
                 </tbody>
               </table>
