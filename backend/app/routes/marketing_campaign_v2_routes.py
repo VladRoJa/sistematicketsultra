@@ -57,6 +57,12 @@ from app.services.marketing_campaign_v2_quota_service import (
     register_quota_capacity,
     assess_preflight_capacity,
 )
+from app.services.marketing_campaign_v2_dispatch_approval_service import (
+    CampaignV2ApprovalValidationError,
+    CampaignV2ApprovalConflictError,
+    approve_dispatch_reservation,
+    get_dispatch_approval,
+)
 from app.services.marketing_campaign_v2_budget_service import (
     CampaignV2BudgetValidationError,
     CampaignV2BudgetConflictError,
@@ -1289,6 +1295,53 @@ def create_campaign_v2_cost_rate_revision_endpoint():
         return _error(str(exc), 409)
     except Exception:
         return _error("Falló el registro de cotización.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/<int:campaign_id>/dispatch/approval")
+@jwt_required()
+def campaign_v2_dispatch_approval_endpoint(campaign_id: int):
+    """Cost and capacity approval ONLY. Never creates provider children or sends."""
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        payload = _parse_payload({
+            "template_id", "expected_dispatch_fingerprint",
+            "expected_recipients", "expected_total_mxn",
+        })
+        row = approve_dispatch_reservation(
+            campaign_id=campaign_id,
+            template_id=payload.get("template_id"),
+            expected_dispatch_fingerprint=payload.get("expected_dispatch_fingerprint"),
+            expected_recipients=payload.get("expected_recipients"),
+            expected_total_mxn=payload.get("expected_total_mxn"),
+            actor_user_id=int(user.id),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(row), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (MarketingCampaignV2RouteValidationError, CampaignV2ApprovalValidationError) as exc:
+        return _error(str(exc), 400)
+    except CampaignV2ApprovalConflictError as exc:
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible reservar capacidad Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/<int:campaign_id>/dispatch/approval")
+@jwt_required()
+def campaign_v2_dispatch_approval_state_endpoint(campaign_id: int):
+    try:
+        _, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        _validate_query_args(set())
+        return jsonify(get_dispatch_approval(campaign_id=campaign_id, session=db.session)), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except Exception:
+        return _error("No fue posible consultar aprobación Campaign V2.", 500)
 
 
 @marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/quota-evidence")
