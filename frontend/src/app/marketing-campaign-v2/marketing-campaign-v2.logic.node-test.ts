@@ -1,5 +1,6 @@
 import { campaignV2IndicativeBudget } from './marketing-campaign-v2-budget.logic';
 import { isDispatchTemplateDraftValid, DispatchTemplateDraft } from './marketing-campaign-v2-dispatch-admin.logic';
+import { isCampaignV2MxnUnitCostValid, isCampaignV2NominalLimitValid, isCampaignV2RemainingCountValid, isCampaignV2ZonedDateString } from './marketing-campaign-v2-admin-validation.logic';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -1289,4 +1290,43 @@ test('Issue #856/B preliminary MXN range uses versioned rates with full channel 
   assert.equal(campaignV2IndicativeBudget(
     { ...template, compatible_channel_ids: [] }, rates, 100, now,
   ).status, 'UNPRICED');
+});
+
+
+test('Issue 856: costo MXN y evidencia Meta aceptan numeros validos sin escapes dobles', () => {
+  for (const price of ['0.85', '0.850000', '1', '1000', ' 12.50 ']) {
+    assert.equal(isCampaignV2MxnUnitCostValid(price), true, price);
+  }
+  for (const price of ['', '0', '-1', '1.1234567', '1e3', '1000.01', 'abc']) {
+    assert.equal(isCampaignV2MxnUnitCostValid(price), false, price);
+  }
+  for (const nominal of ['', '250', '100000']) {
+    assert.equal(isCampaignV2NominalLimitValid(nominal), true, nominal);
+  }
+  for (const nominal of ['0', '-1', '2.0', '9007199254740992']) {
+    assert.equal(isCampaignV2NominalLimitValid(nominal), false, nominal);
+  }
+  for (const remaining of ['0', '250', '10000']) {
+    assert.equal(isCampaignV2RemainingCountValid(remaining), true, remaining);
+  }
+  for (const remaining of ['', '-1', '2.5', '250x', '9007199254740992']) {
+    assert.equal(isCampaignV2RemainingCountValid(remaining), false, remaining);
+  }
+  assert.equal(isCampaignV2ZonedDateString('2026-10-13T09:00:00-07:00'), true);
+  assert.equal(isCampaignV2ZonedDateString('2026-10-13T16:00:00Z'), true);
+  assert.equal(isCampaignV2ZonedDateString('2026-10-13T09:00:00'), false);
+});
+
+test('Issue 856: administracion usa campo MDC acotado y editores progresivos', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const page = fs.readFileSync(path.join(root, 'marketing-campaign-v2-page.component.ts'), 'utf8');
+  const templates = fs.readFileSync(path.join(root, 'marketing-campaign-v2-dispatch-admin-dialog.component.html'), 'utf8');
+  const quotas = fs.readFileSync(path.join(root, 'marketing-campaign-v2-quota-admin-dialog.component.html'), 'utf8');
+  const styles = fs.readFileSync(path.join(process.cwd(), 'src/styles.scss'), 'utf8');
+  assert.equal(page.split("panelClass: 'campaign-v2-admin-dialog'").length - 1, 2);
+  assert.equal(styles.includes('.cdk-overlay-container .campaign-v2-admin-dialog'), true);
+  assert.equal(templates.includes('*ngIf="showTemplateEditor"'), true);
+  assert.equal(templates.includes('*ngIf="showBudgetEditor"'), true);
+  assert.equal(quotas.includes('*ngIf="showPolicyForm"'), true);
+  assert.equal(quotas.includes('*ngIf="showCapacityForm"'), true);
 });
