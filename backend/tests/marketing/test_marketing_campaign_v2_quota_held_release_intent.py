@@ -200,3 +200,25 @@ def test_module_contains_no_external_provider_or_transition():
     assert "IVentasBroadcastProvider" not in source
     assert "provider.create_campaign(" not in source
     assert "child.status =" not in source
+
+
+def test_quota_expiring_during_campaign_lock_is_rechecked_with_fresh_clock():
+    session, source, plan, quota = evaluate_context()
+    after_lock = NOW + timedelta(minutes=20)
+    with patch.object(svc, "_load_source", return_value=source), \
+         patch.object(svc, "_utc", return_value=after_lock) as clock, \
+         patch.object(svc, "build_campaign_v2_preflight", return_value=plan), \
+         patch.object(svc, "build_campaign_v2_provider_dispatch_batch", return_value=NS()), \
+         patch.object(svc, "serialize_campaign_v2_provider_request_snapshot",
+                      return_value={"synthetic": True}), \
+         patch.object(svc, "assess_preflight_capacity", return_value=quota), \
+         patch.object(svc, "manifest_digest", return_value=FINGERPRINT):
+        with pytest.raises(svc.HeldReleaseConflict, match="vigente"):
+            svc._evaluate(
+                campaign_id=77, child_id=100, allowed_sucursal_keys=None,
+                session=session, timestamp=NOW, lock=True,
+                refresh_after_lock=True,
+            )
+    clock.assert_called_once_with(None)
+    session.add.assert_not_called()
+    session.commit.assert_not_called()
