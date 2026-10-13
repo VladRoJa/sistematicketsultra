@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from app.extensions import db
 from app.models.marketing import (
     MarketingCampaignV2ChannelBindingORM,
+    MarketingCampaignV2ProviderCampaignORM,
     MarketingCampaignV2TemplateORM,
 )
 from app.models.warehouse import TrackBranchCatalogORM
@@ -90,6 +91,7 @@ def save_channel_binding(
     actor_user_id: Any,
     metadata: Any = None,
     binding_id: Any = None,
+    require_immutable_history: bool = False,
     session: Any | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -123,6 +125,30 @@ def save_channel_binding(
             raise MarketingCampaignV2DispatchConfigNotFoundError(
                 "Channel binding Campaign V2 no encontrado."
             )
+
+    if require_immutable_history and row is not None:
+        historical = (
+            active_session.query(MarketingCampaignV2ProviderCampaignORM)
+            .filter(MarketingCampaignV2ProviderCampaignORM.channel_binding_id == int(row.id))
+            .all()
+        )
+        if historical:
+            if (
+                row.provider != normalized_provider
+                or int(row.sucursal_id) != normalized_sucursal_id
+                or row.provider_channel_id != normalized_channel_id
+            ):
+                raise MarketingCampaignV2DispatchConfigConflictError(
+                    "El canal ya tiene envíos auditados; crea un binding nuevo para cambiar su identidad."
+                )
+            if any(child.status not in {"SUBMITTED", "SCHEDULED"} for child in historical):
+                if (
+                    bool(row.is_active) != normalized_is_active
+                    or bool(row.is_default) != normalized_is_default
+                ):
+                    raise MarketingCampaignV2DispatchConfigConflictError(
+                        "El canal tiene lotes pendientes o en conciliación; no puede desactivarse."
+                    )
 
     duplicate = active_session.query(MarketingCampaignV2ChannelBindingORM).filter(
         MarketingCampaignV2ChannelBindingORM.provider == normalized_provider,
@@ -246,6 +272,7 @@ def save_template(
     actor_user_id: Any,
     metadata: Any = None,
     template_id: Any = None,
+    require_explicit_channels: bool = False,
     session: Any | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -261,6 +288,37 @@ def save_template(
     normalized_metadata = _normalize_template_metadata(metadata)
     timestamp = _normalize_now(now)
 
+    if require_explicit_channels:
+        if not normalized_channels:
+            raise MarketingCampaignV2DispatchConfigValidationError(
+                "Selecciona al menos un canal explícito; [] significa todos en el contrato legacy."
+            )
+        if not normalized_purposes:
+            raise MarketingCampaignV2DispatchConfigValidationError(
+                "Selecciona al menos un propósito para el template."
+            )
+        if list(normalized_variables) != [
+            str(position) for position in range(1, len(normalized_variables) + 1)
+        ]:
+            raise MarketingCampaignV2DispatchConfigValidationError(
+                "Las posiciones de variables deben ser consecutivas desde 1."
+            )
+        active_channels = {
+            channel_id for (channel_id,) in active_session.query(
+                MarketingCampaignV2ChannelBindingORM.provider_channel_id
+            ).filter(
+                MarketingCampaignV2ChannelBindingORM.provider == normalized_provider,
+                MarketingCampaignV2ChannelBindingORM.is_active.is_(True),
+                MarketingCampaignV2ChannelBindingORM.provider_channel_id.in_(
+                    normalized_channels
+                ),
+            ).all()
+        }
+        if active_channels != set(normalized_channels):
+            raise MarketingCampaignV2DispatchConfigValidationError(
+                "Hay canales inexistentes o inactivos en la selección explícita."
+            )
+
     row = None
     if template_id is not None:
         normalized_template_id = _positive_int(template_id, "template_id")
@@ -271,6 +329,32 @@ def save_template(
             raise MarketingCampaignV2DispatchConfigNotFoundError(
                 "Template Campaign V2 no encontrado."
             )
+
+    if require_explicit_channels and row is not None:
+        historical = (
+            active_session.query(MarketingCampaignV2ProviderCampaignORM)
+            .filter(MarketingCampaignV2ProviderCampaignORM.template_id == int(row.id))
+            .all()
+        )
+        if historical:
+            changed_dispatch = (
+                row.provider != normalized_provider
+                or row.template_name != normalized_name
+                or list(row.purposes_json or []) != list(normalized_purposes)
+                or dict(row.variables_json or {}) != normalized_variables
+                or set(row.compatible_channel_ids_json or []) != set(normalized_channels)
+                or dict(row.metadata_json or {}) != normalized_metadata
+            )
+            if changed_dispatch:
+                raise MarketingCampaignV2DispatchConfigConflictError(
+                    "Plantilla con lotes auditados: no se pueden modificar nombre, variables, propósitos o canales. Crea otra plantilla."
+                )
+            if not normalized_is_active and any(
+                child.status not in {"SUBMITTED", "SCHEDULED"} for child in historical
+            ):
+                raise MarketingCampaignV2DispatchConfigConflictError(
+                    "Plantilla con lotes pendientes/HELD: no se puede desactivar."
+                )
 
     duplicate = active_session.query(MarketingCampaignV2TemplateORM).filter(
         MarketingCampaignV2TemplateORM.provider == normalized_provider,
