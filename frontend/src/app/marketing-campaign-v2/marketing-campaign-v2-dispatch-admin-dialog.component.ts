@@ -21,6 +21,7 @@ import {
   CampaignV2TemplateConfigRequest,
 } from './marketing-campaign-v2.models';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
+import { isDispatchTemplateDraftValid } from './marketing-campaign-v2-dispatch-admin.logic';
 
 interface VariableMappingRow {
   position: number;
@@ -100,11 +101,15 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
     return !this.savingTemplate
       && this.templateName.valid
       && this.templateLabel.valid
-      && this.templatePurposes.value.length > 0
-      && this.templateChannels.value.length > 0
-      && this.templateChannels.value.every(id => this.availableChannels.some(channel => channel.provider_channel_id === id))
-      && this.variableRows.every(row => row.source.value.length > 0)
-      && (!this.templateFileUrl.value.trim() || this.templateFileUrl.value.trim().startsWith('https://'));
+      && isDispatchTemplateDraftValid({
+        templateName: this.templateName.value,
+        label: this.templateLabel.value,
+        purposes: this.templatePurposes.value,
+        channelIds: this.templateChannels.value,
+        activeChannelIds: this.availableChannels.map(channel => channel.provider_channel_id),
+        variables: this.variableRows.map(row => row.source.value),
+        fileUrl: this.templateFileUrl.value,
+      });
   }
 
   get canSaveBinding(): boolean {
