@@ -9,15 +9,17 @@ from app.services import marketing_campaign_v2_dispatch_approval_service as appr
 
 NOW = datetime(2026, 10, 13, 17, tzinfo=timezone.utc)
 FP = "a" * 64
+QF = "b" * 64
 
 
 def test_confirmation_is_exact_not_float():
-    assert approval._validate_confirmation(FP, 12, "3.60", 7) == (
-        FP, 12, Decimal("3.60"), 7,
+    assert approval._validate_confirmation(FP, QF, 12, "3.60", 7) == (
+        FP, QF, 12, Decimal("3.60"), 7,
     )
-    for args in [(FP, True, "3.60", 7), (FP, 12, 3.6, 7),
-                 (FP, 12, "NaN", 7), ("wrong", 12, "3.60", 7),
-                 (FP, 0, "3.60", 7), (FP, 12, "3.6", 7)]:
+    for args in [(FP, QF, True, "3.60", 7), (FP, QF, 12, 3.6, 7),
+                 (FP, QF, 12, "NaN", 7), ("wrong", QF, 12, "3.60", 7),
+                 (FP, QF, 0, "3.60", 7), (FP, QF, 12, "3.6", 7),
+                 (FP, "not-a-quote", 12, "3.60", 7)]:
         with pytest.raises(approval.CampaignV2ApprovalValidationError):
             approval._validate_confirmation(*args)
 
@@ -29,6 +31,7 @@ def test_sqlite_cannot_claim_transactional_reservation():
         approval.approve_dispatch_reservation(
             campaign_id=1, template_id=2,
             expected_dispatch_fingerprint=FP,
+            expected_quote_fingerprint=QF,
             expected_recipients=12, expected_total_mxn="3.60",
             actor_user_id=7, allowed_sucursal_keys=None,
             session=session, now=NOW,
@@ -83,7 +86,7 @@ def reservation_fixture(already_reserved=0):
                        template_id=2, recipients=[None] * 12)])
     budget = {
         "status": "COMPLETE", "currency": "MXN", "sendable_recipients": 12,
-        "total_estimated_mxn": "3.60",
+        "total_estimated_mxn": "3.60", "quote_fingerprint": QF,
         "batches": [{"sucursal_canon": "A", "recipients": 12,
                      "revision_id": 11, "estimated_mxn": "3.60"}],
     }
@@ -116,7 +119,7 @@ def test_active_reservation_is_subtracted_even_with_new_evidence_revision():
     p, budget, rows, quantities, ids, session = reservation_fixture(already_reserved=1)
     with pytest.raises(approval.CampaignV2ApprovalConflictError, match="remanente"):
         approval._reserve_locked(
-            plan=p, budget=budget, confirmation=(FP, 12, Decimal("3.60"), 7),
+            plan=p, budget=budget, confirmation=(FP, QF, 12, Decimal("3.60"), 7),
             session=session, timestamp=NOW, quantities=quantities,
             evidence_ids=ids, quota_rows=rows,
         )
@@ -127,7 +130,7 @@ def test_active_reservation_is_subtracted_even_with_new_evidence_revision():
 def test_success_is_reservation_only_and_expires_with_attestation():
     p, budget, rows, quantities, ids, session = reservation_fixture()
     result = approval._reserve_locked(
-        plan=p, budget=budget, confirmation=(FP, 12, Decimal("3.60"), 7),
+        plan=p, budget=budget, confirmation=(FP, QF, 12, Decimal("3.60"), 7),
         session=session, timestamp=NOW, quantities=quantities,
         evidence_ids=ids, quota_rows=rows,
     )
