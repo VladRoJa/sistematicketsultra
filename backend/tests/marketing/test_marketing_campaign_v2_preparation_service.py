@@ -24,7 +24,7 @@ def _ambiguous(monkeypatch, count: int, *, other=0):
     return rows
 
 
-@pytest.mark.parametrize("count,bulk", [(1, False), (9, False), (10, True), (11, True), (626, True)])
+@pytest.mark.parametrize("count,bulk", [(0, False), (1, False), (9, False), (10, True), (11, True), (626, True)])
 def test_ambiguous_review_classifies_and_requires_bulk_confirmation(monkeypatch, count, bulk):
     _ambiguous(monkeypatch, count, other=2)
     session = _session()
@@ -37,7 +37,7 @@ def test_ambiguous_review_classifies_and_requires_bulk_confirmation(monkeypatch,
     assert result["new_exclusions"] == count
     assert result["requires_bulk_confirmation"] is bulk
     assert len(result["rows"]) <= 25
-    assert result["can_apply"] is True
+    assert result["can_apply"] is (count > 0)
     session.add.assert_not_called()
     session.commit.assert_not_called()
 
@@ -74,7 +74,7 @@ def test_ambiguous_apply_rejects_stale_fingerprint_and_bulk_without_approval(mon
         c.apply_ambiguous_branch_exclusions(
             expected_fingerprint="wrong", **kwargs,
         )
-    with pytest.raises(c.ValidationError, match="10\+"):
+    with pytest.raises(c.ValidationError, match=r"10\+"):
         c.apply_ambiguous_branch_exclusions(
             expected_fingerprint=report["review_fingerprint"], **kwargs,
         )
@@ -153,7 +153,7 @@ def test_multi_campaign_apply_preserves_first_matching_provenance(monkeypatch):
         allowed_sucursal_keys=None, session=session,
     )
     assert report["matched"] == 3
-    with pytest.raises(c.ValidationError, match="10\+|desactualizada"):
+    with pytest.raises(c.ValidationError, match=r"10\+|desactualizada"):
         c.apply_previous_contacts(
             campaign_id=20, source_campaign_ids=[14,15],
             expected_fingerprint="wrong", expected_count=3,
