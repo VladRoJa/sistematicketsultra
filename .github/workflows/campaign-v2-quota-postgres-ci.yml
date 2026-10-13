@@ -6,6 +6,8 @@ on:
       - "backend/app/models/marketing.py"
       - "backend/app/services/marketing_campaign_v2_quota_service.py"
       - "backend/app/services/marketing_campaign_v2_dispatch_approval_service.py"
+      - "backend/app/services/marketing_campaign_v2_manifest_service.py"
+      - "backend/app/services/marketing_campaign_v2_submit_service.py"
       - "backend/app/routes/marketing_campaign_v2_routes.py"
       - "backend/migrations/versions/f4d856a1b20c_campaign_v2_quota_policy_capacity.py"
       - "backend/migrations/versions/a856d2a01013_campaign_v2_dispatch_approval_reservations.py"
@@ -44,7 +46,7 @@ jobs:
           python -m pip install pytest==8.3.5
       - name: Compile service and migration
         run: |
-          python -m py_compile backend/app/services/marketing_campaign_v2_quota_service.py backend/app/services/marketing_campaign_v2_dispatch_approval_service.py backend/app/routes/marketing_campaign_v2_routes.py
+          python -m py_compile backend/app/services/marketing_campaign_v2_quota_service.py backend/app/services/marketing_campaign_v2_dispatch_approval_service.py backend/app/services/marketing_campaign_v2_manifest_service.py backend/app/services/marketing_campaign_v2_submit_service.py backend/app/routes/marketing_campaign_v2_routes.py
           python -m py_compile backend/migrations/versions/f4d856a1b20c_campaign_v2_quota_policy_capacity.py backend/migrations/versions/a856d2a01013_campaign_v2_dispatch_approval_reservations.py
       - name: Run synthetic PostgreSQL quota tests
         working-directory: backend
@@ -58,4 +60,6 @@ jobs:
             tests/marketing/test_marketing_campaign_v2_quota_service.py \
             tests/marketing/test_marketing_campaign_v2_quota_migration.py \
             tests/marketing/test_marketing_campaign_v2_quota_approval.py \
-            tests/marketing/test_marketing_campaign_v2_quota_approval_postgres.py
+            tests/marketing/test_marketing_campaign_v2_quota_approval_postgres.py \
+            tests/marketing/test_marketing_campaign_v2_quota_manifest.py \
+            tests/marketing/test_marketing_campaign_v2_quota_routes.py
