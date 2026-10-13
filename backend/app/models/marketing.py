@@ -761,15 +761,30 @@ class MarketingCampaignV2HeldReleaseIntentORM(db.Model):
     )
     requested_at = db.Column(db.DateTime(timezone=True), nullable=False)
     status = db.Column(db.String(35), nullable=False, default="PENDING_FRESH_COHORT")
+    derived_campaign_id = db.Column(
+        db.BigInteger, db.ForeignKey("marketing_campaign_v2_campaigns.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    materialized_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         db.UniqueConstraint("source_child_id", name="uq_mkt_v2_held_release_child"),
+        db.UniqueConstraint("derived_campaign_id", name="uq_mkt_v2_held_release_derived_campaign"),
         db.CheckConstraint("length(source_manifest_digest) = 64 AND length(candidate_fingerprint) = 64",
                            name="ck_mkt_v2_held_release_fingerprints"),
         db.CheckConstraint("candidate_recipients > 0",
                            name="ck_mkt_v2_held_release_positive"),
-        db.CheckConstraint("status = 'PENDING_FRESH_COHORT'",
-                           name="ck_mkt_v2_held_release_intent_status"),
+        db.CheckConstraint(
+            "status IN ('PENDING_FRESH_COHORT', 'FROZEN_DERIVED')",
+            name="ck_mkt_v2_held_release_intent_status",
+        ),
+        db.CheckConstraint(
+            "(status = 'PENDING_FRESH_COHORT' AND derived_campaign_id IS NULL "
+            "AND materialized_at IS NULL) OR "
+            "(status = 'FROZEN_DERIVED' AND derived_campaign_id IS NOT NULL "
+            "AND materialized_at IS NOT NULL)",
+            name="ck_mkt_v2_held_release_materialization_state",
+        ),
         db.CheckConstraint("length(trim(source_reference)) > 0 AND length(trim(reason)) > 0",
                            name="ck_mkt_v2_held_release_audit"),
     )
