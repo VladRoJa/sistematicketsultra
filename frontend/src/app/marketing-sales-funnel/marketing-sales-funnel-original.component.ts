@@ -576,7 +576,7 @@ export class MarketingSalesFunnelOriginalComponent implements OnInit {
         : '',
       note: sources.combined_available
         ? 'Suma Meta asignada a sucursales + Google Ads de cuenta; no incluye gasto Meta sin asignación. CPL, CPT y CAC existentes siguen basados en Meta.'
-        : 'Sin total combinado comparable para este alcance/corte. Google Ads no está distribuido por sucursal y no se incluye en CPL, CPT ni CAC actuales.',
+        : 'Sin total combinado comparable para este alcance/corte. Google Ads tiene atribución histórica provisional por sucursal (24 sep–8 oct 2026); se presenta por separado y no modifica CPL, CPT ni CAC, que siguen basados en Meta.',
     };
   }
 

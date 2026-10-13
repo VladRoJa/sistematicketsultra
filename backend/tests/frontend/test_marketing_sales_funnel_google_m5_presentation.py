@@ -98,3 +98,37 @@ def test_official_original_ads_is_read_only_and_keeps_existing_kpis():
     assert "<app-marketing-sales-funnel-original-story" in html
     assert "'./marketing-sales-funnel-google-attribution.component.css'" in original
     assert "ngStyle" not in html
+
+
+def test_ads_sections_appear_after_commercial_story_and_quality_at_page_end():
+    for name, story in (
+        ("marketing-sales-funnel-original.component.html",
+         "app-marketing-sales-funnel-original-story"),
+        ("marketing-sales-funnel.component.html",
+         "app-marketing-sales-funnel-story"),
+    ):
+        html = _read(name)
+        quality = html.index('<details class="quality-section story-quality">')
+        story_pos = html.index('<' + story)
+        top = html.index('<ng-container *ngIf="showDashboard">')
+        source = html.index('*ngIf="investmentSourcesView as ads"')
+        attribution = html.index('*ngIf="googleBranchAttributionView as attribution"')
+        last = html.rindex('</ng-container>')
+        assert top < story_pos < quality < source < attribution < last
+        assert html.count('*ngIf="investmentSourcesView as ads"') == 1
+        assert html.count('*ngIf="googleBranchAttributionView as attribution"') == 1
+        assert html.count('class="branch-panel"') == 1
+
+
+def test_ads_copy_acknowledges_historical_mapping_without_changing_meta_basis():
+    for name in (
+        "marketing-sales-funnel-original.component.ts",
+        "marketing-sales-funnel.component.ts",
+    ):
+        ts = _read(name)
+        assert "Google Ads tiene atribución histórica provisional por sucursal" in ts
+        assert "24 sep–8 oct 2026" in ts
+        assert "no modifica CPL, CPT ni CAC, que siguen basados en Meta" in ts
+        assert "Google Ads no está distribuido por sucursal" not in ts
+        assert "this.dashboard?.summary.investment ?? null" in ts
+        assert "this.buildGoogleBranchAttributionView(data)" in ts
