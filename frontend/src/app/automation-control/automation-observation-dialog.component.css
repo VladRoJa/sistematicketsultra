@@ -1,0 +1,7 @@
+h2{font-size:18px;line-height:1.35;margin:0}
+dl{display:grid;grid-template-columns:minmax(120px,1fr) minmax(0,2fr);gap:12px 18px;margin:12px 0;font-size:13px}
+dt{font-weight:600;color:#64748b}
+dd{margin:0;overflow-wrap:anywhere}
+button{background:#fff;border:1px solid #cbd5e1;border-radius:5px;padding:8px 16px;cursor:pointer}
+.notice{font-size:12px;color:#9a6700}
+@media(max-width:480px){dl{grid-template-columns:1fr;gap:3px}dd{margin-bottom:9px}}
