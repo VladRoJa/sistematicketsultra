@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from types import SimpleNamespace as NS
+from unittest.mock import MagicMock
 
 import pytest
 from sqlalchemy import BigInteger, Column, Integer, MetaData, Table, create_engine
@@ -852,3 +853,15 @@ def test_governed_approval_cannot_use_legacy_submit_even_with_kill_switch_on(
         _submit(session, provider)
     assert provider.calls == []
     assert session.query(MarketingCampaignV2ProviderCampaignORM).count() == 0
+
+
+def test_shared_transition_cannot_bypass_governed_authorization():
+    session = MagicMock()
+    session.get.return_value = NS(campaign_v2_id=77)
+    session.query.return_value.filter.return_value.first.return_value = (9,)
+    with pytest.raises(service.MarketingCampaignV2SubmitConflictError, match="gobernada"):
+        service._transition_ready_to_submitting(
+            row_id=1, actor_user_id=7, session=session, now=NOW,
+        )
+    session.query.return_value.filter.return_value.update.assert_not_called()
+    session.commit.assert_not_called()
