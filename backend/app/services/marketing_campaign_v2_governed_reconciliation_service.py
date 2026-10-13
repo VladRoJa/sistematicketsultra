@@ -187,11 +187,12 @@ def escalate_stale_governed_claim(
 
 
 def record_governed_provider_resolution(
-    *, execution_id: int, child_id: int, expected_manifest_digest: str,
+    *, campaign_id: int, execution_id: int, child_id: int, expected_manifest_digest: str,
     resolution: str, source_reference: str, evidence_note: str,
     actor_user_id: int, provider_campaign_id: str | None = None,
     session: Any | None = None, now: datetime | None = None,
 ) -> dict:
+    campaign_id = _required_int(campaign_id, "campaign_id")
     execution_id = _required_int(execution_id, "execution_id")
     child_id = _required_int(child_id, "child_id")
     actor = _required_int(actor_user_id, "actor_user_id")
