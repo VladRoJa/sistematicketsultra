@@ -9,6 +9,9 @@ from datetime import date, datetime
 from typing import Any
 
 from app.extensions import db
+from app.services.marketing_campaign_v2_derived_contact_guard import (
+    DERIVED_SOURCE, DerivedContactConflict, assert_no_prior_or_pending_contact,
+)
 from app.services.marketing_campaign_v2_delivery_export_service import (
     build_campaign_v2_sendable_projection,
     campaign_v2_first_name,
@@ -113,6 +116,23 @@ def build_campaign_v2_preflight(
         session=active_session,
     )
     campaign = projection["campaign"]
+    if campaign.get("source") == DERIVED_SOURCE:
+        # No dynamic blacklist/exclusion may silently shrink a frozen HELD
+        # derivative; its next approval must be for the *same* frozen cohort.
+        frozen = projection["frozen_recipients"]
+        sendable = projection["sendable_recipients"]
+        if (not frozen or len(frozen) != len(sendable) or
+                {int(x.id) for x in frozen} != {int(x.id) for x in sendable}):
+            raise MarketingCampaignV2DispatchConfigValidationError(
+                "Cohorte HELD derivada reducida por blacklist/exclusión; revisión obligatoria."
+            )
+        try:
+            assert_no_prior_or_pending_contact(
+                phones=(r.phone_mx10 for r in frozen),
+                session=active_session, exclude_campaign_id=campaign_id,
+            )
+        except DerivedContactConflict as exc:
+            raise MarketingCampaignV2DispatchConfigValidationError(str(exc)) from exc
     purpose = str(campaign.get("purpose") or "").strip().upper()
     provider_name = str(provider or DEFAULT_PROVIDER).strip().upper()
     schedule_plan = normalize_campaign_v2_schedule(
