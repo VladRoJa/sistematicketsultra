@@ -42,7 +42,75 @@ export class MarketingCampaignV2PreparationDialogComponent {
 
   constructor(@Inject(MAT_DIALOG_DATA) public readonly data: CampaignV2PreparationDialogData) {}
 
-  close(): void { this.dialogRef.close(); }
+  changed = false;
+
+  close(): void { this.dialogRef.close(this.changed); }
+
+  reviewBranches(page = 1): void {
+    if (this.busy) { return; }
+    this.busy = true;
+    this.error = '';
+    this.confirmBranchControl.setValue('');
+    this.api.reviewAmbiguousBranches(this.data.campaignId, page)
+      .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: review => { this.branchReview = review; this.busy = false; },
+        error: error => this.onError(error),
+      });
+  }
+
+  reviewPreviousContacts(): void {
+    if (this.busy) { return; }
+    const pieces = this.sourceIdsControl.value.split(',').map(x => x.trim());
+    if (!pieces.length || pieces.length > 20 ||
+        pieces.some(x => !/^[1-9]\\d*$/.test(x))) {
+      this.error = 'Proporciona hasta 20 IDs positivos separados por comas.';
+      return;
+    }
+    const ids = pieces.map(x => Number(x));
+    if (ids.some(id => !Number.isSafeInteger(id) || id === this.data.campaignId)
+        || new Set(ids).size !== ids.length) {
+      this.error = 'Los orígenes deben ser distintos y anteriores a esta campaña.';
+      return;
+    }
+    this.sourceIds = ids;
+    this.busy = true;
+    this.error = '';
+    this.previousReview = null;
+    this.confirmPreviousControl.setValue('');
+    this.api.reviewPreviousContacts(this.data.campaignId, ids)
+      .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: review => { this.previousReview = review; this.busy = false; },
+        error: error => this.onError(error),
+      });
+  }
+
+  previousBranchesPage(): void {
+    if (this.branchReview && this.branchReview.page > 1) {
+      this.reviewBranches(this.branchReview.page - 1);
+    }
+  }
+
+  nextBranchesPage(): void {
+    if (this.branchReview && this.branchReview.rows.length === 25) {
+      this.reviewBranches(this.branchReview.page + 1);
+    }
+  }
+
+  get canApplyBranches(): boolean {
+    return Boolean(this.data.canManageDispatchConfig && !this.busy
+      && this.branchReview?.can_apply
+      && this.branchReview.new_exclusions > 0
+      && this.confirmBranchControl.value ===
+      'EXCLUIR ' + this.branchReview.new_exclusions);
+  }
+
+  get canApplyPrevious(): boolean {
+    return Boolean(this.data.canManageDispatchConfig && !this.busy
+      && this.previousReview?.can_apply
+      && this.previousReview.new_exclusions > 0
+      && this.confirmPreviousControl.value ===
+      'EXCLUIR ' + this.previousReview.new_exclusions);
+  }
 
   private onError(error: HttpErrorResponse): void {
     this.busy = false;
