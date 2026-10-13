@@ -91,4 +91,5 @@ jobs:
             tests/marketing/test_marketing_campaign_v2_quota_held_release_intent.py \
             tests/marketing/test_marketing_campaign_v2_quota_held_release_intent_postgres.py \
             tests/marketing/test_marketing_campaign_v2_quota_derived_cohort.py \
-            tests/marketing/test_marketing_campaign_v2_quota_derived_cohort_postgres.py
+            tests/marketing/test_marketing_campaign_v2_quota_derived_cohort_postgres.py \
+            tests/marketing/test_marketing_campaign_v2_quota_derived_cohort_real_pg.py
