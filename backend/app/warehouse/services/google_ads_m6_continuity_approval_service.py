@@ -7,10 +7,9 @@ facts, Funnel or any daily ingestion scheduler.
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 from hashlib import sha256
-from zoneinfo import ZoneInfo
 
 import sqlalchemy as sa
 
@@ -274,7 +273,7 @@ def _check_existing(conn, identities: list[dict]) -> tuple[int | None, dict | No
 
 
 def run_on_connection(conn, *, apply: bool, approved_by_user_id: int | None, parsed_files) -> dict:
-    """Validate M5, the 09..12 XLSX pair, canonical scope and prior M6 state."""
+    """Read-only preflight; reject direct approval until authenticated workflow."""
     data = _load_m5()
     original = _m5_preflight(conn, apply=False)
     _require(
@@ -290,47 +289,13 @@ def run_on_connection(conn, *, apply: bool, approved_by_user_id: int | None, par
     metrics = _verify_facts(conn, campaigns, groups, identities)
     existing_id, existing = _check_existing(conn, identities)
 
-    if apply:
-        _require(
-            approved_by_user_id is not None and int(approved_by_user_id) > 0,
-            "APPLY requiere identificador de usuario aprobador",
-        )
-        user = conn.execute(sa.text("""
-            SELECT id, username, rol FROM users WHERE id = :user_id
-        """), {"user_id": approved_by_user_id}).mappings().one_or_none()
-        _require(
-            user is not None
-            and str(user["username"]).strip().casefold() == "admicorp"
-            and str(user["rol"]).strip().upper() == "ADMINISTRADOR",
-            "solo ADMICORP administrador puede aprobar",
-        )
-        _require(
-            existing is None or existing["approved_by_user_id"] == approved_by_user_id,
-            "aprobador distinto al originalmente registrado",
-        )
-        if existing_id is None:
-            version_id = conn.execute(sa.text("""
-                INSERT INTO google_ads_branch_approval_versions
-                (customer_id, approval_reference, source_approval_reference,
-                 valid_from, valid_to, source_campaign_upload_id,
-                 source_ad_group_upload_id, approved_by_user_id, approved_on)
-                VALUES (:customer, :ref, :parent, :start, NULL, :campaign, :groups,
-                        :actor, :approved_on)
-                RETURNING id
-            """), {
-                "customer": CUSTOMER_ID, "ref": M6_REFERENCE, "parent": M5_REFERENCE,
-                "start": START, "campaign": CAMPAIGN_UPLOAD_ID,
-                "groups": GROUP_UPLOAD_ID, "actor": approved_by_user_id,
-                "approved_on": datetime.now(ZoneInfo("America/Tijuana")).date(),
-            }).scalar_one()
-            conn.execute(sa.text("""
-                INSERT INTO google_ads_branch_approved_identities
-                (approval_version_id, campaign_key, ad_group_key, sucursal_canon)
-                VALUES (:approval_version_id, :campaign_key, :ad_group_key, :sucursal_canon)
-            """), [{"approval_version_id": version_id, **r} for r in identities])
-            verified_id, _ = _check_existing(conn, identities)
-            _require(verified_id == version_id, "aprobación M6 incompleta")
-            existing_id = int(version_id)
+    # No unattended/CLI approval is permitted: supplying an arbitrary user ID
+    # cannot authenticate the real actor. A future JWT-authenticated admin
+    # endpoint must own approval authorization and auditable identity.
+    _require(
+        not apply,
+        "APPLY deshabilitado hasta integrar aprobacion con identidad autenticada.",
+    )
 
     return {
         "action": "APPLY" if apply else "CHECK_ONLY",
@@ -348,24 +313,14 @@ def run_on_connection(conn, *, apply: bool, approved_by_user_id: int | None, par
 
 
 def run_approval(*, apply: bool = False, approved_by_user_id: int | None = None) -> dict:
-    """Read-only by default. Apply uses lock and one atomic DB transaction."""
+    """Always read-only: approval requires a future authenticated admin action."""
     _require(
-        not apply or approved_by_user_id is not None,
-        "APPLY requiere un operador aprobador",
+        not apply and approved_by_user_id is None,
+        "APPLY deshabilitado: se requiere identidad autenticada en backend.",
     )
     _verify_m5_raw(_load_m5())
     files = _load_files()
-    if not apply:
-        with db.engine.connect() as conn:
-            return run_on_connection(
-                conn, apply=False, approved_by_user_id=None, parsed_files=files,
-            )
-    with db.engine.begin() as conn:
-        conn.execute(sa.text(
-            "SELECT pg_advisory_xact_lock("
-            "hashtext('google_ads_m6_continuity_initial_20261013'))"
-        ))
+    with db.engine.connect() as conn:
         return run_on_connection(
-            conn, apply=True, approved_by_user_id=approved_by_user_id,
-            parsed_files=files,
+            conn, apply=False, approved_by_user_id=None, parsed_files=files,
         )
