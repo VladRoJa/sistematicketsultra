@@ -23,6 +23,7 @@ import {
 } from './marketing-campaign-v2.models';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
 import { isDispatchTemplateDraftValid } from './marketing-campaign-v2-dispatch-admin.logic';
+import { isCampaignV2MxnUnitCostValid } from './marketing-campaign-v2-admin-validation.logic';
 
 interface VariableMappingRow {
   position: number;
@@ -124,7 +125,6 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
   }
 
   get canSaveBudgetRate(): boolean {
-    const parsed = Number(this.pricingUnitCostMxn.value.trim());
     const template = this.templates.find(row => row.id === this.pricingTemplateId.value);
     return !this.savingBudgetRate
       && Boolean(template?.is_active)
@@ -133,9 +133,7 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
       && Boolean(template && (!template.compatible_channel_ids.length || template.compatible_channel_ids.includes(this.pricingChannelId.value)))
       && this.pricingSourceReference.valid
       && this.pricingSourceReference.value.trim().length > 0
-      && this.pricingUnitCostMxn.value.trim().length > 0
-      && /^\\d+(\\.\\d{1,6})?$/.test(this.pricingUnitCostMxn.value.trim())
-      && Number.isFinite(parsed) && parsed > 0 && parsed <= 1000;
+      && isCampaignV2MxnUnitCostValid(this.pricingUnitCostMxn.value);
   }
 
   get latestBudgetRates(): CampaignV2BudgetRateRevision[] {
