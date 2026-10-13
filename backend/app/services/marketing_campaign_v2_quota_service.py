@@ -6,7 +6,7 @@ hard blocker for capacity *recommendations*. Assessment never reserves/send.
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -165,7 +165,7 @@ def register_quota_capacity(
     timestamp = _date(now or datetime.now(timezone.utc))
     if not observed <= timestamp or not observed < expires <= window:
         raise CampaignV2QuotaValidationError("Vigencia/cierre de ventana inválidos.")
-    if expires - observed > __import__("datetime").timedelta(hours=24):
+    if expires - observed > timedelta(hours=24):
         raise CampaignV2QuotaValidationError("Evidencia operativa máxima 24 horas.")
     remaining = _int(remaining_messages, "remaining_messages")
     reference = _required(source_reference, "source_reference", 255)
@@ -240,15 +240,27 @@ def assess_preflight_capacity(
         if policy:
             total_by_portfolio[policy.portfolio_key] += count
 
-    # Provider events since an operator's attestation make remaining quota uncertain.
-    # Conservative: a recent event is a blocker; don't blindly subtract provider count.
+    # Shared-portfolio activity can come from OTHER channels not in this plan.
+    # HELD is explicitly unattempted, never counted as Meta consumption.
+    all_policies = active.query(MarketingCampaignV2QuotaPolicyRevisionORM).filter(
+        MarketingCampaignV2QuotaPolicyRevisionORM.portfolio_key.in_(sorted(portfolios)),
+        MarketingCampaignV2QuotaPolicyRevisionORM.valid_from <= timestamp,
+    ).order_by(
+        MarketingCampaignV2QuotaPolicyRevisionORM.valid_from.desc(),
+        MarketingCampaignV2QuotaPolicyRevisionORM.id.desc(),
+    ).all() if portfolios else []
+    latest_policies = {}
+    for policy in all_policies:
+        latest_policies.setdefault(policy.provider_channel_id, policy)
     events = []
-    if channels:
+    if latest_policies:
         events = active.query(MarketingCampaignV2ProviderCampaignORM).filter(
             MarketingCampaignV2ProviderCampaignORM.provider == "IVENTAS",
-            MarketingCampaignV2ProviderCampaignORM.provider_channel_id.in_(sorted(channels)),
+            MarketingCampaignV2ProviderCampaignORM.provider_channel_id.in_(
+                sorted(latest_policies)
+            ),
             MarketingCampaignV2ProviderCampaignORM.status.in_(
-                ("SUBMITTING", "SUBMITTED", "SCHEDULED", "RECONCILIATION_REQUIRED", "HELD"),
+                ("SUBMITTING", "SUBMITTED", "SCHEDULED", "RECONCILIATION_REQUIRED"),
             ),
         ).all()
     rows = []
@@ -269,10 +281,10 @@ def assess_preflight_capacity(
         elif total_by_portfolio[policy.portfolio_key] > int(p.remaining_messages):
             reason = "SHARED_PORTFOLIO_REMAINING_EXCEEDED"
         elif any(
-            evt.provider_channel_id == channel
-            and (evt.submit_started_at or evt.submitted_at or evt.created_at)
+            latest_policies.get(evt.provider_channel_id) is not None
+            and latest_policies[evt.provider_channel_id].portfolio_key == policy.portfolio_key
             and _database_date(evt.submit_started_at or evt.submitted_at or evt.created_at)
-            >= min(_database_date(c.observed_at), _database_date(p.observed_at))
+            >= _database_date(p.observed_at)
             for evt in events
         ):
             reason = "ACTIVITY_AFTER_QUOTA_ATTESTATION"
