@@ -2886,3 +2886,110 @@ class TestMarketingCampaignV2Routes:
 
         assert response.status_code == 409
         assert "backoff" in response.get_json()["message"]
+
+    def test_admin_template_catalog_returns_inactive_and_requires_global_capability(self):
+        access = SimpleNamespace(
+            is_global=True, can_manage_campaigns=True,
+            can_preflight_campaigns=True, can_manage_dispatch_config=False,
+        )
+        with self._auth(access), patch.object(routes, "list_templates") as mocked:
+            denied = self.client.get(
+                "/api/marketing/campaigns-v2/dispatch/templates/admin",
+                headers=self.headers,
+            )
+        assert denied.status_code == 403
+        mocked.assert_not_called()
+
+        with (
+            self._auth(self.global_access),
+            patch.object(routes, "list_templates",
+                         return_value=[{"id": 5, "is_active": False}]) as mocked,
+        ):
+            result = self.client.get(
+                "/api/marketing/campaigns-v2/dispatch/templates/admin",
+                headers=self.headers,
+            )
+        assert result.status_code == 200
+        assert result.get_json()["rows"] == [{"id": 5, "is_active": False}]
+        assert mocked.call_args.kwargs["active_only"] is False
+        assert mocked.call_args.kwargs["purpose"] if "purpose" in mocked.call_args.kwargs else True
+
+    def test_admin_routes_no_unprivileged_catalog_or_mutation(self):
+        urls = (
+            ("get", "/api/marketing/campaigns-v2/dispatch/catalog-branches"),
+            ("get", "/api/marketing/campaigns-v2/dispatch/templates/admin"),
+            ("post", "/api/marketing/campaigns-v2/dispatch/templates"),
+            ("put", "/api/marketing/campaigns-v2/dispatch/templates/5"),
+            ("post", "/api/marketing/campaigns-v2/dispatch/channel-bindings"),
+            ("put", "/api/marketing/campaigns-v2/dispatch/channel-bindings/5"),
+        )
+        for method, url in urls:
+            with self._auth(self.partial_access):
+                response = getattr(self.client, method)(url, headers=self.headers,
+                    **({"json": {}} if method in {"post", "put"} else {}))
+            assert response.status_code == 403, (method, url)
+
+    def test_admin_create_template_forces_server_explicit_channels(self):
+        payload = {
+            "provider": "IVENTAS",
+            "template_name": "new_approved",
+            "label": "Nueva aprobada",
+            "is_active": True,
+            "purposes": ["REACTIVATION"],
+            "variables": {"1": "branch"},
+            "compatible_channel_ids": ["channel-current"],
+        }
+        with (
+            self._auth(self.global_access),
+            patch.object(routes, "save_template",
+                         return_value={"id": 80, "template_name": "new_approved"}) as saved,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/dispatch/templates",
+                headers=self.headers, json=payload,
+            )
+        assert response.status_code == 201
+        assert saved.call_args.kwargs["require_explicit_channels"] is True
+        assert saved.call_args.kwargs["actor_user_id"] == 7
+        assert saved.call_args.kwargs["compatible_channel_ids"] == ["channel-current"]
+
+    def test_admin_update_template_maps_history_conflict_to_409(self):
+        payload = {
+            "provider": "IVENTAS", "template_name": "already_used",
+            "label": "Existing", "is_active": False,
+            "purposes": ["REACTIVATION"], "variables": {},
+            "compatible_channel_ids": ["channel-current"],
+        }
+        with (
+            self._auth(self.global_access),
+            patch.object(routes, "save_template",
+                         side_effect=routes.MarketingCampaignV2DispatchConfigConflictError(
+                             "Hay children auditados."
+                         )) as saved,
+        ):
+            response = self.client.put(
+                "/api/marketing/campaigns-v2/dispatch/templates/9",
+                headers=self.headers, json=payload,
+            )
+        assert response.status_code == 409
+        assert saved.call_args.kwargs["require_explicit_channels"] is True
+
+    def test_admin_binding_update_enforces_history_lock(self):
+        payload = {
+            "provider": "IVENTAS", "sucursal_id": 4,
+            "provider_channel_id": "channel-current",
+            "is_active": False, "is_default": False,
+        }
+        with (
+            self._auth(self.global_access),
+            patch.object(routes, "save_channel_binding",
+                         side_effect=routes.MarketingCampaignV2DispatchConfigConflictError(
+                             "Lote READY presente"
+                         )) as saved,
+        ):
+            response = self.client.put(
+                "/api/marketing/campaigns-v2/dispatch/channel-bindings/9",
+                headers=self.headers, json=payload,
+            )
+        assert response.status_code == 409
+        assert saved.call_args.kwargs["require_immutable_history"] is True
