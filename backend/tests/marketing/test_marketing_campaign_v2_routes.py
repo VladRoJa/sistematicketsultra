@@ -2993,3 +2993,104 @@ class TestMarketingCampaignV2Routes:
             )
         assert response.status_code == 409
         assert saved.call_args.kwargs["require_immutable_history"] is True
+
+    def test_phase_b_cost_rate_catalog_global_only(self):
+        with self._auth(self.partial_access), patch.object(
+            routes, "list_cost_rate_revisions",
+        ) as mocked:
+            denied = self.client.get(
+                "/api/marketing/campaigns-v2/dispatch/cost-rates",
+                headers=self.headers,
+            )
+        assert denied.status_code == 403
+        mocked.assert_not_called()
+        with (
+            self._auth(self.global_access),
+            patch.object(routes, "list_cost_rate_revisions",
+                         return_value=[{"revision_id": 7}]) as mocked,
+        ):
+            allowed = self.client.get(
+                "/api/marketing/campaigns-v2/dispatch/cost-rates?template_id=1",
+                headers=self.headers,
+            )
+        assert allowed.status_code == 200
+        assert allowed.get_json()["rows"] == [{"revision_id": 7}]
+        assert mocked.call_args.kwargs["template_id"] == 1
+
+    def test_phase_b_cost_rate_write_uses_server_actor_and_never_provider(self):
+        payload = {
+            "template_id": 1, "provider_channel_id": "channel-tec",
+            "unit_cost_mxn": "0.825000",
+            "source_reference": "synthetic approved contract",
+        }
+        with (
+            self._auth(self.global_access),
+            patch.object(routes, "register_cost_rate_revision",
+                         return_value={"revision_id": 10}) as mocked,
+            patch.object(routes, "IVentasBroadcastProvider") as provider,
+        ):
+            result = self.client.post(
+                "/api/marketing/campaigns-v2/dispatch/cost-rates",
+                json=payload, headers=self.headers,
+            )
+        assert result.status_code == 201
+        assert result.get_json()["revision_id"] == 10
+        assert mocked.call_args.kwargs["actor_user_id"] == 7
+        provider.assert_not_called()
+
+    def test_phase_b_pricing_rejects_browser_rate_authority_and_scope(self):
+        payload = {
+            "template_id": 1, "provider_channel_id": "channel-tec",
+            "unit_cost_mxn": "0.8", "source_reference": "QA",
+            "send_enabled": True,
+        }
+        with (
+            self._auth(self.global_access),
+            patch.object(routes, "register_cost_rate_revision") as mocked,
+        ):
+            bad = self.client.post(
+                "/api/marketing/campaigns-v2/dispatch/cost-rates",
+                headers=self.headers, json=payload,
+            )
+        assert bad.status_code == 400
+        mocked.assert_not_called()
+        with (
+            self._auth(self.partial_access),
+            patch.object(routes, "register_cost_rate_revision") as mocked,
+        ):
+            denied = self.client.post(
+                "/api/marketing/campaigns-v2/dispatch/cost-rates",
+                headers=self.headers, json={k: v for k, v in payload.items()
+                                         if k != "send_enabled"},
+            )
+        assert denied.status_code == 403
+        mocked.assert_not_called()
+
+    def test_phase_b_preflight_adds_read_only_cost_without_enabling_send(self):
+        self.app.config["CAMPAIGN_V2_PROVIDER_SEND_ENABLED"] = False
+        fake_plan = SimpleNamespace(
+            batches=[SimpleNamespace(template_id=7)], sendable_phones=["x"],
+        )
+        with (
+            self._auth(self.global_access),
+            patch.object(routes, "build_campaign_v2_preflight", return_value=fake_plan),
+            patch.object(routes, "serialize_campaign_v2_preflight",
+                         return_value={"ready": True, "dispatch_fingerprint": "x"*64}),
+            patch.object(routes, "get_campaign_v2_submit_state",
+                         return_value={"status": "NOT_STARTED", "batches": [],
+                                       "has_provider_campaigns": False}),
+            patch.object(routes, "estimate_preflight_cost",
+                         return_value={"status": "INCOMPLETE",
+                                       "total_estimated_mxn": None}) as quoted,
+            patch.object(routes, "IVentasBroadcastProvider") as provider,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/7/preflight",
+                json={"template_id": 7}, headers=self.headers,
+            )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["budget"]["total_estimated_mxn"] is None
+        assert data["submission"]["enabled"] is False
+        assert quoted.call_args.kwargs["plan"] is fake_plan
+        provider.assert_not_called()
