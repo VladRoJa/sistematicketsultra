@@ -273,10 +273,19 @@ export interface CampaignV2BlacklistImportResult {
   latest_created_at: string | null;
 }
 
+export interface CampaignV2RecipientDimension {
+  label: string;
+  count: number;
+}
+
 export interface CampaignV2PreviewResponse extends CampaignV2PreviewSummary {
   source: CampaignV2Source;
   source_metadata: CampaignV2SourceMetadata;
   filters: CampaignV2PreviewFilters;
+  recipient_dimensions?: {
+    branches: CampaignV2RecipientDimension[];
+    families: CampaignV2RecipientDimension[];
+  };
   preview_fingerprint_version: string;
   preview_fingerprint: string;
 }
@@ -449,6 +458,51 @@ export interface CampaignV2ChannelBindingRequest {
   metadata: Record<string, unknown>;
 }
 
+export interface CampaignV2BudgetRateRevision {
+  revision_id: number;
+  template_id: number;
+  provider_channel_id: string;
+  unit_cost_mxn: string;
+  valid_from: string;
+  source_reference: string;
+  created_at: string;
+}
+
+export interface CampaignV2BudgetRatesResponse {
+  rows: CampaignV2BudgetRateRevision[];
+}
+
+export interface CampaignV2BudgetRateRequest {
+  template_id: number;
+  provider_channel_id: string;
+  unit_cost_mxn: string;
+  source_reference: string;
+}
+
+export interface CampaignV2BudgetBatch {
+  sucursal_canon: string;
+  channel_id: string | null;
+  recipients: number;
+  revision_id: number | null;
+  unit_cost_mxn: string | null;
+  source_reference: string | null;
+  estimated_mxn: string | null;
+}
+
+export interface CampaignV2PreflightBudget {
+  status: 'COMPLETE' | 'INCOMPLETE';
+  currency: 'MXN';
+  basis: 'MANUAL_OPERATOR_RATE_NOT_PROVIDER_QUOTE';
+  as_of: string;
+  sendable_recipients: number;
+  priced_recipients: number;
+  unassigned_recipients: number;
+  missing_rate_channels: Array<{sucursal_canon: string; recipient_count: number}>;
+  priced_subtotal_mxn: string;
+  total_estimated_mxn: string | null;
+  batches: CampaignV2BudgetBatch[];
+}
+
 export interface CampaignV2PreflightBatch {
   sucursal_id: number;
   sucursal_canon: string;
@@ -530,6 +584,7 @@ export interface CampaignV2PreflightResponse {
   dispatch_fingerprint: string;
   ready: boolean;
   submission: CampaignV2SubmitState;
+  budget?: CampaignV2PreflightBudget;
 }
 
 export interface CampaignV2RecipientSummary {
