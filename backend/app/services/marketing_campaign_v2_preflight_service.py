@@ -9,6 +9,9 @@ from datetime import date, datetime
 from typing import Any
 
 from app.extensions import db
+from app.models.marketing import (
+    MarketingCampaignV2ORM, MarketingCampaignV2HeldReleaseIntentORM,
+)
 from app.services.marketing_campaign_v2_derived_contact_guard import (
     DERIVED_SOURCE, DerivedContactConflict, assert_no_prior_or_pending_contact,
 )
@@ -117,6 +120,28 @@ def build_campaign_v2_preflight(
     )
     campaign = projection["campaign"]
     if campaign.get("source") == DERIVED_SOURCE:
+        # Only an actual, completed D3c1 intent may produce a derived
+        # campaign. Never trust source text or client-supplied metadata alone.
+        derived = active_session.get(MarketingCampaignV2ORM, campaign_id)
+        spec = (derived.audience_definition_json or {}).get("derived_release") if derived else None
+        if not isinstance(spec, dict) or spec.get("version") != "d3c2-held-frozen-v1":
+            raise MarketingCampaignV2DispatchConfigValidationError(
+                "Campaña derivada sin trazabilidad D3c2."
+            )
+        ident = spec.get("intent_id")
+        if type(ident) is not int or ident <= 0:
+            raise MarketingCampaignV2DispatchConfigValidationError(
+                "Campaña derivada sin intención vinculada."
+            )
+        intent = active_session.get(MarketingCampaignV2HeldReleaseIntentORM, ident)
+        if (intent is None or intent.status != "FROZEN_DERIVED" or
+                int(intent.derived_campaign_id or 0) != int(campaign_id) or
+                int(intent.source_campaign_id) != int(spec.get("source_campaign_id") or 0) or
+                int(intent.source_child_id) != int(spec.get("source_child_id") or 0) or
+                intent.candidate_fingerprint != spec.get("candidate_fingerprint")):
+            raise MarketingCampaignV2DispatchConfigValidationError(
+                "Intención D3c2 ausente, alterada o incompatible."
+            )
         # No dynamic blacklist/exclusion may silently shrink a frozen HELD
         # derivative; its next approval must be for the *same* frozen cohort.
         frozen = projection["frozen_recipients"]
