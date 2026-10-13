@@ -80,7 +80,9 @@ def _assert_manifest(plan: Any, budget: dict, approval: Any):
             row.get("hold_reason") != "CHANNEL_DAILY_QUOTA" or
             not isinstance(row.get("hold_evidence"), dict) or
             row["hold_evidence"].get("dispatch_fingerprint") != plan.dispatch_fingerprint or
-            row["hold_evidence"].get("quote_fingerprint") != manifest["quote_fingerprint"]
+            row["hold_evidence"].get("quote_fingerprint") != manifest["quote_fingerprint"] or
+            not isinstance(row["hold_evidence"].get("source_reference"), str) or
+            not row["hold_evidence"]["source_reference"].strip()
         ):
             raise CampaignV2ApprovalConflictError("HELD sin autorización y evidencia íntegra.")
         if not held and (row.get("hold_reason") or row.get("hold_evidence")):
