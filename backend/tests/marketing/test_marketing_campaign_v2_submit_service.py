@@ -63,7 +63,7 @@ def session():
         )
         value.execute(
             Table("sucursales", MetaData(), autoload_with=engine).insert(),
-            [{"sucursal_id": 1}, {"sucursal_id": 2}],
+            [{"sucursal_id": 1}, {"sucursal_id": 2}, {"sucursal_id": 3}],
         )
         value.execute(
             Table(
@@ -71,7 +71,7 @@ def session():
                 MetaData(),
                 autoload_with=engine,
             ).insert(),
-            [{"id": 101}, {"id": 102}],
+            [{"id": 101}, {"id": 102}, {"id": 103}],
         )
         value.execute(
             Table(
@@ -766,3 +766,64 @@ def test_held_state_requires_full_audit_at_database_level(session):
         ))
         session.commit()
     session.rollback()
+
+
+def test_two_limited_branches_held_one_ready_survives_partial_send(session, monkeypatch):
+    """Winback #15 shape: 2 HELD, 1 READY, never send either held child."""
+    from app.services import marketing_campaign_v2_partial_resume_service as resume
+
+    base = _plan()
+    third = _batch(3, "INSURGENTES", "channel-3", 3, "6861000003")
+    plan = CampaignV2PreflightPlan(
+        **{**base.__dict__, "batches": base.batches + (third,)}
+    )
+    _install_plan(monkeypatch, plan)
+    holds = {
+        "TEC_MXL": {
+            "reason": "CHANNEL_DAILY_QUOTA",
+            "evidence": {"recorded": "limited channel", "count": 3612},
+        },
+        "INSURGENTES": {
+            "reason": "CHANNEL_DAILY_QUOTA",
+            "evidence": {"recorded": "limited channel", "count": 68},
+        },
+    }
+    service._prepare_provider_campaign_rows(
+        plan=plan, actor_user_id=7, session=session, now=NOW,
+        held_batches=holds,
+    )
+    db_rows = {
+        row.sucursal_canon: row
+        for row in session.query(MarketingCampaignV2ProviderCampaignORM).all()
+    }
+    assert len(db_rows) == 3
+    assert [db_rows[name].status for name in ("TEC_MXL", "INSURGENTES")] == ["HELD", "HELD"]
+    assert db_rows["VILLAS_MXL"].status == "READY"
+
+    monkeypatch.setattr(resume, "build_campaign_v2_preflight", lambda **kw: plan)
+    review = resume.review_partial_resume(
+        campaign_id=77, template_id=10, expected_fingerprint=FINGERPRINT,
+        expected_submitted={}, expected_failed={},
+        expected_ready={"VILLAS_MXL": 1},
+        expected_held={
+            "TEC_MXL": (1, "CHANNEL_DAILY_QUOTA"),
+            "INSURGENTES": (1, "CHANNEL_DAILY_QUOTA"),
+        },
+        session=session,
+    )
+    assert len(review.ready_children) == 1
+    provider = _Provider([_success("provider-villas")])
+    results = resume.continue_ready_children(
+        review=review, actor_user_id=7, provider=provider,
+        send_enabled=True, session=session,
+    )
+    assert results == [("VILLAS_MXL", "SUBMITTED", "provider-villas")]
+    assert [call.provider_channel_id for call in provider.calls] == ["channel-2"]
+    session.expire_all()
+    for name in ("TEC_MXL", "INSURGENTES"):
+        assert db_rows[name].status == "HELD"
+        assert db_rows[name].provider_campaign_id is None
+        assert db_rows[name].submit_started_at is None
+
+    with pytest.raises(service.MarketingCampaignV2SubmitConflictError):
+        _submit(session, _Provider([_success("unsafe")]))
