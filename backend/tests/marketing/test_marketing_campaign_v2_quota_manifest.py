@@ -21,6 +21,7 @@ class Plan:
     ready: bool = True
     mode: str = "IMMEDIATE"
     campaign_id: int = 99
+    provider: str = "IVENTAS"
     dispatch_fingerprint: str = FP
     sendable_phones: tuple = tuple(str(i) for i in range(12))
 
