@@ -11,6 +11,7 @@ on:
       - 'backend/app/routes/google_ads_m6_continuity_routes.py'
       - 'backend/app/__init__.py'
       - 'backend/tests/google_ads/test_google_ads_m6_authenticated_approval.py'
+      - 'backend/tests/google_ads/test_google_ads_m6_authenticated_postgres.py'
       - 'backend/tests/google_ads/test_google_ads_m6_continuity_*.py'
       - '.github/workflows/google-ads-m6-continuity.yml'
   push:
@@ -59,5 +60,6 @@ jobs:
             tests/google_ads/test_google_ads_m6_continuity_schema.py \
             tests/google_ads/test_google_ads_m6_continuity_approval.py \
             tests/google_ads/test_google_ads_m6_authenticated_approval.py \
+            tests/google_ads/test_google_ads_m6_authenticated_postgres.py \
             tests/google_ads/test_google_ads_m6_continuity_postgres.py \
             tests/google_ads/test_google_ads_m5_branch_attribution_readonly.py
