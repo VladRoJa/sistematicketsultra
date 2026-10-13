@@ -14,6 +14,7 @@ from app.extensions import db
 from app.models.marketing import (
     MarketingCampaignV2ORM,
     MarketingCampaignV2ProviderCampaignORM,
+    MarketingCampaignV2DispatchApprovalORM,
 )
 from app.services.marketing_campaign_v2_preflight_service import (
     DISPATCH_FINGERPRINT_VERSION,
@@ -151,6 +152,16 @@ def submit_campaign_v2(
     normalized_actor = _positive_int(actor_user_id, "actor_user_id")
     expected_fingerprint = _fingerprint(expected_dispatch_fingerprint)
     timestamp = _normalize_now(now)
+
+    # A governed approval must NEVER fall back to the legacy send path.
+    # D2b only materializes rows; a later separately tested D2c gate may send.
+    active_session = session if session is not None else db.session
+    if active_session.query(MarketingCampaignV2DispatchApprovalORM.id).filter(
+        MarketingCampaignV2DispatchApprovalORM.campaign_v2_id == normalized_campaign_id
+    ).first() is not None:
+        raise MarketingCampaignV2SubmitConflictError(
+            "La campaña tiene aprobación gobernada; submit legado bloqueado."
+        )
 
     plan = build_campaign_v2_preflight(
         campaign_id=normalized_campaign_id,
