@@ -83,6 +83,13 @@ class Config:
         "false",
     ).strip().lower() in {"1", "true", "yes", "on"}
 
+    # D2c is a separate, explicit operator gate; enabling legacy sends alone
+    # never authorizes governed execution. Defaults OFF in every environment.
+    CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED = (
+        os.getenv("CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED", "false")
+        .strip().lower() == "true"
+    )
+
     # Dedicated integration key for write-capable Campaign V2 broadcasts.
     # No fallback to legacy/static credentials.
     IVENTAS_CAMPAIGN_SEND_API_KEY = os.getenv(
