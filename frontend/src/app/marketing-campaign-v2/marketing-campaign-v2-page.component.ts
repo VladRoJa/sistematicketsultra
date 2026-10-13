@@ -508,6 +508,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   openQuotaEvidence(): void {
     if (!this.canManageDispatchConfig) { return; }
     this.dialog.open(MarketingCampaignV2QuotaAdminDialogComponent, {
+      panelClass: 'campaign-v2-admin-dialog',
       width: 'min(1050px, 96vw)',
       maxWidth: '96vw',
       maxHeight: '94vh',
@@ -520,6 +521,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       return;
     }
     this.dialog.open(MarketingCampaignV2DispatchAdminDialogComponent, {
+      panelClass: 'campaign-v2-admin-dialog',
       width: 'min(1050px, 96vw)',
       maxWidth: '96vw',
       maxHeight: '94vh',
