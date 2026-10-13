@@ -52,6 +52,15 @@ def _tables():
     Blacklist.__table__.to_metadata(md)
     Child.__table__.to_metadata(md)
     Execution.__table__.to_metadata(md)
+    known = set(md.tables)
+    for model in (Campaign, Recipient, Blacklist, Child, Execution):
+        for column in model.__table__.columns:
+            for fk in column.foreign_keys:
+                parent = fk.column
+                if parent.table.name not in known:
+                    sa.Table(parent.table.name, md,
+                             sa.Column(parent.name, parent.type, primary_key=True))
+                    known.add(parent.table.name)
     return md, stub
 
 
