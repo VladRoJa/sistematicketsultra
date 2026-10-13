@@ -610,6 +610,78 @@ class MarketingCampaignV2QuotaCapacityAttestationORM(db.Model):
     )
 
 
+
+class MarketingCampaignV2DispatchApprovalORM(db.Model):
+    """Immutable, operator-approved estimate and non-sending reservation manifest."""
+
+    __tablename__ = "marketing_campaign_v2_dispatch_approvals"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    campaign_v2_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_campaigns.id", ondelete="RESTRICT"),
+        nullable=False, unique=True,
+    )
+    template_id = db.Column(
+        db.BigInteger, db.ForeignKey("marketing_campaign_v2_templates.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    dispatch_fingerprint = db.Column(db.String(64), nullable=False)
+    recipient_count = db.Column(db.Integer, nullable=False)
+    approved_estimated_mxn = db.Column(db.Numeric(14, 2), nullable=False)
+    manifest_json = db.Column(db.JSON, nullable=False, default=dict)
+    approved_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="RESTRICT"), nullable=False,
+    )
+    approved_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        db.CheckConstraint("recipient_count > 0", name="ck_mkt_v2_approval_recipients"),
+        db.CheckConstraint("approved_estimated_mxn >= 0", name="ck_mkt_v2_approval_cost"),
+        db.CheckConstraint("length(dispatch_fingerprint) = 64", name="ck_mkt_v2_approval_fingerprint"),
+        db.CheckConstraint("approved_at < expires_at", name="ck_mkt_v2_approval_window"),
+    )
+
+
+class MarketingCampaignV2CapacityReservationORM(db.Model):
+    """Per-scope capacity ledger; never interpreted as Meta-verified availability."""
+
+    __tablename__ = "marketing_campaign_v2_capacity_reservations"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    approval_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_dispatch_approvals.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    attestation_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_quota_capacity_attestations.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    scope_kind = db.Column(db.String(20), nullable=False)
+    scope_key = db.Column(db.String(255), nullable=False)
+    reserved_messages = db.Column(db.Integer, nullable=False)
+    reserved_until = db.Column(db.DateTime(timezone=True), nullable=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint("approval_id", "scope_kind", "scope_key",
+                            name="uq_mkt_v2_reservation_scope"),
+        db.CheckConstraint("scope_kind IN ('CHANNEL', 'PORTFOLIO')",
+                           name="ck_mkt_v2_reservation_kind"),
+        db.CheckConstraint("reserved_messages > 0",
+                           name="ck_mkt_v2_reservation_positive"),
+        db.CheckConstraint("length(trim(scope_key)) > 0",
+                           name="ck_mkt_v2_reservation_key"),
+        db.Index("ix_mkt_v2_reservation_active", "scope_kind", "scope_key", "reserved_until"),
+    )
+
+
 class MarketingCampaignV2ORM(db.Model):
     __tablename__ = "marketing_campaign_v2_campaigns"
 
