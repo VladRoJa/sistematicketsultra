@@ -3097,18 +3097,20 @@ class TestMarketingCampaignV2Routes:
 
 
     def test_phase_c_review_is_readonly_but_requires_preflight_access(self):
-        with self._auth(self.partial_access), patch.object(
-            routes, "review_ambiguous_branches", return_value={
+        with (
+            self._auth(self.partial_access),
+            patch.object(routes, "_campaign_v2_allowed_sucursal_keys",
+                         return_value=("TEC_MXL",)),
+            patch.object(routes, "review_ambiguous_branches", return_value={
                 "candidate_count": 3, "rows": [], "review_fingerprint": "a" * 64,
-            },
-        ) as review:
+            }) as review,
+        ):
             response = self.client.get(
                 "/api/marketing/campaigns-v2/15/preparation/branches",
                 headers=self.headers,
             )
-        assert response.status_code in (200, 403)
-        if response.status_code == 200:
-            review.assert_called_once()
+        assert response.status_code == 200
+        assert review.call_args.kwargs["allowed_sucursal_keys"] == ("TEC_MXL",)
         with self._auth(self.global_access), patch.object(
             routes, "review_ambiguous_branches", return_value={
                 "candidate_count": 3, "rows": [], "review_fingerprint": "a" * 64,
