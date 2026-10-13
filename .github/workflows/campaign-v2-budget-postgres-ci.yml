@@ -1,0 +1,58 @@
+name: Campaign V2 Budget PostgreSQL CI
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/models/marketing.py"
+      - "backend/app/services/marketing_campaign_v2_budget_service.py"
+      - "backend/migrations/versions/e4b856c9170d_campaign_v2_cost_rate_revisions.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_budget_*.py"
+      - ".github/workflows/campaign-v2-budget-postgres-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-budget:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: budget_ci
+          POSTGRES_PASSWORD: synthetic-password-budget
+          POSTGRES_DB: budget_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U budget_ci -d budget_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install -r backend/requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Compile code and migration
+        run: |
+          python -m py_compile \
+            backend/app/models/marketing.py \
+            backend/app/services/marketing_campaign_v2_budget_service.py \
+            backend/migrations/versions/e4b856c9170d_campaign_v2_cost_rate_revisions.py
+      - name: Test versioned rates on isolated PostgreSQL 16
+        working-directory: backend
+        env:
+          SECRET_KEY: synthetic-ci-budget
+          JWT_SECRET_KEY: synthetic-ci-budget-jwt
+          BUDGET_TEST_POSTGRES_URL: postgresql://budget_ci:synthetic-password-budget@127.0.0.1:5432/budget_ci
+          CAMPAIGN_V2_PROVIDER_SEND_ENABLED: "false"
+        run: |
+          python -m pytest -q --tb=short \
+            tests/marketing/test_marketing_campaign_v2_budget_service.py \
+            tests/marketing/test_marketing_campaign_v2_budget_migration.py
