@@ -310,3 +310,66 @@ def test_d3_monitor_rejects_query_override(client, global_access):
         )
     assert response.status_code == 400
     monitor.assert_not_called()
+
+
+def test_d3b_manual_escalation_is_global_and_never_calls_provider(
+    client, global_access, partial_access,
+):
+    browser, headers = client
+    endpoint = "/api/marketing/campaigns-v2/77/dispatch/executions/41/escalate"
+    payload = {
+        "child_id": 100, "expected_manifest_digest": "a"*64,
+        "source_reference": "synthetic provider evidence",
+        "evidence_note": "Verificado manualmente sin confirmar resultado.",
+    }
+    with auth(partial_access), patch.object(routes, "escalate_stale_governed_claim") as op:
+        response = browser.post(endpoint, json=payload, headers=headers)
+    assert response.status_code == 403
+    op.assert_not_called()
+
+    with auth(global_access), patch.object(
+        routes, "escalate_stale_governed_claim",
+        return_value={"execution_status":"REVIEW_REQUIRED","provider_outcome":"UNKNOWN",
+                      "send_authorized":False},
+    ) as op, patch.object(routes, "IVentasBroadcastProvider") as provider:
+        response = browser.post(endpoint, json=payload, headers=headers)
+    assert response.status_code == 200
+    assert response.json["send_authorized"] is False
+    assert op.call_args.kwargs["campaign_id"] == 77
+    provider.assert_not_called()
+
+
+def test_d3b_resolution_rejects_extra_send_override(
+    client, global_access,
+):
+    browser, headers = client
+    endpoint = "/api/marketing/campaigns-v2/77/dispatch/executions/41/resolve"
+    with auth(global_access), patch.object(routes, "record_governed_provider_resolution") as op:
+        response = browser.post(endpoint, json={
+            "child_id": 100, "send_enabled": True,
+            "expected_manifest_digest": "a"*64,
+            "resolution": "NOT_CREATED_CONFIRMED",
+            "source_reference": "synthetic", "evidence_note": "confirmed",
+        }, headers=headers)
+    assert response.status_code == 400
+    op.assert_not_called()
+
+
+def test_d3b_resolution_never_calls_provider(client, global_access):
+    browser, headers = client
+    endpoint = "/api/marketing/campaigns-v2/77/dispatch/executions/41/resolve"
+    payload = {
+        "child_id":100,"expected_manifest_digest":"a"*64,
+        "resolution":"PROVIDER_CAMPAIGN_FOUND",
+        "provider_campaign_id":"synthetic-id",
+        "source_reference":"synthetic", "evidence_note":"verified",
+    }
+    with auth(global_access), patch.object(
+        routes, "record_governed_provider_resolution",
+        return_value={"execution_status":"REVIEW_REQUIRED","send_authorized":False},
+    ) as op, patch.object(routes, "IVentasBroadcastProvider") as provider:
+        response = browser.post(endpoint, json=payload, headers=headers)
+    assert response.status_code == 200
+    assert response.json["send_authorized"] is False
+    op.assert_called_once()
+    provider.assert_not_called()

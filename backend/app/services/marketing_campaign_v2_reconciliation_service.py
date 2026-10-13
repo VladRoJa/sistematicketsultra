@@ -9,7 +9,10 @@ from typing import Any
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.extensions import db
-from app.models.marketing import MarketingCampaignV2ProviderCampaignORM
+from app.models.marketing import (
+    MarketingCampaignV2ProviderCampaignORM,
+    MarketingCampaignV2DispatchApprovalORM,
+)
 from app.services.marketing_campaign_v2_retry_policy import (
     next_retry_allowed_at,
     retry_is_exhausted,
@@ -104,6 +107,15 @@ def reconcile_campaign_v2_provider_child(
     if row is None:
         raise MarketingCampaignV2ReconciliationNotFoundError(
             "Provider campaign child no encontrado."
+        )
+
+    # Governed executions must reconcile child AND execution together,
+    # with auditable evidence. Legacy reconciliation is not that transaction.
+    if active_session.query(MarketingCampaignV2DispatchApprovalORM.id).filter(
+        MarketingCampaignV2DispatchApprovalORM.campaign_v2_id == int(row.campaign_v2_id)
+    ).first() is not None:
+        raise MarketingCampaignV2ReconciliationConflictError(
+            "Reconciliación heredada prohibida para campañas gobernadas."
         )
 
     if row.status != "RECONCILIATION_REQUIRED":

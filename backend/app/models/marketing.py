@@ -685,6 +685,53 @@ class MarketingCampaignV2GovernedExecutionORM(db.Model):
     )
 
 
+class MarketingCampaignV2GovernedReconciliationEventORM(db.Model):
+    """Append-only operator evidence for a governed execution/child pair."""
+
+    __tablename__ = "marketing_campaign_v2_governed_reconciliation_events"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    execution_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_governed_executions.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    child_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_provider_campaigns.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    event_kind = db.Column(db.String(40), nullable=False)
+    source_reference = db.Column(db.String(255), nullable=False)
+    evidence_note = db.Column(db.Text, nullable=False)
+    provider_campaign_id = db.Column(db.String(255), nullable=True)
+    previous_child_status = db.Column(db.String(30), nullable=False)
+    next_child_status = db.Column(db.String(30), nullable=False)
+    previous_execution_status = db.Column(db.String(25), nullable=False)
+    next_execution_status = db.Column(db.String(25), nullable=False)
+    actor_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="RESTRICT"), nullable=False,
+    )
+    recorded_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    evidence_json = db.Column(db.JSON, nullable=False, default=dict)
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "execution_id", "child_id", "event_kind",
+            name="uq_mkt_v2_governed_reconcile_event",
+        ),
+        db.CheckConstraint(
+            "event_kind IN ('STALE_CLAIM_REVIEW','PROVIDER_CAMPAIGN_FOUND',"
+            "'NOT_CREATED_CONFIRMED')",
+            name="ck_mkt_v2_governed_reconcile_event_kind",
+        ),
+        db.CheckConstraint("length(trim(source_reference)) > 0",
+                           name="ck_mkt_v2_governed_reconcile_source"),
+        db.CheckConstraint("length(trim(evidence_note)) > 0",
+                           name="ck_mkt_v2_governed_reconcile_note"),
+    )
+
+
 class MarketingCampaignV2CapacityReservationORM(db.Model):
     """Per-scope capacity ledger; never interpreted as Meta-verified availability."""
 

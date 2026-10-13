@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.models.marketing import (
     MarketingCampaignV2ORM,
     MarketingCampaignV2ProviderCampaignORM,
+    MarketingCampaignV2DispatchApprovalORM,
 )
 from app.services import marketing_campaign_v2_reconciliation_service as service
 from app.services.marketing_campaign_v2_submit_service import (
@@ -45,6 +46,7 @@ def session():
 
     MarketingCampaignV2ORM.__table__.to_metadata(metadata)
     MarketingCampaignV2ProviderCampaignORM.__table__.to_metadata(metadata)
+    MarketingCampaignV2DispatchApprovalORM.__table__.to_metadata(metadata)
     metadata.create_all(engine)
 
     with Session(engine) as value:
@@ -421,3 +423,30 @@ def test_not_created_after_third_retry_closes_as_exhausted(session):
     persisted = session.get(MarketingCampaignV2ProviderCampaignORM, row.id)
     assert persisted.status == "RETRY_EXHAUSTED"
     assert persisted.error_code == "RETRY_LIMIT_REACHED"
+
+
+def test_governed_child_refuses_legacy_reconcile_without_writes(session):
+    from datetime import timedelta
+    row = _ambiguous_child(session)
+    session.add(MarketingCampaignV2DispatchApprovalORM(
+        campaign_v2_id=77, template_id=10,
+        dispatch_fingerprint="a"*64, recipient_count=5,
+        approved_estimated_mxn="2.50",
+        manifest_json={"send_authorized": False},
+        approved_by_user_id=7, approved_at=NOW,
+        expires_at=NOW + timedelta(minutes=10),
+    ))
+    session.commit()
+    with pytest.raises(
+        service.MarketingCampaignV2ReconciliationConflictError, match="gobernadas"
+    ):
+        service.reconcile_campaign_v2_provider_child(
+            child_id=row.id, resolution="PROVIDER_CAMPAIGN_FOUND",
+            provider_campaign_id="synthetic-only", note="manual evidence reference",
+            actor_user_id=7, session=session, now=NOW,
+        )
+    session.expire_all()
+    unchanged = session.get(MarketingCampaignV2ProviderCampaignORM, row.id)
+    assert unchanged.status == "RECONCILIATION_REQUIRED"
+    assert unchanged.provider_campaign_id is None
+    assert unchanged.reconciliation_resolution is None

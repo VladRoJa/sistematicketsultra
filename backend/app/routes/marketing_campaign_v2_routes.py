@@ -57,6 +57,12 @@ from app.services.marketing_campaign_v2_quota_service import (
     register_quota_capacity,
     assess_preflight_capacity,
 )
+from app.services.marketing_campaign_v2_governed_reconciliation_service import (
+    GovernedReconciliationConflict,
+    GovernedReconciliationValidation,
+    escalate_stale_governed_claim,
+    record_governed_provider_resolution,
+)
 from app.services.marketing_campaign_v2_governed_monitor_service import (
     GovernedMonitorNotFound,
     GovernedMonitorValidation,
@@ -1387,6 +1393,77 @@ def campaign_v2_materialize_manifest_endpoint(campaign_id: int):
     except Exception:
         db.session.rollback()
         return _error("No fue posible materializar manifiesto Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.post(
+    "/campaigns-v2/<int:campaign_id>/dispatch/executions/<int:execution_id>/escalate"
+)
+@jwt_required()
+def campaign_v2_governed_escalate_endpoint(campaign_id: int, execution_id: int):
+    """Manual unknown-outcome escalation; does not call any provider."""
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        payload = _parse_payload({
+            "child_id", "expected_manifest_digest", "source_reference", "evidence_note",
+        })
+        result = escalate_stale_governed_claim(
+            campaign_id=campaign_id,
+            execution_id=execution_id,
+            child_id=payload.get("child_id"),
+            expected_manifest_digest=payload.get("expected_manifest_digest"),
+            source_reference=payload.get("source_reference"),
+            evidence_note=payload.get("evidence_note"),
+            actor_user_id=int(user.id), session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (GovernedReconciliationValidation, MarketingCampaignV2RouteValidationError) as exc:
+        return _error(str(exc), 400)
+    except GovernedReconciliationConflict as exc:
+        db.session.rollback()
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("Error al escalar ejecución gobernada.", 500)
+
+
+@marketing_campaign_v2_bp.post(
+    "/campaigns-v2/<int:campaign_id>/dispatch/executions/<int:execution_id>/resolve"
+)
+@jwt_required()
+def campaign_v2_governed_resolve_endpoint(campaign_id: int, execution_id: int):
+    """Record operator-verified provider outcome, never retry or send."""
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        payload = _parse_payload({
+            "child_id", "expected_manifest_digest", "resolution",
+            "provider_campaign_id", "source_reference", "evidence_note",
+        })
+        result = record_governed_provider_resolution(
+            campaign_id=campaign_id,
+            execution_id=execution_id,
+            child_id=payload.get("child_id"),
+            expected_manifest_digest=payload.get("expected_manifest_digest"),
+            resolution=payload.get("resolution"),
+            provider_campaign_id=payload.get("provider_campaign_id"),
+            source_reference=payload.get("source_reference"),
+            evidence_note=payload.get("evidence_note"),
+            actor_user_id=int(user.id), session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (GovernedReconciliationValidation, MarketingCampaignV2RouteValidationError) as exc:
+        return _error(str(exc), 400)
+    except GovernedReconciliationConflict as exc:
+        db.session.rollback()
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("Error al resolver ejecución gobernada.", 500)
 
 
 @marketing_campaign_v2_bp.get("/campaigns-v2/<int:campaign_id>/dispatch/monitor")
