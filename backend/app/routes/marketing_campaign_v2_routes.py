@@ -1422,7 +1422,10 @@ def campaign_v2_governed_authorize_endpoint(campaign_id: int):
         return _error(str(exc), 403)
     except MarketingCampaignV2RouteValidationError as exc:
         return _error(str(exc), 400)
-    except GovernedDispatchConflict as exc:
+    except (GovernedDispatchConflict, CampaignV2ApprovalConflictError,
+            MarketingCampaignV2SubmitPreconditionError,
+            MarketingCampaignV2SubmitConflictError) as exc:
+        db.session.rollback()
         return _error(str(exc), 409)
     except Exception:
         db.session.rollback()
@@ -1467,7 +1470,10 @@ def campaign_v2_governed_execute_endpoint(campaign_id: int):
         return _error(str(exc), 400)
     except GovernedDispatchDisabled as exc:
         return _error(str(exc), 423)
-    except GovernedDispatchConflict as exc:
+    except (GovernedDispatchConflict, CampaignV2ApprovalConflictError,
+            MarketingCampaignV2SubmitPreconditionError,
+            MarketingCampaignV2SubmitConflictError) as exc:
+        db.session.rollback()
         return _error(str(exc), 409)
     except CampaignProviderConfigurationError as exc:
         return _error(str(exc), 503)
