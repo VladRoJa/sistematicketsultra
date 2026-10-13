@@ -1,6 +1,6 @@
 # Google Ads → Funnel M5 — atribución diaria por sucursal (CONTRATO PROPUESTO)
 
-**Estado:** DOCUMENTAL / PENDIENTE DE APROBACIÓN DE IDENTIDADES COMPUESTAS. No autoriza implementación, merge ni despliegue.
+**Estado:** DOCUMENTAL / M5-IDENTITY APROBADO PROVISIONALMENTE EL 2026-10-12. No autoriza implementación funcional, merge ni despliegue. Manifiesto aprobado: [`GOOGLE_ADS_M5_IDENTITY_APPROVED_20261012.json`](./GOOGLE_ADS_M5_IDENTITY_APPROVED_20261012.json).
 **Base inspeccionada:** `main` en `e91b69771cd77ec940e4d11e89a3dc5358f67119`.
 **Período histórico auditado:** 2026-09-24 a 2026-10-08, zona operativa `America/Tijuana`.
 
@@ -31,14 +31,14 @@ Auditoría de solo lectura reportada sobre PostgreSQL de producción:
 
 1. `google_ads_daily_metrics` (campaña-día) sigue siendo la autoridad de inversión de cuenta. `google_ads_ad_group_daily_metrics` (grupo-día) es un desglose **no aditivo al ledger**; jamás sumar ambos conjuntos como si fueran gasto independiente.
 2. Clave transitoria de M3: `(customer_id, campaign_key, ad_group_key, report_date)`. `campaign_key` proviene del texto de campaña; `ad_group_key` deriva de `campaign_key` y nombre normalizado del grupo. Ninguno es un ID de Google Ads API.
-3. **Manifiesto explícito pendiente:** registrar/revisar 26 triples distintos `(customer_id, campaign_key, ad_group_key)`, cada uno asociado a un `sucursal_canon` aprobado en `google_ads_family` y a su `sucursal_id` activo. Requerir evidencia de nombre de campaña, nombre de grupo, fuente/upload y vigencia. No inventar valores ni construir asociaciones desde una coincidencia de nombre en tiempo de consulta.
+3. **Manifiesto explícito aprobado provisionalmente:** se registraron 26 triples distintos `(customer_id, campaign_key, ad_group_key)` con nombre de campaña, nombre de grupo, `sucursal_canon`, `sucursal_id` y coste histórico auditado en el archivo JSON citado. Las 26 asociaciones recibieron autorización expresa del propietario en la conversación Suite Ultra del 2026-10-12, exclusivamente para el histórico 2026-09-24 a 2026-10-08. La procedencia concreta por `source_upload_id` aún deberá verificarse en M5-CORE. No inventar valores ni construir asociaciones desde una coincidencia de nombre en tiempo de consulta.
 4. Estado inequívoco de la aprobación: `APPROVED_PROVISIONAL_XLSX` para identidades históricas revisadas; `VERIFIED_OFFICIAL_IDS` solo tras conciliación independiente con `campaign_id` y `ad_group_id` oficiales. No presentar el primero como el segundo.
 5. No puede haber dos sucursales activas para un mismo triple ni mapeo a sucursales inactivas/ajenas al catálogo. Cambios de cuenta, nombre/clave de campaña, grupo, sucursal, período o datos históricos requieren nueva revisión con trazabilidad; cualquier divergencia inesperada se bloquea, nunca se infiere silenciosamente.
 6. `Marca` y `EGADE` están expresamente **sin asignación**. Los otros 15 grupos tampoco reciben asociación. Cualquier actividad posterior de grupos no aprobados permanece sin asignar y activa revisión, aunque el nombre coincida con el de un club.
 
-### Gate previo a implementar: manifest auditable de 26 triples
+### Gate M5-IDENTITY: manifiesto aprobado provisionalmente (2026-10-12)
 
-Extraer en lectura de producción, sin escribir una sola fila, el triple exacto y su club candidato; comparar con alias M4 y obtener aprobación explícita antes de crear mappings. Los nombres se usan **solo en este reporte de auditoría**; no son el join operativo.
+Se extrajeron de producción en solo lectura los 26 triples con candidato a club; coincidieron con los alias M4 y el propietario autorizó explícitamente los 26. Se conservan aquí la consulta SQL de reproducción y el manifiesto JSON versionado. Los nombres se usan **solo en esta auditoría**, nunca como join operativo. Cualquier período, identidad o asociación nueva necesita nueva revisión.
 
 ```sql
 WITH identities AS (
@@ -69,7 +69,7 @@ JOIN track_branch_catalog t
 ORDER BY t.sucursal_id, i.campaign_name, i.ad_group_name;
 ```
 
-**Condición de autorización:** 26 triples únicos, 26 clubes distintos y `campaign_names = group_names = 1` en cada fila; revisión humana de todos los pares campaña+grupo+club. Si no concilia, detener; no completar mappings por nombre automáticamente.
+**Gate satisfecho para el histórico aprobado:** 26 triples únicos; 26 clubes distintos; `campaign_names = group_names = 1` para cada identidad; las 26 claves de campaña/grupo se recalcularon y coincidieron; MXN 17,624.73 de coste local auditado; Marca/EGADE excluidos. **Los IDs oficiales no están verificados**. Cambios futuros de identidad o período deberán detener la atribución y solicitar nueva revisión, sin crear mappings por nombre automáticamente.
 
 ## 3. Contrato de atribución y conciliación
 
@@ -140,9 +140,9 @@ Agregar **un bloque separado** `google_ads_branch_attribution` de lectura, inici
 
 ## 7. Secuencia de ejecución
 
-1. **M5-IDENTITY:** correr consulta de 26 triples, comprobar invariantes, obtener aprobación explícita del manifiesto.
+1. **M5-IDENTITY — APROBADO PROVISIONAL (2026-10-12):** consulta de 26 triples, hashes, alias, invariantes y autorización expresa documentados en el manifiesto JSON.
 2. **M5-CORE:** implementar tabla de asociaciones y servicio de atribución con validación negativa y conciliación.
 3. **M5-FUNNEL:** integrar el bloque separado al API y Angular con permisos y cobertura.
 4. **M5-QA:** pruebas aisladas, revisión independiente, aprobación de merge, despliegue controlado y validación posterior.
 
-**Prohibido hasta el gate M5-IDENTITY:** activar atribución operativa por sucursal, inferir mappings por nombres o cambiar cifras del Funnel existente.
+**M5-CORE todavía pendiente:** esta aprobación del manifiesto no autoriza activar atribución operativa por sucursal, inferir mappings por nombres, modificar cifras del Funnel existente, integrar datos futuros o desplegar cambios. Implementación y merge sujetos a pruebas y aprobación posterior.
