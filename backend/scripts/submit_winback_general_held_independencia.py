@@ -1,4 +1,4 @@
-"""One-off #15: persist INDEPENDENCIA HELD; submit only other 24 batches.
+"""One-off #15: persist INDEPENDENCIA and INSURGENTES HELD; submit other 23.
 
 Dry-run by default (strictly read-only). --apply sends REAL iVentas broadcasts.
 NEVER re-run --apply after an attempt. Reconcile persisted children instead.
@@ -37,13 +37,10 @@ from app.services.marketing_campaign_v2_submit_service import (
 CAMPAIGN_ID = 15
 TEMPLATE_ID = 3
 FINGERPRINT = "fa57395ae86547ac73672e762bc0fd832c3486028514eda8544c0c3d6c59faca"
-HELD_BRANCH = "INDEPENDENCIA"
-HELD_COUNT = 3612
+HELD_BRANCHES = {"INDEPENDENCIA": 3612, "INSURGENTES": 68}
 HELD_CAP = 250
-INSURGENTES_BRANCH = "INSURGENTES"
-INSURGENTES_COUNT = 68
 TOTAL_COUNT = 74175
-SEND_COUNT = TOTAL_COUNT - HELD_COUNT  # 70,563
+SEND_COUNT = TOTAL_COUNT - sum(HELD_BRANCHES.values())  # 70,495
 BATCH_COUNT = 25
 HELD_REASON = "CHANNEL_DAILY_QUOTA"
 
@@ -56,15 +53,11 @@ def require(condition: bool, message: str) -> None:
 def _arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true",
-                        help="Envío REAL: crea 25 children, retiene INDEPENDENCIA y envía 24")
-    parser.add_argument("--insurgentes-remaining", type=int, default=None,
-                        help="Capacidad RESTANTE verificada de canal INSURGENTES (0..250)")
-    parser.add_argument("--capacity-evidence", type=str, default=None,
-                        help="Fuente y momento de verificación manual de capacidad real")
-    parser.add_argument("--other-channels-reviewed", action="store_true",
-                        help="Confirmación de cupos restantes en los otros 23 canales")
+                        help="Envío REAL: 25 children, 2 HELD y 23 envíos")
+    parser.add_argument("--acknowledge-quota-uncertainty", action="store_true",
+                        help="Reconoce que no hay capacidad restante Meta verificada para los otros 23 canales")
     parser.add_argument("--approved-contact-count", type=int, default=None,
-                        help="Confirmación exacta del operador: 70563")
+                        help="Confirmar exactamente 70495 envíos")
     return parser.parse_args()
 
 
@@ -149,30 +142,26 @@ def main() -> int:
             by_branch = {batch.sucursal_canon: batch for batch in plan.batches}
             require(len(by_branch) == BATCH_COUNT, "Sucursal repetida")
             require(
-                HELD_BRANCH in by_branch
-                and len(by_branch[HELD_BRANCH].recipients) == HELD_COUNT
-                and HELD_COUNT > HELD_CAP,
-                "Lote INDEPENDENCIA cambió",
-            )
-            require(
-                INSURGENTES_BRANCH in by_branch
-                and len(by_branch[INSURGENTES_BRANCH].recipients) == INSURGENTES_COUNT,
-                "Lote INSURGENTES cambió",
+                all(
+                    name in by_branch
+                    and len(by_branch[name].recipients) == count
+                    for name, count in HELD_BRANCHES.items()
+                ) and HELD_BRANCHES["INDEPENDENCIA"] > HELD_CAP,
+                "Sucursales retenidas cambiaron",
             )
             expected_ready = {
                 name: len(batch.recipients)
                 for name, batch in by_branch.items()
-                if name != HELD_BRANCH
+                if name not in HELD_BRANCHES
             }
             require(
-                len(expected_ready) == 24
+                len(expected_ready) == 23
                 and sum(expected_ready.values()) == SEND_COUNT,
-                "Manifest 24 lotes cambió",
+                "Manifest de 23 lotes cambió",
             )
             require(
-                all(count <= (250 if name == INSURGENTES_BRANCH else 100000)
-                    for name, count in expected_ready.items()),
-                "Lote supera los límites diarios reportados",
+                all(0 < count <= 100000 for count in expected_ready.values()),
+                "Lote supera límites diarios reportados",
             )
 
             exclusions = (
