@@ -491,7 +491,7 @@ export interface CampaignV2BudgetBatch {
 
 export interface CampaignV2BranchDiagnosticRow {
   recipient_id: number;
-  kind: 'AMBIGUOUS_EVIDENCE' | 'MISSING_EVIDENCE' | 'SINGLE_EVIDENCE_UNRESOLVED';
+  kind: 'AMBIGUOUS_EVIDENCE' | 'MISSING_EVIDENCE' | 'SINGLE_EVIDENCE_RESOLVABLE' | 'UNMAPPED_BRANCH_ALIAS';
   branch_keys: string[];
   existing_exclusion_reason: string | null;
 }
