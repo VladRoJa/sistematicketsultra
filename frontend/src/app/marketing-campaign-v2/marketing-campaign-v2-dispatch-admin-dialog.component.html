@@ -1,0 +1,183 @@
+<h2 mat-dialog-title>Configuración de envío · iVentas</h2>
+
+<mat-dialog-content class="dispatch-admin">
+  <p class="disclaimer">
+    Catálogo local de Suite Ultra. Registrar una plantilla no confirma que exista o esté
+    aprobada en cada canal de iVentas. Esta pantalla nunca envía WhatsApps.
+  </p>
+
+  <div *ngIf="loading" class="feedback" role="status">
+    <mat-spinner diameter="22"></mat-spinner>
+    Cargando plantillas y canales…
+  </div>
+  <p *ngIf="error" class="error" role="alert">{{ error }}</p>
+  <p *ngIf="notice" class="feedback" role="status">{{ notice }}</p>
+
+  <ng-container *ngIf="!loading">
+    <section class="catalog" aria-label="Plantillas de envío">
+      <div class="section-heading">
+        <div>
+          <h3>Plantillas</h3>
+          <p>Nombre exacto de la plantilla ya aprobada en iVentas.</p>
+        </div>
+        <button mat-stroked-button type="button" (click)="resetTemplate()">Nueva plantilla</button>
+      </div>
+
+      <div class="catalog-table">
+        <table>
+          <thead>
+            <tr><th>Etiqueta / nombre exacto</th><th>Propósitos</th><th>Canales</th><th>Estado</th><th>Acciones</th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let template of templates">
+              <td><strong>{{ template.label }}</strong><small>{{ template.template_name }}</small></td>
+              <td>{{ template.purposes.join(', ') || 'Legacy: todos' }}</td>
+              <td>{{ template.compatible_channel_ids.length || 'Legacy: todos' }}</td>
+              <td>{{ template.is_active ? 'Activa' : 'Inactiva' }}</td>
+              <td class="actions">
+                <button mat-button type="button" (click)="editTemplate(template)">Editar</button>
+                <button *ngIf="template.is_active" mat-button type="button" (click)="requestDeactivate(template)"
+                  [disabled]="savingTemplate">Desactivar</button>
+              </td>
+            </tr>
+            <tr *ngIf="!templates.length"><td colspan="5">Sin plantillas locales.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div *ngIf="pendingDeactivateId !== null" class="confirm">
+        <span>¿Confirmas desactivar esta plantilla para futuros preflights?</span>
+        <button mat-flat-button color="warn" type="button" (click)="confirmDeactivate()"
+          [disabled]="savingTemplate">Confirmar desactivación</button>
+        <button mat-button type="button" (click)="cancelDeactivate()">Cancelar</button>
+      </div>
+
+      <div class="editor">
+        <h4>{{ editingTemplateId === null ? 'Agregar plantilla' : 'Editar plantilla #' + editingTemplateId }}</h4>
+        <div class="form-grid">
+          <mat-form-field appearance="outline">
+            <mat-label>Nombre exacto iVentas</mat-label>
+            <input matInput [formControl]="templateName" maxlength="255" placeholder="winback_general_octubre">
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Etiqueta interna</mat-label>
+            <input matInput [formControl]="templateLabel" maxlength="255" placeholder="Winback General">
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Propósitos autorizados</mat-label>
+            <mat-select [formControl]="templatePurposes" multiple>
+              <mat-option *ngFor="let purpose of purposes" [value]="purpose">{{ purpose }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>URL HTTPS de imagen (opcional)</mat-label>
+            <input matInput [formControl]="templateFileUrl" placeholder="https://...">
+          </mat-form-field>
+        </div>
+        <mat-checkbox [formControl]="templateActive">Plantilla activa</mat-checkbox>
+
+        <div class="subheading">
+          <strong>Variables posicionales</strong>
+          <button mat-button type="button" (click)="addVariable()">Añadir variable</button>
+        </div>
+        <div class="variable-row" *ngFor="let row of variableRows; let i = index">
+          <span>Variable {{ row.position }}</span>
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Fuente backend</mat-label>
+            <mat-select [formControl]="row.source">
+              <mat-option *ngFor="let source of variableSources" [value]="source.value">{{ source.label }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+          <button mat-button type="button" (click)="removeVariable(i)">Quitar</button>
+        </div>
+        <p class="muted">El orden debe coincidir con los parámetros {{ '{' }}{{ '{' }}1{{ '}' }}{{ '}' }},
+          {{ '{' }}{{ '{' }}2{{ '}' }}{{ '}' }}… aprobados en el proveedor.</p>
+
+        <div class="subheading">
+          <strong>Canales compatibles ({{ templateChannels.value.length }})</strong>
+          <div>
+            <button mat-button type="button" (click)="selectAllActiveChannels()">Todos los activos</button>
+            <button mat-button type="button" (click)="clearChannels()">Limpiar</button>
+          </div>
+        </div>
+        <mat-form-field class="full-width" appearance="outline">
+          <mat-label>Canales existentes</mat-label>
+          <mat-select multiple [formControl]="templateChannels">
+            <mat-option *ngFor="let binding of availableChannels" [value]="binding.provider_channel_id">
+              {{ binding.sucursal_canon }} · {{ binding.provider_channel_id }}
+            </mat-option>
+          </mat-select>
+          <mat-hint>Selecciona al menos un canal. Cero canales nunca significa «todos».</mat-hint>
+        </mat-form-field>
+        <div class="editor-actions">
+          <button mat-flat-button color="primary" type="button" (click)="saveTemplate()"
+            [disabled]="!canSaveTemplate">
+            {{ savingTemplate ? 'Guardando…' : 'Guardar plantilla' }}
+          </button>
+          <button mat-button type="button" (click)="resetTemplate()">Limpiar formulario</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="catalog" aria-label="Canales de envío">
+      <div class="section-heading">
+        <div>
+          <h3>Bindings de canales</h3>
+          <p>Asociaciones locales entre sucursal y canal iVentas. Solo uno predeterminado por sucursal.</p>
+        </div>
+        <button mat-stroked-button type="button" (click)="showChannels = !showChannels">
+          {{ showChannels ? 'Ocultar canales' : 'Administrar canales' }}
+        </button>
+      </div>
+      <ng-container *ngIf="showChannels">
+        <div class="catalog-table">
+          <table>
+            <thead><tr><th>Sucursal</th><th>ID del canal</th><th>Estado</th><th>Predeterminado</th><th></th></tr></thead>
+            <tbody>
+              <tr *ngFor="let binding of bindings">
+                <td>{{ binding.sucursal_canon }}</td>
+                <td><small>{{ binding.provider_channel_id }}</small></td>
+                <td>{{ binding.is_active ? 'Activo' : 'Inactivo' }}</td>
+                <td>{{ binding.is_default ? 'Sí' : 'No' }}</td>
+                <td><button mat-button type="button" (click)="editBinding(binding)">Editar</button></td>
+              </tr>
+              <tr *ngIf="!bindings.length"><td colspan="5">No hay canales configurados.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="editor">
+          <h4>{{ editingBindingId === null ? 'Registrar canal' : 'Editar binding #' + editingBindingId }}</h4>
+          <div class="form-grid">
+            <mat-form-field appearance="outline">
+              <mat-label>Sucursal activa</mat-label>
+              <mat-select [formControl]="bindingBranchId">
+                <mat-option *ngFor="let branch of branches" [value]="branch.sucursal_id">
+                  {{ branch.track_label }} ({{ branch.sucursal_canon }})
+                </mat-option>
+              </mat-select>
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>ID exacto del canal iVentas</mat-label>
+              <input matInput [formControl]="bindingChannelId" maxlength="255">
+            </mat-form-field>
+          </div>
+          <div class="binding-flags">
+            <mat-checkbox [formControl]="bindingActive">Activo</mat-checkbox>
+            <mat-checkbox [formControl]="bindingDefault">Predeterminado</mat-checkbox>
+          </div>
+          <p class="muted">Si el binding está asociado a lotes auditados, Suite protegerá su identidad y los estados pendientes.</p>
+          <div class="editor-actions">
+            <button mat-flat-button color="primary" type="button" (click)="saveBinding()"
+              [disabled]="!canSaveBinding">{{ savingBinding ? 'Guardando…' : 'Guardar canal' }}</button>
+            <button mat-button type="button" (click)="resetBinding()">Nuevo canal</button>
+          </div>
+        </div>
+      </ng-container>
+    </section>
+  </ng-container>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="reload()" [disabled]="loading">Actualizar</button>
+  <button mat-flat-button type="button" (click)="close()">Cerrar</button>
+</mat-dialog-actions>
