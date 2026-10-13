@@ -38,6 +38,14 @@ def _utc(value: datetime | None) -> datetime:
     return current.astimezone(timezone.utc)
 
 
+def _db_iso(value: datetime) -> str:
+    # SQLite test DBs may return naive datetimes; persisted DB timestamps
+    # are UTC. Operator-supplied timestamps remain strictly tz-aware.
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat()
+
+
 def _money(value: Decimal) -> str:
     return format(value.quantize(CENT, rounding=ROUND_HALF_UP), ".2f")
 
@@ -48,9 +56,9 @@ def _serialize_rate(row: MarketingCampaignV2CostRateRevisionORM) -> dict[str, An
         "template_id": int(row.template_id),
         "provider_channel_id": str(row.provider_channel_id),
         "unit_cost_mxn": format(row.unit_cost_mxn, ".6f"),
-        "valid_from": _utc(row.valid_from).isoformat(),
+        "valid_from": _db_iso(row.valid_from),
         "source_reference": str(row.source_reference),
-        "created_at": _utc(row.created_at).isoformat(),
+        "created_at": _db_iso(row.created_at),
     }
 
 
