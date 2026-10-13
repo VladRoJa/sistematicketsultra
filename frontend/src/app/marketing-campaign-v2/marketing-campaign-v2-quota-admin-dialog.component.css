@@ -1,0 +1,11 @@
+:host { display: block; }
+.quota-admin { min-width: min(900px, 92vw); max-height: 75vh; }
+.quota-section { margin: 18px 0; padding-top: 16px; border-top: 1px solid var(--mat-sys-outline-variant, #ddd); }
+.quota-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.quota-grid mat-form-field { width: 100%; }
+.quota-scroll { overflow: auto; max-height: 200px; margin: 12px 0; }
+table { border-collapse: collapse; min-width: 650px; width: 100%; font-size: 12px; }
+th,td { padding: 9px 12px; border-bottom: 1px solid var(--mat-sys-outline-variant, #ddd); text-align: left; }
+.error { color: #b3261e; }
+.quota-section p { color: var(--mat-sys-on-surface-variant, #555); font-size: 13px; }
+@media(max-width: 650px) { .quota-admin { min-width: 0; } .quota-grid { grid-template-columns: 1fr; } }
