@@ -1,11 +1,13 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { AutomationObservationDialogComponent, AutomationObservationDialogData } from './automation-observation-dialog.component';
 import { forkJoin, Subject, takeUntil } from 'rxjs';
 import { AutomationControlService } from './automation-control.service';
 import { Job, Run, Summary, Dataset, TimelineWorker, TimelineJob, TimelineObservation } from './automation-control.models';
 
-@Component({ selector:'app-automation-control',standalone:true,imports:[CommonModule,FormsModule],
+@Component({ selector:'app-automation-control',standalone:true,imports:[CommonModule,FormsModule,MatDialogModule],
   templateUrl:'./automation-control.component.html',styleUrls:['./automation-control.component.css'] })
 export class AutomationControlComponent implements OnInit,OnDestroy {
   readonly pageSize=20;
@@ -22,7 +24,7 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
   summary:Summary|null=null; jobs:Job[]=[]; datasets:Dataset[]=[];
   selected:Job|null=null; runs:Run[]=[]; coverage='UNKNOWN'; offset=0; hasMore=false;
   domain=''; search=''; loading=true; loadingRuns=false; error=''; runsError='';
-  constructor(private readonly api:AutomationControlService){}
+  constructor(private readonly api:AutomationControlService, private readonly dialog:MatDialog){}
   ngOnInit():void { this.refresh(); }
   ngOnDestroy():void { this.destroyed$.next();this.destroyed$.complete(); }
   get domains():string[] {return [...new Set(this.jobs.map(j=>j.domain))].sort();}
@@ -68,7 +70,8 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
   showObservation(job:TimelineJob,hour:string):void {
     const runs=this.timelineRuns(job,hour);
     if(!runs.length)return;
-    this.selectedObservation=runs[0];this.selectedObservationJob=job.label;
+    const data: AutomationObservationDialogData = {jobLabel:job.label, observation:runs[0]};
+    this.dialog.open(AutomationObservationDialogComponent, {data, width:'min(560px, 96vw)', maxWidth:'96vw', autoFocus:false});
   }
   closeObservation():void {this.selectedObservation=null;this.selectedObservationJob='';}
   hasReferenceHour(job:TimelineJob,hour:string):boolean {

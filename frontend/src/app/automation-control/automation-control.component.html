@@ -47,13 +47,7 @@
         <span>● Ejecución observada</span><span>● Resultado parcial</span><span>● Fallo observado</span>
         <span>· Horario de referencia (sin confirmación)</span><span>— Sin ejecución observada</span>
       </div>
-      <div *ngIf="selectedObservation" class="timeline-detail">
-        <div class="detail-head"><h3>{{selectedObservationJob}} · Ejecución #{{selectedObservation.run_id}}</h3>
-          <button type="button" (click)="closeObservation()">Cerrar</button></div>
-        <p>Estado original: {{selectedObservation.status_raw}} · Hora observada: {{selectedObservation.observed_time}}</p>
-        <p>Corte: {{selectedObservation.business_date||'Sin fecha'}} · Inicio: {{formatDate(selectedObservation.started_at_utc)}}</p>
-        <p *ngIf="selectedObservation.error_available">Error registrado; diagnóstico seguro pendiente de instrumentación.</p>
-      </div>
+
     </section>
     <div class="filters"><label>Dominio <select [(ngModel)]="domain"><option value="">Todos</option>
       <option *ngFor="let d of domains" [value]="d">{{d}}</option></select></label>

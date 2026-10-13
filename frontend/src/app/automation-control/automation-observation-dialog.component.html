@@ -1,0 +1,16 @@
+<h2 mat-dialog-title>{{ data.jobLabel }} · Ejecución #{{ data.observation.run_id }}</h2>
+<mat-dialog-content>
+  <dl>
+    <dt>Estado original</dt><dd>{{ data.observation.status_raw }}</dd>
+    <dt>Hora observada</dt><dd>{{ data.observation.observed_time }}</dd>
+    <dt>Corte</dt><dd>{{ data.observation.business_date || 'Sin fecha' }}</dd>
+    <dt>Inicio (Tijuana)</dt><dd>{{ formatDate(data.observation.started_at_utc) }}</dd>
+    <dt>Fin (Tijuana)</dt><dd>{{ formatDate(data.observation.finished_at_utc) }}</dd>
+  </dl>
+  <p *ngIf="data.observation.error_available" class="notice">
+    Error registrado; diagnóstico seguro pendiente de instrumentación.
+  </p>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button type="button" (click)="close()">Cerrar</button>
+</mat-dialog-actions>
