@@ -1,4 +1,4 @@
-"""M5 seed: PostgreSQL 16 isolated positive and negative migration gates."""
+"""M5 explicit historical load: isolated PG16 tests, no Alembic seed."""
 from __future__ import annotations
 
 from collections import defaultdict
@@ -17,7 +17,6 @@ from alembic.script import ScriptDirectory
 ROOT = Path(__file__).resolve().parents[2]
 MIGRATIONS = ROOT / "migrations"
 SCHEMA_PATH = MIGRATIONS / "versions/c7e4a9b2d601_google_ads_m5_branch_identity_schema.py"
-SEED_PATH = MIGRATIONS / "versions/a63e9f21d48b_seed_google_ads_m5_approved_identities.py"
 
 
 def _module(path, name):
@@ -28,21 +27,18 @@ def _module(path, name):
 
 
 schema = _module(SCHEMA_PATH, "m5_schema_for_seed")
-seed = _module(SEED_PATH, "m5_controlled_seed")
+from app.warehouse.services import google_ads_m5_identity_seed_service as seed
 DB_URL = os.environ.get("GOOGLE_ADS_M5_SEED_TEST_POSTGRES_URL")
 
 
 def test_manifest_and_single_head():
     data = seed._load()
     assert len(data["rows"]) == 26
-    assert seed.revision == "a63e9f21d48b"
-    assert seed.down_revision == schema.revision
     scripts = ScriptDirectory(str(MIGRATIONS))
     heads = scripts.get_heads()
     assert len(heads) == 1
-    assert seed.revision in {
-        x.revision for x in scripts.iterate_revisions(heads[0], "base")
-    }
+    assert heads[0] == schema.revision
+    assert not (MIGRATIONS / "versions/a63e9f21d48b_seed_google_ads_m5_approved_identities.py").exists()
 
 
 def _engine():
@@ -169,7 +165,6 @@ def dataset(monkeypatch):
                 for (ck, day), totals in by_campaign.items()
             ])
             monkeypatch.setattr(schema, "op", Operations(MigrationContext.configure(conn)))
-            monkeypatch.setattr(seed, "op", Operations(MigrationContext.configure(conn)))
             schema.upgrade()
             mapped = sa.Table(schema.TABLE, sa.MetaData(), autoload_with=conn)
             yield conn, mapped, groups, ledger, aliases, upload, cat
@@ -183,15 +178,17 @@ def dataset(monkeypatch):
 def test_pg16_seed_is_exact_and_idempotent(dataset):
     conn, mapped, *_ = dataset
     assert conn.execute(sa.select(sa.func.count()).select_from(mapped)).scalar_one() == 0
-    seed.upgrade()
-    seed.upgrade()
+    preflight = seed.run_on_connection(conn, apply=False)
+    assert preflight["previous_identities"] == 0
+    assert conn.execute(sa.select(sa.func.count()).select_from(mapped)).scalar_one() == 0
+    seed.run_on_connection(conn, apply=True)
+    seed.run_on_connection(conn, apply=True)
     rows = conn.execute(sa.select(mapped)).mappings().all()
     assert len(rows) == 26
     assert len({(r["customer_id"], r["campaign_key"], r["ad_group_key"]) for r in rows}) == 26
     assert all(r["source_upload_id"] == 21499 for r in rows)
     assert all(r["approval_status"] == "APPROVED_PROVISIONAL_XLSX" for r in rows)
-    seed.downgrade()
-    assert conn.execute(sa.select(sa.func.count()).select_from(mapped)).scalar_one() == 0
+    assert seed.run_on_connection(conn, apply=False)["previous_identities"] == 26
 
 
 @pytest.mark.parametrize("tamper", [
@@ -218,14 +215,29 @@ def test_pg16_seed_refuses_tampered_source_with_zero_writes(dataset, tamper):
         conn.execute(sa.update(groups).where(groups.c.ad_group_name == "Villas del Rey")
                      .values(source_upload_id=999))
     with pytest.raises(RuntimeError, match="M5 seed rechazado"):
-        seed.upgrade()
+        seed.run_on_connection(conn, apply=True)
     assert conn.execute(sa.select(sa.func.count()).select_from(mapped)).scalar_one() == 0
 
 
-def test_pg16_downgrade_rejects_modified_mapping(dataset):
+def test_pg16_reapply_rejects_modified_mapping(dataset):
     conn, mapped, *_ = dataset
-    seed.upgrade()
+    seed.run_on_connection(conn, apply=True)
     conn.execute(sa.update(mapped).values(approval_reference="MANUAL_OVERRIDE"))
-    with pytest.raises(RuntimeError, match="downgrade"):
-        seed.downgrade()
+    with pytest.raises(RuntimeError, match="mappings previos ajenos"):
+        seed.run_on_connection(conn, apply=True)
     assert conn.execute(sa.select(sa.func.count()).select_from(mapped)).scalar_one() == 26
+
+
+def test_physical_file_hash_required(monkeypatch):
+    """Even if PostgreSQL metadata matches, the real XLSX must match."""
+    from types import SimpleNamespace
+    data = seed._load()
+    fake = SimpleNamespace(
+        file_size_bytes=79836, file_hash_sha256=data["upload_sha256"],
+    )
+    monkeypatch.setattr(
+        seed, "_upload_content",
+        lambda *args, **kwargs: (fake, b"fake corrupted file"),
+    )
+    with pytest.raises(RuntimeError, match="archivo físico"):
+        seed._verify_original_file(data)
