@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from types import SimpleNamespace as NS
+from unittest.mock import MagicMock
 
 import pytest
 from sqlalchemy import BigInteger, Column, Integer, MetaData, Table, create_engine
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.models.marketing import (
     MarketingCampaignV2ORM,
     MarketingCampaignV2ProviderCampaignORM,
+    MarketingCampaignV2DispatchApprovalORM,
 )
 from app.services import marketing_campaign_v2_submit_service as service
 from app.services.marketing_campaign_v2_preflight_service import (
@@ -55,6 +57,7 @@ def session():
     )
     MarketingCampaignV2ORM.__table__.to_metadata(metadata)
     MarketingCampaignV2ProviderCampaignORM.__table__.to_metadata(metadata)
+    MarketingCampaignV2DispatchApprovalORM.__table__.to_metadata(metadata)
     metadata.create_all(engine)
 
     with Session(engine) as value:
@@ -827,3 +830,49 @@ def test_two_limited_branches_held_one_ready_survives_partial_send(session, monk
 
     with pytest.raises(service.MarketingCampaignV2SubmitConflictError):
         _submit(session, _Provider([_success("unsafe")]))
+
+
+def test_governed_approval_cannot_use_legacy_submit_even_with_kill_switch_on(
+    session, monkeypatch,
+):
+    _install_plan(monkeypatch, _plan())
+    session.add(MarketingCampaignV2DispatchApprovalORM(
+        campaign_v2_id=77, template_id=10,
+        dispatch_fingerprint=FINGERPRINT, recipient_count=2,
+        approved_estimated_mxn="1.00",
+        manifest_json={"version": "D2B_READY_HELD_V1", "send_authorized": False},
+        approved_by_user_id=7,
+        approved_at=NOW,
+        expires_at=NOW.replace(day=NOW.day + 1),
+    ))
+    session.commit()
+    provider = _Provider([_success("never-call")])
+    with pytest.raises(
+        service.MarketingCampaignV2SubmitConflictError, match="gobernada"
+    ):
+        _submit(session, provider)
+    assert provider.calls == []
+    assert session.query(MarketingCampaignV2ProviderCampaignORM).count() == 0
+
+
+def test_shared_transition_cannot_bypass_governed_authorization():
+    session = MagicMock()
+    session.get.return_value = NS(campaign_v2_id=77)
+    session.query.return_value.filter.return_value.first.return_value = (9,)
+    with pytest.raises(service.MarketingCampaignV2SubmitConflictError, match="gobernada"):
+        service._transition_ready_to_submitting(
+            row_id=1, actor_user_id=7, session=session, now=NOW,
+        )
+    session.query.return_value.filter.return_value.update.assert_not_called()
+    session.commit.assert_not_called()
+
+
+@pytest.fixture(autouse=True)
+def mock_shared_contact_gate_for_legacy_unit_tests(monkeypatch):
+    """Legacy unit fixtures use SQLite or isolated session stubs.
+
+    PostgreSQL concurrency and contact admissions are verified separately
+    in test_marketing_campaign_v2_quota_cross_campaign_gate_pg.py.
+    """
+    monkeypatch.setattr(service, "acquire_campaign_v2_contact_gate", lambda session: None)
+    monkeypatch.setattr(service, "verify_outbound_contact_admission", lambda **kwargs: None)

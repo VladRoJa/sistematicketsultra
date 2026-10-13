@@ -49,6 +49,51 @@ from app.services.marketing_campaign_v2_dispatch_config_service import (
     save_channel_binding,
     save_template,
 )
+from app.services.marketing_campaign_v2_quota_service import (
+    CampaignV2QuotaValidationError,
+    CampaignV2QuotaConflictError,
+    list_quota_evidence,
+    register_quota_policy,
+    register_quota_capacity,
+    assess_preflight_capacity,
+)
+from app.services.marketing_campaign_v2_held_derived_cohort_service import (
+    freeze_derived_held_cohort,
+)
+from app.services.marketing_campaign_v2_held_release_intent_service import (
+    HeldReleaseConflict,
+    HeldReleaseNotFound,
+    HeldReleaseValidation,
+    preview_held_release,
+    request_held_release_intent,
+)
+from app.services.marketing_campaign_v2_governed_reconciliation_service import (
+    GovernedReconciliationConflict,
+    GovernedReconciliationValidation,
+    escalate_stale_governed_claim,
+    record_governed_provider_resolution,
+)
+from app.services.marketing_campaign_v2_governed_monitor_service import (
+    GovernedMonitorNotFound,
+    GovernedMonitorValidation,
+    read_governed_dispatch_monitor,
+)
+from app.services.marketing_campaign_v2_governed_dispatch_service import (
+    GovernedDispatchConflict,
+    GovernedDispatchDisabled,
+    authorize_governed_dispatch,
+    execute_governed_child,
+    review_execution,
+)
+from app.services.marketing_campaign_v2_manifest_service import (
+    materialize_approved_manifest,
+)
+from app.services.marketing_campaign_v2_dispatch_approval_service import (
+    CampaignV2ApprovalValidationError,
+    CampaignV2ApprovalConflictError,
+    approve_dispatch_reservation,
+    get_dispatch_approval,
+)
 from app.services.marketing_campaign_v2_budget_service import (
     CampaignV2BudgetValidationError,
     CampaignV2BudgetConflictError,
@@ -64,6 +109,7 @@ from app.services.marketing_campaign_v2_preparation_service import (
     apply_previous_contacts,
 )
 from app.services.marketing_campaign_v2_preflight_service import (
+    CampaignV2PreflightPlan,
     build_campaign_v2_preflight,
     serialize_campaign_v2_preflight,
 )
@@ -1282,6 +1328,447 @@ def create_campaign_v2_cost_rate_revision_endpoint():
         return _error("Falló el registro de cotización.", 500)
 
 
+@marketing_campaign_v2_bp.post("/campaigns-v2/<int:campaign_id>/dispatch/approval")
+@jwt_required()
+def campaign_v2_dispatch_approval_endpoint(campaign_id: int):
+    """Cost and capacity approval ONLY. Never creates provider children or sends."""
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        payload = _parse_payload({
+            "template_id", "expected_dispatch_fingerprint",
+            "expected_quote_fingerprint",
+            "expected_recipients", "expected_total_mxn", "held_sucursal_canons",
+            "held_source_references",
+        })
+        row = approve_dispatch_reservation(
+            campaign_id=campaign_id,
+            template_id=payload.get("template_id"),
+            expected_dispatch_fingerprint=payload.get("expected_dispatch_fingerprint"),
+            expected_quote_fingerprint=payload.get("expected_quote_fingerprint"),
+            expected_recipients=payload.get("expected_recipients"),
+            expected_total_mxn=payload.get("expected_total_mxn"),
+            held_sucursal_canons=payload.get("held_sucursal_canons"),
+            held_source_references=payload.get("held_source_references"),
+            actor_user_id=int(user.id),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(row), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (MarketingCampaignV2RouteValidationError, CampaignV2ApprovalValidationError) as exc:
+        return _error(str(exc), 400)
+    except (CampaignV2ApprovalConflictError, CampaignV2BudgetValidationError) as exc:
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible reservar capacidad Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/<int:campaign_id>/dispatch/approval")
+@jwt_required()
+def campaign_v2_dispatch_approval_state_endpoint(campaign_id: int):
+    try:
+        _, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        _validate_query_args(set())
+        return jsonify(get_dispatch_approval(campaign_id=campaign_id, session=db.session)), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except Exception:
+        return _error("No fue posible consultar aprobación Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/<int:campaign_id>/dispatch/materialize")
+@jwt_required()
+def campaign_v2_materialize_manifest_endpoint(campaign_id: int):
+    """Persist READY/HELD children ONLY. No provider call, even with kill switch ON."""
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        _parse_payload(set())
+        return jsonify(materialize_approved_manifest(
+            campaign_id=campaign_id,
+            actor_user_id=int(user.id),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2RouteValidationError as exc:
+        return _error(str(exc), 400)
+    except CampaignV2ApprovalConflictError as exc:
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible materializar manifiesto Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.post(
+    "/campaigns-v2/<int:campaign_id>/dispatch/executions/<int:execution_id>/escalate"
+)
+@jwt_required()
+def campaign_v2_governed_escalate_endpoint(campaign_id: int, execution_id: int):
+    """Manual unknown-outcome escalation; does not call any provider."""
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        payload = _parse_payload({
+            "child_id", "expected_manifest_digest", "source_reference", "evidence_note",
+        })
+        result = escalate_stale_governed_claim(
+            campaign_id=campaign_id,
+            execution_id=execution_id,
+            child_id=payload.get("child_id"),
+            expected_manifest_digest=payload.get("expected_manifest_digest"),
+            source_reference=payload.get("source_reference"),
+            evidence_note=payload.get("evidence_note"),
+            actor_user_id=int(user.id), session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (GovernedReconciliationValidation, MarketingCampaignV2RouteValidationError) as exc:
+        return _error(str(exc), 400)
+    except GovernedReconciliationConflict as exc:
+        db.session.rollback()
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("Error al escalar ejecución gobernada.", 500)
+
+
+@marketing_campaign_v2_bp.post(
+    "/campaigns-v2/<int:campaign_id>/dispatch/executions/<int:execution_id>/resolve"
+)
+@jwt_required()
+def campaign_v2_governed_resolve_endpoint(campaign_id: int, execution_id: int):
+    """Record operator-verified provider outcome, never retry or send."""
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        payload = _parse_payload({
+            "child_id", "expected_manifest_digest", "resolution",
+            "provider_campaign_id", "source_reference", "evidence_note",
+        })
+        result = record_governed_provider_resolution(
+            campaign_id=campaign_id,
+            execution_id=execution_id,
+            child_id=payload.get("child_id"),
+            expected_manifest_digest=payload.get("expected_manifest_digest"),
+            resolution=payload.get("resolution"),
+            provider_campaign_id=payload.get("provider_campaign_id"),
+            source_reference=payload.get("source_reference"),
+            evidence_note=payload.get("evidence_note"),
+            actor_user_id=int(user.id), session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (GovernedReconciliationValidation, MarketingCampaignV2RouteValidationError) as exc:
+        return _error(str(exc), 400)
+    except GovernedReconciliationConflict as exc:
+        db.session.rollback()
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("Error al resolver ejecución gobernada.", 500)
+
+
+@marketing_campaign_v2_bp.post(
+    "/campaigns-v2/<int:campaign_id>/dispatch/held/<int:child_id>/freeze-derived"
+)
+@jwt_required()
+def campaign_v2_held_freeze_derived_endpoint(campaign_id: int, child_id: int):
+    """D3c2: frozen cohort and intent link only, no provider or dispatch."""
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        payload = _parse_payload({
+            "intent_id", "expected_candidate_fingerprint", "expected_recipient_count",
+        })
+        return jsonify(freeze_derived_held_cohort(
+            source_campaign_id=campaign_id, source_child_id=child_id,
+            intent_id=payload.get("intent_id"),
+            expected_candidate_fingerprint=payload.get("expected_candidate_fingerprint"),
+            expected_recipient_count=payload.get("expected_recipient_count"),
+            actor_user_id=int(user.id),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except HeldReleaseNotFound as exc:
+        return _error(str(exc), 404)
+    except (HeldReleaseValidation, MarketingCampaignV2RouteValidationError) as exc:
+        return _error(str(exc), 400)
+    except HeldReleaseConflict as exc:
+        db.session.rollback()
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("Error al congelar cohorte HELD derivada.", 500)
+
+
+@marketing_campaign_v2_bp.get(
+    "/campaigns-v2/<int:campaign_id>/dispatch/held/<int:child_id>/release-preview"
+)
+@jwt_required()
+def campaign_v2_held_release_preview_endpoint(campaign_id: int, child_id: int):
+    """D3c1 preflight only; no quota reservation and no send."""
+    try:
+        _, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        _validate_query_args(set())
+        return jsonify(preview_held_release(
+            campaign_id=campaign_id, child_id=child_id,
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except HeldReleaseNotFound as exc:
+        return _error(str(exc), 404)
+    except HeldReleaseValidation as exc:
+        return _error(str(exc), 400)
+    except HeldReleaseConflict as exc:
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible revisar elegibilidad del HELD.", 500)
+
+
+@marketing_campaign_v2_bp.post(
+    "/campaigns-v2/<int:campaign_id>/dispatch/held/<int:child_id>/release-intent"
+)
+@jwt_required()
+def campaign_v2_held_release_intent_endpoint(campaign_id: int, child_id: int):
+    """D3c1 immutable request only; never converts a HELD to READY."""
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        payload = _parse_payload({
+            "expected_candidate_fingerprint", "expected_recipient_count",
+            "source_reference", "reason",
+        })
+        return jsonify(request_held_release_intent(
+            campaign_id=campaign_id, child_id=child_id,
+            expected_candidate_fingerprint=payload.get("expected_candidate_fingerprint"),
+            expected_recipient_count=payload.get("expected_recipient_count"),
+            source_reference=payload.get("source_reference"),
+            reason=payload.get("reason"), actor_user_id=int(user.id),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except HeldReleaseNotFound as exc:
+        return _error(str(exc), 404)
+    except (HeldReleaseValidation, MarketingCampaignV2RouteValidationError) as exc:
+        return _error(str(exc), 400)
+    except HeldReleaseConflict as exc:
+        db.session.rollback()
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible registrar solicitud HELD.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/<int:campaign_id>/dispatch/monitor")
+@jwt_required()
+def campaign_v2_governed_monitor_endpoint(campaign_id: int):
+    """Read-only D3a monitor. Never retries, releases HELD or calls provider."""
+    try:
+        _, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        _validate_query_args(set())
+        return jsonify(read_governed_dispatch_monitor(
+            campaign_id=campaign_id, session=db.session,
+        )), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except GovernedMonitorNotFound as exc:
+        return _error(str(exc), 404)
+    except (GovernedMonitorValidation, MarketingCampaignV2RouteValidationError) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible consultar monitor gobernado.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/<int:campaign_id>/dispatch/execution")
+@jwt_required()
+def campaign_v2_execution_review_endpoint(campaign_id: int):
+    try:
+        _, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        _validate_query_args(set())
+        return jsonify(review_execution(campaign_id=campaign_id, session=db.session)), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except Exception:
+        return _error("No fue posible consultar autorización D2c.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/<int:campaign_id>/dispatch/authorize")
+@jwt_required()
+def campaign_v2_governed_authorize_endpoint(campaign_id: int):
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        payload = _parse_payload({
+            "approval_id", "expected_manifest_digest",
+            "expected_ready_recipients", "confirm_dispatch",
+        })
+        result = authorize_governed_dispatch(
+            campaign_id=campaign_id, approval_id=payload.get("approval_id"),
+            expected_digest=payload.get("expected_manifest_digest"),
+            expected_ready_recipients=payload.get("expected_ready_recipients"),
+            confirmed=payload.get("confirm_dispatch"),
+            actor_user_id=int(user.id),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(result), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2RouteValidationError as exc:
+        return _error(str(exc), 400)
+    except (GovernedDispatchConflict, CampaignV2ApprovalConflictError,
+            MarketingCampaignV2SubmitPreconditionError,
+            MarketingCampaignV2SubmitConflictError) as exc:
+        db.session.rollback()
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible autorizar ejecución D2c.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/<int:campaign_id>/dispatch/execute")
+@jwt_required()
+def campaign_v2_governed_execute_endpoint(campaign_id: int):
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        payload = _parse_payload({
+            "execution_id", "child_id", "expected_manifest_digest",
+        })
+        send_enabled = current_app.config.get("CAMPAIGN_V2_PROVIDER_SEND_ENABLED") is True
+        governed_enabled = current_app.config.get(
+            "CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED", False,
+        ) is True
+        if not (send_enabled and governed_enabled):
+            raise GovernedDispatchDisabled("Envío gobernado deshabilitado.")
+        provider = IVentasBroadcastProvider(
+            api_key=current_app.config.get("IVENTAS_CAMPAIGN_SEND_API_KEY", ""),
+            base_url=current_app.config.get(
+                "IVENTAS_CAMPAIGN_SEND_API_BASE_URL", "https://rest.iventas.mx",
+            ),
+        )
+        result = execute_governed_child(
+            campaign_id=campaign_id,
+            execution_id=payload.get("execution_id"),
+            child_id=payload.get("child_id"),
+            expected_digest=payload.get("expected_manifest_digest"),
+            actor_user_id=int(user.id),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            provider=provider, send_enabled=send_enabled,
+            governed_enabled=governed_enabled, session=db.session,
+        )
+        return jsonify(result), 200 if result["status"] == "SUBMITTED" else 502
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2RouteValidationError as exc:
+        return _error(str(exc), 400)
+    except GovernedDispatchDisabled as exc:
+        return _error(str(exc), 423)
+    except (GovernedDispatchConflict, CampaignV2ApprovalConflictError,
+            MarketingCampaignV2SubmitPreconditionError,
+            MarketingCampaignV2SubmitConflictError) as exc:
+        db.session.rollback()
+        return _error(str(exc), 409)
+    except CampaignProviderConfigurationError as exc:
+        return _error(str(exc), 503)
+    except Exception:
+        db.session.rollback()
+        return _error("Error en despacho gobernado; revisar estado antes de reintentar.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/quota-evidence")
+@jwt_required()
+def list_campaign_v2_quota_evidence_endpoint():
+    try:
+        _resolve_campaign_v2_dispatch_config_request()
+        _validate_query_args(set())
+        return jsonify(list_quota_evidence(session=db.session)), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2RouteValidationError as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("Falló consulta de evidencia de cupos.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/dispatch/quota-policies")
+@jwt_required()
+def register_campaign_v2_quota_policy_endpoint():
+    try:
+        user, _ = _resolve_campaign_v2_dispatch_config_request()
+        payload = _parse_payload({
+            "provider_channel_id", "portfolio_key", "account_key",
+            "phone_alias", "nominal_channel_limit", "reset_timezone",
+            "source_reference",
+        })
+        return jsonify(register_quota_policy(
+            provider_channel_id=payload.get("provider_channel_id"),
+            portfolio_key=payload.get("portfolio_key"),
+            account_key=payload.get("account_key"),
+            phone_alias=payload.get("phone_alias"),
+            nominal_channel_limit=payload.get("nominal_channel_limit"),
+            reset_timezone=payload.get("reset_timezone"),
+            source_reference=payload.get("source_reference"),
+            actor_user_id=int(user.id), session=db.session,
+        )), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (CampaignV2QuotaValidationError, MarketingCampaignV2RouteValidationError) as exc:
+        return _error(str(exc), 400)
+    except CampaignV2QuotaConflictError as exc:
+        return _error(str(exc), 409)
+    except Exception:
+        return _error("No se pudo registrar política de cuotas.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/dispatch/quota-attestations")
+@jwt_required()
+def register_campaign_v2_quota_attestation_endpoint():
+    try:
+        user, _ = _resolve_campaign_v2_dispatch_config_request()
+        payload = _parse_payload({
+            "scope_kind", "scope_key", "observed_at", "expires_at",
+            "window_ends_at", "remaining_messages", "source_reference",
+        })
+        return jsonify(register_quota_capacity(
+            scope_kind=payload.get("scope_kind"),
+            scope_key=payload.get("scope_key"),
+            observed_at=payload.get("observed_at"),
+            expires_at=payload.get("expires_at"),
+            window_ends_at=payload.get("window_ends_at"),
+            remaining_messages=payload.get("remaining_messages"),
+            source_reference=payload.get("source_reference"),
+            actor_user_id=int(user.id), session=db.session,
+        )), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (CampaignV2QuotaValidationError, MarketingCampaignV2RouteValidationError) as exc:
+        return _error(str(exc), 400)
+    except CampaignV2QuotaConflictError as exc:
+        return _error(str(exc), 409)
+    except Exception:
+        return _error("No se pudo registrar evidencia de cupo.", 500)
+
+
 @marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/channel-bindings")
 @jwt_required()
 def list_campaign_v2_channel_bindings_endpoint():
@@ -1440,6 +1927,10 @@ def campaign_v2_provider_child_retry_endpoint(child_id: int):
                 False,
             )
         )
+        if current_app.config.get("CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED") is True:
+            raise MarketingCampaignV2SafeRetryDisabledError(
+                "Retry legado deshabilitado durante despacho gobernado."
+            )
         if not send_enabled:
             raise MarketingCampaignV2SafeRetryDisabledError(
                 "El retry Campaign V2 está deshabilitado por kill switch."
@@ -1649,6 +2140,10 @@ def campaign_v2_preflight_endpoint(campaign_id: int):
             campaign_id=campaign_id,
             session=db.session,
         )
+        if isinstance(plan, CampaignV2PreflightPlan):
+            result["quota"] = assess_preflight_capacity(
+                plan=plan, session=db.session,
+            )
         result["submission"] = {
             "enabled": bool(
                 current_app.config.get(
@@ -1700,6 +2195,12 @@ def campaign_v2_submit_endpoint(campaign_id: int):
                 False,
             )
         )
+        # Web mode is exclusive: enabling D2c must not open legacy
+        # provider endpoints for unrelated historical campaigns.
+        if current_app.config.get("CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED") is True:
+            raise MarketingCampaignV2SubmitDisabledError(
+                "Submit legado deshabilitado durante despacho gobernado."
+            )
         if not send_enabled:
             raise MarketingCampaignV2SubmitDisabledError(
                 "El envío Campaign V2 está deshabilitado por kill switch."

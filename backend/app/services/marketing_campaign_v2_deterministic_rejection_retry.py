@@ -14,6 +14,11 @@ from typing import Any, Mapping
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.models.marketing import MarketingCampaignV2ProviderCampaignORM
+from app.services.marketing_campaign_v2_contact_gate_service import (
+    CampaignV2ContactGateConflict,
+    acquire_campaign_v2_contact_gate,
+    verify_outbound_contact_admission,
+)
 from app.services.marketing_campaign_v2_preflight_service import (
     build_campaign_v2_preflight,
     build_provider_campaign_idempotency_key,
@@ -143,6 +148,11 @@ def review_campaign8_la_paz_retry(
 def _mark_la_paz_retry_started(*, review: LaPazRetryReview, actor_user_id: int, session: Any) -> None:
     """Durably preserve prior 4xx before sending; one guarded transition only."""
     now = datetime.now(timezone.utc)
+    try:
+        acquire_campaign_v2_contact_gate(session)
+    except CampaignV2ContactGateConflict as exc:
+        session.rollback()
+        raise Campaign8DeterministicRetryError(str(exc)) from exc
     row = (
         session.query(MarketingCampaignV2ProviderCampaignORM)
         .filter(MarketingCampaignV2ProviderCampaignORM.id == review.child_id)
@@ -163,6 +173,11 @@ def _mark_la_paz_retry_started(*, review: LaPazRetryReview, actor_user_id: int, 
         session.rollback()
         raise Campaign8DeterministicRetryError("Concurrent change: La Paz retry denied.")
 
+    try:
+        verify_outbound_contact_admission(child=row, session=session)
+    except CampaignV2ContactGateConflict as exc:
+        session.rollback()
+        raise Campaign8DeterministicRetryError(str(exc)) from exc
     history = [{
         "schema_version": 1, "attempt": 1,
         "started_at": now.isoformat(),

@@ -14,6 +14,12 @@ from app.extensions import db
 from app.models.marketing import (
     MarketingCampaignV2ORM,
     MarketingCampaignV2ProviderCampaignORM,
+    MarketingCampaignV2DispatchApprovalORM,
+)
+from app.services.marketing_campaign_v2_contact_gate_service import (
+    CampaignV2ContactGateConflict,
+    acquire_campaign_v2_contact_gate,
+    verify_outbound_contact_admission,
 )
 from app.services.marketing_campaign_v2_preflight_service import (
     DISPATCH_FINGERPRINT_VERSION,
@@ -151,6 +157,16 @@ def submit_campaign_v2(
     normalized_actor = _positive_int(actor_user_id, "actor_user_id")
     expected_fingerprint = _fingerprint(expected_dispatch_fingerprint)
     timestamp = _normalize_now(now)
+
+    # A governed approval must NEVER fall back to the legacy send path.
+    # D2b only materializes rows; a later separately tested D2c gate may send.
+    active_session = session if session is not None else db.session
+    if active_session.query(MarketingCampaignV2DispatchApprovalORM.id).filter(
+        MarketingCampaignV2DispatchApprovalORM.campaign_v2_id == normalized_campaign_id
+    ).first() is not None:
+        raise MarketingCampaignV2SubmitConflictError(
+            "La campaña tiene aprobación gobernada; submit legado bloqueado."
+        )
 
     plan = build_campaign_v2_preflight(
         campaign_id=normalized_campaign_id,
@@ -429,6 +445,7 @@ def _prepare_provider_campaign_rows(
     session: Any,
     now: datetime,
     held_batches: Mapping[str, dict[str, Any]] | None = None,
+    commit_rows: bool = True,
 ) -> list[MarketingCampaignV2ProviderCampaignORM]:
     # Used only by an explicitly approved, isolated partial-dispatch operator.
     # All children, including HELD, commit in ONE transaction, before HTTP.
@@ -555,6 +572,11 @@ def _prepare_provider_campaign_rows(
         rows.append(row)
 
     try:
+        if not commit_rows:
+            # Governed path: the caller must validate the complete persisted
+            # manifest before committing any child or returning authorization.
+            session.flush()
+            return rows
         session.commit()
     except IntegrityError as exc:
         session.rollback()
@@ -580,7 +602,30 @@ def _transition_ready_to_submitting(
     session: Any,
     now: datetime,
 ) -> None:
+    # Shared with partial-resume; serialize before inspecting the child.
+    # The resulting SUBMITTING claim is committed while the gate is held.
     try:
+        acquire_campaign_v2_contact_gate(session)
+    except CampaignV2ContactGateConflict as exc:
+        session.rollback()
+        raise MarketingCampaignV2SubmitConflictError(str(exc)) from exc
+    existing = session.get(MarketingCampaignV2ProviderCampaignORM, row_id)
+    if existing is not None and session.query(MarketingCampaignV2DispatchApprovalORM.id).filter(
+        MarketingCampaignV2DispatchApprovalORM.campaign_v2_id == int(existing.campaign_v2_id)
+    ).first() is not None:
+        session.rollback()
+        raise MarketingCampaignV2SubmitConflictError(
+            "Transición heredada bloqueada para aprobación gobernada."
+        )
+    try:
+        if existing is None:
+            raise MarketingCampaignV2SubmitConflictError(
+                "Provider child inexistente antes de claim."
+            )
+        try:
+            verify_outbound_contact_admission(child=existing, session=session)
+        except CampaignV2ContactGateConflict as exc:
+            raise MarketingCampaignV2SubmitConflictError(str(exc)) from exc
         updated = (
             session.query(MarketingCampaignV2ProviderCampaignORM)
             .filter(
@@ -606,6 +651,7 @@ def _transition_ready_to_submitting(
             )
         session.commit()
     except MarketingCampaignV2SubmitConflictError:
+        session.rollback()
         raise
     except SQLAlchemyError as exc:
         session.rollback()

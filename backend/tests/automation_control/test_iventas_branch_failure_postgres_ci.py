@@ -29,7 +29,7 @@ def test_iventas_branch_failure_incremental_migration_postgresql_16():
     spec.loader.exec_module(module)
 
     assert module.revision == "f62a1b9d4c07"
-    assert module.down_revision == "e4b856c9170d"
+    assert module.down_revision == "e856d3c21013"
 
     engine = sa.create_engine(url, future=True)
     try:

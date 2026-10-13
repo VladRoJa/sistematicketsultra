@@ -1,14 +1,14 @@
 """Persist only safe iVentas branch failure classifications per sync run.
 
 Revision ID: f62a1b9d4c07
-Revises: e4b856c9170d
+Revises: e856d3c21013
 Create Date: 2026-10-13
 """
 from alembic import op
 import sqlalchemy as sa
 
 revision = "f62a1b9d4c07"
-down_revision = "e4b856c9170d"
+down_revision = "e856d3c21013"
 branch_labels = None
 depends_on = None
 

@@ -189,3 +189,20 @@ def test_rounding_each_branch_before_total_reconciles_visible_rows(session):
     assert quote["status"] == "COMPLETE"
     assert [x["estimated_mxn"] for x in quote["batches"]] == ["2.48", "2.48"]
     assert quote["total_estimated_mxn"] == "4.96"
+
+
+def test_same_total_new_rate_revision_invalidates_quote_fingerprint(session):
+    _quote(session, "0.825")
+    first = budget.estimate_preflight_cost(
+        plan=_plan(), session=session, now=NOW,
+    )
+    budget.register_cost_rate_revision(
+        template_id=1, provider_channel_id="channel-tec",
+        unit_cost_mxn="0.825", source_reference="new revision same price",
+        actor_user_id=7, session=session, now=NOW + timedelta(minutes=1),
+    )
+    second = budget.estimate_preflight_cost(
+        plan=_plan(), session=session, now=NOW + timedelta(minutes=2),
+    )
+    assert first["total_estimated_mxn"] == second["total_estimated_mxn"]
+    assert first["quote_fingerprint"] != second["quote_fingerprint"]
