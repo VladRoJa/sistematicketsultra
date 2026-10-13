@@ -373,3 +373,46 @@ def test_d3b_resolution_never_calls_provider(client, global_access):
     assert response.json["send_authorized"] is False
     op.assert_called_once()
     provider.assert_not_called()
+
+
+def test_d3c_held_release_preview_global_only_no_provider(client, global_access, partial_access):
+    browser, headers = client
+    url = "/api/marketing/campaigns-v2/77/dispatch/held/100/release-preview"
+    with auth(partial_access), patch.object(routes, "preview_held_release") as preview:
+        denied = browser.get(url, headers=headers)
+    assert denied.status_code == 403
+    preview.assert_not_called()
+
+    with auth(global_access), patch.object(
+        routes, "preview_held_release",
+        return_value={"status":"ELIGIBLE_FOR_INTENT_ONLY","send_authorized":False},
+    ) as preview, patch.object(routes, "IVentasBroadcastProvider") as provider:
+        response = browser.get(url, headers=headers)
+    assert response.status_code == 200
+    assert response.json["send_authorized"] is False
+    preview.assert_called_once()
+    provider.assert_not_called()
+
+
+def test_d3c_held_release_intent_cannot_override_send_or_unhold(client, global_access):
+    browser, headers = client
+    url = "/api/marketing/campaigns-v2/77/dispatch/held/100/release-intent"
+    payload = {"expected_candidate_fingerprint":"a"*64,
+               "expected_recipient_count":5, "source_reference":"manual quota",
+               "reason":"new window",
+               "send_enabled":True}
+    with auth(global_access), patch.object(routes, "request_held_release_intent") as intent:
+        response = browser.post(url, json=payload, headers=headers)
+    assert response.status_code == 400
+    intent.assert_not_called()
+    payload.pop("send_enabled")
+    with auth(global_access), patch.object(
+        routes, "request_held_release_intent",
+        return_value={"intent_id":555,"status":"PENDING_FRESH_COHORT",
+                      "send_authorized":False,"held_released":False},
+    ) as intent, patch.object(routes, "IVentasBroadcastProvider") as provider:
+        response = browser.post(url, json=payload, headers=headers)
+    assert response.status_code == 201
+    assert response.json["held_released"] is False
+    intent.assert_called_once()
+    provider.assert_not_called()
