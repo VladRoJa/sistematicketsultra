@@ -402,3 +402,40 @@ def test_admin_binding_prevents_changing_identity_used_by_child(session):
             is_default=False, actor_user_id=7, session=session,
             require_immutable_history=True,
         )
+
+
+def test_admin_rejects_non_iventas_provider(session):
+    with pytest.raises(service.MarketingCampaignV2DispatchConfigValidationError,
+                       match="sólo admite IVENTAS"):
+        service.save_template(
+            provider="OTHER", template_name="wrong", label="Wrong",
+            is_active=True, purposes=["REACTIVATION"], variables={},
+            compatible_channel_ids=["unknown"],
+            actor_user_id=7, require_explicit_channels=True, session=session,
+        )
+    with pytest.raises(service.MarketingCampaignV2DispatchConfigValidationError,
+                       match="sólo admite IVENTAS"):
+        service.save_channel_binding(
+            provider="OTHER", sucursal_id=4, provider_channel_id="wrong",
+            is_active=True, is_default=True,
+            actor_user_id=7, require_immutable_history=True, session=session,
+        )
+
+
+def test_admin_cannot_replace_default_with_pending_children(session):
+    channel = _active_channel(session)
+    saved = service.save_template(
+        provider="IVENTAS", template_name="historic-template", label="Historical",
+        is_active=True, purposes=["REACTIVATION"], variables={},
+        compatible_channel_ids=["channel-current"], actor_user_id=7,
+        require_explicit_channels=True, session=session,
+    )
+    _campaign_child(session, binding_id=channel["id"], template_id=saved["id"])
+    with pytest.raises(service.MarketingCampaignV2DispatchConfigConflictError,
+                       match="lotes pendientes"):
+        service.save_channel_binding(
+            provider="IVENTAS", sucursal_id=4, provider_channel_id="new-default",
+            is_active=True, is_default=True, actor_user_id=7,
+            require_immutable_history=True, session=session,
+        )
+    assert service.resolve_dispatch_channel_binding(sucursal_id=4, session=session).provider_channel_id == "channel-current"
