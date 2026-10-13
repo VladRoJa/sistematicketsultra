@@ -77,6 +77,8 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
   editingBindingId: number | null = null;
   pendingDeactivateId: number | null = null;
   showChannels = false;
+  showTemplateEditor = false;
+  showBudgetEditor = false;
 
   readonly templateName = new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.maxLength(255)] });
   readonly templateLabel = new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.maxLength(255)] });
@@ -181,6 +183,7 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
   editTemplate(template: CampaignV2DispatchTemplate): void {
     this.pendingDeactivateId = null;
     this.editingTemplateId = template.id;
+    this.showTemplateEditor = true;
     this.templateName.setValue(template.template_name);
     this.templateLabel.setValue(template.label);
     this.templatePurposes.setValue([...template.purposes]);
@@ -195,6 +198,23 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
       }));
     this.notice = '';
     this.error = '';
+  }
+
+  startNewTemplate(): void {
+    this.resetTemplate();
+    this.showTemplateEditor = true;
+  }
+
+  closeTemplateEditor(): void {
+    if (this.savingTemplate) { return; }
+    this.resetTemplate();
+    this.showTemplateEditor = false;
+  }
+
+  openBudgetEditor(): void { this.showBudgetEditor = true; }
+
+  closeBudgetEditor(): void {
+    if (!this.savingBudgetRate) { this.showBudgetEditor = false; }
   }
 
   resetTemplate(): void {
@@ -264,6 +284,7 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
         this.savingTemplate = false;
         this.notice = 'Plantilla guardada localmente. No confirma aprobación en iVentas.';
         this.resetTemplate();
+        this.showTemplateEditor = false;
         this.reload();
       },
       error: (error: HttpErrorResponse) => {
@@ -383,6 +404,7 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
       next: saved => {
         this.savingBudgetRate = false;
         this.budgetRateSuccess = 'Revisión #' + saved.revision_id + ' guardada. Es una estimación manual, no una factura.';
+        this.showBudgetEditor = false;
         this.pricingUnitCostMxn.setValue('');
         this.pricingSourceReference.setValue('');
         this.reload();
