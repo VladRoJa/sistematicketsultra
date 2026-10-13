@@ -3188,5 +3188,5 @@ class TestMarketingCampaignV2Routes:
                       "recipient_ids": [100], "allow_bulk": True},
                 headers=self.headers,
             )
-        assert response.status_code == 409
+        assert response.status_code == 400
         applied.assert_not_called()
