@@ -27,6 +27,8 @@ import {
 
 import { MarketingDashboardResponse } from '../marketing-conversion/marketing.models';
 import {
+  MarketingFunnelInvestmentSources,
+  MarketingGoogleAdsBranchAttribution,
   MarketingSalesFunnelBranch,
   MarketingSalesFunnelMetrics,
   MarketingSalesFunnelResponse,
@@ -97,6 +99,38 @@ interface SalesFunnelBranchTotalsView {
   cac_display: string;
 }
 
+interface FunnelAdsInvestmentView {
+  metaValue: string;
+  googleValue: string;
+  totalValue: string;
+  googleCoverage: string;
+  googleMetrics: string;
+  note: string;
+}
+
+interface GoogleAdsBranchAttributionRowView {
+  sucursalId: number;
+  branch: string;
+  cost: string;
+  clicks: string;
+  impressions: string;
+  passes: string;
+  purchases: string;
+}
+
+interface GoogleAdsBranchAttributionView {
+  title: string;
+  status: 'complete' | 'partial' | 'pending_mapping'
+    | 'requires_review' | 'unavailable' | 'scope_unavailable';
+  statusLabel: string;
+  coverage: string;
+  scopeValue: string;
+  accountValue: string | null;
+  unassignedValue: string | null;
+  rows: GoogleAdsBranchAttributionRowView[];
+  note: string;
+}
+
 interface DashboardRequest {
   month: string;
   cutoffDate: string | null;
@@ -136,6 +170,7 @@ type DashboardRequestResult =
   styleUrls: [
     './marketing-sales-funnel.component.css',
     './marketing-sales-funnel-branch-table.component.css',
+    './marketing-sales-funnel-google-attribution.component.css',
   ],
 })
 export class MarketingSalesFunnelOriginalComponent implements OnInit {
@@ -160,6 +195,8 @@ export class MarketingSalesFunnelOriginalComponent implements OnInit {
   cutoffOptions: Array<{ value: string; label: string }> = [];
 
   dashboard: MarketingSalesFunnelResponse | null = null;
+  investmentSourcesView: FunnelAdsInvestmentView | null = null;
+  googleBranchAttributionView: GoogleAdsBranchAttributionView | null = null;
   summaryCards: SummaryCard[] = [];
   branchRows: SalesFunnelBranchView[] = [];
   branchTotals: SalesFunnelBranchTotalsView | null = null;
@@ -430,6 +467,8 @@ export class MarketingSalesFunnelOriginalComponent implements OnInit {
 
   private applyDashboard(data: MarketingSalesFunnelResponse): void {
     this.dashboard = data;
+    this.investmentSourcesView = this.buildInvestmentSourcesView(data.investment_sources);
+    this.googleBranchAttributionView = this.buildGoogleBranchAttributionView(data);
     this.cutoffOptions = (data.available_cutoff_dates || []).map((value) => ({
       value,
       label: this.formatDate(value),
@@ -500,6 +539,134 @@ export class MarketingSalesFunnelOriginalComponent implements OnInit {
     this.activeScopeBranchIds = this.branchOptions.map(
       (option) => option.sucursal_id,
     );
+  }
+
+  private buildInvestmentSourcesView(
+    sources: MarketingFunnelInvestmentSources | undefined,
+  ): FunnelAdsInvestmentView | null {
+    if (!sources) {
+      return null;
+    }
+
+    const google = sources.google_ads;
+    const hasSpend = google.amount !== null;
+    let coverage = 'Google Ads sin datos para el corte.';
+    if (google.status === 'scope_unavailable') {
+      coverage = 'Campañas multiclub: el gasto de Google Ads no puede asignarse a esta región o sucursal.';
+    } else if (google.status === 'not_configured') {
+      coverage = 'Cuenta Google Ads no configurada.';
+    } else if (hasSpend && google.data_from && google.data_to) {
+      coverage = `Datos Google Ads: ${this.formatDate(google.data_from)} a ${this.formatDate(google.data_to)}. ` +
+        `${google.covered_days ?? 0} de ${google.expected_days ?? 0} días del corte` +
+        (google.complete_to_cutoff ? ' (completo).' : ' (parcial).');
+    }
+
+    return {
+      metaValue: sources.meta_assigned === null
+        ? '—' : this.formatMoneyPrecise(sources.meta_assigned),
+      googleValue: hasSpend
+        ? this.formatMoneyPrecise(google.amount) : '—',
+      totalValue: sources.combined_available && sources.combined !== null
+        ? this.formatMoneyPrecise(sources.combined) : '—',
+      googleCoverage: coverage,
+      googleMetrics: hasSpend
+        ? `${this.formatInteger(google.clicks)} clics · ` +
+          `${this.formatInteger(google.impressions)} impresiones · ` +
+          `${new Intl.NumberFormat('es-MX', { maximumFractionDigits: 4 }).format(google.conversions ?? 0)} conv. Ads`
+        : '',
+      note: sources.combined_available
+        ? 'Suma Meta asignada a sucursales + Google Ads de cuenta; no incluye gasto Meta sin asignación. CPL, CPT y CAC existentes siguen basados en Meta.'
+        : 'Sin total combinado comparable para este alcance/corte. Google Ads no está distribuido por sucursal y no se incluye en CPL, CPT ni CAC actuales.',
+    };
+  }
+
+  private buildGoogleBranchAttributionView(
+    data: MarketingSalesFunnelResponse,
+  ): GoogleAdsBranchAttributionView | null {
+    const evidence: MarketingGoogleAdsBranchAttribution | undefined =
+      data.google_ads_branch_attribution;
+    if (!evidence) {
+      return null;
+    }
+
+    const labels: Record<MarketingGoogleAdsBranchAttribution['status'], string> = {
+      complete: 'Corte completo',
+      partial: 'Histórico parcial',
+      pending_mapping: 'Asignación pendiente',
+      requires_review: 'Requiere revisión',
+      unavailable: 'Sin histórico disponible',
+      scope_unavailable: 'Sin sucursales autorizadas',
+    };
+    const available = evidence.status === 'complete' || evidence.status === 'partial';
+    const names = new Map<number, string>(data.branches.map(
+      (row): [number, string] => [row.sucursal_id, row.sucursal],
+    ));
+    const rows: GoogleAdsBranchAttributionRowView[] = available
+      ? evidence.rows.map((item) => ({
+          sucursalId: item.sucursal_id,
+          branch: names.get(item.sucursal_id) || 'Sucursal autorizada',
+          cost: this.formatMoneyPrecise(item.cost),
+          clicks: this.formatInteger(item.clicks),
+          impressions: this.formatInteger(item.impressions),
+          passes: this.formatAdsConversions(item.free_pass_ads),
+          purchases: this.formatAdsConversions(item.web_purchase_ads),
+        }))
+      : [];
+
+    let coverage = 'El período seleccionado está fuera del histórico aprobado.';
+    if (evidence.status === 'complete' || evidence.status === 'partial') {
+      coverage = `${evidence.covered_days} de ${evidence.expected_days} días cubiertos` +
+        (evidence.observed_from && evidence.observed_to
+          ? ` · ${this.formatDate(evidence.observed_from)} a ${this.formatDate(evidence.observed_to)}`
+          : '');
+    } else if (evidence.status === 'pending_mapping') {
+      coverage = 'No existe una atribución aprobada y completa para todas las sucursales seleccionadas.';
+    } else if (evidence.status === 'requires_review') {
+      coverage = 'El histórico o la identidad de una sucursal no concilia. No se publica ningún subtotal.';
+    } else if (evidence.status === 'scope_unavailable') {
+      coverage = 'Sin sucursales habilitadas en el alcance consultado.';
+    }
+
+    const globallyReconciled = available &&
+      evidence.account_reconciled === true &&
+      evidence.account_cost_observed !== undefined &&
+      evidence.unassigned_cost_observed !== undefined;
+
+    return {
+      title: 'Google Ads · atribución histórica por sucursal',
+      status: evidence.status,
+      statusLabel: labels[evidence.status],
+      coverage,
+      scopeValue: available && evidence.scope_attributed_cost !== null
+        ? this.formatMoneyPrecise(evidence.scope_attributed_cost)
+        : '—',
+      accountValue: globallyReconciled
+        ? this.formatMoneyPrecise(evidence.account_cost_observed!)
+        : null,
+      unassignedValue: globallyReconciled
+        ? this.formatMoneyPrecise(evidence.unassigned_cost_observed!)
+        : null,
+      rows,
+      note: 'Atribución provisional de Excel (24 sep–8 oct 2026). ' +
+        'Pases y compras son conversiones informadas por Google Ads, no ventas CRM. ' +
+        'Este desglose no se suma otra vez al gasto de cuenta y no cambia Meta, CPL, CPT ni CAC.',
+    };
+  }
+
+  private formatAdsConversions(value: number): string {
+    return new Intl.NumberFormat('es-MX', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 4,
+    }).format(value);
+  }
+
+  private formatMoneyPrecise(amount: number): string {
+    return new Intl.NumberFormat('es-MX', {
+      style: 'currency',
+      currency: 'MXN',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
   }
 
   private buildSummaryCards(summary: MarketingSalesFunnelMetrics): SummaryCard[] {
