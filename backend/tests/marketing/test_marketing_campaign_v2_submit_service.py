@@ -721,8 +721,12 @@ def test_held_is_never_recreated_and_reviews_detect_audit_drift(session, monkeyp
         sucursal_canon="TEC_MXL"
     ).one()
     row.held_by_user_id = None
-    with pytest.raises(service.MarketingCampaignV2SubmitPreconditionError):
-        _held_review(monkeypatch, session, plan)
+    # SQLAlchemy would autoflush and enforce the DB CHECK first; disable
+    # autoflush here to independently assert that the manifest reviewer
+    # also refuses a tampered in-memory HELD child before any provider POST.
+    with session.no_autoflush:
+        with pytest.raises(service.MarketingCampaignV2SubmitPreconditionError):
+            _held_review(monkeypatch, session, plan)
     session.rollback()
 
 
