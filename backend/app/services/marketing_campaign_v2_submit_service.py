@@ -597,6 +597,15 @@ def _transition_ready_to_submitting(
     session: Any,
     now: datetime,
 ) -> None:
+    # Shared with the isolated partial-resume script. Neither the web
+    # submit nor that script may bypass the D2c independent authorization.
+    existing = session.get(MarketingCampaignV2ProviderCampaignORM, row_id)
+    if existing is not None and session.query(MarketingCampaignV2DispatchApprovalORM.id).filter(
+        MarketingCampaignV2DispatchApprovalORM.campaign_v2_id == int(existing.campaign_v2_id)
+    ).first() is not None:
+        raise MarketingCampaignV2SubmitConflictError(
+            "Transición heredada bloqueada para aprobación gobernada."
+        )
     try:
         updated = (
             session.query(MarketingCampaignV2ProviderCampaignORM)
