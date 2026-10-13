@@ -25,8 +25,8 @@ from app.routes import google_ads_m6_continuity_routes as routes
 from app.warehouse.services import google_ads_m6_continuity_approval_service as service
 from app.warehouse.services.google_ads_daily_xlsx_parser import parse_google_ads_daily_xlsx
 from app.warehouse.services.google_ads_ad_group_daily_xlsx_parser import parse_google_ads_ad_group_daily_xlsx
-from tests.google_ads.test_google_ads_m6_continuity_approval import _fake_facts
-from tests.google_ads.test_google_ads_m6_continuity_postgres import _revision, _test_engine
+from test_google_ads_m6_continuity_approval import _fake_facts
+from test_google_ads_m6_continuity_postgres import _revision, _test_engine
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 
