@@ -616,6 +616,19 @@ class MarketingCampaignV2ProviderCampaignORM(db.Model):
         default="PREPARED",
         server_default=db.text("'PREPARED'"),
     )
+    hold_reason = db.Column(db.String(80), nullable=True)
+    held_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    held_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    hold_evidence_json = db.Column(
+        db.JSON,
+        nullable=False,
+        default=dict,
+        server_default=db.text("'{}'"),
+    )
     provider_campaign_id = db.Column(db.String(255), nullable=True)
     created_by_user_id = db.Column(
         db.Integer,
@@ -720,6 +733,7 @@ class MarketingCampaignV2ProviderCampaignORM(db.Model):
     template = db.relationship("MarketingCampaignV2TemplateORM")
     sucursal = db.relationship("Sucursal")
     created_by_user = db.relationship("UserORM", foreign_keys=[created_by_user_id])
+    held_by_user = db.relationship("UserORM", foreign_keys=[held_by_user_id])
     submitted_by_user = db.relationship("UserORM", foreign_keys=[submitted_by_user_id])
     scheduled_by_user = db.relationship("UserORM", foreign_keys=[scheduled_by_user_id])
     reconciled_by_user = db.relationship("UserORM", foreign_keys=[reconciled_by_user_id])
@@ -744,11 +758,28 @@ class MarketingCampaignV2ProviderCampaignORM(db.Model):
             name="ck_marketing_campaign_v2_provider_campaign_fingerprints",
         ),
         db.CheckConstraint(
-            "status IN ('PREPARED', 'READY', 'BLOCKED', 'SUBMITTING', "
+            "status IN ('PREPARED', 'READY', 'BLOCKED', 'HELD', 'SUBMITTING', "
             "'SUBMITTED', 'SCHEDULED', 'RETRY_ELIGIBLE', "
             "'RETRY_EXHAUSTED', 'PROVIDER_ERROR', "
             "'RECONCILIATION_REQUIRED')",
             name="ck_marketing_campaign_v2_provider_campaign_status",
+        ),
+        db.CheckConstraint(
+            "(hold_reason IS NULL AND held_by_user_id IS NULL AND held_at IS NULL) "
+            "OR (hold_reason IS NOT NULL AND held_by_user_id IS NOT NULL AND held_at IS NOT NULL)",
+            name="ck_mkt_v2_provider_hold_audit_complete",
+        ),
+        db.CheckConstraint(
+            "status <> 'HELD' OR ("
+            "hold_reason = 'CHANNEL_DAILY_QUOTA' "
+            "AND hold_reason IS NOT NULL "
+            "AND held_by_user_id IS NOT NULL "
+            "AND held_at IS NOT NULL "
+            "AND provider_campaign_id IS NULL "
+            "AND submit_started_at IS NULL "
+            "AND submitted_at IS NULL"
+            ")",
+            name="ck_mkt_v2_provider_held_unattempted",
         ),
         db.CheckConstraint(
             "reconciliation_resolution IS NULL OR "

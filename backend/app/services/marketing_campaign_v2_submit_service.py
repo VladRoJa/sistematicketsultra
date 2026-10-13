@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass
 from time import perf_counter
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Mapping
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -428,7 +428,29 @@ def _prepare_provider_campaign_rows(
     actor_user_id: int,
     session: Any,
     now: datetime,
+    held_batches: Mapping[str, dict[str, Any]] | None = None,
 ) -> list[MarketingCampaignV2ProviderCampaignORM]:
+    # Used only by an explicitly approved, isolated partial-dispatch operator.
+    # All children, including HELD, commit in ONE transaction, before HTTP.
+    holds = dict(held_batches or {})
+    names = {batch.sucursal_canon for batch in plan.batches}
+    if holds:
+        if (
+            not plan.ready
+            or plan.mode != "IMMEDIATE"
+            or not set(holds).issubset(names)
+            or len(holds) >= len(plan.batches)
+            or any(
+                not isinstance(value, dict)
+                or value.get("reason") != "CHANNEL_DAILY_QUOTA"
+                or not isinstance(value.get("evidence"), dict)
+                or not value["evidence"]
+                for value in holds.values()
+            )
+        ):
+            raise MarketingCampaignV2SubmitPreconditionError(
+                "Manifest HELD inválido; ninguna operación iniciada."
+            )
     expected: list[tuple[CampaignV2DispatchBatchPlan, str]] = [
         (
             batch,
@@ -446,6 +468,10 @@ def _prepare_provider_campaign_rows(
         session=session,
     )
     if existing:
+        if holds:
+            raise MarketingCampaignV2SubmitConflictError(
+                "Los lotes ya existen; no se recrea ni modifica una retención."
+            )
         by_key = {row.idempotency_key: row for row in existing}
         expected_keys = {key for _, key in expected}
         if (
@@ -480,6 +506,7 @@ def _prepare_provider_campaign_rows(
             plan=plan,
             batch=batch,
         )
+        hold = holds.get(batch.sucursal_canon)
         row = MarketingCampaignV2ProviderCampaignORM(
             campaign_v2_id=plan.campaign_id,
             provider=plan.provider,
@@ -498,7 +525,13 @@ def _prepare_provider_campaign_rows(
             recipient_count=len(batch.recipients),
             dispatch_fingerprint=plan.dispatch_fingerprint,
             idempotency_key=idempotency_key,
-            status="READY",
+            status="HELD" if hold is not None else "READY",
+            hold_reason="CHANNEL_DAILY_QUOTA" if hold is not None else None,
+            held_by_user_id=actor_user_id if hold is not None else None,
+            held_at=now if hold is not None else None,
+            hold_evidence_json=(
+                dict(hold["evidence"]) if hold is not None else {}
+            ),
             created_by_user_id=actor_user_id,
             scheduled_by_user_id=(
                 actor_user_id
