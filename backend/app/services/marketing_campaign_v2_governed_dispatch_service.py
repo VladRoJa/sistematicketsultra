@@ -298,9 +298,12 @@ def execute_governed_child(
             MarketingCampaignV2GovernedExecutionORM.id == execution_id,
             MarketingCampaignV2GovernedExecutionORM.approval_id == approval.id,
         ).with_for_update().one_or_none()
+        # The campaign/portfolio locks may have been held for minutes.
+        # Never compare execution expiry with the earlier request timestamp.
+        claim_time = _utc(None) if now is None else timestamp
         if (execution is None or execution.status != "AUTHORIZED" or
                 digest != execution.manifest_digest or digest != expected_digest or
-                _database_date(execution.expires_at) <= timestamp):
+                _database_date(execution.expires_at) <= claim_time):
             raise GovernedDispatchConflict("Autorización de despacho inexistente, usada o vencida.")
         _check_child_identities(plan=plan, manifest=manifest, children=children)
         by_branch = {r.sucursal_canon: r for r in children}
@@ -338,14 +341,14 @@ def execute_governed_child(
         # Both claims are committed together, before any HTTP to the provider.
         # If the process crashes after commit, IN_FLIGHT blocks all replays.
         row.status = "SUBMITTING"
-        row.submit_started_at = timestamp
+        row.submit_started_at = claim_time
         row.submitted_by_user_id = actor_user_id
-        row.updated_at = timestamp
+        row.updated_at = claim_time
         row.error_code = None
         row.support_ref = None
         execution.status = "IN_FLIGHT"
         execution.last_child_id = child_id
-        execution.updated_at = timestamp
+        execution.updated_at = claim_time
         active.commit()
     except (GovernedDispatchConflict, SQLAlchemyError):
         active.rollback()
