@@ -174,26 +174,49 @@ def read_google_ads_branch_attribution(
     if start > end:
         return result
 
+    # The historical manifest certifies each exact campaign/group triple and
+    # canonical branch. This is a local file read, NOT an account-ledger query.
+    # It is permitted for scoped readers and reveals no other branch metrics.
+    try:
+        manifest = _load_approved_manifest()
+    except (RuntimeError, ValueError, OSError):
+        result["status"] = "requires_review"
+        return result
+    approved = {
+        (row[2], row[3]): (row[4], int(row[5]))
+        for row in manifest["rows"]
+    }
+    if len(approved) != 26:
+        result["status"] = "requires_review"
+        return result
+
     mappings = _load_scoped_mapping_rows(branch_ids)
     scoped = {}
     for mapping, catalog, branch in mappings:
         branch_id = int(catalog.sucursal_id)
-        if not _mapping_ok(mapping, catalog, branch) or branch_id in scoped:
+        expected = approved.get((mapping.campaign_key, mapping.ad_group_key))
+        if (
+            not _mapping_ok(mapping, catalog, branch)
+            or expected != (mapping.sucursal_canon, branch_id)
+            or branch_id in scoped
+        ):
             result["status"] = "requires_review"
             return result
         scoped[branch_id] = mapping
 
-    # No approved mapping is not a zero-cost campaign.
-    if not scoped:
+    # Missing approval is NOT evidence of zero Google Ads spend.
+    if not scoped or set(scoped) != set(branch_ids):
         result["status"] = "pending_mapping"
         return result
 
     if access.is_global:
-        # This validation reads global M3 and account-ledger evidence ONLY
-        # for globally authorized requests.
+        if len(scoped) != 26:
+            result["status"] = "requires_review"
+            return result
+        # Only global access may inspect the account and excluded groups.
         try:
             _validate_historical_source(
-                db.session.connection(), _load_approved_manifest(),
+                db.session.connection(), manifest,
             )
         except RuntimeError:
             result["status"] = "requires_review"
