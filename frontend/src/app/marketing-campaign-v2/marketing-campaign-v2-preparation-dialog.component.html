@@ -1,0 +1,120 @@
+<h2 mat-dialog-title>Centro de preparación · Campaña #{{ data.campaignId }}</h2>
+<mat-dialog-content class="preparation">
+  <p>Diagnósticos de solo lectura. Los cambios requieren confirmación explícita y
+    producen exclusiones auditadas exclusivas de esta campaña.
+    Ni la cohorte congelada ni la lista negra global se modifican.</p>
+  <div *ngIf="error" class="error" role="alert">{{ error }}</div>
+  <div *ngIf="success" class="success" role="status">{{ success }}</div>
+  <p *ngIf="busy" role="status">Procesando solicitud…</p>
+
+  <section class="preparation-section">
+    <div class="heading">
+      <h3>Sucursales ambiguas</h3>
+      <button mat-stroked-button type="button" (click)="reviewBranches()" [disabled]="busy">
+        Analizar evidencias
+      </button>
+    </div>
+    <ng-container *ngIf="branchReview as review">
+      <p>
+        Sin sucursal consolidada: <strong>{{ review.unresolved_count | number }}</strong>.
+        Evidencia múltiple: <strong>{{ review.counts['AMBIGUOUS_EVIDENCE'] || 0 }}</strong>.
+        Sin evidencia: {{ review.counts['MISSING_EVIDENCE'] || 0 }}.
+        Evidencia única sin consolidar: {{ review.counts['SINGLE_EVIDENCE_UNRESOLVED'] || 0 }}.
+      </p>
+      <p>
+        Excluibles nuevos: <strong>{{ review.new_exclusions | number }}</strong>.
+        Ya excluidos: {{ review.already_excluded_count | number }}.
+        Conflictos: {{ review.conflict_count | number }}.
+      </p>
+      <div class="scroll-table">
+        <table>
+          <thead><tr><th>ID destinatario</th><th>Diagnóstico</th><th>Evidencia de sucursal</th><th>Exclusión</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let row of review.rows">
+              <td>{{ row.recipient_id }}</td>
+              <td>{{ row.kind }}</td>
+              <td>{{ row.branch_keys.join(', ') || 'Ninguna' }}</td>
+              <td>{{ row.existing_exclusion_reason || 'Pendiente' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination">
+        <button mat-button type="button" (click)="previousBranchesPage()"
+          [disabled]="busy || review.page <= 1">Anterior</button>
+        <span>Página {{ review.page }}</span>
+        <button mat-button type="button" (click)="nextBranchesPage()"
+          [disabled]="busy || review.rows.length < 25">Siguiente</button>
+      </div>
+      <div *ngIf="data.canManageDispatchConfig && review.can_apply && review.new_exclusions > 0"
+        class="confirmation">
+        <p>Solo se excluyen contactos con dos o más sucursales contradictorias.
+          Los demás requieren resolver catálogo/evidencia, no eliminación automática.</p>
+        <strong *ngIf="review.requires_bulk_confirmation">
+          Operación masiva (10+). Confirma el volumen completo antes de aplicar.
+        </strong>
+        <mat-form-field appearance="outline">
+          <mat-label>Escribe EXCLUIR {{ review.new_exclusions }}</mat-label>
+          <input matInput [formControl]="confirmBranchControl">
+        </mat-form-field>
+        <button mat-flat-button color="warn" type="button" (click)="applyBranches()"
+          [disabled]="!canApplyBranches">Aplicar exclusiones auditadas</button>
+      </div>
+    </ng-container>
+  </section>
+
+  <section class="preparation-section">
+    <div class="heading">
+      <h3>Deduplicación entre campañas</h3>
+    </div>
+    <p>Indica los IDs de campañas anteriores, separados por coma.
+      Solo se consideran los teléfonos de lotes SUBMITTED aceptados por iVentas.
+      Los lotes HELD nunca cuentan como contactados.</p>
+    <div class="input-row">
+      <mat-form-field appearance="outline">
+        <mat-label>IDs de campañas origen</mat-label>
+        <input matInput [formControl]="sourceIdsControl" placeholder="14, 15">
+      </mat-form-field>
+      <button mat-stroked-button type="button" (click)="reviewPreviousContacts()"
+        [disabled]="busy">Revisar cruces</button>
+    </div>
+    <ng-container *ngIf="previousReview as review">
+      <p>
+        Coincidencias únicas: <strong>{{ review.matched | number }}</strong>.
+        Exclusiones nuevas: <strong>{{ review.new_exclusions | number }}</strong>.
+        Ya excluidos: {{ review.already_excluded_count | number }}.
+        Conflictos: {{ review.conflict_count | number }}.
+      </p>
+      <div class="scroll-table">
+        <table>
+          <thead><tr><th>Campaña anterior</th><th>Aceptados iVentas</th><th>Cruces</th><th>Nuevos únicos atribuidos</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let item of review.source_breakdown">
+              <td>#{{ item.source_campaign_id }}</td>
+              <td>{{ item.submitted_contacts | number }}</td>
+              <td>{{ item.overlap_contacts | number }}</td>
+              <td>{{ item.unique_assigned | number }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div *ngIf="data.canManageDispatchConfig && review.can_apply && review.new_exclusions > 0"
+        class="confirmation">
+        <strong *ngIf="review.new_exclusions >= 10">
+          Es una exclusión masiva; revisa la audiencia y confirma el total.
+        </strong>
+        <mat-form-field appearance="outline">
+          <mat-label>Escribe EXCLUIR {{ review.new_exclusions }}</mat-label>
+          <input matInput [formControl]="confirmPreviousControl">
+        </mat-form-field>
+        <button mat-flat-button color="warn" type="button" (click)="applyPrevious()"
+          [disabled]="!canApplyPrevious">Excluir contactos previos</button>
+      </div>
+    </ng-container>
+  </section>
+  <p class="muted">Después de aplicar cualquier exclusión, vuelve a generar preflight.
+    El fingerprint anterior deja de ser válido.</p>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-flat-button type="button" (click)="close()" [disabled]="busy">Cerrar</button>
+</mat-dialog-actions>
