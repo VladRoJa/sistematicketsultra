@@ -163,8 +163,13 @@ def test_existing_child_must_be_exact_ready_or_held_snapshot():
         NS(sucursal_canon="A", status="SUBMITTED"),
         NS(sucursal_canon="B", status="HELD"),
     ]
-    with pytest.raises(approval.CampaignV2ApprovalConflictError):
-        manifest._validate_existing(p, rows_by_name, children)
+    # The fixture is intentionally minimal: stub serialization, then verify
+    # the impossible SUBMITTED state is rejected before any persistence.
+    with patch.object(manifest, "build_provider_campaign_idempotency_key", return_value="key"), \
+         patch.object(manifest, "build_campaign_v2_provider_dispatch_batch", return_value=NS()), \
+         patch.object(manifest, "serialize_campaign_v2_provider_request_snapshot", return_value={}):
+        with pytest.raises(approval.CampaignV2ApprovalConflictError):
+            manifest._validate_existing(p, rows_by_name, children)
 
 
 def test_materialization_never_imports_provider_dispatch():
