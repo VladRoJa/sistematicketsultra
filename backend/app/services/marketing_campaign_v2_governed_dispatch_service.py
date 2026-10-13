@@ -182,6 +182,7 @@ def _check_child_identities(*, plan: Any, manifest: dict, children: list):
                     dict(row.hold_evidence_json or {}) != definition["hold_evidence"] or
                     row.held_at is None or row.held_by_user_id is None or
                     row.submit_started_at is not None or
+                    row.submitted_at is not None or
                     row.provider_campaign_id is not None):
                 raise GovernedDispatchConflict("HELD modificado o intentado.")
         elif row.status not in {"READY", "SUBMITTED"}:
@@ -190,7 +191,9 @@ def _check_child_identities(*, plan: Any, manifest: dict, children: list):
             if not row.provider_campaign_id or row.submitted_at is None:
                 raise GovernedDispatchConflict("SUBMITTED carece de identidad provider.")
         elif (row.submit_started_at is not None or row.provider_campaign_id is not None or
-              row.submitted_at is not None or row.hold_reason is not None):
+              row.submitted_at is not None or row.hold_reason is not None or
+              row.held_at is not None or row.held_by_user_id is not None or
+              bool(row.hold_evidence_json or {})):
             raise GovernedDispatchConflict("READY modificado o intentado.")
 
 
@@ -308,6 +311,17 @@ def execute_governed_child(
             raise GovernedDispatchConflict("No existen children READY autorizables.")
         # A prior accepted child must be immutable. Other states are blocked
         # by _check_child_identities. No out-of-order or parallel sends.
+        # An already accepted prefix must match the one durable execution
+        # history. A foreign/manual SUBMITTED row cannot authorize the suffix.
+        statuses = [by_branch[b.sucursal_canon].status for b in original_ready]
+        if statuses != ["SUBMITTED"] * statuses.count("SUBMITTED") + (
+                ["READY"] * statuses.count("READY")):
+            raise GovernedDispatchConflict("Orden de envíos previo inconsistente.")
+        submitted = [by_branch[b.sucursal_canon] for b in original_ready
+                     if by_branch[b.sucursal_canon].status == "SUBMITTED"]
+        prior_id = int(submitted[-1].id) if submitted else None
+        if execution.last_child_id != prior_id:
+            raise GovernedDispatchConflict("Historial de ejecución incompatible.")
         first_pending = pending[0]
         row = by_branch[first_pending.sucursal_canon]
         if int(row.id) != child_id:
