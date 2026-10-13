@@ -33,6 +33,8 @@ export class MarketingCampaignV2QuotaAdminDialogComponent implements OnInit {
   busy = false;
   error = '';
   success = '';
+  showPolicyForm = false;
+  showCapacityForm = false;
 
   readonly channelId = new FormControl('', { nonNullable: true });
   readonly portfolioKey = new FormControl('', { nonNullable: true });
@@ -52,6 +54,12 @@ export class MarketingCampaignV2QuotaAdminDialogComponent implements OnInit {
 
   ngOnInit(): void { this.reload(); }
   close(): void { this.dialogRef.close(); }
+  togglePolicyForm(): void {
+    if (!this.busy) { this.showPolicyForm = !this.showPolicyForm; }
+  }
+  toggleCapacityForm(): void {
+    if (!this.busy) { this.showCapacityForm = !this.showCapacityForm; }
+  }
 
   get canSavePolicy(): boolean {
     const n = this.nominalLimit.value.trim();
@@ -112,6 +120,7 @@ export class MarketingCampaignV2QuotaAdminDialogComponent implements OnInit {
       next: row => {
         this.busy = false;
         this.success = 'Política #' + row.revision_id + ' registrada. Cupo real pendiente de observar.';
+        this.showPolicyForm = false;
         this.reload();
       },
       error: err => this.handleError(err),
@@ -134,6 +143,7 @@ export class MarketingCampaignV2QuotaAdminDialogComponent implements OnInit {
       next: row => {
         this.busy = false;
         this.success = 'Evidencia #' + row.attestation_id + ' guardada; no equivale a verificación automática con Meta.';
+        this.showCapacityForm = false;
         this.reload();
       },
       error: err => this.handleError(err),
