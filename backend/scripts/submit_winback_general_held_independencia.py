@@ -188,11 +188,12 @@ def main() -> int:
             print("FINGERPRINT =", plan.dispatch_fingerprint)
             print("CONGELADOS =", plan.frozen_count)
             print("ENVIABLES =", len(plan.sendable_phones))
-            print("HELD =", HELD_BRANCH, HELD_COUNT, "cap_reportado =", HELD_CAP)
+            for branch, count in HELD_BRANCHES.items():
+                print("HELD =", branch, count, "cap_reportado =", HELD_CAP)
             print("READY_BATCHES =", len(expected_ready))
             print("READY_RECIPIENTS =", sum(expected_ready.values()))
-            print("INSURGENTES =", INSURGENTES_COUNT)
-            print("ESTIMACION_CAPACIDAD_NO_ES_CONSULTA_EN_TIEMPO_REAL_META = True")
+            print("INSURGENTES_RETENIDA = TRUE")
+            print("CUPO_RESTANTE_OTROS_23_NO_VERIFICADO_POR_META = True")
             print("OPERACION =", "APPLY_REAL_SEND" if args.apply else "READ_ONLY")
             print("PROVIDER_CALLS_PREPARATION = 0", flush=True)
 
@@ -200,23 +201,14 @@ def main() -> int:
                 print("DRY_RUN_OK = TRUE")
                 return 0
 
-            # Human attestation is explicit and recorded; this service has no
-            # real-time Meta remaining-capacity API. Without evidence, no send.
+            # Only reported nominal limits exist; do not claim live quota was checked.
             require(
-                type(args.insurgentes_remaining) is int
-                and INSURGENTES_COUNT <= args.insurgentes_remaining <= 250,
-                "Falta confirmación de cupo RESTANTE >=68 para INSURGENTES",
+                args.acknowledge_quota_uncertainty is True,
+                "Debes reconocer que no se pudo verificar cupo restante Meta",
             )
-            require(
-                isinstance(args.capacity_evidence, str)
-                and len(args.capacity_evidence.strip()) >= 20
-                and len(args.capacity_evidence.strip()) <= 500,
-                "Evidencia de cupo ausente o inválida",
-            )
-            require(args.other_channels_reviewed, "Falta revisión de capacidad en otros 23 canales")
             require(
                 args.approved_contact_count == SEND_COUNT,
-                "Total a enviar no confirmado explícitamente",
+                "Total exacto de contactos no autorizado",
             )
 
             key = str(app.config.get("IVENTAS_CAMPAIGN_SEND_API_KEY") or "")
@@ -229,23 +221,23 @@ def main() -> int:
             provider = IVentasBroadcastProvider(api_key=key, base_url=base_url)
             attested_at = datetime.now(timezone.utc)
             hold_manifest = {
-                HELD_BRANCH: {
+                branch: {
                     "reason": HELD_REASON,
                     "evidence": {
                         "kind": "CHANNEL_DAILY_QUOTA",
                         "reported_daily_cap": HELD_CAP,
-                        "held_recipient_count": HELD_COUNT,
-                        "estimated_insurgentes_remaining": args.insurgentes_remaining,
-                        "operator_attestation": args.capacity_evidence.strip(),
-                        "other_channels_reviewed": True,
+                        "held_recipient_count": count,
+                        "reason": "OPERATOR_HELD_LIMITED_PORTFOLIO",
+                        "remaining_capacity_unverified": True,
                         "approved_ready_recipient_count": SEND_COUNT,
                         "attested_at_utc": attested_at.isoformat(),
                         "operator_user_id": int(actor.id),
                     },
-                },
+                }
+                for branch, count in HELD_BRANCHES.items()
             }
 
-            # ONE DB commit of all children: 24 READY + one HELD.
+            # ONE DB commit of all children: 23 READY + two HELD.
             # No provider call can happen before durable hold state.
             _prepare_provider_campaign_rows(
                 plan=plan,
@@ -262,18 +254,21 @@ def main() -> int:
                 expected_submitted={},
                 expected_failed={},
                 expected_ready=expected_ready,
-                expected_held={HELD_BRANCH: (HELD_COUNT, HELD_REASON)},
+                expected_held={
+                    branch: (count, HELD_REASON)
+                    for branch, count in HELD_BRANCHES.items()
+                },
                 session=db.session,
             )
             require(
-                len(review.ready_children) == 24
+                len(review.ready_children) == 23
                 and sum(len(c.batch.recipients) for c in review.ready_children)
                 == SEND_COUNT,
                 "Revisión post-persistencia no coincide; NO enviar",
             )
 
             print("HELD_PERSISTED = TRUE", flush=True)
-            print("INICIANDO_ENVIO_REAL_24_LOTES = TRUE", flush=True)
+            print("INICIANDO_ENVIO_REAL_23_LOTES = TRUE", flush=True)
             results = continue_ready_children(
                 review=review,
                 actor_user_id=int(actor.id),
@@ -289,9 +284,10 @@ def main() -> int:
                 )
             accepted = sum(1 for _, status, _ in results if status == "SUBMITTED")
             print("NEW_SUBMITTED_BATCHES =", accepted)
-            print("UNATTEMPTED_READY =", 24 - len(results))
-            print("INDEPENDENCIA_HELD =", HELD_COUNT)
-            if len(results) != 24 or accepted != 24:
+            print("UNATTEMPTED_READY =", 23 - len(results))
+            for branch, count in HELD_BRANCHES.items():
+                print(branch + "_HELD =", count)
+            if len(results) != 23 or accepted != 23:
                 print("PARTIAL_FAILURE = TRUE; DO_NOT_RERUN_APPLY", flush=True)
                 return 2
             print("PARTIAL_SUBMIT_ACCEPTED = TRUE")
