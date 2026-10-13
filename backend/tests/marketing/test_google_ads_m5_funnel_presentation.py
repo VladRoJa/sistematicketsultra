@@ -70,11 +70,17 @@ def test_m5_reader_failure_never_overwrites_existing_funnel_payload(monkeypatch)
         raise RuntimeError("Source requires review")
 
     monkeypatch.setattr(cutoff, "read_google_ads_branch_attribution", fail)
-    with pytest.raises(RuntimeError, match="requires review"):
-        cutoff._attach_google_ads_branch_attribution(
-            payload=payload,
-            month_start=date(2026, 10, 1),
-            cutoff_date=date(2026, 10, 8),
-            access=_access(global_=False),
-        )
+    cutoff._attach_google_ads_branch_attribution(
+        payload=payload,
+        month_start=date(2026, 10, 1),
+        cutoff_date=date(2026, 10, 8),
+        access=_access(global_=False),
+    )
+    evidence = payload.pop("google_ads_branch_attribution")
     assert payload == old
+    assert evidence["status"] == "requires_review"
+    assert evidence["scope_attributed_cost"] is None
+    assert evidence["rows"] == []
+    assert "account_cost_observed" not in evidence
+    assert "unassigned_cost_observed" not in evidence
+    assert evidence["complete_to_cutoff"] is False
