@@ -620,7 +620,7 @@ class MarketingCampaignV2DispatchApprovalORM(db.Model):
     campaign_v2_id = db.Column(
         db.BigInteger,
         db.ForeignKey("marketing_campaign_v2_campaigns.id", ondelete="RESTRICT"),
-        nullable=False, unique=True,
+        nullable=False,
     )
     template_id = db.Column(
         db.BigInteger, db.ForeignKey("marketing_campaign_v2_templates.id", ondelete="RESTRICT"),
@@ -637,6 +637,7 @@ class MarketingCampaignV2DispatchApprovalORM(db.Model):
     expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
 
     __table_args__ = (
+        db.UniqueConstraint("campaign_v2_id", name="uq_mkt_v2_approval_campaign"),
         db.CheckConstraint("recipient_count > 0", name="ck_mkt_v2_approval_recipients"),
         db.CheckConstraint("approved_estimated_mxn >= 0", name="ck_mkt_v2_approval_cost"),
         db.CheckConstraint("length(dispatch_fingerprint) = 64", name="ck_mkt_v2_approval_fingerprint"),
