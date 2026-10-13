@@ -416,3 +416,32 @@ def test_d3c_held_release_intent_cannot_override_send_or_unhold(client, global_a
     assert response.json["held_released"] is False
     intent.assert_called_once()
     provider.assert_not_called()
+
+
+def test_d3c2_freeze_requires_global_authority_and_refuses_send_override(
+    client, global_access, partial_access,
+):
+    browser, headers = client
+    url = "/api/marketing/campaigns-v2/77/dispatch/held/100/freeze-derived"
+    body = {"intent_id":55, "expected_candidate_fingerprint":"a"*64,
+            "expected_recipient_count":5}
+    with auth(partial_access), patch.object(routes, "freeze_derived_held_cohort") as freeze:
+        denied = browser.post(url, json=body, headers=headers)
+    assert denied.status_code == 403
+    freeze.assert_not_called()
+
+    with auth(global_access), patch.object(routes, "freeze_derived_held_cohort") as freeze:
+        denied = browser.post(url, json={**body,"send_enabled":True}, headers=headers)
+    assert denied.status_code == 400
+    freeze.assert_not_called()
+
+    with auth(global_access), patch.object(
+        routes, "freeze_derived_held_cohort",
+        return_value={"derived_campaign_id":999, "status":"FROZEN_DERIVED",
+                      "provider_calls":0, "send_authorized":False},
+    ) as freeze, patch.object(routes, "IVentasBroadcastProvider") as provider:
+        result = browser.post(url, json=body, headers=headers)
+    assert result.status_code == 201
+    assert result.json["send_authorized"] is False
+    freeze.assert_called_once()
+    provider.assert_not_called()

@@ -57,6 +57,9 @@ from app.services.marketing_campaign_v2_quota_service import (
     register_quota_capacity,
     assess_preflight_capacity,
 )
+from app.services.marketing_campaign_v2_held_derived_cohort_service import (
+    freeze_derived_held_cohort,
+)
 from app.services.marketing_campaign_v2_held_release_intent_service import (
     HeldReleaseConflict,
     HeldReleaseNotFound,
@@ -1471,6 +1474,41 @@ def campaign_v2_governed_resolve_endpoint(campaign_id: int, execution_id: int):
     except Exception:
         db.session.rollback()
         return _error("Error al resolver ejecución gobernada.", 500)
+
+
+@marketing_campaign_v2_bp.post(
+    "/campaigns-v2/<int:campaign_id>/dispatch/held/<int:child_id>/freeze-derived"
+)
+@jwt_required()
+def campaign_v2_held_freeze_derived_endpoint(campaign_id: int, child_id: int):
+    """D3c2: frozen cohort and intent link only, no provider or dispatch."""
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        payload = _parse_payload({
+            "intent_id", "expected_candidate_fingerprint", "expected_recipient_count",
+        })
+        return jsonify(freeze_derived_held_cohort(
+            source_campaign_id=campaign_id, source_child_id=child_id,
+            intent_id=payload.get("intent_id"),
+            expected_candidate_fingerprint=payload.get("expected_candidate_fingerprint"),
+            expected_recipient_count=payload.get("expected_recipient_count"),
+            actor_user_id=int(user.id),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except HeldReleaseNotFound as exc:
+        return _error(str(exc), 404)
+    except (HeldReleaseValidation, MarketingCampaignV2RouteValidationError) as exc:
+        return _error(str(exc), 400)
+    except HeldReleaseConflict as exc:
+        db.session.rollback()
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("Error al congelar cohorte HELD derivada.", 500)
 
 
 @marketing_campaign_v2_bp.get(
