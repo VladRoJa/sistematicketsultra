@@ -84,9 +84,10 @@ def test_provider_only_sees_committed_inflight_and_replay_cannot_post():
             plan = NS(campaign_id=99, batches=(batch,))
             manifest = {"A": {"planned_status": "READY"}}
 
-            def synthetic_review(**_kwargs):
-                # The real child row is the ORM instance participating in commit.
-                return (NS(id=9), plan, manifest, [session.get(Child, 100)], DIGEST)
+            def synthetic_review(**kwargs):
+                # Each HTTP-like request uses its own SQLAlchemy session.
+                current_session = kwargs["session"]
+                return (NS(id=9), plan, manifest, [current_session.get(Child, 100)], DIGEST)
 
             class SyntheticProvider:
                 calls = 0
@@ -107,6 +108,21 @@ def test_provider_only_sees_committed_inflight_and_replay_cannot_post():
                     assert (current_child, current_gate, claim) == (
                         "SUBMITTING", "IN_FLIGHT", 100,
                     )
+                    # A competing request arrives while the first request
+                    # is inside the external HTTP-like provider call.
+                    with Session(engine) as competing:
+                        with pytest.raises(
+                            svc.GovernedDispatchConflict, match="usada"
+                        ):
+                            svc.execute_governed_child(
+                                campaign_id=99, execution_id=41, child_id=100,
+                                expected_digest=DIGEST, actor_user_id=7,
+                                provider=self, send_enabled=True,
+                                governed_enabled=True,
+                                allowed_sucursal_keys=None,
+                                session=competing, now=NOW,
+                            )
+                    assert self.calls == 1
                     return NS(
                         provider_campaign_id="FAKE-NOT-A-REAL-ACCOUNT",
                         deduplicated=False, response_metadata={"synthetic": True},
