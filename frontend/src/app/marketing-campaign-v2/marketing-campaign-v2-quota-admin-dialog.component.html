@@ -1,0 +1,133 @@
+<h2 mat-dialog-title>Control de capacidad WhatsApp · evidencia operativa</h2>
+<mat-dialog-content class="quota-admin">
+  <p>Registro manual de la capacidad reportada por un operador.
+    Suite no consulta en tiempo real a Meta ni garantiza disponibilidad.
+    No se habilita ningún envío desde esta pantalla.</p>
+  <p *ngIf="error" class="error" role="alert">{{ error }}</p>
+  <p *ngIf="success" role="status">{{ success }}</p>
+  <p *ngIf="busy" role="status">Cargando o guardando…</p>
+
+  <section class="quota-section">
+    <h3>1. Asociación canal / portafolio</h3>
+    <p>Registra la cuenta, el número y el portafolio compartido. Si varios
+      canales usan el mismo portafolio, utiliza exactamente la misma clave.</p>
+    <div class="quota-grid">
+      <mat-form-field appearance="outline">
+        <mat-label>Canal iVentas activo</mat-label>
+        <mat-select [formControl]="channelId">
+          <mat-option *ngFor="let channel of channels" [value]="channel.provider_channel_id"
+            [disabled]="!channel.is_active">
+            {{ channel.sucursal_canon }} · {{ channel.provider_channel_id }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Clave portafolio Meta</mat-label>
+        <input matInput [formControl]="portfolioKey" placeholder="portfolio-marketing-01">
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Cuenta WhatsApp (alias, sin token)</mat-label>
+        <input matInput [formControl]="accountKey">
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Número (alias, sin secreto)</mat-label>
+        <input matInput [formControl]="phoneAlias">
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Límite nominal por canal (opcional)</mat-label>
+        <input matInput inputmode="numeric" [formControl]="nominalLimit"
+          placeholder="No es cupo restante">
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Zona de reinicio (IANA)</mat-label>
+        <input matInput [formControl]="timezone" placeholder="America/Tijuana">
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Fuente documental de la política</mat-label>
+        <input matInput maxlength="255" [formControl]="policySource">
+      </mat-form-field>
+    </div>
+    <button mat-flat-button color="primary" type="button" (click)="savePolicy()"
+      [disabled]="!canSavePolicy">Registrar revisión de política</button>
+  </section>
+
+  <section class="quota-section">
+    <h3>2. Cupo real reportado: canal y portafolio</h3>
+    <p>Para diagnosticar cada lote se requiere evidencia vigente <strong>del canal y del
+      portafolio</strong>. Registra ambas observaciones con el cupo realmente
+      restante, fuente, cierre de ventana y caducidad.</p>
+    <div class="quota-grid">
+      <mat-form-field appearance="outline">
+        <mat-label>Ámbito</mat-label>
+        <mat-select [formControl]="scopeKind">
+          <mat-option value="CHANNEL">Canal</mat-option>
+          <mat-option value="PORTFOLIO">Portafolio compartido</mat-option>
+        </mat-select>
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Clave exacta del ámbito</mat-label>
+        <input matInput [formControl]="scopeKey">
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Mensajes restantes observados</mat-label>
+        <input matInput inputmode="numeric" [formControl]="remaining">
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Observado en (ISO con zona)</mat-label>
+        <input matInput [formControl]="observedAt" placeholder="2026-10-13T09:00:00-07:00">
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Caduca en (ISO con zona)</mat-label>
+        <input matInput [formControl]="expiresAt" placeholder="2026-10-13T10:00:00-07:00">
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Fin ventana (ISO con zona)</mat-label>
+        <input matInput [formControl]="windowEndsAt" placeholder="2026-10-14T09:00:00-07:00">
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Evidencia / comprobante</mat-label>
+        <input matInput maxlength="255" [formControl]="capacitySource">
+      </mat-form-field>
+    </div>
+    <button mat-flat-button color="primary" type="button" (click)="saveCapacity()"
+      [disabled]="!canSaveCapacity">Registrar observación</button>
+  </section>
+
+  <section class="quota-section" *ngIf="evidence as data">
+    <h3>Histórico de referencia</h3>
+    <p>{{ data.policies.length }} políticas y {{ data.attestations.length }} observaciones
+      en las últimas revisiones. Los registros son históricos; actualizar no los elimina.</p>
+    <div class="quota-scroll">
+      <table>
+        <thead><tr><th>Canal</th><th>Portafolio</th><th>Cuenta/número</th><th>Nominal</th><th>Fuente</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let policy of data.policies">
+            <td>{{ policy.provider_channel_id }}</td>
+            <td>{{ policy.portfolio_key }}</td>
+            <td>{{ policy.account_key }} / {{ policy.phone_alias }}</td>
+            <td>{{ policy.nominal_channel_limit ?? 'Sin dato' }}</td>
+            <td>{{ policy.source_reference }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="quota-scroll">
+      <table>
+        <thead><tr><th>Ámbito</th><th>Clave</th><th>Restantes</th><th>Caduca</th><th>Fuente</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let attestation of data.attestations">
+            <td>{{ attestation.scope_kind }}</td>
+            <td>{{ attestation.scope_key }}</td>
+            <td>{{ attestation.remaining_messages | number }}</td>
+            <td>{{ attestation.expires_at | date:'short' }}</td>
+            <td>{{ attestation.source_reference }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-stroked-button type="button" (click)="reload()" [disabled]="busy">Actualizar</button>
+  <button mat-flat-button type="button" (click)="close()" [disabled]="busy">Cerrar</button>
+</mat-dialog-actions>
