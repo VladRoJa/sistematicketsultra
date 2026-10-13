@@ -2017,6 +2017,41 @@ class MarketingIventasSyncRunORM(db.Model):
     )
 
 
+class MarketingIventasBranchFailureORM(db.Model):
+    """Solo identidad y clase de fallo. Nunca mensajes, payloads ni tokens."""
+    __tablename__ = "marketing_iventas_branch_failures"
+
+    sync_run_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_iventas_sync_runs.id", ondelete="CASCADE"),
+        primary_key=True,
+        nullable=False,
+    )
+    branch_code = db.Column(db.String(100), primary_key=True, nullable=False)
+    error_type = db.Column(db.String(64), nullable=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=_utc_now,
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "length(trim(branch_code)) BETWEEN 1 AND 100",
+            name="ck_iventas_branch_failures_code",
+        ),
+        db.CheckConstraint(
+            "error_type IN ("
+            "'ALIAS_UNRESOLVED', "
+            "'ALIAS_AMBIGUOUS_DESTINATION', "
+            "'MarketingIventasBranchResolutionError', "
+            "'MarketingIventasBranchSyncError', "
+            "'IventasClientError', "
+            "'UNEXPECTED_BRANCH_ABORT'"
+            ")",
+            name="ck_iventas_branch_failures_type",
+        ),
+    )
+
+
 class MarketingIventasRawPageORM(db.Model):
     __tablename__ = "marketing_iventas_raw_pages"
 

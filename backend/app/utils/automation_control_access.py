@@ -13,3 +13,11 @@ def can_read_automation_control(user: object | None) -> bool:
     role = str(getattr(user, "rol", "") or "").strip().upper()
 
     return username == "ADMICORP"
+
+
+def can_read_automation_logs(user: object | None) -> bool:
+    """Permiso de diagnóstico independiente; M1 solo ADMICORP."""
+    if user is None:
+        return False
+    username = str(getattr(user, "username", "") or "").strip().upper()
+    return username == "ADMICORP"

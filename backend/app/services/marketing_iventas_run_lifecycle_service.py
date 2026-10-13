@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.extensions import db
-from app.models import MarketingIventasSyncRunORM
+from app.models import MarketingIventasSyncRunORM, MarketingIventasBranchFailureORM
 
 
 SYNC_STATUS_RUNNING = "RUNNING"
@@ -342,6 +342,7 @@ def finalize_iventas_sync_run(
     make_canonical: bool = False,
     finished_at: datetime | None = None,
     session: Any | None = None,
+    branch_failures: tuple[tuple[str, str], ...] = (),
 ) -> MarketingIventasFinalizeResult:
     """Finaliza un sync_run y opcionalmente lo hace canónico.
 
@@ -399,6 +400,35 @@ def finalize_iventas_sync_run(
     session_value = _session_or_default(
         session
     )
+
+    # Se valida ANTES de la escritura y antes de modificar canonicalidad.
+    allowed_failure_types = frozenset({
+        "ALIAS_UNRESOLVED",
+        "ALIAS_AMBIGUOUS_DESTINATION",
+        "MarketingIventasBranchResolutionError",
+        "MarketingIventasBranchSyncError",
+        "IventasClientError",
+        "UNEXPECTED_BRANCH_ABORT",
+    })
+    if not isinstance(branch_failures, tuple):
+        raise TypeError("branch_failures debe ser tupla inmutable.")
+    observed_codes: set[str] = set()
+    for item in branch_failures:
+        if not isinstance(item, tuple) or len(item) != 2:
+            raise ValueError("Entrada de fallo inválida.")
+        code, kind = item
+        if (
+            not isinstance(code, str)
+            or not code.strip()
+            or code != code.strip()
+            or len(code) > 100
+            or code in observed_codes
+            or kind not in allowed_failure_types
+        ):
+            raise ValueError("Clasificación o identidad de fallo inválida.")
+        observed_codes.add(code)
+    if status_value == SYNC_STATUS_COMPLETED and branch_failures:
+        raise ValueError("Un run COMPLETED no puede registrar fallos de sucursal.")
 
     replaced_canonical_run_id = None
 
@@ -482,6 +512,26 @@ def finalize_iventas_sync_run(
                 counters=counters,
                 make_canonical=make_canonical,
             ):
+                # La idempotencia incluye también la evidencia persistida
+                # por sucursal, no solo status y contadores agregados.
+                # Una llamada divergente debe fallar sin escribir ni
+                # simular una finalización correcta.
+                if status_value != SYNC_STATUS_COMPLETED:
+                    persisted = (
+                        session_value.query(MarketingIventasBranchFailureORM)
+                        .filter_by(sync_run_id=sync_run_id)
+                        .all()
+                    )
+                    stored = {
+                        row.branch_code: row.error_type
+                        for row in persisted
+                    }
+                    if stored != dict(branch_failures):
+                        raise MarketingIventasRunLifecycleError(
+                            "El sync_run ya fue finalizado con "
+                            "evidencia de sucursales diferente."
+                        )
+
                 return MarketingIventasFinalizeResult(
                     sync_run_id=int(
                         run.id
@@ -550,6 +600,17 @@ def finalize_iventas_sync_run(
         run.status = status_value
         run.finished_at = finished
         run.is_canonical = make_canonical
+
+        # Mismo COMMIT que status/canonicalidad. PK compuesta impide duplicados.
+        if branch_failures:
+            session_value.add_all([
+                MarketingIventasBranchFailureORM(
+                    sync_run_id=sync_run_id,
+                    branch_code=code,
+                    error_type=kind,
+                )
+                for code, kind in branch_failures
+            ])
 
         session_value.commit()
 
