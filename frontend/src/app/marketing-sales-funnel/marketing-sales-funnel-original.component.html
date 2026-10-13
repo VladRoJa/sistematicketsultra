@@ -121,6 +121,97 @@
   </section>
 
   <ng-container *ngIf="showDashboard">
+    <section
+      *ngIf="investmentSourcesView as ads"
+      class="ads-source-strip"
+      aria-label="Inversión por fuente de publicidad"
+    >
+      <div class="ads-source-strip__head">
+        <h2>Inversión publicitaria por fuente</h2>
+        <span>Importes MXN · corte seleccionado</span>
+      </div>
+      <div class="ads-source-strip__totals">
+        <div class="ads-source-strip__metric">
+          <span>Meta Ads · asignada a sucursales</span>
+          <strong>{{ ads.metaValue }}</strong>
+        </div>
+        <div class="ads-source-strip__metric">
+          <span>Google Ads · cuenta completa</span>
+          <strong>{{ ads.googleValue }}</strong>
+        </div>
+        <div class="ads-source-strip__metric">
+          <span>Meta asignada + Google · mismo corte</span>
+          <strong>{{ ads.totalValue }}</strong>
+        </div>
+      </div>
+      <p class="ads-source-strip__coverage">{{ ads.googleCoverage }}</p>
+      <p *ngIf="ads.googleMetrics" class="ads-source-strip__coverage">
+        {{ ads.googleMetrics }}
+      </p>
+      <p class="ads-source-strip__note">{{ ads.note }}</p>
+    </section>
+
+    <section
+      *ngIf="googleBranchAttributionView as attribution"
+      class="google-branch-attribution"
+      aria-label="Atribución histórica Google Ads por sucursal"
+    >
+      <div class="google-branch-attribution__heading">
+        <div>
+          <p class="google-branch-attribution__kicker">Fuente complementaria · solo lectura</p>
+          <h2>{{ attribution.title }}</h2>
+        </div>
+        <span class="google-branch-attribution__status"
+          [class.google-branch-attribution__status--complete]="attribution.status === 'complete'"
+          [class.google-branch-attribution__status--partial]="attribution.status === 'partial'"
+        >{{ attribution.statusLabel }}</span>
+      </div>
+
+      <p class="google-branch-attribution__coverage">{{ attribution.coverage }}</p>
+
+      <div class="google-branch-attribution__totals">
+        <div class="google-branch-attribution__total">
+          <span>Google Ads atribuido al alcance</span>
+          <strong>{{ attribution.scopeValue }}</strong>
+        </div>
+        <div *ngIf="attribution.accountValue !== null" class="google-branch-attribution__total">
+          <span>Gasto de cuenta observado</span>
+          <strong>{{ attribution.accountValue }}</strong>
+        </div>
+        <div *ngIf="attribution.unassignedValue !== null" class="google-branch-attribution__total">
+          <span>Sin asignar · solo vista global</span>
+          <strong>{{ attribution.unassignedValue }}</strong>
+        </div>
+      </div>
+
+      <div *ngIf="attribution.rows.length" class="google-branch-attribution__table-wrap">
+        <table class="google-branch-attribution__table">
+          <thead>
+            <tr>
+              <th scope="col">Sucursal</th>
+              <th scope="col">Inversión</th>
+              <th scope="col">Clics</th>
+              <th scope="col">Impresiones</th>
+              <th scope="col">Pases Ads</th>
+              <th scope="col">Compras Ads</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of attribution.rows">
+              <th scope="row">{{ row.branch }}</th>
+              <td>{{ row.cost }}</td>
+              <td>{{ row.clicks }}</td>
+              <td>{{ row.impressions }}</td>
+              <td>{{ row.passes }}</td>
+              <td>{{ row.purchases }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="google-branch-attribution__note">{{ attribution.note }}</p>
+    </section>
+
     <app-marketing-sales-funnel-original-story
       [month]="selectedMonth"
       [cutoffDate]="dashboard?.selected_cutoff_date || null"
