@@ -10,6 +10,7 @@ from .user_model import UserORM
 from .google_ads_oauth import GoogleAdsOAuthCredentialORM
 from .google_ads_daily import GoogleAdsDailyMetricORM
 from .google_ads_ad_group_daily import GoogleAdsAdGroupDailyMetricORM
+from .google_ads_branch_identity_mapping import GoogleAdsBranchIdentityMappingORM
 from .sucursal_model import Sucursal, SucursalOperationalStatus
 from .inventario import (
     InventarioGeneral,
@@ -190,6 +191,7 @@ __all__ = [
     "UserORM",
     "GoogleAdsOAuthCredentialORM",
     "GoogleAdsDailyMetricORM",
+    "GoogleAdsBranchIdentityMappingORM",
     "Sucursal",
     "InventarioGeneral",
     "InventarioSucursal",
