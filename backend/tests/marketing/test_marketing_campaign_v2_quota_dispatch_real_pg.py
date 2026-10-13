@@ -14,6 +14,9 @@ from sqlalchemy.orm import Session
 from app.models.marketing import (
     MarketingCampaignV2ProviderCampaignORM as Child,
     MarketingCampaignV2GovernedExecutionORM as Execution,
+    MarketingCampaignV2ORM as Campaign,
+    MarketingCampaignV2RecipientORM as Recipient,
+    MarketingCampaignV2BlacklistORM as Blacklist,
 )
 from app.services import marketing_campaign_v2_governed_dispatch_service as svc
 
@@ -39,12 +42,14 @@ def _tables():
     for name, col, typ in [
         ("users", "id", sa.Integer),
         ("sucursales", "sucursal_id", sa.Integer),
-        ("marketing_campaign_v2_campaigns", "id", sa.BigInteger),
         ("marketing_campaign_v2_channel_bindings", "id", sa.BigInteger),
         ("marketing_campaign_v2_templates", "id", sa.BigInteger),
         ("marketing_campaign_v2_dispatch_approvals", "id", sa.BigInteger),
     ]:
         stub[name] = sa.Table(name, md, sa.Column(col, typ, primary_key=True))
+    Campaign.__table__.to_metadata(md)
+    Recipient.__table__.to_metadata(md)
+    Blacklist.__table__.to_metadata(md)
     Child.__table__.to_metadata(md)
     Execution.__table__.to_metadata(md)
     return md, stub
@@ -58,7 +63,8 @@ def test_provider_only_sees_committed_inflight_and_replay_cannot_post():
         with Session(engine) as session:
             session.execute(stub["users"].insert().values(id=7))
             session.execute(stub["sucursales"].insert().values(sucursal_id=1))
-            session.execute(stub["marketing_campaign_v2_campaigns"].insert().values(id=99))
+            session.add(Campaign(id=99, name="Synthetic", purpose="REACTIVATION", source="EXPIRED", audience_definition_json={}, created_by_user_id=7))
+            session.flush()
             session.execute(stub["marketing_campaign_v2_channel_bindings"].insert().values(id=101))
             session.execute(stub["marketing_campaign_v2_templates"].insert().values(id=2))
             session.execute(stub["marketing_campaign_v2_dispatch_approvals"].insert().values(id=9))
@@ -68,7 +74,7 @@ def test_provider_only_sees_committed_inflight_and_replay_cannot_post():
                 provider_channel_id="synthetic-only", template_id=2,
                 template_name="no-send-fixture", recipient_count=5,
                 dispatch_fingerprint="b"*64, idempotency_key="c"*64,
-                status="READY", request_snapshot_json={},
+                status="READY", request_snapshot_json={"provider_channel_id":"synthetic-only","leads":[{"phone":"5216861234501"},{"phone":"5216861234502"},{"phone":"5216861234503"},{"phone":"5216861234504"},{"phone":"5216861234505"}]},
                 provider_response_json={}, created_by_user_id=7,
                 created_at=NOW, updated_at=NOW,
             ))
