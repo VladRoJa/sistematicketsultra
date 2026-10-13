@@ -300,6 +300,44 @@
               </table>
             </div>
           </section>
+          <section *ngIf="plan.quota as quota" class="budget-preview" aria-label="Cupo operativo por portafolio">
+            <h4>Capacidad operativa reportada · Sin autorización de envío</h4>
+            <p class="muted">
+              Evaluación de solo lectura basada en reportes manuales; Suite no verifica
+              en vivo Meta. Los números nominales diarios no son cupo restante.
+              El envío gobernado requiere aprobación y reserva adicionales.
+            </p>
+            <div class="preflight-summary-grid">
+              <div><span>Contactos sin bloqueos de cupo declarados</span>
+                <strong>{{ quota.reviewed_recipients | number }}</strong></div>
+              <div><span>Requieren revisar retención</span>
+                <strong>{{ quota.hold_recommended_recipients | number }}</strong></div>
+              <div><span>Evaluación</span><strong>{{ quota.status }}</strong></div>
+            </div>
+            <div class="table-wrap preflight-batches">
+              <table>
+                <thead>
+                  <tr><th>Sucursal</th><th>Portafolio</th><th>Contactos</th>
+                    <th>Cupo canal</th><th>Cupo portafolio</th><th>Resultado</th></tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let item of quota.batches">
+                    <td>{{ item.sucursal_canon }}</td>
+                    <td>{{ item.portfolio_key || 'Sin política' }}</td>
+                    <td>{{ item.recipients | number }}</td>
+                    <td>{{ item.channel_remaining ?? 'Sin evidencia' }}</td>
+                    <td>{{ item.portfolio_remaining ?? 'Sin evidencia' }}</td>
+                    <td>{{ item.blocking_reason || 'Revisión sin bloqueos declarados' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="muted">
+              Sin reserva de capacidad. Si otro canal del portafolio consumió cupo
+              después de la observación, se necesita evidencia nueva.
+            </p>
+          </section>
+
           <div *ngIf="preflightBlockedTotal() > 0" class="preflight-blockers">
             <strong>Bloqueos</strong>
             <span *ngIf="plan.blocked.missing_branch">Sucursal no resoluble: {{ plan.blocked.missing_branch }}</span>
