@@ -49,7 +49,7 @@ def test_static_manifest_and_model():
     assert sum(int(x["historical_cost_mxn"].replace(".", "")) for x in rows) == 1762473
     assert doc["status"] == "APPROVED_PROVISIONAL_XLSX"
     assert doc["scope"] == "HISTORICAL_XLSX_ONLY"
-    assert migration.down_revision == "c29f6a8d1e70"
+    assert migration.down_revision == "d92c15a8f63b"
     assert GoogleAdsBranchIdentityMappingORM.__tablename__ == migration.TABLE
 
 
