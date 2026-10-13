@@ -517,6 +517,106 @@ class MarketingCampaignV2CostRateRevisionORM(db.Model):
     )
 
 
+class MarketingCampaignV2QuotaPolicyRevisionORM(db.Model):
+    """Append-only channel/portfolio association, not a verified live quota."""
+
+    __tablename__ = "marketing_campaign_v2_quota_policy_revisions"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    provider_channel_id = db.Column(
+        db.String(255),
+        db.ForeignKey(
+            "marketing_campaign_v2_channel_bindings.provider_channel_id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
+    portfolio_key = db.Column(db.String(128), nullable=False)
+    account_key = db.Column(db.String(128), nullable=False)
+    phone_alias = db.Column(db.String(128), nullable=False)
+    nominal_channel_limit = db.Column(db.Integer, nullable=True)
+    reset_timezone = db.Column(db.String(80), nullable=False)
+    valid_from = db.Column(db.DateTime(timezone=True), nullable=False)
+    source_reference = db.Column(db.String(255), nullable=False)
+    created_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="RESTRICT"), nullable=False,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "nominal_channel_limit IS NULL OR nominal_channel_limit > 0",
+            name="ck_mkt_v2_quota_nominal_positive",
+        ),
+        db.CheckConstraint(
+            "length(trim(portfolio_key)) > 0 AND length(trim(account_key)) > 0 "
+            "AND length(trim(phone_alias)) > 0 "
+            "AND length(trim(reset_timezone)) > 0 "
+            "AND length(trim(source_reference)) > 0",
+            name="ck_mkt_v2_quota_policy_required",
+        ),
+        db.UniqueConstraint(
+            "provider_channel_id", "valid_from",
+            name="uq_mkt_v2_quota_channel_revision",
+        ),
+        db.Index(
+            "ix_mkt_v2_quota_policy_latest", "provider_channel_id", "valid_from",
+        ),
+    )
+
+
+class MarketingCampaignV2QuotaCapacityAttestationORM(db.Model):
+    """Append-only operator observation; no Meta API verification is implied."""
+
+    __tablename__ = "marketing_campaign_v2_quota_capacity_attestations"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    scope_kind = db.Column(db.String(20), nullable=False)
+    scope_key = db.Column(db.String(255), nullable=False)
+    observed_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    window_ends_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    remaining_messages = db.Column(db.Integer, nullable=False)
+    source_reference = db.Column(db.String(255), nullable=False)
+    created_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="RESTRICT"), nullable=False,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "scope_kind IN ('CHANNEL', 'PORTFOLIO')",
+            name="ck_mkt_v2_quota_capacity_scope",
+        ),
+        db.CheckConstraint(
+            "remaining_messages >= 0",
+            name="ck_mkt_v2_quota_capacity_nonnegative",
+        ),
+        db.CheckConstraint(
+            "observed_at < expires_at AND expires_at <= window_ends_at",
+            name="ck_mkt_v2_quota_capacity_window",
+        ),
+        db.CheckConstraint(
+            "length(trim(scope_key)) > 0 AND length(trim(source_reference)) > 0",
+            name="ck_mkt_v2_quota_capacity_evidence",
+        ),
+        db.UniqueConstraint(
+            "scope_kind", "scope_key", "observed_at",
+            name="uq_mkt_v2_quota_capacity_evidence_time",
+        ),
+        db.Index(
+            "ix_mkt_v2_quota_capacity_latest",
+            "scope_kind", "scope_key", "observed_at",
+        ),
+    )
+
+
 class MarketingCampaignV2ORM(db.Model):
     __tablename__ = "marketing_campaign_v2_campaigns"
 
