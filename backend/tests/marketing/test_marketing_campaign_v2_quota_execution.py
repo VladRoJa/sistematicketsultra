@@ -215,3 +215,14 @@ def test_expiration_while_waiting_for_lock_stops_before_provider_or_claim():
     provider.create_campaign.assert_not_called()
     session.commit.assert_not_called()
     session.rollback.assert_called_once()
+
+
+@pytest.fixture(autouse=True)
+def mock_shared_contact_gate_for_legacy_unit_tests(monkeypatch):
+    """Legacy unit fixtures use SQLite or isolated session stubs.
+
+    PostgreSQL concurrency and contact admissions are verified separately
+    in test_marketing_campaign_v2_quota_cross_campaign_gate_pg.py.
+    """
+    monkeypatch.setattr(svc, "acquire_campaign_v2_contact_gate", lambda session: None)
+    monkeypatch.setattr(svc, "verify_outbound_contact_admission", lambda **kwargs: None)
