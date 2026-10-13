@@ -596,3 +596,169 @@ def test_immediate_submit_keeps_schedule_fields_empty(
     assert all(row.provider_send_at is None for row in rows)
     assert all(row.scheduled_by_user_id is None for row in rows)
     assert all(row.request_snapshot_json["send_at"] is None for row in rows)
+
+
+# ── Audited channel quota hold (Campaign #15 one-off) ──
+
+
+def _test_held_batch_manifest():
+    return {
+        "TEC_MXL": {
+            "reason": "CHANNEL_DAILY_QUOTA",
+            "evidence": {
+                "source": "operator_confirmed",
+                "reported_limit": 250,
+                "recipient_count": 1,
+                "reason": "quota exceeded",
+            },
+        }
+    }
+
+
+def _held_review(monkeypatch, session, plan):
+    from app.services import marketing_campaign_v2_partial_resume_service as resume
+    monkeypatch.setattr(resume, "build_campaign_v2_preflight", lambda **kw: plan)
+    return resume.review_partial_resume(
+        campaign_id=77,
+        template_id=10,
+        expected_fingerprint=FINGERPRINT,
+        expected_submitted={},
+        expected_failed={},
+        expected_ready={"VILLAS_MXL": 1},
+        expected_held={"TEC_MXL": (1, "CHANNEL_DAILY_QUOTA")},
+        session=session,
+    )
+
+
+def test_atomic_held_manifest_persists_audit_and_sends_only_ready(
+    session, monkeypatch,
+):
+    from app.services import marketing_campaign_v2_partial_resume_service as resume
+
+    plan = _plan()
+    _install_plan(monkeypatch, plan)
+    rows = service._prepare_provider_campaign_rows(
+        plan=plan,
+        actor_user_id=7,
+        session=session,
+        now=NOW,
+        held_batches=_test_held_batch_manifest(),
+    )
+    assert len(rows) == 2
+    by_name = {row.sucursal_canon: row for row in rows}
+    held = by_name["TEC_MXL"]
+    assert held.status == "HELD"
+    assert held.hold_reason == "CHANNEL_DAILY_QUOTA"
+    assert held.held_by_user_id == 7
+    assert held.held_at is not None
+    assert held.hold_evidence_json["reported_limit"] == 250
+    assert held.provider_campaign_id is None
+    assert held.submit_started_at is None
+    assert by_name["VILLAS_MXL"].status == "READY"
+
+    provider = _Provider([_success("external-villas")])
+    # Original full-submit path is blocked BEFORE it can contact provider.
+    with pytest.raises(service.MarketingCampaignV2SubmitConflictError):
+        _submit(session, provider)
+    assert provider.calls == []
+
+    review = _held_review(monkeypatch, session, plan)
+    assert len(review.ready_children) == 1
+    assert review.ready_children[0].batch.sucursal_canon == "VILLAS_MXL"
+    results = resume.continue_ready_children(
+        review=review,
+        actor_user_id=7,
+        provider=provider,
+        send_enabled=True,
+        session=session,
+    )
+    assert results == [("VILLAS_MXL", "SUBMITTED", "external-villas")]
+    assert [call.provider_channel_id for call in provider.calls] == ["channel-2"]
+    session.refresh(held)
+    assert held.status == "HELD"
+    assert held.provider_campaign_id is None
+    assert held.submit_started_at is None
+    assert held.submitted_at is None
+
+
+@pytest.mark.parametrize("holds", [
+    {"UNKNOWN": {"reason": "CHANNEL_DAILY_QUOTA", "evidence": {"source": "x"}}},
+    {"TEC_MXL": {"reason": "SOME_OTHER_REASON", "evidence": {"source": "x"}}},
+    {"TEC_MXL": {"reason": "CHANNEL_DAILY_QUOTA", "evidence": {}}},
+    {"TEC_MXL": {"reason": "CHANNEL_DAILY_QUOTA", "evidence": {"x": 1}},
+     "VILLAS_MXL": {"reason": "CHANNEL_DAILY_QUOTA", "evidence": {"x": 1}}},
+])
+def test_invalid_hold_manifest_rejects_before_any_row_commit(session, holds):
+    with pytest.raises(service.MarketingCampaignV2SubmitPreconditionError):
+        service._prepare_provider_campaign_rows(
+            plan=_plan(),
+            actor_user_id=7,
+            session=session,
+            now=NOW,
+            held_batches=holds,
+        )
+    assert session.query(MarketingCampaignV2ProviderCampaignORM).count() == 0
+
+
+def test_held_is_never_recreated_and_reviews_detect_audit_drift(session, monkeypatch):
+    plan = _plan()
+    service._prepare_provider_campaign_rows(
+        plan=plan,
+        actor_user_id=7,
+        session=session,
+        now=NOW,
+        held_batches=_test_held_batch_manifest(),
+    )
+    with pytest.raises(service.MarketingCampaignV2SubmitConflictError):
+        service._prepare_provider_campaign_rows(
+            plan=plan,
+            actor_user_id=7,
+            session=session,
+            now=NOW,
+            held_batches=_test_held_batch_manifest(),
+        )
+    row = session.query(MarketingCampaignV2ProviderCampaignORM).filter_by(
+        sucursal_canon="TEC_MXL"
+    ).one()
+    row.held_by_user_id = None
+    with pytest.raises(service.MarketingCampaignV2SubmitPreconditionError):
+        _held_review(monkeypatch, session, plan)
+    session.rollback()
+
+
+def test_held_review_blocks_fingerprint_drift_before_any_provider_request(
+    session, monkeypatch,
+):
+    plan = _plan()
+    service._prepare_provider_campaign_rows(
+        plan=plan,
+        actor_user_id=7,
+        session=session,
+        now=NOW,
+        held_batches=_test_held_batch_manifest(),
+    )
+    tampered = _plan(fingerprint="b" * 64)
+    with pytest.raises(service.MarketingCampaignV2SubmitPreconditionError):
+        _held_review(monkeypatch, session, tampered)
+
+
+def test_held_state_requires_full_audit_at_database_level(session):
+    from sqlalchemy.exc import IntegrityError
+    from sqlalchemy import text
+
+    plan = _plan()
+    service._prepare_provider_campaign_rows(
+        plan=plan,
+        actor_user_id=7,
+        session=session,
+        now=NOW,
+        held_batches=_test_held_batch_manifest(),
+    )
+    # Test the database CHECK, not just Python validation.
+    with pytest.raises(IntegrityError):
+        session.execute(text(
+            "UPDATE marketing_campaign_v2_provider_campaigns "
+            "SET held_by_user_id = NULL WHERE status = 'HELD'"
+        ))
+        session.commit()
+    session.rollback()
