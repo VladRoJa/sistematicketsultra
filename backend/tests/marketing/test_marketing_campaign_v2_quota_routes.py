@@ -153,3 +153,36 @@ def test_approval_rejects_client_supplied_send_override(client, global_access):
         )
     assert response.status_code == 400
     approve.assert_not_called()
+
+
+def test_governed_materialization_requires_global_dispatch_and_send(
+    client, global_access, partial_access,
+):
+    browser, headers = client
+    endpoint = "/api/marketing/campaigns-v2/99/dispatch/materialize"
+    with auth(partial_access), patch.object(routes, "materialize_approved_manifest") as m:
+        response = browser.post(endpoint, json={}, headers=headers)
+    assert response.status_code == 403
+    m.assert_not_called()
+    with auth(global_access), patch.object(
+        routes, "materialize_approved_manifest",
+        return_value={"status": "PREPARED_NO_SEND", "send_authorized": False},
+    ) as m, patch.object(routes, "IVentasBroadcastProvider") as provider:
+        response = browser.post(endpoint, json={}, headers=headers)
+    assert response.status_code == 201
+    assert response.json["send_authorized"] is False
+    assert m.call_args.kwargs["actor_user_id"] == 7
+    provider.assert_not_called()
+
+
+def test_governed_materialization_rejects_provider_or_kill_switch_override(
+    client, global_access,
+):
+    browser, headers = client
+    with auth(global_access), patch.object(routes, "materialize_approved_manifest") as m:
+        response = browser.post(
+            "/api/marketing/campaigns-v2/99/dispatch/materialize",
+            json={"send_enabled": True}, headers=headers,
+        )
+    assert response.status_code == 400
+    m.assert_not_called()
