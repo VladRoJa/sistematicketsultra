@@ -1,0 +1,59 @@
+name: Google Ads M6 Continuity
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/models/google_ads_m6_continuity.py'
+      - 'backend/app/models/__init__.py'
+      - 'backend/migrations/versions/b3e7c2d9a104_google_ads_m6_branch_continuity.py'
+      - 'backend/app/warehouse/services/google_ads_m6_continuity_approval_service.py'
+      - 'backend/scripts/apply_google_ads_m6_continuity.py'
+      - 'backend/tests/google_ads/test_google_ads_m6_continuity_*.py'
+      - '.github/workflows/google-ads-m6-continuity.yml'
+  push:
+    branches:
+      - feat/google-ads-m6-continuity
+
+permissions:
+  contents: read
+
+jobs:
+  approval-and-schema:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: google_ads_m6_ci
+          POSTGRES_PASSWORD: isolated_google_ads_m6_ci
+          POSTGRES_DB: google_ads_m6_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U google_ads_m6_ci -d google_ads_m6_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install backend and test dependencies
+        run: |
+          python -m pip install -r backend/requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Check M6 preflight and real PostgreSQL 16 schema
+        working-directory: backend
+        env:
+          SECRET_KEY: google-ads-m6-test-only
+          JWT_SECRET_KEY: google-ads-m6-jwt-test-only
+          GOOGLE_ADS_M6_TEST_POSTGRES_URL: postgresql+psycopg2://google_ads_m6_ci:isolated_google_ads_m6_ci@127.0.0.1:5432/google_ads_m6_ci
+        run: |
+          python -m pytest -q --tb=short \
+            tests/google_ads/test_google_ads_m6_continuity_schema.py \
+            tests/google_ads/test_google_ads_m6_continuity_approval.py \
+            tests/google_ads/test_google_ads_m6_continuity_postgres.py \
+            tests/google_ads/test_google_ads_m5_branch_attribution_readonly.py
