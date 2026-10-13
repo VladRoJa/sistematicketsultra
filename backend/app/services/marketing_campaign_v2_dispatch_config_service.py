@@ -179,6 +179,15 @@ def save_channel_binding(
                 MarketingCampaignV2ChannelBindingORM.id != int(row.id)
             )
         for current in current_defaults.all():
+            if require_immutable_history and active_session.query(
+                MarketingCampaignV2ProviderCampaignORM.id
+            ).filter(
+                MarketingCampaignV2ProviderCampaignORM.channel_binding_id == int(current.id),
+                MarketingCampaignV2ProviderCampaignORM.status.notin_(("SUBMITTED", "SCHEDULED")),
+            ).first():
+                raise MarketingCampaignV2DispatchConfigConflictError(
+                    "Hay lotes pendientes vinculados al canal predeterminado; no se puede reemplazar."
+                )
             current.is_default = False
             current.updated_by_user_id = normalized_actor
             current.updated_at = timestamp
