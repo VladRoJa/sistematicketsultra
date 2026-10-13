@@ -571,3 +571,27 @@ def test_scheduled_retry_preserves_backend_schedule(
         "local_datetime": "2026-10-08T12:00:00",
     }
     assert provider.calls == 1
+
+
+def test_governed_approval_disables_legacy_retry_even_after_reconciliation(
+    session, monkeypatch,
+):
+    row = _retry_child(session)
+    from app.models.marketing import MarketingCampaignV2DispatchApprovalORM
+    session.add(MarketingCampaignV2DispatchApprovalORM(
+        campaign_v2_id=77, template_id=10,
+        dispatch_fingerprint="a"*64, recipient_count=1,
+        approved_estimated_mxn="0.50",
+        manifest_json={"version": "D2B_READY_HELD_V1", "send_authorized": False},
+        approved_by_user_id=7, approved_at=NOW,
+        expires_at=NOW + timedelta(minutes=10),
+    ))
+    session.commit()
+    _install_current_plan(monkeypatch, row)
+    provider = SuccessProvider()
+    with pytest.raises(service.MarketingCampaignV2SafeRetryConflictError, match="gobernada"):
+        service.retry_campaign_v2_provider_child(
+            child_id=row.id, actor_user_id=8, provider=provider,
+            send_enabled=True, session=session, now=NOW,
+        )
+    assert provider.calls == 0
