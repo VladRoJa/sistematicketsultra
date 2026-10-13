@@ -62,3 +62,39 @@ def test_m5_html_only_simple_bindings_and_separate_styles():
     assert "max-height: 242px" in css
     assert "overflow: auto" in css
     assert "ngStyle" not in html
+
+
+def test_official_original_route_uses_its_own_component_and_ads_view():
+    routes = (ROOT / "frontend/src/app/app.routes.ts").read_text(encoding="utf-8")
+    original = _read("marketing-sales-funnel-original.component.ts")
+    html = _read("marketing-sales-funnel-original.component.html")
+    original_service = _read("marketing-sales-funnel-original.service.ts")
+
+    assert "path: 'marketing-conversion/venta-total-original'" in routes
+    assert "MarketingSalesFunnelOriginalComponent" in routes
+    assert "selector: 'app-marketing-sales-funnel-original'" in original
+    assert "this.buildInvestmentSourcesView(data.investment_sources)" in original
+    assert "this.buildGoogleBranchAttributionView(data)" in original
+    assert "googleBranchAttributionView as attribution" in html
+    assert "investmentSourcesView as ads" in html
+    assert "app-marketing-sales-funnel-original-story" in html
+    assert "visit_mode', 'registered_only'" in original_service
+
+
+def test_official_original_ads_is_read_only_and_keeps_existing_kpis():
+    original = _read("marketing-sales-funnel-original.component.ts")
+    html = _read("marketing-sales-funnel-original.component.html")
+    export = _read("marketing-sales-funnel-table-export.ts")
+
+    assert "this.dashboard?.summary.investment ?? null" in original
+    assert "this.resolveBranchInvestment(branch.sucursal_id)" in original
+    assert "exportMarketingSalesFunnelBranchTable" in original
+    assert "google_ads_branch_attribution" not in export
+    assert "evidence.account_reconciled === true" in original
+    assert "accountValue: globallyReconciled" in original
+    assert "unassignedValue: globallyReconciled" in original
+    assert "evidence.scope_attributed_cost !== null" in original
+    assert "*ngFor=\"let row of attribution.rows\"" in html
+    assert "<app-marketing-sales-funnel-original-story" in html
+    assert "'./marketing-sales-funnel-google-attribution.component.css'" in original
+    assert "ngStyle" not in html
