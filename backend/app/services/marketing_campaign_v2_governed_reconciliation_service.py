@@ -56,7 +56,7 @@ def _utc(now: datetime | None) -> datetime:
     return value.astimezone(timezone.utc)
 
 
-def _lock_pair(*, execution_id: int, child_id: int, session: Any):
+def _lock_pair(*, campaign_id: int, execution_id: int, child_id: int, session: Any):
     if session.get_bind().dialect.name != "postgresql":
         raise GovernedReconciliationConflict("Se requiere PostgreSQL real.")
     # Resolve IDs without locking; then acquire locks in the same
@@ -68,7 +68,9 @@ def _lock_pair(*, execution_id: int, child_id: int, session: Any):
     preliminary_approval = session.get(MarketingCampaignV2DispatchApprovalORM, approval_id)
     if preliminary_approval is None:
         raise GovernedReconciliationConflict("Aprobación no encontrada.")
-    campaign_id = int(preliminary_approval.campaign_v2_id)
+    actual_campaign_id = int(preliminary_approval.campaign_v2_id)
+    if actual_campaign_id != campaign_id:
+        raise GovernedReconciliationConflict("Campaña de ruta y ejecución no coinciden.")
 
     campaign = session.query(MarketingCampaignV2ORM).filter(
         MarketingCampaignV2ORM.id == campaign_id,
@@ -126,10 +128,11 @@ def _commit(session: Any):
 
 
 def escalate_stale_governed_claim(
-    *, execution_id: int, child_id: int, expected_manifest_digest: str,
+    *, campaign_id: int, execution_id: int, child_id: int, expected_manifest_digest: str,
     source_reference: str, evidence_note: str, actor_user_id: int,
     session: Any | None = None, now: datetime | None = None,
 ) -> dict:
+    campaign_id = _required_int(campaign_id, "campaign_id")
     execution_id = _required_int(execution_id, "execution_id")
     child_id = _required_int(child_id, "child_id")
     actor = _required_int(actor_user_id, "actor_user_id")
@@ -141,7 +144,8 @@ def escalate_stale_governed_claim(
     session = session if session is not None else db.session
     try:
         _, _, execution, child = _lock_pair(
-            execution_id=execution_id, child_id=child_id, session=session,
+            campaign_id=campaign_id, execution_id=execution_id,
+            child_id=child_id, session=session,
         )
         timestamp = _utc(now) if now is not None else _utc(None)
         if execution.manifest_digest != digest:
@@ -208,7 +212,8 @@ def record_governed_provider_resolution(
     session = session if session is not None else db.session
     try:
         _, _, execution, child = _lock_pair(
-            execution_id=execution_id, child_id=child_id, session=session,
+            campaign_id=campaign_id, execution_id=execution_id,
+            child_id=child_id, session=session,
         )
         timestamp = _utc(now) if now is not None else _utc(None)
         if execution.manifest_digest != digest:
