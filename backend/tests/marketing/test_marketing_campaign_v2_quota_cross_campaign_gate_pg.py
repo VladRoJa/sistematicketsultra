@@ -17,6 +17,7 @@ from app.models.marketing import (
     MarketingCampaignV2ORM as Campaign,
     MarketingCampaignV2RecipientORM as Recipient,
     MarketingCampaignV2ProviderCampaignORM as Child,
+    MarketingCampaignV2BlacklistORM as Blacklist,
 )
 from app.services.marketing_campaign_v2_contact_gate_service import (
     CampaignV2ContactGateConflict, acquire_campaign_v2_contact_gate,
@@ -43,7 +44,7 @@ def _engine():
 
 def _schema():
     md = sa.MetaData()
-    mapped = (Campaign, Recipient, Child)
+    mapped = (Campaign, Recipient, Child, Blacklist)
     names = {m.__table__.name for m in mapped}
     for model in mapped:
         model.__table__.to_metadata(md)
