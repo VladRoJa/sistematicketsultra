@@ -39,6 +39,9 @@ from app.services.marketing_google_ads_funnel_service import (
     build_funnel_investment_sources,
     read_google_ads_funnel_investment,
 )
+from app.services.marketing_google_ads_branch_attribution_service import (
+    read_google_ads_branch_attribution,
+)
 from app.services.marketing_sales_funnel_service import (
     MATCH_WINDOW_DAYS,
     ORIGIN_IVENTAS_META,
@@ -828,6 +831,13 @@ def build_marketing_sales_funnel_at_cutoff(
     payload["investment_sources"] = build_funnel_investment_sources(
         meta_assigned=payload["summary"]["investment"],
         google_ads=google_ads_investment,
+    )
+    # M5: independent, permission-scoped historical evidence. Never mutate
+    # summary, branches[].investment or the existing Meta CPL/CPT/CAC basis.
+    payload["google_ads_branch_attribution"] = read_google_ads_branch_attribution(
+        month_start=month_start,
+        cutoff_date=selected_cutoff,
+        access=access,
     )
 
     payload["selected_cutoff_date"] = selected_cutoff.isoformat()
