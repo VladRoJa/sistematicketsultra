@@ -5,7 +5,13 @@
       <h1>Campañas V2</h1>
       <p>Construye una audiencia, revisa el Preview y congela una cohorte trazable.</p>
     </div>
-    <span *ngIf="options" class="scope-note">{{ scopeLabel }}</span>
+    <div class="header-actions">
+      <span *ngIf="options" class="scope-note">{{ scopeLabel }}</span>
+      <button *ngIf="canManageDispatchConfig" mat-stroked-button type="button"
+        (click)="openDispatchConfiguration()">
+        Configuración · plantillas y canales
+      </button>
+    </div>
   </header>
 
   <div *ngIf="loadingOptions" class="state-panel" role="status">
