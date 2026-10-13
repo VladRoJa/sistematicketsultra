@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import date, datetime, timedelta
+import logging
 from decimal import Decimal
 from typing import Any, Iterable, Mapping
 
@@ -38,6 +39,9 @@ from app.services.marketing_meta_dashboard_service import (
 from app.services.marketing_google_ads_funnel_service import (
     build_funnel_investment_sources,
     read_google_ads_funnel_investment,
+)
+from app.services.marketing_google_ads_branch_attribution_service import (
+    read_google_ads_branch_attribution,
 )
 from app.services.marketing_sales_funnel_service import (
     MATCH_WINDOW_DAYS,
@@ -594,6 +598,44 @@ def _apply_crm_history_availability(
     data_quality["survey_fallback_only_after_no_iventas_match"] = None
 
 
+def _attach_google_ads_branch_attribution(
+    *, payload: dict, month_start: date, cutoff_date: date,
+    access: MarketingAccess,
+) -> None:
+    """M5 is supplemental: errors never invalidate the operational Funnel.
+
+    Fail closed without exposing amounts or account totals, and log the
+    underlying error for investigation. The existing payload is untouched.
+    """
+    try:
+        evidence = read_google_ads_branch_attribution(
+            month_start=month_start,
+            cutoff_date=cutoff_date,
+            access=access,
+        )
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "Google Ads M5 reader unavailable at selected Funnel cutoff."
+        )
+        days = (cutoff_date - month_start).days + 1
+        evidence = {
+            "status": "requires_review",
+            "currency": "MXN",
+            "allocation_basis": "APPROVED_PROVISIONAL_XLSX",
+            "requested_from": month_start.isoformat(),
+            "requested_to": cutoff_date.isoformat(),
+            "historical_from": "2026-09-24",
+            "historical_to": "2026-10-08",
+            "complete_to_cutoff": False,
+            "covered_days": 0,
+            "expected_days": days,
+            "missing_days": days,
+            "rows": [],
+            "scope_attributed_cost": None,
+        }
+    payload["google_ads_branch_attribution"] = evidence
+
+
 def build_marketing_sales_funnel_at_cutoff(
     *,
     month: str,
@@ -828,6 +870,13 @@ def build_marketing_sales_funnel_at_cutoff(
     payload["investment_sources"] = build_funnel_investment_sources(
         meta_assigned=payload["summary"]["investment"],
         google_ads=google_ads_investment,
+    )
+    # M5 is supplementary; existing Meta/Funnel metrics remain unchanged.
+    _attach_google_ads_branch_attribution(
+        payload=payload,
+        month_start=month_start,
+        cutoff_date=selected_cutoff,
+        access=access,
     )
 
     payload["selected_cutoff_date"] = selected_cutoff.isoformat()
