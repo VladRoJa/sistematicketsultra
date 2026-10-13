@@ -274,6 +274,10 @@ def _check_existing(conn, identities: list[dict]) -> tuple[int | None, dict | No
 
 def run_on_connection(conn, *, apply: bool, approved_by_user_id: int | None, parsed_files) -> dict:
     """Read-only preflight; reject direct approval until authenticated workflow."""
+    _require(
+        not apply and approved_by_user_id is None,
+        "APPLY deshabilitado: se requiere identidad autenticada en backend.",
+    )
     data = _load_m5()
     original = _m5_preflight(conn, apply=False)
     _require(
@@ -289,16 +293,8 @@ def run_on_connection(conn, *, apply: bool, approved_by_user_id: int | None, par
     metrics = _verify_facts(conn, campaigns, groups, identities)
     existing_id, existing = _check_existing(conn, identities)
 
-    # No unattended/CLI approval is permitted: supplying an arbitrary user ID
-    # cannot authenticate the real actor. A future JWT-authenticated admin
-    # endpoint must own approval authorization and auditable identity.
-    _require(
-        not apply,
-        "APPLY deshabilitado hasta integrar aprobacion con identidad autenticada.",
-    )
-
     return {
-        "action": "APPLY" if apply else "CHECK_ONLY",
+        "action": "CHECK_ONLY",
         "customer_id": CUSTOMER_ID,
         "approval_reference": M6_REFERENCE,
         "approved_identities": 26,
