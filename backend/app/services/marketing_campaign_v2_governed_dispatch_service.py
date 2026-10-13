@@ -33,6 +33,11 @@ from app.services.marketing_campaign_v2_manifest_service import (
 from app.services.marketing_campaign_v2_preflight_service import (
     build_campaign_v2_preflight, build_provider_campaign_idempotency_key,
 )
+from app.services.marketing_campaign_v2_contact_gate_service import (
+    CampaignV2ContactGateConflict,
+    acquire_campaign_v2_contact_gate,
+    verify_outbound_contact_admission,
+)
 from app.services.marketing_campaign_v2_submit_service import (
     _load_campaign_rows,
     _persist_provider_failure, _persist_provider_success,
@@ -289,6 +294,9 @@ def execute_governed_child(
     active = session if session is not None else db.session
     timestamp = _utc(now)
     try:
+        # Hold the same gate as derived-cohort freeze and legacy claim paths.
+        # Lock order: contact gate -> campaign -> approval -> execution -> child.
+        acquire_campaign_v2_contact_gate(active)
         approval, plan, manifest, children, digest = _locked_review(
             campaign_id=campaign_id, session=active, now=timestamp,
             allowed_sucursal_keys=allowed_sucursal_keys, ignore_self=True,
@@ -338,6 +346,9 @@ def execute_governed_child(
         dispatch = build_campaign_v2_provider_dispatch_batch(
             plan=plan, batch=first_pending,
         )
+        # Re-read provider snapshot under the shared lock immediately before
+        # durable claim. A stale preflight is never sufficient for acceptance.
+        verify_outbound_contact_admission(child=row, session=active)
         # Both claims are committed together, before any HTTP to the provider.
         # If the process crashes after commit, IN_FLIGHT blocks all replays.
         row.status = "SUBMITTING"
@@ -350,6 +361,9 @@ def execute_governed_child(
         execution.last_child_id = child_id
         execution.updated_at = claim_time
         active.commit()
+    except CampaignV2ContactGateConflict as exc:
+        active.rollback()
+        raise GovernedDispatchConflict(str(exc)) from exc
     except (GovernedDispatchConflict, SQLAlchemyError):
         active.rollback()
         raise
