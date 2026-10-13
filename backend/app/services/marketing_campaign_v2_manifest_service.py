@@ -234,8 +234,10 @@ def materialize_approved_manifest(
             rows = _prepare_provider_campaign_rows(
                 plan=plan, actor_user_id=actor_user_id,
                 session=active, now=timestamp, held_batches=holds,
+                commit_rows=False,
             )
             _validate_existing(plan, by_name, rows)
+            active.commit()  # all children commit only after full validation
             status = "PREPARED_NO_SEND"
             count = len(rows)
         return {
