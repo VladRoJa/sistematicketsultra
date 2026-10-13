@@ -37,7 +37,11 @@ def test_manifest_and_single_head():
     scripts = ScriptDirectory(str(MIGRATIONS))
     heads = scripts.get_heads()
     assert len(heads) == 1
-    assert heads[0] == schema.revision
+    # Future Alembic migrations may follow M5; it must remain in the
+    # actual ancestry of the single active head, not be that head forever.
+    assert schema.revision in {
+        revision.revision for revision in scripts.iterate_revisions(heads[0], "base")
+    }
     assert not (MIGRATIONS / "versions/a63e9f21d48b_seed_google_ads_m5_approved_identities.py").exists()
 
 
