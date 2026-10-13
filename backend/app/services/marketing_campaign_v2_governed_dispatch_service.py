@@ -67,7 +67,8 @@ def manifest_digest(manifest: Any) -> str:
 
 
 def _locked_review(*, campaign_id: int, session: Any, now: datetime,
-                   allowed_sucursal_keys: Any, ignore_self: bool):
+                   allowed_sucursal_keys: Any, ignore_self: bool,
+                   refresh_after_lock: bool = True):
     if session.get_bind().dialect.name != "postgresql":
         raise GovernedDispatchConflict("Despacho gobernado requiere PostgreSQL.")
     campaign = session.query(MarketingCampaignV2ORM).filter(
@@ -98,11 +99,29 @@ def _locked_review(*, campaign_id: int, session: Any, now: datetime,
             text("SELECT pg_advisory_xact_lock(hashtextextended(:scope,0))"),
             {"scope": "mkt_v2_quota:" + kind + ":" + key},
         )
-    # Caller supplies fresh now after lock in normal flow. The clock here
-    # is refreshed even when the transaction waited for another operator.
-    effective_now = datetime.now(timezone.utc) if now is None else now
+    # Never trust a timestamp captured before an advisory lock wait.
+    effective_now = _utc(None) if refresh_after_lock else now
     if _database_date(approval.expires_at) <= effective_now:
         raise GovernedDispatchConflict("Autorización caducó durante revisión.")
+    refreshed = build_campaign_v2_preflight(
+        campaign_id=campaign_id, template_id=int(approval.template_id),
+        allowed_sucursal_keys=allowed_sucursal_keys, session=session,
+        now=effective_now,
+    )
+    refreshed_budget = estimate_preflight_cost(
+        plan=refreshed, session=session, now=effective_now,
+    )
+    refreshed_manifest = _assert_manifest(refreshed, refreshed_budget, approval)
+    if (refreshed.dispatch_fingerprint != plan.dispatch_fingerprint or
+            refreshed_budget["quote_fingerprint"] != budget["quote_fingerprint"]):
+        raise GovernedDispatchConflict("Plan o tarifa cambió durante el bloqueo.")
+    plan = refreshed
+    manifest = refreshed_manifest
+    original_ready = tuple(
+        batch for batch in plan.batches
+        if manifest[batch.sucursal_canon]["planned_status"] == "READY"
+    )
+    scopes_plan = replace(plan, batches=original_ready)
     _, scopes, evidence_ids, quota_rows = _assess_scopes(
         scopes_plan, session=session, timestamp=effective_now,
         ignore_campaign_id=campaign_id if ignore_self else None,
@@ -194,6 +213,7 @@ def authorize_governed_dispatch(
         approval, plan, manifest, children, digest = _locked_review(
             campaign_id=campaign_id, session=active, now=timestamp,
             allowed_sucursal_keys=allowed_sucursal_keys, ignore_self=False,
+            refresh_after_lock=now is None,
         )
         ready_count = sum(len(b.recipients) for b in plan.batches
                           if manifest[b.sucursal_canon]["planned_status"] == "READY")
@@ -269,6 +289,7 @@ def execute_governed_child(
         approval, plan, manifest, children, digest = _locked_review(
             campaign_id=campaign_id, session=active, now=timestamp,
             allowed_sucursal_keys=allowed_sucursal_keys, ignore_self=True,
+            refresh_after_lock=now is None,
         )
         execution = active.query(MarketingCampaignV2GovernedExecutionORM).filter(
             MarketingCampaignV2GovernedExecutionORM.id == execution_id,
