@@ -12,6 +12,49 @@
       <div>Salud del worker<strong class="unknown">No verificada</strong></div>
     </div>
     <p class="disclaimer">Horarios de referencia, no configuración efectiva. No se admiten ejecuciones manuales ni diagnóstico de logs en esta fase.</p>
+    <section class="panel">
+      <div class="detail-head"><div><h2>Matriz diaria de ejecuciones observadas</h2>
+        <small>Referencia horaria · sin confirmar configuración efectiva ni cumplimiento de SLA</small></div>
+        <label>Fecha (Tijuana) <input type="date" [(ngModel)]="timelineDate" (change)="loadTimeline()"></label>
+      </div>
+      <p *ngIf="loadingTimeline" role="status">Cargando matriz diaria…</p>
+      <p *ngIf="timelineError" role="alert" class="alert">{{timelineError}}</p>
+      <div *ngFor="let worker of timelineWorkers" class="timeline-worker">
+        <h3>{{worker.worker_key}}</h3>
+        <div class="table-wrap"><table class="timeline-table">
+          <thead><tr><th>Job</th><th *ngFor="let hour of hours">{{hour}}</th></tr></thead>
+          <tbody><tr *ngFor="let job of worker.jobs">
+            <td><b>{{job.label}}</b><small *ngIf="job.coverage==='NOT_INSTRUMENTED'">Sin instrumentación</small></td>
+            <td *ngFor="let hour of hours">
+              <button *ngIf="timelineRuns(job,hour).length; else emptySlot"
+                type="button" class="timeline-cell"
+                [class.timeline-error]="timelineState(job,hour)==='error'"
+                [class.timeline-partial]="timelineState(job,hour)==='partial'"
+                [class.timeline-observed]="timelineState(job,hour)==='observed'"
+                [title]="timelineRuns(job,hour).length + ' ejecución(es) observada(s)'"
+                (click)="showObservation(job,hour)">
+                {{timelineRuns(job,hour).length}}
+              </button>
+              <ng-template #emptySlot><span class="timeline-empty"
+                [class.timeline-reference]="hasReferenceHour(job,hour)"
+                [title]="hasReferenceHour(job,hour)?'Horario de referencia sin evidencia atribuible':'Sin ejecución observada'">
+                {{hasReferenceHour(job,hour)?'·':'—'}}</span></ng-template>
+            </td>
+          </tr></tbody>
+        </table></div>
+      </div>
+      <div class="timeline-legend">
+        <span>● Ejecución observada</span><span>● Resultado parcial</span><span>● Fallo observado</span>
+        <span>· Horario de referencia (sin confirmación)</span><span>— Sin ejecución observada</span>
+      </div>
+      <div *ngIf="selectedObservation" class="timeline-detail">
+        <div class="detail-head"><h3>{{selectedObservationJob}} · Ejecución #{{selectedObservation.run_id}}</h3>
+          <button type="button" (click)="closeObservation()">Cerrar</button></div>
+        <p>Estado original: {{selectedObservation.status_raw}} · Hora observada: {{selectedObservation.observed_time}}</p>
+        <p>Corte: {{selectedObservation.business_date||'Sin fecha'}} · Inicio: {{formatDate(selectedObservation.started_at_utc)}}</p>
+        <p *ngIf="selectedObservation.error_available">Error registrado; diagnóstico seguro pendiente de instrumentación.</p>
+      </div>
+    </section>
     <div class="filters"><label>Dominio <select [(ngModel)]="domain"><option value="">Todos</option>
       <option *ngFor="let d of domains" [value]="d">{{d}}</option></select></label>
       <label>Buscar <input [(ngModel)]="search" placeholder="Job o worker"></label>

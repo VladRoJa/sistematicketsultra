@@ -3,12 +3,20 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { forkJoin, Subject, takeUntil } from 'rxjs';
 import { AutomationControlService } from './automation-control.service';
-import { Job, Run, Summary, Dataset } from './automation-control.models';
+import { Job, Run, Summary, Dataset, TimelineWorker, TimelineJob, TimelineObservation } from './automation-control.models';
 
 @Component({ selector:'app-automation-control',standalone:true,imports:[CommonModule,FormsModule],
   templateUrl:'./automation-control.component.html',styleUrls:['./automation-control.component.css'] })
 export class AutomationControlComponent implements OnInit,OnDestroy {
   readonly pageSize=20;
+  readonly hours=Array.from({length:24},(_,i)=>String(i).padStart(2,'0')+':00');
+  timelineDate=new Date().toLocaleDateString('en-CA',{timeZone:'America/Tijuana'});
+  timelineWorkers:TimelineWorker[]=[];
+  loadingTimeline=false;
+  timelineError='';
+  selectedObservation:TimelineObservation|null=null;
+  selectedObservationJob='';
+
   private readonly destroyed$=new Subject<void>();
   private sequence=0;
   summary:Summary|null=null; jobs:Job[]=[]; datasets:Dataset[]=[];
@@ -25,6 +33,7 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
   }
   get page():number {return Math.floor(this.offset/this.pageSize)+1;}
   refresh():void {
+    this.loadTimeline();
     this.sequence++;this.loading=true;this.error='';
     forkJoin({summary:this.api.summary(),jobs:this.api.jobs(),datasets:this.api.datasets()})
       .pipe(takeUntil(this.destroyed$)).subscribe({
@@ -36,6 +45,34 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
         error:()=>{this.loading=false;this.summary=null;this.jobs=[];this.datasets=[];this.close();
           this.error='No se pudo cargar Control de Automatizaciones.';}
       });
+  }
+  loadTimeline():void {
+    if (!this.timelineDate) {return;}
+    this.loadingTimeline=true;this.timelineError='';this.timelineWorkers=[];
+    this.api.timeline(this.timelineDate).pipe(takeUntil(this.destroyed$)).subscribe({
+      next:r=>{this.timelineWorkers=r.workers;this.loadingTimeline=false;},
+      error:()=>{this.loadingTimeline=false;this.timelineError='No se pudo consultar la matriz diaria.';}
+    });
+  }
+  timelineRuns(job:TimelineJob,hour:string):TimelineObservation[] {
+    return job.observed[hour] || [];
+  }
+  timelineState(job:TimelineJob,hour:string):string {
+    const runs=this.timelineRuns(job,hour);
+    if(!runs.length)return 'unknown';
+    if(runs.some(r=>['failed','error'].includes(r.status_raw.toLowerCase())))return 'error';
+    if(runs.some(r=>['partial','running'].includes(r.status_raw.toLowerCase())))return 'partial';
+    if(runs.some(r=>['completed','success','succeeded','replaced'].includes(r.status_raw.toLowerCase())))return 'observed';
+    return 'unknown';
+  }
+  showObservation(job:TimelineJob,hour:string):void {
+    const runs=this.timelineRuns(job,hour);
+    if(!runs.length)return;
+    this.selectedObservation=runs[0];this.selectedObservationJob=job.label;
+  }
+  closeObservation():void {this.selectedObservation=null;this.selectedObservationJob='';}
+  hasReferenceHour(job:TimelineJob,hour:string):boolean {
+    return job.reference_slots.some(s=>s.slice(0,2)===hour.slice(0,2));
   }
   select(job:Job):void {this.selected=job;this.offset=0;this.loadRuns();}
   close():void {this.sequence++;this.selected=null;this.runs=[];this.runsError='';this.loadingRuns=false;}

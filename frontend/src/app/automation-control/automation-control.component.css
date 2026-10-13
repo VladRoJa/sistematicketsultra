@@ -19,3 +19,16 @@ td button{white-space:nowrap}.detail-head{display:flex;justify-content:space-bet
 .datasets article{padding:10px;border:1px solid #e2e8f0;font-size:12px}.datasets p{margin:6px 0}
 @media(max-width:1100px){.columns.with-detail{grid-template-columns:1fr}}
 @media(max-width:640px){.auto-page{padding:10px}.metrics{grid-template-columns:repeat(2,1fr)}}
+
+.timeline-worker h3{font-size:14px;margin:12px 0 6px}
+.timeline-table{table-layout:fixed;min-width:1200px}
+.timeline-table th,.timeline-table td{padding:4px;text-align:center;font-size:10px}
+.timeline-table th:first-child,.timeline-table td:first-child{text-align:left;width:170px}
+.timeline-cell{min-width:25px;padding:5px;background:#e0f2fe;border-color:#7dd3fc}
+.timeline-cell.timeline-observed{background:#dbeafe;border-color:#93c5fd}
+.timeline-cell.timeline-error{background:#fee2e2;border-color:#fca5a5}
+.timeline-cell.timeline-partial{background:#fef3c7;border-color:#fcd34d}
+.timeline-empty{color:#cbd5e1}.timeline-reference{color:#a16207;font-weight:700}
+.timeline-legend{display:flex;flex-wrap:wrap;gap:15px;font-size:11px;color:#64748b;margin:10px 0}
+.timeline-detail{margin-top:12px;background:#f8fafc;padding:12px;border:1px solid #cbd5e1}
+.timeline-detail h3{font-size:14px;margin:0}
