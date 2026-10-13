@@ -2,6 +2,10 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
+from datetime import date, datetime, timedelta
+from app.services.automation_control.timeline_service import daily_timeline
 
 from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
@@ -158,3 +162,24 @@ def automation_control_runs(job_key: str):
         }), 500
 
     return jsonify({"status": "ok", "job_key": job_key, **payload})
+
+@automation_control_bp.get("/timeline")
+@jwt_required()
+def automation_control_timeline():
+    if not _require_read_access():
+        return _deny()
+    raw = request.args.get("date", "")
+    try:
+        day = date.fromisoformat(raw) if raw else datetime.now(
+            ZoneInfo("America/Tijuana")
+        ).date()
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "Fecha inválida."}), 400
+    today = datetime.now(ZoneInfo("America/Tijuana")).date()
+    if day > today or day < today - timedelta(days=730):
+        return jsonify({"status": "error", "message": "Fecha fuera de rango."}), 400
+    try:
+        return jsonify({"status": "ok", **daily_timeline(day)})
+    except Exception:
+        current_app.logger.exception("Fallo al consultar matriz de automatizaciones")
+        return jsonify({"status": "error", "message": "No se pudo consultar la matriz."}), 500
