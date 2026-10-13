@@ -1267,7 +1267,7 @@ def create_campaign_v2_cost_rate_revision_endpoint():
         return jsonify(row), 201
     except MarketingAuthorizationError as exc:
         return _error(str(exc), 403)
-    except CampaignV2BudgetValidationError as exc:
+    except (CampaignV2BudgetValidationError, MarketingCampaignV2RouteValidationError) as exc:
         return _error(str(exc), 400)
     except CampaignV2BudgetConflictError as exc:
         return _error(str(exc), 409)
