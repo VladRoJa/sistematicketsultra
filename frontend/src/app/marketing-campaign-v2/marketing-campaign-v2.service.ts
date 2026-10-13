@@ -13,6 +13,9 @@ import {
   CampaignV2CampaignQuery,
   CampaignV2ConsolidatedReport,
   CampaignV2DispatchTemplatesResponse,
+  CampaignV2BudgetRateRevision,
+  CampaignV2BudgetRateRequest,
+  CampaignV2BudgetRatesResponse,
   CampaignV2DispatchTemplate,
   CampaignV2ChannelBinding,
   CampaignV2ChannelBindingRequest,
@@ -154,6 +157,19 @@ export class MarketingCampaignV2Service {
   updateDispatchChannelBinding(id: number, request: CampaignV2ChannelBindingRequest): Observable<CampaignV2ChannelBinding> {
     return this.http.put<CampaignV2ChannelBinding>(
       `${this.apiUrl}/dispatch/channel-bindings/${id}`, request,
+    );
+  }
+
+  listBudgetRateRevisions(templateId?: number): Observable<CampaignV2BudgetRatesResponse> {
+    const params = templateId ? new HttpParams().set('template_id', String(templateId)) : undefined;
+    return this.http.get<CampaignV2BudgetRatesResponse>(
+      `${this.apiUrl}/dispatch/cost-rates`, { params },
+    );
+  }
+
+  registerBudgetRateRevision(request: CampaignV2BudgetRateRequest): Observable<CampaignV2BudgetRateRevision> {
+    return this.http.post<CampaignV2BudgetRateRevision>(
+      `${this.apiUrl}/dispatch/cost-rates`, request,
     );
   }
 
