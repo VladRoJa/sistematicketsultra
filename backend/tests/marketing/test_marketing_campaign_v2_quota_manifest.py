@@ -73,6 +73,7 @@ def synthetic_approval():
                  "channel_attestation_id": None, "portfolio_attestation_id": None,
                  "portfolio_key": None, "hold_reason": "CHANNEL_DAILY_QUOTA",
                  "hold_evidence": {"source": "EXPLICIT_OPERATOR_DECISION",
+                                   "source_reference": "test quota portfolio evidence",
                                    "dispatch_fingerprint": FP,
                                    "quote_fingerprint": QUOTE}},
             ],
@@ -262,3 +263,13 @@ def test_materialization_expired_approval_blocks_before_children():
             )
     prepare.assert_not_called()
     session.rollback.assert_called_once()
+
+
+def test_held_source_reference_required_per_branch():
+    assert approval._hold_sources({"B"}, {"B": "manual Meta quota evidence"}) == {
+        "B": "manual Meta quota evidence",
+    }
+    for value in [None, {}, {"B": ""}, {"A": "wrong branch"},
+                  {"B": "evidence", "A": "unrequested"}]:
+        with pytest.raises(approval.CampaignV2ApprovalValidationError):
+            approval._hold_sources({"B"}, value)
