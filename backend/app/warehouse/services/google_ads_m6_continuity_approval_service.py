@@ -7,9 +7,12 @@ facts, Funnel or any daily ingestion scheduler.
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from hashlib import sha256
+from zoneinfo import ZoneInfo
+
+from flask_jwt_extended import get_jwt_identity
 
 import sqlalchemy as sa
 
@@ -320,3 +323,85 @@ def run_approval(*, apply: bool = False, approved_by_user_id: int | None = None)
         return run_on_connection(
             conn, apply=False, approved_by_user_id=None, parsed_files=files,
         )
+
+
+def approve_authenticated() -> dict:
+    """Atomic initial approval from the JWT principal, never a supplied user ID.
+
+    Only the authenticated ADMICORP administrator may create this fixed,
+    explicitly preflighted M6 version. The service is not callable from CLI.
+    Route-level kill switch and confirmation are separate required gates.
+    """
+    identity = get_jwt_identity()
+    try:
+        actor_id = int(identity)
+    except (TypeError, ValueError) as exc:
+        raise PermissionError("M6 no autorizado: identidad JWT inválida.") from exc
+    _require(actor_id > 0, "identidad JWT inválida")
+
+    with db.engine.begin() as conn:
+        conn.execute(sa.text(
+            "SELECT pg_advisory_xact_lock("
+            "hashtext('google_ads_m6_continuity_initial_20261013'))"
+        ))
+        # Protect against users whose role or username changed after token issue.
+        principal = conn.execute(sa.text("""
+            SELECT id, username, rol FROM users
+            WHERE id = :actor_id FOR UPDATE
+        """), {"actor_id": actor_id}).mappings().one_or_none()
+        if not principal or (
+            str(principal["username"]).strip().casefold() != "admicorp"
+            or str(principal["rol"]).strip().upper() != "ADMINISTRADOR"
+        ):
+            raise PermissionError("M6 no autorizado: requiere ADMICORP administrador.")
+
+        # The historically approved M5 RAW is validated, never rewritten.
+        _verify_m5_raw(_load_m5())
+        parsed_files = _load_files()
+        preflight = run_on_connection(
+            conn, apply=False, approved_by_user_id=None, parsed_files=parsed_files,
+        )
+        identities = _triples(_load_m5())
+        old_id, old_version = _check_existing(conn, identities)
+        if old_id is not None:
+            if old_version["approved_by_user_id"] != actor_id:
+                raise PermissionError("M6 aprobado previamente por otro operador.")
+            return {
+                **preflight, "action": "ALREADY_APPROVED",
+                "already_approved": True, "approval_version_id": old_id,
+            }
+
+        version_id = conn.execute(sa.text("""
+            INSERT INTO google_ads_branch_approval_versions
+                (customer_id, approval_reference, source_approval_reference,
+                 valid_from, valid_to, source_campaign_upload_id,
+                 source_ad_group_upload_id, approved_by_user_id, approved_on)
+            VALUES (:customer, :reference, :origin, :date_from, NULL,
+                    :campaign_upload, :group_upload, :actor, :approved_on)
+            RETURNING id
+        """), {
+            "customer": CUSTOMER_ID,
+            "reference": M6_REFERENCE,
+            "origin": M5_REFERENCE,
+            "date_from": START,
+            "campaign_upload": CAMPAIGN_UPLOAD_ID,
+            "group_upload": GROUP_UPLOAD_ID,
+            "actor": actor_id,
+            "approved_on": datetime.now(ZoneInfo("America/Tijuana")).date(),
+        }).scalar_one()
+        conn.execute(sa.text("""
+            INSERT INTO google_ads_branch_approved_identities
+                (approval_version_id, campaign_key, ad_group_key, sucursal_canon)
+            VALUES (:approval_version_id, :campaign_key, :ad_group_key, :sucursal_canon)
+        """), [
+            {"approval_version_id": version_id, **row} for row in identities
+        ])
+        checked_id, checked_version = _check_existing(conn, identities)
+        _require(
+            checked_id == version_id and checked_version["approved_by_user_id"] == actor_id,
+            "verificación de aprobación M6 posterior a escritura falló",
+        )
+        return {
+            **preflight, "action": "APPROVED",
+            "already_approved": False, "approval_version_id": int(version_id),
+        }
