@@ -276,3 +276,43 @@ def test_held_source_reference_required_per_branch():
                   {"B": "evidence", "A": "unrequested"}]:
         with pytest.raises(approval.CampaignV2ApprovalValidationError):
             approval._hold_sources({"B"}, value)
+
+
+def test_repeated_materialization_requires_complete_immutable_child_identity():
+    from dataclasses import replace
+    base = synthetic_plan()
+    richer = []
+    for i, batch in enumerate(base.batches, start=1):
+        richer.append(NS(**vars(batch), sucursal_id=i, channel_binding_id=i+100,
+                         template_name="synthetic_approved"))
+    p = replace(base, batches=tuple(richer))
+    approval_data = synthetic_approval().manifest_json["batches"]
+    manifest_rows = {x["sucursal_canon"]: x for x in approval_data}
+    children = []
+    for batch in p.batches:
+        held = batch.sucursal_canon == "B"
+        children.append(NS(
+            campaign_v2_id=99, provider="IVENTAS",
+            sucursal_id=batch.sucursal_id, sucursal_canon=batch.sucursal_canon,
+            channel_binding_id=batch.channel_binding_id,
+            provider_channel_id=batch.provider_channel_id,
+            template_id=2, template_name="synthetic_approved",
+            recipient_count=len(batch.recipients), status="HELD" if held else "READY",
+            dispatch_fingerprint=FP, idempotency_key="exact-idempotency",
+            request_snapshot_json={}, provider_campaign_id=None,
+            submit_started_at=None, submitted_at=None,
+            submitted_by_user_id=None, error_code=None,
+            hold_reason="CHANNEL_DAILY_QUOTA" if held else None,
+            hold_evidence_json=manifest_rows["B"]["hold_evidence"] if held else {},
+            held_at=NOW if held else None, held_by_user_id=7 if held else None,
+        ))
+    with patch.object(manifest, "build_provider_campaign_idempotency_key",
+                      return_value="exact-idempotency"), \
+         patch.object(manifest, "build_campaign_v2_provider_dispatch_batch",
+                      return_value=NS()), \
+         patch.object(manifest, "serialize_campaign_v2_provider_request_snapshot",
+                      return_value={}):
+        manifest._validate_existing(p, manifest_rows, children)
+        children[0].provider_channel_id = "unexpected-channel"
+        with pytest.raises(approval.CampaignV2ApprovalConflictError, match="modificado"):
+            manifest._validate_existing(p, manifest_rows, children)
