@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.models.marketing import (
     MarketingCampaignV2ORM,
     MarketingCampaignV2ProviderCampaignORM,
+    MarketingCampaignV2DispatchApprovalORM,
 )
 from app.services import marketing_campaign_v2_reconciliation_service
 from app.services import marketing_campaign_v2_retry_service as service
@@ -97,6 +98,7 @@ def session():
 
     MarketingCampaignV2ORM.__table__.to_metadata(metadata)
     MarketingCampaignV2ProviderCampaignORM.__table__.to_metadata(metadata)
+    MarketingCampaignV2DispatchApprovalORM.__table__.to_metadata(metadata)
     metadata.create_all(engine)
 
     with Session(engine) as value:
