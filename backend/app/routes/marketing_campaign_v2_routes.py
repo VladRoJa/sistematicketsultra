@@ -1307,7 +1307,7 @@ def campaign_v2_dispatch_approval_endpoint(campaign_id: int):
         payload = _parse_payload({
             "template_id", "expected_dispatch_fingerprint",
             "expected_quote_fingerprint",
-            "expected_recipients", "expected_total_mxn",
+            "expected_recipients", "expected_total_mxn", "held_sucursal_canons",
         })
         row = approve_dispatch_reservation(
             campaign_id=campaign_id,
@@ -1316,6 +1316,7 @@ def campaign_v2_dispatch_approval_endpoint(campaign_id: int):
             expected_quote_fingerprint=payload.get("expected_quote_fingerprint"),
             expected_recipients=payload.get("expected_recipients"),
             expected_total_mxn=payload.get("expected_total_mxn"),
+            held_sucursal_canons=payload.get("held_sucursal_canons"),
             actor_user_id=int(user.id),
             allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
             session=db.session,
