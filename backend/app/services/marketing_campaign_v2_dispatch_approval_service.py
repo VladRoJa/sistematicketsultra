@@ -50,7 +50,7 @@ def _timestamp(value: datetime | None) -> datetime:
 def _validate_confirmation(
     expected_dispatch_fingerprint: Any, expected_quote_fingerprint: Any,
     expected_recipients: Any, expected_total_mxn: Any, actor_user_id: Any,
-) -> tuple[str, int, Decimal, int]:
+) -> tuple[str, str, int, Decimal, int]:
     if (not isinstance(expected_dispatch_fingerprint, str)
             or re.fullmatch(r"[0-9a-f]{64}", expected_dispatch_fingerprint) is None):
         raise CampaignV2ApprovalValidationError("Fingerprint SHA256 exacto requerido.")
