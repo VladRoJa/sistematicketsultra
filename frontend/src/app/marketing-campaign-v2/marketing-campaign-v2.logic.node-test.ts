@@ -1,3 +1,4 @@
+import { isDispatchTemplateDraftValid, DispatchTemplateDraft } from './marketing-campaign-v2-dispatch-admin.logic';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -1231,4 +1232,26 @@ test('Winback scope comercial viaja en preview/freeze y no amplía permisos de f
     isCampaignV2AudienceValid({ ...base, branchFilterMode: 'INCLUDE', branchKeys: ['FORGED'] }, opts),
     false,
   );
+});
+
+test('Issue #856 Phase A: template requires explicit compatible active channels', () => {
+  const draft: DispatchTemplateDraft = {
+    templateName: 'reactivacion_aprobada',
+    label: 'Reactivación',
+    purposes: ['REACTIVATION'],
+    channelIds: ['channel-1'],
+    activeChannelIds: ['channel-1', 'channel-2'],
+    variables: ['branch'],
+    fileUrl: '',
+  };
+  assert.equal(isDispatchTemplateDraftValid(draft), true);
+  assert.equal(isDispatchTemplateDraftValid({ ...draft, channelIds: [] }), false);
+  assert.equal(isDispatchTemplateDraftValid({ ...draft, channelIds: ['inactive'] }), false);
+  assert.equal(isDispatchTemplateDraftValid({ ...draft, channelIds: ['channel-1', 'channel-1'] }), false);
+  assert.equal(isDispatchTemplateDraftValid({ ...draft, channelIds: ['channel-1', 'channel-2'] }), true);
+  assert.equal(isDispatchTemplateDraftValid({ ...draft, templateName: '   ' }), false);
+  assert.equal(isDispatchTemplateDraftValid({ ...draft, purposes: [] }), false);
+  assert.equal(isDispatchTemplateDraftValid({ ...draft, variables: ['arbitrary_browser_var'] }), false);
+  assert.equal(isDispatchTemplateDraftValid({ ...draft, fileUrl: 'http://example.org/file.png' }), false);
+  assert.equal(isDispatchTemplateDraftValid({ ...draft, fileUrl: 'https://media.example.org/file.png' }), true);
 });

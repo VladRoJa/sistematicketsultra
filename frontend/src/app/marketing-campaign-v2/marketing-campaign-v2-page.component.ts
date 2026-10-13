@@ -79,6 +79,7 @@ import {
   MarketingCampaignV2TariffClassifierDialogComponent,
   MarketingCampaignV2TariffClassifierDialogData,
 } from './marketing-campaign-v2-tariff-classifier-dialog.component';
+import { MarketingCampaignV2DispatchAdminDialogComponent } from './marketing-campaign-v2-dispatch-admin-dialog.component';
 
 @Component({
   selector: 'app-marketing-campaign-v2-page',
@@ -437,6 +438,22 @@ export class MarketingCampaignV2PageComponent implements OnInit {
 
   get canManageBlacklist(): boolean {
     return Boolean(this.options?.scope.is_global);
+  }
+
+  get canManageDispatchConfig(): boolean {
+    return Boolean(this.options?.scope.is_global && this.options?.scope.can_manage_dispatch_config);
+  }
+
+  openDispatchConfiguration(): void {
+    if (!this.canManageDispatchConfig) {
+      return;
+    }
+    this.dialog.open(MarketingCampaignV2DispatchAdminDialogComponent, {
+      width: 'min(1050px, 96vw)',
+      maxWidth: '96vw',
+      maxHeight: '94vh',
+      autoFocus: false,
+    });
   }
 
   get scopeLabel(): string {

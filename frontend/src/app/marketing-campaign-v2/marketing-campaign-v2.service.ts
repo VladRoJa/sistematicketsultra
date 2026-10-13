@@ -13,6 +13,12 @@ import {
   CampaignV2CampaignQuery,
   CampaignV2ConsolidatedReport,
   CampaignV2DispatchTemplatesResponse,
+  CampaignV2DispatchTemplate,
+  CampaignV2ChannelBinding,
+  CampaignV2ChannelBindingRequest,
+  CampaignV2ChannelBindingsResponse,
+  CampaignV2CatalogBranchesResponse,
+  CampaignV2TemplateConfigRequest,
   CampaignV2FreezeRequest,
   CampaignV2FreezeResponse,
   CampaignV2IndividualReport,
@@ -106,6 +112,48 @@ export class MarketingCampaignV2Service {
     return this.http.get<CampaignV2DispatchTemplatesResponse>(
       `${this.apiUrl}/dispatch/templates`,
       { params },
+    );
+  }
+
+  listDispatchTemplatesAdmin(): Observable<CampaignV2DispatchTemplatesResponse> {
+    return this.http.get<CampaignV2DispatchTemplatesResponse>(
+      `${this.apiUrl}/dispatch/templates/admin`,
+    );
+  }
+
+  listDispatchChannelBindings(): Observable<CampaignV2ChannelBindingsResponse> {
+    return this.http.get<CampaignV2ChannelBindingsResponse>(
+      `${this.apiUrl}/dispatch/channel-bindings`,
+    );
+  }
+
+  listDispatchCatalogBranches(): Observable<CampaignV2CatalogBranchesResponse> {
+    return this.http.get<CampaignV2CatalogBranchesResponse>(
+      `${this.apiUrl}/dispatch/catalog-branches`,
+    );
+  }
+
+  createDispatchTemplate(request: CampaignV2TemplateConfigRequest): Observable<CampaignV2DispatchTemplate> {
+    return this.http.post<CampaignV2DispatchTemplate>(
+      `${this.apiUrl}/dispatch/templates`, request,
+    );
+  }
+
+  updateDispatchTemplate(id: number, request: CampaignV2TemplateConfigRequest): Observable<CampaignV2DispatchTemplate> {
+    return this.http.put<CampaignV2DispatchTemplate>(
+      `${this.apiUrl}/dispatch/templates/${id}`, request,
+    );
+  }
+
+  createDispatchChannelBinding(request: CampaignV2ChannelBindingRequest): Observable<CampaignV2ChannelBinding> {
+    return this.http.post<CampaignV2ChannelBinding>(
+      `${this.apiUrl}/dispatch/channel-bindings`, request,
+    );
+  }
+
+  updateDispatchChannelBinding(id: number, request: CampaignV2ChannelBindingRequest): Observable<CampaignV2ChannelBinding> {
+    return this.http.put<CampaignV2ChannelBinding>(
+      `${this.apiUrl}/dispatch/channel-bindings/${id}`, request,
     );
   }
 

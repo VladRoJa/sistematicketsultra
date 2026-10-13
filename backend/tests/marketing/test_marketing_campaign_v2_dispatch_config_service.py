@@ -14,6 +14,8 @@ def _sqlite_bigint_as_integer(_type, _compiler, **_kwargs):
 
 from app.models.marketing import (
     MarketingCampaignV2ChannelBindingORM,
+    MarketingCampaignV2ORM,
+    MarketingCampaignV2ProviderCampaignORM,
     MarketingCampaignV2TemplateORM,
 )
 from app.models.sucursal_model import Sucursal
@@ -33,6 +35,8 @@ def session():
     TrackBranchCatalogORM.__table__.to_metadata(metadata)
     MarketingCampaignV2ChannelBindingORM.__table__.to_metadata(metadata)
     MarketingCampaignV2TemplateORM.__table__.to_metadata(metadata)
+    MarketingCampaignV2ORM.__table__.to_metadata(metadata)
+    MarketingCampaignV2ProviderCampaignORM.__table__.to_metadata(metadata)
     metadata.create_all(engine)
 
     with Session(engine) as value:
@@ -259,3 +263,179 @@ def test_resolve_template_rejects_inactive(session):
             purpose="REACTIVATION",
             session=session,
         )
+
+
+def _active_channel(session):
+    return service.save_channel_binding(
+        provider="IVENTAS", sucursal_id=4,
+        provider_channel_id="channel-current",
+        is_active=True, is_default=True, actor_user_id=7,
+        session=session, now=NOW,
+    )
+
+
+def test_admin_template_requires_explicit_active_channels(session):
+    _active_channel(session)
+    def register(channels, **extra):
+        return service.save_template(
+            provider="IVENTAS", template_name="admin_v1", label="Admin V1",
+            is_active=True, purposes=["REACTIVATION"],
+            variables={"1": "branch"}, compatible_channel_ids=channels,
+            actor_user_id=7, require_explicit_channels=True,
+            session=session, now=NOW, **extra,
+        )
+
+    with pytest.raises(service.MarketingCampaignV2DispatchConfigValidationError,
+                       match="al menos un canal"):
+        register([])
+    with pytest.raises(service.MarketingCampaignV2DispatchConfigValidationError,
+                       match="inexistentes o inactivos"):
+        register(["unknown-channel"])
+
+    saved = register(["channel-current"])
+    assert saved["compatible_channel_ids"] == ["channel-current"]
+    assert service.list_templates(active_only=True, purpose="REACTIVATION", session=session)
+    assert not service.template_allows_channel(
+        session.get(MarketingCampaignV2TemplateORM, saved["id"]), "other-channel"
+    )
+
+
+def test_admin_template_inactive_visible_only_in_admin_list(session):
+    _active_channel(session)
+    saved = service.save_template(
+        provider="IVENTAS", template_name="inactive-admin", label="Inactive",
+        is_active=False, purposes=["REACTIVATION"], variables={},
+        compatible_channel_ids=["channel-current"], actor_user_id=7,
+        require_explicit_channels=True, session=session, now=NOW,
+    )
+    assert service.list_templates(active_only=True, session=session) == []
+    assert [row["id"] for row in service.list_templates(
+        active_only=False, session=session
+    )] == [saved["id"]]
+
+
+def test_admin_template_rejects_nonconsecutive_variables(session):
+    _active_channel(session)
+    with pytest.raises(service.MarketingCampaignV2DispatchConfigValidationError,
+                       match="consecutivas"):
+        service.save_template(
+            provider="IVENTAS", template_name="gap", label="Gap",
+            is_active=True, purposes=["REACTIVATION"],
+            variables={"1": "branch", "3": "amount"},
+            compatible_channel_ids=["channel-current"],
+            actor_user_id=7, require_explicit_channels=True, session=session,
+        )
+
+
+def _campaign_child(session, *, binding_id, template_id, status="READY"):
+    campaign = MarketingCampaignV2ORM(
+        name="Legacy audit", purpose="REACTIVATION",
+        source="EXPIRED_MEMBERS", created_by_user_id=7,
+        audience_definition_json={"schema_version": 1}, frozen_at=NOW,
+    )
+    session.add(campaign)
+    session.flush()
+    child = MarketingCampaignV2ProviderCampaignORM(
+        campaign_v2_id=campaign.id,
+        provider="IVENTAS", sucursal_id=4, sucursal_canon="TEC_MXL",
+        channel_binding_id=binding_id, provider_channel_id="channel-current",
+        template_id=template_id, template_name="historic-template",
+        recipient_count=2, dispatch_fingerprint="a" * 64,
+        idempotency_key="b" * 64, status=status,
+        created_by_user_id=7,
+        request_snapshot_json={"leads": []},
+    )
+    session.add(child)
+    session.commit()
+    return child
+
+
+def test_admin_template_rejects_mutating_previously_used_dispatch(session):
+    channel = _active_channel(session)
+    saved = service.save_template(
+        provider="IVENTAS", template_name="historic-template",
+        label="Histórica", is_active=True,
+        purposes=["REACTIVATION"], variables={"1": "branch"},
+        compatible_channel_ids=["channel-current"], actor_user_id=7,
+        require_explicit_channels=True, session=session, now=NOW,
+    )
+    _campaign_child(session, binding_id=channel["id"], template_id=saved["id"])
+    original = dict(
+        template_id=saved["id"], provider="IVENTAS",
+        template_name="historic-template", label="Histórica",
+        is_active=True, purposes=["REACTIVATION"],
+        variables={"1": "branch"}, compatible_channel_ids=["channel-current"],
+        actor_user_id=7, require_explicit_channels=True, session=session, now=NOW,
+    )
+    with pytest.raises(service.MarketingCampaignV2DispatchConfigConflictError,
+                       match="lotes auditados"):
+        service.save_template(**{**original, "template_name": "different-name"})
+    with pytest.raises(service.MarketingCampaignV2DispatchConfigConflictError,
+                       match="pendientes"):
+        service.save_template(**{**original, "is_active": False})
+    updated = service.save_template(**{**original, "label": "Etiqueta editable"})
+    assert updated["label"] == "Etiqueta editable"
+
+
+def test_admin_binding_prevents_changing_identity_used_by_child(session):
+    channel = _active_channel(session)
+    saved = service.save_template(
+        provider="IVENTAS", template_name="historic-template",
+        label="Histórica", is_active=True, purposes=["REACTIVATION"],
+        variables={}, compatible_channel_ids=["channel-current"],
+        actor_user_id=7, require_explicit_channels=True, session=session,
+    )
+    _campaign_child(session, binding_id=channel["id"], template_id=saved["id"])
+    with pytest.raises(service.MarketingCampaignV2DispatchConfigConflictError,
+                       match="envíos auditados"):
+        service.save_channel_binding(
+            binding_id=channel["id"], provider="IVENTAS", sucursal_id=4,
+            provider_channel_id="changed-id", is_active=True,
+            is_default=True, actor_user_id=7, session=session,
+            require_immutable_history=True,
+        )
+    with pytest.raises(service.MarketingCampaignV2DispatchConfigConflictError,
+                       match="pendientes"):
+        service.save_channel_binding(
+            binding_id=channel["id"], provider="IVENTAS", sucursal_id=4,
+            provider_channel_id="channel-current", is_active=False,
+            is_default=False, actor_user_id=7, session=session,
+            require_immutable_history=True,
+        )
+
+
+def test_admin_rejects_non_iventas_provider(session):
+    with pytest.raises(service.MarketingCampaignV2DispatchConfigValidationError,
+                       match="sólo admite IVENTAS"):
+        service.save_template(
+            provider="OTHER", template_name="wrong", label="Wrong",
+            is_active=True, purposes=["REACTIVATION"], variables={},
+            compatible_channel_ids=["unknown"],
+            actor_user_id=7, require_explicit_channels=True, session=session,
+        )
+    with pytest.raises(service.MarketingCampaignV2DispatchConfigValidationError,
+                       match="sólo admite IVENTAS"):
+        service.save_channel_binding(
+            provider="OTHER", sucursal_id=4, provider_channel_id="wrong",
+            is_active=True, is_default=True,
+            actor_user_id=7, require_immutable_history=True, session=session,
+        )
+
+
+def test_admin_cannot_replace_default_with_pending_children(session):
+    channel = _active_channel(session)
+    saved = service.save_template(
+        provider="IVENTAS", template_name="historic-template", label="Historical",
+        is_active=True, purposes=["REACTIVATION"], variables={},
+        compatible_channel_ids=["channel-current"], actor_user_id=7,
+        require_explicit_channels=True, session=session,
+    )
+    _campaign_child(session, binding_id=channel["id"], template_id=saved["id"])
+    with pytest.raises(service.MarketingCampaignV2DispatchConfigConflictError,
+                       match="lotes pendientes"):
+        service.save_channel_binding(
+            provider="IVENTAS", sucursal_id=4, provider_channel_id="new-default",
+            is_active=True, is_default=True, actor_user_id=7,
+            require_immutable_history=True, session=session,
+        )
+    assert service.resolve_dispatch_channel_binding(sucursal_id=4, session=session).provider_channel_id == "channel-current"
