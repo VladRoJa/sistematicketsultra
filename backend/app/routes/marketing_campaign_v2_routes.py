@@ -206,6 +206,9 @@ def campaign_v2_options_endpoint():
                 "branch_options": branch_options,
                 "scope": {
                     "is_global": bool(access.is_global),
+                    "can_manage_dispatch_config": bool(
+                        access.is_global and getattr(access, "can_manage_dispatch_config", False)
+                    ),
                     "allowed_sucursal_keys": (
                         list(allowed) if allowed is not None else None
                     ),
@@ -1084,6 +1087,49 @@ def list_campaign_v2_dispatch_templates_endpoint():
         return _error("Falló la consulta de templates Campaign V2.", 500)
 
 
+@marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/templates/admin")
+@jwt_required()
+def list_campaign_v2_dispatch_templates_admin_endpoint():
+    """Local iVentas catalog, including inactive templates. Never calls iVentas."""
+    try:
+        _resolve_campaign_v2_dispatch_config_request()
+        _validate_query_args(set())
+        return jsonify({
+            "rows": list_templates(
+                provider=CAMPAIGN_V2_DISPATCH_PROVIDER,
+                active_only=False,
+                session=db.session,
+            )
+        }), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except Exception:
+        return _error("Falló el catálogo administrativo de templates.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/catalog-branches")
+@jwt_required()
+def list_campaign_v2_dispatch_catalog_branches_endpoint():
+    try:
+        _resolve_campaign_v2_dispatch_config_request()
+        _validate_query_args(set())
+        rows = db.session.query(TrackBranchCatalogORM).filter(
+            TrackBranchCatalogORM.is_track_active.is_(True),
+            TrackBranchCatalogORM.sucursal_id.isnot(None),
+        ).order_by(TrackBranchCatalogORM.display_order, TrackBranchCatalogORM.sucursal_canon).all()
+        return jsonify({"rows": [
+            {
+                "sucursal_id": int(row.sucursal_id),
+                "sucursal_canon": str(row.sucursal_canon),
+                "track_label": str(row.track_label or row.sucursal_canon),
+            } for row in rows
+        ]}), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except Exception:
+        return _error("Falló el catálogo de sucursales para dispatch.", 500)
+
+
 @marketing_campaign_v2_bp.post("/campaigns-v2/dispatch/templates")
 @jwt_required()
 def create_campaign_v2_dispatch_template_endpoint():
@@ -1111,6 +1157,7 @@ def create_campaign_v2_dispatch_template_endpoint():
             compatible_channel_ids=payload.get("compatible_channel_ids"),
             metadata=payload.get("metadata"),
             actor_user_id=int(user.id),
+            require_explicit_channels=True,
             session=db.session,
         )
         return jsonify(result), 201
@@ -1154,6 +1201,7 @@ def update_campaign_v2_dispatch_template_endpoint(template_id: int):
             compatible_channel_ids=payload.get("compatible_channel_ids"),
             metadata=payload.get("metadata"),
             actor_user_id=int(user.id),
+            require_explicit_channels=True,
             session=db.session,
         )
         return jsonify(result), 200
@@ -1213,6 +1261,7 @@ def create_campaign_v2_channel_binding_endpoint():
             is_default=payload.get("is_default"),
             metadata=payload.get("metadata"),
             actor_user_id=int(user.id),
+            require_immutable_history=True,
             session=db.session,
         )
         return jsonify(result), 201
@@ -1252,6 +1301,7 @@ def update_campaign_v2_channel_binding_endpoint(binding_id: int):
             is_default=payload.get("is_default"),
             metadata=payload.get("metadata"),
             actor_user_id=int(user.id),
+            require_immutable_history=True,
             session=db.session,
         )
         return jsonify(result), 200
