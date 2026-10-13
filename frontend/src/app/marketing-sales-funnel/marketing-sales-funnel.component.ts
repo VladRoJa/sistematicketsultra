@@ -170,6 +170,7 @@ type DashboardRequestResult =
   styleUrls: [
     './marketing-sales-funnel.component.css',
     './marketing-sales-funnel-branch-table.component.css',
+    './marketing-sales-funnel-google-attribution.component.css',
   ],
 })
 export class MarketingSalesFunnelComponent implements OnInit {
@@ -597,9 +598,9 @@ export class MarketingSalesFunnelComponent implements OnInit {
       scope_unavailable: 'Sin sucursales autorizadas',
     };
     const available = evidence.status === 'complete' || evidence.status === 'partial';
-    const names = new Map(data.branches.map((row) => [
-      row.sucursal_id, row.sucursal,
-    ]));
+    const names = new Map<number, string>(data.branches.map(
+      (row): [number, string] => [row.sucursal_id, row.sucursal],
+    ));
     const rows: GoogleAdsBranchAttributionRowView[] = available
       ? evidence.rows.map((item) => ({
           sucursalId: item.sucursal_id,
