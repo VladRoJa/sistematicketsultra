@@ -1,3 +1,4 @@
+import { campaignV2IndicativeBudget } from './marketing-campaign-v2-budget.logic';
 import { isDispatchTemplateDraftValid, DispatchTemplateDraft } from './marketing-campaign-v2-dispatch-admin.logic';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -1254,4 +1255,38 @@ test('Issue #856 Phase A: template requires explicit compatible active channels'
   assert.equal(isDispatchTemplateDraftValid({ ...draft, variables: ['arbitrary_browser_var'] }), false);
   assert.equal(isDispatchTemplateDraftValid({ ...draft, fileUrl: 'http://example.org/file.png' }), false);
   assert.equal(isDispatchTemplateDraftValid({ ...draft, fileUrl: 'https://media.example.org/file.png' }), true);
+});
+
+test('Issue #856/B preliminary MXN range uses versioned rates with full channel coverage', () => {
+  const template = {
+    id: 10, provider: 'IVENTAS', template_name: 'synthetic',
+    label: 'Synthetic', is_active: true, purposes: ['REACTIVATION' as const],
+    variables: {}, compatible_channel_ids: ['channel-1', 'channel-2'],
+    metadata: {}, created_at: null, updated_at: null,
+  };
+  const rates = [
+    { revision_id: 1, template_id: 10, provider_channel_id: 'channel-1',
+      unit_cost_mxn: '0.750000', source_reference: 'QA-01',
+      valid_from: '2026-10-12T08:00:00Z', created_at: '2026-10-12T08:00:00Z' },
+    { revision_id: 2, template_id: 10, provider_channel_id: 'channel-2',
+      unit_cost_mxn: '1.250000', source_reference: 'QA-02',
+      valid_from: '2026-10-12T08:00:00Z', created_at: '2026-10-12T08:00:00Z' },
+  ];
+  const now = '2026-10-13T16:00:00Z';
+  const quote = campaignV2IndicativeBudget(template, rates, 100, now);
+  assert.equal(quote.status, 'RANGE');
+  assert.equal(quote.min_mxn, '75.00');
+  assert.equal(quote.max_mxn, '125.00');
+  const missing = campaignV2IndicativeBudget(template, rates.slice(0,1), 100, now);
+  assert.equal(missing.status, 'INCOMPLETE');
+  assert.equal(missing.min_mxn, null);
+  assert.equal(missing.max_mxn, null);
+  assert.equal(missing.missing_channels, 1);
+  const future = campaignV2IndicativeBudget(template,
+    [{ ...rates[0], valid_from: '2026-11-01T00:00:00Z' }, rates[1]],
+    100, now);
+  assert.equal(future.status, 'INCOMPLETE');
+  assert.equal(campaignV2IndicativeBudget(
+    { ...template, compatible_channel_ids: [] }, rates, 100, now,
+  ).status, 'UNPRICED');
 });
