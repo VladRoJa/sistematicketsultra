@@ -186,7 +186,12 @@ def test_real_postgres_freeze_clones_and_records_one_authorized_intent(monkeypat
             ))
             # An existing derived cohort is real historical data; only isolated
             # test rows can be explicitly cleaned before reversible migration.
-            d2.downgrade()
-            d1.downgrade()
+            for migration in (d2, d1):
+                # Each Alembic Operations object belongs to its transaction.
+                # The connection used for upgrade has already been closed.
+                monkeypatch.setattr(
+                    migration, "op", Operations(MigrationContext.configure(conn)),
+                )
+                migration.downgrade()
         md.drop_all(engine)
         engine.dispose()
