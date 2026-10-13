@@ -49,6 +49,14 @@ from app.services.marketing_campaign_v2_dispatch_config_service import (
     save_channel_binding,
     save_template,
 )
+from app.services.marketing_campaign_v2_quota_service import (
+    CampaignV2QuotaValidationError,
+    CampaignV2QuotaConflictError,
+    list_quota_evidence,
+    register_quota_policy,
+    register_quota_capacity,
+    assess_preflight_capacity,
+)
 from app.services.marketing_campaign_v2_budget_service import (
     CampaignV2BudgetValidationError,
     CampaignV2BudgetConflictError,
@@ -64,6 +72,7 @@ from app.services.marketing_campaign_v2_preparation_service import (
     apply_previous_contacts,
 )
 from app.services.marketing_campaign_v2_preflight_service import (
+    CampaignV2PreflightPlan,
     build_campaign_v2_preflight,
     serialize_campaign_v2_preflight,
 )
@@ -1282,6 +1291,80 @@ def create_campaign_v2_cost_rate_revision_endpoint():
         return _error("Falló el registro de cotización.", 500)
 
 
+@marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/quota-evidence")
+@jwt_required()
+def list_campaign_v2_quota_evidence_endpoint():
+    try:
+        _resolve_campaign_v2_dispatch_config_request()
+        _validate_query_args(set())
+        return jsonify(list_quota_evidence(session=db.session)), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2RouteValidationError as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("Falló consulta de evidencia de cupos.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/dispatch/quota-policies")
+@jwt_required()
+def register_campaign_v2_quota_policy_endpoint():
+    try:
+        user, _ = _resolve_campaign_v2_dispatch_config_request()
+        payload = _parse_payload({
+            "provider_channel_id", "portfolio_key", "account_key",
+            "phone_alias", "nominal_channel_limit", "reset_timezone",
+            "source_reference",
+        })
+        return jsonify(register_quota_policy(
+            provider_channel_id=payload.get("provider_channel_id"),
+            portfolio_key=payload.get("portfolio_key"),
+            account_key=payload.get("account_key"),
+            phone_alias=payload.get("phone_alias"),
+            nominal_channel_limit=payload.get("nominal_channel_limit"),
+            reset_timezone=payload.get("reset_timezone"),
+            source_reference=payload.get("source_reference"),
+            actor_user_id=int(user.id), session=db.session,
+        )), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (CampaignV2QuotaValidationError, MarketingCampaignV2RouteValidationError) as exc:
+        return _error(str(exc), 400)
+    except CampaignV2QuotaConflictError as exc:
+        return _error(str(exc), 409)
+    except Exception:
+        return _error("No se pudo registrar política de cuotas.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/dispatch/quota-attestations")
+@jwt_required()
+def register_campaign_v2_quota_attestation_endpoint():
+    try:
+        user, _ = _resolve_campaign_v2_dispatch_config_request()
+        payload = _parse_payload({
+            "scope_kind", "scope_key", "observed_at", "expires_at",
+            "window_ends_at", "remaining_messages", "source_reference",
+        })
+        return jsonify(register_quota_capacity(
+            scope_kind=payload.get("scope_kind"),
+            scope_key=payload.get("scope_key"),
+            observed_at=payload.get("observed_at"),
+            expires_at=payload.get("expires_at"),
+            window_ends_at=payload.get("window_ends_at"),
+            remaining_messages=payload.get("remaining_messages"),
+            source_reference=payload.get("source_reference"),
+            actor_user_id=int(user.id), session=db.session,
+        )), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (CampaignV2QuotaValidationError, MarketingCampaignV2RouteValidationError) as exc:
+        return _error(str(exc), 400)
+    except CampaignV2QuotaConflictError as exc:
+        return _error(str(exc), 409)
+    except Exception:
+        return _error("No se pudo registrar evidencia de cupo.", 500)
+
+
 @marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/channel-bindings")
 @jwt_required()
 def list_campaign_v2_channel_bindings_endpoint():
@@ -1649,6 +1732,10 @@ def campaign_v2_preflight_endpoint(campaign_id: int):
             campaign_id=campaign_id,
             session=db.session,
         )
+        if isinstance(plan, CampaignV2PreflightPlan):
+            result["quota"] = assess_preflight_capacity(
+                plan=plan, session=db.session,
+            )
         result["submission"] = {
             "enabled": bool(
                 current_app.config.get(
