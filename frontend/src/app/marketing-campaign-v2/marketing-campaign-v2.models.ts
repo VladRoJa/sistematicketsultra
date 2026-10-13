@@ -575,6 +575,10 @@ export type CampaignV2SubmitStatus =
   | 'SUBMITTED'
   | 'PROVIDER_ERROR'
   | 'RECONCILIATION_REQUIRED'
+  | 'HELD'
+  | 'SCHEDULED'
+  | 'RETRY_ELIGIBLE'
+  | 'RETRY_EXHAUSTED'
   | 'PARTIAL';
 
 export interface CampaignV2SubmitBatch {
@@ -617,6 +621,7 @@ export interface CampaignV2PreflightResponse {
   frozen_count: number;
   suppressed: {
     blacklist: number;
+    campaign_exclusions: number;
   };
   sendable_count: number;
   template: {
