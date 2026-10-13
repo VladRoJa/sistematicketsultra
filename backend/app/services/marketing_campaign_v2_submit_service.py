@@ -16,6 +16,11 @@ from app.models.marketing import (
     MarketingCampaignV2ProviderCampaignORM,
     MarketingCampaignV2DispatchApprovalORM,
 )
+from app.services.marketing_campaign_v2_contact_gate_service import (
+    CampaignV2ContactGateConflict,
+    acquire_campaign_v2_contact_gate,
+    verify_outbound_contact_admission,
+)
 from app.services.marketing_campaign_v2_preflight_service import (
     DISPATCH_FINGERPRINT_VERSION,
     CampaignV2DispatchBatchPlan,
@@ -597,16 +602,30 @@ def _transition_ready_to_submitting(
     session: Any,
     now: datetime,
 ) -> None:
-    # Shared with the isolated partial-resume script. Neither the web
-    # submit nor that script may bypass the D2c independent authorization.
+    # Shared with partial-resume; serialize before inspecting the child.
+    # The resulting SUBMITTING claim is committed while the gate is held.
+    try:
+        acquire_campaign_v2_contact_gate(session)
+    except CampaignV2ContactGateConflict as exc:
+        session.rollback()
+        raise MarketingCampaignV2SubmitConflictError(str(exc)) from exc
     existing = session.get(MarketingCampaignV2ProviderCampaignORM, row_id)
     if existing is not None and session.query(MarketingCampaignV2DispatchApprovalORM.id).filter(
         MarketingCampaignV2DispatchApprovalORM.campaign_v2_id == int(existing.campaign_v2_id)
     ).first() is not None:
+        session.rollback()
         raise MarketingCampaignV2SubmitConflictError(
             "Transición heredada bloqueada para aprobación gobernada."
         )
     try:
+        if existing is None:
+            raise MarketingCampaignV2SubmitConflictError(
+                "Provider child inexistente antes de claim."
+            )
+        try:
+            verify_outbound_contact_admission(child=existing, session=session)
+        except CampaignV2ContactGateConflict as exc:
+            raise MarketingCampaignV2SubmitConflictError(str(exc)) from exc
         updated = (
             session.query(MarketingCampaignV2ProviderCampaignORM)
             .filter(
@@ -632,6 +651,7 @@ def _transition_ready_to_submitting(
             )
         session.commit()
     except MarketingCampaignV2SubmitConflictError:
+        session.rollback()
         raise
     except SQLAlchemyError as exc:
         session.rollback()
