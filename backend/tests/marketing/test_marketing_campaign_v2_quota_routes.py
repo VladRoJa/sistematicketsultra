@@ -248,3 +248,26 @@ def test_dispatch_execute_rejects_extra_send_enabled_from_browser(
         )
     assert response.status_code == 400
     dispatch.assert_not_called()
+
+
+def test_governed_mode_does_not_unlock_legacy_web_submit_or_retry(
+    client, global_access,
+):
+    browser, headers = client
+    browser.application.config.update(
+        CAMPAIGN_V2_PROVIDER_SEND_ENABLED=True,
+        CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED=True,
+    )
+    with auth(global_access), patch.object(routes, "IVentasBroadcastProvider") as provider:
+        submit = browser.post(
+            "/api/marketing/campaigns-v2/99/submit",
+            json={"template_id": 2, "expected_dispatch_fingerprint": "a"*64},
+            headers=headers,
+        )
+        retry = browser.post(
+            "/api/marketing/campaigns-v2/provider-campaigns/100/retry",
+            json={}, headers=headers,
+        )
+    assert submit.status_code == 423
+    assert retry.status_code == 423
+    provider.assert_not_called()
