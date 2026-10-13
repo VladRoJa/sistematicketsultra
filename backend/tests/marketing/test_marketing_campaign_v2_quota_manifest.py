@@ -178,3 +178,87 @@ def test_materialization_never_imports_provider_dispatch():
     assert "provider.create_campaign(" not in source
     assert "IVentasBroadcastProvider(" not in source
     assert "send_authorized" in source
+
+
+def test_materialization_rechecks_reservations_and_creates_one_held_child():
+    p = synthetic_plan()
+    a = synthetic_approval()
+    a.id = 40
+    a.template_id = 2
+    a.expires_at = NOW + timedelta(minutes=10)
+    reservation = NS(
+        scope_kind="CHANNEL", scope_key="channel-one", reserved_messages=5,
+        attestation_id=101, reserved_until=NOW+timedelta(minutes=10),
+    )
+    portfolio_reservation = NS(
+        scope_kind="PORTFOLIO", scope_key="shared", reserved_messages=5,
+        attestation_id=301, reserved_until=NOW+timedelta(minutes=10),
+    )
+    session = MagicMock()
+    session.get_bind.return_value.dialect.name = "postgresql"
+    campaign_query = MagicMock()
+    campaign_query.filter.return_value.with_for_update.return_value.one_or_none.return_value = NS(id=99)
+    approval_query = MagicMock()
+    approval_query.filter.return_value.with_for_update.return_value.one_or_none.return_value = a
+    reservation_query = MagicMock()
+    reservation_query.filter.return_value.all.return_value = [
+        reservation, portfolio_reservation,
+    ]
+    def query_model(model):
+        if model is manifest.MarketingCampaignV2ORM:
+            return campaign_query
+        if model is manifest.MarketingCampaignV2DispatchApprovalORM:
+            return approval_query
+        if model is manifest.MarketingCampaignV2CapacityReservationORM:
+            return reservation_query
+        raise AssertionError("Unexpected SQL model")
+    session.query.side_effect = query_model
+    needed = {("CHANNEL","channel-one"): 5, ("PORTFOLIO","shared"): 5}
+    evidence = {("CHANNEL","channel-one"): 101, ("PORTFOLIO","shared"): 301}
+    quota = {"A": {
+        "channel_evidence_id":101, "portfolio_evidence_id":301,
+        "portfolio_key":"shared",
+    }}
+    with patch.object(manifest, "build_campaign_v2_preflight", return_value=p), \
+         patch.object(manifest, "estimate_preflight_cost", return_value=synthetic_quote()), \
+         patch.object(manifest, "_assess_scopes",
+                      return_value=(None, needed, evidence, quota)), \
+         patch.object(manifest, "_load_campaign_rows", return_value=[]), \
+         patch.object(manifest, "_prepare_provider_campaign_rows", return_value=[NS(), NS()]) as prepare, \
+         patch.object(manifest, "_validate_existing") as validate:
+        result = manifest.materialize_approved_manifest(
+            campaign_id=99, actor_user_id=7, allowed_sucursal_keys=None,
+            session=session, now=NOW,
+        )
+    assert result["status"] == "PREPARED_NO_SEND"
+    assert result["ready_batches"] == 1
+    assert result["held_batches"] == 1
+    assert result["send_authorized"] is False
+    assert session.execute.call_count == 2  # advisory lock for both scopes
+    prepare.assert_called_once()
+    assert prepare.call_args.kwargs["held_batches"]["B"]["reason"] == "CHANNEL_DAILY_QUOTA"
+    validate.assert_called_once()
+
+
+def test_materialization_expired_approval_blocks_before_children():
+    a = synthetic_approval()
+    a.id = 40
+    a.template_id = 2
+    a.expires_at = NOW - timedelta(seconds=1)
+    session = MagicMock()
+    session.get_bind.return_value.dialect.name = "postgresql"
+    q_campaign = MagicMock()
+    q_campaign.filter.return_value.with_for_update.return_value.one_or_none.return_value = NS(id=99)
+    q_approval = MagicMock()
+    q_approval.filter.return_value.with_for_update.return_value.one_or_none.return_value = a
+    session.query.side_effect = lambda model: (
+        q_campaign if model is manifest.MarketingCampaignV2ORM else q_approval
+    )
+    with patch.object(manifest, "_prepare_provider_campaign_rows") as prepare:
+        with pytest.raises(approval.CampaignV2ApprovalConflictError, match="caducada"):
+            manifest.materialize_approved_manifest(
+                campaign_id=99, actor_user_id=7, allowed_sucursal_keys=None,
+                session=session, now=NOW,
+            )
+    prepare.assert_not_called()
+    session.rollback.assert_called_once()
