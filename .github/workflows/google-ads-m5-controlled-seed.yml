@@ -1,10 +1,11 @@
-name: Google Ads M5 Controlled Seed
+name: Google Ads M5 Explicit Historical Load
 
 on:
   pull_request:
     paths:
       - 'backend/migrations/data/google_ads_m5_identity_seed_20261012.json'
-      - 'backend/migrations/versions/a63e9f21d48b_seed_google_ads_m5_approved_identities.py'
+      - 'backend/app/warehouse/services/google_ads_m5_identity_seed_service.py'
+      - 'backend/scripts/apply_google_ads_m5_approved_identities.py'
       - 'backend/tests/google_ads/**'
       - '.github/workflows/google-ads-m5-controlled-seed.yml'
   push:
@@ -41,7 +42,7 @@ jobs:
         run: |
           python -m pip install -r backend/requirements.txt
           python -m pip install pytest==8.3.5
-      - name: PG16 controlled seed and Google Ads regressions
+      - name: PG16 explicit load and Google Ads regressions
         working-directory: backend
         env:
           SECRET_KEY: google-ads-m5-seed-ci
