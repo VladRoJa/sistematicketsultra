@@ -174,3 +174,27 @@ def test_multi_campaign_apply_preserves_first_matching_provenance(monkeypatch):
     ]
     assert all(row.reason == "PREVIOUS_CAMPAIGN_CONTACT" for row in records)
     session.commit.assert_called_once()
+
+
+def test_preparation_classifies_resolvable_and_unmapped_single_alias(monkeypatch):
+    monkeypatch.setattr(c, "get_campaign_v2", lambda **kwargs: {"id": kwargs["campaign_id"]})
+    monkeypatch.setattr(c, "resolve_dispatch_branch_key",
+                        lambda value, **kwargs: NS(sucursal_id=4)
+                        if value == "TEC_MXL" else None)
+    rows = [
+        NS(id=1, evidence_rows=[NS(sucursal_key="TEC_MXL")]),
+        NS(id=2, evidence_rows=[NS(sucursal_key="UNMAPPED_UNKNOWN")]),
+        NS(id=3, evidence_rows=[]),
+        NS(id=4, evidence_rows=[
+            NS(sucursal_key="TEC_MXL"), NS(sucursal_key="UNMAPPED_UNKNOWN"),
+        ]),
+    ]
+    session = _session()
+    session.query.return_value.options.return_value.filter.return_value.order_by.return_value.all.return_value = rows
+    result = c._ambiguous_rows(
+        campaign_id=15, allowed_sucursal_keys=None, session=session,
+    )
+    assert [row["kind"] for row in result] == [
+        "SINGLE_EVIDENCE_RESOLVABLE", "UNMAPPED_BRANCH_ALIAS",
+        "MISSING_EVIDENCE", "AMBIGUOUS_EVIDENCE",
+    ]
