@@ -15,6 +15,7 @@ from .google_ads_m6_continuity import (
     GoogleAdsBranchApprovalVersionORM,
     GoogleAdsBranchApprovedIdentityORM,
 )
+from .google_ads_m6_daily_publication import GoogleAdsM6DailyPublicationORM
 from .sucursal_model import Sucursal, SucursalOperationalStatus
 from .inventario import (
     InventarioGeneral,
