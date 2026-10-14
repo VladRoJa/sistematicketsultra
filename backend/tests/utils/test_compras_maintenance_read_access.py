@@ -1,0 +1,116 @@
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+from app.models import permiso_model
+from app.maintenance_planner import service as planner
+from app.routes.pm_routes import _verificar_permiso_sucursal
+from app.utils import pm_permissions
+from app.utils import ticket_filters
+from app.utils.maintenance_ticket_update_guard import (
+    generic_pm_update_is_forbidden,
+)
+
+
+def _compras(*, user_id=901, branches=(3, 5)):
+    return SimpleNamespace(
+        id=user_id,
+        username="compras_baja_test",
+        rol="COMPRAS",
+        department_id=6,
+        sucursal_id=100,
+        sucursales_ids=list(branches),
+    )
+
+
+def _mock_grant(monkeypatch, *, allowed):
+    query = MagicMock()
+    query.filter_by.return_value.first.return_value = object() if allowed else None
+    monkeypatch.setattr(permiso_model, "Permiso", SimpleNamespace(query=query))
+    return query
+
+
+def test_compras_requires_individual_read_grant(monkeypatch):
+    user = _compras()
+    query = _mock_grant(monkeypatch, allowed=False)
+
+    assert pm_permissions.can_pm_view(user) is False
+    assert pm_permissions.can_pm_execute(user) is False
+    query.filter_by.assert_called_once_with(
+        user_id=901,
+        departamento_id=1,
+        es_admin=False,
+    )
+
+
+def test_granted_compras_is_read_only(monkeypatch):
+    user = _compras()
+    _mock_grant(monkeypatch, allowed=True)
+
+    assert pm_permissions.can_pm_view(user) is True
+    assert pm_permissions.can_pm_execute(user) is False
+    assert pm_permissions.can_pm_validate(user) is False
+    assert pm_permissions.can_pm_configure(user) is False
+    assert generic_pm_update_is_forbidden(
+        user,
+        SimpleNamespace(departamento_id=1),
+    ) is True
+
+
+def test_compras_with_grant_sees_only_assigned_maintenance_branches(monkeypatch):
+    _mock_grant(monkeypatch, allowed=True)
+    query = MagicMock()
+    result = MagicMock()
+    query.filter.return_value = result
+    monkeypatch.setattr(ticket_filters.Ticket, "query", query)
+
+    filtered = ticket_filters.filtrar_tickets_por_usuario(_compras())
+    compiled = str(
+        query.filter.call_args.args[0].compile(
+            compile_kwargs={"literal_binds": True}
+        )
+    )
+
+    assert filtered is result
+    assert "departamento_id = 1" in compiled
+    assert "IN (3, 5)" in compiled
+    assert "departamento_id = 6" in compiled
+    # No allow-all para Compras; Mantenimiento exige region asignada.
+    assert "AND" in compiled and "OR" in compiled
+
+
+def test_compras_without_branches_gets_no_maintenance_scope(monkeypatch):
+    _mock_grant(monkeypatch, allowed=True)
+    query = MagicMock()
+    monkeypatch.setattr(ticket_filters.Ticket, "query", query)
+
+    ticket_filters.filtrar_tickets_por_usuario(_compras(branches=()))
+    compiled = str(
+        query.filter.call_args.args[0].compile(
+            compile_kwargs={"literal_binds": True}
+        )
+    )
+
+    assert "departamento_id = 1" not in compiled
+    assert "departamento_id = 6" in compiled
+
+
+def test_compras_pm_branch_scope_ignores_corporate_primary():
+    user = _compras()
+    assert _verificar_permiso_sucursal(user, 3) is None
+    assert _verificar_permiso_sucursal(user, 5) is None
+    assert _verificar_permiso_sucursal(user, 99)[1] == 403
+    assert _verificar_permiso_sucursal(user, 100)[1] == 403
+
+
+def test_compras_planner_uses_strict_branches():
+    user = _compras()
+    query = MagicMock()
+    result = planner._apply_planner_role_scope(query, user)
+
+    assert result is query.filter.return_value
+    assert planner._branch_catalog_ids(user, query) == [3, 5]
+
+    no_branches = _compras(branches=())
+    empty_query = MagicMock()
+    planner._apply_planner_role_scope(empty_query, no_branches)
+    empty_query.filter.assert_called_once_with(False)
