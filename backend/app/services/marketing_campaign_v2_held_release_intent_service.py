@@ -198,8 +198,8 @@ def _evaluate(*, campaign_id: int, child_id: int, allowed_sucursal_keys: Any,
             "suite_portfolio_attempted": quota["suite_portfolio_attempted"],
             "suite_channel_reserved": quota["suite_channel_reserved"],
             "suite_portfolio_reserved": quota["suite_portfolio_reserved"],
-            "window_start": capacity["window_start"],
-            "window_end": capacity["window_end"],
+            # Never fingerprint wall-clock evaluation time: preview and confirm
+            # must agree if policy and Suite-counted activity did not change.
             "actual_meta_remaining": None,
         }]
     else:
