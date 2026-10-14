@@ -566,6 +566,49 @@ export interface CampaignV2QuotaAttestation {
   source_reference: string;
 }
 
+export type CampaignV2PortfolioReviewState =
+  | 'PENDING' | 'WITHDRAWN' | 'DECLARED_UNVERIFIED'
+  | 'DOCUMENTED_UNVERIFIED' | 'REVIEW_REQUIRED';
+
+export type CampaignV2PortfolioReviewFlag =
+  | 'MISSING_PORTFOLIO_CATALOG'
+  | 'HISTORICAL_BUSINESS_CHANGE'
+  | 'WABA_CROSS_BUSINESS'
+  | 'MULTIPLE_DEFAULT_BRANCH'
+  | 'OPERATOR_ONLY'
+  | 'WABA_NOT_RECORDED';
+
+export interface CampaignV2PortfolioReviewRow {
+  sucursal_id: number;
+  sucursal_canon: string;
+  provider_channel_id: string;
+  business_id: string | null;
+  waba_id: string | null;
+  evidence_kind: CampaignV2ChannelPortfolioEvidenceKind | null;
+  source_reference: string | null;
+  revision_id: number | null;
+  review_state: CampaignV2PortfolioReviewState;
+  flags: CampaignV2PortfolioReviewFlag[];
+  revision_count: number;
+  api_verified: false;
+}
+
+export interface CampaignV2PortfolioReviewResponse {
+  rows: CampaignV2PortfolioReviewRow[];
+  summary: {
+    total_channels: number;
+    candidate_businesses: number;
+    pending: number;
+    withdrawn: number;
+    declared_unverified: number;
+    documented_unverified: number;
+    review_required: number;
+    api_verified: 0;
+  };
+  basis: 'OPERATOR_DOCUMENTARY_EVIDENCE_ONLY';
+  meta_verification_available: false;
+}
+
 export type CampaignV2ChannelPortfolioEvidenceKind =
   | 'OPERATOR_STATEMENT' | 'META_DOCUMENT' | 'IVENTAS_CONFIRMATION';
 
