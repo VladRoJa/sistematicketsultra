@@ -81,9 +81,17 @@
       <span>{{visibleJobs.length}} jobs</span></div>
     <div class="columns" [class.with-detail]="selected">
       <section class="panel"><h2>Jobs registrados</h2><div class="table-wrap"><table>
-        <thead><tr><th>Job</th><th>Worker</th><th>Configuración del worker</th><th>Salud</th><th></th></tr></thead>
+        <thead><tr><th>Job</th><th>Última ejecución</th><th>Resultado</th><th>Worker</th><th>Configuración</th><th>Salud del worker</th><th></th></tr></thead>
         <tbody><tr *ngFor="let job of visibleJobs">
-          <td><b>{{job.label}}</b><small>{{job.key}}</small></td><td>{{job.worker_key}}</td>
+          <td><b>{{job.label}}</b><small>{{job.key}}</small></td>
+          <td>{{latestRunTime(job)}}</td>
+          <td>
+            <span class="run-result" [ngClass]="'run-result-'+latestRunState(job)"
+              [attr.aria-label]="latestRunStatus(job)">{{latestRunStatus(job)}}</span>
+            <button type="button" *ngIf="latestRunIsFailure(job)"
+              (click)="openLatestFailure(job)">Ver error</button>
+          </td>
+          <td>{{job.worker_key}}</td>
           <td><span [title]="effectiveDetail(job.key)" [attr.aria-label]="effectiveDetail(job.key)">{{effectiveLabel(job.key)}}</span>
             <small *ngIf="effectiveJob(job.key)?.state==='REPORTED'">Reportado · {{effectiveJob(job.key)?.schedule?.timezone}}</small>
             <small *ngIf="effectiveJob(job.key)?.state!=='REPORTED'">Referencia de código: {{job.schedule_reference}}</small>
