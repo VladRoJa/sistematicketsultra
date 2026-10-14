@@ -14,6 +14,9 @@ import {
   CampaignV2ConsolidatedReport,
   CampaignV2DispatchTemplatesResponse,
   CampaignV2BudgetRateRevision,
+  CampaignV2PortfolioReference,
+  CampaignV2PortfolioReferenceRequest,
+  CampaignV2PortfolioReferencesResponse,
   CampaignV2QuotaEvidence,
   CampaignV2QuotaPolicyRevision,
   CampaignV2QuotaAttestation,
@@ -213,6 +216,20 @@ export class MarketingCampaignV2Service {
     return this.http.post<CampaignV2PreparationApplyResponse>(
       `${this.apiUrl}/${campaignId}/preparation/previous/exclude`,
       { ...request, source_campaign_ids: sourceCampaignIds },
+    );
+  }
+
+  listPortfolioReferences(): Observable<CampaignV2PortfolioReferencesResponse> {
+    return this.http.get<CampaignV2PortfolioReferencesResponse>(
+      `${this.apiUrl}/dispatch/portfolio-references`,
+    );
+  }
+
+  registerPortfolioReference(
+    request: CampaignV2PortfolioReferenceRequest,
+  ): Observable<CampaignV2PortfolioReference> {
+    return this.http.post<CampaignV2PortfolioReference>(
+      `${this.apiUrl}/dispatch/portfolio-references`, request,
     );
   }
 
