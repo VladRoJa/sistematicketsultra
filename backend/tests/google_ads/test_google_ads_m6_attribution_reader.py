@@ -247,3 +247,109 @@ def test_scoped_reader_rejects_provenance_or_incomplete_day(monkeypatch, kwargs)
     assert result["status"] == "requires_review"
     assert result["rows"] == []
     assert result["scope_attributed_cost"] is None
+
+
+def _global_realistic(monkeypatch, *, drift=False):
+    from test_google_ads_m6_continuity_approval import _fake_facts
+    from types import SimpleNamespace
+    _conn, campaign_file, group_file, identities = _fake_facts()
+    monkeypatch.setattr(
+        reader, "load_visible_marketing_branches",
+        lambda _a: ([], tuple(range(1, 27)), {}),
+    )
+    version = Item(
+        id=71, customer_id=reader.CUSTOMER_ID,
+        approval_reference=reader.M6_REFERENCE,
+        source_approval_reference=reader.M5_REFERENCE,
+        valid_from=reader.START, valid_to=None,
+        source_campaign_upload_id=reader.CAMPAIGN_UPLOAD_ID,
+        source_ad_group_upload_id=reader.GROUP_UPLOAD_ID,
+        approved_by_user_id=47, approved_on=date(2026, 10, 14),
+    )
+    monkeypatch.setattr(reader, "_version", lambda: [version])
+    monkeypatch.setattr(reader, "_load_m5", lambda: {
+        "id": reader.M5_REFERENCE, "customer_id": reader.CUSTOMER_ID,
+        "rows": [
+            [None, None, row["campaign_key"], row["ad_group_key"],
+             row["sucursal_canon"], i + 1, "0"]
+            for i, row in enumerate(identities)
+        ],
+    })
+    mapping_rows = []
+    keyed_mappings = {}
+    for i, approved in enumerate(identities):
+        mapping = Item(
+            id=i + 100, approval_version_id=version.id,
+            campaign_key=approved["campaign_key"],
+            ad_group_key=approved["ad_group_key"],
+            sucursal_canon=approved["sucursal_canon"],
+        )
+        catalog = Item(
+            sucursal_id=i + 1,
+            sucursal_canon=approved["sucursal_canon"],
+            is_track_active=True,
+        )
+        branch = Item(sucursal_id=i + 1, operational_status="ACTIVA")
+        mapping_rows.append((mapping, catalog, branch))
+        keyed_mappings[(mapping.campaign_key, mapping.ad_group_key)] = (mapping, catalog)
+    monkeypatch.setattr(reader, "_mapping_rows", lambda *_: mapping_rows)
+    scoped_rows = []
+    for row in group_file.rows:
+        mapped = keyed_mappings.get((row.campaign_key, row.ad_group_key))
+        if mapped is not None:
+            mapping, catalog = mapped
+            scoped_rows.append((
+                Item(
+                    **vars(row),
+                    customer_id=reader.CUSTOMER_ID, campaign_id=None,
+                    ad_group_id=None, source_kind="WAREHOUSE_XLSX",
+                    source_upload_id=reader.GROUP_UPLOAD_ID,
+                ), mapping, catalog,
+            ))
+    monkeypatch.setattr(reader, "_fact_rows", lambda *_: scoped_rows)
+    campaigns = [
+        Item(
+            **vars(row), customer_id=reader.CUSTOMER_ID,
+            campaign_id=None, source_kind="WAREHOUSE_XLSX",
+            source_upload_id=reader.CAMPAIGN_UPLOAD_ID,
+        ) for row in campaign_file.rows
+    ]
+    groups = [
+        Item(
+            **vars(row), customer_id=reader.CUSTOMER_ID,
+            campaign_id=None, ad_group_id=None,
+            source_kind="WAREHOUSE_XLSX",
+            source_upload_id=reader.GROUP_UPLOAD_ID,
+        ) for row in group_file.rows
+    ]
+    if drift:
+        groups[0].cost += Decimal("0.01")
+    monkeypatch.setattr(reader, "_global_campaigns", lambda *_: campaigns)
+    monkeypatch.setattr(reader, "_global_groups", lambda *_: groups)
+    return _access(global_=True)
+
+
+def test_global_m6_reconciles_26_branches_and_nonassigned_account_total(monkeypatch):
+    access = _global_realistic(monkeypatch)
+    result = reader.read_google_ads_m6_branch_attribution(
+        month_start=date(2026, 10, 1),
+        cutoff_date=date(2026, 10, 12), access=access,
+    )
+    assert result["status"] == "partial"
+    assert len(result["rows"]) == 26
+    assert result["scope_attributed_cost"] == 5211.74
+    assert result["account_cost_observed"] == 5562.11
+    assert result["unassigned_cost_observed"] == 350.37
+    assert result["account_reconciled"] is True
+
+
+def test_global_m6_fails_closed_if_group_cost_drifts_from_account(monkeypatch):
+    access = _global_realistic(monkeypatch, drift=True)
+    result = reader.read_google_ads_m6_branch_attribution(
+        month_start=date(2026, 10, 1),
+        cutoff_date=date(2026, 10, 12), access=access,
+    )
+    assert result["status"] == "requires_review"
+    assert result["rows"] == []
+    assert result["scope_attributed_cost"] is None
+    assert "account_cost_observed" not in result
