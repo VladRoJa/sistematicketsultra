@@ -1,0 +1,86 @@
+<h2 mat-dialog-title>QA_MANUAL · preparar un canal</h2>
+<mat-dialog-content class="qa">
+  <p class="intro">Prueba interna controlada: <strong>1 sucursal, 1 canal y 1 destinatario</strong>.
+    El Preview no escribe en la base de datos. Congelar crea una campaña QA, pero
+    <strong>NO envía WhatsApp ni autoriza despacho</strong>. El envío requiere un proceso y
+    una autorización distintos.</p>
+
+  <p *ngIf="loading" role="status">Cargando canales activos…</p>
+  <p *ngIf="previewing" role="status">Calculando fingerprint QA…</p>
+  <p *ngIf="freezing" role="status">Congelando la cohorte interna…</p>
+  <p *ngIf="error" class="error" role="alert">{{ error }}</p>
+  <p *ngIf="success" class="success" role="status">{{ success }}</p>
+
+  <div class="qa-fields" *ngIf="!frozen">
+    <mat-form-field appearance="outline" class="wide">
+      <mat-label>Sucursal y canal de iVentas</mat-label>
+      <mat-select [formControl]="channelId">
+        <mat-option *ngFor="let channel of channels" [value]="channel.provider_channel_id">
+          {{ channel.sucursal_canon }} · {{ channel.provider_channel_id }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline" class="wide">
+      <mat-label>Nombre único de la campaña QA</mat-label>
+      <input matInput [formControl]="campaignName" maxlength="255" placeholder="QA ensayo interno canal…">
+      <mat-hint>Debe iniciar con QA y no repetir una campaña ya congelada.</mat-hint>
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Propósito</mat-label>
+      <mat-select [formControl]="purpose">
+        <mat-option value="NEW_SALE">Venta nueva</mat-option>
+        <mat-option value="REACTIVATION">Reactivación</mat-option>
+        <mat-option value="ACTIVE_MEMBERS">Socios activos</mat-option>
+        <mat-option value="UNCLASSIFIED">Sin clasificar</mat-option>
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Nombre del destinatario de control</mat-label>
+      <input matInput [formControl]="recipientName" maxlength="255" autocomplete="off">
+    </mat-form-field>
+    <mat-form-field appearance="outline" class="wide">
+      <mat-label>Teléfono de prueba (10 dígitos o 521 + 10 dígitos)</mat-label>
+      <input matInput [formControl]="recipientPhone" maxlength="14" inputmode="tel" autocomplete="off">
+      <mat-hint>No se almacena en el navegador; solo se transmite al backend al hacer Preview o Freeze.</mat-hint>
+    </mat-form-field>
+  </div>
+
+  <div class="qa-actions" *ngIf="!frozen">
+    <button mat-flat-button color="primary" type="button" (click)="previewQa()" [disabled]="!canPreview">
+      Generar Preview QA
+    </button>
+  </div>
+  <section class="preview" *ngIf="preview as p">
+    <h3>Revisión antes de congelar</h3>
+    <dl>
+      <dt>Campaña</dt><dd>{{ p.name }}</dd>
+      <dt>Sucursal</dt><dd>{{ p.sucursal_canon }}</dd>
+      <dt>Canal iVentas</dt><dd>{{ p.provider_channel_id }}</dd>
+      <dt>Destinatario</dt><dd>{{ p.recipient_name }} · {{ p.recipient_phone_masked }}</dd>
+      <dt>Destinatarios</dt><dd>{{ p.recipient_count }}</dd>
+      <dt>Fingerprint</dt><dd class="fingerprint">{{ p.preview_fingerprint }}</dd>
+    </dl>
+    <mat-checkbox [formControl]="confirmFreeze">
+      Confirmo que revisé el canal, el destinatario y el fingerprint;
+      autorizo únicamente congelar esta cohorte QA de un contacto, no enviar mensajes.
+    </mat-checkbox>
+    <div class="qa-actions">
+      <button mat-flat-button color="primary" type="button" (click)="freezeQa()" [disabled]="!canFreeze">
+        Congelar 1 contacto · SIN ENVÍO
+      </button>
+    </div>
+  </section>
+  <section class="preview" *ngIf="frozen as result">
+    <h3>Campaña QA congelada</h3>
+    <p>Campaign ID: <strong>{{ result.campaign_id }}</strong></p>
+    <p>Sucursal: {{ result.sucursal_canon }} · Canal: {{ result.provider_channel_id }}</p>
+    <p>Destinatarios: {{ result.recipient_count }} · Estado: FROZEN</p>
+    <p><strong>No se ha llamado a iVentas.</strong> Para continuar, revisa la campaña en
+      el flujo normal de preflight; cualquier envío requiere aprobación explícita adicional.</p>
+  </section>
+  <p class="footnote" *ngIf="!channels.length && !loading">No hay canales predeterminados activos únicos;
+    revisa Configuración de canales antes de preparar QA.</p>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="close()">Cerrar</button>
+</mat-dialog-actions>
