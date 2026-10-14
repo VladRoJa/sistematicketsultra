@@ -1821,6 +1821,79 @@ class TrackDailyVersionORM(db.Model):
         server_default=db.text("now()"),
     )
     
+class TrackEffectiveRosterEpochORM(db.Model):
+    """An explicit forward-only corporate decision about Track membership.
+
+    Independent of mutable branch catalog and operational opening date.
+    Database guards forbid backdating, update/delete and incomplete seals.
+    """
+    __tablename__ = "track_roster_effective_epochs"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    effective_from = db.Column(db.Date, nullable=False)
+    attested_at_utc = db.Column(
+        db.DateTime(timezone=True), nullable=False,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+    attested_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    source_reference = db.Column(db.String(255), nullable=False)
+    source_kind = db.Column(
+        db.String(40), nullable=False,
+        server_default="CORPORATE_ROSTER_ATTESTATION",
+    )
+    expected_branch_count = db.Column(db.Integer, nullable=False)
+    roster_sha256 = db.Column(db.String(64), nullable=False)
+    sealed_at_utc = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "effective_from", name="uq_track_roster_epoch_effective_from",
+        ),
+        db.CheckConstraint(
+            "expected_branch_count > 0", name="ck_track_epoch_positive_count",
+        ),
+        db.CheckConstraint(
+            "roster_sha256 ~ '^[0-9a-f]{64}$'", name="ck_track_epoch_sha256",
+        ),
+        db.CheckConstraint(
+            "length(trim(source_reference)) >= 8",
+            name="ck_track_epoch_source_reference",
+        ),
+        db.CheckConstraint(
+            "source_kind = 'CORPORATE_ROSTER_ATTESTATION'",
+            name="ck_track_epoch_corporate_only",
+        ),
+        db.CheckConstraint(
+            "sealed_at_utc IS NULL OR sealed_at_utc >= attested_at_utc",
+            name="ck_track_epoch_seal_time",
+        ),
+        db.Index("ix_track_roster_effective_epochs_date", "effective_from"),
+    )
+
+
+class TrackEffectiveRosterMemberORM(db.Model):
+    """Exact branch membership in a dated corporate Track attestation."""
+    __tablename__ = "track_roster_effective_members"
+
+    epoch_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("track_roster_effective_epochs.id", ondelete="RESTRICT"),
+        primary_key=True,
+    )
+    sucursal_canon = db.Column(db.Text, primary_key=True)
+    sucursal_id_at_attestation = db.Column(db.Integer, nullable=True)
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "length(trim(sucursal_canon)) > 0",
+            name="ck_track_epoch_branch_nonblank",
+        ),
+    )
+
+
 class TrackVersionRosterSnapshotORM(db.Model):
     """Evidence of expected branches at the instant a Track version runs.
 
