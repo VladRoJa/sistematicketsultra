@@ -216,6 +216,38 @@ def _existing_matches(old: list[dict], wanted: list[dict],
     return True
 
 
+
+def _verify_prior_pair_audits(conn, *, actor_id: int, day: date,
+                              campaign_id: int, group_id: int,
+                              version_id: int) -> None:
+    """Full idempotence demands prior paired audit, not just matching facts."""
+    rows = conn.execute(sa.text("""
+        SELECT upload_id, performed_by_user_id, details
+        FROM warehouse_audit_logs
+        WHERE action = :action AND upload_id IN (:campaign, :groups)
+    """), {
+        "action": AUDIT_ACTION, "campaign": campaign_id, "groups": group_id,
+    }).mappings().all()
+    require(
+        len(rows) == 2
+        and {r["upload_id"] for r in rows} == {campaign_id, group_id},
+        "EXISTING_STRUCTURED_FACT_CONFLICT",
+    )
+    for row in rows:
+        details = row["details"]
+        require(
+            row["performed_by_user_id"] == actor_id
+            and isinstance(details, dict)
+            and details.get("business_date") == day.isoformat()
+            and details.get("customer_id") == CUSTOMER_ID
+            and details.get("approval_version_id") == version_id
+            and details.get("campaign_upload_id") == campaign_id
+            and details.get("ad_group_upload_id") == group_id
+            and details.get("publication") == "NOT_AUTHORIZED",
+            "EXISTING_STRUCTURED_FACT_CONFLICT",
+        )
+
+
 def stage_structured_manual_pair(*, actor_id: int, campaign_upload_id: int,
                                  group_upload_id: int) -> dict:
     """Stage both tables with one atomic commit; no publication side effects."""
@@ -278,6 +310,12 @@ def stage_structured_manual_pair(*, actor_id: int, campaign_upload_id: int,
         same_g = _existing_matches(
             old_groups, group_rows, ("campaign_key", "ad_group_key"))
         require(same_c == same_g, "EXISTING_STRUCTURED_FACT_CONFLICT")
+        if same_c:
+            _verify_prior_pair_audits(
+                conn, actor_id=actor_id, day=day,
+                campaign_id=campaign_upload_id, group_id=group_upload_id,
+                version_id=version,
+            )
         status = "ALREADY_INGESTED" if same_c else "STRUCTURED_PAIR_STAGED"
         if not same_c:
             conn.execute(GoogleAdsDailyMetricORM.__table__.insert(), campaign_rows)
