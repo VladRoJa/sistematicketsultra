@@ -20,6 +20,43 @@
     </div>
   </div>
 
+  <section class="portfolio-catalog" aria-label="Referencias de portafolios Meta">
+    <h3>Portafolios identificados por operador</h3>
+    <p>Business ID y App ID proporcionados por el operador. No equivalen a WABA ni demuestran que un canal de iVentas pertenezca al negocio.
+      El acceso a Meta puede requerir business_management. Ninguna referencia modifica cuotas, campañas o autorizaciones.</p>
+    <div class="portfolio-grid">
+      <mat-form-field appearance="outline">
+        <mat-label>Business ID</mat-label>
+        <input matInput inputmode="numeric" maxlength="32" [formControl]="portfolioBusinessId" placeholder="ID empresarial de Meta">
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Nombre declarado (opcional)</mat-label>
+        <input matInput maxlength="160" [formControl]="portfolioName" placeholder="Nombre pendiente">
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>App ID declarado (opcional)</mat-label>
+        <input matInput inputmode="numeric" maxlength="32" [formControl]="portfolioAppId">
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Fuente / evidencia</mat-label>
+        <input matInput maxlength="255" [formControl]="portfolioSource" placeholder="Declarado por propietario, fecha">
+      </mat-form-field>
+    </div>
+    <button mat-stroked-button type="button" (click)="savePortfolio()" [disabled]="!canSavePortfolio">
+      Registrar referencia sin verificar
+    </button>
+    <p role="alert" class="error" *ngIf="portfolioError">{{ portfolioError }}</p>
+    <p role="status" *ngIf="portfolioSuccess">{{ portfolioSuccess }}</p>
+    <div class="portfolio-rows" *ngIf="portfolios.length">
+      <div class="portfolio-entry" *ngFor="let p of portfolios">
+        <strong>{{ p.display_name || 'Nombre pendiente' }}</strong>
+        <span>{{ p.business_id }} · App: {{ p.app_id || 'Sin identificar' }}</span>
+        <small>NO VERIFICADO · Fuente: {{ p.source_reference }} · Canales verificados: 0</small>
+      </div>
+    </div>
+    <p *ngIf="!portfolios.length && !loading">Sin referencias declaradas. Registrar un portafolio no crea una política de envío.</p>
+  </section>
+
   <p *ngIf="loading" class="feedback" role="status"><mat-spinner diameter="18"></mat-spinner>Consultando catálogos…</p>
   <p *ngIf="error" class="error" role="alert">{{ error }}</p>
   <div class="counts" *ngIf="!loading && !error">

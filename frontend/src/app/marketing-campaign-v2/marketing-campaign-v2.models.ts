@@ -566,6 +566,29 @@ export interface CampaignV2QuotaAttestation {
   source_reference: string;
 }
 
+export interface CampaignV2PortfolioReference {
+  revision_id: number;
+  business_id: string;
+  display_name: string | null;
+  app_id: string | null;
+  source_reference: string;
+  created_by_user_id: number;
+  created_at: string;
+  verification_status: 'UNVERIFIED';
+  verified_channel_count: 0;
+}
+
+export interface CampaignV2PortfolioReferenceRequest {
+  business_id: string;
+  display_name: string | null;
+  app_id: string | null;
+  source_reference: string;
+}
+
+export interface CampaignV2PortfolioReferencesResponse {
+  rows: CampaignV2PortfolioReference[];
+}
+
 export interface CampaignV2QuotaEvidence {
   policies: CampaignV2QuotaPolicyRevision[];
   attestations: CampaignV2QuotaAttestation[];

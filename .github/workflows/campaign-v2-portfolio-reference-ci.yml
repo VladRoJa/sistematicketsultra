@@ -1,0 +1,59 @@
+name: Campaign V2 Portfolio References CI
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/models/marketing.py"
+      - "backend/app/services/marketing_campaign_v2_portfolio_reference_service.py"
+      - "backend/app/routes/marketing_campaign_v2_routes.py"
+      - "backend/migrations/versions/b856port1014_portfolio_reference_catalog.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_portfolio_*.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_portfolio_references.py"
+      - "frontend/src/app/marketing-campaign-v2/**"
+      - ".github/workflows/campaign-v2-portfolio-reference-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  backend-portfolio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: portfolio_ci
+          POSTGRES_PASSWORD: synthetic-portfolio-only
+          POSTGRES_DB: portfolio_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U portfolio_ci -d portfolio_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install backend requirements
+        run: |
+          python -m pip install -r backend/requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Syntax and isolated PostgreSQL verification
+        working-directory: backend
+        env:
+          SECRET_KEY: synthetic-portfolio
+          JWT_SECRET_KEY: synthetic-portfolio-jwt
+          PORTFOLIO_TEST_POSTGRES_URL: postgresql://portfolio_ci:synthetic-portfolio-only@127.0.0.1:5432/portfolio_ci
+          CAMPAIGN_V2_PROVIDER_SEND_ENABLED: "false"
+        run: |
+          python -m py_compile \
+            app/services/marketing_campaign_v2_portfolio_reference_service.py \
+            migrations/versions/b856port1014_portfolio_reference_catalog.py \
+            app/routes/marketing_campaign_v2_routes.py
+          python -m pytest -q --tb=short \
+            tests/marketing/test_marketing_campaign_v2_portfolio_references.py \
+            tests/marketing/test_marketing_campaign_v2_portfolio_migration.py

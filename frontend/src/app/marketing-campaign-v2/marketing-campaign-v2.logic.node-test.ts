@@ -1375,3 +1375,20 @@ test('operator readiness UI uses catalog reads and has no provider send action',
   assert.equal(ui.includes('submitCampaign('), false);
   assert.equal(ui.includes('registerQuotaPolicy('), false);
 });
+
+
+test('B1 catálogo de Business IDs es independiente de políticas, WABA y envíos', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const ui = fs.readFileSync(path.join(root, 'marketing-campaign-v2-readiness-dialog.component.ts'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-readiness-dialog.component.html'), 'utf8');
+  const service = fs.readFileSync(path.join(root, 'marketing-campaign-v2.service.ts'), 'utf8');
+  assert.ok(service.includes('/dispatch/portfolio-references'));
+  assert.ok(ui.includes('listPortfolioReferences()'));
+  assert.ok(ui.includes('registerPortfolioReference('));
+  assert.ok(html.includes('Registrar referencia sin verificar'));
+  assert.ok(html.includes('NO VERIFICADO'));
+  assert.ok(html.includes('Canales verificados: 0'));
+  assert.equal(ui.includes('submitCampaign('), false);
+  assert.equal(ui.includes('registerQuotaPolicy('), false);
+  assert.equal(html.includes('(click)="submitCampaign()"'), false);
+});

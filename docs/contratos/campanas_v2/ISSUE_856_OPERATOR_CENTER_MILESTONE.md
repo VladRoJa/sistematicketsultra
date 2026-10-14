@@ -41,3 +41,44 @@ D. Consola gobernada: consume endpoints existentes para preflight, presupuesto, 
 E. CI/QA: integración + Angular + backend/PG aislado + gates negativos de kill switches; revisión de UX en producción con flags OFF; envío canario #16 solo mediante autorización explícita de esa ejecución, seguido 25 bajo control secuencial y sin reenvío ante estados ambiguos.
 
 **No comenzar prueba live antes de B–E.**
+
+
+## Evidencia real 2026-10-14 — acceso Meta / etapa B1
+
+- `GET /me` con token `META_ACCESS_TOKEN_CP01_CP03`: HTTP 200.
+- `GET /me/businesses`: HTTP 400, código 100, `(#100) Missing Permission`.
+- `GET /{business-id}/owned_whatsapp_business_accounts`: HTTP 403, código 200,
+  `Requires business_management permission to manage the object`.
+- Identificados cuatro **Business ID declarados**, con tres nombres/App IDs proporcionados
+  por el propietario. El cuarto nombre sigue pendiente. Los IDs de cuentas
+  publicitarias CP 01/CP 03 NO acreditan pertenencia a una WABA ni a un negocio.
+- Las cuatro credenciales publicitarias existen en contenedor; no debe usarse
+  el hecho de que existan para asumir el permiso `business_management`.
+
+### B1 — Registro auditable de candidatos; no mapa de canales
+
+Implementación en rama `feat/856-portfolio-candidate-catalog-b1`:
+- Tabla append-only `marketing_campaign_v2_portfolio_references` creada por Alembic
+  `b856port1014` (down_revision `f856m1f40001`), sin seeds.
+- Service `marketing_campaign_v2_portfolio_reference_service.py` valida Business ID,
+  App ID opcional, nombre opcional y referencia documental. Toda revisión tiene
+  `verification_status=UNVERIFIED` y cero canales **verificados**.
+- GET/POST `/api/marketing/campaigns-v2/dispatch/portfolio-references`
+  exige JWT, `can_manage_dispatch_config` y alcance global; el actor lo resuelve el servidor.
+- El modal `Preparación de 26 canales` muestra y permite registrar candidatos;
+  no almacena tokens, no consulta Meta, no vincula WABAs y no ejecuta campañas.
+- Registrar candidatos **NO crea ni actualiza** política en
+  `marketing_campaign_v2_quota_policy_revisions`, tarifa de envío, cuota, reserva
+  o autorización de envío. No se infiere la distribución de 26 canales.
+- Las cuatro referencias conocidas deben registrarse posteriormente mediante la
+  interfaz por operador autorizado; ningún identificador externo se siembra en DB.
+- La ausencia de `business_management` es un bloqueo **de verificación automática**,
+  no excusa para afirmar asociaciones. El mapeo real deberá venir de evidencia
+  administrativa autorizada con identidad de número/WABA o del proveedor si expone
+  un dato verificable.
+
+### Despliegue/aceptación pendiente
+
+No desplegar esta rama antes de CI, QA y merge. En producción, validar primero
+revisión Alembic aplicable; no actualizar código manualmente en el servidor.
+El registro de Business IDs no habilita prueba live ni modifica campaña #16.
