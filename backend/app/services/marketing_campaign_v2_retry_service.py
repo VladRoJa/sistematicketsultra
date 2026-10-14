@@ -9,7 +9,10 @@ from typing import Any
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.extensions import db
-from app.models.marketing import MarketingCampaignV2ProviderCampaignORM
+from app.models.marketing import (
+    MarketingCampaignV2ProviderCampaignORM,
+    MarketingCampaignV2DispatchApprovalORM,
+)
 from app.services.marketing_campaign_v2_preflight_service import (
     build_campaign_v2_preflight,
 )
@@ -22,6 +25,11 @@ from app.services.marketing_campaign_v2_provider import (
 from app.services.marketing_campaign_v2_retry_policy import (
     MAX_SAFE_RETRY_ATTEMPTS,
     retry_is_exhausted,
+)
+from app.services.marketing_campaign_v2_contact_gate_service import (
+    CampaignV2ContactGateConflict,
+    acquire_campaign_v2_contact_gate,
+    verify_outbound_contact_admission,
 )
 from app.services.marketing_campaign_v2_submit_service import (
     MarketingCampaignV2SubmitPreconditionError,
@@ -97,6 +105,12 @@ def retry_campaign_v2_provider_child(
         child_id=normalized_child_id,
         session=active_session,
     )
+    if active_session.query(MarketingCampaignV2DispatchApprovalORM.id).filter(
+        MarketingCampaignV2DispatchApprovalORM.campaign_v2_id == int(row.campaign_v2_id)
+    ).first() is not None:
+        raise MarketingCampaignV2SafeRetryConflictError(
+            "Retry legado prohibido para campañas con aprobación gobernada."
+        )
     _validate_retry_candidate(row=row, now=timestamp)
 
     schedule = _schedule_payload(row)
@@ -366,6 +380,11 @@ def _mark_retry_submitting(
     now: datetime,
     session: Any,
 ) -> MarketingCampaignV2ProviderCampaignORM:
+    try:
+        acquire_campaign_v2_contact_gate(session)
+    except CampaignV2ContactGateConflict as exc:
+        session.rollback()
+        raise MarketingCampaignV2SafeRetryConflictError(str(exc)) from exc
     row = (
         session.query(MarketingCampaignV2ProviderCampaignORM)
         .filter(MarketingCampaignV2ProviderCampaignORM.id == row_id)
@@ -386,6 +405,11 @@ def _mark_retry_submitting(
             "El child cambió antes de iniciar el retry."
         )
 
+    try:
+        verify_outbound_contact_admission(child=row, session=session)
+    except CampaignV2ContactGateConflict as exc:
+        session.rollback()
+        raise MarketingCampaignV2SafeRetryConflictError(str(exc)) from exc
     attempt_number = expected_attempt_count + 1
     history = list(row.retry_history_json or [])
     history.append(

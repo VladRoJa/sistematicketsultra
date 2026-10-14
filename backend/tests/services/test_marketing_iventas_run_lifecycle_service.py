@@ -6,7 +6,7 @@ from datetime import (
 
 import pytest
 
-from app.models import MarketingIventasSyncRunORM
+from app.models import MarketingIventasSyncRunORM, MarketingIventasBranchFailureORM
 from app.services.marketing_iventas_run_lifecycle_service import (
     MarketingIventasRunCounters,
     MarketingIventasRunLifecycleError,
@@ -602,3 +602,157 @@ def test_finished_at_cannot_precede_started_at(
     assert session.events == [
         "rollback",
     ]
+
+def test_branch_failures_commit_atomically_with_run_state():
+    class FailureSession(FakeSession):
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            self.details = []
+
+        def add_all(self, rows):
+            self.events.append("add_all")
+            self.details.extend(rows)
+
+    current = _run()
+    session = FailureSession(run=current)
+    result = finalize_iventas_sync_run(
+        sync_run_id=2,
+        status=SYNC_STATUS_PARTIAL,
+        counters=_partial_counters(),
+        make_canonical=False,
+        finished_at=_finished(),
+        session=session,
+        branch_failures=(
+            ("BRANCH_A", "MarketingIventasBranchSyncError"),
+            ("BRANCH_B", "IventasClientError"),
+        ),
+    )
+    assert result.status == SYNC_STATUS_PARTIAL
+    assert session.events == ["add_all", "commit"]
+    assert len(session.details) == 2
+    assert {x.branch_code for x in session.details} == {"BRANCH_A", "BRANCH_B"}
+    assert {x.sync_run_id for x in session.details} == {2}
+    assert {x.error_type for x in session.details} == {
+        "MarketingIventasBranchSyncError", "IventasClientError",
+    }
+    assert all(set(x.__dict__) <= {
+        "_sa_instance_state", "sync_run_id", "branch_code", "error_type",
+    } for x in session.details)
+
+
+@pytest.mark.parametrize("branch_failures", [
+    (("BRANCH_A", "Provider raw password or stacktrace"),),
+    (("BRANCH_A", "IventasClientError"), ("BRANCH_A", "IventasClientError")),
+    ((" " * 3, "IventasClientError"),),
+    (("BRANCH_" + "A" * 105, "IventasClientError"),),
+])
+def test_invalid_branch_failure_evidence_rejected_before_commit(branch_failures):
+    session = FakeSession(run=_run())
+    with pytest.raises(ValueError):
+        finalize_iventas_sync_run(
+            sync_run_id=2, status=SYNC_STATUS_PARTIAL,
+            counters=_partial_counters(), finished_at=_finished(),
+            session=session, branch_failures=branch_failures,
+        )
+    assert session.events == []
+
+
+def test_cannot_attach_failure_to_completed_canonical():
+    session = FakeSession(run=_run())
+    with pytest.raises(ValueError, match="COMPLETED"):
+        finalize_iventas_sync_run(
+            sync_run_id=2, status=SYNC_STATUS_COMPLETED,
+            counters=_completed_counters(),
+            finished_at=_finished(), session=session,
+            branch_failures=(("BRANCH_A", "IventasClientError"),),
+        )
+    assert session.events == []
+
+
+def test_failure_insert_error_rolls_back_without_commit():
+    class FailedInsertSession(FakeSession):
+        def add_all(self, rows):
+            self.events.append("add_all")
+            raise RuntimeError("controlled write failure")
+
+    session = FailedInsertSession(run=_run())
+    with pytest.raises(RuntimeError, match="controlled write failure"):
+        finalize_iventas_sync_run(
+            sync_run_id=2, status=SYNC_STATUS_PARTIAL,
+            counters=_partial_counters(),
+            finished_at=_finished(),
+            session=session,
+            branch_failures=(("BRANCH_A", "IventasClientError"),),
+        )
+    assert session.events == ["add_all", "rollback"]
+
+
+@pytest.mark.parametrize(
+    ("stored_evidence", "retry_evidence", "expect_equal"),
+    [
+        (
+            (("BRANCH_A", "IventasClientError"),),
+            (("BRANCH_A", "IventasClientError"),),
+            True,
+        ),
+        (
+            (("BRANCH_A", "IventasClientError"),),
+            (("BRANCH_A", "MarketingIventasBranchSyncError"),),
+            False,
+        ),
+        (
+            (("BRANCH_A", "IventasClientError"),),
+            (),
+            False,
+        ),
+        (
+            (),
+            (("BRANCH_A", "IventasClientError"),),
+            False,
+        ),
+        ((), (), True),  # Corrida heredada sin evidencia desglosada.
+    ],
+)
+def test_partial_terminal_retry_validates_exact_branch_evidence(
+    stored_evidence, retry_evidence, expect_equal,
+):
+    current = _run(status=SYNC_STATUS_PARTIAL)
+    counters = _partial_counters()
+    for field_name, value in vars(counters).items():
+        setattr(current, field_name, value)
+
+    class FailureRows:
+        def filter_by(self, **kwargs):
+            assert kwargs == {"sync_run_id": 2}
+            return self
+
+        def all(self):
+            return [
+                MarketingIventasBranchFailureORM(
+                    sync_run_id=2, branch_code=code, error_type=kind
+                )
+                for code, kind in stored_evidence
+            ]
+
+    class RetrySession(FakeSession):
+        def query(self, model):
+            assert model is MarketingIventasBranchFailureORM
+            self.query_count += 1
+            return FailureRows()
+
+    session = RetrySession(run=current)
+    kwargs = dict(
+        sync_run_id=2, status=SYNC_STATUS_PARTIAL, counters=counters,
+        make_canonical=False, finished_at=_finished(), session=session,
+        branch_failures=retry_evidence,
+    )
+
+    if expect_equal:
+        result = finalize_iventas_sync_run(**kwargs)
+        assert result.was_already_finalized is True
+        assert session.events == []
+    else:
+        with pytest.raises(MarketingIventasRunLifecycleError, match="evidencia"):
+            finalize_iventas_sync_run(**kwargs)
+        assert session.events == ["rollback"]
+    assert session.query_count == 1

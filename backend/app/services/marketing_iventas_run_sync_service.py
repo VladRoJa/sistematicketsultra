@@ -586,6 +586,10 @@ def sync_iventas_full_run(
             make_canonical=False,
             finished_at=finished_at,
             session=session_value,
+            branch_failures=tuple(
+                (failure.branch_code, failure.error_type)
+                for failure in alias_failures
+            ),
         )
 
         return MarketingIventasRunSyncResult(
@@ -732,6 +736,13 @@ def sync_iventas_full_run(
                     make_canonical=False,
                     finished_at=finished_at,
                     session=session_value,
+                    branch_failures=(
+                        *(
+                            (failure.branch_code, failure.error_type)
+                            for failure in operational_failures
+                        ),
+                        (resolution.branch_code, "UNEXPECTED_BRANCH_ABORT"),
+                    ),
                 )
 
             except Exception:
@@ -820,6 +831,10 @@ def sync_iventas_full_run(
         make_canonical=make_canonical,
         finished_at=finished_at,
         session=session_value,
+        branch_failures=tuple(
+            (failure.branch_code, failure.error_type)
+            for failure in operational_failures
+        ),
     )
 
     if (

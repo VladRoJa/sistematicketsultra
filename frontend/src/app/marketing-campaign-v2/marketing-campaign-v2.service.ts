@@ -14,6 +14,11 @@ import {
   CampaignV2ConsolidatedReport,
   CampaignV2DispatchTemplatesResponse,
   CampaignV2BudgetRateRevision,
+  CampaignV2QuotaEvidence,
+  CampaignV2QuotaPolicyRevision,
+  CampaignV2QuotaAttestation,
+  CampaignV2QuotaPolicyRequest,
+  CampaignV2QuotaAttestationRequest,
   CampaignV2BranchReview,
   CampaignV2PreviousContactReview,
   CampaignV2PreparationApplyResponse,
@@ -208,6 +213,24 @@ export class MarketingCampaignV2Service {
     return this.http.post<CampaignV2PreparationApplyResponse>(
       `${this.apiUrl}/${campaignId}/preparation/previous/exclude`,
       { ...request, source_campaign_ids: sourceCampaignIds },
+    );
+  }
+
+  listQuotaEvidence(): Observable<CampaignV2QuotaEvidence> {
+    return this.http.get<CampaignV2QuotaEvidence>(
+      `${this.apiUrl}/dispatch/quota-evidence`,
+    );
+  }
+
+  registerQuotaPolicy(payload: CampaignV2QuotaPolicyRequest): Observable<CampaignV2QuotaPolicyRevision> {
+    return this.http.post<CampaignV2QuotaPolicyRevision>(
+      `${this.apiUrl}/dispatch/quota-policies`, payload,
+    );
+  }
+
+  registerQuotaAttestation(payload: CampaignV2QuotaAttestationRequest): Observable<CampaignV2QuotaAttestation> {
+    return this.http.post<CampaignV2QuotaAttestation>(
+      `${this.apiUrl}/dispatch/quota-attestations`, payload,
     );
   }
 

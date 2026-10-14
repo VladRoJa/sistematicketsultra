@@ -517,6 +517,317 @@ class MarketingCampaignV2CostRateRevisionORM(db.Model):
     )
 
 
+class MarketingCampaignV2QuotaPolicyRevisionORM(db.Model):
+    """Append-only channel/portfolio association, not a verified live quota."""
+
+    __tablename__ = "marketing_campaign_v2_quota_policy_revisions"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    provider_channel_id = db.Column(db.String(255), nullable=False)
+    portfolio_key = db.Column(db.String(128), nullable=False)
+    account_key = db.Column(db.String(128), nullable=False)
+    phone_alias = db.Column(db.String(128), nullable=False)
+    nominal_channel_limit = db.Column(db.Integer, nullable=True)
+    reset_timezone = db.Column(db.String(80), nullable=False)
+    valid_from = db.Column(db.DateTime(timezone=True), nullable=False)
+    source_reference = db.Column(db.String(255), nullable=False)
+    created_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="RESTRICT"), nullable=False,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "nominal_channel_limit IS NULL OR nominal_channel_limit > 0",
+            name="ck_mkt_v2_quota_nominal_positive",
+        ),
+        db.CheckConstraint(
+            "length(trim(portfolio_key)) > 0 AND length(trim(account_key)) > 0 "
+            "AND length(trim(phone_alias)) > 0 "
+            "AND length(trim(reset_timezone)) > 0 "
+            "AND length(trim(source_reference)) > 0",
+            name="ck_mkt_v2_quota_policy_required",
+        ),
+        db.UniqueConstraint(
+            "provider_channel_id", "valid_from",
+            name="uq_mkt_v2_quota_channel_revision",
+        ),
+        db.Index(
+            "ix_mkt_v2_quota_policy_latest", "provider_channel_id", "valid_from",
+        ),
+    )
+
+
+class MarketingCampaignV2QuotaCapacityAttestationORM(db.Model):
+    """Append-only operator observation; no Meta API verification is implied."""
+
+    __tablename__ = "marketing_campaign_v2_quota_capacity_attestations"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    scope_kind = db.Column(db.String(20), nullable=False)
+    scope_key = db.Column(db.String(255), nullable=False)
+    observed_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    window_ends_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    remaining_messages = db.Column(db.Integer, nullable=False)
+    source_reference = db.Column(db.String(255), nullable=False)
+    created_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="RESTRICT"), nullable=False,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "scope_kind IN ('CHANNEL', 'PORTFOLIO')",
+            name="ck_mkt_v2_quota_capacity_scope",
+        ),
+        db.CheckConstraint(
+            "remaining_messages >= 0",
+            name="ck_mkt_v2_quota_capacity_nonnegative",
+        ),
+        db.CheckConstraint(
+            "observed_at < expires_at AND expires_at <= window_ends_at",
+            name="ck_mkt_v2_quota_capacity_window",
+        ),
+        db.CheckConstraint(
+            "length(trim(scope_key)) > 0 AND length(trim(source_reference)) > 0",
+            name="ck_mkt_v2_quota_capacity_evidence",
+        ),
+        db.UniqueConstraint(
+            "scope_kind", "scope_key", "observed_at",
+            name="uq_mkt_v2_quota_capacity_evidence_time",
+        ),
+        db.Index(
+            "ix_mkt_v2_quota_capacity_latest",
+            "scope_kind", "scope_key", "observed_at",
+        ),
+    )
+
+
+
+class MarketingCampaignV2DispatchApprovalORM(db.Model):
+    """Immutable, operator-approved estimate and non-sending reservation manifest."""
+
+    __tablename__ = "marketing_campaign_v2_dispatch_approvals"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    campaign_v2_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_campaigns.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    template_id = db.Column(
+        db.BigInteger, db.ForeignKey("marketing_campaign_v2_templates.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    dispatch_fingerprint = db.Column(db.String(64), nullable=False)
+    recipient_count = db.Column(db.Integer, nullable=False)
+    approved_estimated_mxn = db.Column(db.Numeric(14, 2), nullable=False)
+    manifest_json = db.Column(db.JSON, nullable=False, default=dict)
+    approved_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="RESTRICT"), nullable=False,
+    )
+    approved_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint("campaign_v2_id", name="uq_mkt_v2_approval_campaign"),
+        db.CheckConstraint("recipient_count > 0", name="ck_mkt_v2_approval_recipients"),
+        db.CheckConstraint("approved_estimated_mxn >= 0", name="ck_mkt_v2_approval_cost"),
+        db.CheckConstraint("length(dispatch_fingerprint) = 64", name="ck_mkt_v2_approval_fingerprint"),
+        db.CheckConstraint("approved_at < expires_at", name="ck_mkt_v2_approval_window"),
+    )
+
+
+class MarketingCampaignV2GovernedExecutionORM(db.Model):
+    """Independent dispatch authorization; never implied by quota approval."""
+
+    __tablename__ = "marketing_campaign_v2_governed_executions"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    approval_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_dispatch_approvals.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    manifest_digest = db.Column(db.String(64), nullable=False)
+    confirmed_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="RESTRICT"), nullable=False,
+    )
+    confirmed_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    status = db.Column(db.String(25), nullable=False, default="AUTHORIZED")
+    last_child_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_provider_campaigns.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint("approval_id", name="uq_mkt_v2_governed_execution_approval"),
+        db.CheckConstraint("length(manifest_digest) = 64",
+                           name="ck_mkt_v2_execution_digest"),
+        db.CheckConstraint(
+            "status IN ('AUTHORIZED','IN_FLIGHT','REVIEW_REQUIRED','COMPLETE')",
+            name="ck_mkt_v2_execution_status",
+        ),
+        db.CheckConstraint("confirmed_at < expires_at", name="ck_mkt_v2_execution_expiry"),
+    )
+
+
+class MarketingCampaignV2GovernedReconciliationEventORM(db.Model):
+    """Append-only operator evidence for a governed execution/child pair."""
+
+    __tablename__ = "marketing_campaign_v2_governed_reconciliation_events"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    execution_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_governed_executions.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    child_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_provider_campaigns.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    event_kind = db.Column(db.String(40), nullable=False)
+    source_reference = db.Column(db.String(255), nullable=False)
+    evidence_note = db.Column(db.Text, nullable=False)
+    provider_campaign_id = db.Column(db.String(255), nullable=True)
+    previous_child_status = db.Column(db.String(30), nullable=False)
+    next_child_status = db.Column(db.String(30), nullable=False)
+    previous_execution_status = db.Column(db.String(25), nullable=False)
+    next_execution_status = db.Column(db.String(25), nullable=False)
+    actor_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="RESTRICT"), nullable=False,
+    )
+    recorded_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    evidence_json = db.Column(db.JSON, nullable=False, default=dict)
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "execution_id", "child_id", "event_kind",
+            name="uq_mkt_v2_governed_reconcile_event",
+        ),
+        db.CheckConstraint(
+            "event_kind IN ('STALE_CLAIM_REVIEW','PROVIDER_CAMPAIGN_FOUND',"
+            "'NOT_CREATED_CONFIRMED')",
+            name="ck_mkt_v2_governed_reconcile_event_kind",
+        ),
+        db.CheckConstraint("length(trim(source_reference)) > 0",
+                           name="ck_mkt_v2_governed_reconcile_source"),
+        db.CheckConstraint("length(trim(evidence_note)) > 0",
+                           name="ck_mkt_v2_governed_reconcile_note"),
+    )
+
+
+class MarketingCampaignV2HeldReleaseIntentORM(db.Model):
+    """Immutable authorization request, not a child state transition or send grant."""
+
+    __tablename__ = "marketing_campaign_v2_held_release_intents"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    source_campaign_id = db.Column(
+        db.BigInteger, db.ForeignKey("marketing_campaign_v2_campaigns.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    source_approval_id = db.Column(
+        db.BigInteger, db.ForeignKey("marketing_campaign_v2_dispatch_approvals.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    source_child_id = db.Column(
+        db.BigInteger, db.ForeignKey("marketing_campaign_v2_provider_campaigns.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    source_manifest_digest = db.Column(db.String(64), nullable=False)
+    candidate_fingerprint = db.Column(db.String(64), nullable=False)
+    candidate_recipients = db.Column(db.Integer, nullable=False)
+    evidence_json = db.Column(db.JSON, nullable=False)
+    source_reference = db.Column(db.String(255), nullable=False)
+    reason = db.Column(db.Text, nullable=False)
+    requested_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="RESTRICT"), nullable=False,
+    )
+    requested_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    status = db.Column(db.String(35), nullable=False, default="PENDING_FRESH_COHORT")
+    derived_campaign_id = db.Column(
+        db.BigInteger, db.ForeignKey("marketing_campaign_v2_campaigns.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    materialized_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        db.UniqueConstraint("source_child_id", name="uq_mkt_v2_held_release_child"),
+        db.UniqueConstraint("derived_campaign_id", name="uq_mkt_v2_held_release_derived_campaign"),
+        db.CheckConstraint("length(source_manifest_digest) = 64 AND length(candidate_fingerprint) = 64",
+                           name="ck_mkt_v2_held_release_fingerprints"),
+        db.CheckConstraint("candidate_recipients > 0",
+                           name="ck_mkt_v2_held_release_positive"),
+        db.CheckConstraint(
+            "status IN ('PENDING_FRESH_COHORT', 'FROZEN_DERIVED')",
+            name="ck_mkt_v2_held_release_intent_status",
+        ),
+        db.CheckConstraint(
+            "(status = 'PENDING_FRESH_COHORT' AND derived_campaign_id IS NULL "
+            "AND materialized_at IS NULL) OR "
+            "(status = 'FROZEN_DERIVED' AND derived_campaign_id IS NOT NULL "
+            "AND materialized_at IS NOT NULL)",
+            name="ck_mkt_v2_held_release_materialization_state",
+        ),
+        db.CheckConstraint("length(trim(source_reference)) > 0 AND length(trim(reason)) > 0",
+                           name="ck_mkt_v2_held_release_audit"),
+    )
+
+
+class MarketingCampaignV2CapacityReservationORM(db.Model):
+    """Per-scope capacity ledger; never interpreted as Meta-verified availability."""
+
+    __tablename__ = "marketing_campaign_v2_capacity_reservations"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    approval_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_dispatch_approvals.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    attestation_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_quota_capacity_attestations.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    scope_kind = db.Column(db.String(20), nullable=False)
+    scope_key = db.Column(db.String(255), nullable=False)
+    reserved_messages = db.Column(db.Integer, nullable=False)
+    reserved_until = db.Column(db.DateTime(timezone=True), nullable=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint("approval_id", "scope_kind", "scope_key",
+                            name="uq_mkt_v2_reservation_scope"),
+        db.CheckConstraint("scope_kind IN ('CHANNEL', 'PORTFOLIO')",
+                           name="ck_mkt_v2_reservation_kind"),
+        db.CheckConstraint("reserved_messages > 0",
+                           name="ck_mkt_v2_reservation_positive"),
+        db.CheckConstraint("length(trim(scope_key)) > 0",
+                           name="ck_mkt_v2_reservation_key"),
+        db.Index("ix_mkt_v2_reservation_active", "scope_kind", "scope_key", "reserved_until"),
+    )
+
+
 class MarketingCampaignV2ORM(db.Model):
     __tablename__ = "marketing_campaign_v2_campaigns"
 
@@ -1702,6 +2013,41 @@ class MarketingIventasSyncRunORM(db.Model):
             postgresql_where=db.text(
                 "is_canonical = true"
             ),
+        ),
+    )
+
+
+class MarketingIventasBranchFailureORM(db.Model):
+    """Solo identidad y clase de fallo. Nunca mensajes, payloads ni tokens."""
+    __tablename__ = "marketing_iventas_branch_failures"
+
+    sync_run_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_iventas_sync_runs.id", ondelete="CASCADE"),
+        primary_key=True,
+        nullable=False,
+    )
+    branch_code = db.Column(db.String(100), primary_key=True, nullable=False)
+    error_type = db.Column(db.String(64), nullable=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=_utc_now,
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "length(trim(branch_code)) BETWEEN 1 AND 100",
+            name="ck_iventas_branch_failures_code",
+        ),
+        db.CheckConstraint(
+            "error_type IN ("
+            "'ALIAS_UNRESOLVED', "
+            "'ALIAS_AMBIGUOUS_DESTINATION', "
+            "'MarketingIventasBranchResolutionError', "
+            "'MarketingIventasBranchSyncError', "
+            "'IventasClientError', "
+            "'UNEXPECTED_BRANCH_ABORT'"
+            ")",
+            name="ck_iventas_branch_failures_type",
         ),
     )
 

@@ -1,0 +1,64 @@
+<h2 mat-dialog-title>Diagnóstico · {{ data.jobLabel }}</h2>
+<mat-dialog-content>
+  <p *ngIf="loading" role="status">Consultando evidencia del job…</p>
+  <p *ngIf="loadError" role="alert">{{ loadError }}</p>
+  <ng-container *ngIf="diagnostic as info">
+    <dl>
+      <dt>Job</dt><dd>{{ info.job_key }}</dd>
+      <dt>Corrida</dt><dd>{{ info.run_id === null ? 'No disponible' : info.run_id }}</dd>
+      <dt>Corte</dt><dd>{{ info.business_date || 'No disponible' }}</dd>
+      <dt>Estado</dt><dd>{{ info.status || 'No verificado' }}</dd>
+      <dt>Inicio (Tijuana)</dt><dd>{{ formatDate(info.started_at_utc) }}</dd>
+      <dt>Fin (Tijuana)</dt><dd>{{ formatDate(info.finished_at_utc) }}</dd>
+      <ng-container *ngIf="info.error_code">
+        <dt>Código técnico</dt><dd>{{ info.error_code }}</dd>
+      </ng-container>
+      <dt>Evidencia</dt><dd>{{ diagnosticLabel(info) }}</dd>
+      <dt>Log técnico</dt><dd>{{ logLabel(info) }}</dd>
+    </dl>
+    <div *ngIf="info.counts as counts" class="diagnostic-counters">
+      <h3>Resultado de la sincronización</h3>
+      <dl>
+        <dt>Sucursales solicitadas</dt><dd>{{ counts.branches_requested }}</dd>
+        <dt>Sucursales completadas</dt><dd>{{ counts.branches_completed }}</dd>
+        <dt>Sucursales no completadas</dt><dd>{{ counts.branches_failed }}</dd>
+        <dt>Alias sin resolver</dt><dd>{{ counts.aliases_unresolved }}</dd>
+      </dl>
+    </div>
+    <section *ngIf="info.failure_details_coverage" class="branch-failures">
+      <h3>Detalle atribuido a esta corrida</h3>
+      <table *ngIf="info.branch_failures?.length" class="branch-table">
+        <thead><tr><th>Sucursal (alias iVentas)</th><th>Clasificación</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let failure of info.branch_failures">
+            <td>{{ failure.branch_code }}</td>
+            <td>{{ failureLabel(failure.error_type) }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p *ngIf="info.failure_details_coverage==='NOT_RECORDED'" class="note">
+        Esta corrida no tiene detalles de fallo guardados por sucursal.
+        Los registros anteriores a la instrumentación no pueden reconstruirse.
+      </p>
+      <p *ngIf="info.failure_details_coverage==='RECORDED_ONLY'" class="note">
+        Solo se enumeran fallos efectivamente registrados.
+        Pueden existir sucursales no intentadas por un aborto previo.
+      </p>
+      <p *ngIf="info.failure_details_truncated" class="note">
+        Se muestran como máximo 100 registros de diagnóstico.
+      </p>
+    </section>
+    <p class="diagnostic-note">{{ info.sanitized_message }}</p>
+    <p *ngIf="info.failure_recency" class="note">
+      Se registró un fallo o resultado parcial. No se verificó si otra ejecución posterior resolvió el mismo corte.
+    </p>
+    <p class="note" *ngIf="info.log_state==='LOG_NOT_AVAILABLE' || info.diagnostic_state==='LOG_NOT_AVAILABLE'">
+      No se muestran logs ni mensajes de error crudos sin asociación y saneamiento certificados.
+    </p>
+    <p *ngIf="copyStatus" role="status" class="note">{{ copyStatus }}</p>
+  </ng-container>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button type="button" [disabled]="!diagnostic" (click)="copyDiagnostic()">Copiar diagnóstico</button>
+  <button type="button" (click)="close()">Cerrar</button>
+</mat-dialog-actions>

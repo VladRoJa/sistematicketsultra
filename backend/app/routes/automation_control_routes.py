@@ -4,8 +4,10 @@ from __future__ import annotations
 from dataclasses import asdict
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
-from datetime import date, datetime, timedelta
 from app.services.automation_control.timeline_service import daily_timeline
+from app.services.automation_control.diagnostic_service import (
+    run_diagnostic, last_error_diagnostic,
+)
 
 from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
@@ -17,9 +19,10 @@ from app.services.automation_control.job_catalog import (
 )
 from app.services.automation_control.job_read_service import (
     has_run_source,
+    has_completion_marker_source,
     list_job_runs,
 )
-from app.utils.automation_control_access import can_read_automation_control
+from app.utils.automation_control_access import can_read_automation_control, can_read_automation_logs
 
 
 automation_control_bp = Blueprint("automation_control", __name__)
@@ -32,6 +35,14 @@ def _require_read_access() -> bool:
         return False
     user = UserORM.get_by_id(user_id)
     return can_read_automation_control(user)
+
+
+def _require_log_access() -> bool:
+    try:
+        user_id = int(get_jwt_identity())
+    except (TypeError, ValueError):
+        return False
+    return can_read_automation_logs(UserORM.get_by_id(user_id))
 
 
 def _deny():
@@ -50,7 +61,9 @@ def _job_metadata(job) -> dict:
         "worker_health": "UNKNOWN",
         "data_freshness": "UNKNOWN",
         "run_history_coverage": (
-            "DOMAIN_RUNS" if has_run_source(job.key)
+            "COMPLETION_MARKERS_ONLY"
+            if has_completion_marker_source(job.key)
+            else "DOMAIN_RUNS" if has_run_source(job.key)
             else "NOT_INSTRUMENTED"
         ),
     })
@@ -183,3 +196,55 @@ def automation_control_timeline():
     except Exception:
         current_app.logger.exception("Fallo al consultar matriz de automatizaciones")
         return jsonify({"status": "error", "message": "No se pudo consultar la matriz."}), 500
+
+
+@automation_control_bp.get("/jobs/<job_key>/runs/<int:run_id>/diagnostic")
+@jwt_required()
+def automation_control_run_diagnostic(job_key: str, run_id: int):
+    # AUTOMATIONS_LOG_READ (M1): autorización explícita solo ADMICORP.
+    if not _require_log_access():
+        return _deny()
+    if not any(job.key == job_key for job in get_job_catalog()):
+        return jsonify({"status": "error", "message": "Job no registrado."}), 404
+    try:
+        detail = run_diagnostic(job_key, run_id)
+    except Exception:
+        current_app.logger.exception("Error de consulta diagnóstica. job=%s", job_key)
+        return jsonify({"status": "error", "message": "No se pudo consultar el diagnóstico."}), 500
+    if detail is None:
+        return jsonify({"status": "error", "message": "Ejecución no atribuible al job."}), 404
+    current_app.logger.info(
+        "AUTOMATION_DIAGNOSTIC_READ actor=%s job=%s run=%s",
+        get_jwt_identity(), job_key, run_id,
+    )
+    return jsonify({"status": "ok", "diagnostic": detail})
+
+
+@automation_control_bp.get("/jobs/<job_key>/last-error")
+@jwt_required()
+def automation_control_last_error(job_key: str):
+    if not _require_log_access():
+        return _deny()
+    if not any(job.key == job_key for job in get_job_catalog()):
+        return jsonify({"status": "error", "message": "Job no registrado."}), 404
+    if request.args.get("scope_key") is not None:
+        return jsonify({"status": "error", "message": "Scope técnico no soportado."}), 400
+    raw_date = request.args.get("business_date")
+    try:
+        business_date = date.fromisoformat(raw_date) if raw_date else None
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "Fecha inválida."}), 400
+    if business_date is not None:
+        today = datetime.now(ZoneInfo("America/Tijuana")).date()
+        if business_date > today or business_date < today - timedelta(days=730):
+            return jsonify({"status": "error", "message": "Fecha fuera de rango."}), 400
+    try:
+        detail = last_error_diagnostic(job_key, business_date=business_date)
+    except Exception:
+        current_app.logger.exception("Fallo de lectura último error. job=%s", job_key)
+        return jsonify({"status": "error", "message": "No se pudo consultar el diagnóstico."}), 500
+    current_app.logger.info(
+        "AUTOMATION_LAST_ERROR_READ actor=%s job=%s",
+        get_jwt_identity(), job_key,
+    )
+    return jsonify({"status": "ok", "diagnostic": detail})

@@ -30,30 +30,39 @@
                 type="button" class="timeline-cell"
                 [class.timeline-error]="timelineState(job,hour)==='error'"
                 [class.timeline-partial]="timelineState(job,hour)==='partial'"
-                [class.timeline-observed]="timelineState(job,hour)==='observed'"
-                [title]="timelineRuns(job,hour).length + ' ejecución(es) observada(s)'"
+                [class.timeline-running]="timelineState(job,hour)==='running'"
+                [class.timeline-completed]="timelineState(job,hour)==='completed'"
+                [class.timeline-replaced]="timelineState(job,hour)==='replaced'"
+                [class.timeline-unknown]="timelineState(job,hour)==='unknown'"
+                [title]="timelineObservationTitle(job,hour)"
+                [attr.aria-label]="timelineObservationTitle(job,hour)"
                 (click)="showObservation(job,hour)">
-                {{timelineRuns(job,hour).length}}
+                <mat-icon aria-hidden="true">{{timelineIcon(job,hour)}}</mat-icon>
+                <span>{{timelineRuns(job,hour).length}}</span>
               </button>
               <ng-template #emptySlot><span class="timeline-empty"
-                [class.timeline-reference]="hasReferenceHour(job,hour)"
-                [title]="hasReferenceHour(job,hour)?'Horario de referencia sin evidencia atribuible':'Sin ejecución observada'">
-                {{hasReferenceHour(job,hour)?'·':'—'}}</span></ng-template>
+                [class.timeline-reference-future]="referenceState(job,hour)==='FUTURE_REFERENCE'"
+                [class.timeline-reference-past]="referenceState(job,hour)==='PAST_REFERENCE_UNVERIFIED'"
+                [title]="referenceTitle(job,hour)"
+                [attr.aria-label]="referenceTitle(job,hour)">
+                <mat-icon *ngIf="referenceIcon(job,hour)" aria-hidden="true">{{referenceIcon(job,hour)}}</mat-icon>
+                <span *ngIf="!referenceIcon(job,hour)">—</span>
+              </span></ng-template>
             </td>
           </tr></tbody>
         </table></div>
       </div>
-      <div class="timeline-legend">
-        <span>● Ejecución observada</span><span>● Resultado parcial</span><span>● Fallo observado</span>
-        <span>· Horario de referencia (sin confirmación)</span><span>— Sin ejecución observada</span>
+      <div class="timeline-legend" aria-label="Leyenda de estados de la matriz">
+        <span class="legend-completed"><mat-icon aria-hidden="true">check_circle</mat-icon> Ejecución finalizada (no confirma frescura)</span>
+        <span class="legend-running"><mat-icon aria-hidden="true">sync</mat-icon> RUNNING registrado</span>
+        <span class="legend-partial"><mat-icon aria-hidden="true">warning_amber</mat-icon> Resultado parcial</span>
+        <span class="legend-error"><mat-icon aria-hidden="true">cancel</mat-icon> Fallo registrado</span>
+        <span class="legend-replaced"><mat-icon aria-hidden="true">history</mat-icon> Versión sustituida</span>
+        <span class="legend-future"><mat-icon aria-hidden="true">schedule</mat-icon> Horario futuro (referencia)</span>
+        <span class="legend-past"><mat-icon aria-hidden="true">help_outline</mat-icon> Horario pasado sin evidencia atribuible</span>
+        <span class="legend-empty">— Sin ejecución ni horario de referencia</span>
       </div>
-      <div *ngIf="selectedObservation" class="timeline-detail">
-        <div class="detail-head"><h3>{{selectedObservationJob}} · Ejecución #{{selectedObservation.run_id}}</h3>
-          <button type="button" (click)="closeObservation()">Cerrar</button></div>
-        <p>Estado original: {{selectedObservation.status_raw}} · Hora observada: {{selectedObservation.observed_time}}</p>
-        <p>Corte: {{selectedObservation.business_date||'Sin fecha'}} · Inicio: {{formatDate(selectedObservation.started_at_utc)}}</p>
-        <p *ngIf="selectedObservation.error_available">Error registrado; diagnóstico seguro pendiente de instrumentación.</p>
-      </div>
+
     </section>
     <div class="filters"><label>Dominio <select [(ngModel)]="domain"><option value="">Todos</option>
       <option *ngFor="let d of domains" [value]="d">{{d}}</option></select></label>
@@ -65,7 +74,11 @@
         <tbody><tr *ngFor="let job of visibleJobs">
           <td><b>{{job.label}}</b><small>{{job.key}}</small></td><td>{{job.worker_key}}</td>
           <td>{{job.schedule_reference}}</td><td class="unknown">No verificada</td>
-          <td><button type="button" (click)="select(job)">Historial</button></td>
+          <td class="auto-actions">
+            <button type="button" (click)="select(job)">Historial</button>
+            <button type="button" (click)="openLastError(job)"
+              title="Busca la última falla atribuible. No garantiza log disponible.">Ver último error</button>
+          </td>
         </tr><tr *ngIf="!visibleJobs.length"><td colspan="5">Sin resultados.</td></tr></tbody>
       </table></div></section>
       <section class="panel" *ngIf="selected"><div class="detail-head"><h2>{{selected.label}}</h2>
@@ -75,13 +88,20 @@
         <p *ngIf="runsError" role="alert" class="alert">{{runsError}}</p>
         <p *ngIf="!loadingRuns&&!runsError&&coverage==='NOT_INSTRUMENTED'">
           Historial no instrumentado. No implica éxito ni fallo.</p>
-        <div class="table-wrap" *ngIf="!loadingRuns&&!runsError&&coverage==='DOMAIN_RUNS'"><table>
+        <p *ngIf="!loadingRuns&&!runsError&&coverage==='COMPLETION_MARKERS_ONLY'" class="disclaimer">
+          Solo finalizaciones persistidas en auditoría. No hay hora de inicio ni fallos instrumentados.
+        </p>
+        <div class="table-wrap" *ngIf="!loadingRuns&&!runsError&&(coverage==='DOMAIN_RUNS'||coverage==='COMPLETION_MARKERS_ONLY')"><table>
           <thead><tr><th>Corte</th><th>Estado original</th><th>Inicio (Tijuana)</th><th>Fin (Tijuana)</th></tr></thead>
           <tbody><tr *ngFor="let run of runs"><td>{{run.business_date||'—'}}</td>
-          <td>{{run.status_raw}}<small *ngIf="run.error_available">Error registrado; detalle pendiente</small></td>
+          <td>{{run.status_raw}}
+            <button type="button" *ngIf="canDiagnose(run)" (click)="openRunDiagnostic(run)">
+              Ver diagnóstico
+            </button>
+          </td>
           <td>{{formatDate(run.started_at_utc)}}</td><td>{{formatDate(run.finished_at_utc)}}</td></tr>
           <tr *ngIf="!runs.length"><td colspan="4">Sin ejecuciones registradas.</td></tr></tbody>
-        </table></div><div class="pager" *ngIf="coverage==='DOMAIN_RUNS'&&!runsError">
+        </table></div><div class="pager" *ngIf="(coverage==='DOMAIN_RUNS'||coverage==='COMPLETION_MARKERS_ONLY')&&!runsError">
           <button type="button" [disabled]="!offset||loadingRuns" (click)="pageBy(-1)">Anterior</button>
           <span>Página {{page}}</span><button type="button" [disabled]="!hasMore||loadingRuns" (click)="pageBy(1)">Siguiente</button>
         </div>

@@ -541,6 +541,84 @@ export interface CampaignV2PreparationApplyRequest {
   allow_bulk: boolean;
 }
 
+export interface CampaignV2QuotaPolicyRevision {
+  revision_id: number;
+  provider_channel_id: string;
+  portfolio_key: string;
+  account_key: string;
+  phone_alias: string;
+  nominal_channel_limit: number | null;
+  reset_timezone: string;
+  valid_from: string;
+  source_reference: string;
+}
+
+export interface CampaignV2QuotaAttestation {
+  attestation_id: number;
+  scope_kind: 'CHANNEL' | 'PORTFOLIO';
+  scope_key: string;
+  remaining_messages: number;
+  observed_at: string;
+  expires_at: string;
+  window_ends_at: string;
+  source_reference: string;
+}
+
+export interface CampaignV2QuotaEvidence {
+  policies: CampaignV2QuotaPolicyRevision[];
+  attestations: CampaignV2QuotaAttestation[];
+}
+
+export interface CampaignV2QuotaPolicyRequest {
+  provider_channel_id: string;
+  portfolio_key: string;
+  account_key: string;
+  phone_alias: string;
+  nominal_channel_limit: number | null;
+  reset_timezone: string;
+  source_reference: string;
+}
+
+export interface CampaignV2QuotaAttestationRequest {
+  scope_kind: 'CHANNEL' | 'PORTFOLIO';
+  scope_key: string;
+  observed_at: string;
+  expires_at: string;
+  window_ends_at: string;
+  remaining_messages: number;
+  source_reference: string;
+}
+
+export interface CampaignV2PreflightQuota {
+  basis: 'OPERATOR_ATTESTED_NOT_META_VERIFIED';
+  status: 'REVIEWABLE' | 'INCOMPLETE';
+  send_authorized: false;
+  as_of: string;
+  reviewed_recipients: number;
+  hold_recommended_recipients: number;
+  portfolio_demands: Array<{
+    portfolio_key: string;
+    recipients: number;
+    attested_remaining: number | null;
+  }>;
+  batches: Array<{
+    sucursal_canon: string;
+    provider_channel_id: string | null;
+    portfolio_key: string | null;
+    account_key: string | null;
+    phone_alias: string | null;
+    reset_timezone: string | null;
+    reported_nominal_channel_limit: number | null;
+    channel_remaining: number | null;
+    portfolio_remaining: number | null;
+    channel_evidence_id: number | null;
+    portfolio_evidence_id: number | null;
+    recipients: number;
+    recommendation: 'REVIEW_HOLD' | 'CAPACITY_REVIEWED';
+    blocking_reason: string | null;
+  }>;
+}
+
 export interface CampaignV2PreflightBudget {
   status: 'COMPLETE' | 'INCOMPLETE';
   currency: 'MXN';
@@ -642,6 +720,7 @@ export interface CampaignV2PreflightResponse {
   ready: boolean;
   submission: CampaignV2SubmitState;
   budget?: CampaignV2PreflightBudget;
+  quota?: CampaignV2PreflightQuota;
 }
 
 export interface CampaignV2RecipientSummary {

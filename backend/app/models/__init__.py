@@ -75,6 +75,7 @@ from .marketing import (
     MarketingReactivationCampaignORM,
     MarketingReactivationCampaignRecipientORM,
     MarketingIventasSyncRunORM,
+    MarketingIventasBranchFailureORM,
     MarketingIventasRawPageORM,
     MarketingIventasContactORM,
     MarketingIventasContactTagORM,

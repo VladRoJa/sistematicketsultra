@@ -2,7 +2,7 @@
 
 <mat-dialog-content class="dispatch-admin">
   <p class="disclaimer">
-    Catálogo local de Suite Ultra. Registrar una plantilla no confirma que exista o esté
+    <strong>Solo configuración.</strong> Catálogo local de Suite Ultra. Registrar una plantilla no confirma que exista o esté
     aprobada en cada canal de iVentas. Esta pantalla nunca envía WhatsApps.
   </p>
 
@@ -20,8 +20,9 @@
           <h3>Plantillas</h3>
           <p>Nombre exacto de la plantilla ya aprobada en iVentas.</p>
         </div>
-        <button mat-stroked-button type="button" (click)="resetTemplate()">Nueva plantilla</button>
+        <button mat-stroked-button type="button" (click)="startNewTemplate()">Nueva plantilla</button>
       </div>
+      <p class="section-guidance" *ngIf="!showTemplateEditor">Selecciona «Editar» en una plantilla o crea una nueva para abrir el formulario.</p>
 
       <div class="catalog-table">
         <table>
@@ -33,7 +34,7 @@
               <td><strong>{{ template.label }}</strong><small>{{ template.template_name }}</small></td>
               <td>{{ template.purposes.join(', ') || 'Legacy: todos' }}</td>
               <td>{{ template.compatible_channel_ids.length || 'Legacy: todos' }}</td>
-              <td>{{ template.is_active ? 'Activa' : 'Inactiva' }}</td>
+              <td><span class="status-pill" [class.is-inactive]="!template.is_active">{{ template.is_active ? 'Activa' : 'Inactiva' }}</span></td>
               <td class="actions">
                 <button mat-button type="button" (click)="editTemplate(template)">Editar</button>
                 <button *ngIf="template.is_active" mat-button type="button" (click)="requestDeactivate(template)"
@@ -51,7 +52,7 @@
         <button mat-button type="button" (click)="cancelDeactivate()">Cancelar</button>
       </div>
 
-      <div class="editor">
+      <div class="editor editor-card" *ngIf="showTemplateEditor" id="campaign-v2-template-editor">
         <h4>{{ editingTemplateId === null ? 'Agregar plantilla' : 'Editar plantilla #' + editingTemplateId }}</h4>
         <div class="form-grid">
           <mat-form-field appearance="outline">
@@ -112,7 +113,7 @@
             [disabled]="!canSaveTemplate">
             {{ savingTemplate ? 'Guardando…' : 'Guardar plantilla' }}
           </button>
-          <button mat-button type="button" (click)="resetTemplate()">Limpiar formulario</button>
+          <button mat-button type="button" (click)="closeTemplateEditor()">Cancelar</button>
         </div>
       </div>
     </section>
@@ -179,6 +180,7 @@
           <h3>Presupuestos · tarifas de referencia</h3>
           <p>Costos manuales en MXN por mensaje, versión por plantilla y canal. No son cargos confirmados por iVentas.</p>
         </div>
+        <button mat-stroked-button type="button" (click)="openBudgetEditor()" *ngIf="!showBudgetEditor">Nueva tarifa</button>
       </div>
       <div class="catalog-table">
         <table>
@@ -199,7 +201,7 @@
           </tbody>
         </table>
       </div>
-      <div class="editor">
+      <div class="editor editor-card" *ngIf="showBudgetEditor">
         <h4>Registrar nueva versión de tarifa</h4>
         <div class="form-grid">
           <mat-form-field appearance="outline">
@@ -237,6 +239,7 @@
             [disabled]="!canSaveBudgetRate" (click)="registerBudgetRate()">
             {{ savingBudgetRate ? 'Guardando…' : 'Registrar revisión' }}
           </button>
+          <button mat-button type="button" (click)="closeBudgetEditor()" [disabled]="savingBudgetRate">Cancelar</button>
         </div>
       </div>
     </section>

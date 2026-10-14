@@ -35,6 +35,50 @@ def test_reference_schedule_is_never_verified():
     assert result["schedule_verified"] is False
     assert result["timezone"] == "America/Tijuana"
     assert len(result["workers"]) == 5
+    reports = next(w for w in result["workers"] if w["worker_key"] == "reports-scheduler")
+    assert len(reports["jobs"]) == 6
+    assert reports["jobs"][0]["reference_slots"] == ["09:00"] or any(
+        j["reference_slots"] == ["09:00"] for j in reports["jobs"]
+    )
+    assert any(j["reference_slots"] == ["06:20"] for j in reports["jobs"])
+    assert any(
+        j["job_key"] == "reports.commercial_daily_reports"
+        and j["reference_slots"] == []
+        and j["coverage"] == "COMPLETION_MARKERS_ONLY"
+        and j["schedule_verified"] is False
+        for j in reports["jobs"]
+    )
+    assert any(
+        j["job_key"] == "reports.cobranza_recurrente_rechazados"
+        and j["reference_slots"] == ["08:00"]
+        and j["schedule_verified"] is False
+        and j["coverage"] == "COMPLETION_MARKERS_ONLY"
+        for j in reports["jobs"]
+    )
+    assert any(
+        j["job_key"] == "reports.reactivation_outcomes_daily"
+        and j["reference_slots"] == ["09:15"]
+        and j["schedule_verified"] is False
+        for j in reports["jobs"]
+    )
+    assert any(
+        j["job_key"] == "reports.reporte_direccion_daily_capture"
+        and j["coverage"] == "NOT_INSTRUMENTED"
+        and j["reference_slots"] == []
+        for j in reports["jobs"]
+    )
+    routine = next(w for w in result["workers"]
+                   if w["worker_key"] == "routine-control-scheduler")
+    assert len(routine["jobs"]) == 1
+    assert routine["jobs"][0]["reference_slots"] == [
+        "09:20", "13:20", "17:20", "21:20",
+    ]
+    cleanup = next(w for w in result["workers"]
+                   if w["worker_key"] == "ticket-attachment-cleanup")
+    assert len(cleanup["jobs"]) == 1
+    assert cleanup["jobs"][0]["coverage"] == "NOT_INSTRUMENTED"
+    assert cleanup["jobs"][0]["reference_slots"] == []
+    assert reports["jobs"][0]["schedule_verified"] is False
     assert next(job for worker in result["workers"] for job in worker["jobs"]
                 if job["job_key"] == "marketing.iventas_sync")["reference_slots"] == [
                     "08:20", "12:20", "16:20", "20:20"
