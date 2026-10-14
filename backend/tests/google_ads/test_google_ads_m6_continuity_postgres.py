@@ -57,7 +57,7 @@ def _reject(conn, sql, values):
 def test_real_m6_migration_constraints_and_m5_immutability():
     engine = _test_engine()
     rev = _revision()
-    assert rev.down_revision == "e4b856c9170d"
+    assert rev.down_revision == "f62a1b9d4c07"
 
     with engine.connect() as conn:
         transaction = conn.begin()
