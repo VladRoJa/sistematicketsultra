@@ -2,12 +2,13 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { Job, Run, RunsResponse, Summary, Dataset, TimelineResponse, AutomationDiagnostic } from './automation-control.models';
+import { Job, Run, RunsResponse, Summary, Dataset, TimelineResponse, AutomationDiagnostic, WorkerHealthResponse } from './automation-control.models';
 @Injectable({ providedIn:'root' })
 export class AutomationControlService {
   private readonly url = `${environment.apiUrl}/automation-control`;
   constructor(private readonly http: HttpClient) {}
   summary():Observable<Summary> { return this.http.get<Summary>(`${this.url}/summary`); }
+  workerHealth():Observable<WorkerHealthResponse> { return this.http.get<WorkerHealthResponse>(`${this.url}/workers/health`); }
   jobs():Observable<{jobs:Job[]}> { return this.http.get<{jobs:Job[]}>(`${this.url}/jobs`); }
   datasets():Observable<{datasets:Dataset[]}> { return this.http.get<{datasets:Dataset[]}>(`${this.url}/datasets`); }
   timeline(day:string):Observable<TimelineResponse> {

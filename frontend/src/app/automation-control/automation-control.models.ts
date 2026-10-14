@@ -26,3 +26,12 @@ export interface AutomationDiagnostic {
   failure_details_coverage?:string;
   failure_details_truncated?:boolean;
 }
+
+export type WorkerLiveness = 'HEALTHY'|'DEGRADED'|'UNREACHABLE'|'DISABLED'|'UNKNOWN';
+export interface WorkerHealth {
+  worker_key:string; status:WorkerLiveness; reason_code:string;
+  last_seen_at_utc:string|null; instance_count:number;
+}
+export interface WorkerHealthResponse {
+  checked_at_utc:string; workers:WorkerHealth[]; coverage:string;
+}

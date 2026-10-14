@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy import select
 
 from app import create_app, db
+from app.services.automation_control.worker_health_service import emit_worker_heartbeat
 from app.models.routine_control import (
     RoutineControlPipelineRunORM,
 )
@@ -386,6 +387,7 @@ def run_scheduler_loop() -> None:
     with app.app_context():
         while True:
             try:
+                emit_worker_heartbeat('routine-control-scheduler', poll_interval_seconds=poll_seconds, enabled=enabled)
                 if enabled:
                     now_local = datetime.now(
                         scheduler_timezone

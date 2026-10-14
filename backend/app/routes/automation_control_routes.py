@@ -5,6 +5,7 @@ from dataclasses import asdict
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 from app.services.automation_control.timeline_service import daily_timeline
+from app.services.automation_control.worker_health_service import read_worker_health
 from app.services.automation_control.diagnostic_service import (
     run_diagnostic, last_error_diagnostic,
 )
@@ -248,3 +249,18 @@ def automation_control_last_error(job_key: str):
         get_jwt_identity(), job_key,
     )
     return jsonify({"status": "ok", "diagnostic": detail})
+
+
+@automation_control_bp.get("/workers/health")
+@jwt_required()
+def automation_control_worker_health():
+    if not _require_read_access():
+        return _deny()
+    try:
+        return jsonify({"status": "ok", **read_worker_health()})
+    except Exception:
+        current_app.logger.exception("Fallo de lectura de salud de workers")
+        return jsonify({
+            "status": "error",
+            "message": "No se pudo verificar la salud de los workers.",
+        }), 503

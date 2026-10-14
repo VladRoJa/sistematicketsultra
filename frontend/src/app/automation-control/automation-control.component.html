@@ -9,9 +9,10 @@
       <div>Workers<strong>{{summary.worker_count}}</strong></div>
       <div>Jobs<strong>{{summary.job_count}}</strong></div>
       <div>Datasets<strong>{{summary.dataset_count}}</strong></div>
-      <div>Salud del worker<strong class="unknown">No verificada</strong></div>
+      <div>Workers con latido vigente<strong>{{healthyWorkers}} / {{summary.worker_count}}</strong></div>
     </div>
-    <p class="disclaimer">Horarios de referencia, no configuración efectiva. No se admiten ejecuciones manuales ni diagnóstico de logs en esta fase.</p>
+    <p class="disclaimer">Horarios de referencia, no configuración efectiva. La salud del worker se calcula por latidos; no valida el resultado de jobs ni la frescura de datos. Acciones manuales deshabilitadas.</p>
+    <p *ngIf="healthUnavailable" class="disclaimer">No fue posible comprobar los latidos. Estados mostrados como desconocidos.</p>
     <section class="panel">
       <div class="detail-head"><div><h2>Matriz diaria de ejecuciones observadas</h2>
         <small>Referencia horaria · sin confirmar configuración efectiva ni cumplimiento de SLA</small></div>
@@ -20,7 +21,16 @@
       <p *ngIf="loadingTimeline" role="status">Cargando matriz diaria…</p>
       <p *ngIf="timelineError" role="alert" class="alert">{{timelineError}}</p>
       <div *ngFor="let worker of timelineWorkers" class="timeline-worker">
-        <h3>{{worker.worker_key}}</h3>
+        <div class="worker-health-head">
+          <h3>{{worker.worker_key}}</h3>
+          <span class="worker-health-chip" [ngClass]="workerHealthClass(worker.worker_key)"
+            [attr.aria-label]="workerHealthDetail(worker.worker_key)"
+            [title]="workerHealthDetail(worker.worker_key)">
+            <mat-icon aria-hidden="true">{{workerHealthIcon(worker.worker_key)}}</mat-icon>
+            {{workerHealthLabel(worker.worker_key)}}
+          </span>
+          <small>{{workerHealthDetail(worker.worker_key)}}</small>
+        </div>
         <div class="table-wrap"><table class="timeline-table">
           <thead><tr><th>Job</th><th *ngFor="let hour of hours">{{hour}}</th></tr></thead>
           <tbody><tr *ngFor="let job of worker.jobs">
