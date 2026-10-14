@@ -94,6 +94,18 @@ export class DataFreshnessIndicatorComponent implements OnChanges, OnDestroy {
       ': exigible '+base.due_at+
       ', atrasada desde '+base.late_at+
       '. Cierre canónico independiente, condicionado a agregadoras.' : '';
+    const operational=this.state.funnel_operational_sla;
+    const operationalDetail=operational ? (
+      ' Funnel consolidado operativo del '+operational.expected_business_date+
+      ': '+operational.status+
+      '; pendiente desde '+operational.due_at+
+      ', atrasado desde '+operational.late_at+
+      '; faltantes: '+(operational.missing_sources.join(', ') || 'ninguno')+
+      '. No equivale al cierre canónico definitivo. '+
+      (operational.reason_code === 'FIVE_DATES_PRESENT_LINEAGE_UNVERIFIED'
+        ? 'Las cinco fechas existen, pero todavía falta certificar linaje y cobertura.'
+        : '')
+    ) : '';
     const sync=this.state.marketing_sync_sla;
     const syncLabel=sync ? (
       ' Sincronizaciones Marketing (no certifican Funnel completo): '+
@@ -103,7 +115,7 @@ export class DataFreshnessIndicatorComponent implements OnChanges, OnDestroy {
       ', atrasado desde '+(sync.late_at || 'no comprobado')+
       '. '+sync.sources.map(source => source.key+': '+source.status).join('; ')+'.'
     ) : '';
-    return this.state.detail + baseTiming + counts + syncLabel + (
+    return this.state.detail + baseTiming + counts + operationalDetail + syncLabel + (
       this.state.latest_complete_business_date
         ? ' Último corte conjunto: ' + this.state.latest_complete_business_date + '.'
         : ''

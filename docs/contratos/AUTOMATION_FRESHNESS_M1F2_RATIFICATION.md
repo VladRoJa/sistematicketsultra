@@ -143,3 +143,58 @@ alteraciones del cierre Track, sin ejecución masiva ni despliegue implícito.
 Sigue pendiente ratificar la publicación de las tres fuentes Warehouse
 y la condición canónica del lector comercial legado antes de habilitar
 el verde del Funnel completo.
+
+
+---
+
+## M1-F5 — SLA del Funnel consolidado **operativo** (ratificado 14/10/2026)
+
+**Regla autorizada:** para `business_date=D`, publicación conjunta del corte
+operativo de cinco fuentes, con fecha exacta D, en `America/Tijuana`:
+`NOT_DUE` antes de **D+1 03:00**; `LAGGING` desde las
+**03:00 hasta antes de 04:00**; `LATE` desde **D+1 04:00**.
+Aplica todos los días, incluidos fines de semana y festivos. Se comparan
+instantes absolutos y los límites se construyen con el huso local, sin
+fijar offset UTC permanente; ver pruebas del horario de verano.
+
+Las cinco fuentes requeridas son **iVentas, Meta, Venta Total, Detalle de
+Ventas Nuevos Socios y KPI Desempeño**. El SLA consulta cada fuente
+independientemente con `business_date=D`, los reportes estructurados
+canónicos en Warehouse y, para iVentas/Meta, `status=COMPLETED`
+**y** `is_canonical=true`; ello NO altera el lector comercial legacy
+(`_iventas_cutoff_dates`/`_meta_cutoff_dates`) que hoy solo comprueba
+`COMPLETED`. El lector legacy continúa mostrando el último corte
+conjunto; su fecha NO es por sí sola certificación de puntualidad.
+
+### Límites de certificación / no falsas señales verdes
+
+- El último **D exigible es ayer** (fecha del negocio en Tijuana),
+  independientemente del corte seleccionado del dashboard.
+- Cuando el usuario consulta un mes histórico distinto del mes de D,
+  el semáforo principal sigue `UNKNOWN`: no asignar atrasos de hoy a ese mes.
+  El objeto `funnel_operational_sla` queda independiente y rotulado.
+- Si falta una fecha exacta canónica, el estado usa la fase temporal
+  ratificada; si hay más de un canónico por fuente, `UNKNOWN`.
+- Si **las cinco fechas están presentes**, mostrar
+  `UNKNOWN/FIVE_DATES_PRESENT_LINEAGE_UNVERIFIED` en esta fase, **no
+  `UP_TO_DATE`**. La existencia de snapshots no certifica por sí sola
+  linaje a versión Track vigente, cobertura histórica de sucursales o
+  conservación de canonicalidad durante reintentos.
+- El indicador no equivale al **cierre definitivo con agregadoras**;
+  conserva `operational_not_final=true` y esa condición no posee SLA
+  horario ratificado.
+- Para permisos `FILTERED` o lectura global no certificada, no leer
+  ni exponer fechas, faltantes o versiones corporativas: `UNKNOWN`.
+- La comprobación por slots de Marketing M1-F4 y la base nocturna Track
+  M1-F3 siguen **independientes**.
+
+**Implementación M1-F5:** `backend/app/services/automation_control/
+funnel_operational_sla_service.py` (5 consultas de existencia acotadas,
+sin N+1 por sucursal), `freshness_service.py::_funnel_evidence`
+(separación fecha seleccionada vs. D exigible) y el indicador Angular
+(estado operativo y faltantes explícitos). Pruebas de límites exactos,
+DST, rollover mensual, canonicalidad, ambigüedad y permisos. **Sin
+migración Alembic:** el cambio es estrictamente read-only. **Sin
+reprogramar Track/Marketing/Control de Rutinas ni modificar pipelines.**
+La certificación de linaje/cobertura se trabaja en una fase posterior y
+no se reemplaza por un false-green de la fuente actual.

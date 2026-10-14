@@ -39,6 +39,16 @@ def _patch_sources():
                         "status":"UNKNOWN",
                         "reason_code":"WORKER_SCHEDULE_UNVERIFIED",
                     }))
+    patches.append(patch.object(service,"read_funnel_operational_sla",
+                    return_value={
+                        "status":"LATE",
+                        "reason_code":"EXACT_OPERATIONAL_SOURCES_MISSING",
+                        "expected_business_date":"2026-10-13",
+                        "due_at":"2026-10-14T03:00:00-07:00",
+                        "late_at":"2026-10-14T04:00:00-07:00",
+                        "missing_sources":["meta"],
+                        "sources":[],
+                    }))
     return patches
 
 
@@ -54,15 +64,18 @@ def test_funnel_joint_cut_never_infers_green_when_one_source_lags():
         assert tuple(s["key"] for s in result["sources"])==FUNNEL_SOURCE_KEYS
         assert result["latest_complete_business_date"]=="2026-10-12"
         assert result["latest_observed_business_date"]=="2026-10-13"
-        assert result["status"]=="UNKNOWN"
-        assert result["expected_business_date"] is None
+        assert result["status"]=="LATE"
+        assert result["expected_business_date"]=="2026-10-13"
+        assert result["late_at"]=="2026-10-14T04:00:00-07:00"
+        assert result["funnel_operational_sla"]["missing_sources"] == ["meta"]
+        assert result["label"] == "Operativo: atrasado"
         missing=[s for s in result["sources"] if not s["complete"]]
         assert [s["key"] for s in missing]==["meta"]
     finally:
         for p in reversed(patches): p.stop()
 
 
-def test_selected_historical_cut_cannot_use_later_records():
+def test_selected_historical_cut_keeps_separate_current_operational_sla():
     patches=_patch_sources()
     try:
         for p in patches: p.start()
@@ -72,7 +85,39 @@ def test_selected_historical_cut_cannot_use_later_records():
         )
         assert result["latest_observed_business_date"]=="2026-10-12"
         assert all(s["complete"] for s in result["sources"])
-        assert result["status"]=="UNKNOWN"  # No ratified SLA.
+        assert result["status"]=="LATE"  # Yesterday's separate operational SLA.
+        assert result["expected_business_date"]=="2026-10-13"
+        assert result["sources"][1]["latest_complete_business_date"]=="2026-10-12"
+    finally:
+        for p in reversed(patches): p.stop()
+
+
+def test_historical_month_does_not_inherit_a_current_operational_red():
+    patches=_patch_sources()
+    try:
+        for p in patches: p.start()
+        result=read_freshness(
+            "marketing.sales_funnel", scope_global_certified=True,
+            month="2026-09", now=NOW,
+        )
+        assert result["status"]=="UNKNOWN"
+        assert result["reason_code"]=="HISTORICAL_PERIOD_SLA_NOT_APPLIED"
+        assert result["expected_business_date"] is None
+        assert result["funnel_operational_sla"]["status"]=="LATE"
+    finally:
+        for p in reversed(patches): p.stop()
+
+
+def test_first_day_of_month_uses_yesterday_business_month():
+    utc_now=datetime(2026, 11, 1, 18, tzinfo=timezone.utc)
+    patches=_patch_sources()
+    try:
+        for p in patches: p.start()
+        result=read_freshness(
+            "marketing.sales_funnel", scope_global_certified=True, now=utc_now,
+        )
+        assert result["expected_business_date"]=="2026-10-31"
+        assert result["status"]=="LATE"
     finally:
         for p in reversed(patches): p.stop()
 
@@ -88,6 +133,8 @@ def test_scoped_access_never_queries_or_leaks_global_dates():
         assert result["reason_code"]=="SCOPE_NOT_CERTIFIED"
         assert result["sources"]==[]
         assert result["latest_complete_business_date"] is None
+        assert "funnel_operational_sla" not in result
+        assert "marketing_sync_sla" not in result
         for mock in mocks:
             mock.assert_not_called()
     finally:

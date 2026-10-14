@@ -14,6 +14,7 @@ from app.models.warehouse import TrackDailyVersionORM, TrackDailyMartORM
 from app.services.automation_control.track_coverage_service import read_track_current_catalog_coverage
 from app.services.automation_control.track_base_sla_service import read_track_base_sla
 from app.services.automation_control.marketing_slot_sla_service import read_marketing_sync_sla
+from app.services.automation_control.funnel_operational_sla_service import read_funnel_operational_sla
 from app.services.marketing_sales_funnel_cutoff_service import (
     _crm_history_available,
     _iventas_cutoff_dates,
@@ -58,6 +59,32 @@ def _funnel_evidence(payload: dict, *, period_start: date, cutoff: date, checked
     payload["marketing_sync_sla"] = read_marketing_sync_sla(
         business_date=cutoff, now=checked_at,
     )
+    # The current operational SLA always checks yesterday (business day D),
+    # independently of the selected historical dashboard cutoff.
+    operational_day = checked_at.astimezone(TIJUANA).date() - timedelta(days=1)
+    operational = read_funnel_operational_sla(
+        business_date=operational_day, now=checked_at,
+    )
+    payload["funnel_operational_sla"] = operational
+
+    # Never turn a historical month into a red status for today's operational cut.
+    # Likewise, a selected earlier cutoff in the current month must not mask
+    # the obligation to publish yesterday's five-source operational cut.
+    if period_start == operational_day.replace(day=1):
+        payload["expected_business_date"] = operational_day.isoformat()
+        payload["due_at"] = operational["due_at"]
+        payload["late_at"] = operational["late_at"]
+        payload["status"] = operational["status"]
+        payload["reason_code"] = operational["reason_code"]
+        if operational["status"] in {"NOT_DUE", "LAGGING", "LATE"}:
+            payload["label"] = {
+                "NOT_DUE": "Operativo: aún no vence",
+                "LAGGING": "Operativo: pendiente",
+                "LATE": "Operativo: atrasado",
+            }[operational["status"]]
+        else:
+            payload["label"] = "Operativo: sin certificar"
+
     if not _crm_history_available(period_start):
         payload["reason_code"] = "HISTORICAL_CRM_UNAVAILABLE"
         payload["detail"] = "Este periodo no tiene las cinco fuentes históricas certificadas."
@@ -91,10 +118,15 @@ def _funnel_evidence(payload: dict, *, period_start: date, cutoff: date, checked
         }
         for key, dates in zip(FUNNEL_SOURCE_KEYS, source_dates)
     ]
-    payload["reason_code"] = "SLA_NOT_RATIFIED"
+    if period_start != operational_day.replace(day=1):
+        payload["reason_code"] = "HISTORICAL_PERIOD_SLA_NOT_APPLIED"
     payload["detail"] = (
-        "Último corte conjunto según el lector del Funnel. "
-        "No certifica que el corte exigible actual ya esté publicado."
+        "Corte operativo de cinco fuentes del día "
+        + operational_day.isoformat()
+        + ": pendiente desde las 03:00 D+1 y atrasado desde las 04:00 "
+        "America/Tijuana. No equivale al cierre definitivo. "
+        "El último corte conjunto mostrado responde al mes/corte seleccionado. "
+        "Las cinco fechas no certifican linaje Track ni cobertura histórica."
     )
 
 
@@ -211,7 +243,7 @@ def read_freshness(
         try:
             period = (
                 date.fromisoformat(month + "-01") if month is not None
-                else today.replace(day=1)
+                else (today - timedelta(days=1)).replace(day=1)
             )
         except (TypeError, ValueError) as exc:
             raise ValueError("month debe tener formato YYYY-MM.") from exc
