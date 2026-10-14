@@ -492,6 +492,7 @@ this.habilitarSistemasEnMenuSiAplica(menuSistemas);
 this.habilitarContactCenterEnMenuSiAplica(menuContactCenter);
 this.habilitarPurchaseRequisitionsEnMenuSiAplica();
 this.habilitarMaintenancePlannerEnMenu();
+this.habilitarMantenimientoComprasEnMenuSiAplica();
 
 if (
   this.puedeVerTrackDiarioPorRol() &&
@@ -678,6 +679,40 @@ private habilitarPurchaseRequisitionsEnMenuSiAplica(): void {
       },
       error: () => {
         // Backend-authoritative: 401/403 no publica Requisiciones.
+      },
+    });
+}
+
+private habilitarMantenimientoComprasEnMenuSiAplica(): void {
+  const rol = String(this.session.getUser()?.rol || '').trim().toUpperCase();
+  if (rol !== 'COMPRAS') {
+    return;
+  }
+
+  this.http
+    .get<{ allowed?: boolean }>(`${environment.apiUrl}/pm/access`)
+    .subscribe({
+      next: (response) => {
+        if (!response?.allowed || this.menuItems.some((item) => item.label === 'Mantenimiento')) {
+          return;
+        }
+
+        this.menuItems = [
+          ...this.menuItems,
+          {
+            label: 'Mantenimiento',
+            path: '/maintenance-planner',
+            submenu: [
+              { label: 'Planner de Mantenimiento', path: '/maintenance-planner' },
+              { label: 'Consulta / Historial', path: '/pm/consulta-historial' },
+              { label: 'Calendario', path: '/pm/calendario' },
+            ],
+          },
+        ];
+        this.sincronizarMenuConRutaActual();
+      },
+      error: () => {
+        // Sin autorización explícita del backend no se publica el menú.
       },
     });
 }
