@@ -145,6 +145,7 @@ def read_effective_roster_for_date(day: date) -> dict:
         "epoch_id": epoch.id,
         "effective_from": epoch.effective_from.isoformat(),
         "attested_at_utc": epoch.attested_at_utc.isoformat(),
+        "sealed_at_utc": epoch.sealed_at_utc.isoformat(),
         "expected_branch_count": epoch.expected_branch_count,
         "roster_sha256": epoch.roster_sha256,
         "branches": normalized,
