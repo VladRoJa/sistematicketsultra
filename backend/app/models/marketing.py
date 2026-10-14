@@ -1846,6 +1846,13 @@ class MarketingIventasSyncRunORM(db.Model):
         nullable=True,
     )
 
+    # Atribución inmutable al slot de Marketing; NULL para runs manuales/legacy.
+    scheduler_slot_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+
     status = db.Column(
         db.String(20),
         nullable=False,
@@ -2512,6 +2519,13 @@ class MarketingMetaSyncRunORM(db.Model):
     finished_at = db.Column(
         db.DateTime(timezone=True),
         nullable=True,
+    )
+
+    # Atribución inmutable al slot de Marketing; NULL para runs manuales/legacy.
+    scheduler_slot_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True,
+        index=True,
     )
     status = db.Column(
         db.String(20),
