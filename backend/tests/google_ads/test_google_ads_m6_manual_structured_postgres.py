@@ -184,18 +184,23 @@ def test_second_table_insert_failure_rolls_back_first_and_both_audits(
     def fail_group(conn, cursor, statement, parameters, context, executemany):
         if "INSERT INTO google_ads_ad_group_daily_metrics" in statement:
             raise RuntimeError("Synthetic rollback assertion")
-    sa.event.listen(engine, "before_cursor_execute", fail_group)
-    try:
-        r = _ingest(client, token, campaign_id, group_id)
-        assert r.status_code == 503, r.get_json()
-        assert r.json["code"] == "M6_STRUCTURED_STAGE_FAILED"
-        assert _counts(engine) == {
-            "google_ads_daily_metrics": 0,
-            "google_ads_ad_group_daily_metrics": 0,
-            "audits": 0,
-        }
-    finally:
-        sa.event.remove(engine, "before_cursor_execute", fail_group)
+    # Flask-SQLAlchemy creates its OWN engine from the same isolated URL;
+    # instrumenting the _test_engine() setup engine does not intercept writes.
+    from app.extensions import db
+    with client.application.app_context():
+        application_engine = db.engine
+        sa.event.listen(application_engine, "before_cursor_execute", fail_group)
+        try:
+            r = _ingest(client, token, campaign_id, group_id)
+            assert r.status_code == 503, r.get_json()
+            assert r.json["code"] == "M6_STRUCTURED_STAGE_FAILED"
+            assert _counts(engine) == {
+                "google_ads_daily_metrics": 0,
+                "google_ads_ad_group_daily_metrics": 0,
+                "audits": 0,
+            }
+        finally:
+            sa.event.remove(application_engine, "before_cursor_execute", fail_group)
     ok = _ingest(client, token, campaign_id, group_id)
     assert ok.status_code == 201, ok.get_json()
     assert _counts(engine)["audits"] == 2
