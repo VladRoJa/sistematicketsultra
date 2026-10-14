@@ -9,11 +9,13 @@ import {
   GoogleAdsM6RawResult,
   GoogleAdsM6RawUpload,
   GoogleAdsM6StructuredResult,
-  GoogleAdsM6PublishedResult
+  GoogleAdsM6PublishedResult,
+  GoogleAdsM6CorrectionStatus,
+  GoogleAdsM6CorrectionRaw
 } from './google-ads-m6-manual-upload.service';
 
 type ReportKind = 'campaign' | 'ad_group';
-type ProcessingState = 'idle' | 'preview' | 'confirm' | 'ingest' | 'publish';
+type ProcessingState = 'idle' | 'preview' | 'confirm' | 'ingest' | 'publish' | 'diagnose';
 
 const MAX_CAMPAIGN_BYTES = 8 * 1024 * 1024;
 const MAX_GROUP_BYTES = 10 * 1024 * 1024;
@@ -60,7 +62,9 @@ const RESPONSE_MESSAGES: Record<string, string> = {
   STRUCTURED_PAIR_REQUIRED: 'Antes de publicar, deben estar presentes ambas métricas estructuradas y sus auditorías.',
   PUBLICATION_RECONCILIATION_FAILED: 'La conciliación de campañas y grupos no está completa.',
   PUBLISHED_DAY_CONFLICT: 'El día ya tiene una publicación diferente. Requiere procedimiento auditado de corrección.',
-  M6_PUBLICATION_FAILED: 'La publicación se revirtió por completo. Ninguna versión canónica nueva quedó guardada.'
+  M6_PUBLICATION_FAILED: 'La publicación se revirtió por completo. Ninguna versión canónica nueva quedó guardada.',
+  INVALID_CORRECTION_DAY: 'Selecciona una fecha válida a partir del 13 de octubre de 2026.',
+  M6_CORRECTION_DIAGNOSTIC_UNAVAILABLE: 'No se pudo revisar el estado del corte. Inténtalo más tarde.'
 };
 
 @Component({
@@ -76,6 +80,10 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
 
   readonly maxCampaignMb = 8;
   readonly maxGroupMb = 10;
+  readonly firstCorrectionDay = '2026-10-13';
+  correctionDay = '';
+  correctionData: GoogleAdsM6CorrectionStatus | null = null;
+  correctionError = '';
   campaignFile: File | null = null;
   adGroupFile: File | null = null;
   previewData: GoogleAdsM6ManualPreview | null = null;
@@ -94,6 +102,68 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
   constructor(private readonly api: GoogleAdsM6ManualUploadService) {}
 
   get busy(): boolean { return this.state !== 'idle'; }
+
+  get canInspectCorrection(): boolean {
+    const day = this.correctionDay;
+    if (this.busy || !/^20\d{2}-\d{2}-\d{2}$/.test(day)
+        || day < this.firstCorrectionDay) return false;
+    const parsed = new Date(`${day}T12:00:00Z`);
+    return Number.isFinite(parsed.getTime())
+      && parsed.toISOString().slice(0, 10) === day;
+  }
+
+  get correctionButtonLabel(): string {
+    return this.state === 'diagnose' ? 'Consultando…' : 'Consultar evidencias';
+  }
+
+  get correctionStatusLabel(): string {
+    if (!this.correctionData) return '';
+    const labels: Record<GoogleAdsM6CorrectionStatus['state'], string> = {
+      NO_RECORDS: 'No existen registros del corte',
+      RAW_ONLY_UNPUBLISHED: 'RAW registrado, sin ingesta estructurada',
+      STRUCTURED_UNPUBLISHED: 'Estructurado, pendiente de publicación',
+      STRUCTURED_INCONSISTENT: 'Métricas incompletas o inconsistentes',
+      PUBLICATION_REVIEW_REQUIRED: 'Hay una revisión de publicación pendiente',
+      CANONICAL_PUBLISHED: 'Ya existe una publicación canónica'
+    };
+    return labels[this.correctionData.state];
+  }
+
+  correctionReportLabel(item: GoogleAdsM6CorrectionRaw): string {
+    return item.report_type_key === 'google_ads_campaign_daily'
+      ? 'Campañas' : 'Grupos de anuncios';
+  }
+
+  correctionAuditLabel(item: GoogleAdsM6CorrectionRaw): string {
+    return item.manual_pair_upload_audit_count === 1
+      ? 'Pareja manual verificable'
+      : 'Sin auditoría M6 de pareja manual';
+  }
+
+  onCorrectionDayChanged(event: Event): void {
+    this.correctionDay = (event.target as HTMLInputElement).value;
+    this.correctionData = null;
+    this.correctionError = '';
+  }
+
+  inspectCorrection(): void {
+    if (!this.canInspectCorrection) return;
+    this.state = 'diagnose';
+    this.correctionData = null;
+    this.correctionError = '';
+    this.api.correctionStatus(this.correctionDay)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: data => {
+          this.state = 'idle';
+          this.correctionData = data;
+        },
+        error: (error: HttpErrorResponse) => {
+          this.state = 'idle';
+          this.correctionError = this.describeError(error);
+        }
+      });
+  }
 
   get validationButtonLabel(): string {
     return this.state === 'preview' ? 'Validando archivos…' : 'Validar ambos Excel';

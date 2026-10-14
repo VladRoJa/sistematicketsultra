@@ -73,6 +73,47 @@ export interface GoogleAdsM6PublishedResult {
   is_canonical: true;
 }
 
+export interface GoogleAdsM6CorrectionRaw {
+  upload_id: number;
+  report_type_key: string;
+  status: string;
+  period_from: string | null;
+  period_to: string | null;
+  sha256_prefix: string;
+  source_deleted: boolean;
+  manual_pair_upload_audit_count: number;
+  pair_import_audit_count: number;
+  pair_publish_audit_count: number;
+}
+
+export interface GoogleAdsM6CorrectionStatus {
+  business_date: string;
+  customer_id: string;
+  state: 'NO_RECORDS' | 'RAW_ONLY_UNPUBLISHED' |
+    'STRUCTURED_UNPUBLISHED' | 'STRUCTURED_INCONSISTENT' |
+    'PUBLICATION_REVIEW_REQUIRED' | 'CANONICAL_PUBLISHED';
+  raw_reports: GoogleAdsM6CorrectionRaw[];
+  structured: {
+    campaign_rows: number;
+    group_rows: number;
+    campaign_sources: {upload_id: number; rows: number}[];
+    group_sources: {upload_id: number; rows: number}[];
+  };
+  publications: {
+    publication_id: number;
+    revision: number;
+    is_canonical: boolean;
+    campaign_upload_id: number;
+    ad_group_upload_id: number;
+    approval_version_id: number;
+  }[];
+  has_existing_period_evidence: boolean;
+  replacement_authorized: false;
+  can_delete_existing_raw: false;
+  can_auto_republish: false;
+  next_action: 'REVIEW_CORRECTION_POLICY_REQUIRED' | 'NORMAL_M6_PAIR_PREFLIGHT';
+}
+
 @Injectable({ providedIn: 'root' })
 export class GoogleAdsM6ManualUploadService {
   private readonly url = `${environment.apiUrl}/integrations/google-ads/manual`;
@@ -112,6 +153,13 @@ export class GoogleAdsM6ManualUploadService {
         ad_group_upload_id: groupUploadId,
         confirmation: 'PUBLICAR_GOOGLE_ADS_M6_DIA_CANONICO'
       }
+    );
+  }
+
+  correctionStatus(day: string): Observable<GoogleAdsM6CorrectionStatus> {
+    return this.http.get<GoogleAdsM6CorrectionStatus>(
+      `${this.url}/correction-status`,
+      { params: { day } }
     );
   }
 

@@ -135,4 +135,44 @@
        Atribuida: {{ money(published.branch_cost_mxn) }} ·
        Sin asignar: {{ money(published.unassigned_cost_mxn) }}</p>
   </section>
+
+  <section class="manual-ads__diagnostic" aria-labelledby="m6-correction-heading">
+    <h3 id="m6-correction-heading">Consultar estado de un corte existente</h3>
+    <p>Consulta RAW, ingesta, auditorías y versiones canónicas sin modificar Warehouse.
+      Archivar un RAW no autoriza reemplazarlo ni volver a publicarlo.</p>
+    <div class="manual-ads__actions">
+      <label class="manual-ads__diagnostic-date">
+        <span>Fecha del corte</span>
+        <input type="date" [min]="firstCorrectionDay" [value]="correctionDay"
+          [disabled]="busy" (change)="onCorrectionDayChanged($event)" />
+      </label>
+      <button type="button" class="manual-ads__secondary"
+        [disabled]="!canInspectCorrection" (click)="inspectCorrection()">
+        {{ correctionButtonLabel }}
+      </button>
+    </div>
+    <p *ngIf="correctionError" class="manual-ads__message manual-ads__message--error"
+       role="alert">{{ correctionError }}</p>
+    <ng-container *ngIf="correctionData as evidence">
+      <p class="manual-ads__diagnostic-status">
+        <strong>{{ correctionStatusLabel }}</strong> · {{ evidence.business_date }}
+      </p>
+      <p>Campañas estructuradas: {{ evidence.structured.campaign_rows }} ·
+         Grupos estructurados: {{ evidence.structured.group_rows }} ·
+         Revisiones de publicación: {{ evidence.publications.length }}</p>
+      <ul>
+        <li *ngFor="let report of evidence.raw_reports">
+          <strong>#{{ report.upload_id }} · {{ correctionReportLabel(report) }}</strong> ·
+          {{ report.status }} · {{ correctionAuditLabel(report) }} ·
+          Auditorías estructuradas {{ report.pair_import_audit_count }} ·
+          Publicaciones {{ report.pair_publish_audit_count }}
+        </li>
+      </ul>
+      <p *ngIf="!evidence.raw_reports.length">No hay RAW Google Ads para esta fecha.</p>
+      <p class="manual-ads__warning">
+        Diagnóstico de solo lectura. No autoriza eliminar archivos, reemplazar métricas
+        ni modificar publicaciones canónicas.
+      </p>
+    </ng-container>
+  </section>
 </section>

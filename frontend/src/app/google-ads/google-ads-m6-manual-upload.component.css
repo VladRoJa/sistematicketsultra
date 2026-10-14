@@ -104,3 +104,34 @@
 }
 
 .manual-ads__structured-step .manual-ads__primary { margin-top: 6px; }
+
+.manual-ads__diagnostic {
+  border-top: 1px solid #dde6f1;
+  padding-top: 18px;
+  margin-top: 22px;
+}
+.manual-ads__diagnostic > p {
+  color: #52647c;
+  line-height: 1.55;
+}
+.manual-ads__diagnostic-date {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: .83rem;
+  font-weight: 700;
+}
+.manual-ads__diagnostic-date input {
+  font: inherit;
+  border: 1px solid #b8c5d7;
+  border-radius: 8px;
+  padding: 9px;
+}
+.manual-ads__diagnostic-status {
+  margin-top: 17px;
+}
+.manual-ads__diagnostic ul {
+  padding-left: 20px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
