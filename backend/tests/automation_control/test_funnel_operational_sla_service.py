@@ -78,7 +78,7 @@ def test_naive_clock_rejected():
     ("2026-10-14T04:00:00-07:00", "LATE"),
 ])
 def test_missing_one_of_five_sources_exposes_exact_gap(at, expected):
-    rows = [[(11,)], [], [(33,)], [(44,)], [(55,)]]
+    rows = [[(11, True)], [], [(33, True)], [(44, True)], [(55, True)]]
     r = _read(at, rows)
     assert r["status"] == expected
     assert r["missing_sources"] == ["meta"]
@@ -89,7 +89,7 @@ def test_missing_one_of_five_sources_exposes_exact_gap(at, expected):
 
 
 def test_all_five_canonical_dates_are_available_but_cannot_prove_lineage():
-    r = _read("2026-10-14T04:15:00-07:00", [[(i,)] for i in range(1, 6)])
+    r = _read("2026-10-14T04:15:00-07:00", [[(i, True)] for i in range(1, 6)])
     assert r["status"] == "UNKNOWN"
     assert r["reason_code"] == "FIVE_DATES_PRESENT_LINEAGE_UNVERIFIED"
     assert r["missing_sources"] == []
@@ -100,11 +100,22 @@ def test_all_five_canonical_dates_are_available_but_cannot_prove_lineage():
 def test_two_canonical_candidates_are_ambiguous_not_false_green_or_red():
     r = _read(
         "2026-10-14T04:15:00-07:00",
-        [[(11,), (12,)], [(22,)], [(33,)], [], [(55,)]],
+        [[(11, True), (12, True)], [(22, True)], [(33, True)], [], [(55, True)]],
     )
     assert r["status"] == "UNKNOWN"
-    assert r["reason_code"] == "AMBIGUOUS_CANONICAL_SOURCE"
+    assert r["reason_code"] == "EXACT_SOURCE_CANNOT_CERTIFY_HISTORY"
     assert r["sources"][0]["reason_code"] == "AMBIGUOUS_CANONICAL_DATE"
+
+
+def test_superseded_completed_yesterday_is_unknown_not_false_red():
+    r = _read(
+        "2026-10-14T04:15:00-07:00",
+        [[(11, False)], [(22, True)], [(33, True)], [(44, True)], [(55, True)]],
+    )
+    assert r["status"] == "UNKNOWN"
+    assert r["reason_code"] == "EXACT_SOURCE_CANNOT_CERTIFY_HISTORY"
+    assert r["sources"][0]["reason_code"] == "SUPERSEDED_OR_NONCANONICAL_EVIDENCE"
+    assert r["missing_sources"] == []
 
 
 def test_pre_crm_history_does_not_query_database():
@@ -130,8 +141,8 @@ def test_source_predicates_include_canonical_and_exact_period():
     import inspect
     from app.services.automation_control import funnel_operational_sla_service as service
     source = inspect.getsource(service._exact_current_sources)
-    assert source.count("is_canonical.is_(True)") == 5
+    assert source.count(".is_canonical") == 5\n    assert "canonicals = [row for row in rows if row[1] is True]" in source
     assert "status == \"COMPLETED\"" in source
     assert "date_from == start" in source
     assert "date_to == business_date" in source
-    assert ".limit(2).all()" in source
+    assert ".limit(20).all()" in source
