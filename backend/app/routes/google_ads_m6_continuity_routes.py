@@ -20,6 +20,11 @@ from app.warehouse.services.google_ads_m6_manual_confirm_service import (
     confirm_google_ads_m6_manual_pair,
 )
 from app.utils.warehouse_access import require_warehouse_upload
+from app.warehouse.services.google_ads_m6_manual_structured_service import (
+    CONFIRMATION as STRUCTURED_CONFIRMATION,
+    GoogleAdsM6ManualStructuredError,
+    stage_structured_manual_pair,
+)
 
 from app.warehouse.services.google_ads_m6_continuity_approval_service import (
     M6_REFERENCE,
@@ -178,3 +183,45 @@ def confirm_google_ads_m6_manual_raw():
     if all(item["reused_existing"] for item in result["uploads"].values()):
         return jsonify(result), 200
     return jsonify(result), 201
+
+
+@google_ads_m6_continuity_bp.post("/manual/ingest")
+@jwt_required()
+def ingest_google_ads_m6_structured_pair():
+    """Explicit atomic structured stage. Raw confirmation never calls this."""
+    if os.getenv("GOOGLE_ADS_M6_STRUCTURED_INGESTION_ENABLED", "").strip().lower() != "true":
+        return jsonify({"code": "M6_STRUCTURED_INGESTION_DISABLED"}), 503
+    try:
+        actor_id = require_current_admicorp()
+    except PermissionError:
+        return jsonify({"code": "FORBIDDEN"}), 403
+    except Exception:
+        return jsonify({"code": "GOOGLE_ADS_M6_INTERNAL_ERROR"}), 500
+    denied = require_warehouse_upload()
+    if denied:
+        return denied
+    if not request.is_json or (request.content_length or 0) > 4096:
+        return jsonify({"code": "INVALID_STRUCTURED_REQUEST"}), 400
+    data = request.get_json(silent=True)
+    if (not isinstance(data, dict)
+            or set(data) != {"campaign_upload_id", "ad_group_upload_id", "confirmation"}
+            or data["confirmation"] != STRUCTURED_CONFIRMATION
+            or type(data["campaign_upload_id"]) is not int
+            or type(data["ad_group_upload_id"]) is not int
+            or data["campaign_upload_id"] <= 0
+            or data["ad_group_upload_id"] <= 0
+            or data["campaign_upload_id"] == data["ad_group_upload_id"]):
+        return jsonify({"code": "INVALID_STRUCTURED_REQUEST"}), 400
+    try:
+        result = stage_structured_manual_pair(
+            actor_id=actor_id,
+            campaign_upload_id=data["campaign_upload_id"],
+            group_upload_id=data["ad_group_upload_id"],
+        )
+        return jsonify(result), 200 if result["status"] == "ALREADY_INGESTED" else 201
+    except GoogleAdsM6ManualStructuredError as exc:
+        status = 403 if str(exc) == "FORBIDDEN" else 409
+        return jsonify({"code": str(exc), "eligible_for_publication": False}), status
+    except Exception:
+        current_app.logger.exception("M6 atomic structured stage rolled back.")
+        return jsonify({"code": "M6_STRUCTURED_STAGE_FAILED"}), 503
