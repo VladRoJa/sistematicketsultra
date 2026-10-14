@@ -10,10 +10,56 @@ from decimal import Decimal
 import os
 import re
 
-from sqlalchemy import func
+from sqlalchemy import func, and_, or_, exists
 
 from app.extensions import db
 from app.models.google_ads_daily import GoogleAdsDailyMetricORM
+from app.models.google_ads_m6_daily_publication import GoogleAdsM6DailyPublicationORM
+from app.models.google_ads_m6_continuity import GoogleAdsBranchApprovalVersionORM
+from app.models.warehouse import WarehouseUploadORM
+from app.warehouse.services.google_ads_m6_continuity_approval_service import (
+    M6_REFERENCE, M5_REFERENCE, CAMPAIGN_UPLOAD_ID, GROUP_UPLOAD_ID,
+)
+
+
+M6_FIRST_DAILY_DAY = date(2026, 10, 13)
+
+
+def _canonical_m6_campaign_filter():
+    """Correlated fail-closed gate: only explicitly canonical daily M6 uploads.
+
+    A RAW or a structured row is never itself a publication. Canonical rows
+    must match the exact Warehouse upload hash and approved original M6 version.
+    No daily publication is seeded by a successful import.
+    """
+    fact = GoogleAdsDailyMetricORM
+    day = GoogleAdsM6DailyPublicationORM
+    raw = WarehouseUploadORM
+    approval = GoogleAdsBranchApprovalVersionORM
+    authorized = exists().where(and_(
+        day.customer_id == fact.customer_id,
+        day.business_date == fact.report_date,
+        day.campaign_upload_id == fact.source_upload_id,
+        day.is_canonical.is_(True),
+        fact.source_kind == "WAREHOUSE_XLSX",
+        raw.id == day.campaign_upload_id,
+        raw.status == "ACTIVE",
+        raw.source_file_deleted_at.is_(None),
+        raw.file_hash_sha256 == day.campaign_sha256,
+        raw.date_from == day.business_date,
+        raw.date_to == day.business_date,
+        approval.id == day.approval_version_id,
+        approval.customer_id == day.customer_id,
+        approval.approval_reference == M6_REFERENCE,
+        approval.source_approval_reference == M5_REFERENCE,
+        approval.source_campaign_upload_id == CAMPAIGN_UPLOAD_ID,
+        approval.source_ad_group_upload_id == GROUP_UPLOAD_ID,
+        approval.valid_from <= day.business_date,
+        or_(approval.valid_to.is_(None),
+            approval.valid_to >= day.business_date),
+        approval.approved_by_user_id.is_not(None),
+    )).correlate(fact)
+    return or_(fact.report_date < M6_FIRST_DAILY_DAY, authorized)
 
 
 def read_google_ads_funnel_investment(
@@ -45,12 +91,15 @@ def read_google_ads_funnel_investment(
             func.sum(GoogleAdsDailyMetricORM.clicks).label("clicks"),
             func.sum(GoogleAdsDailyMetricORM.impressions).label("impressions"),
             func.sum(GoogleAdsDailyMetricORM.conversions).label("conversions"),
+            func.count(GoogleAdsDailyMetricORM.id).label("campaign_rows"),
         )
         .filter(
             GoogleAdsDailyMetricORM.customer_id == customer_id,
             GoogleAdsDailyMetricORM.currency_code == "MXN",
             GoogleAdsDailyMetricORM.report_date >= month_start,
             GoogleAdsDailyMetricORM.report_date <= cutoff_date,
+            *([_canonical_m6_campaign_filter()]
+              if cutoff_date >= M6_FIRST_DAILY_DAY else []),
         )
         .group_by(GoogleAdsDailyMetricORM.report_date)
         .order_by(GoogleAdsDailyMetricORM.report_date.asc())
@@ -62,6 +111,20 @@ def read_google_ads_funnel_investment(
             "currency": "MXN",
             "amount": None,
             "complete_to_cutoff": False,
+        }
+
+    # Even a manually marked day must have all 27 campaigns; 1..12-OCT is
+    # historical and retains its original read behavior.
+    if any(
+        row.report_date >= M6_FIRST_DAILY_DAY
+        and int(row.campaign_rows) != 27
+        for row in rows
+    ):
+        return {
+            "status": "requires_review",
+            "currency": "MXN", "amount": None,
+            "complete_to_cutoff": False,
+            "reason": "M6_CANONICAL_CAMPAIGN_COVERAGE_FAILED",
         }
 
     dates = {row.report_date for row in rows}
