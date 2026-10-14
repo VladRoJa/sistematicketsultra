@@ -11,6 +11,14 @@ const EVIDENCE = path.resolve(__dirname, '../../playwright-evidence');
 fs.mkdirSync(EVIDENCE, { recursive: true });
 
 const reports = [];
+// A decodable, future-expiring synthetic JWT is required because Suite Ultra's
+// JwtInterceptor calls isTokenExpired(). All API requests remain intercepted,
+// and this fabricated token is never accepted by a real backend.
+const qaJwt = [
+  Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url'),
+  Buffer.from(JSON.stringify({ exp: 4102444800, sub: 'ci-browser-only' })).toString('base64url'),
+  Buffer.from('synthetic-signature-never-valid').toString('base64url'),
+].join('.');
 const fixture = {
   status: 'PREFLIGHT_OK', business_date: '2026-10-13', customer_id: '2739125201',
   campaign_rows: 27, group_rows: 43, approved_branches: 26,
@@ -66,10 +74,10 @@ async function serverReady() {
   throw new Error('Angular dev server failed to start');
 }
 async function session(context, role) {
-  await context.addInitScript(user => {
-    localStorage.setItem('token', 'CI_SYNTHETIC_JWT_NOT_VALID');
+  await context.addInitScript(({ user, token }) => {
+    localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
-  }, role);
+  }, { user: role, token: qaJwt });
 }
 async function setup(page, requests) {
   await page.route('**/api/**', async route => {
@@ -115,8 +123,14 @@ async function run(name, action) {
         await page.screenshot({path: path.join(EVIDENCE, 'form-' + size.name + '.png'), fullPage: true});
       });
       await run('Read-only diagnostic - ' + size.name, async () => {
-        await page.locator('input[type=date]').last().fill('2026-10-13');
-        await page.getByRole('button', { name: 'Consultar evidencias' }).click();
+        const dateControl = page.locator('.manual-ads__diagnostic-date input[type=date]');
+        await dateControl.fill('2026-10-13');
+        // Fire the same change event Angular binds to when a date input commits.
+        await dateControl.dispatchEvent('change');
+        const diagnosticButton = page.getByRole('button', { name: 'Consultar evidencias' });
+        assert(await diagnosticButton.isEnabled(),
+          'diagnostic date not accepted: ' + JSON.stringify(await dateControl.inputValue()));
+        await diagnosticButton.click();
         await page.getByText('RAW registrado, sin ingesta estructurada').waitFor();
         assert(await page.getByText('#21654').count() >= 1, 'historical group RAW missing');
         assert(!requests.some(x => x.path.endsWith('/manual/publish')), 'diagnostic caused publish');
