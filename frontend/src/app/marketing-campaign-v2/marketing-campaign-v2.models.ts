@@ -865,7 +865,7 @@ export interface CampaignV2GovernedAuthorizeRequest {
   expected_ready_recipients: number;
   confirm_dispatch: true;
 }
-export interface CampaignV2GovernedAuthorization {
+export interface CampaignV2GovernedAuthorizedResponse {
   execution_id: number;
   approval_id: number;
   campaign_id: number;
