@@ -249,3 +249,24 @@ def test_writes_are_not_reachable_from_preview(setup_client, monkeypatch):
                         lambda: pytest.fail("no approval"))
     response = post(client, token)
     assert response.status_code == 200, response.get_json()
+
+
+def test_request_content_length_rejected_before_multipart_processing(
+    setup_client, monkeypatch
+):
+    client, token, _ = setup_client
+    # Temporarily lower the thresholds so CI never allocates an 18 MB payload.
+    monkeypatch.setattr(routes, "MAX_CAMPAIGN_BYTES", 10)
+    monkeypatch.setattr(routes, "MAX_GROUP_BYTES", 10)
+    monkeypatch.setattr(
+        routes, "preview_manual_pair", lambda **kwargs: pytest.fail("never parse"),
+    )
+    response = client.post(
+        API,
+        headers={"Authorization": "Bearer " + token},
+        data={"campaign": (BytesIO(b"x" * 70000), "campaign.xlsx"),
+              "ad_group": (BytesIO(b"q"), "groups.xlsx")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 413
+    assert response.get_json()["code"] == "MANUAL_PAIR_TOO_LARGE"

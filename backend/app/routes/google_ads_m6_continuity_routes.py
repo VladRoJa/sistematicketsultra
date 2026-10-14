@@ -77,13 +77,15 @@ def preview_google_ads_m6_manual_pair():
         current_app.logger.exception("M6 manual preview authorization error.")
         return jsonify({"code": "GOOGLE_ADS_M6_INTERNAL_ERROR"}), 500
 
+    # Check total size *before* request.files parses multipart content.
+    # Per-file stream limits below remain mandatory for missing length headers.
+    if (request.content_length is not None
+            and request.content_length > MAX_CAMPAIGN_BYTES + MAX_GROUP_BYTES + 65536):
+        return jsonify({"code": "MANUAL_PAIR_TOO_LARGE"}), 413
     if (request.mimetype != "multipart/form-data"
             or set(request.files) != {"campaign", "ad_group"}
             or bool(request.form)):
         return jsonify({"code": "INVALID_MANUAL_PAIR"}), 400
-    if (request.content_length is not None
-            and request.content_length > MAX_CAMPAIGN_BYTES + MAX_GROUP_BYTES + 65536):
-        return jsonify({"code": "MANUAL_PAIR_TOO_LARGE"}), 413
     content = {}
     for key, limit in (("campaign", MAX_CAMPAIGN_BYTES),
                        ("ad_group", MAX_GROUP_BYTES)):
