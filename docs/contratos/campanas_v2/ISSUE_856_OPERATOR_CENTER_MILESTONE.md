@@ -59,7 +59,7 @@ E. CI/QA: integración + Angular + backend/PG aislado + gates negativos de kill 
 
 Implementación en rama `feat/856-portfolio-candidate-catalog-b1`:
 - Tabla append-only `marketing_campaign_v2_portfolio_references` creada por Alembic
-  `b856port1014` (down_revision `f856opcap1013`), sin seeds.
+  `b856port1014` (down_revision `f856m1f40001`), sin seeds.
 - Service `marketing_campaign_v2_portfolio_reference_service.py` valida Business ID,
   App ID opcional, nombre opcional y referencia documental. Toda revisión tiene
   `verification_status=UNVERIFIED` y cero canales **verificados**.
