@@ -135,3 +135,38 @@ def test_latest_unsealed_epoch_blocks_fallback_to_older_attestation():
         "reason_code": "EFFECTIVE_ROSTER_UNSEALED",
     }
     query.assert_called_once()
+
+
+def test_valid_sealed_epoch_exposes_timestamps_for_next_stage():
+    from datetime import datetime, timezone
+    from app.warehouse.services.track_version_roster_capture_service import roster_digest
+    day = date(2026, 10, 17)
+    pairs = [("TEC_MXL", 7), ("VILLAS_DEL_REY", 8)]
+    epoch = SimpleNamespace(
+        id=14,
+        effective_from=day,
+        sealed_at_utc=datetime(2026, 10, 16, 16, 5, tzinfo=timezone.utc),
+        attested_at_utc=datetime(2026, 10, 16, 16, tzinfo=timezone.utc),
+        expected_branch_count=2,
+        roster_sha256=roster_digest(pairs),
+    )
+    rows = [
+        SimpleNamespace(sucursal_canon=code, sucursal_id_at_attestation=ident)
+        for code, ident in pairs
+    ]
+    q_epoch, q_members = MagicMock(), MagicMock()
+    for q in (q_epoch, q_members):
+        q.filter.return_value = q
+        q.limit.return_value = q
+    q_epoch.order_by.return_value = q_epoch
+    q_epoch.all.return_value = [epoch]
+    q_members.all.return_value = rows
+    with patch(
+        "app.warehouse.services.track_effective_roster_service.db.session.query",
+        side_effect=[q_epoch, q_members],
+    ):
+        result = read_effective_roster_for_date(day)
+    assert result["verified"] is True
+    assert result["epoch_id"] == 14
+    assert result["sealed_at_utc"] == "2026-10-16T16:05:00+00:00"
+    assert result["attested_at_utc"] == "2026-10-16T16:00:00+00:00"
