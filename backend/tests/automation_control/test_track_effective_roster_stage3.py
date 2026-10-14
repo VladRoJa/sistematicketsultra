@@ -102,3 +102,35 @@ def test_corrupted_attestation_digest_cannot_verify():
         result = read_effective_roster_for_date(date(2026, 10, 16))
     assert result["verified"] is False
     assert result["reason_code"] == "EFFECTIVE_ROSTER_INTEGRITY_ERROR"
+
+
+def test_latest_unsealed_epoch_blocks_fallback_to_older_attestation():
+    from datetime import datetime, timezone
+    import inspect
+    from app.warehouse.services import track_effective_roster_service as service
+
+    reader_source = inspect.getsource(service.read_effective_roster_for_date)
+    assert "sealed_at_utc.isnot(None)" not in reader_source
+
+    q = MagicMock()
+    for method in ("filter", "order_by", "limit"):
+        getattr(q, method).return_value = q
+    q.all.return_value = [
+        SimpleNamespace(
+            id=2, effective_from=date(2026, 10, 17), sealed_at_utc=None,
+        ),
+        SimpleNamespace(
+            id=1, effective_from=date(2026, 10, 16),
+            sealed_at_utc=datetime(2026, 10, 15, tzinfo=timezone.utc),
+        ),
+    ]
+    with patch(
+        "app.warehouse.services.track_effective_roster_service.db.session.query",
+        return_value=q,
+    ) as query:
+        result = service.read_effective_roster_for_date(date(2026, 10, 17))
+    assert result == {
+        "verified": False,
+        "reason_code": "EFFECTIVE_ROSTER_UNSEALED",
+    }
+    query.assert_called_once()
