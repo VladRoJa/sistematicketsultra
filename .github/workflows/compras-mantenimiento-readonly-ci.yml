@@ -7,6 +7,7 @@ on:
       - "backend/app/utils/ticket_filters.py"
       - "backend/app/utils/maintenance_ticket_update_guard.py"
       - "backend/app/routes/pm_routes.py"
+      - "backend/app/routes/permissions_catalog_routes.py"
       - "backend/app/routes/ticket_routes.py"
       - "backend/app/maintenance_planner/**"
       - "backend/tests/utils/test_compras_maintenance_read_access.py"
@@ -38,6 +39,7 @@ jobs:
             backend/app/utils/ticket_filters.py \
             backend/app/utils/maintenance_ticket_update_guard.py \
             backend/app/routes/pm_routes.py \
+            backend/app/routes/permissions_catalog_routes.py \
             backend/app/routes/ticket_routes.py \
             backend/app/maintenance_planner/service.py \
             backend/app/maintenance_planner/routes.py
