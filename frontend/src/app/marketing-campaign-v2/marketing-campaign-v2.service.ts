@@ -14,6 +14,9 @@ import {
   CampaignV2ConsolidatedReport,
   CampaignV2DispatchTemplatesResponse,
   CampaignV2BudgetRateRevision,
+  CampaignV2ChannelPortfolioEvidence,
+  CampaignV2ChannelPortfolioEvidenceRequest,
+  CampaignV2ChannelPortfolioEvidenceResponse,
   CampaignV2PortfolioReference,
   CampaignV2PortfolioReferenceRequest,
   CampaignV2PortfolioReferencesResponse,
@@ -216,6 +219,20 @@ export class MarketingCampaignV2Service {
     return this.http.post<CampaignV2PreparationApplyResponse>(
       `${this.apiUrl}/${campaignId}/preparation/previous/exclude`,
       { ...request, source_campaign_ids: sourceCampaignIds },
+    );
+  }
+
+  listChannelPortfolioEvidence(): Observable<CampaignV2ChannelPortfolioEvidenceResponse> {
+    return this.http.get<CampaignV2ChannelPortfolioEvidenceResponse>(
+      `${this.apiUrl}/dispatch/channel-portfolio-evidence`,
+    );
+  }
+
+  registerChannelPortfolioEvidence(
+    request: CampaignV2ChannelPortfolioEvidenceRequest,
+  ): Observable<CampaignV2ChannelPortfolioEvidence> {
+    return this.http.post<CampaignV2ChannelPortfolioEvidence>(
+      `${this.apiUrl}/dispatch/channel-portfolio-evidence`, request,
     );
   }
 
