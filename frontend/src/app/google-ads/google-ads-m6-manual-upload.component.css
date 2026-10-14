@@ -92,3 +92,13 @@
   .manual-ads__header, .manual-ads__preview-heading { align-items: flex-start; flex-direction: column; }
   .manual-ads__files, .manual-ads__totals { grid-template-columns: 1fr; }
 }
+
+.manual-ads__structured-step, .manual-ads__structured-summary {
+  border-top: 1px solid #dde6f1;
+  padding-top: 16px;
+  margin-top: 18px;
+}
+.manual-ads__structured-step p, .manual-ads__structured-summary p {
+  color: #52647c;
+  line-height: 1.55;
+}

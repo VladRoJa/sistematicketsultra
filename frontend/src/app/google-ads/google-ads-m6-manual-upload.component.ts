@@ -7,11 +7,12 @@ import {
   GoogleAdsM6ManualPreview,
   GoogleAdsM6ManualUploadService,
   GoogleAdsM6RawResult,
-  GoogleAdsM6RawUpload
+  GoogleAdsM6RawUpload,
+  GoogleAdsM6StructuredResult
 } from './google-ads-m6-manual-upload.service';
 
 type ReportKind = 'campaign' | 'ad_group';
-type ProcessingState = 'idle' | 'preview' | 'confirm';
+type ProcessingState = 'idle' | 'preview' | 'confirm' | 'ingest';
 
 const MAX_CAMPAIGN_BYTES = 8 * 1024 * 1024;
 const MAX_GROUP_BYTES = 10 * 1024 * 1024;
@@ -41,7 +42,18 @@ const RESPONSE_MESSAGES: Record<string, string> = {
   SERVER_SIGNING_KEY_MISSING: 'No se pudo preparar la confirmación. Contacta a Sistemas.',
   GOOGLE_ADS_M6_PREVIEW_UNAVAILABLE: 'No está disponible la vista previa. Intenta más tarde.',
   GOOGLE_ADS_M6_INTERNAL_ERROR: 'No se pudo comprobar la autorización. Intenta más tarde.',
-  M6_RAW_STAGE_UNAVAILABLE: 'No se pudo completar el guardado RAW. Revisa el estado antes de reintentar.'
+  M6_RAW_STAGE_UNAVAILABLE: 'No se pudo completar el guardado RAW. Revisa el estado antes de reintentar.',
+  M6_STRUCTURED_INGESTION_DISABLED: 'La ingesta estructurada M6 todavía está deshabilitada en el servidor. RAW conservados.',
+  M6_APPROVAL_REQUIRED: 'Antes de importar métricas debe aprobarse explícitamente la continuidad de las 26 identidades M6.',
+  M6_APPROVED_IDENTITIES_MISMATCH: 'Las identidades aprobadas no concilian con el histórico. Se requiere revisión.',
+  RAW_PAIR_UNREADABLE: 'No se pueden volver a leer los RAW de Warehouse.',
+  RAW_PAIR_INVALID_PERIOD: 'El período del RAW no es un día cerrado válido para M6.',
+  RAW_PAIR_METADATA_MISMATCH: 'Hash, estado o fecha del RAW no coincide con su registro.',
+  RAW_PAIR_PREFLIGHT_REJECTED: 'La pareja RAW no pasó la conciliación del backend.',
+  RAW_PAIR_PROVENANCE_INVALID: 'Los RAW no provienen de una confirmación manual pareada validada.',
+  EXISTING_STRUCTURED_FACT_CONFLICT: 'Ya existen métricas distintas o parciales para ese día. Se requiere reconciliación manual.',
+  GOOGLE_ADS_CUSTOMER_NOT_READY: 'La cuenta Google Ads configurada no está lista para esta ingesta.',
+  M6_STRUCTURED_STAGE_FAILED: 'Se revirtió la operación estructurada. No se guardaron cambios parciales.'
 };
 
 @Component({
@@ -61,6 +73,8 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
   adGroupFile: File | null = null;
   previewData: GoogleAdsM6ManualPreview | null = null;
   rawResult: GoogleAdsM6RawResult | null = null;
+  structuredResult: GoogleAdsM6StructuredResult | null = null;
+  acceptedStructured = false;
   state: ProcessingState = 'idle';
   acceptedRawOnly = false;
   errorMessage = '';
@@ -88,6 +102,23 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
   onAcknowledgementChanged(event: Event): void {
     if (this.busy) return;
     this.acceptedRawOnly = (event.target as HTMLInputElement).checked;
+  }
+
+  get canIngest(): boolean {
+    const uploads = this.rawResult?.uploads;
+    return !this.busy && this.isStaged && this.acceptedStructured
+      && this.structuredResult === null
+      && Number.isInteger(uploads?.['google_ads_campaign_daily']?.upload_id)
+      && Number.isInteger(uploads?.['google_ads_ad_group_daily']?.upload_id);
+  }
+
+  get ingestButtonLabel(): string {
+    return this.state === 'ingest' ? 'Ingestando métricas…' : 'Ingestar ambos reportes (sin publicar)';
+  }
+
+  onStructuredAcknowledgement(event: Event): void {
+    if (this.busy) return;
+    this.acceptedStructured = (event.target as HTMLInputElement).checked;
   }
 
   get canPreview(): boolean {
@@ -181,6 +212,8 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
         this.state = 'idle';
         this.rawResult = result;
         this.acceptedRawOnly = false;
+        this.acceptedStructured = false;
+        this.structuredResult = null;
         if (result.status === 'RAW_PAIR_STAGED') {
           this.successMessage = 'Ambos RAW registrados. No se ejecutó ingesta estructurada ni publicación.';
         } else {
@@ -193,6 +226,8 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
         if (response?.status === 'PARTIAL_RAW' || response?.status === 'RAW_STAGE_FAILED') {
           this.rawResult = response as GoogleAdsM6RawResult;
           this.acceptedRawOnly = false;
+          this.acceptedStructured = false;
+          this.structuredResult = null;
           this.errorMessage = response.status === 'PARTIAL_RAW'
             ? 'Solo se guardó uno de los RAW. Puedes reintentar el mismo par, sin publicarlo.'
             : 'No se pudo guardar la pareja RAW. Puedes revisar y reintentar los mismos archivos.';
@@ -204,6 +239,30 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
           this.previewData = null;
           this.acceptedRawOnly = false;
         }
+        this.errorMessage = this.describeError(error);
+      }
+    });
+  }
+
+  ingestStructured(): void {
+    if (!this.canIngest || !this.rawResult) return;
+    const campaigns = this.rawResult.uploads['google_ads_campaign_daily'].upload_id;
+    const groups = this.rawResult.uploads['google_ads_ad_group_daily'].upload_id;
+    this.state = 'ingest';
+    this.errorMessage = '';
+    this.successMessage = '';
+    this.api.ingest(campaigns, groups).pipe(takeUntil(this.destroy$)).subscribe({
+      next: result => {
+        this.state = 'idle';
+        this.acceptedStructured = false;
+        this.structuredResult = result;
+        this.successMessage = result.status === 'ALREADY_INGESTED'
+          ? 'La pareja estructurada ya estaba registrada sin cambios.'
+          : 'Campañas y grupos se guardaron juntos con auditoría. No se publicaron en Funnel.';
+      },
+      error: (error: HttpErrorResponse) => {
+        this.state = 'idle';
+        this.acceptedStructured = false;
         this.errorMessage = this.describeError(error);
       }
     });
@@ -230,7 +289,9 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
   private invalidatePreview(): void {
     this.previewData = null;
     this.rawResult = null;
+    this.structuredResult = null;
     this.acceptedRawOnly = false;
+    this.acceptedStructured = false;
     this.errorMessage = '';
     this.successMessage = '';
   }

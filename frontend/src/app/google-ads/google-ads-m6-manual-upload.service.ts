@@ -41,6 +41,21 @@ export interface GoogleAdsM6RawResult {
   eligible_for_publication: false;
 }
 
+export interface GoogleAdsM6StructuredResult {
+  status: 'STRUCTURED_PAIR_STAGED' | 'ALREADY_INGESTED';
+  business_date: string;
+  campaign_upload_id: number;
+  ad_group_upload_id: number;
+  campaign_rows: number;
+  group_rows: number;
+  approval_version_id: number;
+  account_cost_mxn: string;
+  branch_cost_mxn: string;
+  unassigned_cost_mxn: string;
+  eligible_for_publication: false;
+  funnel_publication: 'NOT_AUTHORIZED';
+}
+
 @Injectable({ providedIn: 'root' })
 export class GoogleAdsM6ManualUploadService {
   private readonly url = `${environment.apiUrl}/integrations/google-ads/manual`;
@@ -59,6 +74,17 @@ export class GoogleAdsM6ManualUploadService {
     const body = this.pairForm(campaign, adGroup);
     body.append('confirmation_ticket', confirmationTicket);
     return this.http.post<GoogleAdsM6RawResult>(`${this.url}/confirm`, body);
+  }
+
+  ingest(campaignUploadId: number, groupUploadId: number): Observable<GoogleAdsM6StructuredResult> {
+    return this.http.post<GoogleAdsM6StructuredResult>(
+      `${this.url}/ingest`,
+      {
+        campaign_upload_id: campaignUploadId,
+        ad_group_upload_id: groupUploadId,
+        confirmation: 'INGESTAR_GOOGLE_ADS_M6_SIN_PUBLICAR'
+      }
+    );
   }
 
   private pairForm(campaign: File, adGroup: File): FormData {

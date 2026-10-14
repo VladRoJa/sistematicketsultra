@@ -91,5 +91,27 @@
       </li>
     </ul>
     <p *ngIf="isPartial">La pareja quedó incompleta. Reintenta ambos archivos sin cambiarlos.</p>
+    <div class="manual-ads__structured-step" *ngIf="isStaged && !structuredResult">
+      <h3>Siguiente paso · Ingesta estructurada</h3>
+      <p>Esta operación requiere que la versión M6 esté aprobada por ADMICORP
+        y que Sistemas habilite el procesamiento en backend. Registrar RAW no otorga esa aprobación.</p>
+      <label class="manual-ads__acknowledgement">
+        <input type="checkbox" [checked]="acceptedStructured" [disabled]="busy"
+          (change)="onStructuredAcknowledgement($event)" />
+        <span>Confirmo ingerir campañas y grupos en una sola transacción, sin publicar en Funnel.
+          Si existe un conflicto, no se deben reemplazar métricas históricas.</span>
+      </label>
+      <button type="button" class="manual-ads__primary" [disabled]="!canIngest"
+        (click)="ingestStructured()">{{ ingestButtonLabel }}</button>
+    </div>
   </section>
+</section>
+
+<section class="manual-ads__structured-summary" *ngIf="structuredResult as structured">
+  <h3>Resultado de ingesta · {{ structured.status }}</h3>
+  <p>{{ structured.business_date }} · {{ structured.campaign_rows }} campañas ·
+    {{ structured.group_rows }} grupos · Versión de identidades #{{ structured.approval_version_id }}</p>
+  <p>Importe de campañas: {{ money(structured.account_cost_mxn) }} ·
+    Asignado: {{ money(structured.branch_cost_mxn) }}</p>
+  <p><strong>Sin publicación:</strong> Funnel mantiene su proceso independiente de aprobación.</p>
 </section>
