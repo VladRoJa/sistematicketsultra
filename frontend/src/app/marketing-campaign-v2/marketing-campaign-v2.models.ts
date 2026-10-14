@@ -785,10 +785,153 @@ export interface CampaignV2PreflightQuota {
   }>;
 }
 
+export interface CampaignV2ApprovalManifestBatch {
+  sucursal_canon: string;
+  provider_channel_id: string | null;
+  recipients: number;
+  planned_status: 'READY' | 'HELD';
+  hold_reason: string | null;
+}
+
+export interface CampaignV2ApprovalManifest {
+  version: string;
+  quote_fingerprint: string;
+  send_authorized: false;
+  batches: CampaignV2ApprovalManifestBatch[];
+}
+
+export interface CampaignV2GovernedApproval {
+  approval_id: number;
+  campaign_id: number;
+  dispatch_fingerprint: string;
+  approved_recipients: number;
+  approved_estimated_mxn: string;
+  approved_at: string;
+  expires_at: string;
+  status: 'EXPIRED' | 'RESERVED_NOT_DISPATCHED';
+  manifest: CampaignV2ApprovalManifest;
+}
+export interface CampaignV2GovernedApprovalState {
+  approval: CampaignV2GovernedApproval | null;
+  send_authorized: false;
+}
+export interface CampaignV2GovernedApprovalRequest {
+  template_id: number;
+  expected_dispatch_fingerprint: string;
+  expected_quote_fingerprint: string;
+  expected_recipients: number;
+  expected_total_mxn: string;
+  held_sucursal_canons: string[];
+  held_source_references: Record<string,string>;
+}
+export interface CampaignV2GovernedApprovalCreated {
+  approval_id: number;
+  campaign_id: number;
+  dispatch_fingerprint: string;
+  quote_fingerprint: string;
+  approved_recipients: number;
+  approved_estimated_mxn: string;
+  expires_at: string;
+  ready_batches: number;
+  held_batches: number;
+  status: string;
+  send_authorized: false;
+}
+export interface CampaignV2GovernedMaterialize {
+  campaign_id: number;
+  approval_id: number;
+  provider_children: number;
+  ready_batches: number;
+  held_batches: number;
+  status: 'PREPARED_NO_SEND' | 'ALREADY_PREPARED';
+  send_authorized: false;
+}
+export interface CampaignV2GovernedExecutionReview {
+  approval: null;
+  execution: null;
+  send_authorized: false;
+}
+export interface CampaignV2GovernedExecutionReviewReady {
+  approval_id: number;
+  manifest_digest: string;
+  manifest: CampaignV2ApprovalManifest;
+  execution: { execution_id: number; status: string; last_child_id: number | null } | null;
+  expires_at: string;
+  send_authorized: false;
+}
+export interface CampaignV2GovernedAuthorizeRequest {
+  approval_id: number;
+  expected_manifest_digest: string;
+  expected_ready_recipients: number;
+  confirm_dispatch: true;
+}
+export interface CampaignV2GovernedAuthorizedResponse {
+  execution_id: number;
+  approval_id: number;
+  campaign_id: number;
+  manifest_digest: string;
+  ready_recipients: number;
+  status: 'AUTHORIZED';
+  provider_calls: 0;
+}
+export interface CampaignV2GovernedExecuteRequest {
+  execution_id: number;
+  child_id: number;
+  expected_manifest_digest: string;
+}
+export interface CampaignV2GovernedExecuteResult {
+  execution_id: number;
+  campaign_id: number;
+  child_id: number;
+  status: string;
+  execution_status: string;
+  error_code: string | null;
+  next_child_requires_fresh_validation: true;
+}
+export interface CampaignV2GovernedMonitorChild {
+  child_id: number;
+  sucursal_canon: string;
+  provider_channel_id: string;
+  recipient_count: number;
+  status: string;
+  provider_campaign_id: string | null;
+  error_code: string | null;
+  needs_manual_review: boolean;
+  send_authorized: false;
+}
+export interface CampaignV2GovernedMonitor {
+  campaign_id: number;
+  as_of: string;
+  basis: string;
+  status: string;
+  next_manual_action: string;
+  send_authorized: false;
+  may_auto_retry: false;
+  may_auto_release_held: false;
+  approval: {
+    id: number;
+    expires_at: string;
+    expired: boolean;
+    dispatch_fingerprint: string;
+    manifest_digest: string;
+  } | null;
+  execution: {
+    id: number;
+    status: string;
+    last_child_id: number | null;
+    expires_at: string;
+  } | null;
+  quota: {basis: string; all_current: boolean};
+  children_count: number;
+  children_by_status: Record<string, number>;
+  children: CampaignV2GovernedMonitorChild[];
+}
+
 export interface CampaignV2PreflightBudget {
   status: 'COMPLETE' | 'INCOMPLETE';
   currency: 'MXN';
   basis: 'MANUAL_OPERATOR_RATE_NOT_PROVIDER_QUOTE';
+  quote_fingerprint: string;
   as_of: string;
   sendable_recipients: number;
   priced_recipients: number;

@@ -214,3 +214,54 @@ reales en fixtures; no correr envíos provider durante CI.
 
 **Esta autorización cubre desarrollo, prueba automatizada, PR y merge;
 NO autoriza ningún POST real a iVentas ni despliegue automático de Suite.**
+
+
+## Etapa D — Consola de despacho gobernado (UI Angular)
+
+**Alcance**: solo cliente Angular tipado para las rutas D2a/D2b/D2c/D3a
+existentes. El backend conserva JWT, alcance global, configuración de dispatch,
+permiso de envío, doble kill switch para el único POST a iVentas, orden FIFO
+del manifiesto y semántica de no reintentar estados ambiguos.
+
+- Entrada administrativa desde **detalle de una Campaign V2 congelada**,
+  no desde el Audience Builder. `canManageDispatchConfig` oculta el botón,
+  pero el backend valida permisos en cada endpoint.
+- **1. Preflight**: llama a `POST /preflight` sin escritura y muestra volúmenes,
+  blacklist/exclusiones, lotes, `dispatch_fingerprint`, `quote_fingerprint`,
+  costo estimado MXN y evidencia interna de cupos. HELD explícito requiere
+  referencia documental. Nada se infiere de la cuenta publicitaria Meta.
+- **2. Aprobación de costo y reserva**: antes de `POST /dispatch/approval`
+  el operador escribe `APROBAR N`; se transmiten el SHA/costo/cantidad
+  **exactos** vistos en el preflight vigente. El backend recalcula, bloquea
+  cuotas por PostgreSQL y deniega evidencia obsoleta. No llama a iVentas.
+- **3. Materialización**: confirmación independiente
+  `MATERIALIZAR {campaign_id}`; `POST /dispatch/materialize` crea READY/HELD
+  atómicos, pero no transmite mensajes.
+- **4. Autorización**: `GET /dispatch/execution` entrega el digest y manifiesto;
+  confirmación `AUTORIZAR N` y `POST /dispatch/authorize` persistente,
+  sin hacer POST al proveedor.
+- **5. Ejecución manual secuencial**: la UI obtiene el siguiente READY
+  desde el orden del manifiesto, compara digest con `GET /dispatch/monitor`,
+  exige checkbox y texto `ENVIAR CHILD {id}`; un clic puede ejecutar
+  **exactamente un** `POST /dispatch/execute`. Sin timer, retry, bucle,
+  envío de teléfonos o variables desde Angular. El backend valida
+  `CAMPAIGN_V2_PROVIDER_SEND_ENABLED` y
+  `CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED`, ambos por defecto OFF.
+- Un HTTP 502, timeout o resultado no `SUBMITTED` bloquea más envíos de esa
+  sesión; se requiere consulta y conciliación independiente. Los children
+  `HELD` jamás se liberan automáticamente.
+- **Monitor**: read-only, solo datos persistidos, indicador de revisión
+  manual y estados de children, sin afirmar capacidad real Meta.
+
+CI y gates: Angular compile, logic tests y build; regresiones backend
+existentes para aprobación/reservas, manifiesto y envío gobernado; pruebas
+negativas de flags/despacho y ausencia de auto-retry.
+
+Esta fase no cambia modelos ni migraciones, ni envía mensajes durante
+desarrollo/CI. Fusionar a main **no** significa desplegar a producción.
+El primer envío live —incluido cualquier child de campaña #16— requiere
+autorización explícita adicional del operador en esa ejecución; esta
+conversación solo autoriza desarrollar y probar con mocks.
+
+**Etapa E todavía pendiente**: cerrar negativos kill switch + smoke en
+producción con flags OFF; después evaluar canario controlado.

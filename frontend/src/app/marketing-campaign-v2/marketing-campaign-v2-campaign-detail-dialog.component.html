@@ -14,6 +14,10 @@
   <div *ngIf="error" class="inline-error" role="alert">{{ error }}</div>
 
   <ng-container *ngIf="campaign && !loadingCampaignDetail">
+    <section *ngIf="data.canManageDispatchConfig" class="governed-entry">
+      <button mat-stroked-button type="button" (click)="openGovernedConsole()">Consola de despacho gobernado</button>
+      <p>Revisión, reserva, READY/HELD y monitoreo; cada operación sensible requiere su propia confirmación.</p>
+    </section>
     <section class="summary-grid">
       <div><span>Fuente</span><strong>{{ sourceLabel(campaign.source) }}</strong></div>
       <div><span>Congelada</span><strong>{{ campaign.frozen_at | date:'medium' }}</strong></div>
