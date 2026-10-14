@@ -265,3 +265,29 @@ conversación solo autoriza desarrollar y probar con mocks.
 
 **Etapa E todavía pendiente**: cerrar negativos kill switch + smoke en
 producción con flags OFF; después evaluar canario controlado.
+
+
+## Etapa E — cierre técnico de gates y promoción separada
+
+En `test/856-stage-e-safety-release-gates`:
+- Suite `test_issue_856_stage_e_gates.py`:
+  las 3 combinaciones con algún kill switch OFF producen 423 sin
+  construir provider; JWT 401, permisos globales/send/config 403,
+  payload extra o intento de override 400; con flags ON únicamente
+  servicios/proveedores simulados, una invocación por child,
+  502 ambiguo sin replay y monitor de lectura.
+- CI aislado `campaign-v2-stage-e-safety-ci.yml`: PostgreSQL 16
+  sintético `quota_ci`, ambos switches OFF; rutas de cuota,
+  autorización, manifiesto, ejecución durable y QA HTTP.
+- Test de contrato Angular: no timers, reintentos automáticos,
+  ejecución legacy, persistencia navegador ni override de identidad.
+- Runbook operativo en
+  `ISSUE_856_STAGE_E_RELEASE_RUNBOOK.md`: requisitos NO-GO,
+  respaldo/revisión de heads, banderas OFF, smoke de solo lectura y
+  recuperación sin downgrade destructivo.
+
+**E se considera cerrada técnicamente únicamente con CI verde.**
+Producción permanecerá sin desplegar hasta que el propietario autorice
+explícitamente la promoción, tras verificar commit, snapshot/restore point,
+Alembic y switches OFF. El primer POST real a iVentas requiere otra
+autorización específica de child y no forma parte de ese despliegue.
