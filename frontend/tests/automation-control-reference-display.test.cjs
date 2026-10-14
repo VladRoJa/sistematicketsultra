@@ -32,3 +32,25 @@ assert.equal(classifyObservationRuns([]), 'unknown');
 assert.equal(classifyObservationRuns([{status_raw:'SUCCEEDED'}]), 'completed');
 assert.equal(classifyObservationRuns([{status_raw:'FAILED'}, {status_raw:'COMPLETED'}]), 'error');
 console.log('Automation reference and observation display: 20 assertions PASS');
+
+// M1-UX: the two dataset cards must use the existing, authorized freshness
+// responses. Do not spin up duplicate requests or synthesize a green SLA.
+const automationTs = fs.readFileSync(path.resolve(__dirname,
+  '../src/app/automation-control/automation-control.component.ts'), 'utf8');
+const automationHtml = fs.readFileSync(path.resolve(__dirname,
+  '../src/app/automation-control/automation-control.component.html'), 'utf8');
+const indicatorTs = fs.readFileSync(path.resolve(__dirname,
+  '../src/app/shared/data-freshness-indicator/data-freshness-indicator.component.ts'), 'utf8');
+
+assert.match(automationTs, /DataFreshnessIndicatorComponent/);
+assert.match(automationTs, /isFreshnessDataset\(key:string\)/);
+assert.match(automationHtml, /<app-data-freshness-indicator/);
+assert.match(automationHtml, /\[suppliedState\]="datasetEvidence\[dataset\.key\] \?\? null"/);
+assert.match(automationHtml, /\[statusOnly\]="true"/);
+assert.doesNotMatch(automationHtml, /Frescura sin SLA certificado/);
+assert.match(indicatorTs, /if \(this\.suppliedState !== undefined\)/);
+assert.match(indicatorTs, /this\.state = this\.suppliedState/);
+assert.match(indicatorTs, /this\.state \? 'Sin certificar' : 'Sin verificar'/);
+assert.match(automationTs, /funnel:this\.freshnessApi\.get\('marketing\.sales_funnel','GLOBAL'\)/);
+assert.match(automationTs, /track:this\.freshnessApi\.get\('track\.daily','GLOBAL'\)/);
+console.log('Automation dataset SLA cards: 11 assertions PASS');

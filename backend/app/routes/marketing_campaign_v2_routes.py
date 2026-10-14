@@ -49,6 +49,30 @@ from app.services.marketing_campaign_v2_dispatch_config_service import (
     save_channel_binding,
     save_template,
 )
+from app.services.marketing_campaign_v2_qa_manual_service import (
+    MarketingCampaignV2QAManualValidationError,
+    MarketingCampaignV2QAManualConflictError,
+    MarketingCampaignV2QAManualPersistenceError,
+)
+from app.services.marketing_campaign_v2_qa_http_service import (
+    preview_qa_manual_http,
+    freeze_qa_manual_http,
+)
+from app.services.marketing_campaign_v2_portfolio_review_service import (
+    list_portfolio_review,
+)
+from app.services.marketing_campaign_v2_channel_portfolio_evidence_service import (
+    CampaignV2ChannelPortfolioValidationError,
+    CampaignV2ChannelPortfolioConflictError,
+    list_channel_portfolio_evidence,
+    register_channel_portfolio_evidence,
+)
+from app.services.marketing_campaign_v2_portfolio_reference_service import (
+    CampaignV2PortfolioReferenceValidationError,
+    CampaignV2PortfolioReferenceConflictError,
+    list_portfolio_references,
+    register_portfolio_reference,
+)
 from app.services.marketing_campaign_v2_quota_service import (
     CampaignV2QuotaValidationError,
     CampaignV2QuotaConflictError,
@@ -1695,6 +1719,178 @@ def campaign_v2_governed_execute_endpoint(campaign_id: int):
         return _error("Error en despacho gobernado; revisar estado antes de reintentar.", 500)
 
 
+@marketing_campaign_v2_bp.post("/campaigns-v2/qa-manual/preview")
+@jwt_required()
+def preview_campaign_v2_qa_http_endpoint():
+    """Issue 856 C: one-recipient operator preview, no database writes or sends."""
+    try:
+        _, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_management(access)
+        _require_campaign_v2_preflight(access)
+        payload = _parse_payload({
+            "name", "purpose", "sucursal_id", "provider_channel_id", "recipients",
+        })
+        return jsonify(preview_qa_manual_http(
+            name=payload.get("name"),
+            purpose=payload.get("purpose"),
+            sucursal_id=payload.get("sucursal_id"),
+            provider_channel_id=payload.get("provider_channel_id"),
+            recipients=payload.get("recipients"), session=db.session,
+        )), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (MarketingCampaignV2RouteValidationError, MarketingCampaignV2QAManualValidationError) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("No fue posible preparar Preview QA_MANUAL.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/qa-manual/freeze")
+@jwt_required()
+def freeze_campaign_v2_qa_http_endpoint():
+    """Creates a one-recipient frozen QA cohort, NEVER submits to iVentas."""
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_management(access)
+        _require_campaign_v2_preflight(access)
+        payload = _parse_payload({
+            "name", "purpose", "sucursal_id", "provider_channel_id", "recipients",
+            "expected_preview_fingerprint", "expected_channel_binding_id",
+            "confirm_freeze",
+        })
+        return jsonify(freeze_qa_manual_http(
+            name=payload.get("name"),
+            purpose=payload.get("purpose"),
+            sucursal_id=payload.get("sucursal_id"),
+            provider_channel_id=payload.get("provider_channel_id"),
+            recipients=payload.get("recipients"),
+            expected_preview_fingerprint=payload.get("expected_preview_fingerprint"),
+            expected_channel_binding_id=payload.get("expected_channel_binding_id"),
+            confirm_freeze=payload.get("confirm_freeze"),
+            actor_user_id=int(user.id), session=db.session,
+        )), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (MarketingCampaignV2RouteValidationError, MarketingCampaignV2QAManualValidationError) as exc:
+        return _error(str(exc), 400)
+    except MarketingCampaignV2QAManualConflictError as exc:
+        return _error(str(exc), 409)
+    except MarketingCampaignV2QAManualPersistenceError:
+        return _error("Error al persistir cohorte QA_MANUAL.", 500)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible congelar QA_MANUAL; verifica el estado antes de reintentar.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/portfolio-review")
+@jwt_required()
+def campaign_v2_portfolio_review_endpoint():
+    """Issue 856 B3: no writes/provider requests; only global dispatch admins."""
+    try:
+        _resolve_campaign_v2_dispatch_config_request()
+        _validate_query_args(set())
+        return jsonify(list_portfolio_review(session=db.session)), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2RouteValidationError as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("No fue posible auditar cobertura de canales Meta.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/channel-portfolio-evidence")
+@jwt_required()
+def list_campaign_v2_channel_portfolio_evidence_endpoint():
+    """Read-only latest/recent audit history for global dispatch administrators."""
+    try:
+        _resolve_campaign_v2_dispatch_config_request()
+        _validate_query_args(set())
+        return jsonify(list_channel_portfolio_evidence(session=db.session)), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2RouteValidationError as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("No fue posible consultar evidencia de canal-portafolio.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/dispatch/channel-portfolio-evidence")
+@jwt_required()
+def register_campaign_v2_channel_portfolio_evidence_endpoint():
+    """Record only an operator-declared assertion; never a quota/dispatch policy."""
+    try:
+        user, _ = _resolve_campaign_v2_dispatch_config_request()
+        payload = _parse_payload({
+            "provider_channel_id", "business_id", "waba_id",
+            "state", "evidence_kind", "source_reference",
+            "expected_revision_id",
+        })
+        result = register_channel_portfolio_evidence(
+            provider_channel_id=payload.get("provider_channel_id"),
+            business_id=payload.get("business_id"),
+            waba_id=payload.get("waba_id"),
+            state=payload.get("state"),
+            evidence_kind=payload.get("evidence_kind"),
+            source_reference=payload.get("source_reference"),
+            expected_revision_id=payload.get("expected_revision_id"),
+            actor_user_id=int(user.id), session=db.session,
+        )
+        return jsonify(result), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (MarketingCampaignV2RouteValidationError, CampaignV2ChannelPortfolioValidationError) as exc:
+        return _error(str(exc), 400)
+    except CampaignV2ChannelPortfolioConflictError as exc:
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible registrar evidencia de canal-portafolio.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/portfolio-references")
+@jwt_required()
+def list_campaign_v2_portfolio_references_endpoint():
+    """Global dispatch admins only: identity catalogue, never Meta verification."""
+    try:
+        _resolve_campaign_v2_dispatch_config_request()
+        _validate_query_args(set())
+        return jsonify(list_portfolio_references(session=db.session)), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2RouteValidationError as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("No fue posible consultar los portafolios declarados.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/dispatch/portfolio-references")
+@jwt_required()
+def register_campaign_v2_portfolio_reference_endpoint():
+    """Append one unverified business identity reference; never bind a channel."""
+    try:
+        user, _ = _resolve_campaign_v2_dispatch_config_request()
+        payload = _parse_payload({
+            "business_id", "display_name", "app_id", "source_reference",
+        })
+        result = register_portfolio_reference(
+            business_id=payload.get("business_id"),
+            display_name=payload.get("display_name"),
+            app_id=payload.get("app_id"),
+            source_reference=payload.get("source_reference"),
+            actor_user_id=int(user.id), session=db.session,
+        )
+        return jsonify(result), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (MarketingCampaignV2RouteValidationError, CampaignV2PortfolioReferenceValidationError) as exc:
+        return _error(str(exc), 400)
+    except CampaignV2PortfolioReferenceConflictError as exc:
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible registrar la referencia de portafolio.", 500)
+
+
 @marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/quota-evidence")
 @jwt_required()
 def list_campaign_v2_quota_evidence_endpoint():
@@ -1718,6 +1914,7 @@ def register_campaign_v2_quota_policy_endpoint():
         payload = _parse_payload({
             "provider_channel_id", "portfolio_key", "account_key",
             "phone_alias", "nominal_channel_limit", "reset_timezone",
+            "operational_channel_cap", "operational_portfolio_cap",
             "source_reference",
         })
         return jsonify(register_quota_policy(
@@ -1726,6 +1923,8 @@ def register_campaign_v2_quota_policy_endpoint():
             account_key=payload.get("account_key"),
             phone_alias=payload.get("phone_alias"),
             nominal_channel_limit=payload.get("nominal_channel_limit"),
+            operational_channel_cap=payload.get("operational_channel_cap"),
+            operational_portfolio_cap=payload.get("operational_portfolio_cap"),
             reset_timezone=payload.get("reset_timezone"),
             source_reference=payload.get("source_reference"),
             actor_user_id=int(user.id), session=db.session,

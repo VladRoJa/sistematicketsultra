@@ -128,6 +128,7 @@ def sync_meta_full_run(
     make_canonical_on_completed: bool = True,
     started_at: datetime | None = None,
     finished_at: datetime | None = None,
+    scheduler_slot_at: datetime | None = None,
     session: Any | None = None,
 ) -> MarketingMetaRunSyncResult:
     account_values = _normalize_accounts(accounts)
@@ -150,6 +151,7 @@ def sync_meta_full_run(
         date_to=date_to,
         accounts_requested=len(account_values),
         started_at=started_at,
+        scheduler_slot_at=scheduler_slot_at,
         session=session_value,
     )
     if run.id is None:

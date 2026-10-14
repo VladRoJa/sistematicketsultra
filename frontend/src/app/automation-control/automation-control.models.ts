@@ -26,3 +26,26 @@ export interface AutomationDiagnostic {
   failure_details_coverage?:string;
   failure_details_truncated?:boolean;
 }
+
+export type WorkerLiveness = 'HEALTHY'|'DEGRADED'|'UNREACHABLE'|'DISABLED'|'UNKNOWN';
+export interface WorkerHealth {
+  worker_key:string; status:WorkerLiveness; reason_code:string;
+  last_seen_at_utc:string|null; instance_count:number;
+}
+export interface WorkerHealthResponse {
+  checked_at_utc:string; workers:WorkerHealth[]; coverage:string;
+}
+
+export type EffectiveScheduleState = 'REPORTED'|'DISABLED'|'UNVERIFIED';
+export interface EffectiveScheduleSpec {
+  enabled:boolean; timezone:string; kind:string; slots:string[];
+  conditional:boolean; interval_seconds:number|null;
+}
+export interface EffectiveJobSchedule {
+  job_key:string; worker_key:string; state:EffectiveScheduleState;
+  reason_code:string; schedule:EffectiveScheduleSpec|null;
+  source:string|null; next_due_at:null;
+}
+export interface EffectiveSchedulesResponse {
+  checked_at_utc:string; jobs:EffectiveJobSchedule[];
+}

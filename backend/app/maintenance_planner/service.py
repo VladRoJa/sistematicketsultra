@@ -248,7 +248,7 @@ def _apply_planner_role_scope(query, user):
     no debe entrar al board.
     """
 
-    if _user_role(user) != REGIONAL_ROLE:
+    if _user_role(user) not in {REGIONAL_ROLE, "COMPRAS"}:
         return query
 
     branch_ids = _user_scope_branch_ids(user)
@@ -289,7 +289,7 @@ def _branch_catalog_ids(user, query) -> list[int]:
     Los demás perfiles conservan el comportamiento derivado del query autorizado.
     """
 
-    if _user_role(user) == REGIONAL_ROLE:
+    if _user_role(user) in {REGIONAL_ROLE, "COMPRAS"}:
         return _user_scope_branch_ids(user)
 
     branch_id_expr = _effective_ticket_branch_id_expression().label("branch_id")

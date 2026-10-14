@@ -548,6 +548,8 @@ export interface CampaignV2QuotaPolicyRevision {
   account_key: string;
   phone_alias: string;
   nominal_channel_limit: number | null;
+  operational_channel_cap: number | null;
+  operational_portfolio_cap: number | null;
   reset_timezone: string;
   valid_from: string;
   source_reference: string;
@@ -564,6 +566,158 @@ export interface CampaignV2QuotaAttestation {
   source_reference: string;
 }
 
+export interface CampaignV2QaManualRecipient {
+  name: string;
+  phone: string;
+}
+
+export interface CampaignV2QaManualBaseRequest {
+  name: string;
+  purpose: CampaignV2Purpose;
+  sucursal_id: number;
+  provider_channel_id: string;
+  recipients: [CampaignV2QaManualRecipient];
+}
+
+export interface CampaignV2QaManualPreview {
+  name: string;
+  purpose: CampaignV2Purpose;
+  source: 'QA_MANUAL';
+  sucursal_id: number;
+  sucursal_canon: string;
+  track_label: string;
+  provider_channel_id: string;
+  channel_binding_id: number;
+  recipient_count: 1;
+  recipient_name: string;
+  recipient_phone_masked: string;
+  preview_fingerprint_version: string;
+  preview_fingerprint: string;
+  provider_send_enabled: false;
+  is_dispatch_authorized: false;
+}
+
+export interface CampaignV2QaManualFreezeRequest extends CampaignV2QaManualBaseRequest {
+  expected_preview_fingerprint: string;
+  expected_channel_binding_id: number;
+  confirm_freeze: true;
+}
+
+export interface CampaignV2QaManualFrozen {
+  campaign_id: number;
+  name: string;
+  purpose: CampaignV2Purpose;
+  source: 'QA_MANUAL';
+  sucursal_id: number;
+  sucursal_canon: string;
+  recipient_count: 1;
+  frozen_at: string;
+  preview_fingerprint_version: string;
+  preview_fingerprint: string;
+  provider_channel_id: string;
+  channel_binding_id: number;
+  provider_send_enabled: false;
+  is_dispatch_authorized: false;
+}
+
+export type CampaignV2PortfolioReviewState =
+  | 'PENDING' | 'WITHDRAWN' | 'DECLARED_UNVERIFIED'
+  | 'DOCUMENTED_UNVERIFIED' | 'REVIEW_REQUIRED';
+
+export type CampaignV2PortfolioReviewFlag =
+  | 'MISSING_PORTFOLIO_CATALOG'
+  | 'HISTORICAL_BUSINESS_CHANGE'
+  | 'WABA_CROSS_BUSINESS'
+  | 'MULTIPLE_DEFAULT_BRANCH'
+  | 'OPERATOR_ONLY'
+  | 'WABA_NOT_RECORDED';
+
+export interface CampaignV2PortfolioReviewRow {
+  sucursal_id: number;
+  sucursal_canon: string;
+  provider_channel_id: string;
+  business_id: string | null;
+  waba_id: string | null;
+  evidence_kind: CampaignV2ChannelPortfolioEvidenceKind | null;
+  source_reference: string | null;
+  revision_id: number | null;
+  review_state: CampaignV2PortfolioReviewState;
+  flags: CampaignV2PortfolioReviewFlag[];
+  revision_count: number;
+  api_verified: false;
+}
+
+export interface CampaignV2PortfolioReviewResponse {
+  rows: CampaignV2PortfolioReviewRow[];
+  summary: {
+    total_channels: number;
+    candidate_businesses: number;
+    pending: number;
+    withdrawn: number;
+    declared_unverified: number;
+    documented_unverified: number;
+    review_required: number;
+    api_verified: 0;
+  };
+  basis: 'OPERATOR_DOCUMENTARY_EVIDENCE_ONLY';
+  meta_verification_available: false;
+}
+
+export type CampaignV2ChannelPortfolioEvidenceKind =
+  | 'OPERATOR_STATEMENT' | 'META_DOCUMENT' | 'IVENTAS_CONFIRMATION';
+
+export interface CampaignV2ChannelPortfolioEvidence {
+  revision_id: number;
+  provider_channel_id: string;
+  business_id: string | null;
+  waba_id: string | null;
+  state: 'DECLARED' | 'WITHDRAWN';
+  evidence_kind: CampaignV2ChannelPortfolioEvidenceKind;
+  source_reference: string;
+  created_by_user_id: number;
+  created_at: string;
+  api_verified: false;
+}
+
+export interface CampaignV2ChannelPortfolioEvidenceRequest {
+  provider_channel_id: string;
+  business_id: string | null;
+  waba_id: string | null;
+  state: 'DECLARED' | 'WITHDRAWN';
+  evidence_kind: CampaignV2ChannelPortfolioEvidenceKind;
+  source_reference: string;
+  expected_revision_id: number | null;
+}
+
+export interface CampaignV2ChannelPortfolioEvidenceResponse {
+  rows: CampaignV2ChannelPortfolioEvidence[];
+  history: CampaignV2ChannelPortfolioEvidence[];
+  history_is_limited: boolean;
+}
+
+export interface CampaignV2PortfolioReference {
+  revision_id: number;
+  business_id: string;
+  display_name: string | null;
+  app_id: string | null;
+  source_reference: string;
+  created_by_user_id: number;
+  created_at: string;
+  verification_status: 'UNVERIFIED';
+  verified_channel_count: 0;
+}
+
+export interface CampaignV2PortfolioReferenceRequest {
+  business_id: string;
+  display_name: string | null;
+  app_id: string | null;
+  source_reference: string;
+}
+
+export interface CampaignV2PortfolioReferencesResponse {
+  rows: CampaignV2PortfolioReference[];
+}
+
 export interface CampaignV2QuotaEvidence {
   policies: CampaignV2QuotaPolicyRevision[];
   attestations: CampaignV2QuotaAttestation[];
@@ -575,6 +729,8 @@ export interface CampaignV2QuotaPolicyRequest {
   account_key: string;
   phone_alias: string;
   nominal_channel_limit: number | null;
+  operational_channel_cap: number;
+  operational_portfolio_cap: number;
   reset_timezone: string;
   source_reference: string;
 }
@@ -590,7 +746,7 @@ export interface CampaignV2QuotaAttestationRequest {
 }
 
 export interface CampaignV2PreflightQuota {
-  basis: 'OPERATOR_ATTESTED_NOT_META_VERIFIED';
+  basis: 'OPERATOR_ATTESTED_NOT_META_VERIFIED' | 'SUITE_OPERATOR_ROLLING_24H_V1';
   status: 'REVIEWABLE' | 'INCOMPLETE';
   send_authorized: false;
   as_of: string;
@@ -600,6 +756,9 @@ export interface CampaignV2PreflightQuota {
     portfolio_key: string;
     recipients: number;
     attested_remaining: number | null;
+    operational_cap?: number | null;
+    suite_attempted?: number;
+    suite_reserved?: number;
   }>;
   batches: Array<{
     sucursal_canon: string;
@@ -609,6 +768,13 @@ export interface CampaignV2PreflightQuota {
     phone_alias: string | null;
     reset_timezone: string | null;
     reported_nominal_channel_limit: number | null;
+    operator_channel_cap?: number | null;
+    operator_portfolio_cap?: number | null;
+    policy_revision_id?: number | null;
+    suite_channel_attempted?: number;
+    suite_portfolio_attempted?: number;
+    suite_channel_reserved?: number;
+    suite_portfolio_reserved?: number;
     channel_remaining: number | null;
     portfolio_remaining: number | null;
     channel_evidence_id: number | null;

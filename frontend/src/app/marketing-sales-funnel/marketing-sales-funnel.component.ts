@@ -26,6 +26,7 @@ import {
 } from 'rxjs';
 
 import { MarketingDashboardResponse } from '../marketing-conversion/marketing.models';
+import { DataFreshnessIndicatorComponent } from '../shared/data-freshness-indicator/data-freshness-indicator.component';
 import {
   MarketingFunnelInvestmentSources,
   MarketingGoogleAdsBranchAttribution,
@@ -156,6 +157,7 @@ type DashboardRequestResult =
   imports: [
     CommonModule,
     MarketingSalesFunnelStoryComponent,
+    DataFreshnessIndicatorComponent,
     MatButtonModule,
     MatDialogModule,
     MatFormFieldModule,
@@ -210,6 +212,11 @@ export class MarketingSalesFunnelComponent implements OnInit {
 
   get selectedMonth(): string {
     return this.monthControl.value.trim();
+  }
+
+  get funnelFreshnessScopeMode(): 'GLOBAL'|'FILTERED' {
+    return this.regionControl.value === null && this.branchControl.value === null
+      ? 'GLOBAL' : 'FILTERED';
   }
 
   get selectedCutoff(): string | null {

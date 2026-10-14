@@ -9,9 +9,11 @@
       <div>Workers<strong>{{summary.worker_count}}</strong></div>
       <div>Jobs<strong>{{summary.job_count}}</strong></div>
       <div>Datasets<strong>{{summary.dataset_count}}</strong></div>
-      <div>Salud del worker<strong class="unknown">No verificada</strong></div>
+      <div>Workers con latido vigente<strong>{{healthyWorkers}} / {{summary.worker_count}}</strong></div>
     </div>
-    <p class="disclaimer">Horarios de referencia, no configuración efectiva. No se admiten ejecuciones manuales ni diagnóstico de logs en esta fase.</p>
+    <p class="disclaimer">Matriz: horarios de referencia y ejecuciones observadas. La tabla de jobs distingue programación reportada por cada worker. Ninguna hora garantiza ejecución ni frescura de datos. Acciones manuales deshabilitadas.</p>
+    <p *ngIf="healthUnavailable" class="disclaimer">No fue posible comprobar los latidos. Estados mostrados como desconocidos.</p>
+    <p *ngIf="configUnavailable" class="disclaimer">No se pudo verificar la configuración efectiva de los workers.</p>
     <section class="panel">
       <div class="detail-head"><div><h2>Matriz diaria de ejecuciones observadas</h2>
         <small>Referencia horaria · sin confirmar configuración efectiva ni cumplimiento de SLA</small></div>
@@ -20,7 +22,16 @@
       <p *ngIf="loadingTimeline" role="status">Cargando matriz diaria…</p>
       <p *ngIf="timelineError" role="alert" class="alert">{{timelineError}}</p>
       <div *ngFor="let worker of timelineWorkers" class="timeline-worker">
-        <h3>{{worker.worker_key}}</h3>
+        <div class="worker-health-head">
+          <h3>{{worker.worker_key}}</h3>
+          <span class="worker-health-chip" [ngClass]="workerHealthClass(worker.worker_key)"
+            [attr.aria-label]="workerHealthDetail(worker.worker_key)"
+            [title]="workerHealthDetail(worker.worker_key)">
+            <mat-icon aria-hidden="true">{{workerHealthIcon(worker.worker_key)}}</mat-icon>
+            {{workerHealthLabel(worker.worker_key)}}
+          </span>
+          <small>{{workerHealthDetail(worker.worker_key)}}</small>
+        </div>
         <div class="table-wrap"><table class="timeline-table">
           <thead><tr><th>Job</th><th *ngFor="let hour of hours">{{hour}}</th></tr></thead>
           <tbody><tr *ngFor="let job of worker.jobs">
@@ -70,10 +81,13 @@
       <span>{{visibleJobs.length}} jobs</span></div>
     <div class="columns" [class.with-detail]="selected">
       <section class="panel"><h2>Jobs registrados</h2><div class="table-wrap"><table>
-        <thead><tr><th>Job</th><th>Worker</th><th>Horario referencia</th><th>Salud</th><th></th></tr></thead>
+        <thead><tr><th>Job</th><th>Worker</th><th>Configuración del worker</th><th>Salud</th><th></th></tr></thead>
         <tbody><tr *ngFor="let job of visibleJobs">
           <td><b>{{job.label}}</b><small>{{job.key}}</small></td><td>{{job.worker_key}}</td>
-          <td>{{job.schedule_reference}}</td><td class="unknown">No verificada</td>
+          <td><span [title]="effectiveDetail(job.key)" [attr.aria-label]="effectiveDetail(job.key)">{{effectiveLabel(job.key)}}</span>
+            <small *ngIf="effectiveJob(job.key)?.state==='REPORTED'">Reportado · {{effectiveJob(job.key)?.schedule?.timezone}}</small>
+            <small *ngIf="effectiveJob(job.key)?.state!=='REPORTED'">Referencia de código: {{job.schedule_reference}}</small>
+          </td><td [ngClass]="workerHealthClass(job.worker_key)">{{workerHealthLabel(job.worker_key)}}</td>
           <td class="auto-actions">
             <button type="button" (click)="select(job)">Historial</button>
             <button type="button" (click)="openLastError(job)"
@@ -109,7 +123,14 @@
     </div>
     <section class="panel"><h2>Datasets vinculados</h2><div class="datasets">
       <article *ngFor="let dataset of datasets"><b>{{dataset.label}}</b>
-        <p>Corte completo: No verificado</p><p class="unknown">Frescura desconocida</p>
+        <p [title]="datasetEvidenceDetail(dataset.key)">{{datasetEvidenceLabel(dataset.key)}}</p>
+        <app-data-freshness-indicator
+          *ngIf="isFreshnessDataset(dataset.key)"
+          [moduleKey]="freshnessModuleKey(dataset.key)"
+          [suppliedState]="datasetEvidence[dataset.key] ?? null"
+          [statusOnly]="true">
+        </app-data-freshness-indicator>
+        <p *ngIf="!isFreshnessDataset(dataset.key)" class="unknown">Sin política SLA para este dataset</p>
         <small>{{dataset.sources.length}} fuentes</small></article></div></section>
   </ng-container>
 </section>

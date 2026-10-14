@@ -1,0 +1,19 @@
+.mapping-dialog { min-width: min(720px, 82vw); }
+.notice { font-size: 13px; line-height: 1.55; }
+.summary { display:flex; gap:10px; align-items:baseline; margin:12px 0; }
+.summary strong { font-size:19px; }
+.summary span { color:#64748b; font-size:13px; }
+.mapping-form { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:8px 12px; margin-top:12px; }
+.mapping-form mat-form-field { width:100%; }
+.full-width { grid-column:1 / -1; }
+.form-actions { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0 16px; }
+.current { font-size:13px; background:rgba(100,116,139,.1); padding:10px; border-radius:8px; }
+.mapping-history h3 { font-size:14px; margin:18px 0 8px; }
+.table-scroll { overflow-x:auto; }
+table { border-collapse:collapse; width:100%; font-size:12px; }
+td, th { padding:9px; border-bottom:1px solid #e2e8f0; text-align:left; vertical-align:top; }
+td small,.revision small { display:block; color:#64748b; overflow-wrap:anywhere; }
+.revision { padding:8px; border-bottom:1px solid #e2e8f0; font-size:12px; }
+.error { color:#b91c1c; }
+.success { color:#166534; }
+@media (max-width:760px) { .mapping-form { grid-template-columns:minmax(0,1fr); } .mapping-dialog { min-width:0; } }

@@ -306,13 +306,32 @@ def _effective_action_decision(action, user, context: dict) -> dict:
 
     # PM
     if full_key == "pm.read":
-        allowed = role in LEGACY_PM_VIEW_ROLES
+        from app.utils.pm_permissions import has_compras_maintenance_read_grant
+
+        compras_grant = (
+            role == "COMPRAS"
+            and has_compras_maintenance_read_grant(user)
+        )
+        allowed = role in LEGACY_PM_VIEW_ROLES or compras_grant
+        branch_scope = (
+            sorted({
+                int(value)
+                for value in (getattr(user, "sucursales_ids", None) or [])
+                if str(value).isdigit() and int(value) not in {100, 1000}
+            })
+            if compras_grant
+            else sucursal_ids
+        )
         return _decision(
             allowed=allowed,
-            source="legacy_pm_roles",
-            reason="pm_view_role_allowed" if allowed else "pm_view_role_not_allowed",
+            source="individual_department_read_grant" if compras_grant else "legacy_pm_roles",
+            reason=(
+                "compras_maintenance_read_granted"
+                if compras_grant
+                else "pm_view_role_allowed" if allowed else "pm_view_role_not_allowed"
+            ),
             scope_type="global" if is_admin or role == "LECTOR_GLOBAL" else "branch_scope",
-            scope_values=[] if is_admin or role == "LECTOR_GLOBAL" else sucursal_ids,
+            scope_values=[] if is_admin or role == "LECTOR_GLOBAL" else branch_scope,
         )
 
     if full_key == "pm.execute":

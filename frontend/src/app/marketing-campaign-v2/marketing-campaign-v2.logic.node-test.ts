@@ -1,3 +1,5 @@
+import { campaignV2BuildReadinessRows } from './marketing-campaign-v2-readiness.logic';
+import type { CampaignV2DispatchTemplate, CampaignV2ChannelBinding, CampaignV2QuotaPolicyRevision, CampaignV2BudgetRateRevision } from './marketing-campaign-v2.models';
 import { campaignV2IndicativeBudget } from './marketing-campaign-v2-budget.logic';
 import { isDispatchTemplateDraftValid, DispatchTemplateDraft } from './marketing-campaign-v2-dispatch-admin.logic';
 import { isCampaignV2MxnUnitCostValid, isCampaignV2NominalLimitValid, isCampaignV2RemainingCountValid, isCampaignV2ZonedDateString } from './marketing-campaign-v2-admin-validation.logic';
@@ -1323,10 +1325,139 @@ test('Issue 856: administracion usa campo MDC acotado y editores progresivos', (
   const templates = fs.readFileSync(path.join(root, 'marketing-campaign-v2-dispatch-admin-dialog.component.html'), 'utf8');
   const quotas = fs.readFileSync(path.join(root, 'marketing-campaign-v2-quota-admin-dialog.component.html'), 'utf8');
   const styles = fs.readFileSync(path.join(process.cwd(), 'src/styles.scss'), 'utf8');
-  assert.equal(page.split("panelClass: 'campaign-v2-admin-dialog'").length - 1, 2);
+  assert.equal(page.split("panelClass: 'campaign-v2-admin-dialog'").length - 1, 4);
   assert.equal(styles.includes('.cdk-overlay-container .campaign-v2-admin-dialog'), true);
   assert.equal(templates.includes('*ngIf="showTemplateEditor"'), true);
   assert.equal(templates.includes('*ngIf="showBudgetEditor"'), true);
   assert.equal(quotas.includes('*ngIf="showPolicyForm"'), true);
   assert.equal(quotas.includes('*ngIf="showCapacityForm"'), true);
+});
+
+test('readiness for 26 channels remains incomplete until exact portfolio policy and rate exist', () => {
+  const template = { id: 1, is_active: true, compatible_channel_ids: ['ch-1', 'ch-2'] } as CampaignV2DispatchTemplate;
+  const bindings = [
+    { id: 1, provider_channel_id: 'ch-1', sucursal_canon: 'AZAHARES_CUL', is_active: true, is_default: true },
+    { id: 2, provider_channel_id: 'ch-2', sucursal_canon: 'TEC_MXL', is_active: true, is_default: true },
+  ] as CampaignV2ChannelBinding[];
+  const policies = [
+    { revision_id: 11, provider_channel_id: 'ch-1', portfolio_key: 'unverified-1',
+      account_key: 'account', operational_channel_cap: 100,
+      operational_portfolio_cap: 200, valid_from: '2026-10-14T01:00:00Z' },
+    { revision_id: 12, provider_channel_id: 'ch-2', portfolio_key: 'unverified-1',
+      account_key: 'account', operational_channel_cap: 100,
+      operational_portfolio_cap: 200, valid_from: '2026-10-14T01:00:00Z' },
+  ] as CampaignV2QuotaPolicyRevision[];
+  const rates = [
+    { revision_id: 21, template_id: 1, provider_channel_id: 'ch-1',
+      unit_cost_mxn: '1.001854', source_reference: 'FX documentation',
+      valid_from: '2026-10-14T01:00:00Z' },
+  ] as CampaignV2BudgetRateRevision[];
+  const rows = campaignV2BuildReadinessRows(template, bindings, policies, rates);
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].configured, true);
+  assert.equal(rows[0].portfolioVerified, false);
+  assert.equal(rows[1].configured, false);
+  assert.ok(rows[1].issues.includes('Tarifa MXN pendiente'));
+  assert.equal(rows[1].unitCostMxn, null);
+  assert.equal(campaignV2BuildReadinessRows(template, bindings, [], []).every(r => !r.configured), true);
+  policies[1].operational_portfolio_cap = 300;
+  assert.equal(campaignV2BuildReadinessRows(template, bindings, policies, rates)[0].configured, false);
+  assert.equal(campaignV2BuildReadinessRows(null, bindings, policies, rates)[0].templateCompatible, false);
+});
+
+test('operator readiness UI uses catalog reads and has no provider send action', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const ui = fs.readFileSync(path.join(root, 'marketing-campaign-v2-readiness-dialog.component.ts'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-readiness-dialog.component.html'), 'utf8');
+  assert.ok(ui.includes('forkJoin('));
+  assert.ok(ui.includes('listQuotaEvidence()'));
+  assert.ok(html.includes('Configurar portafolios y límites'));
+  assert.equal(ui.includes('submitCampaign('), false);
+  assert.equal(ui.includes('registerQuotaPolicy('), false);
+});
+
+
+test('B1 catálogo de Business IDs es independiente de políticas, WABA y envíos', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const ui = fs.readFileSync(path.join(root, 'marketing-campaign-v2-readiness-dialog.component.ts'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-readiness-dialog.component.html'), 'utf8');
+  const service = fs.readFileSync(path.join(root, 'marketing-campaign-v2.service.ts'), 'utf8');
+  assert.ok(service.includes('/dispatch/portfolio-references'));
+  assert.ok(ui.includes('listPortfolioReferences()'));
+  assert.ok(ui.includes('registerPortfolioReference('));
+  assert.ok(html.includes('Registrar referencia sin verificar'));
+  assert.ok(html.includes('NO VERIFICADO'));
+  assert.ok(html.includes('Canales verificados: 0'));
+  assert.equal(ui.includes('submitCampaign('), false);
+  assert.equal(ui.includes('registerQuotaPolicy('), false);
+  assert.equal(html.includes('(click)="submitCampaign()"'), false);
+});
+
+
+test('B2 evidence modal requires confirmation and never changes operational quota or sends', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const ts = fs.readFileSync(path.join(root, 'marketing-campaign-v2-channel-portfolio-dialog.component.ts'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-channel-portfolio-dialog.component.html'), 'utf8');
+  const readiness = fs.readFileSync(path.join(root, 'marketing-campaign-v2-readiness-dialog.component.ts'), 'utf8');
+  const template = fs.readFileSync(path.join(root, 'marketing-campaign-v2-readiness-dialog.component.html'), 'utf8');
+  assert.ok(ts.includes('expected_revision_id: expectedRevision'));
+  assert.ok(ts.includes('this.acknowledgment.value'));
+  assert.ok(ts.includes('listChannelPortfolioEvidence()'));
+  assert.ok(ts.includes("save(state: 'DECLARED' | 'WITHDRAWN')"));
+  assert.ok(html.includes('Guardar revisión declarada'));
+  assert.ok(html.includes('Retirar asociación actual'));
+  assert.ok(ts.includes('DECLARADA · NO VERIFICADA'));
+  assert.ok(template.includes('Business ID declarado (B2)'));
+  assert.ok(template.includes('Clave cuota interna (independiente)'));
+  assert.ok(readiness.includes('mappingBusinessId'));
+  assert.equal(ts.includes('submitCampaign('), false);
+  assert.equal(ts.includes('registerQuotaPolicy('), false);
+  assert.equal(ts.includes('approveDispatch('), false);
+});
+
+
+test('B3 documentary triage uses a read-only API and never claims verified Meta membership', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const ui = fs.readFileSync(path.join(root, 'marketing-campaign-v2-portfolio-review-dialog.component.ts'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-portfolio-review-dialog.component.html'), 'utf8');
+  const editor = fs.readFileSync(path.join(root, 'marketing-campaign-v2-channel-portfolio-dialog.component.ts'), 'utf8');
+  const service = fs.readFileSync(path.join(root, 'marketing-campaign-v2.service.ts'), 'utf8');
+  const entry = fs.readFileSync(path.join(root, 'marketing-campaign-v2-readiness-dialog.component.html'), 'utf8');
+  assert.ok(service.includes('/dispatch/portfolio-review'));
+  assert.ok(ui.includes('listPortfolioReview()'));
+  assert.ok(ui.includes('DOCUMENTED_UNVERIFIED'));
+  assert.ok(ui.includes('REVIEW_REQUIRED'));
+  assert.ok(ui.includes('data: { channelId: row.provider_channel_id }'));
+  assert.ok(editor.includes('MAT_DIALOG_DATA'));
+  assert.ok(entry.includes('Revisar evidencia de 26 canales'));
+  assert.ok(html.includes('no verificación de Meta'));
+  assert.ok(html.includes('Documentar / corregir'));
+  assert.equal(ui.includes('registerQuotaPolicy('), false);
+  assert.equal(ui.includes('submitCampaign('), false);
+  assert.equal(ui.includes('registerChannelPortfolioEvidence('), false);
+});
+
+
+test('Issue 856 C QA modal only previews and freezes one recipient; no send or local persistence', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const component = fs.readFileSync(path.join(root, 'marketing-campaign-v2-qa-manual-dialog.component.ts'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-qa-manual-dialog.component.html'), 'utf8');
+  const page = fs.readFileSync(path.join(root, 'marketing-campaign-v2-page.component.ts'), 'utf8');
+  const pageHtml = fs.readFileSync(path.join(root, 'marketing-campaign-v2-page.component.html'), 'utf8');
+  const api = fs.readFileSync(path.join(root, 'marketing-campaign-v2.service.ts'), 'utf8');
+  assert.ok(api.includes('/qa-manual/preview'));
+  assert.ok(api.includes('/qa-manual/freeze'));
+  assert.ok(component.includes('this.confirmFreeze.value'));
+  assert.ok(component.includes('expected_preview_fingerprint: this.preview.preview_fingerprint'));
+  assert.ok(component.includes('expected_channel_binding_id: this.preview.channel_binding_id'));
+  assert.ok(component.includes('recipients: [{'));
+  assert.ok(component.includes('this.invalidatePreview()'));
+  assert.ok(html.includes('NO envía WhatsApp'));
+  assert.ok(html.includes('Congelar 1 contacto · SIN ENVÍO'));
+  assert.ok(page.includes('if (!this.canManageDispatchConfig) { return; }'));
+  assert.ok(pageHtml.includes('*ngIf="canManageDispatchConfig"'));
+  assert.equal(component.includes('submitCampaign('), false);
+  assert.equal(component.includes('executeGovernedChild('), false);
+  assert.equal(component.includes('localStorage'), false);
+  assert.equal(component.includes('sessionStorage'), false);
 });

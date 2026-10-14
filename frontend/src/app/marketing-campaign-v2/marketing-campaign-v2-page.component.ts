@@ -86,6 +86,8 @@ import {
 } from './marketing-campaign-v2-tariff-classifier-dialog.component';
 import { MarketingCampaignV2DispatchAdminDialogComponent } from './marketing-campaign-v2-dispatch-admin-dialog.component';
 import { MarketingCampaignV2QuotaAdminDialogComponent } from './marketing-campaign-v2-quota-admin-dialog.component';
+import { MarketingCampaignV2QaManualDialogComponent } from './marketing-campaign-v2-qa-manual-dialog.component';
+import { MarketingCampaignV2ReadinessDialogComponent } from './marketing-campaign-v2-readiness-dialog.component';
 
 @Component({
   selector: 'app-marketing-campaign-v2-page',
@@ -503,6 +505,28 @@ export class MarketingCampaignV2PageComponent implements OnInit {
           this.pricingError = 'No se pudo obtener el catálogo de plantillas para cotizar.';
         },
       });
+  }
+
+  openQaManual(): void {
+    if (!this.canManageDispatchConfig) { return; }
+    const dialogRef = this.dialog.open(MarketingCampaignV2QaManualDialogComponent, {
+      width: 'min(850px, 96vw)', maxWidth: '96vw',
+      maxHeight: '94vh', autoFocus: false,
+      panelClass: 'campaign-v2-admin-dialog',
+    });
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.loadCampaigns());
+  }
+
+  openChannelReadiness(): void {
+    if (!this.canManageDispatchConfig) { return; }
+    this.dialog.open(MarketingCampaignV2ReadinessDialogComponent, {
+      panelClass: 'campaign-v2-admin-dialog',
+      width: 'min(1250px, 97vw)',
+      maxWidth: '97vw',
+      maxHeight: '94vh',
+      autoFocus: false,
+    });
   }
 
   openQuotaEvidence(): void {

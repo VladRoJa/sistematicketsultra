@@ -29,6 +29,7 @@ from app.services.marketing_campaign_v2_budget_service import estimate_preflight
 from app.services.marketing_campaign_v2_quota_service import (
     assess_preflight_capacity, _database_date,
 )
+from app.services.marketing_campaign_v2_operational_capacity_service import BASIS as OPERATIONAL_BASIS
 
 APPROVAL_TTL = timedelta(minutes=15)
 
@@ -111,6 +112,7 @@ def _hold_sources(held_names: set[str], supplied: Any) -> dict[str, str]:
 def _assess_scopes(
     plan: Any, *, session: Any, timestamp: datetime,
     ignore_campaign_id: int | None = None,
+    basis_preference: str | None = None,
 ):
     if not plan.ready or plan.mode != "IMMEDIATE" or not plan.batches:
         raise CampaignV2ApprovalConflictError(
@@ -118,7 +120,7 @@ def _assess_scopes(
         )
     quota = assess_preflight_capacity(
         plan=plan, session=session, now=timestamp,
-        ignore_campaign_id=ignore_campaign_id,
+        ignore_campaign_id=ignore_campaign_id, basis_preference=basis_preference,
     )
     if (quota["status"] != "REVIEWABLE" or
             not all(x["recommendation"] == "CAPACITY_REVIEWED" for x in quota["batches"]) or
@@ -127,6 +129,7 @@ def _assess_scopes(
             "No hay evidencia de capacidad completa y vigente para todos los lotes."
         )
 
+    operational = quota.get("basis") == OPERATIONAL_BASIS
     quantities = defaultdict(int)
     evidence_ids = {}
     by_branch = {}
@@ -135,7 +138,11 @@ def _assess_scopes(
         if (row["sucursal_canon"] != batch.sucursal_canon or
                 row["provider_channel_id"] != str(batch.provider_channel_id or "") or
                 not row["portfolio_key"] or
-                not row["channel_evidence_id"] or not row["portfolio_evidence_id"]):
+                (not operational and (not row["channel_evidence_id"] or
+                                   not row["portfolio_evidence_id"])) or
+             (operational and (row.get("policy_revision_id") is None or
+                               not row.get("operator_channel_cap") or
+                               not row.get("operator_portfolio_cap")))):
             raise CampaignV2ApprovalConflictError("Cambió la asignación de lotes/canales.")
         channel_scope = ("CHANNEL", row["provider_channel_id"])
         portfolio_scope = ("PORTFOLIO", row["portfolio_key"])
@@ -170,10 +177,19 @@ def _reserve_locked(
             Decimal(budget["total_estimated_mxn"]) != expected_cost):
         raise CampaignV2ApprovalConflictError("Costo o revisión de tarifa cambió.")
 
+    operational = (bool(quota_rows) and all(
+        row.get("policy_revision_id") is not None for row in quota_rows.values()
+    ))
+    if operational and any(value is not None for value in evidence_ids.values()):
+        raise CampaignV2ApprovalConflictError("Modos de cupo mezclados.")
     evidence = {}
     expiry = timestamp + APPROVAL_TTL
     for scope in sorted(quantities):
         kind, key = scope
+        if operational:
+            # Already assessed inside the same transaction AFTER obtaining scope locks.
+            evidence[scope] = None
+            continue
         row = session.get(MarketingCampaignV2QuotaCapacityAttestationORM, evidence_ids[scope])
         if (row is None or row.scope_kind != kind or row.scope_key != key or
                 _database_date(row.observed_at) > timestamp or
@@ -221,6 +237,9 @@ def _reserve_locked(
                 "quote_fingerprint": expected_quote,
             } if held else None,
             "channel_attestation_id": item["channel_evidence_id"] if item else None,
+            "policy_revision_id": item.get("policy_revision_id") if item else None,
+            "operator_channel_cap": item.get("operator_channel_cap") if item else None,
+            "operator_portfolio_cap": item.get("operator_portfolio_cap") if item else None,
             "portfolio_key": item["portfolio_key"] if item else None,
             "portfolio_attestation_id": item["portfolio_evidence_id"] if item else None,
             "cost_rate_revision_id": price["revision_id"],
@@ -236,7 +255,7 @@ def _reserve_locked(
         manifest_json={
             "version": "D2B_READY_HELD_V1",
             "quote_fingerprint": expected_quote,
-            "basis": "OPERATOR_ATTESTED_NOT_META_VERIFIED",
+            "basis": OPERATIONAL_BASIS if operational else "OPERATOR_ATTESTED_NOT_META_VERIFIED",
             "send_authorized": False,
             "schedule_mode": plan.mode,
             "batches": manifest_batches,
@@ -249,7 +268,7 @@ def _reserve_locked(
         kind, key = scope
         session.add(MarketingCampaignV2CapacityReservationORM(
             approval_id=approval.id,
-            attestation_id=evidence[scope].id,
+            attestation_id=None if operational else evidence[scope].id,
             scope_kind=kind, scope_key=key,
             reserved_messages=quantities[scope],
             reserved_until=expiry, created_at=timestamp,
@@ -322,7 +341,7 @@ def approve_dispatch_reservation(
             raise CampaignV2ApprovalConflictError("Preflight bloqueado o no inmediato.")
         ready_plan, held_names = _ready_plan_and_holds(plan, held_sucursal_canons)
         held_sources = _hold_sources(held_names, held_source_references)
-        _, scopes, _, _ = _assess_scopes(ready_plan, session=active, timestamp=timestamp)
+        initial_quota, scopes, _, _ = _assess_scopes(ready_plan, session=active, timestamp=timestamp)
         initial_scope_names = set(scopes)
         for kind, key in sorted(initial_scope_names):
             active.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:scope, 0))"),
@@ -339,9 +358,12 @@ def approve_dispatch_reservation(
         ready_plan, current_held_names = _ready_plan_and_holds(plan, held_sucursal_canons)
         if current_held_names != held_names:
             raise CampaignV2ApprovalConflictError("Cambió el manifiesto HELD.")
-        _, quantities, evidence_ids, quota_rows = _assess_scopes(
+        refreshed_quota, quantities, evidence_ids, quota_rows = _assess_scopes(
             ready_plan, session=active, timestamp=timestamp,
+            basis_preference=initial_quota.get("basis"),
         )
+        if refreshed_quota.get("basis") != initial_quota.get("basis"):
+            raise CampaignV2ApprovalConflictError("Modalidad de cupo cambió durante aprobación.")
         if set(quantities) != initial_scope_names:
             raise CampaignV2ApprovalConflictError(
                 "Cambió la membresía de portafolio; revisa y reintenta."

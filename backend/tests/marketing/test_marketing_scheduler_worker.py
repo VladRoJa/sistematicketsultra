@@ -579,3 +579,46 @@ def test_provider_stats_scheduler_failure_is_sanitized_and_cleans_session(
     assert cleanups == ["remove"]
     assert "provider-secret-payload" not in caplog.text
     assert "RuntimeError" in caplog.text
+
+
+def test_execute_marketing_sync_attributes_both_jobs_to_same_slot(monkeypatch):
+    from types import SimpleNamespace
+    calls = {}
+
+    def fake_iventas_sync(**kwargs):
+        calls["iventas"] = kwargs
+        return SimpleNamespace(
+            status="COMPLETED", is_canonical=True,
+            sync_run_id=11, branches_completed=26, branches_requested=26,
+        )
+
+    def fake_meta_sync(**kwargs):
+        calls["meta"] = kwargs
+        return SimpleNamespace(
+            status="COMPLETED", is_canonical=True,
+            sync_run_id=12, accounts_completed=5, accounts_requested=5,
+            insights_unique=0,
+        )
+
+    monkeypatch.setattr(worker, "sync_iventas_full_run", fake_iventas_sync)
+    monkeypatch.setattr(worker, "sync_meta_full_run", fake_meta_sync)
+    monkeypatch.setattr(worker, "_load_meta_accounts", lambda: ())
+    monkeypatch.setattr(worker.db.session, "remove", lambda: None)
+
+    slot = datetime(2026, 10, 14, 8, 20, tzinfo=TIJUANA)
+    result = worker.execute_marketing_sync(
+        business_date=slot.date(), scheduler_slot_at=slot,
+    )
+    assert result.completed
+    assert calls["iventas"]["scheduler_slot_at"] == slot
+    assert calls["meta"]["scheduler_slot_at"] == slot
+    assert calls["iventas"]["date_to"] == slot.date()
+    assert calls["meta"]["date_to"] == slot.date()
+
+
+def test_execute_marketing_sync_rejects_slot_on_different_day():
+    with pytest.raises(ValueError, match="business_date"):
+        worker.execute_marketing_sync(
+            business_date=date(2026, 10, 14),
+            scheduler_slot_at=datetime(2026, 10, 13, 20, 20, tzinfo=TIJUANA),
+        )

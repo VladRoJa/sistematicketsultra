@@ -5,6 +5,10 @@ from dataclasses import asdict
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 from app.services.automation_control.timeline_service import daily_timeline
+from app.services.automation_control.freshness_service import read_freshness
+from app.services.marketing_access import resolve_marketing_access, MarketingAuthorizationError
+from app.services.automation_control.worker_health_service import read_worker_health
+from app.services.automation_control.effective_schedule_service import read_effective_schedules
 from app.services.automation_control.diagnostic_service import (
     run_diagnostic, last_error_diagnostic,
 )
@@ -79,6 +83,70 @@ def _parse_pagination() -> tuple[int, int]:
     if not (1 <= limit <= 100 and 0 <= offset <= 10000):
         raise ValueError("limit debe estar entre 1 y 100, offset entre 0 y 10000.")
     return limit, offset
+
+
+@automation_control_bp.get("/freshness")
+@jwt_required()
+def automation_control_freshness():
+    """Domain-authorized public explanation; no global branch leakage."""
+    module_key = str(request.args.get("module_key") or "").strip()
+    if module_key not in {"marketing.sales_funnel", "track.daily"}:
+        return jsonify({"status": "error", "message": "Dataset no registrado."}), 404
+
+    scope_mode = request.args.get("scope_mode", "GLOBAL")
+    if scope_mode not in {"GLOBAL", "FILTERED"}:
+        return jsonify({"status": "error", "message": "scope_mode inválido."}), 400
+    allowed_args = (
+        {"module_key", "scope_mode", "month", "cutoff_date"}
+        if module_key == "marketing.sales_funnel"
+        else {"module_key", "scope_mode", "track_date"}
+    )
+    if set(request.args) - allowed_args:
+        return jsonify({"status": "error", "message": "Parámetros no admitidos."}), 400
+    try:
+        identity = int(get_jwt_identity())
+    except (TypeError, ValueError):
+        return _deny()
+    user = UserORM.get_by_id(identity)
+    if user is None:
+        return _deny()
+
+    if module_key == "marketing.sales_funnel":
+        try:
+            resolve_marketing_access(user)
+        except MarketingAuthorizationError:
+            return _deny()
+    else:
+        allowed_track_roles = {
+            "ADMIN", "ADMINISTRADOR", "SUPER_ADMIN", "LECTOR_GLOBAL",
+            "GERENTE", "GERENTE_REGIONAL", "SISTEMAS",
+            "GERENCIA DEPORTIVA", "MARKETING", "TIENDA",
+        }
+        if str(getattr(user, "rol", "") or "").strip().upper() not in allowed_track_roles:
+            return _deny()
+
+    # Until branch completeness is certified, only ADMICORP corporate/global
+    # can see global evidence. Other valid viewers receive scope-safe UNKNOWN.
+    global_certified = (
+        can_read_automation_control(user) and scope_mode == "GLOBAL"
+    )
+    try:
+        report = read_freshness(
+            module_key, scope_global_certified=global_certified,
+            month=request.args.get("month"),
+            cutoff_date=request.args.get("cutoff_date"),
+            track_date=request.args.get("track_date"),
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception:
+        current_app.logger.exception("Error leyendo frescura. module=%s", module_key)
+        return jsonify({
+            "status": "error",
+            "message": "No fue posible verificar frescura de datos.",
+        }), 503
+
+    return jsonify({"status": "ok", **report})
 
 
 @automation_control_bp.get("/summary")
@@ -248,3 +316,33 @@ def automation_control_last_error(job_key: str):
         get_jwt_identity(), job_key,
     )
     return jsonify({"status": "ok", "diagnostic": detail})
+
+
+@automation_control_bp.get("/workers/health")
+@jwt_required()
+def automation_control_worker_health():
+    if not _require_read_access():
+        return _deny()
+    try:
+        return jsonify({"status": "ok", **read_worker_health()})
+    except Exception:
+        current_app.logger.exception("Fallo de lectura de salud de workers")
+        return jsonify({
+            "status": "error",
+            "message": "No se pudo verificar la salud de los workers.",
+        }), 503
+
+
+@automation_control_bp.get("/jobs/effective-schedules")
+@jwt_required()
+def automation_control_effective_schedules():
+    if not _require_read_access():
+        return _deny()
+    try:
+        return jsonify({"status": "ok", **read_effective_schedules()})
+    except Exception:
+        current_app.logger.exception("No se pudo consultar configuración efectiva de workers")
+        return jsonify({
+            "status": "error",
+            "message": "No se pudo verificar la programación efectiva.",
+        }), 503

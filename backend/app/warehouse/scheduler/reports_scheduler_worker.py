@@ -11,6 +11,8 @@ from zoneinfo import ZoneInfo
 
 from app import create_app
 from app.extensions import db
+from app.services.automation_control.effective_schedule_service import schedule_spec
+from app.services.automation_control.worker_health_service import emit_worker_heartbeat
 from app.models.attendance import WarehouseAttendanceRunORM
 from app.models.warehouse import (
     ReporteDireccionSnapshotORM,
@@ -997,6 +999,49 @@ def _run_commercial_daily_reports_if_due(now: datetime) -> None:
     )
 
 
+
+def _resolved_schedule_snapshot() -> dict:
+    """Use the same flag/time resolvers used for real reports decisions."""
+    now = _now_local()
+    tz = now.tzinfo.key
+    def schedule_hour(hour_key: str, minute_key: str, hour: int, minute: int) -> list[str]:
+        resolved = _scheduled_datetime(
+            now=now, hour_env=hour_key, minute_env=minute_key,
+            default_hour=hour, default_minute=minute,
+        )
+        return [resolved.strftime("%H:%M")]
+    def daily(prefix: str, key: str, hour: int, minute: int, flag: str):
+        return schedule_spec(
+            enabled=_env_bool(flag, False), timezone_name=tz,
+            kind="DAILY_TIME", slots=schedule_hour(
+                prefix + "_RUN_HOUR", prefix + "_RUN_MINUTE", hour, minute,
+            ), conditional=True,
+        )
+    return {
+        "reports.attendance_daily_capture": daily(
+            "ATTENDANCE_DAILY_CAPTURE", "", 6, 20, "ATTENDANCE_DAILY_CAPTURE_ENABLED",
+        ),
+        "reports.reactivation_sources_daily": daily(
+            "REACTIVATION_SOURCES", "", 9, 0, "REACTIVATION_SOURCES_ENABLED",
+        ),
+        "reports.reactivation_outcomes_daily": daily(
+            "REACTIVATION_OUTCOMES", "", 9, 15, "REACTIVATION_SOURCES_ENABLED",
+        ),
+        "reports.cobranza_recurrente_rechazados": daily(
+            "COBRANZA_RECURRENTE", "", 8, 0, "COBRANZA_RECURRENTE_ENABLED",
+        ),
+        "reports.commercial_daily_reports": daily(
+            "COMMERCIAL_DAILY_REPORTS", "", 1, 20,
+            "COMMERCIAL_DAILY_REPORTS_ENABLED",
+        ),
+        "reports.reporte_direccion_daily_capture": schedule_spec(
+            enabled=_env_bool("REPORTE_DIRECCION_DAILY_CAPTURE_ENABLED", False),
+            timezone_name=tz, kind="NIGHTLY_WINDOW",
+            conditional=True,
+        ),
+    }
+
+
 def run_scheduler_loop() -> None:
     enabled = _env_bool("REPORTS_SCHEDULER_ENABLED", True)
     sleep_seconds = max(_env_int("REPORTS_SCHEDULER_SLEEP_SECONDS", 60), 10)
@@ -1013,6 +1058,10 @@ def run_scheduler_loop() -> None:
 
     while not _SHOULD_STOP:
         try:
+            emit_worker_heartbeat(
+                'reports-scheduler', poll_interval_seconds=sleep_seconds,
+                schedules_provider=_resolved_schedule_snapshot,
+            )
             now = _now_local()
 
             logger.info(

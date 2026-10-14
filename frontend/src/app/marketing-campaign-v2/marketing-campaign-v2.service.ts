@@ -14,6 +14,17 @@ import {
   CampaignV2ConsolidatedReport,
   CampaignV2DispatchTemplatesResponse,
   CampaignV2BudgetRateRevision,
+  CampaignV2ChannelPortfolioEvidence,
+  CampaignV2ChannelPortfolioEvidenceRequest,
+  CampaignV2QaManualBaseRequest,
+  CampaignV2QaManualPreview,
+  CampaignV2QaManualFreezeRequest,
+  CampaignV2QaManualFrozen,
+  CampaignV2PortfolioReviewResponse,
+  CampaignV2ChannelPortfolioEvidenceResponse,
+  CampaignV2PortfolioReference,
+  CampaignV2PortfolioReferenceRequest,
+  CampaignV2PortfolioReferencesResponse,
   CampaignV2QuotaEvidence,
   CampaignV2QuotaPolicyRevision,
   CampaignV2QuotaAttestation,
@@ -213,6 +224,56 @@ export class MarketingCampaignV2Service {
     return this.http.post<CampaignV2PreparationApplyResponse>(
       `${this.apiUrl}/${campaignId}/preparation/previous/exclude`,
       { ...request, source_campaign_ids: sourceCampaignIds },
+    );
+  }
+
+  previewQaManual(
+    request: CampaignV2QaManualBaseRequest,
+  ): Observable<CampaignV2QaManualPreview> {
+    return this.http.post<CampaignV2QaManualPreview>(
+      `${this.apiUrl}/qa-manual/preview`, request,
+    );
+  }
+
+  freezeQaManual(
+    request: CampaignV2QaManualFreezeRequest,
+  ): Observable<CampaignV2QaManualFrozen> {
+    return this.http.post<CampaignV2QaManualFrozen>(
+      `${this.apiUrl}/qa-manual/freeze`, request,
+    );
+  }
+
+  listPortfolioReview(): Observable<CampaignV2PortfolioReviewResponse> {
+    return this.http.get<CampaignV2PortfolioReviewResponse>(
+      `${this.apiUrl}/dispatch/portfolio-review`,
+    );
+  }
+
+  listChannelPortfolioEvidence(): Observable<CampaignV2ChannelPortfolioEvidenceResponse> {
+    return this.http.get<CampaignV2ChannelPortfolioEvidenceResponse>(
+      `${this.apiUrl}/dispatch/channel-portfolio-evidence`,
+    );
+  }
+
+  registerChannelPortfolioEvidence(
+    request: CampaignV2ChannelPortfolioEvidenceRequest,
+  ): Observable<CampaignV2ChannelPortfolioEvidence> {
+    return this.http.post<CampaignV2ChannelPortfolioEvidence>(
+      `${this.apiUrl}/dispatch/channel-portfolio-evidence`, request,
+    );
+  }
+
+  listPortfolioReferences(): Observable<CampaignV2PortfolioReferencesResponse> {
+    return this.http.get<CampaignV2PortfolioReferencesResponse>(
+      `${this.apiUrl}/dispatch/portfolio-references`,
+    );
+  }
+
+  registerPortfolioReference(
+    request: CampaignV2PortfolioReferenceRequest,
+  ): Observable<CampaignV2PortfolioReference> {
+    return this.http.post<CampaignV2PortfolioReference>(
+      `${this.apiUrl}/dispatch/portfolio-references`, request,
     );
   }
 

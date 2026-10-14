@@ -11,6 +11,8 @@ from datetime import date, datetime, time as dt_time, timedelta
 from zoneinfo import ZoneInfo
 
 from app import create_app, db
+from app.services.automation_control.effective_schedule_service import schedule_spec
+from app.services.automation_control.worker_health_service import emit_worker_heartbeat
 from app.warehouse.services.track_daily_pipeline_service import (
     run_requested_track_canonical_close,
     run_track_daily_pipeline_for_date,
@@ -455,6 +457,68 @@ def _should_run_warehouse_retention(
     )
 
 
+
+def _resolved_schedule_snapshot() -> dict:
+    """Current worker-local resolver inputs, not a guarantee of job execution."""
+    start = _env_int("TRACK_PREVIEW_START_HOUR", DEFAULT_PREVIEW_START_HOUR)
+    end = _env_int("TRACK_PREVIEW_END_HOUR", DEFAULT_PREVIEW_END_HOUR)
+    if not 0 <= start <= end <= 23:
+        raise ValueError("Invalid Track preview window")
+    def at(h, m):
+        if not (0 <= h <= 23 and 0 <= m <= 59):
+            raise ValueError("Invalid Track scheduled time")
+        return f"{h:02d}:{m:02d}"
+    base = at(
+        _env_int("TRACK_NIGHTLY_BASE_HOUR", DEFAULT_NIGHTLY_BASE_HOUR),
+        _env_int("TRACK_NIGHTLY_BASE_MINUTE", DEFAULT_NIGHTLY_BASE_MINUTE),
+    )
+    retry = at(
+        _env_int("TRACK_NIGHTLY_RETRY_HOUR", DEFAULT_NIGHTLY_RETRY_HOUR),
+        _env_int("TRACK_NIGHTLY_RETRY_MINUTE", DEFAULT_NIGHTLY_RETRY_MINUTE),
+    )
+    retention = at(
+        _env_int("WAREHOUSE_RETENTION_HOUR", DEFAULT_WAREHOUSE_RETENTION_HOUR),
+        _env_int("WAREHOUSE_RETENTION_MINUTE", DEFAULT_WAREHOUSE_RETENTION_MINUTE),
+    )
+    step = max(1, _env_int(
+        "AGREGADORAS_EXPORT_CHECK_MINUTE_STEP",
+        DEFAULT_AGREGADORAS_EXPORT_CHECK_MINUTE_STEP,
+    ))
+    tz = TRACK_TIMEZONE.key
+    return {
+        "track.preview_operativo": schedule_spec(
+            enabled=True, timezone_name=tz, kind="HOURLY_WINDOW",
+            slots=[at(hour, 0) for hour in range(start, end + 1)],
+            conditional=False,
+        ),
+        "track.base_nocturna_canonica": schedule_spec(
+            enabled=True, timezone_name=tz, kind="DAILY_TIME",
+            slots=[base], conditional=False,
+        ),
+        "track.base_nocturna_retry": schedule_spec(
+            enabled=True, timezone_name=tz, kind="DAILY_TIME",
+            slots=[retry], conditional=True,
+        ),
+        "track.request_cierre_canonico": schedule_spec(
+            enabled=True, timezone_name=tz, kind="CONDITIONAL",
+            conditional=True,
+        ),
+        "track.pending_manual_canonical_close": schedule_spec(
+            enabled=True, timezone_name=tz, kind="PENDING_REQUEST",
+            conditional=True,
+        ),
+        "track.agregadoras_consolidado_export": schedule_spec(
+            enabled=True, timezone_name=tz, kind="INTERVAL_CHECK",
+            interval_seconds=step * 60 if step <= 60 else None,
+            conditional=True,
+        ),
+        "track.warehouse_retention": schedule_spec(
+            enabled=True, timezone_name=tz, kind="DAILY_TIME",
+            slots=[retention], conditional=True,
+        ),
+    }
+
+
 def run_scheduler_loop() -> None:
     poll_interval_seconds = _env_int(
         "TRACK_SCHEDULER_POLL_INTERVAL_SECONDS",
@@ -475,6 +539,11 @@ def run_scheduler_loop() -> None:
     with app.app_context():
         while True:
             try:
+                emit_worker_heartbeat(
+                    'track-scheduler',
+                    poll_interval_seconds=poll_interval_seconds,
+                    schedules_provider=_resolved_schedule_snapshot,
+                )
                 now_local = _now_tijuana()
                 decision = decide_track_scheduler_action(now_local)
 

@@ -8,11 +8,20 @@ on:
       - "backend/app/routes/automation_control_routes.py"
       - "backend/app/services/automation_control/**"
       - "backend/app/services/marketing_iventas_run_*"
+      - "backend/app/services/marketing_meta_run_*"
+      - "backend/app/services/marketing_iventas_persistence_service.py"
+      - "backend/app/services/marketing_meta_persistence_service.py"
+      - "backend/app/services/marketing_scheduler_worker.py"
+      - "backend/migrations/versions/f856m1f40001_marketing_slot_attribution.py"
+      - "backend/tests/marketing/test_marketing_scheduler_worker.py"
       - "backend/app/utils/automation_control_access.py"
       - "backend/migrations/versions/f62a1b9d4c07_iventas_branch_failure_diagnostics.py"
       - "backend/tests/automation_control/**"
       - "backend/tests/services/test_marketing_iventas_run_*"
       - "frontend/src/app/automation-control/**"
+      - "frontend/src/app/shared/data-freshness-indicator/**"
+      - "frontend/src/app/marketing-sales-funnel/**"
+      - "frontend/src/app/warehouse/track-dashboard/**"
       - "frontend/tests/automation-control-reference-display.test.cjs"
       - ".github/workflows/automation-control-iventas-diagnostics-ci.yml"
   workflow_dispatch:
@@ -71,13 +80,21 @@ jobs:
             app/services/automation_control/diagnostic_service.py \
             app/services/marketing_iventas_run_lifecycle_service.py \
             app/services/marketing_iventas_run_sync_service.py \
+            app/services/marketing_meta_run_sync_service.py \
+            app/services/marketing_scheduler_worker.py \
+            app/services/automation_control/marketing_slot_sla_service.py \
+            migrations/versions/f856m1f40001_marketing_slot_attribution.py \
             migrations/versions/f62a1b9d4c07_iventas_branch_failure_diagnostics.py
       - name: Regression + real PostgreSQL 16 migration (synthetic only)
         run: |
           python -m pytest -q --tb=short -o addopts= \
             tests/automation_control \
             tests/services/test_marketing_iventas_run_lifecycle_service.py \
-            tests/services/test_marketing_iventas_run_sync_service.py
+            tests/services/test_marketing_iventas_run_sync_service.py \
+            tests/services/test_marketing_iventas_persistence_service.py \
+            tests/services/test_marketing_meta_persistence_service.py \
+            tests/services/test_marketing_meta_run_sync_service.py \
+            tests/marketing/test_marketing_scheduler_worker.py
 
   frontend:
     name: Angular typecheck, contract, and production build
@@ -101,3 +118,49 @@ jobs:
         run: node --test tests/automation-control-reference-display.test.cjs
       - name: Angular production build
         run: npm run build -- --configuration production
+
+  worker-health-postgres15:
+    name: Worker heartbeat migration and upsert - PostgreSQL 15
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: heartbeat_ci
+          POSTGRES_PASSWORD: synthetic-heartbeat
+          POSTGRES_DB: heartbeat_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U heartbeat_ci -d heartbeat_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+      SECRET_KEY: heartbeat-test-only
+      JWT_SECRET_KEY: heartbeat-test-only
+      SQLALCHEMY_DATABASE_URI: "sqlite:///:memory:"
+      WORKER_HEARTBEAT_TEST_POSTGRES_URL: "postgresql://heartbeat_ci:synthetic-heartbeat@127.0.0.1:5432/heartbeat_ci"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Verify new heartbeat migration on PostgreSQL 15
+        run: |
+          python -m pytest -q --tb=short -o addopts= \
+            tests/automation_control/test_worker_health.py \
+            tests/automation_control/test_worker_health_postgres_ci.py \
+            tests/automation_control/test_marketing_slot_sla_service.py

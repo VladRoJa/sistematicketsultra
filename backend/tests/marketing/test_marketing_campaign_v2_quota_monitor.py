@@ -51,11 +51,14 @@ def fake_rows(*, execution_status="IN_FLIGHT", updated_minutes=7, expires_minute
 
 
 def fake_session(*, execution_status="IN_FLIGHT", updated_minutes=7,
-                 expires_minutes=10):
+                 expires_minutes=10, operator_mode=False):
     approval, execution, children, reserves, evidence = fake_rows(
         execution_status=execution_status, updated_minutes=updated_minutes,
         expires_minutes=expires_minutes,
     )
+    if operator_mode:
+        approval.manifest_json["basis"] = "SUITE_OPERATOR_ROLLING_24H_V1"
+        reserves[0].attestation_id = None
     session = MagicMock()
     def get(model, identifier):
         if model is svc.MarketingCampaignV2ORM:
@@ -141,3 +144,22 @@ def test_invalid_date_and_id_fail_closed():
         svc.read_governed_dispatch_monitor(campaign_id=True, session=MagicMock())
     with pytest.raises(svc.GovernedMonitorValidation):
         svc._now_utc(datetime(2026, 10, 13, 12, 0))
+
+
+def test_operator_only_lease_never_dereferences_null_attestation():
+    session = fake_session(operator_mode=True)
+    result = svc.read_governed_dispatch_monitor(campaign_id=77, session=session, now=NOW)
+    assert result["quota"]["basis"] == "SUITE_OPERATOR_ROLLING_24H_V1"
+    assert result["quota"]["reservations"][0]["attestation_id"] is None
+    assert result["quota"]["reservations"][0]["attestation_expires_at"] is None
+    assert result["quota"]["all_current"] is True
+    assert "NOT_META_VERIFIED" in result["basis"]
+    assert session.get.call_count == 1  # campaign only, no phantom Meta attestation
+    session.commit.assert_not_called()
+
+
+def test_operator_only_expired_lease_is_not_current():
+    session = fake_session(operator_mode=True, expires_minutes=-1)
+    result = svc.read_governed_dispatch_monitor(campaign_id=77, session=session, now=NOW)
+    assert result["quota"]["all_current"] is False
+    assert result["quota"]["reservations"][0]["is_current"] is False

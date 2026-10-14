@@ -318,21 +318,28 @@
               <table>
                 <thead>
                   <tr><th>Sucursal</th><th>Portafolio</th><th>Contactos</th>
-                    <th>Cupo canal</th><th>Cupo portafolio</th><th>Resultado</th></tr>
+                    <th>{{ quota.basis === 'SUITE_OPERATOR_ROLLING_24H_V1' ? 'Tope interno canal / 24 h' : 'Cupo canal' }}</th>
+                    <th>{{ quota.basis === 'SUITE_OPERATOR_ROLLING_24H_V1' ? 'Tope interno portafolio / 24 h' : 'Cupo portafolio' }}</th><th>Resultado</th></tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let item of quota.batches">
                     <td>{{ item.sucursal_canon }}</td>
                     <td>{{ item.portfolio_key || 'Sin política' }}</td>
                     <td>{{ item.recipients | number }}</td>
-                    <td>{{ item.channel_remaining ?? 'Sin evidencia' }}</td>
-                    <td>{{ item.portfolio_remaining ?? 'Sin evidencia' }}</td>
+                    <td *ngIf="quota.basis === 'SUITE_OPERATOR_ROLLING_24H_V1'">{{ item.operator_channel_cap ?? 'No definido' }} ({{ item.suite_channel_attempted ?? 0 }} intentados, {{ item.suite_channel_reserved ?? 0 }} reservados)</td>
+                    <td *ngIf="quota.basis !== 'SUITE_OPERATOR_ROLLING_24H_V1'">{{ item.channel_remaining ?? 'Sin evidencia' }}</td>
+                    <td *ngIf="quota.basis === 'SUITE_OPERATOR_ROLLING_24H_V1'">{{ item.operator_portfolio_cap ?? 'No definido' }} ({{ item.suite_portfolio_attempted ?? 0 }} intentados, {{ item.suite_portfolio_reserved ?? 0 }} reservados)</td>
+                    <td *ngIf="quota.basis !== 'SUITE_OPERATOR_ROLLING_24H_V1'">{{ item.portfolio_remaining ?? 'Sin evidencia' }}</td>
                     <td>{{ item.blocking_reason || 'Revisión sin bloqueos declarados' }}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
-            <p class="muted">
+            <p class="muted" *ngIf="quota.basis === 'SUITE_OPERATOR_ROLLING_24H_V1'">
+              Estimación interna en ventana móvil de 24 horas: solo envíos y reservas visibles para Suite Ultra.
+              El saldo real de Meta y los envíos externos son desconocidos. La evaluación no reserva ni autoriza envíos.
+            </p>
+            <p class="muted" *ngIf="quota.basis !== 'SUITE_OPERATOR_ROLLING_24H_V1'">
               Sin reserva de capacidad. Si otro canal del portafolio consumió cupo
               después de la observación, se necesita evidencia nueva.
             </p>

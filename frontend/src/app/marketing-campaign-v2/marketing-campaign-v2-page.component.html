@@ -8,6 +8,14 @@
     <div class="header-actions">
       <span *ngIf="options" class="scope-note">{{ scopeLabel }}</span>
       <button *ngIf="canManageDispatchConfig" mat-stroked-button type="button"
+        (click)="openQaManual()">
+        QA_MANUAL · un contacto por canal
+      </button>
+      <button *ngIf="canManageDispatchConfig" mat-flat-button type="button"
+        (click)="openChannelReadiness()">
+        Preparación de 26 canales
+      </button>
+      <button *ngIf="canManageDispatchConfig" mat-stroked-button type="button"
         (click)="openDispatchConfiguration()">
         Configuración · plantillas y canales
       </button>
