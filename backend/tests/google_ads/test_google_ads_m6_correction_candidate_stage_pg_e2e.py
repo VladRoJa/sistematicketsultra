@@ -128,7 +128,7 @@ def _stage(client, token, campaign, group, *, revision=1, expected=None,
         except Exception as exc:
             # Flask-JWT-Extended exception handlers are exercised by the real
             # HTTP tests in M6; this isolated handler preserves HTTP status.
-            response = app.handle_user_exception(exc)
+            response = app.make_response(app.handle_user_exception(exc))
         return response
 
 
