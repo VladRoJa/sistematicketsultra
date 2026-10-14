@@ -1,6 +1,8 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from sqlalchemy import Integer, String, column
+
 from app.models import permiso_model
 from app.maintenance_planner import service as planner
 from app.routes.pm_routes import _verificar_permiso_sucursal
@@ -26,6 +28,19 @@ def _mock_grant(monkeypatch, *, allowed):
     query = MagicMock()
     query.filter_by.return_value.first.return_value = object() if allowed else None
     monkeypatch.setattr(permiso_model, "Permiso", SimpleNamespace(query=query))
+    return query
+
+
+def _mock_tickets_query(monkeypatch):
+    query = MagicMock()
+    fake_ticket = SimpleNamespace(
+        query=query,
+        departamento_id=column("departamento_id", Integer),
+        sucursal_id_destino=column("sucursal_id_destino", Integer),
+        sucursal_id=column("sucursal_id", Integer),
+        username=column("username", String),
+    )
+    monkeypatch.setattr(ticket_filters, "Ticket", fake_ticket)
     return query
 
 
@@ -58,10 +73,9 @@ def test_granted_compras_is_read_only(monkeypatch):
 
 def test_compras_with_grant_sees_only_assigned_maintenance_branches(monkeypatch):
     _mock_grant(monkeypatch, allowed=True)
-    query = MagicMock()
+    query = _mock_tickets_query(monkeypatch)
     result = MagicMock()
     query.filter.return_value = result
-    monkeypatch.setattr(ticket_filters.Ticket, "query", query)
 
     filtered = ticket_filters.filtrar_tickets_por_usuario(_compras())
     compiled = str(
@@ -80,8 +94,7 @@ def test_compras_with_grant_sees_only_assigned_maintenance_branches(monkeypatch)
 
 def test_compras_without_branches_gets_no_maintenance_scope(monkeypatch):
     _mock_grant(monkeypatch, allowed=True)
-    query = MagicMock()
-    monkeypatch.setattr(ticket_filters.Ticket, "query", query)
+    query = _mock_tickets_query(monkeypatch)
 
     ticket_filters.filtrar_tickets_por_usuario(_compras(branches=()))
     compiled = str(
