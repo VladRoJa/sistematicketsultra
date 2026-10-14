@@ -18,13 +18,13 @@
   <div class="manual-ads__files">
     <label class="manual-ads__file">
       <span>Informe de campaña · XLSX</span>
-      <input type="file" accept=".xlsx" [disabled]="busy"
+      <input #campaignInput type="file" accept=".xlsx" [disabled]="busy"
         (change)="onFileChanged('campaign', $event)" aria-label="Archivo Excel de campañas" />
       <small>{{ campaignFile?.name || 'Sin archivo seleccionado' }} · Máximo {{ maxCampaignMb }} MB</small>
     </label>
     <label class="manual-ads__file">
       <span>Informe de grupo de anuncios · XLSX</span>
-      <input type="file" accept=".xlsx" [disabled]="busy"
+      <input #adGroupInput type="file" accept=".xlsx" [disabled]="busy"
         (change)="onFileChanged('ad_group', $event)" aria-label="Archivo Excel de grupos de anuncios" />
       <small>{{ adGroupFile?.name || 'Sin archivo seleccionado' }} · Máximo {{ maxGroupMb }} MB</small>
     </label>
@@ -33,7 +33,7 @@
   <div class="manual-ads__actions">
     <button type="button" class="manual-ads__primary" [disabled]="!canPreview"
       (click)="validate()">
-      {{ state === 'preview' ? 'Validando archivos…' : 'Validar ambos Excel' }}
+      {{ validationButtonLabel }}
     </button>
     <button type="button" class="manual-ads__secondary" [disabled]="busy"
       (click)="reset()">Limpiar</button>
@@ -69,13 +69,13 @@
       <ng-container *ngIf="!isStaged">
         <label class="manual-ads__acknowledgement">
           <input type="checkbox" [checked]="acceptedRawOnly" [disabled]="busy"
-            (change)="acceptedRawOnly = $any($event.target).checked" />
+            (change)="onAcknowledgementChanged($event)" />
           <span>Confirmo guardar exclusivamente los RAW de este corte, sin publicación.
             Los Excel deben permanecer sin cambios desde la validación.</span>
         </label>
         <button type="button" class="manual-ads__primary" [disabled]="!canConfirmRaw"
           (click)="confirmRaw()">
-          {{ state === 'confirm' ? 'Guardando RAW…' : (isPartial ? 'Reintentar pareja RAW' : 'Confirmar carga RAW') }}
+          {{ confirmationButtonLabel }}
         </button>
       </ng-container>
     </section>
@@ -87,7 +87,7 @@
     <ul>
       <li *ngFor="let item of resultItems">
         <strong>{{ item.kind }}</strong> · Upload #{{ item.data.upload_id }} ·
-        {{ item.data.reused_existing ? 'RAW idéntico reutilizado' : 'RAW registrado' }}
+        {{ uploadStatusLabel(item.data) }}
       </li>
     </ul>
     <p *ngIf="isPartial">La pareja quedó incompleta. Reintenta ambos archivos sin cambiarlos.</p>

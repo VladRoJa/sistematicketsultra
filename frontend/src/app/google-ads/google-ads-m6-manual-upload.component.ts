@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnDestroy } from '@angular/core';
+import { Component, ElementRef, OnDestroy, ViewChild } from '@angular/core';
 import { Subject, takeUntil } from 'rxjs';
 
 import {
@@ -52,6 +52,9 @@ const RESPONSE_MESSAGES: Record<string, string> = {
   styleUrls: ['./google-ads-m6-manual-upload.component.css']
 })
 export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
+  @ViewChild('campaignInput') private campaignInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('adGroupInput') private adGroupInput?: ElementRef<HTMLInputElement>;
+
   readonly maxCampaignMb = 8;
   readonly maxGroupMb = 10;
   campaignFile: File | null = null;
@@ -68,6 +71,24 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
   constructor(private readonly api: GoogleAdsM6ManualUploadService) {}
 
   get busy(): boolean { return this.state !== 'idle'; }
+
+  get validationButtonLabel(): string {
+    return this.state === 'preview' ? 'Validando archivos…' : 'Validar ambos Excel';
+  }
+
+  get confirmationButtonLabel(): string {
+    if (this.state === 'confirm') return 'Guardando RAW…';
+    return this.isPartial ? 'Reintentar pareja RAW' : 'Confirmar carga RAW';
+  }
+
+  uploadStatusLabel(upload: GoogleAdsM6RawUpload): string {
+    return upload.reused_existing ? 'RAW idéntico reutilizado' : 'RAW registrado';
+  }
+
+  onAcknowledgementChanged(event: Event): void {
+    if (this.busy) return;
+    this.acceptedRawOnly = (event.target as HTMLInputElement).checked;
+  }
 
   get canPreview(): boolean {
     return this.state === 'idle' && this.campaignFile !== null
@@ -192,6 +213,8 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
     if (this.busy) return;
     this.campaignFile = null;
     this.adGroupFile = null;
+    if (this.campaignInput) this.campaignInput.nativeElement.value = '';
+    if (this.adGroupInput) this.adGroupInput.nativeElement.value = '';
     this.invalidatePreview();
   }
 
