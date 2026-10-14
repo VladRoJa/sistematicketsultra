@@ -7,11 +7,12 @@ import { AutomationObservationDialogComponent, AutomationObservationDialogData }
 import { AutomationErrorDetailDialogComponent, AutomationErrorDialogData } from './automation-error-detail-dialog.component';
 import { catchError, forkJoin, of, Subject, takeUntil } from 'rxjs';
 import { AutomationControlService } from './automation-control.service';
-import { DataFreshnessService, DatasetFreshness } from '../shared/data-freshness-indicator/data-freshness.service';
+import { DataFreshnessService, DatasetFreshness, FreshnessDatasetKey } from '../shared/data-freshness-indicator/data-freshness.service';
+import { DataFreshnessIndicatorComponent } from '../shared/data-freshness-indicator/data-freshness-indicator.component';
 import { classifyObservationRuns, classifyReferenceHour, currentTijuanaClock, ObservationState, ReferenceState } from './automation-control-timeline-display';
 import { Job, Run, Summary, Dataset, TimelineWorker, TimelineJob, TimelineObservation, WorkerHealth, WorkerLiveness, EffectiveJobSchedule } from './automation-control.models';
 
-@Component({ selector:'app-automation-control',standalone:true,imports:[CommonModule,FormsModule,MatDialogModule,MatIconModule],
+@Component({ selector:'app-automation-control',standalone:true,imports:[CommonModule,FormsModule,MatDialogModule,MatIconModule,DataFreshnessIndicatorComponent],
   templateUrl:'./automation-control.component.html',styleUrls:['./automation-control.component.css'] })
 export class AutomationControlComponent implements OnInit,OnDestroy {
   readonly pageSize=20;
@@ -46,6 +47,13 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
       (!text||[j.label,j.key,j.worker_key].some(v=>v.toLowerCase().includes(text))));
   }
   get page():number {return Math.floor(this.offset/this.pageSize)+1;}
+  isFreshnessDataset(key:string):boolean {
+    return key==='marketing.sales_funnel'||key==='track.daily';
+  }
+  freshnessModuleKey(key:string):FreshnessDatasetKey {
+    // Template guards unknown future datasets; no implicit third SLA is assumed.
+    return key==='track.daily' ? 'track.daily' : 'marketing.sales_funnel';
+  }
   datasetEvidenceLabel(datasetKey:string):string {
     const state=this.datasetEvidence[datasetKey];
     if(!state)return 'Frescura no verificable';
