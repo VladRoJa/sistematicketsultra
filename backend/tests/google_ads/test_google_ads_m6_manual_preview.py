@@ -156,7 +156,7 @@ def test_preview_validates_real_parsers_without_storage(setup_client, monkeypatc
     monkeypatch.setattr(routes, "approve_authenticated",
                         lambda: pytest.fail("approval must not run"))
     r = post(client, token)
-    assert r.status_code == 200
+    assert r.status_code == 200, r.get_json()
     data = r.get_json()
     assert data["status"] == "PREFLIGHT_OK"
     assert data["business_date"] == "2026-10-13"
@@ -229,4 +229,4 @@ def test_writes_are_not_reachable_from_preview(setup_client, monkeypatch):
     monkeypatch.setattr(routes, "approve_authenticated",
                         lambda: pytest.fail("no approval"))
     response = post(client, token)
-    assert response.status_code == 200
+    assert response.status_code == 200, response.get_json()
