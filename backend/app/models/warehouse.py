@@ -1830,7 +1830,7 @@ class TrackEffectiveRosterEpochORM(db.Model):
     __tablename__ = "track_roster_effective_epochs"
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
-    effective_from = db.Column(db.Date, nullable=False, unique=True)
+    effective_from = db.Column(db.Date, nullable=False)
     attested_at_utc = db.Column(
         db.DateTime(timezone=True), nullable=False,
         server_default=db.text("CURRENT_TIMESTAMP"),
