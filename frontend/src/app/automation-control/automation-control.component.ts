@@ -7,6 +7,7 @@ import { AutomationObservationDialogComponent, AutomationObservationDialogData }
 import { AutomationErrorDetailDialogComponent, AutomationErrorDialogData } from './automation-error-detail-dialog.component';
 import { catchError, forkJoin, of, Subject, takeUntil } from 'rxjs';
 import { AutomationControlService } from './automation-control.service';
+import { DataFreshnessService, DatasetFreshness } from '../shared/data-freshness-indicator/data-freshness.service';
 import { classifyObservationRuns, classifyReferenceHour, currentTijuanaClock, ObservationState, ReferenceState } from './automation-control-timeline-display';
 import { Job, Run, Summary, Dataset, TimelineWorker, TimelineJob, TimelineObservation, WorkerHealth, WorkerLiveness, EffectiveJobSchedule } from './automation-control.models';
 
@@ -31,9 +32,11 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
   private readonly destroyed$=new Subject<void>();
   private sequence=0;
   summary:Summary|null=null; jobs:Job[]=[]; datasets:Dataset[]=[];
+  datasetEvidence:Record<string,DatasetFreshness|null>={};
   selected:Job|null=null; runs:Run[]=[]; coverage='UNKNOWN'; offset=0; hasMore=false;
   domain=''; search=''; loading=true; loadingRuns=false; error=''; runsError='';
-  constructor(private readonly api:AutomationControlService, private readonly dialog:MatDialog){}
+  constructor(private readonly api:AutomationControlService,
+    private readonly freshnessApi:DataFreshnessService, private readonly dialog:MatDialog){}
   ngOnInit():void { this.refresh(); }
   ngOnDestroy():void { this.destroyed$.next();this.destroyed$.complete(); }
   get domains():string[] {return [...new Set(this.jobs.map(j=>j.domain))].sort();}
@@ -43,6 +46,18 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
       (!text||[j.label,j.key,j.worker_key].some(v=>v.toLowerCase().includes(text))));
   }
   get page():number {return Math.floor(this.offset/this.pageSize)+1;}
+  datasetEvidenceLabel(datasetKey:string):string {
+    const state=this.datasetEvidence[datasetKey];
+    if(!state)return 'Frescura no verificable';
+    if(state.latest_complete_business_date)
+      return 'Corte conjunto: '+state.latest_complete_business_date;
+    if(state.latest_observed_business_date)
+      return 'Evidencia: '+state.latest_observed_business_date;
+    return 'Sin corte certificado';
+  }
+  datasetEvidenceDetail(datasetKey:string):string {
+    return this.datasetEvidence[datasetKey]?.detail ?? 'No se pudo consultar evidencia de cortes.';
+  }
   effectiveJob(jobKey:string):EffectiveJobSchedule|undefined {
     return this.effectiveSchedules.find(j=>j.job_key===jobKey);
   }
@@ -120,12 +135,15 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
     this.sequence++;this.loading=true;this.error='';
     forkJoin({summary:this.api.summary(),jobs:this.api.jobs(),datasets:this.api.datasets(),
       health:this.api.workerHealth().pipe(catchError(() => of(null))),
-      schedules:this.api.effectiveSchedules().pipe(catchError(() => of(null)))})
+      schedules:this.api.effectiveSchedules().pipe(catchError(() => of(null))),
+      funnel:this.freshnessApi.get('marketing.sales_funnel','GLOBAL').pipe(catchError(() => of(null))),
+      track:this.freshnessApi.get('track.daily','GLOBAL').pipe(catchError(() => of(null)))})
       .pipe(takeUntil(this.destroyed$)).subscribe({
-        next:({summary,jobs,datasets,health,schedules})=>{
+        next:({summary,jobs,datasets,health,schedules,funnel,track})=>{
           this.summary=summary;this.jobs=jobs.jobs;this.datasets=datasets.datasets;this.loading=false;
           this.configUnavailable=!schedules;
           this.effectiveSchedules=schedules?.jobs??[];
+          this.datasetEvidence={'marketing.sales_funnel':funnel,'track.daily':track};
           this.healthUnavailable=!health;this.healthCheckedAt=health?.checked_at_utc??null;
           this.workerHealth=health?.workers??[...new Set(jobs.jobs.map(j=>j.worker_key))].sort()
             .map(worker_key=>({worker_key,status:'UNKNOWN' as const,
