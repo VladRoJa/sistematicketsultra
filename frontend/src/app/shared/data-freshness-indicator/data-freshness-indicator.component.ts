@@ -19,6 +19,11 @@ export class DataFreshnessIndicatorComponent implements OnChanges, OnDestroy {
   @Input() cutoffDate: string|null = null;
   @Input() trackDate: string|null = null;
 
+  // Read-only parent screens can supply their already-authorized API response.
+  // undefined means self-fetch (existing behavior); null means request failed.
+  @Input() suppliedState: DatasetFreshness|null|undefined = undefined;
+  @Input() statusOnly = false;
+
   state: DatasetFreshness|null = null;
   loading = false;
   private pending: Subscription|null = null;
@@ -27,6 +32,12 @@ export class DataFreshnessIndicatorComponent implements OnChanges, OnDestroy {
 
   ngOnChanges(): void {
     this.pending?.unsubscribe();
+    this.pending = null;
+    if (this.suppliedState !== undefined) {
+      this.state = this.suppliedState;
+      this.loading = false;
+      return;
+    }
     this.state = null;
     this.loading = true;
     this.pending = this.service.get(
@@ -47,6 +58,9 @@ export class DataFreshnessIndicatorComponent implements OnChanges, OnDestroy {
 
   get compactLabel(): string {
     if (this.loading) return 'Verificando corte';
+    if (this.statusOnly && this.status === 'UNKNOWN') {
+      return this.state ? 'Sin certificar' : 'Sin verificar';
+    }
     if (this.status === 'UNKNOWN') {
       if (this.state?.latest_complete_business_date) {
         return 'Corte conjunto: ' + this.formatDate(this.state.latest_complete_business_date);
