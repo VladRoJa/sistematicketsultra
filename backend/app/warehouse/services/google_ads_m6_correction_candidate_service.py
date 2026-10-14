@@ -23,6 +23,9 @@ from app.warehouse.services.google_ads_m6_manual_structured_service import (
     _campaign_record, _group_record, _customer_id,
     GoogleAdsM6ManualStructuredError,
 )
+from app.warehouse.services.google_ads_daily_ingestion_service import (
+    GoogleAdsDailyIngestionError,
+)
 
 FLAG = "GOOGLE_ADS_M6_CORRECTION_CANDIDATE_ENABLED"
 AUDIT = "GA_M6_CORRECTION_CANDIDATE"
@@ -194,7 +197,7 @@ def stage_m6_correction_candidate(*, campaign_upload_id: int,
         raise GoogleAdsM6CorrectionStageError("FORBIDDEN") from None
     try:
         _check(_customer_id() == CUSTOMER_ID, "GOOGLE_ADS_CUSTOMER_NOT_READY")
-    except GoogleAdsM6ManualStructuredError:
+    except GoogleAdsDailyIngestionError:
         raise GoogleAdsM6CorrectionStageError("GOOGLE_ADS_CUSTOMER_NOT_READY") from None
 
     try:

@@ -12,6 +12,8 @@ on:
       - 'backend/migrations/versions/e8b2c41d7a60_google_ads_m6_correction_candidates.py'
       - 'backend/app/models/google_ads_m6_correction.py'
       - 'backend/tests/google_ads/test_google_ads_m6_correction_candidates_postgres.py'
+      - 'backend/tests/google_ads/test_google_ads_m6_correction_candidate_stage_pg_e2e.py'
+      - 'backend/app/warehouse/services/google_ads_m6_correction_candidate_service.py'
       - 'backend/tests/google_ads/test_google_ads_m6_alembic_merge_graph.py'
       - 'backend/tests/google_ads/test_google_ads_m6_global_publication_reader_postgres.py'
       - 'backend/app/services/marketing_google_ads_funnel_service.py'
@@ -108,6 +110,7 @@ jobs:
             tests/google_ads/test_google_ads_m6_manual_publication_postgres.py \
             tests/google_ads/test_google_ads_m6_correction_diagnostic_postgres.py \
             tests/google_ads/test_google_ads_m6_correction_candidates_postgres.py \
+            tests/google_ads/test_google_ads_m6_correction_candidate_stage_pg_e2e.py \
             tests/google_ads/test_google_ads_m6_daily_branch_reader.py \
             tests/google_ads/test_google_ads_m6_daily_reader_pg_e2e.py \
             tests/marketing/test_google_ads_funnel_investment.py \
