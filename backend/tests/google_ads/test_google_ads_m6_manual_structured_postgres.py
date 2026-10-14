@@ -234,3 +234,24 @@ def test_archived_or_generic_raw_cannot_ingest(lab, monkeypatch):
     assert r.status_code == 409, r.get_json()
     assert r.json["code"] == "RAW_PAIR_PROVENANCE_INVALID"
     assert _counts(engine)["audits"] == 0
+
+
+
+def test_matching_facts_without_pair_audits_are_not_trusted(lab, monkeypatch):
+    """Matching metric rows without trusted import audit cannot count as completed."""
+    client, token, other, engine, campaign_id, group_id = lab
+    monkeypatch.setenv("GOOGLE_ADS_M6_STRUCTURED_INGESTION_ENABLED", "true")
+    first = _ingest(client, token, campaign_id, group_id)
+    assert first.status_code == 201, first.get_json()
+    # Isolated CI DB: invalidate only the pair's audit action.
+    with engine.begin() as conn:
+        conn.execute(sa.text("""
+            UPDATE warehouse_audit_logs SET action = 'INVALIDATED_CI'
+            WHERE action = 'GOOGLE_ADS_M6_PAIR_IMPORT'
+        """))
+    assert _counts(engine)["google_ads_daily_metrics"] == 27
+    assert _counts(engine)["google_ads_ad_group_daily_metrics"] == 43
+    retry = _ingest(client, token, campaign_id, group_id)
+    assert retry.status_code == 409, retry.get_json()
+    assert retry.json["code"] == "EXISTING_STRUCTURED_FACT_CONFLICT"
+    assert _counts(engine)["audits"] == 0
