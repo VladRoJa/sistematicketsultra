@@ -17,6 +17,7 @@ on:
       - 'backend/app/routes/google_ads_m6_continuity_routes.py'
       - 'backend/app/services/marketing_google_ads_m6_attribution_service.py'
       - 'backend/app/services/marketing_google_ads_m6_daily_attribution_service.py'
+      - 'backend/tests/google_ads/test_google_ads_m6_daily_branch_reader.py'
       - 'backend/app/warehouse/services/google_ads_m6_daily_pair_preflight.py'
       - 'backend/tests/google_ads/test_google_ads_m6_daily_pair_preflight.py'
       - 'backend/app/warehouse/services/google_ads_m6_manual_preview_service.py'
@@ -95,6 +96,7 @@ jobs:
             tests/google_ads/test_google_ads_m6_daily_publication_postgres.py \
             tests/google_ads/test_google_ads_m6_global_publication_reader_postgres.py \
             tests/google_ads/test_google_ads_m6_manual_publication_postgres.py \
+            tests/google_ads/test_google_ads_m6_daily_branch_reader.py \
             tests/marketing/test_google_ads_funnel_investment.py \
             tests/google_ads/test_google_ads_m5_branch_attribution_readonly.py
 
