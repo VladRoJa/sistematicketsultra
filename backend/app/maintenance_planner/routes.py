@@ -47,6 +47,10 @@ def _can_request_maintenance_closure(user) -> bool:
         return False
 
     role = str(getattr(user, "rol", "") or "").strip().upper()
+    # El permiso individual de COMPRAS habilita consulta, nunca cierres.
+    if role == "COMPRAS":
+        return False
+
     if role in {"ADMINISTRADOR", "SUPER_ADMIN", "EDITOR_CORPORATIVO"}:
         return True
 
