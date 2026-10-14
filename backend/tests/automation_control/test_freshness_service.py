@@ -103,13 +103,21 @@ def test_track_current_success_needs_mart_and_stays_unknown():
                    "latest_catalog_matched_date": None,
                    "ambiguous_current_version_dates": [],
                    "coverage": None,
+               }), \
+         patch("app.services.automation_control.freshness_service.read_track_base_sla",
+               return_value={
+                   "expected_business_date": "2026-10-13",
+                   "due_at": "2026-10-14T02:00:00-07:00",
+                   "late_at": "2026-10-14T03:00:00-07:00",
+                   "status": "UNKNOWN",
+                   "reason_code": "BASE_SUCCESS_ROSTER_HISTORY_UNVERIFIED",
                }):
         result=read_freshness(
             "track.daily",scope_global_certified=True,
             track_date="2026-10-13",now=NOW,
         )
     assert result["status"]=="UNKNOWN"
-    assert result["reason_code"]=="TRACK_HISTORICAL_ROSTER_UNVERIFIED"
+    assert result["reason_code"]=="BASE_SUCCESS_ROSTER_HISTORY_UNVERIFIED"
     assert result["latest_complete_business_date"] is None
     assert result["sources"][0]["latest_complete_business_date"]=="2026-10-13"
     assert result["sources"][1]["latest_complete_business_date"]=="2026-10-12"

@@ -131,6 +131,14 @@ def test_m1f2_never_sets_full_complete_date_without_historical_roster():
                        "matches_current_catalog":True,
                        "historical_roster_verified":False,
                    },
+               }), \
+         patch("app.services.automation_control.freshness_service.read_track_base_sla",
+               return_value={
+                   "expected_business_date": "2026-10-13",
+                   "due_at": "2026-10-14T02:00:00-07:00",
+                   "late_at": "2026-10-14T03:00:00-07:00",
+                   "status": "UNKNOWN",
+                   "reason_code": "BASE_SUCCESS_ROSTER_HISTORY_UNVERIFIED",
                }):
         empty=MagicMock()
         empty.filter.return_value=empty
@@ -144,6 +152,6 @@ def test_m1f2_never_sets_full_complete_date_without_historical_roster():
         )
     assert result["status"]=="UNKNOWN"
     assert result["latest_complete_business_date"] is None
-    assert result["expected_business_date"] is None
+    assert result["expected_business_date"]=="2026-10-13"
     assert result["latest_catalog_matched_business_date"]=="2026-10-13"
-    assert result["reason_code"]=="TRACK_HISTORICAL_ROSTER_UNVERIFIED"
+    assert result["reason_code"]=="BASE_SUCCESS_ROSTER_HISTORY_UNVERIFIED"

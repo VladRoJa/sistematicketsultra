@@ -36,7 +36,25 @@ export interface TrackCoverageReport {
   roster_basis: string;
   historical_roster_verified: false;
 }
+export interface TrackBaseSla {
+  expected_business_date:string;
+  due_at:string;
+  late_at:string;
+  phase_if_unavailable:'NOT_DUE'|'LAGGING'|'LATE';
+  timezone:string;
+  policy_key:string;
+  applies_every_day:boolean;
+  status:'NOT_DUE'|'LAGGING'|'LATE'|'UNKNOWN';
+  reason_code:string;
+  base_version_id:number|null;
+  base_version_status:string|null;
+  base_current_catalog_coverage:TrackCatalogCoverage|null;
+  historical_roster_verified:false;
+  canonical_close_sla:string;
+}
 export interface DatasetFreshness {
+  track_base_sla?:TrackBaseSla;
+  late_at?:string|null;
   latest_catalog_matched_business_date?: string|null;
   track_coverage?: TrackCoverageReport;
   module_key: FreshnessDatasetKey;

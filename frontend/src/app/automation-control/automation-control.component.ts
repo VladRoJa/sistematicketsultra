@@ -49,6 +49,11 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
   datasetEvidenceLabel(datasetKey:string):string {
     const state=this.datasetEvidence[datasetKey];
     if(!state)return 'Frescura no verificable';
+    if(datasetKey==='track.daily'){
+      if(state.status==='LATE')return 'Base nocturna atrasada';
+      if(state.status==='LAGGING')return 'Base nocturna pendiente';
+      if(state.status==='NOT_DUE')return 'Base nocturna: aún no vence';
+    }
     if(state.latest_complete_business_date)
       return 'Corte conjunto: '+state.latest_complete_business_date;
     if(state.latest_catalog_matched_business_date)
@@ -62,7 +67,9 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
     if(!evidence)return 'No se pudo consultar evidencia de cortes.';
     const coverage=evidence.track_coverage?.coverage;
     if(!coverage)return evidence.detail;
-    return evidence.detail+' Filas Track: '+coverage.actual_branch_count+
+    const deadline=evidence.track_base_sla?.due_at;
+    const slaText=deadline?' Límite base nocturna: '+deadline+'.':'';
+    return evidence.detail+slaText+' Filas Track: '+coverage.actual_branch_count+
       '/'+coverage.expected_branch_count+' sucursales; faltantes: '+
       coverage.missing_branch_codes.length+', sobrantes: '+
       coverage.unexpected_branch_codes.length+'.';
