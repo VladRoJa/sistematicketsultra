@@ -14,7 +14,7 @@ COMMON = "f62a1b9d4c07"
 
 def test_m6_and_main_have_exactly_one_alembic_head():
     script = ScriptDirectory(str(MIGRATIONS))
-    assert script.get_heads() == (FINAL,)
+    assert list(script.get_heads()) == [FINAL]
     join = script.get_revision(FINAL)
     assert set(join.down_revision) == {MAIN, M6}
     revisions = {r.revision for r in script.walk_revisions()}
