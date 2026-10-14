@@ -286,10 +286,25 @@ def _wait_until_url_not_contains(page: Page, fragment: str, timeout_ms: int) -> 
 
 
 def _read_locator_value(locator, timeout_ms: int = 1000) -> str:
+    """Read a supported SMS editor, failing closed when the DOM cannot be read."""
+    timeout = min(timeout_ms, 1000)
     try:
-        return locator.input_value(timeout=min(timeout_ms, 1000)) or ""
-    except Exception:
-        return ""
+        contenteditable = locator.get_attribute("contenteditable", timeout=timeout)
+        if contenteditable is not None and contenteditable.strip().lower() != "false":
+            value = locator.inner_text(timeout=timeout)
+        else:
+            value = locator.input_value(timeout=timeout)
+    except Exception as exc:
+        raise GoogleMessagesSmsSenderError(
+            "No se pudo verificar el contenido del editor de Google Messages."
+        ) from exc
+
+    if not isinstance(value, str):
+        raise GoogleMessagesSmsSenderError(
+            "Google Messages devolvió un contenido de editor inválido."
+        )
+
+    return value
 
 
 def _assert_message_box_contains_expected_text(locator, expected: str, timeout_ms: int) -> None:
@@ -361,10 +376,7 @@ def _wait_until_locator_value_contains(locator, expected: str, timeout_ms: int) 
     last_value = ""
 
     while time.monotonic() < deadline:
-        try:
-            last_value = locator.input_value(timeout=500)
-        except Exception:
-            last_value = ""
+        last_value = _read_locator_value(locator, timeout_ms=500)
 
         if expected in last_value:
             return
@@ -381,10 +393,7 @@ def _wait_until_locator_empty(locator, timeout_ms: int) -> None:
     last_value = None
 
     while time.monotonic() < deadline:
-        try:
-            last_value = locator.input_value(timeout=500)
-        except Exception:
-            last_value = None
+        last_value = _read_locator_value(locator, timeout_ms=500)
 
         if last_value == "":
             return
