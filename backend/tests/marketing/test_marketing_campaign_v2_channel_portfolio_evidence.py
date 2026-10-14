@@ -42,6 +42,8 @@ def test_claim_valid_and_explicitly_unverified():
     {"business_id": "0"},
     {"waba_id": "not-a-waba"},
     {"state": "VERIFIED"},
+    {"state": []},
+    {"evidence_kind": {}},
     {"state": "WITHDRAWN", "waba_id": "123456789"},
     {"state": "WITHDRAWN", "business_id": "123456789"},
     {"evidence_kind": "SECRET"},
