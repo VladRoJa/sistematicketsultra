@@ -43,6 +43,10 @@ from app.services.marketing_google_ads_funnel_service import (
 from app.services.marketing_google_ads_branch_attribution_service import (
     read_google_ads_branch_attribution,
 )
+from app.services.marketing_google_ads_m6_attribution_service import (
+    read_google_ads_m6_branch_attribution,
+    combine_m5_m6,
+)
 from app.services.marketing_sales_funnel_service import (
     MATCH_WINDOW_DAYS,
     ORIGIN_IVENTAS_META,
@@ -602,7 +606,7 @@ def _attach_google_ads_branch_attribution(
     *, payload: dict, month_start: date, cutoff_date: date,
     access: MarketingAccess,
 ) -> None:
-    """M5 is supplemental: errors never invalidate the operational Funnel.
+    """Google Ads M5/M6 are supplemental: errors never invalidate Funnel.
 
     Fail closed without exposing amounts or account totals, and log the
     underlying error for investigation. The existing payload is untouched.
@@ -613,9 +617,22 @@ def _attach_google_ads_branch_attribution(
             cutoff_date=cutoff_date,
             access=access,
         )
+        # M5 stays source-locked to 21499 through 2026-10-08. M6 is a
+        # separate approved version and can only add later covered days.
+        if month_start <= date(2026, 10, 12) and cutoff_date >= date(2026, 10, 9):
+            newer = read_google_ads_m6_branch_attribution(
+                month_start=month_start,
+                cutoff_date=cutoff_date,
+                access=access,
+            )
+            evidence = combine_m5_m6(
+                evidence, newer,
+                month_start=month_start, cutoff_date=cutoff_date,
+                is_global=access.is_global,
+            )
     except Exception:
         logging.getLogger(__name__).exception(
-            "Google Ads M5 reader unavailable at selected Funnel cutoff."
+            "Google Ads M5/M6 reader unavailable at selected Funnel cutoff."
         )
         days = (cutoff_date - month_start).days + 1
         evidence = {
