@@ -604,6 +604,9 @@ export interface CampaignV2PreflightQuota {
     portfolio_key: string;
     recipients: number;
     attested_remaining: number | null;
+    operational_cap?: number | null;
+    suite_attempted?: number;
+    suite_reserved?: number;
   }>;
   batches: Array<{
     sucursal_canon: string;
@@ -613,6 +616,13 @@ export interface CampaignV2PreflightQuota {
     phone_alias: string | null;
     reset_timezone: string | null;
     reported_nominal_channel_limit: number | null;
+    operator_channel_cap?: number | null;
+    operator_portfolio_cap?: number | null;
+    policy_revision_id?: number | null;
+    suite_channel_attempted?: number;
+    suite_portfolio_attempted?: number;
+    suite_channel_reserved?: number;
+    suite_portfolio_reserved?: number;
     channel_remaining: number | null;
     portfolio_remaining: number | null;
     channel_evidence_id: number | null;
