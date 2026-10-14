@@ -18,6 +18,7 @@ from app.models.marketing import (
     MarketingCampaignV2ChannelBindingORM,
     MarketingCampaignV2ORM,
     MarketingCampaignV2RecipientEvidenceORM,
+    MarketingCampaignV2RecipientDispatchExclusionORM,
     MarketingCampaignV2RecipientORM,
     MarketingCampaignV2TemplateORM,
 )
@@ -65,6 +66,7 @@ def session():
     MarketingCampaignV2ORM.__table__.to_metadata(metadata)
     MarketingCampaignV2RecipientORM.__table__.to_metadata(metadata)
     MarketingCampaignV2RecipientEvidenceORM.__table__.to_metadata(metadata)
+    MarketingCampaignV2RecipientDispatchExclusionORM.__table__.to_metadata(metadata)
     metadata.create_all(engine)
 
     with Session(engine) as value:
