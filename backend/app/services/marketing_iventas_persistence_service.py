@@ -55,6 +55,7 @@ def create_iventas_sync_run_running(
     date_to: date,
     branches_requested: int,
     started_at: datetime | None = None,
+    scheduler_slot_at: datetime | None = None,
     session: Any | None = None,
 ) -> MarketingIventasSyncRunORM:
     """Crea y confirma un sync_run RUNNING.
@@ -109,6 +110,13 @@ def create_iventas_sync_run_running(
             "started_at debe tener timezone."
         )
 
+    # Solo los runs del scheduler llevan slot; los manuales/legacy siguen NULL.
+    if scheduler_slot_at is not None:
+        if scheduler_slot_at.tzinfo is None or scheduler_slot_at.utcoffset() is None:
+            raise ValueError("scheduler_slot_at debe incluir timezone.")
+        if scheduler_slot_at.date() != date_to:
+            raise ValueError("scheduler_slot_at debe corresponder a date_to.")
+
     session_value = _session_or_default(
         session
     )
@@ -135,6 +143,7 @@ def create_iventas_sync_run_running(
         aliases_resolved=0,
         aliases_unresolved=0,
         is_canonical=False,
+        scheduler_slot_at=scheduler_slot_at,
     )
 
     session_value.add(sync_run)
