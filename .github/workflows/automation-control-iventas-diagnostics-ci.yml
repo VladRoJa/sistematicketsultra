@@ -90,6 +90,7 @@ jobs:
             app/services/marketing_meta_run_sync_service.py \
             app/services/marketing_scheduler_worker.py \
             app/services/automation_control/marketing_slot_sla_service.py \
+            app/services/automation_control/track_sla_certification_evidence_service.py \
             app/warehouse/services/track_version_roster_capture_service.py \
             app/warehouse/services/track_daily_mart_service.py \
             app/warehouse/services/track_effective_roster_service.py \
