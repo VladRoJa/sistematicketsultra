@@ -155,6 +155,7 @@ def read_freshness(
     *,
     scope_global_certified: bool,
     month: str | None = None,
+    cutoff_date: str | None = None,
     track_date: str | None = None,
     now: datetime | None = None,
 ) -> dict:
@@ -176,12 +177,20 @@ def read_freshness(
             raise ValueError("month debe tener formato YYYY-MM.")
         if period > today.replace(day=1) or period < date(2026, 1, 1):
             raise ValueError("month fuera de rango.")
-        cutoff = min(
-            today,
+        last_day = (
             (period.replace(year=period.year + 1, month=1)
              if period.month == 12
-             else period.replace(month=period.month + 1)) - timedelta(days=1),
+             else period.replace(month=period.month + 1)) - timedelta(days=1)
         )
+        cutoff = min(today, last_day)
+        if cutoff_date is not None:
+            try:
+                selected = date.fromisoformat(cutoff_date)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("cutoff_date debe ser YYYY-MM-DD.") from exc
+            if not period <= selected <= cutoff:
+                raise ValueError("cutoff_date fuera del periodo solicitado.")
+            cutoff = selected
     else:
         try:
             cutoff = date.fromisoformat(track_date) if track_date else today
