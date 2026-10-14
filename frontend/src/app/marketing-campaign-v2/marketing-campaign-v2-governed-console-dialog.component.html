@@ -1,0 +1,112 @@
+<h2 mat-dialog-title>Despacho gobernado · Campaña #{{ data.campaignId }}</h2>
+<mat-dialog-content class="console">
+  <p><strong>{{ data.campaignName }}</strong></p>
+  <p class="notice">Cada etapa es independiente. Aprobar, materializar y autorizar NO envían. El envío real exige revisión individual de un child y confirmación escrita. Sin reintentos ni liberación automática de HELD.</p>
+  <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy">Actualizar estado</button>
+  <span *ngIf="working" role="status">Operación: {{ working }}</span>
+  <p *ngIf="error" role="alert" class="error">{{ error }}</p>
+  <p *ngIf="notice" role="status">{{ notice }}</p>
+  <p *ngIf="uncertainResult" role="alert" class="error">Resultado posiblemente ambiguo: esta sesión bloquea nuevos envíos. Conciliar antes de actuar.</p>
+
+  <section class="step">
+    <h3>1 · Preflight, presupuesto y cuota</h3>
+    <mat-form-field appearance="outline">
+      <mat-label>Plantilla iVentas</mat-label>
+      <mat-select [formControl]="templateId" [disabled]="busy || hasApproval">
+        <mat-option *ngFor="let template of templates" [value]="template.id">{{ template.label }} · {{ template.template_name }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+    <button mat-stroked-button type="button" (click)="runPreflight()" [disabled]="busy || hasApproval || !templateId.value">Recalcular preflight</button>
+    <ng-container *ngIf="preflight as plan">
+      <p>Estado: <strong>{{ plan.ready ? 'READY' : 'BLOQUEADO' }}</strong> · Frozen {{ plan.frozen_count }} · Sendable {{ plan.sendable_count }}
+        · Blacklist {{ plan.suppressed.blacklist }} · Exclusiones {{ plan.suppressed.campaign_exclusions }}</p>
+      <p>Costo MXN (estimado por operador): {{ plan.budget?.total_estimated_mxn || 'SIN TARIFA' }} · {{ plan.budget?.status || 'INCOMPLETO' }}
+        · Cupo: {{ plan.quota?.status || 'INCOMPLETO' }}</p>
+      <p class="fingerprint">Fingerprint: {{ plan.dispatch_fingerprint }}</p>
+      <p class="fingerprint">Cotización SHA: {{ plan.budget?.quote_fingerprint || 'Falta' }}</p>
+      <p class="hint">Estas cuotas no son saldos verificados de Meta. Los costos no representan facturas de iVentas.</p>
+      <div class="batch" *ngFor="let batch of plan.batches">
+        <strong>{{ batch.sucursal_canon }}</strong> · {{ batch.recipient_count }} · {{ batch.provider_channel_id || 'Sin canal' }}
+        <small *ngIf="batch.blocked_reasons.length">{{ batch.blocked_reasons.join(', ') }}</small>
+        <mat-checkbox [formControl]="holdSelected[batch.sucursal_canon]">Mantener HELD</mat-checkbox>
+        <mat-form-field appearance="outline" *ngIf="holdSelected[batch.sucursal_canon].value">
+          <mat-label>Evidencia documental HELD</mat-label>
+          <input matInput maxlength="255" [formControl]="holdSource[batch.sucursal_canon]">
+        </mat-form-field>
+      </div>
+      <div class="confirmation">
+        <mat-form-field appearance="outline"><mat-label>Escribe {{ approvalWord }}</mat-label>
+          <input matInput [formControl]="approvalPhrase" autocomplete="off">
+        </mat-form-field>
+        <button mat-flat-button color="primary" type="button" (click)="approve()" [disabled]="!canApprove">Aprobar costo y reservar · SIN ENVÍO</button>
+      </div>
+    </ng-container>
+  </section>
+
+  <section class="step">
+    <h3>2 · Reserva y materialización</h3>
+    <ng-container *ngIf="approval?.approval as approval; else noneApproved">
+      <p>Reserva #{{ approval.approval_id }} · {{ approval.status }} · {{ approval.approved_recipients }} destinatarios
+        · MXN {{ approval.approved_estimated_mxn }} · Expira {{ approval.expires_at }}</p>
+      <div class="confirmation">
+        <mat-form-field appearance="outline"><mat-label>Escribe {{ materializeWord }}</mat-label>
+          <input matInput [formControl]="materializePhrase" autocomplete="off">
+        </mat-form-field>
+        <button mat-stroked-button type="button" (click)="materialize()" [disabled]="!canMaterialize">Crear children READY/HELD · SIN ENVÍO</button>
+      </div>
+    </ng-container>
+    <ng-template #noneApproved><p>Sin aprobación ni reserva vigente.</p></ng-template>
+  </section>
+
+  <section class="step">
+    <h3>3 · Autorización independiente</h3>
+    <ng-container *ngIf="reviewReady as review; else noneReviewed">
+      <p class="fingerprint">Digest: {{ review.manifest_digest }}</p>
+      <p>Destinatarios READY: {{ approvedReadyCount }}</p>
+      <p class="manifest" *ngFor="let batch of review.manifest.batches">{{ batch.sucursal_canon }} · {{ batch.planned_status }} · {{ batch.recipients }}</p>
+      <p *ngIf="review.execution">Ejecución #{{ review.execution.execution_id }}: {{ review.execution.status }}.</p>
+      <div class="confirmation" *ngIf="!review.execution">
+        <mat-form-field appearance="outline"><mat-label>Escribe {{ authorizationWord }}</mat-label>
+          <input matInput [formControl]="authorizationPhrase" autocomplete="off">
+        </mat-form-field>
+        <button mat-stroked-button type="button" (click)="authorize()" [disabled]="!canAuthorize">Autorizar · SIN ENVÍO</button>
+      </div>
+    </ng-container>
+    <ng-template #noneReviewed><p>Sin manifiesto de autorización.</p></ng-template>
+  </section>
+
+  <section class="step">
+    <h3>4 · Monitor y ejecución manual</h3>
+    <ng-container *ngIf="monitor as monitorData">
+      <p><strong>{{ monitorData.status }}</strong> · Próxima acción: {{ monitorData.next_manual_action }}</p>
+      <p>Children {{ monitorData.children_count }} · Evidencia interna actual: {{ monitorData.quota.all_current ? 'Sí' : 'No' }}</p>
+      <div class="table-scroll"><table>
+        <thead><tr><th>Child</th><th>Sucursal / canal</th><th>Contactos</th><th>Estado</th><th>Observación</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let child of monitorData.children">
+            <td>#{{ child.child_id }}</td>
+            <td>{{ child.sucursal_canon }}<small>{{ child.provider_channel_id }}</small></td>
+            <td>{{ child.recipient_count }}</td><td>{{ child.status }}</td>
+            <td><strong *ngIf="child.needs_manual_review" class="error">Revisión manual</strong><small>{{ child.error_code }}</small></td>
+          </tr>
+          <tr *ngIf="!monitorData.children.length"><td colspan="5">Sin children</td></tr>
+        </tbody>
+      </table></div>
+      <div class="danger" *ngIf="nextReadyChild as child">
+        <h4>Envío REAL a través de iVentas · SOLO UN CHILD</h4>
+        <p>#{{ child.child_id }} · {{ child.sucursal_canon }} · {{ child.recipient_count }} destinatarios. Nunca repitas el POST si el resultado es incierto.</p>
+        <mat-checkbox [formControl]="executionCheckbox">Verifiqué la audiencia, plantilla, canal, costo, cuotas y autorización; autorizo enviar este child específico.</mat-checkbox>
+        <div class="confirmation">
+          <mat-form-field appearance="outline"><mat-label>Escribe {{ sendWord }}</mat-label>
+            <input matInput [formControl]="executionPhrase" autocomplete="off">
+          </mat-form-field>
+          <button mat-flat-button color="warn" type="button" (click)="executeOne()" [disabled]="!canExecute">
+            Enviar únicamente child #{{ child.child_id }}
+          </button>
+        </div>
+      </div>
+      <p *ngIf="!nextReadyChild" class="hint">No hay child elegible. Estados ambiguos exigen conciliación manual antes de cualquier acción.</p>
+    </ng-container>
+  </section>
+</mat-dialog-content>
+<mat-dialog-actions align="end"><button mat-button type="button" (click)="close()" [disabled]="busy">Cerrar</button></mat-dialog-actions>
