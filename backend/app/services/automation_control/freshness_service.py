@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 
 from app.extensions import db
 from app.models.warehouse import TrackDailyVersionORM, TrackDailyMartORM
+from app.services.automation_control.track_coverage_service import read_track_current_catalog_coverage
 from app.services.marketing_sales_funnel_cutoff_service import (
     _crm_history_available,
     _iventas_cutoff_dates,
@@ -143,10 +144,21 @@ def _track_evidence(payload: dict, *, cutoff: date) -> None:
             ),
         },
     ]
-    payload["reason_code"] = "TRACK_BRANCH_COVERAGE_UNVERIFIED"
+    coverage = read_track_current_catalog_coverage(cutoff=cutoff)
+    payload["track_coverage"] = coverage
+    payload["latest_catalog_matched_business_date"] = (
+        coverage["latest_catalog_matched_date"]
+    )
+    if coverage["ambiguous_current_version_dates"]:
+        payload["reason_code"] = "AMBIGUOUS_CURRENT_VERSION"
+    elif coverage["coverage"] and not coverage["coverage"]["matches_current_catalog"]:
+        payload["reason_code"] = "TRACK_CURRENT_CATALOG_MISMATCH"
+    else:
+        payload["reason_code"] = "TRACK_HISTORICAL_ROSTER_UNVERIFIED"
     payload["detail"] = (
-        "Se verifican versiones vigentes exitosas y filas vinculadas de Track. "
-        "Aún falta certificar la cobertura por sucursal y el SLA."
+        "Cobertura de filas comparada contra el catálogo Track activo actual. "
+        "El catálogo no tiene vigencia histórica por fecha; coincidencia con "
+        "el catálogo actual no certifica todas las sucursales del corte ni su SLA."
     )
 
 

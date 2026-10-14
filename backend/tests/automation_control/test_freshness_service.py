@@ -97,13 +97,19 @@ def test_track_current_success_needs_mart_and_stays_unknown():
     query_mart.distinct.return_value=query_mart
     query_mart.all.return_value=[(31,)]
     with patch("app.services.automation_control.freshness_service.db.session.query",
-               side_effect=[query_versions,query_mart]):
+               side_effect=[query_versions,query_mart]), \
+         patch("app.services.automation_control.freshness_service.read_track_current_catalog_coverage",
+               return_value={
+                   "latest_catalog_matched_date": None,
+                   "ambiguous_current_version_dates": [],
+                   "coverage": None,
+               }):
         result=read_freshness(
             "track.daily",scope_global_certified=True,
             track_date="2026-10-13",now=NOW,
         )
     assert result["status"]=="UNKNOWN"
-    assert result["reason_code"]=="TRACK_BRANCH_COVERAGE_UNVERIFIED"
+    assert result["reason_code"]=="TRACK_HISTORICAL_ROSTER_UNVERIFIED"
     assert result["latest_complete_business_date"] is None
     assert result["sources"][0]["latest_complete_business_date"]=="2026-10-13"
     assert result["sources"][1]["latest_complete_business_date"]=="2026-10-12"
