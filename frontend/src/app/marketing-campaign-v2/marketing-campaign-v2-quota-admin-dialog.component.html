@@ -1,7 +1,7 @@
 <h2 mat-dialog-title>Control de capacidad WhatsApp · evidencia operativa</h2>
 <mat-dialog-content class="quota-admin">
-  <p class="quota-intro"><strong>Evidencia manual, no cupo en tiempo real.</strong>
-    Suite no consulta a Meta ni garantiza disponibilidad. Esta pantalla nunca habilita envíos.</p>
+  <p class="quota-intro"><strong>Control interno de volumen, no saldo de Meta.</strong>
+    Configura máximos preventivos por canal y portafolio compartido. Suite contará únicamente sus propios intentos de envío y reservas en una ventana móvil de 24 horas. Los envíos externos y el cupo real de Meta son desconocidos; esta pantalla nunca habilita envíos.</p>
   <div class="evidence-summary" *ngIf="evidence as summary" aria-label="Registros de capacidad">
     <span><strong>{{ summary.policies.length }}</strong> políticas registradas</span>
     <span><strong>{{ summary.attestations.length }}</strong> observaciones históricas</span>
@@ -12,8 +12,8 @@
 
   <section class="quota-section">
     <div class="quota-heading">
-      <div><h3>1. Asociación canal / portafolio</h3>
-        <p>Vincula los canales al portafolio compartido. Usa la misma clave si varios canales pertenecen al mismo portafolio.</p></div>
+      <div><h3>1. Política de volumen interno</h3>
+        <p>Asocia el canal y el portafolio. Define dos máximos internos explícitos, independientemente del límite nominal mostrado por iVentas.</p></div>
       <button mat-stroked-button type="button" (click)="togglePolicyForm()" [disabled]="busy"
         [attr.aria-expanded]="showPolicyForm">{{ showPolicyForm ? 'Ocultar formulario' : 'Nueva política' }}</button>
     </div>
@@ -45,7 +45,15 @@
           placeholder="No es cupo restante">
       </mat-form-field>
       <mat-form-field appearance="outline">
-        <mat-label>Zona de reinicio (IANA)</mat-label>
+        <mat-label>Máximo interno / 24 h por canal</mat-label>
+        <input matInput inputmode="numeric" [formControl]="operationalChannelCap" placeholder="Decisión del operador">
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Máximo interno / 24 h por portafolio compartido</mat-label>
+        <input matInput inputmode="numeric" [formControl]="operationalPortfolioCap" placeholder="Mismo máximo para los canales del portafolio">
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Zona de referencia (IANA)</mat-label>
         <input matInput [formControl]="timezone" placeholder="America/Tijuana">
       </mat-form-field>
       <mat-form-field appearance="outline">
@@ -59,10 +67,10 @@
 
   <section class="quota-section">
     <div class="quota-heading">
-      <div><h3>2. Cupo reportado por canal y portafolio</h3>
-        <p>Registra evidencia vigente de ambos ámbitos, con mensajes restantes, fuente y caducidad.</p></div>
+      <div><h3>2. Observaciones externas (opcional)</h3>
+        <p>Registra un saldo de Meta solo cuando exista evidencia real. No se exige para la nueva política de límites internos.</p></div>
       <button mat-stroked-button type="button" (click)="toggleCapacityForm()" [disabled]="busy"
-        [attr.aria-expanded]="showCapacityForm">{{ showCapacityForm ? 'Ocultar formulario' : 'Nueva observación' }}</button>
+        [attr.aria-expanded]="showCapacityForm">{{ showCapacityForm ? 'Ocultar formulario' : 'Registrar saldo conocido' }}</button>
     </div>
     <p class="quota-tip" *ngIf="showCapacityForm">Primero registra la política del canal; después utiliza la clave exacta del canal o portafolio y fechas ISO con zona horaria.</p>
     <div class="quota-grid" *ngIf="showCapacityForm">
@@ -106,7 +114,7 @@
     <h3>Histórico de referencia</h3>
     <p>{{ data.policies.length }} políticas y {{ data.attestations.length }} observaciones
       en las últimas revisiones. Los registros son históricos; actualizar no los elimina.</p>
-    <p class="quota-empty" *ngIf="!data.policies.length && !data.attestations.length">Aún no hay evidencias. Registra una política y luego las observaciones verificadas del canal y portafolio.</p>
+    <p class="quota-empty" *ngIf="!data.policies.length && !data.attestations.length">Aún no hay políticas. Registra límites internos por canal/portafolio para habilitar el control preventivo; no necesitas capturar un saldo Meta desconocido.</p>
     <div class="quota-scroll" *ngIf="data.policies.length">
       <table>
         <thead><tr><th>Canal</th><th>Portafolio</th><th>Cuenta/número</th><th>Nominal</th><th>Fuente</th></tr></thead>

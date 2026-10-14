@@ -95,9 +95,11 @@ def _locked_review(*, campaign_id: int, session: Any, now: datetime,
         if manifest[batch.sucursal_canon]["planned_status"] == "READY"
     )
     scopes_plan = replace(plan, batches=original_ready)
+    approved_basis = (approval.manifest_json or {}).get("basis")
     _, scopes_before, _, _ = _assess_scopes(
         scopes_plan, session=session, timestamp=now,
-        ignore_campaign_id=campaign_id if ignore_self else None,
+        ignore_campaign_id=campaign_id if ignore_self or approved_basis == "SUITE_OPERATOR_ROLLING_24H_V1" else None,
+        basis_preference=approved_basis,
     )
     for kind, key in sorted(scopes_before):
         session.execute(
@@ -129,7 +131,8 @@ def _locked_review(*, campaign_id: int, session: Any, now: datetime,
     scopes_plan = replace(plan, batches=original_ready)
     _, scopes, evidence_ids, quota_rows = _assess_scopes(
         scopes_plan, session=session, timestamp=effective_now,
-        ignore_campaign_id=campaign_id if ignore_self else None,
+        ignore_campaign_id=campaign_id if ignore_self or approved_basis == "SUITE_OPERATOR_ROLLING_24H_V1" else None,
+        basis_preference=approved_basis,
     )
     if dict(scopes_before) != dict(scopes):
         raise GovernedDispatchConflict("Cuota cambió durante bloqueo.")
@@ -142,7 +145,7 @@ def _locked_review(*, campaign_id: int, session: Any, now: datetime,
     for scope, count in scopes.items():
         row = by_scope[scope]
         if (int(row.reserved_messages) != int(count) or
-                int(row.attestation_id) != int(evidence_ids[scope]) or
+                row.attestation_id != evidence_ids[scope] or
                 _database_date(row.reserved_until) <= effective_now):
             raise GovernedDispatchConflict("Reserva de cuota incompatible o vencida.")
     for batch in original_ready:
@@ -150,7 +153,10 @@ def _locked_review(*, campaign_id: int, session: Any, now: datetime,
         current = quota_rows[batch.sucursal_canon]
         if (expected["channel_attestation_id"] != current["channel_evidence_id"] or
                 expected["portfolio_attestation_id"] != current["portfolio_evidence_id"] or
-                expected["portfolio_key"] != current["portfolio_key"]):
+                expected["portfolio_key"] != current["portfolio_key"] or
+                expected.get("policy_revision_id") != current.get("policy_revision_id") or
+                expected.get("operator_channel_cap") != current.get("operator_channel_cap") or
+                expected.get("operator_portfolio_cap") != current.get("operator_portfolio_cap")):
             raise GovernedDispatchConflict("Cambió la evidencia aprobada por lote.")
     children = _load_campaign_rows(campaign_id=campaign_id, session=session)
     return approval, plan, manifest, children, manifest_digest(approval.manifest_json)

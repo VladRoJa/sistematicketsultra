@@ -1718,6 +1718,7 @@ def register_campaign_v2_quota_policy_endpoint():
         payload = _parse_payload({
             "provider_channel_id", "portfolio_key", "account_key",
             "phone_alias", "nominal_channel_limit", "reset_timezone",
+            "operational_channel_cap", "operational_portfolio_cap",
             "source_reference",
         })
         return jsonify(register_quota_policy(
@@ -1726,6 +1727,8 @@ def register_campaign_v2_quota_policy_endpoint():
             account_key=payload.get("account_key"),
             phone_alias=payload.get("phone_alias"),
             nominal_channel_limit=payload.get("nominal_channel_limit"),
+            operational_channel_cap=payload.get("operational_channel_cap"),
+            operational_portfolio_cap=payload.get("operational_portfolio_cap"),
             reset_timezone=payload.get("reset_timezone"),
             source_reference=payload.get("source_reference"),
             actor_user_id=int(user.id), session=db.session,

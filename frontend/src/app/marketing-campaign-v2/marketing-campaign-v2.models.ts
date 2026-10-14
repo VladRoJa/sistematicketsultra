@@ -548,6 +548,8 @@ export interface CampaignV2QuotaPolicyRevision {
   account_key: string;
   phone_alias: string;
   nominal_channel_limit: number | null;
+  operational_channel_cap: number | null;
+  operational_portfolio_cap: number | null;
   reset_timezone: string;
   valid_from: string;
   source_reference: string;
@@ -575,6 +577,8 @@ export interface CampaignV2QuotaPolicyRequest {
   account_key: string;
   phone_alias: string;
   nominal_channel_limit: number | null;
+  operational_channel_cap: number;
+  operational_portfolio_cap: number;
   reset_timezone: string;
   source_reference: string;
 }
@@ -590,7 +594,7 @@ export interface CampaignV2QuotaAttestationRequest {
 }
 
 export interface CampaignV2PreflightQuota {
-  basis: 'OPERATOR_ATTESTED_NOT_META_VERIFIED';
+  basis: 'OPERATOR_ATTESTED_NOT_META_VERIFIED' | 'SUITE_OPERATOR_ROLLING_24H_V1';
   status: 'REVIEWABLE' | 'INCOMPLETE';
   send_authorized: false;
   as_of: string;
@@ -600,6 +604,9 @@ export interface CampaignV2PreflightQuota {
     portfolio_key: string;
     recipients: number;
     attested_remaining: number | null;
+    operational_cap?: number | null;
+    suite_attempted?: number;
+    suite_reserved?: number;
   }>;
   batches: Array<{
     sucursal_canon: string;
@@ -609,6 +616,13 @@ export interface CampaignV2PreflightQuota {
     phone_alias: string | null;
     reset_timezone: string | null;
     reported_nominal_channel_limit: number | null;
+    operator_channel_cap?: number | null;
+    operator_portfolio_cap?: number | null;
+    policy_revision_id?: number | null;
+    suite_channel_attempted?: number;
+    suite_portfolio_attempted?: number;
+    suite_channel_reserved?: number;
+    suite_portfolio_reserved?: number;
     channel_remaining: number | null;
     portfolio_remaining: number | null;
     channel_evidence_id: number | null;

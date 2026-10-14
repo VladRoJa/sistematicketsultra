@@ -528,6 +528,8 @@ class MarketingCampaignV2QuotaPolicyRevisionORM(db.Model):
     account_key = db.Column(db.String(128), nullable=False)
     phone_alias = db.Column(db.String(128), nullable=False)
     nominal_channel_limit = db.Column(db.Integer, nullable=True)
+    operational_channel_cap = db.Column(db.Integer, nullable=True)
+    operational_portfolio_cap = db.Column(db.Integer, nullable=True)
     reset_timezone = db.Column(db.String(80), nullable=False)
     valid_from = db.Column(db.DateTime(timezone=True), nullable=False)
     source_reference = db.Column(db.String(255), nullable=False)
@@ -543,6 +545,11 @@ class MarketingCampaignV2QuotaPolicyRevisionORM(db.Model):
         db.CheckConstraint(
             "nominal_channel_limit IS NULL OR nominal_channel_limit > 0",
             name="ck_mkt_v2_quota_nominal_positive",
+        ),
+        db.CheckConstraint(
+            "(operational_channel_cap IS NULL AND operational_portfolio_cap IS NULL) OR "
+            "(operational_channel_cap IS NOT NULL AND operational_portfolio_cap IS NOT NULL AND operational_channel_cap > 0 AND operational_portfolio_cap > 0)",
+            name="ck_mkt_v2_operational_caps_pair",
         ),
         db.CheckConstraint(
             "length(trim(portfolio_key)) > 0 AND length(trim(account_key)) > 0 "
@@ -804,7 +811,7 @@ class MarketingCampaignV2CapacityReservationORM(db.Model):
     attestation_id = db.Column(
         db.BigInteger,
         db.ForeignKey("marketing_campaign_v2_quota_capacity_attestations.id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
     )
     scope_kind = db.Column(db.String(20), nullable=False)
     scope_key = db.Column(db.String(255), nullable=False)
