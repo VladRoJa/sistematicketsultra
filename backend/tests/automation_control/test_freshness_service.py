@@ -74,7 +74,7 @@ def test_selected_historical_cut_cannot_use_later_records():
 def test_scoped_access_never_queries_or_leaks_global_dates():
     patches=_patch_sources()
     try:
-        for p in patches: p.start()
+        mocks = [p.start() for p in patches]
         result=read_freshness(
             "marketing.sales_funnel",scope_global_certified=False,
             month="2026-10",now=NOW,
@@ -82,8 +82,8 @@ def test_scoped_access_never_queries_or_leaks_global_dates():
         assert result["reason_code"]=="SCOPE_NOT_CERTIFIED"
         assert result["sources"]==[]
         assert result["latest_complete_business_date"] is None
-        assert all(not p.is_local for p in [])  # No use of private branch data.
-        for p in patches: p.assert_not_called() if hasattr(p,"assert_not_called") else None
+        for mock in mocks:
+            mock.assert_not_called()
     finally:
         for p in reversed(patches): p.stop()
 
