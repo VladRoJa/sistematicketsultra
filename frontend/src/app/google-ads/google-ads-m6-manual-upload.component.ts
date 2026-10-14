@@ -108,8 +108,8 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
     const uploads = this.rawResult?.uploads;
     return !this.busy && this.isStaged && this.acceptedStructured
       && this.structuredResult === null
-      && Number.isInteger(uploads?.['google_ads_campaign_daily']?.upload_id)
-      && Number.isInteger(uploads?.['google_ads_ad_group_daily']?.upload_id);
+      && Number.isInteger(uploads?.['google_ads_campaign_daily']?.upload_id ?? null)
+      && Number.isInteger(uploads?.['google_ads_ad_group_daily']?.upload_id ?? null);
   }
 
   get ingestButtonLabel(): string {

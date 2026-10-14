@@ -105,13 +105,12 @@
         (click)="ingestStructured()">{{ ingestButtonLabel }}</button>
     </div>
   </section>
-</section>
-
-<section class="manual-ads__structured-summary" *ngIf="structuredResult as structured">
+  <section class="manual-ads__structured-summary" *ngIf="structuredResult as structured">
   <h3>Resultado de ingesta · {{ structured.status }}</h3>
   <p>{{ structured.business_date }} · {{ structured.campaign_rows }} campañas ·
     {{ structured.group_rows }} grupos · Versión de identidades #{{ structured.approval_version_id }}</p>
   <p>Importe de campañas: {{ money(structured.account_cost_mxn) }} ·
     Asignado: {{ money(structured.branch_cost_mxn) }}</p>
-  <p><strong>Sin publicación:</strong> Funnel mantiene su proceso independiente de aprobación.</p>
+    <p><strong>Sin publicación:</strong> Funnel mantiene su proceso independiente de aprobación.</p>
+  </section>
 </section>
