@@ -566,6 +566,38 @@ export interface CampaignV2QuotaAttestation {
   source_reference: string;
 }
 
+export type CampaignV2ChannelPortfolioEvidenceKind =
+  | 'OPERATOR_STATEMENT' | 'META_DOCUMENT' | 'IVENTAS_CONFIRMATION';
+
+export interface CampaignV2ChannelPortfolioEvidence {
+  revision_id: number;
+  provider_channel_id: string;
+  business_id: string | null;
+  waba_id: string | null;
+  state: 'DECLARED' | 'WITHDRAWN';
+  evidence_kind: CampaignV2ChannelPortfolioEvidenceKind;
+  source_reference: string;
+  created_by_user_id: number;
+  created_at: string;
+  api_verified: false;
+}
+
+export interface CampaignV2ChannelPortfolioEvidenceRequest {
+  provider_channel_id: string;
+  business_id: string | null;
+  waba_id: string | null;
+  state: 'DECLARED' | 'WITHDRAWN';
+  evidence_kind: CampaignV2ChannelPortfolioEvidenceKind;
+  source_reference: string;
+  expected_revision_id: number | null;
+}
+
+export interface CampaignV2ChannelPortfolioEvidenceResponse {
+  rows: CampaignV2ChannelPortfolioEvidence[];
+  history: CampaignV2ChannelPortfolioEvidence[];
+  history_is_limited: boolean;
+}
+
 export interface CampaignV2PortfolioReference {
   revision_id: number;
   business_id: string;
