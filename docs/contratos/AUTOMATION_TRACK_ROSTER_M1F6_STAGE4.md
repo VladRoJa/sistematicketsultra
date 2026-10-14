@@ -9,7 +9,7 @@ Valida **independientemente** para un día de negocio D:
 1. Exactamente una versión `base_nocturna_canonica`,
    `is_current=true`, `status=success`, con fecha D exacta.
 2. Existencia de una vigencia Track prospectivamente ratificada por
-   empresa **antes de comenzar D**; fecha `effective_from <= D`; miembros
+   empresa con **atestación Y sello antes de comenzar D**; fecha `effective_from <= D`; miembros
    íntegros, cardinalidad y hash canónico.
 3. Snapshot inmutable de la versión concreta creado mientras se
    procesaba; captura y sello con timestamps coherentes dentro de su
