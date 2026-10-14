@@ -1821,6 +1821,443 @@ class TrackDailyVersionORM(db.Model):
         server_default=db.text("now()"),
     )
     
+class TrackVersionRosterSnapshotORM(db.Model):
+    """Evidence of expected branches at the instant a Track version runs.
+
+    Never treat a captured live catalog as verified for the business date.
+    The sealed artifact is immutable in PostgreSQL; M1-F6 stage 1 creates
+    no snapshots or retrospective certifications.
+    """
+    __tablename__ = "track_version_roster_snapshots"
+
+    version_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("track_daily_versions.id", ondelete="RESTRICT"),
+        primary_key=True,
+    )
+    track_date = db.Column(db.Date, nullable=False)
+    captured_at_utc = db.Column(
+        db.DateTime(timezone=True), nullable=False,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+    sealed_at_utc = db.Column(db.DateTime(timezone=True), nullable=True)
+    expected_branch_count = db.Column(db.Integer, nullable=False)
+    roster_sha256 = db.Column(db.String(64), nullable=False)
+    source_kind = db.Column(
+        db.String(64), nullable=False,
+        server_default="LIVE_TRACK_CATALOG_NON_DEMO_AT_CAPTURE",
+    )
+    historical_roster_verified = db.Column(
+        db.Boolean, nullable=False, server_default=db.false(),
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "expected_branch_count > 0",
+            name="ck_track_roster_expected_positive",
+        ),
+        db.CheckConstraint(
+            "roster_sha256 ~ '^[0-9a-f]{64}
+    __tablename__ = "warehouse_commercial_catalog"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    raw_description = db.Column(db.Text, nullable=False, unique=True, index=True)
+    normalized_description = db.Column(db.Text, nullable=False, index=True)
+
+    commercial_canon = db.Column(db.Text, nullable=True, index=True)
+    family = db.Column(db.Text, nullable=False, default="sin_clasificar", index=True)
+    subfamily = db.Column(db.Text, nullable=True)
+
+    is_promo = db.Column(db.Boolean, nullable=False, default=False, index=True)
+    is_membership = db.Column(db.Boolean, nullable=False, default=False)
+    is_retail = db.Column(db.Boolean, nullable=False, default=False)
+    is_aggregator = db.Column(db.Boolean, nullable=False, default=False)
+
+    is_active = db.Column(db.Boolean, nullable=False, default=True, index=True)
+    needs_business_validation = db.Column(db.Boolean, nullable=False, default=False, index=True)
+
+    notes = db.Column(db.Text, nullable=True)
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        server_default=db.func.now(),
+        nullable=False,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        server_default=db.func.now(),
+        onupdate=db.func.now(),
+        nullable=False,
+    )
+    
+class TrackAlertEventORM(db.Model):
+    __tablename__ = "track_alert_events"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    track_date = db.Column(db.Date, nullable=False)
+
+    sucursal_canon = db.Column(
+        db.String(120),
+        db.ForeignKey("track_branch_catalog.sucursal_canon"),
+        nullable=True,
+    )
+
+    alert_code = db.Column(db.String(100), nullable=False)
+
+    severity = db.Column(db.String(20), nullable=False)
+    # INFO | SUCCESS | WARNING | CRITICAL
+
+    title = db.Column(db.String(255), nullable=False)
+
+    message = db.Column(db.Text, nullable=False)
+
+    metric_value = db.Column(db.Numeric(18, 2), nullable=True)
+
+    threshold_value = db.Column(db.Numeric(18, 2), nullable=True)
+
+    ranking_position = db.Column(db.Integer, nullable=True)
+
+    was_sent = db.Column(db.Boolean, nullable=False, default=False)
+
+    sent_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    metadata_json = db.Column(db.JSON, nullable=True)
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+    )
+
+    branch = db.relationship("TrackBranchCatalogORM")
+
+    __table_args__ = (
+        Index(
+            "ix_track_alert_events_track_date",
+            "track_date",
+        ),
+        Index(
+            "ix_track_alert_events_alert_code",
+            "alert_code",
+        ),
+        Index(
+            "ix_track_alert_events_sucursal_canon",
+            "sucursal_canon",
+        ),
+        Index(
+            "ix_track_alert_events_was_sent",
+            "was_sent",
+        ),
+    )
+
+
+class SociosActivosSnapshotORM(db.Model):
+    __tablename__ = "socios_activos_snapshots"
+
+    id = db.Column(
+        db.BigInteger,
+        primary_key=True,
+        autoincrement=True,
+    )
+    warehouse_upload_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            "warehouse_uploads.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        unique=True,
+    )
+    report_type_key = db.Column(
+        db.String(100),
+        nullable=False,
+    )
+    cutoff_date = db.Column(
+        db.Date,
+        nullable=False,
+    )
+    captured_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+    snapshot_kind = db.Column(
+        db.String(50),
+        nullable=False,
+    )
+    is_canonical = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=False,
+    )
+    row_count_detected = db.Column(
+        db.Integer,
+        nullable=False,
+    )
+    row_count_valid = db.Column(
+        db.Integer,
+        nullable=False,
+    )
+    row_count_rejected = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+
+    warehouse_upload = db.relationship(
+        "WarehouseUploadORM",
+    )
+    rows = db.relationship(
+        "SociosActivosSnapshotRowORM",
+        back_populates="snapshot",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    __table_args__ = (
+        db.Index(
+            "ix_socios_activos_snapshots_cutoff_date",
+            "cutoff_date",
+        ),
+        db.Index(
+            "ix_socios_activos_snapshots_captured_at",
+            "captured_at",
+        ),
+        db.Index(
+            "ix_socios_activos_snapshots_is_canonical",
+            "is_canonical",
+        ),
+        db.Index(
+            "ix_socios_activos_snapshots_cutoff_canonical",
+            "cutoff_date",
+            "is_canonical",
+        ),
+    )
+
+
+class SociosActivosSnapshotRowORM(db.Model):
+    __tablename__ = "socios_activos_snapshot_rows"
+
+    id = db.Column(
+        db.BigInteger,
+        primary_key=True,
+        autoincrement=True,
+    )
+    snapshot_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "socios_activos_snapshots.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+    row_index = db.Column(
+        db.Integer,
+        nullable=False,
+    )
+    source_row_number = db.Column(
+        db.Integer,
+        nullable=True,
+    )
+
+    id_socio = db.Column(
+        db.String(64),
+        nullable=False,
+    )
+    pin = db.Column(
+        db.String(64),
+        nullable=False,
+    )
+    nombre = db.Column(
+        db.String(255),
+        nullable=True,
+    )
+    sucursal_raw = db.Column(
+        db.String(255),
+        nullable=False,
+    )
+
+    fecha_ultimo_pago_local = db.Column(
+        db.DateTime(timezone=False),
+        nullable=True,
+    )
+    fecha_vencimiento_local = db.Column(
+        db.DateTime(timezone=False),
+        nullable=False,
+    )
+    fecha_vencimiento_date = db.Column(
+        db.Date,
+        nullable=False,
+    )
+    fecha_ingreso_local = db.Column(
+        db.DateTime(timezone=False),
+        nullable=True,
+    )
+    fecha_firma_local = db.Column(
+        db.DateTime(timezone=False),
+        nullable=True,
+    )
+
+    tarifa = db.Column(
+        db.String(255),
+        nullable=True,
+    )
+    importe_tarifa = db.Column(
+        db.Numeric(14, 2),
+        nullable=True,
+    )
+
+    lada_raw = db.Column(
+        db.String(32),
+        nullable=True,
+    )
+    telefono_raw = db.Column(
+        db.String(64),
+        nullable=True,
+    )
+    telefono_digits = db.Column(
+        db.String(32),
+        nullable=True,
+    )
+
+    aplica_kpi_raw = db.Column(
+        db.String(32),
+        nullable=False,
+    )
+    aplica_kpi = db.Column(
+        db.Boolean,
+        nullable=False,
+    )
+
+    email_raw = db.Column(
+        db.String(320),
+        nullable=True,
+    )
+
+    row_hash = db.Column(
+        db.String(64),
+        nullable=False,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+    )
+
+    snapshot = db.relationship(
+        "SociosActivosSnapshotORM",
+        back_populates="rows",
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "snapshot_id",
+            "row_index",
+            name="uq_socios_activos_rows_snapshot_row_index",
+        ),
+        db.Index(
+            "ix_socios_activos_rows_snapshot_id",
+            "snapshot_id",
+        ),
+        db.Index(
+            "ix_socios_activos_rows_id_socio",
+            "id_socio",
+        ),
+        db.Index(
+            "ix_socios_activos_rows_pin",
+            "pin",
+        ),
+        db.Index(
+            "ix_socios_activos_rows_branch",
+            "sucursal_raw",
+        ),
+        db.Index(
+            "ix_socios_activos_rows_phone",
+            "telefono_digits",
+        ),
+        db.Index(
+            "ix_socios_activos_rows_email",
+            "email_raw",
+        ),
+        db.Index(
+            "ix_socios_activos_rows_expiration_date",
+            "fecha_vencimiento_date",
+        ),
+        db.Index(
+            "ix_socios_activos_rows_snapshot_member",
+            "snapshot_id",
+            "id_socio",
+        ),
+        db.Index(
+            "ix_socios_activos_rows_snapshot_branch_pin",
+            "snapshot_id",
+            "sucursal_raw",
+            "pin",
+        ),
+        db.Index(
+            "ix_socios_activos_rows_snapshot_pin_branch",
+            "snapshot_id",
+            "pin",
+            "sucursal_raw",
+        ),
+        db.Index(
+            "ix_socios_activos_rows_snapshot_email_normalized",
+            "snapshot_id",
+            db.func.lower(db.func.btrim(email_raw)),
+        ),
+    )
+",
+            name="ck_track_roster_sha256",
+        ),
+        db.CheckConstraint(
+            "source_kind = 'LIVE_TRACK_CATALOG_NON_DEMO_AT_CAPTURE'",
+            name="ck_track_roster_source_kind",
+        ),
+        db.CheckConstraint(
+            "historical_roster_verified = FALSE",
+            name="ck_track_roster_no_unverified_green",
+        ),
+        db.CheckConstraint(
+            "sealed_at_utc IS NULL OR sealed_at_utc >= captured_at_utc",
+            name="ck_track_roster_seal_not_before_capture",
+        ),
+    )
+
+
+class TrackVersionRosterMemberORM(db.Model):
+    """Non-editable expected branch in one version's captured roster."""
+    __tablename__ = "track_version_roster_members"
+
+    version_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("track_version_roster_snapshots.version_id",
+                      ondelete="RESTRICT"),
+        primary_key=True,
+    )
+    sucursal_canon = db.Column(db.Text, primary_key=True)
+    # Historical ID is a captured scalar; no FK to a mutable branch catalog.
+    sucursal_id_at_capture = db.Column(db.Integer, nullable=True)
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "length(trim(sucursal_canon)) > 0",
+            name="ck_track_roster_member_nonblank",
+        ),
+    )
+
+
 class WarehouseCommercialCatalogORM(db.Model):
     __tablename__ = "warehouse_commercial_catalog"
 
