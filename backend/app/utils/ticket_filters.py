@@ -1,6 +1,7 @@
 # backend/app/utils/ticket_filters.py
 from sqlalchemy import or_, and_, func
 from app.models import Ticket
+from app.utils.pm_permissions import has_compras_maintenance_read_grant
 
 GERENTE_ROLES = {"GERENTE", "GERENTE_SUCURSAL", "GERENTE_GENERAL", "GERENTE_DEPTO"}
 
@@ -78,6 +79,32 @@ def filtrar_tickets_por_usuario(user):
             user,
             _condicion_multiples_sucursales(scope),
         )
+
+    # Compras: una concesion individual de lectura habilita tickets de
+    # Mantenimiento UNICAMENTE dentro de las sucursales asignadas. No
+    # heredar el fallback de creador para Mantenimiento fuera del scope.
+    if rol == "COMPRAS" and has_compras_maintenance_read_grant(user):
+        conditions = []
+        try:
+            depto_int = int(depto) if depto is not None else None
+        except (TypeError, ValueError):
+            depto_int = None
+
+        if depto_int is not None and depto_int != 1:
+            conditions.append(Ticket.departamento_id == depto_int)
+
+        creator = _condicion_creador(user)
+        if creator is not None:
+            conditions.append(and_(Ticket.departamento_id != 1, creator))
+
+        authorized_branches = _condicion_multiples_sucursales(scope)
+        if authorized_branches is not None:
+            conditions.append(and_(
+                Ticket.departamento_id == 1,
+                authorized_branches,
+            ))
+
+        return q.filter(or_(*conditions)) if conditions else q.filter(False)
 
     # 3) sucursal_id == 1000 SOLO otorga ALL si el rol realmente es admin/super_admin
     if suc == 1000 and rol in {"ADMINISTRADOR", "SUPER_ADMIN"}:
