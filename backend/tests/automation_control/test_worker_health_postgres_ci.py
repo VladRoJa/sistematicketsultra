@@ -15,6 +15,9 @@ from app.models.automation_control import SystemWorkerHeartbeatORM
 from app.services.automation_control.worker_health_service import (
     emit_worker_heartbeat, read_worker_health,
 )
+from app.services.automation_control.effective_schedule_service import (
+    read_effective_schedules, schedule_spec,
+)
 
 
 def test_pg15_atomic_upsert_and_revision():
@@ -28,6 +31,12 @@ def test_pg15_atomic_upsert_and_revision():
     spec.loader.exec_module(mig)
     assert mig.revision == "c13a70e4d82b"
     assert mig.down_revision == "f62a1b9d4c07"
+    next_path=Path(__file__).resolve().parents[2] / "migrations/versions/c13a70e4d82c_worker_effective_schedules.py"
+    next_spec=importlib.util.spec_from_file_location("effective_schedule_migration_ci",next_path)
+    assert next_spec is not None and next_spec.loader is not None
+    next_mig=importlib.util.module_from_spec(next_spec)
+    next_spec.loader.exec_module(next_mig)
+    assert next_mig.down_revision == "c13a70e4d82b"
     engine=sa.create_engine(url)
     app=Flask(__name__)
     app.config["SQLALCHEMY_DATABASE_URI"]=url
@@ -37,9 +46,22 @@ def test_pg15_atomic_upsert_and_revision():
             assert int(conn.exec_driver_sql("SHOW server_version_num").scalar()) // 10000 == 15
             mig.op=Operations(MigrationContext.configure(conn))
             mig.upgrade()
+            next_mig.op=Operations(MigrationContext.configure(conn))
+            next_mig.upgrade()
+            assert "job_schedules" in {
+                col["name"] for col in sa.inspect(conn).get_columns("system_worker_heartbeats")
+            }
         with app.app_context():
             emit_worker_heartbeat("track-scheduler",poll_interval_seconds=60)
-            emit_worker_heartbeat("track-scheduler",poll_interval_seconds=75)
+            emit_worker_heartbeat(
+                "track-scheduler", poll_interval_seconds=75,
+                schedules_provider=lambda: {
+                    "track.base_nocturna_canonica": schedule_spec(
+                        enabled=True,timezone_name="America/Tijuana",
+                        kind="DAILY_TIME",slots=["23:30"],conditional=False,
+                    )
+                },
+            )
             rows=db.session.query(SystemWorkerHeartbeatORM).all()
             assert len(rows)==1
             assert rows[0].poll_interval_seconds==75
@@ -49,12 +71,19 @@ def test_pg15_atomic_upsert_and_revision():
             track=next(x for x in result["workers"] if x["worker_key"]=="track-scheduler")
             assert track["status"]=="HEALTHY"
             assert track["instance_count"]==1
+            attested=read_effective_schedules()
+            job=next(x for x in attested["jobs"] if x["job_key"]=="track.base_nocturna_canonica")
+            assert job["state"]=="REPORTED"
+            assert job["schedule"]["slots"]==["23:30"]
+            assert job["next_due_at"] is None
             db.session.remove()
         with engine.begin() as conn:
             mig.op=Operations(MigrationContext.configure(conn))
             with pytest.raises(RuntimeError,match="latidos"):
                 mig.downgrade()
             conn.exec_driver_sql("DELETE FROM system_worker_heartbeats")
+            next_mig.op=Operations(MigrationContext.configure(conn))
+            next_mig.downgrade()
             mig.downgrade()
             assert "system_worker_heartbeats" not in sa.inspect(conn).get_table_names()
     finally:
