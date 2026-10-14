@@ -25,6 +25,7 @@ on:
       - 'backend/tests/google_ads/test_google_ads_m6_manual_raw_postgres.py'
       - 'backend/app/warehouse/services/google_ads_m6_manual_structured_service.py'
       - 'backend/app/warehouse/services/google_ads_m6_manual_publication_service.py'
+      - 'backend/tests/google_ads/test_google_ads_m6_manual_publication_postgres.py'
       - 'backend/tests/google_ads/test_google_ads_m6_manual_structured_postgres.py'
       - 'frontend/src/app/google-ads/**'
       - 'backend/app/services/marketing_sales_funnel_cutoff_service.py'
@@ -92,6 +93,7 @@ jobs:
             tests/google_ads/test_google_ads_m6_continuity_postgres.py \
             tests/google_ads/test_google_ads_m6_daily_publication_postgres.py \
             tests/google_ads/test_google_ads_m6_global_publication_reader_postgres.py \
+            tests/google_ads/test_google_ads_m6_manual_publication_postgres.py \
             tests/marketing/test_google_ads_funnel_investment.py \
             tests/google_ads/test_google_ads_m5_branch_attribution_readonly.py
 
