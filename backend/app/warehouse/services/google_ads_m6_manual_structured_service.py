@@ -53,7 +53,8 @@ def _load_pair(campaign_id: int, group_id: int):
         camp, camp_bytes = _upload_content(
             campaign_id, report_type_key=CAMPAIGN_TYPE)
         grp, grp_bytes = _upload_content(
-            group_id, report_type_key=GROUP_TYPE)
+            group_id, report_type_key=GROUP_TYPE,
+            max_file_bytes=10 * 1024 * 1024)
         # Capture metadata before closing ORM session (detached objects).
         metadata = [
             {
