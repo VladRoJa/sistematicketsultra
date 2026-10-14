@@ -125,3 +125,43 @@ Alembic, downgrade protegido; contrato Angular y build.
 fuentes externas para cada canal y permitir a un operador revisar la calidad
 de la evidencia, SIN acoplarla a cupos Meta no observables. No desplegar sin
 CI, merge y migración Alembic según flujo del repo.
+
+
+## Etapa B3 — tablero de evidencia documental (sin efectos laterales)
+
+GET `/api/marketing/campaigns-v2/dispatch/portfolio-review` es una
+vista derivada, restringida a JWT + permiso global de configuración, que
+consulta los bindings activos/default, los Business IDs declarados en B1 y
+**todo** el historial B2 (no el preview truncado de 250 revisiones).
+
+- `PENDING`: canal sin evidencia; `WITHDRAWN`: última revisión retirada.
+- `DECLARED_UNVERIFIED`: asociación fundada solo en la declaración del
+  operador, sin comprobante Meta/iVentas registrado.
+- `DOCUMENTED_UNVERIFIED`: operador clasificó la fuente como documento
+  Meta o confirmación iVentas. **No significa consulta directa o validación
+  de dicha fuente.**
+- `REVIEW_REQUIRED`: candidato ya no figura en el catálogo actual,
+  cambio histórico de Business ID, misma WABA vigente declarada bajo negocios
+  distintos o dos bindings predeterminados activos para la misma sucursal.
+- `WABA_NOT_RECORDED` es aviso informativo, no requisito inventado para
+  considerar documentación; `OPERATOR_ONLY` solicita respaldo adicional.
+- Resumen y matriz filtrable de los canales; acción `Documentar/corregir`
+  abre el editor B2 preseleccionando el canal y sus revisiones. Un GET no
+  corrige, retira, reasigna, aprueba ni envía.
+- `api_verified = false` en todas las filas; resumen cero comprobaciones
+  hechas mediante API Meta. Si Meta sigue sin `business_management`,
+  el estado permanece documental. Nunca registrar como comprobados los
+  canales usando solo cuentas publicitarias CP 01/CP 03.
+- No migra esquema, no altera tablas B1/B2 ni servicios de quota,
+  preflight, presupuestos, autorizaciones o despacho. Sin GET a iVentas.
+
+Pruebas: casos faltante/retirada, evidencia tipo operador/documento,
+cambios históricos fuera de las 250 revisiones recientes, WABA compartida
+entre negocios, doble binding default, JWT 401 y acceso no global 403,
+Angular typecheck, regresión de no-write/no-send. Pruebas deben pasar antes
+de merge; **sin despliegue automático ni envío #16**.
+
+**Pendiente operacional:** para convertir los 26 canales a evidencias
+corroboradas se necesita comprobante individual proporcionado por
+iVentas o administrador Meta con permiso correspondiente. Esta fase
+solo descubre y guía esos faltantes; no simula acceso empresarial a Meta.

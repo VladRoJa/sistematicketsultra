@@ -1,0 +1,63 @@
+<h2 mat-dialog-title>Revisión de evidencia · canales iVentas</h2>
+<mat-dialog-content class="review">
+  <p class="intro">Auditoría documental interna, <strong>no verificación de Meta</strong>.
+    Se muestran todos los canales predeterminados activos. Una captura o confirmación
+    registrada por operador requiere corroboración externa; no implica cupo, aprobación
+    ni autorización para enviar WhatsApp.</p>
+
+  <p *ngIf="loading" role="status">Consultando evidencia histórica…</p>
+  <p class="error" *ngIf="error" role="alert">{{ error }}</p>
+
+  <ng-container *ngIf="report as data">
+    <div class="metrics">
+      <div><strong>{{ data.summary.total_channels }}</strong><small>Canales</small></div>
+      <div><strong>{{ actionCount }}</strong><small>Con trabajo pendiente</small></div>
+      <div><strong>{{ data.summary.documented_unverified }}</strong><small>Documentados, sin validar Meta</small></div>
+      <div><strong>{{ data.summary.review_required }}</strong><small>Contradicciones / anomalías</small></div>
+      <div><strong>{{ data.summary.api_verified }}</strong><small>Verificados vía API</small></div>
+    </div>
+    <p class="hint">Los cuatro Business IDs conocidos deben registrarse primero como candidatos B1.
+      Para un canal sin evidencia, solicita a iVentas o a un administrador autorizado un
+      comprobante de la relación canal → WABA → Business ID. Nunca derives WABA
+      de cuentas publicitarias CP 01 o CP 03.</p>
+    <div class="toolbar">
+      <mat-form-field appearance="outline">
+        <mat-label>Ver canales</mat-label>
+        <mat-select [formControl]="filter">
+          <mat-option value="ACTION">Pendientes o con revisión necesaria</mat-option>
+          <mat-option value="ALL">Todos</mat-option>
+          <mat-option value="DECLARED">Declarados por operador</mat-option>
+          <mat-option value="DOCUMENTED">Documentados sin validación Meta</mat-option>
+        </mat-select>
+      </mat-form-field>
+      <button mat-stroked-button type="button" (click)="reload()" [disabled]="loading">Actualizar diagnóstico</button>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Sucursal / canal</th><th>Portafolio declarado</th>
+            <th>Resultado documental</th><th>Evidencia / observaciones</th><th>Revisión</th></tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of filteredRows">
+            <td><strong>{{ row.sucursal_canon }}</strong><small>{{ row.provider_channel_id }}</small></td>
+            <td>{{ row.business_id || 'Sin asociación' }}<small>WABA: {{ row.waba_id || 'No registrado' }}</small></td>
+            <td><span class="state" [class.attention]="row.requiresAction">{{ row.stateLabel }}</span>
+              <small>Revisiones: {{ row.revision_count }}</small></td>
+            <td><span *ngFor="let issue of row.reasonLabels" class="issue">{{ issue }}</span>
+              <small *ngIf="row.source_reference">Fuente declarada: {{ row.source_reference }}</small>
+              <small *ngIf="!row.reasonLabels.length && !row.source_reference">Sin comprobante</small></td>
+            <td><button mat-stroked-button type="button" (click)="openEvidence(row)">Documentar / corregir</button></td>
+          </tr>
+          <tr *ngIf="!filteredRows.length"><td colspan="5">No hay canales en este filtro.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="footnote">Los cambios históricos de Business ID y la declaración de un mismo WABA bajo varios negocios
+      se señalan para revisión humana: el diagnóstico no corrige ni retira asociaciones automáticamente.
+      Tampoco consulta Meta, iVentas ni modifica políticas de cuota.</p>
+  </ng-container>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="close()">Cerrar</button>
+</mat-dialog-actions>

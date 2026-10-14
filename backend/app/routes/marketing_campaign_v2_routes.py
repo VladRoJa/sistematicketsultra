@@ -49,6 +49,9 @@ from app.services.marketing_campaign_v2_dispatch_config_service import (
     save_channel_binding,
     save_template,
 )
+from app.services.marketing_campaign_v2_portfolio_review_service import (
+    list_portfolio_review,
+)
 from app.services.marketing_campaign_v2_channel_portfolio_evidence_service import (
     CampaignV2ChannelPortfolioValidationError,
     CampaignV2ChannelPortfolioConflictError,
@@ -1705,6 +1708,22 @@ def campaign_v2_governed_execute_endpoint(campaign_id: int):
     except Exception:
         db.session.rollback()
         return _error("Error en despacho gobernado; revisar estado antes de reintentar.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/portfolio-review")
+@jwt_required()
+def campaign_v2_portfolio_review_endpoint():
+    """Issue 856 B3: no writes/provider requests; only global dispatch admins."""
+    try:
+        _resolve_campaign_v2_dispatch_config_request()
+        _validate_query_args(set())
+        return jsonify(list_portfolio_review(session=db.session)), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2RouteValidationError as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("No fue posible auditar cobertura de canales Meta.", 500)
 
 
 @marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/channel-portfolio-evidence")

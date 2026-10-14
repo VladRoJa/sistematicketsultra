@@ -6,6 +6,7 @@ on:
       - "backend/app/models/marketing.py"
       - "backend/app/services/marketing_campaign_v2_portfolio_reference_service.py"
       - "backend/app/services/marketing_campaign_v2_channel_portfolio_evidence_service.py"
+      - "backend/app/services/marketing_campaign_v2_portfolio_review_service.py"
       - "backend/app/routes/marketing_campaign_v2_routes.py"
       - "backend/migrations/versions/b856port1014_portfolio_reference_catalog.py"
       - "backend/migrations/versions/c856map1014_channel_portfolio_evidence.py"
@@ -55,6 +56,7 @@ jobs:
           python -m py_compile \
             app/services/marketing_campaign_v2_portfolio_reference_service.py \
             app/services/marketing_campaign_v2_channel_portfolio_evidence_service.py \
+            app/services/marketing_campaign_v2_portfolio_review_service.py \
             migrations/versions/b856port1014_portfolio_reference_catalog.py \
             migrations/versions/c856map1014_channel_portfolio_evidence.py \
             app/routes/marketing_campaign_v2_routes.py
@@ -62,4 +64,5 @@ jobs:
             tests/marketing/test_marketing_campaign_v2_portfolio_references.py \
             tests/marketing/test_marketing_campaign_v2_portfolio_migration.py \
             tests/marketing/test_marketing_campaign_v2_channel_portfolio_evidence.py \
-            tests/marketing/test_marketing_campaign_v2_channel_portfolio_migration.py
+            tests/marketing/test_marketing_campaign_v2_channel_portfolio_migration.py \
+            tests/marketing/test_marketing_campaign_v2_portfolio_review.py

@@ -1414,3 +1414,25 @@ test('B2 evidence modal requires confirmation and never changes operational quot
   assert.equal(ts.includes('registerQuotaPolicy('), false);
   assert.equal(ts.includes('approveDispatch('), false);
 });
+
+
+test('B3 documentary triage uses a read-only API and never claims verified Meta membership', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const ui = fs.readFileSync(path.join(root, 'marketing-campaign-v2-portfolio-review-dialog.component.ts'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-portfolio-review-dialog.component.html'), 'utf8');
+  const editor = fs.readFileSync(path.join(root, 'marketing-campaign-v2-channel-portfolio-dialog.component.ts'), 'utf8');
+  const service = fs.readFileSync(path.join(root, 'marketing-campaign-v2.service.ts'), 'utf8');
+  const entry = fs.readFileSync(path.join(root, 'marketing-campaign-v2-readiness-dialog.component.html'), 'utf8');
+  assert.ok(service.includes('/dispatch/portfolio-review'));
+  assert.ok(ui.includes('listPortfolioReview()'));
+  assert.ok(ui.includes('DOCUMENTED_UNVERIFIED'));
+  assert.ok(ui.includes('REVIEW_REQUIRED'));
+  assert.ok(ui.includes('data: { channelId: row.provider_channel_id }'));
+  assert.ok(editor.includes('MAT_DIALOG_DATA'));
+  assert.ok(entry.includes('Revisar evidencia de 26 canales'));
+  assert.ok(html.includes('no verificación de Meta'));
+  assert.ok(html.includes('Documentar / corregir'));
+  assert.equal(ui.includes('registerQuotaPolicy('), false);
+  assert.equal(ui.includes('submitCampaign('), false);
+  assert.equal(ui.includes('registerChannelPortfolioEvidence('), false);
+});
