@@ -14,6 +14,8 @@ from app.models.inventario import InventarioGeneral, InventarioSucursal
 from app.models.sucursal_model import Sucursal
 from app.models.pm_validacion import PmValidacionORM
 from app.utils.pm_permissions import (
+    can_pm_view,
+    can_pm_execute,
     require_pm_execute,
     require_pm_validate,
     require_pm_configure,
@@ -913,6 +915,26 @@ def _asignar_bitacoras_a_ocurrencias_con_ventana(
 # ────────────────────────────────────────────────────────────
 # POST /mobile/bitacoras
 # ────────────────────────────────────────────────────────────
+@pm_bp.route("/access", methods=["GET"])
+@jwt_required()
+def pm_read_access():
+    """Contexto liviano para publicar la consulta de PM sin confiar en el rol UI."""
+    user, user_err = _obtener_usuario_actual_pm(get_jwt_identity())
+    if user_err:
+        return jsonify(user_err[0]), user_err[1]
+
+    allowed = can_pm_view(user)
+    if _pm_user_role(user) == "COMPRAS":
+        # La excepción individual solo es útil con sucursales asignadas.
+        allowed = allowed and bool(_pm_user_assigned_sucursales(user))
+
+    return jsonify({
+        "allowed": bool(allowed),
+        "can_view": bool(allowed),
+        "can_execute": can_pm_execute(user),
+    }), 200
+
+
 @pm_bp.route("/mobile/bitacoras", methods=["POST"])
 @jwt_required()
 def pm_mobile_crear_bitacora():
