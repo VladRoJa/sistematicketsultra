@@ -38,9 +38,9 @@ def normalize_claim(
         1 <= len(provider_channel_id.strip()) <= 255
     ):
         raise CampaignV2ChannelPortfolioValidationError("Canal iVentas obligatorio.")
-    if state not in _STATES:
+    if not isinstance(state, str) or state not in _STATES:
         raise CampaignV2ChannelPortfolioValidationError("Estado de asociación inválido.")
-    if evidence_kind not in _KINDS:
+    if not isinstance(evidence_kind, str) or evidence_kind not in _KINDS:
         raise CampaignV2ChannelPortfolioValidationError("Tipo de evidencia inválido.")
     if not isinstance(source_reference, str) or not (
         1 <= len(source_reference.strip()) <= 255
