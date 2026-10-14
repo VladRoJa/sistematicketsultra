@@ -72,25 +72,9 @@ def candidate_lab(lab, monkeypatch):
              WHERE upload_id IN (:campaign, :groups) AND action = 'UPLOAD'
         """), {"campaign": campaign, "groups": group})
 
-    # No this endpoint in Suite Ultra. Tests inject it solely into a
-    # disposable Flask app with real JWT checking.
-    @client.application.post("/__isolated_ci_only/m6-correction-candidate")
-    @jwt_required()
-    def _test_only_dispatch():
-        data = request.get_json()
-        try:
-            result = svc.stage_m6_correction_candidate(**data)
-        except svc.GoogleAdsM6CorrectionStageError as exc:
-            code = str(exc)
-            return jsonify({"code": code}), (
-                503 if code == "CORRECTION_CANDIDATE_DISABLED"
-                else 403 if code == "FORBIDDEN" else 409
-            )
-        except Exception:
-            client.application.logger.exception("isolated test candidate stage failed")
-            return jsonify({"code": "CORRECTION_STAGE_FAILED"}), 503
-        return jsonify(result), 200 if result["status"] == "ALREADY_STAGED" else 201
-
+    # No test route is registered after the fixture has issued requests.
+    # _stage builds an isolated Flask request context and executes a decorated
+    # handler so JWT authentication is real, but no app route is added.
     monkeypatch.setenv("GOOGLE_ADS_OAUTH_CUSTOMER_ID", svc.CUSTOMER_ID)
     monkeypatch.setenv(svc.FLAG, "true")
     try:
@@ -111,15 +95,42 @@ from alembic.operations import Operations
 
 def _stage(client, token, campaign, group, *, revision=1, expected=None,
            reason=REASON):
-    return client.post("/__isolated_ci_only/m6-correction-candidate",
-                       headers={"Authorization": "Bearer " + token} if token else {},
-                       json={
-                           "campaign_upload_id": campaign,
-                           "group_upload_id": group,
-                           "revision": revision,
-                           "expected_publication_id": expected,
-                           "reason": reason,
-                       })
+    data = {
+        "campaign_upload_id": campaign,
+        "group_upload_id": group,
+        "revision": revision,
+        "expected_publication_id": expected,
+        "reason": reason,
+    }
+    app = client.application
+
+    @jwt_required()
+    def _isolated_dispatch():
+        try:
+            result = svc.stage_m6_correction_candidate(**request.get_json())
+        except svc.GoogleAdsM6CorrectionStageError as exc:
+            code = str(exc)
+            return jsonify({"code": code}), (
+                503 if code == "CORRECTION_CANDIDATE_DISABLED"
+                else 403 if code == "FORBIDDEN" else 409
+            )
+        except Exception:
+            app.logger.exception("isolated test candidate stage failed")
+            return jsonify({"code": "CORRECTION_STAGE_FAILED"}), 503
+        return jsonify(result), 200 if result["status"] == "ALREADY_STAGED" else 201
+
+    headers = {"Authorization": "Bearer " + token} if token else {}
+    with app.test_request_context("/__isolated_ci_only/m6-correction-candidate",
+                                  method="POST", headers=headers, json=data):
+        try:
+            response = app.make_response(_isolated_dispatch())
+        except Exception as exc:
+            # Flask-JWT-Extended exception handlers are exercised by the real
+            # HTTP tests in M6; this isolated handler preserves HTTP status.
+            response = app.handle_user_exception(exc)
+        return response
+
+
 
 
 def _counts(engine):
