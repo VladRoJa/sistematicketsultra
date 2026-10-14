@@ -49,7 +49,7 @@ def real_warehouse(tmp_path, monkeypatch):
     app.config.update(
         TESTING=True, SECRET_KEY="m6-raw-ci-signature-only",
         JWT_SECRET_KEY="m6-raw-ci-jwt-only",
-        SQLALCHEMY_DATABASE_URI=str(engine.url),
+        SQLALCHEMY_DATABASE_URI=engine.url.render_as_string(hide_password=False),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
     )
     db.init_app(app)
