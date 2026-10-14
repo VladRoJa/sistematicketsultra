@@ -87,7 +87,7 @@ export function campaignV2BuildReadinessRows(
       channelId: binding.provider_channel_id,
       bindingId: binding.id,
       portfolioKey: policy?.portfolio_key || null,
-      portfolioVerified: false,
+      portfolioVerified: false as const,
       accountAlias: policy?.account_key || null,
       operationalChannelCap: policy?.operational_channel_cap ?? null,
       operationalPortfolioCap: policy?.operational_portfolio_cap ?? null,
