@@ -137,3 +137,86 @@ def test_stale_revision_returns_409_without_provider_call():
             json=BASE, headers=headers,
         )
     assert response.status_code == 409
+
+
+def _fake_mapping_session(*, active_binding=True, has_portfolio=True, previous=None):
+    from datetime import datetime, timezone
+    from unittest.mock import MagicMock
+    from app.models.marketing import (
+        MarketingCampaignV2ChannelBindingORM as Binding,
+        MarketingCampaignV2PortfolioReferenceORM as Portfolio,
+        MarketingCampaignV2ChannelPortfolioEvidenceORM as Evidence,
+    )
+
+    session = MagicMock(name="isolated_query_session")
+
+    def query_for(model):
+        q = MagicMock()
+        q.filter.return_value = q
+        q.order_by.return_value = q
+        q.with_for_update.return_value = q
+        if model is Binding:
+            q.one_or_none.return_value = object() if active_binding else None
+        elif model is Evidence:
+            q.first.return_value = previous
+        elif model is Portfolio.id:
+            q.first.return_value = (1,) if has_portfolio else None
+        else:
+            raise AssertionError(f"Unexpected query: {model!r}")
+        return q
+
+    session.query.side_effect = query_for
+
+    def commit_row():
+        row = session.add.call_args.args[0]
+        row.id = 31
+        row.created_at = datetime(2026, 10, 14, tzinfo=timezone.utc)
+
+    session.commit.side_effect = commit_row
+    return session
+
+
+def test_b2_rejects_missing_or_inactive_channel_before_write():
+    from app.services.marketing_campaign_v2_channel_portfolio_evidence_service import (
+        register_channel_portfolio_evidence as register,
+    )
+    session = _fake_mapping_session(active_binding=False)
+    with pytest.raises(CampaignV2ChannelPortfolioValidationError, match="predeterminado activo"):
+        register(**BASE, actor_user_id=7, session=session)
+    session.add.assert_not_called()
+    session.rollback.assert_called_once()
+
+
+def test_b2_rejects_business_not_registered_in_b1():
+    from app.services.marketing_campaign_v2_channel_portfolio_evidence_service import (
+        register_channel_portfolio_evidence as register,
+    )
+    session = _fake_mapping_session(has_portfolio=False)
+    with pytest.raises(CampaignV2ChannelPortfolioValidationError, match="primero"):
+        register(**BASE, actor_user_id=7, session=session)
+    session.add.assert_not_called()
+
+
+def test_b2_optimistic_revision_blocks_stale_write_and_preserves_old_row():
+    from app.services.marketing_campaign_v2_channel_portfolio_evidence_service import (
+        register_channel_portfolio_evidence as register,
+    )
+    old = SimpleNamespace(id=19, state="DECLARED")
+    session = _fake_mapping_session(previous=old)
+    with pytest.raises(CampaignV2ChannelPortfolioConflictError, match="cambió"):
+        register(**BASE, actor_user_id=7, session=session)
+    session.add.assert_not_called()
+
+
+def test_b2_new_declared_revision_is_unverified_and_not_a_quota_write():
+    from app.services.marketing_campaign_v2_channel_portfolio_evidence_service import (
+        register_channel_portfolio_evidence as register,
+    )
+    session = _fake_mapping_session()
+    result = register(**BASE, actor_user_id=7, session=session)
+    assert result["revision_id"] == 31
+    assert result["api_verified"] is False
+    assert result["business_id"] == BASE["business_id"]
+    assert session.add.call_count == 1
+    assert session.add.call_args.args[0].__tablename__ == "marketing_campaign_v2_channel_portfolio_evidence"
+    session.commit.assert_called_once()
