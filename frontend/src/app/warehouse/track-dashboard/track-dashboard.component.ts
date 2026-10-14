@@ -6,6 +6,7 @@ import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../services/auth.service';
+import { DataFreshnessIndicatorComponent } from '../../shared/data-freshness-indicator/data-freshness-indicator.component';
 import { canAccessTrackRegionalOperational } from '../track-intelligence-regional-operational/track-regional-operational-access.guard';
 import {
   TrackService,
@@ -263,7 +264,7 @@ interface TrackViewRow {
 @Component({
   selector: 'app-track-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, DataFreshnessIndicatorComponent],
   templateUrl: './track-dashboard.component.html',
   styleUrls: ['./track-dashboard.component.css'],
 })

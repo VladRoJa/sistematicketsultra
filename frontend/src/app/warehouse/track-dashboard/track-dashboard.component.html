@@ -12,6 +12,10 @@
         <p class="track-kicker">WAREHOUSE</p>
 
         <h1>{{ pageTitle }}</h1>
+        <app-data-freshness-indicator
+          moduleKey="track.daily"
+          [trackDate]="trackDate">
+        </app-data-freshness-indicator>
 
         <p class="track-subtitle">
           {{ pageSubtitle }}
