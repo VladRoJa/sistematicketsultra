@@ -1,7 +1,7 @@
 """Issue 856 B1: operator-declared Meta business IDs, explicitly unverified.
 
 Revision ID: b856port1014
-Revises: f856opcap1013
+Revises: f856m1f40001
 
 No seed, channel assignment, quota activation or provider access.
 """
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "b856port1014"
-down_revision = "f856opcap1013"
+down_revision = "f856m1f40001"
 branch_labels = None
 depends_on = None
 
