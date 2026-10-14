@@ -1,4 +1,4 @@
-﻿"""Merge M6 with the subsequent Track roster migration, preserving both histories.
+"""Merge M6 with the subsequent Track roster migration, preserving both histories.
 
 Revision ID: c9e1a4d6b720
 Revises: a4c85d6e9f20, f6roster1014
