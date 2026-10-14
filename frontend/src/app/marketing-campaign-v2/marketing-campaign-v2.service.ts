@@ -16,6 +16,10 @@ import {
   CampaignV2BudgetRateRevision,
   CampaignV2ChannelPortfolioEvidence,
   CampaignV2ChannelPortfolioEvidenceRequest,
+  CampaignV2QaManualBaseRequest,
+  CampaignV2QaManualPreview,
+  CampaignV2QaManualFreezeRequest,
+  CampaignV2QaManualFrozen,
   CampaignV2PortfolioReviewResponse,
   CampaignV2ChannelPortfolioEvidenceResponse,
   CampaignV2PortfolioReference,
@@ -220,6 +224,22 @@ export class MarketingCampaignV2Service {
     return this.http.post<CampaignV2PreparationApplyResponse>(
       `${this.apiUrl}/${campaignId}/preparation/previous/exclude`,
       { ...request, source_campaign_ids: sourceCampaignIds },
+    );
+  }
+
+  previewQaManual(
+    request: CampaignV2QaManualBaseRequest,
+  ): Observable<CampaignV2QaManualPreview> {
+    return this.http.post<CampaignV2QaManualPreview>(
+      `${this.apiUrl}/qa-manual/preview`, request,
+    );
+  }
+
+  freezeQaManual(
+    request: CampaignV2QaManualFreezeRequest,
+  ): Observable<CampaignV2QaManualFrozen> {
+    return this.http.post<CampaignV2QaManualFrozen>(
+      `${this.apiUrl}/qa-manual/freeze`, request,
     );
   }
 
