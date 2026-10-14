@@ -67,6 +67,8 @@ def _serialize_policy(row: MarketingCampaignV2QuotaPolicyRevisionORM) -> dict[st
         "account_key": row.account_key,
         "phone_alias": row.phone_alias,
         "nominal_channel_limit": row.nominal_channel_limit,
+        "operational_channel_cap": row.operational_channel_cap,
+        "operational_portfolio_cap": row.operational_portfolio_cap,
         "reset_timezone": row.reset_timezone,
         "valid_from": _database_date(row.valid_from).isoformat(),
         "source_reference": row.source_reference,
@@ -108,6 +110,7 @@ def register_quota_policy(
     phone_alias: Any, nominal_channel_limit: Any,
     reset_timezone: Any, source_reference: Any,
     actor_user_id: Any, session: Any | None = None, now: datetime | None = None,
+    operational_channel_cap: Any = None, operational_portfolio_cap: Any = None,
 ) -> dict[str, Any]:
     active = session if session is not None else db.session
     channel = _required(provider_channel_id, "provider_channel_id", 255)
@@ -119,6 +122,13 @@ def register_quota_policy(
     actor = _int(actor_user_id, "actor_user_id", positive=True)
     if nominal_channel_limit is not None:
         nominal_channel_limit = _int(nominal_channel_limit, "nominal_channel_limit", positive=True)
+    if (operational_channel_cap is None) != (operational_portfolio_cap is None):
+        raise CampaignV2QuotaValidationError("Configura ambos límites internos o ninguno.")
+    if operational_channel_cap is not None:
+        operational_channel_cap = _int(operational_channel_cap, "operational_channel_cap", positive=True)
+        operational_portfolio_cap = _int(operational_portfolio_cap, "operational_portfolio_cap", positive=True)
+        if nominal_channel_limit is not None and operational_channel_cap > nominal_channel_limit:
+            raise CampaignV2QuotaValidationError("Límite interno del canal excede el nominal reportado.")
     try:
         ZoneInfo(tz)
     except (ZoneInfoNotFoundError, ValueError) as exc:
@@ -135,6 +145,8 @@ def register_quota_policy(
         provider_channel_id=channel, portfolio_key=portfolio,
         account_key=account, phone_alias=phone,
         nominal_channel_limit=nominal_channel_limit,
+        operational_channel_cap=operational_channel_cap,
+        operational_portfolio_cap=operational_portfolio_cap,
         reset_timezone=tz, valid_from=timestamp,
         source_reference=reference, created_by_user_id=actor, created_at=timestamp,
     )
@@ -199,10 +211,24 @@ def assess_preflight_capacity(
     *, plan: Any, session: Any | None = None,
     now: datetime | None = None,
     ignore_campaign_id: int | None = None,
+    basis_preference: str | None = None,
 ) -> dict[str, Any]:
     """Fail-closed display only: never reserves capacity or authorizes submit."""
+    from app.services.marketing_campaign_v2_operational_capacity_service import (
+        BASIS as OPERATIONAL_BASIS, assess_operational_capacity,
+    )
     active = session if session is not None else db.session
     timestamp = _date(now or datetime.now(timezone.utc))
+    if basis_preference not in (None, "OPERATOR_ATTESTED_NOT_META_VERIFIED", OPERATIONAL_BASIS):
+        raise CampaignV2QuotaValidationError("Modalidad de cupo desconocida.")
+    if basis_preference != "OPERATOR_ATTESTED_NOT_META_VERIFIED":
+        operating = assess_operational_capacity(
+            plan=plan, session=active, now=timestamp,
+            ignore_campaign_id=ignore_campaign_id,
+            force=basis_preference == OPERATIONAL_BASIS,
+        )
+        if operating is not None:
+            return operating
     channels = {
         str(batch.provider_channel_id)
         for batch in plan.batches if batch.provider_channel_id

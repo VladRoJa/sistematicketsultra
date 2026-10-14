@@ -105,23 +105,29 @@ def read_governed_dispatch_monitor(*, campaign_id: int, session: Any | None = No
         approval=approval, execution=execution, children=children, timestamp=timestamp,
     )
     counts = dict(Counter(str(child.status) for child in children))
+    approved_basis = ((approval.manifest_json or {}).get("basis") if approval is not None
+                      else "OPERATOR_ATTESTED_NOT_META_VERIFIED")
+    operator_mode = approved_basis == "SUITE_OPERATOR_ROLLING_24H_V1"
     quota_rows = []
     for row in reservations:
-        evidence = active.get(MarketingCampaignV2QuotaCapacityAttestationORM,
-                              row.attestation_id)
+        evidence = (active.get(MarketingCampaignV2QuotaCapacityAttestationORM,
+                               row.attestation_id)
+                    if row.attestation_id is not None else None)
         quota_rows.append({
             "scope_kind": row.scope_kind,
             "scope_key": row.scope_key,
             "reserved_messages": int(row.reserved_messages),
-            "attestation_id": int(row.attestation_id),
+            "attestation_id": int(row.attestation_id) if row.attestation_id is not None else None,
             "attestation_expires_at": _iso(evidence.expires_at) if evidence else None,
             "reserved_until": _iso(row.reserved_until),
             "is_current": bool(
-                evidence is not None and
-                _database_date(evidence.expires_at) > timestamp and
-                _database_date(evidence.window_ends_at) > timestamp and
                 _database_date(row.reserved_until) > timestamp and
-                _database_date(evidence.observed_at) <= timestamp
+                (operator_mode and row.attestation_id is None and
+                 approval is not None and _database_date(approval.expires_at) > timestamp
+                 or (evidence is not None and
+                     _database_date(evidence.expires_at) > timestamp and
+                     _database_date(evidence.window_ends_at) > timestamp and
+                     _database_date(evidence.observed_at) <= timestamp))
             ),
         })
     rows = []
@@ -152,7 +158,8 @@ def read_governed_dispatch_monitor(*, campaign_id: int, session: Any | None = No
     return {
         "campaign_id": campaign_id,
         "as_of": timestamp.isoformat(),
-        "basis": "PERSISTED_STATE_AND_OPERATOR_ATTESTATIONS_NOT_META_VERIFIED",
+        "basis": ("PERSISTED_STATE_SUITE_LIMITS_NOT_META_VERIFIED" if operator_mode
+                  else "PERSISTED_STATE_AND_OPERATOR_ATTESTATIONS_NOT_META_VERIFIED"),
         "status": status,
         "next_manual_action": action,
         "send_authorized": False,
@@ -175,7 +182,7 @@ def read_governed_dispatch_monitor(*, campaign_id: int, session: Any | None = No
             "expires_at": _iso(execution.expires_at),
         } if execution is not None else None),
         "quota": {
-            "basis": "OPERATOR_ATTESTED_NOT_META_VERIFIED",
+            "basis": approved_basis,
             "all_current": bool(quota_rows) and all(r["is_current"] for r in quota_rows),
             "reservations": quota_rows,
         },

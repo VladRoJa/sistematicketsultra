@@ -222,3 +222,28 @@ def test_quota_expiring_during_campaign_lock_is_rechecked_with_fresh_clock():
     clock.assert_called_once_with(None)
     session.add.assert_not_called()
     session.commit.assert_not_called()
+
+
+def test_operator_held_preview_is_stable_without_fabricated_meta_remaining():
+    session, source, plan, quota = evaluate_context()
+    quota["basis"] = "SUITE_OPERATOR_ROLLING_24H_V1"
+    quota["window_start"] = (NOW - timedelta(hours=24)).isoformat()
+    quota["window_end"] = NOW.isoformat()
+    quota["batches"][0].update({
+        "channel_evidence_id": None, "portfolio_evidence_id": None,
+        "policy_revision_id": 700, "operator_channel_cap": 10,
+        "operator_portfolio_cap": 50, "suite_channel_attempted": 1,
+        "suite_portfolio_attempted": 5, "suite_channel_reserved": 0,
+        "suite_portfolio_reserved": 0,
+    })
+    first = preview(session, source, plan, quota)
+    assert first["evidence"][0]["actual_meta_remaining"] is None
+    assert "attestation_id" not in first["evidence"][0]
+    quota["window_start"] = (NOW - timedelta(hours=24, seconds=2)).isoformat()
+    quota["window_end"] = (NOW + timedelta(seconds=2)).isoformat()
+    second = preview(session, source, plan, quota)
+    assert second["candidate_fingerprint"] == first["candidate_fingerprint"]
+    quota["batches"][0]["suite_channel_attempted"] += 1
+    third = preview(session, source, plan, quota)
+    assert third["candidate_fingerprint"] != first["candidate_fingerprint"]
+    session.commit.assert_not_called()

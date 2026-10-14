@@ -163,3 +163,49 @@ def test_migration_revision_linear_and_ledger_sql(monkeypatch):
     assert "marketing_campaign_v2_capacity_reservations" in sql
     assert "uq_mkt_v2_approval_campaign" in sql
     assert "reserved_messages > 0" in sql
+
+
+def test_operator_approval_creates_null_attestation_reservations_without_provider_send():
+    plan, budget, rows, quantities, _, session = reservation_fixture()
+    rows["A"].update({
+        "channel_evidence_id": None, "portfolio_evidence_id": None,
+        "policy_revision_id": 1001, "operator_channel_cap": 100,
+        "operator_portfolio_cap": 100,
+    })
+    ids = {("PORTFOLIO", "shared"): None}
+    result = approval._reserve_locked(
+        plan=plan, budget=budget,
+        confirmation=(FP, QF, 12, Decimal("3.60"), 7),
+        session=session, timestamp=NOW, quantities=quantities,
+        evidence_ids=ids, quota_rows=rows,
+    )
+    assert result["manifest"]["basis"] == "SUITE_OPERATOR_ROLLING_24H_V1"
+    assert result["manifest"]["batches"][0]["policy_revision_id"] == 1001
+    assert result["manifest"]["batches"][0]["portfolio_attestation_id"] is None
+    assert result["send_authorized"] is False
+    assert result["expires_at"] == (NOW + timedelta(minutes=15)).isoformat()
+    assert session.add.call_count == 2
+    reservation = session.add.call_args_list[-1].args[0]
+    assert reservation.attestation_id is None
+    assert reservation.scope_kind == "PORTFOLIO"
+    session.get.assert_not_called()
+    session.commit.assert_called_once()
+
+
+def test_operator_basis_rejects_missing_policy_revision_under_assessment():
+    plan = NS(ready=True, mode="IMMEDIATE", batches=[
+        NS(sucursal_canon="A", provider_channel_id="ch1", recipients=[None]),
+    ])
+    preview = {
+        "basis": "SUITE_OPERATOR_ROLLING_24H_V1", "status": "REVIEWABLE",
+        "batches": [{
+            "sucursal_canon": "A", "provider_channel_id": "ch1",
+            "portfolio_key": "shared", "channel_evidence_id": None,
+            "portfolio_evidence_id": None, "policy_revision_id": None,
+            "operator_channel_cap": 10, "operator_portfolio_cap": 10,
+            "recommendation": "CAPACITY_REVIEWED",
+        }],
+    }
+    with patch.object(approval, "assess_preflight_capacity", return_value=preview):
+        with pytest.raises(approval.CampaignV2ApprovalConflictError):
+            approval._assess_scopes(plan, session=MagicMock(), timestamp=NOW)

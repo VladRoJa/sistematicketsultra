@@ -5,6 +5,9 @@ on:
     paths:
       - "backend/app/models/marketing.py"
       - "backend/app/services/marketing_campaign_v2_quota_service.py"
+      - "backend/app/services/marketing_campaign_v2_operational_capacity_service.py"
+      - "backend/migrations/versions/f856opcap1013_internal_volume_policy.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_operational_*.py"
       - "backend/app/services/marketing_campaign_v2_dispatch_approval_service.py"
       - "backend/app/services/marketing_campaign_v2_manifest_service.py"
       - "backend/app/services/marketing_campaign_v2_submit_service.py"
@@ -65,6 +68,7 @@ jobs:
       - name: Compile service and migration
         run: |
           python -m py_compile backend/app/services/marketing_campaign_v2_quota_service.py backend/app/services/marketing_campaign_v2_dispatch_approval_service.py backend/app/services/marketing_campaign_v2_manifest_service.py backend/app/services/marketing_campaign_v2_submit_service.py backend/app/services/marketing_campaign_v2_governed_dispatch_service.py backend/app/services/marketing_campaign_v2_governed_monitor_service.py backend/app/services/marketing_campaign_v2_retry_service.py backend/app/services/marketing_campaign_v2_reconciliation_service.py backend/app/services/marketing_campaign_v2_governed_reconciliation_service.py backend/app/services/marketing_campaign_v2_held_release_intent_service.py backend/app/services/marketing_campaign_v2_held_derived_cohort_service.py backend/app/services/marketing_campaign_v2_derived_contact_guard.py backend/app/services/marketing_campaign_v2_contact_gate_service.py backend/app/services/marketing_campaign_v2_deterministic_rejection_retry.py backend/app/services/marketing_campaign_v2_preflight_service.py backend/app/routes/marketing_campaign_v2_routes.py
+          python -m py_compile backend/app/services/marketing_campaign_v2_operational_capacity_service.py backend/migrations/versions/f856opcap1013_internal_volume_policy.py
           python -m py_compile backend/migrations/versions/f4d856a1b20c_campaign_v2_quota_policy_capacity.py backend/migrations/versions/a856d2a01013_campaign_v2_dispatch_approval_reservations.py backend/migrations/versions/b856d2c01013_governed_execution.py backend/migrations/versions/c856d3b01013_governed_reconciliation_events.py backend/migrations/versions/d856d3c01013_held_release_intents.py
       - name: Run synthetic PostgreSQL quota tests
         working-directory: backend
@@ -75,6 +79,8 @@ jobs:
           CAMPAIGN_V2_PROVIDER_SEND_ENABLED: "false"
         run: |
           python -m pytest -q --tb=short \
+            tests/marketing/test_marketing_campaign_v2_operational_capacity.py \
+            tests/marketing/test_marketing_campaign_v2_operational_migration.py \
             tests/marketing/test_marketing_campaign_v2_quota_service.py \
             tests/marketing/test_marketing_campaign_v2_quota_migration.py \
             tests/marketing/test_marketing_campaign_v2_quota_approval.py \

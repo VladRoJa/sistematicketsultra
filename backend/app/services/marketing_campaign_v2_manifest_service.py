@@ -174,6 +174,8 @@ def materialize_approved_manifest(
         ready_plan = replace(plan, batches=ready)
         _, expected_scopes, expected_evidence_ids, current_quota = _assess_scopes(
             ready_plan, session=active, timestamp=timestamp,
+            ignore_campaign_id=campaign_id,
+            basis_preference=(approval.manifest_json or {}).get("basis"),
         )
         for kind, key in sorted(expected_scopes):
             active.execute(text(
@@ -196,6 +198,8 @@ def materialize_approved_manifest(
         # Capacity and mapping must still be current after acquiring the locks.
         _, locked_scopes, locked_evidence, locked_quota = _assess_scopes(
             ready_plan, session=active, timestamp=timestamp,
+            ignore_campaign_id=campaign_id,
+            basis_preference=(approval.manifest_json or {}).get("basis"),
         )
         if locked_scopes != expected_scopes or locked_evidence != expected_evidence_ids:
             raise CampaignV2ApprovalConflictError("Evidencia de cupo cambió durante preparación.")
@@ -208,7 +212,7 @@ def materialize_approved_manifest(
         for scope, required in locked_scopes.items():
             reservation = reserved[scope]
             if (int(reservation.reserved_messages) != required or
-                    int(reservation.attestation_id) != locked_evidence[scope] or
+                    reservation.attestation_id != locked_evidence[scope] or
                     _database_date(reservation.reserved_until) <= timestamp or
                     _database_date(reservation.reserved_until) > _database_date(approval.expires_at)):
                 raise CampaignV2ApprovalConflictError("Reserva caducada o diferente.")
@@ -217,7 +221,10 @@ def materialize_approved_manifest(
             quota_row = locked_quota[batch.sucursal_canon]
             if (quota_row["channel_evidence_id"] != manifest_row["channel_attestation_id"] or
                     quota_row["portfolio_evidence_id"] != manifest_row["portfolio_attestation_id"] or
-                    quota_row["portfolio_key"] != manifest_row["portfolio_key"]):
+                    quota_row["portfolio_key"] != manifest_row["portfolio_key"] or
+                    quota_row.get("policy_revision_id") != manifest_row.get("policy_revision_id") or
+                    quota_row.get("operator_channel_cap") != manifest_row.get("operator_channel_cap") or
+                    quota_row.get("operator_portfolio_cap") != manifest_row.get("operator_portfolio_cap")):
                 raise CampaignV2ApprovalConflictError("Política o atestación del lote cambió.")
 
         existing = _load_campaign_rows(campaign_id=campaign_id, session=active)
