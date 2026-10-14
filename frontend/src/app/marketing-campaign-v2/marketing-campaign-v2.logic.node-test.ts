@@ -1494,3 +1494,27 @@ test('Issue 856 D: governed console uses exact approval, manifest and one-child 
   assert.equal(ts.includes('localStorage'), false);
   assert.equal(ts.includes('setInterval'), false);
 });
+
+
+test('Issue 856 E: no automatic dispatch, silent retry, or unlocked ambiguity in governed UI', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const ui = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.ts'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.html'), 'utf8');
+  const api = fs.readFileSync(path.join(root, 'marketing-campaign-v2.service.ts'), 'utf8');
+  assert.ok(ui.includes("this.uncertainResult = true"));
+  assert.ok(ui.includes("this.refresh(true)"));
+  assert.ok(ui.includes("this.monitor?.quota.all_current === true"));
+  assert.ok(ui.includes("this.executionCheckbox.value === true"));
+  assert.ok(ui.includes("this.executionPhrase.value === this.sendWord"));
+  assert.ok(ui.includes("review.manifest.batches.filter(batch => batch.planned_status === 'READY')"));
+  assert.ok(ui.includes("child.needs_manual_review"));
+  assert.ok(html.includes('Enviar únicamente child'));
+  assert.ok(html.includes('SOLO UN CHILD'));
+  assert.ok(html.includes('Nunca repitas el POST'));
+  assert.ok(api.includes("/dispatch/monitor"));
+  assert.equal(ui.includes('setInterval('), false);
+  assert.equal(ui.includes('setTimeout('), false);
+  assert.equal(ui.includes('retryWhen('), false);
+  assert.equal(ui.includes('submitCampaign('), false);
+  assert.equal(ui.includes('localStorage'), false);
+});
