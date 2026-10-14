@@ -1325,7 +1325,7 @@ test('Issue 856: administracion usa campo MDC acotado y editores progresivos', (
   const templates = fs.readFileSync(path.join(root, 'marketing-campaign-v2-dispatch-admin-dialog.component.html'), 'utf8');
   const quotas = fs.readFileSync(path.join(root, 'marketing-campaign-v2-quota-admin-dialog.component.html'), 'utf8');
   const styles = fs.readFileSync(path.join(process.cwd(), 'src/styles.scss'), 'utf8');
-  assert.equal(page.split("panelClass: 'campaign-v2-admin-dialog'").length - 1, 3);
+  assert.equal(page.split("panelClass: 'campaign-v2-admin-dialog'").length - 1, 4);
   assert.equal(styles.includes('.cdk-overlay-container .campaign-v2-admin-dialog'), true);
   assert.equal(templates.includes('*ngIf="showTemplateEditor"'), true);
   assert.equal(templates.includes('*ngIf="showBudgetEditor"'), true);
