@@ -97,14 +97,17 @@ def _verificar_permiso_sucursal(user, sucursal_id_int):
         getattr(user, "sucursales_ids", [])
     )
 
-    primary_sucursal_id = getattr(user, "sucursal_id", None)
-    try:
-        primary_sucursal_id = int(primary_sucursal_id) if primary_sucursal_id is not None else None
-    except (TypeError, ValueError):
-        primary_sucursal_id = None
+    # COMPRAS con lectura individual: SOLO la lista administrada en Permisos.
+    # Su sucursal principal (normalmente corporativa) no amplía el acceso.
+    if rol != "COMPRAS":
+        primary_sucursal_id = getattr(user, "sucursal_id", None)
+        try:
+            primary_sucursal_id = int(primary_sucursal_id) if primary_sucursal_id is not None else None
+        except (TypeError, ValueError):
+            primary_sucursal_id = None
 
-    if primary_sucursal_id is not None:
-        allowed_sucursales.append(primary_sucursal_id)
+        if primary_sucursal_id is not None:
+            allowed_sucursales.append(primary_sucursal_id)
 
     allowed_sucursales = sorted(set(allowed_sucursales))
 
