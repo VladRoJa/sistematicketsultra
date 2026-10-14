@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import date
 from io import BytesIO
+from functools import lru_cache
 from types import SimpleNamespace
 
 import pytest
@@ -83,6 +84,9 @@ def setup_client(monkeypatch):
     return app.test_client(), token, conn
 
 
+# Reuse byte-identical ZIP files between preview and confirmation.
+# Rebuilding the same cells can change ZIP timestamps and SHA-256.
+@lru_cache(maxsize=1)
 def daily_xlsx():
     campaigns, groups = _synthetic_pair()
     one_day = min(row.report_date for row in campaigns.rows)
