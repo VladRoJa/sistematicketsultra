@@ -23,6 +23,7 @@ assert.equal(currentTijuanaClock(new Date('2026-10-13T18:13:00Z')).time, '11:13'
 assert.equal(classifyObservationRuns([{status_raw:'RUNNING'}]), 'running');
 assert.equal(classifyObservationRuns([{status_raw:'PARTIAL'}]), 'partial');
 assert.equal(classifyObservationRuns([{status_raw:'FAILED'}]), 'error');
+assert.equal(classifyObservationRuns([{status_raw:'TIMED_OUT'}]), 'error');
 assert.equal(classifyObservationRuns([{status_raw:'replaced'}]), 'replaced');
 assert.equal(classifyObservationRuns([{status_raw:'COMPLETED'}, {status_raw:'FAILED'}]), 'completed');
 assert.equal(classifyObservationRuns([{status_raw:'ERROR'}, {status_raw:'SUCCESS'}]), 'error');
@@ -42,6 +43,14 @@ const automationHtml = fs.readFileSync(path.resolve(__dirname,
 const indicatorTs = fs.readFileSync(path.resolve(__dirname,
   '../src/app/shared/data-freshness-indicator/data-freshness-indicator.component.ts'), 'utf8');
 
+// Latest scheduler outcome uses actual attributed runs, not data freshness.
+assert.match(automationTs, /this\.api\.runs\(job\.key,0,1\)/);
+assert.match(automationTs, /mergeMap\(job=>/);
+assert.match(automationTs, /latestRunStatus\(job:Job\)/);
+assert.match(automationTs, /latestRunIsFailure\(job:Job\)/);
+assert.match(automationHtml, /Última ejecución/);
+assert.match(automationHtml, /\(click\)="openLatestFailure\(job\)"/);
+assert.match(automationHtml, /latestRunStatus\(job\)/);
 assert.match(automationTs, /DataFreshnessIndicatorComponent/);
 assert.match(automationTs, /isFreshnessDataset\(key:string\)/);
 assert.match(automationHtml, /<app-data-freshness-indicator/);
