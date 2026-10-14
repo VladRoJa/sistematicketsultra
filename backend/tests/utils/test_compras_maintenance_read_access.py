@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from flask import Blueprint, Flask
 from sqlalchemy import Integer, String, column
 
 from app.models import permiso_model
@@ -8,6 +9,7 @@ from app.maintenance_planner import service as planner
 from app.routes.pm_routes import _verificar_permiso_sucursal
 from app.utils import pm_permissions
 from app.utils import ticket_filters
+from app.utils import maintenance_ticket_update_guard as ticket_guard
 from app.utils.maintenance_ticket_update_guard import (
     generic_pm_update_is_forbidden,
 )
@@ -127,3 +129,56 @@ def test_compras_planner_uses_strict_branches():
     empty_query = MagicMock()
     planner._apply_planner_role_scope(empty_query, no_branches)
     empty_query.filter.assert_called_once_with(False)
+
+
+def test_compras_cannot_close_maintenance_ticket_via_legacy_endpoint(monkeypatch):
+    app = Flask(__name__)
+    tickets = Blueprint("tickets", __name__)
+
+    @tickets.route("/cierre/solicitar/<int:ticket_id>", methods=["POST"])
+    def cierre_solicitar(ticket_id):
+        return "unexpected write", 200
+
+    app.register_blueprint(tickets)
+
+    actor = _compras()
+    maintenance_ticket = SimpleNamespace(departamento_id=1)
+    monkeypatch.setattr(ticket_guard, "verify_jwt_in_request", lambda: None)
+    monkeypatch.setattr(ticket_guard, "get_jwt_identity", lambda: actor.id)
+    monkeypatch.setattr(ticket_guard.UserORM, "get_by_id", lambda _id: actor)
+    monkeypatch.setattr(
+        ticket_guard,
+        "Ticket",
+        SimpleNamespace(query=SimpleNamespace(get=lambda _id: maintenance_ticket)),
+    )
+    ticket_guard.register_maintenance_ticket_update_guard(app)
+
+    response = app.test_client().post("/cierre/solicitar/99")
+
+    assert response.status_code == 403
+    assert "Compras tiene acceso de consulta" in response.get_json()["mensaje"]
+
+
+def test_compras_guard_does_not_block_other_department_ticket(monkeypatch):
+    app = Flask(__name__)
+    tickets = Blueprint("tickets", __name__)
+
+    @tickets.route("/cierre/solicitar/<int:ticket_id>", methods=["POST"])
+    def cierre_solicitar(ticket_id):
+        return "allowed by legacy route", 200
+
+    app.register_blueprint(tickets)
+
+    actor = _compras()
+    other_ticket = SimpleNamespace(departamento_id=6)
+    monkeypatch.setattr(ticket_guard, "verify_jwt_in_request", lambda: None)
+    monkeypatch.setattr(ticket_guard, "get_jwt_identity", lambda: actor.id)
+    monkeypatch.setattr(ticket_guard.UserORM, "get_by_id", lambda _id: actor)
+    monkeypatch.setattr(
+        ticket_guard,
+        "Ticket",
+        SimpleNamespace(query=SimpleNamespace(get=lambda _id: other_ticket)),
+    )
+    ticket_guard.register_maintenance_ticket_update_guard(app)
+
+    assert app.test_client().post("/cierre/solicitar/99").status_code == 200
