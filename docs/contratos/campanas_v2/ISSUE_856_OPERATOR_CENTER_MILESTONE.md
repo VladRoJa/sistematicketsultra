@@ -165,3 +165,52 @@ de merge; **sin despliegue automático ni envío #16**.
 corroboradas se necesita comprobante individual proporcionado por
 iVentas o administrador Meta con permiso correspondiente. Esta fase
 solo descubre y guía esos faltantes; no simula acceso empresarial a Meta.
+
+
+## Etapa C — QA_MANUAL desde Suite Ultra (2026-10-14)
+
+Esta etapa actualiza expresamente la restricción anterior de Fase 3/M2 §15.1,
+que prohibía un endpoint HTTP para `QA_MANUAL`. **La excepción nueva es
+exclusivamente un flujo administrador global, de una sucursal, un destinatario
+y su canal activo/default**; no se habilita un upload público ni se añade
+`QA_MANUAL` como fuente del Audience Builder comercial.
+
+Endpoints bajo `/api/marketing`:
+- `POST /campaigns-v2/qa-manual/preview`: JWT, global,
+  `can_manage_dispatch_config`, `can_manage_campaigns` y
+  `can_preflight_campaigns`. Valida los campos `name` (prefijo `QA `),
+  `purpose`, `sucursal_id`, `provider_channel_id`, `recipients`
+  (exactamente un objeto con `name` y `phone`), sucursal Track
+  activa/única y exactamente un canal iVentas predeterminado activo.
+  Reutiliza `build_campaign_v2_qa_manual_preview`, no escribe en DB.
+  Responde un teléfono *enmascarado*, SHA-256 del Preview,
+  `channel_binding_id`, canal y sucursal.
+- `POST /campaigns-v2/qa-manual/freeze`: mismos controles, y exige
+  `expected_preview_fingerprint`, `expected_channel_binding_id`
+  y `confirm_freeze: true`. Nunca recibe `created_by_user_id` del
+  cliente: obtiene el actor del JWT y reutiliza el freeze QA existente;
+  su deduplicación por nombre y el conflicto de SHA devuelven 409.
+  Crea una sola campaña QA congelada con un destinatario y su evidencia.
+- Ambos: **no envían**, no crean child iVentas, no reservan cuota,
+  no habilitan kill switches, no autorizan dispatch y no llaman a Meta.
+  El POST de freeze es un write explícito en la Suite, no un envío.
+- Angular: modal standalone TS/HTML/CSS, botón visible para alcance global
+  con `can_manage_dispatch_config`, sin `localStorage`; si cambia
+  cualquier campo se invalida el Preview. Tras congelar muestra el ID y
+  recuerda que todavía se requiere preflight, auditoría y autorización
+  explícita separada para cualquier envío.
+- Backend no expone números completos en el resultado; el teléfono
+  capturado se utiliza en memoria del formulario y solo en cada request.
+- Sin migración Alembic: reutiliza CampaignV2/Recipient/Evidence.
+  La campaña QA #16 existente **no se modifica** automáticamente.
+- Se conserva el script CLI interno para compatibilidad y el límite
+  histórico de 10 destinatarios en ese helper; solo el gateway HTTP
+  restringe a uno.
+
+Tests: negativa 401/403, payload extra `created_by_user_id`,
+reconocimiento de canal activo/default único, teléfono oculto, SHA de
+Preview, conflicto, freeze único en DB aislada y no-send. No usar teléfonos
+reales en fixtures; no correr envíos provider durante CI.
+
+**Esta autorización cubre desarrollo, prueba automatizada, PR y merge;
+NO autoriza ningún POST real a iVentas ni despliegue automático de Suite.**
