@@ -81,3 +81,13 @@ td button{white-space:nowrap}.detail-head{display:flex;justify-content:space-bet
 
 /* M1-C: no expandir ancho por secuencias largas de slots. */
 .auto-page .columns td small{display:block;color:var(--mat-sys-on-surface-variant,#64748b);font-size:11px;max-width:240px;overflow-wrap:anywhere}
+
+/* Última ejecución observada por job: no equivale a frescura del dataset. */
+.run-result{display:inline-flex;align-items:center;border:1px solid #cbd5e1;
+  border-radius:5px;padding:3px 8px;font-weight:700;color:#475569;background:#f8fafc;
+  white-space:nowrap}
+.run-result-completed{color:#166534;border-color:#86efac;background:#f0fdf4}
+.run-result-error{color:#991b1b;border-color:#fca5a5;background:#fef2f2}
+.run-result-partial{color:#92400e;border-color:#fcd34d;background:#fffbeb}
+.run-result-running{color:#075985;border-color:#7dd3fc;background:#eff6ff}
+td .run-result+button{margin-left:7px}
