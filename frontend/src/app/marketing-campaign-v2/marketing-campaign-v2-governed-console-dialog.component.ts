@@ -104,18 +104,23 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
     return this.review && 'manifest' in this.review ? this.review : null;
   }
   get nextReadyChild(): CampaignV2GovernedMonitorChild | null {
-    if (this.monitor?.execution?.status !== 'AUTHORIZED' ||
-        this.uncertainResult || !this.monitor) { return null; }
-    const statuses = this.monitor.children.filter(child => child.status !== 'HELD');
-    // After a failed/ambiguous child, never surface another send action.
-    if (statuses.some(child => child.status !== 'READY' && child.status !== 'SUBMITTED')) {
-      return null;
-    }
-    const nextIndex = statuses.findIndex(child => child.status === 'READY');
+    const monitor = this.monitor, review = this.reviewReady;
+    if (monitor?.execution?.status !== 'AUTHORIZED' || !review?.execution ||
+        review.execution.status !== 'AUTHORIZED' ||
+        this.uncertainResult || !monitor || !this.validApproval) { return null; }
+    if (review.manifest_digest !== monitor.approval?.manifest_digest) { return null; }
+    if (monitor.children.some(child => child.needs_manual_review)) { return null; }
+    const ready = review.manifest.batches.filter(batch => batch.planned_status === 'READY');
+    const byBranch = new Map(monitor.children.map(child => [child.sucursal_canon, child]));
+    const ordered = ready.map(batch => byBranch.get(batch.sucursal_canon));
+    // Manifest is the authority on send sequence, not database child insertion order.
+    if (ordered.some(child => !child ||
+        (child.status !== 'READY' && child.status !== 'SUBMITTED'))) { return null; }
+    const nextIndex = ordered.findIndex(child => child?.status === 'READY');
     if (nextIndex < 0 ||
-        statuses.slice(0, nextIndex).some(child => child.status !== 'SUBMITTED') ||
-        statuses.slice(nextIndex).some(child => child.status !== 'READY')) { return null; }
-    return statuses[nextIndex];
+        ordered.slice(0, nextIndex).some(child => child?.status !== 'SUBMITTED') ||
+        ordered.slice(nextIndex).some(child => child?.status !== 'READY')) { return null; }
+    return ordered[nextIndex] ?? null;
   }
   get approvalWord(): string { return 'APROBAR ' + this.readyCount; }
   get materializeWord(): string { return 'MATERIALIZAR ' + this.data.campaignId; }
@@ -144,11 +149,12 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
       this.authorizationPhrase.value === this.authorizationWord;
   }
   get canExecute(): boolean {
+    const review = this.reviewReady;
     return !this.busy && !this.uncertainResult && !!this.nextReadyChild &&
-      this.validApproval && !!this.reviewReady?.execution &&
+      this.validApproval && !!review?.execution &&
       this.monitor?.quota.all_current === true &&
-      this.reviewReady.execution.status === 'AUTHORIZED' &&
-      this.reviewReady.manifest_digest === this.monitor?.approval?.manifest_digest &&
+      review.execution.status === 'AUTHORIZED' &&
+      review.manifest_digest === this.monitor?.approval?.manifest_digest &&
       this.executionCheckbox.value === true &&
       this.executionPhrase.value === this.sendWord;
   }
@@ -209,6 +215,9 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
             this.holdSelected[batch.sucursal_canon] = new FormControl(false, { nonNullable: true });
             this.holdSource[batch.sucursal_canon] = new FormControl('', { nonNullable: true });
             this.holdSelected[batch.sucursal_canon].valueChanges.pipe(
+              takeUntilDestroyed(this.destroyRef),
+            ).subscribe(() => this.approvalPhrase.setValue(''));
+            this.holdSource[batch.sucursal_canon].valueChanges.pipe(
               takeUntilDestroyed(this.destroyRef),
             ).subscribe(() => this.approvalPhrase.setValue(''));
           }
