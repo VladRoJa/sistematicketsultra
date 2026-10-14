@@ -14,7 +14,7 @@ REV = "b856port1014"
 
 def test_b1_migration_is_linear_and_append_only():
     module = ScriptDirectory(str(MIGRATIONS)).get_revision(REV).module
-    assert module.down_revision == "f856opcap1013"
+    assert module.down_revision == "f856m1f40001"
 
 
 def test_b1_migration_postgres_constraints_and_downgrade(monkeypatch):
