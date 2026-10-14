@@ -68,7 +68,7 @@ jobs:
             tests/google_ads/test_google_ads_m6_authenticated_approval.py \
             tests/google_ads/test_google_ads_m6_authenticated_postgres.py \
             tests/google_ads/test_google_ads_m6_attribution_reader.py \
-            backend/tests/google_ads/test_google_ads_m6_daily_pair_preflight.py \
+            tests/google_ads/test_google_ads_m6_daily_pair_preflight.py \
             tests/google_ads/test_google_ads_m6_attribution_postgres.py \
             tests/google_ads/test_google_ads_m6_continuity_postgres.py \
             tests/google_ads/test_google_ads_m5_branch_attribution_readonly.py
