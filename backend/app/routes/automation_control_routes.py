@@ -97,7 +97,7 @@ def automation_control_freshness():
     if scope_mode not in {"GLOBAL", "FILTERED"}:
         return jsonify({"status": "error", "message": "scope_mode inválido."}), 400
     allowed_args = (
-        {"module_key", "scope_mode", "month"}
+        {"module_key", "scope_mode", "month", "cutoff_date"}
         if module_key == "marketing.sales_funnel"
         else {"module_key", "scope_mode", "track_date"}
     )
@@ -134,6 +134,7 @@ def automation_control_freshness():
         report = read_freshness(
             module_key, scope_global_certified=global_certified,
             month=request.args.get("month"),
+            cutoff_date=request.args.get("cutoff_date"),
             track_date=request.args.get("track_date"),
         )
     except ValueError as exc:
