@@ -10,6 +10,7 @@ on:
       - 'backend/migrations/versions/d7f2a09c8b61_google_ads_m6_daily_publications.py'
       - 'backend/tests/google_ads/test_google_ads_m6_global_publication_reader_postgres.py'
       - 'backend/app/services/marketing_google_ads_funnel_service.py'
+      - 'backend/tests/marketing/test_google_ads_funnel_investment.py'
       - 'backend/tests/google_ads/test_google_ads_m6_daily_publication_postgres.py'
       - 'backend/app/warehouse/services/google_ads_m6_continuity_approval_service.py'
       - 'backend/scripts/apply_google_ads_m6_continuity.py'
@@ -90,6 +91,7 @@ jobs:
             tests/google_ads/test_google_ads_m6_continuity_postgres.py \
             tests/google_ads/test_google_ads_m6_daily_publication_postgres.py \
             tests/google_ads/test_google_ads_m6_global_publication_reader_postgres.py \
+            tests/marketing/test_google_ads_funnel_investment.py \
             tests/google_ads/test_google_ads_m5_branch_attribution_readonly.py
 
   frontend:
