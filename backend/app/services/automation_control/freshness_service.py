@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from app.extensions import db
 from app.models.warehouse import TrackDailyVersionORM, TrackDailyMartORM
 from app.services.automation_control.track_coverage_service import read_track_current_catalog_coverage
+from app.services.automation_control.track_base_sla_service import read_track_base_sla
 from app.services.marketing_sales_funnel_cutoff_service import (
     _crm_history_available,
     _iventas_cutoff_dates,
@@ -92,7 +93,7 @@ def _funnel_evidence(payload: dict, *, period_start: date, cutoff: date) -> None
     )
 
 
-def _track_evidence(payload: dict, *, cutoff: date) -> None:
+def _track_evidence(payload: dict, *, cutoff: date, checked_at: datetime) -> None:
     """Track requires current success + actual mart rows, not a green from success."""
     start = cutoff - timedelta(days=14)
     rows = (
@@ -160,6 +161,30 @@ def _track_evidence(payload: dict, *, cutoff: date) -> None:
         "El catálogo no tiene vigencia histórica por fecha; coincidencia con "
         "el catálogo actual no certifica todas las sucursales del corte ni su SLA."
     )
+    base_sla = read_track_base_sla(business_date=cutoff, now=checked_at)
+    payload["track_base_sla"] = base_sla
+    payload["expected_business_date"] = base_sla["expected_business_date"]
+    payload["due_at"] = base_sla["due_at"]
+    payload["late_at"] = base_sla["late_at"]
+    payload["status"] = base_sla["status"]
+    if base_sla["status"] != "UNKNOWN":
+        payload["reason_code"] = base_sla["reason_code"]
+        payload["label"] = {
+            "NOT_DUE": "Aún no vence", "LAGGING": "Pendiente",
+            "LATE": "Atrasado",
+        }[base_sla["status"]]
+        payload["detail"] += (
+            " Base nocturna D+1: exigible a las 02:00; atrasada desde "
+            "las 03:00 de Tijuana, todos los días. "
+            "No se confunde con el cierre canónico."
+        )
+    else:
+        payload["reason_code"] = base_sla["reason_code"]
+        payload["detail"] += (
+            " La base tiene versión vigente o información ambigua, pero no "
+            "existe cobertura histórica por sucursal certificada: "
+            "no se puede confirmar cumplimiento ni atraso."
+        )
 
 
 def read_freshness(
@@ -204,8 +229,10 @@ def read_freshness(
                 raise ValueError("cutoff_date fuera del periodo solicitado.")
             cutoff = selected
     else:
+        # Without a chosen date, monitor the last nightly-base business day.
+        # Track's page can explicitly request today's date before its deadline.
         try:
-            cutoff = date.fromisoformat(track_date) if track_date else today
+            cutoff = date.fromisoformat(track_date) if track_date else (today - timedelta(days=1))
         except (ValueError, TypeError) as exc:
             raise ValueError("track_date debe ser YYYY-MM-DD.") from exc
         if cutoff > today or cutoff < today - timedelta(days=730):
@@ -222,5 +249,5 @@ def read_freshness(
     if module_key == "marketing.sales_funnel":
         _funnel_evidence(payload, period_start=period, cutoff=cutoff)
     else:
-        _track_evidence(payload, cutoff=cutoff)
+        _track_evidence(payload, cutoff=cutoff, checked_at=checked)
     return payload
