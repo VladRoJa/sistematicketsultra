@@ -15,7 +15,7 @@ REV = "f856opcap1013"
 
 def test_operator_cap_revision_is_linear_and_data_preserving(monkeypatch):
     migration = ScriptDirectory(str(MIGRATIONS)).get_revision(REV)
-    assert migration.down_revision == "e856d3c21013"
+    assert migration.down_revision == "c13a70e4d82c"
     out = StringIO()
     ctx = MigrationContext.configure(
         dialect_name="postgresql", opts={"as_sql": True, "output_buffer": out},
