@@ -94,7 +94,16 @@ export class DataFreshnessIndicatorComponent implements OnChanges, OnDestroy {
       ': exigible '+base.due_at+
       ', atrasada desde '+base.late_at+
       '. Cierre canónico independiente, condicionado a agregadoras.' : '';
-    return this.state.detail + baseTiming + counts + (
+    const sync=this.state.marketing_sync_sla;
+    const syncLabel=sync ? (
+      ' Sincronizaciones Marketing (no certifican Funnel completo): '+
+      'slot '+(sync.slot_at || 'sin atribución')+
+      ', estado '+sync.status+
+      ', pendiente desde '+(sync.due_at || 'no comprobado')+
+      ', atrasado desde '+(sync.late_at || 'no comprobado')+
+      '. '+sync.sources.map(source => source.key+': '+source.status).join('; ')+'.'
+    ) : '';
+    return this.state.detail + baseTiming + counts + syncLabel + (
       this.state.latest_complete_business_date
         ? ' Último corte conjunto: ' + this.state.latest_complete_business_date + '.'
         : ''
