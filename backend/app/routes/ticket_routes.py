@@ -2028,7 +2028,11 @@ def historial_equipo(equipo_id):
 
         # Si no eres admin, filtra solo tickets de tu sucursal
         query = Ticket.query.filter(Ticket.aparato_id == equipo_id)
-        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
+        if str(user.rol or "").strip().upper() == "COMPRAS":
+            query = filtrar_tickets_por_usuario(user).filter(
+                Ticket.aparato_id == equipo_id
+            )
+        elif not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
             query = query.filter(Ticket.sucursal_id == user.sucursal_id)
 
         tickets = query.order_by(Ticket.fecha_creacion.desc()).all()
@@ -2076,8 +2080,10 @@ def historial_por_equipo(aparato_id):
 
         query = Ticket.query.filter_by(aparato_id=aparato_id)
 
-        # Solo admins pueden ver todos, los demás solo los de su sucursal
-        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
+        # COMPRAS siempre reutiliza su scope individual, incluso con sede root.
+        if str(user.rol or "").strip().upper() == "COMPRAS":
+            query = filtrar_tickets_por_usuario(user).filter_by(aparato_id=aparato_id)
+        elif not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
             query = query.filter_by(sucursal_id=user.sucursal_id)
 
         tickets = query.order_by(Ticket.fecha_creacion.desc()).all()
@@ -2108,7 +2114,8 @@ def historial_global():
         sucursal_id = request.args.get('sucursal_id', type=int)
         estado = request.args.get('estado')  # abierto/en progreso/finalizado
 
-        query = Ticket.query
+        is_compras_reader = str(user.rol or "").strip().upper() == "COMPRAS"
+        query = filtrar_tickets_por_usuario(user) if is_compras_reader else Ticket.query
 
         # Filtro por tipo de inventario
         if tipo:
@@ -2116,8 +2123,14 @@ def historial_global():
             query = query.join(Ticket.inventario)
             query = query.filter(InventarioGeneral.tipo == tipo)
 
-        # Filtro por sucursal (admins ven todo)
-        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
+        # Compras nunca recibe visibilidad implícita por sucursal corporativa.
+        if is_compras_reader:
+            if sucursal_id:
+                query = query.filter(or_(
+                    Ticket.sucursal_id_destino == sucursal_id,
+                    Ticket.sucursal_id == sucursal_id,
+                ))
+        elif not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
             query = query.filter_by(sucursal_id=user.sucursal_id)
         elif sucursal_id:
             query = query.filter_by(sucursal_id=sucursal_id)
@@ -2151,15 +2164,26 @@ def historial_aparato(aparato_id):
         if not user:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
-        # FILTRO: Si no es admin, solo puede ver su sucursal
+        # COMPRAS: alcance exclusivamente asignado, sin excepción corporativa.
+        is_compras_reader = str(user.rol or "").strip().upper() == "COMPRAS"
         filtro_sucursal = []
-        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
+        if is_compras_reader:
+            filtro_sucursal = [
+                int(x) for x in (getattr(user, "sucursales_ids", None) or [])
+                if str(x).isdigit() and int(x) not in {100, 1000}
+            ]
+        elif not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
             filtro_sucursal = [user.sucursal_id]
 
         # --- Tickets relacionados ---
-        tickets_query = Ticket.query.filter_by(aparato_id=aparato_id)
-        if filtro_sucursal:
-            tickets_query = tickets_query.filter(Ticket.sucursal_id.in_(filtro_sucursal))
+        if is_compras_reader:
+            tickets_query = filtrar_tickets_por_usuario(user).filter_by(
+                aparato_id=aparato_id
+            )
+        else:
+            tickets_query = Ticket.query.filter_by(aparato_id=aparato_id)
+            if filtro_sucursal:
+                tickets_query = tickets_query.filter(Ticket.sucursal_id.in_(filtro_sucursal))
         tickets = tickets_query.order_by(Ticket.fecha_creacion.desc()).all()
         tickets_serializados = [t.to_dict() for t in tickets]
 
@@ -2172,7 +2196,7 @@ def historial_aparato(aparato_id):
         for d in detalles:
             mov = d.movimiento
             # Filtramos por sucursal si aplica
-            if filtro_sucursal and mov.sucursal_id not in filtro_sucursal:
+            if (is_compras_reader or filtro_sucursal) and mov.sucursal_id not in filtro_sucursal:
                 continue
             movimientos.append({
                 'id': mov.id,

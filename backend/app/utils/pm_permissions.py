@@ -65,6 +65,30 @@ def get_user_role(user) -> str:
     return normalize_pm_role(getattr(user, "rol", None))
 
 
+def has_compras_maintenance_read_grant(user) -> bool:
+    """Individual read grant; COMPRAS role alone never enables Maintenance."""
+
+    if get_user_role(user) != "COMPRAS":
+        return False
+
+    user_id = getattr(user, "id", None)
+    if user_id is None:
+        return False
+
+    from app.models.permiso_model import Permiso
+
+    # The existing department ACL can be assigned/revoked per user.
+    # The es_admin flag must be false: this grant never authorizes writes.
+    return (
+        Permiso.query.filter_by(
+            user_id=user_id,
+            departamento_id=1,
+            es_admin=False,
+        ).first()
+        is not None
+    )
+
+
 def _check_pm_role(user, allowed_roles: set[str], action: str) -> PmPermissionResult:
     role = get_user_role(user)
 
@@ -82,6 +106,14 @@ def _check_pm_role(user, allowed_roles: set[str], action: str) -> PmPermissionRe
             action=action,
             role=role,
             reason="role_allowed",
+        )
+
+    if action == "view" and has_compras_maintenance_read_grant(user):
+        return PmPermissionResult(
+            allowed=True,
+            action=action,
+            role=role,
+            reason="explicit_compras_maintenance_read_grant",
         )
 
     return PmPermissionResult(

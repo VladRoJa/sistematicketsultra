@@ -11,6 +11,19 @@ from app.utils.pm_permissions import can_pm_execute
 MAINTENANCE_DEPARTMENT_ID = 1
 GENERIC_TICKET_UPDATE_ENDPOINT = "tickets.update_ticket_status"
 
+# Algunas rutas legacy permiten acciones a cuentas corporativas por sucursal
+# principal. COMPRAS no debe heredar escrituras sobre tickets de Mantenimiento.
+COMPRAS_MAINTENANCE_MUTATION_ENDPOINTS = frozenset({
+    "tickets.update_ticket_status",
+    "tickets.set_compromiso",
+    "tickets.cierre_gerente_desde_cero",
+    "tickets.cierre_solicitar",
+    "tickets.cierre_rechazar_jefe",
+    "tickets.cierre_aceptar_creador",
+    "tickets.cierre_rechazar_creador",
+    "tickets.notify_ticket",
+})
+
 
 def is_maintenance_ticket(ticket) -> bool:
     """Return True only for tickets owned by Mantenimiento."""
@@ -79,5 +92,40 @@ def register_maintenance_ticket_update_guard(app) -> None:
                     )
                 }
             ),
+            403,
+        )
+
+    @app.before_request
+    def guard_compras_maintenance_mutations():
+        if (
+            request.method not in {"POST", "PUT", "PATCH", "DELETE"}
+            or request.endpoint not in COMPRAS_MAINTENANCE_MUTATION_ENDPOINTS
+        ):
+            return None
+
+        verify_jwt_in_request()
+        actor = UserORM.get_by_id(get_jwt_identity())
+        if (
+            actor is None
+            or str(getattr(actor, "rol", "") or "").strip().upper() != "COMPRAS"
+        ):
+            return None
+
+        route_args = request.view_args or {}
+        ticket_id = route_args.get("ticket_id", route_args.get("id"))
+        if ticket_id is None:
+            return None
+
+        ticket = Ticket.query.get(ticket_id)
+        if ticket is None or not is_maintenance_ticket(ticket):
+            return None
+
+        return (
+            jsonify({
+                "mensaje": (
+                    "Compras tiene acceso de consulta a Mantenimiento; "
+                    "no puede ejecutar cambios, cierres ni notificaciones."
+                )
+            }),
             403,
         )

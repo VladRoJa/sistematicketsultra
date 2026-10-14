@@ -14,6 +14,8 @@ from app.models.inventario import InventarioGeneral, InventarioSucursal
 from app.models.sucursal_model import Sucursal
 from app.models.pm_validacion import PmValidacionORM
 from app.utils.pm_permissions import (
+    can_pm_view,
+    can_pm_execute,
     require_pm_execute,
     require_pm_validate,
     require_pm_configure,
@@ -97,14 +99,17 @@ def _verificar_permiso_sucursal(user, sucursal_id_int):
         getattr(user, "sucursales_ids", [])
     )
 
-    primary_sucursal_id = getattr(user, "sucursal_id", None)
-    try:
-        primary_sucursal_id = int(primary_sucursal_id) if primary_sucursal_id is not None else None
-    except (TypeError, ValueError):
-        primary_sucursal_id = None
+    # COMPRAS con lectura individual: SOLO la lista administrada en Permisos.
+    # Su sucursal principal (normalmente corporativa) no amplía el acceso.
+    if rol != "COMPRAS":
+        primary_sucursal_id = getattr(user, "sucursal_id", None)
+        try:
+            primary_sucursal_id = int(primary_sucursal_id) if primary_sucursal_id is not None else None
+        except (TypeError, ValueError):
+            primary_sucursal_id = None
 
-    if primary_sucursal_id is not None:
-        allowed_sucursales.append(primary_sucursal_id)
+        if primary_sucursal_id is not None:
+            allowed_sucursales.append(primary_sucursal_id)
 
     allowed_sucursales = sorted(set(allowed_sucursales))
 
@@ -910,6 +915,26 @@ def _asignar_bitacoras_a_ocurrencias_con_ventana(
 # ────────────────────────────────────────────────────────────
 # POST /mobile/bitacoras
 # ────────────────────────────────────────────────────────────
+@pm_bp.route("/access", methods=["GET"])
+@jwt_required()
+def pm_read_access():
+    """Contexto liviano para publicar la consulta de PM sin confiar en el rol UI."""
+    user, user_err = _obtener_usuario_actual_pm(get_jwt_identity())
+    if user_err:
+        return jsonify(user_err[0]), user_err[1]
+
+    allowed = can_pm_view(user)
+    if _pm_user_role(user) == "COMPRAS":
+        # La excepción individual solo es útil con sucursales asignadas.
+        allowed = allowed and bool(_pm_user_assigned_sucursales(user))
+
+    return jsonify({
+        "allowed": bool(allowed),
+        "can_view": bool(allowed),
+        "can_execute": can_pm_execute(user),
+    }), 200
+
+
 @pm_bp.route("/mobile/bitacoras", methods=["POST"])
 @jwt_required()
 def pm_mobile_crear_bitacora():
@@ -1040,7 +1065,7 @@ def pm_listar_bitacoras():
     department_id = _pm_user_department_id(user)
     rol = _pm_user_role(user)
 
-    if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO"}:
+    if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO", "COMPRAS"}:
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "APARATOS")
     elif department_id == 7 or rol in {"SISTEMAS", "TECNICO"}:
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "DISPOSITIVOS")
@@ -1141,7 +1166,7 @@ def pm_listar_configuraciones():
     department_id = _pm_user_department_id(user)
     rol = _pm_user_role(user)
 
-    if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO"}:
+    if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO", "COMPRAS"}:
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "APARATOS")
     elif department_id == 7 or rol in {"SISTEMAS", "TECNICO"}:
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "DISPOSITIVOS")
@@ -1342,7 +1367,7 @@ def pm_preventivo_dashboard():
     rol = _pm_user_role(user)
     department_id = _pm_user_department_id(user)
 
-    if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO"}:
+    if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO", "COMPRAS"}:
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "APARATOS")
     elif department_id == 7 or rol in {"SISTEMAS", "TECNICO"}:
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "DISPOSITIVOS")
@@ -1526,7 +1551,7 @@ def pm_calendario():
     department_id = _pm_user_department_id(user)
     rol = _pm_user_role(user)
 
-    if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO"}:
+    if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO", "COMPRAS"}:
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "APARATOS")
     elif department_id == 7 or rol in {"SISTEMAS", "TECNICO"}:
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "DISPOSITIVOS")
