@@ -51,7 +51,7 @@
       <div class="portfolio-entry" *ngFor="let p of portfolios">
         <strong>{{ p.display_name || 'Nombre pendiente' }}</strong>
         <span>{{ p.business_id }} · App: {{ p.app_id || 'Sin identificar' }}</span>
-        <small>NO VERIFICADO · Fuente: {{ p.source_reference }} · Canales vinculados: 0</small>
+        <small>NO VERIFICADO · Fuente: {{ p.source_reference }} · Canales verificados: 0</small>
       </div>
     </div>
     <p *ngIf="!portfolios.length && !loading">Sin referencias declaradas. Registrar un portafolio no crea una política de envío.</p>
