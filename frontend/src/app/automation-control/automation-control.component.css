@@ -91,3 +91,9 @@ td button{white-space:nowrap}.detail-head{display:flex;justify-content:space-bet
 .run-result-partial{color:#92400e;border-color:#fcd34d;background:#fffbeb}
 .run-result-running{color:#075985;border-color:#7dd3fc;background:#eff6ff}
 td .run-result+button{margin-left:7px}
+
+/* Matriz avanzada: disponible bajo demanda, no oculta el estado por job. */
+.timeline-expand{margin:12px 0}
+.timeline-expand summary{cursor:pointer;padding:11px 12px;background:#fff;
+  border:1px solid #dce2e9;border-radius:5px;font-size:13px;font-weight:600}
+.timeline-expand[open] summary{margin-bottom:10px}
