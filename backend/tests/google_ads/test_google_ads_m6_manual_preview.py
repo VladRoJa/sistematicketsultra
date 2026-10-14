@@ -53,14 +53,23 @@ def setup_client(monkeypatch):
     monkeypatch.setattr(svc, "db", SimpleNamespace(engine=engine))
 
     baseline_campaign, baseline_group = _synthetic_pair()
-    _, _, _, identities = _fake_facts()
+    # Synthetic fixtures in _fake_facts use placeholder hashes, whereas
+    # the real XLSX parser derives SHA-256 from campaign/group names.
+    # A positive test must use the *parsed* historical keys, never loosen
+    # the production equality check.
+    historical_first_day = min(row.report_date for row in baseline_group.rows)
+    actual_groups = [
+        row for row in baseline_group.rows
+        if row.report_date == historical_first_day
+    ]
+    assert len(actual_groups) == 43
     manifest = {
         "id": "GOOGLE_ADS_M5_IDENTITY_20261012_V1",
         "customer_id": "2739125201",
         "rows": [
-            ["c", "g", row["campaign_key"], row["ad_group_key"],
-             row["sucursal_canon"], i + 1, "0"]
-            for i, row in enumerate(identities)
+            [row.campaign_name, row.ad_group_name, row.campaign_key,
+             row.ad_group_key, f"LAB_BRANCH_{i}", i + 1, "0"]
+            for i, row in enumerate(actual_groups[:26])
         ],
     }
     monkeypatch.setattr(svc, "_load_files", lambda: (baseline_campaign, baseline_group))
@@ -210,10 +219,20 @@ def test_fail_closed_for_invalid_payload(setup_client, alter, expected):
     elif alter == "not_excel":
         r = post(client, token, files=(b"not-an-excel", second))
     else:
-        # Same layout but two different days after strict XLSX parser.
-        r = post(client, token, files=(first, second.replace(
-            b"13 de octubre de 2026", b"14 de octubre de 2026"
-        )))
+        # XLSX is zipped: modify workbook cells, not raw ZIP bytes.
+        from openpyxl import load_workbook
+        book = load_workbook(BytesIO(second))
+        sheet = book.active
+        sheet.cell(2, 1).value = (
+            "14 de octubre de 2026 - 14 de octubre de 2026"
+        )
+        for line in range(4, sheet.max_row + 1):
+            if sheet.cell(line, 1).value == DAY.isoformat():
+                sheet.cell(line, 1).value = "2026-10-14"
+        changed = BytesIO()
+        book.save(changed)
+        book.close()
+        r = post(client, token, files=(first, changed.getvalue()))
     assert r.status_code == expected
 
 
