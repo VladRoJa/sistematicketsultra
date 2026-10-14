@@ -8,6 +8,12 @@ on:
       - "backend/app/routes/automation_control_routes.py"
       - "backend/app/services/automation_control/**"
       - "backend/app/services/marketing_iventas_run_*"
+      - "backend/app/services/marketing_meta_run_*"
+      - "backend/app/services/marketing_iventas_persistence_service.py"
+      - "backend/app/services/marketing_meta_persistence_service.py"
+      - "backend/app/services/marketing_scheduler_worker.py"
+      - "backend/migrations/versions/f856m1f40001_marketing_slot_attribution.py"
+      - "backend/tests/marketing/test_marketing_scheduler_worker.py"
       - "backend/app/utils/automation_control_access.py"
       - "backend/migrations/versions/f62a1b9d4c07_iventas_branch_failure_diagnostics.py"
       - "backend/tests/automation_control/**"
@@ -74,13 +80,21 @@ jobs:
             app/services/automation_control/diagnostic_service.py \
             app/services/marketing_iventas_run_lifecycle_service.py \
             app/services/marketing_iventas_run_sync_service.py \
+            app/services/marketing_meta_run_sync_service.py \
+            app/services/marketing_scheduler_worker.py \
+            app/services/automation_control/marketing_slot_sla_service.py \
+            migrations/versions/f856m1f40001_marketing_slot_attribution.py \
             migrations/versions/f62a1b9d4c07_iventas_branch_failure_diagnostics.py
       - name: Regression + real PostgreSQL 16 migration (synthetic only)
         run: |
           python -m pytest -q --tb=short -o addopts= \
             tests/automation_control \
             tests/services/test_marketing_iventas_run_lifecycle_service.py \
-            tests/services/test_marketing_iventas_run_sync_service.py
+            tests/services/test_marketing_iventas_run_sync_service.py \
+            tests/services/test_marketing_iventas_persistence_service.py \
+            tests/services/test_marketing_meta_persistence_service.py \
+            tests/services/test_marketing_meta_run_sync_service.py \
+            tests/marketing/test_marketing_scheduler_worker.py
 
   frontend:
     name: Angular typecheck, contract, and production build
@@ -148,4 +162,5 @@ jobs:
         run: |
           python -m pytest -q --tb=short -o addopts= \
             tests/automation_control/test_worker_health.py \
-            tests/automation_control/test_worker_health_postgres_ci.py
+            tests/automation_control/test_worker_health_postgres_ci.py \
+            tests/automation_control/test_marketing_slot_sla_service.py
