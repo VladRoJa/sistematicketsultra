@@ -107,7 +107,6 @@ def read_effective_roster_for_date(day: date) -> dict:
         db.session.query(TrackEffectiveRosterEpochORM)
         .filter(
             TrackEffectiveRosterEpochORM.effective_from <= day,
-            TrackEffectiveRosterEpochORM.sealed_at_utc.isnot(None),
         )
         .order_by(TrackEffectiveRosterEpochORM.effective_from.desc())
         .limit(2)
@@ -116,6 +115,10 @@ def read_effective_roster_for_date(day: date) -> dict:
     if not epochs:
         return {"verified": False, "reason_code": "NO_EFFECTIVE_ROSTER_ATTESTATION"}
     epoch = epochs[0]
+    # Never fall back to an older sealed epoch once a newer decision's
+    # effective date has arrived but its member set is still unsealed.
+    if epoch.sealed_at_utc is None:
+        return {"verified": False, "reason_code": "EFFECTIVE_ROSTER_UNSEALED"}
     rows = (
         db.session.query(TrackEffectiveRosterMemberORM)
         .filter(TrackEffectiveRosterMemberORM.epoch_id == epoch.id)
