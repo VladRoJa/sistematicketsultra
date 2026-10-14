@@ -108,7 +108,7 @@ def test_global_operator_creates_unverified_reference_not_a_channel_binding():
     with patch.object(routes, "_resolve_request_access", return_value=(SimpleNamespace(id=7), permitted)), \
          patch.object(routes, "register_portfolio_reference", return_value={
              "business_id": BASE["business_id"], "verification_status": "UNVERIFIED",
-             "linked_channel_count": 0,
+             "verified_channel_count": 0,
          }) as register:
         response = client.post(
             "/api/marketing/campaigns-v2/dispatch/portfolio-references",
