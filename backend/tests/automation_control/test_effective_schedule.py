@@ -88,6 +88,7 @@ def test_disabled_flag_is_explicit(appdb):
     {"track.base_nocturna_canonica":{**SPEC,"timezone":"Bearer SECRET"}},
     {"track.base_nocturna_canonica":{**SPEC,"slots":["garbage"]}},
     {"track.base_nocturna_canonica":{**SPEC,"enabled":"true"}},
+    {"track.base_nocturna_canonica":{**SPEC,"kind":[]}},
     {"track.base_nocturna_canonica":{**SPEC,"interval_seconds":True}},
     {"track.base_nocturna_canonica":{**SPEC,"slots":[]}},
 ])
@@ -119,3 +120,18 @@ def test_endpoint_jwt_and_admicorp_only(appdb):
         result=c.get(url,headers=auth)
     assert result.status_code==200
     assert len(result.get_json()["jobs"])==18
+
+
+def test_query_returns_single_newest_heartbeat_after_many_restarts(appdb):
+    for i in range(25):
+        _beat(
+            "track-scheduler",
+            {"track.base_nocturna_canonica":{**SPEC,"slots":["01:10"]}},
+            instance=f"{i:032x}",
+            seen=NOW-timedelta(days=i+1),
+        )
+    _beat("track-scheduler", {"track.base_nocturna_canonica":SPEC},
+          instance="f"*32, seen=NOW)
+    result=_job(read_effective_schedules(NOW))
+    assert result["state"]=="REPORTED"
+    assert result["schedule"]["slots"]==["23:30"]
