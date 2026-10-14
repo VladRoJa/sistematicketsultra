@@ -1,3 +1,5 @@
+import { campaignV2BuildReadinessRows } from './marketing-campaign-v2-readiness.logic';
+import type { CampaignV2DispatchTemplate, CampaignV2ChannelBinding, CampaignV2QuotaPolicyRevision, CampaignV2BudgetRateRevision } from './marketing-campaign-v2.models';
 import { campaignV2IndicativeBudget } from './marketing-campaign-v2-budget.logic';
 import { isDispatchTemplateDraftValid, DispatchTemplateDraft } from './marketing-campaign-v2-dispatch-admin.logic';
 import { isCampaignV2MxnUnitCostValid, isCampaignV2NominalLimitValid, isCampaignV2RemainingCountValid, isCampaignV2ZonedDateString } from './marketing-campaign-v2-admin-validation.logic';
@@ -1323,10 +1325,53 @@ test('Issue 856: administracion usa campo MDC acotado y editores progresivos', (
   const templates = fs.readFileSync(path.join(root, 'marketing-campaign-v2-dispatch-admin-dialog.component.html'), 'utf8');
   const quotas = fs.readFileSync(path.join(root, 'marketing-campaign-v2-quota-admin-dialog.component.html'), 'utf8');
   const styles = fs.readFileSync(path.join(process.cwd(), 'src/styles.scss'), 'utf8');
-  assert.equal(page.split("panelClass: 'campaign-v2-admin-dialog'").length - 1, 2);
+  assert.equal(page.split("panelClass: 'campaign-v2-admin-dialog'").length - 1, 3);
   assert.equal(styles.includes('.cdk-overlay-container .campaign-v2-admin-dialog'), true);
   assert.equal(templates.includes('*ngIf="showTemplateEditor"'), true);
   assert.equal(templates.includes('*ngIf="showBudgetEditor"'), true);
   assert.equal(quotas.includes('*ngIf="showPolicyForm"'), true);
   assert.equal(quotas.includes('*ngIf="showCapacityForm"'), true);
+});
+
+test('readiness for 26 channels remains incomplete until exact portfolio policy and rate exist', () => {
+  const template = { id: 1, is_active: true, compatible_channel_ids: ['ch-1', 'ch-2'] } as CampaignV2DispatchTemplate;
+  const bindings = [
+    { id: 1, provider_channel_id: 'ch-1', sucursal_canon: 'AZAHARES_CUL', is_active: true, is_default: true },
+    { id: 2, provider_channel_id: 'ch-2', sucursal_canon: 'TEC_MXL', is_active: true, is_default: true },
+  ] as CampaignV2ChannelBinding[];
+  const policies = [
+    { revision_id: 11, provider_channel_id: 'ch-1', portfolio_key: 'unverified-1',
+      account_key: 'account', operational_channel_cap: 100,
+      operational_portfolio_cap: 200, valid_from: '2026-10-14T01:00:00Z' },
+    { revision_id: 12, provider_channel_id: 'ch-2', portfolio_key: 'unverified-1',
+      account_key: 'account', operational_channel_cap: 100,
+      operational_portfolio_cap: 200, valid_from: '2026-10-14T01:00:00Z' },
+  ] as CampaignV2QuotaPolicyRevision[];
+  const rates = [
+    { revision_id: 21, template_id: 1, provider_channel_id: 'ch-1',
+      unit_cost_mxn: '1.001854', source_reference: 'FX documentation',
+      valid_from: '2026-10-14T01:00:00Z' },
+  ] as CampaignV2BudgetRateRevision[];
+  const rows = campaignV2BuildReadinessRows(template, bindings, policies, rates);
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].configured, true);
+  assert.equal(rows[0].portfolioVerified, false);
+  assert.equal(rows[1].configured, false);
+  assert.ok(rows[1].issues.includes('Tarifa MXN pendiente'));
+  assert.equal(rows[1].unitCostMxn, null);
+  assert.equal(campaignV2BuildReadinessRows(template, bindings, [], []).every(r => !r.configured), true);
+  policies[1].operational_portfolio_cap = 300;
+  assert.equal(campaignV2BuildReadinessRows(template, bindings, policies, rates)[0].configured, false);
+  assert.equal(campaignV2BuildReadinessRows(null, bindings, policies, rates)[0].templateCompatible, false);
+});
+
+test('operator readiness UI uses catalog reads and has no provider send action', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const ui = fs.readFileSync(path.join(root, 'marketing-campaign-v2-readiness-dialog.component.ts'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-readiness-dialog.component.html'), 'utf8');
+  assert.ok(ui.includes('forkJoin('));
+  assert.ok(ui.includes('listQuotaEvidence()'));
+  assert.ok(html.includes('Configurar portafolios y límites'));
+  assert.equal(ui.includes('submitCampaign('), false);
+  assert.equal(ui.includes('registerQuotaPolicy('), false);
 });
