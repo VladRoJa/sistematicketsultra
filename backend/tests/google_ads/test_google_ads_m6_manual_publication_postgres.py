@@ -12,6 +12,7 @@ from app.models.google_ads_m6_daily_publication import GoogleAdsM6DailyPublicati
 from app.warehouse.services.google_ads_m6_manual_publication_service import (
     PUBLISH_AUDIT, CONFIRMATION,
 )
+from test_google_ads_m6_manual_raw_postgres import real_warehouse
 from test_google_ads_m6_manual_structured_postgres import lab, _ingest, _counts
 
 URL = "/api/integrations/google-ads/manual/publish"
