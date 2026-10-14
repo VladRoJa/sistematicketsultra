@@ -575,7 +575,7 @@ export interface CampaignV2PortfolioReference {
   created_by_user_id: number;
   created_at: string;
   verification_status: 'UNVERIFIED';
-  linked_channel_count: 0;
+  verified_channel_count: 0;
 }
 
 export interface CampaignV2PortfolioReferenceRequest {
