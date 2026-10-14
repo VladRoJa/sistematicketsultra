@@ -9,6 +9,9 @@ on:
       - 'backend/app/models/google_ads_m6_daily_publication.py'
       - 'backend/migrations/versions/d7f2a09c8b61_google_ads_m6_daily_publications.py'
       - 'backend/migrations/versions/a4c85d6e9f20_merge_main_and_google_ads_m6.py'
+      - 'backend/migrations/versions/e8b2c41d7a60_google_ads_m6_correction_candidates.py'
+      - 'backend/app/models/google_ads_m6_correction.py'
+      - 'backend/tests/google_ads/test_google_ads_m6_correction_candidates_postgres.py'
       - 'backend/tests/google_ads/test_google_ads_m6_alembic_merge_graph.py'
       - 'backend/tests/google_ads/test_google_ads_m6_global_publication_reader_postgres.py'
       - 'backend/app/services/marketing_google_ads_funnel_service.py'
@@ -104,6 +107,7 @@ jobs:
             tests/google_ads/test_google_ads_m6_global_publication_reader_postgres.py \
             tests/google_ads/test_google_ads_m6_manual_publication_postgres.py \
             tests/google_ads/test_google_ads_m6_correction_diagnostic_postgres.py \
+            tests/google_ads/test_google_ads_m6_correction_candidates_postgres.py \
             tests/google_ads/test_google_ads_m6_daily_branch_reader.py \
             tests/google_ads/test_google_ads_m6_daily_reader_pg_e2e.py \
             tests/marketing/test_google_ads_funnel_investment.py \

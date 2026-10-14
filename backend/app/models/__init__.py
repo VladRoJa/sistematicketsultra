@@ -17,6 +17,11 @@ from .google_ads_m6_continuity import (
     GoogleAdsBranchApprovedIdentityORM,
 )
 from .google_ads_m6_daily_publication import GoogleAdsM6DailyPublicationORM
+from .google_ads_m6_correction import (
+    GoogleAdsM6CorrectionCaseORM,
+    GoogleAdsM6CorrectionCampaignORM,
+    GoogleAdsM6CorrectionGroupORM,
+)
 from .sucursal_model import Sucursal, SucursalOperationalStatus
 from .inventario import (
     InventarioGeneral,
@@ -201,6 +206,9 @@ __all__ = [
     "GoogleAdsOAuthCredentialORM",
     "GoogleAdsDailyMetricORM",
     "GoogleAdsBranchIdentityMappingORM",
+    "GoogleAdsM6CorrectionCaseORM",
+    "GoogleAdsM6CorrectionCampaignORM",
+    "GoogleAdsM6CorrectionGroupORM",
     "GoogleAdsBranchApprovalVersionORM",
     "GoogleAdsBranchApprovedIdentityORM",
     "Sucursal",
