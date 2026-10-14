@@ -1,0 +1,97 @@
+<h2 mat-dialog-title>Asociaciones canal → portafolio · evidencia</h2>
+<mat-dialog-content class="mapping-dialog">
+  <p class="notice"><strong>Registro operativo no verificado por Meta.</strong>
+    Esta pantalla no cambia límites, tarifas, permisos ni campañas. Ninguna asociación afirma que un WABA o canal
+    pertenezca al negocio hasta contar con comprobación externa.</p>
+  <div class="summary" *ngIf="!loading">
+    <strong>{{ declaredCount }} / {{ channelRows.length }}</strong>
+    <span>canales con asociación declarada (no verificada)</span>
+  </div>
+  <p *ngIf="loading" role="status">Consultando canales y evidencias…</p>
+  <p *ngIf="saving" role="status">Registrando revisión auditada…</p>
+  <p class="error" role="alert" *ngIf="error">{{ error }}</p>
+  <p class="success" role="status" *ngIf="success">{{ success }}</p>
+  <p class="error" *ngIf="!portfolios.length && !loading">
+    Primero registra los Business IDs en el catálogo de portafolios de la pantalla anterior.
+  </p>
+  <div class="mapping-form" *ngIf="!loading">
+    <mat-form-field appearance="outline">
+      <mat-label>Canal predeterminado activo</mat-label>
+      <mat-select [formControl]="channelId">
+        <mat-option *ngFor="let row of channelRows" [value]="row.binding.provider_channel_id">
+          {{ row.binding.sucursal_canon }} · {{ row.binding.provider_channel_id }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Business ID declarado</mat-label>
+      <mat-select [formControl]="businessId">
+        <mat-option *ngFor="let portfolio of portfolios" [value]="portfolio.business_id">
+          {{ portfolio.display_name || 'Nombre pendiente' }} · {{ portfolio.business_id }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>WABA ID (opcional; sin suposiciones)</mat-label>
+      <input matInput [formControl]="wabaId" maxlength="32" inputmode="numeric"
+        placeholder="Solo cuando exista evidencia">
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Tipo de evidencia</mat-label>
+      <mat-select [formControl]="evidenceKind">
+        <mat-option value="OPERATOR_STATEMENT">Declaración de operador</mat-option>
+        <mat-option value="META_DOCUMENT">Documento / captura Meta</mat-option>
+        <mat-option value="IVENTAS_CONFIRMATION">Confirmación de iVentas</mat-option>
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Referencia exacta a evidencia / revisión</mat-label>
+      <input matInput [formControl]="sourceReference" maxlength="255"
+        placeholder="Referencia administrativa, ticket o comprobante (sin secretos)">
+    </mat-form-field>
+  </div>
+  <p class="current" *ngIf="selected as row">
+    Última revisión #{{ row.revision_id }}:
+    <strong>{{ row.state === 'DECLARED' ? 'DECLARADA · NO VERIFICADA' : 'RETIRADA' }}</strong>
+    · {{ row.business_id || 'sin Business ID' }} · {{ row.source_reference }}
+  </p>
+  <mat-checkbox [formControl]="acknowledgment" *ngIf="!loading">
+    Confirmo que esta es una referencia documental, no un permiso ni una verificación de Meta.
+  </mat-checkbox>
+  <div class="form-actions" *ngIf="!loading">
+    <button type="button" mat-flat-button color="primary" [disabled]="!canDeclare"
+      (click)="save('DECLARED')">Guardar revisión declarada</button>
+    <button type="button" mat-stroked-button [disabled]="!canWithdraw"
+      (click)="save('WITHDRAWN')">Retirar asociación actual</button>
+    <button type="button" mat-button [disabled]="saving" (click)="reload()">Actualizar</button>
+  </div>
+  <section class="mapping-history" *ngIf="!loading">
+    <h3>Mapa actual de canales · evidencia declarada</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Sucursal / canal</th><th>Business ID</th><th>Estado</th><th>Evidencia reciente</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let row of channelRows">
+            <td>{{ row.binding.sucursal_canon }}<small>{{ row.binding.provider_channel_id }}</small></td>
+            <td>{{ row.association?.business_id || 'Sin asociación' }}</td>
+            <td>{{ row.association?.state === 'DECLARED' ? 'DECLARADA · NO VERIFICADA'
+              : row.association?.state === 'WITHDRAWN' ? 'RETIRADA' : 'PENDIENTE' }}</td>
+            <td>{{ row.association?.source_reference || 'Sin evidencia' }}</td>
+          </tr>
+          <tr *ngIf="!channelRows.length"><td colspan="4">No hay canales activos predeterminados.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3>Historial de revisiones · canal seleccionado</h3>
+    <p *ngIf="historyIsLimited">Se muestran solo las 250 revisiones recientes del sistema.</p>
+    <div class="revision" *ngFor="let item of selectedHistory">
+      #{{ item.revision_id }} · {{ item.created_at }} · {{ item.state }} ·
+      {{ item.business_id || 'Sin portafolio' }} · {{ item.evidence_kind }}
+      <small>{{ item.source_reference }} · Actor #{{ item.created_by_user_id }}</small>
+    </div>
+    <p *ngIf="!selectedHistory.length">Sin revisiones registradas para este canal.</p>
+  </section>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button type="button" mat-button (click)="close()">Cerrar</button>
+</mat-dialog-actions>
