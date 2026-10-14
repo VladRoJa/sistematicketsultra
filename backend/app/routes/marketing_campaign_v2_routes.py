@@ -49,6 +49,12 @@ from app.services.marketing_campaign_v2_dispatch_config_service import (
     save_channel_binding,
     save_template,
 )
+from app.services.marketing_campaign_v2_portfolio_reference_service import (
+    CampaignV2PortfolioReferenceValidationError,
+    CampaignV2PortfolioReferenceConflictError,
+    list_portfolio_references,
+    register_portfolio_reference,
+)
 from app.services.marketing_campaign_v2_quota_service import (
     CampaignV2QuotaValidationError,
     CampaignV2QuotaConflictError,
@@ -1693,6 +1699,50 @@ def campaign_v2_governed_execute_endpoint(campaign_id: int):
     except Exception:
         db.session.rollback()
         return _error("Error en despacho gobernado; revisar estado antes de reintentar.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/portfolio-references")
+@jwt_required()
+def list_campaign_v2_portfolio_references_endpoint():
+    """Global dispatch admins only: identity catalogue, never Meta verification."""
+    try:
+        _resolve_campaign_v2_dispatch_config_request()
+        _validate_query_args(set())
+        return jsonify(list_portfolio_references(session=db.session)), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2RouteValidationError as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("No fue posible consultar los portafolios declarados.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/dispatch/portfolio-references")
+@jwt_required()
+def register_campaign_v2_portfolio_reference_endpoint():
+    """Append one unverified business identity reference; never bind a channel."""
+    try:
+        user, _ = _resolve_campaign_v2_dispatch_config_request()
+        payload = _parse_payload({
+            "business_id", "display_name", "app_id", "source_reference",
+        })
+        result = register_portfolio_reference(
+            business_id=payload.get("business_id"),
+            display_name=payload.get("display_name"),
+            app_id=payload.get("app_id"),
+            source_reference=payload.get("source_reference"),
+            actor_user_id=int(user.id), session=db.session,
+        )
+        return jsonify(result), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (MarketingCampaignV2RouteValidationError, CampaignV2PortfolioReferenceValidationError) as exc:
+        return _error(str(exc), 400)
+    except CampaignV2PortfolioReferenceConflictError as exc:
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible registrar la referencia de portafolio.", 500)
 
 
 @marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/quota-evidence")
