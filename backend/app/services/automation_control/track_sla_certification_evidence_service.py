@@ -77,12 +77,20 @@ def verify_base_publication(
     started = _utc(getattr(version, "started_at_utc", None))
     finished = _utc(getattr(version, "finished_at_utc", None))
     instant = _utc(now)
-    attested = _utc(datetime.fromisoformat(epoch["attested_at_utc"]))
+    try:
+        attested = _utc(datetime.fromisoformat(epoch["attested_at_utc"]))
+        epoch_sealed = _utc(datetime.fromisoformat(epoch["sealed_at_utc"]))
+    except (KeyError, ValueError, TypeError):
+        return failure("BASE_TIME_OR_ATTESTATION_UNVERIFIED")
     policy_day_start = datetime.combine(business_date, time.min, tzinfo=TIJUANA)
+    beginning_utc = policy_day_start.astimezone(timezone.utc)
     if (
-        started is None or finished is None or instant is None or attested is None
+        started is None or finished is None or instant is None
+        or attested is None or epoch_sealed is None
         or started > finished or finished > instant
-        or attested >= policy_day_start.astimezone(timezone.utc)
+        or attested >= beginning_utc
+        or epoch_sealed >= beginning_utc
+        or epoch_sealed < attested
     ):
         return failure("BASE_TIME_OR_ATTESTATION_UNVERIFIED")
 
