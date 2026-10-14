@@ -51,6 +51,10 @@ export class DataFreshnessIndicatorComponent implements OnChanges, OnDestroy {
       if (this.state?.latest_complete_business_date) {
         return 'Corte conjunto: ' + this.formatDate(this.state.latest_complete_business_date);
       }
+      if (this.state?.latest_catalog_matched_business_date) {
+        return 'Cobertura catálogo actual: ' +
+          this.formatDate(this.state.latest_catalog_matched_business_date);
+      }
       if (this.state?.latest_observed_business_date) {
         return 'Evidencia: ' + this.formatDate(this.state.latest_observed_business_date);
       }
@@ -69,7 +73,15 @@ export class DataFreshnessIndicatorComponent implements OnChanges, OnDestroy {
     const sources = this.state.sources.map(source =>
       source.key + ': ' + (source.latest_complete_business_date || 'sin evidencia'),
     ).join('; ');
-    return this.state.detail + (
+    const coverage=this.state.track_coverage?.coverage;
+    const counts=coverage ?
+      ' Cobertura catálogo actual: '+coverage.actual_branch_count+
+      ' de '+coverage.expected_branch_count+
+      ' sucursales. Faltantes: '+coverage.missing_branch_codes.length+
+      '. Sobrantes: '+coverage.unexpected_branch_codes.length+
+      '. Duplicadas: '+coverage.duplicate_branch_codes.length+
+      '. Vigencia histórica del catálogo no certificada.' : '';
+    return this.state.detail + counts + (
       this.state.latest_complete_business_date
         ? ' Último corte conjunto: ' + this.state.latest_complete_business_date + '.'
         : ''
