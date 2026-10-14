@@ -174,7 +174,9 @@ def _evaluate(*, campaign_id: int, child_id: int, allowed_sucursal_keys: Any,
     rows = capacity.get("batches") or []
     if (capacity.get("status") != "REVIEWABLE" or len(rows) != 1 or
             rows[0].get("recommendation") != "CAPACITY_REVIEWED"):
-        raise HeldReleaseConflict("Sin capacidad operativa vigente para crear cohorte nueva.")
+        if capacity.get("basis") == "SUITE_OPERATOR_ROLLING_24H_V1":
+            raise HeldReleaseConflict("Sin capacidad operativa vigente para crear cohorte nueva.")
+        raise HeldReleaseConflict("Sin cuota NUEVA vigente para canal y portafolio.")
     quota = rows[0]
     original_cutoff = max(
         [_database_date(approval.approved_at)]
