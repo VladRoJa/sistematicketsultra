@@ -32,7 +32,7 @@ class GoogleAdsDailyIngestionError(RuntimeError):
     pass
 
 
-def _upload_content(warehouse_upload_id: int, *, report_type_key: str = REPORT_TYPE_KEY) -> tuple[WarehouseUploadORM, bytes]:
+def _upload_content(warehouse_upload_id: int, *, report_type_key: str = REPORT_TYPE_KEY, max_file_bytes: int = 8 * 1024 * 1024) -> tuple[WarehouseUploadORM, bytes]:
     upload = db.session.get(WarehouseUploadORM, warehouse_upload_id)
     if (
         upload is None or upload.status != "ACTIVE"
@@ -49,7 +49,7 @@ def _upload_content(warehouse_upload_id: int, *, report_type_key: str = REPORT_T
     target = (root / relative_dir / upload.stored_filename).resolve()
     if not target.is_relative_to(root) or not target.is_file():
         raise GoogleAdsDailyIngestionError("Archivo documental no disponible.")
-    if target.stat().st_size > 8 * 1024 * 1024:
+    if max_file_bytes not in (8 * 1024 * 1024, 10 * 1024 * 1024) or target.stat().st_size > max_file_bytes:
         raise GoogleAdsDailyIngestionError("Excel demasiado grande.")
     return upload, target.read_bytes()
 
