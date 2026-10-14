@@ -1,54 +1,58 @@
-# Suite Ultra — Google Ads M6 · Contrato de carga manual temporal
+# Suite Ultra — Google Ads M6 · Contrato de carga manual y lectura canónica
 
-**Estado (14-oct-2026):** integrante del único hito [Issue #888](https://github.com/VladRoJa/sistematicketsultra/issues/888) y [PR #885](https://github.com/VladRoJa/sistematicketsultra/pull/885), ambos abiertos y sin merge. Este archivo conserva su nombre histórico por compatibilidad, pero el contrato anterior de automatización por correo **queda sustituido** por esta decisión. El historial de Git conserva el contrato anterior.
+**Actualizado 14-oct-2026.** [Issue #888](https://github.com/VladRoJa/sistematicketsultra/issues/888) · [PR #885](https://github.com/VladRoJa/sistematicketsultra/pull/885). El nombre de este documento se conserva por compatibilidad histórica: el transporte por Gmail y sus schedulers **no forman parte de M6**. La futura Google Ads API deberá sustituir únicamente el adaptador de entrada, no las reglas de ingesta, trazabilidad ni permisos.
 
-## Decisión de entrada y objetivos
-Hasta terminar la API oficial, **el operador descarga manualmente** `Informe de campaña` e `Informe de grupo de anuncios` de Google Ads y los sube en la misma operación de Suite Ultra. No existe lectura programada del buzón, descarga desde enlaces ni scheduler por correo. No pedir contraseñas ni tokens de Gmail/Google Ads al usuario. Google Ads API será un adaptador alternativo futuro sobre las **mismas** validaciones y salidas.
+**Estado del código:** flujo manual desarrollado en la rama, no desplegado. Las banderas de escritura/aprobación están **OFF por defecto**. El último gate de código anterior al corte documental aprobó 138 tests PostgreSQL 16 más TypeScript y build Angular; no sustituye QA visual ni revisión independiente. Ninguna aprobación, importación o publicación productiva se infiere del CI.
 
-```text
-ADMICORP -> cargar campaña.xlsx + grupos.xlsx
-         -> PREVIEW sin escrituras (parsers XLSX existentes)
-         -> validar fecha cerrada, misma cuenta, 27 campañas, 43 grupos,
-            26 pares de identidades aprobadas, MXN y conciliación
-         -> confirmar operación con autorización backend
-         -> Warehouse RAW ambos, hashes SHA256, fecha, usuario y auditoría
-         -> revisión/ingesta estructurada versionada (sin datos parciales)
-         -> aprobación/control de continuidad -> Funnel por sucursal
-Google Ads API (futuro) -> mismo validador/RAW/ingesta/Funnel
-```
+## 1. Alcance e invariantes
 
-## Histórico inmutable y reconciliación
-- Cuenta esperada `2739125201`. No confiar en nombre de archivo ni en fechas del navegador.
-- M5 histórico: 24-sep..08-oct-2026, fuente grupo upload `21499`, manifiesto `GOOGLE_ADS_M5_IDENTITY_20261012_V1`. No actualizar ni prolongar automáticamente.
-- Arranque M6: 09..12-oct-2026, fuentes RAW campañas `21604`, grupos `21605`. 108 filas campaña/día, 172 filas grupo/día, 43 pares históricos y 26 identidades de sucursal a aprobar; inversión cuenta MXN 5,562.11, asignable MXN 5,211.74, no asignada MXN 350.37.
-- Los totales de campañas son la única autoridad de gasto de cuenta. Grupos son detalle **no aditivo**. No alterar Metas, CPL, CPT, CAC ni indicadores Meta.
-- Aprobación de identidades con versión, JWT ADMICORP y flag `GOOGLE_ADS_M6_APPROVAL_ENABLED` apagado por defecto. La carga manual **no** implica aprobación automática. No inferir nuevos clubes de nombres de campaña/grupo.
-- `preflight_daily_pair` es un validador puro sin permisos, persistencia ni publicación; no equivale a finalización de pipeline.
-- No permitir que nuevos días aparezcan en Funnel por la mera existencia de los XLSX. El lector M6 actual sigue acotado a 09..12 hasta integrar la procedencia diaria y versión de aprobación de forma segura.
+- Cuenta `2739125201`; fechas y MXN validadas por backend a partir del XLSX y de sus datos, nunca a partir del nombre del archivo.
+- M5 del 24-sep al 08-oct-2026 es inmutable; fuente grupo `21499` y manifiesto `GOOGLE_ADS_M5_IDENTITY_20261012_V1`.
+- M6 histórico del 09 al 12-oct: RAW campaña `21604`, grupos `21605`; 108 filas campañas/día, 172 grupos/día en total por el período, costo cuenta MXN 5,562.11, costo asignado MXN 5,211.74 y no asignado MXN 350.37. La continuidad de 26 identidades exige aprobación inicial versionada, nunca implícita.
+- Desde el **13-oct-2026** el día solo alimenta Funnel tras publicación canónica explícita de exactamente 27 campañas y 43 grupos conciliados, con 26 asociaciones aprobadas, auditoría y hashes exactos.
+- Campañas constituyen el ledger único de inversión. Grupos detallan atribución a sucursal y **no** se suman nuevamente al gasto. No modificar Meta ni métricas CPL/CPT/CAC existentes.
+- Para gerente/regional, las consultas de grupos se acotan por SQL a sus sucursales y a los uploads publicados; no se devuelve gasto global ni no asignado. Fechas sin publicación no equivalen a costo cero.
 
-## UX y permisos propuestos
-- Sección simple «Google Ads · Carga manual», visible y operable solamente a ADMICORP. Adjuntar ambos XLSX en un mismo formulario, fecha reportada detectada desde sus celdas, no editable como fuente de verdad.
-- Botón «Validar» muestra: período, estado, filas, coste cuenta, coste asignado, importe no asignado, diferencias, duplicados y eventual error. **El preview no guarda documentos ni hechos.**
-- Botón «Confirmar carga» requiere que la evidencia validada corresponda a los mismos hashes; se debe volver a validar backend antes de persistir. Los errores no se transforman en cero.
-- `POST /api/warehouse/uploads` **no puede** usarse como único flujo pareado: su dispatcher opcional intenta ingesta estructurada de un archivo individual inmediatamente. Crear endpoints específicos o una orquestación equivalente, con controles de identidad y sin eludir el preflight.
-- La autorización del backend es fuente real: JWT + comprobación vigente del usuario/rol ADMICORP. Las restricciones de menú Angular no conceden permisos.
-- Angular: TS para todas las validaciones y acciones, HTML de estructura, CSS separado.
+## 2. Flujo implementado en la rama M6
 
-## RAW, reintentos y correcciones
-- Antes de guardar, validar ambos XLSX con parsers estrictos existentes: `google_ads_daily_xlsx_parser.py` y `google_ads_ad_group_daily_xlsx_parser.py`. Solo MXN y días cerrados Tijuana, mismas identidades y totales costo/clics/impresiones/conversiones.
-- Persistir documentos RAW con `create_warehouse_document_upload`; sus hashes y fechas deben corresponder al preview. Asociar los dos uploads lógicamente al día/operación sin añadir aprobaciones silenciosas.
-- Repetir exactamente el mismo par puede reutilizar uploads RAW por hash. Si falla guardar uno, mostrar estado incompleto y exigir reintento/revisión, sin estructurar ni publicar. Archivos tardíos/diferentes para un día ya importado requieren revisión explícita, no `UPDATE` destructivo.
-- Estructurada y publicación están separadas de RAW y necesitan controles, trazabilidad, snapshots/canonicalidad y regresión de permisos.
+| Etapa | Endpoint | Efecto y barrera |
+| --- | --- | --- |
+| 1. Preview | `POST /api/integrations/google-ads/manual/preview` | Dos XLSX, JWT + ADMICORP vigente, preflight sin escrituras, ticket vinculado a hashes/actor con 15 minutos |
+| 2. RAW | `POST /api/integrations/google-ads/manual/confirm` | Ticket y archivos idénticos, permiso Warehouse upload, revalidación y dos uploads RAW auditados; `PARTIAL_RAW` no ingesta/publica |
+| 3. Estructurada | `POST /api/integrations/google-ads/manual/ingest` | Confirmación explícita, JWT/ADMICORP+Warehouse, bandera separada; 27+43 facts y dos auditorías en transacción PG16 |
+| 4. Canónica | `POST /api/integrations/google-ads/manual/publish` | Confirmación explícita, JWT/ADMICORP+Warehouse, bandera separada; hashes, identidades, hechos y auditorías revalidados, publicación revisionada y dos auditorías atómicas |
+| Diagnóstico | `GET /api/integrations/google-ads/manual/correction-status?day=YYYY-MM-DD` | ADMICORP + Warehouse view, transacción de solo lectura; RAW, facts, auditorías, revisiones y bloqueos del día |
+| Aprobación M6 inicial | `POST /api/integrations/google-ads/continuity/approve` | Aprobación explícita con JWT, identidad real ADMICORP y comprobación histórica; bandera apagada por defecto |
 
-## Gates y despliegue
-1. Retirar prototipo de lectura/descarga Gmail y staging RAW acoplado al ID de mensaje.
-2. Implementar preflight API sin escrituras para dos archivos y pruebas positivas/negativas.
-3. Confirmación ADMICORP e integración RAW pareada con deduplicación y detección de fallos parciales.
-4. UI Angular, revisión de accesibilidad y permisos; prueba integrada contra PostgreSQL16.
-5. Importación estructurada controlada y extensión del lector M6 a nuevos días con identidad/canonicalidad verificadas.
-6. Reconciliar heads Alembic: M6 `b3e7c2d9a104` y main `c13a70e4d82b`, ambas descendientes de `f62a1b9d4c07`. Incorporar main y hacer migración de unión; **nunca** reescribir una migración histórica aplicada.
-7. CI global + revisión independiente + un merge autorizado + deploy por git pull/Docker Compose y migración controlada.
+Las rutas pertenecen al blueprint `backend/app/routes/google_ads_m6_continuity_routes.py`. El frontend se integra en Google Ads · Administración, con componente standalone TS/HTML/CSS y service REST separado. Angular guía, pero **el backend autoriza**.
 
-**Excluidos:** Gmail/IMAP, autenticación de descarga de enlaces, job/scheduler de correo, ejecución autónoma de correo, reemplazo inmediato por Google Ads API. Los dos mensajes del 14-oct se verificaron solo para diagnóstico: llegaron como enlace directo y no como adjunto, pero no forman parte de M6 manual.
+Banderas de operación (apagadas hasta autorización productiva):
+- `GOOGLE_ADS_M6_APPROVAL_ENABLED`
+- `GOOGLE_ADS_M6_STRUCTURED_INGESTION_ENABLED`
+- `GOOGLE_ADS_M6_DAILY_PUBLICATION_ENABLED`
 
-**No desplegado y sin aprobación real:** los tests históricos (hasta 116 PASS del prototipo) no prueban todavía el flujo manual integral.
+La carga RAW y el preflight no equivalen a aprobación ni publicación. La confirmación de RAW no llama a la ingesta; la ingesta no llama a publicación. No se debe usar `POST /api/warehouse/uploads` genérico como sustituto del proceso pareado: podría despachar ingesta individual sin sus gates.
+
+## 3. Consistencia, fallos e idempotencia
+
+- Los RAW conservan SHA256, periodo y actor. Una pareja idéntica puede ser reintentada sin duplicación; ante fallo de segunda carga, la primera evidencia puede persistir y el estado debe reflejar `PARTIAL_RAW`, sin representar atomicidad que Warehouse no provee.
+- La transacción estructurada contiene **ambas tablas y auditorías**; ante fallo del segundo insert no queda publicación ni mitad de la pareja.
+- Publicar exige hechos equivalentes a RAW, ambos import audits, estado ACTIVE, identidad M6 aprobada y autorización actual. La publicación inicial y las dos auditorías forman una única transacción.
+- La tabla `google_ads_m6_daily_publications` admite revisiones con índice parcial único para el único canónico por día. La implementación **aún no almacena hechos alternativos por revisión** y, por seguridad, rechaza sustituciones de días publicados.
+- Una publicación exacta puede repetirse idempotentemente; una distinta produce conflicto. RAW archivados o con hash distinto son evidencia, no permiso para reemplazo.
+- Correcciones históricas y el caso de RAW `21654`/`21655`: [protocolo separado de correcciones tardías](GOOGLE_ADS_M6_CORRECCIONES_TARDIAS.md). Está **propuesto y en HOLD**; no autoriza archivar, borrar, sustituir ni publicar datos reales.
+
+## 4. Almacenamiento, migraciones y lectores
+
+- Migraciones M6 `b3e7c2d9a104` (continuidad/identidades) y `d7f2a09c8b61` (publicaciones).
+- El `main` integrado en la rama culmina en `c856map1014`; la migración **de unión** `a4c85d6e9f20` declara ambos padres, sin DDL, DML ni backfill. La prueba Alembic comprueba un solo head. No implica que migraciones se hayan aplicado en producción.
+- El lector de atribución nuevo para fechas 13-oct+ se ubica en `backend/app/services/marketing_google_ads_m6_daily_attribution_service.py`; se combina con la historia 09–12 sin modificar M5. El lector global verifica campañas y grupos pero contabiliza solo gasto de campañas.
+- Si existen huecos entre el inicio del tramo diario y la última publicación canónica, la lectura falla cerrada (`requires_review`) en lugar de aparentar cobertura completa.
+
+## 5. Evidencia y condiciones previas al merge/despliegue
+
+En el HEAD de código `a69c65ab` los workflows M6 [push](https://github.com/VladRoJa/sistematicketsultra/actions/runs/38636448972) y [PR](https://github.com/VladRoJa/sistematicketsultra/actions/runs/38636454373) terminaron SUCCESS: **138/138 pruebas** backend/PG16, comprobación TypeScript y build Angular PASS. El E2E sintético usa rutas Flask/JWT, Warehouse/PG16 real, publicación y SQL restringido por sucursal; no prueba datos productivos ni pixel-perfect UI.
+
+**Pendiente:** QA visual en navegador con perfiles reales y mensajes de error; revisión de seguridad/código independiente; aceptación productiva de identidades M6; procedimiento separado de correcciones versionadas si se decide incluirlo; plan de migración, rollback, único merge autorizado y despliegue posterior siguiendo repo → servidor git pull → Docker Compose → Alembic. No desplegar ni habilitar flags desde un test exitoso.
+
+**No hacer:** reactivar Gmail/IMAP, descargar reportes desde enlaces de correo, crear jobs de buzón, editar código directamente en servidor, borrar RAW históricos, actualizar hechos M5 o hacer publicación automática tras upload.
