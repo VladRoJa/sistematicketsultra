@@ -173,33 +173,54 @@ def _evaluate(*, campaign_id: int, child_id: int, allowed_sucursal_keys: Any,
     )
     rows = capacity.get("batches") or []
     if (capacity.get("status") != "REVIEWABLE" or len(rows) != 1 or
-            rows[0].get("recommendation") != "CAPACITY_REVIEWED" or
-            rows[0].get("channel_evidence_id") is None or
-            rows[0].get("portfolio_evidence_id") is None):
-        raise HeldReleaseConflict("Sin cuota NUEVA vigente para canal y portafolio.")
+            rows[0].get("recommendation") != "CAPACITY_REVIEWED"):
+        raise HeldReleaseConflict("Sin capacidad operativa vigente para crear cohorte nueva.")
     quota = rows[0]
     original_cutoff = max(
         [_database_date(approval.approved_at)]
         + ([last_sent] if last_sent is not None else []),
     )
     evidence = []
-    for eid, kind, key in (
-        (quota["channel_evidence_id"], "CHANNEL", child.provider_channel_id),
-        (quota["portfolio_evidence_id"], "PORTFOLIO", quota["portfolio_key"]),
-    ):
-        row = session.get(MarketingCampaignV2QuotaCapacityAttestationORM, int(eid))
-        if (row is None or row.scope_kind != kind or row.scope_key != key or
-                _database_date(row.observed_at) <= original_cutoff or
-                _database_date(row.observed_at) > timestamp or
-                _database_date(row.expires_at) <= timestamp or
-                _database_date(row.window_ends_at) <= timestamp):
-            raise HeldReleaseConflict(
-                "Atestación debe ser posterior al envío original y seguir vigente."
-            )
-        evidence.append({"scope_kind": kind, "scope_key": key,
-                         "attestation_id": int(row.id),
-                         "observed_at": _database_date(row.observed_at).isoformat(),
-                         "expires_at": _database_date(row.expires_at).isoformat()})
+    if capacity.get("basis") == "SUITE_OPERATOR_ROLLING_24H_V1":
+        if (type(quota.get("policy_revision_id")) is not int or
+                not quota.get("operator_channel_cap") or
+                not quota.get("operator_portfolio_cap")):
+            raise HeldReleaseConflict("Sin política de volumen interno vigente.")
+        evidence = [{
+            "scope_kind": "SUITE_INTERNAL_ROLLING_24H",
+            "policy_revision_id": quota["policy_revision_id"],
+            "portfolio_key": quota["portfolio_key"],
+            "operator_channel_cap": quota["operator_channel_cap"],
+            "operator_portfolio_cap": quota["operator_portfolio_cap"],
+            "suite_channel_attempted": quota["suite_channel_attempted"],
+            "suite_portfolio_attempted": quota["suite_portfolio_attempted"],
+            "suite_channel_reserved": quota["suite_channel_reserved"],
+            "suite_portfolio_reserved": quota["suite_portfolio_reserved"],
+            "window_start": capacity["window_start"],
+            "window_end": capacity["window_end"],
+            "actual_meta_remaining": None,
+        }]
+    else:
+        if (quota.get("channel_evidence_id") is None or
+                quota.get("portfolio_evidence_id") is None):
+            raise HeldReleaseConflict("Sin cuota NUEVA vigente para canal y portafolio.")
+        for eid, kind, key in (
+            (quota["channel_evidence_id"], "CHANNEL", child.provider_channel_id),
+            (quota["portfolio_evidence_id"], "PORTFOLIO", quota["portfolio_key"]),
+        ):
+            row = session.get(MarketingCampaignV2QuotaCapacityAttestationORM, int(eid))
+            if (row is None or row.scope_kind != kind or row.scope_key != key or
+                    _database_date(row.observed_at) <= original_cutoff or
+                    _database_date(row.observed_at) > timestamp or
+                    _database_date(row.expires_at) <= timestamp or
+                    _database_date(row.window_ends_at) <= timestamp):
+                raise HeldReleaseConflict(
+                    "Atestación debe ser posterior al envío original y seguir vigente."
+                )
+            evidence.append({"scope_kind": kind, "scope_key": key,
+                             "attestation_id": int(row.id),
+                             "observed_at": _database_date(row.observed_at).isoformat(),
+                             "expires_at": _database_date(row.expires_at).isoformat()})
     digest = manifest_digest(approval.manifest_json)
     payload = {
         "version": "D3C1_RELEASE_INTENT_V1",
