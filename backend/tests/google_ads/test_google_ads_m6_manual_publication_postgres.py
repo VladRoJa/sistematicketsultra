@@ -28,6 +28,12 @@ def publication_lab(lab):
     try:
         yield client, token, other, engine, campaign, group
     finally:
+        # This fixture holds a Flask app context across HTTP requests; the
+        # Warehouse-view permission check can leave an ORM read transaction
+        # open. Remove it BEFORE DDL teardown or PostgreSQL waits on its lock.
+        from app.extensions import db
+        with client.application.app_context():
+            db.session.remove()
         with engine.begin() as conn:
             table.drop(conn)
 
