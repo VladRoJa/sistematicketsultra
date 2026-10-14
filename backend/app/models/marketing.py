@@ -548,7 +548,7 @@ class MarketingCampaignV2QuotaPolicyRevisionORM(db.Model):
         ),
         db.CheckConstraint(
             "(operational_channel_cap IS NULL AND operational_portfolio_cap IS NULL) OR "
-            "(operational_channel_cap > 0 AND operational_portfolio_cap > 0)",
+            "(operational_channel_cap IS NOT NULL AND operational_portfolio_cap IS NOT NULL AND operational_channel_cap > 0 AND operational_portfolio_cap > 0)",
             name="ck_mkt_v2_operational_caps_pair",
         ),
         db.CheckConstraint(
