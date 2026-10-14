@@ -141,7 +141,8 @@ def test_source_predicates_include_canonical_and_exact_period():
     import inspect
     from app.services.automation_control import funnel_operational_sla_service as service
     source = inspect.getsource(service._exact_current_sources)
-    assert source.count(".is_canonical") == 5\n    assert "canonicals = [row for row in rows if row[1] is True]" in source
+    assert source.count(".is_canonical") == 5
+    assert "canonicals = [row for row in rows if row[1] is True]" in source
     assert "status == \"COMPLETED\"" in source
     assert "date_from == start" in source
     assert "date_to == business_date" in source
