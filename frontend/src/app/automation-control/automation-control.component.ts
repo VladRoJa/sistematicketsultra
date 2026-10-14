@@ -5,10 +5,10 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { AutomationObservationDialogComponent, AutomationObservationDialogData } from './automation-observation-dialog.component';
 import { AutomationErrorDetailDialogComponent, AutomationErrorDialogData } from './automation-error-detail-dialog.component';
-import { forkJoin, Subject, takeUntil } from 'rxjs';
+import { catchError, forkJoin, of, Subject, takeUntil } from 'rxjs';
 import { AutomationControlService } from './automation-control.service';
 import { classifyObservationRuns, classifyReferenceHour, currentTijuanaClock, ObservationState, ReferenceState } from './automation-control-timeline-display';
-import { Job, Run, Summary, Dataset, TimelineWorker, TimelineJob, TimelineObservation } from './automation-control.models';
+import { Job, Run, Summary, Dataset, TimelineWorker, TimelineJob, TimelineObservation, WorkerHealth, WorkerLiveness } from './automation-control.models';
 
 @Component({ selector:'app-automation-control',standalone:true,imports:[CommonModule,FormsModule,MatDialogModule,MatIconModule],
   templateUrl:'./automation-control.component.html',styleUrls:['./automation-control.component.css'] })
@@ -18,6 +18,9 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
   tijuanaClock=currentTijuanaClock(new Date());
   timelineDate=new Date().toLocaleDateString('en-CA',{timeZone:'America/Tijuana'});
   timelineWorkers:TimelineWorker[]=[];
+  workerHealth:WorkerHealth[]=[];
+  healthUnavailable=false;
+  healthCheckedAt:string|null=null;
   loadingTimeline=false;
   timelineError='';
   selectedObservation:TimelineObservation|null=null;
@@ -38,13 +41,57 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
       (!text||[j.label,j.key,j.worker_key].some(v=>v.toLowerCase().includes(text))));
   }
   get page():number {return Math.floor(this.offset/this.pageSize)+1;}
+  get healthyWorkers():number {
+    return this.workerHealth.filter(worker=>worker.status==='HEALTHY').length;
+  }
+  workerState(workerKey:string):WorkerHealth|undefined {
+    return this.workerHealth.find(worker=>worker.worker_key===workerKey);
+  }
+  workerHealthLabel(workerKey:string):string {
+    const status=this.workerState(workerKey)?.status??'UNKNOWN';
+    const names:Record<WorkerLiveness,string>={
+      HEALTHY:'Latido vigente',DEGRADED:'Revisar',UNREACHABLE:'Sin latido',
+      DISABLED:'Deshabilitado',UNKNOWN:'Desconocido',
+    };
+    return names[status];
+  }
+  workerHealthIcon(workerKey:string):string {
+    const status=this.workerState(workerKey)?.status??'UNKNOWN';
+    const icons:Record<WorkerLiveness,string>={
+      HEALTHY:'favorite',DEGRADED:'warning_amber',UNREACHABLE:'heart_broken',
+      DISABLED:'pause_circle',UNKNOWN:'help_outline',
+    };
+    return icons[status];
+  }
+  workerHealthClass(workerKey:string):string {
+    return 'health-'+(this.workerState(workerKey)?.status??'UNKNOWN').toLowerCase();
+  }
+  workerHealthDetail(workerKey:string):string {
+    const worker=this.workerState(workerKey);
+    if(!worker||!worker.last_seen_at_utc) return 'Sin evidencia de latido persistido';
+    const reason:Record<string,string>={
+      RECENT_HEARTBEAT:'Último latido dentro de la tolerancia',
+      MULTIPLE_ACTIVE_INSTANCES:'Varias instancias activas; revisar duplicidad',
+      WORKER_DISABLED:'Worker deshabilitado',
+      HEARTBEAT_LATE:'Último latido fuera de la tolerancia',
+      HEARTBEAT_EXPIRED:'Sin latidos recientes; estado del proceso no confirmado',
+      CLOCK_SKEW:'Hora del worker fuera de sincronía',
+    };
+    return (reason[worker.reason_code]??'Estado sin verificar')+
+      ' · Último latido: '+this.formatDate(worker.last_seen_at_utc);
+  }
   refresh():void {
     this.loadTimeline();
     this.sequence++;this.loading=true;this.error='';
-    forkJoin({summary:this.api.summary(),jobs:this.api.jobs(),datasets:this.api.datasets()})
+    forkJoin({summary:this.api.summary(),jobs:this.api.jobs(),datasets:this.api.datasets(),
+      health:this.api.workerHealth().pipe(catchError(() => of(null)))})
       .pipe(takeUntil(this.destroyed$)).subscribe({
-        next:({summary,jobs,datasets})=>{
+        next:({summary,jobs,datasets,health})=>{
           this.summary=summary;this.jobs=jobs.jobs;this.datasets=datasets.datasets;this.loading=false;
+          this.healthUnavailable=!health;this.healthCheckedAt=health?.checked_at_utc??null;
+          this.workerHealth=health?.workers??[...new Set(jobs.jobs.map(j=>j.worker_key))].sort()
+            .map(worker_key=>({worker_key,status:'UNKNOWN' as const,
+              reason_code:'HEALTH_API_UNAVAILABLE',last_seen_at_utc:null,instance_count:0}));
           const selected=this.jobs.find(j=>j.key===this.selected?.key);
           if(selected){this.select(selected);} else{this.close();}
         },
