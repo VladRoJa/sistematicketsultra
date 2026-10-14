@@ -20,6 +20,9 @@ import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
 interface ChannelAssociationRow {
   binding: CampaignV2ChannelBinding;
   association: CampaignV2ChannelPortfolioEvidence | null;
+  businessLabel: string;
+  statusLabel: string;
+  sourceLabel: string;
 }
 
 @Component({
@@ -68,6 +71,10 @@ export class MarketingCampaignV2ChannelPortfolioDialogComponent implements OnIni
       ?.association ?? null;
   }
 
+  get selectedStatusLabel(): string {
+    return this.selected?.state === 'DECLARED' ? 'DECLARADA · NO VERIFICADA' : 'RETIRADA';
+  }
+
   get selectedHistory(): CampaignV2ChannelPortfolioEvidence[] {
     return this.history.filter(row => row.provider_channel_id === this.channelId.value);
   }
@@ -111,7 +118,17 @@ export class MarketingCampaignV2ChannelPortfolioDialogComponent implements OnIni
         );
         this.channelRows = response.channels.rows
           .filter(row => row.is_active && row.is_default && row.provider === 'IVENTAS')
-          .map(binding => ({ binding, association: byChannel.get(binding.provider_channel_id) ?? null }))
+.map(binding => {
+            const association = byChannel.get(binding.provider_channel_id) ?? null;
+            return {
+              binding, association,
+              businessLabel: association?.business_id || 'Sin asociación',
+              statusLabel: association?.state === 'DECLARED'
+                ? 'DECLARADA · NO VERIFICADA'
+                : association?.state === 'WITHDRAWN' ? 'RETIRADA' : 'PENDIENTE',
+              sourceLabel: association?.source_reference || 'Sin evidencia',
+            };
+          })
           .sort((a, b) => a.binding.sucursal_canon.localeCompare(b.binding.sucursal_canon));
         if (!this.channelRows.some(row => row.binding.provider_channel_id === this.channelId.value)) {
           this.channelId.setValue(this.channelRows[0]?.binding.provider_channel_id ?? '', { emitEvent: false });
