@@ -52,7 +52,7 @@
   </div>
   <p class="current" *ngIf="selected as row">
     Última revisión #{{ row.revision_id }}:
-    <strong>{{ row.state === 'DECLARED' ? 'DECLARADA · NO VERIFICADA' : 'RETIRADA' }}</strong>
+    <strong>{{ selectedStatusLabel }}</strong>
     · {{ row.business_id || 'sin Business ID' }} · {{ row.source_reference }}
   </p>
   <mat-checkbox [formControl]="acknowledgment" *ngIf="!loading">
@@ -73,10 +73,9 @@
         <tbody>
           <tr *ngFor="let row of channelRows">
             <td>{{ row.binding.sucursal_canon }}<small>{{ row.binding.provider_channel_id }}</small></td>
-            <td>{{ row.association?.business_id || 'Sin asociación' }}</td>
-            <td>{{ row.association?.state === 'DECLARED' ? 'DECLARADA · NO VERIFICADA'
-              : row.association?.state === 'WITHDRAWN' ? 'RETIRADA' : 'PENDIENTE' }}</td>
-            <td>{{ row.association?.source_reference || 'Sin evidencia' }}</td>
+            <td>{{ row.businessLabel }}</td>
+            <td>{{ row.statusLabel }}</td>
+            <td>{{ row.sourceLabel }}</td>
           </tr>
           <tr *ngIf="!channelRows.length"><td colspan="4">No hay canales activos predeterminados.</td></tr>
         </tbody>
