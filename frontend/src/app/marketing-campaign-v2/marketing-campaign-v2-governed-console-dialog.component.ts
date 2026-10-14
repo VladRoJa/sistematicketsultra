@@ -170,10 +170,10 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
     });
   }
 
-  refresh(): void {
+  refresh(preserveError = false): void {
     if (this.busy) { return; }
     this.working = 'read';
-    this.error = '';
+    if (!preserveError) { this.error = ''; }
     // Every review is a fresh read; never call execute automatically.
     forkJoin({
       approval: this.api.getGovernedApproval(this.data.campaignId),
@@ -189,7 +189,8 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
       },
       error: (err: HttpErrorResponse) => {
         this.working = null;
-        this.error = this.message(err, 'No fue posible consultar el estado gobernado.');
+        this.error = (preserveError && this.error ? this.error + ' · ' : '') +
+          this.message(err, 'No fue posible consultar el estado gobernado.');
         this.approval = null;
         this.review = null;
         this.monitor = null;
@@ -255,7 +256,7 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
         this.working = null;
         this.invalidatePreflight();
         this.error = this.message(err, 'La aprobación no quedó confirmada. Actualiza estado.');
-        this.refresh();
+        this.refresh(true);
       },
     });
   }
@@ -324,7 +325,7 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
         this.working = null;
         this.uncertainResult = true;
         this.error = this.message(err, 'Resultado incierto: consulta y reconcilia, NUNCA reenvíes.');
-        this.refresh();
+        this.refresh(true);
       },
     });
   }
@@ -332,7 +333,7 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   private handleWriteError(err: HttpErrorResponse): void {
     this.working = null;
     this.error = this.message(err, 'La operación no fue confirmada; consulta el monitor.');
-    this.refresh();
+    this.refresh(true);
   }
   private invalidatePreflight(): void {
     this.preflight = null;
