@@ -1406,7 +1406,7 @@ test('B2 evidence modal requires confirmation and never changes operational quot
   assert.ok(ts.includes("save(state: 'DECLARED' | 'WITHDRAWN')"));
   assert.ok(html.includes('Guardar revisión declarada'));
   assert.ok(html.includes('Retirar asociación actual'));
-  assert.ok(html.includes('NO VERIFICADA'));
+  assert.ok(ts.includes('DECLARADA · NO VERIFICADA'));
   assert.ok(template.includes('Business ID declarado (B2)'));
   assert.ok(template.includes('Clave cuota interna (independiente)'));
   assert.ok(readiness.includes('mappingBusinessId'));
