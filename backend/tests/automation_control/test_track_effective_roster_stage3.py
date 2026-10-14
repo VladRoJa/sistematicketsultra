@@ -85,6 +85,7 @@ def test_corrupted_attestation_digest_cannot_verify():
     epoch = SimpleNamespace(
         id=1, expected_branch_count=2, roster_sha256="a" * 64,
         effective_from=date(2026, 10, 15),
+        sealed_at_utc=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
         attested_at_utc=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
     )
     members = [SimpleNamespace(sucursal_canon="TEC_MXL", sucursal_id_at_attestation=7)]
