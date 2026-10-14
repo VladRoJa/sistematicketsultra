@@ -8,6 +8,7 @@ on:
       - 'backend/migrations/versions/b3e7c2d9a104_google_ads_m6_branch_continuity.py'
       - 'backend/app/models/google_ads_m6_daily_publication.py'
       - 'backend/migrations/versions/d7f2a09c8b61_google_ads_m6_daily_publications.py'
+      - 'backend/tests/google_ads/test_google_ads_m6_daily_publication_postgres.py'
       - 'backend/app/warehouse/services/google_ads_m6_continuity_approval_service.py'
       - 'backend/scripts/apply_google_ads_m6_continuity.py'
       - 'backend/app/routes/google_ads_m6_continuity_routes.py'
@@ -85,6 +86,7 @@ jobs:
             tests/google_ads/test_google_ads_m6_manual_structured_postgres.py \
             tests/google_ads/test_google_ads_m6_attribution_postgres.py \
             tests/google_ads/test_google_ads_m6_continuity_postgres.py \
+            tests/google_ads/test_google_ads_m6_daily_publication_postgres.py \
             tests/google_ads/test_google_ads_m5_branch_attribution_readonly.py
 
   frontend:
