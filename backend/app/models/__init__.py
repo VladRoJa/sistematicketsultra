@@ -45,6 +45,8 @@ from .warehouse import (
     SociosVencidosSnapshotRowORM,
     TrackSourceTiendaDailyORM,
     WarehouseCommercialCatalogORM,
+    TrackVersionRosterSnapshotORM,
+    TrackVersionRosterMemberORM,
 )
 from .suite_governance import (
     SuiteRegionORM,
@@ -228,6 +230,8 @@ __all__ = [
     "SociosVencidosSnapshotRowORM",
     "TrackSourceTiendaDailyORM",
     "WarehouseCommercialCatalogORM",
+    "TrackVersionRosterSnapshotORM",
+    "TrackVersionRosterMemberORM",
     "SuiteRegionORM",
     "SuiteSucursalRegionAssignmentORM",
     "SuiteRegionManagerORM",

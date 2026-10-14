@@ -46,6 +46,17 @@ import {
   CampaignV2FreezeResponse,
   CampaignV2IndividualReport,
   CampaignV2OptionsResponse,
+  CampaignV2GovernedApprovalState,
+  CampaignV2GovernedApprovalRequest,
+  CampaignV2GovernedApprovalCreated,
+  CampaignV2GovernedMaterialize,
+  CampaignV2GovernedExecutionReview,
+  CampaignV2GovernedExecutionReviewReady,
+  CampaignV2GovernedAuthorizeRequest,
+  CampaignV2GovernedAuthorizedResponse,
+  CampaignV2GovernedExecuteRequest,
+  CampaignV2GovernedExecuteResult,
+  CampaignV2GovernedMonitor,
   CampaignV2PreflightResponse,
   CampaignV2PreviewDetailRequest,
   CampaignV2PreviewDetailResponse,
@@ -292,6 +303,56 @@ export class MarketingCampaignV2Service {
   registerQuotaAttestation(payload: CampaignV2QuotaAttestationRequest): Observable<CampaignV2QuotaAttestation> {
     return this.http.post<CampaignV2QuotaAttestation>(
       `${this.apiUrl}/dispatch/quota-attestations`, payload,
+    );
+  }
+
+  getGovernedApproval(campaignId: number): Observable<CampaignV2GovernedApprovalState> {
+    return this.http.get<CampaignV2GovernedApprovalState>(
+      `${this.apiUrl}/${campaignId}/dispatch/approval`,
+    );
+  }
+
+  approveGovernedCampaign(
+    campaignId: number, payload: CampaignV2GovernedApprovalRequest,
+  ): Observable<CampaignV2GovernedApprovalCreated> {
+    return this.http.post<CampaignV2GovernedApprovalCreated>(
+      `${this.apiUrl}/${campaignId}/dispatch/approval`, payload,
+    );
+  }
+
+  materializeGovernedCampaign(campaignId: number): Observable<CampaignV2GovernedMaterialize> {
+    return this.http.post<CampaignV2GovernedMaterialize>(
+      `${this.apiUrl}/${campaignId}/dispatch/materialize`, {},
+    );
+  }
+
+  getGovernedExecution(campaignId: number): Observable<
+    CampaignV2GovernedExecutionReview | CampaignV2GovernedExecutionReviewReady
+  > {
+    return this.http.get<CampaignV2GovernedExecutionReview | CampaignV2GovernedExecutionReviewReady>(
+      `${this.apiUrl}/${campaignId}/dispatch/execution`,
+    );
+  }
+
+  authorizeGovernedCampaign(
+    campaignId: number, payload: CampaignV2GovernedAuthorizeRequest,
+  ): Observable<CampaignV2GovernedAuthorizedResponse> {
+    return this.http.post<CampaignV2GovernedAuthorizedResponse>(
+      `${this.apiUrl}/${campaignId}/dispatch/authorize`, payload,
+    );
+  }
+
+  executeGovernedChild(
+    campaignId: number, payload: CampaignV2GovernedExecuteRequest,
+  ): Observable<CampaignV2GovernedExecuteResult> {
+    return this.http.post<CampaignV2GovernedExecuteResult>(
+      `${this.apiUrl}/${campaignId}/dispatch/execute`, payload,
+    );
+  }
+
+  getGovernedMonitor(campaignId: number): Observable<CampaignV2GovernedMonitor> {
+    return this.http.get<CampaignV2GovernedMonitor>(
+      `${this.apiUrl}/${campaignId}/dispatch/monitor`,
     );
   }
 

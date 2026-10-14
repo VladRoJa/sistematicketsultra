@@ -1821,6 +1821,82 @@ class TrackDailyVersionORM(db.Model):
         server_default=db.text("now()"),
     )
     
+class TrackVersionRosterSnapshotORM(db.Model):
+    """Evidence of expected branches at the instant a Track version runs.
+
+    Never treat a captured live catalog as verified for the business date.
+    The sealed artifact is immutable in PostgreSQL; M1-F6 stage 1 creates
+    no snapshots or retrospective certifications.
+    """
+    __tablename__ = "track_version_roster_snapshots"
+
+    version_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("track_daily_versions.id", ondelete="RESTRICT"),
+        primary_key=True,
+    )
+    track_date = db.Column(db.Date, nullable=False)
+    captured_at_utc = db.Column(
+        db.DateTime(timezone=True), nullable=False,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+    sealed_at_utc = db.Column(db.DateTime(timezone=True), nullable=True)
+    expected_branch_count = db.Column(db.Integer, nullable=False)
+    roster_sha256 = db.Column(db.String(64), nullable=False)
+    source_kind = db.Column(
+        db.String(64), nullable=False,
+        server_default="LIVE_TRACK_CATALOG_NON_DEMO_AT_CAPTURE",
+    )
+    historical_roster_verified = db.Column(
+        db.Boolean, nullable=False, server_default=db.false(),
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "expected_branch_count > 0",
+            name="ck_track_roster_expected_positive",
+        ),
+        db.CheckConstraint(
+            "roster_sha256 ~ '^[0-9a-f]{64}$'",
+            name="ck_track_roster_sha256",
+        ),
+        db.CheckConstraint(
+            "source_kind = 'LIVE_TRACK_CATALOG_NON_DEMO_AT_CAPTURE'",
+            name="ck_track_roster_source_kind",
+        ),
+        db.CheckConstraint(
+            "historical_roster_verified = FALSE",
+            name="ck_track_roster_no_unverified_green",
+        ),
+        db.CheckConstraint(
+            "sealed_at_utc IS NULL OR sealed_at_utc >= captured_at_utc",
+            name="ck_track_roster_seal_not_before_capture",
+        ),
+    )
+
+
+class TrackVersionRosterMemberORM(db.Model):
+    """Non-editable expected branch in one version's captured roster."""
+    __tablename__ = "track_version_roster_members"
+
+    version_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("track_version_roster_snapshots.version_id",
+                      ondelete="RESTRICT"),
+        primary_key=True,
+    )
+    sucursal_canon = db.Column(db.Text, primary_key=True)
+    # Historical ID is a captured scalar; no FK to a mutable branch catalog.
+    sucursal_id_at_capture = db.Column(db.Integer, nullable=True)
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "length(trim(sucursal_canon)) > 0",
+            name="ck_track_roster_member_nonblank",
+        ),
+    )
+
+
 class WarehouseCommercialCatalogORM(db.Model):
     __tablename__ = "warehouse_commercial_catalog"
 

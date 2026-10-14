@@ -52,6 +52,7 @@ import {
   MarketingCampaignV2RecipientDetailDialogComponent,
   MarketingCampaignV2RecipientDetailDialogData,
 } from './marketing-campaign-v2-recipient-detail-dialog.component';
+import { MarketingCampaignV2GovernedConsoleDialogComponent } from './marketing-campaign-v2-governed-console-dialog.component';
 import {
   MarketingCampaignV2SubmitConfirmDialogComponent,
   MarketingCampaignV2SubmitConfirmDialogData,
@@ -213,6 +214,18 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
           );
         },
       });
+  }
+
+  openGovernedConsole(): void {
+    if (!this.data.canManageDispatchConfig || !this.campaign) { return; }
+    const ref = this.dialog.open(MarketingCampaignV2GovernedConsoleDialogComponent, {
+      width: 'min(1200px, 96vw)', maxWidth: '96vw',
+      maxHeight: '95vh', autoFocus: false,
+      panelClass: 'campaign-v2-admin-dialog',
+      data: { campaignId: this.data.campaignId, campaignName: this.campaign.name },
+    });
+    ref.afterClosed().pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.loadCampaign());
   }
 
   openPreparationCenter(): void {

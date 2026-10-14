@@ -1461,3 +1461,36 @@ test('Issue 856 C QA modal only previews and freezes one recipient; no send or l
   assert.equal(component.includes('localStorage'), false);
   assert.equal(component.includes('sessionStorage'), false);
 });
+
+
+test('Issue 856 D: governed console uses exact approval, manifest and one-child APIs', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const ts = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.ts'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.html'), 'utf8');
+  const service = fs.readFileSync(path.join(root, 'marketing-campaign-v2.service.ts'), 'utf8');
+  const detail = fs.readFileSync(path.join(root, 'marketing-campaign-v2-campaign-detail-dialog.component.ts'), 'utf8');
+  const detailHtml = fs.readFileSync(path.join(root, 'marketing-campaign-v2-campaign-detail-dialog.component.html'), 'utf8');
+  for (const suffix of [
+    '/dispatch/approval', '/dispatch/materialize', '/dispatch/execution',
+    '/dispatch/authorize', '/dispatch/execute', '/dispatch/monitor',
+  ]) assert.ok(service.includes(suffix), suffix);
+  assert.ok(ts.includes('expected_dispatch_fingerprint: plan.dispatch_fingerprint'));
+  assert.ok(ts.includes('expected_quote_fingerprint: plan.budget.quote_fingerprint'));
+  assert.ok(ts.includes('expected_total_mxn: plan.budget.total_estimated_mxn'));
+  assert.ok(ts.includes('expected_manifest_digest: review.manifest_digest'));
+  assert.ok(ts.includes('expected_ready_recipients: this.approvedReadyCount'));
+  assert.ok(ts.includes('child_id: child.child_id'));
+  assert.ok(ts.includes('this.executionCheckbox.value === true'));
+  assert.ok(ts.includes('this.executionPhrase.value === this.sendWord'));
+  assert.ok(ts.includes('this.uncertainResult = true'));
+  assert.ok(ts.includes("this.monitor?.execution?.status") || ts.includes("monitor?.execution?.status"));
+  assert.ok(ts.includes("review.manifest.batches.filter(batch => batch.planned_status === 'READY')"));
+  assert.ok(html.includes('SOLO UN CHILD'));
+  assert.ok(html.includes('SIN ENVÍO'));
+  assert.ok(html.includes('Nunca repitas el POST'));
+  assert.ok(detail.includes('if (!this.data.canManageDispatchConfig || !this.campaign) { return; }'));
+  assert.ok(detailHtml.includes('data.canManageDispatchConfig'));
+  assert.equal(ts.includes('submitCampaign('), false);
+  assert.equal(ts.includes('localStorage'), false);
+  assert.equal(ts.includes('setInterval'), false);
+});
