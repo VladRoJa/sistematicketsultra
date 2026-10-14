@@ -299,28 +299,28 @@ def _global_realistic(monkeypatch, *, drift=False):
         if mapped is not None:
             mapping, catalog = mapped
             scoped_rows.append((
-                Item(
+                Item(**{
                     **vars(row),
-                    customer_id=reader.CUSTOMER_ID, campaign_id=None,
-                    ad_group_id=None, source_kind="WAREHOUSE_XLSX",
-                    source_upload_id=reader.GROUP_UPLOAD_ID,
-                ), mapping, catalog,
+                    "customer_id": reader.CUSTOMER_ID, "campaign_id": None,
+                    "ad_group_id": None, "source_kind": "WAREHOUSE_XLSX",
+                    "source_upload_id": reader.GROUP_UPLOAD_ID,
+                }), mapping, catalog,
             ))
     monkeypatch.setattr(reader, "_fact_rows", lambda *_: scoped_rows)
     campaigns = [
-        Item(
-            **vars(row), customer_id=reader.CUSTOMER_ID,
-            campaign_id=None, source_kind="WAREHOUSE_XLSX",
-            source_upload_id=reader.CAMPAIGN_UPLOAD_ID,
-        ) for row in campaign_file.rows
+        Item(**{
+            **vars(row), "customer_id": reader.CUSTOMER_ID,
+            "campaign_id": None, "source_kind": "WAREHOUSE_XLSX",
+            "source_upload_id": reader.CAMPAIGN_UPLOAD_ID,
+        }) for row in campaign_file.rows
     ]
     groups = [
-        Item(
-            **vars(row), customer_id=reader.CUSTOMER_ID,
-            campaign_id=None, ad_group_id=None,
-            source_kind="WAREHOUSE_XLSX",
-            source_upload_id=reader.GROUP_UPLOAD_ID,
-        ) for row in group_file.rows
+        Item(**{
+            **vars(row), "customer_id": reader.CUSTOMER_ID,
+            "campaign_id": None, "ad_group_id": None,
+            "source_kind": "WAREHOUSE_XLSX",
+            "source_upload_id": reader.GROUP_UPLOAD_ID,
+        }) for row in group_file.rows
     ]
     if drift:
         groups[0].cost += Decimal("0.01")
