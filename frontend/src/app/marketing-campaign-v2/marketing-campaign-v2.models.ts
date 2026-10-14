@@ -566,6 +566,60 @@ export interface CampaignV2QuotaAttestation {
   source_reference: string;
 }
 
+export interface CampaignV2QaManualRecipient {
+  name: string;
+  phone: string;
+}
+
+export interface CampaignV2QaManualBaseRequest {
+  name: string;
+  purpose: CampaignV2Purpose;
+  sucursal_id: number;
+  provider_channel_id: string;
+  recipients: [CampaignV2QaManualRecipient];
+}
+
+export interface CampaignV2QaManualPreview {
+  name: string;
+  purpose: CampaignV2Purpose;
+  source: 'QA_MANUAL';
+  sucursal_id: number;
+  sucursal_canon: string;
+  track_label: string;
+  provider_channel_id: string;
+  channel_binding_id: number;
+  recipient_count: 1;
+  recipient_name: string;
+  recipient_phone_masked: string;
+  preview_fingerprint_version: string;
+  preview_fingerprint: string;
+  provider_send_enabled: false;
+  is_dispatch_authorized: false;
+}
+
+export interface CampaignV2QaManualFreezeRequest extends CampaignV2QaManualBaseRequest {
+  expected_preview_fingerprint: string;
+  expected_channel_binding_id: number;
+  confirm_freeze: true;
+}
+
+export interface CampaignV2QaManualFrozen {
+  campaign_id: number;
+  name: string;
+  purpose: CampaignV2Purpose;
+  source: 'QA_MANUAL';
+  sucursal_id: number;
+  sucursal_canon: string;
+  recipient_count: 1;
+  frozen_at: string;
+  preview_fingerprint_version: string;
+  preview_fingerprint: string;
+  provider_channel_id: string;
+  channel_binding_id: number;
+  provider_send_enabled: false;
+  is_dispatch_authorized: false;
+}
+
 export type CampaignV2PortfolioReviewState =
   | 'PENDING' | 'WITHDRAWN' | 'DECLARED_UNVERIFIED'
   | 'DOCUMENTED_UNVERIFIED' | 'REVIEW_REQUIRED';

@@ -1325,7 +1325,7 @@ test('Issue 856: administracion usa campo MDC acotado y editores progresivos', (
   const templates = fs.readFileSync(path.join(root, 'marketing-campaign-v2-dispatch-admin-dialog.component.html'), 'utf8');
   const quotas = fs.readFileSync(path.join(root, 'marketing-campaign-v2-quota-admin-dialog.component.html'), 'utf8');
   const styles = fs.readFileSync(path.join(process.cwd(), 'src/styles.scss'), 'utf8');
-  assert.equal(page.split("panelClass: 'campaign-v2-admin-dialog'").length - 1, 3);
+  assert.equal(page.split("panelClass: 'campaign-v2-admin-dialog'").length - 1, 4);
   assert.equal(styles.includes('.cdk-overlay-container .campaign-v2-admin-dialog'), true);
   assert.equal(templates.includes('*ngIf="showTemplateEditor"'), true);
   assert.equal(templates.includes('*ngIf="showBudgetEditor"'), true);
@@ -1435,4 +1435,29 @@ test('B3 documentary triage uses a read-only API and never claims verified Meta 
   assert.equal(ui.includes('registerQuotaPolicy('), false);
   assert.equal(ui.includes('submitCampaign('), false);
   assert.equal(ui.includes('registerChannelPortfolioEvidence('), false);
+});
+
+
+test('Issue 856 C QA modal only previews and freezes one recipient; no send or local persistence', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const component = fs.readFileSync(path.join(root, 'marketing-campaign-v2-qa-manual-dialog.component.ts'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-qa-manual-dialog.component.html'), 'utf8');
+  const page = fs.readFileSync(path.join(root, 'marketing-campaign-v2-page.component.ts'), 'utf8');
+  const pageHtml = fs.readFileSync(path.join(root, 'marketing-campaign-v2-page.component.html'), 'utf8');
+  const api = fs.readFileSync(path.join(root, 'marketing-campaign-v2.service.ts'), 'utf8');
+  assert.ok(api.includes('/qa-manual/preview'));
+  assert.ok(api.includes('/qa-manual/freeze'));
+  assert.ok(component.includes('this.confirmFreeze.value'));
+  assert.ok(component.includes('expected_preview_fingerprint: this.preview.preview_fingerprint'));
+  assert.ok(component.includes('expected_channel_binding_id: this.preview.channel_binding_id'));
+  assert.ok(component.includes('recipients: [{'));
+  assert.ok(component.includes('this.invalidatePreview()'));
+  assert.ok(html.includes('NO envía WhatsApp'));
+  assert.ok(html.includes('Congelar 1 contacto · SIN ENVÍO'));
+  assert.ok(page.includes('if (!this.canManageDispatchConfig) { return; }'));
+  assert.ok(pageHtml.includes('*ngIf="canManageDispatchConfig"'));
+  assert.equal(component.includes('submitCampaign('), false);
+  assert.equal(component.includes('executeGovernedChild('), false);
+  assert.equal(component.includes('localStorage'), false);
+  assert.equal(component.includes('sessionStorage'), false);
 });

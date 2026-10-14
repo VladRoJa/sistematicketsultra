@@ -18,6 +18,7 @@ from app.models.marketing import (
     MarketingCampaignV2ChannelBindingORM,
     MarketingCampaignV2ORM,
     MarketingCampaignV2RecipientEvidenceORM,
+    MarketingCampaignV2RecipientDispatchExclusionORM,
     MarketingCampaignV2RecipientORM,
     MarketingCampaignV2TemplateORM,
 )
@@ -65,6 +66,7 @@ def session():
     MarketingCampaignV2ORM.__table__.to_metadata(metadata)
     MarketingCampaignV2RecipientORM.__table__.to_metadata(metadata)
     MarketingCampaignV2RecipientEvidenceORM.__table__.to_metadata(metadata)
+    MarketingCampaignV2RecipientDispatchExclusionORM.__table__.to_metadata(metadata)
     metadata.create_all(engine)
 
     with Session(engine) as value:
@@ -309,3 +311,47 @@ def test_qa_manual_flows_into_real_m2_preflight_with_exact_phone_set(session):
     assert batch.template_name == "invita_y_gana_4800"
     assert {row.phone_mx10 for row in batch.recipients} == expected_phones
     assert batch.blocked_reasons == ()
+
+
+def test_issue_856_http_gateway_can_freeze_exact_one_qa_recipient_without_send(session):
+    from app.services.marketing_campaign_v2_qa_http_service import (
+        preview_qa_manual_http, freeze_qa_manual_http,
+    )
+    binding = dispatch_config.save_channel_binding(
+        provider="IVENTAS", sucursal_id=16, provider_channel_id="qa-channel-one",
+        is_active=True, is_default=True, actor_user_id=47, session=session, now=NOW,
+    )
+    kwargs = {
+        "name": "QA Manual HTTP 20261014",
+        "purpose": "NEW_SALE",
+        "sucursal_id": 16,
+        "provider_channel_id": "qa-channel-one",
+        "recipients": [{"name": "Persona QA", "phone": "6861000001"}],
+        "session": session,
+    }
+    preview = preview_qa_manual_http(**kwargs)
+    assert preview["recipient_count"] == 1
+    assert preview["recipient_phone_masked"] == "******0001"
+    assert preview["channel_binding_id"] == binding["id"]
+    assert session.query(MarketingCampaignV2ORM).count() == 0
+
+    frozen = freeze_qa_manual_http(
+        **kwargs, expected_preview_fingerprint=preview["preview_fingerprint"],
+        expected_channel_binding_id=binding["id"], confirm_freeze=True,
+        actor_user_id=47,
+    )
+    assert frozen["source"] == "QA_MANUAL"
+    assert frozen["recipient_count"] == 1
+    assert frozen["provider_send_enabled"] is False
+    assert frozen["is_dispatch_authorized"] is False
+    assert session.query(MarketingCampaignV2ORM).count() == 1
+    assert session.query(MarketingCampaignV2RecipientORM).count() == 1
+    assert session.query(MarketingCampaignV2RecipientEvidenceORM).count() == 1
+
+    with pytest.raises(service.MarketingCampaignV2QAManualConflictError, match="Ya existe"):
+        freeze_qa_manual_http(
+            **kwargs, expected_preview_fingerprint=preview["preview_fingerprint"],
+            expected_channel_binding_id=binding["id"], confirm_freeze=True,
+            actor_user_id=47,
+        )
+    assert session.query(MarketingCampaignV2ORM).count() == 1
