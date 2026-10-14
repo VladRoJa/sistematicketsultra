@@ -32,8 +32,9 @@ def publication_lab(lab):
         # Warehouse-view permission check can leave an ORM read transaction
         # open. Remove it BEFORE DDL teardown or PostgreSQL waits on its lock.
         from app.extensions import db
-        with client.application.app_context():
-            db.session.remove()
+        # real_warehouse already holds the original Flask app_context here.
+        # A nested app_context would remove a DIFFERENT scoped DB session.
+        db.session.remove()
         with engine.begin() as conn:
             table.drop(conn)
 
