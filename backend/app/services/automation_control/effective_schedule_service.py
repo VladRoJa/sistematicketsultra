@@ -13,7 +13,6 @@ from sqlalchemy import select
 from app.extensions import db
 from app.models.automation_control import SystemWorkerHeartbeatORM
 from app.services.automation_control.job_catalog import get_job_catalog
-from app.services.automation_control.worker_health_service import read_worker_health
 
 _TIME = re.compile(r"^(?:[01][0-9]|2[0-3]):[0-5][0-9]$")
 _TZ = re.compile(r"^[A-Za-z0-9_+.-]+(?:/[A-Za-z0-9_+.-]+)*$")
@@ -78,6 +77,8 @@ def read_effective_schedules(now: datetime | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("now must be UTC-aware")
+    from app.services.automation_control.worker_health_service import read_worker_health
+
     health = read_worker_health(now)
     states = {item["worker_key"]: item for item in health["workers"]}
     keys = tuple(states)
