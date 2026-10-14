@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 from app import create_app
 from app.extensions import db
+from app.services.automation_control.worker_health_service import emit_worker_heartbeat
 from app.warehouse.services.scheduler_priority_service import (
     get_secondary_job_block_reason,
 )
@@ -633,6 +634,7 @@ def run_scheduler_loop() -> None:
 
     while not _SHOULD_STOP:
         try:
+            emit_worker_heartbeat('marketing-scheduler', poll_interval_seconds=poll_seconds)
             now = _now_local()
 
             if provider_stats_config is not None:

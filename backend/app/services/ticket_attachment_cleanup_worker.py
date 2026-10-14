@@ -7,6 +7,7 @@ from datetime import date, datetime, time as dt_time
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app import create_app, db
+from app.services.automation_control.worker_health_service import emit_worker_heartbeat
 from app.services.ticket_attachment_cleanup_service import (
     cleanup_expired_ticket_attachments,
 )
@@ -189,6 +190,7 @@ def run_cleanup_loop() -> None:
     with app.app_context():
         while True:
             try:
+                emit_worker_heartbeat('ticket-attachment-cleanup', poll_interval_seconds=poll_interval_seconds)
                 now_local = datetime.now(
                     scheduler_timezone
                 )

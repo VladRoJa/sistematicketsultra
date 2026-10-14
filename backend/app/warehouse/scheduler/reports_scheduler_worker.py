@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 
 from app import create_app
 from app.extensions import db
+from app.services.automation_control.worker_health_service import emit_worker_heartbeat
 from app.models.attendance import WarehouseAttendanceRunORM
 from app.models.warehouse import (
     ReporteDireccionSnapshotORM,
@@ -1013,6 +1014,7 @@ def run_scheduler_loop() -> None:
 
     while not _SHOULD_STOP:
         try:
+            emit_worker_heartbeat('reports-scheduler', poll_interval_seconds=sleep_seconds)
             now = _now_local()
 
             logger.info(

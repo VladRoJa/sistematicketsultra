@@ -11,6 +11,7 @@ from datetime import date, datetime, time as dt_time, timedelta
 from zoneinfo import ZoneInfo
 
 from app import create_app, db
+from app.services.automation_control.worker_health_service import emit_worker_heartbeat
 from app.warehouse.services.track_daily_pipeline_service import (
     run_requested_track_canonical_close,
     run_track_daily_pipeline_for_date,
@@ -475,6 +476,7 @@ def run_scheduler_loop() -> None:
     with app.app_context():
         while True:
             try:
+                emit_worker_heartbeat('track-scheduler', poll_interval_seconds=poll_interval_seconds)
                 now_local = _now_tijuana()
                 decision = decide_track_scheduler_action(now_local)
 
