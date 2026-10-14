@@ -1392,3 +1392,25 @@ test('B1 catálogo de Business IDs es independiente de políticas, WABA y envío
   assert.equal(ui.includes('registerQuotaPolicy('), false);
   assert.equal(html.includes('(click)="submitCampaign()"'), false);
 });
+
+
+test('B2 evidence modal requires confirmation and never changes operational quota or sends', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const ts = fs.readFileSync(path.join(root, 'marketing-campaign-v2-channel-portfolio-dialog.component.ts'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-channel-portfolio-dialog.component.html'), 'utf8');
+  const readiness = fs.readFileSync(path.join(root, 'marketing-campaign-v2-readiness-dialog.component.ts'), 'utf8');
+  const template = fs.readFileSync(path.join(root, 'marketing-campaign-v2-readiness-dialog.component.html'), 'utf8');
+  assert.ok(ts.includes('expected_revision_id: expectedRevision'));
+  assert.ok(ts.includes('this.acknowledgment.value'));
+  assert.ok(ts.includes('listChannelPortfolioEvidence()'));
+  assert.ok(ts.includes("save(state: 'DECLARED' | 'WITHDRAWN')"));
+  assert.ok(html.includes('Guardar revisión declarada'));
+  assert.ok(html.includes('Retirar asociación actual'));
+  assert.ok(ts.includes('DECLARADA · NO VERIFICADA'));
+  assert.ok(template.includes('Business ID declarado (B2)'));
+  assert.ok(template.includes('Clave cuota interna (independiente)'));
+  assert.ok(readiness.includes('mappingBusinessId'));
+  assert.equal(ts.includes('submitCampaign('), false);
+  assert.equal(ts.includes('registerQuotaPolicy('), false);
+  assert.equal(ts.includes('approveDispatch('), false);
+});

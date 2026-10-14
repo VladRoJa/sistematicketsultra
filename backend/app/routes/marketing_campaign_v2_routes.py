@@ -49,6 +49,12 @@ from app.services.marketing_campaign_v2_dispatch_config_service import (
     save_channel_binding,
     save_template,
 )
+from app.services.marketing_campaign_v2_channel_portfolio_evidence_service import (
+    CampaignV2ChannelPortfolioValidationError,
+    CampaignV2ChannelPortfolioConflictError,
+    list_channel_portfolio_evidence,
+    register_channel_portfolio_evidence,
+)
 from app.services.marketing_campaign_v2_portfolio_reference_service import (
     CampaignV2PortfolioReferenceValidationError,
     CampaignV2PortfolioReferenceConflictError,
@@ -1699,6 +1705,55 @@ def campaign_v2_governed_execute_endpoint(campaign_id: int):
     except Exception:
         db.session.rollback()
         return _error("Error en despacho gobernado; revisar estado antes de reintentar.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/channel-portfolio-evidence")
+@jwt_required()
+def list_campaign_v2_channel_portfolio_evidence_endpoint():
+    """Read-only latest/recent audit history for global dispatch administrators."""
+    try:
+        _resolve_campaign_v2_dispatch_config_request()
+        _validate_query_args(set())
+        return jsonify(list_channel_portfolio_evidence(session=db.session)), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2RouteValidationError as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("No fue posible consultar evidencia de canal-portafolio.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/dispatch/channel-portfolio-evidence")
+@jwt_required()
+def register_campaign_v2_channel_portfolio_evidence_endpoint():
+    """Record only an operator-declared assertion; never a quota/dispatch policy."""
+    try:
+        user, _ = _resolve_campaign_v2_dispatch_config_request()
+        payload = _parse_payload({
+            "provider_channel_id", "business_id", "waba_id",
+            "state", "evidence_kind", "source_reference",
+            "expected_revision_id",
+        })
+        result = register_channel_portfolio_evidence(
+            provider_channel_id=payload.get("provider_channel_id"),
+            business_id=payload.get("business_id"),
+            waba_id=payload.get("waba_id"),
+            state=payload.get("state"),
+            evidence_kind=payload.get("evidence_kind"),
+            source_reference=payload.get("source_reference"),
+            expected_revision_id=payload.get("expected_revision_id"),
+            actor_user_id=int(user.id), session=db.session,
+        )
+        return jsonify(result), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (MarketingCampaignV2RouteValidationError, CampaignV2ChannelPortfolioValidationError) as exc:
+        return _error(str(exc), 400)
+    except CampaignV2ChannelPortfolioConflictError as exc:
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible registrar evidencia de canal-portafolio.", 500)
 
 
 @marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/portfolio-references")

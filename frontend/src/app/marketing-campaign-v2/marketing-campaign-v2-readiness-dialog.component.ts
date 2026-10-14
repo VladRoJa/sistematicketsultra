@@ -17,9 +17,11 @@ import {
   CampaignV2DispatchTemplate,
   CampaignV2QuotaPolicyRevision,
   CampaignV2PortfolioReference,
+  CampaignV2ChannelPortfolioEvidence,
 } from './marketing-campaign-v2.models';
 import { campaignV2BuildReadinessRows, CampaignV2ReadinessRow } from './marketing-campaign-v2-readiness.logic';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
+import { MarketingCampaignV2ChannelPortfolioDialogComponent } from './marketing-campaign-v2-channel-portfolio-dialog.component';
 import { MarketingCampaignV2QuotaAdminDialogComponent } from './marketing-campaign-v2-quota-admin-dialog.component';
 import { MarketingCampaignV2DispatchAdminDialogComponent } from './marketing-campaign-v2-dispatch-admin-dialog.component';
 
@@ -41,7 +43,12 @@ export class MarketingCampaignV2ReadinessDialogComponent implements OnInit {
 
   readonly templateId = new FormControl<number | null>(null);
   templates: CampaignV2DispatchTemplate[] = [];
-  rows: CampaignV2ReadinessRow[] = [];
+  rows: Array<CampaignV2ReadinessRow & {
+    mappingBusinessId: string | null;
+    mappingStatus: string;
+    mappingSource: string | null;
+  }> = [];
+  private associationByChannel = new Map<string, CampaignV2ChannelPortfolioEvidence>();
   portfolios: CampaignV2PortfolioReference[] = [];
   portfolioSaving = false;
   portfolioError = '';
@@ -101,6 +108,10 @@ export class MarketingCampaignV2ReadinessDialogComponent implements OnInit {
     });
   }
 
+  get declaredMappingCount(): number {
+    return this.rows.filter(row => row.mappingStatus === 'DECLARADA · NO VERIFICADA').length;
+  }
+
   get configuredCount(): number { return this.rows.filter(row => row.configured).length; }
   get missingPolicyCount(): number { return this.rows.filter(row => !row.portfolioKey).length; }
   get missingRateCount(): number { return this.rows.filter(row => !row.unitCostMxn).length; }
@@ -118,6 +129,7 @@ export class MarketingCampaignV2ReadinessDialogComponent implements OnInit {
       quota: this.api.listQuotaEvidence(),
       rates: this.api.listBudgetRateRevisions(),
       portfolioReferences: this.api.listPortfolioReferences(),
+      associations: this.api.listChannelPortfolioEvidence(),
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: result => {
         this.templates = result.templates.rows.filter(t => t.is_active);
@@ -125,6 +137,9 @@ export class MarketingCampaignV2ReadinessDialogComponent implements OnInit {
         this.policies = result.quota.policies;
         this.rates = result.rates.rows;
         this.portfolios = result.portfolioReferences.rows;
+        this.associationByChannel = new Map(
+          result.associations.rows.map(row => [row.provider_channel_id, row]),
+        );
         const selected = this.templateId.value;
         const defaultTemplate = this.templates.find(t => t.template_name === 'invita_y_gana_4800');
         if (!this.templates.some(t => t.id === selected)) {
@@ -149,6 +164,14 @@ export class MarketingCampaignV2ReadinessDialogComponent implements OnInit {
     ref.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.reload());
   }
 
+  openChannelPortfolioMap(): void {
+    const ref = this.dialog.open(MarketingCampaignV2ChannelPortfolioDialogComponent, {
+      panelClass: 'campaign-v2-admin-dialog', width: 'min(1080px, 96vw)',
+      maxWidth: '96vw', maxHeight: '94vh', autoFocus: false,
+    });
+    ref.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.reload());
+  }
+
   openRates(): void {
     const ref = this.dialog.open(MarketingCampaignV2DispatchAdminDialogComponent, {
       panelClass: 'campaign-v2-admin-dialog', width: 'min(1050px, 96vw)',
@@ -163,6 +186,16 @@ export class MarketingCampaignV2ReadinessDialogComponent implements OnInit {
     this.rows = campaignV2BuildReadinessRows(
       this.templates.find(t => t.id === this.templateId.value) ?? null,
       this.bindings, this.policies, this.rates,
-    );
+    ).map(row => {
+      const mapping = this.associationByChannel.get(row.channelId);
+      return {
+        ...row,
+        mappingBusinessId: mapping?.state === 'DECLARED' ? mapping.business_id : null,
+        mappingStatus: mapping?.state === 'DECLARED'
+          ? 'DECLARADA · NO VERIFICADA'
+          : mapping?.state === 'WITHDRAWN' ? 'RETIRADA' : 'PENDIENTE',
+        mappingSource: mapping?.source_reference ?? null,
+      };
+    });
   }
 }

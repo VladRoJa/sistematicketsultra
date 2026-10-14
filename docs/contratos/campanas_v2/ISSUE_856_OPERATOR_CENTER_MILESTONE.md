@@ -82,3 +82,46 @@ Implementación en rama `feat/856-portfolio-candidate-catalog-b1`:
 No desplegar esta rama antes de CI, QA y merge. En producción, validar primero
 revisión Alembic aplicable; no actualizar código manualmente en el servidor.
 El registro de Business IDs no habilita prueba live ni modifica campaña #16.
+
+
+## Etapa B2 — Declaración auditable canal iVentas → Business ID (sin verificación Meta)
+
+**Límites del alcance:** la credencial actual no tiene `business_management`; no
+es posible corroborar automáticamente WABA/portfolio. La asociación creada en
+B2 es siempre `DECLARED`, con `api_verified=false`. El operador puede
+documentar una fuente tipo declaración, documento Meta o respuesta de iVentas;
+ninguna fuente equivale a verificación automática del Graph API.
+
+- Tabla append-only `marketing_campaign_v2_channel_portfolio_evidence`
+  (Alembic `c856map1014` sobre `b856port1014`). Sin seed ni cambios de cuotas.
+- Cada revisión incluye canal iVentas existente/activo/default, Business ID
+  conocido en el catálogo B1, WABA ID opcional y solo con evidencia,
+  `evidence_kind`, `source_reference`, actor y fecha.
+- `WITHDRAWN` registra la retirada de una asociación: Business/WABA se
+  convierten en NULL, sin eliminar datos históricos.
+- POST exige `expected_revision_id` correspondiente al último registro;
+  se bloquea el binding existente `FOR UPDATE` para serializar revisiones,
+  devolver 409 ante concurrencia o reintentos y evitar sobrescribir evidencia
+  ajena. No se pueden asignar canales inactivos/no predeterminados.
+- GET devuelve el estado vigente por canal y hasta 250 eventos recientes
+  para auditoría, con indicación de historial limitado.
+- GET/POST requieren JWT, `can_manage_dispatch_config` y alcance global.
+  `created_by_user_id` se obtiene del servidor. No hay llamadas Meta ni
+  iVentas, ni llamadas a servicios de presupuesto, cuota, reserva o dispatch.
+- Angular muestra `Business ID declarado (B2)` separado de
+  `Clave cuota interna`, estado pendiente/declarado/retirado; admite captura
+  y retiro con confirmación contextual, revisión esperada y vista histórica.
+- `OPERATOR_STATEMENT` no acredita pertenencia a portafolio. No rellenar los
+  26 canales sin evidencia externa: ni CP 01/CP 03 ni los 4 Business IDs
+  por sí solos bastan para asignarlos.
+
+### Pruebas y gate de producción
+
+Tests backend JWT 401, global 403, sin escrituras en GET, actor servidor,
+validaciones, 409 por revisión obsoleta, constraints PG16, una sola cabeza
+Alembic, downgrade protegido; contrato Angular y build.
+
+`B2` no autoriza el envío #16 ni ningún envío live. B3 requerirá identificar
+fuentes externas para cada canal y permitir a un operador revisar la calidad
+de la evidencia, SIN acoplarla a cupos Meta no observables. No desplegar sin
+CI, merge y migración Alembic según flujo del repo.

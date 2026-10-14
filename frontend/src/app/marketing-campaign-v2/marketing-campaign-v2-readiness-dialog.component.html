@@ -14,6 +14,7 @@
       </mat-select>
     </mat-form-field>
     <div class="actions">
+      <button mat-stroked-button type="button" (click)="openChannelPortfolioMap()" [disabled]="loading">Documentar canal → Business ID</button>
       <button mat-stroked-button type="button" (click)="openPortfolios()" [disabled]="loading">Configurar portafolios y límites</button>
       <button mat-stroked-button type="button" (click)="openRates()" [disabled]="loading">Configurar tarifas y canales</button>
       <button mat-button type="button" (click)="reload()" [disabled]="loading">Actualizar</button>
@@ -62,7 +63,8 @@
   <div class="counts" *ngIf="!loading && !error">
     <div><strong>{{ rows.length }}</strong><span>Canales predeterminados activos</span></div>
     <div><strong>{{ configuredCount }}</strong><span>Configuración completa</span></div>
-    <div><strong>{{ knownPortfolioCount }}</strong><span>Claves de portafolio registradas</span></div>
+    <div><strong>{{ knownPortfolioCount }}</strong><span>Claves de portafolio en políticas</span></div>
+    <div><strong>{{ declaredMappingCount }}</strong><span>Canales con asociación declarada, no verificada</span></div>
     <div><strong>{{ missingRateCount }}</strong><span>Sin tarifa MXN</span></div>
     <div><strong>{{ missingPolicyCount }}</strong><span>Sin portafolio registrado</span></div>
   </div>
@@ -74,11 +76,12 @@
 
   <div class="table-scroll" *ngIf="!loading && !error">
     <table>
-      <thead><tr><th>Sucursal</th><th>Portafolio declarado</th><th>Tope canal / 24 h</th>
+      <thead><tr><th>Sucursal</th><th>Business ID declarado (B2)</th><th>Clave cuota interna (independiente)</th><th>Tope canal / 24 h</th>
         <th>Tope portafolio / 24 h</th><th>Tarifa MXN</th><th>Estado de configuración</th></tr></thead>
       <tbody>
         <tr *ngFor="let row of rows">
           <td><strong>{{ row.sucursalCanon }}</strong><small>{{ row.channelId }}</small></td>
+          <td>{{ row.mappingBusinessId || 'Sin asociar' }}<small>{{ row.mappingStatus }}</small><small *ngIf="row.mappingSource">Evidencia: {{ row.mappingSource }}</small></td>
           <td>{{ row.portfolioKey || 'Sin identificar' }}<small *ngIf="row.policySource">Fuente: {{ row.policySource }}</small></td>
           <td>{{ row.operationalChannelCap ?? 'Pendiente' }}</td>
           <td>{{ row.operationalPortfolioCap ?? 'Pendiente' }}</td>
@@ -88,7 +91,7 @@
             <small *ngFor="let issue of row.issues">{{ issue }}</small>
           </td>
         </tr>
-        <tr *ngIf="!rows.length"><td colspan="6">Sin canales activos predeterminados.</td></tr>
+        <tr *ngIf="!rows.length"><td colspan="7">Sin canales activos predeterminados.</td></tr>
       </tbody>
     </table>
   </div>
