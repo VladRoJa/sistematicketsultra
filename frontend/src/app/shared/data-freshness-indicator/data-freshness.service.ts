@@ -73,7 +73,7 @@ export interface FunnelOperationalSla {
   applies_every_day: boolean;
   status: 'NOT_DUE'|'LAGGING'|'LATE'|'UNKNOWN';
   reason_code: string;
-  sources: Array<{key:string; present:boolean; reason_code:string}>;
+  sources: Array<{key:string; present:boolean|null; reason_code:string}>;
   missing_sources: string[];
   operational_not_final: true;
   lineage_verified: false;
