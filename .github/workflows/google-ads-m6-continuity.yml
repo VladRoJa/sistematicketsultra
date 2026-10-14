@@ -16,6 +16,8 @@ on:
       - 'backend/tests/google_ads/test_google_ads_m6_mail_notice_service.py'
       - 'backend/app/warehouse/services/google_ads_m6_report_download_service.py'
       - 'backend/tests/google_ads/test_google_ads_m6_report_download_service.py'
+      - 'backend/app/warehouse/services/google_ads_m6_daily_raw_stage_service.py'
+      - 'backend/tests/google_ads/test_google_ads_m6_daily_raw_stage_service.py'
       - 'backend/app/services/marketing_sales_funnel_cutoff_service.py'
       - 'backend/tests/google_ads/test_google_ads_m6_attribution_reader.py'
       - 'backend/tests/google_ads/test_google_ads_m6_attribution_postgres.py'
@@ -75,6 +77,7 @@ jobs:
             tests/google_ads/test_google_ads_m6_daily_pair_preflight.py \
             tests/google_ads/test_google_ads_m6_mail_notice_service.py \
             tests/google_ads/test_google_ads_m6_report_download_service.py \
+            tests/google_ads/test_google_ads_m6_daily_raw_stage_service.py \
             tests/google_ads/test_google_ads_m6_attribution_postgres.py \
             tests/google_ads/test_google_ads_m6_continuity_postgres.py \
             tests/google_ads/test_google_ads_m5_branch_attribution_readonly.py
