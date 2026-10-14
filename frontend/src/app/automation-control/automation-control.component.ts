@@ -51,12 +51,21 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
     if(!state)return 'Frescura no verificable';
     if(state.latest_complete_business_date)
       return 'Corte conjunto: '+state.latest_complete_business_date;
+    if(state.latest_catalog_matched_business_date)
+      return 'Coincide con catálogo actual: '+state.latest_catalog_matched_business_date;
     if(state.latest_observed_business_date)
       return 'Evidencia: '+state.latest_observed_business_date;
     return 'Sin corte certificado';
   }
   datasetEvidenceDetail(datasetKey:string):string {
-    return this.datasetEvidence[datasetKey]?.detail ?? 'No se pudo consultar evidencia de cortes.';
+    const evidence=this.datasetEvidence[datasetKey];
+    if(!evidence)return 'No se pudo consultar evidencia de cortes.';
+    const coverage=evidence.track_coverage?.coverage;
+    if(!coverage)return evidence.detail;
+    return evidence.detail+' Filas Track: '+coverage.actual_branch_count+
+      '/'+coverage.expected_branch_count+' sucursales; faltantes: '+
+      coverage.missing_branch_codes.length+', sobrantes: '+
+      coverage.unexpected_branch_codes.length+'.';
   }
   effectiveJob(jobKey:string):EffectiveJobSchedule|undefined {
     return this.effectiveSchedules.find(j=>j.job_key===jobKey);
