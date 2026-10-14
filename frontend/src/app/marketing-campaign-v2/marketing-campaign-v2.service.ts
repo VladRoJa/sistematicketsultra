@@ -53,7 +53,7 @@ import {
   CampaignV2GovernedExecutionReview,
   CampaignV2GovernedExecutionReviewReady,
   CampaignV2GovernedAuthorizeRequest,
-  CampaignV2GovernedAuthorization,
+  CampaignV2GovernedAuthorizedResponse,
   CampaignV2GovernedExecuteRequest,
   CampaignV2GovernedExecuteResult,
   CampaignV2GovernedMonitor,
@@ -336,8 +336,8 @@ export class MarketingCampaignV2Service {
 
   authorizeGovernedCampaign(
     campaignId: number, payload: CampaignV2GovernedAuthorizeRequest,
-  ): Observable<CampaignV2GovernedAuthorization> {
-    return this.http.post<CampaignV2GovernedAuthorization>(
+  ): Observable<CampaignV2GovernedAuthorizedResponse> {
+    return this.http.post<CampaignV2GovernedAuthorizedResponse>(
       `${this.apiUrl}/${campaignId}/dispatch/authorize`, payload,
     );
   }
