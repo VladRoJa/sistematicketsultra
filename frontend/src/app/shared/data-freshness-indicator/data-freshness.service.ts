@@ -63,7 +63,25 @@ export interface MarketingSyncSla {
   scope: 'SYNC_ONLY_NOT_FUNNEL_CONSOLIDATED';
   sources: Array<{key:string; status:FreshnessStatus; reason_code:string}>;
 }
+export interface FunnelOperationalSla {
+  expected_business_date: string;
+  due_at: string;
+  late_at: string;
+  phase_if_unavailable: 'NOT_DUE'|'LAGGING'|'LATE';
+  timezone: string;
+  policy_key: string;
+  applies_every_day: boolean;
+  status: 'NOT_DUE'|'LAGGING'|'LATE'|'UNKNOWN';
+  reason_code: string;
+  sources: Array<{key:string; present:boolean; reason_code:string}>;
+  missing_sources: string[];
+  operational_not_final: true;
+  lineage_verified: false;
+  historical_roster_verified: false;
+  canonical_close_sla: string;
+}
 export interface DatasetFreshness {
+  funnel_operational_sla?: FunnelOperationalSla;
   marketing_sync_sla?: MarketingSyncSla;
   track_base_sla?:TrackBaseSla;
   late_at?:string|null;
