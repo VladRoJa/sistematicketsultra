@@ -1065,7 +1065,7 @@ def pm_listar_bitacoras():
     department_id = _pm_user_department_id(user)
     rol = _pm_user_role(user)
 
-    if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO"}:
+    if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO", "COMPRAS"}:
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "APARATOS")
     elif department_id == 7 or rol in {"SISTEMAS", "TECNICO"}:
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "DISPOSITIVOS")
@@ -1166,7 +1166,7 @@ def pm_listar_configuraciones():
     department_id = _pm_user_department_id(user)
     rol = _pm_user_role(user)
 
-    if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO"}:
+    if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO", "COMPRAS"}:
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "APARATOS")
     elif department_id == 7 or rol in {"SISTEMAS", "TECNICO"}:
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "DISPOSITIVOS")
@@ -1367,7 +1367,7 @@ def pm_preventivo_dashboard():
     rol = _pm_user_role(user)
     department_id = _pm_user_department_id(user)
 
-    if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO"}:
+    if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO", "COMPRAS"}:
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "APARATOS")
     elif department_id == 7 or rol in {"SISTEMAS", "TECNICO"}:
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "DISPOSITIVOS")
@@ -1551,7 +1551,7 @@ def pm_calendario():
     department_id = _pm_user_department_id(user)
     rol = _pm_user_role(user)
 
-    if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO"}:
+    if department_id == 1 or rol in {"MANTENIMIENTO", "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO", "COMPRAS"}:
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "APARATOS")
     elif department_id == 7 or rol in {"SISTEMAS", "TECNICO"}:
         query = query.filter(db.func.upper(InventarioGeneral.tipo) == "DISPOSITIVOS")
