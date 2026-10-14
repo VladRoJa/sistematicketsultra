@@ -2881,3 +2881,39 @@ class MarketingMetaAdInsightORM(db.Model):
             "row_hash",
         ),
     )
+
+
+
+class MarketingCampaignV2PortfolioReferenceORM(db.Model):
+    """Operator-declared Meta business identity; never proves channel ownership."""
+
+    __tablename__ = "marketing_campaign_v2_portfolio_references"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    business_id = db.Column(db.String(32), nullable=False)
+    display_name = db.Column(db.String(160), nullable=True)
+    app_id = db.Column(db.String(32), nullable=True)
+    source_reference = db.Column(db.String(255), nullable=False)
+    created_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="RESTRICT"), nullable=False,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "business_id ~ '^[1-9][0-9]{5,31}$'",
+            name="ck_mkt_v2_portfolio_business_id",
+        ),
+        db.CheckConstraint(
+            "app_id IS NULL OR app_id ~ '^[1-9][0-9]{5,31}$'",
+            name="ck_mkt_v2_portfolio_app_id",
+        ),
+        db.CheckConstraint(
+            "length(trim(source_reference)) > 0",
+            name="ck_mkt_v2_portfolio_source",
+        ),
+        db.Index("ix_mkt_v2_portfolio_business_latest", "business_id", "id"),
+    )
