@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import and_, func, select
 
 from app.extensions import db
 from app.models.automation_control import SystemWorkerHeartbeatORM
@@ -52,7 +52,7 @@ def validate_schedule_snapshot(worker_key: str, source: object) -> dict:
         if type(enabled) is not bool or type(conditional) is not bool:
             raise ValueError("Schedule flags must be booleans")
         if (not isinstance(tz, str) or len(tz) > 64 or
-                not _TZ.fullmatch(tz) or kind not in _KINDS):
+                not _TZ.fullmatch(tz) or type(kind) is not str or kind not in _KINDS):
             raise ValueError("Schedule type/timezone invalid")
         if (not isinstance(slots, list) or len(slots) > 24 or
                 any(not isinstance(v, str) or not _TIME.fullmatch(v) for v in slots) or
@@ -83,14 +83,20 @@ def read_effective_schedules(now: datetime | None = None) -> dict:
     states = {item["worker_key"]: item for item in health["workers"]}
     keys = tuple(states)
     # At most 8 instances per worker; deterministic ordering and no 26-branch N+1.
+    table = SystemWorkerHeartbeatORM
+    rank = select(
+        table.worker_key, table.instance_id,
+        func.row_number().over(
+            partition_by=table.worker_key,
+            order_by=(table.last_seen_at.desc(), table.instance_id.asc()),
+        ).label("position"),
+    ).where(table.worker_key.in_(keys)).subquery()
+    # Return <= one ORM record per worker even after thousands of restarts.
     rows = db.session.execute(
-        select(SystemWorkerHeartbeatORM)
-        .where(SystemWorkerHeartbeatORM.worker_key.in_(keys))
-        .order_by(
-            SystemWorkerHeartbeatORM.worker_key,
-            SystemWorkerHeartbeatORM.last_seen_at.desc(),
-            SystemWorkerHeartbeatORM.instance_id,
-        )
+        select(table).join(
+            rank, and_(table.worker_key == rank.c.worker_key,
+                       table.instance_id == rank.c.instance_id),
+        ).where(rank.c.position == 1)
     ).scalars().all()
     first_by_worker = {}
     for row in rows:
@@ -108,7 +114,7 @@ def read_effective_schedules(now: datetime | None = None) -> dict:
             if record is not None and record.job_schedules is not None:
                 try:
                     payload = validate_schedule_snapshot(job.worker_key, record.job_schedules)
-                except ValueError:
+                except (TypeError, ValueError):
                     reason = "INVALID_SCHEDULE_SNAPSHOT"
                 else:
                     value = payload.get(job.key)
