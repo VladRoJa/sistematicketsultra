@@ -11,6 +11,7 @@ import os
 import re
 
 from sqlalchemy import func, and_, or_, exists
+from sqlalchemy.orm import aliased
 
 from app.extensions import db
 from app.models.google_ads_daily import GoogleAdsDailyMetricORM
@@ -29,12 +30,13 @@ def _canonical_m6_campaign_filter():
     """Correlated fail-closed gate: only explicitly canonical daily M6 uploads.
 
     A RAW or a structured row is never itself a publication. Canonical rows
-    must match the exact Warehouse upload hash and approved original M6 version.
+    must match BOTH original Warehouse upload hashes and the approved M6 version.
     No daily publication is seeded by a successful import.
     """
     fact = GoogleAdsDailyMetricORM
     day = GoogleAdsM6DailyPublicationORM
     raw = WarehouseUploadORM
+    group_raw = aliased(WarehouseUploadORM)
     approval = GoogleAdsBranchApprovalVersionORM
     authorized = exists().where(and_(
         day.customer_id == fact.customer_id,
@@ -48,6 +50,15 @@ def _canonical_m6_campaign_filter():
         raw.file_hash_sha256 == day.campaign_sha256,
         raw.date_from == day.business_date,
         raw.date_to == day.business_date,
+        # The published pair ceases to be valid when EITHER RAW is archived,
+        # deleted or replaced. Never expose global campaign spend while the
+        # group evidence fails integrity, even if the campaign RAW is intact.
+        group_raw.id == day.ad_group_upload_id,
+        group_raw.status == "ACTIVE",
+        group_raw.source_file_deleted_at.is_(None),
+        group_raw.file_hash_sha256 == day.ad_group_sha256,
+        group_raw.date_from == day.business_date,
+        group_raw.date_to == day.business_date,
         approval.id == day.approval_version_id,
         approval.customer_id == day.customer_id,
         approval.approval_reference == M6_REFERENCE,
