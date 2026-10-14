@@ -19,6 +19,8 @@ from app.warehouse.services.google_ads_m6_manual_confirm_service import (
     GoogleAdsM6ManualConfirmError, issue_raw_confirmation_ticket,
     confirm_google_ads_m6_manual_pair,
 )
+from app.utils.warehouse_access import require_warehouse_view
+from app.warehouse.services.google_ads_m6_manual_correction_diagnostic_service import inspect_m6_day_for_correction
 from app.utils.warehouse_access import require_warehouse_upload
 from app.warehouse.services.google_ads_m6_manual_publication_service import (
     CONFIRMATION as PUBLICATION_CONFIRMATION,
@@ -273,3 +275,38 @@ def publish_google_ads_m6_manual_day():
     except Exception:
         current_app.logger.exception("M6 canonical daily publication aborted.")
         return jsonify({"code": "M6_PUBLICATION_FAILED"}), 503
+
+
+
+@google_ads_m6_continuity_bp.get("/manual/correction-status")
+@jwt_required()
+def google_ads_m6_manual_correction_status():
+    """ADMICORP-only, read-only day inspection; no archival or correction."""
+    from datetime import date
+    import re
+
+    try:
+        require_current_admicorp()
+    except PermissionError:
+        return jsonify({"code": "FORBIDDEN"}), 403
+    except Exception:
+        current_app.logger.exception("Google Ads M6 correction diagnostic auth error.")
+        return jsonify({"code": "GOOGLE_ADS_M6_INTERNAL_ERROR"}), 500
+    denied = require_warehouse_view()
+    if denied:
+        return denied
+    if set(request.args.keys()) != {"day"}:
+        return jsonify({"code": "INVALID_CORRECTION_DAY"}), 400
+    raw_day = request.args.get("day", "")
+    if not re.fullmatch(r"20\d{2}-\d{2}-\d{2}", raw_day):
+        return jsonify({"code": "INVALID_CORRECTION_DAY"}), 400
+    try:
+        selected = date.fromisoformat(raw_day)
+        if selected < date(2026, 10, 13):
+            return jsonify({"code": "INVALID_CORRECTION_DAY"}), 400
+        return jsonify(inspect_m6_day_for_correction(business_date=selected)), 200
+    except ValueError:
+        return jsonify({"code": "INVALID_CORRECTION_DAY"}), 400
+    except Exception:
+        current_app.logger.exception("M6 correction day diagnostic failed.")
+        return jsonify({"code": "M6_CORRECTION_DIAGNOSTIC_UNAVAILABLE"}), 503
