@@ -143,10 +143,9 @@ jobs:
         working-directory: frontend
         run: npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund
       - name: Install isolated Playwright runner and Chromium
-        working-directory: frontend
         run: |
-          npm install --no-save --no-package-lock --legacy-peer-deps --ignore-scripts playwright@1.56.1
-          npx playwright install --with-deps chromium
+          npm install --prefix "$RUNNER_TEMP/ga-m6-playwright" --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          node "$RUNNER_TEMP/ga-m6-playwright/node_modules/playwright/cli.js" install --with-deps chromium
       - name: Start Angular dev server and run isolated browser QA
         working-directory: frontend
         run: |
@@ -154,7 +153,7 @@ jobs:
           node node_modules/@angular/cli/bin/ng.js serve --host 127.0.0.1 --port 4300 > playwright-evidence/ng-serve.log 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
-          node tests/google-ads-m6/browser-qa.cjs
+          NODE_PATH="$RUNNER_TEMP/ga-m6-playwright/node_modules" node tests/google-ads-m6/browser-qa.cjs
       - name: Upload browser QA evidence
         if: always()
         uses: actions/upload-artifact@v4
