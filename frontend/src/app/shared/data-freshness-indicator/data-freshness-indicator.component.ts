@@ -60,6 +60,13 @@ export class DataFreshnessIndicatorComponent implements OnChanges, OnDestroy {
       }
       return 'Frescura sin verificar';
     }
+    if (this.moduleKey === 'track.daily') {
+      const baseLabels: Partial<Record<FreshnessStatus,string>> = {
+        NOT_DUE:'Base: aún no vence', LAGGING:'Base: pendiente',
+        LATE:'Base: atrasada',
+      };
+      if (baseLabels[this.status]) return baseLabels[this.status]!;
+    }
     const labels: Record<FreshnessStatus,string> = {
       UP_TO_DATE:'Al día',LAGGING:'Pendiente',LATE:'Atrasado',
       NOT_DUE:'Aún no vence',DISABLED:'Deshabilitado',UNKNOWN:'Sin verificar',
@@ -81,7 +88,13 @@ export class DataFreshnessIndicatorComponent implements OnChanges, OnDestroy {
       '. Sobrantes: '+coverage.unexpected_branch_codes.length+
       '. Duplicadas: '+coverage.duplicate_branch_codes.length+
       '. Vigencia histórica del catálogo no certificada.' : '';
-    return this.state.detail + counts + (
+    const base=this.state.track_base_sla;
+    const baseTiming=base ?
+      ' SLA base nocturna del '+base.expected_business_date+
+      ': exigible '+base.due_at+
+      ', atrasada desde '+base.late_at+
+      '. Cierre canónico independiente, condicionado a agregadoras.' : '';
+    return this.state.detail + baseTiming + counts + (
       this.state.latest_complete_business_date
         ? ' Último corte conjunto: ' + this.state.latest_complete_business_date + '.'
         : ''
