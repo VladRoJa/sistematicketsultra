@@ -5,6 +5,7 @@ Never confuses worker liveness, individual job result, or data freshness.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -14,6 +15,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from app.extensions import db
 from app.models.automation_control import SystemWorkerHeartbeatORM
 from app.services.automation_control.job_catalog import get_job_catalog
+from app.services.automation_control.effective_schedule_service import validate_schedule_snapshot
 
 LOGGER = logging.getLogger(__name__)
 _INSTANCE_ID = uuid4().hex
@@ -23,6 +25,7 @@ _REPORTED_FAILURES: set[str] = set()
 
 def emit_worker_heartbeat(
     worker_key: str, *, poll_interval_seconds: int, enabled: bool = True,
+    schedules_provider: Callable[[], dict] | None = None,
 ) -> None:
     """Best effort independent write; database/monitoring failures never stop jobs."""
     if worker_key not in {job.worker_key for job in get_job_catalog()}:
@@ -32,7 +35,16 @@ def emit_worker_heartbeat(
     if not isinstance(enabled, bool):
         raise ValueError("enabled must be a boolean")
     interval = max(10, min(poll_interval_seconds, 3600))
+    schedule_data = None
+    if schedules_provider is not None:
+        try:
+            schedule_data = validate_schedule_snapshot(worker_key, schedules_provider())
+        except Exception as exc:
+            # Keep heartbeat alive even when optional schedule resolution fails.
+            LOGGER.warning("Effective schedule unavailable worker=%s error_type=%s",
+                           worker_key, type(exc).__name__)
     payload = {
+        "job_schedules": schedule_data,
         "worker_key": worker_key, "instance_id": _INSTANCE_ID,
         "started_at": _STARTED_AT, "last_seen_at": datetime.now(timezone.utc),
         "poll_interval_seconds": interval, "enabled": enabled,
@@ -45,6 +57,7 @@ def emit_worker_heartbeat(
                 "last_seen_at": stmt.excluded.last_seen_at,
                 "poll_interval_seconds": stmt.excluded.poll_interval_seconds,
                 "enabled": stmt.excluded.enabled,
+                "job_schedules": stmt.excluded.job_schedules,
             },
         )
         # Important: NEVER db.session.commit() (would commit a live job).

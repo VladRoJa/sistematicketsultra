@@ -78,3 +78,6 @@ td button{white-space:nowrap}.detail-head{display:flex;justify-content:space-bet
 .health-degraded{color:#92400e;background:#fffbeb;border-color:#fcd34d}
 .health-unreachable{color:#991b1b;background:#fef2f2;border-color:#fca5a5}
 .health-disabled,.health-unknown{color:#475569;background:#f8fafc;border-color:#cbd5e1}
+
+/* M1-C: no expandir ancho por secuencias largas de slots. */
+.auto-page .columns td small{display:block;color:var(--mat-sys-on-surface-variant,#64748b);font-size:11px;max-width:240px;overflow-wrap:anywhere}

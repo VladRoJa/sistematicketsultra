@@ -8,7 +8,7 @@ import { AutomationErrorDetailDialogComponent, AutomationErrorDialogData } from 
 import { catchError, forkJoin, of, Subject, takeUntil } from 'rxjs';
 import { AutomationControlService } from './automation-control.service';
 import { classifyObservationRuns, classifyReferenceHour, currentTijuanaClock, ObservationState, ReferenceState } from './automation-control-timeline-display';
-import { Job, Run, Summary, Dataset, TimelineWorker, TimelineJob, TimelineObservation, WorkerHealth, WorkerLiveness } from './automation-control.models';
+import { Job, Run, Summary, Dataset, TimelineWorker, TimelineJob, TimelineObservation, WorkerHealth, WorkerLiveness, EffectiveJobSchedule } from './automation-control.models';
 
 @Component({ selector:'app-automation-control',standalone:true,imports:[CommonModule,FormsModule,MatDialogModule,MatIconModule],
   templateUrl:'./automation-control.component.html',styleUrls:['./automation-control.component.css'] })
@@ -19,6 +19,8 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
   timelineDate=new Date().toLocaleDateString('en-CA',{timeZone:'America/Tijuana'});
   timelineWorkers:TimelineWorker[]=[];
   workerHealth:WorkerHealth[]=[];
+  effectiveSchedules:EffectiveJobSchedule[]=[];
+  configUnavailable=false;
   healthUnavailable=false;
   healthCheckedAt:string|null=null;
   loadingTimeline=false;
@@ -41,6 +43,39 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
       (!text||[j.label,j.key,j.worker_key].some(v=>v.toLowerCase().includes(text))));
   }
   get page():number {return Math.floor(this.offset/this.pageSize)+1;}
+  effectiveJob(jobKey:string):EffectiveJobSchedule|undefined {
+    return this.effectiveSchedules.find(j=>j.job_key===jobKey);
+  }
+  effectiveLabel(jobKey:string):string {
+    const entry=this.effectiveJob(jobKey);
+    if(!entry||entry.state==='UNVERIFIED'||!entry.schedule)return 'Sin verificar';
+    if(entry.state==='DISABLED')return 'Deshabilitado';
+    const schedule=entry.schedule;
+    if(schedule.kind==='HOURLY_WINDOW'&&schedule.slots.length>1){
+      return schedule.slots[0]+'–'+schedule.slots[schedule.slots.length-1]+' (horario local)';
+    }
+    if(schedule.slots.length) return schedule.slots.join(', ');
+    if(schedule.interval_seconds){
+      const n=schedule.interval_seconds;
+      return n%60===0?'Cada '+(n/60)+' min':'Cada '+n+' s';
+    }
+    const names:Record<string,string>={
+      CONDITIONAL:'Según condiciones',PENDING_REQUEST:'Cuando hay solicitud',
+      NIGHTLY_WINDOW:'Ventana nocturna condicionada',
+      INTERVAL_CHECK:'Comprobación periódica',
+    };
+    return names[schedule.kind]||'Condicional';
+  }
+  effectiveDetail(jobKey:string):string {
+    const entry=this.effectiveJob(jobKey);
+    if(!entry||!entry.schedule||entry.state==='UNVERIFIED') {
+      return 'El worker no ha confirmado una programación vigente.';
+    }
+    const part='Configuración reportada por el worker en '+entry.schedule.timezone+'.';
+    return part+(entry.schedule.conditional?
+      ' Su ejecución depende de prioridades, reintentos o disponibilidad; no es una garantía.':
+      ' Horario nominal, no confirma que la ejecución vaya a terminar correctamente.');
+  }
   get healthyWorkers():number {
     return this.workerHealth.filter(worker=>worker.status==='HEALTHY').length;
   }
@@ -84,10 +119,13 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
     this.loadTimeline();
     this.sequence++;this.loading=true;this.error='';
     forkJoin({summary:this.api.summary(),jobs:this.api.jobs(),datasets:this.api.datasets(),
-      health:this.api.workerHealth().pipe(catchError(() => of(null)))})
+      health:this.api.workerHealth().pipe(catchError(() => of(null))),
+      schedules:this.api.effectiveSchedules().pipe(catchError(() => of(null)))})
       .pipe(takeUntil(this.destroyed$)).subscribe({
-        next:({summary,jobs,datasets,health})=>{
+        next:({summary,jobs,datasets,health,schedules})=>{
           this.summary=summary;this.jobs=jobs.jobs;this.datasets=datasets.datasets;this.loading=false;
+          this.configUnavailable=!schedules;
+          this.effectiveSchedules=schedules?.jobs??[];
           this.healthUnavailable=!health;this.healthCheckedAt=health?.checked_at_utc??null;
           this.workerHealth=health?.workers??[...new Set(jobs.jobs.map(j=>j.worker_key))].sort()
             .map(worker_key=>({worker_key,status:'UNKNOWN' as const,

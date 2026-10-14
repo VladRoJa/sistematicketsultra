@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 from app.services.automation_control.timeline_service import daily_timeline
 from app.services.automation_control.worker_health_service import read_worker_health
+from app.services.automation_control.effective_schedule_service import read_effective_schedules
 from app.services.automation_control.diagnostic_service import (
     run_diagnostic, last_error_diagnostic,
 )
@@ -263,4 +264,19 @@ def automation_control_worker_health():
         return jsonify({
             "status": "error",
             "message": "No se pudo verificar la salud de los workers.",
+        }), 503
+
+
+@automation_control_bp.get("/jobs/effective-schedules")
+@jwt_required()
+def automation_control_effective_schedules():
+    if not _require_read_access():
+        return _deny()
+    try:
+        return jsonify({"status": "ok", **read_effective_schedules()})
+    except Exception:
+        current_app.logger.exception("No se pudo consultar configuración efectiva de workers")
+        return jsonify({
+            "status": "error",
+            "message": "No se pudo verificar la programación efectiva.",
         }), 503

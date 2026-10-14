@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 from app import create_app
 from app.extensions import db
+from app.services.automation_control.effective_schedule_service import schedule_spec
 from app.services.automation_control.worker_health_service import emit_worker_heartbeat
 from app.warehouse.services.scheduler_priority_service import (
     get_secondary_job_block_reason,
@@ -634,7 +635,30 @@ def run_scheduler_loop() -> None:
 
     while not _SHOULD_STOP:
         try:
-            emit_worker_heartbeat('marketing-scheduler', poll_interval_seconds=poll_seconds)
+            emit_worker_heartbeat(
+                'marketing-scheduler', poll_interval_seconds=poll_seconds,
+                schedules_provider=lambda: {
+                    "marketing.iventas_sync": schedule_spec(
+                        enabled=True, timezone_name=_timezone().key,
+                        kind="DAILY_SLOTS", conditional=True,
+                        slots=sorted(f"{h:02d}:{m:02d}" for h, m in run_times),
+                    ),
+                    "marketing.meta_sync": schedule_spec(
+                        enabled=True, timezone_name=_timezone().key,
+                        kind="DAILY_SLOTS", conditional=True,
+                        slots=sorted(f"{h:02d}:{m:02d}" for h, m in run_times),
+                    ),
+                    "marketing.campaign_v2_provider_stats": schedule_spec(
+                        enabled=provider_stats_config is not None,
+                        timezone_name=_timezone().key,
+                        kind="INTERVAL", conditional=True,
+                        interval_seconds=(
+                            provider_stats_config.interval_seconds
+                            if provider_stats_config else None
+                        ),
+                    ),
+                },
+            )
             now = _now_local()
 
             if provider_stats_config is not None:
