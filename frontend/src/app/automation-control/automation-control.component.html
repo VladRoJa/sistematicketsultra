@@ -124,7 +124,13 @@
     <section class="panel"><h2>Datasets vinculados</h2><div class="datasets">
       <article *ngFor="let dataset of datasets"><b>{{dataset.label}}</b>
         <p [title]="datasetEvidenceDetail(dataset.key)">{{datasetEvidenceLabel(dataset.key)}}</p>
-        <p class="unknown">Frescura sin SLA certificado</p>
+        <app-data-freshness-indicator
+          *ngIf="isFreshnessDataset(dataset.key)"
+          [moduleKey]="freshnessModuleKey(dataset.key)"
+          [suppliedState]="datasetEvidence[dataset.key] ?? null"
+          [statusOnly]="true">
+        </app-data-freshness-indicator>
+        <p *ngIf="!isFreshnessDataset(dataset.key)" class="unknown">Sin política SLA para este dataset</p>
         <small>{{dataset.sources.length}} fuentes</small></article></div></section>
   </ng-container>
 </section>
