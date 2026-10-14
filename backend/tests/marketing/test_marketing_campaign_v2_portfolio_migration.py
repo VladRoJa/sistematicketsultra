@@ -33,7 +33,7 @@ def test_b1_portfolio_migration_constraints_and_guarded_downgrade():
         ), dict(bid="629679279215746", display=None, app=None, src="operador", actor=7))
         row = conn.execute(sa.text(f"SELECT business_id FROM {table}")).scalar_one()
         assert row == "629679279215746"
-        with pytest.raises(Exception, match=""):
+        with pytest.raises(sa.exc.IntegrityError):
             with conn.begin_nested():
                 conn.execute(sa.text(
                     f"INSERT INTO {table} (business_id, source_reference, created_by_user_id) "
