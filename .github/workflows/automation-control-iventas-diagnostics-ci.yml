@@ -13,6 +13,8 @@ on:
       - "backend/app/services/marketing_meta_persistence_service.py"
       - "backend/app/services/marketing_scheduler_worker.py"
       - "backend/migrations/versions/f856m1f40001_marketing_slot_attribution.py"
+      - "backend/migrations/versions/f6roster1014_track_version_roster_evidence.py"
+      - "backend/app/models/warehouse.py"
       - "backend/tests/marketing/test_marketing_scheduler_worker.py"
       - "backend/app/utils/automation_control_access.py"
       - "backend/migrations/versions/f62a1b9d4c07_iventas_branch_failure_diagnostics.py"
@@ -59,6 +61,7 @@ jobs:
       JWT_SECRET_KEY: synthetic-ci-jwt
       SQLALCHEMY_DATABASE_URI: "sqlite:///:memory:"
       IVENTAS_DIAG_TEST_POSTGRES_URL: "postgresql://automations_ci:synthetic-ci-password@127.0.0.1:5432/automations_ci"
+      TRACK_ROSTER_TEST_POSTGRES_URL: "postgresql://automations_ci:synthetic-ci-password@127.0.0.1:5432/automations_ci"
       CAMPAIGN_V2_PROVIDER_SEND_ENABLED: "false"
 
     steps:
@@ -84,6 +87,7 @@ jobs:
             app/services/marketing_scheduler_worker.py \
             app/services/automation_control/marketing_slot_sla_service.py \
             migrations/versions/f856m1f40001_marketing_slot_attribution.py \
+            migrations/versions/f6roster1014_track_version_roster_evidence.py \
             migrations/versions/f62a1b9d4c07_iventas_branch_failure_diagnostics.py
       - name: Regression + real PostgreSQL 16 migration (synthetic only)
         run: |
@@ -147,6 +151,7 @@ jobs:
       JWT_SECRET_KEY: heartbeat-test-only
       SQLALCHEMY_DATABASE_URI: "sqlite:///:memory:"
       WORKER_HEARTBEAT_TEST_POSTGRES_URL: "postgresql://heartbeat_ci:synthetic-heartbeat@127.0.0.1:5432/heartbeat_ci"
+      TRACK_ROSTER_TEST_POSTGRES_URL: "postgresql://heartbeat_ci:synthetic-heartbeat@127.0.0.1:5432/heartbeat_ci"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -163,4 +168,5 @@ jobs:
           python -m pytest -q --tb=short -o addopts= \
             tests/automation_control/test_worker_health.py \
             tests/automation_control/test_worker_health_postgres_ci.py \
-            tests/automation_control/test_marketing_slot_sla_service.py
+            tests/automation_control/test_marketing_slot_sla_service.py \
+            tests/automation_control/test_track_roster_m1f6_postgres.py
