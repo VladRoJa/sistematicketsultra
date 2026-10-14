@@ -90,7 +90,7 @@ def test_alembic_revision_has_no_seed_and_protects_rollback():
     assert spec and spec.loader
     spec.loader.exec_module(module)
     assert module.revision == "b3e7c2d9a104"
-    assert module.down_revision == "e4b856c9170d"
+    assert module.down_revision == "f62a1b9d4c07"
     source = path.read_text(encoding="utf-8")
     assert "op.create_table(" in source
     assert "op.execute(" not in source
