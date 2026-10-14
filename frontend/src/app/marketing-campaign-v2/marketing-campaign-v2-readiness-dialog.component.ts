@@ -21,6 +21,7 @@ import {
 } from './marketing-campaign-v2.models';
 import { campaignV2BuildReadinessRows, CampaignV2ReadinessRow } from './marketing-campaign-v2-readiness.logic';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
+import { MarketingCampaignV2PortfolioReviewDialogComponent } from './marketing-campaign-v2-portfolio-review-dialog.component';
 import { MarketingCampaignV2ChannelPortfolioDialogComponent } from './marketing-campaign-v2-channel-portfolio-dialog.component';
 import { MarketingCampaignV2QuotaAdminDialogComponent } from './marketing-campaign-v2-quota-admin-dialog.component';
 import { MarketingCampaignV2DispatchAdminDialogComponent } from './marketing-campaign-v2-dispatch-admin-dialog.component';
@@ -159,6 +160,14 @@ export class MarketingCampaignV2ReadinessDialogComponent implements OnInit {
   openPortfolios(): void {
     const ref = this.dialog.open(MarketingCampaignV2QuotaAdminDialogComponent, {
       panelClass: 'campaign-v2-admin-dialog', width: 'min(1050px, 96vw)',
+      maxWidth: '96vw', maxHeight: '94vh', autoFocus: false,
+    });
+    ref.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.reload());
+  }
+
+  openPortfolioReview(): void {
+    const ref = this.dialog.open(MarketingCampaignV2PortfolioReviewDialogComponent, {
+      panelClass: 'campaign-v2-admin-dialog', width: 'min(1200px, 96vw)',
       maxWidth: '96vw', maxHeight: '94vh', autoFocus: false,
     });
     ref.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.reload());
