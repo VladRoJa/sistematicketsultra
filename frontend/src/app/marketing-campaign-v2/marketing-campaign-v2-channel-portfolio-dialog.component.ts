@@ -5,7 +5,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
@@ -39,6 +39,7 @@ export class MarketingCampaignV2ChannelPortfolioDialogComponent implements OnIni
   private readonly api = inject(MarketingCampaignV2Service);
   private readonly destroyRef = inject(DestroyRef);
   private readonly dialogRef = inject(MatDialogRef<MarketingCampaignV2ChannelPortfolioDialogComponent>);
+  private readonly initialData = inject<{ channelId?: string } | null>(MAT_DIALOG_DATA, { optional: true });
 
   readonly channelId = new FormControl('', { nonNullable: true });
   readonly businessId = new FormControl('', { nonNullable: true });
@@ -131,7 +132,11 @@ export class MarketingCampaignV2ChannelPortfolioDialogComponent implements OnIni
           })
           .sort((a, b) => a.binding.sucursal_canon.localeCompare(b.binding.sucursal_canon));
         if (!this.channelRows.some(row => row.binding.provider_channel_id === this.channelId.value)) {
-          this.channelId.setValue(this.channelRows[0]?.binding.provider_channel_id ?? '', { emitEvent: false });
+          const requestedChannel = this.initialData?.channelId;
+          const initialChannel = this.channelRows.some(row => row.binding.provider_channel_id === requestedChannel)
+            ? requestedChannel ?? ''
+            : this.channelRows[0]?.binding.provider_channel_id ?? '';
+          this.channelId.setValue(initialChannel, { emitEvent: false });
         }
         this.loading = false;
         this.selectCurrent();
