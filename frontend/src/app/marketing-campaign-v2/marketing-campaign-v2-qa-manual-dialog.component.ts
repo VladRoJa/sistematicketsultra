@@ -68,7 +68,8 @@ export class MarketingCampaignV2QaManualDialogComponent implements OnInit {
     return !this.loading && !this.previewing && !this.freezing && !this.frozen &&
       Boolean(this.selectedChannel && name.length >= 4 && name.length <= 255 &&
         name.toUpperCase().startsWith('QA ') &&
-        /^\\+?[0-9]{10,13}$/.test(phone) &&
+        /^[+]?[0-9]{10,13}$/.test(phone) &&
+        this.recipientName.value.trim().length > 0 &&
         this.recipientName.value.trim().length <= 255);
   }
 
