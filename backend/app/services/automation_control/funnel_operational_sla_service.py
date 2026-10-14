@@ -94,7 +94,7 @@ def _exact_current_sources(business_date: date) -> list[dict]:
     )
     results = []
     for key, query in zip(SOURCE_KEYS, queries):
-        rows = query.order_by(query.column_descriptions[0]["expr"].desc()).limit(20).all()
+        rows = query.limit(20).all()
         if len(rows) >= 20:
             reason = "ATTEMPTS_LIMIT"
             present = None
