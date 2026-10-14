@@ -52,7 +52,19 @@ export interface TrackBaseSla {
   historical_roster_verified:false;
   canonical_close_sla:string;
 }
+export interface MarketingSyncSla {
+  business_date: string;
+  status: FreshnessStatus;
+  reason_code: string;
+  slot_at: string|null;
+  due_at: string|null;
+  late_at: string|null;
+  timezone: string;
+  scope: 'SYNC_ONLY_NOT_FUNNEL_CONSOLIDATED';
+  sources: Array<{key:string; status:FreshnessStatus; reason_code:string}>;
+}
 export interface DatasetFreshness {
+  marketing_sync_sla?: MarketingSyncSla;
   track_base_sla?:TrackBaseSla;
   late_at?:string|null;
   latest_catalog_matched_business_date?: string|null;
