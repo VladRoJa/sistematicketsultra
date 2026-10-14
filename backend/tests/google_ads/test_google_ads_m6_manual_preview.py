@@ -20,7 +20,7 @@ API = "/api/integrations/google-ads/manual/preview"
 @pytest.fixture
 def setup_client(monkeypatch):
     app = Flask(__name__)
-    app.config.update(TESTING=True, JWT_SECRET_KEY="manual-preview-synthetic-key")
+    app.config.update(\n        TESTING=True, JWT_SECRET_KEY="manual-preview-synthetic-key",\n        SECRET_KEY="manual-preview-ticket-test-only-key",\n    )
     JWTManager(app)
     app.register_blueprint(
         routes.google_ads_m6_continuity_bp,
