@@ -82,7 +82,7 @@ jobs:
           JWT_SECRET_KEY: google-ads-m6-jwt-test-only
           GOOGLE_ADS_M6_TEST_POSTGRES_URL: postgresql+psycopg2://google_ads_m6_ci:isolated_google_ads_m6_ci@127.0.0.1:5432/google_ads_m6_ci
         run: |
-          python -m pytest -q --tb=short \
+          timeout --signal=TERM 180s python -m pytest -vv --tb=short -o faulthandler_timeout=30 \
             tests/google_ads/test_google_ads_m6_continuity_schema.py \
             tests/google_ads/test_google_ads_m6_continuity_approval.py \
             tests/google_ads/test_google_ads_m6_authenticated_approval.py \
