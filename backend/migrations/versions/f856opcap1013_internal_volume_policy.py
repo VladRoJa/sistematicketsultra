@@ -1,7 +1,7 @@
 """Issue 856 operational limits: audited channel/portfolio limits without fake Meta remaining.
 
 Revision ID: f856opcap1013
-Revises: e856d3c21013
+Revises: c13a70e4d82c
 
 Existing evidence-backed approvals keep their non-null attestation references.
 New internal-limit approvals record null attestation_id with the policy revision
@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "f856opcap1013"
-down_revision = "e856d3c21013"
+down_revision = "c13a70e4d82c"
 branch_labels = None
 depends_on = None
 
