@@ -190,3 +190,36 @@ def test_qa_freeze_fingerprint_conflict_returns_409():
         response = api.post("/api/marketing/campaigns-v2/qa-manual/freeze",
                             headers=headers, json=BASE)
     assert response.status_code == 409
+
+
+def test_postgres_concurrent_same_name_freeze_returns_409_before_write():
+    from unittest.mock import MagicMock
+    params = {**BASE, "expected_preview_fingerprint": "a" * 64,
+              "expected_channel_binding_id": 12, "confirm_freeze": True, "actor_user_id": 47}
+    session = MagicMock()
+    session.get_bind.return_value.dialect.name = "postgresql"
+    session.execute.return_value.scalar.return_value = False
+    with patch.object(qa, "list_channel_bindings", return_value=[BINDING]), \
+         patch.object(qa, "freeze_campaign_v2_qa_manual") as freeze:
+        with pytest.raises(QAConflict, match="en curso"):
+            qa.freeze_qa_manual_http(**params, session=session)
+    session.execute.assert_called_once()
+    freeze.assert_not_called()
+
+
+def test_postgres_freeze_lock_success_delegates_existing_service():
+    from unittest.mock import MagicMock
+    params = {**BASE, "expected_preview_fingerprint": "a" * 64,
+              "expected_channel_binding_id": 12, "confirm_freeze": True, "actor_user_id": 47}
+    session = MagicMock()
+    session.get_bind.return_value.dialect.name = "postgresql"
+    session.execute.return_value.scalar.return_value = True
+    with patch.object(qa, "list_channel_bindings", return_value=[BINDING]), \
+         patch.object(qa, "freeze_campaign_v2_qa_manual", return_value={
+             "campaign_id": 56, "recipient_count": 1, "source": "QA_MANUAL",
+         }) as freeze:
+        result = qa.freeze_qa_manual_http(**params, session=session)
+    assert result["campaign_id"] == 56
+    assert result["is_dispatch_authorized"] is False
+    session.execute.assert_called_once()
+    freeze.assert_called_once()
