@@ -3,6 +3,8 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Subject, takeUntil } from 'rxjs';
+import { SessionService } from '../core/auth/session.service';
+import { GoogleAdsM6ManualUploadComponent } from './google-ads-m6-manual-upload.component';
 
 import {
   GoogleAdsAccountCheck,
@@ -21,7 +23,7 @@ function dateInputValue(date: Date): string {
 @Component({
   selector: 'app-google-ads-admin',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, GoogleAdsM6ManualUploadComponent],
   templateUrl: './google-ads-admin.component.html',
   styleUrls: ['./google-ads-admin.component.css']
 })
@@ -45,7 +47,16 @@ export class GoogleAdsAdminComponent implements OnInit, OnDestroy {
   dateTo = dateInputValue(new Date());
   dateFrom = dateInputValue(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000));
 
-  constructor(private readonly googleAds: GoogleAdsAdminService) {}
+  constructor(
+    private readonly googleAds: GoogleAdsAdminService,
+    private readonly session: SessionService
+  ) {}
+
+  get showManualUpload(): boolean {
+    const user = this.session.getUser();
+    return String(user?.username || '').trim().toUpperCase() === 'ADMICORP'
+      && String(user?.rol || '').trim().toUpperCase() === 'ADMINISTRADOR';
+  }
 
   ngOnInit(): void {
     this.reloadStatus();

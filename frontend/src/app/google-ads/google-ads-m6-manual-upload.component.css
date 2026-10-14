@@ -1,0 +1,94 @@
+:host { display: block; }
+
+.manual-ads {
+  border: 1px solid #d5dfec;
+  border-radius: 16px;
+  padding: 24px;
+  margin: 20px 0;
+  background: #fff;
+  color: #172946;
+  box-shadow: 0 6px 18px rgba(17, 41, 75, .045);
+}
+
+.manual-ads__header,
+.manual-ads__preview-heading,
+.manual-ads__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.manual-ads__header { align-items: flex-start; }
+.manual-ads__header h2 { margin: 0 0 7px; font-size: 1.2rem; }
+.manual-ads__header p { margin: 0; color: #5b6980; line-height: 1.5; max-width: 790px; }
+.manual-ads__eyebrow {
+  color: #b44521 !important; font-size: .75rem; font-weight: 800;
+  letter-spacing: .1em; margin-bottom: 8px !important; text-transform: uppercase;
+}
+.manual-ads__chip, .manual-ads__ok {
+  white-space: nowrap; border-radius: 18px; padding: 7px 11px;
+  color: #6d4020; background: #fff1e7; font-size: .75rem; font-weight: 750;
+}
+.manual-ads__ok { color: #19634a; background: #e8f6ef; }
+.manual-ads__steps {
+  display: flex; flex-wrap: wrap; gap: 12px;
+  padding: 13px 0; margin: 19px 0; border-top: 1px solid #e1e7f0;
+  border-bottom: 1px solid #e1e7f0;
+  color: #536784; font-size: .83rem; font-weight: 700;
+}
+.manual-ads__steps span { padding: 5px 12px; background: #f3f6fa; border-radius: 20px; }
+.manual-ads__files { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.manual-ads__file {
+  padding: 16px; border: 1px solid #dce4ee; border-radius: 11px;
+  background: #fafbfd; display: flex; flex-direction: column; gap: 11px; min-width: 0;
+}
+.manual-ads__file span { font-size: .9rem; font-weight: 750; }
+.manual-ads__file input { width: 100%; min-width: 0; font: inherit; font-size: .82rem; }
+.manual-ads__file small { color: #52657d; overflow-wrap: anywhere; }
+.manual-ads__actions { justify-content: flex-start; flex-wrap: wrap; margin-top: 15px; }
+.manual-ads__primary, .manual-ads__secondary {
+  padding: 11px 15px; border-radius: 9px; cursor: pointer;
+  font: inherit; font-size: .9rem; font-weight: 700;
+}
+.manual-ads__primary { background: #182f56; color: #fff; border: 1px solid #182f56; }
+.manual-ads__secondary { background: #fff; color: #182f56; border: 1px solid #b8c5d7; }
+.manual-ads button:disabled { opacity: .47; cursor: not-allowed; }
+.manual-ads input:focus-visible, .manual-ads button:focus-visible {
+  outline: 3px solid #6997d9; outline-offset: 3px;
+}
+.manual-ads__message { border-radius: 9px; padding: 12px 14px; margin: 15px 0 0; }
+.manual-ads__message--error { color: #823227; background: #fff2f0; border: 1px solid #f0beb8; }
+.manual-ads__message--success { color: #145d46; background: #edfbf3; border: 1px solid #b2e1c8; }
+.manual-ads__preview, .manual-ads__result {
+  border-top: 1px solid #e0e7f1; padding-top: 17px; margin-top: 19px;
+}
+.manual-ads h3 { font-size: 1.05rem; margin: 0; }
+.manual-ads__caption { color: #607089; font-size: .85rem; line-height: 1.5; }
+.manual-ads__totals {
+  display: grid; grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 12px; margin: 15px 0;
+}
+.manual-ads__totals div {
+  display: flex; flex-direction: column; gap: 7px; padding: 15px;
+  background: #f5f8fc; border-radius: 10px; border: 1px solid #e3eaf3;
+}
+.manual-ads__totals span { color: #53637a; font-size: .82rem; }
+.manual-ads__totals strong { font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+.manual-ads__warning {
+  background: #fff8ec; color: #765321; padding: 12px 14px;
+  border: 1px solid #f0dfbe; border-radius: 9px; line-height: 1.5;
+}
+.manual-ads__acknowledgement {
+  display: flex; align-items: flex-start; gap: 10px; margin: 16px 0;
+  line-height: 1.5; color: #344c6b; font-size: .88rem;
+}
+.manual-ads__acknowledgement input { margin-top: 4px; }
+.manual-ads__result ul { padding-left: 19px; line-height: 1.75; }
+.manual-ads__result p { color: #546882; }
+
+@media (max-width: 740px) {
+  .manual-ads { padding: 17px; }
+  .manual-ads__header, .manual-ads__preview-heading { align-items: flex-start; flex-direction: column; }
+  .manual-ads__files, .manual-ads__totals { grid-template-columns: 1fr; }
+}

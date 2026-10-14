@@ -1,0 +1,95 @@
+<section class="manual-ads" aria-labelledby="m6-manual-title">
+  <header class="manual-ads__header">
+    <div>
+      <p class="manual-ads__eyebrow">Google Ads · M6</p>
+      <h2 id="m6-manual-title">Carga manual de reportes diarios</h2>
+      <p>Selecciona el informe de campañas y el de grupos del <strong>mismo día cerrado</strong>.
+        Validaremos primero los dos archivos, sin guardar ni publicar datos.</p>
+    </div>
+    <span class="manual-ads__chip">Solo ADMICORP</span>
+  </header>
+
+  <div class="manual-ads__steps">
+    <span>1 · Seleccionar</span>
+    <span>2 · Validar</span>
+    <span>3 · Confirmar RAW</span>
+  </div>
+
+  <div class="manual-ads__files">
+    <label class="manual-ads__file">
+      <span>Informe de campaña · XLSX</span>
+      <input type="file" accept=".xlsx" [disabled]="busy"
+        (change)="onFileChanged('campaign', $event)" aria-label="Archivo Excel de campañas" />
+      <small>{{ campaignFile?.name || 'Sin archivo seleccionado' }} · Máximo {{ maxCampaignMb }} MB</small>
+    </label>
+    <label class="manual-ads__file">
+      <span>Informe de grupo de anuncios · XLSX</span>
+      <input type="file" accept=".xlsx" [disabled]="busy"
+        (change)="onFileChanged('ad_group', $event)" aria-label="Archivo Excel de grupos de anuncios" />
+      <small>{{ adGroupFile?.name || 'Sin archivo seleccionado' }} · Máximo {{ maxGroupMb }} MB</small>
+    </label>
+  </div>
+
+  <div class="manual-ads__actions">
+    <button type="button" class="manual-ads__primary" [disabled]="!canPreview"
+      (click)="validate()">
+      {{ state === 'preview' ? 'Validando archivos…' : 'Validar ambos Excel' }}
+    </button>
+    <button type="button" class="manual-ads__secondary" [disabled]="busy"
+      (click)="reset()">Limpiar</button>
+  </div>
+
+  <p class="manual-ads__message manual-ads__message--error" role="alert" *ngIf="errorMessage">
+    {{ errorMessage }}
+  </p>
+  <p class="manual-ads__message manual-ads__message--success" role="status" *ngIf="successMessage">
+    {{ successMessage }}
+  </p>
+
+  <ng-container *ngIf="previewData as report">
+    <section class="manual-ads__preview" aria-label="Vista previa del corte">
+      <div class="manual-ads__preview-heading">
+        <h3>Vista previa · {{ report.business_date }}</h3>
+        <span class="manual-ads__ok">{{ report.status }}</span>
+      </div>
+      <p class="manual-ads__caption">Cuenta Google Ads: {{ report.customer_id }} ·
+        {{ report.campaign_rows }} campañas · {{ report.group_rows }} grupos ·
+        {{ report.approved_branches }} sucursales con identidad histórica</p>
+      <div class="manual-ads__totals">
+        <div><span>Gasto total de cuenta</span><strong>{{ money(report.account_cost_mxn) }}</strong></div>
+        <div><span>Asignado a sucursales</span><strong>{{ money(report.branch_cost_mxn) }}</strong></div>
+        <div><span>Sin asignar</span><strong>{{ money(report.unassigned_cost_mxn) }}</strong></div>
+      </div>
+
+      <p class="manual-ads__warning">
+        Esta validación <strong>no aprueba identidades</strong>, no importa métricas estructuradas
+        ni publica datos en Funnel. Solo permite registrar los dos documentos RAW.
+      </p>
+
+      <ng-container *ngIf="!isStaged">
+        <label class="manual-ads__acknowledgement">
+          <input type="checkbox" [checked]="acceptedRawOnly" [disabled]="busy"
+            (change)="acceptedRawOnly = $any($event.target).checked" />
+          <span>Confirmo guardar exclusivamente los RAW de este corte, sin publicación.
+            Los Excel deben permanecer sin cambios desde la validación.</span>
+        </label>
+        <button type="button" class="manual-ads__primary" [disabled]="!canConfirmRaw"
+          (click)="confirmRaw()">
+          {{ state === 'confirm' ? 'Guardando RAW…' : (isPartial ? 'Reintentar pareja RAW' : 'Confirmar carga RAW') }}
+        </button>
+      </ng-container>
+    </section>
+  </ng-container>
+
+  <section class="manual-ads__result" *ngIf="rawResult as raw" aria-label="Resultado de carga RAW">
+    <h3>Resultado: {{ raw.status }}</h3>
+    <p>Corte {{ raw.business_date }}. Esto no implica ingesta estructurada ni publicación.</p>
+    <ul>
+      <li *ngFor="let item of resultItems">
+        <strong>{{ item.kind }}</strong> · Upload #{{ item.data.upload_id }} ·
+        {{ item.data.reused_existing ? 'RAW idéntico reutilizado' : 'RAW registrado' }}
+      </li>
+    </ul>
+    <p *ngIf="isPartial">La pareja quedó incompleta. Reintenta ambos archivos sin cambiarlos.</p>
+  </section>
+</section>

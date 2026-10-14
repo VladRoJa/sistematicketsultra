@@ -3,13 +3,15 @@
     <div>
       <p class="eyebrow">Marketing · Integraciones</p>
       <h1>Google Ads</h1>
-      <p class="intro">Conexión administrativa y consulta de campañas de Ultra Gym. Esta pantalla utiliza datos reales de Google Ads API, nunca datos de demostración.</p>
+      <p class="intro">Conexión administrativa y consulta de campañas de Ultra Gym. Consulta Google Ads API y carga manual de Excel mientras se completa la integración automática.</p>
     </div>
     <button type="button" class="btn btn-outline"
             (click)="reloadStatus()" [disabled]="loadingStatus || connecting">
       {{ loadingStatus ? 'Consultando...' : 'Actualizar estado' }}
     </button>
   </header>
+
+  <app-google-ads-m6-manual-upload *ngIf="showManualUpload"></app-google-ads-m6-manual-upload>
 
   <div class="ads-alert" role="alert" *ngIf="statusError">{{ statusError }}</div>
 
