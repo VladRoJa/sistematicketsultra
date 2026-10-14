@@ -6,6 +6,7 @@ import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { forkJoin } from 'rxjs';
@@ -15,6 +16,7 @@ import {
   CampaignV2ChannelBinding,
   CampaignV2DispatchTemplate,
   CampaignV2QuotaPolicyRevision,
+  CampaignV2PortfolioReference,
 } from './marketing-campaign-v2.models';
 import { campaignV2BuildReadinessRows, CampaignV2ReadinessRow } from './marketing-campaign-v2-readiness.logic';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
@@ -26,7 +28,7 @@ import { MarketingCampaignV2DispatchAdminDialogComponent } from './marketing-cam
   standalone: true,
   imports: [
     CommonModule, ReactiveFormsModule, MatButtonModule, MatDialogModule,
-    MatFormFieldModule, MatProgressSpinnerModule, MatSelectModule,
+    MatFormFieldModule, MatInputModule, MatProgressSpinnerModule, MatSelectModule,
   ],
   templateUrl: './marketing-campaign-v2-readiness-dialog.component.html',
   styleUrls: ['./marketing-campaign-v2-readiness-dialog.component.css'],
@@ -40,6 +42,15 @@ export class MarketingCampaignV2ReadinessDialogComponent implements OnInit {
   readonly templateId = new FormControl<number | null>(null);
   templates: CampaignV2DispatchTemplate[] = [];
   rows: CampaignV2ReadinessRow[] = [];
+  portfolios: CampaignV2PortfolioReference[] = [];
+  portfolioSaving = false;
+  portfolioError = '';
+  portfolioSuccess = '';
+
+  readonly portfolioBusinessId = new FormControl('', { nonNullable: true });
+  readonly portfolioName = new FormControl('', { nonNullable: true });
+  readonly portfolioAppId = new FormControl('', { nonNullable: true });
+  readonly portfolioSource = new FormControl('', { nonNullable: true });
   loading = false;
   error = '';
   private bindings: CampaignV2ChannelBinding[] = [];
@@ -50,6 +61,44 @@ export class MarketingCampaignV2ReadinessDialogComponent implements OnInit {
     this.templateId.valueChanges.pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.rebuild());
     this.reload();
+  }
+
+  get canSavePortfolio(): boolean {
+    const business = this.portfolioBusinessId.value.trim();
+    const appId = this.portfolioAppId.value.trim();
+    const name = this.portfolioName.value.trim();
+    const source = this.portfolioSource.value.trim();
+    return !this.loading && !this.portfolioSaving
+      && /^[1-9][0-9]{5,31}$/.test(business)
+      && (!appId || /^[1-9][0-9]{5,31}$/.test(appId))
+      && name.length <= 160 && source.length > 0 && source.length <= 255;
+  }
+
+  savePortfolio(): void {
+    if (!this.canSavePortfolio) { return; }
+    this.portfolioSaving = true;
+    this.portfolioError = '';
+    this.portfolioSuccess = '';
+    this.api.registerPortfolioReference({
+      business_id: this.portfolioBusinessId.value.trim(),
+      display_name: this.portfolioName.value.trim() || null,
+      app_id: this.portfolioAppId.value.trim() || null,
+      source_reference: this.portfolioSource.value.trim(),
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: row => {
+        this.portfolioSaving = false;
+        this.portfolioSuccess = 'Business ID ' + row.business_id + ' registrado sin verificar; no vincula canales ni habilita envíos.';
+        this.portfolioBusinessId.reset('');
+        this.portfolioName.reset('');
+        this.portfolioAppId.reset('');
+        this.portfolioSource.reset('');
+        this.reload();
+      },
+      error: (error: HttpErrorResponse) => {
+        this.portfolioSaving = false;
+        this.portfolioError = String(error.error?.message || 'No se pudo registrar la referencia.');
+      },
+    });
   }
 
   get configuredCount(): number { return this.rows.filter(row => row.configured).length; }
@@ -68,12 +117,14 @@ export class MarketingCampaignV2ReadinessDialogComponent implements OnInit {
       bindings: this.api.listDispatchChannelBindings(),
       quota: this.api.listQuotaEvidence(),
       rates: this.api.listBudgetRateRevisions(),
+      portfolioReferences: this.api.listPortfolioReferences(),
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: result => {
         this.templates = result.templates.rows.filter(t => t.is_active);
         this.bindings = result.bindings.rows;
         this.policies = result.quota.policies;
         this.rates = result.rates.rows;
+        this.portfolios = result.portfolioReferences.rows;
         const selected = this.templateId.value;
         const defaultTemplate = this.templates.find(t => t.template_name === 'invita_y_gana_4800');
         if (!this.templates.some(t => t.id === selected)) {
