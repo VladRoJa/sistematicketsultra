@@ -84,6 +84,7 @@ def create_meta_sync_run_running(
     date_to: date,
     accounts_requested: int,
     started_at: datetime | None = None,
+    scheduler_slot_at: datetime | None = None,
     session: Any | None = None,
 ) -> MarketingMetaSyncRunORM:
     period_value = str(period_key or "").strip()
@@ -108,6 +109,13 @@ def create_meta_sync_run_running(
         started_at if started_at is not None else _utc_now(),
         "started_at",
     )
+    # Solo los runs del scheduler llevan slot; los manuales/legacy siguen NULL.
+    if scheduler_slot_at is not None:
+        if scheduler_slot_at.tzinfo is None or scheduler_slot_at.utcoffset() is None:
+            raise ValueError("scheduler_slot_at debe incluir timezone.")
+        if scheduler_slot_at.date() != date_to:
+            raise ValueError("scheduler_slot_at debe corresponder a date_to.")
+
     session_value = _session_or_default(session)
     run = MarketingMetaSyncRunORM(
         period_key=period_value,
@@ -123,6 +131,7 @@ def create_meta_sync_run_running(
         insights_received=0,
         insights_unique=0,
         is_canonical=False,
+        scheduler_slot_at=scheduler_slot_at,
     )
     session_value.add(run)
     session_value.commit()
