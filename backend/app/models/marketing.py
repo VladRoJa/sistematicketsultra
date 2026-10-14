@@ -2917,3 +2917,51 @@ class MarketingCampaignV2PortfolioReferenceORM(db.Model):
         ),
         db.Index("ix_mkt_v2_portfolio_business_latest", "business_id", "id"),
     )
+
+
+class MarketingCampaignV2ChannelPortfolioEvidenceORM(db.Model):
+    """Append-only operator assertion; NOT live Meta verification or quota policy."""
+
+    __tablename__ = "marketing_campaign_v2_channel_portfolio_evidence"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    provider_channel_id = db.Column(db.String(255), nullable=False)
+    business_id = db.Column(db.String(32), nullable=True)
+    waba_id = db.Column(db.String(32), nullable=True)
+    state = db.Column(db.String(16), nullable=False)
+    evidence_kind = db.Column(db.String(32), nullable=False)
+    source_reference = db.Column(db.String(255), nullable=False)
+    created_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="RESTRICT"), nullable=False,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=_utc_now,
+        server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "(state = 'DECLARED' AND business_id IS NOT NULL) OR "
+            "(state = 'WITHDRAWN' AND business_id IS NULL AND waba_id IS NULL)",
+            name="ck_mkt_v2_channel_portfolio_state",
+        ),
+        db.CheckConstraint(
+            "business_id IS NULL OR business_id ~ '^[1-9][0-9]{5,31}$'",
+            name="ck_mkt_v2_channel_portfolio_business",
+        ),
+        db.CheckConstraint(
+            "waba_id IS NULL OR waba_id ~ '^[1-9][0-9]{5,31}$'",
+            name="ck_mkt_v2_channel_portfolio_waba",
+        ),
+        db.CheckConstraint(
+            "evidence_kind IN ('OPERATOR_STATEMENT', 'META_DOCUMENT', 'IVENTAS_CONFIRMATION')",
+            name="ck_mkt_v2_channel_portfolio_evidence_kind",
+        ),
+        db.CheckConstraint(
+            "length(trim(provider_channel_id)) > 0 AND length(trim(source_reference)) > 0",
+            name="ck_mkt_v2_channel_portfolio_required",
+        ),
+        db.Index(
+            "ix_mkt_v2_channel_portfolio_latest", "provider_channel_id", "id",
+        ),
+    )
