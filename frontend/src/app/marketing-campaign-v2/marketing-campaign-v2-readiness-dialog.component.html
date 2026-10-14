@@ -14,6 +14,7 @@
       </mat-select>
     </mat-form-field>
     <div class="actions">
+      <button mat-stroked-button type="button" (click)="openPortfolioReview()" [disabled]="loading">Revisar evidencia de 26 canales</button>
       <button mat-stroked-button type="button" (click)="openChannelPortfolioMap()" [disabled]="loading">Documentar canal → Business ID</button>
       <button mat-stroked-button type="button" (click)="openPortfolios()" [disabled]="loading">Configurar portafolios y límites</button>
       <button mat-stroked-button type="button" (click)="openRates()" [disabled]="loading">Configurar tarifas y canales</button>
