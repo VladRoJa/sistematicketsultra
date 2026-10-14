@@ -101,3 +101,48 @@ jobs:
         run: node --test tests/automation-control-reference-display.test.cjs
       - name: Angular production build
         run: npm run build -- --configuration production
+
+  worker-health-postgres15:
+    name: Worker heartbeat migration and upsert - PostgreSQL 15
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: heartbeat_ci
+          POSTGRES_PASSWORD: synthetic-heartbeat
+          POSTGRES_DB: heartbeat_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U heartbeat_ci -d heartbeat_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+      SECRET_KEY: heartbeat-test-only
+      JWT_SECRET_KEY: heartbeat-test-only
+      SQLALCHEMY_DATABASE_URI: "sqlite:///:memory:"
+      WORKER_HEARTBEAT_TEST_POSTGRES_URL: "postgresql://heartbeat_ci:synthetic-heartbeat@127.0.0.1:5432/heartbeat_ci"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Verify new heartbeat migration on PostgreSQL 15
+        run: |
+          python -m pytest -q --tb=short -o addopts= \
+            tests/automation_control/test_worker_health.py \
+            tests/automation_control/test_worker_health_postgres_ci.py
