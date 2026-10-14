@@ -49,6 +49,15 @@ from app.services.marketing_campaign_v2_dispatch_config_service import (
     save_channel_binding,
     save_template,
 )
+from app.services.marketing_campaign_v2_qa_manual_service import (
+    MarketingCampaignV2QAManualValidationError,
+    MarketingCampaignV2QAManualConflictError,
+    MarketingCampaignV2QAManualPersistenceError,
+)
+from app.services.marketing_campaign_v2_qa_http_service import (
+    preview_qa_manual_http,
+    freeze_qa_manual_http,
+)
 from app.services.marketing_campaign_v2_portfolio_review_service import (
     list_portfolio_review,
 )
@@ -1708,6 +1717,69 @@ def campaign_v2_governed_execute_endpoint(campaign_id: int):
     except Exception:
         db.session.rollback()
         return _error("Error en despacho gobernado; revisar estado antes de reintentar.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/qa-manual/preview")
+@jwt_required()
+def preview_campaign_v2_qa_http_endpoint():
+    """Issue 856 C: one-recipient operator preview, no database writes or sends."""
+    try:
+        _, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_management(access)
+        _require_campaign_v2_preflight(access)
+        payload = _parse_payload({
+            "name", "purpose", "sucursal_id", "provider_channel_id", "recipients",
+        })
+        return jsonify(preview_qa_manual_http(
+            name=payload.get("name"),
+            purpose=payload.get("purpose"),
+            sucursal_id=payload.get("sucursal_id"),
+            provider_channel_id=payload.get("provider_channel_id"),
+            recipients=payload.get("recipients"), session=db.session,
+        )), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (MarketingCampaignV2RouteValidationError, MarketingCampaignV2QAManualValidationError) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        return _error("No fue posible preparar Preview QA_MANUAL.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/qa-manual/freeze")
+@jwt_required()
+def freeze_campaign_v2_qa_http_endpoint():
+    """Creates a one-recipient frozen QA cohort, NEVER submits to iVentas."""
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_management(access)
+        _require_campaign_v2_preflight(access)
+        payload = _parse_payload({
+            "name", "purpose", "sucursal_id", "provider_channel_id", "recipients",
+            "expected_preview_fingerprint", "expected_channel_binding_id",
+            "confirm_freeze",
+        })
+        return jsonify(freeze_qa_manual_http(
+            name=payload.get("name"),
+            purpose=payload.get("purpose"),
+            sucursal_id=payload.get("sucursal_id"),
+            provider_channel_id=payload.get("provider_channel_id"),
+            recipients=payload.get("recipients"),
+            expected_preview_fingerprint=payload.get("expected_preview_fingerprint"),
+            expected_channel_binding_id=payload.get("expected_channel_binding_id"),
+            confirm_freeze=payload.get("confirm_freeze"),
+            actor_user_id=int(user.id), session=db.session,
+        )), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (MarketingCampaignV2RouteValidationError, MarketingCampaignV2QAManualValidationError) as exc:
+        return _error(str(exc), 400)
+    except MarketingCampaignV2QAManualConflictError as exc:
+        return _error(str(exc), 409)
+    except MarketingCampaignV2QAManualPersistenceError:
+        return _error("Error al persistir cohorte QA_MANUAL.", 500)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible congelar QA_MANUAL; verifica el estado antes de reintentar.", 500)
 
 
 @marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/portfolio-review")
