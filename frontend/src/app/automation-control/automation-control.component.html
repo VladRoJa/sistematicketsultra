@@ -1,6 +1,6 @@
 <section class="auto-page">
   <header class="auto-head"><div><small>SISTEMAS · OBSERVABILIDAD</small><h1>Control de Automatizaciones</h1>
-  <p>Catálogo e historial de ejecución · Solo lectura</p></div>
+  <p>Última ejecución observada de cada proceso · Solo lectura</p></div>
   <button type="button" (click)="refresh()" [disabled]="loading">Actualizar</button></header>
   <p *ngIf="error" role="alert" class="alert">{{ error }}</p>
   <p *ngIf="loading" role="status">Consultando automatizaciones…</p>
@@ -11,7 +11,7 @@
       <div>Datasets<strong>{{summary.dataset_count}}</strong></div>
       <div>Workers con latido vigente<strong>{{healthyWorkers}} / {{summary.worker_count}}</strong></div>
     </div>
-    <p class="disclaimer">Matriz: horarios de referencia y ejecuciones observadas. La tabla de jobs distingue programación reportada por cada worker. Ninguna hora garantiza ejecución ni frescura de datos. Acciones manuales deshabilitadas.</p>
+    <p class="disclaimer">Resultado de la última corrida registrada. «Sin instrumentación» no significa que el job haya fallado; «Finalización observada» no garantiza que todos sus fallos estén registrados.</p>
     <p *ngIf="healthUnavailable" class="disclaimer">No fue posible comprobar los latidos. Estados mostrados como desconocidos.</p>
     <p *ngIf="configUnavailable" class="disclaimer">No se pudo verificar la configuración efectiva de los workers.</p>
     <div class="filters"><label>Dominio <select [(ngModel)]="domain"><option value="">Todos</option>
@@ -19,7 +19,7 @@
       <label>Buscar <input [(ngModel)]="search" placeholder="Job o worker"></label>
       <span>{{visibleJobs.length}} jobs</span></div>
     <div class="columns" [class.with-detail]="selected">
-      <section class="panel"><h2>Jobs registrados</h2><div class="table-wrap"><table>
+      <section class="panel"><h2>Última ejecución por proceso</h2><div class="table-wrap"><table>
         <thead><tr><th>Job</th><th>Última ejecución</th><th>Resultado</th><th>Worker</th><th>Configuración</th><th>Salud del worker</th><th></th></tr></thead>
         <tbody><tr *ngFor="let job of visibleJobs">
           <td><b>{{job.label}}</b><small>{{job.key}}</small></td>
