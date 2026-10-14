@@ -140,6 +140,38 @@ def test_only_exact_canonical_upload_counts_and_missing_day_remains_missing(camp
     assert _read()["amount"] == 100.0
 
 
+
+def test_canonical_global_spend_requires_both_raw_sources_intact(campaign_gate_pg):
+    """A publication is a PAIR: invalid group RAW must never count campaign spend."""
+    conn, publication, pub, uploads, fact = campaign_gate_pg
+    publication_id = publication(is_canonical=True)
+    valid = _read(cutoff=date(2026, 10, 13))
+    assert valid["amount"] == 370.0
+    assert valid["covered_days"] == 2
+
+    # The campaign RAW remains ACTIVE: only the GROUP RAW changes.
+    conn.execute(sa.update(uploads).where(uploads.c.id == 22002)
+                 .values(status="ARCHIVED"))
+    archived = _read(cutoff=date(2026, 10, 13))
+    assert archived["amount"] == 100.0
+    assert archived["covered_days"] == 1
+
+    conn.execute(sa.update(uploads).where(uploads.c.id == 22002)
+                 .values(status="ACTIVE", file_hash_sha256="f" * 64))
+    modified_group = _read(cutoff=date(2026, 10, 13))
+    assert modified_group["amount"] == 100.0
+    assert modified_group["covered_days"] == 1
+
+    conn.execute(sa.update(uploads).where(uploads.c.id == 22002)
+                 .values(file_hash_sha256="d" * 64))
+    conn.execute(sa.update(pub).where(pub.c.id == publication_id)
+                 .values(ad_group_sha256="e" * 64))
+    altered_publication = _read(cutoff=date(2026, 10, 13))
+    assert altered_publication["amount"] == 100.0
+    assert altered_publication["covered_days"] == 1
+
+
+
 def test_canonical_day_incomplete_campaign_count_fails_closed(campaign_gate_pg):
     conn, publication, pub, uploads, facts = campaign_gate_pg
     publication(is_canonical=True)
