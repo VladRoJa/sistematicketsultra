@@ -24,6 +24,7 @@ on:
       - 'backend/tests/google_ads/test_google_ads_m6_manual_confirm.py'
       - 'backend/tests/google_ads/test_google_ads_m6_manual_raw_postgres.py'
       - 'backend/app/warehouse/services/google_ads_m6_manual_structured_service.py'
+      - 'backend/app/warehouse/services/google_ads_m6_manual_publication_service.py'
       - 'backend/tests/google_ads/test_google_ads_m6_manual_structured_postgres.py'
       - 'frontend/src/app/google-ads/**'
       - 'backend/app/services/marketing_sales_funnel_cutoff_service.py'

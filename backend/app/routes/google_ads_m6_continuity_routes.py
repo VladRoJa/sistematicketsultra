@@ -20,6 +20,10 @@ from app.warehouse.services.google_ads_m6_manual_confirm_service import (
     confirm_google_ads_m6_manual_pair,
 )
 from app.utils.warehouse_access import require_warehouse_upload
+from app.warehouse.services.google_ads_m6_manual_publication_service import (
+    CONFIRMATION as PUBLICATION_CONFIRMATION,
+    publish_manual_daily_pair,
+)
 from app.warehouse.services.google_ads_m6_manual_structured_service import (
     CONFIRMATION as STRUCTURED_CONFIRMATION,
     GoogleAdsM6ManualStructuredError,
@@ -225,3 +229,47 @@ def ingest_google_ads_m6_structured_pair():
     except Exception:
         current_app.logger.exception("M6 atomic structured stage rolled back.")
         return jsonify({"code": "M6_STRUCTURED_STAGE_FAILED"}), 503
+
+
+
+@google_ads_m6_continuity_bp.post("/manual/publish")
+@jwt_required()
+def publish_google_ads_m6_manual_day():
+    """Explicit canonical publication, never invoked by RAW/ingest."""
+    if os.getenv("GOOGLE_ADS_M6_DAILY_PUBLICATION_ENABLED", "").strip().lower() != "true":
+        return jsonify({"code": "M6_DAILY_PUBLICATION_DISABLED"}), 503
+    try:
+        actor_id = require_current_admicorp()
+    except PermissionError:
+        return jsonify({"code": "FORBIDDEN"}), 403
+    except Exception:
+        current_app.logger.exception("M6 publication authorization failure.")
+        return jsonify({"code": "GOOGLE_ADS_M6_INTERNAL_ERROR"}), 500
+    denied = require_warehouse_upload()
+    if denied:
+        return denied
+    if not request.is_json or (request.content_length or 0) > 4096:
+        return jsonify({"code": "INVALID_PUBLICATION_REQUEST"}), 400
+    body = request.get_json(silent=True)
+    if (not isinstance(body, dict)
+            or set(body) != {"campaign_upload_id", "ad_group_upload_id", "confirmation"}
+            or body["confirmation"] != PUBLICATION_CONFIRMATION
+            or type(body["campaign_upload_id"]) is not int
+            or type(body["ad_group_upload_id"]) is not int
+            or body["campaign_upload_id"] <= 0
+            or body["ad_group_upload_id"] <= 0
+            or body["campaign_upload_id"] == body["ad_group_upload_id"]):
+        return jsonify({"code": "INVALID_PUBLICATION_REQUEST"}), 400
+    try:
+        result = publish_manual_daily_pair(
+            actor_id=actor_id,
+            campaign_upload_id=body["campaign_upload_id"],
+            group_upload_id=body["ad_group_upload_id"],
+        )
+        return jsonify(result), 200 if result["status"] == "ALREADY_PUBLISHED" else 201
+    except GoogleAdsM6ManualStructuredError as exc:
+        code = str(exc)
+        return jsonify({"code": code}), 403 if code == "FORBIDDEN" else 409
+    except Exception:
+        current_app.logger.exception("M6 canonical daily publication aborted.")
+        return jsonify({"code": "M6_PUBLICATION_FAILED"}), 503
