@@ -7,10 +7,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy import text
+
 from app.extensions import db
 from app.services.marketing_campaign_v2_dispatch_config_service import list_channel_bindings
 from app.services.marketing_campaign_v2_qa_manual_service import (
     MarketingCampaignV2QAManualValidationError as QAValidation,
+    MarketingCampaignV2QAManualConflictError as QAConflict,
     build_campaign_v2_qa_manual_preview,
     freeze_campaign_v2_qa_manual,
 )
@@ -102,6 +105,15 @@ def freeze_qa_manual_http(
     )
     if binding["id"] != expected_channel_binding_id:
         raise QAValidation("El binding iVentas cambió. Repite el Preview.")
+    # Serialize same-name freezes across tabs/workers without changing the CLI flow.
+    # A nonblocking PostgreSQL transaction lock returns 409 rather than hanging.
+    if hasattr(active, "get_bind") and active.get_bind().dialect.name == "postgresql":
+        acquired = active.execute(
+            text("SELECT pg_try_advisory_xact_lock(hashtext(:name))"),
+            {"name": "campaign-v2-qa-manual:" + name.strip()},
+        ).scalar()
+        if not acquired:
+            raise QAConflict("Otra congelación QA con este nombre está en curso.")
     result = freeze_campaign_v2_qa_manual(
         **common,
         expected_preview_fingerprint=expected_preview_fingerprint,
