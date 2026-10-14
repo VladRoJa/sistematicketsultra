@@ -1387,7 +1387,7 @@ test('B1 catálogo de Business IDs es independiente de políticas, WABA y envío
   assert.ok(ui.includes('registerPortfolioReference('));
   assert.ok(html.includes('Registrar referencia sin verificar'));
   assert.ok(html.includes('NO VERIFICADO'));
-  assert.ok(html.includes('Canales vinculados: 0'));
+  assert.ok(html.includes('Canales verificados: 0'));
   assert.equal(ui.includes('submitCampaign('), false);
   assert.equal(ui.includes('registerQuotaPolicy('), false);
   assert.equal(html.includes('(click)="submitCampaign()"'), false);
