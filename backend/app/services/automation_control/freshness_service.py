@@ -13,6 +13,7 @@ from app.extensions import db
 from app.models.warehouse import TrackDailyVersionORM, TrackDailyMartORM
 from app.services.automation_control.track_coverage_service import read_track_current_catalog_coverage
 from app.services.automation_control.track_base_sla_service import read_track_base_sla
+from app.services.automation_control.marketing_slot_sla_service import read_marketing_sync_sla
 from app.services.marketing_sales_funnel_cutoff_service import (
     _crm_history_available,
     _iventas_cutoff_dates,
@@ -52,7 +53,11 @@ def _date(value: date | None) -> str | None:
     return value.isoformat() if value is not None else None
 
 
-def _funnel_evidence(payload: dict, *, period_start: date, cutoff: date) -> None:
+def _funnel_evidence(payload: dict, *, period_start: date, cutoff: date, checked_at: datetime) -> None:
+    # Sync SLA is a distinct indicator; it never turns the 5-source Funnel green.
+    payload["marketing_sync_sla"] = read_marketing_sync_sla(
+        business_date=cutoff, now=checked_at,
+    )
     if not _crm_history_available(period_start):
         payload["reason_code"] = "HISTORICAL_CRM_UNAVAILABLE"
         payload["detail"] = "Este periodo no tiene las cinco fuentes históricas certificadas."
@@ -247,7 +252,7 @@ def read_freshness(
         return payload
 
     if module_key == "marketing.sales_funnel":
-        _funnel_evidence(payload, period_start=period, cutoff=cutoff)
+        _funnel_evidence(payload, period_start=period, cutoff=cutoff, checked_at=checked)
     else:
         _track_evidence(payload, cutoff=cutoff, checked_at=checked)
     return payload

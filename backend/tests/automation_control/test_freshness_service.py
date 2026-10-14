@@ -32,8 +32,14 @@ def _patch_sources():
         "_iventas_cutoff_dates", "_meta_cutoff_dates", "_venta_total_cutoff_dates",
         "_new_sales_cutoff_dates", "_kpi_cutoff_dates",
     ]
-    return [patch.object(service,name,return_value=data)
-            for name,data in zip(names,_source_sets())]
+    patches = [patch.object(service,name,return_value=data)
+               for name,data in zip(names,_source_sets())]
+    patches.append(patch.object(service,"read_marketing_sync_sla",
+                    return_value={
+                        "status":"UNKNOWN",
+                        "reason_code":"WORKER_SCHEDULE_UNVERIFIED",
+                    }))
+    return patches
 
 
 def test_funnel_joint_cut_never_infers_green_when_one_source_lags():

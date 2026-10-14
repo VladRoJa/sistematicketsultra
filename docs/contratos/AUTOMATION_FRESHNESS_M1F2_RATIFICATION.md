@@ -101,3 +101,45 @@ SLA de negocio ni convierte el indicador neutral en semáforo falso.
 **Siguen pendientes** la vigencia histórica del universo Track, el SLA
 de Funnel y la ratificación del cierre canónico. Esta sección sustituye
 únicamente la pregunta de hora límite/tolerancia de la base Track.
+
+
+---
+
+## M1-F4 — SLA de sincronización Marketing (ratificado 14/10/2026)
+
+**Alcance aprobado:** iVentas y Meta, **cada fuente por su slot atribuido**,
+independiente de la disponibilidad del Funnel comercial de cinco fuentes.
+
+- Para `business_date D`, los slots son los que reporte realmente el worker
+  saludable, único y `America/Tijuana`. Valores de referencia:
+  **08:20 / 12:20 / 16:20 / 20:20**, todos los días incluidos festivos.
+- Si falta una ejecución canónica y atribuida al slot:
+  **`NOT_DUE` antes de slot +60 minutos**; **`LAGGING` desde
+  slot +60 hasta antes de +120 minutos**; **`LATE` desde slot +120**.
+  Los límites se calculan en UTC, con representación local Tijuana.
+- Los slots se atribuyen mediante `scheduler_slot_at` en ambos sync_runs;
+  el valor es nullable y se crea con el run `RUNNING` antes de los HTTP.
+  Un reintento conserva el slot original. Corridas legacy/manuales no
+  reciben retroactivamente una atribución inventada.
+- `UP_TO_DATE` en **el subindicador de sincronización** exige que ambas
+  fuentes tengan corrida `COMPLETED`, canónica vigente, con `finished_at`
+  y fecha exacta del slot. Una corrida completada que perdió canonicalidad
+  por reemplazo no acredita cumplimiento histórico: `UNKNOWN`.
+- Si el worker no atestigua un horario estable/único, las fuentes divergen
+  o se consulta una fecha histórica sin configuración de esa fecha:
+  `UNKNOWN`; nunca marcar verdes ni rojos extrapolando defaults.
+- El scheduler puede posponer reintentos por la prioridad de Track,
+  pero su estado y el resultado del dataset se reportan por separado.
+- **El estado global `marketing.sales_funnel` se mantiene `UNKNOWN`**,
+  pues su SLA de cinco fuentes no está ratificado. Se conserva la
+  intersección exacta de iVentas, Meta, Venta Total, Nuevos Socios y KPI,
+  sin cambiar el lector comercial del Funnel.
+- Tras migrar e instrumentar, la evidencia nueva solo es verificable
+  prospectivamente. El despliegue de app debe suceder después de
+  `flask db upgrade` (o equivalente Alembic), nunca antes.
+
+**Sin cambios de horario del scheduler**, sin trigger externo, sin
+alteraciones del cierre Track, sin ejecución masiva ni despliegue implícito.
+Sigue pendiente ratificar la publicación de las tres fuentes Warehouse
+y la condición canónica del lector comercial legado antes de habilitar
+el verde del Funnel completo.

@@ -367,7 +367,14 @@ def execute_marketing_sync(
     business_date: date,
     run_iventas: bool = True,
     run_meta: bool = True,
+    scheduler_slot_at: datetime | None = None,
 ) -> MarketingSyncResult:
+    if scheduler_slot_at is not None:
+        if scheduler_slot_at.tzinfo is None or scheduler_slot_at.utcoffset() is None:
+            raise ValueError("scheduler_slot_at debe incluir timezone.")
+        if scheduler_slot_at.astimezone(_timezone()).date() != business_date:
+            raise ValueError("slot y business_date no coinciden.")
+
     period = resolve_iventas_month_period(
         month_date=business_date,
         today=business_date,
@@ -390,6 +397,7 @@ def execute_marketing_sync(
                 period_key=period.period_key,
                 date_from=period.date_from,
                 date_to=period.date_to,
+                scheduler_slot_at=scheduler_slot_at,
             )
 
             iventas_completed = (
@@ -429,6 +437,7 @@ def execute_marketing_sync(
                 ),
                 date_from=period.date_from,
                 date_to=period.date_to,
+                scheduler_slot_at=scheduler_slot_at,
                 accounts=meta_accounts,
             )
 
@@ -695,10 +704,15 @@ def run_scheduler_loop() -> None:
                     not in _META_COMPLETED_SLOTS
                 )
 
+                # El instante del slot es estable aunque el retry ocurra después.
+                slot_at = now.replace(
+                    hour=slot_key[1], minute=slot_key[2], second=0, microsecond=0,
+                )
                 result = execute_marketing_sync(
                     business_date=slot_key[0],
                     run_iventas=run_iventas,
                     run_meta=run_meta,
+                    scheduler_slot_at=slot_at,
                 )
 
                 if result.iventas_completed:
