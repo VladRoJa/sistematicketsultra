@@ -60,7 +60,7 @@ El cálculo usa ventana móvil UTC, no un calendario local ni reinicio Meta supu
   actividad ajena dentro del portafolio, reserva concurrente, HOLD, errores
   ambiguos, NULL en attestation solo para nuevo manifest, rechazo de caps
   inconsistentes y protección de liberación HELD.
-- Migración Alembic de e856d3c21013 → f856opcap1013 probada en PostgreSQL 16
+- Migración Alembic del HEAD actual c13a70e4d82c → f856opcap1013 probada en PostgreSQL 16
   aislado, sin borrado/backfill, downgrade protegido con datos nuevos.
 - Angular build, pruebas de rutas/permisos y kill switches OFF.
 - Sin merge, despliegue ni POST provider antes de revisión explícita.
