@@ -18,6 +18,9 @@ from app.models.warehouse import (
     TrackSourceTiendaDailyORM,
     TrackDailyMartORM,
 )
+from app.warehouse.services.track_version_roster_capture_service import (
+    capture_roster_for_version,
+)
 
 
 SUPPORTED_GENERATION_MODES = frozenset(
@@ -116,6 +119,7 @@ def build_track_daily_mart_for_date(
     *,
     business_date: Any,
     generation_mode: str = "official_closed_day",
+    active_branches: list[TrackBranchCatalogORM] | None = None,
 ) -> list[dict[str, Any]]:
     track_date = _ensure_date(
         business_date,
@@ -128,7 +132,8 @@ def build_track_daily_mart_for_date(
         generation_mode=normalized_generation_mode,
     )
 
-    active_branches = _load_active_analytical_branches()
+    if active_branches is None:
+        active_branches = _load_active_analytical_branches()
 
     if not active_branches:
         raise TrackDailyMartServiceError(
@@ -354,9 +359,13 @@ def refresh_track_daily_mart_for_date(
     )
     normalized_generation_mode = _ensure_generation_mode(generation_mode)
 
+    # One catalog read is shared by mart rows and immutable roster evidence.
+    # Do not read the live catalog twice during a long-running refresh.
+    active_branches = _load_active_analytical_branches()
     rows = build_track_daily_mart_for_date(
         business_date=track_date,
         generation_mode=normalized_generation_mode,
+        active_branches=active_branches,
     )
 
     try:
@@ -467,6 +476,18 @@ def refresh_track_daily_mart_for_date(
                 )
             )
 
+        roster_capture = None
+        if track_daily_version_id is not None:
+            # Same SQLAlchemy transaction as these exact mart rows. DB triggers
+            # require a fresh running version and forbid retrospective editing.
+            roster_capture = capture_roster_for_version(
+                version_id=track_daily_version_id,
+                track_date=track_date,
+                branch_rows=active_branches,
+                mart_rows=rows,
+                generation_mode=normalized_generation_mode,
+            )
+
         db.session.commit()
 
     except Exception:
@@ -478,6 +499,7 @@ def refresh_track_daily_mart_for_date(
         "track_date": track_date.isoformat(),
         "generation_mode": normalized_generation_mode,
         "rows_inserted": len(rows),
+        "roster_capture": roster_capture,
     }
     
     
