@@ -42,6 +42,8 @@ export class MarketingCampaignV2QuotaAdminDialogComponent implements OnInit {
   readonly accountKey = new FormControl('', { nonNullable: true });
   readonly phoneAlias = new FormControl('', { nonNullable: true });
   readonly nominalLimit = new FormControl('', { nonNullable: true });
+  readonly operationalChannelCap = new FormControl('', { nonNullable: true });
+  readonly operationalPortfolioCap = new FormControl('', { nonNullable: true });
   readonly timezone = new FormControl('America/Tijuana', { nonNullable: true });
   readonly policySource = new FormControl('', { nonNullable: true });
 
@@ -68,7 +70,14 @@ export class MarketingCampaignV2QuotaAdminDialogComponent implements OnInit {
       c.provider_channel_id === this.channelId.value)
       && [this.portfolioKey, this.accountKey, this.phoneAlias,
         this.timezone, this.policySource].every(c => c.value.trim().length > 0)
-      && isCampaignV2NominalLimitValid(n);
+      && isCampaignV2NominalLimitValid(n)
+      && /^[1-9]\d*$/.test(this.operationalChannelCap.value.trim())
+      && /^[1-9]\d*$/.test(this.operationalPortfolioCap.value.trim())
+      && Number.isSafeInteger(Number(this.operationalChannelCap.value.trim()))
+      && Number.isSafeInteger(Number(this.operationalPortfolioCap.value.trim()))
+      && Number(this.operationalChannelCap.value.trim()) <= 2147483647
+      && Number(this.operationalPortfolioCap.value.trim()) <= 2147483647
+      && (!n || Number(this.operationalChannelCap.value.trim()) <= Number(n));
   }
 
   get canSaveCapacity(): boolean {
@@ -113,6 +122,8 @@ export class MarketingCampaignV2QuotaAdminDialogComponent implements OnInit {
       phone_alias: this.phoneAlias.value.trim(),
       nominal_channel_limit: this.nominalLimit.value.trim()
         ? Number(this.nominalLimit.value) : null,
+      operational_channel_cap: Number(this.operationalChannelCap.value.trim()),
+      operational_portfolio_cap: Number(this.operationalPortfolioCap.value.trim()),
       reset_timezone: this.timezone.value.trim(),
       source_reference: this.policySource.value.trim(),
     };
@@ -120,7 +131,7 @@ export class MarketingCampaignV2QuotaAdminDialogComponent implements OnInit {
     this.api.registerQuotaPolicy(payload).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: row => {
         this.busy = false;
-        this.success = 'Política #' + row.revision_id + ' registrada. Cupo real pendiente de observar.';
+        this.success = 'Política #' + row.revision_id + ' registrada. Límites operativos activos; cupo real de Meta desconocido.';
         this.showPolicyForm = false;
         this.reload();
       },
