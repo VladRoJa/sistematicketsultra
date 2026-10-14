@@ -11,8 +11,9 @@
       <div>Datasets<strong>{{summary.dataset_count}}</strong></div>
       <div>Workers con latido vigente<strong>{{healthyWorkers}} / {{summary.worker_count}}</strong></div>
     </div>
-    <p class="disclaimer">Horarios de referencia, no configuración efectiva. La salud del worker se calcula por latidos; no valida el resultado de jobs ni la frescura de datos. Acciones manuales deshabilitadas.</p>
+    <p class="disclaimer">Matriz: horarios de referencia y ejecuciones observadas. La tabla de jobs distingue programación reportada por cada worker. Ninguna hora garantiza ejecución ni frescura de datos. Acciones manuales deshabilitadas.</p>
     <p *ngIf="healthUnavailable" class="disclaimer">No fue posible comprobar los latidos. Estados mostrados como desconocidos.</p>
+    <p *ngIf="configUnavailable" class="disclaimer">No se pudo verificar la configuración efectiva de los workers.</p>
     <section class="panel">
       <div class="detail-head"><div><h2>Matriz diaria de ejecuciones observadas</h2>
         <small>Referencia horaria · sin confirmar configuración efectiva ni cumplimiento de SLA</small></div>
@@ -80,10 +81,13 @@
       <span>{{visibleJobs.length}} jobs</span></div>
     <div class="columns" [class.with-detail]="selected">
       <section class="panel"><h2>Jobs registrados</h2><div class="table-wrap"><table>
-        <thead><tr><th>Job</th><th>Worker</th><th>Horario referencia</th><th>Salud</th><th></th></tr></thead>
+        <thead><tr><th>Job</th><th>Worker</th><th>Configuración del worker</th><th>Salud</th><th></th></tr></thead>
         <tbody><tr *ngFor="let job of visibleJobs">
           <td><b>{{job.label}}</b><small>{{job.key}}</small></td><td>{{job.worker_key}}</td>
-          <td>{{job.schedule_reference}}</td><td class="unknown">No verificada</td>
+          <td><span [title]="effectiveDetail(job.key)" [attr.aria-label]="effectiveDetail(job.key)">{{effectiveLabel(job.key)}}</span>
+            <small *ngIf="effectiveJob(job.key)?.state==='REPORTED'">Reportado · {{effectiveJob(job.key)?.schedule?.timezone}}</small>
+            <small *ngIf="effectiveJob(job.key)?.state!=='REPORTED'">Referencia de código: {{job.schedule_reference}}</small>
+          </td><td [ngClass]="workerHealthClass(job.worker_key)">{{workerHealthLabel(job.worker_key)}}</td>
           <td class="auto-actions">
             <button type="button" (click)="select(job)">Historial</button>
             <button type="button" (click)="openLastError(job)"
