@@ -18,6 +18,7 @@ from app.extensions import db
 from app.models.google_ads_m6_daily_publication import GoogleAdsM6DailyPublicationORM
 from app.warehouse.services import google_ads_m6_correction_candidate_service as svc
 from test_google_ads_m6_manual_structured_postgres import lab
+from test_google_ads_m6_manual_raw_postgres import real_warehouse
 from test_google_ads_m6_continuity_postgres import _test_engine
 
 REV_PATH = (
