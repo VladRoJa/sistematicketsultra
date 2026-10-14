@@ -11,6 +11,8 @@ class SystemWorkerHeartbeatORM(db.Model):
     last_seen_at = db.Column(db.DateTime(timezone=True), nullable=False)
     poll_interval_seconds = db.Column(db.Integer, nullable=False)
     enabled = db.Column(db.Boolean, nullable=False)
+    # Typed, sanitized summaries reported by the worker itself, never raw env.
+    job_schedules = db.Column(db.JSON, nullable=True)
 
     __table_args__ = (
         db.CheckConstraint(
