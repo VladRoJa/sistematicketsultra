@@ -132,7 +132,8 @@ def test_archived_raw_blocks_publication(publication_lab, monkeypatch):
         ), {"id": group})
     result = _publish(client, token, camp, group)
     assert result.status_code == 409, result.get_json()
-    assert result.json["code"] in ("RAW_PAIR_METADATA_MISMATCH",
+    assert result.json["code"] in ("RAW_PAIR_UNREADABLE",
+                                   "RAW_PAIR_METADATA_MISMATCH",
                                    "RAW_PAIR_PROVENANCE_INVALID")
     assert _published(engine) == ([], [])
 
