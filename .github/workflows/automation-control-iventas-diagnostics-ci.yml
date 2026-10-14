@@ -13,6 +13,9 @@ on:
       - "backend/tests/automation_control/**"
       - "backend/tests/services/test_marketing_iventas_run_*"
       - "frontend/src/app/automation-control/**"
+      - "frontend/src/app/shared/data-freshness-indicator/**"
+      - "frontend/src/app/marketing-sales-funnel/**"
+      - "frontend/src/app/warehouse/track-dashboard/**"
       - "frontend/tests/automation-control-reference-display.test.cjs"
       - ".github/workflows/automation-control-iventas-diagnostics-ci.yml"
   workflow_dispatch:

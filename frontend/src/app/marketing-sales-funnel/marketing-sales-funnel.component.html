@@ -3,6 +3,12 @@
     <div class="page-heading">
       <p class="eyebrow">Marketing y Conversión</p>
       <h1>Funnel de Venta Nueva</h1>
+      <app-data-freshness-indicator
+        moduleKey="marketing.sales_funnel"
+        [scopeMode]="funnelFreshnessScopeMode"
+        [month]="selectedMonth"
+        [cutoffDate]="selectedCutoff">
+      </app-data-freshness-indicator>
       <p class="page-subtitle">
         Del interés al socio. Visualiza cómo se compone la Venta Nueva y qué tan trazable es cada venta.
       </p>
