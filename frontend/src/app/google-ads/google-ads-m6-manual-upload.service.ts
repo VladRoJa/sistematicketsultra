@@ -56,6 +56,23 @@ export interface GoogleAdsM6StructuredResult {
   funnel_publication: 'NOT_AUTHORIZED';
 }
 
+export interface GoogleAdsM6PublishedResult {
+  status: 'CANONICAL_DAY_PUBLISHED' | 'ALREADY_PUBLISHED';
+  publication_id: number;
+  revision: number;
+  business_date: string;
+  customer_id: string;
+  campaign_upload_id: number;
+  ad_group_upload_id: number;
+  approval_version_id: number;
+  campaign_rows: number;
+  group_rows: number;
+  account_cost_mxn: string;
+  branch_cost_mxn: string;
+  unassigned_cost_mxn: string;
+  is_canonical: true;
+}
+
 @Injectable({ providedIn: 'root' })
 export class GoogleAdsM6ManualUploadService {
   private readonly url = `${environment.apiUrl}/integrations/google-ads/manual`;
@@ -83,6 +100,17 @@ export class GoogleAdsM6ManualUploadService {
         campaign_upload_id: campaignUploadId,
         ad_group_upload_id: groupUploadId,
         confirmation: 'INGESTAR_GOOGLE_ADS_M6_SIN_PUBLICAR'
+      }
+    );
+  }
+
+  publish(campaignUploadId: number, groupUploadId: number): Observable<GoogleAdsM6PublishedResult> {
+    return this.http.post<GoogleAdsM6PublishedResult>(
+      `${this.url}/publish`,
+      {
+        campaign_upload_id: campaignUploadId,
+        ad_group_upload_id: groupUploadId,
+        confirmation: 'PUBLICAR_GOOGLE_ADS_M6_DIA_CANONICO'
       }
     );
   }

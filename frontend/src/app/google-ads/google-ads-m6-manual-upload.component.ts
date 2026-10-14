@@ -8,11 +8,12 @@ import {
   GoogleAdsM6ManualUploadService,
   GoogleAdsM6RawResult,
   GoogleAdsM6RawUpload,
-  GoogleAdsM6StructuredResult
+  GoogleAdsM6StructuredResult,
+  GoogleAdsM6PublishedResult
 } from './google-ads-m6-manual-upload.service';
 
 type ReportKind = 'campaign' | 'ad_group';
-type ProcessingState = 'idle' | 'preview' | 'confirm' | 'ingest';
+type ProcessingState = 'idle' | 'preview' | 'confirm' | 'ingest' | 'publish';
 
 const MAX_CAMPAIGN_BYTES = 8 * 1024 * 1024;
 const MAX_GROUP_BYTES = 10 * 1024 * 1024;
@@ -53,7 +54,13 @@ const RESPONSE_MESSAGES: Record<string, string> = {
   RAW_PAIR_PROVENANCE_INVALID: 'Los RAW no provienen de una confirmación manual pareada validada.',
   EXISTING_STRUCTURED_FACT_CONFLICT: 'Ya existen métricas distintas o parciales para ese día. Se requiere reconciliación manual.',
   GOOGLE_ADS_CUSTOMER_NOT_READY: 'La cuenta Google Ads configurada no está lista para esta ingesta.',
-  M6_STRUCTURED_STAGE_FAILED: 'Se revirtió la operación estructurada. No se guardaron cambios parciales.'
+  M6_STRUCTURED_STAGE_FAILED: 'Se revirtió la operación estructurada. No se guardaron cambios parciales.',
+  M6_DAILY_PUBLICATION_DISABLED: 'Sistemas todavía no ha habilitado la publicación de días M6.',
+  INVALID_PUBLICATION_REQUEST: 'No se pudo confirmar la publicación. Revisa la pareja de RAW.',
+  STRUCTURED_PAIR_REQUIRED: 'Antes de publicar, deben estar presentes ambas métricas estructuradas y sus auditorías.',
+  PUBLICATION_RECONCILIATION_FAILED: 'La conciliación de campañas y grupos no está completa.',
+  PUBLISHED_DAY_CONFLICT: 'El día ya tiene una publicación diferente. Requiere procedimiento auditado de corrección.',
+  M6_PUBLICATION_FAILED: 'La publicación se revirtió por completo. Ninguna versión canónica nueva quedó guardada.'
 };
 
 @Component({
@@ -75,6 +82,8 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
   rawResult: GoogleAdsM6RawResult | null = null;
   structuredResult: GoogleAdsM6StructuredResult | null = null;
   acceptedStructured = false;
+  acceptedPublication = false;
+  publishedResult: GoogleAdsM6PublishedResult | null = null;
   state: ProcessingState = 'idle';
   acceptedRawOnly = false;
   errorMessage = '';
@@ -102,6 +111,26 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
   onAcknowledgementChanged(event: Event): void {
     if (this.busy) return;
     this.acceptedRawOnly = (event.target as HTMLInputElement).checked;
+  }
+
+  get canPublish(): boolean {
+    return !this.busy && this.acceptedPublication
+      && this.structuredResult !== null
+      && this.rawResult?.status === 'RAW_PAIR_STAGED'
+      && this.publishedResult === null
+      && this.structuredResult.campaign_rows === 27
+      && this.structuredResult.group_rows === 43;
+  }
+
+  get publishButtonLabel(): string {
+    return this.state === 'publish'
+      ? 'Publicando día canónico…'
+      : 'Publicar este día en Funnel';
+  }
+
+  onPublicationAcknowledgement(event: Event): void {
+    if (this.busy) return;
+    this.acceptedPublication = (event.target as HTMLInputElement).checked;
   }
 
   get canIngest(): boolean {
@@ -214,6 +243,8 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
         this.acceptedRawOnly = false;
         this.acceptedStructured = false;
         this.structuredResult = null;
+        this.publishedResult = null;
+        this.acceptedPublication = false;
         if (result.status === 'RAW_PAIR_STAGED') {
           this.successMessage = 'Ambos RAW registrados. No se ejecutó ingesta estructurada ni publicación.';
         } else {
@@ -228,6 +259,8 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
           this.acceptedRawOnly = false;
           this.acceptedStructured = false;
           this.structuredResult = null;
+          this.publishedResult = null;
+          this.acceptedPublication = false;
           this.errorMessage = response.status === 'PARTIAL_RAW'
             ? 'Solo se guardó uno de los RAW. Puedes reintentar el mismo par, sin publicarlo.'
             : 'No se pudo guardar la pareja RAW. Puedes revisar y reintentar los mismos archivos.';
@@ -256,6 +289,8 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
         this.state = 'idle';
         this.acceptedStructured = false;
         this.structuredResult = result;
+        this.publishedResult = null;
+        this.acceptedPublication = false;
         this.successMessage = result.status === 'ALREADY_INGESTED'
           ? 'La pareja estructurada ya estaba registrada sin cambios.'
           : 'Campañas y grupos se guardaron juntos con auditoría. No se publicaron en Funnel.';
@@ -266,6 +301,32 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
         this.errorMessage = this.describeError(error);
       }
     });
+  }
+
+  publishCanonical(): void {
+    if (!this.canPublish || !this.structuredResult) return;
+    const campaign = this.structuredResult.campaign_upload_id;
+    const group = this.structuredResult.ad_group_upload_id;
+    this.state = 'publish';
+    this.errorMessage = '';
+    this.successMessage = '';
+    this.api.publish(campaign, group)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: result => {
+          this.state = 'idle';
+          this.acceptedPublication = false;
+          this.publishedResult = result;
+          this.successMessage = result.status === 'ALREADY_PUBLISHED'
+            ? 'La publicación canónica de este día ya existía con los mismos RAW.'
+            : 'Día publicado como canónico y auditado. Disponible para el lector de Funnel según cobertura.';
+        },
+        error: (error: HttpErrorResponse) => {
+          this.state = 'idle';
+          this.acceptedPublication = false;
+          this.errorMessage = this.describeError(error);
+        }
+      });
   }
 
   reset(): void {
@@ -290,6 +351,8 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
     this.previewData = null;
     this.rawResult = null;
     this.structuredResult = null;
+    this.publishedResult = null;
+    this.acceptedPublication = false;
     this.acceptedRawOnly = false;
     this.acceptedStructured = false;
     this.errorMessage = '';

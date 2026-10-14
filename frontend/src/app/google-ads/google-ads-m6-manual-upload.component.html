@@ -111,6 +111,28 @@
     {{ structured.group_rows }} grupos · Versión de identidades #{{ structured.approval_version_id }}</p>
   <p>Importe de campañas: {{ money(structured.account_cost_mxn) }} ·
     Asignado: {{ money(structured.branch_cost_mxn) }}</p>
-    <p><strong>Sin publicación:</strong> Funnel mantiene su proceso independiente de aprobación.</p>
+    <p *ngIf="!publishedResult"><strong>Sin publicación:</strong> los datos siguen pendientes de autorización canónica.</p>
+    <div class="manual-ads__structured-step" *ngIf="!publishedResult">
+      <h3>Paso final · Publicación canónica</h3>
+      <p>Publicar habilita la lectura financiera aprobada para este día. No se podrán sustituir
+        estos RAW ni corregir el día desde este formulario. Esta operación requiere
+        autorización independiente de ADMICORP y habilitación en backend.</p>
+      <label class="manual-ads__acknowledgement">
+        <input type="checkbox" [checked]="acceptedPublication" [disabled]="busy"
+          (change)="onPublicationAcknowledgement($event)" />
+        <span>He revisado el corte, las 27 campañas, los 43 grupos y la inversión.
+          Autorizo publicar este día como versión canónica en Funnel.</span>
+      </label>
+      <button type="button" class="manual-ads__primary" [disabled]="!canPublish"
+        (click)="publishCanonical()">{{ publishButtonLabel }}</button>
+    </div>
+  </section>
+  <section class="manual-ads__structured-summary" *ngIf="publishedResult as published">
+    <h3>Día canónico publicado</h3>
+    <p>{{ published.business_date }} · Publicación #{{ published.publication_id }} ·
+       Revisión {{ published.revision }} · 27 campañas y 43 grupos validados</p>
+    <p>Inversión de cuenta: {{ money(published.account_cost_mxn) }} ·
+       Atribuida: {{ money(published.branch_cost_mxn) }} ·
+       Sin asignar: {{ money(published.unassigned_cost_mxn) }}</p>
   </section>
 </section>
