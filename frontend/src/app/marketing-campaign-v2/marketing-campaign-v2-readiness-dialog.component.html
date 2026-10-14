@@ -1,0 +1,61 @@
+<h2 mat-dialog-title>Centro de preparación · 26 canales</h2>
+
+<mat-dialog-content class="readiness">
+  <p class="description">
+    Vista de solo lectura basada en la configuración de Suite Ultra.
+    Los portafolios se deben corroborar en Meta/iVentas: una política local no verifica su pertenencia real.
+    <strong>Configurar no autoriza ni envía mensajes.</strong>
+  </p>
+  <div class="tools">
+    <mat-form-field appearance="outline">
+      <mat-label>Plantilla para evaluación</mat-label>
+      <mat-select [formControl]="templateId">
+        <mat-option *ngFor="let t of templates" [value]="t.id">{{ t.label }} · {{ t.template_name }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+    <div class="actions">
+      <button mat-stroked-button type="button" (click)="openPortfolios()" [disabled]="loading">Configurar portafolios y límites</button>
+      <button mat-stroked-button type="button" (click)="openRates()" [disabled]="loading">Configurar tarifas y canales</button>
+      <button mat-button type="button" (click)="reload()" [disabled]="loading">Actualizar</button>
+    </div>
+  </div>
+
+  <p *ngIf="loading" class="feedback" role="status"><mat-spinner diameter="18"></mat-spinner>Consultando catálogos…</p>
+  <p *ngIf="error" class="error" role="alert">{{ error }}</p>
+  <div class="counts" *ngIf="!loading && !error">
+    <div><strong>{{ rows.length }}</strong><span>Canales predeterminados activos</span></div>
+    <div><strong>{{ configuredCount }}</strong><span>Configuración completa</span></div>
+    <div><strong>{{ knownPortfolioCount }}</strong><span>Claves de portafolio registradas</span></div>
+    <div><strong>{{ missingRateCount }}</strong><span>Sin tarifa MXN</span></div>
+    <div><strong>{{ missingPolicyCount }}</strong><span>Sin portafolio registrado</span></div>
+  </div>
+
+  <p class="notice" *ngIf="!loading && !error">
+    «Configuración completa» significa que existen referencias internas, <strong>no que Meta haya verificado portafolio,
+    cupo disponible o capacidad de enviar</strong>. El preflight y la autorización se realizan por campaña.
+  </p>
+
+  <div class="table-scroll" *ngIf="!loading && !error">
+    <table>
+      <thead><tr><th>Sucursal</th><th>Portafolio declarado</th><th>Tope canal / 24 h</th>
+        <th>Tope portafolio / 24 h</th><th>Tarifa MXN</th><th>Estado de configuración</th></tr></thead>
+      <tbody>
+        <tr *ngFor="let row of rows">
+          <td><strong>{{ row.sucursalCanon }}</strong><small>{{ row.channelId }}</small></td>
+          <td>{{ row.portfolioKey || 'Sin identificar' }}<small *ngIf="row.policySource">Fuente: {{ row.policySource }}</small></td>
+          <td>{{ row.operationalChannelCap ?? 'Pendiente' }}</td>
+          <td>{{ row.operationalPortfolioCap ?? 'Pendiente' }}</td>
+          <td>{{ row.unitCostMxn ?? 'Pendiente' }}<small *ngIf="row.rateSource">Fuente: {{ row.rateSource }}</small></td>
+          <td>
+            <span [class.complete]="row.configured" class="status">{{ row.configured ? 'Completa*' : 'Pendiente' }}</span>
+            <small *ngFor="let issue of row.issues">{{ issue }}</small>
+          </td>
+        </tr>
+        <tr *ngIf="!rows.length"><td colspan="6">Sin canales activos predeterminados.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-flat-button type="button" (click)="close()">Cerrar</button>
+</mat-dialog-actions>
