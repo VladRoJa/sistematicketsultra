@@ -58,7 +58,7 @@ def _serialize(row):
         "created_by_user_id": int(row.created_by_user_id),
         "created_at": timestamp.astimezone(timezone.utc).isoformat(),
         "verification_status": "UNVERIFIED",
-        "linked_channel_count": 0,
+        "verified_channel_count": 0,
     }
 
 
