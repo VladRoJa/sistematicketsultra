@@ -49,6 +49,9 @@ assert.match(automationTs, /mergeMap\(job=>/);
 assert.match(automationTs, /latestRunStatus\(job:Job\)/);
 assert.match(automationTs, /latestRunIsFailure\(job:Job\)/);
 assert.match(automationHtml, /Última ejecución/);
+assert.ok(automationHtml.indexOf('Última ejecución por proceso') <
+  automationHtml.indexOf('Ver matriz horaria de ejecuciones'));
+assert.match(automationHtml, /<details class="timeline-expand">/);
 assert.match(automationHtml, /\(click\)="openLatestFailure\(job\)"/);
 assert.match(automationHtml, /latestRunStatus\(job\)/);
 assert.match(automationTs, /DataFreshnessIndicatorComponent/);
