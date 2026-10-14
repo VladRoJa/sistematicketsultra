@@ -1,7 +1,7 @@
 """M6 Google Ads: versioned branch identity approval schema only.
 
 Revision ID: b3e7c2d9a104
-Revises: e4b856c9170d
+Revises: f62a1b9d4c07
 Create Date: 2026-10-13
 
 No M5 table modifications, inserts, approval seeds or Funnel behavior changes.
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 
 revision = "b3e7c2d9a104"
-down_revision = "e4b856c9170d"
+down_revision = "f62a1b9d4c07"
 branch_labels = None
 depends_on = None
 
