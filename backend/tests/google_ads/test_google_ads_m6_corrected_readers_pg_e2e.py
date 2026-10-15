@@ -310,3 +310,103 @@ def test_global_correction_uses_read_only_snapshot_without_row_locks(readers_pg)
                in line for line in commands)
     assert not any("for update" in line or "for share" in line
                    for line in commands)
+
+
+
+def test_review_comparison_uses_immediately_previous_corrected_canonical(readers_pg):
+    """Revision 2 candidate must compare against published correction r1,
+    never a stale normal campaign ledger for the same day.
+    """
+    client, actor, reviewer, engine, camp, group = readers_pg
+    promoted = _publish_correction(client, actor, reviewer, camp, group)
+    previous = promoted["publication_id"]
+    base_amount = Decimal(promoted["account_cost_mxn"])
+    next_id = None
+    try:
+        with engine.begin() as conn:
+            original_case = conn.execute(sa.text("""
+                SELECT case_id FROM google_ads_m6_correction_promotions
+                WHERE publication_id = :pub
+            """), {"pub": previous}).scalar_one()
+            # Read-only comparison fixture: clone facts for a hypothetical
+            # next revision; do not use a staging endpoint or republish.
+            next_id = conn.execute(sa.text("""
+                INSERT INTO google_ads_m6_correction_cases (
+                    customer_id, business_date, revision,
+                    expected_publication_id, campaign_upload_id,
+                    ad_group_upload_id, approval_version_id,
+                    campaign_sha256, ad_group_sha256,
+                    requested_by_user_id, reason
+                )
+                SELECT customer_id, business_date, 2,
+                       :previous, campaign_upload_id, ad_group_upload_id,
+                       approval_version_id, campaign_sha256, ad_group_sha256,
+                       requested_by_user_id,
+                       'Synthetic comparison of next version to prior correction'
+                  FROM google_ads_m6_correction_cases WHERE id = :src
+                RETURNING id
+            """), {"src": original_case, "previous": previous}).scalar_one()
+            conn.execute(sa.text("""
+                INSERT INTO google_ads_m6_correction_campaign_facts (
+                    case_id, campaign_key, campaign_name, currency_code,
+                    cost, impressions, clicks, conversions, conversion_value
+                )
+                SELECT :new, campaign_key, campaign_name, currency_code,
+                       cost, impressions, clicks, conversions, conversion_value
+                FROM google_ads_m6_correction_campaign_facts WHERE case_id = :src
+            """), {"new": next_id, "src": original_case})
+            conn.execute(sa.text("""
+                INSERT INTO google_ads_m6_correction_group_facts (
+                    case_id, campaign_key, ad_group_key, campaign_name,
+                    ad_group_name, currency_code, cost,
+                    impressions, clicks, conversions,
+                    free_pass_conversions, web_purchase_conversions, conversion_value
+                )
+                SELECT :new, campaign_key, ad_group_key, campaign_name,
+                       ad_group_name, currency_code, cost,
+                       impressions, clicks, conversions,
+                       free_pass_conversions, web_purchase_conversions, conversion_value
+                FROM google_ads_m6_correction_group_facts WHERE case_id = :src
+            """), {"new": next_id, "src": original_case})
+            conn.execute(sa.text("""
+                UPDATE google_ads_m6_correction_campaign_facts
+                   SET cost = cost + 10
+                 WHERE id = (
+                    SELECT MIN(id) FROM google_ads_m6_correction_campaign_facts
+                    WHERE case_id = :id
+                 )
+            """), {"id": next_id})
+            conn.execute(sa.text("""
+                UPDATE google_ads_m6_correction_group_facts
+                   SET cost = cost + 10
+                 WHERE id = (
+                    SELECT MIN(id) FROM google_ads_m6_correction_group_facts
+                    WHERE case_id = :id
+                 )
+            """), {"id": next_id})
+        inspected = client.get(
+            "/api/integrations/google-ads/corrections/candidates/" + str(next_id),
+            headers={"Authorization": "Bearer " + actor},
+        )
+        assert inspected.status_code == 200, inspected.get_json()
+        assert Decimal(inspected.json["previous_account_cost_mxn"]) == base_amount
+        assert Decimal(inspected.json["candidate_account_cost_mxn"]) == base_amount + 10
+        assert Decimal(inspected.json["delta_account_cost_mxn"]) == Decimal("10")
+        assert inspected.json["expected_publication_id"] == previous
+        assert inspected.json["status"] == "REQUIRES_INDEPENDENT_REVIEW"
+    finally:
+        if next_id is not None:
+            db.session.remove()
+            with engine.begin() as conn:
+                conn.execute(sa.text("""
+                    DELETE FROM google_ads_m6_correction_group_facts
+                    WHERE case_id = :id
+                """), {"id": next_id})
+                conn.execute(sa.text("""
+                    DELETE FROM google_ads_m6_correction_campaign_facts
+                    WHERE case_id = :id
+                """), {"id": next_id})
+                conn.execute(sa.text("""
+                    DELETE FROM google_ads_m6_correction_cases
+                    WHERE id = :id
+                """), {"id": next_id})
