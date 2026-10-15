@@ -2337,7 +2337,8 @@ def campaign_v2_preflight_endpoint(campaign_id: int):
             result["budget"] = estimate_preflight_cost(
                 plan=plan, session=db.session,
             )
-            result["budget_usd"] = estimate_automatic_usd_maximum(plan=plan)
+            if isinstance(plan, CampaignV2PreflightPlan):
+                result["budget_usd"] = estimate_automatic_usd_maximum(plan=plan)
         submit_state = get_campaign_v2_submit_state(
             campaign_id=campaign_id,
             session=db.session,
