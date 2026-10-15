@@ -1,7 +1,5 @@
 """M1: comparador semántico de KPI Desempeño, sin DB ni Warehouse."""
 
-BUSINESS_DATE = date(2026, 10, 7)
-
 from dataclasses import replace
 from datetime import date, datetime
 from io import BytesIO
@@ -21,6 +19,8 @@ from app.warehouse.services.kpi_desempeno_semantic_diff import (
     compare_kpi_desempeno_parsed,
     compare_kpi_desempeno_xlsx,
 )
+
+BUSINESS_DATE = date(2026, 10, 7)
 
 
 def _row(sucursal="CENTRO", **overrides):
