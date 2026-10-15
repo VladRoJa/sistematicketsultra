@@ -68,7 +68,7 @@ def _actor(conn):
     return actor
 
 
-def _read_snapshot(conn, case_id):
+def _read_snapshot(conn, case_id, *, promoted_publication_id=None):
     case = conn.execute(sa.text("""
         SELECT id, customer_id, business_date, revision,
                expected_publication_id, campaign_upload_id,
@@ -85,7 +85,14 @@ def _read_snapshot(conn, case_id):
           AND is_canonical = true FOR SHARE
     """), {"customer": CUSTOMER_ID, "day": case["business_date"]}).mappings().all()
     _ensure(len(canonical) <= 1, "CORRECTION_CANONICAL_CONFLICT")
-    if canonical:
+    if promoted_publication_id is not None:
+        _ensure(
+            len(canonical) == 1
+            and canonical[0]["id"] == promoted_publication_id
+            and canonical[0]["revision"] == case["revision"],
+            "CORRECTION_CANONICAL_CHANGED",
+        )
+    elif canonical:
         _ensure(
             case["expected_publication_id"] == canonical[0]["id"]
             and case["revision"] == canonical[0]["revision"] + 1,

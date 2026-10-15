@@ -19,6 +19,10 @@ from app.warehouse.services.google_ads_m6_correction_candidate_service import (
     FLAG as CORRECTION_CANDIDATE_FLAG,
     stage_m6_correction_candidate, GoogleAdsM6CorrectionStageError,
 )
+from app.warehouse.services.google_ads_m6_correction_promotion_service import (
+    promote_m6_correction, GoogleAdsM6CorrectionPromotionError,
+    FLAG as CORRECTION_PROMOTION_FLAG,
+)
 from app.warehouse.services.google_ads_m6_correction_decision_service import (
     decide_m6_correction, GoogleAdsM6CorrectionDecisionError,
     FLAG as CORRECTION_REVIEW_FLAG,
@@ -516,3 +520,50 @@ def review_m6_correction_candidate(case_id):
     except Exception:
         current_app.logger.exception("Independent M6 correction review rejected")
         return jsonify({"code": "CORRECTION_REVIEW_UNAVAILABLE"}), 503
+
+
+@google_ads_m6_continuity_bp.post("/corrections/candidates/<int:case_id>/promote")
+@jwt_required()
+def promote_m6_correction_candidate(case_id):
+    """Explicit, independently approved revision, never an upload side effect."""
+    if os.getenv(CORRECTION_PROMOTION_FLAG, "").strip().lower() != "true":
+        return jsonify({"code": "CORRECTION_PROMOTION_DISABLED"}), 503
+    try:
+        require_current_admicorp()
+    except PermissionError:
+        return jsonify({"code": "FORBIDDEN"}), 403
+    denied = require_warehouse_upload()
+    if denied:
+        return denied
+    if not request.is_json or (request.content_length or 0) > 1024:
+        return jsonify({"code": "INVALID_CORRECTION_PROMOTION"}), 400
+    data = request.get_json(silent=True)
+    if (not isinstance(data, dict)
+        or set(data) != {
+            "decision_id", "snapshot_sha256", "revision",
+            "expected_publication_id", "confirmation",
+        }
+        or data.get("confirmation") != "PUBLICAR_REVISION_GOOGLE_ADS_M6"
+        or any(type(data.get(k)) is not int or data[k] <= 0
+               for k in ("decision_id", "revision"))
+        or (data.get("expected_publication_id") is not None and
+            (type(data["expected_publication_id"]) is not int
+             or data["expected_publication_id"] <= 0))
+        or not isinstance(data.get("snapshot_sha256"), str)):
+        return jsonify({"code": "INVALID_CORRECTION_PROMOTION"}), 400
+    try:
+        result = promote_m6_correction(
+            case_id=case_id, decision_id=data["decision_id"],
+            snapshot_sha256=data["snapshot_sha256"],
+            revision=data["revision"],
+            expected_publication_id=data["expected_publication_id"],
+        )
+        return jsonify(result), (
+            200 if result["status"] == "ALREADY_PROMOTED" else 201
+        )
+    except GoogleAdsM6CorrectionPromotionError as exc:
+        code = str(exc)
+        return jsonify({"code": code}), (403 if code == "FORBIDDEN" else 409)
+    except Exception:
+        current_app.logger.exception("M6 correction promotion rolled back.")
+        return jsonify({"code": "CORRECTION_PROMOTION_UNAVAILABLE"}), 503
