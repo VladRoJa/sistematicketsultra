@@ -1,6 +1,28 @@
-# Google Ads M6 — Contrato propuesto de correcciones históricas versionadas
+# Google Ads M6 — Contrato de correcciones históricas versionadas
 
-**14-oct-2026 · Diseño sujeto a aprobación, NO implementado.** Aplica al Issue #888 / PR #885. Este documento **no autoriza** editar datos productivos, sustituir RAW, activar flags, aplicar migraciones, publicar o hacer merge. El protocolo de publicación actual admite únicamente primera publicación e idempotencia exacta.
+**Actualizado: 15-oct-2026.** Issue #888 / PR #885 (**Draft, no merge, no deploy**). El contrato se implementó por fases C0–C5 en la rama del PR, con C4 probado y C5 pendiente de validación integral en su HEAD final. **Implementado en GitHub no significa autorizado ni desplegado.** Este documento no autoriza tocar RAW productivos, ejecutar migraciones en producción, cambiar flags, publicar revisiones ni hacer merge.
+
+## Estado del producto y gates (corte C6)
+
+| Gate | Implementación en PR #885 | Operación productiva |
+| --- | --- | --- |
+| C0 · Expediente y hechos versionados | Alembic `e8b2c41d7a60`, 27 campañas, 43 grupos candidatos | HOLD |
+| C1 · Nuevos RAW excepcionales | Preflight/confirmación firmada, auditoría por upload, reintento parcial | HOLD |
+| C2 · Revisión independiente | Alembic `ac42e8b9d510`, decisión única por caso, revisor ADMINISTRADOR distinto de ADMICORP con allowlist y Warehouse view | HOLD |
+| C3 · Promoción canónica versionada | Alembic `c5e7a2d93f10`, nueva publicación vinculada a expediente/decisión, transacción y rollback; publicación anterior conservada | HOLD |
+| C4 · Lector Funnel de correcciones | Global: 27 campañas una vez; gerencia/región: grupos SQL-filtrados por sucursal y caso. PG16 **166/166 PASS** (corte `64fb6b98`). | HOLD |
+| C5 · Interfaz Angular | Workbench en archivos TS/HTML/CSS; 11/11 escenarios sintéticos Chromium PASS (corte `119c6854`); CI del HEAD posterior todavía pendiente | HOLD |
+| C6 · QA y gate de liberación | En curso; regresión completa r1→r2, snapshot read-only y corrección de teardown CI incorporadas en rama | NO ACCEPTED |
+
+**Flags independientes, todas OFF por defecto:** `GOOGLE_ADS_M6_CORRECTION_RAW_ENABLED`, `GOOGLE_ADS_M6_CORRECTION_CANDIDATE_ENABLED`, `GOOGLE_ADS_M6_CORRECTION_REVIEW_ENABLED`, `GOOGLE_ADS_M6_CORRECTION_PROMOTION_ENABLED`, `GOOGLE_ADS_M6_CORRECTION_READER_ENABLED`. La lista `GOOGLE_ADS_M6_CORRECTION_REVIEWER_USER_IDS` también empieza vacía: sin revisor vigente, ninguna aprobación es válida. La promoción requiere además que el lector de correcciones esté habilitado.
+
+**Restricción de liberación:** validación 100% verde del HEAD final en PostgreSQL 16, Angular y Chromium; revisión independiente; sincronización con `main`; autorización explícita para **un único merge** y autorización distinta para deploy/migraciones/flags. Ninguno de esos gates se presume concedido.
+
+---
+
+### Antecedente documental de diseño (14-oct-2026)
+
+Los apartados siguientes conservan la propuesta inicial y su justificación histórica; donde dicen «futuro» describen el estado *antes* de la implementación en el PR. Su lectura no cambia el HOLD productivo.
 
 ## 1. Estado demostrado y restricción principal
 
@@ -29,7 +51,7 @@ Esto **no** prueba que ambos archivos sean válidos, que deban borrarse o que es
 
 No tomar `replacement_authorized=false`, `can_delete_existing_raw=false` o `can_auto_republish=false` como campos a modificar para habilitar reemplazos: expresan **bloqueos de seguridad**.
 
-## 4. Protocolo mínimo para futura implementación (no autorizado)
+## 4. Protocolo de implementación (contrato en PR Draft, no autorizado en producción)
 
 ### 4.1 Apertura de caso
 
@@ -68,6 +90,6 @@ Expediente inmutable por cliente/día con ID de caso, motivo, solicitante, revis
 
 ## 6. Decisión actual
 
-**HOLD sobre correcciones tardías.** PR #885 puede seguir validándose para primera publicación canónica y lectura, pero **no** puede usarse para corregir/reemplazar RAW 21654/21655 ni días ya publicados. Cualquier habilitación requiere implementación de hechos versionados, endpoint separado, evidencia E2E y aprobación explícita previa.
+**HOLD productivo sobre correcciones tardías.** PR #885 ya implementa el flujo versionado en rama Draft, pero **no** está desplegado ni autorizado para corregir datos productivos. No modificar, archivar ni borrar RAW 21654/21655. Para liberar se exigen CI integral en el HEAD final, revisión independiente, merge expresamente autorizado y despliegue/flags por etapa con otra autorización.
 
-**Queda fuera de este cambio:** ejecutar corrección real, editar Warehouse, crear migración de hechos alternativos, cambiar switches y modificar Funnel en producción.
+**Queda fuera de toda autorización de este contrato:** ejecutar una corrección real, alterar Warehouse productivo, aplicar migraciones en el servidor, activar flags o modificar lecturas de Funnel en producción sin los gates de release.
