@@ -21,7 +21,7 @@ _REFERENCE = {
     "marketing.iventas_sync": ("08:20", "12:20", "16:20", "20:20"),
     "marketing.meta_sync": ("08:20", "12:20", "16:20", "20:20"),
     "track.preview_operativo": tuple(f"{hour:02d}:00" for hour in range(5, 24)),
-    "track.base_nocturna_canonica": ("23:30",),
+    "track.base_nocturna_canonica": ("00:15",),
     "reports.attendance_daily_capture": ("06:20",),
     "reports.reactivation_sources_daily": ("09:00",),
     "reports.reactivation_outcomes_daily": ("09:15",),
