@@ -56,6 +56,17 @@ def inspect_correction_case(case_id: int) -> dict:
                     google_ads_m6_daily_publications
                 WHERE customer_id = :customer AND business_date = :day
             """), {"customer": CUSTOMER_ID, "day": case["business_date"]}).mappings().all()
+            review = conn.execute(sa.text("""
+                SELECT id, decision, reviewed_by_user_id, snapshot_sha256,
+                       review_note
+                FROM google_ads_m6_correction_decisions
+                WHERE case_id = :id
+            """), {"id": case_id}).mappings().one_or_none()
+            promotion = conn.execute(sa.text("""
+                SELECT publication_id, promoted_by_user_id, snapshot_sha256
+                FROM google_ads_m6_correction_promotions
+                WHERE case_id = :id
+            """), {"id": case_id}).mappings().one_or_none()
     mapping = {(r["campaign_key"], r["ad_group_key"]): r["sucursal_canon"]
                for r in mapped}
     campaign_cost = sum((Decimal(r["cost"]) for r in camp), Decimal("0"))
@@ -70,8 +81,13 @@ def inspect_correction_case(case_id: int) -> dict:
                   and prior[0]["n"] == 27 else None)
     diff = campaign_cost - prior_cost if prior_cost is not None else None
     current = [r for r in live if r["is_canonical"]]
+    is_published = bool(promotion and len(current) == 1
+                        and current[0]["id"] == promotion["publication_id"]
+                        and promotion["snapshot_sha256"] == (
+                            review["snapshot_sha256"] if review else None))
     status = (
-        "INCOMPLETE_CANDIDATE" if len(camp) != 27 or len(group) != 43
+        "CANONICAL_PUBLISHED" if is_published
+        else "INCOMPLETE_CANDIDATE" if len(camp) != 27 or len(group) != 43
         else "RECONCILIATION_FAILED" if campaign_cost != group_cost
         else "CANONICAL_CHANGED" if len(current) != 1 and case["expected_publication_id"] is not None
         else "CANONICAL_CHANGED" if len(current) == 1 and (
@@ -98,6 +114,18 @@ def inspect_correction_case(case_id: int) -> dict:
             {"sucursal_canon": branch, "cost_mxn": str(amount)}
             for branch, amount in sorted(branch_costs.items())
         ],
-        "status": status, "approved": False, "eligible_for_publication": False,
+        "status": status,
+        "approved": bool(review and review["decision"] == "APPROVED"),
+        "decision": {
+            "decision_id": review["id"],
+            "decision": review["decision"],
+            "reviewed_by_user_id": review["reviewed_by_user_id"],
+            "snapshot_sha256": review["snapshot_sha256"],
+        } if review else None,
+        "promotion": {
+            "publication_id": promotion["publication_id"],
+            "promoted_by_user_id": promotion["promoted_by_user_id"],
+        } if promotion else None,
+        "eligible_for_publication": False,
         "can_auto_republish": False,
     }
