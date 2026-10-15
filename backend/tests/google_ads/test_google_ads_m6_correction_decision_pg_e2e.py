@@ -203,8 +203,33 @@ def test_rejection_is_persistent_not_replaceable_with_approval(reviewer_lab):
     assert attempt.json["code"] == "CORRECTION_REVIEW_CONFLICT"
     assert _review_counts(engine) == (1, 2)
 
-def test_reviewer_can_read_case_list_and_capabilities_without_raw_upload(reviewer_lab):
+@pytest.fixture
+def reviewer_listing_schema(reviewer_lab):
+    """A complete promotion-link table exists before the review-detail GET."""
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
     client, actor, reviewer, engine, camp, group = reviewer_lab
+    path = (
+        Path(__file__).resolve().parents[2] /
+        "migrations/versions/c5e7a2d93f10_google_ads_m6_correction_promotions.py"
+    )
+    spec = importlib.util.spec_from_file_location("m6_review_listing_pg", path)
+    assert spec and spec.loader
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    with engine.begin() as conn:
+        migration.op = Operations(MigrationContext.configure(conn))
+        migration.upgrade()
+    try:
+        yield reviewer_lab
+    finally:
+        with engine.begin() as conn:
+            migration.op = Operations(MigrationContext.configure(conn))
+            migration.downgrade()
+
+
+def test_reviewer_can_read_case_list_and_capabilities_without_raw_upload(reviewer_listing_schema):
+    client, actor, reviewer, engine, camp, group = reviewer_listing_schema
     cid = _stage(client, actor, camp, group)
     headers = {"Authorization": "Bearer " + reviewer}
     capabilities = client.get(
