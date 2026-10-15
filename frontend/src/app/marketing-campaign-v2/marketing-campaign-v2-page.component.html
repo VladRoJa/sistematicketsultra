@@ -517,8 +517,8 @@
     <section class="workspace reporting-workspace" aria-labelledby="campaign-v2-reporting">
       <div class="section-heading">
         <div>
-          <h2 id="campaign-v2-reporting">Reporting Campaign V2</h2>
-          <p>Resultados persistidos de campañas congeladas. Se carga bajo demanda.</p>
+          <h2 id="campaign-v2-reporting">Resultados de todas las campañas</h2>
+          <p>Consulta resultados previamente guardados por Suite Ultra; no es información en tiempo real.</p>
         </div>
         <div class="reporting-actions">
           <button
@@ -542,15 +542,15 @@
 
       <div class="reporting-filters">
         <mat-form-field appearance="fill">
-          <mat-label>Observado desde</mat-label>
+          <mat-label>Actualizado desde</mat-label>
           <input matInput type="date" [formControl]="reportingObservedFrom">
         </mat-form-field>
         <mat-form-field appearance="fill">
-          <mat-label>Observado hasta</mat-label>
+          <mat-label>Actualizado hasta</mat-label>
           <input matInput type="date" [formControl]="reportingObservedTo">
         </mat-form-field>
         <mat-form-field appearance="fill">
-          <mat-label>Propósito</mat-label>
+          <mat-label>Objetivo de campaña</mat-label>
           <mat-select [formControl]="reportingPurpose">
             <mat-option value="">Todos</mat-option>
             <mat-option *ngFor="let value of options.purposes" [value]="value">{{ purposeLabel(value) }}</mat-option>
@@ -564,11 +564,11 @@
           </mat-select>
         </mat-form-field>
         <mat-form-field appearance="fill">
-          <mat-label>Provider</mat-label>
+          <mat-label>Servicio de envío</mat-label>
           <input matInput [formControl]="reportingProvider" placeholder="Ej. IVENTAS">
         </mat-form-field>
         <mat-form-field appearance="fill">
-          <mat-label>Estado de observación</mat-label>
+          <mat-label>Disponibilidad de resultados</mat-label>
           <mat-select [formControl]="reportingSnapshotStatus">
             <mat-option value="">Todas</mat-option>
             <mat-option value="WITH_SNAPSHOT">Con observación</mat-option>
@@ -610,8 +610,8 @@
             <div class="reporting-metric"><span>Con observación</span><strong>{{ report.summary.campaigns_with_snapshot | number }}</strong></div>
             <div class="reporting-metric"><span>Sin observación</span><strong>{{ report.summary.campaigns_without_snapshot | number }}</strong></div>
             <div class="reporting-metric emphasized"><span>Exposiciones de destinatarios</span><strong>{{ report.summary.total_recipients | number }}</strong></div>
-            <div class="reporting-metric"><span>Successful</span><strong>{{ report.summary.normalized.successful | number }}</strong></div>
-            <div class="reporting-metric"><span>Reach</span><strong>{{ report.summary.normalized.reach_count | number }}</strong></div>
+            <div class="reporting-metric"><span>Aceptados según iVentas</span><strong>{{ report.summary.normalized.successful | number }}</strong></div>
+            <div class="reporting-metric"><span>Contactos alcanzados</span><strong>{{ report.summary.normalized.reach_count | number }}</strong></div>
             <div class="reporting-metric"><span>Viewed</span><strong>{{ report.summary.normalized.viewed | number }}</strong></div>
             <div class="reporting-metric"><span>Failed</span><strong>{{ report.summary.normalized.failed | number }}</strong></div>
           </div>
@@ -626,7 +626,7 @@
 
           <div class="reporting-secondary-grid">
             <div>
-              <span>Responders reportados por provider</span>
+              <span>Contactos que respondieron según iVentas</span>
               <strong>{{ reportingValue(report.summary.interactions.responders_aggregate) }}</strong>
               <small>{{ report.summary.interactions.responders_campaigns_with_value || 0 }} campañas con dato</small>
             </div>
@@ -692,8 +692,8 @@
 
           <div class="reporting-section-title secondary">
             <div>
-              <h3>Conteos raw del provider</h3>
-              <p>Se muestran separados de las métricas normalized Campaign V2.</p>
+              <h3>Datos originales de iVentas (detalle técnico)</h3>
+              <p>Se muestran por separado de las cifras calculadas por Suite Ultra.</p>
             </div>
           </div>
           <div class="table-wrapper reporting-table raw-table">
@@ -701,11 +701,11 @@
               <thead>
                 <tr>
                   <th>Campaña</th>
-                  <th>Successful raw</th>
-                  <th>Failed raw</th>
-                  <th>Sent raw</th>
-                  <th>Delivered raw</th>
-                  <th>Viewed raw</th>
+                  <th>Aceptados (original)</th>
+                  <th>Fallidos (original)</th>
+                  <th>Enviados (original)</th>
+                  <th>Entregados (original)</th>
+                  <th>Leídos (original)</th>
                   <th>Answered raw</th>
                 </tr>
               </thead>
