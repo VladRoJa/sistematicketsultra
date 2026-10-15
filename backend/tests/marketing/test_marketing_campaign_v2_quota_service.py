@@ -64,6 +64,7 @@ def assess(batches, *, policies=None, capacity=None, events=None):
     session = fake_session(policies, capacity, events)
     result = quota.assess_preflight_capacity(
         plan=NS(batches=batches), session=session, now=NOW,
+        basis_preference="OPERATOR_ATTESTED_NOT_META_VERIFIED",
     )
     session.add.assert_not_called()
     session.commit.assert_not_called()
