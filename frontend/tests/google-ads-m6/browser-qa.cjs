@@ -79,14 +79,79 @@ async function session(context, role) {
     localStorage.setItem('user', JSON.stringify(user));
   }, { user: role, token: qaJwt });
 }
-async function setup(page, requests) {
+async function setup(page, requests, correctionMode = 'none') {
+  let reviewed = correctionMode === 'ownerApproved';
+  const caseRecord = () => ({
+    case_id: 99123, business_date: '2026-10-13', revision: 2,
+    expected_publication_id: 99002, reason: 'Corrección sintética validada para CI',
+    campaign_rows: 27, group_rows: 43,
+    candidate_account_cost_mxn: '980.25', candidate_assigned_cost_mxn: '930.00',
+    candidate_unassigned_cost_mxn: '50.25',
+    previous_account_cost_mxn: '950.25', delta_account_cost_mxn: '30.00',
+    branch_costs_mxn: Array.from({length:26}, (_, i) => ({
+      sucursal_canon: 'LAB_BRANCH_' + i, cost_mxn: '35.00'
+    })),
+    status: reviewed ? 'REQUIRES_INDEPENDENT_REVIEW' : 'REQUIRES_INDEPENDENT_REVIEW',
+    approved: reviewed,
+    decision: reviewed ? {
+      decision_id: 99124, decision: 'APPROVED',
+      reviewed_by_user_id: 48, snapshot_sha256: 'c'.repeat(64)
+    } : null,
+    promotion: null, eligible_for_publication: false
+  });
   await page.route('**/api/**', async route => {
     const req = route.request();
     const url = new URL(req.url());
     const pathname = url.pathname;
     requests.push({ path: pathname, method: req.method() });
     let status = 200, json = {};
-    if (pathname.endsWith('/integrations/google-ads/manual/preview')) json = fixture;
+    if (pathname.endsWith('/integrations/google-ads/corrections/capabilities')) {
+      json = {
+        can_read: correctionMode !== 'none',
+        can_stage_raw: correctionMode === 'owner',
+        can_ingest: correctionMode === 'owner',
+        can_review: correctionMode === 'reviewer',
+        can_promote: correctionMode === 'ownerApproved'
+      };
+    } else if (pathname.endsWith('/integrations/google-ads/corrections/candidates')
+               && req.method() === 'GET') {
+      json = {cases: [{
+        case_id: 99123, business_date: '2026-10-13',
+        revision: 2, decision: reviewed ? 'APPROVED' : 'PENDING'
+      }]};
+    } else if (pathname.endsWith('/integrations/google-ads/corrections/candidates/99123')
+               && req.method() === 'GET') {
+      json = caseRecord();
+    } else if (pathname.endsWith('/integrations/google-ads/corrections/raw/preview')) {
+      json = {...fixture, status: 'CORRECTION_PREFLIGHT_OK',
+        correction_ticket: 'SYNTHETIC_TICKET_NO_REAL_SIGNATURE',
+        revision: 2, expected_publication_id: 99002};
+    } else if (pathname.endsWith('/integrations/google-ads/corrections/raw/confirm')) {
+      status = 201;
+      json = {...raw, status: 'CORRECTION_RAW_PAIR_STAGED'};
+    } else if (pathname.endsWith('/integrations/google-ads/corrections/candidates/ingest')) {
+      status = 201;
+      json = {
+        status: 'CANDIDATE_STAGED', case_id: 99123,
+        revision: 2, business_date: '2026-10-13',
+        campaign_rows: 27, group_rows: 43, eligible_for_publication: false
+      };
+    } else if (pathname.endsWith('/integrations/google-ads/corrections/candidates/99123/review')) {
+      status = 201;
+      reviewed = true;
+      json = {
+        status: 'REVIEW_RECORDED', decision_id: 99124, case_id: 99123,
+        decision: 'APPROVED', snapshot_sha256: 'c'.repeat(64),
+        eligible_for_publication: false
+      };
+    } else if (pathname.endsWith('/integrations/google-ads/corrections/candidates/99123/promote')) {
+      status = 201;
+      json = {
+        status: 'CORRECTION_CANONICAL_PROMOTED', publication_id: 99125,
+        case_id: 99123, revision: 2, business_date: '2026-10-13',
+        account_cost_mxn: '980.25', is_canonical: true
+      };
+    } else if (pathname.endsWith('/integrations/google-ads/manual/preview')) json = fixture;
     else if (pathname.endsWith('/integrations/google-ads/manual/confirm')) { status = 201; json = raw; }
     else if (pathname.endsWith('/integrations/google-ads/manual/ingest')) { status = 201; json = structured; }
     else if (pathname.endsWith('/integrations/google-ads/manual/publish')) { status = 201; json = published; }
