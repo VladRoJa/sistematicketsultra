@@ -31,6 +31,7 @@ from app.services.marketing_campaign_v2_quota_service import (
     assess_preflight_capacity, _database_date,
 )
 from app.services.marketing_campaign_v2_operational_capacity_service import BASIS as OPERATIONAL_BASIS
+from app.services.marketing_campaign_v2_branch_exception_capacity import BASIS as EXCEPTION_BASIS
 
 APPROVAL_TTL = timedelta(minutes=15)
 
@@ -131,30 +132,42 @@ def _assess_scopes(
         )
 
     operational = quota.get("basis") == OPERATIONAL_BASIS
+    exception = quota.get("basis") == EXCEPTION_BASIS
     quantities = defaultdict(int)
     evidence_ids = {}
     by_branch = {}
     for batch, row in zip(plan.batches, quota["batches"], strict=True):
         count = len(batch.recipients)
         if (row["sucursal_canon"] != batch.sucursal_canon or
-                row["provider_channel_id"] != str(batch.provider_channel_id or "") or
-                not row["portfolio_key"] or
-                (not operational and (not row["channel_evidence_id"] or
-                                   not row["portfolio_evidence_id"])) or
-             (operational and (row.get("policy_revision_id") is None or
-                               not row.get("operator_channel_cap") or
-                               not row.get("operator_portfolio_cap")))):
-            raise CampaignV2ApprovalConflictError("Cambió la asignación de lotes/canales.")
+                row["provider_channel_id"] != str(batch.provider_channel_id or "")):
+            raise CampaignV2ApprovalConflictError("Cambió la identidad del lote.")
         channel_scope = ("CHANNEL", row["provider_channel_id"])
-        portfolio_scope = ("PORTFOLIO", row["portfolio_key"])
-        for scope, evidence_id in (
-            (channel_scope, row["channel_evidence_id"]),
-            (portfolio_scope, row["portfolio_evidence_id"]),
-        ):
-            if scope in evidence_ids and evidence_ids[scope] != evidence_id:
-                raise CampaignV2ApprovalConflictError("Evidencias contradictorias entre lotes.")
-            evidence_ids[scope] = evidence_id
-            quantities[scope] += count
+        if exception:
+            # The no-cap branch still has an auditable reservation and lock.
+            if (row.get("channel_evidence_id") is not None or
+                    row.get("portfolio_evidence_id") is not None or
+                    row.get("policy_revision_id") is not None or
+                    row.get("portfolio_key") is not None):
+                raise CampaignV2ApprovalConflictError("Evidencia ajena a modo de excepciones.")
+            evidence_ids[channel_scope] = None
+            quantities[channel_scope] += count
+        else:
+            if (not row["portfolio_key"] or
+                    (not operational and (not row["channel_evidence_id"] or
+                                          not row["portfolio_evidence_id"])) or
+                    (operational and (row.get("policy_revision_id") is None or
+                                      not row.get("operator_channel_cap") or
+                                      not row.get("operator_portfolio_cap")))):
+                raise CampaignV2ApprovalConflictError("Cambió la asignación de lotes/canales.")
+            portfolio_scope = ("PORTFOLIO", row["portfolio_key"])
+            for scope, evidence_id in (
+                (channel_scope, row["channel_evidence_id"]),
+                (portfolio_scope, row["portfolio_evidence_id"]),
+            ):
+                if scope in evidence_ids and evidence_ids[scope] != evidence_id:
+                    raise CampaignV2ApprovalConflictError("Evidencias contradictorias entre lotes.")
+                evidence_ids[scope] = evidence_id
+                quantities[scope] += count
         by_branch[batch.sucursal_canon] = row
     return quota, quantities, evidence_ids, by_branch
 
@@ -165,6 +178,7 @@ def _reserve_locked(
     evidence_ids: dict, quota_rows: dict,
     held_names: frozenset[str] = frozenset(),
     held_sources: dict[str, str] | None = None,
+    capacity_basis: str | None = None,
 ) -> dict[str, Any]:
     expected_fingerprint, expected_quote, expected_count, expected_cost, actor = confirmation
     if plan.dispatch_fingerprint != expected_fingerprint:
@@ -182,9 +196,17 @@ def _reserve_locked(
             quote_amount is None or Decimal(quote_amount) != expected_cost):
         raise CampaignV2ApprovalConflictError("Presupuesto o destinatarios cambiaron.")
 
-    operational = (bool(quota_rows) and all(
-        row.get("policy_revision_id") is not None for row in quota_rows.values()
-    ))
+    operational = (
+        capacity_basis == EXCEPTION_BASIS or
+        (bool(quota_rows) and all(
+            row.get("policy_revision_id") is not None for row in quota_rows.values()
+        ))
+    )
+    if capacity_basis == EXCEPTION_BASIS and (
+        any(evidence_id is not None for evidence_id in evidence_ids.values()) or
+        any(row.get("operator_portfolio_cap") is not None for row in quota_rows.values())
+    ):
+        raise CampaignV2ApprovalConflictError("Excepciones con evidencia ajena.")
     if operational and any(value is not None for value in evidence_ids.values()):
         raise CampaignV2ApprovalConflictError("Modos de cupo mezclados.")
     evidence = {}
@@ -265,7 +287,9 @@ def _reserve_locked(
             "pricing_currency": currency,
             "pricing_basis": budget.get("basis"),
             "pricing_rate_version": budget.get("rate_version"),
-            "basis": OPERATIONAL_BASIS if operational else "OPERATOR_ATTESTED_NOT_META_VERIFIED",
+            "basis": capacity_basis if capacity_basis == EXCEPTION_BASIS else (
+                OPERATIONAL_BASIS if operational else "OPERATOR_ATTESTED_NOT_META_VERIFIED"
+            ),
             "send_authorized": False,
             "schedule_mode": plan.mode,
             "batches": manifest_batches,
@@ -405,6 +429,7 @@ def approve_dispatch_reservation(
             evidence_ids=evidence_ids, quota_rows=quota_rows,
             held_names=frozenset(held_names),
             held_sources=held_sources,
+            capacity_basis=refreshed_quota.get("basis"),
         )
     except (CampaignV2ApprovalValidationError, CampaignV2ApprovalConflictError):
         active.rollback()
