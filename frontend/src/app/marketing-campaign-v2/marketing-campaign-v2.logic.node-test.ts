@@ -1559,7 +1559,7 @@ test('Issue 856 USD: estimate is automatic delivered-based; approval cannot requ
   assert.ok(models.includes("billable_basis: 'PROVIDER_CONFIRMED_DELIVERED'"));
   assert.ok(ts.includes('plan.budget_usd.quote_fingerprint'));
   assert.ok(ts.includes("pricing_currency: 'USD'"));
-  assert.ok(ts.includes("plan.quota?.status === 'REVIEWABLE'"));
+  assert.ok(ts.includes('get isSelectionWithinCapacity(): boolean'));
   assert.ok(ts.includes("this.monitor?.quota.all_current === true"));
   assert.ok(html.includes('Máximo si todos reciben'));
   assert.ok(html.includes('iVentas confirma el cobro después de entregar'));
