@@ -5,7 +5,8 @@ import ast
 from alembic.script import ScriptDirectory
 
 MIGRATIONS = Path(__file__).resolve().parents[2] / "migrations"
-FINAL = "e8b2c41d7a60"
+FINAL = "ac42e8b9d510"
+CANDIDATE_FINAL = "e8b2c41d7a60"
 PRIOR_FINAL = "c9e1a4d6b720"
 EARLIER_JOIN = "a4c85d6e9f20"
 TRACK_ROSTER = "f6roster1014"
@@ -19,7 +20,8 @@ def test_m6_and_main_have_exactly_one_alembic_head():
     script = ScriptDirectory(str(MIGRATIONS))
     assert list(script.get_heads()) == [FINAL]
     join = script.get_revision(FINAL)
-    assert join.down_revision == PRIOR_FINAL
+    assert join.down_revision == CANDIDATE_FINAL
+    assert script.get_revision(CANDIDATE_FINAL).down_revision == PRIOR_FINAL
     assert set(script.get_revision(PRIOR_FINAL).down_revision) == {EARLIER_JOIN, TRACK_ROSTER}
     assert set(script.get_revision(EARLIER_JOIN).down_revision) == {MAIN, M6}
     assert script.get_revision(TRACK_ROSTER).down_revision == MAIN
