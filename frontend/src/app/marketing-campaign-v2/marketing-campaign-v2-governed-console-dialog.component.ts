@@ -122,6 +122,78 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
         ordered.slice(nextIndex).some(child => child?.status !== 'READY')) { return null; }
     return ordered[nextIndex] ?? null;
   }
+  // Presentación para operadores: los códigos permanecen intactos en los contratos.
+  get preflightStatusLabel(): string {
+    if (!this.preflight) { return 'Pendiente de revisión'; }
+    return this.preflight.ready ? 'Destinatarios revisados' : 'Destinatarios con problemas';
+  }
+  get budgetStatusLabel(): string {
+    return this.preflight?.budget?.status === 'COMPLETE'
+      ? 'Tarifa registrada' : 'Falta registrar tarifa';
+  }
+  get quotaStatusLabel(): string {
+    return this.preflight?.quota?.status === 'REVIEWABLE'
+      ? 'Límite revisado' : 'Falta revisar el límite de envío';
+  }
+  get preparationIssue(): string {
+    const plan = this.preflight;
+    if (!plan) { return ''; }
+    if (!plan.ready) {
+      return 'Hay problemas en los destinatarios o canales. Corrige los datos señalados antes de continuar.';
+    }
+    if (plan.budget?.status !== 'COMPLETE') {
+      return 'Falta registrar el costo por mensaje para esta plantilla y canal en Configuración de campañas → Tarifas. La aprobación continuará bloqueada.';
+    }
+    if (plan.quota?.status !== 'REVIEWABLE') {
+      return 'Falta revisar la capacidad de envío de este canal en Control de límites. La aprobación continuará bloqueada.';
+    }
+    return '';
+  }
+  statusLabel(value: string | null | undefined): string {
+    const labels: Record<string, string> = {
+      READY: 'Listo para enviar (sin envío)',
+      HELD: 'En espera (no enviar)',
+      SUBMITTED: 'Aceptado por iVentas',
+      SCHEDULED: 'Programado',
+      SUBMITTING: 'Envío en proceso: no repetir',
+      AUTHORIZED: 'Autorizado, aún sin enviar',
+      IN_FLIGHT: 'Envío en proceso: revisar',
+      IN_FLIGHT_STALE: 'Envío sin confirmación: revisar manualmente',
+      RECONCILIATION_REQUIRED: 'Resultado incierto: revisar manualmente',
+      PROVIDER_ERROR: 'Error del proveedor: revisar antes de actuar',
+      REVIEW_REQUIRED: 'Requiere revisión manual',
+      COMPLETE: 'Proceso terminado',
+      APPROVAL_EXPIRED: 'Aprobación vencida',
+      AUTHORIZED_NOT_DISPATCHED: 'Autorizado, sin enviar',
+      PREPARED_NOT_DISPATCHED: 'Lotes preparados, sin enviar',
+      RESERVED_NOT_PREPARED: 'Costo aprobado, faltan preparar los lotes',
+      NO_GOVERNED_APPROVAL: 'Sin aprobación de envío',
+      RETRY_ELIGIBLE: 'Revisión de posible reintento requerida',
+      RETRY_EXHAUSTED: 'Sin reintentos disponibles',
+    };
+    return value ? labels[value] ?? 'Estado pendiente de revisión' : 'Sin estado';
+  }
+  nextActionLabel(value: string | null | undefined): string {
+    const labels: Record<string, string> = {
+      VERIFY_PROVIDER_OUTCOME_MANUALLY: 'Comprobar el resultado directamente con iVentas antes de actuar',
+      DO_NOT_RESEND: 'No reenviar; solicitar revisión manual',
+      REVIEW_BEFORE_ANY_NEW_APPROVAL: 'Revisar la campaña antes de aprobar nuevamente',
+      NEW_AUTHORIZATION_POLICY_REQUIRED: 'Solicitar una nueva autorización',
+      MANUAL_NEXT_CHILD_ONLY: 'Revisar y enviar solo el siguiente lote, si está autorizado',
+      INDEPENDENT_AUTHORIZATION_REQUIRED: 'Falta autorización independiente',
+      MATERIALIZE_BEFORE_EXPIRY: 'Preparar los lotes antes de que venza la aprobación',
+    };
+    return value ? labels[value] ?? 'Consultar el detalle antes de continuar' : 'Sin acción pendiente';
+  }
+  get workingLabel(): string {
+    const labels: Record<Action, string> = {
+      read: 'Consultando', preflight: 'Revisando destinatarios',
+      approve: 'Aprobando costo', materialize: 'Preparando lotes',
+      authorize: 'Autorizando', execute: 'Enviando un lote',
+    };
+    return this.working ? labels[this.working] : '';
+  }
+
   get approvalWord(): string { return 'APROBAR ' + this.readyCount; }
   get materializeWord(): string { return 'MATERIALIZAR ' + this.data.campaignId; }
   get authorizationWord(): string { return 'AUTORIZAR ' + this.approvedReadyCount; }
