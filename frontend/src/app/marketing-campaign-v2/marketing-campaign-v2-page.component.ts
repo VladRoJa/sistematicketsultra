@@ -509,7 +509,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   }
 
   openExcelImport(): void {
-    if (!this.options) { return; }
+    if (!this.canManageDispatchConfig) { return; }
     const dialogRef = this.dialog.open(MarketingCampaignV2ExcelDialogComponent, {
       width: 'min(920px, 96vw)', maxWidth: '96vw',
       maxHeight: '94vh', autoFocus: false,
