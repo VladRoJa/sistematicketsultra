@@ -235,7 +235,9 @@ def test_row_count_inconsistency_blocks_parsed_comparison():
 def test_nan_metric_blocks_parsed_comparison():
     old = _parsed(_row())
     bad = replace(old, rows=[replace(old.rows[0], alcance_meta=float("nan"))])
-    diff = compare_kpi_desempeno_parsed(previous=old, current=bad)
+    diff = compare_kpi_desempeno_parsed(
+        business_date=BUSINESS_DATE, previous=old, current=bad
+    )
     assert diff.status == BLOCKED_BY_VALIDATION
 
 
