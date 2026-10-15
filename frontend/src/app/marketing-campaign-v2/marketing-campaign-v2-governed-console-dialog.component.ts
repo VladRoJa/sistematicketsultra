@@ -132,7 +132,16 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
       ? 'Cálculo automático en USD' : 'Costo en USD no disponible';
   }
   get quotaStatusLabel(): string {
-    return this.preflight?.quota?.status === 'REVIEWABLE'
+    const quota = this.preflight?.quota;
+    if (!quota) { return 'Pendiente de revisión'; }
+    if (quota.basis === 'SUITE_BRANCH_EXCEPTION_CAPS_V1') {
+      const restricted = quota.batches.some(row =>
+        row.restriction_kind === 'CHANNEL_250_ROLLING_24H');
+      return quota.status === 'REVIEWABLE'
+        ? (restricted ? '250 diarios por canal: correcto' : 'Sin límite interno diario')
+        : 'Revisar límite especial o canal';
+    }
+    return quota.status === 'REVIEWABLE'
       ? 'Límite revisado' : 'Falta revisar el límite de envío';
   }
   get preparationIssue(): string {
@@ -145,7 +154,9 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
       return 'Aún no está disponible el costo estimado automático en USD. Vuelve a revisar los destinatarios.';
     }
     if (plan.quota?.status !== 'REVIEWABLE') {
-      return 'Falta revisar la capacidad de envío de este canal en Límites de envío. La aprobación continuará bloqueada.';
+      return plan.quota?.basis === 'SUITE_BRANCH_EXCEPTION_CAPS_V1'
+        ? 'Hay un canal sin identificar o Insurgentes/Independencia superan sus 250 mensajes diarios (o tienen envíos por conciliar). Revisa el detalle del canal antes de continuar.'
+        : 'Falta revisar la capacidad de envío de este canal en Límites de envío. La aprobación continuará bloqueada.';
     }
     return '';
   }
