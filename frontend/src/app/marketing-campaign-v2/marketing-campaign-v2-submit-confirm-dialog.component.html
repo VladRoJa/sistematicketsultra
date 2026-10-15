@@ -2,13 +2,13 @@
 
 <mat-dialog-content>
   <div class="warning-box">
-    <strong>Esta acción puede enviar mensajes reales a los destinatarios indicados.</strong>
+    <strong>Esta acción enviará mensajes reales de WhatsApp a los destinatarios indicados.</strong>
     <span>El envío es inmediato. No es una simulación ni una exportación.</span>
   </div>
 
   <dl class="summary">
     <div><dt>Campaña</dt><dd>{{ data.campaignName }}</dd></div>
-    <div><dt>Purpose</dt><dd>{{ data.purposeLabel }}</dd></div>
+    <div><dt>Objetivo</dt><dd>{{ data.purposeLabel }}</dd></div>
     <div><dt>Plantilla</dt><dd>{{ data.templateName }}</dd></div>
     <div><dt>Contactos guardados</dt><dd>{{ data.frozenCount | number }}</dd></div>
     <div><dt>Excluidos por lista negra</dt><dd>{{ data.blacklistedCount | number }}</dd></div>
@@ -36,7 +36,7 @@
   </div>
 
   <p class="guard-note">
-    Suite volverá a construir el preflight antes de enviar. Si cambió blacklist,
+    Suite volverá a comprobar destinatarios y exclusiones antes de enviar. Si cambió blacklist,
     template, channel, variables o phone set, el submit se bloqueará.
   </p>
 </mat-dialog-content>
