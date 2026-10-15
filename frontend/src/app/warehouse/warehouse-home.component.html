@@ -65,12 +65,16 @@
           >
             <option value="">Selecciona un tipo de reporte</option>
 
-            <option *ngFor="let reportType of reportTypes" [value]="reportType.key">
+            <option *ngFor="let reportType of uploadableReportTypes" [value]="reportType.key">
               {{ reportType.label }}
+            </option>
+            <option *ngIf="canUploadGoogleAdsM6" [value]="googleAdsPairTypeKey">
+              Google Ads — campañas y grupos (M6)
             </option>
           </select>
         </div>
 
+        <ng-container *ngIf="!isGoogleAdsPairSelected">
         <div class="warehouse-form__group warehouse-form__group--file">
           <label for="warehouse-file">Archivo</label>
           <input
@@ -143,9 +147,13 @@
             Subir archivo
           </button>
         </div>
+        </ng-container>
       </div>
 
-      <div class="warehouse-form__feedback">
+      <app-google-ads-m6-manual-upload
+        *ngIf="isGoogleAdsPairSelected"></app-google-ads-m6-manual-upload>
+
+      <div class="warehouse-form__feedback" *ngIf="!isGoogleAdsPairSelected">
         <div class="warehouse-form__hint" *ngIf="selectedReportTypeContext.periodType">
           <span class="warehouse-pill">
             Periodo requerido: {{ selectedReportTypeContext.periodType }}
@@ -511,4 +519,5 @@
       </div>
     </section>
   </div>
+  <app-google-ads-m6-correction-workbench></app-google-ads-m6-correction-workbench>
 </div>
