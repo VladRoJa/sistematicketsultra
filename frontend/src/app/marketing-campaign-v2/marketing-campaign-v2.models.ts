@@ -805,7 +805,9 @@ export interface CampaignV2GovernedApproval {
   campaign_id: number;
   dispatch_fingerprint: string;
   approved_recipients: number;
-  approved_estimated_mxn: string;
+  approved_estimated_mxn: string | null;
+  approved_estimated_usd: string | null;
+  currency: 'USD' | 'MXN';
   approved_at: string;
   expires_at: string;
   status: 'EXPIRED' | 'RESERVED_NOT_DISPATCHED';
@@ -820,7 +822,7 @@ export interface CampaignV2GovernedApprovalRequest {
   expected_dispatch_fingerprint: string;
   expected_quote_fingerprint: string;
   expected_recipients: number;
-  expected_total_mxn: string;
+  pricing_currency: 'USD';
   held_sucursal_canons: string[];
   held_source_references: Record<string,string>;
 }
@@ -830,7 +832,9 @@ export interface CampaignV2GovernedApprovalCreated {
   dispatch_fingerprint: string;
   quote_fingerprint: string;
   approved_recipients: number;
-  approved_estimated_mxn: string;
+  approved_estimated_mxn: string | null;
+  approved_estimated_usd: string | null;
+  currency: 'USD' | 'MXN';
   expires_at: string;
   ready_batches: number;
   held_batches: number;
@@ -925,6 +929,25 @@ export interface CampaignV2GovernedMonitor {
   children_count: number;
   children_by_status: Record<string, number>;
   children: CampaignV2GovernedMonitorChild[];
+}
+
+export interface CampaignV2AutomaticUsdBudget {
+  quote_fingerprint: string;
+  status: 'COMPLETE' | 'INCOMPLETE';
+  currency: 'USD';
+  basis: 'AUTOMATIC_MAXIMUM_IF_ALL_RECIPIENTS_DELIVERED';
+  billable_basis: 'PROVIDER_CONFIRMED_DELIVERED';
+  rate_version: string;
+  unit_cost_usd: string;
+  sendable_recipients: number;
+  unassigned_recipients: number;
+  maximum_estimated_usd: string;
+  batches: Array<{
+    sucursal_canon: string;
+    channel_id: string;
+    recipients: number;
+    maximum_estimated_usd: string;
+  }>;
 }
 
 export interface CampaignV2PreflightBudget {
@@ -1029,6 +1052,7 @@ export interface CampaignV2PreflightResponse {
   ready: boolean;
   submission: CampaignV2SubmitState;
   budget?: CampaignV2PreflightBudget;
+  budget_usd?: CampaignV2AutomaticUsdBudget;
   quota?: CampaignV2PreflightQuota;
 }
 
