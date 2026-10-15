@@ -1,6 +1,6 @@
 <header class="dialog-header">
   <div>
-    <p class="eyebrow">Preview Campaign V2</p>
+    <p class="eyebrow">Vista previa de destinatarios</p>
     <h2>{{ title }}</h2>
   </div>
   <button mat-button mat-dialog-close type="button">Cerrar</button>
@@ -32,10 +32,10 @@
             <th>Familia</th>
             <th>Vencimiento</th>
             <th>Estado actual</th>
-            <th *ngIf="isHistoryDecisionBucket()">Decisión</th>
-            <th *ngIf="isHistoryDecisionBucket()">Cumplió la regla</th>
-            <th *ngIf="isHistoryDecisionBucket()">Señales observadas</th>
-            <th *ngIf="response.source === 'FUNNEL_PORTFOLIO'">Evidencia Funnel</th>
+            <th *ngIf="isHistoryDecisionBucket()">Resultado del filtro</th>
+            <th *ngIf="isHistoryDecisionBucket()">¿Cumple las condiciones?</th>
+            <th *ngIf="isHistoryDecisionBucket()">Datos utilizados</th>
+            <th *ngIf="response.source === 'FUNNEL_PORTFOLIO'">Información de Funnel</th>
           </tr>
         </thead>
         <tbody>
