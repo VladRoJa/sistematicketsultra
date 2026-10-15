@@ -652,7 +652,8 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
     return labels[value];
   }
 
-  sourceLabel(value: CampaignV2Source): string {
+  sourceLabel(value: CampaignV2Source | 'EXCEL_IMPORT'): string {
+    if (value === 'EXCEL_IMPORT') { return 'Excel importado'; }
     const labels: Record<CampaignV2Source, string> = {
       EXPIRED_MEMBERS: 'Socios vencidos',
       ACTIVE_MEMBERS: 'Socios activos',

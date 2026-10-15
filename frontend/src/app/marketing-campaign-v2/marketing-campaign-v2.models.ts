@@ -1,3 +1,28 @@
+export interface CampaignV2ExcelPreview {
+  name: string;
+  purpose: CampaignV2Purpose;
+  template_id: number;
+  template_name: string;
+  sha256: string;
+  rows_read: number;
+  unique_recipient_count: number;
+  blacklist_excluded_count: number;
+  branch_counts: Record<string, number>;
+  preview_fingerprint_version: string;
+  preview_fingerprint: string;
+}
+
+export interface CampaignV2ExcelFrozen {
+  campaign_id: number;
+  name: string;
+  purpose: CampaignV2Purpose;
+  source: 'EXCEL_IMPORT';
+  recipient_count: number;
+  blacklist_excluded_count: number;
+  upload_sha256: string;
+  frozen_at: string;
+}
+
 export type CampaignV2Source =
   | 'EXPIRED_MEMBERS'
   | 'ACTIVE_MEMBERS'

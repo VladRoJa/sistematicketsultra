@@ -1,0 +1,13 @@
+.excel-import { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; }
+.explanation { font-size: 13px; line-height: 1.5; }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.file-field { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.file-field input { max-width: 100%; }
+.error { color: #b91c1c; }
+.review { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.review dl { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; margin: 0; font-size: 13px; }
+.review dt { color: #64748b; }
+.review dd { margin: 0; overflow-wrap: anywhere; }
+.fingerprint { font-family: monospace; font-size: 11px; }
+.branch-counts { display: flex; flex-wrap: wrap; gap: 8px; max-height: 160px; overflow: auto; }
+.branch-counts span { background: #f1f5f9; border-radius: 4px; padding: 5px 8px; font-size: 12px; color: #0f172a; }

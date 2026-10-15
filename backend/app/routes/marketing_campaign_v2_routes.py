@@ -25,6 +25,12 @@ from app.services.marketing_campaign_v2_creation_service import (
     build_campaign_v2_freeze_preview,
     freeze_campaign_v2,
 )
+from app.services.marketing_campaign_v2_excel_import_service import (
+    ExcelCampaignImportValidationError,
+    ExcelCampaignImportConflictError,
+    preview_excel_campaign,
+    freeze_excel_campaign,
+)
 from app.services.marketing_campaign_v2_blacklist_service import (
     XLSX_MIMETYPE as BLACKLIST_XLSX_MIMETYPE,
     MarketingCampaignV2BlacklistPersistenceError,
@@ -369,6 +375,67 @@ def campaign_v2_blacklist_export_endpoint():
         return _error(str(exc), 403)
     except Exception:
         return _error("Falló la exportación de lista negra Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/excel/preview")
+@jwt_required()
+def campaign_v2_excel_preview_endpoint():
+    """Parse an uploaded file and compute a read-only audience fingerprint."""
+    try:
+        _, access = _resolve_campaign_v2_request()
+        if set(request.form) != {"name", "purpose", "template_id"} or set(request.files) != {"file"}:
+            raise ExcelCampaignImportValidationError(
+                "Requiere name, purpose, template_id y un archivo Excel/CSV."
+            )
+        upload = request.files["file"]
+        result = preview_excel_campaign(
+            file_bytes=upload.read(), filename=upload.filename or "",
+            name=request.form["name"], purpose=request.form["purpose"],
+            template_id=_parse_positive_query_int(request.form["template_id"], field_name="template_id"),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (ExcelCampaignImportValidationError, MarketingCampaignV2RouteValidationError) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        current_app.logger.exception("Campaign V2 Excel preview failed")
+        return _error("Falló la validación del Excel de campaña.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/excel/freeze")
+@jwt_required()
+def campaign_v2_excel_freeze_endpoint():
+    """Immutable freeze; never contacts iVentas or submits a provider campaign."""
+    try:
+        user, access = _resolve_campaign_v2_request()
+        fields = {"name", "purpose", "template_id", "expected_preview_fingerprint"}
+        if set(request.form) != fields or set(request.files) != {"file"}:
+            raise ExcelCampaignImportValidationError(
+                "Requiere name, purpose, template_id, fingerprint y archivo."
+            )
+        upload = request.files["file"]
+        result = freeze_excel_campaign(
+            file_bytes=upload.read(), filename=upload.filename or "",
+            name=request.form["name"], purpose=request.form["purpose"],
+            template_id=_parse_positive_query_int(request.form["template_id"], field_name="template_id"),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            expected_preview_fingerprint=request.form["expected_preview_fingerprint"],
+            created_by_user_id=int(user.id),
+            session=db.session,
+        )
+        return jsonify(result), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (ExcelCampaignImportValidationError, MarketingCampaignV2RouteValidationError) as exc:
+        return _error(str(exc), 400)
+    except ExcelCampaignImportConflictError as exc:
+        return _error(str(exc), 409)
+    except Exception:
+        current_app.logger.exception("Campaign V2 Excel freeze failed")
+        return _error("No fue posible congelar el Excel de campaña.", 500)
 
 
 @marketing_campaign_v2_bp.post("/campaigns-v2/preview")

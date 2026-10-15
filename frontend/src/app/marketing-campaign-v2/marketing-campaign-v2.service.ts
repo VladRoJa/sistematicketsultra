@@ -5,6 +5,8 @@ import { Observable } from 'rxjs';
 import { environment } from 'src/environments/environment';
 
 import {
+  CampaignV2ExcelPreview,
+  CampaignV2ExcelFrozen,
   CampaignV2AudienceDefinitionRequest,
   CampaignV2BlacklistImportResult,
   CampaignV2BlacklistSummary,
@@ -85,6 +87,27 @@ export class MarketingCampaignV2Service {
 
   getBlacklistSummary(): Observable<CampaignV2BlacklistSummary> {
     return this.http.get<CampaignV2BlacklistSummary>(`${this.apiUrl}/blacklist`);
+  }
+
+  private excelForm(file: File, name: string, purpose: CampaignV2Purpose, templateId: number): FormData {
+    const payload = new FormData();
+    payload.append('file', file, file.name);
+    payload.append('name', name);
+    payload.append('purpose', purpose);
+    payload.append('template_id', String(templateId));
+    return payload;
+  }
+
+  previewExcel(file: File, name: string, purpose: CampaignV2Purpose, templateId: number): Observable<CampaignV2ExcelPreview> {
+    return this.http.post<CampaignV2ExcelPreview>(
+      `${this.apiUrl}/excel/preview`, this.excelForm(file, name, purpose, templateId),
+    );
+  }
+
+  freezeExcel(file: File, name: string, purpose: CampaignV2Purpose, templateId: number, fingerprint: string): Observable<CampaignV2ExcelFrozen> {
+    const payload = this.excelForm(file, name, purpose, templateId);
+    payload.append('expected_preview_fingerprint', fingerprint);
+    return this.http.post<CampaignV2ExcelFrozen>(`${this.apiUrl}/excel/freeze`, payload);
   }
 
   importBlacklist(file: File): Observable<CampaignV2BlacklistImportResult> {

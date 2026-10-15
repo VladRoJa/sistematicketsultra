@@ -1,0 +1,75 @@
+<h2 mat-dialog-title>Crear campaña desde Excel</h2>
+<mat-dialog-content class="excel-import">
+  <p class="explanation">Carga un Excel o CSV con columnas <strong>sucursal</strong> y <strong>telefono</strong>.
+    El sistema valida canales, plantilla y teléfonos, y excluye la lista negra vigente.
+    <strong>Guardar la campaña no envía mensajes.</strong></p>
+  <p class="error" *ngIf="error" role="alert">{{ error }}</p>
+
+  <div class="fields" *ngIf="!frozen">
+    <mat-form-field appearance="outline">
+      <mat-label>Nombre de campaña</mat-label>
+      <input matInput maxlength="255" [formControl]="name" placeholder="ANUAL 3999 · Vencidos · Oct 2026">
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Propósito</mat-label>
+      <mat-select [formControl]="purpose">
+        <mat-option value="REACTIVATION">Reactivación</mat-option>
+        <mat-option value="ACTIVE_MEMBERS">Socios activos</mat-option>
+        <mat-option value="NEW_SALE">Venta nueva</mat-option>
+        <mat-option value="UNCLASSIFIED">Sin clasificar</mat-option>
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Plantilla iVentas</mat-label>
+      <mat-select [formControl]="templateId">
+        <mat-option *ngFor="let template of availableTemplates" [value]="template.id">
+          {{ template.label }} · {{ template.template_name }} (ID {{ template.id }})
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+    <div class="file-field">
+      <label for="excel-v2-file">Archivo Excel/CSV (máximo 5 MB)</label>
+      <input id="excel-v2-file" type="file" accept=".xlsx,.csv" (change)="onFileChange($event)">
+      <small *ngIf="selectedFile">{{ selectedFile.name }}</small>
+    </div>
+    <button mat-flat-button color="primary" type="button" [disabled]="!canPreview"
+      (click)="previewFile()">
+      {{ previewing ? 'Validando…' : 'Validar público' }}
+    </button>
+  </div>
+
+  <section *ngIf="preview as p" class="review">
+    <h3>Revisión de la audiencia</h3>
+    <dl>
+      <dt>Campaña</dt><dd>{{ p.name }}</dd>
+      <dt>Plantilla</dt><dd>{{ p.template_name }} (ID {{ p.template_id }})</dd>
+      <dt>Filas del archivo</dt><dd>{{ p.rows_read }}</dd>
+      <dt>Teléfonos elegibles tras lista negra</dt><dd>{{ p.unique_recipient_count }}</dd>
+      <dt>Excluidos por lista negra</dt><dd>{{ p.blacklist_excluded_count }}</dd>
+      <dt>SHA-256 del archivo</dt><dd class="fingerprint">{{ p.sha256 }}</dd>
+    </dl>
+    <h4>Destinatarios por sucursal</h4>
+    <div class="branch-counts">
+      <span *ngFor="let branch of branchRows">{{ branch.name }}: {{ branch.count }}</span>
+    </div>
+    <mat-checkbox [formControl]="confirmFreeze">
+      Revisé el archivo, su número de destinatarios y las sucursales. Autorizo
+      <strong>guardar una audiencia fija</strong>, sin enviar mensajes.
+    </mat-checkbox>
+    <button mat-flat-button color="primary" type="button" [disabled]="!canFreeze"
+      (click)="freezeFile()">
+      {{ freezing ? 'Guardando…' : 'Guardar audiencia · NO ENVÍA' }}
+    </button>
+  </section>
+
+  <section class="review" *ngIf="frozen as result" role="status">
+    <h3>Audiencia congelada</h3>
+    <p>Campaña <strong>#{{ result.campaign_id }}</strong> · {{ result.name }}</p>
+    <p><strong>{{ result.recipient_count }}</strong> contactos guardados.</p>
+    <p>Ya puedes abrir la campaña en Campañas V2 y continuar por el preflight
+      y aprobación existentes. Todavía no se ha enviado ningún WhatsApp.</p>
+  </section>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="close()">Cerrar</button>
+</mat-dialog-actions>
