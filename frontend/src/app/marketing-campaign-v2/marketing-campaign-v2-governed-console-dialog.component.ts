@@ -155,7 +155,7 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
     }
     if (plan.quota?.status !== 'REVIEWABLE') {
       return plan.quota?.basis === 'SUITE_BRANCH_EXCEPTION_CAPS_V1'
-        ? 'Hay un canal sin identificar o Insurgentes/Independencia superan sus 250 mensajes diarios (o tienen envíos por conciliar). Revisa el detalle del canal antes de continuar.'
+        ? 'Si Insurgentes o Independencia alcanzaron 250 diarios o tienen resultados inciertos, marca esos lotes en espera y registra el motivo para continuar con las demás sucursales. Un canal sin identificar siempre bloquea la preparación.'
         : 'Falta revisar la capacidad de envío de este canal en Límites de envío. La aprobación continuará bloqueada.';
     }
     return '';
@@ -211,10 +211,24 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   get sendWord(): string {
     return this.nextReadyChild ? 'ENVIAR LOTE ' + this.nextReadyChild.child_id : '';
   }
+  get isSelectionWithinCapacity(): boolean {
+    const quota = this.preflight?.quota;
+    if (!quota) { return false; }
+    if (quota.status === 'REVIEWABLE') { return true; }
+    if (quota.basis !== 'SUITE_BRANCH_EXCEPTION_CAPS_V1') { return false; }
+    const blocked = quota.batches.filter(row => row.recommendation === 'REVIEW_HOLD');
+    // Never allow a missing channel to be bypassed as an exception.
+    return blocked.length > 0 && blocked.every(row =>
+      ['CHANNEL_EXCEPTION_250_EXCEEDED', 'UNRESOLVED_PROVIDER_ACTIVITY']
+        .includes(row.blocking_reason || '') &&
+      this.heldBranches.includes(row.sucursal_canon) &&
+      !!this.heldSources[row.sucursal_canon]
+    );
+  }
   get canApprove(): boolean {
     const plan = this.preflight;
     return !this.busy && !this.hasApproval && !!plan && plan.ready &&
-      plan.sendable_count > 0 && plan.quota?.status === 'REVIEWABLE' &&
+      plan.sendable_count > 0 && this.isSelectionWithinCapacity &&
       !!plan.budget_usd?.quote_fingerprint &&
       plan.budget_usd.status === 'COMPLETE' &&
       this.heldBranches.length < plan.batches.length &&
