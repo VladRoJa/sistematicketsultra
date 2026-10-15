@@ -1,8 +1,8 @@
-<h2 mat-dialog-title>Configuración de envío · iVentas</h2>
+<h2 mat-dialog-title>Plantillas, canales y tarifas · iVentas</h2>
 
 <mat-dialog-content class="dispatch-admin">
   <p class="disclaimer">
-    <strong>Solo configuración.</strong> Catálogo local de Suite Ultra. Registrar una plantilla no confirma que exista o esté
+    <strong>Estas opciones preparan el envío; no envían mensajes.</strong> Catálogo local de Suite Ultra. Registrar una plantilla no confirma que exista o esté
     aprobada en cada canal de iVentas. Esta pantalla nunca envía WhatsApps.
   </p>
 
@@ -18,7 +18,7 @@
       <div class="section-heading">
         <div>
           <h3>Plantillas</h3>
-          <p>Nombre exacto de la plantilla ya aprobada en iVentas.</p>
+          <p>Usa el nombre exacto que está aprobado en iVentas.</p>
         </div>
         <button mat-stroked-button type="button" (click)="startNewTemplate()">Nueva plantilla</button>
       </div>
@@ -83,7 +83,7 @@
         <div class="variable-row" *ngFor="let row of variableRows; let i = index">
           <span>Variable {{ row.position }}</span>
           <mat-form-field appearance="outline" subscriptSizing="dynamic">
-            <mat-label>Fuente backend</mat-label>
+            <mat-label>Dato usado en el mensaje</mat-label>
             <mat-select [formControl]="row.source">
               <mat-option *ngFor="let source of variableSources" [value]="source.value">{{ source.label }}</mat-option>
             </mat-select>
@@ -121,8 +121,8 @@
     <section class="catalog" aria-label="Canales de envío">
       <div class="section-heading">
         <div>
-          <h3>Bindings de canales</h3>
-          <p>Asociaciones locales entre sucursal y canal iVentas. Solo uno predeterminado por sucursal.</p>
+          <h3>Canales asociados a sucursales</h3>
+          <p>Cada sucursal debe tener un canal principal de iVentas para preparar sus mensajes.</p>
         </div>
         <button mat-stroked-button type="button" (click)="showChannels = !showChannels">
           {{ showChannels ? 'Ocultar canales' : 'Administrar canales' }}
@@ -146,7 +146,7 @@
         </div>
 
         <div class="editor">
-          <h4>{{ editingBindingId === null ? 'Registrar canal' : 'Editar binding #' + editingBindingId }}</h4>
+          <h4>{{ editingBindingId === null ? 'Agregar canal' : 'Editar canal #' + editingBindingId }}</h4>
           <div class="form-grid">
             <mat-form-field appearance="outline">
               <mat-label>Sucursal activa</mat-label>
@@ -177,7 +177,7 @@
     <section class="catalog" aria-label="Tarifas estimadas">
       <div class="section-heading">
         <div>
-          <h3>Presupuestos · tarifas de referencia</h3>
+          <h3>Costos estimados de envío</h3>
           <p>Costos manuales en MXN por mensaje, versión por plantilla y canal. No son cargos confirmados por iVentas.</p>
         </div>
         <button mat-stroked-button type="button" (click)="openBudgetEditor()" *ngIf="!showBudgetEditor">Nueva tarifa</button>
@@ -185,7 +185,7 @@
       <div class="catalog-table">
         <table>
           <thead>
-            <tr><th>Plantilla</th><th>Canal</th><th>MXN por contacto</th><th>Fuente</th><th>Vigente desde</th></tr>
+            <tr><th>Plantilla</th><th>Canal</th><th>Costo por destinatario (MXN)</th><th>Fuente</th><th>Vigente desde</th></tr>
           </thead>
           <tbody>
             <tr *ngFor="let row of latestBudgetRates">
@@ -196,13 +196,13 @@
               <td>{{ row.valid_from | date:'short' }}</td>
             </tr>
             <tr *ngIf="!latestBudgetRates.length">
-              <td colspan="5">Sin cotizaciones registradas. El sistema no asignará costos ficticios.</td>
+              <td colspan="5">No hay tarifas registradas. Debes indicar una tarifa de referencia antes de aprobar un envío.</td>
             </tr>
           </tbody>
         </table>
       </div>
       <div class="editor editor-card" *ngIf="showBudgetEditor">
-        <h4>Registrar nueva versión de tarifa</h4>
+        <h4>Registrar nuevo costo</h4>
         <div class="form-grid">
           <mat-form-field appearance="outline">
             <mat-label>Plantilla activa</mat-label>
@@ -221,11 +221,11 @@
             </mat-select>
           </mat-form-field>
           <mat-form-field appearance="outline">
-            <mat-label>Costo unitario estimado MXN</mat-label>
+            <mat-label>Costo estimado por mensaje (MXN)</mat-label>
             <input matInput inputmode="decimal" placeholder="0.850000" [formControl]="pricingUnitCostMxn">
           </mat-form-field>
           <mat-form-field appearance="outline">
-            <mat-label>Fuente de cotización / aprobación</mat-label>
+            <mat-label>Origen del costo o documento de respaldo</mat-label>
             <input matInput maxlength="255" placeholder="Cotización interna autorizada #..." [formControl]="pricingSourceReference">
           </mat-form-field>
         </div>
