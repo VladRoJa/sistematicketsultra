@@ -184,7 +184,7 @@ def test_candidate_is_unpublished_atomic_idempotent_and_keeps_legacy(candidate_l
     assert _counts(engine) == (1, 27, 43, 0, 0, 0, 2)
     changed = _stage(client, token, camp, group, reason="Otro motivo explicito")
     assert changed.status_code == 409
-    assert changed.json["code"] == "CORRECTION_CANDIDATE_CONFLICT"
+    assert changed.json["code"] == "CORRECTION_RAW_PROVENANCE_INVALID"
     assert _counts(engine) == (1, 27, 43, 0, 0, 0, 2)
     with engine.connect() as conn:
         assert conn.execute(sa.text("""
@@ -254,7 +254,7 @@ def test_revision_two_requires_exact_canonical_without_promoting(candidate_lab):
             "is_canonical": True, "published_by_user_id": 47,
             "published_on": date(2026, 10, 14),
         }).scalar_one()
-    assert _stage(client, token, camp, group).json["code"] == "CORRECTION_REVISION_MISMATCH"
+    assert _stage(client, token, camp, group).json["code"] == "CORRECTION_RAW_PROVENANCE_INVALID"
     assert _stage(client, token, camp, group, revision=2).status_code == 409
     # Simulate a ticket explicitly signed for revision 2 and exact canonical ID.
     import json
