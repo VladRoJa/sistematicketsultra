@@ -30,13 +30,16 @@
       <div class="batch" *ngFor="let batch of plan.batches">
         <strong>{{ batch.sucursal_canon }}</strong> · {{ batch.recipient_count }} · {{ batch.provider_channel_id || 'Sin canal' }}
         <small *ngIf="batch.blocked_reasons.length">{{ batch.blocked_reasons.join(', ') }}</small>
+        <small *ngIf="plan.quota?.basis === 'SUITE_BRANCH_EXCEPTION_CAPS_V1'">
+          {{ plan.quota?.batches?.length ? quotaStatusLabel : '' }}
+        </small>
         <mat-checkbox [formControl]="holdSelected[batch.sucursal_canon]">Dejar este lote en espera (no enviar)</mat-checkbox>
         <mat-form-field appearance="outline" *ngIf="holdSelected[batch.sucursal_canon].value">
           <mat-label>Motivo o comprobante para dejarlo en espera</mat-label>
           <input matInput maxlength="255" [formControl]="holdSource[batch.sucursal_canon]">
         </mat-form-field>
       </div>
-      <div class="confirmation" *ngIf="plan.quota?.status === 'REVIEWABLE' && plan.ready && plan.budget_usd?.status === 'COMPLETE'">
+      <div class="confirmation" *ngIf="isSelectionWithinCapacity && plan.ready && plan.budget_usd?.status === 'COMPLETE'">
         <mat-form-field appearance="outline"><mat-label>Escribe {{ approvalWord }}</mat-label>
           <input matInput [formControl]="approvalPhrase" autocomplete="off">
         </mat-form-field>
