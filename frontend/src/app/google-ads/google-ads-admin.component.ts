@@ -5,6 +5,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Subject, takeUntil } from 'rxjs';
 import { SessionService } from '../core/auth/session.service';
 import { GoogleAdsM6ManualUploadComponent } from './google-ads-m6-manual-upload.component';
+import { GoogleAdsM6CorrectionWorkbenchComponent } from './google-ads-m6-correction-workbench.component';
 
 import {
   GoogleAdsAccountCheck,
@@ -23,7 +24,7 @@ function dateInputValue(date: Date): string {
 @Component({
   selector: 'app-google-ads-admin',
   standalone: true,
-  imports: [CommonModule, FormsModule, GoogleAdsM6ManualUploadComponent],
+  imports: [CommonModule, FormsModule, GoogleAdsM6ManualUploadComponent, GoogleAdsM6CorrectionWorkbenchComponent],
   templateUrl: './google-ads-admin.component.html',
   styleUrls: ['./google-ads-admin.component.css']
 })
