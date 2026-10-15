@@ -106,21 +106,23 @@ def _actor(conn):
     return actor
 
 
-def _read_snapshot(conn, case_id, *, promoted_publication_id=None):
-    case = conn.execute(sa.text("""
+def _read_snapshot(conn, case_id, *, promoted_publication_id=None, lock_rows=True):
+    case_lock = "FOR UPDATE" if lock_rows else ""
+    shared_lock = "FOR SHARE" if lock_rows else ""
+    case = conn.execute(sa.text(f"""
         SELECT id, customer_id, business_date, revision,
                expected_publication_id, campaign_upload_id,
                ad_group_upload_id, campaign_sha256, ad_group_sha256,
                approval_version_id, requested_by_user_id, reason
         FROM google_ads_m6_correction_cases
-        WHERE id = :id AND customer_id = :customer FOR UPDATE
+        WHERE id = :id AND customer_id = :customer {case_lock}
     """), {"id": case_id, "customer": CUSTOMER_ID}).mappings().one_or_none()
     _ensure(case is not None, "CORRECTION_CASE_NOT_FOUND")
-    canonical = conn.execute(sa.text("""
+    canonical = conn.execute(sa.text(f"""
         SELECT id, revision, approval_version_id
         FROM google_ads_m6_daily_publications
         WHERE customer_id = :customer AND business_date = :day
-          AND is_canonical = true FOR SHARE
+          AND is_canonical = true {shared_lock}
     """), {"customer": CUSTOMER_ID, "day": case["business_date"]}).mappings().all()
     _ensure(len(canonical) <= 1, "CORRECTION_CANONICAL_CONFLICT")
     if promoted_publication_id is not None:
@@ -141,11 +143,11 @@ def _read_snapshot(conn, case_id, *, promoted_publication_id=None):
             case["expected_publication_id"] is None and case["revision"] == 1,
             "CORRECTION_CANONICAL_CHANGED",
         )
-    source = conn.execute(sa.text("""
+    source = conn.execute(sa.text(f"""
         SELECT id, status, file_hash_sha256, cutoff_date,
                date_from, date_to, source_file_deleted_at
         FROM warehouse_uploads
-        WHERE id IN (:campaign, :groups) FOR SHARE
+        WHERE id IN (:campaign, :groups) {shared_lock}
     """), {"campaign": case["campaign_upload_id"],
            "groups": case["ad_group_upload_id"]}).mappings().all()
     by_id = {r["id"]: r for r in source}
@@ -162,18 +164,18 @@ def _read_snapshot(conn, case_id, *, promoted_publication_id=None):
             == case["business_date"],
             "CORRECTION_RAW_INVALID",
         )
-    campaign = conn.execute(sa.text("""
+    campaign = conn.execute(sa.text(f"""
         SELECT campaign_key, campaign_name, currency_code, cost,
                impressions, clicks, conversions, conversion_value
         FROM google_ads_m6_correction_campaign_facts
-        WHERE case_id = :id ORDER BY campaign_key FOR SHARE
+        WHERE case_id = :id ORDER BY campaign_key {shared_lock}
     """), {"id": case_id}).mappings().all()
-    groups = conn.execute(sa.text("""
+    groups = conn.execute(sa.text(f"""
         SELECT campaign_key, ad_group_key, campaign_name, ad_group_name,
                currency_code, cost, impressions, clicks, conversions,
                free_pass_conversions, web_purchase_conversions, conversion_value
         FROM google_ads_m6_correction_group_facts
-        WHERE case_id = :id ORDER BY campaign_key, ad_group_key FOR SHARE
+        WHERE case_id = :id ORDER BY campaign_key, ad_group_key {shared_lock}
     """), {"id": case_id}).mappings().all()
     _ensure(len(campaign) == 27 and len(groups) == 43,
             "CORRECTION_INCOMPLETE_CANDIDATE")
@@ -202,11 +204,11 @@ def _read_snapshot(conn, case_id, *, promoted_publication_id=None):
         and all(r["currency_code"] == "MXN" for r in groups),
         "CORRECTION_CURRENCY_INVALID",
     )
-    mapping = conn.execute(sa.text("""
+    mapping = conn.execute(sa.text(f"""
         SELECT campaign_key, ad_group_key, sucursal_canon
         FROM google_ads_branch_approved_identities
         WHERE approval_version_id = :version
-        ORDER BY campaign_key, ad_group_key FOR SHARE
+        ORDER BY campaign_key, ad_group_key {shared_lock}
     """), {"version": case["approval_version_id"]}).mappings().all()
     valid_pairs = {(g["campaign_key"], g["ad_group_key"]) for g in groups}
     _ensure(

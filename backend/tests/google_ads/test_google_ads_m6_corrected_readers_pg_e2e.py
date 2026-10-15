@@ -285,3 +285,28 @@ def test_revision_two_replaces_account_and_branch_read_without_old_double_count(
             WHERE business_date = :day ORDER BY revision
         """), {"day": DAY}).all()
     assert versions == [(1, False), (2, True)]
+
+def test_global_correction_uses_read_only_snapshot_without_row_locks(readers_pg):
+    """Funnel GET may validate hashes, but cannot acquire approval write locks."""
+    client, actor, reviewer, engine, camp, group = readers_pg
+    promoted = _publish_correction(client, actor, reviewer, camp, group)
+    commands = []
+    with client.application.app_context():
+        app_engine = db.engine
+        def record(_conn, _cursor, sql, params, _context, _multi):
+            normalized = " ".join(sql.lower().split())
+            if ("google_ads_m6_correction_" in normalized
+                    or "set transaction" in normalized):
+                commands.append(normalized)
+        sa.event.listen(app_engine, "before_cursor_execute", record)
+        try:
+            account = _global()
+        finally:
+            sa.event.remove(app_engine, "before_cursor_execute", record)
+    assert account["amount"] == pytest.approx(
+        float(Decimal(promoted["account_cost_mxn"]))
+    )
+    assert any("set transaction isolation level repeatable read, read only"
+               in line for line in commands)
+    assert not any("for update" in line or "for share" in line
+                   for line in commands)

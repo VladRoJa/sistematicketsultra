@@ -11,6 +11,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 import os
 from sqlalchemy import and_, or_
+import sqlalchemy as sa
 from sqlalchemy.orm import aliased
 
 from app.extensions import db
@@ -153,8 +154,14 @@ def _global_corrected_day_cost(pub, source, decision, attributed: Decimal):
     )
     try:
         with db.engine.begin() as connection:
+            # A Funnel GET must never acquire the mutation locks used for
+            # independent approval/promotion. Snapshot is consistent and RO.
+            connection.execute(sa.text(
+                "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"
+            ))
             verified, fingerprint, totals = _read_snapshot(
                 connection, source.id, promoted_publication_id=pub.id,
+                lock_rows=False,
             )
         amount = Decimal(totals["account_cost_mxn"])
         if (verified.id != source.id
