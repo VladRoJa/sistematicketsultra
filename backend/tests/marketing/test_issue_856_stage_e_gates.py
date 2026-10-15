@@ -224,3 +224,18 @@ def test_enabled_dispatch_cannot_use_another_users_password(api):
     assert result.status_code == 403
     provider.assert_not_called()
     execute.assert_not_called()
+
+
+def test_stepup_checks_real_werkzeug_password_hash():
+    from werkzeug.security import generate_password_hash
+    from app.models.user_model import UserORM
+
+    class SyntheticOperator:
+        id = 47
+        password = generate_password_hash("synthetic-secret")
+        verify_password = UserORM.verify_password
+
+    actor = SyntheticOperator()
+    assert routes._valid_governed_dispatch_password(actor, "synthetic-secret") is True
+    assert routes._valid_governed_dispatch_password(actor, "wrong") is False
+    assert routes._valid_governed_dispatch_password(actor, None) is False
