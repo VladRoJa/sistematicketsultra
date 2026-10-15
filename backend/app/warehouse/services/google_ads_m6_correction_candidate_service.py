@@ -5,6 +5,7 @@ correction RAW intake and canonical promotion require future authorization.
 """
 from __future__ import annotations
 
+from hashlib import sha256
 import os
 import sqlalchemy as sa
 
@@ -73,7 +74,10 @@ def _authorized_operator(conn, actor_id):
     )
 
 
-def _correction_raw_provenance(conn, *, upload_id, kind, actor, day, hashes):
+def _correction_raw_provenance(
+    conn, *, upload_id, kind, actor, day, hashes,
+    revision, expected_publication_id, reason_sha256,
+):
     data = conn.execute(sa.text("""
         SELECT u.status, u.uploaded_by_user_id, u.file_hash_sha256,
                u.cutoff_date, u.date_from, u.date_to,
@@ -107,7 +111,10 @@ def _correction_raw_provenance(conn, *, upload_id, kind, actor, day, hashes):
         and details.get("manual_pair_business_date") == day.isoformat()
         and details.get("manual_pair_campaign_sha256") == hashes[0]
         and details.get("manual_pair_group_sha256") == hashes[1]
-        and details.get("publication") == "NOT_AUTHORIZED",
+        and details.get("publication") == "NOT_AUTHORIZED"
+        and details.get("intended_revision") == revision
+        and details.get("expected_publication_id") == expected_publication_id
+        and details.get("reason_sha256") == reason_sha256,
         "CORRECTION_RAW_PROVENANCE_INVALID",
     )
 
@@ -206,6 +213,7 @@ def stage_m6_correction_candidate(*, campaign_upload_id: int,
     except GoogleAdsM6ManualStructuredError:
         raise GoogleAdsM6CorrectionStageError("CORRECTION_RAW_PAIR_REJECTED") from None
     day = campaign.date_from
+    reason_sha256 = sha256(reason.strip().encode("utf-8")).hexdigest()
     _check(len(campaign.rows) == 27 and len(groups.rows) == 43,
            "CORRECTION_RAW_PAIR_REJECTED")
 
@@ -225,6 +233,9 @@ def stage_m6_correction_candidate(*, campaign_upload_id: int,
             _correction_raw_provenance(
                 conn, upload_id=upload_id, kind=kind,
                 actor=actor, day=day, hashes=hashes,
+                revision=revision,
+                expected_publication_id=expected_publication_id,
+                reason_sha256=reason_sha256,
             )
         _prior_evidence(conn, day=day, campaign_id=campaign_upload_id,
                         group_id=group_upload_id)

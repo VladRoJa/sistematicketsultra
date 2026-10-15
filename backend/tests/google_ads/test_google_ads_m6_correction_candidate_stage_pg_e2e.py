@@ -76,6 +76,23 @@ def candidate_lab(lab, monkeypatch):
     # No test route is registered after the fixture has issued requests.
     # _stage builds an isolated Flask request context and executes a decorated
     # handler so JWT authentication is real, but no app route is added.
+    # Audit is bound to intended revision, previous canonical ID, and reason
+    # exactly as the signed exceptional RAW confirmation would produce.
+    from hashlib import sha256
+    from sqlalchemy import text
+    import json
+    metadata = {
+        "intended_revision": 1,
+        "expected_publication_id": None,
+        "reason_sha256": sha256(REASON.encode("utf-8")).hexdigest(),
+    }
+    with engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE warehouse_audit_logs
+               SET details = details::jsonb || CAST(:patch AS jsonb)
+             WHERE upload_id IN (:campaign, :groups) AND action = 'UPLOAD'
+        """), {"patch": json.dumps(metadata), "campaign": campaign, "groups": group})
+
     monkeypatch.setenv("GOOGLE_ADS_OAUTH_CUSTOMER_ID", svc.CUSTOMER_ID)
     monkeypatch.setenv(svc.FLAG, "true")
     try:
@@ -239,6 +256,19 @@ def test_revision_two_requires_exact_canonical_without_promoting(candidate_lab):
         }).scalar_one()
     assert _stage(client, token, camp, group).json["code"] == "CORRECTION_REVISION_MISMATCH"
     assert _stage(client, token, camp, group, revision=2).status_code == 409
+    # Simulate a ticket explicitly signed for revision 2 and exact canonical ID.
+    import json
+    with engine.begin() as conn:
+        conn.execute(sa.text("""
+            UPDATE warehouse_audit_logs
+               SET details = details::jsonb || CAST(:metadata AS jsonb)
+             WHERE upload_id IN (:campaign, :groups) AND action = 'UPLOAD'
+        """), {
+            "metadata": json.dumps({
+                "intended_revision": 2,
+                "expected_publication_id": prior_id,
+            }), "campaign": camp, "groups": group,
+        })
     accepted = _stage(client, token, camp, group,
                       revision=2, expected=prior_id)
     assert accepted.status_code == 201, accepted.get_json()
