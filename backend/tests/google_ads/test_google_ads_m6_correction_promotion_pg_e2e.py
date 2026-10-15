@@ -50,12 +50,20 @@ def promotion_lab(reviewer_lab, monkeypatch):
             conn.execute(sa.text(
                 "DELETE FROM warehouse_audit_logs WHERE action = :a"
             ), {"a": promote_svc.ACTION})
+            promoted_ids = conn.execute(sa.text(
+                "SELECT publication_id FROM google_ads_m6_correction_promotions"
+            )).scalars().all()
             conn.execute(sa.text(
                 "DELETE FROM google_ads_m6_correction_promotions"
             ))
-            conn.execute(sa.text(
-                "DELETE FROM google_ads_m6_daily_publications"
-            ))
+            # Historical parent publications remain FK-referenced by case;
+            # the outer candidate fixture will drop them after deleting cases.
+            if promoted_ids:
+                conn.execute(
+                    GoogleAdsM6DailyPublicationORM.__table__.delete().where(
+                        GoogleAdsM6DailyPublicationORM.id.in_(promoted_ids)
+                    )
+                )
             module.op = Operations(MigrationContext.configure(conn))
             module.downgrade()
 
