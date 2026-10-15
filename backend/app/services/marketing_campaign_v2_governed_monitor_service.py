@@ -107,7 +107,9 @@ def read_governed_dispatch_monitor(*, campaign_id: int, session: Any | None = No
     counts = dict(Counter(str(child.status) for child in children))
     approved_basis = ((approval.manifest_json or {}).get("basis") if approval is not None
                       else "OPERATOR_ATTESTED_NOT_META_VERIFIED")
-    operator_mode = approved_basis == "SUITE_OPERATOR_ROLLING_24H_V1"
+    operator_mode = approved_basis in {
+        "SUITE_OPERATOR_ROLLING_24H_V1", "SUITE_BRANCH_EXCEPTION_CAPS_V1",
+    }
     quota_rows = []
     for row in reservations:
         evidence = (active.get(MarketingCampaignV2QuotaCapacityAttestationORM,
