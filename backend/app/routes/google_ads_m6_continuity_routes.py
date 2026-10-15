@@ -15,6 +15,13 @@ from app.warehouse.services.google_ads_m6_manual_preview_service import (
     MAX_CAMPAIGN_BYTES, MAX_GROUP_BYTES,
     preview_manual_pair, require_current_admicorp,
 )
+from app.warehouse.services.google_ads_m6_correction_candidate_service import (
+    FLAG as CORRECTION_CANDIDATE_FLAG,
+    stage_m6_correction_candidate, GoogleAdsM6CorrectionStageError,
+)
+from app.warehouse.services.google_ads_m6_correction_review_service import (
+    inspect_correction_case, GoogleAdsM6CorrectionReviewError,
+)
 from app.warehouse.services.google_ads_m6_correction_raw_service import (
     GoogleAdsM6CorrectionRawError, FLAG as CORRECTION_RAW_FLAG,
     preview_correction_raw_pair, confirm_correction_raw_pair,
@@ -405,3 +412,68 @@ def confirm_m6_correction_raw():
     except Exception:
         current_app.logger.exception("M6 correction RAW confirmation failed.")
         return jsonify({"code": "CORRECTION_RAW_STAGE_UNAVAILABLE"}), 503
+
+
+@google_ads_m6_continuity_bp.post("/corrections/candidates/ingest")
+@jwt_required()
+def ingest_m6_correction_candidate():
+    """Explicit candidate-only staging; cannot publish or replace canonical."""
+    if os.getenv(CORRECTION_CANDIDATE_FLAG, "").strip().lower() != "true":
+        return jsonify({"code": "CORRECTION_CANDIDATE_DISABLED"}), 503
+    try:
+        require_current_admicorp()
+    except PermissionError:
+        return jsonify({"code": "FORBIDDEN"}), 403
+    denied = require_warehouse_upload()
+    if denied:
+        return denied
+    if not request.is_json or (request.content_length or 0) > 2048:
+        return jsonify({"code": "INVALID_CORRECTION_CANDIDATE"}), 400
+    body = request.get_json(silent=True)
+    if (not isinstance(body, dict) or set(body) != {
+            "campaign_upload_id", "ad_group_upload_id", "revision",
+            "expected_publication_id", "reason", "confirmation"
+        } or body.get("confirmation") != "INGESTAR_CORRECCION_M6_SIN_PUBLICAR"
+        or any(type(body.get(k)) is not int or body[k] <= 0
+               for k in ("campaign_upload_id", "ad_group_upload_id", "revision"))
+        or (body["expected_publication_id"] is not None and (
+            type(body["expected_publication_id"]) is not int
+            or body["expected_publication_id"] <= 0))
+        or not isinstance(body["reason"], str)
+        or not 10 <= len(body["reason"].strip()) <= 500):
+        return jsonify({"code": "INVALID_CORRECTION_CANDIDATE"}), 400
+    try:
+        result = stage_m6_correction_candidate(
+            campaign_upload_id=body["campaign_upload_id"],
+            group_upload_id=body["ad_group_upload_id"],
+            revision=body["revision"], reason=body["reason"],
+            expected_publication_id=body["expected_publication_id"],
+        )
+        return jsonify(result), 200 if result["status"] == "ALREADY_STAGED" else 201
+    except GoogleAdsM6CorrectionStageError as exc:
+        return jsonify({"code": str(exc), "eligible_for_publication": False}), (
+            403 if str(exc) == "FORBIDDEN" else 409
+        )
+    except Exception:
+        current_app.logger.exception("M6 correction candidate staging aborted.")
+        return jsonify({"code": "CORRECTION_CANDIDATE_STAGE_UNAVAILABLE"}), 503
+
+
+@google_ads_m6_continuity_bp.get("/corrections/candidates/<int:case_id>")
+@jwt_required()
+def get_m6_correction_candidate(case_id):
+    """ADMICORP-only, READ ONLY financial diff; NEVER grants approval."""
+    try:
+        require_current_admicorp()
+    except PermissionError:
+        return jsonify({"code": "FORBIDDEN"}), 403
+    denied = require_warehouse_view()
+    if denied:
+        return denied
+    try:
+        return jsonify(inspect_correction_case(case_id)), 200
+    except GoogleAdsM6CorrectionReviewError as exc:
+        return jsonify({"code": str(exc)}), 404
+    except Exception:
+        current_app.logger.exception("M6 candidate review unavailable.")
+        return jsonify({"code": "CORRECTION_CASE_REVIEW_UNAVAILABLE"}), 503
