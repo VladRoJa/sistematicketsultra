@@ -19,6 +19,10 @@ from app.warehouse.services.google_ads_m6_correction_candidate_service import (
     FLAG as CORRECTION_CANDIDATE_FLAG,
     stage_m6_correction_candidate, GoogleAdsM6CorrectionStageError,
 )
+from app.warehouse.services.google_ads_m6_correction_decision_service import (
+    decide_m6_correction, GoogleAdsM6CorrectionDecisionError,
+    FLAG as CORRECTION_REVIEW_FLAG,
+)
 from app.warehouse.services.google_ads_m6_correction_review_service import (
     inspect_correction_case, GoogleAdsM6CorrectionReviewError,
 )
@@ -477,3 +481,38 @@ def get_m6_correction_candidate(case_id):
     except Exception:
         current_app.logger.exception("M6 candidate review unavailable.")
         return jsonify({"code": "CORRECTION_CASE_REVIEW_UNAVAILABLE"}), 503
+
+
+@google_ads_m6_continuity_bp.post("/corrections/candidates/<int:case_id>/review")
+@jwt_required()
+def review_m6_correction_candidate(case_id):
+    """Allowlisted independent reviewer. Does not grant canonical publication."""
+    if os.getenv(CORRECTION_REVIEW_FLAG, "").strip().lower() != "true":
+        return jsonify({"code": "CORRECTION_REVIEW_DISABLED"}), 503
+    denied = require_warehouse_view()
+    if denied:
+        return denied
+    if not request.is_json or (request.content_length or 0) > 1400:
+        return jsonify({"code": "INVALID_CORRECTION_DECISION"}), 400
+    body = request.get_json(silent=True)
+    if (not isinstance(body, dict)
+            or set(body) != {"decision", "note", "confirmation"}
+            or body.get("confirmation") != "REVISION_INDEPENDIENTE_SIN_PUBLICAR"
+            or body.get("decision") not in ("APPROVED", "REJECTED")
+            or not isinstance(body.get("note"), str)
+            or not 10 <= len(body["note"].strip()) <= 1000):
+        return jsonify({"code": "INVALID_CORRECTION_DECISION"}), 400
+    try:
+        output = decide_m6_correction(
+            case_id=case_id, decision=body["decision"], note=body["note"])
+        return jsonify(output), (200 if output["status"] == "ALREADY_REVIEWED"
+                                  else 201)
+    except GoogleAdsM6CorrectionDecisionError as exc:
+        code = str(exc)
+        return jsonify({"code": code, "eligible_for_publication": False}), (
+            403 if code in ("FORBIDDEN", "CORRECTION_SELF_REVIEW_FORBIDDEN")
+            else 404 if code == "CORRECTION_CASE_NOT_FOUND" else 409
+        )
+    except Exception:
+        current_app.logger.exception("Independent M6 correction review rejected")
+        return jsonify({"code": "CORRECTION_REVIEW_UNAVAILABLE"}), 503
