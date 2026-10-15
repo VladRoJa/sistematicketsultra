@@ -957,18 +957,18 @@ test('M30 UI consolidado pinta backend summary y separa raw provider', () => {
   const html = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.html'), 'utf8');
 
   for (const label of [
-    'Reporting Campaign V2',
-    'Observado desde',
-    'Observado hasta',
-    'Propósito',
-    'Provider',
-    'Estado de observación',
+    'Resultados de todas las campañas',
+    'Actualizado desde',
+    'Actualizado hasta',
+    'Objetivo de campaña',
+    'Servicio de envío',
+    'Disponibilidad de resultados',
     'Exposiciones de destinatarios',
     'Última observación de Suite',
     'Datos originales de iVentas (detalle técnico)',
     'Por sucursal',
     'Por familia de audiencia',
-    'Responders reportados por provider',
+    'Contactos que respondieron según iVentas',
     'Respuestas de texto agregadas',
     'Exposiciones con interacción de botón',
   ]) {
