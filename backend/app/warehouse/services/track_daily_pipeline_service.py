@@ -674,14 +674,24 @@ def run_requested_track_canonical_close(
             )
         )
 
-        # 4) Tienda mantiene el comportamiento existente.
+        # 4) Domiciliados usa el mismo Venta Total staging que ingresos,
+        # no el snapshot canónico anterior aún vigente.
+        domiciliados_refresh_result = (
+            refresh_track_source_domiciliados_efectivos_daily_for_date(
+                business_date=track_date,
+                venta_total_snapshot_id=venta_total_snapshot_id,
+                auto_commit=False,
+            )
+        )
+
+        # 5) Tienda mantiene el comportamiento existente.
         tienda_refresh_result = (
             refresh_track_source_tienda_daily_for_date(
                 business_date=track_date,
             )
         )
 
-        # 5) El mart se construye sobre la versión solicitada,
+        # 6) El mart se construye sobre la versión solicitada,
         # que sigue non-current.
         mart_refresh_result = refresh_track_daily_mart_for_date(
             business_date=track_date,
@@ -689,7 +699,7 @@ def run_requested_track_canonical_close(
             track_daily_version_id=normalized_version_id,
         )
 
-        # 6) PROMOCIÓN FINAL.
+        # 7) PROMOCIÓN FINAL.
         #
         # Ambos cambios comparten la misma sesión y ninguno hace
         # commit por separado. Si cualquiera falla, el except hace
@@ -747,6 +757,7 @@ def run_requested_track_canonical_close(
             "source_refresh_results": {
                 "agregadoras": agregadoras_refresh_result,
                 "ingresos": ingresos_refresh_result,
+                "domiciliados": domiciliados_refresh_result,
                 "tienda": tienda_refresh_result,
             },
             "mart_refresh_result": mart_refresh_result,
