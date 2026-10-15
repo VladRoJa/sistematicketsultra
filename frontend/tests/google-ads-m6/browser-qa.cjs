@@ -229,6 +229,94 @@ async function run(name, action) {
       });
       await context.close();
     }
+    // Correction workbench runs only against synthetic API fixtures.
+    for (const size of [{name:'desktop', width:1440, height:900},
+                        {name:'mobile', width:390, height:844}]) {
+      const context = await browser.newContext({
+        viewport: {width:size.width, height:size.height}
+      });
+      await session(context, {id:1, username:'ADMICORP', rol:'ADMINISTRADOR'});
+      const page = await context.newPage(), requests = [];
+      await setup(page, requests, 'owner');
+      await run('Correction RAW and candidate remain unapproved - ' + size.name, async () => {
+        await page.goto(BASE + '/#/marketing/google-ads');
+        await page.getByText('Correcciones históricas auditadas').waitFor({timeout:20000});
+        await page.getByLabel('Excel de campañas para corrección').setInputFiles({
+          name:'corrected_campaign.xlsx', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          buffer: Buffer.from('SYNTHETIC_CORRECTED_CAMPAIGN')
+        });
+        await page.getByLabel('Excel de grupos para corrección').setInputFiles({
+          name:'corrected_groups.xlsx', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          buffer: Buffer.from('SYNTHETIC_CORRECTED_GROUPS')
+        });
+        await page.getByLabel('Motivo de la corrección').fill('Corrección sintética de gastos aprobados');
+        await page.getByRole('button', {name:'Validar pareja excepcional'}).click();
+        await page.getByText('Vista previa · 2026-10-13').last().waitFor();
+        assert(!requests.some(r=>r.path.endsWith('/corrections/raw/confirm')), 'preview saved correction RAW');
+        await page.getByText(/Confirmo guardar únicamente nuevos RAW/).locator('..').locator('input').check();
+        await page.getByRole('button', {name:'Confirmar RAW de corrección'}).click();
+        await page.getByText('CORRECTION_RAW_PAIR_STAGED').waitFor();
+        assert(!requests.some(r=>r.path.endsWith('/corrections/candidates/ingest')), 'raw auto-staged candidate');
+        await page.getByText(/Confirmo crear un expediente estructurado/).locator('..').locator('input').check();
+        await page.getByRole('button', {name:'Preparar candidato sin publicar'}).click();
+        await page.getByText('Expediente #99123 creado para revisión independiente.').waitFor();
+        assert(!requests.some(r=>r.path.endsWith('/review') || r.path.endsWith('/promote')),
+          'candidate auto-reviewed or promoted');
+        await page.screenshot({path:path.join(EVIDENCE,'correction-owner-'+size.name+'.png'),fullPage:true});
+      });
+      await context.close();
+    }
+    {
+      const context = await browser.newContext({viewport:{width:1200,height:860}});
+      await session(context, {id:48, username:'REVIEW_QA', rol:'ADMINISTRADOR'});
+      const page = await context.newPage(), requests = [];
+      await setup(page, requests, 'reviewer');
+      await run('Independent reviewer can approve but cannot upload or promote', async () => {
+        await page.goto(BASE + '/#/marketing/google-ads');
+        await page.getByText('Correcciones históricas auditadas').waitFor({timeout:20000});
+        assert(await page.getByLabel('Excel de campañas para corrección').count() === 0,
+          'reviewer incorrectly got RAW upload form');
+        assert(await page.getByText('Carga manual de reportes diarios').count() === 0,
+          'reviewer received ADMICORP-only normal upload');
+        await page.getByRole('button', {name:/#99123.*Pendiente de revisión/}).click();
+        await page.getByText('Expediente #99123 · 2026-10-13').waitFor();
+        await page.getByLabel('Justificación del dictamen').fill(
+          'Validación independiente de gastos e identidad del día');
+        await page.getByText(/Confirmo la revisión independiente de los RAW/)
+          .locator('..').locator('input').check();
+        await page.getByRole('button', {name:'Registrar dictamen auditado'}).click();
+        await page.getByText('Decisión independiente registrada y auditada. Sin publicación.').waitFor();
+        assert(requests.some(r=>r.path.endsWith('/99123/review')&&r.method==='POST'),
+          'independent review not posted');
+        assert(!requests.some(r=>r.path.includes('/corrections/raw/')
+          || r.path.endsWith('/promote')), 'reviewer performed unauthorized workflow');
+        await page.screenshot({path:path.join(EVIDENCE,'correction-reviewer.png'),fullPage:true});
+      });
+      await context.close();
+    }
+    {
+      const context = await browser.newContext({viewport:{width:1200,height:860}});
+      await session(context, {id:1, username:'ADMICORP', rol:'ADMINISTRADOR'});
+      const page = await context.newPage(), requests = [];
+      await setup(page, requests, 'ownerApproved');
+      await run('Owner requires explicit confirmation to promote approved revision', async () => {
+        await page.goto(BASE + '/#/marketing/google-ads');
+        await page.getByText('Correcciones históricas auditadas').waitFor({timeout:20000});
+        await page.getByRole('button', {name:/#99123.*Aprobado/}).click();
+        await page.getByText('Expediente #99123 · 2026-10-13').waitFor();
+        const promote = page.getByRole('button', {name:'Publicar revisión aprobada'});
+        assert(!(await promote.isEnabled()), 'promotion enabled without consent');
+        assert(!requests.some(r=>r.path.endsWith('/99123/promote')), 'promotion fired by GET');
+        await page.getByText(/Autorizo promover esta revisión/)
+          .locator('..').locator('input').check();
+        await promote.click();
+        await page.getByText('La revisión aprobada ya es la publicación canónica auditada.').waitFor();
+        assert(requests.filter(r=>r.path.endsWith('/99123/promote')&&r.method==='POST').length===1,
+          'promotion not explicitly single-fired');
+        await page.screenshot({path:path.join(EVIDENCE,'correction-promotion.png'),fullPage:true});
+      });
+      await context.close();
+    }
     {
       const context = await browser.newContext({ viewport: { width: 1200, height: 800 } });
       await session(context, { id: 2, username: 'REGIONAL_QA', rol: 'ADMINISTRADOR' });
