@@ -38,8 +38,8 @@ def reviewer_lab(candidate_lab, monkeypatch):
         mig.upgrade()
         conn.execute(sa.text("""
             INSERT INTO warehouse_operators
-                (user_id, can_view, can_upload, can_archive)
-            VALUES (48, true, false, false)
+                (id, user_id, can_view, can_upload, can_archive)
+            VALUES (2, 48, true, false, false)
         """))
     monkeypatch.setenv(review.FLAG, "true")
     monkeypatch.setenv(review.REVIEWERS, "48")
