@@ -883,6 +883,7 @@ export interface CampaignV2GovernedExecuteRequest {
   execution_id: number;
   child_id: number;
   expected_manifest_digest: string;
+  operator_password: string;
 }
 export interface CampaignV2GovernedExecuteResult {
   execution_id: number;
