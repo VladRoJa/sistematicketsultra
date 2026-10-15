@@ -74,13 +74,9 @@ export function campaignV2BuildReadinessRows(
     if ((byBranch.get(binding.sucursal_canon) ?? 0) !== 1) {
       issues.push('Más de un canal predeterminado');
     }
-    if (!policy?.portfolio_key) { issues.push('Portafolio sin identificar'); }
-    if (!policy?.operational_channel_cap || !policy.operational_portfolio_cap) {
-      issues.push('Límites internos pendientes');
-    }
-    if (policy?.portfolio_key && (byPortfolio.get(policy.portfolio_key)?.size ?? 0) > 1) {
-      issues.push('Límites inconsistentes del portafolio');
-    }
+    // Portfolio verification and manual policy are informational in the
+    // exception-only send contract. The backend enforces 250 for each special
+    // branch independently and still requires exact channel/template mapping.
     return {
       sucursalCanon: binding.sucursal_canon,
       channelId: binding.provider_channel_id,
@@ -88,8 +84,9 @@ export function campaignV2BuildReadinessRows(
       portfolioKey: policy?.portfolio_key || null,
       portfolioVerified: false as const,
       accountAlias: policy?.account_key || null,
-      operationalChannelCap: policy?.operational_channel_cap ?? null,
-      operationalPortfolioCap: policy?.operational_portfolio_cap ?? null,
+      operationalChannelCap: ['INDEPENDENCIA', 'INSURGENTES'].includes(
+        binding.sucursal_canon.trim().toUpperCase()) ? 250 : null,
+      operationalPortfolioCap: null,
       unitCostMxn: rate?.unit_cost_mxn ?? null,
       rateSource: rate?.source_reference ?? null,
       policySource: policy?.source_reference ?? null,
