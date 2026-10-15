@@ -1333,7 +1333,7 @@ test('Issue 856: administracion usa campo MDC acotado y editores progresivos', (
   assert.equal(quotas.includes('*ngIf="showCapacityForm"'), true);
 });
 
-test('readiness for 26 channels remains incomplete until exact portfolio policy and rate exist', () => {
+test('readiness for 26 channels requires portfolio policy, not historical manual MXN rate', () => {
   const template = { id: 1, is_active: true, compatible_channel_ids: ['ch-1', 'ch-2'] } as CampaignV2DispatchTemplate;
   const bindings = [
     { id: 1, provider_channel_id: 'ch-1', sucursal_canon: 'AZAHARES_CUL', is_active: true, is_default: true },
@@ -1356,8 +1356,8 @@ test('readiness for 26 channels remains incomplete until exact portfolio policy 
   assert.equal(rows.length, 2);
   assert.equal(rows[0].configured, true);
   assert.equal(rows[0].portfolioVerified, false);
-  assert.equal(rows[1].configured, false);
-  assert.ok(rows[1].issues.includes('Tarifa MXN pendiente'));
+  assert.equal(rows[1].configured, true);
+  assert.equal(rows[1].issues.includes('Tarifa MXN pendiente'), false);
   assert.equal(rows[1].unitCostMxn, null);
   assert.equal(campaignV2BuildReadinessRows(template, bindings, [], []).every(r => !r.configured), true);
   policies[1].operational_portfolio_cap = 300;
@@ -1543,7 +1543,7 @@ test('Issue 856 UX: preparación explica bloqueos, simplifica lenguaje y conserv
   assert.ok(page.includes('Preparar prueba interna · 1 contacto'));
   assert.ok(page.includes('Plantillas, canales y tarifas'));
   assert.ok(readiness.includes('Estado de configuración de canales'));
-  assert.ok(pricing.includes('Registrar nuevo costo'));
+  assert.ok(pricing.includes('Historial de tarifas MXN (método anterior)'));
   assert.equal(ts.includes('submitCampaign('), false);
   assert.equal(ts.includes('setInterval('), false);
   assert.equal(ts.includes('retryWhen('), false);
