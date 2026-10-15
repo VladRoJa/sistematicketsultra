@@ -32,8 +32,8 @@
           <tbody>
             <tr *ngFor="let template of templates">
               <td><strong>{{ template.label }}</strong><small>{{ template.template_name }}</small></td>
-              <td>{{ template.purposes.join(', ') || 'Legacy: todos' }}</td>
-              <td>{{ template.compatible_channel_ids.length || 'Legacy: todos' }}</td>
+              <td>{{ template.purposes.join(', ') || 'Sin restricción histórica' }}</td>
+              <td>{{ template.compatible_channel_ids.length || 'Sin restricción histórica' }}</td>
               <td><span class="status-pill" [class.is-inactive]="!template.is_active">{{ template.is_active ? 'Activa' : 'Inactiva' }}</span></td>
               <td class="actions">
                 <button mat-button type="button" (click)="editTemplate(template)">Editar</button>
@@ -46,7 +46,7 @@
         </table>
       </div>
       <div *ngIf="pendingDeactivateId !== null" class="confirm">
-        <span>¿Confirmas desactivar esta plantilla para futuros preflights?</span>
+        <span>¿Quieres desactivar esta plantilla para futuras preparaciones de envío?</span>
         <button mat-flat-button color="warn" type="button" (click)="confirmDeactivate()"
           [disabled]="savingTemplate">Confirmar desactivación</button>
         <button mat-button type="button" (click)="cancelDeactivate()">Cancelar</button>
@@ -231,7 +231,7 @@
         </div>
         <p class="muted">
           Cada registro genera una revisión histórica inmutable; actualizar el precio requiere registrar otra revisión.
-          Sin precio para un canal, el preflight mostrará presupuesto incompleto.
+          Si un canal no tiene una tarifa de referencia, no se podrá aprobar su costo de envío.
         </p>
         <p *ngIf="budgetRateSuccess" role="status">{{ budgetRateSuccess }}</p>
         <div class="editor-actions">
