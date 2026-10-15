@@ -27,3 +27,13 @@ tbody tr:last-child td { border-bottom: 0; }
   .quota-heading { align-items: stretch; flex-direction: column; }
   .quota-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+
+/* UX: compact capacity review without hiding documentary evidence. */
+.quota-admin { min-width:min(820px,90vw); }
+.quota-intro { padding: 9px 11px; margin-bottom: 9px; }
+.evidence-summary { gap: 7px; margin: 9px 0 12px; }
+.evidence-summary span { padding: 6px 9px; }
+.quota-section { margin: 9px 0; padding: 12px; }
+.quota-grid { margin-top: 10px; }
+th,td { padding: 8px 9px; }
