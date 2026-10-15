@@ -15,7 +15,18 @@ from flask_jwt_extended import JWTManager, create_access_token
 from app.routes import marketing_campaign_v2_routes as routes
 
 ENDPOINT = "/api/marketing/campaigns-v2/99/dispatch/execute"
-GOOD = {"execution_id": 41, "child_id": 100, "expected_manifest_digest": "a" * 64}
+GOOD = {
+    "execution_id": 41, "child_id": 100,
+    "expected_manifest_digest": "a" * 64,
+    "operator_password": "synthetic-password",
+}
+
+
+def operator(user_id=47):
+    return SimpleNamespace(
+        id=user_id,
+        verify_password=lambda candidate: candidate == "synthetic-password",
+    )
 
 
 @pytest.fixture()
@@ -132,7 +143,7 @@ def test_enabled_gates_call_exactly_one_mocked_service_not_real_iventas(
         CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED=True,
     )
     with patch.object(routes, "_resolve_request_access",
-                      return_value=(SimpleNamespace(id=47), access())), \
+                      return_value=(operator(), access())), \
          patch.object(routes, "IVentasBroadcastProvider") as provider, \
          patch.object(routes, "execute_governed_child", return_value={
              "status": outcome, "child_id": 100,
@@ -172,3 +183,44 @@ def test_not_authorize_not_materialize_and_monitor_are_never_provider_writes(api
             )
             assert response.status_code == 200
     provider.assert_not_called()
+
+
+@pytest.mark.parametrize("password", [None, "", "incorrect", 123, "z" * 257])
+def test_enabled_dispatch_rejects_missing_or_wrong_password_before_provider(
+    api, password,
+):
+    browser, headers = api
+    browser.application.config.update(
+        CAMPAIGN_V2_PROVIDER_SEND_ENABLED=True,
+        CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED=True,
+    )
+    payload = dict(GOOD)
+    if password is None:
+        payload.pop("operator_password")
+    else:
+        payload["operator_password"] = password
+    with patch.object(routes, "_resolve_request_access",
+                      return_value=(operator(), access())), \
+         patch.object(routes, "IVentasBroadcastProvider") as provider, \
+         patch.object(routes, "execute_governed_child") as execute:
+        result = browser.post(ENDPOINT, headers=headers, json=payload)
+    assert result.status_code == 403
+    provider.assert_not_called()
+    execute.assert_not_called()
+
+
+def test_enabled_dispatch_cannot_use_another_users_password(api):
+    browser, headers = api
+    browser.application.config.update(
+        CAMPAIGN_V2_PROVIDER_SEND_ENABLED=True,
+        CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED=True,
+    )
+    with patch.object(routes, "_resolve_request_access",
+                      return_value=(operator(47), access())), \
+         patch.object(routes, "IVentasBroadcastProvider") as provider, \
+         patch.object(routes, "execute_governed_child") as execute:
+        result = browser.post(ENDPOINT, headers=headers,
+                              json={**GOOD, "operator_password": "other-password"})
+    assert result.status_code == 403
+    provider.assert_not_called()
+    execute.assert_not_called()
