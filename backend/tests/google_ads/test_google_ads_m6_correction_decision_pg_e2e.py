@@ -223,6 +223,9 @@ def reviewer_listing_schema(reviewer_lab):
     try:
         yield reviewer_lab
     finally:
+        # Case list uses db.session ORM. Release its open read transaction
+        # before PostgreSQL DROP TABLE or Alembic waits on its own lab session.
+        db.session.remove()
         with engine.begin() as conn:
             migration.op = Operations(MigrationContext.configure(conn))
             migration.downgrade()
