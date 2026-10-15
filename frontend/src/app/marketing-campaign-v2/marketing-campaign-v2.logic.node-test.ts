@@ -1408,7 +1408,7 @@ test('B2 evidence modal requires confirmation and never changes operational quot
   assert.ok(html.includes('Quitar relación del canal'));
   assert.ok(ts.includes('DECLARADA · NO VERIFICADA'));
   assert.ok(template.includes('Empresa Meta registrada (sin verificar)'));
-  assert.ok(template.includes('Grupo que comparte el límite'));
+  assert.ok(template.includes('Control de envíos Suite'));
   assert.ok(readiness.includes('mappingBusinessId'));
   assert.equal(ts.includes('submitCampaign('), false);
   assert.equal(ts.includes('registerQuotaPolicy('), false);
