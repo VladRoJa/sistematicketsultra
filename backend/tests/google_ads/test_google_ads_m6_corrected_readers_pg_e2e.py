@@ -1,0 +1,208 @@
+"""C4 PG16: corrected canonical source selection and scoped privacy tests."""
+from __future__ import annotations
+
+from datetime import date
+from decimal import Decimal
+import sqlalchemy as sa
+import pytest
+
+from app.extensions import db
+from app.models.sucursal_model import Sucursal
+from app.models.google_ads_daily import GoogleAdsDailyMetricORM
+from app.services import (
+    marketing_google_ads_m6_daily_attribution_service as daily,
+    marketing_google_ads_funnel_service as global_reader,
+)
+from app.services.marketing_access import MarketingAccess
+from app.warehouse.services import google_ads_m6_manual_preview_service as preview
+from test_google_ads_m6_correction_promotion_pg_e2e import (
+    promotion_lab, _promote,
+)
+from test_google_ads_m6_correction_decision_pg_e2e import (
+    reviewer_lab, _stage, _review,
+)
+from test_google_ads_m6_correction_candidate_stage_pg_e2e import candidate_lab
+from test_google_ads_m6_manual_structured_postgres import lab
+from test_google_ads_m6_manual_raw_postgres import real_warehouse
+
+DAY = date(2026, 10, 13)
+
+
+@pytest.fixture
+def readers_pg(promotion_lab, monkeypatch):
+    client, actor, reviewer, engine, campaign, group = promotion_lab
+    with engine.begin() as conn:
+        assert not sa.inspect(conn).has_table("sucursales")
+        Sucursal.__table__.create(conn)
+        conn.execute(sa.text("""
+            ALTER TABLE track_branch_catalog
+            ADD COLUMN sucursal_id INTEGER,
+            ADD COLUMN track_label TEXT,
+            ADD COLUMN display_order INTEGER,
+            ADD COLUMN is_track_active BOOLEAN,
+            ADD COLUMN notes TEXT
+        """))
+        conn.execute(Sucursal.__table__.insert(), [{
+            "sucursal_id": i + 1, "serie": str(i+1),
+            "sucursal": f"Lab {i+1}", "estado": "LAB",
+            "operational_status": "ACTIVA",
+            "municipio": "LAB", "direccion": "Synthetic CI",
+        } for i in range(26)])
+        conn.execute(sa.text("""
+            UPDATE track_branch_catalog
+            SET sucursal_id = :id, track_label = :label,
+                display_order = :id, is_track_active = true
+            WHERE sucursal_canon = :branch
+        """), [{
+            "id": i + 1, "label": f"Lab {i+1}",
+            "branch": f"LAB_BRANCH_{i}",
+        } for i in range(26)])
+    monkeypatch.setattr(daily, "_load_m5", preview._load_m5)
+    monkeypatch.setattr(
+        daily, "load_visible_marketing_branches",
+        lambda access: (
+            [], tuple(range(1, 27)) if access.is_global
+            else access.visible_branch_ids(tuple(range(1, 27))), {},
+        ),
+    )
+    monkeypatch.setenv(daily.CORRECTION_READER_FLAG, "true")
+    try:
+        yield client, actor, reviewer, engine, campaign, group
+    finally:
+        db.session.remove()
+        with engine.begin() as conn:
+            Sucursal.__table__.drop(conn)
+
+
+def _access(*, ids=(), global_=False):
+    return MarketingAccess(
+        type="GLOBAL" if global_ else (
+            "PRIMARY_BRANCH" if len(ids) == 1 else "ASSIGNED_BRANCHES"),
+        is_global=global_, branch_ids=tuple(ids),
+        role="ADMINISTRADOR" if global_ else (
+            "GERENTE" if len(ids) == 1 else "GERENTE_REGIONAL"),
+        can_edit_inputs=False,
+    )
+
+
+def _daily(ids=(), global_=False):
+    return daily.read_google_ads_m6_daily_branch_attribution(
+        month_start=date(2026, 10, 1),
+        cutoff_date=DAY,
+        access=_access(ids=ids, global_=global_),
+    )
+
+
+def _global():
+    return global_reader.read_google_ads_funnel_investment(
+        month_start=date(2026, 10, 1), cutoff_date=DAY, is_global=True,
+    )
+
+
+def _publish_correction(client, actor, reviewer, campaign, group):
+    cid = _stage(client, actor, campaign, group)
+    reviewed = _review(client, reviewer, cid)
+    assert reviewed.status_code == 201, reviewed.get_json()
+    posted = _promote(client, actor, cid, reviewed.json)
+    assert posted.status_code == 201, posted.get_json()
+    return posted.json
+
+
+def test_canonical_correction_reads_27_campaigns_once_and_only_scoped_groups(
+    readers_pg, monkeypatch,
+):
+    client, actor, reviewer, engine, campaign, group = readers_pg
+    published = _publish_correction(client, actor, reviewer, campaign, group)
+    expected = float(Decimal(published["account_cost_mxn"]))
+    selected = []
+    def observe(conn, cursor, sql, params, ctx, multi):
+        if sql.lstrip().lower().startswith("select"):
+            selected.append((sql.lower(), params))
+    with client.application.app_context():
+        app_engine = db.engine
+        sa.event.listen(app_engine, "before_cursor_execute", observe)
+        try:
+            gerente = _daily((1,))
+        finally:
+            sa.event.remove(app_engine, "before_cursor_execute", observe)
+    assert gerente["status"] == "partial", gerente
+    assert gerente["covered_days"] == 1
+    assert [row["sucursal_id"] for row in gerente["rows"]] == [1]
+    assert gerente["scope_attributed_cost"] > 0
+    assert not {"account_cost_observed", "unassigned_cost_observed"} & gerente.keys()
+    group_queries = [(sql, params) for sql, params in selected
+                     if "google_ads_m6_correction_group_facts" in sql]
+    assert group_queries
+    for sql, params in group_queries:
+        assert "track_branch_catalog.sucursal_id in (" in sql
+        assert "google_ads_m6_correction_group_facts.case_id in (" in sql
+        scoped = {int(v) for k, v in params.items()
+                  if k.startswith("sucursal_id_") and isinstance(v, int)}
+        assert scoped == {1}
+    assert not any("google_ads_m6_correction_campaign_facts" in sql
+                   or "google_ads_daily_metrics" in sql
+                   for sql, _ in selected)
+    regional = _daily((1, 2))
+    assert [row["sucursal_id"] for row in regional["rows"]] == [1, 2]
+    assert regional["scope_attributed_cost"] >= gerente["scope_attributed_cost"]
+    assert _daily((99,))["status"] == "scope_unavailable"
+    company = _daily(global_=True)
+    assert company["status"] == "partial", company
+    assert company["account_reconciled"] is True
+    assert company["account_cost_observed"] == pytest.approx(expected)
+    assert company["scope_attributed_cost"] <= expected
+    account = _global()
+    assert account["status"] == "partial", account
+    assert account["amount"] == pytest.approx(expected)
+    assert account["covered_days"] == 1
+    assert account["clicks"] > 0
+    assert global_reader.read_google_ads_funnel_investment(
+        month_start=date(2026, 10, 1), cutoff_date=DAY, is_global=False,
+    )["amount"] is None
+
+
+def test_corrected_canonical_ignores_original_global_campaign_spend(readers_pg):
+    client, actor, reviewer, engine, campaign, group = readers_pg
+    published = _publish_correction(client, actor, reviewer, campaign, group)
+    with engine.begin() as conn:
+        # Fake a previously imported/now-superseded 27-campaign ledger.
+        # It must not leak into a canonical corrected revision.
+        data = [{
+            "customer_id": daily.CUSTOMER_ID, "campaign_id": None,
+            "campaign_key": "name:" + format(i, "064x"),
+            "campaign_name": f"Previous campaign {i}",
+            "report_date": DAY, "currency_code": "MXN",
+            "cost": Decimal("999.00"), "clicks": 1, "impressions": 10,
+            "conversions": Decimal("0"), "conversion_value": Decimal("0"),
+            "source_kind": "WAREHOUSE_XLSX", "source_upload_id": 990101,
+        } for i in range(1, 28)]
+        conn.execute(GoogleAdsDailyMetricORM.__table__.insert(), data)
+    account = _global()
+    assert account["amount"] == pytest.approx(
+        float(Decimal(published["account_cost_mxn"]))
+    ), account
+    assert account["covered_days"] == 1
+
+
+def test_corrected_reader_fails_closed_for_archived_or_tampered_raw(readers_pg):
+    client, actor, reviewer, engine, campaign, group = readers_pg
+    _publish_correction(client, actor, reviewer, campaign, group)
+    with engine.begin() as conn:
+        conn.execute(sa.text("""
+            UPDATE warehouse_uploads SET status = 'ARCHIVED'
+            WHERE id = :id
+        """), {"id": group})
+    assert _daily((1,))["status"] == "requires_review"
+    assert _global()["amount"] is None
+
+
+def test_corrected_reader_rejects_invalid_promotion_link(readers_pg):
+    client, actor, reviewer, engine, campaign, group = readers_pg
+    _publish_correction(client, actor, reviewer, campaign, group)
+    with engine.begin() as conn:
+        conn.execute(sa.text("""
+            UPDATE google_ads_m6_correction_promotions
+            SET snapshot_sha256 = :bad
+        """), {"bad": "0" * 64})
+    assert _daily((1,))["status"] == "requires_review"
+    assert _global()["status"] == "requires_review"
