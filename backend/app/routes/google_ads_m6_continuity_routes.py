@@ -9,6 +9,7 @@ import os
 
 from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import jwt_required
+from app.extensions import db
 
 from app.warehouse.services.google_ads_m6_manual_preview_service import (
     GoogleAdsM6ManualPreviewError,
