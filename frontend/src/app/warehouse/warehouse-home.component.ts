@@ -3,6 +3,9 @@
 
 import { CommonModule } from '@angular/common';
 import { Component, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
+import { SessionService } from '../core/auth/session.service';
+import { GoogleAdsM6ManualUploadComponent } from '../google-ads/google-ads-m6-manual-upload.component';
+import { GoogleAdsM6CorrectionWorkbenchComponent } from '../google-ads/google-ads-m6-correction-workbench.component';
 
 
 import {
@@ -21,6 +24,12 @@ import {
 
 
 
+
+const GOOGLE_ADS_M6_PAIR_REPORT_TYPE_KEY = 'google_ads_m6_paired';
+const GOOGLE_ADS_SINGLE_REPORT_TYPES = new Set([
+  'google_ads_campaign_daily',
+  'google_ads_ad_group_daily',
+]);
 
 const AGREGADORAS_TEMPLATE_REPORT_TYPE_KEY =
   'agregadoras_consolidado_template';
@@ -62,13 +71,33 @@ interface WarehouseUploadListFilterState {
 @Component({
   selector: 'app-warehouse-home',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, GoogleAdsM6ManualUploadComponent, GoogleAdsM6CorrectionWorkbenchComponent],
   templateUrl: './warehouse-home.component.html',
   styleUrls: ['./warehouse-home.component.css'],
 })
 export class WarehouseHomeComponent implements OnInit {
   private readonly warehouseUploadsService = inject(WarehouseUploadsService);
   private readonly warehouseCatalogsService = inject(WarehouseCatalogsService);
+  private readonly session = inject(SessionService);
+
+  readonly googleAdsPairTypeKey = GOOGLE_ADS_M6_PAIR_REPORT_TYPE_KEY;
+
+  get canUploadGoogleAdsM6(): boolean {
+    const user = this.session.getUser();
+    return String(user?.username || '').trim().toUpperCase() === 'ADMICORP'
+      && String(user?.rol || '').trim().toUpperCase() === 'ADMINISTRADOR';
+  }
+
+  get uploadableReportTypes(): WarehouseReportTypeCatalogOption[] {
+    return this.reportTypes.filter(reportType =>
+      !GOOGLE_ADS_SINGLE_REPORT_TYPES.has(reportType.key)
+    );
+  }
+
+  get isGoogleAdsPairSelected(): boolean {
+    return this.canUploadGoogleAdsM6
+      && this.uploadForm.report_type_key === GOOGLE_ADS_M6_PAIR_REPORT_TYPE_KEY;
+  }
   @ViewChild('warehouseFileInput') warehouseFileInput?: ElementRef<HTMLInputElement>;
 
   selectedUploadDetail: WarehouseUploadDetail | null = null;
@@ -349,6 +378,13 @@ loadCatalogs(): void {
 }
 
 onReportTypeChanged(reportTypeKey: string): void {
+  if (reportTypeKey === GOOGLE_ADS_M6_PAIR_REPORT_TYPE_KEY && !this.canUploadGoogleAdsM6) {
+    return;
+  }
+  this.uploadForm.file = null;
+  if (this.warehouseFileInput?.nativeElement) {
+    this.warehouseFileInput.nativeElement.value = '';
+  }
   this.uploadForm.report_type_key = reportTypeKey;
   this.uploadForm.cutoff_date =
     reportTypeKey === AGREGADORAS_TEMPLATE_REPORT_TYPE_KEY
@@ -390,6 +426,11 @@ isMonthlyPeriodSelected(): boolean {
 }
 
 submitUpload(): void {
+  if (this.isGoogleAdsPairSelected ||
+      GOOGLE_ADS_SINGLE_REPORT_TYPES.has(this.uploadForm.report_type_key)) {
+    this.uploadErrorMessage = 'Google Ads requiere ambos Excel y el proceso M6 de Warehouse.';
+    return;
+  }
   this.uploadErrorMessage = '';
   this.uploadSuccessMessage = '';
   this.errorMessage = '';
