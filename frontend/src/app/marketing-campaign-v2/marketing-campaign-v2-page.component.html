@@ -345,7 +345,7 @@
             </mat-select>
           </mat-form-field>
           <p class="helper-text">El objetivo sirve para clasificar la campaña; no modifica los destinatarios ya revisados.</p>
-          <p *ngIf="isFunnelSource" class="helper-text">Cartera Funnel está orientada a Venta nueva, pero el purpose sigue siendo una clasificación explícita.</p>
+          <p *ngIf="isFunnelSource" class="helper-text">Los prospectos de Funnel suelen usarse para venta nueva, pero puedes seleccionar otro objetivo sin cambiar los destinatarios.</p>
 
           <div class="freeze-readiness" [class.ready]="canFreeze">
             <span>{{ canFreeze ? 'Listo para congelar' : 'Falta revisar la lista' }}</span>
@@ -447,7 +447,7 @@
               (faltantes: {{ estimate.missing_channels }}).
             </p>
           </div>
-          <p>El presupuesto definitivo para lotes enviables se recalcula en el preflight, después de congelar y aplicar supresiones.</p>
+          <p>El costo final estimado se volverá a calcular al preparar el envío, con la lista guardada y las exclusiones vigentes.</p>
         </section>
         <section
           *ngIf="preview.before_history_filter_count !== undefined"
