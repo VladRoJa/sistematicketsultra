@@ -21,7 +21,7 @@ from app.warehouse.services.google_ads_m6_continuity_approval_service import CUS
 
 FLAG = "GOOGLE_ADS_M6_CORRECTION_REVIEW_ENABLED"
 REVIEWERS = "GOOGLE_ADS_M6_CORRECTION_REVIEWER_USER_IDS"
-ACTION = "GA_M6_CORRECTION_INDEPENDENT_REVIEW"
+ACTION = "GA_M6_CORR_REVIEW"
 CAMPAIGN_COLUMNS = (
     "campaign_key", "campaign_name", "currency_code", "cost",
     "impressions", "clicks", "conversions", "conversion_value",
