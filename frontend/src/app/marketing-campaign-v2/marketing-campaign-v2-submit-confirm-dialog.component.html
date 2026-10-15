@@ -1,19 +1,19 @@
-<h2 mat-dialog-title>Confirmar envío inmediato</h2>
+<h2 mat-dialog-title>Confirmar envío real por WhatsApp</h2>
 
 <mat-dialog-content>
   <div class="warning-box">
-    <strong>Esta acción enviará mensajes reales por WhatsApp.</strong>
+    <strong>Esta acción puede enviar mensajes reales a los destinatarios indicados.</strong>
     <span>El envío es inmediato. No es una simulación ni una exportación.</span>
   </div>
 
   <dl class="summary">
     <div><dt>Campaña</dt><dd>{{ data.campaignName }}</dd></div>
     <div><dt>Purpose</dt><dd>{{ data.purposeLabel }}</dd></div>
-    <div><dt>Template</dt><dd>{{ data.templateName }}</dd></div>
-    <div><dt>Cohorte congelada</dt><dd>{{ data.frozenCount | number }}</dd></div>
-    <div><dt>Blacklist vigente</dt><dd>{{ data.blacklistedCount | number }}</dd></div>
-    <div><dt>Lista para envío</dt><dd>{{ data.recipientCount | number }}</dd></div>
-    <div><dt>Provider campaigns</dt><dd>{{ data.providerCampaignCount | number }}</dd></div>
+    <div><dt>Plantilla</dt><dd>{{ data.templateName }}</dd></div>
+    <div><dt>Contactos guardados</dt><dd>{{ data.frozenCount | number }}</dd></div>
+    <div><dt>Excluidos por lista negra</dt><dd>{{ data.blacklistedCount | number }}</dd></div>
+    <div><dt>Destinatarios de este envío</dt><dd>{{ data.recipientCount | number }}</dd></div>
+    <div><dt>Lotes de envío</dt><dd>{{ data.providerCampaignCount | number }}</dd></div>
     <div><dt>Modo</dt><dd>Inmediato</dd></div>
   </dl>
 
@@ -31,7 +31,7 @@
   </div>
 
   <div class="fingerprint">
-    <span>Dispatch fingerprint aprobado · {{ data.fingerprintVersion }}</span>
+    <span>Referencia de seguridad aprobada · {{ data.fingerprintVersion }}</span>
     <code>{{ data.fingerprint }}</code>
   </div>
 
