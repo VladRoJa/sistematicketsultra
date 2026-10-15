@@ -42,6 +42,44 @@ def _ensure(ok, code):
         raise GoogleAdsM6CorrectionDecisionError(code)
 
 
+def _current_correction_permissions():
+    """Read current DB permissions; JWT role claims and Angular are not authority."""
+    try:
+        user_id = int(get_jwt_identity())
+    except (ValueError, TypeError):
+        return {
+            "can_read": False, "can_stage_raw": False,
+            "can_ingest": False, "can_review": False,
+            "can_promote": False,
+        }
+    with db.engine.connect() as conn:
+        user = conn.execute(sa.text("""
+            SELECT u.username, u.rol, o.can_view, o.can_upload
+            FROM users u LEFT JOIN warehouse_operators o ON o.user_id = u.id
+            WHERE u.id = :id
+        """), {"id": user_id}).mappings().one_or_none()
+    admin = user is not None and str(user["rol"]).strip().upper() == "ADMINISTRADOR"
+    view = bool(admin and user["can_view"] is True)
+    upload = bool(admin and user["can_upload"] is True)
+    admicorp = bool(admin and str(user["username"]).strip().casefold() == "admicorp")
+    reviewers = {
+        int(v.strip()) for v in os.getenv(REVIEWERS, "").split(",")
+        if re.fullmatch(r"[1-9][0-9]*", v.strip())
+    }
+    reviewer = view and user_id in reviewers and not admicorp
+    return {
+        "can_read": bool((view and admicorp) or reviewer),
+        "can_stage_raw": bool(upload and admicorp and
+            os.getenv("GOOGLE_ADS_M6_CORRECTION_RAW_ENABLED", "").lower() == "true"),
+        "can_ingest": bool(upload and admicorp and
+            os.getenv("GOOGLE_ADS_M6_CORRECTION_CANDIDATE_ENABLED", "").lower() == "true"),
+        "can_review": bool(reviewer and os.getenv(FLAG, "").lower() == "true"),
+        "can_promote": bool(upload and admicorp and
+            os.getenv("GOOGLE_ADS_M6_CORRECTION_PROMOTION_ENABLED", "").lower() == "true"
+            and os.getenv("GOOGLE_ADS_M6_CORRECTION_READER_ENABLED", "").lower() == "true"),
+    }
+
+
 def _actor(conn):
     try:
         actor = int(get_jwt_identity())

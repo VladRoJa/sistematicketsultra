@@ -25,6 +25,7 @@ from app.warehouse.services.google_ads_m6_correction_promotion_service import (
 )
 from app.warehouse.services.google_ads_m6_correction_decision_service import (
     decide_m6_correction, GoogleAdsM6CorrectionDecisionError,
+    _current_correction_permissions,
     FLAG as CORRECTION_REVIEW_FLAG,
 )
 from app.warehouse.services.google_ads_m6_correction_review_service import (
@@ -471,13 +472,8 @@ def ingest_m6_correction_candidate():
 @jwt_required()
 def get_m6_correction_candidate(case_id):
     """ADMICORP-only, READ ONLY financial diff; NEVER grants approval."""
-    try:
-        require_current_admicorp()
-    except PermissionError:
+    if not _current_correction_permissions()["can_read"]:
         return jsonify({"code": "FORBIDDEN"}), 403
-    denied = require_warehouse_view()
-    if denied:
-        return denied
     try:
         return jsonify(inspect_correction_case(case_id)), 200
     except GoogleAdsM6CorrectionReviewError as exc:
@@ -567,3 +563,52 @@ def promote_m6_correction_candidate(case_id):
     except Exception:
         current_app.logger.exception("M6 correction promotion rolled back.")
         return jsonify({"code": "CORRECTION_PROMOTION_UNAVAILABLE"}), 503
+
+
+@google_ads_m6_continuity_bp.get("/corrections/capabilities")
+@jwt_required()
+def m6_correction_capabilities():
+    """Current principal's server-side capabilities; safe for non-ADMICORP admins."""
+    return jsonify(_current_correction_permissions()), 200
+
+
+@google_ads_m6_continuity_bp.get("/corrections/candidates")
+@jwt_required()
+def list_m6_correction_candidates():
+    """Bounded, authorized listing; no global financial detail in this response."""
+    if not _current_correction_permissions()["can_read"]:
+        return jsonify({"code": "FORBIDDEN"}), 403
+    day = request.args.get("day", "", type=str)
+    if day and not (len(day) == 10 and day >= "2026-10-13"):
+        return jsonify({"code": "INVALID_CORRECTION_DAY"}), 400
+    try:
+        from app.models.google_ads_m6_correction import GoogleAdsM6CorrectionCaseORM
+        from app.models.google_ads_m6_correction_decision import GoogleAdsM6CorrectionDecisionORM
+        query = db.session.query(GoogleAdsM6CorrectionCaseORM,
+                                 GoogleAdsM6CorrectionDecisionORM).outerjoin(
+            GoogleAdsM6CorrectionDecisionORM,
+            GoogleAdsM6CorrectionDecisionORM.case_id ==
+                GoogleAdsM6CorrectionCaseORM.id,
+        ).filter(GoogleAdsM6CorrectionCaseORM.customer_id == CUSTOMER_ID)
+        if day:
+            from datetime import date
+            query = query.filter(
+                GoogleAdsM6CorrectionCaseORM.business_date ==
+                date.fromisoformat(day),
+            )
+        cases = query.order_by(
+            GoogleAdsM6CorrectionCaseORM.business_date.desc(),
+            GoogleAdsM6CorrectionCaseORM.revision.desc(),
+        ).limit(50).all()
+        return jsonify({
+            "cases": [{
+                "case_id": case.id, "business_date": case.business_date.isoformat(),
+                "revision": case.revision,
+                "decision": decision.decision if decision else "PENDING",
+            } for case, decision in cases],
+        }), 200
+    except (ValueError, TypeError):
+        return jsonify({"code": "INVALID_CORRECTION_DAY"}), 400
+    except Exception:
+        current_app.logger.exception("M6 correction case list unavailable.")
+        return jsonify({"code": "CORRECTION_CASE_LIST_UNAVAILABLE"}), 503
