@@ -202,3 +202,42 @@ def test_rejection_is_persistent_not_replaceable_with_approval(reviewer_lab):
     assert attempt.status_code == 409
     assert attempt.json["code"] == "CORRECTION_REVIEW_CONFLICT"
     assert _review_counts(engine) == (1, 2)
+
+def test_reviewer_can_read_case_list_and_capabilities_without_raw_upload(reviewer_lab):
+    client, actor, reviewer, engine, camp, group = reviewer_lab
+    cid = _stage(client, actor, camp, group)
+    headers = {"Authorization": "Bearer " + reviewer}
+    capabilities = client.get(
+        "/api/integrations/google-ads/corrections/capabilities",
+        headers=headers,
+    )
+    assert capabilities.status_code == 200
+    assert capabilities.json["can_read"] is True
+    assert capabilities.json["can_review"] is True
+    assert capabilities.json["can_stage_raw"] is False
+    assert capabilities.json["can_promote"] is False
+    collection = client.get(
+        "/api/integrations/google-ads/corrections/candidates",
+        headers=headers,
+    )
+    assert collection.status_code == 200, collection.get_json()
+    assert collection.json["cases"] == [{
+        "case_id": cid, "business_date": "2026-10-13",
+        "revision": 1, "decision": "PENDING",
+    }]
+    detail = client.get(URI + str(cid), headers=headers)
+    assert detail.status_code == 200, detail.get_json()
+    assert detail.json["approved"] is False
+    assert detail.json["campaign_rows"] == 27
+    assert detail.json["group_rows"] == 43
+    assert client.get(
+        "/api/integrations/google-ads/corrections/candidates?day=2026-99-99",
+        headers=headers,
+    ).status_code == 400
+    with engine.begin() as conn:
+        conn.execute(sa.text("UPDATE users SET rol = 'GERENTE' WHERE id = 48"))
+    assert client.get(URI + str(cid), headers=headers).status_code == 403
+    assert client.get(
+        "/api/integrations/google-ads/corrections/candidates",
+        headers=headers,
+    ).status_code == 403
