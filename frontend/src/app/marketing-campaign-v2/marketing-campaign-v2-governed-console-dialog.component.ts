@@ -128,8 +128,8 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
     return this.preflight.ready ? 'Destinatarios revisados' : 'Destinatarios con problemas';
   }
   get budgetStatusLabel(): string {
-    return this.preflight?.budget?.status === 'COMPLETE'
-      ? 'Tarifa registrada' : 'Falta registrar tarifa';
+    return this.preflight?.budget_usd
+      ? 'Cálculo automático en USD' : 'Costo en USD no disponible';
   }
   get quotaStatusLabel(): string {
     return this.preflight?.quota?.status === 'REVIEWABLE'
@@ -141,8 +141,8 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
     if (!plan.ready) {
       return 'Hay problemas en los destinatarios o canales. Corrige los datos señalados antes de continuar.';
     }
-    if (plan.budget?.status !== 'COMPLETE') {
-      return 'Falta registrar el costo por mensaje para esta plantilla y canal en Plantillas, canales y tarifas → Registrar nuevo costo. La aprobación continuará bloqueada.';
+    if (!plan.budget_usd) {
+      return 'Aún no está disponible el costo estimado automático en USD. Vuelve a revisar los destinatarios.';
     }
     if (plan.quota?.status !== 'REVIEWABLE') {
       return 'Falta revisar la capacidad de envío de este canal en Límites de envío. La aprobación continuará bloqueada.';
@@ -203,9 +203,9 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   get canApprove(): boolean {
     const plan = this.preflight;
     return !this.busy && !this.hasApproval && !!plan && plan.ready &&
-      plan.sendable_count > 0 && plan.budget?.status === 'COMPLETE' &&
-      !!plan.budget.quote_fingerprint && !!plan.budget.total_estimated_mxn &&
-      plan.quota?.status === 'REVIEWABLE' &&
+      plan.sendable_count > 0 && plan.quota?.status === 'REVIEWABLE' &&
+      !!plan.budget_usd?.quote_fingerprint &&
+      plan.budget_usd.status === 'COMPLETE' &&
       this.heldBranches.length < plan.batches.length &&
       this.heldBranches.every(branch => !!this.heldSources[branch]) &&
       this.approvalPhrase.value === this.approvalWord;
@@ -306,22 +306,22 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   approve(): void {
     const plan = this.preflight, templateId = this.templateId.value;
     if (!this.canApprove || !plan || !templateId ||
-        !plan.budget?.total_estimated_mxn || !plan.budget.quote_fingerprint) { return; }
+        !plan.budget_usd?.quote_fingerprint) { return; }
     this.working = 'approve';
     this.error = '';
     this.api.approveGovernedCampaign(this.data.campaignId, {
       template_id: templateId,
       expected_dispatch_fingerprint: plan.dispatch_fingerprint,
-      expected_quote_fingerprint: plan.budget.quote_fingerprint,
+      expected_quote_fingerprint: plan.budget_usd.quote_fingerprint,
       expected_recipients: plan.sendable_count,
-      expected_total_mxn: plan.budget.total_estimated_mxn,
+      pricing_currency: 'USD',
       held_sucursal_canons: this.heldBranches,
       held_source_references: this.heldSources,
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.working = null;
         this.invalidatePreflight();
-        this.notice = 'Reserva aprobada. No se crearon envíos ni se contactó al proveedor.';
+        this.notice = 'Destinatarios y límite autorizados. El precio en USD se calculó automáticamente; no se enviaron mensajes.';
         this.refresh();
       },
       error: (err: HttpErrorResponse) => {
