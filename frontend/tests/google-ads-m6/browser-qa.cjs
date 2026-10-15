@@ -156,7 +156,7 @@ async function run(name, action) {
             assert(await page.getByRole('button', { name: 'Subir archivo' }).count() === 1,
               'Warehouse submit control missing');
             const types = page.locator('#warehouse-report-type');
-            await types.getByRole('option', { name: 'Venta total' }).waitFor();
+            await types.locator('option[value="venta_total"]').waitFor({ state: 'attached' });
             assert(await types.locator('option[value=google_ads_campaign_daily]').count() === 0,
               'Legacy campaign type still selectable');
             assert(await types.locator('option[value=google_ads_ad_group_daily]').count() === 0,
@@ -217,7 +217,7 @@ async function run(name, action) {
           await run('Other administrators cannot select or access M6 uploads - ' + size.name, async () => {
             await page.goto(BASE + '/#/warehouse');
             const types = page.locator('#warehouse-report-type');
-            await types.getByRole('option', { name: 'Venta total' }).waitFor({ timeout: 20000 });
+            await types.locator('option[value="venta_total"]').waitFor({ state: 'attached', timeout: 20000 });
             assert(await types.locator('option[value=google_ads_m6_paired]').count() === 0,
               'Unauthorized administrator can select paired M6 upload');
             assert(await page.getByLabel('Archivo Excel de campañas').count() === 0,
