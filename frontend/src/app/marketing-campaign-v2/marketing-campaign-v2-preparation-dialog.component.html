@@ -1,6 +1,6 @@
-<h2 mat-dialog-title>Centro de preparación · Campaña #{{ data.campaignId }}</h2>
+<h2 mat-dialog-title>Preparar destinatarios · Campaña #{{ data.campaignId }}</h2>
 <mat-dialog-content class="preparation">
-  <p>Diagnósticos de solo lectura. Los cambios requieren confirmación explícita y
+  <p>Motivo de la revisións de solo lectura. Los cambios requieren confirmación explícita y
     producen exclusiones auditadas exclusivas de esta campaña.
     Ni la cohorte congelada ni la lista negra global se modifican.</p>
   <div *ngIf="error" class="error" role="alert">{{ error }}</div>
@@ -9,7 +9,7 @@
 
   <section class="preparation-section">
     <div class="heading">
-      <h3>Sucursales ambiguas</h3>
+      <h3>Sucursales que no se pudieron identificar con seguridad</h3>
       <button mat-stroked-button type="button" (click)="reviewBranches()" [disabled]="busy">
         Analizar evidencias
       </button>
@@ -28,7 +28,7 @@
       </p>
       <div class="scroll-table">
         <table>
-          <thead><tr><th>ID destinatario</th><th>Diagnóstico</th><th>Evidencia de sucursal</th><th>Exclusión</th></tr></thead>
+          <thead><tr><th>ID destinatario</th><th>Motivo de la revisión</th><th>Datos disponibles de la sucursal</th><th>Resultado</th></tr></thead>
           <tbody>
             <tr *ngFor="let row of review.rows">
               <td>{{ row.recipient_id }}</td>
@@ -58,25 +58,25 @@
           <input matInput [formControl]="confirmBranchControl">
         </mat-form-field>
         <button mat-flat-button color="warn" type="button" (click)="applyBranches()"
-          [disabled]="!canApplyBranches">Aplicar exclusiones auditadas</button>
+          [disabled]="!canApplyBranches">Excluir contactos con sucursal incierta</button>
       </div>
     </ng-container>
   </section>
 
   <section class="preparation-section">
     <div class="heading">
-      <h3>Deduplicación entre campañas</h3>
+      <h3>Evitar contactos repetidos entre campañas</h3>
     </div>
     <p>Indica los IDs de campañas anteriores, separados por coma.
       Solo se consideran los teléfonos de lotes SUBMITTED aceptados por iVentas.
       Los lotes HELD nunca cuentan como contactados.</p>
     <div class="input-row">
       <mat-form-field appearance="outline">
-        <mat-label>IDs de campañas origen</mat-label>
+        <mat-label>Números de campañas anteriores</mat-label>
         <input matInput [formControl]="sourceIdsControl" placeholder="14, 15">
       </mat-form-field>
       <button mat-stroked-button type="button" (click)="reviewPreviousContacts()"
-        [disabled]="busy">Revisar cruces</button>
+        [disabled]="busy">Buscar contactos repetidos</button>
     </div>
     <ng-container *ngIf="previousReview as review">
       <p>
@@ -87,7 +87,7 @@
       </p>
       <div class="scroll-table">
         <table>
-          <thead><tr><th>Campaña anterior</th><th>Aceptados iVentas</th><th>Cruces</th><th>Nuevos únicos atribuidos</th></tr></thead>
+          <thead><tr><th>Campaña anterior</th><th>Aceptados anteriormente por iVentas</th><th>Cruces</th><th>Contactos repetidos</th></tr></thead>
           <tbody>
             <tr *ngFor="let item of review.source_breakdown">
               <td>#{{ item.source_campaign_id }}</td>
@@ -108,7 +108,7 @@
           <input matInput [formControl]="confirmPreviousControl">
         </mat-form-field>
         <button mat-flat-button color="warn" type="button" (click)="applyPrevious()"
-          [disabled]="!canApplyPrevious">Excluir contactos previos</button>
+          [disabled]="!canApplyPrevious">Excluir contactos ya utilizados</button>
       </div>
     </ng-container>
   </section>
