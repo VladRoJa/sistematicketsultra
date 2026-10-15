@@ -54,6 +54,10 @@ on:
       - 'backend/tests/google_ads/test_google_ads_m6_manual_publication_postgres.py'
       - 'backend/tests/google_ads/test_google_ads_m6_manual_structured_postgres.py'
       - 'frontend/src/app/google-ads/**'
+      - 'frontend/src/app/warehouse/warehouse-home.component.ts'
+      - 'frontend/src/app/warehouse/warehouse-home.component.html'
+      - 'backend/app/routes/warehouse_routes.py'
+      - 'backend/tests/google_ads/test_google_ads_warehouse_single_upload_block.py'
       - 'frontend/tests/google-ads-m6/**'
       - 'backend/app/services/marketing_sales_funnel_cutoff_service.py'
       - 'backend/tests/google_ads/test_google_ads_m6_attribution_reader.py'
@@ -106,6 +110,7 @@ jobs:
           GOOGLE_ADS_M6_TEST_POSTGRES_URL: postgresql+psycopg2://google_ads_m6_ci:isolated_google_ads_m6_ci@127.0.0.1:5432/google_ads_m6_ci
         run: |
           timeout --signal=TERM 180s python -m pytest -vv --tb=short -o faulthandler_timeout=30 \
+            tests/google_ads/test_google_ads_warehouse_single_upload_block.py \
             tests/google_ads/test_google_ads_m6_continuity_schema.py \
             tests/google_ads/test_google_ads_m6_continuity_approval.py \
             tests/google_ads/test_google_ads_m6_authenticated_approval.py \
