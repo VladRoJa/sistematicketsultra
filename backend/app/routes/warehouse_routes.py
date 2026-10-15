@@ -200,6 +200,16 @@ def warehouse_create_upload():
         }), 401
 
     report_type_key = (request.form.get('report_type_key') or '').strip()
+
+    # M6 Google Ads requires paired XLSX preflight, signed RAW provenance and
+    # an explicit canonical publication. The generic one-file dispatcher can
+    # never provide these guarantees, even when its ingest hook is disabled.
+    if report_type_key in {'google_ads_campaign_daily', 'google_ads_ad_group_daily'}:
+        return jsonify({
+            "code": "GOOGLE_ADS_M6_PAIRED_UPLOAD_REQUIRED",
+            "detail": "Carga ambos archivos desde Google Ads M6 en Warehouse.",
+        }), 409
+
     cutoff_date_raw = (request.form.get('cutoff_date') or '').strip()
     date_from_raw = (request.form.get('date_from') or '').strip()
     date_to_raw = (request.form.get('date_to') or '').strip()
