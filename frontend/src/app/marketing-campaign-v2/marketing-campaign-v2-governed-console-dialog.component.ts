@@ -142,10 +142,10 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
       return 'Hay problemas en los destinatarios o canales. Corrige los datos señalados antes de continuar.';
     }
     if (plan.budget?.status !== 'COMPLETE') {
-      return 'Falta registrar el costo por mensaje para esta plantilla y canal en Configuración de campañas → Tarifas. La aprobación continuará bloqueada.';
+      return 'Falta registrar el costo por mensaje para esta plantilla y canal en Plantillas, canales y tarifas → Registrar nuevo costo. La aprobación continuará bloqueada.';
     }
     if (plan.quota?.status !== 'REVIEWABLE') {
-      return 'Falta revisar la capacidad de envío de este canal en Control de límites. La aprobación continuará bloqueada.';
+      return 'Falta revisar la capacidad de envío de este canal en Límites de envío. La aprobación continuará bloqueada.';
     }
     return '';
   }
@@ -195,10 +195,10 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   }
 
   get approvalWord(): string { return 'APROBAR ' + this.readyCount; }
-  get materializeWord(): string { return 'MATERIALIZAR ' + this.data.campaignId; }
+  get materializeWord(): string { return 'PREPARAR ' + this.data.campaignId; }
   get authorizationWord(): string { return 'AUTORIZAR ' + this.approvedReadyCount; }
   get sendWord(): string {
-    return this.nextReadyChild ? 'ENVIAR CHILD ' + this.nextReadyChild.child_id : '';
+    return this.nextReadyChild ? 'ENVIAR LOTE ' + this.nextReadyChild.child_id : '';
   }
   get canApprove(): boolean {
     const plan = this.preflight;
@@ -298,7 +298,7 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
         },
         error: (err: HttpErrorResponse) => {
           this.working = null;
-          this.error = this.message(err, 'Falló preflight. No se realizó ninguna aprobación.');
+          this.error = this.message(err, 'No se pudieron revisar los destinatarios. No se aprobó ningún costo.');
         },
       });
   }
@@ -342,7 +342,7 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
       .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: () => {
           this.working = null;
-          this.notice = 'Children preparados como READY/HELD; sin llamadas al proveedor.';
+          this.notice = 'Lotes preparados para revisión. No se enviaron mensajes.';
           this.refresh();
         },
         error: (err: HttpErrorResponse) => this.handleWriteError(err),
@@ -387,8 +387,8 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
       next: result => {
         this.working = null;
         this.notice = result.status === 'SUBMITTED'
-          ? 'iVentas aceptó este único child. Revisa el monitor antes de cualquier otro.'
-          : 'Resultado del proveedor requiere revisión; no reintentes desde esta pantalla.';
+          ? 'iVentas aceptó este único lote. Consulta el resultado antes de preparar otro.'
+          : 'El resultado de iVentas requiere revisión. No vuelvas a enviar desde esta pantalla.';
         this.uncertainResult = result.status !== 'SUBMITTED';
         this.refresh();
       },
@@ -396,7 +396,7 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
         // A timeout/502 can happen AFTER provider acceptance. No retry affordance.
         this.working = null;
         this.uncertainResult = true;
-        this.error = this.message(err, 'Resultado incierto: consulta y reconcilia, NUNCA reenvíes.');
+        this.error = this.message(err, 'No está confirmado si se envió el mensaje. Compruébalo directamente con iVentas. No lo reenvíes.');
         this.refresh(true);
       },
     });
