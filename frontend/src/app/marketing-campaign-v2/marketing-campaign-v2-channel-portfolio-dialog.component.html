@@ -1,14 +1,14 @@
-<h2 mat-dialog-title>Asociaciones canal → portafolio · evidencia</h2>
+<h2 mat-dialog-title>Relación de canales con empresas Meta</h2>
 <mat-dialog-content class="mapping-dialog">
-  <p class="notice"><strong>Registro operativo no verificado por Meta.</strong>
+  <p class="notice"><strong>Son relaciones declaradas por el equipo. No significan que Meta las haya confirmado.</strong>
     Esta pantalla no cambia límites, tarifas, permisos ni campañas. Ninguna asociación afirma que un WABA o canal
     pertenezca al negocio hasta contar con comprobación externa.</p>
   <div class="summary" *ngIf="!loading">
     <strong>{{ declaredCount }} / {{ channelRows.length }}</strong>
-    <span>canales con asociación declarada (no verificada)</span>
+    <span>canales relacionados, todavía sin confirmar</span>
   </div>
   <p *ngIf="loading" role="status">Consultando canales y evidencias…</p>
-  <p *ngIf="saving" role="status">Registrando revisión auditada…</p>
+  <p *ngIf="saving" role="status">Guardando revisión…</p>
   <p class="error" role="alert" *ngIf="error">{{ error }}</p>
   <p class="success" role="status" *ngIf="success">{{ success }}</p>
   <p class="error" *ngIf="!portfolios.length && !loading">
@@ -24,7 +24,7 @@
       </mat-select>
     </mat-form-field>
     <mat-form-field appearance="outline">
-      <mat-label>Business ID declarado</mat-label>
+      <mat-label>ID de empresa Meta registrado</mat-label>
       <mat-select [formControl]="businessId">
         <mat-option *ngFor="let portfolio of portfolios" [value]="portfolio.business_id">
           {{ portfolio.display_name || 'Nombre pendiente' }} · {{ portfolio.business_id }}
@@ -37,15 +37,15 @@
         placeholder="Solo cuando exista evidencia">
     </mat-form-field>
     <mat-form-field appearance="outline">
-      <mat-label>Tipo de evidencia</mat-label>
+      <mat-label>Origen de la información</mat-label>
       <mat-select [formControl]="evidenceKind">
-        <mat-option value="OPERATOR_STATEMENT">Declaración de operador</mat-option>
-        <mat-option value="META_DOCUMENT">Documento / captura Meta</mat-option>
-        <mat-option value="IVENTAS_CONFIRMATION">Confirmación de iVentas</mat-option>
+        <mat-option value="OPERATOR_STATEMENT">Información proporcionada por el equipo</mat-option>
+        <mat-option value="META_DOCUMENT">Documento o captura de Meta</mat-option>
+        <mat-option value="IVENTAS_CONFIRMATION">Confirmación recibida de iVentas</mat-option>
       </mat-select>
     </mat-form-field>
     <mat-form-field appearance="outline" class="full-width">
-      <mat-label>Referencia exacta a evidencia / revisión</mat-label>
+      <mat-label>Documento, enlace o comprobante de referencia</mat-label>
       <input matInput [formControl]="sourceReference" maxlength="255"
         placeholder="Referencia administrativa, ticket o comprobante (sin secretos)">
     </mat-form-field>
@@ -60,13 +60,13 @@
   </mat-checkbox>
   <div class="form-actions" *ngIf="!loading">
     <button type="button" mat-flat-button color="primary" [disabled]="!canDeclare"
-      (click)="save('DECLARED')">Guardar revisión declarada</button>
+      (click)="save('DECLARED')">Guardar información del canal</button>
     <button type="button" mat-stroked-button [disabled]="!canWithdraw"
-      (click)="save('WITHDRAWN')">Retirar asociación actual</button>
+      (click)="save('WITHDRAWN')">Quitar relación del canal</button>
     <button type="button" mat-button [disabled]="saving" (click)="reload()">Actualizar</button>
   </div>
   <section class="mapping-history" *ngIf="!loading">
-    <h3>Mapa actual de canales · evidencia declarada</h3>
+    <h3>Canales y empresas Meta registradas</h3>
     <div class="table-scroll">
       <table>
         <thead><tr><th>Sucursal / canal</th><th>Business ID</th><th>Estado</th><th>Evidencia reciente</th></tr></thead>
@@ -77,11 +77,11 @@
             <td>{{ row.statusLabel }}</td>
             <td>{{ row.sourceLabel }}</td>
           </tr>
-          <tr *ngIf="!channelRows.length"><td colspan="4">No hay canales activos predeterminados.</td></tr>
+          <tr *ngIf="!channelRows.length"><td colspan="4">No hay canales principales activos.</td></tr>
         </tbody>
       </table>
     </div>
-    <h3>Historial de revisiones · canal seleccionado</h3>
+    <h3>Cambios anteriores del canal seleccionado</h3>
     <p *ngIf="historyIsLimited">Se muestran solo las 250 revisiones recientes del sistema.</p>
     <div class="revision" *ngFor="let item of selectedHistory">
       #{{ item.revision_id }} · {{ item.created_at }} · {{ item.state }} ·
