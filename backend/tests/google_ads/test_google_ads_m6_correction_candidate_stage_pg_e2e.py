@@ -254,7 +254,7 @@ def test_revision_two_requires_exact_canonical_without_promoting(candidate_lab):
             "is_canonical": True, "published_by_user_id": 47,
             "published_on": date(2026, 10, 14),
         }).scalar_one()
-    assert _stage(client, token, camp, group).json["code"] == "CORRECTION_RAW_PROVENANCE_INVALID"
+    assert _stage(client, token, camp, group).json["code"] == "CORRECTION_REVISION_MISMATCH"
     assert _stage(client, token, camp, group, revision=2).status_code == 409
     # Simulate a ticket explicitly signed for revision 2 and exact canonical ID.
     import json
