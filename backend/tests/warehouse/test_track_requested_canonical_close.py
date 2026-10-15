@@ -214,6 +214,19 @@ def _install_common_dependencies(
         fake_refresh_ingresos,
     )
 
+    def fake_refresh_domiciliados(*, business_date, venta_total_snapshot_id, auto_commit):
+        assert business_date == TARGET_DATE
+        assert venta_total_snapshot_id == VENTA_TOTAL_SNAPSHOT_ID
+        assert auto_commit is False
+        events.append("refresh_domiciliados")
+        return {"status": "refreshed", "rows_inserted": 25}
+
+    monkeypatch.setattr(
+        service,
+        "refresh_track_source_domiciliados_efectivos_daily_for_date",
+        fake_refresh_domiciliados,
+    )
+
     def fake_refresh_tienda(*, business_date):
         assert business_date == TARGET_DATE
         events.append("refresh_tienda")
@@ -344,6 +357,7 @@ def test_requested_canonical_close_promotes_only_after_mart(
         "readiness",
         "refresh_agregadoras",
         "refresh_ingresos",
+        "refresh_domiciliados",
         "refresh_tienda",
         "refresh_mart",
         "promote_venta_total",
@@ -354,6 +368,10 @@ def test_requested_canonical_close_promotes_only_after_mart(
 
     assert result["status"] == "completed"
     assert result["track_date"] == "2026-07-31"
+    assert result["source_refresh_results"]["domiciliados"] == {
+        "status": "refreshed",
+        "rows_inserted": 25,
+    }
 
     assert (
         result["venta_total_snapshot_id"]

@@ -15,6 +15,8 @@ on:
       - "backend/migrations/versions/f856m1f40001_marketing_slot_attribution.py"
       - "backend/migrations/versions/f6roster1014_track_version_roster_evidence.py"
       - "backend/app/models/warehouse.py"
+      - "backend/app/warehouse/services/track_daily_mart_service.py"
+      - "backend/app/warehouse/services/track_version_roster_capture_service.py"
       - "backend/tests/marketing/test_marketing_scheduler_worker.py"
       - "backend/app/utils/automation_control_access.py"
       - "backend/migrations/versions/f62a1b9d4c07_iventas_branch_failure_diagnostics.py"
@@ -86,6 +88,8 @@ jobs:
             app/services/marketing_meta_run_sync_service.py \
             app/services/marketing_scheduler_worker.py \
             app/services/automation_control/marketing_slot_sla_service.py \
+            app/warehouse/services/track_version_roster_capture_service.py \
+            app/warehouse/services/track_daily_mart_service.py \
             migrations/versions/f856m1f40001_marketing_slot_attribution.py \
             migrations/versions/f6roster1014_track_version_roster_evidence.py \
             migrations/versions/f62a1b9d4c07_iventas_branch_failure_diagnostics.py
@@ -98,7 +102,9 @@ jobs:
             tests/services/test_marketing_iventas_persistence_service.py \
             tests/services/test_marketing_meta_persistence_service.py \
             tests/services/test_marketing_meta_run_sync_service.py \
-            tests/marketing/test_marketing_scheduler_worker.py
+            tests/marketing/test_marketing_scheduler_worker.py \
+            tests/warehouse/test_track_daily_mart_ingresos_lineage.py \
+            tests/warehouse/test_track_requested_canonical_close.py
 
   frontend:
     name: Angular typecheck, contract, and production build
@@ -169,4 +175,5 @@ jobs:
             tests/automation_control/test_worker_health.py \
             tests/automation_control/test_worker_health_postgres_ci.py \
             tests/automation_control/test_marketing_slot_sla_service.py \
-            tests/automation_control/test_track_roster_m1f6_postgres.py
+            tests/automation_control/test_track_roster_m1f6_postgres.py \
+            tests/automation_control/test_track_roster_capture_stage2.py

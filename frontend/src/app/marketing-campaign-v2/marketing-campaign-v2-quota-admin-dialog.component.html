@@ -1,10 +1,10 @@
-<h2 mat-dialog-title>Control de capacidad WhatsApp · evidencia operativa</h2>
+<h2 mat-dialog-title>Límites diarios de envío por WhatsApp</h2>
 <mat-dialog-content class="quota-admin">
-  <p class="quota-intro"><strong>Control interno de volumen, no saldo de Meta.</strong>
+  <p class="quota-intro"><strong>Estos límites los configura el equipo; no representan el saldo confirmado por Meta.</strong>
     Configura máximos preventivos por canal y portafolio compartido. Suite contará únicamente sus propios intentos de envío y reservas en una ventana móvil de 24 horas. Los envíos externos y el cupo real de Meta son desconocidos; esta pantalla nunca habilita envíos.</p>
   <div class="evidence-summary" *ngIf="evidence as summary" aria-label="Registros de capacidad">
-    <span><strong>{{ summary.policies.length }}</strong> políticas registradas</span>
-    <span><strong>{{ summary.attestations.length }}</strong> observaciones históricas</span>
+    <span><strong>{{ summary.policies.length }}</strong> límites configurados</span>
+    <span><strong>{{ summary.attestations.length }}</strong> observaciones externas</span>
   </div>
   <p *ngIf="error" class="error" role="alert">{{ error }}</p>
   <p *ngIf="success" role="status">{{ success }}</p>
@@ -12,10 +12,10 @@
 
   <section class="quota-section">
     <div class="quota-heading">
-      <div><h3>1. Política de volumen interno</h3>
+      <div><h3>1. Configurar límite diario</h3>
         <p>Asocia el canal y el portafolio. Define dos máximos internos explícitos, independientemente del límite nominal mostrado por iVentas.</p></div>
       <button mat-stroked-button type="button" (click)="togglePolicyForm()" [disabled]="busy"
-        [attr.aria-expanded]="showPolicyForm">{{ showPolicyForm ? 'Ocultar formulario' : 'Nueva política' }}</button>
+        [attr.aria-expanded]="showPolicyForm">{{ showPolicyForm ? 'Ocultar formulario' : 'Agregar límite' }}</button>
     </div>
     <div class="quota-grid" *ngIf="showPolicyForm">
       <mat-form-field appearance="outline">
@@ -40,37 +40,37 @@
         <input matInput [formControl]="phoneAlias">
       </mat-form-field>
       <mat-form-field appearance="outline">
-        <mat-label>Límite nominal por canal (opcional)</mat-label>
+        <mat-label>Límite informado por canal (opcional)</mat-label>
         <input matInput inputmode="numeric" [formControl]="nominalLimit"
           placeholder="No es cupo restante">
       </mat-form-field>
       <mat-form-field appearance="outline">
-        <mat-label>Máximo interno / 24 h por canal</mat-label>
+        <mat-label>Máximo permitido por canal cada 24 horas</mat-label>
         <input matInput inputmode="numeric" [formControl]="operationalChannelCap" placeholder="Decisión del operador">
       </mat-form-field>
       <mat-form-field appearance="outline">
-        <mat-label>Máximo interno / 24 h por portafolio compartido</mat-label>
+        <mat-label>Máximo compartido por empresa cada 24 horas</mat-label>
         <input matInput inputmode="numeric" [formControl]="operationalPortfolioCap" placeholder="Mismo máximo para los canales del portafolio">
       </mat-form-field>
       <mat-form-field appearance="outline">
-        <mat-label>Zona de referencia (IANA)</mat-label>
+        <mat-label>Zona horaria de control</mat-label>
         <input matInput [formControl]="timezone" placeholder="America/Tijuana">
       </mat-form-field>
       <mat-form-field appearance="outline">
-        <mat-label>Fuente documental de la política</mat-label>
+        <mat-label>Documento que respalda el límite</mat-label>
         <input matInput maxlength="255" [formControl]="policySource">
       </mat-form-field>
     </div>
     <button *ngIf="showPolicyForm" mat-flat-button color="primary" type="button" (click)="savePolicy()"
-      [disabled]="!canSavePolicy">Registrar revisión de política</button>
+      [disabled]="!canSavePolicy">Guardar límite</button>
   </section>
 
   <section class="quota-section">
     <div class="quota-heading">
-      <div><h3>2. Observaciones externas (opcional)</h3>
+      <div><h3>2. Registrar capacidad externa informada (opcional)</h3>
         <p>Registra un saldo de Meta solo cuando exista evidencia real. No se exige para la nueva política de límites internos.</p></div>
       <button mat-stroked-button type="button" (click)="toggleCapacityForm()" [disabled]="busy"
-        [attr.aria-expanded]="showCapacityForm">{{ showCapacityForm ? 'Ocultar formulario' : 'Registrar saldo conocido' }}</button>
+        [attr.aria-expanded]="showCapacityForm">{{ showCapacityForm ? 'Ocultar formulario' : 'Agregar capacidad informada' }}</button>
     </div>
     <p class="quota-tip" *ngIf="showCapacityForm">Primero registra la política del canal; después utiliza la clave exacta del canal o portafolio y fechas ISO con zona horaria.</p>
     <div class="quota-grid" *ngIf="showCapacityForm">
@@ -86,7 +86,7 @@
         <input matInput [formControl]="scopeKey">
       </mat-form-field>
       <mat-form-field appearance="outline">
-        <mat-label>Mensajes restantes observados</mat-label>
+        <mat-label>Mensajes disponibles según la fuente</mat-label>
         <input matInput inputmode="numeric" [formControl]="remaining">
       </mat-form-field>
       <mat-form-field appearance="outline">
@@ -111,7 +111,7 @@
   </section>
 
   <section class="quota-section" *ngIf="evidence as data">
-    <h3>Histórico de referencia</h3>
+    <h3>Registros anteriores de límites</h3>
     <p>{{ data.policies.length }} políticas y {{ data.attestations.length }} observaciones
       en las últimas revisiones. Los registros son históricos; actualizar no los elimina.</p>
     <p class="quota-empty" *ngIf="!data.policies.length && !data.attestations.length">Aún no hay políticas. Registra límites internos por canal/portafolio para habilitar el control preventivo; no necesitas capturar un saldo Meta desconocido.</p>

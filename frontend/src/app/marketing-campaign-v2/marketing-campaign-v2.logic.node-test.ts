@@ -874,10 +874,10 @@ test('Campaign V2 separa cohorte congelada de lista para envío', () => {
   assert.equal(detail.includes("'LISTA_ENVIO'"), true);
   assert.equal(detail.includes("blob.type === 'application/zip' ? 'zip' : 'xlsx'"), true);
 
-  assert.equal(html.includes('Descargar cohorte congelada'), true);
+  assert.equal(html.includes('Descargar lista original'), true);
   assert.equal(html.includes('Descargar lista para envío'), true);
-  assert.equal(html.includes('Cohorte congelada = evidencia histórica exacta.'), true);
-  assert.equal(html.includes('Lista para envío = esa misma cohorte menos supresiones vigentes'), true);
+  assert.equal(html.includes('Lista original: contactos guardados al crear la campaña.'), true);
+  assert.equal(html.includes('Lista para envío: la misma lista menos los contactos excluidos actualmente'), true);
 });
 
 test('M33 UI polish da jerarquía al constructor sin cambiar su contrato', () => {
@@ -957,18 +957,18 @@ test('M30 UI consolidado pinta backend summary y separa raw provider', () => {
   const html = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.html'), 'utf8');
 
   for (const label of [
-    'Reporting Campaign V2',
-    'Observado desde',
-    'Observado hasta',
-    'Propósito',
-    'Provider',
-    'Estado de observación',
+    'Resultados de todas las campañas',
+    'Actualizado desde',
+    'Actualizado hasta',
+    'Objetivo de campaña',
+    'Servicio de envío',
+    'Disponibilidad de resultados',
     'Exposiciones de destinatarios',
     'Última observación de Suite',
-    'Conteos raw del provider',
+    'Datos originales de iVentas (detalle técnico)',
     'Por sucursal',
     'Por familia de audiencia',
-    'Responders reportados por provider',
+    'Contactos que respondieron según iVentas',
     'Respuestas de texto agregadas',
     'Exposiciones con interacción de botón',
   ]) {
@@ -1001,14 +1001,14 @@ test('M30 Campaign Detail carga reporting lazy, evolution y export individual', 
 
   assert.equal(detail.includes('this.service.getCampaignReport(this.data.campaignId)'), true);
   assert.equal(detail.includes('this.service.exportCampaignReport(this.data.campaignId)'), true);
-  assert.equal(html.includes('Resultados / Reporting'), true);
+  assert.equal(html.includes('Resultados de la campaña'), true);
   assert.equal(html.includes('Cargar resultados'), true);
   assert.equal(html.includes('Exportar reporte'), true);
   assert.equal(
     html.includes('Aún no hay observaciones persistidas para esta campaña.'),
     true,
   );
-  assert.equal(html.includes('Conteos raw del provider'), true);
+  assert.equal(html.includes('Datos originales de iVentas (detalle técnico)'), true);
   assert.equal(html.includes('Evolución observada por Suite'), true);
   assert.equal(html.includes('report.evolution'), true);
   assert.equal(html.includes('report.provider_raw'), true);
@@ -1137,7 +1137,7 @@ test('F3-M2 detalle exige preflight ready, gate backend y confirmación explíci
   assert.equal(component.includes('MarketingCampaignV2SubmitConfirmDialogComponent'), true);
   assert.equal(component.includes('plan.dispatch_fingerprint'), true);
   assert.equal(component.includes('this.service.submitCampaign('), true);
-  assert.equal(html.includes('Controlled Submit M2'), true);
+  assert.equal(html.includes('Envío directo (método anterior)'), true);
   assert.equal(html.includes('Enviar mensajes ahora'), true);
   assert.equal(html.includes('*ngIf="plan.submission.can_send"'), true);
   assert.equal(html.includes('[disabled]="!canSubmitDispatch"'), true);
@@ -1152,14 +1152,14 @@ test('F3-M2 confirmación muestra impacto real y no ofrece scheduling', () => {
   );
 
   for (const label of [
-    'Esta acción enviará mensajes reales por WhatsApp.',
-    'Cohorte congelada',
-    'Blacklist vigente',
-    'Lista para envío',
-    'Provider campaigns',
+    'Esta acción enviará mensajes reales de WhatsApp a los destinatarios indicados.',
+    'Contactos guardados',
+    'Excluidos por lista negra',
+    'Destinatarios de este envío',
+    'Lotes de envío',
     'Modo',
     'Inmediato',
-    'Dispatch fingerprint aprobado',
+    'Referencia de seguridad aprobada',
     'Sí, enviar mensajes ahora',
   ]) {
     assert.equal(html.includes(label), true, label);
@@ -1180,7 +1180,7 @@ test('F3-M2 conserva ambas descargas manuales después de agregar submit', () =>
     'utf8',
   );
 
-  assert.equal(html.includes('Descargar cohorte congelada'), true);
+  assert.equal(html.includes('Descargar lista original'), true);
   assert.equal(html.includes('Descargar lista para envío'), true);
   assert.equal(component.includes('exportDeliveryPackage()'), true);
   assert.equal(component.includes('exportSendablePackage()'), true);
@@ -1371,7 +1371,7 @@ test('operator readiness UI uses catalog reads and has no provider send action',
   const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-readiness-dialog.component.html'), 'utf8');
   assert.ok(ui.includes('forkJoin('));
   assert.ok(ui.includes('listQuotaEvidence()'));
-  assert.ok(html.includes('Configurar portafolios y límites'));
+  assert.ok(html.includes('Configurar límites por canal'));
   assert.equal(ui.includes('submitCampaign('), false);
   assert.equal(ui.includes('registerQuotaPolicy('), false);
 });
@@ -1404,11 +1404,11 @@ test('B2 evidence modal requires confirmation and never changes operational quot
   assert.ok(ts.includes('this.acknowledgment.value'));
   assert.ok(ts.includes('listChannelPortfolioEvidence()'));
   assert.ok(ts.includes("save(state: 'DECLARED' | 'WITHDRAWN')"));
-  assert.ok(html.includes('Guardar revisión declarada'));
-  assert.ok(html.includes('Retirar asociación actual'));
+  assert.ok(html.includes('Guardar información del canal'));
+  assert.ok(html.includes('Quitar relación del canal'));
   assert.ok(ts.includes('DECLARADA · NO VERIFICADA'));
-  assert.ok(template.includes('Business ID declarado (B2)'));
-  assert.ok(template.includes('Clave cuota interna (independiente)'));
+  assert.ok(template.includes('Empresa Meta registrada (sin verificar)'));
+  assert.ok(template.includes('Grupo que comparte el límite'));
   assert.ok(readiness.includes('mappingBusinessId'));
   assert.equal(ts.includes('submitCampaign('), false);
   assert.equal(ts.includes('registerQuotaPolicy('), false);
@@ -1429,9 +1429,9 @@ test('B3 documentary triage uses a read-only API and never claims verified Meta 
   assert.ok(ui.includes('REVIEW_REQUIRED'));
   assert.ok(ui.includes('data: { channelId: row.provider_channel_id }'));
   assert.ok(editor.includes('MAT_DIALOG_DATA'));
-  assert.ok(entry.includes('Revisar evidencia de 26 canales'));
-  assert.ok(html.includes('no verificación de Meta'));
-  assert.ok(html.includes('Documentar / corregir'));
+  assert.ok(entry.includes('Ver canales pendientes de revisión'));
+  assert.ok(html.includes('sin confirmación directa de Meta'));
+  assert.ok(html.includes('Agregar o corregir datos'));
   assert.equal(ui.includes('registerQuotaPolicy('), false);
   assert.equal(ui.includes('submitCampaign('), false);
   assert.equal(ui.includes('registerChannelPortfolioEvidence('), false);
@@ -1452,8 +1452,8 @@ test('Issue 856 C QA modal only previews and freezes one recipient; no send or l
   assert.ok(component.includes('expected_channel_binding_id: this.preview.channel_binding_id'));
   assert.ok(component.includes('recipients: [{'));
   assert.ok(component.includes('this.invalidatePreview()'));
-  assert.ok(html.includes('NO envía WhatsApp'));
-  assert.ok(html.includes('Congelar 1 contacto · SIN ENVÍO'));
+  assert.ok(html.includes('no se envían mensajes ni se autorizan envíos'));
+  assert.ok(html.includes('Guardar prueba de 1 contacto · NO ENVÍA'));
   assert.ok(page.includes('if (!this.canManageDispatchConfig) { return; }'));
   assert.ok(pageHtml.includes('*ngIf="canManageDispatchConfig"'));
   assert.equal(component.includes('submitCampaign('), false);
@@ -1485,12 +1485,66 @@ test('Issue 856 D: governed console uses exact approval, manifest and one-child 
   assert.ok(ts.includes('this.uncertainResult = true'));
   assert.ok(ts.includes("this.monitor?.execution?.status") || ts.includes("monitor?.execution?.status"));
   assert.ok(ts.includes("review.manifest.batches.filter(batch => batch.planned_status === 'READY')"));
-  assert.ok(html.includes('SOLO UN CHILD'));
-  assert.ok(html.includes('SIN ENVÍO'));
-  assert.ok(html.includes('Nunca repitas el POST'));
+  assert.ok(html.includes('UN SOLO LOTE'));
+  assert.ok(html.includes('no envía'));
+  assert.ok(html.includes('NO vuelvas a enviar'));
   assert.ok(detail.includes('if (!this.data.canManageDispatchConfig || !this.campaign) { return; }'));
   assert.ok(detailHtml.includes('data.canManageDispatchConfig'));
   assert.equal(ts.includes('submitCampaign('), false);
   assert.equal(ts.includes('localStorage'), false);
   assert.equal(ts.includes('setInterval'), false);
+});
+
+
+test('Issue 856 E: no automatic dispatch, silent retry, or unlocked ambiguity in governed UI', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const ui = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.ts'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.html'), 'utf8');
+  const api = fs.readFileSync(path.join(root, 'marketing-campaign-v2.service.ts'), 'utf8');
+  assert.ok(ui.includes("this.uncertainResult = true"));
+  assert.ok(ui.includes("this.refresh(true)"));
+  assert.ok(ui.includes("this.monitor?.quota.all_current === true"));
+  assert.ok(ui.includes("this.executionCheckbox.value === true"));
+  assert.ok(ui.includes("this.executionPhrase.value === this.sendWord"));
+  assert.ok(ui.includes("review.manifest.batches.filter(batch => batch.planned_status === 'READY')"));
+  assert.ok(ui.includes("child.needs_manual_review"));
+  assert.ok(html.includes('Enviar únicamente lote'));
+  assert.ok(html.includes('UN SOLO LOTE'));
+  assert.ok(html.includes('NO vuelvas a enviar'));
+  assert.ok(api.includes("/dispatch/monitor"));
+  assert.equal(ui.includes('setInterval('), false);
+  assert.equal(ui.includes('setTimeout('), false);
+  assert.equal(ui.includes('retryWhen('), false);
+  assert.equal(ui.includes('submitCampaign('), false);
+  assert.equal(ui.includes('localStorage'), false);
+});
+
+
+test('Issue 856 UX: preparación explica bloqueos, simplifica lenguaje y conserva gates de envío', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const ts = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.ts'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.html'), 'utf8');
+  const css = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.css'), 'utf8');
+  const page = fs.readFileSync(path.join(root, 'marketing-campaign-v2-page.component.html'), 'utf8');
+  const readiness = fs.readFileSync(path.join(root, 'marketing-campaign-v2-readiness-dialog.component.html'), 'utf8');
+  const pricing = fs.readFileSync(path.join(root, 'marketing-campaign-v2-dispatch-admin-dialog.component.html'), 'utf8');
+  assert.ok(ts.includes("plan.budget?.status !== 'COMPLETE'"));
+  assert.ok(ts.includes("plan.quota?.status !== 'REVIEWABLE'"));
+  assert.ok(ts.includes("this.monitor?.quota.all_current === true"));
+  assert.ok(ts.includes("this.uncertainResult = true"));
+  assert.ok(ts.includes("'ENVIAR LOTE ' + this.nextReadyChild.child_id"));
+  assert.ok(html.includes('Falta registrar tarifa') === false); // text comes from .ts
+  assert.ok(html.includes('{{ preparationIssue }}'));
+  assert.ok(html.includes('{{ budgetStatusLabel }}'));
+  assert.ok(html.includes('{{ quotaStatusLabel }}'));
+  assert.ok(html.includes('<details class="technical">'));
+  assert.ok(html.includes('NO vuelvas a enviar'));
+  assert.ok(css.includes('.review-summary'));
+  assert.ok(page.includes('Preparar prueba interna · 1 contacto'));
+  assert.ok(page.includes('Plantillas, canales y tarifas'));
+  assert.ok(readiness.includes('Estado de configuración de canales'));
+  assert.ok(pricing.includes('Registrar nuevo costo'));
+  assert.equal(ts.includes('submitCampaign('), false);
+  assert.equal(ts.includes('setInterval('), false);
+  assert.equal(ts.includes('retryWhen('), false);
 });

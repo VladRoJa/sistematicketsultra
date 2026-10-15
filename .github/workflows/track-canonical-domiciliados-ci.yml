@@ -1,0 +1,49 @@
+name: Track Canonical Domiciliados CI
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/warehouse/services/track_daily_pipeline_service.py'
+      - 'backend/app/warehouse/services/track_source_domiciliados_efectivos_daily_service.py'
+      - 'backend/tests/warehouse/test_track_requested_canonical_close.py'
+      - 'backend/tests/test_track_source_domiciliados_efectivos_daily_service.py'
+      - '.github/workflows/track-canonical-domiciliados-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+      SECRET_KEY: track-ci-synthetic-secret
+      JWT_SECRET_KEY: track-ci-synthetic-jwt
+      SQLALCHEMY_DATABASE_URI: 'sqlite:///:memory:'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend test requirements
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Compile changed services
+        run: |
+          python -m py_compile \
+            app/warehouse/services/track_daily_pipeline_service.py \
+            app/warehouse/services/track_source_domiciliados_efectivos_daily_service.py
+      - name: Test staging lineage and canonical reclose ordering
+        run: |
+          python -m pytest -q --tb=short -o addopts= \
+            tests/warehouse/test_track_requested_canonical_close.py \
+            tests/test_track_source_domiciliados_efectivos_daily_service.py

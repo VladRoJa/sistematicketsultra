@@ -14,7 +14,7 @@ REV = "c856map1014"
 
 def test_b2_revision_linear():
     scripts = ScriptDirectory(str(MIGRATIONS))
-    assert scripts.get_heads() == [REV]
+    assert len(scripts.get_heads()) == 1  # B2 may have later linear child revisions
     assert scripts.get_revision(REV).down_revision == "b856port1014"
 
 

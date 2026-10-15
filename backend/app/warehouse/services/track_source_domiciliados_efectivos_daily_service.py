@@ -109,7 +109,36 @@ def _parse_venta_total_row_date(value: Any, *, row_index: int | None = None) -> 
 def _resolve_venta_total_snapshot_for_track_date(
     *,
     business_date: date,
+    venta_total_snapshot_id: int | None = None,
 ) -> VentaTotalSnapshotORM:
+    # Manual canonical reclose uses a freshly ingested staging snapshot.
+    # Resolve it explicitly: the previous canonical snapshot is still active.
+    if venta_total_snapshot_id is not None:
+        try:
+            normalized_id = int(venta_total_snapshot_id)
+        except (TypeError, ValueError) as exc:
+            raise TrackSourceDomiciliadosEfectivosDailyServiceError(
+                f"venta_total_snapshot_id inválido: {venta_total_snapshot_id!r}"
+            ) from exc
+
+        if normalized_id <= 0:
+            raise TrackSourceDomiciliadosEfectivosDailyServiceError(
+                "venta_total_snapshot_id debe ser positivo."
+            )
+
+        snapshot = VentaTotalSnapshotORM.query.filter_by(
+            id=normalized_id,
+            business_date=business_date,
+            snapshot_kind="daily",
+        ).first()
+
+        if snapshot is None or snapshot.report_type_key != "venta_total":
+            raise TrackSourceDomiciliadosEfectivosDailyServiceError(
+                "El snapshot indicado no es Venta Total daily para "
+                f"{business_date.isoformat()}: id={normalized_id}."
+            )
+        return snapshot
+
     exact_snapshot = (
         VentaTotalSnapshotORM.query.filter_by(
             business_date=business_date,
@@ -151,15 +180,17 @@ def _resolve_venta_total_snapshot_for_track_date(
 def build_track_source_domiciliados_efectivos_daily_for_date(
     *,
     business_date: Any,
+    venta_total_snapshot_id: int | None = None,
 ) -> list[dict[str, Any]]:
     normalized_business_date = _ensure_date(
         business_date,
         field_name="business_date",
     )
 
-    snapshot = _resolve_venta_total_snapshot_for_track_date(
-        business_date=normalized_business_date,
-    )
+    snapshot_kwargs = {"business_date": normalized_business_date}
+    if venta_total_snapshot_id is not None:
+        snapshot_kwargs["venta_total_snapshot_id"] = venta_total_snapshot_id
+    snapshot = _resolve_venta_total_snapshot_for_track_date(**snapshot_kwargs)
 
     rows = (
         VentaTotalSnapshotRowORM.query.filter_by(snapshot_id=snapshot.id)
@@ -224,15 +255,18 @@ def build_track_source_domiciliados_efectivos_daily_for_date(
 def refresh_track_source_domiciliados_efectivos_daily_for_date(
     *,
     business_date: Any,
+    venta_total_snapshot_id: int | None = None,
+    auto_commit: bool = True,
 ) -> dict[str, Any]:
     normalized_business_date = _ensure_date(
         business_date,
         field_name="business_date",
     )
 
-    rows = build_track_source_domiciliados_efectivos_daily_for_date(
-        business_date=normalized_business_date,
-    )
+    build_kwargs = {"business_date": normalized_business_date}
+    if venta_total_snapshot_id is not None:
+        build_kwargs["venta_total_snapshot_id"] = venta_total_snapshot_id
+    rows = build_track_source_domiciliados_efectivos_daily_for_date(**build_kwargs)
 
     try:
         TrackSourceDomiciliadosEfectivosDailyORM.query.filter_by(
@@ -253,10 +287,12 @@ def refresh_track_source_domiciliados_efectivos_daily_for_date(
                 )
             )
 
-        db.session.commit()
+        if auto_commit:
+            db.session.commit()
 
     except Exception:
-        db.session.rollback()
+        if auto_commit:
+            db.session.rollback()
         raise
 
     return {

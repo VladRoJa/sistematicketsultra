@@ -38,3 +38,13 @@
   .variable-row { flex-wrap: wrap; }
   .catalog-table table { min-width: 640px; }
 }
+
+
+/* UX: tighter catalog cards, not smaller interactive controls. */
+.dispatch-admin { min-width:min(790px,88vw); }
+.disclaimer { margin-bottom: 10px; padding: 9px 11px; }
+.catalog { margin: 8px 0; padding: 12px; }
+.catalog-table { margin-top: 8px; }
+.catalog-table th,.catalog-table td { padding: 8px 9px; }
+.editor-card { padding: 12px; }
+.subheading { margin: 12px 0 6px; }

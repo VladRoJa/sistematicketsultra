@@ -1,0 +1,71 @@
+name: Campaign V2 Stage E Safety Gates
+
+on:
+  pull_request:
+    paths:
+      - "backend/tests/marketing/test_issue_856_stage_e_gates.py"
+      - "backend/app/routes/marketing_campaign_v2_routes.py"
+      - "backend/app/services/marketing_campaign_v2_governed_dispatch_service.py"
+      - "backend/app/services/marketing_campaign_v2_dispatch_approval_service.py"
+      - "backend/app/services/marketing_campaign_v2_manifest_service.py"
+      - "backend/app/services/marketing_campaign_v2_governed_monitor_service.py"
+      - "frontend/src/app/marketing-campaign-v2/**"
+      - ".github/workflows/campaign-v2-stage-e-safety-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  stage-e-backend-and-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: quota_ci
+          POSTGRES_PASSWORD: synthetic-quota-only
+          POSTGRES_DB: quota_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U quota_ci -d quota_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      SECRET_KEY: synthetic-issue-856-stage-e
+      JWT_SECRET_KEY: synthetic-issue-856-stage-e-jwt
+      QUOTA_TEST_POSTGRES_URL: postgresql://quota_ci:synthetic-quota-only@127.0.0.1:5432/quota_ci
+      CAMPAIGN_V2_PROVIDER_SEND_ENABLED: "false"
+      CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install backend dependencies
+        run: |
+          python -m pip install -r backend/requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Assert release flags remain off in CI
+        working-directory: backend
+        run: |
+          python - <<'PY'
+          import os
+          assert os.environ.get("CAMPAIGN_V2_PROVIDER_SEND_ENABLED") == "false"
+          assert os.environ.get("CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED") == "false"
+          print("RELEASE_FLAGS_BOTH_OFF")
+          PY
+      - name: Negative gateway, PostgreSQL durable claim and regression
+        working-directory: backend
+        run: |
+          python -m pytest -q --tb=short \
+            tests/marketing/test_issue_856_stage_e_gates.py \
+            tests/marketing/test_marketing_campaign_v2_quota_routes.py \
+            tests/marketing/test_marketing_campaign_v2_quota_execution.py \
+            tests/marketing/test_marketing_campaign_v2_quota_dispatch_real_pg.py \
+            tests/marketing/test_marketing_campaign_v2_quota_monitor.py \
+            tests/marketing/test_marketing_campaign_v2_quota_approval.py \
+            tests/marketing/test_marketing_campaign_v2_quota_manifest.py \
+            tests/marketing/test_marketing_campaign_v2_qa_http.py

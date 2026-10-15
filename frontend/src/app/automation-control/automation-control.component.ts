@@ -5,7 +5,7 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { AutomationObservationDialogComponent, AutomationObservationDialogData } from './automation-observation-dialog.component';
 import { AutomationErrorDetailDialogComponent, AutomationErrorDialogData } from './automation-error-detail-dialog.component';
-import { catchError, forkJoin, of, Subject, takeUntil } from 'rxjs';
+import { catchError, forkJoin, from, map, mergeMap, of, Subject, takeUntil } from 'rxjs';
 import { AutomationControlService } from './automation-control.service';
 import { DataFreshnessService, DatasetFreshness, FreshnessDatasetKey } from '../shared/data-freshness-indicator/data-freshness.service';
 import { DataFreshnessIndicatorComponent } from '../shared/data-freshness-indicator/data-freshness-indicator.component';
@@ -32,6 +32,9 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
 
   private readonly destroyed$=new Subject<void>();
   private sequence=0;
+  private latestRunSequence=0;
+  latestRuns:Record<string,Run|null>={};
+  latestRunUnavailable:Record<string,boolean>={};
   summary:Summary|null=null; jobs:Job[]=[]; datasets:Dataset[]=[];
   datasetEvidence:Record<string,DatasetFreshness|null>={};
   selected:Job|null=null; runs:Run[]=[]; coverage='UNKNOWN'; offset=0; hasMore=false;
@@ -156,7 +159,7 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
   }
   refresh():void {
     this.loadTimeline();
-    this.sequence++;this.loading=true;this.error='';
+    this.sequence++;this.latestRunSequence++;this.loading=true;this.error='';
     forkJoin({summary:this.api.summary(),jobs:this.api.jobs(),datasets:this.api.datasets(),
       health:this.api.workerHealth().pipe(catchError(() => of(null))),
       schedules:this.api.effectiveSchedules().pipe(catchError(() => of(null))),
@@ -165,6 +168,7 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
       .pipe(takeUntil(this.destroyed$)).subscribe({
         next:({summary,jobs,datasets,health,schedules,funnel,track})=>{
           this.summary=summary;this.jobs=jobs.jobs;this.datasets=datasets.datasets;this.loading=false;
+          this.loadLatestRuns(this.jobs);
           this.configUnavailable=!schedules;
           this.effectiveSchedules=schedules?.jobs??[];
           this.datasetEvidence={'marketing.sales_funnel':funnel,'track.daily':track};
@@ -267,6 +271,65 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
       next:r=>{if(seq!==this.sequence)return;this.runs=r.rows;this.coverage=r.coverage;
         this.hasMore=r.has_more;this.loadingRuns=false;},
       error:()=>{if(seq!==this.sequence)return;this.loadingRuns=false;this.runsError='No se pudo cargar el historial.';}
+    });
+  }
+  /** Solo el último intento atribuido a cada job; NO es un SLA de datos. */
+  private loadLatestRuns(jobs:Job[]):void {
+    const sequence=++this.latestRunSequence;
+    this.latestRuns={};
+    this.latestRunUnavailable={};
+    const instrumented=jobs.filter(job=>job.run_history_coverage!=='NOT_INSTRUMENTED');
+    from(instrumented).pipe(
+      mergeMap(job=>this.api.runs(job.key,0,1).pipe(
+        map(response=>({key:job.key,run:response.rows[0]??null,unavailable:false})),
+        catchError(()=>of({key:job.key,run:null,unavailable:true})),
+      ),4),
+      takeUntil(this.destroyed$),
+    ).subscribe(({key,run,unavailable})=>{
+      if(sequence!==this.latestRunSequence)return;
+      this.latestRuns[key]=run;
+      if(unavailable)this.latestRunUnavailable[key]=true;
+    });
+  }
+  latestRun(job:Job):Run|null {
+    return this.latestRuns[job.key]??null;
+  }
+  latestRunTime(job:Job):string {
+    const run=this.latestRun(job);
+    return run
+      ? this.formatDate(run.finished_at_utc||run.observed_at_utc||run.started_at_utc)
+      : '—';
+  }
+  latestRunState(job:Job):ObservationState {
+    const run=this.latestRun(job);
+    return run?classifyObservationRuns([run]):'unknown';
+  }
+  latestRunStatus(job:Job):string {
+    if(job.run_history_coverage==='NOT_INSTRUMENTED')return 'Sin instrumentación';
+    if(!(job.key in this.latestRuns))return 'Consultando…';
+    if(this.latestRunUnavailable[job.key])return 'No verificable';
+    const run=this.latestRun(job);
+    if(!run)return 'Sin registro';
+    // El audit de reportes solo acredita finalizaciones, no captura fallos.
+    if(job.run_history_coverage==='COMPLETION_MARKERS_ONLY')return 'Finalización observada';
+    const labels:Record<ObservationState,string>={
+      completed:'OK',replaced:'Sustituida',running:'Ejecutando',
+      partial:'Parcial',error:'FALLÓ',unknown:'No verificable',
+    };
+    return labels[this.latestRunState(job)];
+  }
+  latestRunIsFailure(job:Job):boolean {
+    const run=this.latestRun(job);
+    return job.run_history_coverage==='DOMAIN_RUNS' &&
+      !!run && ['FAILED','ERROR','TIMED_OUT','PARTIAL'].includes(
+        run.status_raw.trim().toUpperCase());
+  }
+  openLatestFailure(job:Job):void {
+    const run=this.latestRun(job);
+    if(!run||!this.latestRunIsFailure(job))return;
+    this.dialog.open(AutomationErrorDetailDialogComponent,{
+      data:{jobKey:job.key,jobLabel:job.label,runId:run.run_id},
+      width:'min(610px,96vw)',maxWidth:'96vw',autoFocus:false,
     });
   }
   formatDate(value:string|null):string {

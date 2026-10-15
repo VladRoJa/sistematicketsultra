@@ -2,9 +2,19 @@
 import importlib.util
 import os
 from pathlib import Path
+from datetime import date
+from types import SimpleNamespace
 
 import pytest
 import sqlalchemy as sa
+from flask import Flask
+from app.extensions import db
+from app.warehouse.services.track_version_roster_capture_service import (
+    TrackVersionRosterCaptureError,
+    capture_roster_for_version,
+    normalized_roster,
+    roster_digest,
+)
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 
@@ -142,5 +152,63 @@ def test_pg_roster_capture_sealing_and_no_retrospective_claims():
 
             with pytest.raises(RuntimeError, match="No se elimina evidencia"):
                 mod.downgrade()
+        # Stage 2: actual Flask SQLAlchemy session against the committed
+        # synthetic PostgreSQL schema. A single version gets one sealed
+        # snapshot; the service NEVER commits (the owning mart refresh does).
+        app = Flask(__name__ + "_m1f6_capture")
+        app.config["SQLALCHEMY_DATABASE_URI"] = url
+        db.init_app(app)
+        with app.app_context():
+            branches = [
+                SimpleNamespace(sucursal_canon="VILLAS_DEL_REY", sucursal_id=8),
+                SimpleNamespace(sucursal_canon="TEC_MXL", sucursal_id=7),
+            ]
+            rows = [
+                {"sucursal_canon": "TEC_MXL", "track_date": "2026-10-14",
+                 "generation_mode": "official_closed_day"},
+                {"sucursal_canon": "VILLAS_DEL_REY", "track_date": "2026-10-14",
+                 "generation_mode": "official_closed_day"},
+            ]
+            expected = roster_digest(normalized_roster(branches))
+            captured = capture_roster_for_version(
+                version_id=503,
+                track_date=date(2026, 10, 14),
+                branch_rows=branches,
+                mart_rows=rows,
+                generation_mode="official_closed_day",
+            )
+            assert captured["roster_sha256"] == expected
+            assert captured["historical_roster_verified"] is False
+            db.session.commit()
+
+            with pytest.raises(TrackVersionRosterCaptureError):
+                capture_roster_for_version(
+                    version_id=503, track_date=date(2026, 10, 14),
+                    branch_rows=branches, mart_rows=rows,
+                    generation_mode="official_closed_day",
+                )
+            db.session.rollback()
+
+            with pytest.raises(sa.exc.DBAPIError):
+                capture_roster_for_version(
+                    version_id=502, track_date=date(2026, 10, 13),
+                    branch_rows=branches,
+                    mart_rows=[{**row, "track_date": "2026-10-13"} for row in rows],
+                    generation_mode="official_closed_day",
+                )
+            db.session.rollback()
+            db.session.remove()
+        with engine.connect() as conn:
+            result = conn.exec_driver_sql("""
+                SELECT expected_branch_count, roster_sha256,
+                       historical_roster_verified, sealed_at_utc IS NOT NULL
+                  FROM track_version_roster_snapshots WHERE version_id=503
+            """).one()
+            assert result == (2, expected, False, True)
+            assert conn.exec_driver_sql("""
+                SELECT sucursal_canon, sucursal_id_at_capture
+                  FROM track_version_roster_members WHERE version_id=503
+                  ORDER BY sucursal_canon
+            """).all() == [("TEC_MXL", 7), ("VILLAS_DEL_REY", 8)]
     finally:
         engine.dispose()

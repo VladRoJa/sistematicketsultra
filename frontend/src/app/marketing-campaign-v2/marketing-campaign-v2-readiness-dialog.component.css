@@ -30,3 +30,11 @@ td small { display:block; color:#64748b; margin-top:4px; max-width:215px; overfl
 .portfolio-entry strong { color:#0f172a; }
 .portfolio-entry span,.portfolio-entry small { color:#64748b; font-size:11px; }
 @media(max-width:760px) { .portfolio-grid,.portfolio-rows { grid-template-columns:minmax(0,1fr); } }
+
+
+/* UX: concise channel-readiness summary. */
+.counts { gap: 7px; margin: 9px 0; }
+.counts div { padding: 9px 10px; }
+.counts strong { font-size: 20px; }
+.portfolio-catalog { padding: 10px; margin: 10px 0 12px; }
+th,td { padding: 8px 9px; }
