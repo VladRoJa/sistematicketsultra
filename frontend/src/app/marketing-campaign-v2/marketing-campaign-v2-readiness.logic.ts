@@ -81,7 +81,6 @@ export function campaignV2BuildReadinessRows(
     if (policy?.portfolio_key && (byPortfolio.get(policy.portfolio_key)?.size ?? 0) > 1) {
       issues.push('Límites inconsistentes del portafolio');
     }
-    if (!rate) { issues.push('Tarifa MXN pendiente'); }
     return {
       sucursalCanon: binding.sucursal_canon,
       channelId: binding.provider_channel_id,
