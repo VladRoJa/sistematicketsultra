@@ -2,8 +2,8 @@
   <header class="dialog-header">
     <div>
       <span class="eyebrow">Campaign V2</span>
-      <h2>Catalogar tarifas sin clasificación</h2>
-      <p>Ordenadas por impacto. Cada fila representa una tarifa única normalizada, no un socio.</p>
+      <h2>Clasificar tarifas pendientes</h2>
+      <p>Las tarifas con más contactos aparecen primero. Cada fila representa una tarifa diferente, no un contacto.</p>
     </div>
     <button mat-button type="button" (click)="close()">Cerrar</button>
   </header>
@@ -18,7 +18,7 @@
   <div *ngIf="!loading && !error" class="summary">
     <strong>{{ rows.length | number }}</strong> tarifas únicas ·
     <strong>{{ totalUnclassifiedRows | number }}</strong> filas sin clasificación
-    <span *ngIf="unkeyedRowCount > 0"> · {{ unkeyedRowCount | number }} sin key catalogable</span>
+    <span *ngIf="unkeyedRowCount > 0"> · {{ unkeyedRowCount | number }} sin clave reconocida</span>
   </div>
 
   <div *ngIf="!loading && rows.length" class="table-wrapper">
@@ -75,7 +75,7 @@
             >
               {{ row.saving ? 'Guardando…' : (row.saved ? 'Actualizar' : 'Guardar') }}
             </button>
-            <small *ngIf="row.saved" class="saved">Clasificación guardada</small>
+            <small *ngIf="row.saved" class="saved">Clasificación actualizada</small>
             <small *ngIf="row.error" class="row-error">{{ row.error }}</small>
           </td>
         </tr>
