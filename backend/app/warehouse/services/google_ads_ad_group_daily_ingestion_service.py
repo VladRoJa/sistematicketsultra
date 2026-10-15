@@ -98,6 +98,7 @@ def import_google_ads_ad_group_warehouse_upload(*, warehouse_upload_id: int) -> 
     try:
         upload, content = _upload_content(
             warehouse_upload_id, report_type_key=REPORT_TYPE_KEY,
+            max_file_bytes=10 * 1024 * 1024,
         )
         parsed = parse_google_ads_ad_group_daily_xlsx(content)
     except (GoogleAdsDailyIngestionError, GoogleAdsXlsxValidationError) as exc:

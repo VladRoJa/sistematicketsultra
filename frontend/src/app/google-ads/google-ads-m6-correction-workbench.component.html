@@ -1,0 +1,156 @@
+<section class="m6-correction" *ngIf="visible" aria-labelledby="m6-correction-title">
+  <header class="m6-correction__heading">
+    <div>
+      <p class="m6-correction__eyebrow">Google Ads M6 · Control de cambios</p>
+      <h2 id="m6-correction-title">Correcciones históricas auditadas</h2>
+      <p>La carga, la preparación, la revisión independiente y la publicación son
+        acciones separadas. Ningún paso publica datos automáticamente.</p>
+    </div>
+    <button type="button" class="m6-correction__secondary" (click)="refreshCases()"
+      [disabled]="busy" aria-label="Actualizar expedientes">Actualizar expedientes</button>
+  </header>
+
+  <p role="alert" class="m6-correction__error" *ngIf="error">{{ error }}</p>
+  <p role="status" class="m6-correction__success" *ngIf="message">{{ message }}</p>
+
+  <section class="m6-correction__panel" *ngIf="capabilities?.can_stage_raw">
+    <h3>1. Validar nuevos RAW de corrección</h3>
+    <p>Solo se permite una pareja nueva de Excel para un corte anterior documentado.
+      Los RAW existentes nunca se reemplazan ni eliminan.</p>
+    <div class="m6-correction__grid">
+      <label>Informe de campañas · XLSX
+        <input type="file" accept=".xlsx" aria-label="Excel de campañas para corrección"
+          [disabled]="busy" (change)="changeFile('campaign', $event)" />
+        <small>{{ campaignFile?.name || 'Sin archivo' }} · máximo 8 MB</small>
+      </label>
+      <label>Informe de grupos · XLSX
+        <input type="file" accept=".xlsx" aria-label="Excel de grupos para corrección"
+          [disabled]="busy" (change)="changeFile('group', $event)" />
+        <small>{{ groupFile?.name || 'Sin archivo' }} · máximo 10 MB</small>
+      </label>
+    </div>
+    <label class="m6-correction__full">Motivo de la corrección
+      <textarea rows="2" maxlength="500" [(ngModel)]="reason"
+        (ngModelChange)="changeReason()" [disabled]="busy"
+        placeholder="Describe qué cambió y por qué debe corregirse el corte"></textarea>
+    </label>
+    <button type="button" class="m6-correction__primary" (click)="previewFiles()"
+      [disabled]="!canPreview">Validar pareja excepcional</button>
+
+    <div class="m6-correction__summary" *ngIf="previewData as preview">
+      <h4>Vista previa · {{ preview.business_date }}</h4>
+      <p>Revisión propuesta {{ preview.revision }} ·
+        {{ preview.campaign_rows }} campañas · {{ preview.group_rows }} grupos</p>
+      <div class="m6-correction__amounts">
+        <div><span>Cuenta</span><strong>{{ money(preview.account_cost_mxn) }}</strong></div>
+        <div><span>Asignado</span><strong>{{ money(preview.branch_cost_mxn) }}</strong></div>
+        <div><span>No asignado</span><strong>{{ money(preview.unassigned_cost_mxn) }}</strong></div>
+      </div>
+      <label class="m6-correction__confirm">
+        <input type="checkbox" [(ngModel)]="acceptRaw" [disabled]="busy" />
+        Confirmo guardar únicamente nuevos RAW, sin modificar los documentos anteriores.
+      </label>
+      <button type="button" class="m6-correction__primary" [disabled]="!canConfirmRaw"
+        (click)="confirmRaw()">Confirmar RAW de corrección</button>
+    </div>
+    <div class="m6-correction__summary" *ngIf="rawData as raw">
+      <p>Estado RAW: <strong>{{ raw.status }}</strong></p>
+      <p *ngIf="raw.status === 'PARTIAL_RAW'">Carga parcial: puedes reintentar la
+        confirmación con exactamente los mismos archivos.</p>
+      <div *ngIf="raw.status === 'CORRECTION_RAW_PAIR_STAGED'">
+        <p>Los dos documentos están registrados. Todavía no hay métricas publicadas.</p>
+        <label class="m6-correction__confirm" *ngIf="capabilities?.can_ingest">
+          <input type="checkbox" [(ngModel)]="acceptStage" [disabled]="busy" />
+          Confirmo crear un expediente estructurado sin publicar información.
+        </label>
+        <button type="button" class="m6-correction__primary" *ngIf="capabilities?.can_ingest"
+          [disabled]="!canStage" (click)="stageCandidate()">Preparar candidato sin publicar</button>
+      </div>
+    </div>
+    <p class="m6-correction__success" *ngIf="staged as result">
+      Expediente #{{ result.case_id }} creado para revisión independiente.
+    </p>
+  </section>
+
+  <section class="m6-correction__panel">
+    <h3>2. Expedientes pendientes y publicados</h3>
+    <p>Consulta un expediente para verificar su procedencia, diferencias de inversión,
+      revisor y estado de publicación antes de autorizar cualquier acción.</p>
+    <div *ngIf="!cases.length" class="m6-correction__empty">
+      No hay expedientes visibles. Usa Actualizar expedientes para consultar nuevamente.
+    </div>
+    <div class="m6-correction__case-list" *ngIf="cases.length">
+      <button type="button" class="m6-correction__case" *ngFor="let item of cases; trackBy: trackCase"
+        [disabled]="busy" (click)="inspect(item.case_id)">
+        <span><strong>#{{ item.case_id }}</strong> · {{ item.business_date }} · revisión {{ item.revision }}</span>
+        <span>{{ item.decision === 'PENDING' ? 'Pendiente de revisión' :
+          item.decision === 'APPROVED' ? 'Aprobado' : 'Rechazado' }}</span>
+      </button>
+    </div>
+
+    <div class="m6-correction__summary" *ngIf="selectedCase as detail">
+      <h4>Expediente #{{ detail.case_id }} · {{ detail.business_date }}</h4>
+      <p>{{ detail.status }} · Revisión {{ detail.revision }} ·
+        {{ detail.campaign_rows }} campañas / {{ detail.group_rows }} grupos</p>
+      <p><strong>Motivo:</strong> {{ detail.reason }}</p>
+      <div class="m6-correction__amounts">
+        <div><span>Nuevo gasto</span><strong>{{ money(detail.candidate_account_cost_mxn) }}</strong></div>
+        <div><span>Gasto anterior</span><strong>{{ money(detail.previous_account_cost_mxn) }}</strong></div>
+        <div><span>Diferencia</span><strong>{{ money(detail.delta_account_cost_mxn) }}</strong></div>
+      </div>
+      <details>
+        <summary>Ver distribución de las 26 sucursales</summary>
+        <ul class="m6-correction__branch-list">
+          <li *ngFor="let branch of detail.branch_costs_mxn">
+            <span>{{ branch.sucursal_canon }}</span><strong>{{ money(branch.cost_mxn) }}</strong>
+          </li>
+        </ul>
+      </details>
+      <p *ngIf="detail.decision as decision" class="m6-correction__evidence">
+        Dictamen: <strong>{{ decision.decision }}</strong> ·
+        Revisor #{{ decision.reviewed_by_user_id }} · SHA256
+        <code>{{ decision.snapshot_sha256 }}</code>
+      </p>
+      <p *ngIf="detail.promotion as promotion" class="m6-correction__evidence">
+        Publicación canónica #{{ promotion.publication_id }} registrada.
+      </p>
+
+      <div class="m6-correction__sensitive" *ngIf="capabilities?.can_review && !detail.decision">
+        <h4>3. Decisión de revisor independiente</h4>
+        <p>El solicitante no puede aprobar su propio expediente. La decisión y la
+          huella de los hechos quedarán auditadas y no podrán reemplazarse.</p>
+        <label>Dictamen
+          <select [(ngModel)]="reviewDecision" [disabled]="busy">
+            <option value="APPROVED">Aprobar expediente</option>
+            <option value="REJECTED">Rechazar expediente</option>
+          </select>
+        </label>
+        <label class="m6-correction__full">Justificación del dictamen
+          <textarea rows="3" maxlength="1000" [(ngModel)]="reviewNote"
+            [disabled]="busy" placeholder="Fundamento de la revisión independiente"></textarea>
+        </label>
+        <label class="m6-correction__confirm">
+          <input type="checkbox" [(ngModel)]="acceptReview" [disabled]="busy" />
+          Confirmo la revisión independiente de los RAW, cifras e identidades.
+          Esta decisión no publica nada.
+        </label>
+        <button type="button" class="m6-correction__primary"
+          [disabled]="!canReview" (click)="submitReview()">Registrar dictamen auditado</button>
+      </div>
+
+      <div class="m6-correction__sensitive"
+        *ngIf="capabilities?.can_promote && detail.decision?.decision === 'APPROVED' && !detail.promotion">
+        <h4>4. Publicación canónica excepcional</h4>
+        <p>Solo ADMICORP puede publicar una revisión aprobada por otra persona.
+          La versión anterior se conserva; Funnel utilizará la nueva versión canónica.</p>
+        <label class="m6-correction__confirm">
+          <input type="checkbox" [(ngModel)]="acceptPromotion" [disabled]="busy" />
+          Autorizo promover esta revisión y sustituir únicamente la referencia canónica
+          del día, sin editar RAW ni hechos anteriores.
+        </label>
+        <button type="button" class="m6-correction__primary"
+          [disabled]="!canPromote" (click)="publishCorrection()">Publicar revisión aprobada</button>
+      </div>
+    </div>
+  </section>
+</section>

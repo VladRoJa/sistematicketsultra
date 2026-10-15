@@ -632,6 +632,10 @@ export class MarketingSalesFunnelOriginalComponent implements OnInit {
       evidence.account_cost_observed !== undefined &&
       evidence.unassigned_cost_observed !== undefined;
 
+    const observedPeriod = available && evidence.observed_from && evidence.observed_to
+      ? `${this.formatDate(evidence.observed_from)} a ${this.formatDate(evidence.observed_to)}`
+      : '24 sep–8 oct 2026';
+
     return {
       title: 'Google Ads · atribución histórica por sucursal',
       status: evidence.status,
@@ -647,7 +651,7 @@ export class MarketingSalesFunnelOriginalComponent implements OnInit {
         ? this.formatMoneyPrecise(evidence.unassigned_cost_observed!)
         : null,
       rows,
-      note: 'Atribución provisional de Excel (24 sep–8 oct 2026). ' +
+      note: `Atribución provisional de Excel (${observedPeriod}). ` +
         'Pases y compras son conversiones informadas por Google Ads, no ventas CRM. ' +
         'Este desglose no se suma otra vez al gasto de cuenta y no cambia Meta, CPL, CPT ni CAC.',
     };
