@@ -1,7 +1,7 @@
 <h2 mat-dialog-title>Prueba interna · preparar un contacto</h2>
 <mat-dialog-content class="qa">
   <p class="intro">Preparación controlada: <strong>una sucursal, un canal y un solo contacto</strong>.
-    El Preview no escribe en la base de datos. Congelar crea una campaña QA, pero
+    Revisar los datos no guarda nada. Guardar la prueba crea una campaña interna, pero
     <strong>no se envían mensajes ni se autorizan envíos</strong>. El envío requiere un proceso y
     una autorización distintos.</p>
 
@@ -47,7 +47,7 @@
 
   <div class="qa-actions" *ngIf="!frozen">
     <button mat-flat-button color="primary" type="button" (click)="previewQa()" [disabled]="!canPreview">
-      Generar Preview QA
+      Revisar datos de la prueba
     </button>
   </div>
   <section class="preview" *ngIf="preview as p">
@@ -61,12 +61,12 @@
       <dt>Referencia de seguridad</dt><dd class="fingerprint">{{ p.preview_fingerprint }}</dd>
     </dl>
     <mat-checkbox [formControl]="confirmFreeze">
-      Confirmo que revisé el canal, el destinatario y el fingerprint;
-      autorizo únicamente congelar esta cohorte QA de un contacto, no enviar mensajes.
+      Confirmo que revisé el canal, el contacto y su referencia de seguridad;
+      autorizo únicamente guardar una campaña de prueba de un contacto, sin enviar mensajes.
     </mat-checkbox>
     <div class="qa-actions">
       <button mat-flat-button color="primary" type="button" (click)="freezeQa()" [disabled]="!canFreeze">
-        Congelar 1 contacto · SIN ENVÍO
+        Guardar prueba de 1 contacto · NO ENVÍA
       </button>
     </div>
   </section>
@@ -76,10 +76,10 @@
     <p>Sucursal: {{ result.sucursal_canon }} · Canal: {{ result.provider_channel_id }}</p>
     <p>Destinatarios: {{ result.recipient_count }} · Estado: Guardada</p>
     <p><strong>Todavía no se ha enviado ningún mensaje a iVentas.</strong> Para continuar, revisa la campaña en
-      el flujo normal de preflight; cualquier envío requiere aprobación explícita adicional.</p>
+      la revisión de envío normal; cualquier envío exige una aprobación adicional.</p>
   </section>
   <p class="footnote" *ngIf="!channels.length && !loading">No hay canales predeterminados activos únicos;
-    revisa Configuración de canales antes de preparar QA.</p>
+    revisa la configuración de canales antes de preparar la prueba.</p>
 </mat-dialog-content>
 <mat-dialog-actions align="end">
   <button mat-button type="button" (click)="close()">Cerrar</button>
