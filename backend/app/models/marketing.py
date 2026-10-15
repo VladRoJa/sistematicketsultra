@@ -635,7 +635,9 @@ class MarketingCampaignV2DispatchApprovalORM(db.Model):
     )
     dispatch_fingerprint = db.Column(db.String(64), nullable=False)
     recipient_count = db.Column(db.Integer, nullable=False)
-    approved_estimated_mxn = db.Column(db.Numeric(14, 2), nullable=False)
+    # Legacy MXN approvals remain immutable; new approvals use the USD column.
+    approved_estimated_mxn = db.Column(db.Numeric(14, 2), nullable=True)
+    approved_estimated_usd = db.Column(db.Numeric(14, 4), nullable=True)
     manifest_json = db.Column(db.JSON, nullable=False, default=dict)
     approved_by_user_id = db.Column(
         db.Integer, db.ForeignKey("users.id", ondelete="RESTRICT"), nullable=False,
@@ -647,6 +649,11 @@ class MarketingCampaignV2DispatchApprovalORM(db.Model):
         db.UniqueConstraint("campaign_v2_id", name="uq_mkt_v2_approval_campaign"),
         db.CheckConstraint("recipient_count > 0", name="ck_mkt_v2_approval_recipients"),
         db.CheckConstraint("approved_estimated_mxn >= 0", name="ck_mkt_v2_approval_cost"),
+        db.CheckConstraint(
+            "(approved_estimated_mxn IS NOT NULL AND approved_estimated_usd IS NULL) OR "
+            "(approved_estimated_mxn IS NULL AND approved_estimated_usd IS NOT NULL AND approved_estimated_usd >= 0)",
+            name="ck_mkt_v2_approval_exactly_one_currency",
+        ),
         db.CheckConstraint("length(dispatch_fingerprint) = 64", name="ck_mkt_v2_approval_fingerprint"),
         db.CheckConstraint("approved_at < expires_at", name="ck_mkt_v2_approval_window"),
     )

@@ -28,7 +28,7 @@ from app.services.marketing_campaign_v2_dispatch_approval_service import (
     _assess_scopes, _database_date,
 )
 from app.services.marketing_campaign_v2_manifest_service import (
-    _assert_manifest, _validate_existing,
+    _assert_manifest, _validate_existing, budget_for_existing_approval,
 )
 from app.services.marketing_campaign_v2_preflight_service import (
     build_campaign_v2_preflight, build_provider_campaign_idempotency_key,
@@ -88,7 +88,9 @@ def _locked_review(*, campaign_id: int, session: Any, now: datetime,
         campaign_id=campaign_id, template_id=int(approval.template_id),
         allowed_sucursal_keys=allowed_sucursal_keys, session=session, now=now,
     )
-    budget = estimate_preflight_cost(plan=plan, session=session, now=now)
+    budget = budget_for_existing_approval(
+        plan=plan, approval=approval, session=session, now=now,
+    )
     manifest = _assert_manifest(plan, budget, approval)
     original_ready = tuple(
         batch for batch in plan.batches
@@ -115,8 +117,8 @@ def _locked_review(*, campaign_id: int, session: Any, now: datetime,
         allowed_sucursal_keys=allowed_sucursal_keys, session=session,
         now=effective_now,
     )
-    refreshed_budget = estimate_preflight_cost(
-        plan=refreshed, session=session, now=effective_now,
+    refreshed_budget = budget_for_existing_approval(
+        plan=refreshed, approval=approval, session=session, now=effective_now,
     )
     refreshed_manifest = _assert_manifest(refreshed, refreshed_budget, approval)
     if (refreshed.dispatch_fingerprint != plan.dispatch_fingerprint or

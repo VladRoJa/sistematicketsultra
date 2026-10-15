@@ -118,6 +118,7 @@ from app.services.marketing_campaign_v2_dispatch_approval_service import (
     approve_dispatch_reservation,
     get_dispatch_approval,
 )
+from app.services.marketing_campaign_v2_usd_pricing_service import estimate_automatic_usd_maximum
 from app.services.marketing_campaign_v2_budget_service import (
     CampaignV2BudgetValidationError,
     CampaignV2BudgetConflictError,
@@ -1362,7 +1363,7 @@ def campaign_v2_dispatch_approval_endpoint(campaign_id: int):
         payload = _parse_payload({
             "template_id", "expected_dispatch_fingerprint",
             "expected_quote_fingerprint",
-            "expected_recipients", "expected_total_mxn", "held_sucursal_canons",
+            "expected_recipients", "expected_total_mxn", "pricing_currency", "held_sucursal_canons",
             "held_source_references",
         })
         row = approve_dispatch_reservation(
@@ -1372,6 +1373,7 @@ def campaign_v2_dispatch_approval_endpoint(campaign_id: int):
             expected_quote_fingerprint=payload.get("expected_quote_fingerprint"),
             expected_recipients=payload.get("expected_recipients"),
             expected_total_mxn=payload.get("expected_total_mxn"),
+            pricing_currency=payload.get("pricing_currency", "MXN"),
             held_sucursal_canons=payload.get("held_sucursal_canons"),
             held_source_references=payload.get("held_source_references"),
             actor_user_id=int(user.id),
@@ -2335,6 +2337,8 @@ def campaign_v2_preflight_endpoint(campaign_id: int):
             result["budget"] = estimate_preflight_cost(
                 plan=plan, session=db.session,
             )
+            if isinstance(plan, CampaignV2PreflightPlan):
+                result["budget_usd"] = estimate_automatic_usd_maximum(plan=plan)
         submit_state = get_campaign_v2_submit_state(
             campaign_id=campaign_id,
             session=db.session,

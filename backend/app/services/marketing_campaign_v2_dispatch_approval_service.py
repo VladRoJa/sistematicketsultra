@@ -26,6 +26,7 @@ from app.models.marketing import (
 )
 from app.services.marketing_campaign_v2_preflight_service import build_campaign_v2_preflight
 from app.services.marketing_campaign_v2_budget_service import estimate_preflight_cost
+from app.services.marketing_campaign_v2_usd_pricing_service import estimate_automatic_usd_maximum
 from app.services.marketing_campaign_v2_quota_service import (
     assess_preflight_capacity, _database_date,
 )
@@ -170,12 +171,16 @@ def _reserve_locked(
         raise CampaignV2ApprovalConflictError("Fingerprint cambió; vuelve a revisar.")
     if len(plan.sendable_phones) != expected_count:
         raise CampaignV2ApprovalConflictError("Volumen cambió; vuelve a revisar.")
+    currency = budget.get("currency")
+    quote_amount = (
+        budget.get("maximum_estimated_usd") if currency == "USD"
+        else budget.get("total_estimated_mxn") if currency == "MXN" else None
+    )
     if (budget["quote_fingerprint"] != expected_quote or
-            budget["status"] != "COMPLETE" or budget["currency"] != "MXN" or
+            budget["status"] != "COMPLETE" or
             budget["sendable_recipients"] != expected_count or
-            budget["total_estimated_mxn"] is None or
-            Decimal(budget["total_estimated_mxn"]) != expected_cost):
-        raise CampaignV2ApprovalConflictError("Costo o revisión de tarifa cambió.")
+            quote_amount is None or Decimal(quote_amount) != expected_cost):
+        raise CampaignV2ApprovalConflictError("Presupuesto o destinatarios cambiaron.")
 
     operational = (bool(quota_rows) and all(
         row.get("policy_revision_id") is not None for row in quota_rows.values()
@@ -242,8 +247,9 @@ def _reserve_locked(
             "operator_portfolio_cap": item.get("operator_portfolio_cap") if item else None,
             "portfolio_key": item["portfolio_key"] if item else None,
             "portfolio_attestation_id": item["portfolio_evidence_id"] if item else None,
-            "cost_rate_revision_id": price["revision_id"],
-            "estimated_mxn": price["estimated_mxn"],
+            "cost_rate_revision_id": price.get("revision_id") if currency == "MXN" else None,
+            "estimated_mxn": price.get("estimated_mxn") if currency == "MXN" else None,
+            "estimated_usd": price.get("maximum_estimated_usd") if currency == "USD" else None,
         })
 
     approval = MarketingCampaignV2DispatchApprovalORM(
@@ -251,10 +257,14 @@ def _reserve_locked(
         template_id=plan.batches[0].template_id,
         dispatch_fingerprint=plan.dispatch_fingerprint,
         recipient_count=expected_count,
-        approved_estimated_mxn=expected_cost,
+        approved_estimated_mxn=expected_cost if currency == "MXN" else None,
+        approved_estimated_usd=expected_cost if currency == "USD" else None,
         manifest_json={
             "version": "D2B_READY_HELD_V1",
             "quote_fingerprint": expected_quote,
+            "pricing_currency": currency,
+            "pricing_basis": budget.get("basis"),
+            "pricing_rate_version": budget.get("rate_version"),
             "basis": OPERATIONAL_BASIS if operational else "OPERATOR_ATTESTED_NOT_META_VERIFIED",
             "send_authorized": False,
             "schedule_mode": plan.mode,
@@ -279,8 +289,9 @@ def _reserve_locked(
         "dispatch_fingerprint": plan.dispatch_fingerprint,
         "quote_fingerprint": expected_quote,
         "approved_recipients": expected_count,
-        "approved_estimated_mxn": format(expected_cost, ".2f"),
-        "currency": "MXN", "approved_at": timestamp.isoformat(),
+        "approved_estimated_mxn": format(expected_cost, ".2f") if currency == "MXN" else None,
+        "approved_estimated_usd": format(expected_cost, ".4f") if currency == "USD" else None,
+        "currency": currency, "approved_at": timestamp.isoformat(),
         "expires_at": expiry.isoformat(),
         "reservation_scopes": len(quantities),
         "ready_batches": len(plan.batches) - len(held_names),
@@ -296,17 +307,28 @@ def approve_dispatch_reservation(
     expected_quote_fingerprint: Any, expected_recipients: Any, expected_total_mxn: Any, actor_user_id: Any,
     allowed_sucursal_keys: Any, held_sucursal_canons: Any = None,
     held_source_references: Any = None, session: Any | None = None,
-    now: datetime | None = None,
+    now: datetime | None = None, pricing_currency: str = "MXN",
 ) -> dict[str, Any]:
     """Reserve only, with PostgreSQL transaction-scoped locks; never dispatch."""
     if type(campaign_id) is not int or campaign_id <= 0:
         raise CampaignV2ApprovalValidationError("campaign_id inválido.")
     if type(template_id) is not int or template_id <= 0:
         raise CampaignV2ApprovalValidationError("template_id inválido.")
-    confirmation = _validate_confirmation(
-        expected_dispatch_fingerprint, expected_quote_fingerprint,
-        expected_recipients, expected_total_mxn, actor_user_id,
-    )
+    if pricing_currency not in ("MXN", "USD") or type(pricing_currency) is not str:
+        raise CampaignV2ApprovalValidationError("Moneda de presupuesto inválida.")
+    if pricing_currency == "USD":
+        # No operator-supplied price: validate digest, count and actor only.
+        if expected_total_mxn is not None:
+            raise CampaignV2ApprovalValidationError("USD automático no acepta montos MXN del navegador.")
+        confirmation = _validate_confirmation(
+            expected_dispatch_fingerprint, expected_quote_fingerprint,
+            expected_recipients, "0.00", actor_user_id,
+        )
+    else:
+        confirmation = _validate_confirmation(
+            expected_dispatch_fingerprint, expected_quote_fingerprint,
+            expected_recipients, expected_total_mxn, actor_user_id,
+        )
     timestamp = _timestamp(now)
     active = session if session is not None else db.session
     try:
@@ -368,7 +390,15 @@ def approve_dispatch_reservation(
             raise CampaignV2ApprovalConflictError(
                 "Cambió la membresía de portafolio; revisa y reintenta."
             )
-        budget = estimate_preflight_cost(plan=plan, session=active, now=timestamp)
+        budget = (
+            estimate_automatic_usd_maximum(plan=plan) if pricing_currency == "USD"
+            else estimate_preflight_cost(plan=plan, session=active, now=timestamp)
+        )
+        if pricing_currency == "USD":
+            confirmation = (
+                confirmation[0], confirmation[1], confirmation[2],
+                Decimal(budget["maximum_estimated_usd"]), confirmation[4],
+            )
         return _reserve_locked(
             plan=plan, budget=budget, confirmation=confirmation,
             session=active, timestamp=timestamp, quantities=quantities,
@@ -402,7 +432,11 @@ def get_dispatch_approval(*, campaign_id: int, session: Any | None = None) -> di
             "campaign_id": int(approval.campaign_v2_id),
             "dispatch_fingerprint": approval.dispatch_fingerprint,
             "approved_recipients": int(approval.recipient_count),
-            "approved_estimated_mxn": format(approval.approved_estimated_mxn, ".2f"),
+            "approved_estimated_mxn": format(approval.approved_estimated_mxn, ".2f")
+            if approval.approved_estimated_mxn is not None else None,
+            "approved_estimated_usd": format(approval.approved_estimated_usd, ".4f")
+            if approval.approved_estimated_usd is not None else None,
+            "currency": "USD" if approval.approved_estimated_usd is not None else "MXN",
             "approved_at": _database_date(approval.approved_at).isoformat(),
             "expires_at": _database_date(approval.expires_at).isoformat(),
             "status": "EXPIRED" if _database_date(approval.expires_at)
