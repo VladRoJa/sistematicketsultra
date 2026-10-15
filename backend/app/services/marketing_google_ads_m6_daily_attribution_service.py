@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal
+import os
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import aliased
 
@@ -17,6 +18,11 @@ from app.models.google_ads_daily import GoogleAdsDailyMetricORM
 from app.models.google_ads_ad_group_daily import GoogleAdsAdGroupDailyMetricORM
 from app.models.google_ads_m6_continuity import GoogleAdsBranchApprovedIdentityORM
 from app.models.google_ads_m6_daily_publication import GoogleAdsM6DailyPublicationORM
+from app.models.google_ads_m6_correction import (
+    GoogleAdsM6CorrectionCaseORM, GoogleAdsM6CorrectionGroupORM,
+)
+from app.models.google_ads_m6_correction_promotion import GoogleAdsM6CorrectionPromotionORM
+from app.models.google_ads_m6_correction_decision import GoogleAdsM6CorrectionDecisionORM
 from app.models.warehouse import TrackBranchCatalogORM, WarehouseUploadORM
 from app.services.marketing_access import MarketingAccess
 from app.services.marketing_dashboard_service import load_visible_marketing_branches
@@ -26,6 +32,7 @@ from app.services.marketing_google_ads_m6_attribution_service import (
 )
 
 FIRST_DAILY_DAY = date(2026, 10, 13)
+CORRECTION_READER_FLAG = "GOOGLE_ADS_M6_CORRECTION_READER_ENABLED"
 ZERO = Decimal("0")
 METRICS = ("cost", "clicks", "impressions", "free_pass_ads", "web_purchase_ads")
 
@@ -53,6 +60,110 @@ def _published_days(start: date, cutoff: date, version_id: int):
         .all()
     )
 
+
+
+def _promotion_links(publication_ids: tuple[int, ...]):
+    """Read correction source links as metadata only; gated for staged rollout."""
+    if (os.getenv(CORRECTION_READER_FLAG, "").strip().lower() != "true"
+            or not publication_ids):
+        return {}
+    link = GoogleAdsM6CorrectionPromotionORM
+    case = GoogleAdsM6CorrectionCaseORM
+    review = GoogleAdsM6CorrectionDecisionORM
+    rows = (db.session.query(link, case, review)
+            .join(case, case.id == link.case_id)
+            .join(review, review.id == link.decision_id)
+            .filter(link.publication_id.in_(publication_ids)).all())
+    result = {}
+    for promoted, source, decision in rows:
+        if promoted.publication_id in result:
+            return None
+        result[promoted.publication_id] = (promoted, source, decision)
+    return result
+
+
+def _valid_promotion_link(pub, link, source, decision) -> bool:
+    """Metadata and independent approval must reference this EXACT publication."""
+    if not (
+        link.publication_id == pub.id
+        and link.case_id == source.id
+        and link.decision_id == decision.id
+        and decision.case_id == source.id
+        and decision.decision == "APPROVED"
+        and decision.snapshot_sha256 == link.snapshot_sha256
+        and source.customer_id == pub.customer_id == CUSTOMER_ID
+        and source.business_date == pub.business_date
+        and source.revision == pub.revision
+        and source.expected_publication_id == link.superseded_publication_id
+        and source.campaign_upload_id == pub.campaign_upload_id
+        and source.ad_group_upload_id == pub.ad_group_upload_id
+        and source.approval_version_id == pub.approval_version_id
+        and source.campaign_sha256 == pub.campaign_sha256
+        and source.ad_group_sha256 == pub.ad_group_sha256
+        and decision.reviewed_by_user_id not in (
+            source.requested_by_user_id, link.promoted_by_user_id)
+        and link.promoted_by_user_id == pub.published_by_user_id
+    ):
+        return False
+    if source.expected_publication_id is not None:
+        prior = db.session.get(
+            GoogleAdsM6DailyPublicationORM, source.expected_publication_id)
+        return bool(
+            prior and prior.customer_id == pub.customer_id
+            and prior.business_date == pub.business_date
+            and prior.revision + 1 == pub.revision
+            and prior.is_canonical is False
+        )
+    return pub.revision == 1
+
+
+def _restricted_corrected_group_facts(
+    branch_ids: tuple[int, ...], case_ids: tuple[int, ...],
+    start: date, cutoff: date, version_id: int,
+):
+    """SQL-scope correction facts BEFORE retrieval; never read account campaigns."""
+    facts = GoogleAdsM6CorrectionGroupORM
+    cases = GoogleAdsM6CorrectionCaseORM
+    mapping = GoogleAdsBranchApprovedIdentityORM
+    catalog = TrackBranchCatalogORM
+    return (
+        db.session.query(facts, mapping, catalog, cases)
+        .join(cases, cases.id == facts.case_id)
+        .join(mapping, and_(
+            facts.campaign_key == mapping.campaign_key,
+            facts.ad_group_key == mapping.ad_group_key,
+            mapping.approval_version_id == version_id,
+            cases.approval_version_id == mapping.approval_version_id,
+        ))
+        .join(catalog, catalog.sucursal_canon == mapping.sucursal_canon)
+        .filter(
+            catalog.sucursal_id.in_(branch_ids),
+            facts.case_id.in_(case_ids),
+            cases.customer_id == CUSTOMER_ID,
+            cases.business_date.between(start, cutoff),
+        )
+        .all()
+    )
+
+
+def _global_corrected_day_cost(pub, source, decision, attributed: Decimal):
+    """Global-only SHA-bound campaign ledger. Never adds group spend twice."""
+    from app.warehouse.services.google_ads_m6_correction_decision_service import (
+        _read_snapshot, GoogleAdsM6CorrectionDecisionError,
+    )
+    try:
+        with db.engine.begin() as connection:
+            verified, fingerprint, totals = _read_snapshot(
+                connection, source.id, promoted_publication_id=pub.id,
+            )
+        amount = Decimal(totals["account_cost_mxn"])
+        if (verified.id != source.id
+                or fingerprint != decision.snapshot_sha256
+                or amount < attributed):
+            return None
+        return amount
+    except (GoogleAdsM6CorrectionDecisionError, ValueError, KeyError):
+        return None
 
 def _metadata_ok(pub, camp, group, day: date) -> bool:
     return (
@@ -222,6 +333,23 @@ def read_google_ads_m6_daily_branch_attribution(
         if day in pubs or not _metadata_ok(pub, campaign_raw, group_raw, day):
             return _fail(month_start, cutoff_date)
         pubs[day] = pub
+    # A corrected publication must have an independently reviewed case linked
+    # to that specific canonical revision. Ungated revision >1 fails closed.
+    links = _promotion_links(tuple(int(p.id) for p in pubs.values()
+                                   if getattr(p, "id", None) is not None))
+    if links is None:
+        return _fail(month_start, cutoff_date)
+    corrections = {}
+    for day, pub in pubs.items():
+        entry = links.get(getattr(pub, "id", None))
+        if entry is None:
+            if pub.revision != 1:
+                return _fail(month_start, cutoff_date)
+            continue
+        promoted, source, decision = entry
+        if not _valid_promotion_link(pub, promoted, source, decision):
+            return _fail(month_start, cutoff_date)
+        corrections[day] = (source, decision)
     last = max(pubs)
     expected = {
         start + timedelta(days=i) for i in range((last - start).days + 1)
@@ -230,21 +358,44 @@ def read_google_ads_m6_daily_branch_attribution(
     if set(pubs) != expected:
         return _fail(month_start, cutoff_date)
 
+    normal = {day: p for day, p in pubs.items() if day not in corrections}
     facts = _restricted_group_facts(
         tuple(sorted(scoped)),
-        tuple(sorted({p.ad_group_upload_id for p in pubs.values()})),
+        tuple(sorted({p.ad_group_upload_id for p in normal.values()})),
         start, last, version.id,
-    )
+    ) if normal else []
     by_branch_day = {}
     for fact, mapping, catalog in facts:
         bid = int(catalog.sucursal_id)
         key = (bid, fact.report_date)
-        pub = pubs.get(fact.report_date)
+        pub = normal.get(fact.report_date)
         if (
             bid not in scoped or pub is None
             or mapping.id != scoped[bid].id
             or key in by_branch_day
             or not _valid_group_row(fact, mapping, pub, day=fact.report_date)
+        ):
+            return _fail(month_start, cutoff_date)
+        by_branch_day[key] = fact
+    corrected = _restricted_corrected_group_facts(
+        tuple(sorted(scoped)),
+        tuple(sorted(source.id for source, _ in corrections.values())),
+        start, last, version.id,
+    ) if corrections else []
+    for fact, mapping, catalog, source in corrected:
+        bid = int(catalog.sucursal_id)
+        day = source.business_date
+        key = (bid, day)
+        pub = pubs.get(day)
+        if (
+            bid not in scoped or day not in corrections
+            or pub is None or source.id != corrections[day][0].id
+            or fact.case_id != source.id
+            or mapping.id != scoped[bid].id
+            or key in by_branch_day
+            or fact.currency_code != "MXN"
+            or fact.campaign_key != mapping.campaign_key
+            or fact.ad_group_key != mapping.ad_group_key
         ):
             return _fail(month_start, cutoff_date)
         by_branch_day[key] = fact
@@ -259,7 +410,10 @@ def read_google_ads_m6_daily_branch_attribution(
         branch_cost = sum((Decimal(f.cost) for f in metrics), ZERO)
         attributed += branch_cost
         for fact in metrics:
-            by_date_attributed[fact.report_date] += Decimal(fact.cost)
+            # Correction facts are keyed by case, not report_date.
+            day = next(day for day in expected
+                       if by_branch_day[bid, day] is fact)
+            by_date_attributed[day] += Decimal(fact.cost)
         rows.append({
             "sucursal_id": bid, "cost": float(branch_cost),
             "clicks": sum(int(f.clicks) for f in metrics),
@@ -282,7 +436,14 @@ def read_google_ads_m6_daily_branch_attribution(
     if access.is_global:
         account = ZERO
         for day in sorted(expected):
-            amount = _global_day_cost(pubs[day], by_date_attributed[day])
+            amount = (
+                _global_corrected_day_cost(
+                    pubs[day], corrections[day][0], corrections[day][1],
+                    by_date_attributed[day],
+                )
+                if day in corrections
+                else _global_day_cost(pubs[day], by_date_attributed[day])
+            )
             if amount is None:
                 return _fail(month_start, cutoff_date)
             account += amount
