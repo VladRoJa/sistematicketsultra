@@ -113,6 +113,10 @@ def promote_m6_correction(*, case_id: int, decision_id: int,
                            expected_publication_id: int | None):
     if os.getenv(FLAG, "").strip().lower() != "true":
         raise GoogleAdsM6CorrectionPromotionError("CORRECTION_PROMOTION_DISABLED")
+    # A published correction must never become invisible to Funnel. Enable
+    # and validate canonical reader before authorizing any write.
+    if os.getenv("GOOGLE_ADS_M6_CORRECTION_READER_ENABLED", "").strip().lower() != "true":
+        raise GoogleAdsM6CorrectionPromotionError("CORRECTION_READER_DISABLED")
     _require(
         type(case_id) is int and case_id > 0
         and type(decision_id) is int and decision_id > 0

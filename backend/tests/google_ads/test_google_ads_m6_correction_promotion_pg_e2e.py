@@ -42,6 +42,7 @@ def promotion_lab(reviewer_lab, monkeypatch):
         module.op = Operations(MigrationContext.configure(conn))
         module.upgrade()
     monkeypatch.setenv(promote_svc.FLAG, "true")
+    monkeypatch.setenv("GOOGLE_ADS_M6_CORRECTION_READER_ENABLED", "true")
     try:
         yield client, actor, reviewer, engine, camp, group
     finally:
@@ -141,6 +142,11 @@ def test_promotion_requires_current_identity_decision_and_matching_digest(
     monkeypatch.delenv(promote_svc.FLAG)
     assert _promote(client, actor, cid, decision).status_code == 503
     monkeypatch.setenv(promote_svc.FLAG, "true")
+    monkeypatch.delenv("GOOGLE_ADS_M6_CORRECTION_READER_ENABLED")
+    reader_disabled = _promote(client, actor, cid, decision)
+    assert reader_disabled.status_code == 409
+    assert reader_disabled.json["code"] == "CORRECTION_READER_DISABLED"
+    monkeypatch.setenv("GOOGLE_ADS_M6_CORRECTION_READER_ENABLED", "true")
     assert _promote(client, None, cid, decision).status_code == 401
     assert _promote(client, reviewer, cid, decision).status_code == 403
     assert _promote(client, actor, cid, decision, sha="0" * 64).status_code == 409
