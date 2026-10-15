@@ -13,6 +13,9 @@ import re
 from sqlalchemy import func, and_, or_, exists
 from sqlalchemy.orm import aliased
 
+from app.services.marketing_google_ads_m6_correction_reader_service import (
+    canonical_correction_campaign_days,
+)
 from app.extensions import db
 from app.models.google_ads_daily import GoogleAdsDailyMetricORM
 from app.models.google_ads_m6_daily_publication import GoogleAdsM6DailyPublicationORM
@@ -95,6 +98,16 @@ def read_google_ads_funnel_investment(
             "complete_to_cutoff": False,
         }
 
+    try:
+        corrected = canonical_correction_campaign_days(
+            customer_id, month_start, cutoff_date,
+        )
+    except ValueError:
+        return {
+            "status": "requires_review", "currency": "MXN",
+            "amount": None, "complete_to_cutoff": False,
+            "reason": "M6_CORRECTION_CANONICAL_INTEGRITY_FAILED",
+        }
     rows = (
         db.session.query(
             GoogleAdsDailyMetricORM.report_date,
@@ -109,6 +122,8 @@ def read_google_ads_funnel_investment(
             GoogleAdsDailyMetricORM.currency_code == "MXN",
             GoogleAdsDailyMetricORM.report_date >= month_start,
             GoogleAdsDailyMetricORM.report_date <= cutoff_date,
+            *([GoogleAdsDailyMetricORM.report_date.notin_(tuple(corrected))]
+              if corrected else []),
             *([_canonical_m6_campaign_filter()]
               if cutoff_date >= M6_FIRST_DAILY_DAY else []),
         )
@@ -116,6 +131,7 @@ def read_google_ads_funnel_investment(
         .order_by(GoogleAdsDailyMetricORM.report_date.asc())
         .all()
     )
+    rows = list(rows) + list(corrected.values())
     if not rows:
         return {
             "status": "no_data",
