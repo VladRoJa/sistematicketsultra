@@ -1,13 +1,13 @@
-<h2 mat-dialog-title>QA_MANUAL · preparar un canal</h2>
+<h2 mat-dialog-title>Prueba interna · preparar un contacto</h2>
 <mat-dialog-content class="qa">
-  <p class="intro">Prueba interna controlada: <strong>1 sucursal, 1 canal y 1 destinatario</strong>.
+  <p class="intro">Preparación controlada: <strong>una sucursal, un canal y un solo contacto</strong>.
     El Preview no escribe en la base de datos. Congelar crea una campaña QA, pero
-    <strong>NO envía WhatsApp ni autoriza despacho</strong>. El envío requiere un proceso y
+    <strong>no se envían mensajes ni se autorizan envíos</strong>. El envío requiere un proceso y
     una autorización distintos.</p>
 
   <p *ngIf="loading" role="status">Cargando canales activos…</p>
-  <p *ngIf="previewing" role="status">Calculando fingerprint QA…</p>
-  <p *ngIf="freezing" role="status">Congelando la cohorte interna…</p>
+  <p *ngIf="previewing" role="status">Revisando datos de la prueba…</p>
+  <p *ngIf="freezing" role="status">Guardando la lista de prueba…</p>
   <p *ngIf="error" class="error" role="alert">{{ error }}</p>
   <p *ngIf="success" class="success" role="status">{{ success }}</p>
 
@@ -21,9 +21,9 @@
       </mat-select>
     </mat-form-field>
     <mat-form-field appearance="outline" class="wide">
-      <mat-label>Nombre único de la campaña QA</mat-label>
+      <mat-label>Nombre de esta prueba interna</mat-label>
       <input matInput [formControl]="campaignName" maxlength="255" placeholder="QA ensayo interno canal…">
-      <mat-hint>Debe iniciar con QA y no repetir una campaña ya congelada.</mat-hint>
+      <mat-hint>Debe comenzar con QA y ser diferente al nombre de cualquier campaña guardada.</mat-hint>
     </mat-form-field>
     <mat-form-field appearance="outline">
       <mat-label>Propósito</mat-label>
@@ -35,13 +35,13 @@
       </mat-select>
     </mat-form-field>
     <mat-form-field appearance="outline">
-      <mat-label>Nombre del destinatario de control</mat-label>
+      <mat-label>Nombre del contacto de prueba</mat-label>
       <input matInput [formControl]="recipientName" maxlength="255" autocomplete="off">
     </mat-form-field>
     <mat-form-field appearance="outline" class="wide">
-      <mat-label>Teléfono de prueba (10 dígitos o 521 + 10 dígitos)</mat-label>
+      <mat-label>Teléfono de prueba (10 dígitos o 521 y 10 dígitos)</mat-label>
       <input matInput [formControl]="recipientPhone" maxlength="14" inputmode="tel" autocomplete="off">
-      <mat-hint>No se almacena en el navegador; solo se transmite al backend al hacer Preview o Freeze.</mat-hint>
+      <mat-hint>No se guarda en el navegador. Se utiliza únicamente al revisar o guardar la prueba.</mat-hint>
     </mat-form-field>
   </div>
 
@@ -51,14 +51,14 @@
     </button>
   </div>
   <section class="preview" *ngIf="preview as p">
-    <h3>Revisión antes de congelar</h3>
+    <h3>Revisar antes de guardar</h3>
     <dl>
       <dt>Campaña</dt><dd>{{ p.name }}</dd>
       <dt>Sucursal</dt><dd>{{ p.sucursal_canon }}</dd>
       <dt>Canal iVentas</dt><dd>{{ p.provider_channel_id }}</dd>
       <dt>Destinatario</dt><dd>{{ p.recipient_name }} · {{ p.recipient_phone_masked }}</dd>
       <dt>Destinatarios</dt><dd>{{ p.recipient_count }}</dd>
-      <dt>Fingerprint</dt><dd class="fingerprint">{{ p.preview_fingerprint }}</dd>
+      <dt>Referencia de seguridad</dt><dd class="fingerprint">{{ p.preview_fingerprint }}</dd>
     </dl>
     <mat-checkbox [formControl]="confirmFreeze">
       Confirmo que revisé el canal, el destinatario y el fingerprint;
@@ -71,11 +71,11 @@
     </div>
   </section>
   <section class="preview" *ngIf="frozen as result">
-    <h3>Campaña QA congelada</h3>
-    <p>Campaign ID: <strong>{{ result.campaign_id }}</strong></p>
+    <h3>Campaña de prueba guardada</h3>
+    <p>Número de campaña: <strong>{{ result.campaign_id }}</strong></p>
     <p>Sucursal: {{ result.sucursal_canon }} · Canal: {{ result.provider_channel_id }}</p>
-    <p>Destinatarios: {{ result.recipient_count }} · Estado: FROZEN</p>
-    <p><strong>No se ha llamado a iVentas.</strong> Para continuar, revisa la campaña en
+    <p>Destinatarios: {{ result.recipient_count }} · Estado: Guardada</p>
+    <p><strong>Todavía no se ha enviado ningún mensaje a iVentas.</strong> Para continuar, revisa la campaña en
       el flujo normal de preflight; cualquier envío requiere aprobación explícita adicional.</p>
   </section>
   <p class="footnote" *ngIf="!channels.length && !loading">No hay canales predeterminados activos únicos;
