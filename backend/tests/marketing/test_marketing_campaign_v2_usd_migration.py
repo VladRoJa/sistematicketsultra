@@ -59,9 +59,10 @@ def test_isolated_pg_keeps_mxn_and_forbids_mixed_or_empty_approvals(monkeypatch)
             "(id, approved_estimated_mxn, approved_estimated_usd) VALUES (3, 0.03, 0.0542)",
             "INSERT INTO marketing_campaign_v2_dispatch_approvals (id) VALUES (4)",
         ):
-            with conn.begin_nested():
+            with conn.begin_nested() as savepoint:
                 with pytest.raises(sa.exc.IntegrityError):
                     conn.execute(sa.text(stmt))
+                savepoint.rollback()
         with pytest.raises(RuntimeError, match="USD approvals"):
             upgrade.downgrade()
         conn.execute(sa.text(
@@ -73,4 +74,5 @@ def test_isolated_pg_keeps_mxn_and_forbids_mixed_or_empty_approvals(monkeypatch)
             "WHERE table_name='marketing_campaign_v2_dispatch_approvals' "
             "AND column_name='approved_estimated_usd'"
         )) == 0
+        table.drop(conn)
     engine.dispose()
