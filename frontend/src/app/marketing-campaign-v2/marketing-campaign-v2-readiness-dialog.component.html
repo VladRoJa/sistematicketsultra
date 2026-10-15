@@ -1,10 +1,10 @@
-<h2 mat-dialog-title>Estado de configuración de canales</h2>
+<h2 mat-dialog-title>Estado de canales para campañas</h2>
 
 <mat-dialog-content class="readiness">
   <p class="description">
     Vista de solo lectura basada en la configuración de Suite Ultra.
     Los portafolios se deben corroborar en Meta/iVentas: una política local no verifica su pertenencia real.
-    <strong>El costo se calcula automáticamente en USD y no bloquea la preparación. Aquí no se envían mensajes.</strong>
+    <strong>No se exige configurar límites internos para sucursales normales. Insurgentes e Independencia conservan 250 mensajes por canal cada 24 horas. Aquí no se envían mensajes.</strong>
   </p>
   <div class="tools">
     <mat-form-field appearance="outline">
@@ -16,7 +16,7 @@
     <div class="actions">
       <button mat-stroked-button type="button" (click)="openPortfolioReview()" [disabled]="loading">Ver canales pendientes de revisión</button>
       <button mat-stroked-button type="button" (click)="openChannelPortfolioMap()" [disabled]="loading">Relacionar canal con empresa Meta</button>
-      <button mat-stroked-button type="button" (click)="openPortfolios()" [disabled]="loading">Configurar límites por canal</button>
+      <button mat-stroked-button type="button" (click)="openPortfolios()" [disabled]="loading">Consultar políticas históricas</button>
       <button mat-stroked-button type="button" (click)="openRates()" [disabled]="loading">Ver canales y plantillas</button>
       <button mat-button type="button" (click)="reload()" [disabled]="loading">Actualizar</button>
     </div>
@@ -70,27 +70,24 @@
   </div>
 
   <p class="notice" *ngIf="!loading && !error">
-    «Configuración completa» significa que existen referencias internas, <strong>no que Meta haya verificado portafolio,
-    cupo disponible o permiso para enviar</strong>. Cada campaña requiere una revisión y autorización propias.
+    «Configuración completa» confirma plantilla y canal principal; <strong>no garantiza permiso real de Meta ni autoriza envíos</strong>. La Suite aplica automáticamente la excepción de 250 por canal en Insurgentes e Independencia.
   </p>
 
   <div class="table-scroll" *ngIf="!loading && !error">
     <table>
-      <thead><tr><th>Sucursal</th><th>Empresa Meta registrada (sin verificar)</th><th>Grupo que comparte el límite</th><th>Tope canal / 24 h</th>
-        <th>Tope portafolio / 24 h</th><th>¿Está completo?</th></tr></thead>
+      <thead><tr><th>Sucursal</th><th>Empresa Meta registrada (sin verificar)</th><th>Empresa Meta registrada</th><th>Control de envíos Suite</th><th>¿Está completo?</th></tr></thead>
       <tbody>
         <tr *ngFor="let row of rows">
           <td><strong>{{ row.sucursalCanon }}</strong><small>{{ row.channelId }}</small></td>
           <td>{{ row.mappingBusinessId || 'Sin asociar' }}<small>{{ row.mappingStatus }}</small><small *ngIf="row.mappingSource">Evidencia: {{ row.mappingSource }}</small></td>
           <td>{{ row.portfolioKey || 'Sin identificar' }}<small *ngIf="row.policySource">Fuente: {{ row.policySource }}</small></td>
-          <td>{{ row.operationalChannelCap ?? 'Pendiente' }}</td>
-          <td>{{ row.operationalPortfolioCap ?? 'Pendiente' }}</td>
+          <td>{{ row.operationalChannelCap === 250 ? 'Máximo 250 por canal / 24 h' : 'Sin límite interno diario' }}</td>
           <td>
             <span [class.complete]="row.configured" class="status">{{ row.configured ? 'Completa*' : 'Pendiente' }}</span>
             <small *ngFor="let issue of row.issues">{{ issue }}</small>
           </td>
         </tr>
-        <tr *ngIf="!rows.length"><td colspan="6">No hay canales principales activos para revisar.</td></tr>
+        <tr *ngIf="!rows.length"><td colspan="5">No hay canales principales activos para revisar.</td></tr>
       </tbody>
     </table>
   </div>
