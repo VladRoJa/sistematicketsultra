@@ -877,7 +877,7 @@ test('Campaign V2 separa cohorte congelada de lista para envío', () => {
   assert.equal(html.includes('Descargar lista original'), true);
   assert.equal(html.includes('Descargar lista para envío'), true);
   assert.equal(html.includes('Lista original: contactos guardados al crear la campaña.'), true);
-  assert.equal(html.includes('Lista para envío = esa misma cohorte menos supresiones vigentes'), true);
+  assert.equal(html.includes('Lista para envío: la misma lista menos los contactos excluidos actualmente'), true);
 });
 
 test('M33 UI polish da jerarquía al constructor sin cambiar su contrato', () => {
