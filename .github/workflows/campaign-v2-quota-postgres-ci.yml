@@ -31,6 +31,10 @@ on:
       - "backend/migrations/versions/a856d2a01013_campaign_v2_dispatch_approval_reservations.py"
       - "backend/migrations/versions/b856d2c01013_governed_execution.py"
       - "backend/tests/marketing/test_marketing_campaign_v2_quota_*.py"
+      - "backend/app/services/marketing_campaign_v2_usd_pricing_service.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_automatic_usd.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_usd_migration.py"
+      - "backend/migrations/versions/a856usd1015_campaign_v2_usd_approval.py"
       - "backend/tests/marketing/test_marketing_campaign_v2_submit_service.py"
       - "backend/tests/marketing/test_marketing_campaign_v2_retry_service.py"
       - ".github/workflows/campaign-v2-quota-postgres-ci.yml"
@@ -77,6 +81,7 @@ jobs:
           JWT_SECRET_KEY: synthetic-quota-jwt
           QUOTA_TEST_POSTGRES_URL: postgresql://quota_ci:synthetic-quota-only@127.0.0.1:5432/quota_ci
           CAMPAIGN_V2_PROVIDER_SEND_ENABLED: "false"
+          CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED: "false"
         run: |
           python -m pytest -q --tb=short \
             tests/marketing/test_marketing_campaign_v2_operational_capacity.py \
@@ -84,6 +89,8 @@ jobs:
             tests/marketing/test_marketing_campaign_v2_quota_service.py \
             tests/marketing/test_marketing_campaign_v2_quota_migration.py \
             tests/marketing/test_marketing_campaign_v2_quota_approval.py \
+            tests/marketing/test_marketing_campaign_v2_automatic_usd.py \
+            tests/marketing/test_marketing_campaign_v2_usd_migration.py \
             tests/marketing/test_marketing_campaign_v2_quota_approval_postgres.py \
             tests/marketing/test_marketing_campaign_v2_quota_manifest.py \
             tests/marketing/test_marketing_campaign_v2_quota_routes.py \

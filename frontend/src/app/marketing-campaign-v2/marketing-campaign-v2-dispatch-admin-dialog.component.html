@@ -177,10 +177,10 @@
     <section class="catalog" aria-label="Tarifas estimadas">
       <div class="section-heading">
         <div>
-          <h3>Costos estimados de envío</h3>
-          <p>Costos manuales en MXN por mensaje, versión por plantilla y canal. No son cargos confirmados por iVentas.</p>
+          <h3>Historial de tarifas MXN (método anterior)</h3>
+          <p>Solo consulta histórica. Los envíos nuevos utilizan automáticamente US$0.0542 por entregado; no es necesario registrar tarifas por canal.</p>
         </div>
-        <button mat-stroked-button type="button" (click)="openBudgetEditor()" *ngIf="!showBudgetEditor">Nueva tarifa</button>
+
       </div>
       <div class="catalog-table">
         <table>
@@ -196,7 +196,7 @@
               <td>{{ row.valid_from | date:'short' }}</td>
             </tr>
             <tr *ngIf="!latestBudgetRates.length">
-              <td colspan="5">No hay tarifas registradas. Debes indicar una tarifa de referencia antes de aprobar un envío.</td>
+              <td colspan="5">Sin tarifas MXN históricas. Los nuevos envíos calculan el costo en USD automáticamente.</td>
             </tr>
           </tbody>
         </table>

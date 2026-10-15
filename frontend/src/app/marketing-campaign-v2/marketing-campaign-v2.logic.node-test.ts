@@ -1333,7 +1333,7 @@ test('Issue 856: administracion usa campo MDC acotado y editores progresivos', (
   assert.equal(quotas.includes('*ngIf="showCapacityForm"'), true);
 });
 
-test('readiness for 26 channels remains incomplete until exact portfolio policy and rate exist', () => {
+test('readiness for 26 channels requires portfolio policy, not historical manual MXN rate', () => {
   const template = { id: 1, is_active: true, compatible_channel_ids: ['ch-1', 'ch-2'] } as CampaignV2DispatchTemplate;
   const bindings = [
     { id: 1, provider_channel_id: 'ch-1', sucursal_canon: 'AZAHARES_CUL', is_active: true, is_default: true },
@@ -1356,8 +1356,8 @@ test('readiness for 26 channels remains incomplete until exact portfolio policy 
   assert.equal(rows.length, 2);
   assert.equal(rows[0].configured, true);
   assert.equal(rows[0].portfolioVerified, false);
-  assert.equal(rows[1].configured, false);
-  assert.ok(rows[1].issues.includes('Tarifa MXN pendiente'));
+  assert.equal(rows[1].configured, true);
+  assert.equal(rows[1].issues.includes('Tarifa MXN pendiente'), false);
   assert.equal(rows[1].unitCostMxn, null);
   assert.equal(campaignV2BuildReadinessRows(template, bindings, [], []).every(r => !r.configured), true);
   policies[1].operational_portfolio_cap = 300;
@@ -1475,8 +1475,8 @@ test('Issue 856 D: governed console uses exact approval, manifest and one-child 
     '/dispatch/authorize', '/dispatch/execute', '/dispatch/monitor',
   ]) assert.ok(service.includes(suffix), suffix);
   assert.ok(ts.includes('expected_dispatch_fingerprint: plan.dispatch_fingerprint'));
-  assert.ok(ts.includes('expected_quote_fingerprint: plan.budget.quote_fingerprint'));
-  assert.ok(ts.includes('expected_total_mxn: plan.budget.total_estimated_mxn'));
+  assert.ok(ts.includes('expected_quote_fingerprint: plan.budget_usd.quote_fingerprint'));
+  assert.ok(ts.includes("pricing_currency: 'USD'"));
   assert.ok(ts.includes('expected_manifest_digest: review.manifest_digest'));
   assert.ok(ts.includes('expected_ready_recipients: this.approvedReadyCount'));
   assert.ok(ts.includes('child_id: child.child_id'));
@@ -1528,12 +1528,12 @@ test('Issue 856 UX: preparación explica bloqueos, simplifica lenguaje y conserv
   const page = fs.readFileSync(path.join(root, 'marketing-campaign-v2-page.component.html'), 'utf8');
   const readiness = fs.readFileSync(path.join(root, 'marketing-campaign-v2-readiness-dialog.component.html'), 'utf8');
   const pricing = fs.readFileSync(path.join(root, 'marketing-campaign-v2-dispatch-admin-dialog.component.html'), 'utf8');
-  assert.ok(ts.includes("plan.budget?.status !== 'COMPLETE'"));
+  assert.ok(ts.includes("if (!plan.budget_usd)"));
   assert.ok(ts.includes("plan.quota?.status !== 'REVIEWABLE'"));
   assert.ok(ts.includes("this.monitor?.quota.all_current === true"));
   assert.ok(ts.includes("this.uncertainResult = true"));
   assert.ok(ts.includes("'ENVIAR LOTE ' + this.nextReadyChild.child_id"));
-  assert.ok(html.includes('Falta registrar tarifa') === false); // text comes from .ts
+  assert.ok(html.includes('Tarifa automática:'));
   assert.ok(html.includes('{{ preparationIssue }}'));
   assert.ok(html.includes('{{ budgetStatusLabel }}'));
   assert.ok(html.includes('{{ quotaStatusLabel }}'));
@@ -1543,8 +1543,28 @@ test('Issue 856 UX: preparación explica bloqueos, simplifica lenguaje y conserv
   assert.ok(page.includes('Preparar prueba interna · 1 contacto'));
   assert.ok(page.includes('Plantillas, canales y tarifas'));
   assert.ok(readiness.includes('Estado de configuración de canales'));
-  assert.ok(pricing.includes('Registrar nuevo costo'));
+  assert.ok(pricing.includes('Historial de tarifas MXN (método anterior)'));
   assert.equal(ts.includes('submitCampaign('), false);
   assert.equal(ts.includes('setInterval('), false);
   assert.equal(ts.includes('retryWhen('), false);
+});
+
+
+test('Issue 856 USD: estimate is automatic delivered-based; approval cannot require per-channel MXN', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const ts = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.ts'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.html'), 'utf8');
+  const models = fs.readFileSync(path.join(root, 'marketing-campaign-v2.models.ts'), 'utf8');
+  assert.ok(models.includes('interface CampaignV2AutomaticUsdBudget'));
+  assert.ok(models.includes("billable_basis: 'PROVIDER_CONFIRMED_DELIVERED'"));
+  assert.ok(ts.includes('plan.budget_usd.quote_fingerprint'));
+  assert.ok(ts.includes("pricing_currency: 'USD'"));
+  assert.ok(ts.includes("plan.quota?.status === 'REVIEWABLE'"));
+  assert.ok(ts.includes("this.monitor?.quota.all_current === true"));
+  assert.ok(html.includes('Máximo si todos reciben'));
+  assert.ok(html.includes('iVentas confirma el cobro después de entregar'));
+  assert.equal(ts.includes('expected_total_mxn:'), false);
+  assert.equal(ts.includes('plan.budget?.status !=='), false);
+  assert.equal(ts.includes('setInterval('), false);
+  assert.equal(ts.includes('executeOne();'), false);
 });

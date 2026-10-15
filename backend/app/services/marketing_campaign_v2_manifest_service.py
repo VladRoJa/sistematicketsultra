@@ -25,6 +25,7 @@ from app.services.marketing_campaign_v2_dispatch_approval_service import (
     _database_date,
 )
 from app.services.marketing_campaign_v2_budget_service import estimate_preflight_cost
+from app.services.marketing_campaign_v2_usd_pricing_service import estimate_automatic_usd_maximum
 from app.services.marketing_campaign_v2_preflight_service import (
     build_campaign_v2_preflight,
     build_provider_campaign_idempotency_key,
@@ -41,6 +42,16 @@ from app.services.marketing_campaign_v2_submit_service import (
 MANIFEST_VERSION = "D2B_READY_HELD_V1"
 
 
+def budget_for_existing_approval(*, plan: Any, approval: Any, session: Any, now: datetime) -> dict:
+    """Preserve legacy MXN snapshots while validating all new USD snapshots."""
+    pricing_currency = (approval.manifest_json or {}).get("pricing_currency", "MXN")
+    if pricing_currency == "USD":
+        return estimate_automatic_usd_maximum(plan=plan)
+    if pricing_currency == "MXN":
+        return estimate_preflight_cost(plan=plan, session=session, now=now)
+    raise CampaignV2ApprovalConflictError("Moneda de aprobación no reconocida.")
+
+
 def _assert_manifest(plan: Any, budget: dict, approval: Any):
     manifest = dict(approval.manifest_json or {})
     if manifest.get("version") != MANIFEST_VERSION or manifest.get("send_authorized") is not False:
@@ -49,9 +60,24 @@ def _assert_manifest(plan: Any, budget: dict, approval: Any):
             len(plan.sendable_phones) != int(approval.recipient_count) or
             plan.mode != "IMMEDIATE" or not plan.ready or
             budget["status"] != "COMPLETE" or
-            budget["quote_fingerprint"] != manifest.get("quote_fingerprint") or
-            Decimal(budget["total_estimated_mxn"]) != Decimal(approval.approved_estimated_mxn)):
+            budget["quote_fingerprint"] != manifest.get("quote_fingerprint")):
         raise CampaignV2ApprovalConflictError("Preflight, presupuesto o revisión cambiaron.")
+    currency = manifest.get("pricing_currency", "MXN")
+    if currency == "USD":
+        if (budget.get("currency") != "USD" or
+                manifest.get("pricing_rate_version") != budget.get("rate_version") or
+                approval.approved_estimated_usd is None or
+                approval.approved_estimated_mxn is not None or
+                Decimal(budget["maximum_estimated_usd"]) !=
+                Decimal(approval.approved_estimated_usd)):
+            raise CampaignV2ApprovalConflictError("La estimación USD original cambió.")
+    elif currency == "MXN":
+        if (budget.get("currency") != "MXN" or
+                approval.approved_estimated_mxn is None or
+                Decimal(budget["total_estimated_mxn"]) != Decimal(approval.approved_estimated_mxn)):
+            raise CampaignV2ApprovalConflictError("Costo histórico MXN modificado.")
+    else:
+        raise CampaignV2ApprovalConflictError("Moneda no reconocida.")
     batches = manifest.get("batches")
     if not isinstance(batches, list) or len(batches) != len(plan.batches):
         raise CampaignV2ApprovalConflictError("Manifiesto de lotes incompleto.")
@@ -72,8 +98,10 @@ def _assert_manifest(plan: Any, budget: dict, approval: Any):
         if (row["provider_channel_id"] != batch.provider_channel_id or
                 type(row["recipients"]) is not int or
                 row["recipients"] != len(batch.recipients) or
-                row["estimated_mxn"] != cost["estimated_mxn"] or
-                row["cost_rate_revision_id"] != cost["revision_id"]):
+                (row.get("estimated_usd") != cost.get("maximum_estimated_usd")
+                 if currency == "USD" else
+                 (row.get("estimated_mxn") != cost.get("estimated_mxn") or
+                  row.get("cost_rate_revision_id") != cost.get("revision_id")))):
             raise CampaignV2ApprovalConflictError("Lote, identidad o tarifa diferente.")
         held = row["planned_status"] == "HELD"
         if held and (
@@ -167,7 +195,9 @@ def materialize_approved_manifest(
             campaign_id=campaign_id, template_id=int(approval.template_id),
             allowed_sucursal_keys=allowed_sucursal_keys, session=active, now=timestamp,
         )
-        budget = estimate_preflight_cost(plan=plan, session=active, now=timestamp)
+        budget = budget_for_existing_approval(
+            plan=plan, approval=approval, session=active, now=timestamp,
+        )
         by_name = _assert_manifest(plan, budget, approval)
         ready = tuple(b for b in plan.batches
                       if by_name[b.sucursal_canon]["planned_status"] == "READY")
@@ -190,7 +220,9 @@ def materialize_approved_manifest(
             campaign_id=campaign_id, template_id=int(approval.template_id),
             allowed_sucursal_keys=allowed_sucursal_keys, session=active, now=timestamp,
         )
-        budget = estimate_preflight_cost(plan=plan, session=active, now=timestamp)
+        budget = budget_for_existing_approval(
+            plan=plan, approval=approval, session=active, now=timestamp,
+        )
         by_name = _assert_manifest(plan, budget, approval)
         ready = tuple(b for b in plan.batches
                       if by_name[b.sucursal_canon]["planned_status"] == "READY")

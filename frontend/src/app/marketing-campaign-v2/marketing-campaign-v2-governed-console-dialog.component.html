@@ -21,10 +21,10 @@
       <div class="review-summary"><div><small>Preparación</small><strong>{{ preflightStatusLabel }}</strong></div><div><small>Destinatarios disponibles</small><strong>{{ plan.sendable_count }}</strong></div><div><small>Costo de envío</small><strong>{{ budgetStatusLabel }}</strong></div><div><small>Límite de envío</small><strong>{{ quotaStatusLabel }}</strong></div></div>
       <p class="hint">Contactos de la campaña: {{ plan.frozen_count }} · Excluidos por lista negra: {{ plan.suppressed.blacklist }} · Otras exclusiones: {{ plan.suppressed.campaign_exclusions }}</p>
       <p *ngIf="preparationIssue" class="blocking-note" role="status">{{ preparationIssue }}</p>
-      <p *ngIf="plan.budget?.status === 'COMPLETE'">Costo total estimado: <strong>MXN {{ plan.budget?.total_estimated_mxn }}</strong></p>
+      <p *ngIf="plan.budget_usd as cost" class="hint">Tarifa automática: <strong>US$ {{ cost.unit_cost_usd }}</strong> por mensaje entregado. Máximo si todos reciben: <strong>US$ {{ cost.maximum_estimated_usd }}</strong>. iVentas confirma el cobro después de entregar.</p>
       <details class="technical"><summary>Ver referencias técnicas de esta revisión</summary>
         <p class="fingerprint">Huella de destinatarios: {{ plan.dispatch_fingerprint }}</p>
-        <p class="fingerprint">Huella del costo: {{ plan.budget?.quote_fingerprint || 'No disponible' }}</p>
+        <p class="fingerprint">Versión y huella del costo USD: {{ plan.budget_usd?.rate_version || 'No disponible' }} · {{ plan.budget_usd?.quote_fingerprint || 'No disponible' }}</p>
       </details>
       <p class="hint">El límite es un control interno, no una confirmación de saldo de Meta. El costo es una estimación, no un cobro realizado.</p>
       <div class="batch" *ngFor="let batch of plan.batches">
@@ -36,11 +36,11 @@
           <input matInput maxlength="255" [formControl]="holdSource[batch.sucursal_canon]">
         </mat-form-field>
       </div>
-      <div class="confirmation">
+      <div class="confirmation" *ngIf="plan.quota?.status === 'REVIEWABLE' && plan.ready && plan.budget_usd?.status === 'COMPLETE'">
         <mat-form-field appearance="outline"><mat-label>Escribe {{ approvalWord }}</mat-label>
           <input matInput [formControl]="approvalPhrase" autocomplete="off">
         </mat-form-field>
-        <button mat-flat-button color="primary" type="button" (click)="approve()" [disabled]="!canApprove">Aprobar costo y reservar (no envía)</button>
+        <button mat-flat-button color="primary" type="button" (click)="approve()" [disabled]="!canApprove">Aprobar destinatarios y reservar límite (no envía)</button>
       </div>
     </ng-container>
   </section>
@@ -49,7 +49,7 @@
     <h3>2 · Aprobar y preparar los lotes</h3>
     <ng-container *ngIf="approval?.approval as approval; else noneApproved">
       <p>Reserva #{{ approval.approval_id }} · {{ approval.status }} · {{ approval.approved_recipients }} destinatarios
-        · MXN {{ approval.approved_estimated_mxn }} · Expira {{ approval.expires_at }}</p>
+        · Máximo estimado: {{ approval.currency === 'USD' ? 'US$ ' + approval.approved_estimated_usd : 'MXN ' + approval.approved_estimated_mxn }} · Expira {{ approval.expires_at }}</p>
       <div class="confirmation">
         <mat-form-field appearance="outline"><mat-label>Escribe {{ materializeWord }}</mat-label>
           <input matInput [formControl]="materializePhrase" autocomplete="off">

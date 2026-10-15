@@ -428,26 +428,9 @@
             </div>
           </div>
         </section>
-        <section class="budget-preview-panel" *ngIf="canManageDispatchConfig" aria-label="Presupuesto preliminar">
-          <h4>Estimación preliminar de costo</h4>
-          <p>Referencia en MXN con las tarifas registradas manualmente, antes de excluir números de campañas previas y resolver canales definitivos. No es una cotización de iVentas.</p>
-          <mat-form-field appearance="outline">
-            <mat-label>Plantilla de referencia</mat-label>
-            <mat-select [formControl]="budgetTemplate">
-              <mat-option *ngFor="let row of pricingTemplates" [value]="row.id">{{ row.label }}</mat-option>
-            </mat-select>
-          </mat-form-field>
-          <div *ngIf="pricingError" role="status">{{ pricingError }}</div>
-          <div *ngIf="previewBudgetEstimate as estimate">
-            <strong *ngIf="estimate.status === 'RANGE'">
-              Rango indicativo MXN ${{ estimate.min_mxn }} – ${{ estimate.max_mxn }}
-            </strong>
-            <p *ngIf="estimate.status !== 'RANGE'">
-              Sin cotización preliminar completa. Registra tarifas para todos los canales compatibles
-              (faltantes: {{ estimate.missing_channels }}).
-            </p>
-          </div>
-          <p>El costo final estimado se volverá a calcular al preparar el envío, con la lista guardada y las exclusiones vigentes.</p>
+        <section class="budget-preview-panel" *ngIf="canManageDispatchConfig" aria-label="Presupuesto automático de campaña">
+          <h4>Costo automático en USD</h4>
+          <p>Al guardar la lista y revisar el envío, Suite Ultra calculará el gasto máximo con una tarifa general de iVentas. Solo se cobran los mensajes entregados. No necesitas configurar tarifas por sucursal.</p>
         </section>
         <section
           *ngIf="preview.before_history_filter_count !== undefined"
