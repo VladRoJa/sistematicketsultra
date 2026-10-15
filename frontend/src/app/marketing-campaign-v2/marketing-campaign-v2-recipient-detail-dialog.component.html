@@ -1,6 +1,6 @@
 <header class="dialog-header">
   <div>
-    <p class="eyebrow">Evidence congelada</p>
+    <p class="eyebrow">Datos guardados del contacto</p>
     <h2>Detalle del destinatario</h2>
   </div>
   <button mat-button mat-dialog-close type="button">Cerrar</button>
@@ -24,13 +24,13 @@
     </section>
 
     <div *ngIf="recipient.conflict_fields.length" class="conflict-box">
-      <strong>Datos con conflicto</strong>
+      <strong>Datos que no coinciden</strong>
       <span>{{ recipient.conflict_fields.join(', ') }}</span>
     </div>
 
     <section class="evidence-section">
       <div class="section-heading">
-        <h3>Evidence</h3>
+        <h3>Registros de origen</h3>
         <span>{{ recipient.evidence_count }} filas</span>
       </div>
 
@@ -51,11 +51,11 @@
         </div>
 
         <details class="technical-detail">
-          <summary>Referencias técnicas</summary>
+          <summary>Identificadores técnicos</summary>
           <dl>
             <div><dt>Vencidos cartera</dt><dd>{{ evidence.socios_vencidos_cartera_id ?? '—' }}</dd></div>
-            <div><dt>Active row</dt><dd>{{ evidence.socios_activos_snapshot_row_id ?? '—' }}</dd></div>
-            <div><dt>Active snapshot</dt><dd>{{ evidence.socios_activos_snapshot_id ?? '—' }}</dd></div>
+            <div><dt>Registro del socio activo</dt><dd>{{ evidence.socios_activos_snapshot_row_id ?? '—' }}</dd></div>
+            <div><dt>Corte de socios activos</dt><dd>{{ evidence.socios_activos_snapshot_id ?? '—' }}</dd></div>
           </dl>
         </details>
       </article>

@@ -125,3 +125,16 @@ dl { margin:0; }.metadata-panel dl div { display:grid; grid-template-columns:170
 .budget-preview-panel > h4 { margin-top: 0; }
 .budget-preview-panel > p { font-size: 12px; color: var(--mat-sys-on-surface-variant, #666); }
 .budget-preview-panel mat-form-field { width: min(360px, 100%); }
+
+
+/* UX: preserve readable controls while reducing unnecessary whitespace. */
+.campaign-v2-page { gap: 12px; }
+.page-header { padding: 13px 16px; gap: 12px; }
+.workspace { padding: 16px 18px; }
+.workflow-strip { margin-top: 10px; padding: 8px 10px; }
+.builder-grid { gap: 12px; margin-top: 12px; }
+.builder-panel { padding: 14px; }
+@media (max-width: 760px) {
+  .page-header { padding: 12px; }
+  .workspace { padding: 12px; }
+}
