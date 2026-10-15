@@ -1333,7 +1333,7 @@ test('Issue 856: administracion usa campo MDC acotado y editores progresivos', (
   assert.equal(quotas.includes('*ngIf="showCapacityForm"'), true);
 });
 
-test('readiness for 26 channels requires portfolio policy, not historical manual MXN rate', () => {
+test('readiness for 26 channels does not require manual cap/portfolio/price', () => {
   const template = { id: 1, is_active: true, compatible_channel_ids: ['ch-1', 'ch-2'] } as CampaignV2DispatchTemplate;
   const bindings = [
     { id: 1, provider_channel_id: 'ch-1', sucursal_canon: 'AZAHARES_CUL', is_active: true, is_default: true },
@@ -1359,9 +1359,9 @@ test('readiness for 26 channels requires portfolio policy, not historical manual
   assert.equal(rows[1].configured, true);
   assert.equal(rows[1].issues.includes('Tarifa MXN pendiente'), false);
   assert.equal(rows[1].unitCostMxn, null);
-  assert.equal(campaignV2BuildReadinessRows(template, bindings, [], []).every(r => !r.configured), true);
+  assert.equal(campaignV2BuildReadinessRows(template, bindings, [], []).every(r => r.configured), true);
   policies[1].operational_portfolio_cap = 300;
-  assert.equal(campaignV2BuildReadinessRows(template, bindings, policies, rates)[0].configured, false);
+  assert.equal(campaignV2BuildReadinessRows(template, bindings, policies, rates)[0].configured, true);
   assert.equal(campaignV2BuildReadinessRows(null, bindings, policies, rates)[0].templateCompatible, false);
 });
 
@@ -1371,7 +1371,7 @@ test('operator readiness UI uses catalog reads and has no provider send action',
   const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-readiness-dialog.component.html'), 'utf8');
   assert.ok(ui.includes('forkJoin('));
   assert.ok(ui.includes('listQuotaEvidence()'));
-  assert.ok(html.includes('Configurar límites por canal'));
+  assert.ok(html.includes('Consultar políticas históricas'));
   assert.equal(ui.includes('submitCampaign('), false);
   assert.equal(ui.includes('registerQuotaPolicy('), false);
 });
@@ -1542,7 +1542,7 @@ test('Issue 856 UX: preparación explica bloqueos, simplifica lenguaje y conserv
   assert.ok(css.includes('.review-summary'));
   assert.ok(page.includes('Preparar prueba interna · 1 contacto'));
   assert.ok(page.includes('Plantillas, canales y tarifas'));
-  assert.ok(readiness.includes('Estado de configuración de canales'));
+  assert.ok(readiness.includes('Estado de canales para campañas'));
   assert.ok(pricing.includes('Historial de tarifas MXN (método anterior)'));
   assert.equal(ts.includes('submitCampaign('), false);
   assert.equal(ts.includes('setInterval('), false);
@@ -1567,4 +1567,25 @@ test('Issue 856 USD: estimate is automatic delivered-based; approval cannot requ
   assert.equal(ts.includes('plan.budget?.status !=='), false);
   assert.equal(ts.includes('setInterval('), false);
   assert.equal(ts.includes('executeOne();'), false);
+});
+
+
+test('Issue 856 exception-only capacity: client preserves quota and explicit HELD gates', () => {
+  const dir = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const component = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-governed-console-dialog.component.ts'), 'utf8');
+  const template = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-governed-console-dialog.component.html'), 'utf8');
+  const readiness = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-readiness.logic.ts'), 'utf8');
+  const model = fs.readFileSync(path.join(dir, 'marketing-campaign-v2.models.ts'), 'utf8');
+  assert.ok(component.includes('get isSelectionWithinCapacity(): boolean'));
+  assert.ok(component.includes("'CHANNEL_EXCEPTION_250_EXCEEDED'"));
+  assert.ok(component.includes("'UNRESOLVED_PROVIDER_ACTIVITY'"));
+  assert.ok(component.includes("this.heldBranches.includes(row.sucursal_canon)"));
+  assert.ok(component.includes("this.heldBranches.every(branch => !!this.heldSources[branch])"));
+  assert.ok(component.includes("this.monitor?.quota.all_current === true"));
+  assert.ok(component.includes("this.uncertainResult"));
+  assert.ok(template.includes('*ngIf="isSelectionWithinCapacity'));
+  assert.ok(readiness.includes("binding.sucursal_canon.trim().toUpperCase()"));
+  assert.ok(model.includes("'SUITE_BRANCH_EXCEPTION_CAPS_V1'"));
+  assert.ok(template.includes('(click)="approve()"'));
+  assert.equal(component.includes('setInterval('), false);
 });
