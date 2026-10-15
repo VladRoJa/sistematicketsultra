@@ -1,0 +1,50 @@
+name: Track Nightly D+1 Cutoff CI
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/warehouse/scheduler/track_scheduler_worker.py'
+      - 'backend/tests/warehouse/test_track_scheduler_manual_canonical_close.py'
+      - 'backend/app/services/automation_control/job_catalog.py'
+      - 'backend/app/services/automation_control/timeline_service.py'
+      - '.github/workflows/track-nightly-dplus1-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nightly-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+      SECRET_KEY: synthetic-nightly-track-secret
+      JWT_SECRET_KEY: synthetic-nightly-track-jwt
+      SQLALCHEMY_DATABASE_URI: 'sqlite:///:memory:'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install locked backend dependencies and pytest
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Compile changed Python files
+        run: |
+          python -m py_compile \
+            app/warehouse/scheduler/track_scheduler_worker.py \
+            app/services/automation_control/job_catalog.py \
+            app/services/automation_control/timeline_service.py
+      - name: Test D+1 cutoff, retry, calendar rollovers and extractor dates
+        run: |
+          python -m pytest -q --tb=short -o addopts= \
+            tests/warehouse/test_track_scheduler_manual_canonical_close.py \
+            tests/warehouse/test_gasca_single_report_runner_venta_total_historical_date.py

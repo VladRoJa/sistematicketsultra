@@ -46,10 +46,10 @@ TRACK_TIMEZONE = ZoneInfo("America/Tijuana")
 DEFAULT_POLL_INTERVAL_SECONDS = 60
 DEFAULT_PREVIEW_START_HOUR = 5
 DEFAULT_PREVIEW_END_HOUR = 23
-DEFAULT_NIGHTLY_BASE_HOUR = 23
-DEFAULT_NIGHTLY_BASE_MINUTE = 30
+DEFAULT_NIGHTLY_BASE_HOUR = 0
+DEFAULT_NIGHTLY_BASE_MINUTE = 15
 DEFAULT_NIGHTLY_RETRY_HOUR = 0
-DEFAULT_NIGHTLY_RETRY_MINUTE = 30
+DEFAULT_NIGHTLY_RETRY_MINUTE = 45
 DEFAULT_CLOSE_LOOKBACK_DAYS = 7
 DEFAULT_AUTO_CLOSE_MAX_ATTEMPTS = 2
 DEFAULT_WAREHOUSE_RETENTION_HOUR = 1
@@ -220,9 +220,11 @@ def decide_track_scheduler_action(now_local: datetime) -> TrackSchedulerDecision
         hour=nightly_base_hour,
         minute=nightly_base_minute,
     ):
+        # The 00:15 D+1 capture closes the FULL previous business day,
+        # including sales registered between 23:30 and 23:59.
         return TrackSchedulerDecision(
             action="base_nocturna_canonica",
-            track_date=today,
+            track_date=today - timedelta(days=1),
             reason="nightly_base_window",
         )
 

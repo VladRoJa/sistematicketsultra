@@ -230,3 +230,122 @@ def test_preview_operativo_starts_at_5am_by_default(
         )
 
         assert actual_action == expected_action
+
+
+@pytest.mark.parametrize(
+    ("now_local", "expected_date"),
+    [
+        (datetime(2026, 10, 16, 0, 15, tzinfo=worker.TRACK_TIMEZONE), date(2026, 10, 15)),
+        (datetime(2026, 11, 1, 0, 15, tzinfo=worker.TRACK_TIMEZONE), date(2026, 10, 31)),
+        (datetime(2027, 1, 1, 0, 15, tzinfo=worker.TRACK_TIMEZONE), date(2026, 12, 31)),
+    ],
+)
+def test_nightly_base_d_plus_one_processes_previous_business_date(
+    monkeypatch: pytest.MonkeyPatch,
+    now_local: datetime,
+    expected_date: date,
+):
+    for name in (
+        "TRACK_PREVIEW_START_HOUR", "TRACK_PREVIEW_END_HOUR",
+        "TRACK_NIGHTLY_BASE_HOUR", "TRACK_NIGHTLY_BASE_MINUTE",
+        "TRACK_NIGHTLY_RETRY_HOUR", "TRACK_NIGHTLY_RETRY_MINUTE",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    decision = worker.decide_track_scheduler_action(now_local)
+    assert decision == worker.TrackSchedulerDecision(
+        action="base_nocturna_canonica",
+        track_date=expected_date,
+        reason="nightly_base_window",
+    )
+
+
+def test_nightly_base_does_not_fire_at_old_slot_or_before_cutoff(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    for name in (
+        "TRACK_NIGHTLY_BASE_HOUR", "TRACK_NIGHTLY_BASE_MINUTE",
+        "TRACK_NIGHTLY_RETRY_HOUR", "TRACK_NIGHTLY_RETRY_MINUTE",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    for current in (
+        datetime(2026, 10, 15, 23, 30, tzinfo=worker.TRACK_TIMEZONE),
+        datetime(2026, 10, 16, 0, 14, tzinfo=worker.TRACK_TIMEZONE),
+        datetime(2026, 10, 16, 0, 16, tzinfo=worker.TRACK_TIMEZONE),
+    ):
+        action = worker.decide_track_scheduler_action(current)
+        assert action is None or action.action != "base_nocturna_canonica"
+
+
+def test_nightly_retry_at_0045_retries_previous_day_only_after_failure(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    for name in (
+        "TRACK_NIGHTLY_BASE_HOUR", "TRACK_NIGHTLY_BASE_MINUTE",
+        "TRACK_NIGHTLY_RETRY_HOUR", "TRACK_NIGHTLY_RETRY_MINUTE",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    target = date(2026, 10, 31)
+    monkeypatch.setattr(
+        worker, "_has_failed_current_version",
+        lambda *, track_date, version_type: (
+            track_date == target and version_type == "base_nocturna_canonica"
+        ),
+    )
+    monkeypatch.setattr(
+        worker, "_has_success_current_version",
+        lambda *, track_date, version_type: False,
+    )
+    decision = worker.decide_track_scheduler_action(
+        datetime(2026, 11, 1, 0, 45, tzinfo=worker.TRACK_TIMEZONE)
+    )
+    assert decision == worker.TrackSchedulerDecision(
+        action="base_nocturna_retry",
+        track_date=target,
+        reason="nightly_base_retry_after_failure",
+    )
+    monkeypatch.setattr(
+        worker, "_has_success_current_version",
+        lambda *, track_date, version_type: (
+            track_date == target and version_type == "base_nocturna_canonica"
+        ),
+    )
+    assert worker.decide_track_scheduler_action(
+        datetime(2026, 11, 1, 0, 45, tzinfo=worker.TRACK_TIMEZONE)
+    ) is None
+
+
+def test_nightly_base_and_retry_send_exact_business_date_to_pipeline(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured = []
+    monkeypatch.setattr(
+        worker, "run_track_daily_pipeline_for_date",
+        lambda **kwargs: captured.append(kwargs) or {"status": "completed"},
+    )
+    business_date = date(2026, 10, 31)
+    for action in ("base_nocturna_canonica", "base_nocturna_retry"):
+        result = worker.execute_track_scheduler_decision(
+            worker.TrackSchedulerDecision(
+                action=action,
+                track_date=business_date,
+                reason="test",
+            )
+        )
+        assert result["status"] == "completed"
+    assert [x["business_date"] for x in captured] == [
+        business_date, business_date,
+    ]
+    assert all(x["generation_mode"] == "official_closed_day" for x in captured)
+
+
+def test_effective_schedule_reports_post_midnight_slots(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    for name in (
+        "TRACK_NIGHTLY_BASE_HOUR", "TRACK_NIGHTLY_BASE_MINUTE",
+        "TRACK_NIGHTLY_RETRY_HOUR", "TRACK_NIGHTLY_RETRY_MINUTE",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    schedules = worker._resolved_schedule_snapshot()
+    assert schedules["track.base_nocturna_canonica"]["slots"] == ["00:15"]
+    assert schedules["track.base_nocturna_retry"]["slots"] == ["00:45"]
