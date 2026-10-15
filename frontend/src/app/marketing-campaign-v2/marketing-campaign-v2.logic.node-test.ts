@@ -1589,3 +1589,22 @@ test('Issue 856 exception-only capacity: client preserves quota and explicit HEL
   assert.ok(template.includes('(click)="approve()"'));
   assert.equal(component.includes('setInterval('), false);
 });
+
+
+test('Issue 856 password gate: execution needs ephemeral operator password with no unlocked session', () => {
+  const dir = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const component = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-governed-console-dialog.component.ts'), 'utf8');
+  const template = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-governed-console-dialog.component.html'), 'utf8');
+  const models = fs.readFileSync(path.join(dir, 'marketing-campaign-v2.models.ts'), 'utf8');
+  assert.ok(component.includes('readonly executionPassword = new FormControl'));
+  assert.ok(component.includes('this.executionPassword.value.length > 0'));
+  assert.ok(component.includes('this.executionPassword.setValue(\'\');'));
+  assert.ok(component.includes('operator_password: operatorPassword'));
+  assert.ok(component.includes('err.status === 403 || err.status === 423'));
+  assert.ok(component.includes('this.uncertainResult = true'));
+  assert.ok(template.includes('type="password"'));
+  assert.ok(template.includes('[formControl]="executionPassword"'));
+  assert.ok(models.includes('operator_password: string'));
+  assert.equal(component.includes('localStorage.setItem'), false);
+  assert.equal(component.includes('setInterval('), false);
+});

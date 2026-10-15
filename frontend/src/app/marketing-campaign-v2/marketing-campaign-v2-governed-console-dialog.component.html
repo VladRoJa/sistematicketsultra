@@ -102,6 +102,9 @@
           <mat-form-field appearance="outline"><mat-label>Escribe {{ sendWord }}</mat-label>
             <input matInput [formControl]="executionPhrase" autocomplete="off">
           </mat-form-field>
+          <mat-form-field appearance="outline"><mat-label>Contraseña de Suite Ultra</mat-label>
+            <input matInput type="password" [formControl]="executionPassword" autocomplete="current-password" maxlength="256">
+          </mat-form-field>
           <button mat-flat-button color="warn" type="button" (click)="executeOne()" [disabled]="!canExecute">
             Enviar únicamente lote #{{ child.child_id }}
           </button>

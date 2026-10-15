@@ -1679,6 +1679,7 @@ def campaign_v2_governed_execute_endpoint(campaign_id: int):
         _require_campaign_v2_send(access)
         payload = _parse_payload({
             "execution_id", "child_id", "expected_manifest_digest",
+            "operator_password",
         })
         send_enabled = current_app.config.get("CAMPAIGN_V2_PROVIDER_SEND_ENABLED") is True
         governed_enabled = current_app.config.get(
@@ -1686,6 +1687,20 @@ def campaign_v2_governed_execute_endpoint(campaign_id: int):
         ) is True
         if not (send_enabled and governed_enabled):
             raise GovernedDispatchDisabled("Envío gobernado deshabilitado.")
+        # Step-up authentication is bound to the JWT actor and this exact
+        # child/manifest request. No separate unlock, session flag or password
+        # persistence exists. Reject BEFORE provider construction or DB claims.
+        password = payload.pop("operator_password", None)
+        if not _valid_governed_dispatch_password(user, password):
+            current_app.logger.warning(
+                "Governed dispatch password denied: actor=%s campaign=%s child=%s",
+                user.id, campaign_id, payload.get("child_id"),
+            )
+            return _error("Contraseña de Suite Ultra incorrecta o ausente.", 403)
+        current_app.logger.info(
+            "Governed dispatch password verified: actor=%s campaign=%s child=%s",
+            user.id, campaign_id, payload.get("child_id"),
+        )
         provider = IVentasBroadcastProvider(
             api_key=current_app.config.get("IVENTAS_CAMPAIGN_SEND_API_KEY", ""),
             base_url=current_app.config.get(
@@ -2539,6 +2554,20 @@ def _require_campaign_v2_send(access) -> None:
         raise MarketingAuthorizationError(
             "No autorizado para enviar Campaign V2."
         )
+
+
+def _valid_governed_dispatch_password(user: UserORM, password: Any) -> bool:
+    """Reauthenticate the exact JWT actor using the existing login hash."""
+    if (not isinstance(password, str) or not password or len(password) > 256):
+        return False
+    checker = getattr(user, "verify_password", None)
+    if not callable(checker):
+        return False
+    try:
+        return checker(password) is True
+    except (TypeError, ValueError):
+        # Fail closed on malformed stored hashes; never log supplied secrets.
+        return False
 
 
 def _require_campaign_v2_global_management(access) -> None:

@@ -49,6 +49,7 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   readonly materializePhrase = new FormControl('', { nonNullable: true });
   readonly authorizationPhrase = new FormControl('', { nonNullable: true });
   readonly executionPhrase = new FormControl('', { nonNullable: true });
+  readonly executionPassword = new FormControl('', { nonNullable: true });
   readonly executionCheckbox = new FormControl(false, { nonNullable: true });
   templates: CampaignV2DispatchTemplate[] = [];
   preflight: CampaignV2PreflightResponse | null = null;
@@ -253,6 +254,8 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
       review.execution.status === 'AUTHORIZED' &&
       review.manifest_digest === this.monitor?.approval?.manifest_digest &&
       this.executionCheckbox.value === true &&
+      this.executionPassword.value.length > 0 &&
+      this.executionPassword.value.length <= 256 &&
       this.executionPhrase.value === this.sendWord;
   }
 
@@ -399,6 +402,8 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
     const child = this.nextReadyChild, execution = this.reviewReady?.execution;
     const digest = this.reviewReady?.manifest_digest;
     if (!this.canExecute || !child || !execution || !digest) { return; }
+    const operatorPassword = this.executionPassword.value;
+    this.executionPassword.setValue('');
     this.working = 'execute';
     this.executionCheckbox.setValue(false);
     this.executionPhrase.setValue('');
@@ -408,6 +413,7 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
       execution_id: execution.execution_id,
       child_id: child.child_id,
       expected_manifest_digest: digest,
+      operator_password: operatorPassword,
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: result => {
         this.working = null;
@@ -418,8 +424,16 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
         this.refresh();
       },
       error: (err: HttpErrorResponse) => {
-        // A timeout/502 can happen AFTER provider acceptance. No retry affordance.
         this.working = null;
+        // Auth/kill-switch denial happens before any provider request.
+        // The operator may retry their password; a timeout/502 must NEVER
+        // offer an automatic repeat because iVentas might have accepted it.
+        if (err.status === 403 || err.status === 423) {
+          this.uncertainResult = false;
+          this.error = this.message(err, 'Acceso denegado. Verifica tu contraseña y permisos.');
+          this.refresh(true);
+          return;
+        }
         this.uncertainResult = true;
         this.error = this.message(err, 'No está confirmado si se envió el mensaje. Compruébalo directamente con iVentas. No lo reenvíes.');
         this.refresh(true);
@@ -443,6 +457,7 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
     this.materializePhrase.setValue('');
     this.authorizationPhrase.setValue('');
     this.executionPhrase.setValue('');
+    this.executionPassword.setValue('');
     this.executionCheckbox.setValue(false);
   }
   private message(err: HttpErrorResponse, fallback: string): string {
