@@ -1528,7 +1528,7 @@ test('Issue 856 UX: preparación explica bloqueos, simplifica lenguaje y conserv
   const page = fs.readFileSync(path.join(root, 'marketing-campaign-v2-page.component.html'), 'utf8');
   const readiness = fs.readFileSync(path.join(root, 'marketing-campaign-v2-readiness-dialog.component.html'), 'utf8');
   const pricing = fs.readFileSync(path.join(root, 'marketing-campaign-v2-dispatch-admin-dialog.component.html'), 'utf8');
-  assert.ok(ts.includes("plan.budget?.status !== 'COMPLETE'"));
+  assert.ok(ts.includes("if (!plan.budget_usd)"));
   assert.ok(ts.includes("plan.quota?.status !== 'REVIEWABLE'"));
   assert.ok(ts.includes("this.monitor?.quota.all_current === true"));
   assert.ok(ts.includes("this.uncertainResult = true"));
