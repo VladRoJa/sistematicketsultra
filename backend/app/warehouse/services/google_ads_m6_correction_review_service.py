@@ -45,12 +45,42 @@ def inspect_correction_case(case_id: int) -> dict:
                 FROM google_ads_branch_approved_identities i
                 WHERE i.approval_version_id = :version
             """), {"version": case["approval_version_id"]}).mappings().all()
-            prior = conn.execute(sa.text("""
-                SELECT source_upload_id, COUNT(*) AS n, SUM(cost) AS amount
-                FROM google_ads_daily_metrics
-                WHERE customer_id = :customer AND report_date = :day
-                GROUP BY source_upload_id
-            """), {"customer": CUSTOMER_ID, "day": case["business_date"]}).mappings().all()
+            # Compare ONLY with the exact canonical publication being
+            # superseded. Revision 3 must compare with revision 2, not an
+            # orphaned original campaign ledger or another upload for the day.
+            baseline = None
+            if case["expected_publication_id"] is not None:
+                prior_pub = conn.execute(sa.text("""
+                    SELECT p.id, p.campaign_upload_id,
+                           x.case_id AS correction_case_id
+                    FROM google_ads_m6_daily_publications p
+                    LEFT JOIN google_ads_m6_correction_promotions x
+                      ON x.publication_id = p.id
+                    WHERE p.id = :prior_id
+                      AND p.customer_id = :customer
+                      AND p.business_date = :day
+                """), {
+                    "prior_id": case["expected_publication_id"],
+                    "customer": CUSTOMER_ID, "day": case["business_date"],
+                }).mappings().one_or_none()
+                if prior_pub:
+                    if prior_pub["correction_case_id"] is not None:
+                        baseline = conn.execute(sa.text("""
+                            SELECT COUNT(*) AS n, SUM(cost) AS amount
+                            FROM google_ads_m6_correction_campaign_facts
+                            WHERE case_id = :prior_case
+                        """), {"prior_case": prior_pub["correction_case_id"]}).mappings().one()
+                    else:
+                        baseline = conn.execute(sa.text("""
+                            SELECT COUNT(*) AS n, SUM(cost) AS amount
+                            FROM google_ads_daily_metrics
+                            WHERE customer_id = :customer AND report_date = :day
+                              AND source_upload_id = :prior_upload
+                        """), {
+                            "customer": CUSTOMER_ID,
+                            "day": case["business_date"],
+                            "prior_upload": prior_pub["campaign_upload_id"],
+                        }).mappings().one()
             live = conn.execute(sa.text("""
                 SELECT id, revision, is_canonical FROM
                     google_ads_m6_daily_publications
@@ -77,8 +107,11 @@ def inspect_correction_case(case_id: int) -> dict:
         if branch:
             branch_costs[branch] = branch_costs.get(branch, Decimal("0")) + Decimal(row["cost"])
     assigned = sum(branch_costs.values(), Decimal("0"))
-    prior_cost = (Decimal(prior[0]["amount"]) if len(prior) == 1
-                  and prior[0]["n"] == 27 else None)
+    prior_cost = (
+        Decimal(baseline["amount"]) if baseline is not None
+        and int(baseline["n"]) == 27 and baseline["amount"] is not None
+        else None
+    )
     diff = campaign_cost - prior_cost if prior_cost is not None else None
     current = [r for r in live if r["is_canonical"]]
     is_published = bool(promotion and len(current) == 1
