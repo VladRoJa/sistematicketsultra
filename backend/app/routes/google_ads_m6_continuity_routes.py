@@ -15,6 +15,10 @@ from app.warehouse.services.google_ads_m6_manual_preview_service import (
     MAX_CAMPAIGN_BYTES, MAX_GROUP_BYTES,
     preview_manual_pair, require_current_admicorp,
 )
+from app.warehouse.services.google_ads_m6_correction_raw_service import (
+    GoogleAdsM6CorrectionRawError, FLAG as CORRECTION_RAW_FLAG,
+    preview_correction_raw_pair, confirm_correction_raw_pair,
+)
 from app.warehouse.services.google_ads_m6_manual_confirm_service import (
     GoogleAdsM6ManualConfirmError, issue_raw_confirmation_ticket,
     confirm_google_ads_m6_manual_pair,
@@ -310,3 +314,94 @@ def google_ads_m6_manual_correction_status():
     except Exception:
         current_app.logger.exception("M6 correction day diagnostic failed.")
         return jsonify({"code": "M6_CORRECTION_DIAGNOSTIC_UNAVAILABLE"}), 503
+
+
+@google_ads_m6_continuity_bp.post("/corrections/raw/preview")
+@jwt_required()
+def preview_m6_correction_raw():
+    """Explicit correction-only preflight; separate from daily normal upload."""
+    if os.getenv(CORRECTION_RAW_FLAG, "").strip().lower() != "true":
+        return jsonify({"code": "CORRECTION_RAW_DISABLED"}), 503
+    try:
+        actor_id = require_current_admicorp()
+    except PermissionError:
+        return jsonify({"code": "FORBIDDEN"}), 403
+    denied = require_warehouse_upload()
+    if denied:
+        return denied
+    if (request.content_length is not None
+            and request.content_length > MAX_CAMPAIGN_BYTES + MAX_GROUP_BYTES + 69632):
+        return jsonify({"code": "CORRECTION_FILES_TOO_LARGE"}), 413
+    if (request.mimetype != "multipart/form-data"
+            or set(request.files) != {"campaign", "ad_group"}
+            or set(request.form) != {"reason"}):
+        return jsonify({"code": "INVALID_CORRECTION_REQUEST"}), 400
+    content = {}
+    for name, limit in (("campaign", MAX_CAMPAIGN_BYTES),
+                        ("ad_group", MAX_GROUP_BYTES)):
+        part = request.files[name]
+        if not part or not part.filename or not part.filename.lower().endswith(".xlsx"):
+            return jsonify({"code": "INVALID_CORRECTION_FILENAME"}), 400
+        content[name] = part.stream.read(limit + 1)
+        if not 0 < len(content[name]) <= limit:
+            return jsonify({"code": "INVALID_CORRECTION_SIZE"}), 413
+    try:
+        output = preview_correction_raw_pair(
+            actor_id=actor_id,
+            campaign_bytes=content["campaign"], group_bytes=content["ad_group"],
+            reason=request.form["reason"])
+        return jsonify(output), 200
+    except GoogleAdsM6CorrectionRawError as exc:
+        return jsonify({"code": str(exc), "eligible_for_publication": False}), 409
+    except Exception:
+        current_app.logger.exception("M6 correction RAW preview rejected.")
+        return jsonify({"code": "CORRECTION_PREVIEW_UNAVAILABLE"}), 503
+
+
+@google_ads_m6_continuity_bp.post("/corrections/raw/confirm")
+@jwt_required()
+def confirm_m6_correction_raw():
+    """Ticket bound to actor and two files; does not publish or ingest facts."""
+    if os.getenv(CORRECTION_RAW_FLAG, "").strip().lower() != "true":
+        return jsonify({"code": "CORRECTION_RAW_DISABLED"}), 503
+    try:
+        actor_id = require_current_admicorp()
+    except PermissionError:
+        return jsonify({"code": "FORBIDDEN"}), 403
+    denied = require_warehouse_upload()
+    if denied:
+        return denied
+    if (request.content_length is not None
+            and request.content_length > MAX_CAMPAIGN_BYTES + MAX_GROUP_BYTES + 69632):
+        return jsonify({"code": "CORRECTION_FILES_TOO_LARGE"}), 413
+    if (request.mimetype != "multipart/form-data"
+            or set(request.files) != {"campaign", "ad_group"}
+            or set(request.form) != {"correction_ticket"}):
+        return jsonify({"code": "INVALID_CORRECTION_REQUEST"}), 400
+    ticket = request.form["correction_ticket"]
+    if not 0 < len(ticket) <= 4096:
+        return jsonify({"code": "INVALID_CORRECTION_CONFIRMATION"}), 400
+    content = {}
+    for name, limit in (("campaign", MAX_CAMPAIGN_BYTES),
+                        ("ad_group", MAX_GROUP_BYTES)):
+        part = request.files[name]
+        if not part or not part.filename or not part.filename.lower().endswith(".xlsx"):
+            return jsonify({"code": "INVALID_CORRECTION_FILENAME"}), 400
+        content[name] = part.stream.read(limit + 1)
+        if not 0 < len(content[name]) <= limit:
+            return jsonify({"code": "INVALID_CORRECTION_SIZE"}), 413
+    try:
+        output = confirm_correction_raw_pair(
+            actor_id=actor_id, ticket=ticket,
+            campaign_bytes=content["campaign"], group_bytes=content["ad_group"])
+        if output["status"] != "CORRECTION_RAW_PAIR_STAGED":
+            return jsonify(output), 409
+        return jsonify(output), (
+            200 if all(u["reused_existing"] for u in output["uploads"].values())
+            else 201
+        )
+    except GoogleAdsM6CorrectionRawError as exc:
+        return jsonify({"code": str(exc), "eligible_for_publication": False}), 409
+    except Exception:
+        current_app.logger.exception("M6 correction RAW confirmation failed.")
+        return jsonify({"code": "CORRECTION_RAW_STAGE_UNAVAILABLE"}), 503
