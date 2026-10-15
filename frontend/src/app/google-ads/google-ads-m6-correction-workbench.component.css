@@ -1,0 +1,91 @@
+.m6-correction {
+  margin: 22px 0; border: 1px solid #d6e0ec; border-radius: 14px;
+  background: #fff; padding: 24px; color: #213a57;
+}
+.m6-correction__heading {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+}
+.m6-correction h2 { margin: 4px 0 9px; font-size: 1.4rem; }
+.m6-correction h3 { margin: 0 0 8px; font-size: 1.04rem; }
+.m6-correction h4 { margin: 0 0 12px; font-size: .98rem; }
+.m6-correction p { color: #52647c; line-height: 1.55; }
+.m6-correction__eyebrow {
+  text-transform: uppercase; letter-spacing: .09em; font-size: .72rem;
+  font-weight: 700; color: #426c9e !important; margin: 0;
+}
+.m6-correction__panel { border-top: 1px solid #dce5f1; padding-top: 18px; margin-top: 22px; }
+.m6-correction__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 16px 0; }
+.m6-correction label:not(.m6-correction__confirm) {
+  display: flex; flex-direction: column; gap: 7px; color: #314b6b;
+  font-size: .84rem; font-weight: 650;
+}
+.m6-correction input[type=file], .m6-correction textarea, .m6-correction select {
+  box-sizing: border-box; width: 100%; border: 1px solid #b8c7da;
+  border-radius: 8px; padding: 10px; color: #213a57; background: #fff;
+  font: inherit;
+}
+.m6-correction small { color: #5f728a; font-weight: 400; }
+.m6-correction__full { margin: 15px 0; }
+.m6-correction button { cursor: pointer; border-radius: 8px; padding: 10px 15px; font-weight: 700; }
+.m6-correction__primary {
+  color: #fff; background: #173c6b; border: 1px solid #173c6b;
+}
+.m6-correction__secondary {
+  color: #173c6b; background: white; border: 1px solid #adc0d5;
+}
+.m6-correction button:disabled { opacity: .45; cursor: not-allowed; }
+.m6-correction input:focus-visible,
+.m6-correction textarea:focus-visible,
+.m6-correction select:focus-visible,
+.m6-correction button:focus-visible { outline: 3px solid #83afe5; outline-offset: 2px; }
+.m6-correction__summary {
+  margin-top: 18px; padding: 17px; background: #f7f9fc;
+  border: 1px solid #e1e8f2; border-radius: 10px;
+}
+.m6-correction__amounts {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px; margin: 14px 0;
+}
+.m6-correction__amounts > div {
+  display: flex; flex-direction: column; gap: 8px;
+  background: white; border: 1px solid #e0e7f1; border-radius: 8px; padding: 13px;
+}
+.m6-correction__amounts span { color: #586c85; font-size: .79rem; }
+.m6-correction__amounts strong { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.m6-correction__confirm {
+  display: flex; align-items: flex-start; gap: 9px;
+  margin: 16px 0; color: #3e5675; line-height: 1.5; font-size: .86rem;
+}
+.m6-correction__confirm input { margin-top: 4px; }
+.m6-correction__case-list {
+  display: flex; flex-direction: column; gap: 8px; margin: 14px 0;
+  max-height: 290px; overflow-y: auto;
+}
+.m6-correction__case {
+  background: white; text-align: left; border: 1px solid #d4dfec;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; color: #2b496f;
+}
+.m6-correction__sensitive {
+  padding-top: 18px; border-top: 1px solid #d5e0ee; margin-top: 18px;
+}
+.m6-correction__branch-list {
+  padding-left: 16px; max-height: 280px; overflow-y: auto;
+}
+.m6-correction__branch-list li {
+  display: flex; justify-content: space-between; gap: 18px;
+  padding: 6px; border-bottom: 1px solid #e0e7f1;
+}
+.m6-correction__evidence code { overflow-wrap: anywhere; }
+.m6-correction__error, .m6-correction__success {
+  border-radius: 8px; padding: 12px 14px; margin-top: 16px;
+}
+.m6-correction__error { background: #fff1ee; border: 1px solid #e6bdb7; color: #7e2a20 !important; }
+.m6-correction__success { background: #eef9f3; border: 1px solid #bce3cc; color: #155c40 !important; }
+.m6-correction__empty { color: #677b93; margin-top: 15px; }
+@media (max-width: 740px) {
+  .m6-correction { padding: 16px; }
+  .m6-correction__heading, .m6-correction__case { flex-direction: column; align-items: stretch; }
+  .m6-correction__grid, .m6-correction__amounts { grid-template-columns: 1fr; }
+  .m6-correction__heading > button { align-self: flex-start; }
+}
