@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import date
+import json
 from decimal import Decimal
 import sqlalchemy as sa
 import pytest
@@ -21,7 +22,9 @@ from test_google_ads_m6_correction_promotion_pg_e2e import (
 from test_google_ads_m6_correction_decision_pg_e2e import (
     reviewer_lab, _stage, _review,
 )
-from test_google_ads_m6_correction_candidate_stage_pg_e2e import candidate_lab
+from test_google_ads_m6_correction_candidate_stage_pg_e2e import (
+    candidate_lab, _stage as stage_revision,
+)
 from test_google_ads_m6_manual_structured_postgres import lab
 from test_google_ads_m6_manual_raw_postgres import real_warehouse
 
@@ -206,3 +209,79 @@ def test_corrected_reader_rejects_invalid_promotion_link(readers_pg):
         """), {"bad": "0" * 64})
     assert _daily((1,))["status"] == "requires_review"
     assert _global()["status"] == "requires_review"
+
+
+def test_revision_two_replaces_account_and_branch_read_without_old_double_count(readers_pg):
+    """Full SQL regression: historical canonical r1 superseded by approved r2."""
+    client, actor, reviewer, engine, camp, group = readers_pg
+    publication = __import__(
+        "app.models.google_ads_m6_daily_publication",
+        fromlist=["GoogleAdsM6DailyPublicationORM"],
+    ).GoogleAdsM6DailyPublicationORM
+    with engine.begin() as conn:
+        prior = conn.execute(
+            publication.__table__.insert().returning(publication.id), {
+                "customer_id": daily.CUSTOMER_ID,
+                "business_date": DAY, "revision": 1,
+                "campaign_upload_id": 990101,
+                "ad_group_upload_id": 990102,
+                "approval_version_id": 1,
+                "campaign_sha256": "f" * 64,
+                "ad_group_sha256": "e" * 64,
+                "is_canonical": True, "published_by_user_id": 47,
+                "published_on": date(2026, 10, 14),
+            },
+        ).scalar_one()
+        # This is the historical 27-row global account ledger, not active r2.
+        conn.execute(GoogleAdsDailyMetricORM.__table__.insert(), [{
+            "customer_id": daily.CUSTOMER_ID,
+            "campaign_id": None,
+            "campaign_key": "name:" + format(i, "064x"),
+            "campaign_name": f"Prior campaign {i}",
+            "report_date": DAY, "currency_code": "MXN",
+            "cost": Decimal("999.00"),
+            "clicks": 1, "impressions": 10,
+            "conversions": Decimal("0"), "conversion_value": Decimal("0"),
+            "source_kind": "WAREHOUSE_XLSX", "source_upload_id": 990101,
+        } for i in range(1, 28)])
+        conn.execute(sa.text("""
+            UPDATE warehouse_audit_logs
+               SET details = details::jsonb || CAST(:extra AS jsonb)
+             WHERE action = 'UPLOAD'
+               AND upload_id IN (:camp, :grp)
+        """), {
+            "extra": json.dumps({
+                "intended_revision": 2,
+                "expected_publication_id": prior,
+            }),
+            "camp": camp, "grp": group,
+        })
+    staged = stage_revision(client, actor, camp, group,
+                            revision=2, expected=prior)
+    assert staged.status_code == 201, staged.get_json()
+    case_id = staged.json["case_id"]
+    reviewed = _review(client, reviewer, case_id)
+    assert reviewed.status_code == 201, reviewed.get_json()
+    promoted = _promote(client, actor, case_id, reviewed.json,
+                        revision=2, prior=prior)
+    assert promoted.status_code == 201, promoted.get_json()
+    new_cost = float(Decimal(promoted.json["account_cost_mxn"]))
+    assert new_cost < 27000  # prior ledger intentionally costs 26,973 MXN
+    from_company = _global()
+    assert from_company["status"] == "partial", from_company
+    assert from_company["amount"] == pytest.approx(new_cost), from_company
+    assert from_company["covered_days"] == 1
+    scoped = _daily((1,))
+    assert scoped["status"] == "partial", scoped
+    assert [r["sucursal_id"] for r in scoped["rows"]] == [1]
+    global_daily = _daily(global_=True)
+    assert global_daily["status"] == "partial", global_daily
+    assert global_daily["account_cost_observed"] == pytest.approx(new_cost)
+    assert global_daily["scope_attributed_cost"] <= new_cost
+    with engine.connect() as conn:
+        versions = conn.execute(sa.text("""
+            SELECT revision, is_canonical
+            FROM google_ads_m6_daily_publications
+            WHERE business_date = :day ORDER BY revision
+        """), {"day": DAY}).all()
+    assert versions == [(1, False), (2, True)]
