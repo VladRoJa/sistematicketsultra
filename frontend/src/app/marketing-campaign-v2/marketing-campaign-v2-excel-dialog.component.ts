@@ -46,10 +46,12 @@ export class MarketingCampaignV2ExcelDialogComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadTemplates();
-    for (const control of [this.name, this.purpose, this.templateId]) {
-      control.valueChanges.pipe(takeUntilDestroyed(this.destroyRef))
-        .subscribe(() => this.invalidatePreview());
-    }
+    this.name.valueChanges.pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.invalidatePreview());
+    this.purpose.valueChanges.pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.invalidatePreview());
+    this.templateId.valueChanges.pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.invalidatePreview());
   }
 
   get availableTemplates(): CampaignV2DispatchTemplate[] {
