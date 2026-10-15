@@ -6,6 +6,8 @@ on:
       - "backend/app/models/marketing.py"
       - "backend/app/services/marketing_campaign_v2_quota_service.py"
       - "backend/app/services/marketing_campaign_v2_operational_capacity_service.py"
+      - "backend/app/services/marketing_campaign_v2_branch_exception_capacity.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_branch_exception_capacity.py"
       - "backend/migrations/versions/f856opcap1013_internal_volume_policy.py"
       - "backend/tests/marketing/test_marketing_campaign_v2_operational_*.py"
       - "backend/app/services/marketing_campaign_v2_dispatch_approval_service.py"
@@ -85,6 +87,7 @@ jobs:
         run: |
           python -m pytest -q --tb=short \
             tests/marketing/test_marketing_campaign_v2_operational_capacity.py \
+            tests/marketing/test_marketing_campaign_v2_branch_exception_capacity.py \
             tests/marketing/test_marketing_campaign_v2_operational_migration.py \
             tests/marketing/test_marketing_campaign_v2_quota_service.py \
             tests/marketing/test_marketing_campaign_v2_quota_migration.py \
