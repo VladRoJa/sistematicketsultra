@@ -152,9 +152,13 @@ def _compile(
     recipients: list[dict[str, Any]] = []
     seen: set[str] = set()
     branches: Counter[str] = Counter()
+    branch_cache: dict[str, Any] = {}
+    channel_cache: dict[int, Any] = {}
     for line, row in enumerate(rows, start=2):
         branch_raw = _text(row.get("sucursal"))
-        branch = resolve_dispatch_branch_key(branch_raw, session=session)
+        if branch_raw not in branch_cache:
+            branch_cache[branch_raw] = resolve_dispatch_branch_key(branch_raw, session=session)
+        branch = branch_cache[branch_raw]
         if branch is None:
             raise ExcelCampaignImportValidationError(
                 f"Fila {line}: sucursal sin identidad canónica única."
@@ -164,9 +168,11 @@ def _compile(
             raise ExcelCampaignImportValidationError(
                 f"Fila {line}: sucursal fuera del alcance autorizado."
             )
-        channel = resolve_dispatch_channel_binding(
-            sucursal_id=branch.sucursal_id, session=session,
-        )
+        if branch.sucursal_id not in channel_cache:
+            channel_cache[branch.sucursal_id] = resolve_dispatch_channel_binding(
+                sucursal_id=branch.sucursal_id, session=session,
+            )
+        channel = channel_cache[branch.sucursal_id]
         if channel is None or not template_allows_channel(
             template, str(channel.provider_channel_id)
         ):
