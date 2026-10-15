@@ -18,6 +18,7 @@ from .google_ads_m6_continuity import (
 )
 from .google_ads_m6_daily_publication import GoogleAdsM6DailyPublicationORM
 from .google_ads_m6_correction_decision import GoogleAdsM6CorrectionDecisionORM
+from .google_ads_m6_correction_promotion import GoogleAdsM6CorrectionPromotionORM
 from .google_ads_m6_correction import (
     GoogleAdsM6CorrectionCaseORM,
     GoogleAdsM6CorrectionCampaignORM,
@@ -208,6 +209,7 @@ __all__ = [
     "GoogleAdsDailyMetricORM",
     "GoogleAdsBranchIdentityMappingORM",
     "GoogleAdsM6CorrectionDecisionORM",
+    "GoogleAdsM6CorrectionPromotionORM",
     "GoogleAdsM6CorrectionCaseORM",
     "GoogleAdsM6CorrectionCampaignORM",
     "GoogleAdsM6CorrectionGroupORM",

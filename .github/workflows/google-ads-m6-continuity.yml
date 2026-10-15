@@ -12,6 +12,10 @@ on:
       - 'backend/migrations/versions/e8b2c41d7a60_google_ads_m6_correction_candidates.py'
       - 'backend/app/models/google_ads_m6_correction.py'
       - 'backend/app/models/google_ads_m6_correction_decision.py'
+      - 'backend/app/models/google_ads_m6_correction_promotion.py'
+      - 'backend/migrations/versions/c5e7a2d93f10_google_ads_m6_correction_promotions.py'
+      - 'backend/app/warehouse/services/google_ads_m6_correction_promotion_service.py'
+      - 'backend/tests/google_ads/test_google_ads_m6_correction_promotion_pg_e2e.py'
       - 'backend/migrations/versions/ac42e8b9d510_google_ads_m6_correction_review.py'
       - 'backend/app/warehouse/services/google_ads_m6_correction_decision_service.py'
       - 'backend/tests/google_ads/test_google_ads_m6_correction_decision_pg_e2e.py'
@@ -122,6 +126,7 @@ jobs:
             tests/google_ads/test_google_ads_m6_correction_raw_pg_e2e.py \
             tests/google_ads/test_google_ads_m6_candidate_routes_pg_e2e.py \
             tests/google_ads/test_google_ads_m6_correction_decision_pg_e2e.py \
+            tests/google_ads/test_google_ads_m6_correction_promotion_pg_e2e.py \
             tests/google_ads/test_google_ads_m6_daily_branch_reader.py \
             tests/google_ads/test_google_ads_m6_daily_reader_pg_e2e.py \
             tests/marketing/test_google_ads_funnel_investment.py \
