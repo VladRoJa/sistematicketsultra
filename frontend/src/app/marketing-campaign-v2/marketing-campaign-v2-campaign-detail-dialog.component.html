@@ -20,7 +20,7 @@
     </section>
     <section class="summary-grid">
       <div><span>Fuente</span><strong>{{ sourceLabel(campaign.source) }}</strong></div>
-      <div><span>Congelada</span><strong>{{ campaign.frozen_at | date:'medium' }}</strong></div>
+      <div><span>Guardada</span><strong>{{ campaign.frozen_at | date:'medium' }}</strong></div>
       <div><span>Destinatarios</span><strong>{{ campaign.recipient_count | number }}</strong></div>
       <div><span>Referencia de seguridad</span><strong class="mono">{{ campaign.preview_fingerprint || '—' }}</strong></div>
     </section>
@@ -33,7 +33,7 @@
         </mat-select>
       </mat-form-field>
       <button mat-stroked-button type="button" (click)="savePurpose()" [disabled]="updatingPurpose || purposeControl.value === campaign.purpose">
-        {{ updatingPurpose ? 'Guardando…' : 'Actualizar purpose' }}
+        {{ updatingPurpose ? 'Guardando…' : 'Guardar objetivo' }}
       </button>
     </section>
 
@@ -173,7 +173,7 @@
               </tbody>
             </table>
           </div>
-          <ng-template #noEvolution><p class="muted">Sin snapshots históricos para mostrar.</p></ng-template>
+          <ng-template #noEvolution><p class="muted">Sin registros anteriores de resultados.</p></ng-template>
         </section>
       </ng-container>
     </section>
@@ -192,7 +192,7 @@
             (click)="exportDeliveryPackage()"
             [disabled]="exportingDeliveryPackage || recipientsTotal <= 0"
           >
-            {{ exportingDeliveryPackage ? 'Preparando…' : 'Descargar cohorte congelada' }}
+            {{ exportingDeliveryPackage ? 'Preparando…' : 'Descargar lista original' }}
           </button>
           <button
             mat-stroked-button
@@ -218,26 +218,26 @@
         {{ sendableExportSuccess }}
       </div>
       <p class="muted delivery-feedback">
-        Cohorte congelada = evidencia histórica exacta. Lista para envío = esa misma cohorte menos supresiones vigentes como lista negra.
+        Lista original: contactos guardados al crear la campaña. Lista para envío: la misma lista menos los contactos excluidos actualmente (por ejemplo, lista negra).
       </p>
 
       <div class="recipient-actions">
         <button mat-stroked-button type="button" (click)="openPreparationCenter()">
           Centro de preparación · Ambigüedades y duplicados
         </button>
-        <p class="muted">Revisar exclusiones no modifica la cohorte congelada ni envía mensajes.</p>
+        <p class="muted">Revisar exclusiones no cambia la lista original ni envía mensajes.</p>
       </div>
       <section class="dispatch-preflight-section">
         <div class="section-heading">
           <div>
             <h3>Revisar envío</h3>
-            <p>Preflight M1: revisa el plan que usaría Suite. Esta acción no envía mensajes.</p>
+            <p>Comprueba a quién se enviaría y desde qué canal. Esta revisión no envía mensajes.</p>
           </div>
         </div>
 
         <div class="dispatch-preflight-controls">
           <mat-form-field appearance="fill">
-            <mat-label>Template</mat-label>
+            <mat-label>Plantilla de WhatsApp</mat-label>
             <mat-select
               [formControl]="dispatchTemplateControl"
               [disabled]="loadingDispatchTemplates || dispatchTemplates.length === 0"
@@ -253,28 +253,28 @@
             (click)="reviewDispatch()"
             [disabled]="!canReviewDispatch"
           >
-            {{ preflighting ? 'Revisando…' : 'Revisar envío' }}
+            {{ preflighting ? 'Revisando…' : 'Comprobar destinatarios' }}
           </button>
         </div>
 
-        <p *ngIf="loadingDispatchTemplates" class="muted">Cargando templates permitidos…</p>
+        <p *ngIf="loadingDispatchTemplates" class="muted">Cargando plantillas disponibles…</p>
         <p *ngIf="!loadingDispatchTemplates && dispatchTemplates.length === 0 && !preflightError" class="muted">
-          No hay templates activos compatibles con el purpose de esta campaña.
+          No hay plantillas activas compatibles con el objetivo de esta campaña.
         </p>
         <div *ngIf="preflightError" class="inline-error" role="alert">{{ preflightError }}</div>
 
         <ng-container *ngIf="preflight as plan">
           <div class="preflight-state" [class.preflight-ready]="plan.ready" [class.preflight-blocked]="!plan.ready">
             <strong>{{ plan.ready ? 'Plan listo para revisión' : 'Plan bloqueado' }}</strong>
-            <span>{{ plan.ready ? 'Sin bloqueos detectados por preflight.' : 'Corrige los bloqueos antes de habilitar una fase de envío.' }}</span>
+            <span>{{ plan.ready ? 'No se encontraron problemas en esta revisión.' : 'Corrige los bloqueos antes de habilitar una fase de envío.' }}</span>
           </div>
 
           <div class="preflight-summary-grid">
-            <div><span>Cohorte congelada</span><strong>{{ plan.frozen_count | number }}</strong></div>
+            <div><span>Destinatarios guardados</span><strong>{{ plan.frozen_count | number }}</strong></div>
             <div><span>Blacklist vigente</span><strong>{{ plan.suppressed.blacklist | number }}</strong></div>
             <div><span>Exclusiones de campaña</span><strong>{{ plan.suppressed.campaign_exclusions | number }}</strong></div>
             <div><span>Enviables</span><strong>{{ plan.sendable_count | number }}</strong></div>
-            <div><span>Provider campaigns</span><strong>{{ plan.provider_campaign_count | number }}</strong></div>
+            <div><span>Lotes del proveedor</span><strong>{{ plan.provider_campaign_count | number }}</strong></div>
           </div>
 
           <section *ngIf="plan.budget as budget" class="budget-preview" aria-label="Presupuesto estimado">
@@ -286,7 +286,7 @@
               <div><span>Total estimado</span><strong>{{ budgetTotalLabel(budget) }}</strong></div>
             </div>
             <p *ngIf="budget.status !== 'COMPLETE'" class="muted">
-              Presupuesto incompleto: {{ budget.missing_rate_channels.length }} lotes sin tarifa
+              Faltan costos por registrar: {{ budget.missing_rate_channels.length }} lotes sin tarifa
               y {{ budget.unassigned_recipients | number }} destinatarios sin lote.
             </p>
             <div class="table-wrap preflight-batches" *ngIf="budget.batches.length">
@@ -393,7 +393,7 @@
 
           <div class="submit-gate" [class.submit-gate-ready]="canSubmitDispatch">
             <div>
-              <strong>Controlled Submit M2</strong>
+              <strong>Envío directo (método anterior)</strong>
               <span>{{ submitAvailabilityLabel() }}</span>
             </div>
             <button
@@ -418,7 +418,7 @@
           <div class="provider-submit-state" *ngIf="plan.submission.has_provider_campaigns">
             <div class="section-heading compact-heading">
               <div>
-                <h4>Estado de provider campaigns</h4>
+                <h4>Resultado de los lotes enviados</h4>
                 <p>{{ plan.submission.status }}</p>
               </div>
             </div>
@@ -429,7 +429,7 @@
                     <th>Sucursal</th>
                     <th>Destinatarios</th>
                     <th>Estado</th>
-                    <th>Provider ID</th>
+                    <th>Referencia iVentas</th>
                     <th>Referencia</th>
                   </tr>
                 </thead>
@@ -450,7 +450,7 @@
 
       <div class="table-wrap" *ngIf="recipients.length; else emptyRecipients">
         <table>
-          <thead><tr><th>Teléfono</th><th>Nombre</th><th>Sucursal</th><th>Tarifa</th><th>Familia</th><th>Conflictos</th><th>Evidence</th><th></th></tr></thead>
+          <thead><tr><th>Teléfono</th><th>Nombre</th><th>Sucursal</th><th>Tarifa</th><th>Familia</th><th>Conflictos</th><th>Registros de origen</th><th></th></tr></thead>
           <tbody>
             <tr *ngFor="let recipient of recipients">
               <td>{{ recipient.phone_mx10 }}</td>
