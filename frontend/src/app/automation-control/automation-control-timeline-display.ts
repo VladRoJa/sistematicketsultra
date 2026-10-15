@@ -45,7 +45,7 @@ export function classifyObservationRuns(runs: readonly { status_raw: string }[])
   const status = (runs[0]?.status_raw ?? '').trim().toLowerCase();
   if (status === 'running') { return 'running'; }
   if (status === 'partial') { return 'partial'; }
-  if (status === 'failed' || status === 'error') { return 'error'; }
+  if (['failed', 'error', 'timed_out'].includes(status)) { return 'error'; }
   if (['completed', 'success', 'succeeded'].includes(status)) { return 'completed'; }
   if (status === 'replaced') { return 'replaced'; }
   return 'unknown';
