@@ -25,6 +25,13 @@ from app.services.marketing_campaign_v2_operational_capacity_service import (
 BASIS = "SUITE_BRANCH_EXCEPTION_CAPS_V1"
 WINDOW = timedelta(hours=24)
 RESTRICTED_BRANCHES = frozenset({"INDEPENDENCIA", "INSURGENTES"})
+# Exact iVentas channel IDs grounded in Alembic f3c8a1b2d4e6.
+# Protect both canonical branch identity and provider identity so neither a
+# branch-label change nor a binding reassignment silently removes a 250 cap.
+RESTRICTED_CHANNEL_IDS = frozenset({
+    "6a29c8ffe83fa20008b5a789",  # INDEPENDENCIA
+    "6a2aff2d555186000912586d",  # INSURGENTES
+})
 RESTRICTED_CHANNEL_LIMIT = 250
 
 
@@ -36,8 +43,9 @@ def _branch_key(value: Any) -> str:
     return str(value or "").strip().upper().replace("-", "_").replace(" ", "_")
 
 
-def restricted_branch(value: Any) -> bool:
-    return _branch_key(value) in RESTRICTED_BRANCHES
+def restricted_branch(value: Any, channel_id: Any = None) -> bool:
+    return (_branch_key(value) in RESTRICTED_BRANCHES or
+            str(channel_id or "").strip() in RESTRICTED_CHANNEL_IDS)
 
 
 def assess_branch_exception_capacity(
@@ -54,7 +62,7 @@ def assess_branch_exception_capacity(
     limited_channels = {
         str(batch.provider_channel_id)
         for batch in plan.batches
-        if restricted_branch(batch.sucursal_canon) and batch.provider_channel_id
+        if restricted_branch(batch.sucursal_canon, batch.provider_channel_id) and batch.provider_channel_id
     }
     attempted = defaultdict(int)
     reserved = defaultdict(int)
@@ -107,7 +115,7 @@ def assess_branch_exception_capacity(
 
     demand = defaultdict(int)
     for batch in plan.batches:
-        if restricted_branch(batch.sucursal_canon) and batch.provider_channel_id:
+        if restricted_branch(batch.sucursal_canon, batch.provider_channel_id) and batch.provider_channel_id:
             demand[str(batch.provider_channel_id)] += len(batch.recipients)
 
     rows = []
@@ -115,7 +123,7 @@ def assess_branch_exception_capacity(
     for batch in plan.batches:
         channel = str(batch.provider_channel_id or "")
         count = len(batch.recipients)
-        restricted = restricted_branch(batch.sucursal_canon)
+        restricted = restricted_branch(batch.sucursal_canon, batch.provider_channel_id)
         reason = None
         if not channel:
             reason = "MISSING_CHANNEL"
