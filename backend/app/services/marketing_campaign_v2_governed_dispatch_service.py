@@ -100,7 +100,9 @@ def _locked_review(*, campaign_id: int, session: Any, now: datetime,
     approved_basis = (approval.manifest_json or {}).get("basis")
     _, scopes_before, _, _ = _assess_scopes(
         scopes_plan, session=session, timestamp=now,
-        ignore_campaign_id=campaign_id if ignore_self or approved_basis == "SUITE_OPERATOR_ROLLING_24H_V1" else None,
+        ignore_campaign_id=campaign_id if ignore_self or approved_basis in {
+            "SUITE_OPERATOR_ROLLING_24H_V1", "SUITE_BRANCH_EXCEPTION_CAPS_V1",
+        } else None,
         basis_preference=approved_basis,
     )
     for kind, key in sorted(scopes_before):
@@ -133,7 +135,9 @@ def _locked_review(*, campaign_id: int, session: Any, now: datetime,
     scopes_plan = replace(plan, batches=original_ready)
     _, scopes, evidence_ids, quota_rows = _assess_scopes(
         scopes_plan, session=session, timestamp=effective_now,
-        ignore_campaign_id=campaign_id if ignore_self or approved_basis == "SUITE_OPERATOR_ROLLING_24H_V1" else None,
+        ignore_campaign_id=campaign_id if ignore_self or approved_basis in {
+            "SUITE_OPERATOR_ROLLING_24H_V1", "SUITE_BRANCH_EXCEPTION_CAPS_V1",
+        } else None,
         basis_preference=approved_basis,
     )
     if dict(scopes_before) != dict(scopes):

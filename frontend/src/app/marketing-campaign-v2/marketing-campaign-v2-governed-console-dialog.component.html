@@ -36,7 +36,7 @@
           <input matInput maxlength="255" [formControl]="holdSource[batch.sucursal_canon]">
         </mat-form-field>
       </div>
-      <div class="confirmation" *ngIf="plan.quota?.status === 'REVIEWABLE' && plan.ready && plan.budget_usd?.status === 'COMPLETE'">
+      <div class="confirmation" *ngIf="isSelectionWithinCapacity && plan.ready && plan.budget_usd?.status === 'COMPLETE'">
         <mat-form-field appearance="outline"><mat-label>Escribe {{ approvalWord }}</mat-label>
           <input matInput [formControl]="approvalPhrase" autocomplete="off">
         </mat-form-field>

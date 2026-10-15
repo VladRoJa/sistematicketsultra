@@ -132,7 +132,16 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
       ? 'Cálculo automático en USD' : 'Costo en USD no disponible';
   }
   get quotaStatusLabel(): string {
-    return this.preflight?.quota?.status === 'REVIEWABLE'
+    const quota = this.preflight?.quota;
+    if (!quota) { return 'Pendiente de revisión'; }
+    if (quota.basis === 'SUITE_BRANCH_EXCEPTION_CAPS_V1') {
+      const restricted = quota.batches.some(row =>
+        row.restriction_kind === 'CHANNEL_250_ROLLING_24H');
+      return quota.status === 'REVIEWABLE'
+        ? (restricted ? '250 diarios por canal: correcto' : 'Sin límite interno diario')
+        : 'Revisar límite especial o canal';
+    }
+    return quota.status === 'REVIEWABLE'
       ? 'Límite revisado' : 'Falta revisar el límite de envío';
   }
   get preparationIssue(): string {
@@ -145,7 +154,9 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
       return 'Aún no está disponible el costo estimado automático en USD. Vuelve a revisar los destinatarios.';
     }
     if (plan.quota?.status !== 'REVIEWABLE') {
-      return 'Falta revisar la capacidad de envío de este canal en Límites de envío. La aprobación continuará bloqueada.';
+      return plan.quota?.basis === 'SUITE_BRANCH_EXCEPTION_CAPS_V1'
+        ? 'Si Insurgentes o Independencia alcanzaron 250 diarios o tienen resultados inciertos, marca esos lotes en espera y registra el motivo para continuar con las demás sucursales. Un canal sin identificar siempre bloquea la preparación.'
+        : 'Falta revisar la capacidad de envío de este canal en Límites de envío. La aprobación continuará bloqueada.';
     }
     return '';
   }
@@ -200,10 +211,24 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   get sendWord(): string {
     return this.nextReadyChild ? 'ENVIAR LOTE ' + this.nextReadyChild.child_id : '';
   }
+  get isSelectionWithinCapacity(): boolean {
+    const quota = this.preflight?.quota;
+    if (!quota) { return false; }
+    if (quota.status === 'REVIEWABLE') { return true; }
+    if (quota.basis !== 'SUITE_BRANCH_EXCEPTION_CAPS_V1') { return false; }
+    const blocked = quota.batches.filter(row => row.recommendation === 'REVIEW_HOLD');
+    // Never allow a missing channel to be bypassed as an exception.
+    return blocked.length > 0 && blocked.every(row =>
+      ['CHANNEL_EXCEPTION_250_EXCEEDED', 'UNRESOLVED_PROVIDER_ACTIVITY']
+        .includes(row.blocking_reason || '') &&
+      this.heldBranches.includes(row.sucursal_canon) &&
+      !!this.heldSources[row.sucursal_canon]
+    );
+  }
   get canApprove(): boolean {
     const plan = this.preflight;
     return !this.busy && !this.hasApproval && !!plan && plan.ready &&
-      plan.sendable_count > 0 && plan.quota?.status === 'REVIEWABLE' &&
+      plan.sendable_count > 0 && this.isSelectionWithinCapacity &&
       !!plan.budget_usd?.quote_fingerprint &&
       plan.budget_usd.status === 'COMPLETE' &&
       this.heldBranches.length < plan.batches.length &&

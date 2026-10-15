@@ -746,7 +746,7 @@ export interface CampaignV2QuotaAttestationRequest {
 }
 
 export interface CampaignV2PreflightQuota {
-  basis: 'OPERATOR_ATTESTED_NOT_META_VERIFIED' | 'SUITE_OPERATOR_ROLLING_24H_V1';
+  basis: 'OPERATOR_ATTESTED_NOT_META_VERIFIED' | 'SUITE_OPERATOR_ROLLING_24H_V1' | 'SUITE_BRANCH_EXCEPTION_CAPS_V1';
   status: 'REVIEWABLE' | 'INCOMPLETE';
   send_authorized: false;
   as_of: string;
@@ -782,6 +782,7 @@ export interface CampaignV2PreflightQuota {
     recipients: number;
     recommendation: 'REVIEW_HOLD' | 'CAPACITY_REVIEWED';
     blocking_reason: string | null;
+    restriction_kind?: 'CHANNEL_250_ROLLING_24H' | 'NO_SUITE_DAILY_QUOTA';
   }>;
 }
 

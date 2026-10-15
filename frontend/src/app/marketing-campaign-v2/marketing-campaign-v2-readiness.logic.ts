@@ -54,15 +54,6 @@ export function campaignV2BuildReadinessRows(
   for (const row of active) {
     byBranch.set(row.sucursal_canon, (byBranch.get(row.sucursal_canon) ?? 0) + 1);
   }
-  const byPortfolio = new Map<string, Set<number>>();
-  for (const channel of active) {
-    const policy = latestPolicies.get(channel.provider_channel_id);
-    if (policy?.portfolio_key && policy.operational_portfolio_cap !== null) {
-      const caps = byPortfolio.get(policy.portfolio_key) ?? new Set<number>();
-      caps.add(policy.operational_portfolio_cap);
-      byPortfolio.set(policy.portfolio_key, caps);
-    }
-  }
   return active.map(binding => {
     const policy = latestPolicies.get(binding.provider_channel_id);
     const rate = latestRates.get(binding.provider_channel_id);
@@ -74,13 +65,9 @@ export function campaignV2BuildReadinessRows(
     if ((byBranch.get(binding.sucursal_canon) ?? 0) !== 1) {
       issues.push('Más de un canal predeterminado');
     }
-    if (!policy?.portfolio_key) { issues.push('Portafolio sin identificar'); }
-    if (!policy?.operational_channel_cap || !policy.operational_portfolio_cap) {
-      issues.push('Límites internos pendientes');
-    }
-    if (policy?.portfolio_key && (byPortfolio.get(policy.portfolio_key)?.size ?? 0) > 1) {
-      issues.push('Límites inconsistentes del portafolio');
-    }
+    // Portfolio verification and manual policy are informational in the
+    // exception-only send contract. The backend enforces 250 for each special
+    // branch independently and still requires exact channel/template mapping.
     return {
       sucursalCanon: binding.sucursal_canon,
       channelId: binding.provider_channel_id,
@@ -88,8 +75,11 @@ export function campaignV2BuildReadinessRows(
       portfolioKey: policy?.portfolio_key || null,
       portfolioVerified: false as const,
       accountAlias: policy?.account_key || null,
-      operationalChannelCap: policy?.operational_channel_cap ?? null,
-      operationalPortfolioCap: policy?.operational_portfolio_cap ?? null,
+      operationalChannelCap: (
+        ['INDEPENDENCIA', 'INSURGENTES'].includes(binding.sucursal_canon.trim().toUpperCase()) ||
+        ['6a29c8ffe83fa20008b5a789', '6a2aff2d555186000912586d'].includes(binding.provider_channel_id)
+      ) ? 250 : null,
+      operationalPortfolioCap: null,
       unitCostMxn: rate?.unit_cost_mxn ?? null,
       rateSource: rate?.source_reference ?? null,
       policySource: policy?.source_reference ?? null,
