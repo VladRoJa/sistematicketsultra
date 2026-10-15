@@ -1,4 +1,4 @@
-<h2 mat-dialog-title>¿Está completo? de canales</h2>
+<h2 mat-dialog-title>Estado de configuración de canales</h2>
 
 <mat-dialog-content class="readiness">
   <p class="description">
@@ -72,12 +72,12 @@
 
   <p class="notice" *ngIf="!loading && !error">
     «Configuración completa» significa que existen referencias internas, <strong>no que Meta haya verificado portafolio,
-    cupo disponible o capacidad de enviar</strong>. El preflight y la autorización se realizan por campaña.
+    cupo disponible o permiso para enviar</strong>. Cada campaña requiere una revisión y autorización propias.
   </p>
 
   <div class="table-scroll" *ngIf="!loading && !error">
     <table>
-      <thead><tr><th>Sucursal</th><th>ID de empresa Meta (Business ID) declarado (B2)</th><th>Clave cuota interna (independiente)</th><th>Tope canal / 24 h</th>
+      <thead><tr><th>Sucursal</th><th>Empresa Meta registrada (sin verificar)</th><th>Grupo que comparte el límite</th><th>Tope canal / 24 h</th>
         <th>Tope portafolio / 24 h</th><th>Costo por mensaje (MXN)</th><th>¿Está completo?</th></tr></thead>
       <tbody>
         <tr *ngFor="let row of rows">
