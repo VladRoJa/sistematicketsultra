@@ -1600,6 +1600,8 @@ test('Issue 856 password gate: execution needs ephemeral operator password with 
   assert.ok(component.includes('this.executionPassword.value.length > 0'));
   assert.ok(component.includes('this.executionPassword.setValue(\'\');'));
   assert.ok(component.includes('operator_password: operatorPassword'));
+  assert.ok(component.includes('err.status === 403 || err.status === 423'));
+  assert.ok(component.includes('this.uncertainResult = true'));
   assert.ok(template.includes('type="password"'));
   assert.ok(template.includes('[formControl]="executionPassword"'));
   assert.ok(models.includes('operator_password: string'));
