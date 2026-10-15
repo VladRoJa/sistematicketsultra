@@ -217,10 +217,22 @@ def assess_preflight_capacity(
     from app.services.marketing_campaign_v2_operational_capacity_service import (
         BASIS as OPERATIONAL_BASIS, assess_operational_capacity,
     )
+    from app.services.marketing_campaign_v2_branch_exception_capacity import (
+        BASIS as EXCEPTION_BASIS, assess_branch_exception_capacity,
+    )
     active = session if session is not None else db.session
     timestamp = _date(now or datetime.now(timezone.utc))
-    if basis_preference not in (None, "OPERATOR_ATTESTED_NOT_META_VERIFIED", OPERATIONAL_BASIS):
+    if basis_preference not in (
+        None, EXCEPTION_BASIS, "OPERATOR_ATTESTED_NOT_META_VERIFIED", OPERATIONAL_BASIS,
+    ):
         raise CampaignV2QuotaValidationError("Modalidad de cupo desconocida.")
+    # New approvals never need 26 manually-entered policies; persisted approvals
+    # explicitly request their historical basis so existing snapshots don't change.
+    if basis_preference in (None, EXCEPTION_BASIS):
+        return assess_branch_exception_capacity(
+            plan=plan, session=active, now=timestamp,
+            ignore_campaign_id=ignore_campaign_id,
+        )
     if basis_preference != "OPERATOR_ATTESTED_NOT_META_VERIFIED":
         operating = assess_operational_capacity(
             plan=plan, session=active, now=timestamp,
