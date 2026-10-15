@@ -53,7 +53,7 @@ from app.warehouse.services.google_ads_m6_manual_structured_service import (
 )
 
 from app.warehouse.services.google_ads_m6_continuity_approval_service import (
-    M6_REFERENCE,
+    CUSTOMER_ID, M6_REFERENCE,
     approve_authenticated,
 )
 
