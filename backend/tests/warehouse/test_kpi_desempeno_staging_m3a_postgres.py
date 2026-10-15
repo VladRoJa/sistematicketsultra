@@ -317,7 +317,7 @@ def test_pg_rejects_explicit_aliases(pg_synthetic):
 
 
 def test_pg_invalid_business_date_never_calls_repository(pg_synthetic):
-    with pytest.raises(KpiDesempenoStagingError, match="business_date"):
+    with pytest.raises(KpiDesempenoStagingError, match="baseline identity"):
         _stage(pg_synthetic, business_date="2026-08-20")
     with pytest.raises(KpiDesempenoStagingError, match="business_date"):
         _stage(pg_synthetic, business_date="not-a-date")
