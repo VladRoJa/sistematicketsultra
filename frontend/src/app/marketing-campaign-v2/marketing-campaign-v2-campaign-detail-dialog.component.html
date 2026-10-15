@@ -287,9 +287,12 @@
             </div>
             <p class="muted">Tarifa general automática; no requiere capturar un precio por canal. El límite de envío sigue siendo obligatorio.</p>
           </section>
-          <section *ngIf="plan.quota as quota" class="budget-preview" aria-label="Cupo operativo por portafolio">
-            <h4>Capacidad operativa reportada · Sin autorización de envío</h4>
-            <p class="muted">
+          <section *ngIf="plan.quota as quota" class="budget-preview" aria-label="Revisión de límites y excepciones">
+            <h4>{{ quota.basis === 'SUITE_BRANCH_EXCEPTION_CAPS_V1' ? 'Reglas de envío por sucursal · No autoriza envío' : 'Capacidad operativa reportada · Sin autorización de envío' }}</h4>
+            <p class="muted" *ngIf="quota.basis === 'SUITE_BRANCH_EXCEPTION_CAPS_V1'">
+              Sin cupo diario interno para sucursales normales. Insurgentes e Independencia: máximo 250 por canal en 24 horas, comprobado con los envíos conocidos por Suite. No incluye envíos externos en iVentas ni confirma saldo Meta.
+            </p>
+            <p class="muted" *ngIf="quota.basis !== 'SUITE_BRANCH_EXCEPTION_CAPS_V1'">
               Evaluación de solo lectura basada en reportes manuales; Suite no verifica
               en vivo Meta. Los números nominales diarios no son cupo restante.
               El envío gobernado requiere aprobación y reserva adicionales.
@@ -301,7 +304,18 @@
                 <strong>{{ quota.hold_recommended_recipients | number }}</strong></div>
               <div><span>Evaluación</span><strong>{{ quota.status }}</strong></div>
             </div>
-            <div class="table-wrap preflight-batches">
+            <div class="table-wrap preflight-batches" *ngIf="quota.basis === 'SUITE_BRANCH_EXCEPTION_CAPS_V1'">
+              <table>
+                <thead><tr><th>Sucursal</th><th>Destinatarios</th><th>Regla</th><th>Resultado</th></tr></thead>
+                <tbody><tr *ngFor="let item of quota.batches">
+                  <td>{{ item.sucursal_canon }}</td>
+                  <td>{{ item.recipients | number }}</td>
+                  <td>{{ item.restriction_kind === 'CHANNEL_250_ROLLING_24H' ? '250 por canal / 24 h' : 'Sin límite interno diario' }}</td>
+                  <td>{{ item.blocking_reason || 'Sin bloqueos por límite' }}</td>
+                </tr></tbody>
+              </table>
+            </div>
+            <div class="table-wrap preflight-batches" *ngIf="quota.basis !== 'SUITE_BRANCH_EXCEPTION_CAPS_V1'">
               <table>
                 <thead>
                   <tr><th>Sucursal</th><th>Portafolio</th><th>Contactos</th>
@@ -326,7 +340,7 @@
               Estimación interna en ventana móvil de 24 horas: solo envíos y reservas visibles para Suite Ultra.
               El saldo real de Meta y los envíos externos son desconocidos. La evaluación no reserva ni autoriza envíos.
             </p>
-            <p class="muted" *ngIf="quota.basis !== 'SUITE_OPERATOR_ROLLING_24H_V1'">
+            <p class="muted" *ngIf="quota.basis !== 'SUITE_OPERATOR_ROLLING_24H_V1' && quota.basis !== 'SUITE_BRANCH_EXCEPTION_CAPS_V1'">
               Sin reserva de capacidad. Si otro canal del portafolio consumió cupo
               después de la observación, se necesita evidencia nueva.
             </p>
