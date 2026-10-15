@@ -424,8 +424,16 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
         this.refresh();
       },
       error: (err: HttpErrorResponse) => {
-        // A timeout/502 can happen AFTER provider acceptance. No retry affordance.
         this.working = null;
+        // Auth/kill-switch denial happens before any provider request.
+        // The operator may retry their password; a timeout/502 must NEVER
+        // offer an automatic repeat because iVentas might have accepted it.
+        if (err.status === 403 || err.status === 423) {
+          this.uncertainResult = false;
+          this.error = this.message(err, 'Acceso denegado. Verifica tu contraseña y permisos.');
+          this.refresh(true);
+          return;
+        }
         this.uncertainResult = true;
         this.error = this.message(err, 'No está confirmado si se envió el mensaje. Compruébalo directamente con iVentas. No lo reenvíes.');
         this.refresh(true);
