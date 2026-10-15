@@ -1,10 +1,44 @@
 """M6 candidate HTTP: explicit non-publishing ingest and READ ONLY diff, PG16."""
 
+from pathlib import Path
+import importlib.util
+import pytest
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
+
 from test_google_ads_m6_correction_candidate_stage_pg_e2e import (
     candidate_lab, REASON, _counts,
 )
 from test_google_ads_m6_manual_structured_postgres import lab
 from test_google_ads_m6_manual_raw_postgres import real_warehouse
+
+@pytest.fixture
+def case_review_schema(candidate_lab):
+    """Full Alembic schema for case GET, isolated from earlier staging fixtures."""
+    client, actor, other, engine, camp, group = candidate_lab
+    migrations = []
+    for revision in (
+        "ac42e8b9d510_google_ads_m6_correction_review.py",
+        "c5e7a2d93f10_google_ads_m6_correction_promotions.py",
+    ):
+        path = Path(__file__).resolve().parents[2] / "migrations/versions" / revision
+        spec = importlib.util.spec_from_file_location("candidate_detail_" + revision, path)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        migrations.append(module)
+    with engine.begin() as conn:
+        for mod in migrations:
+            mod.op = Operations(MigrationContext.configure(conn))
+            mod.upgrade()
+    try:
+        yield candidate_lab
+    finally:
+        with engine.begin() as conn:
+            for mod in reversed(migrations):
+                mod.op = Operations(MigrationContext.configure(conn))
+                mod.downgrade()
+
 
 STAGE = "/api/integrations/google-ads/corrections/candidates/ingest"
 GET = "/api/integrations/google-ads/corrections/candidates/"
@@ -22,8 +56,8 @@ def _post(client, token, camp, group, *, confirmation="INGESTAR_CORRECCION_M6_SI
     )
 
 
-def test_candidate_route_safe_write_and_readonly_comparison(candidate_lab):
-    client, actor, other, engine, camp, group = candidate_lab
+def test_candidate_route_safe_write_and_readonly_comparison(case_review_schema):
+    client, actor, other, engine, camp, group = case_review_schema
     assert _counts(engine) == (0, 0, 0, 0, 0, 0, 0)
     resp = _post(client, actor, camp, group)
     assert resp.status_code == 201, resp.get_json()
