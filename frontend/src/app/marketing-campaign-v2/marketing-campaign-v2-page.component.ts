@@ -85,6 +85,7 @@ import {
   MarketingCampaignV2TariffClassifierDialogData,
 } from './marketing-campaign-v2-tariff-classifier-dialog.component';
 import { MarketingCampaignV2DispatchAdminDialogComponent } from './marketing-campaign-v2-dispatch-admin-dialog.component';
+import { MarketingCampaignV2ExcelDialogComponent } from './marketing-campaign-v2-excel-dialog.component';
 import { MarketingCampaignV2QuotaAdminDialogComponent } from './marketing-campaign-v2-quota-admin-dialog.component';
 import { MarketingCampaignV2QaManualDialogComponent } from './marketing-campaign-v2-qa-manual-dialog.component';
 import { MarketingCampaignV2ReadinessDialogComponent } from './marketing-campaign-v2-readiness-dialog.component';
@@ -505,6 +506,17 @@ export class MarketingCampaignV2PageComponent implements OnInit {
           this.pricingError = 'No se pudo obtener el catálogo de plantillas para cotizar.';
         },
       });
+  }
+
+  openExcelImport(): void {
+    if (!this.options?.capabilities.can_manage_campaigns) { return; }
+    const dialogRef = this.dialog.open(MarketingCampaignV2ExcelDialogComponent, {
+      width: 'min(920px, 96vw)', maxWidth: '96vw',
+      maxHeight: '94vh', autoFocus: false,
+      panelClass: 'campaign-v2-admin-dialog',
+    });
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(saved => { if (saved) { this.loadCampaigns(1); } });
   }
 
   openQaManual(): void {
