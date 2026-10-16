@@ -27,14 +27,13 @@ from app.services.marketing_campaign_v2_contact_gate_service import (
 )
 from app.services.marketing_campaign_v2_dispatch_approval_service import (
     _assess_scopes, _ready_plan_and_holds, _hold_sources, _reserve_locked,
-    _database_date, CampaignV2ApprovalConflictError,
+    _database_date, CampaignV2ApprovalConflictError, CampaignV2ApprovalValidationError,
 )
 from app.services.marketing_campaign_v2_manifest_service import (
     _assert_manifest, _validate_existing, budget_for_existing_approval,
 )
 from app.services.marketing_campaign_v2_governed_dispatch_service import manifest_digest
 from app.services.marketing_campaign_v2_preflight_service import build_campaign_v2_preflight
-from app.services.marketing_campaign_v2_submit_service import _load_campaign_rows
 from app.services.marketing_campaign_v2_query_service import get_campaign_v2
 
 
@@ -201,7 +200,7 @@ def reauthorize_unattempted_dispatch(
             "send_authorized": False,
         }
     except (CampaignV2ContactGateConflict, CampaignV2ApprovalConflictError,
-            CampaignV2ReauthorizationError) as exc:
+            CampaignV2ApprovalValidationError, CampaignV2ReauthorizationError) as exc:
         active.rollback()
         if isinstance(exc, CampaignV2ReauthorizationError):
             raise
