@@ -220,8 +220,8 @@ def test_revision_uniqueness_and_immutable_history_on_real_pg(monkeypatch):
             "WHERE campaign_v2_id=22 ORDER BY revision_no"
         )).all()
         assert revisions == [(7, 1), (9, 2)]
-        with conn.begin_nested():
-            with pytest.raises(sa.exc.IntegrityError):
+        with pytest.raises(sa.exc.IntegrityError):
+            with conn.begin_nested():
                 conn.execute(sa.text(
                     "INSERT INTO marketing_campaign_v2_dispatch_approvals "
                     "(id,campaign_v2_id,revision_no) VALUES (10,22,2)"
