@@ -60,6 +60,75 @@ def test_missing_partial_or_malformed_prior_evidence_fails_closed(rows):
         svc._submitted_phone_set(source_campaign_id=14, session=session_with_children(rows))
 
 
+def untouched_ready(*phones):
+    row = child(*phones, status="READY", provider_campaign_id=None)
+    row.submitted_at = None
+    row.hold_reason = None
+    row.held_by_user_id = None
+    row.held_at = None
+    row.hold_evidence_json = {}
+    row.provider_response_json = {}
+    row.provider_deduplicated = None
+    row.error_code = None
+    row.support_ref = None
+    row.reconciliation_resolution = None
+    row.reconciled_at = None
+    row.reconciliation_note = None
+    row.reconciliation_snapshot_json = {}
+    row.retry_attempt_count = 0
+    row.retry_last_attempt_at = None
+    row.retry_history_json = []
+    row.provider_send_at = None
+    return row
+
+
+def test_prior_partial_source_uses_only_proven_submitted_when_others_ready():
+    rows = [
+        child("5216861234567", channel_id="accepted"),
+        untouched_ready("5216867654321"),
+        untouched_ready("5216867654322"),
+    ]
+    assert svc._submitted_phone_set(
+        source_campaign_id=20, session=session_with_children(rows),
+    ) == {"6861234567"}
+
+
+@pytest.mark.parametrize("field,value", [
+    ("provider_campaign_id", "external-id"),
+    ("submit_started_at", datetime(2026, 10, 12, tzinfo=timezone.utc)),
+    ("submitted_at", datetime(2026, 10, 12, tzinfo=timezone.utc)),
+    ("provider_response_json", {"status": "uncertain"}),
+    ("error_code", "TEMPLATE_NOT_FOUND"),
+    ("reconciliation_resolution", "NOT_CREATED_CONFIRMED"),
+    ("retry_attempt_count", 1),
+    ("retry_history_json", [{"attempt": 1}]),
+    ("provider_deduplicated", False),
+])
+def test_prior_ready_with_any_attempt_evidence_fails_closed(field, value):
+    row = untouched_ready("5216867654321")
+    setattr(row, field, value)
+    with pytest.raises(svc.CampaignV2ScopedExclusionValidationError, match="READY"):
+        svc._submitted_phone_set(
+            source_campaign_id=20,
+            session=session_with_children([child("5216861234567"), row]),
+        )
+
+
+def test_prior_partial_source_with_provider_error_still_fails_closed():
+    row = untouched_ready("5216867654321")
+    row.status = "PROVIDER_ERROR"
+    row.error_code = "TEMPLATE_NOT_FOUND"
+    with pytest.raises(svc.CampaignV2ScopedExclusionValidationError, match="sin aceptación"):
+        svc._submitted_phone_set(
+            source_campaign_id=21,
+            session=session_with_children([
+                child("5216861234567"),
+                row,
+                untouched_ready("5216867654322"),
+            ]),
+        )
+
+
 def test_prior_provider_snapshot_missing_leads_fails_closed():
     row = child("5216861234567")
     row.request_snapshot_json = {}
