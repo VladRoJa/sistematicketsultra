@@ -104,7 +104,7 @@ def _validate_embedded_date(payload: bytes, expected: date) -> None:
 
 # Only these layouts are authorized. The date in the provider title is the
 # *business* date, not the date when the XLSX was downloaded.
-_GASCA_TITLE = re.compile(r"^KPIs Desempeño \\(Corte: (\\d{2}/\\d{2}/\\d{4})\\)$")
+_GASCA_TITLE = re.compile(r"^KPIs Desempeño \(Corte: (\d{2}/\d{2}/\d{4})\)$")
 
 
 def _normalize_kpi_layout_in_memory(payload: bytes, *, expected_date: date) -> bytes:
