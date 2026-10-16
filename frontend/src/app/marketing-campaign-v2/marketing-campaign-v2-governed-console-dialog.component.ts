@@ -27,7 +27,7 @@ export interface MarketingCampaignV2GovernedConsoleDialogData {
   campaignName: string;
 }
 
-type Action = 'read' | 'preflight' | 'approve' | 'materialize' | 'authorize' | 'execute' | 'bulk';
+type Action = 'read' | 'preflight' | 'approve' | 'materialize' | 'authorize' | 'reauthorize' | 'execute' | 'bulk';
 type ExecutionReview =
   CampaignV2GovernedExecutionReview | CampaignV2GovernedExecutionReviewReady;
 
@@ -50,6 +50,7 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   readonly templateId = new FormControl<number | null>(null);
   readonly approvalPhrase = new FormControl('', { nonNullable: true });
   readonly materializePhrase = new FormControl('', { nonNullable: true });
+  readonly reauthorizePhrase = new FormControl('', { nonNullable: true });
   readonly authorizationPhrase = new FormControl('', { nonNullable: true });
   readonly executionPhrase = new FormControl('', { nonNullable: true });
   readonly executionPassword = new FormControl('', { nonNullable: true });
@@ -222,7 +223,7 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   get workingLabel(): string {
     const labels: Record<Action, string> = {
       read: 'Consultando', preflight: 'Revisando destinatarios',
-      approve: 'Aprobando costo', materialize: 'Preparando lotes',
+      approve: 'Aprobando costo', materialize: 'Preparando lotes', reauthorize: 'Reautorizando despacho',
       authorize: 'Autorizando', execute: 'Enviando un lote', bulk: 'Enviando lotes pendientes',
     };
     return this.working ? labels[this.working] : '';
@@ -230,6 +231,17 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
 
   get approvalWord(): string { return 'APROBAR ' + this.readyCount; }
   get materializeWord(): string { return 'PREPARAR ' + this.data.campaignId; }
+  get reauthorizeWord(): string { return 'REAUTORIZAR ' + this.data.campaignId; }
+  get canReauthorize(): boolean {
+    const state = this.monitor;
+    return !this.busy && !!state && state.status === 'APPROVAL_EXPIRED' &&
+      !!state.approval && !!state.execution &&
+      state.execution.status === 'AUTHORIZED' &&
+      state.execution.last_child_id === null &&
+      state.children.some(child => child.status === 'READY') &&
+      state.children.every(child => child.status === 'READY' || child.status === 'HELD') &&
+      this.reauthorizePhrase.value === this.reauthorizeWord;
+  }
   get authorizationWord(): string { return 'AUTORIZAR ' + this.approvedReadyCount; }
   get bulkPendingIds(): number[] {
     return pendingGovernedBatchIds(this.monitor, this.reviewReady);
@@ -392,6 +404,35 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
         this.working = null;
         this.invalidatePreflight();
         this.error = this.message(err, 'La aprobación no quedó confirmada. Actualiza estado.');
+        this.refresh(true);
+      },
+    });
+  }
+
+  reauthorize(): void {
+    const state = this.monitor;
+    if (!this.canReauthorize || !state?.approval) { return; }
+    this.working = 'reauthorize';
+    this.error = '';
+    this.reauthorizePhrase.setValue('');
+    this.api.reauthorizeGovernedCampaign(this.data.campaignId, {
+      previous_approval_id: state.approval.id,
+      expected_manifest_digest: state.approval.manifest_digest,
+      confirmation: this.reauthorizeWord,
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: result => {
+        this.working = null;
+        this.uncertainResult = false;
+        this.notice = 'Reautorización #' + result.new_approval_id +
+          ' registrada con nueva reserva. ' + result.ready_batches +
+          ' lotes listos y ' + result.held_batches +
+          ' en espera. No se enviaron mensajes.';
+        this.refresh();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.working = null;
+        this.error = this.message(err,
+          'La reautorización no quedó confirmada. Consulta el estado, no envíes nada.');
         this.refresh(true);
       },
     });
