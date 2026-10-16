@@ -35,3 +35,8 @@ th { position:sticky; top:0; background:#fff; }
  .confirmation { align-items:stretch; flex-direction:column; }
  .confirmation mat-form-field,.confirmation button { width:100%; max-width:none; }
 }
+
+.bulk-execution { border-color:#b45309; background:#fffbeb; }
+.bulk-execution h4 { color:#78350f; }
+.bulk-progress { margin-top:12px; border:1px solid #cbd5e1; padding:10px 12px; border-radius:8px; }
+.bulk-progress p { margin:5px 0; font-size:12px; }

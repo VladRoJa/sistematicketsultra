@@ -1,7 +1,7 @@
 <h2 mat-dialog-title>Preparar envío · Campaña #{{ data.campaignId }}</h2>
 <mat-dialog-content class="console">
   <p><strong>{{ data.campaignName }}</strong></p>
-  <p class="notice">Revisa a quién se enviaría, cuánto costaría y el límite disponible. Preparar y autorizar no envían mensajes. El envío final se confirma por separado, un lote a la vez. Nunca se reintenta automáticamente.</p>
+  <p class="notice">Revisa a quién se enviaría, cuánto costaría y el límite disponible. Preparar y autorizar no envían mensajes. El envío real requiere una confirmación explícita. Puedes enviar un lote o recorrer los pendientes secuencialmente; cada lote mantiene los controles del servidor y nunca se reintenta automáticamente.</p>
   <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy">Consultar estado</button>
   <span *ngIf="working" role="status">{{ workingLabel }}…</span>
   <p *ngIf="error" role="alert" class="error">{{ error }}</p>
@@ -109,6 +109,36 @@
             Enviar únicamente lote #{{ child.child_id }}
           </button>
         </div>
+      </div>
+      <div class="danger bulk-execution" *ngIf="bulkPendingIds.length > 1 && !uncertainResult">
+        <h4>Enviar todos los lotes pendientes · UNA SOLA CONFIRMACIÓN</h4>
+        <p><strong>{{ bulkPendingIds.length }} lotes</strong> autorizados aún sin enviar.
+          Los lotes ya aceptados por iVentas se excluyen. La Suite enviará solo los pendientes en el orden del manifiesto,
+          consultando de nuevo autorización y estado antes de cada lote. Ante bloqueo, error o resultado incierto, se detendrá sin reintentos.</p>
+        <mat-checkbox [formControl]="bulkCheckbox" [disabled]="busy">
+          Revisé los {{ bulkPendingIds.length }} lotes pendientes, sus destinatarios, plantilla, canales, costo y límites.
+          Confirmo el envío real secuencial de todos ellos.
+        </mat-checkbox>
+        <div class="confirmation">
+          <mat-form-field appearance="outline">
+            <mat-label>Escribe {{ bulkWord }}</mat-label>
+            <input matInput [formControl]="bulkPhrase" [disabled]="busy" autocomplete="off">
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Contraseña de Suite Ultra (solo una vez)</mat-label>
+            <input matInput type="password" [formControl]="bulkPassword" [disabled]="busy" autocomplete="current-password" maxlength="256">
+          </mat-form-field>
+          <button mat-flat-button color="warn" type="button" (click)="executePendingSequentially()" [disabled]="!canBulkSend">
+            Enviar {{ bulkPendingIds.length }} lotes pendientes
+          </button>
+        </div>
+      </div>
+      <div class="bulk-progress" *ngIf="bulkTotal > 0" role="status">
+        <p><strong>Avance de esta ejecución:</strong> {{ bulkAccepted }} de {{ bulkTotal }} lotes aceptados.</p>
+        <p *ngIf="working === 'bulk' && bulkCurrentChildId">Lote en proceso: #{{ bulkCurrentChildId }}. No cierres ni recargues la página.</p>
+        <button *ngIf="working === 'bulk' && !bulkStopRequested" mat-stroked-button type="button"
+          (click)="requestBulkStop()">Detener después del lote actual</button>
+        <p *ngIf="bulkStopRequested && working === 'bulk'">Se detendrá después de recibir o revisar el resultado del lote actual.</p>
       </div>
       <p *ngIf="!nextReadyChild" class="hint">No hay un lote habilitado para envío. Si existe un resultado incierto, debe verificarse manualmente antes de continuar.</p>
     </ng-container>

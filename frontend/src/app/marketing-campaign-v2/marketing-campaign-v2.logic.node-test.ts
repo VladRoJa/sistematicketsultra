@@ -1,4 +1,6 @@
 import { campaignV2BuildReadinessRows } from './marketing-campaign-v2-readiness.logic';
+import { pendingGovernedBatchIds } from './marketing-campaign-v2-bulk-dispatch.logic';
+import type { CampaignV2GovernedMonitor, CampaignV2GovernedExecutionReviewReady } from './marketing-campaign-v2.models';
 import type { CampaignV2DispatchTemplate, CampaignV2ChannelBinding, CampaignV2QuotaPolicyRevision, CampaignV2BudgetRateRevision } from './marketing-campaign-v2.models';
 import { campaignV2IndicativeBudget } from './marketing-campaign-v2-budget.logic';
 import { isDispatchTemplateDraftValid, DispatchTemplateDraft } from './marketing-campaign-v2-dispatch-admin.logic';
@@ -1609,4 +1611,86 @@ test('Issue 856 password gate: execution needs ephemeral operator password with 
   assert.ok(models.includes('operator_password: string'));
   assert.equal(component.includes('localStorage.setItem'), false);
   assert.equal(component.includes('setInterval('), false);
+});
+
+
+test('Bulk send explicit: only authorized pending suffix, never previously accepted #79', () => {
+  const review: CampaignV2GovernedExecutionReviewReady = {
+    approval_id: 4, manifest_digest: 'd'.repeat(64),
+    manifest: {
+      version: 'v1', quote_fingerprint: 'q'.repeat(64), send_authorized: false,
+      batches: [
+        { sucursal_canon: 'AZAHARES_CUL', provider_channel_id: 'ch1', recipients: 29, planned_status: 'READY', hold_reason: null },
+        { sucursal_canon: 'CARROUSEL_TJ', provider_channel_id: 'ch2', recipients: 60, planned_status: 'READY', hold_reason: null },
+        { sucursal_canon: 'INDEPENDENCIA', provider_channel_id: 'ch3', recipients: 114, planned_status: 'READY', hold_reason: null },
+      ],
+    },
+    execution: { execution_id: 2, status: 'AUTHORIZED', last_child_id: 79 },
+    expires_at: '2099-01-01T00:00:00Z', send_authorized: false,
+  };
+  const monitor: CampaignV2GovernedMonitor = {
+    campaign_id: 20, as_of: '2026-10-16T00:00:00Z', basis: 'TEST',
+    status: 'AUTHORIZED', next_manual_action: 'MANUAL_NEXT_CHILD_ONLY',
+    send_authorized: false, may_auto_retry: false, may_auto_release_held: false,
+    approval: {
+      id: 4, expires_at: '2099-01-01T00:00:00Z',
+      expired: false, dispatch_fingerprint: 'f'.repeat(64),
+      manifest_digest: 'd'.repeat(64),
+    },
+    execution: { id: 2, status: 'AUTHORIZED', last_child_id: 79, expires_at: '2099-01-01T00:00:00Z' },
+    quota: { basis: 'TEST', all_current: true }, children_count: 3,
+    children_by_status: { SUBMITTED: 1, READY: 2 },
+    children: [
+      { child_id: 79, sucursal_canon: 'AZAHARES_CUL', provider_channel_id: 'ch1',
+        recipient_count: 29, status: 'SUBMITTED', provider_campaign_id: 'iventas-79',
+        error_code: null, needs_manual_review: false, send_authorized: false },
+      { child_id: 80, sucursal_canon: 'CARROUSEL_TJ', provider_channel_id: 'ch2',
+        recipient_count: 60, status: 'READY', provider_campaign_id: null,
+        error_code: null, needs_manual_review: false, send_authorized: false },
+      { child_id: 81, sucursal_canon: 'INDEPENDENCIA', provider_channel_id: 'ch3',
+        recipient_count: 114, status: 'READY', provider_campaign_id: null,
+        error_code: null, needs_manual_review: false, send_authorized: false },
+    ],
+  };
+  assert.deepEqual(pendingGovernedBatchIds(monitor, review), [80, 81]);
+  const after80: CampaignV2GovernedMonitor = {
+    ...monitor,
+    execution: { ...monitor.execution!, last_child_id: 80 },
+    children: monitor.children.map(c => c.child_id === 80 ? {
+      ...c, status: 'SUBMITTED', provider_campaign_id: 'iventas-80',
+    } : c),
+  };
+  const review80: CampaignV2GovernedExecutionReviewReady = {
+    ...review, execution: { ...review.execution!, last_child_id: 80 },
+  };
+  assert.deepEqual(pendingGovernedBatchIds(after80, review80), [81]);
+
+  assert.deepEqual(pendingGovernedBatchIds({...monitor, quota: {...monitor.quota, all_current: false}}, review), []);
+  assert.deepEqual(pendingGovernedBatchIds({...monitor, children: monitor.children.map(c => c.child_id === 80 ? {...c, needs_manual_review: true} : c)}, review), []);
+  assert.deepEqual(pendingGovernedBatchIds({...monitor, children: monitor.children.map(c => c.child_id === 80 ? {...c, status: 'RECONCILIATION_REQUIRED'} : c)}, review), []);
+  assert.deepEqual(pendingGovernedBatchIds({...monitor, children: monitor.children.map(c => c.child_id === 79 ? {...c, provider_campaign_id: null} : c)}, review), []);
+  assert.deepEqual(pendingGovernedBatchIds({...monitor, execution: {...monitor.execution!, last_child_id: null}}, review), []);
+  assert.deepEqual(pendingGovernedBatchIds({...monitor, approval: {...monitor.approval!, expired: true}}, review), []);
+  assert.deepEqual(pendingGovernedBatchIds({...monitor, approval: {...monitor.approval!, manifest_digest: 'x'.repeat(64)}}, review), []);
+});
+
+test('Bulk send explicit: one gesture, sequential per-child guarded requests, no replay or secrets persisted', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const ui = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.ts'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.html'), 'utf8');
+  assert.ok(html.includes('(click)="executePendingSequentially()"'));
+  assert.ok(html.includes('Enviar {{ bulkPendingIds.length }} lotes pendientes'));
+  assert.ok(html.includes('Detener después del lote actual'));
+  assert.ok(ui.includes('this.reviewReady!.execution!.execution_id'));
+  assert.ok(ui.includes('this.bulkPassword.setValue(\'\')'));
+  assert.ok(ui.includes('await this.readFreshBulkState()'));
+  assert.ok(ui.includes('pendingIds.slice(index)'));
+  assert.ok(ui.includes("result.status !== 'SUBMITTED'"));
+  assert.ok(ui.includes("persisted?.status !== 'SUBMITTED'"));
+  assert.ok(ui.includes('operator_password: password'));
+  assert.equal(ui.includes('retryWhen('), false);
+  assert.equal(ui.includes('setInterval('), false);
+  assert.equal(ui.includes('setTimeout('), false);
+  assert.equal(ui.includes('localStorage'), false);
+  assert.equal(ui.includes('sessionStorage'), false);
 });
