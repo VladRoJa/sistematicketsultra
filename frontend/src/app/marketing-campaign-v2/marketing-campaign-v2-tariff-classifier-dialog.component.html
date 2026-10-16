@@ -40,7 +40,7 @@
           </td>
           <td class="count-cell">{{ row.row_count | number }}</td>
           <td>
-            <mat-form-field appearance="outline">
+            <mat-form-field appearance="fill">
               <mat-select
                 [value]="row.categoriaTarifa"
                 (selectionChange)="setCategory(row, $event.value)"
@@ -53,7 +53,7 @@
             </mat-form-field>
           </td>
           <td>
-            <mat-form-field appearance="outline">
+            <mat-form-field appearance="fill">
               <mat-select
                 [value]="row.audienceFamily"
                 (selectionChange)="setFamily(row, $event.value)"
