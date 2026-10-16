@@ -81,7 +81,7 @@ def _locked_review(*, campaign_id: int, session: Any, now: datetime,
     ).with_for_update().one_or_none()
     approval = session.query(MarketingCampaignV2DispatchApprovalORM).filter(
         MarketingCampaignV2DispatchApprovalORM.campaign_v2_id == campaign_id,
-    ).with_for_update().one_or_none()
+    ).order_by(MarketingCampaignV2DispatchApprovalORM.revision_no.desc()).with_for_update().first()
     if campaign is None or approval is None or _database_date(approval.expires_at) <= now:
         raise GovernedDispatchConflict("Campaña o aprobación inexistente/vencida.")
     plan = build_campaign_v2_preflight(
@@ -271,7 +271,7 @@ def review_execution(*, campaign_id: int, session: Any | None = None) -> dict:
     active = session if session is not None else db.session
     approval = active.query(MarketingCampaignV2DispatchApprovalORM).filter(
         MarketingCampaignV2DispatchApprovalORM.campaign_v2_id == campaign_id
-    ).one_or_none()
+    ).order_by(MarketingCampaignV2DispatchApprovalORM.revision_no.desc()).first()
     if approval is None:
         return {"approval": None, "execution": None, "send_authorized": False}
     execution = active.query(MarketingCampaignV2GovernedExecutionORM).filter(
