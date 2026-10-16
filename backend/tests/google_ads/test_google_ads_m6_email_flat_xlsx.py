@@ -17,7 +17,7 @@ from app.warehouse.services.google_ads_daily_xlsx_parser import (
 from app.warehouse.services.google_ads_ad_group_daily_xlsx_parser import (
     parse_google_ads_ad_group_daily_xlsx,
 )
-from test_google_ads_m6_manual_preview import daily_xlsx, post
+from test_google_ads_m6_manual_preview import daily_xlsx, post, setup_client
 
 CAMPAIGN = "campaign"
 GROUP = "group"
