@@ -204,7 +204,7 @@ def test_materialization_rechecks_reservations_and_creates_one_held_child():
     campaign_query = MagicMock()
     campaign_query.filter.return_value.with_for_update.return_value.one_or_none.return_value = NS(id=99)
     approval_query = MagicMock()
-    approval_query.filter.return_value.with_for_update.return_value.one_or_none.return_value = a
+    approval_query.filter.return_value.order_by.return_value.with_for_update.return_value.first.return_value = a
     reservation_query = MagicMock()
     reservation_query.filter.return_value.all.return_value = [
         reservation, portfolio_reservation,
@@ -255,7 +255,7 @@ def test_materialization_expired_approval_blocks_before_children():
     q_campaign = MagicMock()
     q_campaign.filter.return_value.with_for_update.return_value.one_or_none.return_value = NS(id=99)
     q_approval = MagicMock()
-    q_approval.filter.return_value.with_for_update.return_value.one_or_none.return_value = a
+    q_approval.filter.return_value.order_by.return_value.with_for_update.return_value.first.return_value = a
     session.query.side_effect = lambda model: (
         q_campaign if model is manifest.MarketingCampaignV2ORM else q_approval
     )

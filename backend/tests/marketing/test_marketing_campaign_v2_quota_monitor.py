@@ -72,7 +72,7 @@ def fake_session(*, execution_status="IN_FLIGHT", updated_minutes=7,
         q = MagicMock()
         filter_q = q.filter.return_value
         if model is svc.MarketingCampaignV2DispatchApprovalORM:
-            filter_q.one_or_none.return_value = approval
+            filter_q.order_by.return_value.first.return_value = approval
         elif model is svc.MarketingCampaignV2GovernedExecutionORM:
             filter_q.one_or_none.return_value = execution
         elif model is svc.MarketingCampaignV2CapacityReservationORM:

@@ -74,8 +74,8 @@ def _load_source(*, campaign_id: int, child_id: int, session: Any, lock: bool):
         raise HeldReleaseNotFound("Campaña de origen inexistente.")
     q = session.query(MarketingCampaignV2DispatchApprovalORM).filter(
         MarketingCampaignV2DispatchApprovalORM.campaign_v2_id == campaign_id,
-    )
-    approval = (q.with_for_update() if lock else q).one_or_none()
+    ).order_by(MarketingCampaignV2DispatchApprovalORM.revision_no.desc())
+    approval = (q.with_for_update() if lock else q).first()
     if approval is None:
         raise HeldReleaseConflict("Campaña sin aprobación gobernada.")
     q = session.query(MarketingCampaignV2GovernedExecutionORM).filter(

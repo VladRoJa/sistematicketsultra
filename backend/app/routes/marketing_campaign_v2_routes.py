@@ -118,6 +118,9 @@ from app.services.marketing_campaign_v2_governed_dispatch_service import (
 from app.services.marketing_campaign_v2_manifest_service import (
     materialize_approved_manifest,
 )
+from app.services.marketing_campaign_v2_reauthorization_service import (
+    CampaignV2ReauthorizationError, reauthorize_unattempted_dispatch,
+)
 from app.services.marketing_campaign_v2_dispatch_approval_service import (
     CampaignV2ApprovalValidationError,
     CampaignV2ApprovalConflictError,
@@ -1471,6 +1474,38 @@ def campaign_v2_dispatch_approval_state_endpoint(campaign_id: int):
         return _error(str(exc), 403)
     except Exception:
         return _error("No fue posible consultar aprobación Campaign V2.", 500)
+
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/<int:campaign_id>/dispatch/reauthorize")
+@jwt_required()
+def campaign_v2_reauthorize_unattempted_endpoint(campaign_id: int):
+    """New audited authorization ONLY; never sends or edits original approval."""
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        payload = _parse_payload({"previous_approval_id", "expected_manifest_digest", "confirmation"})
+        if payload.get("confirmation") != f"REAUTORIZAR {campaign_id}":
+            return _error("Confirmación explícita de reautorización requerida.", 400)
+        result = reauthorize_unattempted_dispatch(
+            campaign_id=campaign_id,
+            previous_approval_id=payload.get("previous_approval_id"),
+            expected_manifest_digest=payload.get("expected_manifest_digest"),
+            actor_user_id=int(user.id),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(result), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2RouteValidationError as exc:
+        return _error(str(exc), 400)
+    except CampaignV2ReauthorizationError as exc:
+        db.session.rollback()
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible reautorizar el despacho Campaign V2.", 500)
 
 
 @marketing_campaign_v2_bp.post("/campaigns-v2/<int:campaign_id>/dispatch/materialize")
