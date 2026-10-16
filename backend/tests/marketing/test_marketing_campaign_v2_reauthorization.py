@@ -282,7 +282,7 @@ def test_new_approval_reservation_keeps_original_held_audit(monkeypatch):
         quota_rows={"A": {
             "channel_evidence_id": None, "portfolio_evidence_id": None,
             "policy_revision_id": None, "operator_portfolio_cap": None,
-            "operator_channel_cap": None,
+            "operator_channel_cap": None, "portfolio_key": None,
         }},
         held_names=frozenset({"B"}),
         held_sources={"B": "cupo-250"},
