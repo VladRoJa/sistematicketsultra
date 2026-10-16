@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+import math
 from typing import Mapping
 
 from app.warehouse.services.kpi_desempeno_semantic_diff import (
@@ -164,13 +165,23 @@ def plan_kpi_desempeno_mtd_impact(
                     ))
                     continue
                 seen_fields.add(field.field)
+                # M1 may be supplied with already-structured differences.
+                # Validate both sides independently before converting to int:
+                # NaN/inf must never reach int() or the continuity checks.
+                def valid_metric_value(value: object) -> bool:
+                    if type(value) is int:
+                        pass
+                    elif type(value) is float and math.isfinite(value):
+                        pass
+                    else:
+                        return False
+                    if field.field != "alcance_meta":
+                        return value >= 0 and int(value) == value
+                    return True
+
                 if (
-                    type(field.previous) not in (int, float)
-                    or type(field.current) not in (int, float)
-                    or (field.field != "alcance_meta" and (
-                        int(field.previous) != field.previous
-                        or int(field.current) != field.current
-                    ))
+                    not valid_metric_value(field.previous)
+                    or not valid_metric_value(field.current)
                     or field.previous == field.current
                 ):
                     issues.append(M3BContinuityIssue(
