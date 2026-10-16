@@ -46,7 +46,7 @@ def test_source_requires_unattempted_held_and_completed_execution():
         if model is svc.MarketingCampaignV2ORM:
             q.filter.return_value.one_or_none.return_value = campaign
         elif model is svc.MarketingCampaignV2DispatchApprovalORM:
-            q.filter.return_value.one_or_none.return_value = approval
+            q.filter.return_value.order_by.return_value.first.return_value = approval
         elif model is svc.MarketingCampaignV2GovernedExecutionORM:
             q.filter.return_value.one_or_none.return_value = exec_obj
         elif model is svc.MarketingCampaignV2ProviderCampaignORM:
