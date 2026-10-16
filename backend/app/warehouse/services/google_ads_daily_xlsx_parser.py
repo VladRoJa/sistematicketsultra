@@ -55,6 +55,7 @@ class GoogleAdsDailyParsedFile:
     currency_code: str
     rows: tuple[GoogleAdsDailyParsedRow, ...]
     total_cost: Decimal
+    totals_provenance: str = "GOOGLE_ADS_DAILY_TOTALS"
 
 
 def _norm(value: object) -> str:
@@ -149,14 +150,27 @@ def parse_google_ads_daily_xlsx(content: bytes) -> GoogleAdsDailyParsedFile:
         if sheet.max_row is not None and sheet.max_row > MAX_ROWS:
             raise GoogleAdsXlsxValidationError("Demasiadas filas.")
         rows = sheet.iter_rows(values_only=True)
-        title = next(rows, ())
-        period = next(rows, ())
-        headings = next(rows, ())
-        if not title or _norm(title[0]) != "informe de campana":
+        first = next(rows, ())
+        if not first:
             raise GoogleAdsXlsxValidationError("No es un Informe de campaña Google Ads.")
-        if not period:
-            raise GoogleAdsXlsxValidationError("Falta periodo.")
-        date_from, date_to = _report_range(period[0])
+        flat_email = _norm(first[0]) == "dia"
+        if flat_email:
+            headings = first
+            # The scheduled-email export has no title, period or account total
+            # rows.  Require Google's distinctive campaign-state column so an
+            # arbitrary spreadsheet is never misclassified as a campaign report.
+            if "estado de la campana" not in {_norm(v) for v in headings}:
+                raise GoogleAdsXlsxValidationError("No es un Informe de campaña Google Ads.")
+            first_data_row = 2
+        else:
+            if _norm(first[0]) != "informe de campana":
+                raise GoogleAdsXlsxValidationError("No es un Informe de campaña Google Ads.")
+            period = next(rows, ())
+            headings = next(rows, ())
+            if not period:
+                raise GoogleAdsXlsxValidationError("Falta periodo.")
+            date_from, date_to = _report_range(period[0])
+            first_data_row = 4
         index = {_norm(col): i for i, col in enumerate(headings) if col is not None}
         if len(index) != len([col for col in headings if col is not None]):
             raise GoogleAdsXlsxValidationError("Columnas duplicadas.")
@@ -169,7 +183,7 @@ def parse_google_ads_daily_xlsx(content: bytes) -> GoogleAdsDailyParsedFile:
         currencies = set()
         observed_days = set()
         daily_sum = {}
-        for position, values in enumerate(rows, start=4):
+        for position, values in enumerate(rows, start=first_data_row):
             if position > MAX_ROWS:
                 raise GoogleAdsXlsxValidationError("Demasiadas filas.")
             if not values or all(cell is None for cell in values):
@@ -180,6 +194,8 @@ def parse_google_ads_daily_xlsx(content: bytes) -> GoogleAdsDailyParsedFile:
             status = str(values[1] or "").strip()
             day = values[index["dia"]]
             if status.startswith("Total:"):
+                if flat_email:
+                    raise GoogleAdsXlsxValidationError("Subtotales inesperados en exportación plana.")
                 if status == "Total: Cuenta" and day is not None and str(day).strip() not in ("", "--"):
                     parsed_day = _date_value(day)
                     if parsed_day in account_totals:
@@ -191,7 +207,7 @@ def parse_google_ads_daily_xlsx(content: bytes) -> GoogleAdsDailyParsedFile:
                     )
                 continue
             report_date = _date_value(day)
-            if not date_from <= report_date <= date_to:
+            if not flat_email and not date_from <= report_date <= date_to:
                 raise GoogleAdsXlsxValidationError(
                     f"Fila {position}: fecha fuera del periodo."
                 )
@@ -232,25 +248,36 @@ def parse_google_ads_daily_xlsx(content: bytes) -> GoogleAdsDailyParsedFile:
             raise GoogleAdsXlsxValidationError(
                 "No hay campañas o la moneda no es exclusivamente MXN."
             )
-        expected_days = {
-            date.fromordinal(date_from.toordinal() + offset)
-            for offset in range((date_to - date_from).days + 1)
-        }
-        if observed_days != expected_days:
-            raise GoogleAdsXlsxValidationError("Faltan días del periodo solicitado.")
-        if set(account_totals) != expected_days:
-            raise GoogleAdsXlsxValidationError(
-                "Faltan totales diarios de cuenta para conciliación."
-            )
-        for day, amount in daily_sum.items():
-            if amount != account_totals[day]:
+        if flat_email:
+            if len(observed_days) != 1:
                 raise GoogleAdsXlsxValidationError(
-                    f"No coincide el total de cuenta del {day.isoformat()}."
+                    "El informe plano del correo debe contener exactamente un día."
                 )
+            date_from = date_to = next(iter(observed_days))
+            # No official subtotal exists in the email XLSX. The daily cost,
+            # clicks and impressions are computed from detail rows; cross-file
+            # reconciliation remains mandatory in the M6 pair preflight.
+        else:
+            expected_days = {
+                date.fromordinal(date_from.toordinal() + offset)
+                for offset in range((date_to - date_from).days + 1)
+            }
+            if observed_days != expected_days:
+                raise GoogleAdsXlsxValidationError("Faltan días del periodo solicitado.")
+            if set(account_totals) != expected_days:
+                raise GoogleAdsXlsxValidationError(
+                    "Faltan totales diarios de cuenta para conciliación."
+                )
+            for day, amount in daily_sum.items():
+                if amount != account_totals[day]:
+                    raise GoogleAdsXlsxValidationError(
+                        f"No coincide el total de cuenta del {day.isoformat()}."
+                    )
         return GoogleAdsDailyParsedFile(
             date_from=date_from, date_to=date_to,
             currency_code="MXN", rows=tuple(parsed),
             total_cost=sum((row.cost for row in parsed), Decimal("0.00")),
+            totals_provenance="DETAIL_SUM_ONLY" if flat_email else "GOOGLE_ADS_DAILY_TOTALS",
         )
     finally:
         workbook.close()
