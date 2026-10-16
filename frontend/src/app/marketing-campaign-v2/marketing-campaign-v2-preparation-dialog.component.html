@@ -54,7 +54,7 @@
         <strong *ngIf="review.requires_bulk_confirmation">
           Operación masiva (10+). Confirma el volumen completo antes de aplicar.
         </strong>
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="fill">
           <mat-label>Escribe EXCLUIR {{ review.new_exclusions }}</mat-label>
           <input matInput [formControl]="confirmBranchControl">
         </mat-form-field>
@@ -75,7 +75,7 @@
       Solo los lotes SUBMITTED con aceptación demostrada por iVentas cuentan como contactados.
       Los lotes READY sin intento y HELD no cuentan. Los rechazos no confirmados se muestran por separado.</p>
     <div class="input-row">
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="fill">
         <mat-label>IDs de campañas a comparar</mat-label>
         <input matInput [formControl]="sourceIdsControl" placeholder="21, 23">
       </mat-form-field>
@@ -119,7 +119,7 @@
         <strong *ngIf="review.new_exclusions >= 10">
           Es una exclusión masiva; revisa la audiencia y confirma el total.
         </strong>
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="fill">
           <mat-label>Escribe EXCLUIR {{ review.new_exclusions }}</mat-label>
           <input matInput [formControl]="confirmPreviousControl">
         </mat-form-field>
