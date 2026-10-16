@@ -8,6 +8,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { firstValueFrom, forkJoin } from 'rxjs';
 
@@ -36,6 +37,7 @@ type ExecutionReview =
   imports: [
     CommonModule, ReactiveFormsModule, MatButtonModule, MatCheckboxModule,
     MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule,
+    MatProgressSpinnerModule,
   ],
   templateUrl: './marketing-campaign-v2-governed-console-dialog.component.html',
   styleUrls: ['./marketing-campaign-v2-governed-console-dialog.component.css'],
