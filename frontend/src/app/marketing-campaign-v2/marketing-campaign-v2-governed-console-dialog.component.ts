@@ -86,6 +86,17 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   }
 
   get busy(): boolean { return this.working !== null; }
+  get sentLotCount(): number { return this.monitor?.children_by_status['SUBMITTED'] ?? 0; }
+  get pendingLotCount(): number { return this.monitor?.children_by_status['READY'] ?? 0; }
+  get heldLotCount(): number { return this.monitor?.children_by_status['HELD'] ?? 0; }
+  get acceptedContactCount(): number {
+    return this.monitor?.children
+      .filter(child => child.status === 'SUBMITTED')
+      .reduce((total, child) => total + child.recipient_count, 0) ?? 0;
+  }
+  get setupSummary(): string {
+    return this.reviewReady ? 'Preparación y autorizaciones anteriores' : 'Preparar campaña para envío';
+  }
   get hasApproval(): boolean { return !!this.approval?.approval; }
   get validApproval(): boolean {
     const approval = this.approval?.approval;
