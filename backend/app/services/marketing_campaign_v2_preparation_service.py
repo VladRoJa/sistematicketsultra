@@ -257,7 +257,7 @@ def _previous_multi_proof(
             allow_later_frozen_source=True,
             inspect_rejected=True,
         )
-        source_unconfirmed = proof["unconfirmed_batches"]
+        source_unconfirmed = proof.get("unconfirmed_batches", [])
         unconfirmed_batches.extend(source_unconfirmed)
         new = 0
         for recipient_id in proof["matched_recipient_ids"]:
