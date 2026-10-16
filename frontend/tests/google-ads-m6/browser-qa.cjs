@@ -23,6 +23,8 @@ const preview = {
   approved_branches: 26, account_cost_mxn: '950.25',
   branch_cost_mxn: '900.00', unassigned_cost_mxn: '50.25',
   campaign_sha256: 'a'.repeat(64), ad_group_sha256: 'b'.repeat(64),
+  campaign_totals_provenance: 'DETAIL_SUM_ONLY',
+  group_totals_provenance: 'DETAIL_SUM_ONLY',
   raw_confirm_ticket: 'CI_SYNTHETIC_NOT_VALID_IN_PRODUCTION',
   ready_to_stage_raw: true,
 };
@@ -213,6 +215,7 @@ async function run(name, action) {
             });
             await page.getByRole('button', { name: 'Validar ambos Excel' }).click();
             await page.getByText('Vista previa · 2026-10-13').waitFor();
+            await page.getByText(/Estos archivos no contienen subtotales oficiales de Google Ads/).waitFor();
             assert(!requests.some(r => r.pathname.endsWith('/manual/confirm')),
               'Preview auto-confirmed RAW');
             await page.getByText(/Confirmo guardar exclusivamente los RAW/).locator('..').locator('input').check();

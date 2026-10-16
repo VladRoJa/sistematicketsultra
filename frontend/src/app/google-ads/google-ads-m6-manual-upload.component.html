@@ -61,6 +61,12 @@
         <div><span>Sin asignar</span><strong>{{ money(report.unassigned_cost_mxn) }}</strong></div>
       </div>
 
+      <p class="manual-ads__warning" *ngIf="totalsAreCalculatedFromDetail">
+        Exportación del correo: los totales se calcularon a partir de los renglones
+        de ambos Excel y se conciliaron entre campañas y grupos.
+        Estos archivos no contienen subtotales oficiales de Google Ads.
+      </p>
+
       <p class="manual-ads__warning">
         Esta validación <strong>no aprueba identidades</strong>, no importa métricas estructuradas
         ni publica datos en Funnel. Solo permite registrar los dos documentos RAW.

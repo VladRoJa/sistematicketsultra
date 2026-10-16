@@ -44,6 +44,7 @@ on:
       - 'backend/tests/google_ads/test_google_ads_m6_daily_pair_preflight.py'
       - 'backend/app/warehouse/services/google_ads_m6_manual_preview_service.py'
       - 'backend/tests/google_ads/test_google_ads_m6_manual_preview.py'
+      - 'backend/tests/google_ads/test_google_ads_m6_email_flat_xlsx.py'
       - 'backend/app/warehouse/services/google_ads_m6_manual_confirm_service.py'
       - 'backend/tests/google_ads/test_google_ads_m6_manual_confirm.py'
       - 'backend/tests/google_ads/test_google_ads_m6_manual_raw_postgres.py'
@@ -118,6 +119,7 @@ jobs:
             tests/google_ads/test_google_ads_m6_attribution_reader.py \
             tests/google_ads/test_google_ads_m6_daily_pair_preflight.py \
             tests/google_ads/test_google_ads_m6_manual_preview.py \
+            tests/google_ads/test_google_ads_m6_email_flat_xlsx.py \
             tests/google_ads/test_google_ads_m6_manual_confirm.py \
             tests/google_ads/test_google_ads_m6_manual_raw_postgres.py \
             tests/google_ads/test_google_ads_m6_manual_structured_postgres.py \

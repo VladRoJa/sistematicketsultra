@@ -13,6 +13,8 @@ export interface GoogleAdsM6ManualPreview {
   account_cost_mxn: string;
   branch_cost_mxn: string;
   unassigned_cost_mxn: string;
+  campaign_totals_provenance?: 'DETAIL_SUM_ONLY' | 'GOOGLE_ADS_DAILY_TOTALS';
+  group_totals_provenance?: 'DETAIL_SUM_ONLY' | 'GOOGLE_ADS_DAILY_TOTALS';
   campaign_sha256: string;
   ad_group_sha256: string;
   raw_confirm_ticket: string;

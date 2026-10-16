@@ -61,6 +61,7 @@ class GoogleAdsAdGroupDailyFile:
     total_cost: Decimal
     total_free_pass: Decimal
     total_web_purchase: Decimal
+    totals_provenance: str = "GOOGLE_ADS_DAILY_TOTALS"
 
 
 def _ad_group_key(campaign_key: str, ad_group_name: str) -> str:
@@ -123,14 +124,29 @@ def parse_google_ads_ad_group_daily_xlsx(content: bytes) -> GoogleAdsAdGroupDail
         if sheet.max_row is not None and sheet.max_row > MAX_ROWS:
             raise GoogleAdsXlsxValidationError("Demasiadas filas.")
         records = sheet.iter_rows(values_only=True)
-        title = next(records, ())
-        period = next(records, ())
-        columns = next(records, ())
-        if not title or _norm(title[0]) != "informe de grupo de anuncios":
+        first = next(records, ())
+        if not first:
             raise GoogleAdsXlsxValidationError("No es un informe de grupos de Google Ads.")
-        if not period:
-            raise GoogleAdsXlsxValidationError("Periodo ausente.")
-        start, end = _report_range(period[0])
+        flat_email = _norm(first[0]) == "dia"
+        if flat_email:
+            columns = first
+            normalized = [_norm(v) for v in columns if v is not None]
+            # The emailed report is a direct table with TWO currency columns.
+            # Distinctive ad-group status and both currency positions prevent
+            # treating a mismatched or partial workbook as this known format.
+            if ("estado del grupo de anuncios" not in normalized
+                    or normalized.count("codigo de moneda") != 2):
+                raise GoogleAdsXlsxValidationError("No es un informe de grupos de Google Ads.")
+            first_data_row = 2
+        else:
+            if _norm(first[0]) != "informe de grupo de anuncios":
+                raise GoogleAdsXlsxValidationError("No es un informe de grupos de Google Ads.")
+            period = next(records, ())
+            columns = next(records, ())
+            if not period:
+                raise GoogleAdsXlsxValidationError("Periodo ausente.")
+            start, end = _report_range(period[0])
+            first_data_row = 4
         positions: dict[str, list[int]] = {}
         for position, heading in enumerate(columns):
             if heading is not None:
@@ -152,7 +168,7 @@ def parse_google_ads_ad_group_daily_xlsx(content: bytes) -> GoogleAdsAdGroupDail
         daily_account = {}
         observed_dates = set()
         keys_per_day = {}
-        for position, values in enumerate(records, start=4):
+        for position, values in enumerate(records, start=first_data_row):
             if position > MAX_ROWS:
                 raise GoogleAdsXlsxValidationError("Demasiadas filas.")
             if not values or all(v is None for v in values):
@@ -160,6 +176,8 @@ def parse_google_ads_ad_group_daily_xlsx(content: bytes) -> GoogleAdsAdGroupDail
             status = str(values[1] or "").strip()
             raw_date = values[index["dia"]]
             if status.startswith("Total:"):
+                if flat_email:
+                    raise GoogleAdsXlsxValidationError("Subtotales inesperados en exportación plana.")
                 if status in ("Total: Cuenta", "Total: Grupos de anuncios"):
                     if raw_date is not None and str(raw_date).strip() not in ("", "--"):
                         day = _date_value(raw_date)
@@ -172,7 +190,7 @@ def parse_google_ads_ad_group_daily_xlsx(content: bytes) -> GoogleAdsAdGroupDail
                 continue
 
             day = _date_value(raw_date)
-            if not start <= day <= end:
+            if not flat_email and not start <= day <= end:
                 raise GoogleAdsXlsxValidationError(f"Fila {position}: día fuera del periodo.")
             campaign_name = str(values[index["campana"]] or "").strip()
             group_name = str(values[index["grupo de anuncios"]] or "").strip()
@@ -202,14 +220,22 @@ def parse_google_ads_ad_group_daily_xlsx(content: bytes) -> GoogleAdsAdGroupDail
                 prev, (cost, clicks, impressions, conv, passes, purchases, value)
             ))
 
-        expected = {
-            date.fromordinal(start.toordinal() + i)
-            for i in range((end - start).days + 1)
-        }
-        if not parsed or observed_dates != expected:
-            raise GoogleAdsXlsxValidationError("Faltan días o grupos.")
-        if set(daily_groups) != expected or set(daily_account) != expected:
-            raise GoogleAdsXlsxValidationError("Faltan subtotales diarios para reconciliar.")
+        if flat_email:
+            if not parsed or len(observed_dates) != 1:
+                raise GoogleAdsXlsxValidationError(
+                    "El informe plano del correo debe contener exactamente un día."
+                )
+            start = end = next(iter(observed_dates))
+            expected = {start}
+        else:
+            expected = {
+                date.fromordinal(start.toordinal() + i)
+                for i in range((end - start).days + 1)
+            }
+            if not parsed or observed_dates != expected:
+                raise GoogleAdsXlsxValidationError("Faltan días o grupos.")
+            if set(daily_groups) != expected or set(daily_account) != expected:
+                raise GoogleAdsXlsxValidationError("Faltan subtotales diarios para reconciliar.")
         first_day_keys = keys_per_day[start]
         if any(keys != first_day_keys for keys in keys_per_day.values()):
             raise GoogleAdsXlsxValidationError(
@@ -218,7 +244,7 @@ def parse_google_ads_ad_group_daily_xlsx(content: bytes) -> GoogleAdsAdGroupDail
         # Google rounds attributed conversions and conversion values when
         # reporting day subtotals. Monetary spend and integer traffic must
         # reconcile exactly; attribution metrics have <= 0.01 tolerance.
-        for day in expected:
+        for day in expected if not flat_email else ():
             for official in (daily_groups[day], daily_account[day]):
                 if daily[day][:3] != official[:3]:
                     raise GoogleAdsXlsxValidationError(
@@ -241,6 +267,7 @@ def parse_google_ads_ad_group_daily_xlsx(content: bytes) -> GoogleAdsAdGroupDail
             total_web_purchase=sum(
                 (item.web_purchase_conversions for item in parsed), Decimal("0")
             ),
+            totals_provenance="DETAIL_SUM_ONLY" if flat_email else "GOOGLE_ADS_DAILY_TOTALS",
         )
     finally:
         workbook.close()
