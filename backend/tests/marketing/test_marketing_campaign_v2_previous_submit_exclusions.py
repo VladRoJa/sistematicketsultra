@@ -277,3 +277,91 @@ def test_model_db_check_requires_provenance_and_distinct_campaign():
     assert "related_campaign_id <> campaign_id" in constraints[
         "ck_mkt_v2_recipient_dispatch_exclusion_source_diff"
     ]
+
+
+def test_explicit_unconfirmed_rejection_is_visible_but_never_counts_as_submitted():
+    accepted = child("5216861234567", channel_id="accepted")
+    rejected = child(
+        "5216867654321", status="PROVIDER_ERROR", provider_campaign_id=None,
+        channel_id="rejected",
+    )
+    rejected.id = 107
+    rejected.submitted_at = None
+    rejected.submit_started_at = datetime(2026, 10, 15, tzinfo=timezone.utc)
+    rejected.error_code = "TEMPLATE_NOT_FOUND"
+    rejected.support_ref = "bc-evidence"
+    rejected.provider_response_json = {"http_status": 400, "error_code": "TEMPLATE_NOT_FOUND"}
+    warnings = []
+    phones = svc._submitted_phone_set(
+        source_campaign_id=21,
+        session=session_with_children([accepted, rejected, untouched_ready("5216867654322")]),
+        inspect_rejected=True, unconfirmed_batches=warnings,
+    )
+    assert phones == {"6861234567"}
+    assert warnings == [{
+        "source_campaign_id": 21, "child_id": 107,
+        "status": "PROVIDER_ERROR", "error_code": "TEMPLATE_NOT_FOUND",
+        "recipient_count": 1,
+    }]
+    with pytest.raises(svc.CampaignV2ScopedExclusionValidationError):
+        svc._submitted_phone_set(
+            source_campaign_id=21, session=session_with_children([accepted, rejected]),
+        )
+
+
+@pytest.mark.parametrize("tamper", [
+    {"provider_campaign_id": "external-accepted"},
+    {"submitted_at": datetime(2026, 10, 15, tzinfo=timezone.utc)},
+    {"error_code": "HTTP_503"},
+    {"support_ref": None},
+    {"provider_response_json": {"http_status": 503}},
+    {"provider_response_json": {}},
+    {"submit_started_at": None},
+])
+def test_unconfirmed_rejection_must_have_deterministic_400_evidence(tamper):
+    rejected = child("5216867654321", status="PROVIDER_ERROR", provider_campaign_id=None)
+    rejected.id = 107
+    rejected.submitted_at = None
+    rejected.submit_started_at = datetime(2026, 10, 15, tzinfo=timezone.utc)
+    rejected.error_code = "TEMPLATE_NOT_FOUND"
+    rejected.support_ref = "bc-evidence"
+    rejected.provider_response_json = {"http_status": 400}
+    for field, value in tamper.items():
+        setattr(rejected, field, value)
+    with pytest.raises(svc.CampaignV2ScopedExclusionValidationError):
+        svc._submitted_phone_set(
+            source_campaign_id=21,
+            session=session_with_children([child("5216861234567"), rejected]),
+            inspect_rejected=True,
+        )
+
+
+def test_later_frozen_source_only_allowed_on_unsent_unapproved_target(monkeypatch):
+    target = NS(frozen_at=datetime(2026, 10, 15, 17, 41, tzinfo=timezone.utc))
+    source = NS(frozen_at=datetime(2026, 10, 15, 17, 45, tzinfo=timezone.utc))
+    session = MagicMock()
+    session.get.side_effect = lambda model, cid: {22: target, 23: source}[cid]
+    session.query.return_value.filter.return_value.first.return_value = None
+    session.query.return_value.filter.return_value.all.return_value = [
+        (888, "6861234567"),
+    ]
+    monkeypatch.setattr(svc, "get_campaign_v2", lambda **kw: {"id": kw["campaign_id"]})
+    monkeypatch.setattr(svc, "_submitted_phone_set", lambda **kw: {"6861234567"})
+    with pytest.raises(svc.CampaignV2ScopedExclusionValidationError, match="antes"):
+        svc.find_previous_campaign_contact_ids(
+            campaign_id=22, source_campaign_id=23,
+            allowed_sucursal_keys=None, session=session,
+        )
+    allowed = svc.find_previous_campaign_contact_ids(
+        campaign_id=22, source_campaign_id=23,
+        allowed_sucursal_keys=None, session=session,
+        allow_later_frozen_source=True,
+    )
+    assert allowed["matched_recipient_ids"] == [888]
+    session.query.return_value.filter.return_value.first.return_value = (1,)
+    with pytest.raises(svc.CampaignV2ScopedExclusionValidationError, match="lotes o aprobación"):
+        svc.find_previous_campaign_contact_ids(
+            campaign_id=22, source_campaign_id=23,
+            allowed_sucursal_keys=None, session=session,
+            allow_later_frozen_source=True,
+        )

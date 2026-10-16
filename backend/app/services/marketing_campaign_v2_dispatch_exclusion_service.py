@@ -10,6 +10,7 @@ from typing import Any, Iterable
 from app.extensions import db
 from app.models.marketing import (
     MarketingCampaignV2ORM,
+    MarketingCampaignV2DispatchApprovalORM,
     MarketingCampaignV2ProviderCampaignORM,
     MarketingCampaignV2RecipientORM,
     MarketingCampaignV2RecipientEvidenceORM,
@@ -155,6 +156,8 @@ PREVIOUS_CAMPAIGN_CONTACT = "PREVIOUS_CAMPAIGN_CONTACT"
 
 def _submitted_phone_set(
     *, source_campaign_id: int, session: Any,
+    inspect_rejected: bool = False,
+    unconfirmed_batches: list[dict[str, Any]] | None = None,
 ) -> set[str]:
     """Proof of actual provider submissions, never the source frozen cohort.
 
@@ -216,6 +219,33 @@ def _submitted_phone_set(
                     "Origen con lote HELD sin auditoría íntegra o con intento de envío."
                 )
             continue
+        if child.status == "PROVIDER_ERROR" and inspect_rejected:
+            # This exception is ONLY for audited contact-overlap review.
+            # A 400 TEMPLATE_NOT_FOUND is not an accepted provider submission,
+            # yet can create a provider-side record. Keep it unresolved and
+            # visible; never infer delivery OR absence of delivery.
+            response = getattr(child, "provider_response_json", None)
+            if (
+                child.error_code != "TEMPLATE_NOT_FOUND"
+                or not isinstance(response, dict)
+                or response.get("http_status") != 400
+                or not getattr(child, "support_ref", None)
+                or child.provider_campaign_id is not None
+                or child.submitted_at is not None
+                or child.submit_started_at is None
+            ):
+                raise CampaignV2ScopedExclusionValidationError(
+                    "Origen tiene resultado proveedor no confirmado; requiere revisión manual."
+                )
+            if unconfirmed_batches is not None:
+                unconfirmed_batches.append({
+                    "source_campaign_id": source_campaign_id,
+                    "child_id": int(child.id),
+                    "status": child.status,
+                    "error_code": child.error_code,
+                    "recipient_count": int(child.recipient_count),
+                })
+            continue
         if (
             child.status != "SUBMITTED"
             or not child.provider_campaign_id
@@ -268,6 +298,8 @@ def find_previous_campaign_contact_ids(
     source_campaign_id: int,
     allowed_sucursal_keys,
     session: Any | None = None,
+    allow_later_frozen_source: bool = False,
+    inspect_rejected: bool = False,
 ) -> dict[str, Any]:
     """Read-only proof of overlapping numbers present in prior SUBMITTED payloads."""
     active = session if session is not None else db.session
@@ -294,14 +326,34 @@ def find_previous_campaign_contact_ids(
     if (
         target is None or source is None
         or target.frozen_at is None or source.frozen_at is None
-        or source.frozen_at >= target.frozen_at
     ):
         raise CampaignV2ScopedExclusionValidationError(
-            "La campaña origen debe estar congelada antes de la campaña destino."
+            "Origen y destino deben estar congelados."
         )
+    if source.frozen_at >= target.frozen_at:
+        if not allow_later_frozen_source:
+            raise CampaignV2ScopedExclusionValidationError(
+                "La campaña origen debe estar congelada antes de la campaña destino."
+            )
+        # A later source can be used only while the target still has NO
+        # provider children and NO approved dispatch. The write repeats
+        # these guards under a campaign row lock.
+        children_exist = active.query(MarketingCampaignV2ProviderCampaignORM.id).filter(
+            MarketingCampaignV2ProviderCampaignORM.campaign_v2_id == campaign_id,
+        ).first()
+        approved = active.query(MarketingCampaignV2DispatchApprovalORM.id).filter(
+            MarketingCampaignV2DispatchApprovalORM.campaign_v2_id == campaign_id,
+        ).first()
+        if children_exist or approved:
+            raise CampaignV2ScopedExclusionValidationError(
+                "No se permite usar un origen posterior si el destino ya tiene lotes o aprobación."
+            )
 
+    unconfirmed_batches: list[dict[str, Any]] = []
     submitted_phones = _submitted_phone_set(
         source_campaign_id=source_campaign_id, session=active,
+        inspect_rejected=inspect_rejected,
+        unconfirmed_batches=unconfirmed_batches,
     )
     target_rows = (
         active.query(MarketingCampaignV2RecipientORM.id,
@@ -315,6 +367,7 @@ def find_previous_campaign_contact_ids(
         "campaign_id": campaign_id,
         "source_campaign_id": source_campaign_id,
         "source_submitted_phones_count": len(submitted_phones),
+        "unconfirmed_batches": unconfirmed_batches,
         "matched_recipient_ids": ids,
         "matched": len(ids),
     }

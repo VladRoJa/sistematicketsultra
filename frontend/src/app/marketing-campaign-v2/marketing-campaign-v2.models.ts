@@ -547,6 +547,15 @@ export interface CampaignV2PreviousContactReview {
     submitted_contacts: number;
     overlap_contacts: number;
     unique_assigned: number;
+    unconfirmed_batches_count: number;
+    unconfirmed_contacts_count: number;
+  }>;
+  unconfirmed_batches: Array<{
+    source_campaign_id: number;
+    child_id: number;
+    status: string;
+    error_code: string;
+    recipient_count: number;
   }>;
   new_exclusions: number;
   already_excluded_count: number;

@@ -71,13 +71,13 @@
     <div class="heading">
       <h3>Evitar contactos repetidos entre campañas</h3>
     </div>
-    <p>Indica los IDs de campañas anteriores, separados por coma.
-      Solo se consideran los teléfonos de lotes SUBMITTED aceptados por iVentas.
-      Los lotes HELD nunca cuentan como contactados.</p>
+    <p>Indica los IDs de campañas a comparar, separados por coma; pueden haberse congelado antes o después de esta campaña.
+      Solo los lotes SUBMITTED con aceptación demostrada por iVentas cuentan como contactados.
+      Los lotes READY sin intento y HELD no cuentan. Los rechazos no confirmados se muestran por separado.</p>
     <div class="input-row">
       <mat-form-field appearance="outline">
-        <mat-label>Números de campañas anteriores</mat-label>
-        <input matInput [formControl]="sourceIdsControl" placeholder="14, 15">
+        <mat-label>IDs de campañas a comparar</mat-label>
+        <input matInput [formControl]="sourceIdsControl" placeholder="21, 23">
       </mat-form-field>
       <button mat-stroked-button type="button" (click)="reviewPreviousContacts()"
         [disabled]="busy">
@@ -87,6 +87,14 @@
     </div>
     <p *ngIf="previousError" class="error" role="alert">{{ previousError }}</p>
     <ng-container *ngIf="previousReview as review">
+      <p *ngIf="review.unconfirmed_batches.length" class="error" role="alert">
+        Atención: {{ review.unconfirmed_batches.length }} lote(s) de origen tienen un rechazo de iVentas no confirmado.
+        Sus destinatarios NO se cuentan como enviados ni como descartados; esta revisión solo excluye contactos de lotes
+        SUBMITTED demostrados. Antes de autorizar el envío de esta campaña verifica estos lotes y descarta posibles contactos repetidos.
+      </p>
+      <p *ngFor="let item of review.unconfirmed_batches" class="muted" role="status">
+        Campaña #{{ item.source_campaign_id }} · lote #{{ item.child_id }} · {{ item.recipient_count }} contactos sin resultado confirmado · {{ item.error_code }}
+      </p>
       <p>
         Coincidencias únicas: <strong>{{ review.matched | number }}</strong>.
         Exclusiones nuevas: <strong>{{ review.new_exclusions | number }}</strong>.
@@ -95,7 +103,7 @@
       </p>
       <div class="scroll-table">
         <table>
-          <thead><tr><th>Campaña anterior</th><th>Aceptados anteriormente por iVentas</th><th>Cruces</th><th>Contactos repetidos</th></tr></thead>
+          <thead><tr><th>Campaña origen</th><th>Aceptados por iVentas</th><th>Cruces</th><th>Contactos repetidos</th></tr></thead>
           <tbody>
             <tr *ngFor="let item of review.source_breakdown">
               <td>#{{ item.source_campaign_id }}</td>
