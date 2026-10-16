@@ -91,7 +91,15 @@
       </li>
     </ul>
     <p *ngIf="isPartial">La pareja quedó incompleta. Reintenta ambos archivos sin cambiarlos.</p>
-    <div class="manual-ads__structured-step" *ngIf="isStaged && !structuredResult">
+  </section>
+  <section class="manual-ads__result" *ngIf="resumedPair as pair"
+    aria-label="Pareja RAW recuperada">
+    <h3>RAW existentes recuperados · {{ pair.businessDate }}</h3>
+    <p>Campañas #{{ pair.campaignUploadId }} · Grupos #{{ pair.groupUploadId }}.
+      No se cargaron archivos nuevamente ni se publicó en Funnel.</p>
+  </section>
+  <section class="manual-ads__result" *ngIf="activePair && !structuredResult">
+    <div class="manual-ads__structured-step">
       <h3>Siguiente paso · Ingesta estructurada</h3>
       <p>Esta operación requiere que la versión M6 esté aprobada por ADMICORP
         y que Sistemas habilite el procesamiento en backend. Registrar RAW no otorga esa aprobación.</p>
@@ -169,6 +177,12 @@
         </li>
       </ul>
       <p *ngIf="!evidence.raw_reports.length">No hay RAW Google Ads para esta fecha.</p>
+      <button type="button" class="manual-ads__primary" *ngIf="canResumePair"
+        [disabled]="busy" (click)="resumeExistingPair()">
+        Continuar con RAW existentes
+      </button>
+      <p *ngIf="canResumePair">Esta acción retoma únicamente los dos RAW M6 auditados.
+        No vuelve a subir archivos, ingestar datos ni publicar automáticamente.</p>
       <p class="manual-ads__warning">
         Diagnóstico de solo lectura. No autoriza eliminar archivos, reemplazar métricas
         ni modificar publicaciones canónicas.

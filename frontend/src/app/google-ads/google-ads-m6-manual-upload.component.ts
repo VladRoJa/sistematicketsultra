@@ -15,6 +15,7 @@ import {
 } from './google-ads-m6-manual-upload.service';
 
 type ReportKind = 'campaign' | 'ad_group';
+type StagedPair = { businessDate: string; campaignUploadId: number; groupUploadId: number };
 type ProcessingState = 'idle' | 'preview' | 'confirm' | 'ingest' | 'publish' | 'diagnose';
 
 const MAX_CAMPAIGN_BYTES = 8 * 1024 * 1024;
@@ -88,6 +89,7 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
   adGroupFile: File | null = null;
   previewData: GoogleAdsM6ManualPreview | null = null;
   rawResult: GoogleAdsM6RawResult | null = null;
+  resumedPair: StagedPair | null = null;
   structuredResult: GoogleAdsM6StructuredResult | null = null;
   acceptedStructured = false;
   acceptedPublication = false;
@@ -114,6 +116,56 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
 
   get correctionButtonLabel(): string {
     return this.state === 'diagnose' ? 'Consultando…' : 'Consultar evidencias';
+  }
+
+  get resumablePair(): StagedPair | null {
+    const evidence = this.correctionData;
+    if (!evidence || evidence.state !== 'RAW_ONLY_UNPUBLISHED'
+      || evidence.structured.campaign_rows !== 0 || evidence.structured.group_rows !== 0
+      || evidence.publications.length !== 0) return null;
+
+    // The older misclassified RAWs are retained as historical evidence; only
+    // the exact two intact, audited M6 manual-pair uploads may be resumed.
+    const eligible = evidence.raw_reports.filter(item =>
+      item.status === 'ACTIVE' && !item.source_deleted
+      && item.period_from === evidence.business_date
+      && item.period_to === evidence.business_date
+      && item.manual_pair_upload_audit_count === 1
+      && item.pair_import_audit_count === 0
+      && item.pair_publish_audit_count === 0
+    );
+    const campaigns = eligible.filter(item => item.report_type_key === 'google_ads_campaign_daily');
+    const groups = eligible.filter(item => item.report_type_key === 'google_ads_ad_group_daily');
+    if (eligible.length !== 2 || campaigns.length !== 1 || groups.length !== 1
+      || !Number.isSafeInteger(campaigns[0].upload_id) || campaigns[0].upload_id <= 0
+      || !Number.isSafeInteger(groups[0].upload_id) || groups[0].upload_id <= 0
+      || campaigns[0].upload_id === groups[0].upload_id) return null;
+
+    return {
+      businessDate: evidence.business_date,
+      campaignUploadId: campaigns[0].upload_id,
+      groupUploadId: groups[0].upload_id,
+    };
+  }
+
+  get canResumePair(): boolean {
+    return !this.busy && this.resumablePair !== null;
+  }
+
+  resumeExistingPair(): void {
+    if (!this.canResumePair) return;
+    const pair = this.resumablePair;
+    if (!pair) return;
+    this.previewData = null;
+    this.rawResult = null;
+    this.resumedPair = pair;
+    this.structuredResult = null;
+    this.publishedResult = null;
+    this.acceptedRawOnly = false;
+    this.acceptedStructured = false;
+    this.acceptedPublication = false;
+    this.errorMessage = '';
+    this.successMessage = 'RAW existentes recuperados. Continúa con la ingesta sin volver a cargarlos.';
   }
 
   get correctionStatusLabel(): string {
@@ -186,7 +238,7 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
   get canPublish(): boolean {
     return !this.busy && this.acceptedPublication
       && this.structuredResult !== null
-      && this.rawResult?.status === 'RAW_PAIR_STAGED'
+      && (this.isStaged || this.resumedPair !== null)
       && this.publishedResult === null
       && this.structuredResult.campaign_rows === 27
       && this.structuredResult.group_rows === 43;
@@ -203,12 +255,20 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
     this.acceptedPublication = (event.target as HTMLInputElement).checked;
   }
 
+  get activePair(): StagedPair | null {
+    if (this.resumedPair) return this.resumedPair;
+    if (!this.isStaged || !this.rawResult) return null;
+    const campaigns = this.rawResult.uploads['google_ads_campaign_daily']?.upload_id;
+    const groups = this.rawResult.uploads['google_ads_ad_group_daily']?.upload_id;
+    if (!Number.isSafeInteger(campaigns) || campaigns <= 0
+      || !Number.isSafeInteger(groups) || groups <= 0 || campaigns === groups) return null;
+    return { businessDate: this.rawResult.business_date,
+      campaignUploadId: campaigns, groupUploadId: groups };
+  }
+
   get canIngest(): boolean {
-    const uploads = this.rawResult?.uploads;
-    return !this.busy && this.isStaged && this.acceptedStructured
-      && this.structuredResult === null
-      && Number.isInteger(uploads?.['google_ads_campaign_daily']?.upload_id ?? null)
-      && Number.isInteger(uploads?.['google_ads_ad_group_daily']?.upload_id ?? null);
+    return !this.busy && this.activePair !== null && this.acceptedStructured
+      && this.structuredResult === null;
   }
 
   get ingestButtonLabel(): string {
@@ -348,9 +408,11 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
   }
 
   ingestStructured(): void {
-    if (!this.canIngest || !this.rawResult) return;
-    const campaigns = this.rawResult.uploads['google_ads_campaign_daily'].upload_id;
-    const groups = this.rawResult.uploads['google_ads_ad_group_daily'].upload_id;
+    if (!this.canIngest) return;
+    const pair = this.activePair;
+    if (!pair) return;
+    const campaigns = pair.campaignUploadId;
+    const groups = pair.groupUploadId;
     this.state = 'ingest';
     this.errorMessage = '';
     this.successMessage = '';
@@ -420,6 +482,7 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
   private invalidatePreview(): void {
     this.previewData = null;
     this.rawResult = null;
+    this.resumedPair = null;
     this.structuredResult = null;
     this.publishedResult = null;
     this.acceptedPublication = false;
