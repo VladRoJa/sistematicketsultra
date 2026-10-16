@@ -7,10 +7,12 @@ import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/materia
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import {
   CampaignV2BranchReview, CampaignV2PreviousContactReview,
 } from './marketing-campaign-v2.models';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
+import { parsePreviousCampaignIds } from './marketing-campaign-v2-preparation.logic';
 
 export interface CampaignV2PreparationDialogData {
   campaignId: number;
@@ -21,7 +23,7 @@ export interface CampaignV2PreparationDialogData {
   selector: 'app-marketing-campaign-v2-preparation-dialog',
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, MatDialogModule,
-    MatButtonModule, MatFormFieldModule, MatInputModule],
+    MatButtonModule, MatFormFieldModule, MatInputModule, MatProgressSpinnerModule],
   templateUrl: './marketing-campaign-v2-preparation-dialog.component.html',
   styleUrls: ['./marketing-campaign-v2-preparation-dialog.component.css'],
 })
@@ -33,7 +35,9 @@ export class MarketingCampaignV2PreparationDialogComponent {
   branchReview: CampaignV2BranchReview | null = null;
   previousReview: CampaignV2PreviousContactReview | null = null;
   busy = false;
+  workingAction: 'branches-review' | 'branches-apply' | 'previous-review' | 'previous-apply' | null = null;
   error = '';
+  previousError = '';
   success = '';
   sourceIdsControl = new FormControl('', { nonNullable: true });
   confirmBranchControl = new FormControl('', { nonNullable: true });
@@ -49,37 +53,38 @@ export class MarketingCampaignV2PreparationDialogComponent {
   reviewBranches(page = 1): void {
     if (this.busy) { return; }
     this.busy = true;
+    this.workingAction = 'branches-review';
     this.error = '';
     this.confirmBranchControl.setValue('');
     this.api.reviewAmbiguousBranches(this.data.campaignId, page)
       .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-        next: review => { this.branchReview = review; this.busy = false; },
+        next: review => { this.branchReview = review; this.busy = false; this.workingAction = null; },
         error: error => this.onError(error),
       });
   }
 
   reviewPreviousContacts(): void {
     if (this.busy) { return; }
-    const pieces = this.sourceIdsControl.value.split(',').map(x => x.trim());
-    if (!pieces.length || pieces.length > 20 ||
-        pieces.some(x => !/^[1-9]\\d*$/.test(x))) {
-      this.error = 'Proporciona hasta 20 IDs positivos separados por comas.';
+    const parsed = parsePreviousCampaignIds(this.sourceIdsControl.value, this.data.campaignId);
+    this.previousError = parsed.error;
+    if (parsed.error) {
+      this.previousReview = null;
       return;
     }
-    const ids = pieces.map(x => Number(x));
-    if (ids.some(id => !Number.isSafeInteger(id) || id === this.data.campaignId)
-        || new Set(ids).size !== ids.length) {
-      this.error = 'Los orígenes deben ser distintos y anteriores a esta campaña.';
-      return;
-    }
-    this.sourceIds = ids;
+    this.sourceIds = parsed.ids;
     this.busy = true;
+    this.workingAction = 'previous-review';
     this.error = '';
     this.previousReview = null;
     this.confirmPreviousControl.setValue('');
-    this.api.reviewPreviousContacts(this.data.campaignId, ids)
+    this.api.reviewPreviousContacts(this.data.campaignId, parsed.ids)
       .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-        next: review => { this.previousReview = review; this.busy = false; },
+        next: review => {
+          this.previousReview = review;
+          this.busy = false;
+          this.workingAction = null;
+          this.previousError = '';
+        },
         error: error => this.onError(error),
       });
   }
@@ -116,6 +121,7 @@ export class MarketingCampaignV2PreparationDialogComponent {
     const review = this.branchReview;
     if (!review || !this.canApplyBranches) { return; }
     this.busy = true;
+    this.workingAction = 'branches-apply';
     this.error = '';
     this.api.applyAmbiguousBranches(this.data.campaignId, {
       expected_fingerprint: review.review_fingerprint,
@@ -124,6 +130,7 @@ export class MarketingCampaignV2PreparationDialogComponent {
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: result => {
         this.busy = false;
+        this.workingAction = null;
         this.changed = true;
         this.success = result.added + ' exclusiones auditadas. Revisa nuevamente el preflight.';
         this.branchReview = null;
@@ -138,7 +145,9 @@ export class MarketingCampaignV2PreparationDialogComponent {
     const review = this.previousReview;
     if (!review || !this.canApplyPrevious) { return; }
     this.busy = true;
+    this.workingAction = 'previous-apply';
     this.error = '';
+    this.previousError = '';
     this.api.applyPreviousContacts(this.data.campaignId, this.sourceIds, {
       expected_fingerprint: review.review_fingerprint,
       expected_count: review.new_exclusions,
@@ -146,6 +155,7 @@ export class MarketingCampaignV2PreparationDialogComponent {
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: result => {
         this.busy = false;
+        this.workingAction = null;
         this.changed = true;
         this.success = result.added + ' contactos anteriores excluidos; el preflight anterior ya no sirve.';
         this.branchReview = null;
@@ -157,7 +167,10 @@ export class MarketingCampaignV2PreparationDialogComponent {
   }
 
   private onError(error: HttpErrorResponse): void {
+    const message = String(error.error?.message || 'No se pudo completar la operación.');
+    this.previousError = this.workingAction?.startsWith('previous-') ? message : '';
+    this.error = this.workingAction?.startsWith('branches-') ? message : '';
     this.busy = false;
-    this.error = String(error.error?.message || 'No se pudo completar la operación.');
+    this.workingAction = null;
   }
 }

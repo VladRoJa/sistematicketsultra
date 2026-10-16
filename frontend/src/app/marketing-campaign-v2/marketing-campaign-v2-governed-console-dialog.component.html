@@ -2,7 +2,10 @@
 <mat-dialog-content class="console">
   <p><strong>{{ data.campaignName }}</strong></p>
   <p class="notice">Revisa a quién se enviaría, cuánto costaría y el límite disponible. Preparar y autorizar no envían mensajes. El envío real requiere una confirmación explícita. Puedes enviar un lote o recorrer los pendientes secuencialmente; cada lote mantiene los controles del servidor y nunca se reintenta automáticamente.</p>
-  <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy">Consultar estado</button>
+  <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy">
+    <mat-progress-spinner *ngIf="working === 'read'" mode="indeterminate" [diameter]="16" aria-label="Consultando estado"></mat-progress-spinner>
+    {{ working === 'read' ? 'Consultando estado…' : 'Consultar estado' }}
+  </button>
   <span *ngIf="working" role="status">{{ workingLabel }}…</span>
   <p *ngIf="error" role="alert" class="error">{{ error }}</p>
   <p *ngIf="notice" role="status">{{ notice }}</p>
@@ -16,7 +19,10 @@
         <mat-option *ngFor="let template of templates" [value]="template.id">{{ template.label }} · {{ template.template_name }}</mat-option>
       </mat-select>
     </mat-form-field>
-    <button mat-stroked-button type="button" (click)="runPreflight()" [disabled]="busy || hasApproval || !templateId.value">Revisar destinatarios y costo</button>
+    <button mat-stroked-button type="button" (click)="runPreflight()" [disabled]="busy || hasApproval || !templateId.value">
+      <mat-progress-spinner *ngIf="working === 'preflight'" mode="indeterminate" [diameter]="16" aria-label="Revisando destinatarios y costo"></mat-progress-spinner>
+      {{ working === 'preflight' ? 'Validando destinatarios y costo…' : 'Revisar destinatarios y costo' }}
+    </button>
     <ng-container *ngIf="preflight as plan">
       <div class="review-summary"><div><small>Preparación</small><strong>{{ preflightStatusLabel }}</strong></div><div><small>Destinatarios disponibles</small><strong>{{ plan.sendable_count }}</strong></div><div><small>Costo de envío</small><strong>{{ budgetStatusLabel }}</strong></div><div><small>Límite de envío</small><strong>{{ quotaStatusLabel }}</strong></div></div>
       <p class="hint">Contactos de la campaña: {{ plan.frozen_count }} · Excluidos por lista negra: {{ plan.suppressed.blacklist }} · Otras exclusiones: {{ plan.suppressed.campaign_exclusions }}</p>
@@ -41,7 +47,10 @@
         <mat-form-field appearance="outline"><mat-label>Escribe {{ approvalWord }}</mat-label>
           <input matInput [formControl]="approvalPhrase" autocomplete="off">
         </mat-form-field>
-        <button mat-flat-button color="primary" type="button" (click)="approve()" [disabled]="!canApprove">Aprobar destinatarios y reservar límite (no envía)</button>
+        <button mat-flat-button color="primary" type="button" (click)="approve()" [disabled]="!canApprove">
+          <mat-progress-spinner *ngIf="working === 'approve'" mode="indeterminate" [diameter]="16" aria-label="Reservando límite"></mat-progress-spinner>
+          {{ working === 'approve' ? 'Aprobando y reservando…' : 'Aprobar destinatarios y reservar límite (no envía)' }}
+        </button>
       </div>
     </ng-container>
   </section>
@@ -55,7 +64,10 @@
         <mat-form-field appearance="outline"><mat-label>Escribe {{ materializeWord }}</mat-label>
           <input matInput [formControl]="materializePhrase" autocomplete="off">
         </mat-form-field>
-        <button mat-stroked-button type="button" (click)="materialize()" [disabled]="!canMaterialize">Preparar lotes para revisión (no envía)</button>
+        <button mat-stroked-button type="button" (click)="materialize()" [disabled]="!canMaterialize">
+          <mat-progress-spinner *ngIf="working === 'materialize'" mode="indeterminate" [diameter]="16" aria-label="Preparando lotes"></mat-progress-spinner>
+          {{ working === 'materialize' ? 'Preparando lotes…' : 'Preparar lotes para revisión (no envía)' }}
+        </button>
       </div>
     </ng-container>
     <ng-template #noneApproved><p>Pendiente: primero revisa los destinatarios, el costo y el límite.</p></ng-template>
@@ -72,7 +84,10 @@
         <mat-form-field appearance="outline"><mat-label>Escribe {{ authorizationWord }}</mat-label>
           <input matInput [formControl]="authorizationPhrase" autocomplete="off">
         </mat-form-field>
-        <button mat-stroked-button type="button" (click)="authorize()" [disabled]="!canAuthorize">Confirmar autorización (no envía)</button>
+        <button mat-stroked-button type="button" (click)="authorize()" [disabled]="!canAuthorize">
+          <mat-progress-spinner *ngIf="working === 'authorize'" mode="indeterminate" [diameter]="16" aria-label="Autorizando"></mat-progress-spinner>
+          {{ working === 'authorize' ? 'Autorizando…' : 'Confirmar autorización (no envía)' }}
+        </button>
       </div>
     </ng-container>
     <ng-template #noneReviewed><p>Aún no hay lotes preparados para autorizar.</p></ng-template>
@@ -107,7 +122,8 @@
             <input matInput type="password" [formControl]="executionPassword" autocomplete="current-password" maxlength="256">
           </mat-form-field>
           <button mat-flat-button color="warn" type="button" (click)="executeOne()" [disabled]="!canExecute">
-            Enviar únicamente lote #{{ child.child_id }}
+            <mat-progress-spinner *ngIf="working === 'execute'" mode="indeterminate" [diameter]="16" aria-label="Enviando lote"></mat-progress-spinner>
+            {{ working === 'execute' ? 'Enviando lote…' : 'Enviar únicamente lote #' + child.child_id }}
           </button>
         </div>
       </div>
@@ -130,7 +146,8 @@
             <input matInput type="password" [formControl]="bulkPassword" [disabled]="busy" autocomplete="current-password" maxlength="256">
           </mat-form-field>
           <button mat-flat-button color="warn" type="button" (click)="executePendingSequentially()" [disabled]="!canBulkSend">
-            Enviar {{ bulkPendingIds.length }} lotes pendientes
+            <mat-progress-spinner *ngIf="working === 'bulk'" mode="indeterminate" [diameter]="16" aria-label="Enviando lotes pendientes"></mat-progress-spinner>
+            {{ working === 'bulk' ? 'Enviando lotes… ' + bulkAccepted + '/' + bulkTotal : 'Enviar ' + bulkPendingIds.length + ' lotes pendientes' }}
           </button>
         </div>
       </div>

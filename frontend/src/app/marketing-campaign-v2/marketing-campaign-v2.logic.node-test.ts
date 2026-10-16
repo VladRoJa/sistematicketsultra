@@ -1,5 +1,6 @@
 import { campaignV2BuildReadinessRows } from './marketing-campaign-v2-readiness.logic';
 import { pendingGovernedBatchIds } from './marketing-campaign-v2-bulk-dispatch.logic';
+import { parsePreviousCampaignIds } from './marketing-campaign-v2-preparation.logic';
 import type { CampaignV2GovernedMonitor, CampaignV2GovernedExecutionReviewReady } from './marketing-campaign-v2.models';
 import type { CampaignV2DispatchTemplate, CampaignV2ChannelBinding, CampaignV2QuotaPolicyRevision, CampaignV2BudgetRateRevision } from './marketing-campaign-v2.models';
 import { campaignV2IndicativeBudget } from './marketing-campaign-v2-budget.logic';
@@ -1679,7 +1680,8 @@ test('Bulk send explicit: one gesture, sequential per-child guarded requests, no
   const ui = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.ts'), 'utf8');
   const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.html'), 'utf8');
   assert.ok(html.includes('(click)="executePendingSequentially()"'));
-  assert.ok(html.includes('Enviar {{ bulkPendingIds.length }} lotes pendientes'));
+  assert.ok(html.includes("'Enviar ' + bulkPendingIds.length + ' lotes pendientes'"));
+  assert.ok(html.includes("working === 'bulk' ? 'Enviando lotes… ' + bulkAccepted + '/' + bulkTotal"));
   assert.ok(html.includes('Detener después del lote actual'));
   assert.ok(ui.includes('this.reviewReady!.execution!.execution_id'));
   assert.ok(ui.includes('this.bulkPassword.setValue(\'\')'));
@@ -1707,4 +1709,34 @@ test('Campaign V2: BI purpose does not hide iVentas creatives or override dispat
   assert.ok(html.includes('{{ creativePurposeNotice }}'));
   assert.ok(ui.includes('this.monitor?.quota.all_current === true'));
   assert.ok(ui.includes('this.executionPhrase.value === this.sendWord'));
+});
+
+
+test('Previous-contact preparation accepts actual numeric IDs and rejects invalid/future references', () => {
+  assert.deepEqual(parsePreviousCampaignIds('20, 21', 22), { ids: [20, 21], error: '' });
+  assert.deepEqual(parsePreviousCampaignIds(' 20 ,  21 ', 22), { ids: [20, 21], error: '' });
+  assert.ok(parsePreviousCampaignIds('20, 20', 22).error);
+  assert.ok(parsePreviousCampaignIds('20, 22', 22).error);
+  assert.ok(parsePreviousCampaignIds('20, 23', 22).error);
+  assert.ok(parsePreviousCampaignIds('', 22).error);
+  assert.ok(parsePreviousCampaignIds('abc, 21', 22).error);
+  assert.ok(parsePreviousCampaignIds('20;21', 22).error);
+  assert.ok(parsePreviousCampaignIds('9007199254740993', 22).error);
+});
+
+test('Campaign V2 preparation and governed approval show contextual pending feedback', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const component = fs.readFileSync(path.join(root, 'marketing-campaign-v2-preparation-dialog.component.ts'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-preparation-dialog.component.html'), 'utf8');
+  const governedHtml = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.html'), 'utf8');
+  assert.ok(component.includes('parsePreviousCampaignIds(this.sourceIdsControl.value'));
+  assert.ok(component.includes("this.workingAction = 'previous-review'"));
+  assert.ok(html.includes('role="alert">{{ previousError }}'));
+  for (const action of ['branches-review', 'branches-apply', 'previous-review', 'previous-apply']) {
+    assert.ok(html.includes("workingAction === '" + action + "'"));
+  }
+  for (const action of ['read', 'preflight', 'approve', 'materialize', 'authorize', 'execute', 'bulk']) {
+    assert.ok(governedHtml.includes("working === '" + action + "'"));
+  }
+  assert.equal((governedHtml.match(/mat-progress-spinner/g) || []).length >= 7, true);
 });
