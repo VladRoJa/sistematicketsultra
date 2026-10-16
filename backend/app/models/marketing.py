@@ -644,9 +644,13 @@ class MarketingCampaignV2DispatchApprovalORM(db.Model):
     )
     approved_at = db.Column(db.DateTime(timezone=True), nullable=False)
     expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    # Each fresh approval is a new immutable revision; the prior audit survives.
+    revision_no = db.Column(db.Integer, nullable=False, default=1, server_default="1")
 
     __table_args__ = (
-        db.UniqueConstraint("campaign_v2_id", name="uq_mkt_v2_approval_campaign"),
+        db.UniqueConstraint("campaign_v2_id", "revision_no",
+                            name="uq_mkt_v2_approval_campaign_revision"),
+        db.CheckConstraint("revision_no >= 1", name="ck_mkt_v2_approval_revision_positive"),
         db.CheckConstraint("recipient_count > 0", name="ck_mkt_v2_approval_recipients"),
         db.CheckConstraint("approved_estimated_mxn >= 0", name="ck_mkt_v2_approval_cost"),
         db.CheckConstraint(
