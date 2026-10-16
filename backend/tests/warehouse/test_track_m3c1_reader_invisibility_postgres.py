@@ -165,7 +165,7 @@ def test_pg_prefill_resolves_effective_version_with_same_public_shape(isolated_p
             out = planning.get_branch_prefill(
                 sucursal_canon=BRANCH, target_month=MONTH,
             )
-    assert out["m2_sin_circulaciones"] == 220.0
+    assert out["m2_sin_circulaciones"] == "220.00"
     assert out["track_label"] == "Synthetic Gym"
 
 
