@@ -83,6 +83,32 @@ async function setup(context, page, user, requests) {
       body = structured;
     } else if (pathname.endsWith('/integrations/google-ads/manual/publish')) {
       body = published;
+    } else if (pathname.endsWith('/integrations/google-ads/manual/correction-status')) {
+      const day = new URL(req.url()).searchParams.get('day');
+      body = {
+        business_date: day, customer_id: '2739125201',
+        state: 'RAW_ONLY_UNPUBLISHED', publications: [],
+        structured: { campaign_rows: 0, group_rows: 0,
+          campaign_sources: [], group_sources: [] },
+        raw_reports: [
+          { upload_id: 21654, report_type_key: 'google_ads_ad_group_daily',
+            status: 'ACTIVE', period_from: day, period_to: day,
+            source_deleted: false, manual_pair_upload_audit_count: 0,
+            pair_import_audit_count: 0, pair_publish_audit_count: 0 },
+          { upload_id: 21655, report_type_key: 'google_ads_campaign_daily',
+            status: 'ACTIVE', period_from: day, period_to: day,
+            source_deleted: false, manual_pair_upload_audit_count: 0,
+            pair_import_audit_count: 0, pair_publish_audit_count: 0 },
+          { upload_id: 99101, report_type_key: 'google_ads_campaign_daily',
+            status: 'ACTIVE', period_from: day, period_to: day,
+            source_deleted: false, manual_pair_upload_audit_count: 1,
+            pair_import_audit_count: 0, pair_publish_audit_count: 0 },
+          { upload_id: 99102, report_type_key: 'google_ads_ad_group_daily',
+            status: 'ACTIVE', period_from: day, period_to: day,
+            source_deleted: false, manual_pair_upload_audit_count: 1,
+            pair_import_audit_count: 0, pair_publish_audit_count: 0 },
+        ]
+      };
     } else if (pathname.includes('/integrations/google-ads/')) {
       body = { enabled: false, authorized: false, customer_id: '2739125201' };
     } else if (pathname.includes('/warehouse/catalog')) {
@@ -211,6 +237,31 @@ async function run(name, action) {
             await page.screenshot({
               path: path.join(EVIDENCE, 'warehouse-m6-' + size.name + '.png'), fullPage: true
             });
+          });
+          await run('Warehouse resumes audited RAW after page reload without reupload - ' + size.name, async () => {
+            const before = requests.length;
+            await page.goto(BASE + '/#/warehouse');
+            const selector = page.locator('#warehouse-report-type');
+            await selector.locator('option[value=google_ads_m6_paired]').waitFor({ state: 'attached' });
+            await selector.selectOption('google_ads_m6_paired');
+            await page.getByLabel('Fecha del corte').fill('2026-10-13');
+            await page.getByRole('button', { name: 'Consultar evidencias' }).click();
+            await page.getByRole('button', { name: 'Continuar con RAW existentes' }).waitFor();
+            await page.getByRole('button', { name: 'Continuar con RAW existentes' }).click();
+            await page.getByText('RAW existentes recuperados · 2026-10-13').waitFor();
+            await page.getByText(/Confirmo ingerir campañas y grupos/).locator('..').locator('input').check();
+            await page.getByRole('button', { name: 'Ingestar ambos reportes (sin publicar)' }).click();
+            await page.getByText('Resultado de ingesta · STRUCTURED_PAIR_STAGED').waitFor();
+            await page.getByText(/Autorizo publicar este día como versión canónica/).locator('..').locator('input').check();
+            await page.getByRole('button', { name: 'Publicar este día en Funnel' }).click();
+            await page.getByRole('heading', { name: 'Día canónico publicado' }).waitFor();
+            const after = requests.slice(before);
+            assert(!after.some(r => r.pathname.endsWith('/manual/confirm')),
+              'Resuming existing RAW incorrectly confirmed another upload');
+            assert(after.filter(r => r.pathname.endsWith('/manual/ingest')).length === 1,
+              'Resumed pair failed to submit one explicit ingestion');
+            assert(after.filter(r => r.pathname.endsWith('/manual/publish')).length === 1,
+              'Resumed pair failed to submit one explicit publication');
           });
         }
         if (user.username !== 'ADMICORP') {
