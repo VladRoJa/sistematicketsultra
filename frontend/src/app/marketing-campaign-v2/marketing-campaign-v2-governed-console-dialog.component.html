@@ -98,6 +98,22 @@
     <ng-container *ngIf="monitor as monitorData">
       <p><strong>{{ statusLabel(monitorData.status) }}</strong> · Qué sigue: {{ nextActionLabel(monitorData.next_manual_action) }}</p>
       <p>Lotes creados: {{ monitorData.children_count }} · Revisión interna de límites: {{ monitorData.quota.all_current ? 'Vigente' : 'No vigente' }}</p>
+      <div class="confirmation" *ngIf="monitorData.status === 'APPROVAL_EXPIRED'">
+        <h4>Reautorizar despacho vencido · No envía mensajes</h4>
+        <p>La autorización anterior caducó. Solo es posible emitir una nueva aprobación y reserva
+          cuando todos los lotes siguen READY o HELD, no hay intentos de envío y el costo, los
+          destinatarios y las cuotas pueden validarse nuevamente. Los lotes HELD permanecen retenidos.
+          La autorización anterior conserva su auditoría.</p>
+        <mat-form-field appearance="outline">
+          <mat-label>Escribe {{ reauthorizeWord }}</mat-label>
+          <input matInput [formControl]="reauthorizePhrase" autocomplete="off">
+        </mat-form-field>
+        <button mat-stroked-button type="button" (click)="reauthorize()" [disabled]="!canReauthorize">
+          <mat-progress-spinner *ngIf="working === 'reauthorize'" mode="indeterminate" [diameter]="16"
+            aria-label="Reautorizando despacho"></mat-progress-spinner>
+          {{ working === 'reauthorize' ? 'Reautorizando…' : 'Reautorizar sin enviar' }}
+        </button>
+      </div>
       <div class="table-scroll"><table>
         <thead><tr><th>Lote</th><th>Sucursal / canal</th><th>Contactos</th><th>Estado</th><th>Observación</th></tr></thead>
         <tbody>
