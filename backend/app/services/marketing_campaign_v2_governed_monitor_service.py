@@ -86,7 +86,7 @@ def read_governed_dispatch_monitor(*, campaign_id: int, session: Any | None = No
 
     approval = active.query(MarketingCampaignV2DispatchApprovalORM).filter(
         MarketingCampaignV2DispatchApprovalORM.campaign_v2_id == campaign_id,
-    ).one_or_none()
+    ).order_by(MarketingCampaignV2DispatchApprovalORM.revision_no.desc()).first()
     execution = None
     reservations = []
     if approval is not None:
