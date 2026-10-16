@@ -295,3 +295,84 @@ def test_pg_manual_close_claim_excludes_reserved_pending_and_running(isolated_pg
     db.session.expire_all()
     assert db.session.get(TrackDailyVersionORM, bad_pending.id).status == "pending"
     assert db.session.get(TrackDailyVersionORM, bad_running.id).status == "running"
+
+
+def test_pg_historical_manual_preview_replace_twice_keeps_mode_identity(isolated_pg):
+    """Real PostgreSQL event roundtrip: manual request resolves official close.
+
+    First reproduces previous mismatch: evaluate candidate has real row mode,
+    but deletion of old events is keyed by requested generation mode. Correct
+    behavior retains only one generation's events after two replacements.
+    """
+    from app.models.warehouse import TrackAlertEventORM
+    from app.track_alerts.services.track_alert_event_service import (
+        generate_track_alert_events,
+    )
+
+    TrackAlertEventORM.__table__.create(bind=db.engine)
+
+    # Six current close branches are required for top/bottom alert rankings.
+    # Candidate-only and candidate-with-current rows already exist in this
+    # fixture, with inflated amounts; none may be used in public alerts.
+    for index in range(1, 6):
+        branch = f"SYNTHETIC_GYM_{index}"
+        db.session.execute(sa.text(
+            "INSERT INTO track_branch_catalog (sucursal_canon) VALUES (:branch)"
+        ), {"branch": branch})
+        db.session.add(TrackDailyMartORM(
+            track_date=DAY,
+            target_month=MONTH,
+            generation_mode="official_closed_day",
+            track_daily_version_id=isolated_pg["close"],
+            sucursal_canon=branch,
+            m2_sin_circulaciones=100,
+            ingreso_real_base_mtd=200 + index * 10,
+            ingreso_real_total_mtd=200 + index * 10,
+            clientes_nuevos_real_mtd=4 + index,
+            meta_faycgo_mes=1000,
+            venta_tienda_real_mtd=15,
+        ))
+    db.session.commit()
+
+    requested_mode = "manual_preview"
+    for iteration in (1, 2):
+        result = generate_track_alert_events(
+            track_date=DAY,
+            generation_mode=requested_mode,
+            replace_existing=True,
+        )
+        assert result["generation_mode"] == requested_mode
+        assert result["created_events"] == 12
+        db.session.expire_all()
+
+        stored = (
+            db.session.query(TrackAlertEventORM)
+            .filter(TrackAlertEventORM.track_date == DAY)
+            .order_by(TrackAlertEventORM.id)
+            .all()
+        )
+        assert len(stored) == 12, f"replace_existing failed on iteration {iteration}"
+        assert len({(
+            event.sucursal_canon, event.alert_code, event.ranking_position
+        ) for event in stored}) == 12
+        assert all(
+            event.metadata_json["generation_mode"] == requested_mode
+            and event.metadata_json["source_generation_mode"] == "official_closed_day"
+            for event in stored
+        )
+        assert all(
+            (event.metric_value or 0) < 1000 for event in stored
+        ), "Candidate values leaked into stored public alert events"
+
+    # The original real source mode must remain independently identifiable.
+    # An explicitly official request is a distinct identity, not a replacement
+    # of alerts requested as manual_preview.
+    official = generate_track_alert_events(
+        track_date=DAY, generation_mode="official_closed_day",
+        replace_existing=True,
+    )
+    assert official["created_events"] == 12
+    groups = {"manual_preview": 0, "official_closed_day": 0}
+    for event in db.session.query(TrackAlertEventORM).filter_by(track_date=DAY):
+        groups[event.metadata_json["generation_mode"]] += 1
+    assert groups == {"manual_preview": 12, "official_closed_day": 12}
