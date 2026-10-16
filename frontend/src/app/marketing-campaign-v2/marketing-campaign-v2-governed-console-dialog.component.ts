@@ -87,6 +87,12 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
 
   get busy(): boolean { return this.working !== null; }
   get sentLotCount(): number { return this.monitor?.children_by_status['SUBMITTED'] ?? 0; }
+  get actionableLotCount(): number { return (this.monitor?.children_count ?? 0) - this.heldLotCount; }
+  get setupInitiallyOpen(): boolean { return !this.reviewReady; }
+  get setupHelpText(): string {
+    return this.reviewReady ? 'Consultar detalles y evidencias' : 'Revisar antes de autorizar';
+  }
+  get expandSingleSend(): boolean { return this.bulkPendingIds.length === 1; }
   get pendingLotCount(): number { return this.monitor?.children_by_status['READY'] ?? 0; }
   get heldLotCount(): number { return this.monitor?.children_by_status['HELD'] ?? 0; }
   get acceptedContactCount(): number {
