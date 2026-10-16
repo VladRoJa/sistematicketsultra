@@ -101,7 +101,9 @@ def _verified_started_suffix(*, session: Any, approval: Any, plan: Any,
             not accepted[0].submit_started_at or
             _database_date(accepted[0].submit_started_at) >
             _database_date(approval.expires_at) or
-            any(not c.submit_started_at or c.submitted_by_user_id is None for c in accepted)):
+            any(not c.submit_started_at or c.submitted_by_user_id is None or
+                not c.provider_campaign_id or c.submitted_at is None
+                for c in accepted)):
         raise GovernedDispatchConflict("Historial de ejecución anterior incompatible.")
     pending = {c.sucursal_canon for c in ready if c.status == "READY"}
     return tuple(b for b in plan.batches if b.sucursal_canon in pending)
