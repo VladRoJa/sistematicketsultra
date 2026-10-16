@@ -644,6 +644,7 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   private clearConfirmations(): void {
     this.approvalPhrase.setValue('');
     this.materializePhrase.setValue('');
+    this.reauthorizePhrase.setValue('');
     this.authorizationPhrase.setValue('');
     this.executionPhrase.setValue('');
     this.executionPassword.setValue('');
