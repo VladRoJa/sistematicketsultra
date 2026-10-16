@@ -1794,7 +1794,7 @@ test('Campaign V2 UI: envio compacto, una zona vertical de scroll y seguridad vi
   const ts = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.ts'), 'utf8');
   assert.ok(html.includes('class="dispatch-overview"'));
   assert.ok(html.includes('class="setup-history"'));
-  assert.ok(html.includes('[attr.open]="reviewReady ? null :'));
+  assert.ok(html.includes('[open]="setupInitiallyOpen"'));
   assert.ok(html.includes('class="manifest-details"'));
   assert.ok(html.includes('class="batch-details"'));
   assert.ok(html.includes('class="send-panel bulk-execution"'));
