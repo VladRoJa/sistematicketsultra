@@ -20,6 +20,7 @@
     <ng-container *ngIf="preflight as plan">
       <div class="review-summary"><div><small>Preparación</small><strong>{{ preflightStatusLabel }}</strong></div><div><small>Destinatarios disponibles</small><strong>{{ plan.sendable_count }}</strong></div><div><small>Costo de envío</small><strong>{{ budgetStatusLabel }}</strong></div><div><small>Límite de envío</small><strong>{{ quotaStatusLabel }}</strong></div></div>
       <p class="hint">Contactos de la campaña: {{ plan.frozen_count }} · Excluidos por lista negra: {{ plan.suppressed.blacklist }} · Otras exclusiones: {{ plan.suppressed.campaign_exclusions }}</p>
+      <p *ngIf="creativePurposeNotice" class="blocking-note" role="status">{{ creativePurposeNotice }}</p>
       <p *ngIf="preparationIssue" class="blocking-note" role="status">{{ preparationIssue }}</p>
       <p *ngIf="plan.budget_usd as cost" class="hint">Tarifa automática: <strong>US$ {{ cost.unit_cost_usd }}</strong> por mensaje entregado. Máximo si todos reciben: <strong>US$ {{ cost.maximum_estimated_usd }}</strong>. iVentas confirma el cobro después de entregar.</p>
       <details class="technical"><summary>Ver referencias técnicas de esta revisión</summary>

@@ -166,11 +166,12 @@ def test_template_catalog_normalizes_mapping_and_filters_by_purpose(session):
             session=session,
         )
     ) == 1
-    assert service.list_templates(
+    # Campaign purpose is not a technical template compatibility gate.
+    assert [x["id"] for x in service.list_templates(
         provider="IVENTAS",
         purpose="NEW_SALE",
         session=session,
-    ) == []
+    )] == [saved["id"]]
 
 
 def test_template_catalog_normalizes_optional_file_url(session):
@@ -439,3 +440,47 @@ def test_admin_cannot_replace_default_with_pending_children(session):
             require_immutable_history=True, session=session,
         )
     assert service.resolve_dispatch_channel_binding(sucursal_id=4, session=session).provider_channel_id == "channel-current"
+
+
+def test_historical_new_sale_template_can_serve_active_members_without_mutation(session):
+    channel = _active_channel(session)
+    saved = service.save_template(
+        provider="IVENTAS", template_name="historic-template",
+        label="Invita y gana", is_active=True, purposes=["NEW_SALE"],
+        variables={}, compatible_channel_ids=["channel-current"],
+        actor_user_id=7, session=session, now=NOW,
+        require_explicit_channels=True,
+    )
+    _campaign_child(session, binding_id=channel["id"], template_id=saved["id"])
+    selected = service.resolve_dispatch_template(
+        template_id=saved["id"], purpose="ACTIVE_MEMBERS", session=session,
+    )
+    assert selected.template_name == "historic-template"
+    assert selected.purposes_json == ["NEW_SALE"]
+    assert service.template_allows_channel(selected, "channel-current")
+    assert not service.template_allows_channel(selected, "wrong-channel")
+    # Historical children must still protect the original template contract.
+    with pytest.raises(service.MarketingCampaignV2DispatchConfigConflictError, match="lotes auditados"):
+        service.save_template(
+            template_id=saved["id"], provider="IVENTAS",
+            template_name="historic-template", label="Invita y gana",
+            is_active=True, purposes=["NEW_SALE", "ACTIVE_MEMBERS"],
+            variables={}, compatible_channel_ids=["channel-current"],
+            actor_user_id=7, session=session, now=NOW,
+            require_explicit_channels=True,
+        )
+
+
+def test_decoupled_template_selection_still_rejects_invalid_purpose(session):
+    saved = service.save_template(
+        provider="IVENTAS", template_name="new_sale_only",
+        label="Nueva venta", is_active=True, purposes=["NEW_SALE"],
+        variables={}, compatible_channel_ids=[],
+        actor_user_id=7, session=session, now=NOW,
+    )
+    with pytest.raises(service.MarketingCampaignV2DispatchConfigValidationError, match="purpose"):
+        service.resolve_dispatch_template(
+            template_id=saved["id"], purpose="NONEXISTENT", session=session,
+        )
+    with pytest.raises(service.MarketingCampaignV2DispatchConfigValidationError, match="purpose"):
+        service.list_templates(purpose="NONEXISTENT", session=session)

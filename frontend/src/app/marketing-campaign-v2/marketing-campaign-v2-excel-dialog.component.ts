@@ -55,10 +55,9 @@ export class MarketingCampaignV2ExcelDialogComponent implements OnInit {
   }
 
   get availableTemplates(): CampaignV2DispatchTemplate[] {
-    return this.templates.filter(template =>
-      template.is_active &&
-      (!template.purposes.length || template.purposes.includes(this.purpose.value)),
-    );
+    // Purpose classifies the campaign for BI. Active iVentas creatives remain
+    // selectable across purposes; backend validates channels and variables.
+    return this.templates.filter(template => template.is_active);
   }
 
   get canPreview(): boolean {
