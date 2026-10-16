@@ -13,7 +13,7 @@
 
   <section class="step">
     <h3>1 · Revisar destinatarios, costo y límite</h3>
-    <mat-form-field appearance="outline">
+    <mat-form-field appearance="fill">
       <mat-label>Plantilla iVentas</mat-label>
       <mat-select [formControl]="templateId" [disabled]="busy || hasApproval">
         <mat-option *ngFor="let template of templates" [value]="template.id">{{ template.label }} · {{ template.template_name }}</mat-option>
@@ -38,13 +38,13 @@
         <strong>{{ batch.sucursal_canon }}</strong> · {{ batch.recipient_count }} · {{ batch.provider_channel_id || 'Sin canal' }}
         <small *ngIf="batch.blocked_reasons.length">{{ batch.blocked_reasons.join(', ') }}</small>
         <mat-checkbox [formControl]="holdSelected[batch.sucursal_canon]">Dejar este lote en espera (no enviar)</mat-checkbox>
-        <mat-form-field appearance="outline" *ngIf="holdSelected[batch.sucursal_canon].value">
+        <mat-form-field appearance="fill" *ngIf="holdSelected[batch.sucursal_canon].value">
           <mat-label>Motivo o comprobante para dejarlo en espera</mat-label>
           <input matInput maxlength="255" [formControl]="holdSource[batch.sucursal_canon]">
         </mat-form-field>
       </div>
       <div class="confirmation" *ngIf="isSelectionWithinCapacity && plan.ready && plan.budget_usd?.status === 'COMPLETE'">
-        <mat-form-field appearance="outline"><mat-label>Escribe {{ approvalWord }}</mat-label>
+        <mat-form-field appearance="fill"><mat-label>Escribe {{ approvalWord }}</mat-label>
           <input matInput [formControl]="approvalPhrase" autocomplete="off">
         </mat-form-field>
         <button mat-flat-button color="primary" type="button" (click)="approve()" [disabled]="!canApprove">
@@ -61,7 +61,7 @@
       <p>Reserva #{{ approval.approval_id }} · {{ approval.status }} · {{ approval.approved_recipients }} destinatarios
         · Máximo estimado: {{ approval.currency === 'USD' ? 'US$ ' + approval.approved_estimated_usd : 'MXN ' + approval.approved_estimated_mxn }} · Expira {{ approval.expires_at }}</p>
       <div class="confirmation">
-        <mat-form-field appearance="outline"><mat-label>Escribe {{ materializeWord }}</mat-label>
+        <mat-form-field appearance="fill"><mat-label>Escribe {{ materializeWord }}</mat-label>
           <input matInput [formControl]="materializePhrase" autocomplete="off">
         </mat-form-field>
         <button mat-stroked-button type="button" (click)="materialize()" [disabled]="!canMaterialize">
@@ -81,7 +81,7 @@
       <p class="manifest" *ngFor="let batch of review.manifest.batches">{{ batch.sucursal_canon }} · {{ statusLabel(batch.planned_status) }} · {{ batch.recipients }} contacto(s)</p>
       <p *ngIf="review.execution">Autorización #{{ review.execution.execution_id }}: {{ statusLabel(review.execution.status) }}.</p>
       <div class="confirmation" *ngIf="!review.execution">
-        <mat-form-field appearance="outline"><mat-label>Escribe {{ authorizationWord }}</mat-label>
+        <mat-form-field appearance="fill"><mat-label>Escribe {{ authorizationWord }}</mat-label>
           <input matInput [formControl]="authorizationPhrase" autocomplete="off">
         </mat-form-field>
         <button mat-stroked-button type="button" (click)="authorize()" [disabled]="!canAuthorize">
@@ -111,7 +111,7 @@
           cuando todos los lotes siguen READY o HELD, no hay intentos de envío y el costo, los
           destinatarios y las cuotas pueden validarse nuevamente. Los lotes HELD permanecen retenidos.
           La autorización anterior conserva su auditoría.</p>
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="fill">
           <mat-label>Escribe {{ reauthorizeWord }}</mat-label>
           <input matInput [formControl]="reauthorizePhrase" autocomplete="off">
         </mat-form-field>
@@ -138,10 +138,10 @@
         <p>#{{ child.child_id }} · {{ child.sucursal_canon }} · {{ child.recipient_count }} destinatarios. Si el resultado es incierto, NO vuelvas a enviar: primero comprueba si iVentas lo aceptó.</p>
         <mat-checkbox [formControl]="executionCheckbox">Revisé los destinatarios, plantilla, canal, costo, límite y autorización. Confirmo el envío real de este único lote.</mat-checkbox>
         <div class="confirmation">
-          <mat-form-field appearance="outline"><mat-label>Escribe {{ sendWord }}</mat-label>
+          <mat-form-field appearance="fill"><mat-label>Escribe {{ sendWord }}</mat-label>
             <input matInput [formControl]="executionPhrase" autocomplete="off">
           </mat-form-field>
-          <mat-form-field appearance="outline"><mat-label>Contraseña de Suite Ultra</mat-label>
+          <mat-form-field appearance="fill"><mat-label>Contraseña de Suite Ultra</mat-label>
             <input matInput type="password" [formControl]="executionPassword" autocomplete="current-password" maxlength="256">
           </mat-form-field>
           <button mat-flat-button color="warn" type="button" (click)="executeOne()" [disabled]="!canExecute">
@@ -161,11 +161,11 @@
           Confirmo el envío real secuencial de todos ellos.
         </mat-checkbox>
         <div class="confirmation">
-          <mat-form-field appearance="outline">
+          <mat-form-field appearance="fill">
             <mat-label>Escribe {{ bulkWord }}</mat-label>
             <input matInput [formControl]="bulkPhrase" [disabled]="busy" autocomplete="off">
           </mat-form-field>
-          <mat-form-field appearance="outline">
+          <mat-form-field appearance="fill">
             <mat-label>Contraseña de Suite Ultra (solo una vez)</mat-label>
             <input matInput type="password" [formControl]="bulkPassword" [disabled]="busy" autocomplete="current-password" maxlength="256">
           </mat-form-field>

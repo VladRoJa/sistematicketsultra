@@ -1,3 +1,4 @@
+@import './marketing-campaign-v2-form-fields.css';
 .qa {min-width:min(690px,84vw);}
 .intro,.footnote {font-size:13px;line-height:1.55;color:#475569;}
 .qa-fields {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px;margin:14px 0;}
