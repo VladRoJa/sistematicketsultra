@@ -1,0 +1,67 @@
+name: KPI Desempeno M3-A Noncanonical Staging
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/warehouse/services/kpi_desempeno_staging_service.py'
+      - 'backend/tests/warehouse/test_kpi_desempeno_staging_m3a_postgres.py'
+      - 'backend/app/warehouse/services/kpi_desempeno_repository.py'
+      - 'backend/app/warehouse/services/kpi_desempeno_semantic_diff.py'
+      - 'backend/app/warehouse/services/kpi_desempeno_parser.py'
+      - '.github/workflows/kpi-desempeno-staging-m3a.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-postgresql16:
+    name: Synthetic PostgreSQL 16 - noncanonical staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: kpi_m3a_ci
+          POSTGRES_PASSWORD: synthetic-m3a-password
+          POSTGRES_DB: kpi_m3a_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kpi_m3a_ci -d kpi_m3a_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+      SECRET_KEY: synthetic-only-m3a
+      JWT_SECRET_KEY: synthetic-only-m3a-jwt
+      SQLALCHEMY_DATABASE_URI: 'sqlite:///:memory:'
+      M3A_TEST_POSTGRES_URL: 'postgresql://kpi_m3a_ci:synthetic-m3a-password@127.0.0.1:5432/kpi_m3a_ci'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend dependencies and pytest
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Compile M3-A and M1 code
+        run: |
+          python -m py_compile \
+            app/warehouse/services/kpi_desempeno_staging_service.py \
+            tests/warehouse/test_kpi_desempeno_staging_m3a_postgres.py \
+            app/warehouse/services/kpi_desempeno_semantic_diff.py
+      - name: Synthetic PostgreSQL + M1 semantic regression
+        run: |
+          python -m pytest -q --tb=short -o addopts= \
+            tests/warehouse/test_kpi_desempeno_staging_m3a_postgres.py \
+            tests/warehouse/test_kpi_desempeno_semantic_diff.py
