@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import date
 from hashlib import sha256
+import os
 import re
 
 import sqlalchemy as sa
@@ -15,6 +16,7 @@ from flask import current_app
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from app.extensions import db
+from app.models.warehouse import WarehouseAuditLogORM
 from app.warehouse.services.google_ads_m6_manual_preview_service import (
     GoogleAdsM6ManualPreviewError, preview_manual_pair,
 )
@@ -93,6 +95,123 @@ def _existing_raw_documents(conn, day: date) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+
+RECOVERY_ENV = "GOOGLE_ADS_M6_LEGACY_RECOVERY_UPLOAD_IDS"
+RECOVERY_AUDIT = "GOOGLE_ADS_M6_RAW_SUPERSEDED"
+
+
+def _legacy_recovery_context(conn, *, day: date, actor_id: int,
+                             existing: list[dict], hashes: dict) -> dict | None:
+    """A deliberately narrow, opt-in recovery of TWO misclassified RAWs.
+
+    The configuration lists the immutable Warehouse IDs explicitly.  Never
+    accept arbitrary archive status, changed metrics, or an already published
+    day as grounds for overwriting its evidence.
+    """
+    configured = os.getenv(RECOVERY_ENV, "")
+    if not re.fullmatch(r"[1-9][0-9]*,[1-9][0-9]*", configured):
+        return None
+    ids = sorted(int(v) for v in configured.split(","))
+    if ids[0] == ids[1]:
+        return None
+
+    # Allow correctly staged new files as well, so a partial RAW stage can
+    # safely resume and a completed stage is idempotent while configured.
+    conflicting = [
+        row for row in existing
+        if (row.get("report_type_key") not in hashes
+            or row.get("file_hash_sha256") != hashes.get(row.get("report_type_key"))
+            or row.get("date_from") != day or row.get("date_to") != day)
+    ]
+    if (len(conflicting) != 2
+            or sorted(row.get("id") for row in conflicting) != ids
+            or {row.get("report_type_key") for row in conflicting} != set(REPORT_TYPES)
+            or len({row.get("file_hash_sha256") for row in conflicting}) != 1
+            or not conflicting[0].get("file_hash_sha256")
+            or any(row.get("date_from") != day or row.get("date_to") != day
+                   for row in conflicting)):
+        return None
+    old_hash = conflicting[0]["file_hash_sha256"]
+    # An ordinary same-hash reupload is not evidence of the known error:
+    # the two legacy report types must share ONE wrong group-report file.
+    if old_hash in hashes.values():
+        return None
+
+    evidence = conn.execute(sa.text("""
+        SELECT u.id, rt.key AS kind, u.status, u.cutoff_date,
+               u.uploaded_by_user_id, u.source_file_deleted_at,
+               a.performed_by_user_id AS audited_by,
+               a.details->>'upload_origin' AS origin
+        FROM warehouse_uploads u
+        JOIN warehouse_report_types rt ON rt.id = u.report_type_id
+        JOIN warehouse_audit_logs a
+          ON a.upload_id = u.id AND a.action = 'UPLOAD'
+        WHERE u.id IN (:first, :second)
+        ORDER BY u.id
+    """), {"first": ids[0], "second": ids[1]}).mappings().all()
+    if (len(evidence) != 2
+            or [row["id"] for row in evidence] != ids
+            or {row["kind"] for row in evidence} != set(REPORT_TYPES)
+            or any(row["status"] != "ACTIVE"
+                   or row["cutoff_date"] is not None
+                   or row["source_file_deleted_at"] is not None
+                   or row["uploaded_by_user_id"] != actor_id
+                   or row["audited_by"] != actor_id
+                   or row["origin"] != "manual_route"
+                   for row in evidence)):
+        return None
+
+    # Neither structured source table nor publication history may have a
+    # record for this date (regardless of customer or upload source).
+    counts = conn.execute(sa.text("""
+        SELECT
+          (SELECT COUNT(*) FROM google_ads_daily_metrics
+           WHERE report_date = :day) AS campaigns,
+          (SELECT COUNT(*) FROM google_ads_ad_group_daily_metrics
+           WHERE report_date = :day) AS groups,
+          (SELECT COUNT(*) FROM google_ads_m6_daily_publications
+           WHERE business_date = :day) AS publications
+    """), {"day": day}).mappings().one()
+    if any(counts[k] for k in ("campaigns", "groups", "publications")):
+        return None
+    return {"prior_ids": ids, "prior_sha256": old_hash}
+
+
+def _audit_legacy_recovery(conn, *, actor_id: int, day: date,
+                           recovery: dict, outputs: dict, hashes: dict) -> None:
+    """Only after both new RAWs succeeded; preserve original rows/files."""
+    old_ids = recovery["prior_ids"]
+    details = {
+        "business_date": day.isoformat(),
+        "reason": "MISCLASSIFIED_DUPLICATE_GROUP_REPORT",
+        "prior_upload_ids": old_ids,
+        "prior_sha256": recovery["prior_sha256"],
+        "new_campaign_upload_id": outputs[REPORT_TYPES[0]]["upload_id"],
+        "new_group_upload_id": outputs[REPORT_TYPES[1]]["upload_id"],
+        "new_campaign_sha256": hashes[REPORT_TYPES[0]],
+        "new_group_sha256": hashes[REPORT_TYPES[1]],
+        "publication": "NOT_AUTHORIZED",
+    }
+    prior = conn.execute(sa.text("""
+        SELECT upload_id, performed_by_user_id, details
+        FROM warehouse_audit_logs
+        WHERE action = :action AND upload_id IN (:first, :second)
+    """), {"action": RECOVERY_AUDIT,
+           "first": old_ids[0], "second": old_ids[1]}).mappings().all()
+    if prior:
+        if (len(prior) != 2
+                or {row["upload_id"] for row in prior} != set(old_ids)
+                or any(row["performed_by_user_id"] != actor_id
+                       or row["details"] != details for row in prior)):
+            raise GoogleAdsM6ManualConfirmError("LEGACY_RECOVERY_AUDIT_CONFLICT")
+        return
+    for old_id in old_ids:
+        conn.execute(WarehouseAuditLogORM.__table__.insert().values(
+            upload_id=old_id, action=RECOVERY_AUDIT,
+            performed_by_user_id=actor_id, details=details,
+        ))
+
+
 def confirm_google_ads_m6_manual_pair(
     *, actor_id: int, ticket: str,
     campaign_bytes: bytes, group_bytes: bytes,
@@ -139,11 +258,19 @@ def confirm_google_ads_m6_manual_pair(
         """), {"day_ordinal": day.toordinal()})
         existing = (_existing_raw_documents(conn, day) if existing_lookup is None
                     else existing_lookup(day))
-        for row in existing:
-            expected = hashes.get(row["report_type_key"])
-            if (expected is None or row["file_hash_sha256"] != expected
-                    or row.get("date_from") != day
-                    or row.get("date_to") != day):
+        conflicting = [
+            row for row in existing
+            if (hashes.get(row.get("report_type_key"))
+                != row.get("file_hash_sha256")
+                or row.get("date_from") != day or row.get("date_to") != day)
+        ]
+        recovery = None
+        if conflicting:
+            recovery = _legacy_recovery_context(
+                conn, day=day, actor_id=actor_id,
+                existing=existing, hashes=hashes,
+            )
+            if recovery is None:
                 raise GoogleAdsM6ManualConfirmError("EXISTING_PERIOD_CONFLICT")
         for kind in REPORT_TYPES:
             try:
@@ -160,6 +287,10 @@ def confirm_google_ads_m6_manual_pair(
                         "manual_pair_campaign_sha256": hashes[REPORT_TYPES[0]],
                         "manual_pair_group_sha256": hashes[REPORT_TYPES[1]],
                         "publication": "NOT_AUTHORIZED",
+                        **({
+                            "legacy_recovery_prior_upload_ids": recovery["prior_ids"],
+                            "legacy_recovery_prior_sha256": recovery["prior_sha256"],
+                        } if recovery else {}),
                     },
                 )
                 if (not isinstance(saved, dict)
@@ -188,6 +319,11 @@ def confirm_google_ads_m6_manual_pair(
                 "file_hash_sha256": saved["file_hash_sha256"],
                 "reused_existing": saved["upload_status"] == "reused_existing",
             }
+        if recovery is not None:
+            _audit_legacy_recovery(
+                conn, actor_id=actor_id, day=day, recovery=recovery,
+                outputs=outputs, hashes=hashes,
+            )
 
     return {
         "status": "RAW_PAIR_STAGED",
