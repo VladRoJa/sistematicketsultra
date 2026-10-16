@@ -67,6 +67,13 @@ def real_warehouse(tmp_path, monkeypatch):
         sa.Column("rol", sa.Text, nullable=False),
     )
     sa.Table("track_daily_versions", schema, sa.Column("id", sa.Integer, primary_key=True))
+    # Minimal isolation-only tables for the fail-closed legacy recovery check.
+    sa.Table("google_ads_daily_metrics", schema,
+             sa.Column("report_date", sa.Date, nullable=False))
+    sa.Table("google_ads_ad_group_daily_metrics", schema,
+             sa.Column("report_date", sa.Date, nullable=False))
+    sa.Table("google_ads_m6_daily_publications", schema,
+             sa.Column("business_date", sa.Date, nullable=False))
     tables = [
         WarehouseSourceORM, WarehouseFamilyORM, WarehouseOperationalRoleORM,
         WarehouseReportTypeORM, WarehouseUploadORM, WarehouseOperatorORM,
@@ -256,3 +263,141 @@ def test_real_partial_raw_then_safe_resume(real_warehouse, monkeypatch):
     raw, audits = _snapshot(engine)
     assert len(raw) == len(audits) == 2
     assert physical.read_bytes() == files[0]
+
+
+def _seed_legacy_misclassified_pair(app, engine, day=DAY):
+    """Synthetic duplicate group XLSX stored once under each report type."""
+    from openpyxl import Workbook
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["Día", "Estado del grupo de anuncios", "Grupo de anuncios", "Campaña"])
+    sheet.append([day.isoformat(), "Habilitado", "Sucursal sintética", "Campaña sintética"])
+    buffer = BytesIO()
+    workbook.save(buffer)
+    workbook.close()
+    old_bytes = buffer.getvalue()
+    with app.app_context():
+        for kind in confirm_svc.REPORT_TYPES:
+            saved = create_warehouse_document_upload(
+                report_type_key=kind,
+                original_filename="old_group_report.xlsx",
+                content_type=confirm_svc.XLSX_MIME,
+                file_bytes=old_bytes,
+                uploaded_by_user_id=47,
+                cutoff_date=None, date_from=day, date_to=day,
+                audit_details={"upload_origin": "manual_route"},
+            )
+            assert saved["upload_status"] == "created"
+    raw, audits = _snapshot(engine)
+    assert len(raw) == len(audits) == 2
+    assert raw[0]["file_hash_sha256"] == raw[1]["file_hash_sha256"]
+    return sorted(row["id"] for row in raw), raw, audits
+
+
+def test_legacy_recovery_requires_explicit_ids_then_audits_both_originals(
+        real_warehouse, monkeypatch):
+    client, token, other, engine, storage_root = real_warehouse
+    files = daily_xlsx()
+    signed = preview_post(client, token, files=files).json["raw_confirm_ticket"]
+    ids, originals, original_audits = _seed_legacy_misclassified_pair(
+        client.application, engine,
+    )
+
+    denied = _confirm(client, token, signed, files)
+    assert denied.status_code == 409
+    assert denied.json["code"] == "EXISTING_PERIOD_CONFLICT"
+    assert _snapshot(engine) == (originals, original_audits)
+
+    monkeypatch.setenv(confirm_svc.RECOVERY_ENV, "999,1000")
+    assert _confirm(client, token, signed, files).status_code == 409
+    monkeypatch.setenv(confirm_svc.RECOVERY_ENV, ",".join(map(str, ids)))
+    assert _confirm(client, other, signed, files).status_code == 403
+    result = _confirm(client, token, signed, files)
+    assert result.status_code == 201, result.get_json()
+    assert result.json["status"] == "RAW_PAIR_STAGED"
+    assert result.json["eligible_for_publication"] is False
+
+    raw, audits = _snapshot(engine)
+    assert len(raw) == 4 and len(audits) == 6
+    for original in originals:
+        current = next(row for row in raw if row["id"] == original["id"])
+        assert current == original
+        physical = storage_root / current["stored_path"] / current["stored_filename"]
+        assert physical.exists()
+    assert all(row in audits for row in original_audits)
+    recovery_audits = [
+        row for row in audits if row["action"] == confirm_svc.RECOVERY_AUDIT
+    ]
+    assert len(recovery_audits) == 2
+    assert {row["upload_id"] for row in recovery_audits} == set(ids)
+    assert {row["performed_by_user_id"] for row in recovery_audits} == {47}
+    assert all(row["details"]["prior_upload_ids"] == ids
+               and row["details"]["publication"] == "NOT_AUTHORIZED"
+               for row in recovery_audits)
+    new_uploads = [
+        row for row in audits if row["action"] == "UPLOAD"
+        and row["upload_id"] not in ids
+    ]
+    assert len(new_uploads) == 2
+    assert all(row["details"]["upload_origin"] == "google_ads_manual_pair"
+               and row["details"]["legacy_recovery_prior_upload_ids"] == ids
+               for row in new_uploads)
+
+    repeat = _confirm(client, token, signed, files)
+    assert repeat.status_code == 200, repeat.get_json()
+    assert all(row["reused_existing"] for row in repeat.json["uploads"].values())
+    assert _snapshot(engine) == (raw, audits)
+
+
+@pytest.mark.parametrize("table, column", [
+    ("google_ads_daily_metrics", "report_date"),
+    ("google_ads_ad_group_daily_metrics", "report_date"),
+    ("google_ads_m6_daily_publications", "business_date"),
+])
+def test_legacy_recovery_refuses_existing_facts_or_publication(
+        real_warehouse, monkeypatch, table, column):
+    client, token, other, engine, storage_root = real_warehouse
+    files = daily_xlsx()
+    signed = preview_post(client, token, files=files).json["raw_confirm_ticket"]
+    ids, original_raw, original_audit = _seed_legacy_misclassified_pair(
+        client.application, engine,
+    )
+    monkeypatch.setenv(confirm_svc.RECOVERY_ENV, ",".join(map(str, ids)))
+    with engine.begin() as conn:
+        conn.execute(sa.text(
+            f"INSERT INTO {table} ({column}) VALUES (:day)"
+        ), {"day": DAY})
+    response = _confirm(client, token, signed, files)
+    assert response.status_code == 409, response.get_json()
+    assert response.json["code"] == "EXISTING_PERIOD_CONFLICT"
+    assert _snapshot(engine) == (original_raw, original_audit)
+
+
+def test_legacy_recovery_partial_raw_resume_no_premature_supersession(
+        real_warehouse, monkeypatch):
+    client, token, other, engine, storage_root = real_warehouse
+    files = daily_xlsx()
+    signed = preview_post(client, token, files=files).json["raw_confirm_ticket"]
+    ids, _, _ = _seed_legacy_misclassified_pair(client.application, engine)
+    monkeypatch.setenv(confirm_svc.RECOVERY_ENV, ",".join(map(str, ids)))
+
+    def fail_second(*, report_type_key, **kw):
+        if report_type_key == confirm_svc.REPORT_TYPES[1]:
+            raise OSError("simulated group upload failure")
+        return create_warehouse_document_upload(report_type_key=report_type_key, **kw)
+
+    monkeypatch.setattr(confirm_svc, "create_warehouse_document_upload", fail_second)
+    partial = _confirm(client, token, signed, files)
+    assert partial.status_code == 409 and partial.json["status"] == "PARTIAL_RAW"
+    assert len(_snapshot(engine)[0]) == 3
+    assert all(row["action"] != confirm_svc.RECOVERY_AUDIT
+               for row in _snapshot(engine)[1])
+
+    monkeypatch.setattr(confirm_svc, "create_warehouse_document_upload",
+                        create_warehouse_document_upload)
+    recovered = _confirm(client, token, signed, files)
+    assert recovered.status_code == 201, recovered.get_json()
+    assert recovered.json["uploads"][confirm_svc.REPORT_TYPES[0]]["reused_existing"]
+    assert len([row for row in _snapshot(engine)[1]
+                if row["action"] == confirm_svc.RECOVERY_AUDIT]) == 2
