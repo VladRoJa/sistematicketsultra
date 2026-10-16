@@ -63,6 +63,30 @@ def _classify(*, approval: Any, execution: Any, children: list,
     if execution is not None and execution.status == "COMPLETE":
         return "COMPLETE", None
     if approval is not None and _database_date(approval.expires_at) <= timestamp:
+        if execution is not None and execution.status == "AUTHORIZED" and (
+            execution.manifest_digest == manifest_digest(approval.manifest_json)
+        ) and execution.last_child_id is not None:
+            batches = (approval.manifest_json or {}).get("batches", [])
+            by_branch = {c.sucursal_canon: c for c in children}
+            if isinstance(batches, list) and len(batches) == len(children) == len(by_branch):
+                ready = [by_branch.get(b.get("sucursal_canon"))
+                         for b in batches if isinstance(b, dict) and
+                         b.get("planned_status") == "READY"]
+                held = [by_branch.get(b.get("sucursal_canon"))
+                        for b in batches if isinstance(b, dict) and
+                        b.get("planned_status") == "HELD"]
+                states = [c.status if c is not None else None for c in ready]
+                submitted = states.count("SUBMITTED")
+                if (0 < submitted < len(ready) and
+                        states == ["SUBMITTED"] * submitted + ["READY"] * (len(ready) - submitted) and
+                        all(c is not None and c.status == "HELD" for c in held) and
+                        ready[submitted - 1].id == execution.last_child_id and
+                        ready[0].submit_started_at is not None and
+                        _database_date(ready[0].submit_started_at) <=
+                        _database_date(approval.expires_at) and
+                        all(c.provider_campaign_id is not None and c.submitted_at is not None
+                            for c in ready[:submitted])):
+                    return "CONTINUATION_REVIEW_REQUIRED", "MANUAL_NEXT_PENDING_WITH_FRESH_QUOTA"
         return "APPROVAL_EXPIRED", "NEW_AUTHORIZATION_POLICY_REQUIRED"
     if execution is not None:
         return "AUTHORIZED_NOT_DISPATCHED", "MANUAL_NEXT_CHILD_ONLY"

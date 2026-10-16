@@ -163,3 +163,44 @@ def test_operator_only_expired_lease_is_not_current():
     result = svc.read_governed_dispatch_monitor(campaign_id=77, session=session, now=NOW)
     assert result["quota"]["all_current"] is False
     assert result["quota"]["reservations"][0]["is_current"] is False
+
+
+def test_expired_accepted_prefix_reports_manual_fresh_quota_continuation():
+    manifest = {
+        "batches": [
+            {"sucursal_canon": "A", "planned_status": "READY"},
+            {"sucursal_canon": "B", "planned_status": "READY"},
+            {"sucursal_canon": "INDEPENDENCIA", "planned_status": "HELD"},
+        ],
+    }
+    expires = NOW - timedelta(minutes=2)
+    approval = NS(expires_at=expires, manifest_json=manifest)
+    execution = NS(
+        status="AUTHORIZED", last_child_id=133,
+        manifest_digest=svc.manifest_digest(manifest),
+    )
+    children = [
+        NS(id=133, sucursal_canon="A", status="SUBMITTED",
+           submit_started_at=expires - timedelta(minutes=3),
+           submitted_at=expires - timedelta(minutes=3),
+           provider_campaign_id="synthetic-accepted"),
+        NS(id=134, sucursal_canon="B", status="READY"),
+        NS(id=135, sucursal_canon="INDEPENDENCIA", status="HELD"),
+    ]
+    status, action = svc._classify(
+        approval=approval, execution=execution, children=children, timestamp=NOW,
+    )
+    assert (status, action) == (
+        "CONTINUATION_REVIEW_REQUIRED", "MANUAL_NEXT_PENDING_WITH_FRESH_QUOTA",
+    )
+    children[1].status = "SUBMITTING"
+    status, _ = svc._classify(
+        approval=approval, execution=execution, children=children, timestamp=NOW,
+    )
+    assert status == "RECONCILIATION_REQUIRED"
+    children[1].status = "READY"
+    execution.last_child_id = 135
+    status, _ = svc._classify(
+        approval=approval, execution=execution, children=children, timestamp=NOW,
+    )
+    assert status == "APPROVAL_EXPIRED"

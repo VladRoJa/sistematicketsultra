@@ -71,9 +71,51 @@ def manifest_digest(manifest: Any) -> str:
     ).encode("utf-8")).hexdigest()
 
 
+
+def _verified_started_suffix(*, session: Any, approval: Any, plan: Any,
+                             manifest: dict, children: list) -> tuple:
+    """An accepted, ordered prefix is the ONLY authority to outlive first-start TTL.
+
+    Never creates/retries/claims provider work. Call under the campaign row lock.
+    The first actual provider claim must predate the original approval expiry.
+    """
+    execution = session.query(MarketingCampaignV2GovernedExecutionORM).filter(
+        MarketingCampaignV2GovernedExecutionORM.approval_id == approval.id,
+    ).one_or_none()
+    if (execution is None or execution.status != "AUTHORIZED" or
+            execution.manifest_digest != manifest_digest(approval.manifest_json) or
+            _database_date(execution.confirmed_at) >= _database_date(approval.expires_at)):
+        raise GovernedDispatchConflict("No existe ejecución activa válida para continuar.")
+
+    _check_child_identities(plan=plan, manifest=manifest, children=children)
+    by_branch = {c.sucursal_canon: c for c in children}
+    if any(by_branch[b.sucursal_canon].status != "HELD"
+           for b in plan.batches if manifest[b.sucursal_canon]["planned_status"] == "HELD"):
+        raise GovernedDispatchConflict("Retención HELD histórica incompatible.")
+    ready = [by_branch[b.sucursal_canon] for b in plan.batches
+             if manifest[b.sucursal_canon]["planned_status"] == "READY"]
+    statuses = [c.status for c in ready]
+    if (not ready or "SUBMITTED" not in statuses or "READY" not in statuses or
+            statuses != ["SUBMITTED"] * statuses.count("SUBMITTED") +
+            ["READY"] * statuses.count("READY")):
+        raise GovernedDispatchConflict("No hay prefijo aceptado y pendiente íntegro.")
+    accepted = ready[:statuses.count("SUBMITTED")]
+    if (execution.last_child_id != accepted[-1].id or
+            not accepted[0].submit_started_at or
+            _database_date(accepted[0].submit_started_at) >
+            _database_date(approval.expires_at) or
+            any(not c.submit_started_at or c.submitted_by_user_id is None or
+                not c.provider_campaign_id or c.submitted_at is None
+                for c in accepted)):
+        raise GovernedDispatchConflict("Historial de ejecución anterior incompatible.")
+    pending = {c.sucursal_canon for c in ready if c.status == "READY"}
+    return tuple(b for b in plan.batches if b.sucursal_canon in pending)
+
+
 def _locked_review(*, campaign_id: int, session: Any, now: datetime,
                    allowed_sucursal_keys: Any, ignore_self: bool,
-                   refresh_after_lock: bool = True):
+                   refresh_after_lock: bool = True,
+                   allow_started_continuation: bool = False):
     if session.get_bind().dialect.name != "postgresql":
         raise GovernedDispatchConflict("Despacho gobernado requiere PostgreSQL.")
     campaign = session.query(MarketingCampaignV2ORM).filter(
@@ -82,7 +124,9 @@ def _locked_review(*, campaign_id: int, session: Any, now: datetime,
     approval = session.query(MarketingCampaignV2DispatchApprovalORM).filter(
         MarketingCampaignV2DispatchApprovalORM.campaign_v2_id == campaign_id,
     ).order_by(MarketingCampaignV2DispatchApprovalORM.revision_no.desc()).with_for_update().first()
-    if campaign is None or approval is None or _database_date(approval.expires_at) <= now:
+    if campaign is None or approval is None or (
+        _database_date(approval.expires_at) <= now and not allow_started_continuation
+    ):
         raise GovernedDispatchConflict("Campaña o aprobación inexistente/vencida.")
     plan = build_campaign_v2_preflight(
         campaign_id=campaign_id, template_id=int(approval.template_id),
@@ -96,13 +140,26 @@ def _locked_review(*, campaign_id: int, session: Any, now: datetime,
         batch for batch in plan.batches
         if manifest[batch.sucursal_canon]["planned_status"] == "READY"
     )
-    scopes_plan = replace(plan, batches=original_ready)
     approved_basis = (approval.manifest_json or {}).get("basis")
+    continuing_before = _database_date(approval.expires_at) <= now
+    if continuing_before:
+        if not allow_started_continuation:
+            raise GovernedDispatchConflict("Autorización vencida.")
+        started_rows = _load_campaign_rows(campaign_id=campaign_id, session=session)
+        quota_batches = _verified_started_suffix(
+            session=session, approval=approval, plan=plan,
+            manifest=manifest, children=started_rows,
+        )
+    else:
+        quota_batches = original_ready
+    scopes_plan = replace(plan, batches=quota_batches)
     _, scopes_before, _, _ = _assess_scopes(
         scopes_plan, session=session, timestamp=now,
-        ignore_campaign_id=campaign_id if ignore_self or approved_basis in {
-            "SUITE_OPERATOR_ROLLING_24H_V1", "SUITE_BRANCH_EXCEPTION_CAPS_V1",
-        } else None,
+        ignore_campaign_id=None if continuing_before else (
+            campaign_id if ignore_self or approved_basis in {
+                "SUITE_OPERATOR_ROLLING_24H_V1", "SUITE_BRANCH_EXCEPTION_CAPS_V1",
+            } else None
+        ),
         basis_preference=approved_basis,
     )
     for kind, key in sorted(scopes_before):
@@ -112,7 +169,8 @@ def _locked_review(*, campaign_id: int, session: Any, now: datetime,
         )
     # Never trust a timestamp captured before an advisory lock wait.
     effective_now = _utc(None) if refresh_after_lock else now
-    if _database_date(approval.expires_at) <= effective_now:
+    continuing_after = _database_date(approval.expires_at) <= effective_now
+    if continuing_after and not allow_started_continuation:
         raise GovernedDispatchConflict("Autorización caducó durante revisión.")
     refreshed = build_campaign_v2_preflight(
         campaign_id=campaign_id, template_id=int(approval.template_id),
@@ -132,39 +190,54 @@ def _locked_review(*, campaign_id: int, session: Any, now: datetime,
         batch for batch in plan.batches
         if manifest[batch.sucursal_canon]["planned_status"] == "READY"
     )
-    scopes_plan = replace(plan, batches=original_ready)
+    children = _load_campaign_rows(campaign_id=campaign_id, session=session)
+    if continuing_after:
+        quota_batches = _verified_started_suffix(
+            session=session, approval=approval, plan=plan,
+            manifest=manifest, children=children,
+        )
+    else:
+        quota_batches = original_ready
+    scopes_plan = replace(plan, batches=quota_batches)
     _, scopes, evidence_ids, quota_rows = _assess_scopes(
         scopes_plan, session=session, timestamp=effective_now,
-        ignore_campaign_id=campaign_id if ignore_self or approved_basis in {
-            "SUITE_OPERATOR_ROLLING_24H_V1", "SUITE_BRANCH_EXCEPTION_CAPS_V1",
-        } else None,
+        ignore_campaign_id=None if continuing_after else (
+            campaign_id if ignore_self or approved_basis in {
+                "SUITE_OPERATOR_ROLLING_24H_V1", "SUITE_BRANCH_EXCEPTION_CAPS_V1",
+            } else None
+        ),
         basis_preference=approved_basis,
     )
-    if dict(scopes_before) != dict(scopes):
+    if (dict(scopes_before) != dict(scopes) and
+            not (continuing_after and not continuing_before and
+                 set(scopes).issubset(scopes_before))):
         raise GovernedDispatchConflict("Cuota cambió durante bloqueo.")
     reservations = session.query(MarketingCampaignV2CapacityReservationORM).filter(
         MarketingCampaignV2CapacityReservationORM.approval_id == approval.id,
     ).all()
     by_scope = {(r.scope_kind, r.scope_key): r for r in reservations}
-    if len(reservations) != len(by_scope) or set(by_scope) != set(scopes):
-        raise GovernedDispatchConflict("Reservas incompletas.")
-    for scope, count in scopes.items():
-        row = by_scope[scope]
-        if (int(row.reserved_messages) != int(count) or
-                row.attestation_id != evidence_ids[scope] or
-                _database_date(row.reserved_until) <= effective_now):
-            raise GovernedDispatchConflict("Reserva de cuota incompatible o vencida.")
-    for batch in original_ready:
+    if not continuing_after:
+        if len(reservations) != len(by_scope) or set(by_scope) != set(scopes):
+            raise GovernedDispatchConflict("Reservas incompletas.")
+        for scope, count in scopes.items():
+            row = by_scope[scope]
+            if (int(row.reserved_messages) != int(count) or
+                    row.attestation_id != evidence_ids[scope] or
+                    _database_date(row.reserved_until) <= effective_now):
+                raise GovernedDispatchConflict("Reserva de cuota incompatible o vencida.")
+    elif any(_database_date(row.reserved_until) > effective_now for row in reservations):
+        raise GovernedDispatchConflict("Reserva anterior incompatible con continuación.")
+    for batch in quota_batches:
         expected = manifest[batch.sucursal_canon]
         current = quota_rows[batch.sucursal_canon]
-        if (expected["channel_attestation_id"] != current["channel_evidence_id"] or
-                expected["portfolio_attestation_id"] != current["portfolio_evidence_id"] or
+        if ((not continuing_after and (
+                expected["channel_attestation_id"] != current["channel_evidence_id"] or
+                expected["portfolio_attestation_id"] != current["portfolio_evidence_id"])) or
                 expected["portfolio_key"] != current["portfolio_key"] or
                 expected.get("policy_revision_id") != current.get("policy_revision_id") or
                 expected.get("operator_channel_cap") != current.get("operator_channel_cap") or
                 expected.get("operator_portfolio_cap") != current.get("operator_portfolio_cap")):
             raise GovernedDispatchConflict("Cambió la evidencia aprobada por lote.")
-    children = _load_campaign_rows(campaign_id=campaign_id, session=session)
     return approval, plan, manifest, children, manifest_digest(approval.manifest_json)
 
 
@@ -312,7 +385,7 @@ def execute_governed_child(
         approval, plan, manifest, children, digest = _locked_review(
             campaign_id=campaign_id, session=active, now=timestamp,
             allowed_sucursal_keys=allowed_sucursal_keys, ignore_self=True,
-            refresh_after_lock=now is None,
+            refresh_after_lock=now is None, allow_started_continuation=True,
         )
         execution = active.query(MarketingCampaignV2GovernedExecutionORM).filter(
             MarketingCampaignV2GovernedExecutionORM.id == execution_id,
@@ -322,9 +395,17 @@ def execute_governed_child(
         # Never compare execution expiry with the earlier request timestamp.
         claim_time = _utc(None) if now is None else timestamp
         if (execution is None or execution.status != "AUTHORIZED" or
-                digest != execution.manifest_digest or digest != expected_digest or
-                _database_date(execution.expires_at) <= claim_time):
-            raise GovernedDispatchConflict("Autorización de despacho inexistente, usada o vencida.")
+                digest != execution.manifest_digest or digest != expected_digest):
+            raise GovernedDispatchConflict("Autorización de despacho inexistente o usada.")
+        if _database_date(execution.expires_at) <= claim_time:
+            if not any(c.status == "SUBMITTED" for c in children):
+                raise GovernedDispatchConflict("Autorización de despacho vencida sin inicio confirmado.")
+            # Only a verified durable prefix may continue after the FIRST claim
+            # window. Every remaining child rechecks current capacity.
+            _verified_started_suffix(
+                session=active, approval=approval, plan=plan,
+                manifest=manifest, children=children,
+            )
         _check_child_identities(plan=plan, manifest=manifest, children=children)
         by_branch = {r.sucursal_canon: r for r in children}
         original_ready = [b for b in plan.batches

@@ -89,8 +89,10 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   get hasApproval(): boolean { return !!this.approval?.approval; }
   get validApproval(): boolean {
     const approval = this.approval?.approval;
-    return !!approval && approval.status !== 'EXPIRED' &&
-      Date.parse(approval.expires_at) > Date.now();
+    return !!approval && (
+      (approval.status !== 'EXPIRED' && Date.parse(approval.expires_at) > Date.now()) ||
+      this.monitor?.status === 'CONTINUATION_REVIEW_REQUIRED'
+    );
   }
   get readyCount(): number {
     return this.preflight?.sendable_count ?? 0;
@@ -199,6 +201,7 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
       REVIEW_REQUIRED: 'Requiere revisión manual',
       COMPLETE: 'Proceso terminado',
       APPROVAL_EXPIRED: 'Aprobación vencida',
+      CONTINUATION_REVIEW_REQUIRED: 'Envío iniciado: puede continuar tras validar cupo vigente',
       AUTHORIZED_NOT_DISPATCHED: 'Autorizado, sin enviar',
       PREPARED_NOT_DISPATCHED: 'Lotes preparados, sin enviar',
       RESERVED_NOT_PREPARED: 'Costo aprobado, faltan preparar los lotes',
@@ -214,6 +217,7 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
       DO_NOT_RESEND: 'No reenviar; solicitar revisión manual',
       REVIEW_BEFORE_ANY_NEW_APPROVAL: 'Revisar la campaña antes de aprobar nuevamente',
       NEW_AUTHORIZATION_POLICY_REQUIRED: 'Solicitar una nueva autorización',
+      MANUAL_NEXT_PENDING_WITH_FRESH_QUOTA: 'Confirmar manualmente los pendientes; el servidor validará nuevamente el cupo antes de cada lote',
       MANUAL_NEXT_CHILD_ONLY: 'Revisar y enviar solo el siguiente lote, si está autorizado',
       INDEPENDENT_AUTHORIZATION_REQUIRED: 'Falta autorización independiente',
       MATERIALIZE_BEFORE_EXPIRY: 'Preparar los lotes antes de que venza la aprobación',
@@ -288,7 +292,8 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
     const review = this.reviewReady;
     return !this.busy && !this.uncertainResult && !!this.nextReadyChild &&
       this.validApproval && !!review?.execution &&
-      this.monitor?.quota.all_current === true &&
+      (this.monitor?.quota.all_current === true ||
+        this.monitor?.status === 'CONTINUATION_REVIEW_REQUIRED') &&
       review.execution.status === 'AUTHORIZED' &&
       review.manifest_digest === this.monitor?.approval?.manifest_digest &&
       this.executionCheckbox.value === true &&

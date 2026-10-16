@@ -1673,6 +1673,27 @@ test('Bulk send explicit: only authorized pending suffix, never previously accep
   assert.deepEqual(pendingGovernedBatchIds({...monitor, execution: {...monitor.execution!, last_child_id: null}}, review), []);
   assert.deepEqual(pendingGovernedBatchIds({...monitor, approval: {...monitor.approval!, expired: true}}, review), []);
   assert.deepEqual(pendingGovernedBatchIds({...monitor, approval: {...monitor.approval!, manifest_digest: 'x'.repeat(64)}}, review), []);
+
+  // After a valid first provider claim, expiry is no longer a blanket timer:
+  // backend will validate current quota before each pending child.
+  const continued: CampaignV2GovernedMonitor = {
+    ...monitor, status: 'CONTINUATION_REVIEW_REQUIRED',
+    next_manual_action: 'MANUAL_NEXT_PENDING_WITH_FRESH_QUOTA',
+    approval: {...monitor.approval!, expired: true},
+    quota: {...monitor.quota, all_current: false},
+  };
+  assert.deepEqual(pendingGovernedBatchIds(continued, review), [80, 81]);
+  assert.deepEqual(pendingGovernedBatchIds({
+    ...continued, status: 'APPROVAL_EXPIRED',
+  }, review), []);
+  assert.deepEqual(pendingGovernedBatchIds({
+    ...continued,
+    execution: {...continued.execution!, last_child_id: null},
+  }, review), []);
+  assert.deepEqual(pendingGovernedBatchIds({
+    ...continued, children: continued.children.map(child => child.child_id === 79
+      ? {...child, provider_campaign_id: null} : child),
+  }, review), []);
 });
 
 test('Bulk send explicit: one gesture, sequential per-child guarded requests, no replay or secrets persisted', () => {
