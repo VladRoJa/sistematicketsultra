@@ -19,3 +19,17 @@ dd {margin:0;overflow-wrap:anywhere;}
 .qa-fields { margin: 10px 0; gap: 4px 10px; }
 .preview { margin: 12px 0; padding: 11px; }
 .preview h3 { margin-bottom: 8px; }
+
+
+/* Uncramp the QA controls, including floating labels and support text. */
+.qa { min-width: min(720px, 86vw); font-size: 14px; }
+.intro, .footnote { font-size: 14px; line-height: 1.55; }
+.qa-fields { gap: 14px 18px; margin: 18px 0; }
+.qa-fields mat-form-field { min-width: 0; }
+.preview h3 { font-size: 16px; }
+.qa-actions { margin: 14px 0; }
+@media (max-width: 760px) {
+  .qa { min-width: 0; }
+  .qa-fields { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .wide { grid-column: auto; }
+}
