@@ -1680,7 +1680,8 @@ test('Bulk send explicit: one gesture, sequential per-child guarded requests, no
   const ui = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.ts'), 'utf8');
   const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.html'), 'utf8');
   assert.ok(html.includes('(click)="executePendingSequentially()"'));
-  assert.ok(html.includes('Enviar {{ bulkPendingIds.length }} lotes pendientes'));
+  assert.ok(html.includes("'Enviar ' + bulkPendingIds.length + ' lotes pendientes'"));
+  assert.ok(html.includes("working === 'bulk' ? 'Enviando lotes… ' + bulkAccepted + '/' + bulkTotal"));
   assert.ok(html.includes('Detener después del lote actual'));
   assert.ok(ui.includes('this.reviewReady!.execution!.execution_id'));
   assert.ok(ui.includes('this.bulkPassword.setValue(\'\')'));
