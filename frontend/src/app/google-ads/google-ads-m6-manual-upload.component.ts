@@ -217,6 +217,11 @@ export class GoogleAdsM6ManualUploadComponent implements OnDestroy {
       });
   }
 
+  get totalsAreCalculatedFromDetail(): boolean {
+    return this.previewData?.campaign_totals_provenance === 'DETAIL_SUM_ONLY'
+      || this.previewData?.group_totals_provenance === 'DETAIL_SUM_ONLY';
+  }
+
   get validationButtonLabel(): string {
     return this.state === 'preview' ? 'Validando archivos…' : 'Validar ambos Excel';
   }
