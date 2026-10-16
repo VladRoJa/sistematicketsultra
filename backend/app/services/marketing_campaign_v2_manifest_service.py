@@ -188,7 +188,7 @@ def materialize_approved_manifest(
             raise CampaignV2ApprovalConflictError("Campaña inexistente.")
         approval = active.query(MarketingCampaignV2DispatchApprovalORM).filter(
             MarketingCampaignV2DispatchApprovalORM.campaign_v2_id == campaign_id
-        ).with_for_update().one_or_none()
+        ).order_by(MarketingCampaignV2DispatchApprovalORM.revision_no.desc()).with_for_update().first()
         if approval is None or _database_date(approval.expires_at) <= timestamp:
             raise CampaignV2ApprovalConflictError("Aprobación inexistente o caducada.")
         plan = build_campaign_v2_preflight(
