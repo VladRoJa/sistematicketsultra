@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 from app.extensions import db
 from app.models.marketing import (
     MarketingCampaignV2ORM,
+    MarketingCampaignV2DispatchApprovalORM,
     MarketingCampaignV2ProviderCampaignORM,
     MarketingCampaignV2RecipientORM,
     MarketingCampaignV2RecipientDispatchExclusionORM,
@@ -162,6 +163,12 @@ def _lock_clean_target(*, campaign_id: int, allowed_sucursal_keys, session: Any)
         raise ValidationError(
             "Campaña con provider children: no se permite cambiar exclusiones."
         )
+    if session.query(MarketingCampaignV2DispatchApprovalORM.id).filter(
+        MarketingCampaignV2DispatchApprovalORM.campaign_v2_id == campaign_id,
+    ).first():
+        raise ValidationError(
+            "Campaña con aprobación: no se permiten nuevas exclusiones."
+        )
     return campaign
 
 
@@ -242,11 +249,16 @@ def _previous_multi_proof(
 ) -> dict[str, Any]:
     assignment: dict[int, int] = {}
     breakdown = []
+    unconfirmed_batches: list[dict[str, Any]] = []
     for source_id in source_ids:
         proof = find_previous_campaign_contact_ids(
             campaign_id=campaign_id, source_campaign_id=source_id,
             allowed_sucursal_keys=allowed_sucursal_keys, session=session,
+            allow_later_frozen_source=True,
+            inspect_rejected=True,
         )
+        source_unconfirmed = proof["unconfirmed_batches"]
+        unconfirmed_batches.extend(source_unconfirmed)
         new = 0
         for recipient_id in proof["matched_recipient_ids"]:
             if recipient_id not in assignment:
@@ -257,6 +269,10 @@ def _previous_multi_proof(
             "submitted_contacts": proof["source_submitted_phones_count"],
             "overlap_contacts": proof["matched"],
             "unique_assigned": new,
+            "unconfirmed_batches_count": len(source_unconfirmed),
+            "unconfirmed_contacts_count": sum(
+                item["recipient_count"] for item in source_unconfirmed
+            ),
         })
     allocations = sorted(assignment.items())
     return {
@@ -265,8 +281,10 @@ def _previous_multi_proof(
         "matched": len(allocations),
         "source_breakdown": breakdown,
         "review_fingerprint": _fingerprint(
-            "PREVIOUS_CAMPAIGN_CONTACT", campaign_id, allocations,
+            "PREVIOUS_CAMPAIGN_CONTACT", campaign_id,
+            {"allocations": allocations, "unconfirmed_batches": unconfirmed_batches},
         ),
+        "unconfirmed_batches": unconfirmed_batches,
         "assignments": allocations,
     }
 
