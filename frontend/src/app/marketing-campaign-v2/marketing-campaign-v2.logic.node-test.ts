@@ -1740,3 +1740,15 @@ test('Campaign V2 preparation and governed approval show contextual pending feed
   }
   assert.equal((governedHtml.match(/mat-progress-spinner/g) || []).length >= 7, true);
 });
+
+
+test('Campaign V2 saved campaigns display the stable internal ID for cross-campaign dedupe', () => {
+  const html = fs.readFileSync(
+    path.join(process.cwd(), 'src/app/marketing-campaign-v2/marketing-campaign-v2-page.component.html'),
+    'utf8',
+  );
+  const savedCampaignsSection = html.split('id="campaign-v2-history"')[1] || '';
+  assert.ok(savedCampaignsSection.includes('<th scope="col">ID</th>'));
+  assert.ok(savedCampaignsSection.includes('<strong>#{{ campaign.id }}</strong>'));
+  assert.ok(savedCampaignsSection.includes('(click)="openCampaign(campaign)"'));
+});
