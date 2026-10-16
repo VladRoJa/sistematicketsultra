@@ -322,3 +322,116 @@ def test_pg_invalid_business_date_never_calls_repository(pg_synthetic):
     with pytest.raises(KpiDesempenoStagingError, match="business_date"):
         _stage(pg_synthetic, business_date="not-a-date")
     assert KpiDesempenoSnapshotORM.query.count() == 1
+
+
+# Real provider layout contract, exercised ONLY with synthetic PostgreSQL data.
+# Provider example: "KPIs Desempeño (Corte: 07/10/2026)" on A1.
+def _titled_xlsx(
+    *,
+    title: str | None = None,
+    reactivaciones: int = 29,
+    layout: str = "valid",
+    embedded_date: date | None = BUSINESS_DATE,
+) -> bytes:
+    result = BytesIO()
+    effective_title = (
+        title if title is not None
+        else f"KPIs Desempeño (Corte: {BUSINESS_DATE:%d/%m/%Y})"
+    )
+    with pd.ExcelWriter(result, engine="openpyxl") as writer:
+        data = pd.DataFrame(
+            _data(reactivaciones=reactivaciones),
+            columns=EXPECTED_KPI_DESEMPENO_COLUMNS,
+        )
+        data.to_excel(
+            writer, sheet_name="data", index=False,
+            startrow=2 if layout == "extra_blank_row" else 1,
+        )
+        sheet = writer.sheets["data"]
+        sheet.cell(row=1, column=1, value=effective_title)
+        if layout == "extra_title_column":
+            sheet.cell(row=1, column=2, value="not blank")
+        elif layout == "duplicate_header":
+            for i, label in enumerate(EXPECTED_KPI_DESEMPENO_COLUMNS, 1):
+                sheet.cell(row=4, column=i, value=label)
+        elif layout == "ambiguous_column":
+            sheet.cell(row=2, column=2, value="Clients Unknown")
+        elif layout == "extra_column":
+            sheet.cell(row=2, column=10, value="Extra")
+        if embedded_date is not None:
+            pd.DataFrame([
+                {"key": "report_type", "value": "kpi_desempeno"},
+                {"key": "business_date", "value": embedded_date.isoformat()},
+            ]).to_excel(writer, sheet_name="metadata", index=False)
+    return result.getvalue()
+
+
+@pytest.mark.parametrize("embedded_date", [BUSINESS_DATE, None])
+def test_pg_gasca_title_is_adapted_only_in_memory(pg_synthetic, embedded_date):
+    payload = _titled_xlsx(embedded_date=embedded_date)
+    original_hash = hashlib.sha256(payload).hexdigest()
+    stored_file = pg_synthetic["create_upload"](731, payload)
+    assert stored_file.read_bytes() == payload
+
+    result = _stage(pg_synthetic, warehouse_upload_id=731)
+    assert result["status"] == "staged"
+    assert result["is_canonical"] is False
+    assert result["changed_branches"] == 1
+    assert result["changed_fields"] == 1
+
+    # The title-row XLSX is preserved byte-for-byte; only an in-memory
+    # adapted view was given to parser/M1 and persisted as structured data.
+    assert stored_file.read_bytes() == payload
+    upload_hash = db.session.execute(
+        sa.text("SELECT file_hash_sha256 FROM warehouse_uploads WHERE id=731")
+    ).scalar_one()
+    assert upload_hash == original_hash
+    assert hashlib.sha256(stored_file.read_bytes()).hexdigest() == upload_hash
+    baseline = db.session.get(KpiDesempenoSnapshotORM, pg_synthetic["baseline_id"])
+    staged = db.session.get(KpiDesempenoSnapshotORM, result["snapshot_id"])
+    assert baseline.is_canonical is True
+    assert staged.is_canonical is False
+    assert KpiDesempenoSnapshotRowORM.query.filter_by(
+        snapshot_id=staged.id, sucursal="CENTRO"
+    ).one().reactivaciones == 29
+    repeated = _stage(pg_synthetic, warehouse_upload_id=731)
+    assert repeated["status"] == "already_staged"
+    assert repeated["snapshot_id"] == staged.id
+
+
+@pytest.mark.parametrize(
+    ("title", "layout"),
+    [
+        ("KPIs Desempeño (Corte: 18/08/2026)", "valid"),
+        ("KPIs Desempeño (Corte: 31/02/2026)", "valid"),
+        ("KPIs Desempeño (Corte: 19/08/2026) - adicional", "valid"),
+        ("Reporte KPIs Desempeño (Corte: 19/08/2026)", "valid"),
+        ("KPIs Desempeño (Corte: 19/08/2026)", "extra_title_column"),
+        ("KPIs Desempeño (Corte: 19/08/2026)", "duplicate_header"),
+        ("KPIs Desempeño (Corte: 19/08/2026)", "ambiguous_column"),
+        ("KPIs Desempeño (Corte: 19/08/2026)", "extra_column"),
+        ("KPIs Desempeño (Corte: 19/08/2026)", "extra_blank_row"),
+    ],
+)
+def test_pg_rejects_wrong_title_date_and_ambiguous_layout(
+    pg_synthetic, title, layout
+):
+    payload = _titled_xlsx(title=title, layout=layout)
+    pg_synthetic["create_upload"](732, payload)
+    with pytest.raises(KpiDesempenoStagingError):
+        _stage(pg_synthetic, warehouse_upload_id=732)
+    assert KpiDesempenoSnapshotORM.query.count() == 1
+    baseline = db.session.get(
+        KpiDesempenoSnapshotORM, pg_synthetic["baseline_id"]
+    )
+    assert baseline.is_canonical is True
+
+
+def test_pg_rejects_title_vs_metadata_date_mismatch(pg_synthetic):
+    payload = _titled_xlsx(
+        embedded_date=date(2026, 8, 18)
+    )
+    pg_synthetic["create_upload"](733, payload)
+    with pytest.raises(KpiDesempenoStagingError, match="business_date mismatch"):
+        _stage(pg_synthetic, warehouse_upload_id=733)
+    assert KpiDesempenoSnapshotORM.query.count() == 1
