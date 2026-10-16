@@ -234,3 +234,66 @@ def test_revision_uniqueness_and_immutable_history_on_real_pg(monkeypatch):
         revision.module.downgrade()
         md.drop_all(conn)
     engine.dispose()
+
+
+def test_new_approval_reservation_keeps_original_held_audit(monkeypatch):
+    from decimal import Decimal
+    from app.services import marketing_campaign_v2_dispatch_approval_service as approval
+
+    original = {
+        "source": "EXPLICIT_OPERATOR_DECISION", "source_reference": "cupo-250",
+        "dispatch_fingerprint": FINGERPRINT, "quote_fingerprint": QUOTE,
+        "approved_by_user_id": 7,
+        "approved_at": "2026-10-16T17:30:00+00:00",
+    }
+    plan = NS(
+        campaign_id=22, dispatch_fingerprint=FINGERPRINT, ready=True,
+        mode="IMMEDIATE", sendable_phones=tuple(str(i) for i in range(12)),
+        batches=[
+            NS(sucursal_canon="A", provider_channel_id="ch-A",
+               template_id=1, recipients=[None] * 8),
+            NS(sucursal_canon="B", provider_channel_id="ch-B",
+               template_id=1, recipients=[None] * 4),
+        ],
+    )
+    budget = {
+        "currency": "USD", "status": "COMPLETE",
+        "quote_fingerprint": QUOTE, "sendable_recipients": 12,
+        "maximum_estimated_usd": "12.0000", "rate_version": "synthetic",
+        "basis": "AUTOMATIC_MAXIMUM_IF_ALL_RECIPIENTS_DELIVERED",
+        "batches": [
+            {"sucursal_canon": "A", "recipients": 8, "maximum_estimated_usd": "8.0000"},
+            {"sucursal_canon": "B", "recipients": 4, "maximum_estimated_usd": "4.0000"},
+        ],
+    }
+    session = MagicMock()
+    def flush():
+        for call in session.add.call_args_list:
+            approval_row = call.args[0]
+            if isinstance(approval_row, approval.MarketingCampaignV2DispatchApprovalORM):
+                approval_row.id = 9
+    session.flush.side_effect = flush
+    result = approval._reserve_locked(
+        plan=plan, budget=budget,
+        confirmation=(FINGERPRINT, QUOTE, 12, __import__("decimal").Decimal("12.0000"), 11),
+        session=session, timestamp=NOW,
+        quantities={("CHANNEL", "ch-A"): 8},
+        evidence_ids={("CHANNEL", "ch-A"): None},
+        quota_rows={"A": {
+            "channel_evidence_id": None, "portfolio_evidence_id": None,
+            "policy_revision_id": None, "operator_portfolio_cap": None,
+            "operator_channel_cap": None,
+        }},
+        held_names=frozenset({"B"}),
+        held_sources={"B": "cupo-250"},
+        held_evidence_override={"B": original},
+        capacity_basis="SUITE_BRANCH_EXCEPTION_CAPS_V1",
+        revision_no=2, commit=False,
+    )
+    assert result["manifest"]["batches"][1]["hold_evidence"] == original
+    assert result["manifest"]["batches"][0]["planned_status"] == "READY"
+    assert result["ready_batches"] == 1 and result["held_batches"] == 1
+    saved = session.add.call_args_list[0].args[0]
+    assert saved.revision_no == 2
+    session.commit.assert_not_called()
+    assert session.add.call_count == 2
