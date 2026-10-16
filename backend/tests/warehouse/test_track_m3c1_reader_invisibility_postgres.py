@@ -257,3 +257,41 @@ def test_public_resolvers_never_include_reserved_type():
     assert CANDIDATE not in resolve_track_daily_version_type_candidates(
         track_date=DAY, generation_mode="official_closed_day",
     )
+
+
+def test_pg_candidate_only_date_never_generates_public_alerts(isolated_pg):
+    with patch.object(alerts, "_evaluate_income_ranking") as ranking:
+        result = alerts.evaluate_track_alerts(
+            track_date=DAY - timedelta(days=1),
+            generation_mode="official_closed_day",
+        )
+    assert result == []
+    ranking.assert_not_called()
+
+
+def test_pg_manual_close_claim_excludes_reserved_pending_and_running(isolated_pg):
+    from app.warehouse.services.track_daily_version_service import (
+        claim_next_pending_track_canonical_close,
+    )
+
+    # No real canonical-close requests are present in this isolated schema.
+    bad_pending = TrackDailyVersionORM(
+        track_date=DAY + timedelta(days=3),
+        version_type=CANDIDATE, status="pending",
+        is_current=False, trigger_source="m3c1_synthetic_only",
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    bad_running = TrackDailyVersionORM(
+        track_date=DAY + timedelta(days=4),
+        version_type=CANDIDATE, status="running",
+        is_current=False, trigger_source="m3c1_synthetic_only",
+        created_at=datetime.now(timezone.utc)-timedelta(hours=4),
+        updated_at=datetime.now(timezone.utc)-timedelta(hours=4),
+    )
+    db.session.add_all([bad_pending, bad_running])
+    db.session.commit()
+    assert claim_next_pending_track_canonical_close() is None
+    db.session.expire_all()
+    assert db.session.get(TrackDailyVersionORM, bad_pending.id).status == "pending"
+    assert db.session.get(TrackDailyVersionORM, bad_running.id).status == "running"
