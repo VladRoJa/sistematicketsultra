@@ -1,3 +1,4 @@
+@import './marketing-campaign-v2-form-fields.css';
 :host { display:block; }
 .classifier-dialog { width:min(1180px,96vw); max-height:88vh; padding:18px; overflow:auto; color:#0f172a; }
 .dialog-header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:14px; }
