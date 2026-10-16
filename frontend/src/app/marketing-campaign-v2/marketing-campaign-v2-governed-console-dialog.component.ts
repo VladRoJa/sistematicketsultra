@@ -505,6 +505,7 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
             current.some((id, position) => id !== expected[position])) {
           throw new Error('Cambió la autorización, límite u orden de lotes. Se detuvo el envío.');
         }
+        if (this.bulkStopRequested || this.destroyed) { break; }
         const childId = pendingIds[index];
         this.bulkCurrentChildId = childId;
         const result = await firstValueFrom(this.api.executeGovernedChild(this.data.campaignId, {
