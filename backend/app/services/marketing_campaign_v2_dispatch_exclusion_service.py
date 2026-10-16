@@ -160,7 +160,7 @@ def _submitted_phone_set(
 
     Each accepted provider child retains the exact leads in request_snapshot_json.
     Accept only proven SUBMITTED snapshots; audited HELD children contributed
-    zero submitted contacts. Other partial/ambiguous states fail closed.
+    zero submitted contacts. Untouched READY children count as zero; any\n    attempt, partial response or ambiguous result still fails closed.
     """
     children = (
         session.query(MarketingCampaignV2ProviderCampaignORM)
@@ -174,6 +174,31 @@ def _submitted_phone_set(
 
     submitted = []
     for child in children:
+        if child.status == "READY":
+            # A prepared READY child is not proof of a provider submission.
+            # Ignore it ONLY if its persistence has no sign of an attempt,
+            # result, reconciliation or retry. Otherwise fail closed.
+            if (
+                child.provider_campaign_id is not None
+                or child.submit_started_at is not None
+                or child.submitted_at is not None
+                or getattr(child, "provider_send_at", None) is not None
+                or getattr(child, "provider_response_json", None)
+                or getattr(child, "provider_deduplicated", None) is not None
+                or getattr(child, "error_code", None) is not None
+                or getattr(child, "support_ref", None) is not None
+                or getattr(child, "reconciliation_resolution", None) is not None
+                or getattr(child, "reconciled_at", None) is not None
+                or getattr(child, "reconciliation_note", None) is not None
+                or getattr(child, "reconciliation_snapshot_json", None)
+                or getattr(child, "retry_attempt_count", 0) not in (None, 0)
+                or getattr(child, "retry_last_attempt_at", None) is not None
+                or getattr(child, "retry_history_json", None)
+            ):
+                raise CampaignV2ScopedExclusionValidationError(
+                    "Origen contiene lote READY con indicios de envío; revisión obligatoria."
+                )
+            continue
         if child.status == "HELD":
             # A held batch is an intentional *non-send*, not a prior contact.
             # Require its persisted audit; reject any provider attempt/identity.
