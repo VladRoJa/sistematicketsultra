@@ -393,6 +393,8 @@ def execute_governed_child(
                 digest != execution.manifest_digest or digest != expected_digest):
             raise GovernedDispatchConflict("Autorización de despacho inexistente o usada.")
         if _database_date(execution.expires_at) <= claim_time:
+            if not any(c.status == "SUBMITTED" for c in children):
+                raise GovernedDispatchConflict("Autorización de despacho vencida sin inicio confirmado.")
             # Only a verified durable prefix may continue after the FIRST claim
             # window. Every remaining child rechecks current capacity.
             _verified_started_suffix(
