@@ -1,16 +1,28 @@
-<h2 mat-dialog-title>Preparar envío · Campaña #{{ data.campaignId }}</h2>
+<h2 mat-dialog-title>Centro de envío · Campaña #{{ data.campaignId }}</h2>
 <mat-dialog-content class="console">
-  <p><strong>{{ data.campaignName }}</strong></p>
-  <p class="notice">Revisa a quién se enviaría, cuánto costaría y el límite disponible. Preparar y autorizar no envían mensajes. El envío real requiere una confirmación explícita. Puedes enviar un lote o recorrer los pendientes secuencialmente; cada lote mantiene los controles del servidor y nunca se reintenta automáticamente.</p>
-  <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy">
-    <mat-progress-spinner *ngIf="working === 'read'" mode="indeterminate" [diameter]="16" aria-label="Consultando estado"></mat-progress-spinner>
-    {{ working === 'read' ? 'Consultando estado…' : 'Consultar estado' }}
-  </button>
-  <span *ngIf="working" role="status">{{ workingLabel }}…</span>
-  <p *ngIf="error" role="alert" class="error">{{ error }}</p>
-  <p *ngIf="notice" role="status">{{ notice }}</p>
-  <p *ngIf="uncertainResult" role="alert" class="error">No sabemos si iVentas recibió el envío. Se bloquearon nuevos envíos en esta ventana. Verifica el resultado antes de continuar.</p>
+  <header class="console-toolbar">
+    <div class="console-identification">
+      <strong>{{ data.campaignName }}</strong>
+      <span>El envío real siempre requiere confirmación. No hay reintentos automáticos.</span>
+    </div>
+    <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy">
+      <mat-progress-spinner *ngIf="working === 'read'" mode="indeterminate" [diameter]="16" aria-label="Consultando estado"></mat-progress-spinner>
+      {{ working === 'read' ? 'Consultando…' : 'Actualizar estado' }}
+    </button>
+  </header>
+  <div class="dispatch-overview" *ngIf="monitor as state" aria-label="Resumen del envío">
+    <div><small>Aceptados por iVentas</small><strong>{{ sentLotCount }} / {{ actionableLotCount }} lotes</strong><span>{{ acceptedContactCount | number }} contactos</span></div>
+    <div><small>Pendientes</small><strong>{{ pendingLotCount }} lotes</strong></div>
+    <div><small>En espera</small><strong>{{ heldLotCount }} lotes</strong></div>
+    <div><small>Estado</small><strong class="overview-status">{{ statusLabel(state.status) }}</strong></div>
+  </div>
+  <span *ngIf="working" role="status" class="working">{{ workingLabel }}…</span>
+  <p *ngIf="error" role="alert" class="error critical-message">{{ error }}</p>
+  <p *ngIf="notice" role="status" class="success-message">{{ notice }}</p>
+  <p *ngIf="uncertainResult" role="alert" class="error critical-message">El resultado del último intento requiere revisión en iVentas. La consola no enviará otro lote automáticamente.</p>
 
+  <details class="setup-history" [open]="setupInitiallyOpen">
+    <summary>{{ setupSummary }} <small>{{ setupHelpText }}</small></summary>
   <section class="step">
     <h3>1 · Revisar destinatarios, costo y límite</h3>
     <mat-form-field appearance="fill">
@@ -78,7 +90,10 @@
     <ng-container *ngIf="reviewReady as review; else noneReviewed">
       <details class="technical"><summary>Ver identificador técnico de esta autorización</summary><p class="fingerprint">Huella de lotes: {{ review.manifest_digest }}</p></details>
       <p>Destinatarios preparados para enviar: {{ approvedReadyCount }}</p>
-      <p class="manifest" *ngFor="let batch of review.manifest.batches">{{ batch.sucursal_canon }} · {{ statusLabel(batch.planned_status) }} · {{ batch.recipients }} contacto(s)</p>
+      <details class="manifest-details">
+        <summary>Consultar preparación de {{ review.manifest.batches.length }} sucursales</summary>
+        <p class="manifest" *ngFor="let batch of review.manifest.batches">{{ batch.sucursal_canon }} · {{ statusLabel(batch.planned_status) }} · {{ batch.recipients }} contacto(s)</p>
+      </details>
       <p *ngIf="review.execution">Autorización #{{ review.execution.execution_id }}: {{ statusLabel(review.execution.status) }}.</p>
       <div class="confirmation" *ngIf="!review.execution">
         <mat-form-field appearance="fill"><mat-label>Escribe {{ authorizationWord }}</mat-label>
@@ -93,11 +108,14 @@
     <ng-template #noneReviewed><p>Aún no hay lotes preparados para autorizar.</p></ng-template>
   </section>
 
-  <section class="step">
-    <h3>4 · Consultar resultados y enviar un lote</h3>
+  </details>
+
+  <section class="step current-stage">
+    <h3>Estado del envío y acciones pendientes</h3>
     <ng-container *ngIf="monitor as monitorData">
-      <p><strong>{{ statusLabel(monitorData.status) }}</strong> · Qué sigue: {{ nextActionLabel(monitorData.next_manual_action) }}</p>
-      <p>Lotes creados: {{ monitorData.children_count }} · Revisión interna de límites: {{ monitorData.quota.all_current ? 'Vigente' : 'No vigente' }}</p>
+      <p class="current-status"><strong>{{ statusLabel(monitorData.status) }}</strong> <span>· {{ nextActionLabel(monitorData.next_manual_action) }}</span></p>
+      <p class="hint" *ngIf="monitorData.status !== 'COMPLETE'">Lotes preparados: {{ monitorData.children_count }} · Reserva original: {{ monitorData.quota.all_current ? 'Vigente' : 'Vencida o sin validar' }}. El servidor revisa los límites antes de cada envío.</p>
+      <p class="completed-note" *ngIf="monitorData.status === 'COMPLETE'">Todos los lotes autorizados fueron aceptados por iVentas. Las sucursales en espera no se enviaron. La entrega y la lectura se consultan después.</p>
       <p *ngIf="monitorData.status === 'CONTINUATION_REVIEW_REQUIRED'">
         La ventana inicial de 15 minutos ya terminó, pero existen lotes aceptados y pendientes.
         Solo se permite continuar manualmente con los pendientes: antes de cada lote el backend
@@ -121,6 +139,8 @@
           {{ working === 'reauthorize' ? 'Reautorizando…' : 'Reautorizar sin enviar' }}
         </button>
       </div>
+      <details class="batch-details">
+        <summary>Ver estado individual de los {{ monitorData.children_count }} lotes y sus canales</summary>
       <div class="table-scroll"><table>
         <thead><tr><th>Lote</th><th>Sucursal / canal</th><th>Contactos</th><th>Estado</th><th>Observación</th></tr></thead>
         <tbody>
@@ -133,24 +153,8 @@
           <tr *ngIf="!monitorData.children.length"><td colspan="5">Todavía no hay lotes preparados</td></tr>
         </tbody>
       </table></div>
-      <div class="danger" *ngIf="nextReadyChild as child">
-        <h4>Envío real por iVentas · UN SOLO LOTE</h4>
-        <p>#{{ child.child_id }} · {{ child.sucursal_canon }} · {{ child.recipient_count }} destinatarios. Si el resultado es incierto, NO vuelvas a enviar: primero comprueba si iVentas lo aceptó.</p>
-        <mat-checkbox [formControl]="executionCheckbox">Revisé los destinatarios, plantilla, canal, costo, límite y autorización. Confirmo el envío real de este único lote.</mat-checkbox>
-        <div class="confirmation">
-          <mat-form-field appearance="fill"><mat-label>Escribe {{ sendWord }}</mat-label>
-            <input matInput [formControl]="executionPhrase" autocomplete="off">
-          </mat-form-field>
-          <mat-form-field appearance="fill"><mat-label>Contraseña de Suite Ultra</mat-label>
-            <input matInput type="password" [formControl]="executionPassword" autocomplete="current-password" maxlength="256">
-          </mat-form-field>
-          <button mat-flat-button color="warn" type="button" (click)="executeOne()" [disabled]="!canExecute">
-            <mat-progress-spinner *ngIf="working === 'execute'" mode="indeterminate" [diameter]="16" aria-label="Enviando lote"></mat-progress-spinner>
-            {{ working === 'execute' ? 'Enviando lote…' : 'Enviar únicamente lote #' + child.child_id }}
-          </button>
-        </div>
-      </div>
-      <div class="danger bulk-execution" *ngIf="bulkPendingIds.length > 1 && !uncertainResult">
+      </details>
+      <div class="send-panel bulk-execution" *ngIf="bulkPendingIds.length > 1 && !uncertainResult">
         <h4>Enviar todos los lotes pendientes · UNA SOLA CONFIRMACIÓN</h4>
         <p><strong>{{ bulkPendingIds.length }} lotes</strong> autorizados aún sin enviar.
           Los lotes ya aceptados por iVentas se excluyen. La Suite enviará solo los pendientes en el orden del manifiesto,
@@ -175,6 +179,24 @@
           </button>
         </div>
       </div>
+      <details class="single-send" *ngIf="nextReadyChild as child" [open]="expandSingleSend">
+        <summary>Enviar solo el siguiente lote (alternativa)</summary>
+        <h4>Envío real por iVentas · UN SOLO LOTE</h4>
+        <p>#{{ child.child_id }} · {{ child.sucursal_canon }} · {{ child.recipient_count }} destinatarios. Si el resultado es incierto, NO vuelvas a enviar: primero comprueba si iVentas lo aceptó.</p>
+        <mat-checkbox [formControl]="executionCheckbox">Revisé los destinatarios, plantilla, canal, costo, límite y autorización. Confirmo el envío real de este único lote.</mat-checkbox>
+        <div class="confirmation">
+          <mat-form-field appearance="fill"><mat-label>Escribe {{ sendWord }}</mat-label>
+            <input matInput [formControl]="executionPhrase" autocomplete="off">
+          </mat-form-field>
+          <mat-form-field appearance="fill"><mat-label>Contraseña de Suite Ultra</mat-label>
+            <input matInput type="password" [formControl]="executionPassword" autocomplete="current-password" maxlength="256">
+          </mat-form-field>
+          <button mat-flat-button color="warn" type="button" (click)="executeOne()" [disabled]="!canExecute">
+            <mat-progress-spinner *ngIf="working === 'execute'" mode="indeterminate" [diameter]="16" aria-label="Enviando lote"></mat-progress-spinner>
+            {{ working === 'execute' ? 'Enviando lote…' : 'Enviar únicamente lote #' + child.child_id }}
+          </button>
+        </div>
+      </details>
       <div class="bulk-progress" *ngIf="bulkTotal > 0" role="status">
         <p><strong>Avance de esta ejecución:</strong> {{ bulkAccepted }} de {{ bulkTotal }} lotes aceptados.</p>
         <p *ngIf="working === 'bulk' && bulkCurrentChildId">Lote en proceso: #{{ bulkCurrentChildId }}. No cierres ni recargues la página.</p>
@@ -182,7 +204,7 @@
           (click)="requestBulkStop()">Detener después del lote actual</button>
         <p *ngIf="bulkStopRequested && working === 'bulk'">Se detendrá después de recibir o revisar el resultado del lote actual.</p>
       </div>
-      <p *ngIf="!nextReadyChild" class="hint">No hay un lote habilitado para envío. Si existe un resultado incierto, debe verificarse manualmente antes de continuar.</p>
+      <p *ngIf="!nextReadyChild && monitorData.status !== 'COMPLETE'" class="hint">No hay un lote habilitado para envío. Si existe un resultado incierto, debe verificarse manualmente antes de continuar.</p>
     </ng-container>
   </section>
 </mat-dialog-content>

@@ -1785,3 +1785,41 @@ test('Campaign V2 shows unresolved provider result without claiming an accepted 
   assert.ok(html.includes('No se cuentan'.toLowerCase()) || html.includes('NO se cuentan'));
   assert.ok(html.includes('resultados') || html.includes('rechazo'));
 });
+
+
+test('Campaign V2 UI: envio compacto, una zona vertical de scroll y seguridad visible', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.html'), 'utf8');
+  const css = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.css'), 'utf8');
+  const ts = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.ts'), 'utf8');
+  assert.ok(html.includes('class="dispatch-overview"'));
+  assert.ok(html.includes('class="setup-history"'));
+  assert.ok(html.includes('[open]="setupInitiallyOpen"'));
+  assert.ok(html.includes('class="manifest-details"'));
+  assert.ok(html.includes('class="batch-details"'));
+  assert.ok(html.includes('class="send-panel bulk-execution"'));
+  assert.ok(html.includes('class="single-send"'));
+  assert.ok(html.indexOf('class="send-panel bulk-execution"') <
+    html.indexOf('class="single-send"'));
+  assert.ok(html.includes('(click)="executePendingSequentially()"'));
+  assert.ok(html.includes('(click)="executeOne()"'));
+  assert.ok(html.includes('El envío real siempre requiere confirmación'));
+  assert.ok(html.includes('No hay reintentos automáticos'));
+  assert.equal(html.includes('appearance="outline"'), false);
+  assert.equal(html.includes('style="'), false);
+  assert.ok(css.includes('.table-scroll { overflow-x: auto; overflow-y: visible; }'));
+  assert.equal(css.includes('max-height:260px'), false);
+  assert.ok(ts.includes('get sentLotCount(): number'));
+  assert.ok(ts.includes('get acceptedContactCount(): number'));
+  for (const name of [
+    'governed-console-dialog', 'preparation-dialog', 'dispatch-admin-dialog',
+    'quota-admin-dialog', 'readiness-dialog', 'channel-portfolio-dialog',
+    'portfolio-review-dialog', 'qa-manual-dialog', 'excel-dialog',
+    'tariff-classifier-dialog',
+  ]) {
+    const fields = fs.readFileSync(
+      path.join(root, 'marketing-campaign-v2-' + name + '.component.html'), 'utf8',
+    );
+    assert.equal(fields.includes('appearance="outline"'), false, name);
+  }
+});
