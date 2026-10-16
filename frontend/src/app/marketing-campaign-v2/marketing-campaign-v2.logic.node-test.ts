@@ -1694,3 +1694,17 @@ test('Bulk send explicit: one gesture, sequential per-child guarded requests, no
   assert.equal(ui.includes('localStorage'), false);
   assert.equal(ui.includes('sessionStorage'), false);
 });
+
+
+test('Campaign V2: BI purpose does not hide iVentas creatives or override dispatch safety', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const excel = fs.readFileSync(path.join(root, 'marketing-campaign-v2-excel-dialog.component.ts'), 'utf8');
+  const ui = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.ts'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.html'), 'utf8');
+  assert.ok(excel.includes('this.templates.filter(template => template.is_active)'));
+  assert.ok(ui.includes('get creativePurposeNotice()'));
+  assert.ok(ui.includes('this.preflight?.campaign_purpose'));
+  assert.ok(html.includes('{{ creativePurposeNotice }}'));
+  assert.ok(ui.includes('this.monitor?.quota.all_current === true'));
+  assert.ok(ui.includes('this.executionPhrase.value === this.sendWord'));
+});
