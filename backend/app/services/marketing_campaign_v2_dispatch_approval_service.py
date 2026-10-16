@@ -179,6 +179,9 @@ def _reserve_locked(
     held_names: frozenset[str] = frozenset(),
     held_sources: dict[str, str] | None = None,
     capacity_basis: str | None = None,
+    revision_no: int = 1,
+    held_evidence_override: dict[str, dict] | None = None,
+    commit: bool = True,
 ) -> dict[str, Any]:
     expected_fingerprint, expected_quote, expected_count, expected_cost, actor = confirmation
     if plan.dispatch_fingerprint != expected_fingerprint:
@@ -273,9 +276,18 @@ def _reserve_locked(
             "estimated_mxn": price.get("estimated_mxn") if currency == "MXN" else None,
             "estimated_usd": price.get("maximum_estimated_usd") if currency == "USD" else None,
         })
+        if held and held_evidence_override is not None:
+            old_evidence = held_evidence_override.get(batch.sucursal_canon)
+            if (not isinstance(old_evidence, dict) or
+                    old_evidence.get("dispatch_fingerprint") != expected_fingerprint or
+                    old_evidence.get("quote_fingerprint") != expected_quote or
+                    old_evidence.get("source_reference") != (held_sources or {}).get(batch.sucursal_canon)):
+                raise CampaignV2ApprovalConflictError("No se puede reautorizar una retención alterada.")
+            manifest_batches[-1]["hold_evidence"] = dict(old_evidence)
 
     approval = MarketingCampaignV2DispatchApprovalORM(
         campaign_v2_id=plan.campaign_id,
+        revision_no=revision_no,
         template_id=plan.batches[0].template_id,
         dispatch_fingerprint=plan.dispatch_fingerprint,
         recipient_count=expected_count,
@@ -307,7 +319,9 @@ def _reserve_locked(
             reserved_messages=quantities[scope],
             reserved_until=expiry, created_at=timestamp,
         ))
-    session.commit()
+    session.flush()
+    if commit:
+        session.commit()
     return {
         "approval_id": int(approval.id), "campaign_id": int(plan.campaign_id),
         "dispatch_fingerprint": plan.dispatch_fingerprint,
@@ -448,7 +462,7 @@ def get_dispatch_approval(*, campaign_id: int, session: Any | None = None) -> di
     active = session if session is not None else db.session
     approval = active.query(MarketingCampaignV2DispatchApprovalORM).filter(
         MarketingCampaignV2DispatchApprovalORM.campaign_v2_id == campaign_id
-    ).one_or_none()
+    ).order_by(MarketingCampaignV2DispatchApprovalORM.revision_no.desc()).first()
     if approval is None:
         return {"approval": None, "send_authorized": False}
     return {
