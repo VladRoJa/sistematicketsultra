@@ -89,6 +89,9 @@ def _verified_started_suffix(*, session: Any, approval: Any, plan: Any,
 
     _check_child_identities(plan=plan, manifest=manifest, children=children)
     by_branch = {c.sucursal_canon: c for c in children}
+    if any(by_branch[b.sucursal_canon].status != "HELD"
+           for b in plan.batches if manifest[b.sucursal_canon]["planned_status"] == "HELD"):
+        raise GovernedDispatchConflict("Retención HELD histórica incompatible.")
     ready = [by_branch[b.sucursal_canon] for b in plan.batches
              if manifest[b.sucursal_canon]["planned_status"] == "READY"]
     statuses = [c.status for c in ready]
