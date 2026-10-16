@@ -155,6 +155,16 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
     return quota.status === 'REVIEWABLE'
       ? 'Límite revisado' : 'Falta revisar el límite de envío';
   }
+  get creativePurposeNotice(): string {
+    const purpose = this.preflight?.campaign_purpose;
+    const template = this.templates.find(item => item.id === this.preflight?.template?.id);
+    if (!purpose || !template || !template.purposes.length ||
+        template.purposes.includes(purpose)) { return ''; }
+    return 'El público se clasifica como ' + purpose +
+      ', pero la plantilla está catalogada como ' + template.purposes.join(', ') +
+      '. Es una diferencia de clasificación, no un bloqueo técnico; confirma que el contenido promocional sea adecuado para este público.';
+  }
+
   get preparationIssue(): string {
     const plan = this.preflight;
     if (!plan) { return ''; }
