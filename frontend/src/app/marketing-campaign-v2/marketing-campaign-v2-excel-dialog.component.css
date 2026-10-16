@@ -1,3 +1,4 @@
+@import './marketing-campaign-v2-form-fields.css';
 .excel-import { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; }
 .explanation { font-size: 13px; line-height: 1.5; }
 .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
