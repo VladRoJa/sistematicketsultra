@@ -343,6 +343,16 @@ export class MarketingCampaignV2Service {
     );
   }
 
+  reauthorizeGovernedCampaign(campaignId: number, payload: {
+    previous_approval_id: number;
+    expected_manifest_digest: string;
+    confirmation: string;
+  }): Observable<{new_approval_id: number; new_execution_id: number; ready_batches: number; held_batches: number; expires_at: string}> {
+    return this.http.post<{new_approval_id: number; new_execution_id: number; ready_batches: number; held_batches: number; expires_at: string}>(
+      `${this.apiUrl}/${campaignId}/dispatch/reauthorize`, payload,
+    );
+  }
+
   materializeGovernedCampaign(campaignId: number): Observable<CampaignV2GovernedMaterialize> {
     return this.http.post<CampaignV2GovernedMaterialize>(
       `${this.apiUrl}/${campaignId}/dispatch/materialize`, {},
