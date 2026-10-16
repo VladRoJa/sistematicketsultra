@@ -98,6 +98,13 @@
     <ng-container *ngIf="monitor as monitorData">
       <p><strong>{{ statusLabel(monitorData.status) }}</strong> · Qué sigue: {{ nextActionLabel(monitorData.next_manual_action) }}</p>
       <p>Lotes creados: {{ monitorData.children_count }} · Revisión interna de límites: {{ monitorData.quota.all_current ? 'Vigente' : 'No vigente' }}</p>
+      <p *ngIf="monitorData.status === 'CONTINUATION_REVIEW_REQUIRED'">
+        La ventana inicial de 15 minutos ya terminó, pero existen lotes aceptados y pendientes.
+        Solo se permite continuar manualmente con los pendientes: antes de cada lote el backend
+        comprobará otra vez la capacidad real y el historial de iVentas.
+        La reserva original está vencida y NO representa capacidad disponible hoy.
+        Cualquier discrepancia o resultado incierto detendrá los envíos.
+      </p>
       <div class="confirmation" *ngIf="monitorData.status === 'APPROVAL_EXPIRED'">
         <h4>Reautorizar despacho vencido · No envía mensajes</h4>
         <p>La autorización anterior caducó. Solo es posible emitir una nueva aprobación y reserva
@@ -147,7 +154,8 @@
         <h4>Enviar todos los lotes pendientes · UNA SOLA CONFIRMACIÓN</h4>
         <p><strong>{{ bulkPendingIds.length }} lotes</strong> autorizados aún sin enviar.
           Los lotes ya aceptados por iVentas se excluyen. La Suite enviará solo los pendientes en el orden del manifiesto,
-          consultando de nuevo autorización y estado antes de cada lote. Ante bloqueo, error o resultado incierto, se detendrá sin reintentos.</p>
+          consultando de nuevo autorización, capacidad y estado antes de cada lote. Una campaña ya iniciada puede continuar aunque venciera
+          su ventana de inicio, solo si cada validación de cupo actual pasa. Ante bloqueo, error o resultado incierto, se detendrá sin reintentos.</p>
         <mat-checkbox [formControl]="bulkCheckbox" [disabled]="busy">
           Revisé los {{ bulkPendingIds.length }} lotes pendientes, sus destinatarios, plantilla, canales, costo y límites.
           Confirmo el envío real secuencial de todos ellos.
