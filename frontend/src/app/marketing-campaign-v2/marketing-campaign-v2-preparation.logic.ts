@@ -7,9 +7,9 @@ export function parsePreviousCampaignIds(raw: string, currentCampaignId: number)
     return { ids: [], error: 'Indica de 1 a 20 IDs positivos, separados por comas (ejemplo: 20, 21).' };
   }
   const ids = pieces.map(value => Number(value));
-  if (ids.some(value => !Number.isSafeInteger(value) || value >= currentCampaignId) ||
+  if (ids.some(value => !Number.isSafeInteger(value) || value === currentCampaignId) ||
       new Set(ids).size !== ids.length) {
-    return { ids: [], error: 'Los IDs deben ser únicos y anteriores a esta campaña.' };
+    return { ids: [], error: 'Los IDs deben ser únicos y distintos de la campaña actual.' };
   }
   return { ids, error: '' };
 }
