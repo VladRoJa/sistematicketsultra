@@ -3,6 +3,7 @@
 No iVentas calls and no production data. The old reservation MUST NOT be
 mistaken for fresh capacity, and HELD batches must remain excluded.
 """
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace as NS
 from unittest.mock import MagicMock
@@ -13,6 +14,13 @@ from app.services import marketing_campaign_v2_governed_dispatch_service as svc
 
 NOW = datetime(2026, 10, 16, 19, 0, tzinfo=timezone.utc)
 DIGEST = "a" * 64
+
+
+@dataclass(frozen=True)
+class Plan:
+    campaign_id: int
+    dispatch_fingerprint: str
+    batches: tuple
 
 
 def synthetic(monkeypatch):
@@ -41,7 +49,7 @@ def synthetic(monkeypatch):
         NS(sucursal_canon="B"),
         NS(sucursal_canon="INDEPENDENCIA"),
     ]
-    plan = NS(
+    plan = Plan(
         campaign_id=22, dispatch_fingerprint="f"*64, batches=tuple(batches),
     )
     manifest = {
