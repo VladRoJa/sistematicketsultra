@@ -15,3 +15,4 @@ td, th { text-align: left; border-bottom: 1px solid #ddd; padding: 9px 12px; }
 .success { font-weight: 600; }
 .muted { font-size: 12px; opacity: .8; }
 @media (max-width: 700px) { .preparation { min-width: 0; } .input-row mat-form-field { min-width: 0; width: 100%; } }
+button mat-progress-spinner { display: inline-block; vertical-align: middle; margin-right: 7px; }
