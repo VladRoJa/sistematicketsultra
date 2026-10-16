@@ -7,6 +7,7 @@ on:
       - 'backend/app/warehouse/services/planning_targets_service.py'
       - 'backend/app/warehouse/services/kpi_desempeno_query_service.py'
       - 'backend/app/track_alerts/services/track_alert_rules_service.py'
+      - 'backend/app/track_alerts/services/track_alert_event_service.py'
       - 'backend/app/warehouse/services/track_forecast_service.py'
       - 'backend/app/routes/track_routes.py'
       - 'backend/app/warehouse/services/scheduler_priority_service.py'
@@ -65,6 +66,7 @@ jobs:
             app/warehouse/services/planning_targets_service.py \
             app/warehouse/services/kpi_desempeno_query_service.py \
             app/track_alerts/services/track_alert_rules_service.py \
+            app/track_alerts/services/track_alert_event_service.py \
             app/warehouse/services/track_forecast_service.py \
             app/routes/track_routes.py \
             app/warehouse/services/scheduler_priority_service.py \
