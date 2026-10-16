@@ -359,3 +359,96 @@ def test_postgres16_synthetic_snapshot_is_not_mutated():
         with engine.begin() as conn:
             conn.exec_driver_sql(f"DROP SCHEMA IF EXISTS {schema} CASCADE")
         engine.dispose()
+
+
+# Independent-review gate: every integer KPI metric must be nonnegative
+# even on day 1 (when no previous month MTD comparison is allowed).
+_INTEGER_KPI_FIELDS = (
+    "socios_activos_inicio_mes",
+    "clientes_nuevo_real",
+    "reactivaciones",
+    "renovaciones",
+    "bajas",
+    "socios_activos_del_mes",
+    "meta_socios_activos_del_mes",
+)
+
+
+def test_first_of_month_negative_reactivaciones_is_blocked_without_prior_day():
+    first = date(2026, 9, 1)
+    observed = {
+        first: {CENTRO: {
+            "reactivaciones_real_mtd": 5,
+            "bajas_reales_mtd": 1,
+        }},
+        first + timedelta(days=1): {CENTRO: {
+            "reactivaciones_real_mtd": 7,
+            "bajas_reales_mtd": 2,
+        }},
+    }
+    plan = plan_kpi_desempeno_mtd_impact(
+        business_date=first,
+        diff=_diff(day=first, fields=[("reactivaciones", 5, -3)]),
+        observed_mtd=observed,
+    )
+    assert plan.status == BLOCKED
+    assert [(x.code, x.branch_key, x.track_mtd_field)
+            for x in plan.blocking_issues] == [
+        ("INVALID_M1_FIELD", CENTRO, "reactivaciones"),
+    ]
+    assert plan.track_field_changes == ()
+    assert plan.changed_snapshot_fields == ()
+    assert observed[first][CENTRO]["reactivaciones_real_mtd"] == 5
+
+
+@pytest.mark.parametrize("metric", _INTEGER_KPI_FIELDS)
+@pytest.mark.parametrize("side", ["previous", "current"])
+def test_negative_previous_or_current_count_blocks_all_seven_kpi_metrics(metric, side):
+    old, new = (-1, 5) if side == "previous" else (5, -1)
+    plan = plan_kpi_desempeno_mtd_impact(
+        business_date=DAY,
+        diff=_diff(fields=[(metric, old, new)]),
+        observed_mtd=_series(),
+    )
+    assert plan.status == BLOCKED
+    assert [(x.code, x.branch_key, x.track_mtd_field)
+            for x in plan.blocking_issues] == [
+        ("INVALID_M1_FIELD", CENTRO, metric),
+    ]
+    assert plan.changed_snapshot_fields == ()
+    assert plan.track_field_changes == ()
+    assert plan.derived_delta_impacts == ()
+
+
+@pytest.mark.parametrize("metric", ["alcance_meta", "reactivaciones"])
+@pytest.mark.parametrize("side", ["previous", "current"])
+@pytest.mark.parametrize("nonfinite", [
+    float("nan"), float("inf"), float("-inf"),
+], ids=["NaN", "positive_inf", "negative_inf"])
+def test_nonfinite_m1_value_fails_closed_without_int_conversion(metric, side, nonfinite):
+    old, new = (nonfinite, 3) if side == "previous" else (3, nonfinite)
+    plan = plan_kpi_desempeno_mtd_impact(
+        business_date=DAY,
+        diff=_diff(fields=[(metric, old, new)]),
+        observed_mtd=_series(),
+    )
+    assert plan.status == BLOCKED
+    assert [(x.code, x.branch_key, x.track_mtd_field)
+            for x in plan.blocking_issues] == [
+        ("INVALID_M1_FIELD", CENTRO, metric),
+    ]
+    assert plan.changed_snapshot_fields == ()
+    assert plan.track_field_changes == ()
+
+
+def test_negative_socios_activos_is_not_masked_by_mtd_absence():
+    plan = plan_kpi_desempeno_mtd_impact(
+        business_date=DAY,
+        diff=_diff(fields=[("socios_activos_del_mes", 800, -1)]),
+        observed_mtd={},
+    )
+    assert plan.status == BLOCKED
+    assert len(plan.blocking_issues) == 1
+    assert plan.blocking_issues[0].code == "INVALID_M1_FIELD"
+    assert plan.blocking_issues[0].track_mtd_field == "socios_activos_del_mes"
+    assert plan.track_field_changes == ()
