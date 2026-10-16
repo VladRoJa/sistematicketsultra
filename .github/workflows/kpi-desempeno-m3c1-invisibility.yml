@@ -74,4 +74,9 @@ jobs:
           python -m pytest -q --tb=short -o addopts= \
             tests/warehouse/test_track_m3c1_reader_invisibility_postgres.py \
             tests/warehouse/test_track_daily_query_version_service.py \
-            tests/test_track_alert_region_rules_service.py
+            tests/test_track_alert_region_rules_service.py \
+            tests/test_track_forecast_service.py \
+            tests/test_track_excel_export_service.py \
+            tests/warehouse/test_commercial_daily_reports_service.py \
+            tests/test_track_regional_operational_service.py \
+            tests/test_track_branch_operational_detail_service.py
