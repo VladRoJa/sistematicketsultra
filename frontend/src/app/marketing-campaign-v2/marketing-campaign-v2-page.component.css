@@ -1,3 +1,4 @@
+@import './marketing-campaign-v2-form-fields.css';
 :host { display:block; color:var(--ultra-gray-900,#0f172a); }
 * { box-sizing:border-box; }
 .campaign-v2-page { min-height:calc(100vh - 72px); padding:16px; display:flex; flex-direction:column; gap:14px; background:var(--ultra-bg,#f5f7fa); }
