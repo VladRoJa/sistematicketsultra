@@ -1823,3 +1823,27 @@ test('Campaign V2 UI: envio compacto, una zona vertical de scroll y seguridad vi
     assert.equal(fields.includes('appearance="outline"'), false, name);
   }
 });
+
+
+test('Campaign V2: compact top navigation keeps all admin operations and hash routing intact', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-page.component.html'), 'utf8');
+  const ts = fs.readFileSync(path.join(root, 'marketing-campaign-v2-page.component.ts'), 'utf8');
+  assert.ok(html.includes('[matMenuTriggerFor]="campaignToolsMenu"'));
+  assert.ok(html.includes('<mat-menu #campaignToolsMenu="matMenu">'));
+  for (const action of [
+    'openExcelImport()', 'openQaManual()', 'openChannelReadiness()',
+    'openDispatchConfiguration()', 'openQuotaEvidence()',
+  ]) {
+    assert.ok(html.includes('(click)="' + action + '"'), action);
+  }
+  for (const section of [
+    'campaign-v2-builder', 'campaign-v2-reporting', 'campaign-v2-history',
+  ]) {
+    assert.ok(html.includes("goToCampaignSection('" + section + "')"), section);
+  }
+  assert.ok(ts.includes('MatMenuModule'));
+  assert.ok(ts.includes('inject(DOCUMENT)'));
+  assert.ok(ts.includes('scrollIntoView('));
+  assert.equal(html.includes('href="#campaign-v2-'), false); // hash router is reserved
+});
