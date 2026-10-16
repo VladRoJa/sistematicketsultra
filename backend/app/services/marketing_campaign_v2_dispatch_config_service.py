@@ -252,9 +252,11 @@ def list_templates(
 ) -> list[dict[str, Any]]:
     active_session = session if session is not None else db.session
     normalized_provider = _normalize_provider(provider)
-    normalized_purpose = (
-        _normalize_purpose(purpose) if purpose is not None else None
-    )
+    # "purpose" classifies the audience for BI; it is not a provider-side
+    # constraint on the selected creative. Validate the supplied vocabulary,
+    # but never hide an active template because of its historical usage tags.
+    if purpose is not None:
+        _normalize_purpose(purpose)
     query = active_session.query(MarketingCampaignV2TemplateORM).filter(
         MarketingCampaignV2TemplateORM.provider == normalized_provider
     )
@@ -264,12 +266,6 @@ def list_templates(
         MarketingCampaignV2TemplateORM.label.asc(),
         MarketingCampaignV2TemplateORM.id.asc(),
     ).all()
-    if normalized_purpose is not None:
-        rows = [
-            row
-            for row in rows
-            if _template_allows_purpose(row, normalized_purpose)
-        ]
     return [_serialize_template(row) for row in rows]
 
 
@@ -428,7 +424,9 @@ def resolve_dispatch_template(
     active_session = session if session is not None else db.session
     normalized_template_id = _positive_int(template_id, "template_id")
     normalized_provider = _normalize_provider(provider)
-    normalized_purpose = _normalize_purpose(purpose)
+    # Purpose remains a validated, authoritative campaign BI dimension.
+    # Template purposes are usage labels, not restrictions imposed by iVentas.
+    _normalize_purpose(purpose)
     row = active_session.query(MarketingCampaignV2TemplateORM).filter(
         MarketingCampaignV2TemplateORM.id == normalized_template_id,
         MarketingCampaignV2TemplateORM.provider == normalized_provider,
@@ -440,10 +438,6 @@ def resolve_dispatch_template(
     if not bool(row.is_active):
         raise MarketingCampaignV2DispatchConfigValidationError(
             "El template seleccionado está inactivo."
-        )
-    if not _template_allows_purpose(row, normalized_purpose):
-        raise MarketingCampaignV2DispatchConfigValidationError(
-            "El template no está permitido para el purpose de la campaña."
         )
     return row
 
@@ -487,18 +481,6 @@ def _resolve_active_catalog_branch(*, sucursal_id: int, session: Any):
             "La sucursal no tiene una identidad Track activa y única."
         )
     return rows[0]
-
-
-def _template_allows_purpose(
-    template: MarketingCampaignV2TemplateORM,
-    purpose: str,
-) -> bool:
-    configured = {
-        str(value).strip().upper()
-        for value in (template.purposes_json or [])
-        if str(value or "").strip()
-    }
-    return not configured or purpose in configured
 
 
 def _serialize_channel_binding(
