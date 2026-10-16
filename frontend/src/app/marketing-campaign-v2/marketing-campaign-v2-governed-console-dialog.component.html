@@ -11,7 +11,7 @@
     </button>
   </header>
   <div class="dispatch-overview" *ngIf="monitor as state" aria-label="Resumen del envío">
-    <div><small>Aceptados por iVentas</small><strong>{{ sentLotCount }} / {{ state.children_count - heldLotCount }} lotes</strong><span>{{ acceptedContactCount | number }} contactos</span></div>
+    <div><small>Aceptados por iVentas</small><strong>{{ sentLotCount }} / {{ actionableLotCount }} lotes</strong><span>{{ acceptedContactCount | number }} contactos</span></div>
     <div><small>Pendientes</small><strong>{{ pendingLotCount }} lotes</strong></div>
     <div><small>En espera</small><strong>{{ heldLotCount }} lotes</strong></div>
     <div><small>Estado</small><strong class="overview-status">{{ statusLabel(state.status) }}</strong></div>
@@ -21,8 +21,8 @@
   <p *ngIf="notice" role="status" class="success-message">{{ notice }}</p>
   <p *ngIf="uncertainResult" role="alert" class="error critical-message">El resultado del último intento requiere revisión en iVentas. La consola no enviará otro lote automáticamente.</p>
 
-  <details class="setup-history" [attr.open]="reviewReady ? null : ''">
-    <summary>{{ setupSummary }} <small>{{ reviewReady ? 'Consultar detalles y evidencias' : 'Revisar antes de autorizar' }}</small></summary>
+  <details class="setup-history" [open]="setupInitiallyOpen">
+    <summary>{{ setupSummary }} <small>{{ setupHelpText }}</small></summary>
   <section class="step">
     <h3>1 · Revisar destinatarios, costo y límite</h3>
     <mat-form-field appearance="fill">
@@ -179,7 +179,7 @@
           </button>
         </div>
       </div>
-      <details class="single-send" *ngIf="nextReadyChild as child" [attr.open]="bulkPendingIds.length === 1 ? '' : null">
+      <details class="single-send" *ngIf="nextReadyChild as child" [open]="expandSingleSend">
         <summary>Enviar solo el siguiente lote (alternativa)</summary>
         <h4>Envío real por iVentas · UN SOLO LOTE</h4>
         <p>#{{ child.child_id }} · {{ child.sucursal_canon }} · {{ child.recipient_count }} destinatarios. Si el resultado es incierto, NO vuelvas a enviar: primero comprueba si iVentas lo aceptó.</p>
