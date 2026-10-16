@@ -172,3 +172,41 @@ dl { margin:0; }.metadata-panel dl div { display:grid; grid-template-columns:170
   .header-actions { justify-content: flex-start; }
   .campaign-section-nav { padding: 3px 1px 7px; }
 }
+
+
+/* Readability pass: restore a clear text hierarchy around filled controls. */
+.campaign-v2-page { font-size: 14px; }
+.section-heading p,
+.commercial-panel-heading p,
+.blacklist-copy span,
+.families-header span,
+.helper-text,
+.builder-actions span,
+.iventas-current-status-heading span,
+.history-builder-heading span {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.workflow-step strong { font-size: 14px; }
+.workflow-step small { font-size: 12px; line-height: 1.35; }
+.commercial-panel-heading > span,
+.freeze-readiness span,
+.history-rule-title,
+.eyebrow { font-size: 12px; }
+.blacklist-copy strong { font-size: 14px; }
+.freeze-readiness small,
+.history-evaluation div,
+.history-breakdown div,
+.reporting-validation,
+.history-validation { font-size: 12px; line-height: 1.5; }
+.field-grid,
+.reporting-filters { gap: 14px 16px; }
+.field-grid mat-form-field,
+.reporting-filters mat-form-field,
+.commercial-panel mat-form-field { min-width: 0; }
+.campaign-section-nav button,
+.header-actions button { font-size: 14px; }
+@media (max-width: 760px) {
+  .field-grid,
+  .reporting-filters { row-gap: 12px; }
+}
