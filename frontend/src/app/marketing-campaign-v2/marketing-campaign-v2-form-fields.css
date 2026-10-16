@@ -1,0 +1,17 @@
+/* Campañas V2 | Campos discretos, sin cajas outline.
+   Variables MDC heredadas: no alteran el tema del resto de Suite Ultra.
+   Aplicar desde el CSS de cada componente mediante @import. */
+:host {
+  --mdc-filled-text-field-container-color: transparent;
+  --mdc-filled-text-field-disabled-container-color: #f1f5f9;
+  --mdc-filled-text-field-hover-state-layer-opacity: 0;
+  --mdc-filled-text-field-active-indicator-color: #cbd5e1;
+  --mdc-filled-text-field-hover-active-indicator-color: #94a3b8;
+  --mdc-filled-text-field-focus-active-indicator-color: var(--ultra-orange, #e54525);
+  --mdc-filled-text-field-label-text-color: #475569;
+  --mdc-filled-text-field-focus-label-text-color: var(--ultra-orange, #e54525);
+  --mdc-filled-text-field-label-text-size: 12px;
+  --mdc-filled-text-field-input-text-size: 13px;
+  --mat-form-field-container-height: 48px;
+  --mat-form-field-container-vertical-padding: 11px;
+}
