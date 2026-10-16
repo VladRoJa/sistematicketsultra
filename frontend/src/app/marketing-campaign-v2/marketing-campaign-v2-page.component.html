@@ -785,9 +785,10 @@
 
       <div class="table-wrapper" *ngIf="campaigns.length; else emptyHistory">
         <table>
-          <thead><tr><th>Nombre</th><th>Guardada</th><th>Origen</th><th>Objetivo</th><th>Destinatarios</th><th>Acciones</th></tr></thead>
+          <thead><tr><th scope="col">ID</th><th>Nombre</th><th>Guardada</th><th>Origen</th><th>Objetivo</th><th>Destinatarios</th><th>Acciones</th></tr></thead>
           <tbody>
             <tr *ngFor="let campaign of campaigns">
+              <td><strong>#{{ campaign.id }}</strong></td>
               <td>{{ campaign.name }}</td>
               <td>{{ campaign.frozen_at | date:'short' }}</td>
               <td>{{ sourceLabel(campaign.source) }}</td>
