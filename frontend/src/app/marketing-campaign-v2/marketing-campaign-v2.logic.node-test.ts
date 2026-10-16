@@ -1712,12 +1712,12 @@ test('Campaign V2: BI purpose does not hide iVentas creatives or override dispat
 });
 
 
-test('Previous-contact preparation accepts actual numeric IDs and rejects invalid/future references', () => {
+test('Previous-contact preparation accepts actual numeric IDs and rejects invalid or self references', () => {
   assert.deepEqual(parsePreviousCampaignIds('20, 21', 22), { ids: [20, 21], error: '' });
   assert.deepEqual(parsePreviousCampaignIds(' 20 ,  21 ', 22), { ids: [20, 21], error: '' });
   assert.ok(parsePreviousCampaignIds('20, 20', 22).error);
   assert.ok(parsePreviousCampaignIds('20, 22', 22).error);
-  assert.ok(parsePreviousCampaignIds('20, 23', 22).error);
+  assert.deepEqual(parsePreviousCampaignIds('21, 23', 22), { ids: [21, 23], error: '' });
   assert.ok(parsePreviousCampaignIds('', 22).error);
   assert.ok(parsePreviousCampaignIds('abc, 21', 22).error);
   assert.ok(parsePreviousCampaignIds('20;21', 22).error);
@@ -1751,4 +1751,16 @@ test('Campaign V2 saved campaigns display the stable internal ID for cross-campa
   assert.ok(savedCampaignsSection.includes('<th scope="col">ID</th>'));
   assert.ok(savedCampaignsSection.includes('<strong>#{{ campaign.id }}</strong>'));
   assert.ok(savedCampaignsSection.includes('(click)="openCampaign(campaign)"'));
+});
+
+test('Campaign V2 shows unresolved provider result without claiming an accepted send', () => {
+  const html = fs.readFileSync(
+    path.join(process.cwd(), 'src/app/marketing-campaign-v2/marketing-campaign-v2-preparation-dialog.component.html'),
+    'utf8',
+  );
+  assert.ok(html.includes('review.unconfirmed_batches.length'));
+  assert.ok(html.includes('item.source_campaign_id'));
+  assert.ok(html.includes('item.child_id'));
+  assert.ok(html.includes('No se cuentan'.toLowerCase()) || html.includes('NO se cuentan'));
+  assert.ok(html.includes('resultados') || html.includes('rechazo'));
 });
