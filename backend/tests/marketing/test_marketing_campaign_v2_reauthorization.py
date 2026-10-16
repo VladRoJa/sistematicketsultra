@@ -178,3 +178,59 @@ def test_approval_revision_migration_is_additive_and_downgrade_guarded(monkeypat
     assert "revision_no" in sql and "uq_mkt_v2_approval_campaign_revision" in sql
     assert "UPDATE marketing_campaign_v2" not in sql
     assert "DELETE FROM marketing_campaign_v2" not in sql
+
+
+def test_revision_uniqueness_and_immutable_history_on_real_pg(monkeypatch):
+    """Isolated PG16: two revisions allowed, repeated revision denied, rollback guarded."""
+    import os
+    import sqlalchemy as sa
+    from alembic.script import ScriptDirectory
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    raw = os.getenv("QUOTA_TEST_POSTGRES_URL")
+    if not raw:
+        pytest.skip("isolated quota_ci required")
+    uri = sa.engine.make_url(raw)
+    if (uri.get_backend_name() != "postgresql" or uri.username != "quota_ci"
+            or uri.database != "quota_ci" or uri.host not in ("localhost", "127.0.0.1")):
+        pytest.fail("Refusing any database except isolated synthetic quota_ci")
+    engine = sa.create_engine(raw)
+    md = sa.MetaData()
+    approvals = sa.Table(
+        "marketing_campaign_v2_dispatch_approvals", md,
+        sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("campaign_v2_id", sa.Integer(), nullable=False),
+        sa.UniqueConstraint("campaign_v2_id", name="uq_mkt_v2_approval_campaign"),
+    )
+    migrations = Path(__file__).resolve().parents[2] / "migrations"
+    revision = ScriptDirectory(str(migrations)).get_revision("b856rea1016")
+    with engine.begin() as conn:
+        md.create_all(conn)
+        conn.execute(approvals.insert().values(id=7, campaign_v2_id=22))
+        monkeypatch.setattr(revision.module, "op",
+                            Operations(MigrationContext.configure(conn)))
+        revision.module.upgrade()
+        conn.execute(sa.text(
+            "INSERT INTO marketing_campaign_v2_dispatch_approvals "
+            "(id,campaign_v2_id,revision_no) VALUES (9,22,2)"
+        ))
+        revisions = conn.execute(sa.text(
+            "SELECT id, revision_no FROM marketing_campaign_v2_dispatch_approvals "
+            "WHERE campaign_v2_id=22 ORDER BY revision_no"
+        )).all()
+        assert revisions == [(7, 1), (9, 2)]
+        with conn.begin_nested():
+            with pytest.raises(sa.exc.IntegrityError):
+                conn.execute(sa.text(
+                    "INSERT INTO marketing_campaign_v2_dispatch_approvals "
+                    "(id,campaign_v2_id,revision_no) VALUES (10,22,2)"
+                ))
+        with pytest.raises(RuntimeError, match="downgrade destructivo"):
+            revision.module.downgrade()
+        conn.execute(sa.text(
+            "DELETE FROM marketing_campaign_v2_dispatch_approvals WHERE id=9"
+        ))
+        revision.module.downgrade()
+        md.drop_all(conn)
+    engine.dispose()
