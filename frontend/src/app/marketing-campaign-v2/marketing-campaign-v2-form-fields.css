@@ -1,17 +1,40 @@
-/* Campañas V2 | Campos discretos, sin cajas outline.
-   Variables MDC heredadas: no alteran el tema del resto de Suite Ultra.
-   Aplicar desde el CSS de cada componente mediante @import. */
+/* Campaigns V2: readable MATERIAL FILL fields, never outline.
+ * Background and focus indicator distinguish input areas from plain text.
+ * Scope through component :host to avoid altering other Suite Ultra modules.
+ */
 :host {
-  --mdc-filled-text-field-container-color: transparent;
-  --mdc-filled-text-field-disabled-container-color: #f1f5f9;
-  --mdc-filled-text-field-hover-state-layer-opacity: 0;
-  --mdc-filled-text-field-active-indicator-color: #cbd5e1;
-  --mdc-filled-text-field-hover-active-indicator-color: #94a3b8;
+  --mdc-filled-text-field-container-color: #f1f5f9;
+  --mdc-filled-text-field-disabled-container-color: #f4f5f7;
+  --mdc-filled-text-field-container-shape: 8px 8px 0 0;
+  --mdc-filled-text-field-hover-state-layer-opacity: 0.025;
+
+  --mdc-filled-text-field-active-indicator-color: #94a3b8;
+  --mdc-filled-text-field-hover-active-indicator-color: #64748b;
   --mdc-filled-text-field-focus-active-indicator-color: var(--ultra-orange, #e54525);
+  --mdc-filled-text-field-caret-color: var(--ultra-orange, #e54525);
+
   --mdc-filled-text-field-label-text-color: #475569;
-  --mdc-filled-text-field-focus-label-text-color: var(--ultra-orange, #e54525);
-  --mdc-filled-text-field-label-text-size: 12px;
-  --mdc-filled-text-field-input-text-size: 13px;
-  --mat-form-field-container-height: 48px;
-  --mat-form-field-container-vertical-padding: 11px;
+  --mdc-filled-text-field-hover-label-text-color: #334155;
+  --mdc-filled-text-field-focus-label-text-color: #a53319;
+  --mdc-filled-text-field-label-text-size: 14px;
+
+  --mdc-filled-text-field-input-text-color: #0f172a;
+  --mdc-filled-text-field-input-text-size: 16px;
+  --mdc-filled-text-field-disabled-input-text-color: #64748b;
+
+  /* Default 48px caused cramped labels, floating text and invisible inputs. */
+  --mat-form-field-container-height: 60px;
+  --mat-form-field-container-vertical-padding: 18px;
+  --mat-form-field-subscript-text-size: 12px;
+}
+
+:host mat-form-field {
+  min-width: 0;
+  font-size: 15px;
+}
+
+:host mat-hint,
+:host mat-error {
+  font-size: 12px;
+  line-height: 1.45;
 }
