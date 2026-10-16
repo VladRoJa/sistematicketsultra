@@ -1,0 +1,65 @@
+name: KPI Desempeno M3-B MTD Contract
+
+on:
+  pull_request:
+    paths:
+      - 'docs/contratos/SUITE_ULTRA_KPI_DESEMPENO_M3B_MTD_SELECTIVE_CONTRACT.md'
+      - 'backend/app/warehouse/services/kpi_desempeno_m3b_continuity_plan.py'
+      - 'backend/tests/warehouse/test_kpi_desempeno_m3b_continuity_plan.py'
+      - '.github/workflows/kpi-desempeno-m3b-mtd-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mtd-contract-postgresql16:
+    name: Synthetic PostgreSQL 16 / read-only M3-B impact planning
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: kpi_m3b_ci
+          POSTGRES_PASSWORD: synthetic-m3b-only
+          POSTGRES_DB: kpi_m3b_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kpi_m3b_ci -d kpi_m3b_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+      SECRET_KEY: synthetic-m3b-only
+      JWT_SECRET_KEY: synthetic-m3b-jwt-only
+      SQLALCHEMY_DATABASE_URI: 'sqlite:///:memory:'
+      M3B_TEST_POSTGRES_URL: 'postgresql://kpi_m3b_ci:synthetic-m3b-only@127.0.0.1:5432/kpi_m3b_ci'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install pinned backend and pytest
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Compile read-only contract and synthetic tests
+        run: |
+          python -m py_compile \
+            app/warehouse/services/kpi_desempeno_m3b_continuity_plan.py \
+            tests/warehouse/test_kpi_desempeno_m3b_continuity_plan.py
+      - name: Synthetic contract / real PostgreSQL 16 / M1 regressions
+        run: |
+          python -m pytest -q --tb=short -o addopts= \
+            tests/warehouse/test_kpi_desempeno_m3b_continuity_plan.py \
+            tests/warehouse/test_kpi_desempeno_semantic_diff.py
