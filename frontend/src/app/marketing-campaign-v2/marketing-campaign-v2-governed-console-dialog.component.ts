@@ -9,7 +9,7 @@ import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/materia
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { forkJoin } from 'rxjs';
+import { firstValueFrom, forkJoin } from 'rxjs';
 
 import {
   CampaignV2DispatchTemplate,
@@ -19,13 +19,14 @@ import {
   CampaignV2PreflightResponse,
 } from './marketing-campaign-v2.models';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
+import { pendingGovernedBatchIds } from './marketing-campaign-v2-bulk-dispatch.logic';
 
 export interface MarketingCampaignV2GovernedConsoleDialogData {
   campaignId: number;
   campaignName: string;
 }
 
-type Action = 'read' | 'preflight' | 'approve' | 'materialize' | 'authorize' | 'execute';
+type Action = 'read' | 'preflight' | 'approve' | 'materialize' | 'authorize' | 'execute' | 'bulk';
 type ExecutionReview =
   CampaignV2GovernedExecutionReview | CampaignV2GovernedExecutionReviewReady;
 
@@ -51,6 +52,9 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   readonly executionPhrase = new FormControl('', { nonNullable: true });
   readonly executionPassword = new FormControl('', { nonNullable: true });
   readonly executionCheckbox = new FormControl(false, { nonNullable: true });
+  readonly bulkPhrase = new FormControl('', { nonNullable: true });
+  readonly bulkPassword = new FormControl('', { nonNullable: true });
+  readonly bulkCheckbox = new FormControl(false, { nonNullable: true });
   templates: CampaignV2DispatchTemplate[] = [];
   preflight: CampaignV2PreflightResponse | null = null;
   approval: CampaignV2GovernedApprovalState | null = null;
@@ -62,12 +66,18 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   error = '';
   notice = '';
   uncertainResult = false;
+  bulkTotal = 0;
+  bulkAccepted = 0;
+  bulkCurrentChildId: number | null = null;
+  bulkStopRequested = false;
+  private destroyed = false;
 
   constructor(@Inject(MAT_DIALOG_DATA) readonly data: MarketingCampaignV2GovernedConsoleDialogData) {}
 
   ngOnInit(): void {
     this.templateId.valueChanges.pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.invalidatePreflight());
+    this.destroyRef.onDestroy(() => { this.destroyed = true; this.bulkStopRequested = true; });
     this.loadCatalog();
     this.refresh();
   }
@@ -201,7 +211,7 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
     const labels: Record<Action, string> = {
       read: 'Consultando', preflight: 'Revisando destinatarios',
       approve: 'Aprobando costo', materialize: 'Preparando lotes',
-      authorize: 'Autorizando', execute: 'Enviando un lote',
+      authorize: 'Autorizando', execute: 'Enviando un lote', bulk: 'Enviando lotes pendientes',
     };
     return this.working ? labels[this.working] : '';
   }
@@ -209,6 +219,10 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   get approvalWord(): string { return 'APROBAR ' + this.readyCount; }
   get materializeWord(): string { return 'PREPARAR ' + this.data.campaignId; }
   get authorizationWord(): string { return 'AUTORIZAR ' + this.approvedReadyCount; }
+  get bulkPendingIds(): number[] {
+    return pendingGovernedBatchIds(this.monitor, this.reviewReady);
+  }
+  get bulkWord(): string { return 'ENVIAR PENDIENTES ' + this.bulkPendingIds.length; }
   get sendWord(): string {
     return this.nextReadyChild ? 'ENVIAR LOTE ' + this.nextReadyChild.child_id : '';
   }
@@ -257,6 +271,16 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
       this.executionPassword.value.length > 0 &&
       this.executionPassword.value.length <= 256 &&
       this.executionPhrase.value === this.sendWord;
+  }
+
+  get canBulkSend(): boolean {
+    const ids = this.bulkPendingIds;
+    return !this.busy && !this.uncertainResult && this.validApproval &&
+      ids.length > 0 && ids.length <= 30 &&
+      this.nextReadyChild?.child_id === ids[0] &&
+      this.bulkCheckbox.value === true &&
+      this.bulkPhrase.value === this.bulkWord &&
+      this.bulkPassword.value.length > 0 && this.bulkPassword.value.length <= 256;
   }
 
   close(): void { if (!this.busy) { this.dialogRef.close(); } }
@@ -441,6 +465,117 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
     });
   }
 
+  /**
+   * One user-initiated operation; one existing guarded provider request per
+   * DISTINCT pending child. No timers, retries, stored credentials or resume.
+   * Fresh backend monitor + manifest review must pass before EVERY next child.
+   */
+  async executePendingSequentially(): Promise<void> {
+    if (!this.canBulkSend) { return; }
+    const pendingIds = [...this.bulkPendingIds];
+    const expectedDigest = this.reviewReady!.manifest_digest;
+    const expectedExecutionId = this.reviewReady!.execution!.execution_id;
+    let password = this.bulkPassword.value;
+    this.bulkPassword.setValue('');
+    this.bulkCheckbox.setValue(false);
+    this.bulkPhrase.setValue('');
+    this.executionPassword.setValue('');
+    this.executionCheckbox.setValue(false);
+    this.executionPhrase.setValue('');
+    this.bulkStopRequested = false;
+    this.bulkTotal = pendingIds.length;
+    this.bulkAccepted = 0;
+    this.bulkCurrentChildId = null;
+    this.working = 'bulk';
+    this.error = '';
+    this.notice = '';
+
+    try {
+      for (let index = 0; index < pendingIds.length; index += 1) {
+        if (this.bulkStopRequested || this.destroyed) { break; }
+        // Fail closed if approval, manifest, quota, child order or provider state
+        // changed between operator review and this exact provider request.
+        await this.readFreshBulkState();
+        const expected = pendingIds.slice(index);
+        const current = pendingGovernedBatchIds(this.monitor, this.reviewReady);
+        if (!this.validApproval || !this.reviewReady ||
+            this.reviewReady.manifest_digest !== expectedDigest ||
+            this.reviewReady.execution?.execution_id !== expectedExecutionId ||
+            current.length !== expected.length ||
+            current.some((id, position) => id !== expected[position])) {
+          throw new Error('Cambió la autorización, límite u orden de lotes. Se detuvo el envío.');
+        }
+        const childId = pendingIds[index];
+        this.bulkCurrentChildId = childId;
+        const result = await firstValueFrom(this.api.executeGovernedChild(this.data.campaignId, {
+          execution_id: expectedExecutionId,
+          child_id: childId,
+          expected_manifest_digest: expectedDigest,
+          operator_password: password,
+        }).pipe(takeUntilDestroyed(this.destroyRef)));
+        if (result.status !== 'SUBMITTED' || result.child_id !== childId) {
+          throw new Error('iVentas no confirmó este lote. Revisar el estado antes de continuar.');
+        }
+        this.bulkAccepted += 1;
+        // Require durable backend confirmation of the exact accepted child.
+        await this.readFreshBulkState();
+        const persisted = this.monitor?.children.find(child => child.child_id === childId);
+        if (persisted?.status !== 'SUBMITTED' || !persisted.provider_campaign_id) {
+          throw new Error('No se pudo verificar la aceptación persistida del lote. No continuar.');
+        }
+        if (index + 1 < pendingIds.length) {
+          const remaining = pendingGovernedBatchIds(this.monitor, this.reviewReady);
+          if (remaining.length !== pendingIds.length - index - 1 ||
+              remaining.some((id, position) => id !== pendingIds[index + 1 + position])) {
+            throw new Error('Cambió el siguiente lote autorizado. No continuar.');
+          }
+        } else if (this.monitor?.execution?.status !== 'COMPLETE') {
+          throw new Error('El último lote fue aceptado, pero la ejecución requiere revisión.');
+        }
+      }
+      if (!this.destroyed) {
+        this.notice = this.bulkStopRequested
+          ? `Envío detenido por el operador: ${this.bulkAccepted}/${this.bulkTotal} lotes aceptados. Consulta el estado antes de continuar.`
+          : `Proceso terminado: ${this.bulkAccepted}/${this.bulkTotal} lotes aceptados por iVentas. Revisa las estadísticas del proveedor.`;
+      }
+    } catch (error: unknown) {
+      if (!this.destroyed) {
+        this.uncertainResult = true;
+        this.error = error instanceof HttpErrorResponse
+          ? this.message(error, 'No se pudo confirmar el estado del lote. No reenviar.')
+          : error instanceof Error ? error.message : 'Resultado incierto. No reenviar.';
+        this.notice = `Proceso detenido tras ${this.bulkAccepted} de ${this.bulkTotal} aceptaciones confirmadas. Revisa iVentas antes de cualquier continuación.`;
+      }
+    } finally {
+      password = '';
+      this.bulkCurrentChildId = null;
+      this.working = null;
+      if (!this.destroyed) {
+        // A fresh manual consultation is always available; there is no
+        // automatic continuation after an error, expiry, stop or reload.
+        this.refresh(true);
+      }
+    }
+  }
+
+  requestBulkStop(): void {
+    if (this.working === 'bulk') {
+      this.bulkStopRequested = true;
+    }
+  }
+
+  private async readFreshBulkState(): Promise<void> {
+    const latest = await firstValueFrom(forkJoin({
+      approval: this.api.getGovernedApproval(this.data.campaignId),
+      execution: this.api.getGovernedExecution(this.data.campaignId),
+      monitor: this.api.getGovernedMonitor(this.data.campaignId),
+    }).pipe(takeUntilDestroyed(this.destroyRef)));
+    if (this.destroyed) { throw new Error('Pantalla cerrada.'); }
+    this.approval = latest.approval;
+    this.review = latest.execution;
+    this.monitor = latest.monitor;
+  }
+
   private handleWriteError(err: HttpErrorResponse): void {
     this.working = null;
     this.error = this.message(err, 'La operación no fue confirmada; consulta el monitor.');
@@ -459,6 +594,9 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
     this.executionPhrase.setValue('');
     this.executionPassword.setValue('');
     this.executionCheckbox.setValue(false);
+    this.bulkCheckbox.setValue(false);
+    this.bulkPhrase.setValue('');
+    this.bulkPassword.setValue('');
   }
   private message(err: HttpErrorResponse, fallback: string): string {
     return String(err.error?.message || fallback);
