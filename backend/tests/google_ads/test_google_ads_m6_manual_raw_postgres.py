@@ -67,13 +67,6 @@ def real_warehouse(tmp_path, monkeypatch):
         sa.Column("rol", sa.Text, nullable=False),
     )
     sa.Table("track_daily_versions", schema, sa.Column("id", sa.Integer, primary_key=True))
-    # Minimal isolation-only tables for the fail-closed legacy recovery check.
-    sa.Table("google_ads_daily_metrics", schema,
-             sa.Column("report_date", sa.Date, nullable=False))
-    sa.Table("google_ads_ad_group_daily_metrics", schema,
-             sa.Column("report_date", sa.Date, nullable=False))
-    sa.Table("google_ads_m6_daily_publications", schema,
-             sa.Column("business_date", sa.Date, nullable=False))
     tables = [
         WarehouseSourceORM, WarehouseFamilyORM, WarehouseOperationalRoleORM,
         WarehouseReportTypeORM, WarehouseUploadORM, WarehouseOperatorORM,
@@ -265,6 +258,36 @@ def test_real_partial_raw_then_safe_resume(real_warehouse, monkeypatch):
     assert physical.read_bytes() == files[0]
 
 
+
+
+@pytest.fixture
+def legacy_warehouse(real_warehouse):
+    """Create recovery-only tables AFTER standard RAW setup; tear down FIRST.
+
+    Keep the existing M6 raw PostgreSQL fixture unchanged: many unrelated
+    suites share its CI database and own their own daily metric tables.
+    """
+    client, token, other, engine, storage_root = real_warehouse
+    tables = sa.MetaData()
+    for name, column in (
+        ("google_ads_daily_metrics", "report_date"),
+        ("google_ads_ad_group_daily_metrics", "report_date"),
+        ("google_ads_m6_daily_publications", "business_date"),
+    ):
+        sa.Table(name, tables, sa.Column(column, sa.Date, nullable=False))
+    with engine.begin() as conn:
+        for table in tables.tables:
+            assert not sa.inspect(conn).has_table(table), (
+                f"Isolation violation: pre-existing {table}"
+            )
+        tables.create_all(conn)
+    try:
+        yield real_warehouse
+    finally:
+        with engine.begin() as conn:
+            tables.drop_all(conn)
+
+
 def _seed_legacy_misclassified_pair(app, engine, day=DAY):
     """Synthetic duplicate group XLSX stored once under each report type."""
     from openpyxl import Workbook
@@ -296,8 +319,8 @@ def _seed_legacy_misclassified_pair(app, engine, day=DAY):
 
 
 def test_legacy_recovery_requires_explicit_ids_then_audits_both_originals(
-        real_warehouse, monkeypatch):
-    client, token, other, engine, storage_root = real_warehouse
+        legacy_warehouse, monkeypatch):
+    client, token, other, engine, storage_root = legacy_warehouse
     files = daily_xlsx()
     signed = preview_post(client, token, files=files).json["raw_confirm_ticket"]
     ids, originals, original_audits = _seed_legacy_misclassified_pair(
@@ -356,8 +379,8 @@ def test_legacy_recovery_requires_explicit_ids_then_audits_both_originals(
     ("google_ads_m6_daily_publications", "business_date"),
 ])
 def test_legacy_recovery_refuses_existing_facts_or_publication(
-        real_warehouse, monkeypatch, table, column):
-    client, token, other, engine, storage_root = real_warehouse
+        legacy_warehouse, monkeypatch, table, column):
+    client, token, other, engine, storage_root = legacy_warehouse
     files = daily_xlsx()
     signed = preview_post(client, token, files=files).json["raw_confirm_ticket"]
     ids, original_raw, original_audit = _seed_legacy_misclassified_pair(
@@ -375,8 +398,8 @@ def test_legacy_recovery_refuses_existing_facts_or_publication(
 
 
 def test_legacy_recovery_partial_raw_resume_no_premature_supersession(
-        real_warehouse, monkeypatch):
-    client, token, other, engine, storage_root = real_warehouse
+        legacy_warehouse, monkeypatch):
+    client, token, other, engine, storage_root = legacy_warehouse
     files = daily_xlsx()
     signed = preview_post(client, token, files=files).json["raw_confirm_ticket"]
     ids, _, _ = _seed_legacy_misclassified_pair(client.application, engine)
