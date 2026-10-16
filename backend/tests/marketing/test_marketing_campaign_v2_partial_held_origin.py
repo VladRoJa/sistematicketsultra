@@ -59,7 +59,7 @@ def test_tampered_held_never_proves_safe_source(tamper):
         ])
 
 @pytest.mark.parametrize("state", [
-    "READY", "SUBMITTING", "PROVIDER_ERROR",
+    "SUBMITTING", "PROVIDER_ERROR",
     "RECONCILIATION_REQUIRED", "SCHEDULED",
 ])
 def test_non_held_partial_source_fails_closed(state):
@@ -68,6 +68,14 @@ def test_non_held_partial_source_fails_closed(state):
             child("5216861111111", "SUBMITTED", "regular"),
             child("5216862222222", state, "unknown"),
         ])
+
+def test_unattempted_ready_and_audited_held_are_both_ignored():
+    assert origin([
+        child("5216861111111", "SUBMITTED", "regular"),
+        child("5216862222222", "READY", "prepared"),
+        child("5216863333333", "HELD", "limited"),
+    ]) == {"6861111111"}
+
 
 def test_only_held_is_not_accepted_campaign():
     with pytest.raises(CampaignV2ScopedExclusionValidationError):
