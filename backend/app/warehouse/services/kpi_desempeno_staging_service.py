@@ -10,6 +10,7 @@ from datetime import date, datetime
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
+import re
 from typing import Any, Mapping
 
 import pandas as pd
@@ -101,6 +102,72 @@ def _validate_embedded_date(payload: bytes, expected: date) -> None:
         raise KpiDesempenoStagingError("KPI XLSX business_date mismatch")
 
 
+# Only these layouts are authorized. The date in the provider title is the
+# *business* date, not the date when the XLSX was downloaded.
+_GASCA_TITLE = re.compile(r"^KPIs Desempeño \\(Corte: (\\d{2}/\\d{2}/\\d{4})\\)$")
+
+
+def _normalize_kpi_layout_in_memory(payload: bytes, *, expected_date: date) -> bytes:
+    """Adapt Gasca's one-title-row layout without changing stored XLSX bytes.
+
+    The ordinary layout passes through unchanged. When A1 is the exact
+    business-date title and row 2 is the exact nine-column header, return a
+    separate in-memory XLSX understood by the existing parser/M1 comparator.
+    """
+    try:
+        with pd.ExcelFile(BytesIO(payload)) as book:
+            sheet = next(
+                (name for name in book.sheet_names if name.strip().lower() == "data"),
+                book.sheet_names[0],
+            )
+            raw = pd.read_excel(book, sheet_name=sheet, header=None)
+    except Exception as exc:
+        raise KpiDesempenoStagingError("Unreadable KPI XLSX layout") from exc
+
+    def header_at(index: int) -> tuple[str, ...]:
+        return tuple(
+            "" if pd.isna(value) else str(value).strip()
+            for value in raw.iloc[index].tolist()
+        )
+
+    if raw.shape[1] != len(EXPECTED_KPI_DESEMPENO_COLUMNS) or raw.empty:
+        raise KpiDesempenoStagingError("Unexpected KPI column count or empty worksheet")
+
+    header_positions = [
+        index for index in range(len(raw))
+        if header_at(index) == EXPECTED_KPI_DESEMPENO_COLUMNS
+    ]
+    if header_positions == [0]:
+        return payload
+    if header_positions != [1]:
+        raise KpiDesempenoStagingError("Ambiguous or unexpected KPI headers")
+
+    first_row = raw.iloc[0].tolist()
+    if not isinstance(first_row[0], str) or any(
+        not pd.isna(value) for value in first_row[1:]
+    ):
+        raise KpiDesempenoStagingError("Unexpected KPI title row")
+
+    match = _GASCA_TITLE.fullmatch(first_row[0].strip())
+    if match is None:
+        raise KpiDesempenoStagingError("Unrecognized KPI business-date title")
+    try:
+        title_date = datetime.strptime(match.group(1), "%d/%m/%Y").date()
+    except ValueError as exc:
+        raise KpiDesempenoStagingError("Invalid KPI title business date") from exc
+    if title_date != expected_date:
+        raise KpiDesempenoStagingError("KPI title business_date mismatch")
+
+    # Recreate ONLY the parsed view. The verified payload, source file,
+    # Warehouse upload hash, and original workbook are never changed.
+    data = raw.iloc[2:].copy()
+    data.columns = EXPECTED_KPI_DESEMPENO_COLUMNS
+    result = BytesIO()
+    with pd.ExcelWriter(result, engine="openpyxl") as writer:
+        data.to_excel(writer, sheet_name="data", index=False)
+    return result.getvalue()
+
+
 def _validate_integer_cells(payload: bytes) -> None:
     """Guard against parser's legacy int(float(value)) truncation."""
     with pd.ExcelFile(BytesIO(payload)) as book:
@@ -129,8 +196,9 @@ def _validate_integer_cells(payload: bytes) -> None:
 def _read_parsed(upload: WarehouseUploadORM, *, expected_date: date) -> KpiDesempenoParseResult:
     payload = _verified_bytes(upload, expected_date=expected_date)
     _validate_embedded_date(payload, expected_date)
-    _validate_integer_cells(payload)
-    return parse_kpi_desempeno_xlsx(file_bytes=payload)
+    parsed_view = _normalize_kpi_layout_in_memory(payload, expected_date=expected_date)
+    _validate_integer_cells(parsed_view)
+    return parse_kpi_desempeno_xlsx(file_bytes=parsed_view)
 
 
 def stage_kpi_desempeno_upload(
