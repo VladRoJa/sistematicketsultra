@@ -1,17 +1,18 @@
 <h2 mat-dialog-title>Preparar destinatarios · Campaña #{{ data.campaignId }}</h2>
 <mat-dialog-content class="preparation">
-  <p>Motivo de la revisións de solo lectura. Los cambios requieren confirmación explícita y
+  <p>Las revisiones son de solo lectura. Los cambios requieren confirmación explícita y
     producen exclusiones auditadas exclusivas de esta campaña.
     Ni la cohorte congelada ni la lista negra global se modifican.</p>
   <div *ngIf="error" class="error" role="alert">{{ error }}</div>
   <div *ngIf="success" class="success" role="status">{{ success }}</div>
-  <p *ngIf="busy" role="status">Procesando solicitud…</p>
+  <p *ngIf="busy" role="status" aria-live="polite">Procesando: {{ workingAction === 'branches-review' ? 'analizando evidencias' : workingAction === 'branches-apply' ? 'guardando exclusiones' : workingAction === 'previous-review' ? 'buscando coincidencias' : 'guardando exclusiones previas' }}…</p>
 
   <section class="preparation-section">
     <div class="heading">
       <h3>Sucursales que no se pudieron identificar con seguridad</h3>
       <button mat-stroked-button type="button" (click)="reviewBranches()" [disabled]="busy">
-        Analizar evidencias
+        <mat-progress-spinner *ngIf="workingAction === 'branches-review'" mode="indeterminate" [diameter]="16" aria-label="Analizando evidencias"></mat-progress-spinner>
+        {{ workingAction === 'branches-review' ? 'Analizando…' : 'Analizar evidencias' }}
       </button>
     </div>
     <ng-container *ngIf="branchReview as review">
@@ -58,7 +59,10 @@
           <input matInput [formControl]="confirmBranchControl">
         </mat-form-field>
         <button mat-flat-button color="warn" type="button" (click)="applyBranches()"
-          [disabled]="!canApplyBranches">Excluir contactos con sucursal incierta</button>
+          [disabled]="!canApplyBranches">
+          <mat-progress-spinner *ngIf="workingAction === 'branches-apply'" mode="indeterminate" [diameter]="16" aria-label="Guardando exclusiones"></mat-progress-spinner>
+          {{ workingAction === 'branches-apply' ? 'Guardando exclusiones…' : 'Excluir contactos con sucursal incierta' }}
+        </button>
       </div>
     </ng-container>
   </section>
@@ -76,8 +80,12 @@
         <input matInput [formControl]="sourceIdsControl" placeholder="14, 15">
       </mat-form-field>
       <button mat-stroked-button type="button" (click)="reviewPreviousContacts()"
-        [disabled]="busy">Buscar contactos repetidos</button>
+        [disabled]="busy">
+        <mat-progress-spinner *ngIf="workingAction === 'previous-review'" mode="indeterminate" [diameter]="16" aria-label="Buscando contactos repetidos"></mat-progress-spinner>
+        {{ workingAction === 'previous-review' ? 'Buscando coincidencias…' : 'Buscar contactos repetidos' }}
+      </button>
     </div>
+    <p *ngIf="previousError" class="error" role="alert">{{ previousError }}</p>
     <ng-container *ngIf="previousReview as review">
       <p>
         Coincidencias únicas: <strong>{{ review.matched | number }}</strong>.
@@ -108,7 +116,10 @@
           <input matInput [formControl]="confirmPreviousControl">
         </mat-form-field>
         <button mat-flat-button color="warn" type="button" (click)="applyPrevious()"
-          [disabled]="!canApplyPrevious">Excluir contactos ya utilizados</button>
+          [disabled]="!canApplyPrevious">
+          <mat-progress-spinner *ngIf="workingAction === 'previous-apply'" mode="indeterminate" [diameter]="16" aria-label="Guardando exclusiones de campañas previas"></mat-progress-spinner>
+          {{ workingAction === 'previous-apply' ? 'Guardando exclusiones…' : 'Excluir contactos ya utilizados' }}
+        </button>
       </div>
     </ng-container>
   </section>
