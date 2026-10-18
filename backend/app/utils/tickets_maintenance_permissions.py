@@ -14,6 +14,12 @@ from app.utils.pm_permissions import can_pm_view, normalize_pm_role
 COORDINATE_ACTION = "tickets.maintenance.coordinate"
 ASSIGNED_ONLY_ACTION = "tickets.maintenance.read_assigned_only"
 ADMIN_ROLES = frozenset({"ADMINISTRADOR", "SUPER_ADMIN", "ADMIN"})
+ASSIGNED_ONLY_ELIGIBLE_ROLES = frozenset({
+    "SR_MANTENIMIENTO",
+    "AUX_MANTENIMIENTO",
+    "MANTENIMIENTO",
+    "TECNICO",
+})
 
 
 def _has_active_user_grant(user, action_key: str) -> bool:
@@ -81,7 +87,7 @@ def has_assigned_only_maintenance_scope(user) -> bool:
         return False
 
     role = normalize_pm_role(getattr(user, "rol", None))
-    if role in ADMIN_ROLES:
+    if role not in ASSIGNED_ONLY_ELIGIBLE_ROLES:
         return False
 
     return _has_active_user_grant(user, ASSIGNED_ONLY_ACTION)
