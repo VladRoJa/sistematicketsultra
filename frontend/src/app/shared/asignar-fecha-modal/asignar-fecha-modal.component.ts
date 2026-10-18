@@ -158,6 +158,18 @@ export class AsignarFechaModalComponent implements OnChanges {
     );
   }
 
+  get modalTitulo(): string {
+    return this.permitirAsignacionMantenimiento
+      ? 'Asignar atención y compromiso'
+      : 'Asignar fecha de solución';
+  }
+
+  get modalDescripcion(): string {
+    return this.permitirAsignacionMantenimiento
+      ? 'Define responsable, fecha compromiso y motivo del seguimiento.'
+      : 'Define la fecha compromiso y registra el motivo para mantener trazabilidad.';
+  }
+
   get guardarDeshabilitado(): boolean {
     return this.cargandoCatalogos || this.aparatoSinFamilia || (
       this.permitirAsignacionMantenimiento && (
