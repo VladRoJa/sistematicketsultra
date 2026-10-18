@@ -233,3 +233,40 @@ def test_tecnico_asignado_no_puede_solicitar_cierre_sin_revision_coordinacion(mo
 
     assert status == 403
     assert calls == []
+
+
+def test_conformidad_mantenimiento_es_de_gerente_no_creador():
+    from app.routes import ticket_routes
+
+    mantenimiento = SimpleNamespace(
+        id=501, departamento_id=1, username="RECEPCIONISTA_QA",
+        sucursal_id=8, sucursal_id_destino=8,
+    )
+    creador = SimpleNamespace(
+        username="RECEPCIONISTA_QA", rol="RECEPCIONISTA", sucursal_id=8,
+    )
+    gerente = SimpleNamespace(
+        username="GERENTE_QA", rol="GERENTE", sucursal_id=8,
+    )
+    gerente_ajeno = SimpleNamespace(
+        username="GERENTE_AJENO", rol="GERENTE", sucursal_id=9,
+    )
+    admin = SimpleNamespace(
+        username="ADMIN_QA", rol="ADMINISTRADOR", sucursal_id=1000,
+    )
+
+    assert not ticket_routes._puede_validar_cierre_gerente(creador, mantenimiento)
+    assert ticket_routes._puede_validar_cierre_gerente(gerente, mantenimiento)
+    assert not ticket_routes._puede_validar_cierre_gerente(gerente_ajeno, mantenimiento)
+    assert ticket_routes._puede_validar_cierre_gerente(admin, mantenimiento)
+
+    assert not ticket_routes._puede_cerrar_ticket_desde_cero(gerente, mantenimiento)
+    assert not ticket_routes._puede_cerrar_ticket_desde_cero(admin, mantenimiento)
+
+    # El resto de departamentos conserva el doble check heredado.
+    otro_departamento = SimpleNamespace(
+        id=502, departamento_id=6, username="RECEPCIONISTA_QA",
+        sucursal_id=8, sucursal_id_destino=8,
+    )
+    assert ticket_routes._puede_validar_cierre_gerente(creador, otro_departamento)
+    assert ticket_routes._puede_cerrar_ticket_desde_cero(gerente, otro_departamento)
