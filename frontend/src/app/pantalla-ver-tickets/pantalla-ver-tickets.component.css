@@ -401,6 +401,11 @@
   width: 150px;
 }
 
+.tabla-tickets .c-resp {
+  width: 170px;
+  min-width: 170px;
+}
+
 .tabla-tickets .c-sol {
   width: 126px;
 }
@@ -1465,12 +1470,23 @@ td.col-descripcion {
 }
 
 
-/* Atención operativa: lectura compacta sin añadir columnas al tablero. */
-.ticket-assignment-meta {
-  margin: 0 0 6px;
+/* Responsable: columna informativa independiente de las acciones. */
+.tabla-tickets .td-responsable {
+  text-align: left;
+}
+
+.ticket-responsable {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
   color: var(--ultra-gray-700, #414651);
-  font-size: 11px;
-  font-weight: 750;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ticket-responsable--externo {
+  color: var(--ultra-orange, #e54525);
 }
