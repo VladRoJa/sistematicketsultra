@@ -188,6 +188,9 @@ def test_qa_flujo_interno_devolucion_revision_y_conformidad(qa_http):
     assert ticket.estado == "en progreso"
     assert ticket.estado_cierre == "pendiente_revision_coord"
     assert commit.call_count == 1
+    assert post(91002, close, {"notas_cierre": ""}).status_code == 400
+    assert ticket.estado == "en progreso"
+    assert commit.call_count == 1
 
     assert post(91002, returned, {"motivo": "Faltó fijar la cubierta"}).status_code == 200
     assert ticket.estado_cierre is None
