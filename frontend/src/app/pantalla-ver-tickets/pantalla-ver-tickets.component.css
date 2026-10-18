@@ -442,6 +442,31 @@
   box-shadow: 0 3px 0 rgba(255, 255, 255, 0.08);
 }
 
+/* Titulares uniformes: tanto filtros Material como columnas sin filtro. */
+.tabla-tickets thead th,
+.tabla-tickets thead .header-button,
+.tabla-tickets thead .tickets-header-static {
+  font-family: inherit;
+  font-size: 12px !important;
+  font-weight: 900;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.tabla-tickets thead .header-button {
+  padding-inline: 4px;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.tabla-tickets thead .header-button mat-icon {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 14px;
+}
+
 .tabla-tickets thead th:first-child {
   border-top-left-radius: var(--ultra-radius-lg);
 }
