@@ -288,7 +288,8 @@ def prepare_maintenance_work_completion(
         raise TicketCoordinationError(
             "Solo se puede terminar un trabajo en progreso."
         )
-    if getattr(ticket, "estado_cierre", None):
+    previous_closure_state = str(getattr(ticket, "estado_cierre", "") or "").strip().lower()
+    if previous_closure_state not in {"", "rechazado_por_gerente"}:
         raise TicketCoordinationError(
             "El ticket ya tiene una etapa de revisión o cierre activa."
         )
@@ -321,6 +322,7 @@ def prepare_maintenance_work_completion(
         "tipo_atencion": "INTERNA",
         "asignado_a": ticket.asignado_a,
         "estado": ticket.estado,
+        "estado_cierre_anterior": previous_closure_state or None,
         "estado_cierre_nuevo": MAINTENANCE_WORK_REVIEW_PENDING,
     })
     history.sort(
