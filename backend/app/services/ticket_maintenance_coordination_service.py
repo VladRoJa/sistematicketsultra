@@ -305,6 +305,79 @@ def prepare_maintenance_work_completion(
     flag_modified(ticket, "historial_fechas")
     return ticket
 
+
+def prepare_maintenance_work_return(
+    ticket_id: int,
+    user,
+    payload: dict,
+    *,
+    now: datetime | None = None,
+) -> Ticket:
+    """Coordinación devuelve una reparación interna sin alterar otros campos."""
+
+    if not has_maintenance_coordination_permission(user):
+        raise TicketCoordinationForbidden(
+            "Sin permiso para revisar trabajos de Mantenimiento."
+        )
+
+    ticket = (
+        Ticket.query
+        .filter(
+            Ticket.id == ticket_id,
+            Ticket.departamento_id == MAINTENANCE_DEPARTMENT_ID,
+        )
+        .first()
+    )
+    if ticket is None or not _can_coordinate_branch(user, _ticket_branch_id(ticket)):
+        raise TicketCoordinationNotFound(
+            "Ticket de Mantenimiento inexistente o fuera de alcance."
+        )
+
+    if (
+        str(ticket.tipo_atencion or "").strip().upper() != "INTERNA"
+        or str(ticket.estado or "").strip().lower() != "en progreso"
+        or str(getattr(ticket, "estado_cierre", "") or "").strip().lower()
+        != MAINTENANCE_WORK_REVIEW_PENDING
+    ):
+        raise TicketCoordinationError(
+            "Solo se puede devolver un trabajo interno pendiente de revisión."
+        )
+    if not isinstance(payload, dict) or set(payload) - {"motivo"}:
+        raise TicketCoordinationError("La devolución solo admite un motivo.")
+    reason = payload.get("motivo")
+    if not isinstance(reason, str) or not 1 <= len(reason.strip()) <= 500:
+        raise TicketCoordinationError(
+            "Describe por qué se devuelve el trabajo (1-500 caracteres)."
+        )
+
+    current_time = now or datetime.now(timezone.utc)
+    if current_time.tzinfo is None:
+        current_time = current_time.replace(tzinfo=timezone.utc)
+    current_time = current_time.astimezone(timezone.utc)
+
+    ticket.estado_cierre = None
+    history = list(ticket.historial_fechas or [])
+    history.append({
+        "tipo": "maintenance_work_returned_v1",
+        "origen": "tickets_v1",
+        "fechaCambio": current_time.isoformat(),
+        "cambiadoPor": str(getattr(user, "username", "") or "").strip(),
+        "motivo": reason.strip(),
+        "tipo_atencion": "INTERNA",
+        "asignado_a": ticket.asignado_a,
+        "estado": ticket.estado,
+        "estado_cierre_anterior": MAINTENANCE_WORK_REVIEW_PENDING,
+        "estado_cierre_nuevo": None,
+    })
+    history.sort(
+        key=lambda item: str(item.get("fechaCambio") or item.get("fecha") or ""),
+        reverse=True,
+    )
+    ticket.historial_fechas = history
+    flag_modified(ticket, "historial_fechas")
+    return ticket
+
+
 def prepare_maintenance_reassignment(
     ticket_id: int,
     user,
