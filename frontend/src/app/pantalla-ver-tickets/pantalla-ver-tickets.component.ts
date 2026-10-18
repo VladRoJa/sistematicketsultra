@@ -2848,7 +2848,7 @@ puedeMarcarTrabajoTerminado(ticket: Ticket): boolean {
     && Number(this.user?.department_id) === 1
     && String(ticket.estado || '').trim().toLowerCase() === 'en progreso'
     && ticket.tipo_atencion === 'INTERNA'
-    && !ticket.estado_cierre
+    && (!ticket.estado_cierre || ticket.estado_cierre === 'rechazado_por_gerente')
     && String(ticket.asignado_a || '').trim().toLowerCase()
       === String(this.user?.username || '').trim().toLowerCase();
 }
