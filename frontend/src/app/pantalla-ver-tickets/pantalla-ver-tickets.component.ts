@@ -1818,6 +1818,20 @@ cargarContextoCoordinacionMantenimiento(): void {
   });
 }
 
+esTicketMantenimiento(ticket: Ticket): boolean {
+  return Number(ticket?.departamento_id) === 1;
+}
+
+resumenAtencionMantenimiento(ticket: Ticket): string {
+  if (ticket.tipo_atencion === 'EXTERNA') {
+    return 'Proveedor externo';
+  }
+  if (ticket.asignado_a) {
+    return 'Asignado a: ' + ticket.asignado_a;
+  }
+  return 'Sin responsable asignado';
+}
+
 puedeCoordinarTicket(ticket: Ticket): boolean {
   const estado = String(ticket?.estado || '').trim().toLowerCase();
   return this.puedeCoordinarMantenimiento
