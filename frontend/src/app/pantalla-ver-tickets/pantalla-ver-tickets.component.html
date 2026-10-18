@@ -929,13 +929,13 @@
                 [title]="obtenerResponsableTicket(ticket)"
               >{{ obtenerResponsableTicket(ticket) }}</span>
               <button
-                *ngIf="puedeCoordinarTicket(ticket)"
+                *ngIf="puedeReasignarTicket(ticket)"
                 mat-icon-button
                 type="button"
                 class="ticket-responsable__editar"
                 matTooltip="Reasignar responsable"
                 aria-label="Reasignar responsable"
-                (click)="abrirFechaSolucionConCoordinacion(ticket)"
+                (click)="abrirReasignarResponsable(ticket)"
               >
                 <mat-icon>edit</mat-icon>
               </button>
@@ -991,6 +991,17 @@
       (onCancelar)="onCancelarAsignarFecha()"
     >
     </app-asignar-fecha-modal>
+  </div>
+
+  <!-- Reasignar responsable sin tocar fecha, estado ni refacciones -->
+  <div *ngIf="ticketParaReasignar" class="modal-asignar-fecha-overlay">
+    <app-reasignar-responsable-modal
+      [ticket]="ticketParaReasignar"
+      [responsables]="responsablesMantenimiento"
+      [guardando]="guardandoReasignacion"
+      (onGuardar)="onGuardarReasignacion($event)"
+      (onCancelar)="onCancelarReasignacion()"
+    ></app-reasignar-responsable-modal>
   </div>
 
   <!-- Aviso de límite -->
