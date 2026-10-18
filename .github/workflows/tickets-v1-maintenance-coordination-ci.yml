@@ -26,6 +26,8 @@ on:
       - "backend/tests/services/test_ticket_maintenance_coordination_service.py"
       - "backend/tests/utils/test_tickets_assigned_only_scope.py"
       - "backend/tests/routes/test_maintenance_closure_workflow_qa.py"
+      - "backend/tests/test_ticket_creator_closure_flow.py"
+      - "frontend/src/app/shared/modal-cierre-ticket/**"
       - "backend/tests/utils/test_maintenance_closure_qa_seed_safety.py"
       - "backend/scripts/seed_maintenance_closure_qa.py"
       - "backend/app/maintenance_planner/routes.py"
@@ -71,7 +73,8 @@ jobs:
             tests/services/test_ticket_maintenance_coordination_service.py \
             tests/utils/test_tickets_assigned_only_scope.py \
             tests/routes/test_maintenance_closure_workflow_qa.py \
-            tests/utils/test_maintenance_closure_qa_seed_safety.py
+            tests/utils/test_maintenance_closure_qa_seed_safety.py \
+            tests/test_ticket_creator_closure_flow.py
       - name: Inspect Alembic migration heads (read-only)
         run: |
           python - <<'PY'
