@@ -20,6 +20,8 @@ from app.services.ticket_maintenance_coordination_service import (
     list_maintenance_assignees,
     prepare_maintenance_coordination,
     prepare_maintenance_reassignment,
+    prepare_maintenance_work_completion,
+    MAINTENANCE_WORK_REVIEW_PENDING,
 )
 from app.utils.tickets_maintenance_permissions import (
     has_maintenance_coordination_permission,
@@ -930,6 +932,33 @@ def reassign_maintenance_ticket(ticket_id):
     except Exception as exc:
         db.session.rollback()
         return manejar_error(exc, "reassign_maintenance_ticket")
+
+
+@ticket_bp.route('/maintenance/<int:ticket_id>/work-completed', methods=['POST'])
+@jwt_required()
+def maintenance_mark_work_completed(ticket_id):
+    """Técnico asignado declara terminada la reparación, sin solicitar cierre."""
+    actor = UserORM.get_by_id(get_jwt_identity())
+    if actor is None:
+        return jsonify({"mensaje": "Usuario no encontrado"}), 401
+
+    try:
+        ticket = prepare_maintenance_work_completion(
+            ticket_id,
+            actor,
+            request.get_json(silent=True),
+        )
+        db.session.commit()
+        return jsonify({
+            "mensaje": "Trabajo terminado; pendiente de revisión de coordinación.",
+            "ticket": ticket.to_dict(),
+        }), 200
+    except TicketCoordinationError as exc:
+        db.session.rollback()
+        return jsonify({"mensaje": exc.message}), exc.status_code
+    except Exception as exc:
+        db.session.rollback()
+        return manejar_error(exc, "maintenance_mark_work_completed")
 
 
 # RUTA: Actualizar estado de un ticket
@@ -2550,7 +2579,7 @@ def cierre_solicitar(ticket_id):
         if tipo_atencion == "INTERNA":
             # El técnico debe registrar trabajo terminado antes de que
             # coordinación revise y solicite conformidad al gerente.
-            if str(t.estado_cierre or "").strip().lower() != "pendiente_revision_coord":
+            if str(t.estado_cierre or "").strip().lower() != MAINTENANCE_WORK_REVIEW_PENDING:
                 return jsonify({"mensaje": "Falta la terminación técnica y revisión de coordinación."}), 409
         elif tipo_atencion != "EXTERNA":
             return jsonify({"mensaje": "Define atención INTERNA o EXTERNA antes del cierre."}), 409
