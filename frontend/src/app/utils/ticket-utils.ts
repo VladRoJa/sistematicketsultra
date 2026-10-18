@@ -66,6 +66,16 @@ export function getFiltrosActivosFrom(
 }
 
 // ----------- FILTRADO CRUZADO PRINCIPAL -----------
+/** Etiqueta común para la celda Responsable y su filtro cruzado. */
+export function obtenerResponsableVisible(ticket: Pick<Ticket, 'departamento_id' | 'tipo_atencion' | 'asignado_a'>): string {
+  if (Number(ticket.departamento_id) === 1 && ticket.tipo_atencion === 'EXTERNA') {
+    return 'Proveedor externo';
+  }
+  const asignado = String(ticket.asignado_a || '').trim();
+  if (asignado) return asignado;
+  return Number(ticket.departamento_id) === 1 ? 'Sin asignar' : '—';
+}
+
 export function filtrarTicketsConFiltros(
   tickets: any[],
   filtros: FiltrosEntrada | Record<string, any>
@@ -77,6 +87,7 @@ export function filtrarTicketsConFiltros(
       case 'categoria':    return t.categoria != null ? String(t.categoria) : '';
       case 'descripcion':  return t.descripcion ?? '';
       case 'username':     return t.username ?? '';
+          case 'responsable':  return obtenerResponsableVisible(t);
       case 'estado':       return t.estado ?? '';
       case 'criticidad':   return t.criticidad != null ? String(t.criticidad) : '';
       case 'departamento': return t.departamento ?? '';      // ← por nombre
@@ -107,6 +118,7 @@ return tickets.filter(t => {
           case 'categoria':    return t.categoria != null ? String(t.categoria) : '';
           case 'descripcion':  return t.descripcion ?? '';
           case 'username':     return t.username ?? '';
+          case 'responsable':  return obtenerResponsableVisible(t);
           case 'estado':       return t.estado ?? '';
           case 'criticidad':   return t.criticidad != null ? String(t.criticidad) : '';
           case 'subcategoria': return t.subcategoria != null ? String(t.subcategoria) : '';
@@ -214,6 +226,7 @@ export function isFilterActive(ctx: any, columna: string): boolean {
     categoria: 'categorias',
     descripcion: 'descripciones',
     username: 'usuarios',
+    responsable: 'responsables',
     estado: 'estados',
     criticidad: 'criticidades',
     departamento: 'departamentos',
