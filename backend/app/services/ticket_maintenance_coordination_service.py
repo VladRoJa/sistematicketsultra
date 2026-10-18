@@ -209,3 +209,109 @@ def prepare_maintenance_coordination(
     ticket.historial_fechas = history
     flag_modified(ticket, "historial_fechas")
     return ticket
+
+
+def prepare_maintenance_reassignment(
+    ticket_id: int,
+    user,
+    payload: dict,
+    *,
+    now: datetime | None = None,
+) -> Ticket:
+    """Reasigna exclusivamente atención/responsable, con historial auditable.
+
+    Deliberadamente no modifica fecha compromiso, fecha en progreso, estado,
+    refacción ni otras propiedades del ticket.
+    """
+
+    if not has_maintenance_coordination_permission(user):
+        raise TicketCoordinationForbidden("Sin permiso para reasignar Mantenimiento.")
+
+    ticket = (
+        Ticket.query
+        .filter(
+            Ticket.id == ticket_id,
+            Ticket.departamento_id == MAINTENANCE_DEPARTMENT_ID,
+        )
+        .first()
+    )
+    if ticket is None or not _can_coordinate_branch(user, _ticket_branch_id(ticket)):
+        raise TicketCoordinationNotFound(
+            "Ticket de Mantenimiento inexistente o fuera de alcance."
+        )
+
+    if str(ticket.estado or "").strip().lower() not in COORDINATABLE_STATES:
+        raise TicketCoordinationError(
+            "Solo se puede reasignar un ticket abierto o en progreso."
+        )
+
+    if not isinstance(payload, dict):
+        raise TicketCoordinationError("El cuerpo debe ser un objeto JSON.")
+
+    # El contrato de esta ruta es intencionadamente estrecho.
+    unexpected = set(payload) - {"motivo", "tipo_atencion", "asignado_user_id"}
+    if unexpected:
+        raise TicketCoordinationError(
+            "La reasignación no admite cambios de fecha, estado ni refacción."
+        )
+
+    reason = payload.get("motivo")
+    if not isinstance(reason, str) or not 1 <= len(reason.strip()) <= 500:
+        raise TicketCoordinationError("Indica un motivo de reasignación (máximo 500 caracteres).")
+    reason = reason.strip()
+
+    attention_mode = payload.get("tipo_atencion")
+    if attention_mode not in ATTENTION_MODES:
+        raise TicketCoordinationError("Selecciona atención INTERNA o EXTERNA.")
+
+    assignee_id = payload.get("asignado_user_id")
+    assigned_username = None
+    if attention_mode == "INTERNA":
+        if not isinstance(assignee_id, int) or isinstance(assignee_id, bool):
+            raise TicketCoordinationError(
+                "Selecciona un usuario de Mantenimiento como nuevo responsable."
+            )
+        assignee = UserORM.get_by_id(assignee_id)
+        if assignee is None or int(assignee.department_id or 0) != MAINTENANCE_DEPARTMENT_ID:
+            raise TicketCoordinationError(
+                "El responsable debe pertenecer a Mantenimiento."
+            )
+        assigned_username = assignee.username
+    elif assignee_id is not None:
+        raise TicketCoordinationError(
+            "Atención EXTERNA no acepta un usuario Suite."
+        )
+
+    previous_username = ticket.asignado_a
+    previous_mode = ticket.tipo_atencion
+    if (previous_mode == attention_mode and
+        str(previous_username or "").casefold() == str(assigned_username or "").casefold()):
+        raise TicketCoordinationError("Selecciona un responsable distinto al actual.")
+
+    current_time = now or datetime.now(timezone.utc)
+    if current_time.tzinfo is None:
+        current_time = current_time.replace(tzinfo=timezone.utc)
+    current_time = current_time.astimezone(timezone.utc)
+
+    ticket.tipo_atencion = attention_mode
+    ticket.asignado_a = assigned_username
+
+    history = list(ticket.historial_fechas or [])
+    history.append({
+        "tipo": "maintenance_reassignment_v1",
+        "origen": "tickets_v1",
+        "fechaCambio": current_time.isoformat(),
+        "cambiadoPor": str(getattr(user, "username", "") or "").strip(),
+        "motivo": reason,
+        "tipo_atencion_anterior": previous_mode,
+        "tipo_atencion_nuevo": attention_mode,
+        "asignado_anterior": previous_username,
+        "asignado_nuevo": assigned_username,
+    })
+    history.sort(
+        key=lambda item: str(item.get("fechaCambio") or item.get("fecha") or ""),
+        reverse=True,
+    )
+    ticket.historial_fechas = history
+    flag_modified(ticket, "historial_fechas")
+    return ticket
