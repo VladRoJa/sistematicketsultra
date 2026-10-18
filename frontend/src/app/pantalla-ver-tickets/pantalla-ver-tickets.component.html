@@ -920,13 +920,26 @@
           <td>{{ getDetalleVisible(ticket) }}</td>
 
 
-          <!-- Responsable (columna propia, futura base para filtrado) -->
+          <!-- Responsable: editar abre el MISMO modal de fecha y asignación. -->
           <td class="td-responsable">
-            <span
-              class="ticket-responsable"
-              [class.ticket-responsable--externo]="ticket.tipo_atencion === 'EXTERNA'"
-              [title]="obtenerResponsableTicket(ticket)"
-            >{{ obtenerResponsableTicket(ticket) }}</span>
+            <div class="ticket-responsable__contenido">
+              <span
+                class="ticket-responsable"
+                [class.ticket-responsable--externo]="ticket.tipo_atencion === 'EXTERNA'"
+                [title]="obtenerResponsableTicket(ticket)"
+              >{{ obtenerResponsableTicket(ticket) }}</span>
+              <button
+                *ngIf="puedeCoordinarTicket(ticket)"
+                mat-icon-button
+                type="button"
+                class="ticket-responsable__editar"
+                matTooltip="Reasignar responsable"
+                aria-label="Reasignar responsable"
+                (click)="abrirFechaSolucionConCoordinacion(ticket)"
+              >
+                <mat-icon>edit</mat-icon>
+              </button>
+            </div>
           </td>
 
           <!-- Fecha Solución -->
