@@ -135,6 +135,7 @@ export interface Ticket {
   | 'pendiente_creador'
   | 'rechazado_por_jefe'
   | 'rechazado_por_creador'
+  | 'rechazado_por_gerente'
   | 'cerrado_por_gerente_desde_cero'
   | null;
 
