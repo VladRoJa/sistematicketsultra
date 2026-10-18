@@ -257,3 +257,149 @@ def test_reasignar_mantenimiento_mantiene_ticket_y_audita_cambio(monkeypatch):
     assert t.historial_fechas[0]["asignado_anterior"] == "SR_MANT_MXL"
     assert t.historial_fechas[0]["asignado_nuevo"] == "SR_MANT_TIJ"
     assert t.historial_fechas[0]["motivo"] == "Corrección de responsable regional"
+
+
+def test_reassign_only_updates_assignee_and_history(monkeypatch):
+    t = ticket(branch=8, state="en progreso")
+    t.asignado_a = "SR_MANT_MXL"
+    t.tipo_atencion = "INTERNA"
+    t.fecha_solucion = datetime(2026, 10, 24, 14, 0, tzinfo=timezone.utc)
+    t.fecha_en_progreso = datetime(2026, 10, 18, 17, 0, tzinfo=timezone.utc)
+    t.necesita_refaccion = True
+    t.descripcion_refaccion = "Se mandó comprar puerta"
+    t.historial_fechas = [{"tipo": "legacy", "fechaCambio": "2026-10-16T01:00:00+00:00"}]
+    setup_queries(monkeypatch, t)
+    monkeypatch.setattr(coordination, "has_maintenance_coordination_permission", lambda _u: True)
+
+    original_due = t.fecha_solucion
+    original_in_progress = t.fecha_en_progreso
+    original_history = t.historial_fechas[0].copy()
+    result = coordination.prepare_maintenance_reassignment(
+        t.id,
+        actor(),
+        {
+            "tipo_atencion": "INTERNA",
+            "asignado_user_id": 68,
+            "motivo": "Responsable incorrecto de Mexicali",
+        },
+        now=NOW,
+    )
+
+    assert result is t
+    assert t.asignado_a == "SR_MANT_TIJ"
+    assert t.tipo_atencion == "INTERNA"
+    assert t.fecha_solucion == original_due
+    assert t.fecha_en_progreso == original_in_progress
+    assert t.estado == "en progreso"
+    assert t.necesita_refaccion is True
+    assert t.descripcion_refaccion == "Se mandó comprar puerta"
+    assert t.historial_fechas[1] == original_history
+    assert t.historial_fechas[0]["tipo"] == "maintenance_reassignment_v1"
+    assert t.historial_fechas[0]["asignado_anterior"] == "SR_MANT_MXL"
+    assert t.historial_fechas[0]["asignado_nuevo"] == "SR_MANT_TIJ"
+
+
+def test_reassign_can_change_to_external_without_touching_date(monkeypatch):
+    t = ticket(branch=8, state="en progreso")
+    t.tipo_atencion = "INTERNA"
+    t.asignado_a = "SR_MANT_MXL"
+    t.fecha_solucion = datetime(2026, 10, 24, tzinfo=timezone.utc)
+    setup_queries(monkeypatch, t)
+    monkeypatch.setattr(coordination, "has_maintenance_coordination_permission", lambda _u: True)
+
+    coordination.prepare_maintenance_reassignment(
+        t.id,
+        actor(),
+        {"tipo_atencion": "EXTERNA", "asignado_user_id": None, "motivo": "Se contratará proveedor"},
+        now=NOW,
+    )
+    assert t.asignado_a is None
+    assert t.tipo_atencion == "EXTERNA"
+    assert t.fecha_solucion == datetime(2026, 10, 24, tzinfo=timezone.utc)
+
+
+@pytest.mark.parametrize("changes", [
+    {"motivo": " "},
+    {"motivo": None},
+    {"motivo": "x" * 501},
+    {"asignado_user_id": True},
+    {"asignado_user_id": None},
+    {"asignado_user_id": 999},
+    {"tipo_atencion": "CUALQUIERA"},
+    {"due_date": "2026-12-25"},
+    {"estado": "finalizado"},
+    {"necesita_refaccion": False},
+])
+def test_reassign_rejects_invalid_or_extra_fields_without_mutation(monkeypatch, changes):
+    t = ticket(branch=8, state="en progreso")
+    t.asignado_a = "SR_MANT_MXL"
+    t.tipo_atencion = "INTERNA"
+    t.fecha_solucion = datetime(2026, 10, 24, tzinfo=timezone.utc)
+    setup_queries(monkeypatch, t)
+    monkeypatch.setattr(coordination, "has_maintenance_coordination_permission", lambda _u: True)
+    valid = {
+        "tipo_atencion": "INTERNA",
+        "asignado_user_id": 68,
+        "motivo": "Corrección de responsable",
+    }
+
+    with pytest.raises(coordination.TicketCoordinationError):
+        coordination.prepare_maintenance_reassignment(
+            t.id, actor(), {**valid, **changes}, now=NOW
+        )
+
+    assert t.asignado_a == "SR_MANT_MXL"
+    assert t.tipo_atencion == "INTERNA"
+    assert t.fecha_solucion == datetime(2026, 10, 24, tzinfo=timezone.utc)
+    assert t.historial_fechas == []
+
+
+def test_reassign_requires_scope_and_does_not_reopen_closed_tickets(monkeypatch):
+    t = ticket(branch=3, state="en progreso")
+    t.asignado_a = "SR_MANT_MXL"
+    setup_queries(monkeypatch, t)
+    monkeypatch.setattr(coordination, "has_maintenance_coordination_permission", lambda _u: True)
+
+    with pytest.raises(coordination.TicketCoordinationNotFound):
+        coordination.prepare_maintenance_reassignment(
+            t.id, actor(),
+            {"tipo_atencion": "INTERNA", "asignado_user_id": 68, "motivo": "Corrección"},
+            now=NOW,
+        )
+
+    t.sucursal_id_destino = 8
+    t.estado = "finalizado"
+    with pytest.raises(coordination.TicketCoordinationError):
+        coordination.prepare_maintenance_reassignment(
+            t.id, actor(),
+            {"tipo_atencion": "INTERNA", "asignado_user_id": 68, "motivo": "Corrección"},
+            now=NOW,
+        )
+    assert t.asignado_a == "SR_MANT_MXL"
+
+
+def test_reassign_denies_actor_without_coordination_capability(monkeypatch):
+    q = setup_queries(monkeypatch, ticket())
+    monkeypatch.setattr(coordination, "has_maintenance_coordination_permission", lambda _u: False)
+    with pytest.raises(coordination.TicketCoordinationForbidden):
+        coordination.prepare_maintenance_reassignment(
+            501, actor(),
+            {"tipo_atencion": "INTERNA", "asignado_user_id": 68, "motivo": "Corrección"},
+            now=NOW,
+        )
+    q.filter.assert_not_called()
+
+
+def test_reassign_ignores_noop_and_does_not_pollute_audit(monkeypatch):
+    t = ticket(branch=8, state="en progreso")
+    t.tipo_atencion = "INTERNA"
+    t.asignado_a = "SR_MANT_TIJ"
+    setup_queries(monkeypatch, t)
+    monkeypatch.setattr(coordination, "has_maintenance_coordination_permission", lambda _u: True)
+    with pytest.raises(coordination.TicketCoordinationError, match="distinto"):
+        coordination.prepare_maintenance_reassignment(
+            t.id, actor(),
+            {"tipo_atencion": "INTERNA", "asignado_user_id": 68, "motivo": "Repetir"},
+            now=NOW,
+        )
+    assert t.historial_fechas == []
