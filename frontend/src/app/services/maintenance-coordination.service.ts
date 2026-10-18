@@ -52,6 +52,26 @@ export class MaintenanceCoordinationService {
     );
   }
 
+  markWorkCompleted(
+    ticketId: number,
+    notes: string,
+  ): Observable<{ mensaje: string; ticket: unknown }> {
+    return this.http.post<{ mensaje: string; ticket: unknown }>(
+      `${this.baseUrl}/${ticketId}/work-completed`,
+      { notas_trabajo: notes },
+    );
+  }
+
+  returnWorkToTechnician(
+    ticketId: number,
+    reason: string,
+  ): Observable<{ mensaje: string; ticket: unknown }> {
+    return this.http.post<{ mensaje: string; ticket: unknown }>(
+      `${this.baseUrl}/${ticketId}/return-to-technician`,
+      { motivo: reason },
+    );
+  }
+
   coordinateTicket(
     ticketId: number,
     payload: CoordinateMaintenanceTicketPayload,
