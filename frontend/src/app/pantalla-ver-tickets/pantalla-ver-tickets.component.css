@@ -887,13 +887,22 @@ td.col-descripcion {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 12px;
+  box-sizing: border-box;
+  overflow: hidden;
   background: rgba(15, 23, 42, 0.48);
   z-index: 2000;
 }
 
 :host ::ng-deep app-asignar-fecha-modal {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   width: 95vw;
   max-width: 720px;
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow: hidden;
   background: var(--ultra-surface);
   border-radius: var(--ultra-radius-xl);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
