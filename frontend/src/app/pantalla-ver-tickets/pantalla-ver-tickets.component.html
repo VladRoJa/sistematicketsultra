@@ -679,28 +679,18 @@
 
           <!-- Acciones -->
           <td class="td-acciones">
+            <!-- La asignación se realiza dentro del modal de fecha, no como acción adicional. -->
             <button
-              *ngIf="puedeCoordinarTicket(ticket)"
-              type="button"
+              *ngIf="puedeMostrarBotonEnProgreso(ticket)"
               mat-button
               class="ticket-action ticket-action--progress"
-              (click)="abrirCoordinarMantenimiento(ticket)"
+              (click)="cambiarEstadoEnProgreso(ticket)"
             >
-              <mat-icon>assignment_ind</mat-icon>
-              <span>Asignar atención</span>
+              <mat-icon>play_circle</mat-icon>
+              <span>En progreso</span>
             </button>
-            <div *ngIf="puedeEditarTickets">
-              <!-- Botón: pasar a En progreso -->
-              <button
-                *ngIf="puedeMostrarBotonEnProgreso(ticket)"
-                mat-button
-                class="ticket-action ticket-action--progress"
-                (click)="cambiarEstadoEnProgreso(ticket)"
-              >
-                <mat-icon>play_circle</mat-icon>
-                <span>En progreso</span>
-              </button>
 
+            <div *ngIf="puedeEditarTickets">
               <!-- Botón: Finalizar (jefe inicia flujo de cierre) -->
               <button
                 *ngIf="puedeMostrarBotonFinalizar(ticket)"
@@ -907,8 +897,9 @@
 
               <button
                 *ngIf="
-                  puedeEditarTickets &&
-                  !(user?.rol === 'COMPRAS' && ticket.departamento_id === 1) &&
+                  (puedeCoordinarTicket(ticket) ||
+                   (puedeEditarTickets &&
+                    !(user?.rol === 'COMPRAS' && ticket.departamento_id === 1))) &&
                   ((ticket.estado ?? '').toString().trim().toLowerCase() === 'en progreso')
                 "
                 mat-icon-button
