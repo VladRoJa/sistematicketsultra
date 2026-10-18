@@ -49,7 +49,12 @@ import { ModalCierreTicketComponent } from '../shared/modal-cierre-ticket/modal-
 import { buscarAncestroNivel, filtrarTicketsConFiltros, obtenerResponsableVisible } from '../utils/ticket-utils';
 import { MatSelectModule } from '@angular/material/select';
 import { AuthService } from '../services/auth.service';
-import { MaintenanceAssignee, MaintenanceCoordinationService } from '../services/maintenance-coordination.service';
+import {
+  MaintenanceAssignee,
+  MaintenanceCoordinationService,
+  ReassignMaintenanceTicketPayload,
+} from '../services/maintenance-coordination.service';
+import { ReasignarResponsableModalComponent } from '../shared/reasignar-responsable-modal/reasignar-responsable-modal.component';
 import { DialogoConfirmacionComponent } from '../shared/dialogo-confirmacion/dialogo-confirmacion.component';
 import {
   MantenimientoEquiposService,
@@ -164,6 +169,7 @@ interface RegionReporteMantenimientoOption
     MatDatepickerModule,
     HistorialFechasModalComponent,
     AsignarFechaModalComponent,
+    ReasignarResponsableModalComponent,
     MatTooltipModule,
     MatSelectModule,
 
@@ -269,6 +275,8 @@ export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
   puedeCoordinarMantenimiento = false;
   responsablesMantenimiento: MaintenanceAssignee[] = [];
   esCoordinacionMantenimiento = false;
+  ticketParaReasignar: Ticket | null = null;
+  guardandoReasignacion = false;
   
 
   // Controles
@@ -1846,6 +1854,43 @@ puedeCoordinarTicket(ticket: Ticket): boolean {
   return this.puedeCoordinarMantenimiento
     && Number(ticket?.departamento_id) === 1
     && (estado === 'abierto' || estado === 'en progreso');
+}
+
+puedeReasignarTicket(ticket: Ticket): boolean {
+  return this.puedeCoordinarTicket(ticket)
+    && (Boolean(String(ticket.asignado_a || '').trim())
+      || ticket.tipo_atencion === 'EXTERNA');
+}
+
+abrirReasignarResponsable(ticket: Ticket): void {
+  if (!this.puedeReasignarTicket(ticket)) return;
+  this.ticketParaReasignar = ticket;
+}
+
+onCancelarReasignacion(): void {
+  if (!this.guardandoReasignacion) this.ticketParaReasignar = null;
+}
+
+onGuardarReasignacion(payload: ReassignMaintenanceTicketPayload): void {
+  const ticket = this.ticketParaReasignar;
+  if (!ticket || !this.puedeReasignarTicket(ticket) || this.guardandoReasignacion) return;
+
+  this.guardandoReasignacion = true;
+  this.maintenanceCoordinationService.reassignTicket(ticket.id, payload)
+    .pipe(finalize(() => { this.guardandoReasignacion = false; }))
+    .subscribe({
+      next: () => {
+        this.ticketParaReasignar = null;
+        this.refrescarTicketsPreservandoFiltros();
+        mostrarAlertaToast('Responsable reasignado correctamente.', 'success');
+      },
+      error: (err) => {
+        mostrarAlertaToast(
+          err?.error?.mensaje || 'No se pudo reasignar el responsable.',
+          'error',
+        );
+      },
+    });
 }
 
 abrirFechaSolucionConCoordinacion(ticket: Ticket): void {
