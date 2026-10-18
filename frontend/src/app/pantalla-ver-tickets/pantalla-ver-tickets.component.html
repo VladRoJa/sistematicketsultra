@@ -148,6 +148,7 @@
         <col class="c-dep">
         <col class="c-sub">
         <col class="c-det">
+        <col class="c-resp">
         <col class="c-sol">
         <col class="c-his">
       </colgroup>
@@ -661,10 +662,13 @@
 
 
 
-          <!-- (15) Fecha Solución -->
+          <!-- (15) Responsable -->
+          <th>Responsable</th>
+
+          <!-- (16) Fecha Solución -->
           <th>Fecha Solución</th>
 
-          <!-- (16) Historial -->
+          <!-- (17) Historial -->
           <th>Historial</th>
         </tr>
       </thead>
@@ -675,9 +679,6 @@
 
           <!-- Acciones -->
           <td class="td-acciones">
-            <div *ngIf="esTicketMantenimiento(ticket)" class="ticket-assignment-meta">
-              {{ resumenAtencionMantenimiento(ticket) }}
-            </div>
             <button
               *ngIf="puedeCoordinarTicket(ticket)"
               type="button"
@@ -889,6 +890,15 @@
           <td>{{ getSubcategoriaVisible(ticket) }}</td>
           <td>{{ getDetalleVisible(ticket) }}</td>
 
+
+          <!-- Responsable (columna propia, futura base para filtrado) -->
+          <td class="td-responsable">
+            <span
+              class="ticket-responsable"
+              [class.ticket-responsable--externo]="ticket.tipo_atencion === 'EXTERNA'"
+              [title]="obtenerResponsableTicket(ticket)"
+            >{{ obtenerResponsableTicket(ticket) }}</span>
+          </td>
 
           <!-- Fecha Solución -->
           <td>
