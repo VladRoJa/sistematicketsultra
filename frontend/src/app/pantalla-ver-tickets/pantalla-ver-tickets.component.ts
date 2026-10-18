@@ -1842,7 +1842,7 @@ puedeCoordinarTicket(ticket: Ticket): boolean {
     && (estado === 'abierto' || estado === 'en progreso');
 }
 
-abrirCoordinarMantenimiento(ticket: Ticket): void {
+abrirFechaSolucionConCoordinacion(ticket: Ticket): void {
   if (!this.puedeCoordinarTicket(ticket)) return;
 
   this.ticketParaAsignarFecha = ticket;
@@ -1868,6 +1868,13 @@ abrirCoordinarMantenimiento(ticket: Ticket): void {
 }
 
 cambiarEstadoEnProgreso(ticket: Ticket) {
+  // Una única entrada al modal de fecha. Para coordinadores incluye la
+  // asignación interna/externa; los demás conservan el flujo anterior.
+  if (this.puedeCoordinarTicket(ticket)) {
+    this.abrirFechaSolucionConCoordinacion(ticket);
+    return;
+  }
+
   if (!ticket.fecha_solucion) {
     this.ticketParaAsignarFecha = ticket;
     this.esCoordinacionMantenimiento = false;
@@ -2061,7 +2068,12 @@ onCancelarAsignarFecha() {
 
 abrirEditarFechaSolucion(ticket: Ticket) {
   const estado = (ticket.estado ?? '').toString().trim().toLowerCase();
-  if (estado !== 'en progreso') return; // ✅ solo editable en progreso
+  if (estado !== 'en progreso') return;
+
+  if (this.puedeCoordinarTicket(ticket)) {
+    this.abrirFechaSolucionConCoordinacion(ticket);
+    return;
+  }
 
   const dialogRef = this.dialog.open(EditarFechaSolucionModalComponent, {
     width: '560px',
@@ -2757,7 +2769,11 @@ esPendienteCierreCreador(ticket: Ticket): boolean {
 
 puedeMostrarBotonEnProgreso(ticket: Ticket): boolean {
   const estado = (ticket?.estado || '').trim().toLowerCase();
-  return this.puedeEditarTickets && estado === 'abierto'
+  if (estado !== 'abierto') return false;
+
+  if (this.puedeCoordinarTicket(ticket)) return true;
+
+  return this.puedeEditarTickets
     && !(String(this.user?.rol || '').toUpperCase() === 'COMPRAS'
       && Number(ticket.departamento_id) === 1);
 }
