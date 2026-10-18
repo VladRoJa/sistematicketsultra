@@ -255,7 +255,7 @@ export class MaintenancePlannerTicketDialogComponent {
     const dialogRef = this.dialog.open(ModalCierreTicketComponent, {
       width: '560px',
       maxWidth: '92vw',
-      data: { ticketId: this.ticket.ticket_id },
+      data: { ticketId: this.ticket.ticket_id, modo: 'maintenance_request' },
       autoFocus: false,
     });
 
