@@ -82,6 +82,9 @@ jobs:
       - name: Compile Angular application
         working-directory: frontend
         run: node node_modules/typescript/bin/tsc --noEmit --project tsconfig.app.json
+      - name: Build Angular templates
+        working-directory: frontend
+        run: npm run build
 
   migration-postgres:
     runs-on: ubuntu-latest
