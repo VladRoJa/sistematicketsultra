@@ -1,6 +1,6 @@
 <section class="maintenance-work-dialog">
   <header mat-dialog-title class="maintenance-work-dialog__header">
-    <mat-icon>{{ isCompletion ? 'task_alt' : 'assignment_return' }}</mat-icon>
+    <mat-icon>{{ iconName }}</mat-icon>
     <div>
       <h2>{{ title }}</h2>
       <small>Ticket #{{ data.ticketId }}</small>
@@ -16,7 +16,7 @@
         rows="5"
         [maxlength]="maxLength"
         [(ngModel)]="notes"
-        [placeholder]="isCompletion ? 'Describe la reparación realizada' : 'Indica qué debe corregirse'"
+        [placeholder]="fieldPlaceholder"
       ></textarea>
       <mat-hint align="end">{{ notes.length }} / {{ maxLength }}</mat-hint>
     </mat-form-field>
@@ -28,7 +28,7 @@
   <mat-dialog-actions align="end" class="maintenance-work-dialog__actions">
     <button mat-button type="button" (click)="cancel()">Cancelar</button>
     <button mat-flat-button type="button" color="primary" [disabled]="!canSubmit" (click)="save()">
-      {{ isCompletion ? 'Marcar trabajo terminado' : 'Devolver trabajo' }}
+      {{ submitLabel }}
     </button>
   </mat-dialog-actions>
 </section>
