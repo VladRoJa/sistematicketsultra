@@ -1,0 +1,118 @@
+:host {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  color: var(--ultra-gray-900);
+}
+
+.reasignar-modal {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: calc(100dvh - 48px);
+  overflow: hidden;
+}
+
+.reasignar-modal__header {
+  flex: 0 0 auto;
+  margin-bottom: 16px;
+}
+
+.reasignar-modal__header h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 900;
+}
+
+.reasignar-modal__header p {
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ultra-gray-600);
+}
+
+.reasignar-modal__content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.reasignar-modal__actual {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 13px;
+  border: 1px solid var(--ultra-gray-200);
+  border-radius: var(--ultra-radius-lg);
+  background: var(--ultra-gray-50);
+}
+
+.reasignar-modal__actual span {
+  font-size: 12px;
+  color: var(--ultra-gray-600);
+}
+
+.reasignar-modal__actual strong {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.reasignar-modal__campo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.reasignar-modal__campo label {
+  display: block;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ultra-gray-900);
+}
+
+.reasignar-modal__campo mat-form-field {
+  width: 100%;
+  --mdc-filled-text-field-container-color: var(--ultra-gray-50);
+  --mdc-filled-text-field-active-indicator-color: var(--ultra-gray-300);
+  --mdc-filled-text-field-focus-active-indicator-color: var(--ultra-orange);
+}
+
+.reasignar-modal__hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ultra-gray-600);
+}
+
+.reasignar-modal__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ultra-gray-200);
+  background: var(--ultra-surface);
+}
+
+.reasignar-modal__save {
+  color: var(--ultra-surface);
+  background: var(--ultra-orange);
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+@media (max-width: 420px) {
+  .reasignar-modal__actions {
+    justify-content: stretch;
+  }
+
+  .reasignar-modal__actions button {
+    flex: 1 1 0;
+  }
+}
