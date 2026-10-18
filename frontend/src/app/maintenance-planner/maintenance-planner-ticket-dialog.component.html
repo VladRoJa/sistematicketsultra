@@ -170,8 +170,18 @@
       <div class="side-card side-card--closure">
         <span class="side-card__eyebrow">Flujo de cierre</span>
         <h3>Estado de cierre</h3>
-        <p>{{ ticket.estado_cierre || 'Sin flujo de cierre activo' }}</p>
+        <p>{{ closureStageLabel }}</p>
         <small *ngIf="ticket.motivo_rechazo_cierre">{{ ticket.motivo_rechazo_cierre }}</small>
+
+        <button
+          *ngIf="canMarkWorkCompleted"
+          type="button"
+          class="side-card__finish"
+          (click)="openWorkActionDialog('complete')"
+          [disabled]="saving"
+        >
+          Trabajo terminado
+        </button>
 
         <button
           *ngIf="canFinalizeTicket"
@@ -180,7 +190,17 @@
           (click)="openClosureDialog()"
           [disabled]="saving"
         >
-          Finalizar ticket
+          {{ closureActionLabel }}
+        </button>
+
+        <button
+          *ngIf="canReturnWork"
+          type="button"
+          class="side-card__finish side-card__finish--return"
+          (click)="openWorkActionDialog('return')"
+          [disabled]="saving"
+        >
+          Devolver al técnico
         </button>
       </div>
 
