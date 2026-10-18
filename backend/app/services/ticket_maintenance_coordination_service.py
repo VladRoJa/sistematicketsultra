@@ -15,6 +15,7 @@ from app.models.ticket_model import Ticket
 from app.models.user_model import UserORM
 from app.utils.tickets_maintenance_permissions import (
     ADMIN_ROLES,
+    ASSIGNED_ONLY_ELIGIBLE_ROLES,
     has_maintenance_coordination_permission,
 )
 from app.utils.pm_permissions import normalize_pm_role
@@ -24,6 +25,7 @@ BUSINESS_TZ = ZoneInfo("America/Tijuana")
 MAINTENANCE_DEPARTMENT_ID = 1
 COORDINATABLE_STATES = frozenset({"abierto", "en progreso"})
 ATTENTION_MODES = frozenset({"INTERNA", "EXTERNA"})
+MAINTENANCE_WORK_REVIEW_PENDING = "pendiente_revision_coord"
 
 
 class TicketCoordinationError(Exception):
@@ -210,6 +212,98 @@ def prepare_maintenance_coordination(
     flag_modified(ticket, "historial_fechas")
     return ticket
 
+
+
+def prepare_maintenance_work_completion(
+    ticket_id: int,
+    user,
+    payload: dict,
+    *,
+    now: datetime | None = None,
+) -> Ticket:
+    """El técnico asignado marca trabajo terminado sin solicitar cierre.
+
+    Conserva estado='en progreso' y fecha/costo/solución intactos; el
+    coordinador revisará antes de solicitar conformidad del gerente.
+    No hace commit ni envía notificaciones.
+    """
+
+    role = normalize_pm_role(getattr(user, "rol", None))
+    if (
+        role not in ASSIGNED_ONLY_ELIGIBLE_ROLES
+        or int(getattr(user, "department_id", 0) or 0) != MAINTENANCE_DEPARTMENT_ID
+    ):
+        raise TicketCoordinationForbidden(
+            "Solo un técnico de Mantenimiento puede terminar su trabajo."
+        )
+
+    ticket = (
+        Ticket.query
+        .filter(
+            Ticket.id == ticket_id,
+            Ticket.departamento_id == MAINTENANCE_DEPARTMENT_ID,
+        )
+        .first()
+    )
+    if (
+        ticket is None
+        or str(getattr(ticket, "asignado_a", "") or "").strip().casefold()
+        != str(getattr(user, "username", "") or "").strip().casefold()
+    ):
+        raise TicketCoordinationNotFound(
+            "Ticket de Mantenimiento inexistente o no asignado a este técnico."
+        )
+
+    if str(ticket.tipo_atencion or "").strip().upper() != "INTERNA":
+        raise TicketCoordinationError(
+            "Solo la atención INTERNA permite marcar trabajo terminado."
+        )
+    if str(ticket.estado or "").strip().lower() != "en progreso":
+        raise TicketCoordinationError(
+            "Solo se puede terminar un trabajo en progreso."
+        )
+    if getattr(ticket, "estado_cierre", None):
+        raise TicketCoordinationError(
+            "El ticket ya tiene una etapa de revisión o cierre activa."
+        )
+
+    if not isinstance(payload, dict):
+        raise TicketCoordinationError("El cuerpo debe ser un objeto JSON.")
+    if set(payload) - {"notas_trabajo"}:
+        raise TicketCoordinationError(
+            "Trabajo terminado solo admite notas_trabajo."
+        )
+    notes = payload.get("notas_trabajo")
+    if not isinstance(notes, str) or not 1 <= len(notes.strip()) <= 2000:
+        raise TicketCoordinationError(
+            "Describe el trabajo realizado (1-2000 caracteres)."
+        )
+
+    current_time = now or datetime.now(timezone.utc)
+    if current_time.tzinfo is None:
+        current_time = current_time.replace(tzinfo=timezone.utc)
+    current_time = current_time.astimezone(timezone.utc)
+
+    ticket.estado_cierre = MAINTENANCE_WORK_REVIEW_PENDING
+    history = list(ticket.historial_fechas or [])
+    history.append({
+        "tipo": "maintenance_work_completed_v1",
+        "origen": "tickets_v1",
+        "fechaCambio": current_time.isoformat(),
+        "cambiadoPor": str(user.username).strip(),
+        "motivo": notes.strip(),
+        "tipo_atencion": "INTERNA",
+        "asignado_a": ticket.asignado_a,
+        "estado": ticket.estado,
+        "estado_cierre_nuevo": MAINTENANCE_WORK_REVIEW_PENDING,
+    })
+    history.sort(
+        key=lambda item: str(item.get("fechaCambio") or item.get("fecha") or ""),
+        reverse=True,
+    )
+    ticket.historial_fechas = history
+    flag_modified(ticket, "historial_fechas")
+    return ticket
 
 def prepare_maintenance_reassignment(
     ticket_id: int,
