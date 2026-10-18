@@ -170,65 +170,58 @@
         class="historial-card historial-card-compacta"
         [class.historial-card-rechazo]="esRechazoCierre(item)">
 
-        <!-- Fila compacta: evento, usuario, fechas y motivo -->
-        <div
-          class="historial-compact-row"
-          [class.historial-compact-row--reasignacion]="esReasignacion(item)"
-          [class.historial-compact-row--coordinacion]="esCoordinacion(item)">
+        <!-- Una fila por evento: acción, autor, hora, cambio real y motivo. -->
+        <div class="historial-compact-row">
 
-          <!-- Tipo real del evento; los eventos legacy conservan Cambio. -->
-          <span
-            class="evento-chip"
-            [class.evento-rechazo]="esRechazoCierre(item)">
-
+          <span class="evento-chip" [class.evento-rechazo]="esRechazoCierre(item)">
             <mat-icon inline>
               {{ esRechazoCierre(item) ? 'report' : (esReasignacion(item) ? 'person' : 'history') }}
             </mat-icon>
-
             {{ getEventoLabel(item) }}
           </span>
 
+          <span class="usuario-chip">{{ getUsuarioItem(item) }}</span>
 
-          <!-- Usuario que generó el cambio -->
-          <span class="usuario-chip">
-            {{ getUsuarioItem(item) }}
-          </span>
-
-
-          <!-- Una reasignación NO cambia la fecha compromiso: no mostrar fecha vacía. -->
-          <div class="compact-cell" *ngIf="!esReasignacion(item)">
-            <span class="compact-label">
-              <mat-icon inline>event</mat-icon>
-              Solución
-            </span>
-
-            <strong>
-              {{ getFechaSolucionItem(item) ? (getFechaSolucionItem(item) | date:fmtDate:tz) : '—' }}
-            </strong>
-          </div>
-
-
-          <!-- Fecha de cambio -->
-          <div class="compact-cell">
+          <div class="compact-cell historial-fecha-cambio">
             <span class="compact-label">
               <mat-icon inline>schedule</mat-icon>
               Cambio
             </span>
-
             <strong>
               {{ getFechaCambioItem(item) ? (getFechaCambioItem(item) | date:fmtDateTime:tz) : '—' }}
             </strong>
           </div>
 
+          <div class="compact-cell historial-detalle">
+            <ng-container *ngIf="getCambioResponsableItem(item) as cambio; else soloSolucion">
+              <span class="compact-label">Responsable</span>
+              <span class="historial-responsable-inline">
+                <span class="historial-responsable-inline__anterior">{{ cambio.anterior }}</span>
+                <mat-icon inline>arrow_forward</mat-icon>
+                <strong>{{ cambio.nuevo }}</strong>
+              </span>
+              <span
+                class="historial-compromiso-inline"
+                *ngIf="esCoordinacion(item) && getFechaSolucionItem(item)">
+                Compromiso: {{ getFechaSolucionItem(item) | date:fmtDate:tz }}
+              </span>
+            </ng-container>
+            <ng-template #soloSolucion>
+              <span class="compact-label">
+                <mat-icon inline>event</mat-icon>
+                Solución
+              </span>
+              <strong>
+                {{ getFechaSolucionItem(item) ? (getFechaSolucionItem(item) | date:fmtDate:tz) : '—' }}
+              </strong>
+            </ng-template>
+          </div>
 
-          <!-- Motivo / comentario -->
           <div class="compact-cell motivo-compacto">
             <span class="compact-label">
               <mat-icon inline>edit_note</mat-icon>
               Motivo
             </span>
-
-            <!-- Motivo existente -->
             <p
               *ngIf="getMotivoItem(item); else sinMotivo"
               class="motivo"
@@ -236,23 +229,11 @@
               [matTooltip]="debeMostrarTooltipMotivo(item) ? getMotivoItem(item) : ''">
               {{ getMotivoItem(item) }}
             </p>
-
-            <!-- Sin motivo -->
             <ng-template #sinMotivo>
               <em class="motivo-sin">Sin motivo</em>
             </ng-template>
           </div>
 
-        </div>
-
-        <!-- Campo afectado: transición real conservada en el registro auditado. -->
-        <div class="historial-cambio-responsable" *ngIf="getCambioResponsableItem(item) as cambio">
-          <span class="historial-cambio-responsable__label">Responsable</span>
-          <span class="historial-cambio-responsable__valores">
-            <span class="historial-cambio-responsable__anterior">{{ cambio.anterior }}</span>
-            <mat-icon inline>arrow_forward</mat-icon>
-            <strong>{{ cambio.nuevo }}</strong>
-          </span>
         </div>
       </article>
 
