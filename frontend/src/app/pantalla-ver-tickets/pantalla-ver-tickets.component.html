@@ -675,6 +675,9 @@
 
           <!-- Acciones -->
           <td class="td-acciones">
+            <div *ngIf="esTicketMantenimiento(ticket)" class="ticket-assignment-meta">
+              {{ resumenAtencionMantenimiento(ticket) }}
+            </div>
             <button
               *ngIf="puedeCoordinarTicket(ticket)"
               type="button"
