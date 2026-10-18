@@ -395,7 +395,7 @@ def build_planner_board(
             and str(row["asignado_a"] or "").strip().casefold() == current_username
             and row["tipo_atencion"] == "INTERNA"
             and str(row["estado"] or "").strip().lower() == "en progreso"
-            and not row["estado_cierre"]
+            and row["estado_cierre"] in {None, "", "rechazado_por_gerente"}
         )
 
     active_rows = [row for row in rows if str(row["estado"]).lower() in ACTIVE_STATES]
