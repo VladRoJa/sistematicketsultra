@@ -662,14 +662,53 @@
 
 
 
-          <!-- (15) Responsable -->
-          <th>Responsable</th>
+          <!-- (15) Responsable — filtro uniforme con el resto de Tickets V1 -->
+          <th [class.filtro-activo]="isFilterActive('responsable')">
+            <button mat-button
+                    [matMenuTriggerFor]="menuResponsable"
+                    #triggerFiltroResponsable="matMenuTrigger"
+                    (click)="onAbrirFiltro('responsable', triggerFiltroResponsable)"
+                    class="header-button">
+              Responsable <mat-icon>arrow_drop_down</mat-icon>
+            </button>
+            <mat-menu #menuResponsable="matMenu" disableClose="true">
+              <mat-divider></mat-divider>
+              <div class="menu-filtro" (click)="$event.stopPropagation()">
+                <label>Filtrar Responsable</label>
+                <mat-form-field *ngIf="permiteBusqueda('responsable')" appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
+                  <mat-label>Buscar</mat-label>
+                  <input matInput [(ngModel)]="filtroResponsableTexto" (ngModelChange)="filtrarOpcionesTexto('responsable')">
+                </mat-form-field>
+                <mat-checkbox
+                  [checked]="isTodoSeleccionado('responsable')"
+                  (change)="alternarSeleccionTemporal('responsable', $event.checked)"
+                  (click)="$event.stopPropagation()"
+                  name="responsable_selectAll">
+                  Seleccionar todo
+                </mat-checkbox>
+                <div class="opciones-scrollable">
+                  <mat-checkbox
+                    *ngFor="let item of temporalSeleccionados['responsable']; let i = index"
+                    [checked]="item.seleccionado"
+                    (change)="actualizarSeleccionTemporal('responsable', i, $event.checked)"
+                    [name]="'responsable_' + i"
+                    (click)="$event.stopPropagation()">
+                    {{ item.etiqueta ?? item.valor }}
+                  </mat-checkbox>
+                </div>
+                <div class="menu-botones-fijos">
+                  <button mat-button color="primary" (click)="cerrarYAplicar('responsable', triggerFiltroResponsable)">Aplicar</button>
+                  <button mat-button (click)="cerrarYLimpiar('responsable', triggerFiltroResponsable)">Borrar Filtros</button>
+                </div>
+              </div>
+            </mat-menu>
+          </th>
 
           <!-- (16) Fecha Solución -->
-          <th>Fecha Solución</th>
+          <th><span class="tickets-header-static">Fecha Solución</span></th>
 
           <!-- (17) Historial -->
-          <th>Historial</th>
+          <th><span class="tickets-header-static">Historial</span></th>
         </tr>
       </thead>
 
