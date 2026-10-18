@@ -32,6 +32,7 @@ ASSIGNED_ONLY_MAINTENANCE_MUTATION_ENDPOINTS = (
     | frozenset({
         "tickets.coordinate_maintenance_ticket",
         "tickets.reassign_maintenance_ticket",
+        "tickets.maintenance_mark_work_completed",
         "maintenance_planner.put_schedule",
         "mantenimiento_equipos.guardar_compromiso_estructurado",
     })
