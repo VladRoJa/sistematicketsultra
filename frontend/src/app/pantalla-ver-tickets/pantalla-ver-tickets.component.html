@@ -675,6 +675,16 @@
 
           <!-- Acciones -->
           <td class="td-acciones">
+            <button
+              *ngIf="puedeCoordinarTicket(ticket)"
+              type="button"
+              mat-button
+              class="ticket-action ticket-action--progress"
+              (click)="abrirCoordinarMantenimiento(ticket)"
+            >
+              <mat-icon>assignment_ind</mat-icon>
+              <span>Asignar atención</span>
+            </button>
             <div *ngIf="puedeEditarTickets">
               <!-- Botón: pasar a En progreso -->
               <button
@@ -885,6 +895,7 @@
               <button
                 *ngIf="
                   puedeEditarTickets &&
+                  !(user?.rol === 'COMPRAS' && ticket.departamento_id === 1) &&
                   ((ticket.estado ?? '').toString().trim().toLowerCase() === 'en progreso')
                 "
                 mat-icon-button
@@ -917,6 +928,8 @@
     <app-asignar-fecha-modal
       [fechaSeleccionada]="fechaSolucionTentativa"
       [ticket]="ticketParaAsignarFecha"
+      [permitirAsignacionMantenimiento]="esCoordinacionMantenimiento"
+      [responsablesMantenimiento]="responsablesMantenimiento"
       [puedeCapturarDiagnostico]="puedeCapturarDiagnosticoMantenimiento(ticketParaAsignarFecha)"
       (onGuardar)="onGuardarFechaSolucion($event)"
       (onCancelar)="onCancelarAsignarFecha()"
