@@ -2626,7 +2626,10 @@ async solicitarCierre(ticket: Ticket) {
   // 🔹 1. Abrir modal de cierre y esperar datos
   const dialogRef = this.dialog.open(ModalCierreTicketComponent, {
     width: '560px',
-    data: { ticketId: ticket.id }
+    data: {
+      ticketId: ticket.id,
+      modo: this.esTicketMantenimiento(ticket) ? 'maintenance_request' : undefined,
+    }
   });
 
   const result = await dialogRef.afterClosed().toPromise();
