@@ -17,6 +17,8 @@ class Ticket(db.Model):
     descripcion = db.Column(db.Text, nullable=False)
     username = db.Column(db.String(50), db.ForeignKey('users.username'), nullable=False)
     asignado_a = db.Column(db.String(50), db.ForeignKey('users.username'), nullable=True)
+    # NULL = sin asignar; INTERNA = usuario Suite; EXTERNA = proveedor no identificado.
+    tipo_atencion = db.Column(db.String(12), nullable=True)
 
     sucursal_id = db.Column(db.Integer, db.ForeignKey('sucursales.sucursal_id'), nullable=False)
     sucursal_id_destino = db.Column(db.Integer, db.ForeignKey('sucursales.sucursal_id'), nullable=False)
@@ -215,6 +217,7 @@ class Ticket(db.Model):
             'descripcion': self.descripcion,
             'username': self.username,
             'asignado_a': self.asignado_a,
+            'tipo_atencion': self.tipo_atencion,
             'estado': self.estado,
 
             'fecha_creacion':   safe_dt_iso(self.fecha_creacion),
