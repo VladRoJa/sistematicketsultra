@@ -212,6 +212,11 @@ def test_tecnico_asignado_no_puede_solicitar_cierre_sin_revision_coordinacion(mo
 
     monkeypatch.setattr(ticket_routes.UserORM, "get_by_id", lambda _id: tecnico)
     monkeypatch.setattr(ticket_routes, "get_jwt_identity", lambda: tecnico.id)
+    # El permiso se valida en sus tests dedicados; aquí aislamos el endpoint.
+    monkeypatch.setattr(
+        ticket_routes, "has_maintenance_coordination_permission",
+        lambda _actor: False,
+    )
     monkeypatch.setattr(
         ticket_routes, "Ticket",
         SimpleNamespace(query=SimpleNamespace(get=lambda _id: t)),
