@@ -1822,14 +1822,17 @@ esTicketMantenimiento(ticket: Ticket): boolean {
   return Number(ticket?.departamento_id) === 1;
 }
 
-resumenAtencionMantenimiento(ticket: Ticket): string {
-  if (ticket.tipo_atencion === 'EXTERNA') {
+obtenerResponsableTicket(ticket: Ticket): string {
+  if (this.esTicketMantenimiento(ticket) && ticket.tipo_atencion === 'EXTERNA') {
     return 'Proveedor externo';
   }
-  if (ticket.asignado_a) {
-    return 'Asignado a: ' + ticket.asignado_a;
+
+  const responsable = String(ticket.asignado_a || '').trim();
+  if (responsable) {
+    return responsable;
   }
-  return 'Sin responsable asignado';
+
+  return this.esTicketMantenimiento(ticket) ? 'Sin asignar' : '—';
 }
 
 puedeCoordinarTicket(ticket: Ticket): boolean {
