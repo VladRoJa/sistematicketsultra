@@ -5,6 +5,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
+import { isModalSubmitDisabled } from '../modal-submit-state';
 import {
   MaintenanceAssignee,
   MaintenanceAttentionMode,
@@ -71,12 +72,14 @@ export class ReasignarResponsableModalComponent implements OnInit {
   }
 
   get guardarDeshabilitado(): boolean {
-    return this.guardando ||
-      !this.tipoAtencion ||
-      !this.motivo.trim() ||
-      this.motivo.trim().length > 500 ||
-      (this.tipoAtencion === 'INTERNA' && !this.responsableUserId) ||
-      this.mismoResponsable;
+    return isModalSubmitDisabled({
+      requiredText: [this.motivo],
+      requiredSelections: [
+        this.tipoAtencion,
+        ...(this.tipoAtencion === 'INTERNA' ? [this.responsableUserId] : []),
+      ],
+      blocked: this.guardando || this.motivo.trim().length > 500 || this.mismoResponsable,
+    });
   }
 
   onTipoAtencionChange(): void {
