@@ -31,7 +31,7 @@ def _has_active_user_grant(user, action_key: str) -> bool:
 
     from app.models.permissions import PermissionActionORM, PermissionGrantORM
 
-    return (
+    rows = (
         PermissionGrantORM.query
         .join(PermissionGrantORM.action)
         .filter(
@@ -39,7 +39,9 @@ def _has_active_user_grant(user, action_key: str) -> bool:
             PermissionActionORM.is_active.is_(True),
             PermissionGrantORM.principal_type == "user",
             PermissionGrantORM.principal_user_id == user_id,
-            PermissionGrantORM.effect == "allow",
+            # La capacidad se asigna globalmente, pero el endpoint siempre
+            # intersecta el alcance operativo con usuario_sucursal.
+            PermissionGrantORM.scope_type == "global",
             PermissionGrantORM.is_active.is_(True),
             PermissionGrantORM.deleted_at.is_(None),
             or_(
@@ -51,9 +53,16 @@ def _has_active_user_grant(user, action_key: str) -> bool:
                 PermissionGrantORM.expires_at > func.now(),
             ),
         )
-        .first()
-        is not None
+        .with_entities(PermissionGrantORM.effect)
+        .all()
     )
+    return _effects_allow([row[0] for row in rows])
+
+
+def _effects_allow(effects: list[str]) -> bool:
+    """Un deny explícito activo prevalece sobre cualquier allow duplicado."""
+
+    return "deny" not in effects and "allow" in effects
 
 
 def has_maintenance_coordination_permission(user) -> bool:
