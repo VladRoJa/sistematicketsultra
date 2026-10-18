@@ -58,6 +58,8 @@ class SyntheticTicket:
         self.estado = "por_validar"
         self.estado_cierre = "pendiente_creador"
         self.fecha_finalizado = datetime.now(timezone.utc)
+        # La implementación ORM real hace commit dentro de solicitar_cierre().
+        self._commit()
 
     def aceptar_conformidad_creador(self, commit=True):
         assert self.estado == "por_validar"
@@ -143,6 +145,7 @@ def qa_http(monkeypatch):
     )
 
     commit = Mock()
+    ticket._commit = commit
     session = SimpleNamespace(commit=commit, rollback=Mock())
     monkeypatch.setattr(ticket_routes, "db", SimpleNamespace(session=session))
 
