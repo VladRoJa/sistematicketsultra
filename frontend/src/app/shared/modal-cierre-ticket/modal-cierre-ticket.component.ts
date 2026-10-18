@@ -57,6 +57,20 @@ export class ModalCierreTicketComponent {
     return this.isMaintenanceRequest ? 'Costo (opcional)' : 'Costo de la solución';
   }
 
+  get noticeTitle(): string {
+    return this.isMaintenanceRequest ? 'Solicitud de conformidad' : 'Confirmación de cierre';
+  }
+
+  get noticeDescription(): string {
+    return this.isMaintenanceRequest
+      ? 'Al enviar, el gerente deberá dar conformidad antes del cierre definitivo.'
+      : 'Al aceptar, el cierre se enviará directamente. Ya no se mostrará una segunda confirmación.';
+  }
+
+  get submitLabel(): string {
+    return this.isMaintenanceRequest ? 'Solicitar conformidad' : 'Aceptar cierre';
+  }
+
   get canSubmit(): boolean {
     return !this.isMaintenanceRequest
       || (this.notas.trim().length > 0 && this.notas.trim().length <= 2000);
