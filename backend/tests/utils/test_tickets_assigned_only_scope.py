@@ -149,3 +149,44 @@ def test_mutacion_legacy_propia_no_es_bloqueada_por_guard(monkeypatch):
     guard.register_maintenance_ticket_update_guard(app)
 
     assert app.test_client().post("/cierre/solicitar/501").status_code == 200
+
+
+def test_reassignment_endpoint_denies_mutating_foreign_assigned_ticket(monkeypatch):
+    from flask import Blueprint, Flask
+    from app.utils import maintenance_ticket_update_guard as guard
+
+    app = Flask(__name__)
+    bp = Blueprint("tickets", __name__)
+
+    @bp.route("/maintenance/<int:ticket_id>/reassign", methods=["PUT"])
+    def reassign_maintenance_ticket(ticket_id):
+        return "unexpected reassignment", 200
+
+    app.register_blueprint(bp)
+
+    staff = user()
+    foreign = SimpleNamespace(
+        id=501,
+        departamento_id=1,
+        asignado_a="SR_MANT_MXL",
+    )
+    monkeypatch.setattr(guard, "verify_jwt_in_request", lambda: None)
+    monkeypatch.setattr(guard, "get_jwt_identity", lambda: staff.id)
+    monkeypatch.setattr(guard.UserORM, "get_by_id", lambda _id: staff)
+    monkeypatch.setattr(
+        guard,
+        "Ticket",
+        SimpleNamespace(query=SimpleNamespace(get=lambda _id: foreign)),
+    )
+    monkeypatch.setattr(
+        guard, "has_assigned_only_maintenance_scope", lambda _actor: True,
+    )
+    guard.register_maintenance_ticket_update_guard(app)
+
+    response = app.test_client().put("/maintenance/501/reassign", json={
+        "motivo": "Cambio no autorizado",
+        "tipo_atencion": "INTERNA",
+        "asignado_user_id": 68,
+    })
+    assert response.status_code == 403
+    assert "que tenga asignados" in response.get_json()["mensaje"]
