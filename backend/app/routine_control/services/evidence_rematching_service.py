@@ -42,7 +42,7 @@ from app.routine_control.services.reconciliation_service import (
 
 
 REACTIVATION_REQUIRED = "REACTIVATION_REQUIRED"
-_UNLINK_REASON = "IDENTITY_TEMPORAL_V2_REMATCH"
+_UNLINK_REASON = f"{MATCHING_CONTRACT_VERSION}_REMATCH"
 
 
 @dataclass(frozen=True, slots=True)
