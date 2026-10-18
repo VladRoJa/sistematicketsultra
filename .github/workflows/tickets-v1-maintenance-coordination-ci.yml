@@ -10,6 +10,9 @@ on:
       - "backend/app/utils/maintenance_ticket_update_guard.py"
       - "frontend/src/app/services/maintenance-coordination.service.ts"
       - "frontend/scripts/verify-tickets-responsable-filter.cjs"
+      - "frontend/scripts/verify-modal-submit-state.cjs"
+      - "frontend/src/app/shared/modal-submit-state.ts"
+      - "frontend/src/styles.scss"
       - "frontend/src/app/utils/ticket-utils.ts"
       - "frontend/src/app/pantalla-ver-tickets/helpers/**"
       - "frontend/src/app/types/ticket.ts"
@@ -89,6 +92,9 @@ jobs:
       - name: Verify Responsible cross-filter behavior
         working-directory: frontend
         run: node scripts/verify-tickets-responsable-filter.cjs
+      - name: Verify reusable confirm disabled states
+        working-directory: frontend
+        run: node scripts/verify-modal-submit-state.cjs
       - name: Build Angular templates
         working-directory: frontend
         run: npm run build
