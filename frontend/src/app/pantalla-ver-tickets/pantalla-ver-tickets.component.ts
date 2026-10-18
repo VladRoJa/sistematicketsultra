@@ -1150,7 +1150,9 @@ private normalizarTextoFiltro(value: any): string {
 
   abrirHistorialModal(ticket: Ticket): void {
     this.dialog.open(HistorialFechasModalComponent, {
-      width: '920px',
+      // Crece en escritorio y respeta el viewport en pantallas pequeñas.
+      // El historial adapta sus columnas al contenido mediante CSS.
+      width: 'min(1080px, 96vw)',
       maxWidth: '96vw',
       maxHeight: '90vh',
       data: ticket
