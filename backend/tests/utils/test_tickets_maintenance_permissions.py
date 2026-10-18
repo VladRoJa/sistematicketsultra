@@ -72,3 +72,11 @@ def test_assigned_only_no_restringe_administradores():
             actor(role="ADMINISTRADOR")
         ) is False
         check.assert_not_called()
+
+
+def test_deny_explicito_prevalece_y_no_hay_allow_por_defecto():
+    assert policy._effects_allow([]) is False
+    assert policy._effects_allow(["allow"]) is True
+    assert policy._effects_allow(["deny"]) is False
+    assert policy._effects_allow(["allow", "deny"]) is False
+    assert policy._effects_allow(["allow", "allow"]) is True
