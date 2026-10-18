@@ -741,6 +741,36 @@
               </button>
             </div>
 
+            <div *ngIf="puedeEditarTickets" class="acciones-mantenimiento">
+              <button
+                *ngIf="puedeMarcarTrabajoTerminado(ticket)"
+                type="button"
+                class="ticket-action ticket-action--finish"
+                (click)="marcarTrabajoTerminado(ticket)"
+              >
+                <mat-icon>task_alt</mat-icon>
+                <span>Trabajo terminado</span>
+              </button>
+              <button
+                *ngIf="puedeSolicitarCierreMantenimiento(ticket)"
+                type="button"
+                class="ticket-action ticket-action--finish"
+                (click)="solicitarCierre(ticket)"
+              >
+                <mat-icon>fact_check</mat-icon>
+                <span>{{ etiquetaSolicitarCierreMantenimiento(ticket) }}</span>
+              </button>
+              <button
+                *ngIf="puedeDevolverTrabajoMantenimiento(ticket)"
+                type="button"
+                class="ticket-action ticket-action--manager"
+                (click)="devolverTrabajoMantenimiento(ticket)"
+              >
+                <mat-icon>assignment_return</mat-icon>
+                <span>Devolver trabajo</span>
+              </button>
+            </div>
+
             <!-- Botón: Cierre administrativo por gerente/admin -->
             <button
               *ngIf="puedeMostrarBotonCerrarDesdeCero(ticket)"
@@ -894,7 +924,7 @@
           </td>
 
           <td>{{ getNombreSucursal(ticket) }}</td>
-          <td>{{ ticket.estado }}</td>
+          <td>{{ etiquetaEstadoTicket(ticket) }}</td>
           <td>{{ ticket.criticidad }}</td>
 
           <td>
