@@ -311,6 +311,8 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  /* Ajustar cada evento al ancho real del contenido, no solo al viewport. */
+  container-type: inline-size;
 }
 
 /* ==========================================================================
@@ -356,9 +358,14 @@
 
 .historial-compact-row {
   display: grid;
-  grid-template-columns: 128px 100px 142px minmax(190px, 1.25fr) minmax(150px, 1fr);
+  /* Evento/autor/fecha toman solo el espacio que requieren; detalle y motivo flexionan. */
+  grid-template-columns: max-content fit-content(185px) minmax(138px, max-content) minmax(160px, 1.25fr) minmax(115px, 1fr);
   align-items: center;
-  gap: 9px;
+  gap: 8px;
+  min-width: 0;
+}
+
+.historial-compact-row > * {
   min-width: 0;
 }
 
@@ -472,13 +479,17 @@
 }
 
 .usuario-chip {
-  display: inline-flex;
+  display: inline-block;
+  box-sizing: border-box;
+  max-width: 100%;
   padding: 4px 8px;
   border-radius: 999px;
   background: var(--ultra-gray-100);
   color: var(--ultra-gray-800);
   font-size: 12px;
   font-weight: 800;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .evento-chip {
@@ -539,9 +550,10 @@
   }
 }
 
-@media (max-width: 900px) {
+/* Si el diálogo queda estrecho, refluye antes de que autor y fecha se encimen. */
+@container (max-width: 780px) {
   .historial-compact-row {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
   }
 

@@ -102,8 +102,18 @@ const scss = fs.readFileSync(
   path.resolve(__dirname, '../src/app/pantalla-ver-tickets/modals/historial-fechas-modal.component.scss'),
   'utf8',
 );
-assert.match(scss, /\.historial-compact-row\s*\{[^}]*grid-template-columns: 128px/s);
+assert.match(scss, /\.historial-compact-row\s*\{[^}]*grid-template-columns: max-content fit-content\(185px\)/s);
+assert.match(scss, /\.usuario-chip\s*\{[^}]*max-width: 100%[^}]*overflow-wrap: anywhere/s);
+assert.match(scss, /container-type: inline-size/);
+assert.match(scss, /@container \(max-width: 780px\)/);
 assert.match(scss, /\.contenido-modal\s*\{[^}]*overflow-y: auto/s);
 assert.doesNotMatch(scss, /\.historial-cambio-responsable\s*\{/);
 
-console.log('PASS: historial legible en una fila, scroll de contenido y eventos legacy');
+const ticketsComponent = fs.readFileSync(
+  path.resolve(__dirname, '../src/app/pantalla-ver-tickets/pantalla-ver-tickets.component.ts'),
+  'utf8',
+);
+assert.match(ticketsComponent, /width: 'min\(1080px, 96vw\)'/);
+assert.match(ticketsComponent, /maxWidth: '96vw'/);
+
+console.log('PASS: historial responsivo sin colisiones de actor, scroll interno y eventos legacy');
