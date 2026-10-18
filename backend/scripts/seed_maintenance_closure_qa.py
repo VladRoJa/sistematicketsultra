@@ -9,7 +9,7 @@ Ejemplo (PowerShell, usando la configuración local habitual):
   $env:SQLALCHEMY_DATABASE_URI = "postgresql+psycopg2://...@127.0.0.1:5432/suite_ultra_tickets_qa"
   $env:SUITE_QA_SEED_ALLOWED = "YES_CREATE_LOCAL_SYNTHETIC_TICKETS"
   $env:SUITE_QA_TEST_PASSWORD = "<contraseña local NO productiva>"
-  python scripts/seed_maintenance_closure_qa.py
+  python -m scripts.seed_maintenance_closure_qa
 """
 
 from __future__ import annotations
