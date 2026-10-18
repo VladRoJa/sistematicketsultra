@@ -13,7 +13,17 @@
   box-sizing: border-box;
 }
 
+/* Mantener Guardar/Cancelar visibles incluso con refacciones o diagnóstico. */
+.asignar-fecha-modal {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .asignar-fecha-modal__header {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -48,7 +58,8 @@
 }
 
 .asignar-fecha-modal__notice {
-  margin-bottom: 16px;
+  flex: 0 0 auto;
+  margin-bottom: 12px;
   padding: 12px 14px;
   border-radius: var(--ultra-radius-lg);
   border: 1px solid rgba(229, 69, 37, 0.24);
@@ -74,8 +85,13 @@
 
 .asignar-fecha-modal__content {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
-  gap: 12px;
+  min-height: 0;
+  gap: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .w-full {
@@ -228,10 +244,14 @@
 
 .asignar-fecha-modal__actions {
   display: flex;
+  flex: 0 0 auto;
   justify-content: flex-end;
   align-items: center;
   gap: 10px;
-  margin-top: 18px;
+  margin-top: 10px;
+  padding-top: 12px;
+  background: var(--ultra-surface);
+  border-top: 1px solid var(--ultra-gray-200);
 }
 
 .asignar-fecha-modal__cancel,
@@ -245,6 +265,36 @@
 .asignar-fecha-modal__save {
   background: var(--ultra-orange);
   color: var(--ultra-surface);
+}
+
+/* En escritorio los dos selectores no necesitan ocupar dos filas completas. */
+@media (min-width: 640px) {
+  .asignar-atencion-v1 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    column-gap: 14px;
+    row-gap: 2px;
+  }
+
+  .asignar-atencion-v1__campo {
+    min-width: 0;
+  }
+
+  .asignar-atencion-v1__hint {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-height: 760px) {
+  .asignar-fecha-modal__header {
+    margin-bottom: 10px;
+  }
+
+  .asignar-fecha-modal__notice {
+    margin-bottom: 10px;
+    padding: 8px 12px;
+  }
 }
 
 @media (max-width: 560px) {
