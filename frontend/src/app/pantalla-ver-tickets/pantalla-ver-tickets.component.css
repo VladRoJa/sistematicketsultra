@@ -1495,9 +1495,9 @@ td.col-descripcion {
 }
 
 
-/* Responsable: columna informativa independiente de las acciones. */
+/* Responsable hereda tipografía y alineación de las demás celdas. */
 .tabla-tickets .td-responsable {
-  text-align: left;
+  text-align: center;
 }
 
 .ticket-responsable {
@@ -1507,9 +1507,8 @@ td.col-descripcion {
   text-overflow: ellipsis;
   vertical-align: middle;
   white-space: nowrap;
-  color: var(--ultra-gray-700, #414651);
-  font-size: 12px;
-  font-weight: 700;
+  font: inherit;
+  color: inherit;
 }
 
 .ticket-responsable--externo {
