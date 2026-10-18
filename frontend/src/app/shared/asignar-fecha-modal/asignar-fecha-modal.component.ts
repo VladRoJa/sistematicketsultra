@@ -159,9 +159,8 @@ export class AsignarFechaModalComponent implements OnChanges {
   }
 
   get modalTitulo(): string {
-    return this.permitirAsignacionMantenimiento
-      ? 'Asignar atención y compromiso'
-      : 'Asignar fecha de solución';
+    // Es el modal de fecha existente, incluso cuando incluye asignación.
+    return 'Asignar fecha de solución';
   }
 
   get modalDescripcion(): string {
