@@ -43,22 +43,24 @@
     </mat-form-field>
 
     <section *ngIf="permitirAsignacionMantenimiento" class="asignar-atencion-v1">
-      <label class="asignar-fecha-modal__field-label" for="tipo-atencion-v1">Tipo de atención *</label>
-      <mat-form-field appearance="fill" class="w-full">
-        <mat-select
-          id="tipo-atencion-v1"
-          aria-label="Tipo de atención"
-          [(ngModel)]="tipoAtencion"
-          (selectionChange)="onTipoAtencionChange()"
-          placeholder="Seleccionar atención"
-          required
-        >
-          <mat-option value="INTERNA">Interno · Personal de Mantenimiento</mat-option>
-          <mat-option value="EXTERNA">Externo · Proveedor</mat-option>
-        </mat-select>
-      </mat-form-field>
+      <div class="asignar-atencion-v1__campo">
+        <label class="asignar-fecha-modal__field-label" for="tipo-atencion-v1">Tipo de atención *</label>
+        <mat-form-field appearance="fill" class="w-full">
+          <mat-select
+            id="tipo-atencion-v1"
+            aria-label="Tipo de atención"
+            [(ngModel)]="tipoAtencion"
+            (selectionChange)="onTipoAtencionChange()"
+            placeholder="Seleccionar atención"
+            required
+          >
+            <mat-option value="INTERNA">Interno · Personal de Mantenimiento</mat-option>
+            <mat-option value="EXTERNA">Externo · Proveedor</mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
 
-      <ng-container *ngIf="tipoAtencion === 'INTERNA'">
+      <div *ngIf="tipoAtencion === 'INTERNA'" class="asignar-atencion-v1__campo">
         <label class="asignar-fecha-modal__field-label" for="responsable-v1">Asignado a *</label>
         <mat-form-field appearance="fill" class="w-full">
           <mat-select
@@ -73,7 +75,7 @@
             </mat-option>
           </mat-select>
         </mat-form-field>
-      </ng-container>
+      </div>
       <p *ngIf="tipoAtencion === 'EXTERNA'" class="asignar-atencion-v1__hint">
         Se registrará como atención externa sin asociar un usuario de Suite.
       </p>
