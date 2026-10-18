@@ -338,9 +338,10 @@
    ========================================================================== */
 
 .tabla-tickets {
-  table-layout: auto;
-  width: max-content;
-  min-width: 100%;
+  /* 17 columnas dentro del mismo ancho base de Suite Ultra V1. */
+  table-layout: fixed;
+  width: max(100%, var(--table-min-width));
+  min-width: var(--table-min-width);
   border-collapse: separate;
   border-spacing: 0;
   font-size: 14px;
@@ -360,7 +361,7 @@
 }
 
 .tabla-tickets .c-apa {
-  width: 170px;
+  width: 160px;
 }
 
 .tabla-tickets .c-desc {
@@ -376,13 +377,13 @@
 }
 
 .tabla-tickets .c-cri {
-  width: 92px;
+  width: 90px;
 }
 
 .tabla-tickets .c-fc,
 .tabla-tickets .c-fp,
 .tabla-tickets .c-ff {
-  width: 158px;
+  width: 150px;
 }
 
 .tabla-tickets .c-dep {
@@ -390,11 +391,11 @@
 }
 
 .tabla-tickets .c-sub {
-  width: 150px;
+  width: 140px;
 }
 
 .tabla-tickets .c-det {
-  width: 135px;
+  width: 125px;
 }
 
 .tabla-tickets .c-acc {
@@ -402,8 +403,7 @@
 }
 
 .tabla-tickets .c-resp {
-  width: 170px;
-  min-width: 170px;
+  width: 145px;
 }
 
 .tabla-tickets .c-sol {
