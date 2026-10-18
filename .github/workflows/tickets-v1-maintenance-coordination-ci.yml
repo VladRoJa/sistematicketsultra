@@ -1,0 +1,35 @@
+name: Tickets V1 Maintenance Coordination
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/utils/tickets_maintenance_permissions.py"
+      - "backend/tests/utils/test_tickets_maintenance_permissions.py"
+      - ".github/workflows/tickets-v1-maintenance-coordination-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  coordinator-permissions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend requirements
+        run: |
+          python -m pip install -r backend/requirements.txt
+          python -m pip install "pytest==8.3.5"
+      - name: Compile authorization module
+        run: |
+          python -m py_compile backend/app/utils/tickets_maintenance_permissions.py
+      - name: Run authorization unit tests
+        working-directory: backend
+        env:
+          SECRET_KEY: tickets-v1-maint-ci
+          JWT_SECRET_KEY: tickets-v1-maint-jwt-ci
+        run: |
+          python -m pytest -q --tb=short tests/utils/test_tickets_maintenance_permissions.py
