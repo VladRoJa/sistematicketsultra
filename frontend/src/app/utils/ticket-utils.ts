@@ -265,6 +265,12 @@ export function limpiarFiltroColumnaConMapa(component: any, columna: string): vo
       filtroTexto: 'filtroUsuarioTexto',
       seleccionarTodo: 'seleccionarTodoUsuario',
     },
+    responsable: {
+      disponibles: 'responsablesDisponibles',
+      filtradas: 'responsablesFiltrados',
+      filtroTexto: 'filtroResponsableTexto',
+      seleccionarTodo: 'seleccionarTodoResponsable',
+    },
     estado: {
       disponibles: 'estadosDisponibles',
       filtradas: 'estadosFiltrados',
@@ -346,6 +352,11 @@ export function toggleSeleccionarTodoConMapa(component: any, columna: string): v
       disponibles: 'usuariosDisponibles',
       filtradas: 'usuariosFiltrados',
       seleccionarTodo: 'seleccionarTodoUsuario',
+    },
+    responsable: {
+      disponibles: 'responsablesDisponibles',
+      filtradas: 'responsablesFiltrados',
+      seleccionarTodo: 'seleccionarTodoResponsable',
     },
     estado: {
       disponibles: 'estadosDisponibles',
