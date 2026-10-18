@@ -49,12 +49,14 @@ import { ModalCierreTicketComponent } from '../shared/modal-cierre-ticket/modal-
 import { buscarAncestroNivel, filtrarTicketsConFiltros } from '../utils/ticket-utils';
 import { MatSelectModule } from '@angular/material/select';
 import { AuthService } from '../services/auth.service';
+import { MaintenanceAssignee, MaintenanceCoordinationService } from '../services/maintenance-coordination.service';
 import { DialogoConfirmacionComponent } from '../shared/dialogo-confirmacion/dialogo-confirmacion.component';
 import {
   MantenimientoEquiposService,
   RegionReporteMantenimientoDTO,
 } from '../services/mantenimiento-equipos.service';
 import {
+  AsignarFechaPayload,
   CondicionOperativa,
   FallaMantenimientoDTO,
   FamiliaEquipoDTO,
@@ -118,6 +120,8 @@ export interface Ticket {
   sucursal_id_destino?: number | null;
   url_evidencia?: string | null;
   has_attachment?: boolean;
+  asignado_a?: string | null;
+  tipo_atencion?: 'INTERNA' | 'EXTERNA' | null;
   refaccion_definida_por_jefe?: boolean;
   estado_cierre?:
   | 'pendiente_jefe'
@@ -259,6 +263,9 @@ export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
   showModalAsignarFecha: boolean = false;
   ticketParaAsignarFecha: Ticket | null = null;
   fechaSolucionTentativa: Date | null = null;
+  puedeCoordinarMantenimiento = false;
+  responsablesMantenimiento: MaintenanceAssignee[] = [];
+  esCoordinacionMantenimiento = false;
   
 
   // Controles
@@ -324,6 +331,7 @@ export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
     private sucursalesService: SucursalesService,
     private authService: AuthService, 
     private mantenimientoEquiposService: MantenimientoEquiposService,
+    private maintenanceCoordinationService: MaintenanceCoordinationService,
     private route: ActivatedRoute,
     private router: Router,
   ) {}
@@ -366,6 +374,7 @@ async ngOnInit() {
 
   // 👇 NUEVO: setear usuarioActual a partir de this.user
   this.usuarioActual = (this.user?.username || '').trim().toUpperCase();
+  this.cargarContextoCoordinacionMantenimiento();
 
   if (this.puedeDescargarReporteMantenimiento) {
     this.cargarRegionesReporteMantenimiento();
@@ -1794,9 +1803,57 @@ permiteBusqueda(col: string): boolean {
 }
 
 
+cargarContextoCoordinacionMantenimiento(): void {
+  this.maintenanceCoordinationService.getContext().subscribe({
+    next: (context) => {
+      this.puedeCoordinarMantenimiento = !!context.can_coordinate;
+      this.responsablesMantenimiento = context.can_coordinate
+        ? (context.assignees || [])
+        : [];
+    },
+    error: () => {
+      this.puedeCoordinarMantenimiento = false;
+      this.responsablesMantenimiento = [];
+    },
+  });
+}
+
+puedeCoordinarTicket(ticket: Ticket): boolean {
+  const estado = String(ticket?.estado || '').trim().toLowerCase();
+  return this.puedeCoordinarMantenimiento
+    && Number(ticket?.departamento_id) === 1
+    && (estado === 'abierto' || estado === 'en progreso');
+}
+
+abrirCoordinarMantenimiento(ticket: Ticket): void {
+  if (!this.puedeCoordinarTicket(ticket)) return;
+
+  this.ticketParaAsignarFecha = ticket;
+  this.esCoordinacionMantenimiento = true;
+  const actual = ticket.fecha_solucion ? new Date(ticket.fecha_solucion) : null;
+
+  if (actual && !Number.isNaN(actual.getTime())) {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Tijuana',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const partes = formatter.format(actual).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    this.fechaSolucionTentativa = partes
+      ? new Date(Number(partes[1]), Number(partes[2]) - 1, Number(partes[3]))
+      : null;
+  } else {
+    this.fechaSolucionTentativa = null;
+  }
+
+  this.showModalAsignarFecha = true;
+}
+
 cambiarEstadoEnProgreso(ticket: Ticket) {
   if (!ticket.fecha_solucion) {
     this.ticketParaAsignarFecha = ticket;
+    this.esCoordinacionMantenimiento = false;
     this.fechaSolucionTentativa = null;
     this.showModalAsignarFecha = true;
   } else {
@@ -1805,15 +1862,7 @@ cambiarEstadoEnProgreso(ticket: Ticket) {
 }
 
 
-onGuardarFechaSolucion(event: {
-  fecha: Date;
-  motivo: string;
-  necesita_refaccion?: boolean;
-  descripcion_refaccion?: string;
-  refaccion_definida_por_jefe?: boolean;
-  falla_mantenimiento_id?: number;
-  condicion_operativa?: CondicionOperativa;
-}) {
+onGuardarFechaSolucion(event: AsignarFechaPayload) {
   if (!this.ticketParaAsignarFecha) return;
 
   if (!event.motivo || !event.motivo.trim()) {
@@ -1822,6 +1871,49 @@ onGuardarFechaSolucion(event: {
   }
 
   const id = this.ticketParaAsignarFecha.id;
+
+  if (this.esCoordinacionMantenimiento) {
+    if (!event.tipo_atencion ||
+        (event.tipo_atencion === 'INTERNA' && !event.asignado_user_id)) {
+      mostrarAlertaToast('Selecciona tipo de atención y responsable.', 'error');
+      return;
+    }
+
+    const dueDate = [
+      event.fecha.getFullYear(),
+      String(event.fecha.getMonth() + 1).padStart(2, '0'),
+      String(event.fecha.getDate()).padStart(2, '0'),
+    ].join('-');
+
+    this.maintenanceCoordinationService.coordinateTicket(id, {
+      due_date: dueDate,
+      motivo: event.motivo.trim(),
+      tipo_atencion: event.tipo_atencion,
+      asignado_user_id: event.tipo_atencion === 'INTERNA'
+        ? (event.asignado_user_id ?? null)
+        : null,
+      ...(event.necesita_refaccion !== undefined
+        ? { necesita_refaccion: !!event.necesita_refaccion }
+        : {}),
+      descripcion_refaccion: event.descripcion_refaccion,
+    }).subscribe({
+      next: () => {
+        this.refrescarTicketsPreservandoFiltros();
+        this.showModalAsignarFecha = false;
+        this.ticketParaAsignarFecha = null;
+        this.esCoordinacionMantenimiento = false;
+        mostrarAlertaToast('Responsable y compromiso guardados.', 'success');
+      },
+      error: (err) => {
+        mostrarAlertaToast(
+          err?.error?.mensaje || 'No se pudo asignar la atención.',
+          'error',
+        );
+      },
+    });
+    return;
+  }
+
   const capturaEstructurada = this.puedeGuardarCompromisoMantenimiento(
     this.ticketParaAsignarFecha,
   );
@@ -1945,6 +2037,7 @@ private puedeGuardarCompromisoMantenimiento(ticket: Ticket | null): boolean {
 
 
 onCancelarAsignarFecha() {
+  this.esCoordinacionMantenimiento = false;
   this.showModalAsignarFecha = false;
   this.ticketParaAsignarFecha = null;
 }
@@ -2647,12 +2740,16 @@ esPendienteCierreCreador(ticket: Ticket): boolean {
 
 puedeMostrarBotonEnProgreso(ticket: Ticket): boolean {
   const estado = (ticket?.estado || '').trim().toLowerCase();
-  return this.puedeEditarTickets && estado === 'abierto';
+  return this.puedeEditarTickets && estado === 'abierto'
+    && !(String(this.user?.rol || '').toUpperCase() === 'COMPRAS'
+      && Number(ticket.departamento_id) === 1);
 }
 
 puedeMostrarBotonFinalizar(ticket: Ticket): boolean {
   const estado = (ticket?.estado || '').trim().toLowerCase();
   return this.puedeEditarTickets &&
+         !(String(this.user?.rol || '').toUpperCase() === 'COMPRAS'
+           && Number(ticket.departamento_id) === 1) &&
          estado === 'en progreso' &&
          ticket?.estado_cierre !== 'pendiente_creador';
 }
