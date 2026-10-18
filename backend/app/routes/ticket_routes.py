@@ -2633,13 +2633,40 @@ def cierre_solicitar(ticket_id):
             t.costo_solucion = Decimal(str(costo))
         except (InvalidOperation, ValueError):
             return jsonify({"mensaje": "costo_solucion inválido"}), 400
-    else:
+    elif t.departamento_id != 1:
+        # Mantener semántica legacy fuera de Mantenimiento. En PM, un costo
+        # previamente registrado no se borra al solicitar el cierre sin precio.
         t.costo_solucion = None
 
     # Asignar notas de cierre (texto libre)
     t.notas_cierre = (notas or None)
 
-    # Estado de cierre: queda pendiente aprobación del creador
+    if t.departamento_id == 1:
+        # Evento explícito de revisión de coordinación; el técnico solo puede
+        # declarar trabajo terminado, nunca solicitar conformidad del gerente.
+        # Se registra antes de que solicitar_cierre() haga el commit legacy.
+        previous_review_state = t.estado_cierre
+        now = datetime.now(timezone.utc)
+        history = list(t.historial_fechas or [])
+        history.append({
+            "tipo": "maintenance_closure_reviewed_v1",
+            "origen": "tickets_v1",
+            "fechaCambio": now.isoformat(),
+            "cambiadoPor": str(user.username).strip(),
+            "motivo": str(notas or "").strip(),
+            "tipo_atencion": tipo_atencion,
+            "estado": t.estado,
+            "estado_cierre_anterior": previous_review_state,
+            "estado_cierre_nuevo": "pendiente_creador",
+        })
+        history.sort(
+            key=lambda item: str(item.get("fechaCambio") or item.get("fecha") or ""),
+            reverse=True,
+        )
+        t.historial_fechas = history
+        flag_modified(t, "historial_fechas")
+
+    # Estado de cierre: queda pendiente conformidad del gerente en Mantenimiento.
     t.solicitar_cierre()
     
     notificados = _notificar_evento_ticket(
