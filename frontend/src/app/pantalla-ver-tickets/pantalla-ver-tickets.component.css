@@ -338,9 +338,10 @@
    ========================================================================== */
 
 .tabla-tickets {
-  table-layout: auto;
-  width: max-content;
-  min-width: 100%;
+  /* 17 columnas dentro del mismo ancho base de Suite Ultra V1. */
+  table-layout: fixed;
+  width: max(100%, var(--table-min-width));
+  min-width: var(--table-min-width);
   border-collapse: separate;
   border-spacing: 0;
   font-size: 14px;
@@ -360,7 +361,7 @@
 }
 
 .tabla-tickets .c-apa {
-  width: 170px;
+  width: 160px;
 }
 
 .tabla-tickets .c-desc {
@@ -376,13 +377,13 @@
 }
 
 .tabla-tickets .c-cri {
-  width: 92px;
+  width: 90px;
 }
 
 .tabla-tickets .c-fc,
 .tabla-tickets .c-fp,
 .tabla-tickets .c-ff {
-  width: 158px;
+  width: 150px;
 }
 
 .tabla-tickets .c-dep {
@@ -390,15 +391,19 @@
 }
 
 .tabla-tickets .c-sub {
-  width: 150px;
+  width: 140px;
 }
 
 .tabla-tickets .c-det {
-  width: 135px;
+  width: 125px;
 }
 
 .tabla-tickets .c-acc {
   width: 150px;
+}
+
+.tabla-tickets .c-resp {
+  width: 145px;
 }
 
 .tabla-tickets .c-sol {
@@ -435,6 +440,31 @@
   font-size: 13px;
   font-weight: 900;
   box-shadow: 0 3px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* Titulares uniformes: tanto filtros Material como columnas sin filtro. */
+.tabla-tickets thead th,
+.tabla-tickets thead .header-button,
+.tabla-tickets thead .tickets-header-static {
+  font-family: inherit;
+  font-size: 12px !important;
+  font-weight: 900;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.tabla-tickets thead .header-button {
+  padding-inline: 4px;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.tabla-tickets thead .header-button mat-icon {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 14px;
 }
 
 .tabla-tickets thead th:first-child {
@@ -857,17 +887,41 @@ td.col-descripcion {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 12px;
+  box-sizing: border-box;
+  overflow: hidden;
   background: rgba(15, 23, 42, 0.48);
   z-index: 2000;
 }
 
 :host ::ng-deep app-asignar-fecha-modal {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   width: 95vw;
   max-width: 720px;
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow: hidden;
   background: var(--ultra-surface);
   border-radius: var(--ultra-radius-xl);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
   padding: 16px;
+}
+
+/* Reasignación puntual: diálogo compacto, mismo overlay de Tickets V1. */
+:host ::ng-deep app-reasignar-responsable-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(95vw, 520px);
+  max-height: calc(100dvh - 24px);
+  min-height: 0;
+  overflow: hidden;
+  padding: 18px;
+  box-sizing: border-box;
+  background: var(--ultra-surface);
+  border-radius: var(--ultra-radius-xl);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
 }
 
 /* ==========================================================================
@@ -1462,4 +1516,51 @@ td.col-descripcion {
   font-size: 17px;
   line-height: 17px;
   margin-right: 6px;
+}
+
+
+/* Responsable hereda tipografía y alineación de las demás celdas. */
+.tabla-tickets .td-responsable {
+  text-align: center;
+}
+
+.ticket-responsable__contenido {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  gap: 2px;
+}
+
+.ticket-responsable {
+  display: inline-block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+  font: inherit;
+  color: inherit;
+}
+
+.tabla-tickets .ticket-responsable__editar {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--ultra-gray-600);
+  --mdc-icon-button-state-layer-size: 24px;
+}
+
+.tabla-tickets .ticket-responsable__editar mat-icon {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  font-size: 15px;
+  line-height: 15px;
+}
+
+.ticket-responsable--externo {
+  color: var(--ultra-orange, #e54525);
 }

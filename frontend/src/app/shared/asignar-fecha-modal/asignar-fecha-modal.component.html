@@ -3,9 +3,9 @@
     <span class="asignar-fecha-modal__icon">📅</span>
 
     <div class="asignar-fecha-modal__title">
-      <h2>Asignar fecha de solución</h2>
+      <h2>{{ modalTitulo }}</h2>
       <p>
-        Define la fecha compromiso y registra el motivo para mantener trazabilidad.
+        {{ modalDescripcion }}
       </p>
     </div>
   </header>
@@ -18,13 +18,15 @@
   </div>
 
   <div class="asignar-fecha-modal__content">
+    <label class="asignar-fecha-modal__field-label" for="fecha-compromiso-v1">Fecha compromiso *</label>
     <mat-form-field
       appearance="fill"
       class="w-full asignar-fecha-modal__date-field"
       (click)="picker.open()"
     >
-      <mat-label>Selecciona una fecha</mat-label>
       <input
+        id="fecha-compromiso-v1"
+        aria-label="Fecha compromiso"
         matInput
         [matDatepicker]="picker"
         [(ngModel)]="fechaSeleccionada"
@@ -40,9 +42,50 @@
       </mat-error>
     </mat-form-field>
 
+    <section *ngIf="permitirAsignacionMantenimiento" class="asignar-atencion-v1">
+      <div class="asignar-atencion-v1__campo">
+        <label class="asignar-fecha-modal__field-label" for="tipo-atencion-v1">Tipo de atención *</label>
+        <mat-form-field appearance="fill" class="w-full">
+          <mat-select
+            id="tipo-atencion-v1"
+            aria-label="Tipo de atención"
+            [(ngModel)]="tipoAtencion"
+            (selectionChange)="onTipoAtencionChange()"
+            placeholder="Seleccionar atención"
+            required
+          >
+            <mat-option value="INTERNA">Interno · Personal de Mantenimiento</mat-option>
+            <mat-option value="EXTERNA">Externo · Proveedor</mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+
+      <div *ngIf="tipoAtencion === 'INTERNA'" class="asignar-atencion-v1__campo">
+        <label class="asignar-fecha-modal__field-label" for="responsable-v1">Asignado a *</label>
+        <mat-form-field appearance="fill" class="w-full">
+          <mat-select
+            id="responsable-v1"
+            aria-label="Responsable de mantenimiento"
+            [(ngModel)]="responsableUserId"
+            placeholder="Seleccionar responsable"
+            required
+          >
+            <mat-option *ngFor="let person of responsablesMantenimiento" [value]="person.id">
+              {{ person.username }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+      <p *ngIf="tipoAtencion === 'EXTERNA'" class="asignar-atencion-v1__hint">
+        Se registrará como atención externa sin asociar un usuario de Suite.
+      </p>
+    </section>
+
+    <label class="asignar-fecha-modal__field-label" for="motivo-compromiso-v1">Motivo del compromiso *</label>
     <mat-form-field appearance="fill" class="w-full">
-      <mat-label>Motivo del cambio</mat-label>
       <textarea
+        id="motivo-compromiso-v1"
+        aria-label="Motivo del compromiso"
         matInput
         [(ngModel)]="motivo"
         rows="3"
@@ -154,7 +197,7 @@
     <button
       mat-raised-button
       type="button"
-      class="asignar-fecha-modal__save"
+      class="asignar-fecha-modal__save ultra-modal-confirm"
       (click)="guardar()"
       [disabled]="guardarDeshabilitado"
     >

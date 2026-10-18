@@ -148,6 +148,7 @@
         <col class="c-dep">
         <col class="c-sub">
         <col class="c-det">
+        <col class="c-resp">
         <col class="c-sol">
         <col class="c-his">
       </colgroup>
@@ -661,11 +662,53 @@
 
 
 
-          <!-- (15) Fecha Solución -->
-          <th>Fecha Solución</th>
+          <!-- (15) Responsable — filtro uniforme con el resto de Tickets V1 -->
+          <th [class.filtro-activo]="isFilterActive('responsable')">
+            <button mat-button
+                    [matMenuTriggerFor]="menuResponsable"
+                    #triggerFiltroResponsable="matMenuTrigger"
+                    (click)="onAbrirFiltro('responsable', triggerFiltroResponsable)"
+                    class="header-button">
+              Responsable <mat-icon>arrow_drop_down</mat-icon>
+            </button>
+            <mat-menu #menuResponsable="matMenu" disableClose="true">
+              <mat-divider></mat-divider>
+              <div class="menu-filtro" (click)="$event.stopPropagation()">
+                <label>Filtrar Responsable</label>
+                <mat-form-field *ngIf="permiteBusqueda('responsable')" appearance="fill" class="buscador-filtro" (click)="$event.stopPropagation()">
+                  <mat-label>Buscar</mat-label>
+                  <input matInput [(ngModel)]="filtroResponsableTexto" (ngModelChange)="filtrarOpcionesTexto('responsable')">
+                </mat-form-field>
+                <mat-checkbox
+                  [checked]="isTodoSeleccionado('responsable')"
+                  (change)="alternarSeleccionTemporal('responsable', $event.checked)"
+                  (click)="$event.stopPropagation()"
+                  name="responsable_selectAll">
+                  Seleccionar todo
+                </mat-checkbox>
+                <div class="opciones-scrollable">
+                  <mat-checkbox
+                    *ngFor="let item of temporalSeleccionados['responsable']; let i = index"
+                    [checked]="item.seleccionado"
+                    (change)="actualizarSeleccionTemporal('responsable', i, $event.checked)"
+                    [name]="'responsable_' + i"
+                    (click)="$event.stopPropagation()">
+                    {{ item.etiqueta ?? item.valor }}
+                  </mat-checkbox>
+                </div>
+                <div class="menu-botones-fijos">
+                  <button mat-button color="primary" (click)="cerrarYAplicar('responsable', triggerFiltroResponsable)">Aplicar</button>
+                  <button mat-button (click)="cerrarYLimpiar('responsable', triggerFiltroResponsable)">Borrar Filtros</button>
+                </div>
+              </div>
+            </mat-menu>
+          </th>
 
-          <!-- (16) Historial -->
-          <th>Historial</th>
+          <!-- (16) Fecha Solución -->
+          <th><span class="tickets-header-static">Fecha Solución</span></th>
+
+          <!-- (17) Historial -->
+          <th><span class="tickets-header-static">Historial</span></th>
         </tr>
       </thead>
 
@@ -675,18 +718,18 @@
 
           <!-- Acciones -->
           <td class="td-acciones">
-            <div *ngIf="puedeEditarTickets">
-              <!-- Botón: pasar a En progreso -->
-              <button
-                *ngIf="puedeMostrarBotonEnProgreso(ticket)"
-                mat-button
-                class="ticket-action ticket-action--progress"
-                (click)="cambiarEstadoEnProgreso(ticket)"
-              >
-                <mat-icon>play_circle</mat-icon>
-                <span>En progreso</span>
-              </button>
+            <!-- La asignación se realiza dentro del modal de fecha, no como acción adicional. -->
+            <button
+              *ngIf="puedeMostrarBotonEnProgreso(ticket)"
+              mat-button
+              class="ticket-action ticket-action--progress"
+              (click)="cambiarEstadoEnProgreso(ticket)"
+            >
+              <mat-icon>play_circle</mat-icon>
+              <span>En progreso</span>
+            </button>
 
+            <div *ngIf="puedeEditarTickets">
               <!-- Botón: Finalizar (jefe inicia flujo de cierre) -->
               <button
                 *ngIf="puedeMostrarBotonFinalizar(ticket)"
@@ -877,6 +920,28 @@
           <td>{{ getDetalleVisible(ticket) }}</td>
 
 
+          <!-- Responsable: editar abre el MISMO modal de fecha y asignación. -->
+          <td class="td-responsable">
+            <div class="ticket-responsable__contenido">
+              <span
+                class="ticket-responsable"
+                [class.ticket-responsable--externo]="ticket.tipo_atencion === 'EXTERNA'"
+                [title]="obtenerResponsableTicket(ticket)"
+              >{{ obtenerResponsableTicket(ticket) }}</span>
+              <button
+                *ngIf="puedeReasignarTicket(ticket)"
+                mat-icon-button
+                type="button"
+                class="ticket-responsable__editar"
+                matTooltip="Reasignar responsable"
+                aria-label="Reasignar responsable"
+                (click)="abrirReasignarResponsable(ticket)"
+              >
+                <mat-icon>edit</mat-icon>
+              </button>
+            </div>
+          </td>
+
           <!-- Fecha Solución -->
           <td>
             <ng-container *ngIf="ticket.fecha_solucion; else soloLecturaSinFecha">
@@ -884,7 +949,9 @@
 
               <button
                 *ngIf="
-                  puedeEditarTickets &&
+                  (puedeCoordinarTicket(ticket) ||
+                   (puedeEditarTickets &&
+                    !(user?.rol === 'COMPRAS' && ticket.departamento_id === 1))) &&
                   ((ticket.estado ?? '').toString().trim().toLowerCase() === 'en progreso')
                 "
                 mat-icon-button
@@ -917,11 +984,24 @@
     <app-asignar-fecha-modal
       [fechaSeleccionada]="fechaSolucionTentativa"
       [ticket]="ticketParaAsignarFecha"
+      [permitirAsignacionMantenimiento]="esCoordinacionMantenimiento"
+      [responsablesMantenimiento]="responsablesMantenimiento"
       [puedeCapturarDiagnostico]="puedeCapturarDiagnosticoMantenimiento(ticketParaAsignarFecha)"
       (onGuardar)="onGuardarFechaSolucion($event)"
       (onCancelar)="onCancelarAsignarFecha()"
     >
     </app-asignar-fecha-modal>
+  </div>
+
+  <!-- Reasignar responsable sin tocar fecha, estado ni refacciones -->
+  <div *ngIf="ticketParaReasignar" class="modal-asignar-fecha-overlay">
+    <app-reasignar-responsable-modal
+      [ticket]="ticketParaReasignar"
+      [responsables]="responsablesMantenimiento"
+      [guardando]="guardandoReasignacion"
+      (onGuardar)="onGuardarReasignacion($event)"
+      (onCancelar)="onCancelarReasignacion()"
+    ></app-reasignar-responsable-modal>
   </div>
 
   <!-- Aviso de límite -->

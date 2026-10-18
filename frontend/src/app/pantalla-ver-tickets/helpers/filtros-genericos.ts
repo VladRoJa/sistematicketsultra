@@ -6,7 +6,7 @@ export function inicializarTemporales(component: any, columna: string): void {
     descripcion: 'descripciones', username: 'usuarios', estado: 'estados',
     criticidad: 'criticidades', categoria: 'categorias', departamento: 'departamentos',
     subcategoria: 'subcategorias', detalle: 'detalles', inventario: 'inventarios',
-    sucursal: 'sucursales'  
+    sucursal: 'sucursales', responsable: 'responsables'  
   };
 
   // 👉 alias para la caja de texto
@@ -36,7 +36,7 @@ export function confirmarFiltroColumna(component: any, columna: string): void {
     categoria: 'categorias', descripcion: 'descripciones', username: 'usuarios',
     estado: 'estados', criticidad: 'criticidades', departamento: 'departamentos',
     subcategoria: 'subcategorias', detalle: 'detalles', inventario: 'inventarios',
-    sucursal: 'sucursales'
+    sucursal: 'sucursales', responsable: 'responsables'
   };
 
   const plural = pluralMap[columna];
@@ -90,7 +90,7 @@ export function filtrarPorTextoEnTemporales(component: any, columna: string): vo
     subcategoria: 'subcategorias',
     detalle: 'detalles',
     inventario: 'inventarios',
-    sucursal: 'sucursales'
+    sucursal: 'sucursales', responsable: 'responsables'
   };
 
   const key = alias[columna] ?? `${columna}s`;

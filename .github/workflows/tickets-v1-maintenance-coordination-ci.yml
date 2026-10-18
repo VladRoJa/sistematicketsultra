@@ -1,0 +1,140 @@
+name: Tickets V1 Maintenance Coordination
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/utils/tickets_maintenance_permissions.py"
+      - "backend/app/models/ticket_model.py"
+      - "backend/app/routes/ticket_routes.py"
+      - "backend/app/utils/ticket_filters.py"
+      - "backend/app/utils/maintenance_ticket_update_guard.py"
+      - "frontend/src/app/services/maintenance-coordination.service.ts"
+      - "frontend/scripts/verify-tickets-responsable-filter.cjs"
+      - "frontend/scripts/verify-modal-submit-state.cjs"
+      - "frontend/scripts/verify-tickets-history-assignment.cjs"
+      - "frontend/src/app/pantalla-ver-tickets/modals/historial-fechas-*"
+      - "frontend/src/app/shared/modal-submit-state.ts"
+      - "frontend/src/styles.scss"
+      - "frontend/src/app/utils/ticket-utils.ts"
+      - "frontend/src/app/pantalla-ver-tickets/helpers/**"
+      - "frontend/src/app/types/ticket.ts"
+      - "frontend/src/app/shared/asignar-fecha-modal/**"
+      - "frontend/src/app/shared/reasignar-responsable-modal/**"
+      - "frontend/src/app/pantalla-ver-tickets/pantalla-ver-tickets.component.*"
+      - "backend/app/services/ticket_maintenance_coordination_service.py"
+      - "backend/tests/utils/test_tickets_maintenance_permissions.py"
+      - "backend/tests/services/test_ticket_maintenance_coordination_service.py"
+      - "backend/tests/utils/test_tickets_assigned_only_scope.py"
+      - "backend/tests/services/test_tickets_attention_migration_postgres.py"
+      - "backend/migrations/versions/c17a10202601_tickets_v1_maintenance_attention.py"
+      - ".github/workflows/tickets-v1-maintenance-coordination-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  coordinator-permissions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend requirements
+        run: |
+          python -m pip install -r backend/requirements.txt
+          python -m pip install "pytest==8.3.5"
+      - name: Compile authorization module
+        run: |
+          python -m py_compile backend/app/utils/tickets_maintenance_permissions.py \
+            backend/app/models/ticket_model.py \
+            backend/app/services/ticket_maintenance_coordination_service.py \
+            backend/app/routes/ticket_routes.py \
+            backend/app/utils/ticket_filters.py \
+            backend/app/utils/maintenance_ticket_update_guard.py \
+            backend/migrations/versions/c17a10202601_tickets_v1_maintenance_attention.py
+      - name: Run authorization unit tests
+        working-directory: backend
+        env:
+          SECRET_KEY: tickets-v1-maint-ci
+          JWT_SECRET_KEY: tickets-v1-maint-jwt-ci
+        run: |
+          python -m pytest -q --tb=short tests/utils/test_tickets_maintenance_permissions.py \
+            tests/services/test_ticket_maintenance_coordination_service.py \
+            tests/utils/test_tickets_assigned_only_scope.py
+      - name: Inspect Alembic migration heads (read-only)
+        run: |
+          python - <<'PY'
+          from alembic.config import Config
+          from alembic.script import ScriptDirectory
+          cfg = Config()
+          cfg.set_main_option("script_location", "backend/migrations")
+          heads = ScriptDirectory.from_config(cfg).get_heads()
+          print("ALEMBIC_HEADS =", heads)
+          assert heads == ["c17a10202601"], heads
+          PY
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - name: Compile Angular application
+        working-directory: frontend
+        run: node node_modules/typescript/bin/tsc --noEmit --project tsconfig.app.json
+      - name: Verify Responsible cross-filter behavior
+        working-directory: frontend
+        run: node scripts/verify-tickets-responsable-filter.cjs
+      - name: Verify reusable confirm disabled states
+        working-directory: frontend
+        run: node scripts/verify-modal-submit-state.cjs
+      - name: Verify ticket assignment history display
+        working-directory: frontend
+        run: node scripts/verify-tickets-history-assignment.cjs
+      - name: Build Angular templates
+        working-directory: frontend
+        run: npm run build
+
+  migration-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: coordination_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d coordination_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend requirements
+        run: |
+          python -m pip install -r backend/requirements.txt
+          python -m pip install "pytest==8.3.5"
+      - name: Run migration with synthetic data on PostgreSQL 16
+        working-directory: backend
+        env:
+          SECRET_KEY: tickets-v1-maint-ci
+          JWT_SECRET_KEY: tickets-v1-maint-jwt-ci
+          PG_COORD_TEST_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/coordination_test
+        run: |
+          python -m pytest -q --tb=short tests/services/test_tickets_attention_migration_postgres.py

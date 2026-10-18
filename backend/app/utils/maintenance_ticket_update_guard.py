@@ -6,6 +6,7 @@ from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 from app.models.ticket_model import Ticket
 from app.models.user_model import UserORM
 from app.utils.pm_permissions import can_pm_execute
+from app.utils.tickets_maintenance_permissions import has_assigned_only_maintenance_scope
 
 
 MAINTENANCE_DEPARTMENT_ID = 1
@@ -23,6 +24,27 @@ COMPRAS_MAINTENANCE_MUTATION_ENDPOINTS = frozenset({
     "tickets.cierre_rechazar_creador",
     "tickets.notify_ticket",
 })
+
+# Estas rutas aceptan un ticket_id por URL y pueden mutar el ticket.
+# El filtro assigned-only debe aplicarse también aquí, no solo en GET/list.
+ASSIGNED_ONLY_MAINTENANCE_MUTATION_ENDPOINTS = (
+    COMPRAS_MAINTENANCE_MUTATION_ENDPOINTS
+    | frozenset({
+        "tickets.coordinate_maintenance_ticket",
+        "tickets.reassign_maintenance_ticket",
+        "maintenance_planner.put_schedule",
+        "mantenimiento_equipos.guardar_compromiso_estructurado",
+    })
+)
+
+
+def assigned_only_maintenance_mutation_forbidden(user, ticket) -> bool:
+    if not is_maintenance_ticket(ticket) or not has_assigned_only_maintenance_scope(user):
+        return False
+    return (
+        str(getattr(ticket, "asignado_a", "") or "").strip().casefold()
+        != str(getattr(user, "username", "") or "").strip().casefold()
+    )
 
 
 def is_maintenance_ticket(ticket) -> bool:
@@ -94,6 +116,38 @@ def register_maintenance_ticket_update_guard(app) -> None:
             ),
             403,
         )
+
+    @app.before_request
+    def guard_assigned_only_maintenance_mutations():
+        if (
+            request.method not in {"POST", "PUT", "PATCH", "DELETE"}
+            or request.endpoint not in ASSIGNED_ONLY_MAINTENANCE_MUTATION_ENDPOINTS
+        ):
+            return None
+
+        verify_jwt_in_request()
+        actor = UserORM.get_by_id(get_jwt_identity())
+        if actor is None or not has_assigned_only_maintenance_scope(actor):
+            return None
+
+        route_args = request.view_args or {}
+        ticket_id = route_args.get("ticket_id", route_args.get("id"))
+        if ticket_id is None:
+            return None
+
+        ticket = Ticket.query.get(ticket_id)
+        if ticket is None:
+            return None
+
+        if assigned_only_maintenance_mutation_forbidden(actor, ticket):
+            return jsonify({
+                "mensaje": (
+                    "Este usuario solo puede modificar tickets de "
+                    "Mantenimiento que tenga asignados."
+                ),
+            }), 403
+
+        return None
 
     @app.before_request
     def guard_compras_maintenance_mutations():

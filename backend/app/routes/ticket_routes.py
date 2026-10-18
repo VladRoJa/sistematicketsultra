@@ -15,6 +15,16 @@ from app.utils.notify_targets import build_subject, pick_recipients
 from app.utils.notify_utils import render_ticket_html, render_ticket_whatsapp_text
 from app.utils.ticket_filters import filtrar_tickets_por_usuario
 from app.services.ticket_validation_summary_service import get_ticket_validation_summary_for_user
+from app.services.ticket_maintenance_coordination_service import (
+    TicketCoordinationError,
+    list_maintenance_assignees,
+    prepare_maintenance_coordination,
+    prepare_maintenance_reassignment,
+)
+from app.utils.tickets_maintenance_permissions import (
+    has_maintenance_coordination_permission,
+    has_assigned_only_maintenance_scope,
+)
 from app.services.ticket_attachment_service import create_ticket_image_attachment
 from app.services.ticket_attachment_image_service import MAX_TICKET_ATTACHMENT_BYTES
 from app.services.ticket_attachment_storage_service import resolve_ticket_attachment_path
@@ -852,6 +862,76 @@ def list_tickets_with_filters():
 
 
 # ─────────────────────────────────────────────────────────────
+
+@ticket_bp.route('/maintenance/coordination/context', methods=['GET'])
+@jwt_required()
+def get_maintenance_coordination_context():
+    """Permisos y catálogo del modal de Tickets V1 resueltos por backend."""
+    actor = UserORM.get_by_id(get_jwt_identity())
+    if actor is None:
+        return jsonify({"mensaje": "Usuario no encontrado"}), 401
+
+    allowed = has_maintenance_coordination_permission(actor)
+    return jsonify({
+        "can_coordinate": allowed,
+        "assignees": list_maintenance_assignees(actor) if allowed else [],
+    }), 200
+
+
+@ticket_bp.route('/maintenance/<int:ticket_id>/coordinate', methods=['PUT'])
+@jwt_required()
+def coordinate_maintenance_ticket(ticket_id):
+    """Transacción única: responsable/tipo + compromiso + inicio + historial."""
+    actor = UserORM.get_by_id(get_jwt_identity())
+    if actor is None:
+        return jsonify({"mensaje": "Usuario no encontrado"}), 401
+
+    try:
+        ticket = prepare_maintenance_coordination(
+            ticket_id,
+            actor,
+            request.get_json(silent=True),
+        )
+        db.session.commit()
+        return jsonify({
+            "mensaje": "Atención y compromiso guardados correctamente.",
+            "ticket": ticket.to_dict(),
+        }), 200
+    except TicketCoordinationError as exc:
+        db.session.rollback()
+        return jsonify({"mensaje": exc.message}), exc.status_code
+    except Exception as exc:
+        db.session.rollback()
+        return manejar_error(exc, "coordinate_maintenance_ticket")
+
+
+@ticket_bp.route('/maintenance/<int:ticket_id>/reassign', methods=['PUT'])
+@jwt_required()
+def reassign_maintenance_ticket(ticket_id):
+    """Responsable/tipo e historial en un solo commit; compromiso intacto."""
+    actor = UserORM.get_by_id(get_jwt_identity())
+    if actor is None:
+        return jsonify({"mensaje": "Usuario no encontrado"}), 401
+
+    try:
+        ticket = prepare_maintenance_reassignment(
+            ticket_id,
+            actor,
+            request.get_json(silent=True),
+        )
+        db.session.commit()
+        return jsonify({
+            "mensaje": "Responsable actualizado correctamente.",
+            "ticket": ticket.to_dict(),
+        }), 200
+    except TicketCoordinationError as exc:
+        db.session.rollback()
+        return jsonify({"mensaje": exc.message}), exc.status_code
+    except Exception as exc:
+        db.session.rollback()
+        return manejar_error(exc, "reassign_maintenance_ticket")
+
+
 # RUTA: Actualizar estado de un ticket
 # ─────────────────────────────────────────────────────────────
 
@@ -2028,7 +2108,10 @@ def historial_equipo(equipo_id):
 
         # Si no eres admin, filtra solo tickets de tu sucursal
         query = Ticket.query.filter(Ticket.aparato_id == equipo_id)
-        if str(user.rol or "").strip().upper() == "COMPRAS":
+        if (
+            str(user.rol or "").strip().upper() == "COMPRAS"
+            or has_assigned_only_maintenance_scope(user)
+        ):
             query = filtrar_tickets_por_usuario(user).filter(
                 Ticket.aparato_id == equipo_id
             )
@@ -2081,7 +2164,10 @@ def historial_por_equipo(aparato_id):
         query = Ticket.query.filter_by(aparato_id=aparato_id)
 
         # COMPRAS siempre reutiliza su scope individual, incluso con sede root.
-        if str(user.rol or "").strip().upper() == "COMPRAS":
+        if (
+            str(user.rol or "").strip().upper() == "COMPRAS"
+            or has_assigned_only_maintenance_scope(user)
+        ):
             query = filtrar_tickets_por_usuario(user).filter_by(aparato_id=aparato_id)
         elif not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
             query = query.filter_by(sucursal_id=user.sucursal_id)
@@ -2115,7 +2201,8 @@ def historial_global():
         estado = request.args.get('estado')  # abierto/en progreso/finalizado
 
         is_compras_reader = str(user.rol or "").strip().upper() == "COMPRAS"
-        query = filtrar_tickets_por_usuario(user) if is_compras_reader else Ticket.query
+        is_scoped_reader = is_compras_reader or has_assigned_only_maintenance_scope(user)
+        query = filtrar_tickets_por_usuario(user) if is_scoped_reader else Ticket.query
 
         # Filtro por tipo de inventario
         if tipo:
@@ -2124,7 +2211,7 @@ def historial_global():
             query = query.filter(InventarioGeneral.tipo == tipo)
 
         # Compras nunca recibe visibilidad implícita por sucursal corporativa.
-        if is_compras_reader:
+        if is_scoped_reader:
             if sucursal_id:
                 query = query.filter(or_(
                     Ticket.sucursal_id_destino == sucursal_id,
@@ -2166,6 +2253,7 @@ def historial_aparato(aparato_id):
 
         # COMPRAS: alcance exclusivamente asignado, sin excepción corporativa.
         is_compras_reader = str(user.rol or "").strip().upper() == "COMPRAS"
+        is_assigned_reader = has_assigned_only_maintenance_scope(user)
         filtro_sucursal = []
         if is_compras_reader:
             filtro_sucursal = [
@@ -2176,7 +2264,7 @@ def historial_aparato(aparato_id):
             filtro_sucursal = [user.sucursal_id]
 
         # --- Tickets relacionados ---
-        if is_compras_reader:
+        if is_compras_reader or is_assigned_reader:
             tickets_query = filtrar_tickets_por_usuario(user).filter_by(
                 aparato_id=aparato_id
             )

@@ -130,6 +130,31 @@ html, body {
   height: 100%;
 }
 
+/* Suite Ultra UI v1 — confirmación reutilizable para modales Angular Material.
+   El disabled nativo impide el clic; estos estados lo hacen visible.
+   El scope por clase evita alterar otros botones de la Suite. */
+button.mat-mdc-raised-button.ultra-modal-confirm {
+  border-radius: 999px;
+  font-weight: 900;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+button.mat-mdc-raised-button.ultra-modal-confirm:not(:disabled) {
+  background-color: var(--ultra-orange) !important;
+  color: var(--ultra-surface) !important;
+  cursor: pointer;
+}
+
+button.mat-mdc-raised-button.ultra-modal-confirm:disabled {
+  --mdc-protected-button-disabled-container-color: var(--ultra-gray-200);
+  --mdc-protected-button-disabled-label-text-color: var(--ultra-gray-500);
+  background-color: var(--ultra-gray-200) !important;
+  color: var(--ultra-gray-500) !important;
+  cursor: not-allowed;
+  box-shadow: none !important;
+  opacity: 1;
+}
+
 // -------------------------------
 // 📦 Modal Animación
 // -------------------------------

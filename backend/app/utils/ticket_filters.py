@@ -2,6 +2,7 @@
 from sqlalchemy import or_, and_, func
 from app.models import Ticket
 from app.utils.pm_permissions import has_compras_maintenance_read_grant
+from app.utils.tickets_maintenance_permissions import has_assigned_only_maintenance_scope
 
 GERENTE_ROLES = {"GERENTE", "GERENTE_SUCURSAL", "GERENTE_GENERAL", "GERENTE_DEPTO"}
 
@@ -69,6 +70,17 @@ def filtrar_tickets_por_usuario(user):
     # 1) Admins por rol (ALL)
     if rol in ADMIN_ROLES:
         return q
+
+    # Permiso individual de bandeja asignada: no se heredan tickets por
+    # departamento, sucursal ni por creador. No afecta al rol completo.
+    if has_assigned_only_maintenance_scope(user):
+        username = str(getattr(user, "username", "") or "").strip()
+        if not username:
+            return q.filter(False)
+        return q.filter(and_(
+            Ticket.departamento_id == 1,
+            func.lower(Ticket.asignado_a) == username.lower(),
+        ))
 
     # 2) Gerente regional: SIEMPRE por scope (aunque suc=1000)
     if rol == "GERENTE_REGIONAL":

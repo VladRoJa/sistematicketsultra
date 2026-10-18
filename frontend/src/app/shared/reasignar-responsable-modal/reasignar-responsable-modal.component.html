@@ -1,0 +1,78 @@
+<section class="reasignar-modal">
+  <header class="reasignar-modal__header">
+    <h2>Reasignar responsable</h2>
+    <p>Esta acción no modifica la fecha compromiso, el estado ni la refacción.</p>
+  </header>
+
+  <div class="reasignar-modal__content">
+    <div class="reasignar-modal__actual">
+      <span>Responsable actual</span>
+      <strong>{{ responsableActual }}</strong>
+    </div>
+
+    <div class="reasignar-modal__campo">
+      <label for="reasignar-tipo">Nueva atención *</label>
+      <mat-form-field appearance="fill">
+        <mat-select
+          id="reasignar-tipo"
+          aria-label="Nueva atención"
+          [(ngModel)]="tipoAtencion"
+          (selectionChange)="onTipoAtencionChange()"
+          placeholder="Seleccionar atención"
+        >
+          <mat-option value="INTERNA">Interno · Personal de Mantenimiento</mat-option>
+          <mat-option value="EXTERNA">Externo · Proveedor</mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
+
+    <div class="reasignar-modal__campo" *ngIf="tipoAtencion === 'INTERNA'">
+      <label for="reasignar-usuario">Nuevo responsable *</label>
+      <mat-form-field appearance="fill">
+        <mat-select
+          id="reasignar-usuario"
+          aria-label="Nuevo responsable"
+          [(ngModel)]="responsableUserId"
+          placeholder="Selecciona usuario"
+        >
+          <mat-option *ngFor="let person of responsables" [value]="person.id">
+            {{ person.username }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
+
+    <p *ngIf="tipoAtencion === 'EXTERNA'" class="reasignar-modal__hint">
+      El ticket quedará a cargo de un proveedor externo, sin usuario Suite.
+    </p>
+
+    <div class="reasignar-modal__campo">
+      <label for="reasignar-motivo">Motivo de la reasignación *</label>
+      <mat-form-field appearance="fill">
+        <textarea
+          id="reasignar-motivo"
+          matInput
+          aria-label="Motivo de la reasignación"
+          [(ngModel)]="motivo"
+          placeholder="Ej. Corrección del responsable regional"
+          maxlength="500"
+          rows="2"
+        ></textarea>
+        <mat-hint align="end">{{ motivo.length }}/500</mat-hint>
+      </mat-form-field>
+    </div>
+  </div>
+
+  <footer class="reasignar-modal__actions">
+    <button type="button" mat-button (click)="cancelar()" [disabled]="guardando">Cancelar</button>
+    <button
+      type="button"
+      mat-raised-button
+      class="reasignar-modal__save ultra-modal-confirm"
+      [disabled]="guardarDeshabilitado"
+      (click)="guardar()"
+    >
+      {{ guardando ? 'Guardando…' : 'Guardar cambio' }}
+    </button>
+  </footer>
+</section>
