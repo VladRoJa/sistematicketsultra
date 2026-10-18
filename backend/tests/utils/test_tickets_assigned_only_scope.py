@@ -85,3 +85,67 @@ def test_admin_conserva_lectura_global(monkeypatch):
 
     assert result is query
     query.filter.assert_not_called()
+
+
+def test_mutacion_legacy_de_ticket_ajeno_bloqueada(monkeypatch):
+    from flask import Blueprint, Flask
+    from app.utils import maintenance_ticket_update_guard as guard
+
+    app = Flask(__name__)
+    bp = Blueprint("tickets", __name__)
+
+    @bp.route("/cierre/solicitar/<int:ticket_id>", methods=["POST"])
+    def cierre_solicitar(ticket_id):
+        return "unexpected write", 200
+
+    app.register_blueprint(bp)
+    staff = user()
+    foreign_ticket = SimpleNamespace(
+        id=501, departamento_id=1, asignado_a="OTRO_AUXILIAR"
+    )
+    monkeypatch.setattr(guard, "verify_jwt_in_request", lambda: None)
+    monkeypatch.setattr(guard, "get_jwt_identity", lambda: staff.id)
+    monkeypatch.setattr(guard.UserORM, "get_by_id", lambda _id: staff)
+    monkeypatch.setattr(
+        guard, "Ticket",
+        SimpleNamespace(query=SimpleNamespace(get=lambda _id: foreign_ticket))
+    )
+    monkeypatch.setattr(
+        guard, "has_assigned_only_maintenance_scope", lambda _actor: True
+    )
+    guard.register_maintenance_ticket_update_guard(app)
+
+    response = app.test_client().post("/cierre/solicitar/501")
+    assert response.status_code == 403
+    assert "que tenga asignados" in response.get_json()["mensaje"]
+
+
+def test_mutacion_legacy_propia_no_es_bloqueada_por_guard(monkeypatch):
+    from flask import Blueprint, Flask
+    from app.utils import maintenance_ticket_update_guard as guard
+
+    app = Flask(__name__)
+    bp = Blueprint("tickets", __name__)
+
+    @bp.route("/cierre/solicitar/<int:ticket_id>", methods=["POST"])
+    def cierre_solicitar(ticket_id):
+        return "checked by original endpoint", 200
+
+    app.register_blueprint(bp)
+    staff = user()
+    owned_ticket = SimpleNamespace(
+        id=501, departamento_id=1, asignado_a="sr_mant_tij"
+    )
+    monkeypatch.setattr(guard, "verify_jwt_in_request", lambda: None)
+    monkeypatch.setattr(guard, "get_jwt_identity", lambda: staff.id)
+    monkeypatch.setattr(guard.UserORM, "get_by_id", lambda _id: staff)
+    monkeypatch.setattr(
+        guard, "Ticket",
+        SimpleNamespace(query=SimpleNamespace(get=lambda _id: owned_ticket))
+    )
+    monkeypatch.setattr(
+        guard, "has_assigned_only_maintenance_scope", lambda _actor: True
+    )
+    guard.register_maintenance_ticket_update_guard(app)
+
+    assert app.test_client().post("/cierre/solicitar/501").status_code == 200
