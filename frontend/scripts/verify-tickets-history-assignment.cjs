@@ -85,7 +85,7 @@ assert.equal(obtenerCambioResponsableHistorial({
   asignado_nuevo: 'SR_MANT_TIJ',
 }), null);
 
-// Template usa el tipo de evento para no enseñar fecha de solución vacía.
+// El resumen representa el cambio en una sola fila y no inventa una fecha de solución.
 const html = fs.readFileSync(
   path.resolve(__dirname, '../src/app/pantalla-ver-tickets/modals/historial-fechas-modal.component.html'),
   'utf8',
@@ -93,6 +93,17 @@ const html = fs.readFileSync(
 assert.match(html, /getCambioResponsableItem\(item\) as cambio/);
 assert.match(html, /cambio\.anterior/);
 assert.match(html, /cambio\.nuevo/);
-assert.match(html, /\*ngIf="!esReasignacion\(item\)"/);
+assert.match(html, /historial-responsable-inline/);
+assert.match(html, /Compromiso:/);
+assert.match(html, /\*ngIf="getCambioResponsableItem\(item\) as cambio; else soloSolucion"/);
+assert.doesNotMatch(html, /historial-cambio-responsable/, 'No regresar a la franja extra');
 
-console.log('PASS: historial de reasignación, externo, coordinación y legacy sin datos inventados');
+const scss = fs.readFileSync(
+  path.resolve(__dirname, '../src/app/pantalla-ver-tickets/modals/historial-fechas-modal.component.scss'),
+  'utf8',
+);
+assert.match(scss, /\.historial-compact-row\s*\{[^}]*grid-template-columns: 128px/s);
+assert.match(scss, /\.contenido-modal\s*\{[^}]*overflow-y: auto/s);
+assert.doesNotMatch(scss, /\.historial-cambio-responsable\s*\{/);
+
+console.log('PASS: historial legible en una fila, scroll de contenido y eventos legacy');
