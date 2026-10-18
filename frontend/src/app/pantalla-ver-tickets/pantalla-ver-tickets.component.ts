@@ -46,7 +46,7 @@ import { mostrarAlertaToast,solicitarMotivoRechazoCierre } from '../utils/alerta
 import { SucursalesService } from '../services/sucursales.service';
 import { EvidenciaPreviewComponent } from './modals/evidencia-preview.component';
 import { ModalCierreTicketComponent } from '../shared/modal-cierre-ticket/modal-cierre-ticket.component';
-import { buscarAncestroNivel, filtrarTicketsConFiltros } from '../utils/ticket-utils';
+import { buscarAncestroNivel, filtrarTicketsConFiltros, obtenerResponsableVisible } from '../utils/ticket-utils';
 import { MatSelectModule } from '@angular/material/select';
 import { AuthService } from '../services/auth.service';
 import { MaintenanceAssignee, MaintenanceCoordinationService } from '../services/maintenance-coordination.service';
@@ -220,6 +220,7 @@ export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
       categoria: [],
       descripcion: [],
       username: [],
+      responsable: [],
       estado: [],
       criticidad: [],
       departamento: [],
@@ -234,6 +235,7 @@ export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
   categoriasDisponibles: any[] = [];
   descripcionesDisponibles: any[] = [];
   usuariosDisponibles: any[] = [];
+  responsablesDisponibles: { valor: string; etiqueta: string; seleccionado: boolean }[] = [];
   estadosDisponibles: any[] = [];
   criticidadesDisponibles: any[] = [];
   fechasCreacionDisponibles: any[] = [];
@@ -249,6 +251,7 @@ export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
   categoriasFiltradas: any[] = [];
   descripcionesFiltradas: any[] = [];
   usuariosFiltrados: any[] = [];
+  responsablesFiltrados: { valor: string; etiqueta: string; seleccionado: boolean }[] = [];
   estadosFiltrados: any[] = [];
   criticidadesFiltradas: any[] = [];
   fechasCreacionFiltradas: any[] = [];
@@ -286,6 +289,7 @@ export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
   filtroDescripcionTexto = '';
   filtroDescripcionAplicadoTexto = '';
   filtroUsuarioTexto = '';
+  filtroResponsableTexto = '';
   filtroEstadoTexto = '';
   filtroCriticidadTexto = '';
   filtroFechaTexto = '';
@@ -309,6 +313,7 @@ export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
   @ViewChild('triggerFiltroCategoria') triggerFiltroCategoria: any;
   @ViewChild('triggerFiltroDesc') triggerFiltroDesc: any;
   @ViewChild('triggerFiltroUsuario') triggerFiltroUsuario: any;
+  @ViewChild('triggerFiltroResponsable') triggerFiltroResponsable: any;
   @ViewChild('triggerFiltroEstado') triggerFiltroEstado: any;
   @ViewChild('triggerFiltroCriticidad') triggerFiltroCriticidad: any;
   @ViewChild('triggerFiltroFechaC') triggerFiltroFechaC: any;
@@ -340,6 +345,7 @@ ngAfterViewInit(): void {
     { ref: this.triggerFiltroCategoria,    key: 'categoria' },
     { ref: this.triggerFiltroDesc,         key: 'descripcion' },
     { ref: this.triggerFiltroUsuario,      key: 'username' },
+    { ref: this.triggerFiltroResponsable,  key: 'responsable' },
     { ref: this.triggerFiltroEstado,       key: 'estado' },
     { ref: this.triggerFiltroCriticidad,   key: 'criticidad' },
     { ref: this.triggerFiltroDepartamento, key: 'departamento' },
@@ -989,6 +995,7 @@ private obtenerTextoFiltroColumna(columna: string): string {
     categoria: this.filtroCategoriaTexto,
     descripcion: this.filtroDescripcionTexto,
     username: this.filtroUsuarioTexto,
+    responsable: this.filtroResponsableTexto,
     estado: this.filtroEstadoTexto,
     criticidad: this.filtroCriticidadTexto,
     departamento: this.filtroDeptoTexto,
@@ -1214,6 +1221,7 @@ private obtenerPluralFiltro(columna: string): string | null {
     categoria: 'categorias',
     descripcion: 'descripciones',
     username: 'usuarios',
+    responsable: 'responsables',
     estado: 'estados',
     criticidad: 'criticidades',
     departamento: 'departamentos',
@@ -1305,7 +1313,11 @@ private prepararOpcionesFiltro(columna: string, path: string): void {
   // 1) Recolector genérico: usa todos los filtros activos EXCEPTO la columna actual.
   (baseOpciones || []).forEach((t: any) => {
     let valor: any = t;
-    for (const part of path.split('.')) valor = valor?.[part];
+    if (columna === 'responsable') {
+      valor = obtenerResponsableVisible(t);
+    } else {
+      for (const part of path.split('.')) valor = valor?.[part];
+    }
 
     if (columna === 'departamento') {
       const esId = valor != null && /^[0-9]+$/.test(String(valor));
@@ -1402,6 +1414,7 @@ if (columna === 'subcategoria') {
     categoria: 'categoria',
     descripcion: 'descripcion',
     username: 'username',
+    responsable: 'asignado_a',
     estado: 'estado',
     criticidad: 'criticidad',
     departamento: 'departamento',
@@ -1576,6 +1589,7 @@ private limpiarTextoFiltroColumnaLocal(columna: string): void {
     this.filtroDescripcionAplicadoTexto = '';
   }
   if (columna === 'username') this.filtroUsuarioTexto = '';
+  if (columna === 'responsable') this.filtroResponsableTexto = '';
   if (columna === 'estado') this.filtroEstadoTexto = '';
   if (columna === 'criticidad') this.filtroCriticidadTexto = '';
   if (columna === 'departamento') this.filtroDeptoTexto = '';
@@ -1799,7 +1813,7 @@ aplicarFiltroColumnaConReset = (col: string) => aplicarFiltroColumnaConReset(thi
 
   /** Sólo estas columnas muestran buscador de texto */
 permiteBusqueda(col: string): boolean {
-  return ['categoria','descripcion','inventario','estado','departamento','subcategoria','detalle','sucursal','username','criticidad'].includes(col);
+  return ['categoria','descripcion','inventario','estado','departamento','subcategoria','detalle','sucursal','username','responsable','criticidad'].includes(col);
 }
 
 
@@ -1823,16 +1837,7 @@ esTicketMantenimiento(ticket: Ticket): boolean {
 }
 
 obtenerResponsableTicket(ticket: Ticket): string {
-  if (this.esTicketMantenimiento(ticket) && ticket.tipo_atencion === 'EXTERNA') {
-    return 'Proveedor externo';
-  }
-
-  const responsable = String(ticket.asignado_a || '').trim();
-  if (responsable) {
-    return responsable;
-  }
-
-  return this.esTicketMantenimiento(ticket) ? 'Sin asignar' : '—';
+  return obtenerResponsableVisible(ticket);
 }
 
 puedeCoordinarTicket(ticket: Ticket): boolean {
@@ -2417,6 +2422,7 @@ private obtenerPluralColumna(columna: string): string {
     categoria: 'categorias',
     descripcion: 'descripciones',
     username: 'usuarios',
+    responsable: 'responsables',
     estado: 'estados',
     criticidad: 'criticidades',
     departamento: 'departamentos',
