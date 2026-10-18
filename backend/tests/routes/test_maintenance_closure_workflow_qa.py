@@ -66,6 +66,21 @@ class SyntheticTicket:
         self.estado = "finalizado"
         self.estado_cierre = None
 
+    def rechazar_conformidad_creador(self, motivo=None, nueva_fecha_compromiso=None,
+                                     actor_username=None):
+        assert self.estado == "por_validar"
+        assert motivo
+        self.estado = "en progreso"
+        self.estado_cierre = "rechazado_por_gerente"
+        self.motivo_rechazo_cierre = motivo
+        self.fecha_finalizado = None
+        self.historial_fechas.append({
+            "tipo": "rechazo_cierre_gerente",
+            "cambiadoPor": actor_username,
+            "motivo": motivo,
+        })
+        self._commit()
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -210,9 +225,23 @@ def test_qa_flujo_interno_devolucion_revision_y_conformidad(qa_http):
     # El solicitante y el gerente de otra sucursal no validan.
     assert post(91004, approve).status_code == 403
     assert post(91005, approve).status_code == 403
+
+    # Si el gerente rechaza, el técnico puede corregir y volver a terminar.
+    assert post(
+        91003, "cierre/rechazar-creador/990001",
+        {"motivo": "Continúa la falla"},
+    ).status_code == 200
+    assert ticket.estado == "en progreso"
+    assert ticket.estado_cierre == "rechazado_por_gerente"
+    assert post(
+        91001, work, {"notas_trabajo": "Reparación corregida"},
+    ).status_code == 200
+    assert post(
+        91002, close, {"notas_cierre": "Segunda revisión satisfactoria"},
+    ).status_code == 200
     assert post(91003, approve).status_code == 200
     assert ticket.estado == "finalizado"
-    assert commit.call_count == 5
+    assert commit.call_count == 8
 
 
 def test_qa_externa_solo_coordinacion_solicita_y_gerente_valida(qa_http):
