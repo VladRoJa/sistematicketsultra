@@ -26,6 +26,8 @@ on:
       - "backend/tests/services/test_ticket_maintenance_coordination_service.py"
       - "backend/tests/utils/test_tickets_assigned_only_scope.py"
       - "backend/tests/routes/test_maintenance_closure_workflow_qa.py"
+      - "backend/tests/utils/test_maintenance_closure_qa_seed_safety.py"
+      - "backend/scripts/seed_maintenance_closure_qa.py"
       - "backend/app/maintenance_planner/routes.py"
       - "backend/app/maintenance_planner/service.py"
       - "frontend/src/app/maintenance-planner/**"
@@ -68,7 +70,8 @@ jobs:
           python -m pytest -q --tb=short tests/utils/test_tickets_maintenance_permissions.py \
             tests/services/test_ticket_maintenance_coordination_service.py \
             tests/utils/test_tickets_assigned_only_scope.py \
-            tests/routes/test_maintenance_closure_workflow_qa.py
+            tests/routes/test_maintenance_closure_workflow_qa.py \
+            tests/utils/test_maintenance_closure_qa_seed_safety.py
       - name: Inspect Alembic migration heads (read-only)
         run: |
           python - <<'PY'
