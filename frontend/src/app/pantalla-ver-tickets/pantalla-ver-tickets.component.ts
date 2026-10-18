@@ -275,6 +275,7 @@ export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
   seleccionarTodoCategoria = false;
   seleccionarTodoDescripcion = false;
   seleccionarTodoUsuario = false;
+  seleccionarTodoResponsable = false;
   seleccionarTodoEstado = false;
   seleccionarTodoCriticidad = false;
   seleccionarTodoFechaC = false;
