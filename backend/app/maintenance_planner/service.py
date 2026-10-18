@@ -10,6 +10,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.models.sucursal_model import Sucursal
 from app.models.ticket_model import Ticket
 from app.utils.pm_permissions import can_pm_execute, can_pm_view
+from app.utils.tickets_maintenance_permissions import ASSIGNED_ONLY_ELIGIBLE_ROLES
 from app.utils.sucursal_audience import (
     SUCURSAL_AUDIENCE_ANALYTICAL,
     SUCURSAL_AUDIENCE_OPERATIONAL,
@@ -182,6 +183,7 @@ def _serialize_ticket(ticket: Ticket, today: date) -> dict:
         "sucursal": _ticket_branch_name(ticket),
         "sucursal_is_demo": bool(getattr(branch, "is_demo", False)),
         "asignado_a": ticket.asignado_a,
+        "tipo_atencion": ticket.tipo_atencion,
         "fecha_creacion": _iso_business(ticket.fecha_creacion),
         "fecha_en_progreso": _iso_business(ticket.fecha_en_progreso),
         "fecha_finalizado": _iso_business(ticket.fecha_finalizado),
@@ -378,6 +380,23 @@ def build_planner_board(
 
     tickets = query.order_by(Ticket.fecha_solucion.asc().nullsfirst(), Ticket.id.asc()).all()
     rows = [_serialize_ticket(ticket, today) for ticket in tickets]
+
+    # Indicador de UI solamente: los endpoints vuelven a validar cada mutación.
+    current_username = str(getattr(user, "username", "") or "").strip().casefold()
+    technician_allowed = (
+        _user_role(user) in ASSIGNED_ONLY_ELIGIBLE_ROLES
+        and int(getattr(user, "department_id", 0) or 0) == MAINTENANCE_DEPARTMENT_ID
+        and can_pm_execute(user)
+    )
+    for row in rows:
+        row["can_mark_work_completed"] = bool(
+            technician_allowed
+            and current_username
+            and str(row["asignado_a"] or "").strip().casefold() == current_username
+            and row["tipo_atencion"] == "INTERNA"
+            and str(row["estado"] or "").strip().lower() == "en progreso"
+            and not row["estado_cierre"]
+        )
 
     active_rows = [row for row in rows if str(row["estado"]).lower() in ACTIVE_STATES]
     week_rows = [
