@@ -64,6 +64,28 @@ def _ticket_branch_id(ticket: Ticket) -> int:
     return int(ticket.sucursal_id_destino or ticket.sucursal_id)
 
 
+def _invalidate_work_review_on_assignment_change(
+    ticket: Ticket,
+    previous_mode: str | None,
+    previous_assignee: str | None,
+    next_mode: str | None,
+    next_assignee: str | None,
+) -> bool:
+    """Anula la terminación anterior cuando cambia proveedor o técnico."""
+    if getattr(ticket, "estado_cierre", None) != MAINTENANCE_WORK_REVIEW_PENDING:
+        return False
+
+    if (
+        previous_mode == next_mode
+        and str(previous_assignee or "").strip().casefold()
+        == str(next_assignee or "").strip().casefold()
+    ):
+        return False
+
+    ticket.estado_cierre = None
+    return True
+
+
 def list_maintenance_assignees(user) -> list[dict]:
     """Catálogo acotado a personal interno de Mantenimiento, sin contraseñas."""
 
@@ -176,6 +198,9 @@ def prepare_maintenance_coordination(
 
     ticket.tipo_atencion = attention_mode
     ticket.asignado_a = assigned_username
+    review_invalidated = _invalidate_work_review_on_assignment_change(
+        ticket, previous_mode, previous_assignment, attention_mode, assigned_username,
+    )
     ticket.fecha_solucion = due_utc
     if str(ticket.estado or "").strip().lower() == "abierto":
         ticket.estado = "en progreso"
@@ -198,6 +223,7 @@ def prepare_maintenance_coordination(
         "tipo_atencion_nuevo": attention_mode,
         "asignado_anterior": previous_assignment,
         "asignado_nuevo": assigned_username,
+        "revision_tecnica_invalidada": review_invalidated,
         "fecha_compromiso_anterior": (
             previous_due.isoformat() if previous_due else None
         ),
@@ -462,6 +488,9 @@ def prepare_maintenance_reassignment(
 
     ticket.tipo_atencion = attention_mode
     ticket.asignado_a = assigned_username
+    review_invalidated = _invalidate_work_review_on_assignment_change(
+        ticket, previous_mode, previous_username, attention_mode, assigned_username,
+    )
 
     history = list(ticket.historial_fechas or [])
     history.append({
@@ -474,6 +503,7 @@ def prepare_maintenance_reassignment(
         "tipo_atencion_nuevo": attention_mode,
         "asignado_anterior": previous_username,
         "asignado_nuevo": assigned_username,
+        "revision_tecnica_invalidada": review_invalidated,
     })
     history.sort(
         key=lambda item: str(item.get("fechaCambio") or item.get("fecha") or ""),
