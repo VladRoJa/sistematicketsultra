@@ -14,6 +14,7 @@ on:
       - "frontend/src/app/pantalla-ver-tickets/helpers/**"
       - "frontend/src/app/types/ticket.ts"
       - "frontend/src/app/shared/asignar-fecha-modal/**"
+      - "frontend/src/app/shared/reasignar-responsable-modal/**"
       - "frontend/src/app/pantalla-ver-tickets/pantalla-ver-tickets.component.*"
       - "backend/app/services/ticket_maintenance_coordination_service.py"
       - "backend/tests/utils/test_tickets_maintenance_permissions.py"
