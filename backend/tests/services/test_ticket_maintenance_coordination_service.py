@@ -576,3 +576,24 @@ def test_reprogramacion_sin_cambiar_responsable_conserva_revision(monkeypatch):
 
     assert t.estado_cierre == coordination.MAINTENANCE_WORK_REVIEW_PENDING
     assert t.historial_fechas[0]["revision_tecnica_invalidada"] is False
+
+
+def test_tecnico_puede_volver_a_terminar_tras_rechazo_del_gerente(monkeypatch):
+    t = ticket(state="en progreso")
+    t.tipo_atencion = "INTERNA"
+    t.asignado_a = "SR_MANT_TIJ"
+    t.estado_cierre = "rechazado_por_gerente"
+    setup_queries(monkeypatch, t)
+    tecnico = SimpleNamespace(
+        id=68, username="SR_MANT_TIJ", rol="SR_MANTENIMIENTO", department_id=1,
+    )
+
+    coordination.prepare_maintenance_work_completion(
+        501, tecnico, {"notas_trabajo": "Se corrigió el problema reportado"},
+        now=NOW,
+    )
+
+    assert t.estado == "en progreso"
+    assert t.estado_cierre == coordination.MAINTENANCE_WORK_REVIEW_PENDING
+    assert t.historial_fechas[0]["estado_cierre_anterior"] == "rechazado_por_gerente"
+    assert t.historial_fechas[0]["motivo"] == "Se corrigió el problema reportado"
