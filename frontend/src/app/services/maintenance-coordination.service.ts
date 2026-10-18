@@ -25,6 +25,12 @@ export interface CoordinateMaintenanceTicketPayload {
   descripcion_refaccion?: string;
 }
 
+export interface ReassignMaintenanceTicketPayload {
+  motivo: string;
+  tipo_atencion: MaintenanceAttentionMode;
+  asignado_user_id: number | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class MaintenanceCoordinationService {
   private readonly http = inject(HttpClient);
@@ -33,6 +39,16 @@ export class MaintenanceCoordinationService {
   getContext(): Observable<MaintenanceCoordinationContext> {
     return this.http.get<MaintenanceCoordinationContext>(
       `${this.baseUrl}/coordination/context`,
+    );
+  }
+
+  reassignTicket(
+    ticketId: number,
+    payload: ReassignMaintenanceTicketPayload,
+  ): Observable<{ mensaje: string; ticket: unknown }> {
+    return this.http.put<{ mensaje: string; ticket: unknown }>(
+      `${this.baseUrl}/${ticketId}/reassign`,
+      payload,
     );
   }
 
