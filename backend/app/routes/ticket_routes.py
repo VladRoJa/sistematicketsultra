@@ -2697,6 +2697,14 @@ def cierre_rechazar_jefe(ticket_id):
     if not t:
         return jsonify({"mensaje":"Ticket no encontrado"}), 404
 
+    # En Mantenimiento la devolución técnica pertenece exclusivamente a
+    # coordinación (return-to-technician); la devolución tras conformidad
+    # pertenece al gerente (rechazar-creador). Esta ruta legacy no aplica.
+    if t.departamento_id == 1:
+        return jsonify({
+            "mensaje": "Para Mantenimiento usa la revisión de coordinación o conformidad del gerente."
+        }), 403
+
     if not (_es_admin_o_corporativo(user) or _es_jefe_depto(user, t)):
         return jsonify({"mensaje":"No autorizado"}), 403
 
