@@ -3,9 +3,10 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import date
+from functools import partial
 
 
-MATCHING_CONTRACT_VERSION = "IDENTITY_TEMPORAL_V2"
+MATCHING_CONTRACT_VERSION = "IDENTITY_TEMPORAL_V3"
 
 MATCHED = "MATCHED"
 UNMATCHED = "UNMATCHED"
@@ -88,9 +89,85 @@ def _id_identity(
     return _IdentityEvaluation(None, False)
 
 
+def _single_insertion_difference(first: str, second: str) -> bool:
+    """Only one added/omitted character, never a substitution."""
+    if abs(len(first) - len(second)) != 1:
+        return False
+    shorter, longer = sorted((first, second), key=len)
+    return any(
+        longer[:index] + longer[index + 1:] == shorter
+        for index in range(len(longer))
+    )
+
+
+def _compatible_name_variant(
+    evidence_name: str,
+    candidate_name: str,
+) -> str | None:
+    """Conservative, explainable variants; no unrestricted fuzzy matching."""
+    evidence_parts = evidence_name.split()
+    candidate_parts = candidate_name.split()
+
+    shorter, longer = sorted(
+        (evidence_parts, candidate_parts), key=len
+    )
+    if (
+        len(shorter) >= 2
+        and len(shorter) < len(longer)
+        and shorter == longer[:len(shorter)]
+    ):
+        return "EMAIL_NAME_PREFIX"
+
+    if len(evidence_parts) != len(candidate_parts) or len(evidence_parts) < 3:
+        return None
+
+    # Preserve the full given-name prefix; only the final two surnames swap.
+    if (
+        evidence_parts[:-2] == candidate_parts[:-2]
+        and evidence_parts[-2:] == candidate_parts[-2:][::-1]
+        and evidence_parts[-2] != evidence_parts[-1]
+    ):
+        return "EMAIL_SURNAME_SWAP"
+
+    differences = [
+        index
+        for index, (left, right) in enumerate(
+            zip(evidence_parts, candidate_parts)
+        )
+        if left != right
+    ]
+    if len(differences) != 1:
+        return None
+
+    index = differences[0]
+    # An initial can replace only a non-first given name (not a surname).
+    if (
+        0 < index < len(evidence_parts) - 2
+        and len(evidence_parts[index]) == 1
+        and len(candidate_parts[index]) >= 2
+        and candidate_parts[index].startswith(evidence_parts[index])
+    ):
+        return "EMAIL_NAME_INITIAL"
+
+    # One missing/extra letter in the first given name, with two full
+    # subsequent matching tokens; substitutions and surname typos remain blocked.
+    if (
+        index == 0
+        and min(len(evidence_parts[0]), len(candidate_parts[0])) >= 6
+        and _single_insertion_difference(
+            evidence_parts[0], candidate_parts[0]
+        )
+    ):
+        return "EMAIL_FIRST_NAME_INSERTION"
+
+    return None
+
+
 def _email_identity(
     evidence: EvidenceMatchInput,
     candidate: MemberMatchCandidate,
+    *,
+    allow_name_variants: bool = False,
 ) -> _IdentityEvaluation:
     if (
         not evidence.email_normalized
@@ -101,15 +178,23 @@ def _email_identity(
     if (
         evidence.member_name_normalized
         and candidate.member_name_normalized
-        and evidence.member_name_normalized
-        != candidate.member_name_normalized
     ):
+        if evidence.member_name_normalized == candidate.member_name_normalized:
+            return _IdentityEvaluation("EMAIL_AND_NAME", False)
+
+        # Relaxation requires one email candidate and no contradictory
+        # external ID. Different persons sharing an email must not be merged.
+        if allow_name_variants and (
+            not evidence.external_member_id
+            or evidence.external_member_id == candidate.external_member_id
+        ):
+            corroborator = _compatible_name_variant(
+                evidence.member_name_normalized,
+                candidate.member_name_normalized,
+            )
+            if corroborator is not None:
+                return _IdentityEvaluation(corroborator, False)
         return _IdentityEvaluation(None, True)
-    if (
-        evidence.member_name_normalized
-        and candidate.member_name_normalized
-    ):
-        return _IdentityEvaluation("EMAIL_AND_NAME", False)
     return _IdentityEvaluation("EMAIL", False)
 
 
@@ -243,7 +328,12 @@ def select_evidence_match(
             evidence=evidence,
             candidates=email_candidates,
             match_method="EMAIL",
-            identity_evaluator=_email_identity,
+            identity_evaluator=partial(
+                _email_identity,
+                allow_name_variants=(
+                    len({member.member_id for member in email_candidates}) == 1
+                ),
+            ),
         )
         if email_candidates or not external_id_candidates:
             return email_result
