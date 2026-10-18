@@ -1509,8 +1509,17 @@ td.col-descripcion {
   text-align: center;
 }
 
+.ticket-responsable__contenido {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  gap: 2px;
+}
+
 .ticket-responsable {
   display: inline-block;
+  min-width: 0;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1518,6 +1527,23 @@ td.col-descripcion {
   white-space: nowrap;
   font: inherit;
   color: inherit;
+}
+
+.tabla-tickets .ticket-responsable__editar {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--ultra-gray-600);
+  --mdc-icon-button-state-layer-size: 24px;
+}
+
+.tabla-tickets .ticket-responsable__editar mat-icon {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  font-size: 15px;
+  line-height: 15px;
 }
 
 .ticket-responsable--externo {
