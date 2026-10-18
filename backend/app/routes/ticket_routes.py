@@ -21,6 +21,7 @@ from app.services.ticket_maintenance_coordination_service import (
     prepare_maintenance_coordination,
     prepare_maintenance_reassignment,
     prepare_maintenance_work_completion,
+    prepare_maintenance_work_return,
     MAINTENANCE_WORK_REVIEW_PENDING,
 )
 from app.utils.tickets_maintenance_permissions import (
@@ -959,6 +960,33 @@ def maintenance_mark_work_completed(ticket_id):
     except Exception as exc:
         db.session.rollback()
         return manejar_error(exc, "maintenance_mark_work_completed")
+
+
+@ticket_bp.route('/maintenance/<int:ticket_id>/return-to-technician', methods=['POST'])
+@jwt_required()
+def maintenance_return_work_to_technician(ticket_id):
+    """Coordinación devuelve trabajo interno pendiente de revisión."""
+    actor = UserORM.get_by_id(get_jwt_identity())
+    if actor is None:
+        return jsonify({"mensaje": "Usuario no encontrado"}), 401
+
+    try:
+        ticket = prepare_maintenance_work_return(
+            ticket_id,
+            actor,
+            request.get_json(silent=True),
+        )
+        db.session.commit()
+        return jsonify({
+            "mensaje": "Trabajo devuelto al técnico para corrección.",
+            "ticket": ticket.to_dict(),
+        }), 200
+    except TicketCoordinationError as exc:
+        db.session.rollback()
+        return jsonify({"mensaje": exc.message}), exc.status_code
+    except Exception as exc:
+        db.session.rollback()
+        return manejar_error(exc, "maintenance_return_work_to_technician")
 
 
 # RUTA: Actualizar estado de un ticket
