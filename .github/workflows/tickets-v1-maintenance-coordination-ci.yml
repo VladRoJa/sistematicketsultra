@@ -5,6 +5,7 @@ on:
     paths:
       - "backend/app/utils/tickets_maintenance_permissions.py"
       - "backend/tests/utils/test_tickets_maintenance_permissions.py"
+      - "backend/migrations/versions/c17a10202601_tickets_v1_maintenance_attention.py"
       - ".github/workflows/tickets-v1-maintenance-coordination-ci.yml"
 
 permissions:
@@ -25,7 +26,8 @@ jobs:
           python -m pip install "pytest==8.3.5"
       - name: Compile authorization module
         run: |
-          python -m py_compile backend/app/utils/tickets_maintenance_permissions.py
+          python -m py_compile backend/app/utils/tickets_maintenance_permissions.py \
+            backend/migrations/versions/c17a10202601_tickets_v1_maintenance_attention.py
       - name: Run authorization unit tests
         working-directory: backend
         env:
@@ -40,5 +42,7 @@ jobs:
           from alembic.script import ScriptDirectory
           cfg = Config()
           cfg.set_main_option("script_location", "backend/migrations")
-          print("ALEMBIC_HEADS =", ScriptDirectory.from_config(cfg).get_heads())
+          heads = ScriptDirectory.from_config(cfg).get_heads()
+          print("ALEMBIC_HEADS =", heads)
+          assert heads == ["c17a10202601"], heads
           PY
