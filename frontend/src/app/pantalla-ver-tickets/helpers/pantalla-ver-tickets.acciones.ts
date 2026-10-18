@@ -93,6 +93,7 @@ export function limpiarTodosLosFiltros(component: PantallaVerTicketsComponent): 
     'detalle',
     'inventario',
     'sucursal',
+    'responsable',
   ];
 
   // 1) Limpiar selección de todos los filtros.
@@ -107,6 +108,7 @@ export function limpiarTodosLosFiltros(component: PantallaVerTicketsComponent): 
   marcarTodoSeleccionado(component.detallesDisponibles);
   marcarTodoSeleccionado(component.inventariosDisponibles);
   marcarTodoSeleccionado(component.sucursalesDisponibles);
+  marcarTodoSeleccionado(component.responsablesDisponibles);
 
   // 2) Resetear filtros visibles.
   component.categoriasFiltradas = [...component.categoriasDisponibles];
@@ -119,6 +121,7 @@ export function limpiarTodosLosFiltros(component: PantallaVerTicketsComponent): 
   component.detallesFiltrados = [...component.detallesDisponibles];
   component.inventariosFiltrados = [...component.inventariosDisponibles];
   component.sucursalesFiltradas = [...component.sucursalesDisponibles];
+  component.responsablesFiltrados = [...component.responsablesDisponibles];
 
   // 3) Resetear temporales.
   columnas.forEach(columna => {
@@ -133,6 +136,7 @@ export function limpiarTodosLosFiltros(component: PantallaVerTicketsComponent): 
       detalle: 'detalles',
       inventario: 'inventarios',
       sucursal: 'sucursales',
+      responsable: 'responsables',
     };
 
     const plural = pluralMap[columna];
@@ -155,6 +159,7 @@ export function limpiarTodosLosFiltros(component: PantallaVerTicketsComponent): 
   component.filtroDetalleTexto = '';
   component.filtroInventarioTexto = '';
   component.filtroSucursalTexto = '';
+  component.filtroResponsableTexto = '';
   component.filtroDescripcionTexto = '';
   (component as any).filtroDescripcionAplicadoTexto = '';
 
