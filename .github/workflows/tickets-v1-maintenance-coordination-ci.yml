@@ -33,3 +33,12 @@ jobs:
           JWT_SECRET_KEY: tickets-v1-maint-jwt-ci
         run: |
           python -m pytest -q --tb=short tests/utils/test_tickets_maintenance_permissions.py
+      - name: Inspect Alembic migration heads (read-only)
+        run: |
+          python - <<'PY'
+          from alembic.config import Config
+          from alembic.script import ScriptDirectory
+          cfg = Config()
+          cfg.set_main_option("script_location", "backend/migrations")
+          print("ALEMBIC_HEADS =", ScriptDirectory.from_config(cfg).get_heads())
+          PY
