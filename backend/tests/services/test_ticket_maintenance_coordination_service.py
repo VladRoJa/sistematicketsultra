@@ -229,3 +229,31 @@ def test_admin_no_limitado_por_sucursales_del_coordinador(monkeypatch):
         501, admin, payload(), now=NOW
     )
     assert t.asignado_a == "SR_MANT_TIJ"
+
+
+def test_reasignar_mantenimiento_mantiene_ticket_y_audita_cambio(monkeypatch):
+    """Un responsable de Mexicali puede corregirse a Tijuana sin abrir otro ticket."""
+    t = ticket(branch=8, state="en progreso")
+    t.tipo_atencion = "INTERNA"
+    t.asignado_a = "SR_MANT_MXL"
+    setup_queries(monkeypatch, t)
+    monkeypatch.setattr(
+        coordination, "has_maintenance_coordination_permission", lambda user: True
+    )
+
+    result = coordination.prepare_maintenance_coordination(
+        501,
+        actor(),
+        {**payload(), "motivo": "Corrección de responsable regional"},
+        now=NOW,
+    )
+
+    assert result is t
+    assert t.id == 501
+    assert t.estado == "en progreso"
+    assert t.tipo_atencion == "INTERNA"
+    assert t.asignado_a == "SR_MANT_TIJ"
+    assert len(t.historial_fechas) == 1
+    assert t.historial_fechas[0]["asignado_anterior"] == "SR_MANT_MXL"
+    assert t.historial_fechas[0]["asignado_nuevo"] == "SR_MANT_TIJ"
+    assert t.historial_fechas[0]["motivo"] == "Corrección de responsable regional"
