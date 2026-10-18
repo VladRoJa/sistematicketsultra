@@ -60,6 +60,7 @@ export interface TicketDTO {
   descripcion: string;
   username: string;                // creador
   asignado_a?: string | null;
+  tipo_atencion?: 'INTERNA' | 'EXTERNA' | null;
 
   // Catálogo jerárquico
   departamento?: string | number;
@@ -144,6 +145,8 @@ export interface AsignarFechaPayload {
   refaccion_definida_por_jefe?: boolean;
   falla_mantenimiento_id?: number;
   condicion_operativa?: CondicionOperativa;
+  tipo_atencion?: 'INTERNA' | 'EXTERNA';
+  asignado_user_id?: number | null;
 }
 
 /** Payload para fijar/actualizar compromiso (fecha_solucion y refacción) */
