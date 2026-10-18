@@ -4,7 +4,11 @@ on:
   pull_request:
     paths:
       - "backend/app/utils/tickets_maintenance_permissions.py"
+      - "backend/app/models/ticket_model.py"
+      - "backend/app/routes/ticket_routes.py"
+      - "backend/app/services/ticket_maintenance_coordination_service.py"
       - "backend/tests/utils/test_tickets_maintenance_permissions.py"
+      - "backend/tests/services/test_ticket_maintenance_coordination_service.py"
       - "backend/migrations/versions/c17a10202601_tickets_v1_maintenance_attention.py"
       - ".github/workflows/tickets-v1-maintenance-coordination-ci.yml"
 
@@ -27,6 +31,9 @@ jobs:
       - name: Compile authorization module
         run: |
           python -m py_compile backend/app/utils/tickets_maintenance_permissions.py \
+            backend/app/models/ticket_model.py \
+            backend/app/services/ticket_maintenance_coordination_service.py \
+            backend/app/routes/ticket_routes.py \
             backend/migrations/versions/c17a10202601_tickets_v1_maintenance_attention.py
       - name: Run authorization unit tests
         working-directory: backend
@@ -34,7 +41,8 @@ jobs:
           SECRET_KEY: tickets-v1-maint-ci
           JWT_SECRET_KEY: tickets-v1-maint-jwt-ci
         run: |
-          python -m pytest -q --tb=short tests/utils/test_tickets_maintenance_permissions.py
+          python -m pytest -q --tb=short tests/utils/test_tickets_maintenance_permissions.py \
+            tests/services/test_ticket_maintenance_coordination_service.py
       - name: Inspect Alembic migration heads (read-only)
         run: |
           python - <<'PY'
