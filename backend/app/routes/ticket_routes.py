@@ -20,7 +20,10 @@ from app.services.ticket_maintenance_coordination_service import (
     list_maintenance_assignees,
     prepare_maintenance_coordination,
 )
-from app.utils.tickets_maintenance_permissions import has_maintenance_coordination_permission
+from app.utils.tickets_maintenance_permissions import (
+    has_maintenance_coordination_permission,
+    has_assigned_only_maintenance_scope,
+)
 from app.services.ticket_attachment_service import create_ticket_image_attachment
 from app.services.ticket_attachment_image_service import MAX_TICKET_ATTACHMENT_BYTES
 from app.services.ticket_attachment_storage_service import resolve_ticket_attachment_path
@@ -2077,7 +2080,10 @@ def historial_equipo(equipo_id):
 
         # Si no eres admin, filtra solo tickets de tu sucursal
         query = Ticket.query.filter(Ticket.aparato_id == equipo_id)
-        if str(user.rol or "").strip().upper() == "COMPRAS":
+        if (
+            str(user.rol or "").strip().upper() == "COMPRAS"
+            or has_assigned_only_maintenance_scope(user)
+        ):
             query = filtrar_tickets_por_usuario(user).filter(
                 Ticket.aparato_id == equipo_id
             )
@@ -2130,7 +2136,10 @@ def historial_por_equipo(aparato_id):
         query = Ticket.query.filter_by(aparato_id=aparato_id)
 
         # COMPRAS siempre reutiliza su scope individual, incluso con sede root.
-        if str(user.rol or "").strip().upper() == "COMPRAS":
+        if (
+            str(user.rol or "").strip().upper() == "COMPRAS"
+            or has_assigned_only_maintenance_scope(user)
+        ):
             query = filtrar_tickets_por_usuario(user).filter_by(aparato_id=aparato_id)
         elif not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
             query = query.filter_by(sucursal_id=user.sucursal_id)
@@ -2164,7 +2173,8 @@ def historial_global():
         estado = request.args.get('estado')  # abierto/en progreso/finalizado
 
         is_compras_reader = str(user.rol or "").strip().upper() == "COMPRAS"
-        query = filtrar_tickets_por_usuario(user) if is_compras_reader else Ticket.query
+        is_scoped_reader = is_compras_reader or has_assigned_only_maintenance_scope(user)
+        query = filtrar_tickets_por_usuario(user) if is_scoped_reader else Ticket.query
 
         # Filtro por tipo de inventario
         if tipo:
@@ -2173,7 +2183,7 @@ def historial_global():
             query = query.filter(InventarioGeneral.tipo == tipo)
 
         # Compras nunca recibe visibilidad implícita por sucursal corporativa.
-        if is_compras_reader:
+        if is_scoped_reader:
             if sucursal_id:
                 query = query.filter(or_(
                     Ticket.sucursal_id_destino == sucursal_id,
@@ -2215,6 +2225,7 @@ def historial_aparato(aparato_id):
 
         # COMPRAS: alcance exclusivamente asignado, sin excepción corporativa.
         is_compras_reader = str(user.rol or "").strip().upper() == "COMPRAS"
+        is_assigned_reader = has_assigned_only_maintenance_scope(user)
         filtro_sucursal = []
         if is_compras_reader:
             filtro_sucursal = [
@@ -2225,7 +2236,7 @@ def historial_aparato(aparato_id):
             filtro_sucursal = [user.sucursal_id]
 
         # --- Tickets relacionados ---
-        if is_compras_reader:
+        if is_compras_reader or is_assigned_reader:
             tickets_query = filtrar_tickets_por_usuario(user).filter_by(
                 aparato_id=aparato_id
             )
