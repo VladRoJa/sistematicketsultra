@@ -24,8 +24,15 @@ from app.routine_control.repositories.member_evidence_repository import (
 
 
 _MATCH_METHODS = frozenset(("EXTERNAL_ID", "EMAIL"))
-_IDENTITY_CORROBORATORS = frozenset(("EMAIL", "NAME", "EMAIL_AND_NAME"))
-_MATCHING_CONTRACT_VERSION = "IDENTITY_TEMPORAL_V2"
+_IDENTITY_CORROBORATORS_V2 = frozenset(("EMAIL", "NAME", "EMAIL_AND_NAME"))
+_IDENTITY_CORROBORATORS_V3 = _IDENTITY_CORROBORATORS_V2 | frozenset((
+    "EMAIL_NAME_PREFIX", "EMAIL_NAME_INITIAL", "EMAIL_SURNAME_SWAP",
+    "EMAIL_FIRST_NAME_INSERTION",
+))
+_MATCHING_CONTRACT_CORROBORATORS = {
+    "IDENTITY_TEMPORAL_V2": _IDENTITY_CORROBORATORS_V2,
+    "IDENTITY_TEMPORAL_V3": _IDENTITY_CORROBORATORS_V3,
+}
 
 
 def _validate_positive_id(value: object, field_name: str) -> None:
@@ -64,9 +71,16 @@ def _validate_link_command(command: LinkRoutineMemberEvidenceCommand) -> None:
     if any(value is not None for value in audit_values):
         if any(value is None for value in audit_values):
             raise RoutineControlMemberEvidenceValidationError(
-                "La auditoría V2 del vínculo debe estar completa."
+                "La auditoría de identidad del vínculo debe estar completa."
             )
-        if command.identity_corroborator not in _IDENTITY_CORROBORATORS:
+        allowed_corroborators = _MATCHING_CONTRACT_CORROBORATORS.get(
+            command.matching_contract_version
+        )
+        if allowed_corroborators is None:
+            raise RoutineControlMemberEvidenceValidationError(
+                "matching_contract_version es inválida."
+            )
+        if command.identity_corroborator not in allowed_corroborators:
             raise RoutineControlMemberEvidenceValidationError(
                 "identity_corroborator es inválido."
             )
@@ -78,9 +92,12 @@ def _validate_link_command(command: LinkRoutineMemberEvidenceCommand) -> None:
             raise RoutineControlMemberEvidenceValidationError(
                 "temporal_delta_days debe ser entero mayor o igual a -30."
             )
-        if command.matching_contract_version != _MATCHING_CONTRACT_VERSION:
+        if (
+            command.match_method == "EXTERNAL_ID"
+            and command.identity_corroborator not in _IDENTITY_CORROBORATORS_V2
+        ):
             raise RoutineControlMemberEvidenceValidationError(
-                "matching_contract_version es inválida."
+                "EXTERNAL_ID no admite corroboración flexible por nombre."
             )
         if (
             command.match_method == "EMAIL"
