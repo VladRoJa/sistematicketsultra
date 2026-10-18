@@ -2626,6 +2626,13 @@ def cierre_solicitar(ticket_id):
     costo = data.get("costo_solucion")
     notas = data.get("notas_cierre")
 
+    if t.departamento_id == 1 and (
+        not isinstance(notas, str) or not 1 <= len(notas.strip()) <= 2000
+    ):
+        return jsonify({
+            "mensaje": "Describe la revisión de Mantenimiento (1-2000 caracteres)."
+        }), 400
+
     # Validar y asignar costo_solucion
     if costo is not None:
         try:
