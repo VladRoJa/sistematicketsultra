@@ -2525,10 +2525,38 @@ def cierre_solicitar(ticket_id):
     t = Ticket.query.get(ticket_id)
     if not t:
         return jsonify({"mensaje":"Ticket no encontrado"}), 404
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado"}), 401
 
-    # Puede iniciar el proceso el jefe o admin; (si quieres, también el asignado)
-    if not (_es_admin_o_corporativo(user) or _es_jefe_depto(user, t)):
-        return jsonify({"mensaje":"No autorizado"}), 403
+    if t.departamento_id == 1:
+        # Cierre PM: solo coordinación explícita dentro de sus sucursales.
+        # Nunca heredar autoridad por pertenecer al departamento Mantenimiento
+        # ni por tener una sucursal principal corporativa.
+        if not has_maintenance_coordination_permission(user):
+            return jsonify({"mensaje": "Sin permiso para solicitar cierre de Mantenimiento."}), 403
+
+        ticket_en_scope = (
+            filtrar_tickets_por_usuario(user)
+            .filter(Ticket.id == ticket_id)
+            .first()
+        )
+        if not ticket_en_scope:
+            return jsonify({"mensaje": "Ticket de Mantenimiento fuera de alcance."}), 404
+
+        if str(t.estado or "").strip().lower() != "en progreso":
+            return jsonify({"mensaje": "Solo se puede solicitar cierre de Mantenimiento en progreso."}), 409
+
+        tipo_atencion = str(t.tipo_atencion or "").strip().upper()
+        if tipo_atencion == "INTERNA":
+            # El técnico debe registrar trabajo terminado antes de que
+            # coordinación revise y solicite conformidad al gerente.
+            if str(t.estado_cierre or "").strip().lower() != "pendiente_revision_coord":
+                return jsonify({"mensaje": "Falta la terminación técnica y revisión de coordinación."}), 409
+        elif tipo_atencion != "EXTERNA":
+            return jsonify({"mensaje": "Define atención INTERNA o EXTERNA antes del cierre."}), 409
+    elif not (_es_admin_o_corporativo(user) or _es_jefe_depto(user, t)):
+        # Contrato legacy intacto para departamentos distintos de Mantenimiento.
+        return jsonify({"mensaje": "No autorizado"}), 403
 
     data = request.get_json() or {}
     costo = data.get("costo_solucion")
