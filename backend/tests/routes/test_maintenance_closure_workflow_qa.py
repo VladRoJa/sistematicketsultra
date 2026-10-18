@@ -178,6 +178,10 @@ def test_qa_flujo_interno_devolucion_revision_y_conformidad(qa_http):
 
     # El técnico y la coordinadora no pueden omitir la revisión técnica.
     assert post(91001, close, {"notas_cierre": "Intento técnico"}).status_code == 403
+    assert post(
+        91001, "cierre/rechazar-jefe/990001",
+        {"motivo": "Intento de reabrir sin coordinación"},
+    ).status_code == 403
     assert post(91002, close, {"notas_cierre": "Sin técnico"}).status_code == 409
 
     assert post(91001, work, {"notas_trabajo": "Reparación hecha"}).status_code == 200
