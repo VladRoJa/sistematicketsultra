@@ -19,6 +19,7 @@ import {
 } from 'src/app/types/ticket';
 import { mostrarAlertaToast } from 'src/app/utils/alertas';
 import { MaintenanceAssignee, MaintenanceAttentionMode } from 'src/app/services/maintenance-coordination.service';
+import { isModalSubmitDisabled } from '../modal-submit-state';
 
 @Component({
   selector: 'app-asignar-fecha-modal',
@@ -170,12 +171,25 @@ export class AsignarFechaModalComponent implements OnChanges {
   }
 
   get guardarDeshabilitado(): boolean {
-    return this.cargandoCatalogos || this.aparatoSinFamilia || (
-      this.permitirAsignacionMantenimiento && (
-        !this.tipoAtencion ||
-        (this.tipoAtencion === 'INTERNA' && !this.responsableUserId)
-      )
-    );
+    const fechaValida = this.fechaSeleccionada instanceof Date
+      && !Number.isNaN(this.fechaSeleccionada.getTime());
+
+    return isModalSubmitDisabled({
+      requiredText: [this.motivo],
+      requiredSelections: [
+        fechaValida ? this.fechaSeleccionada : null,
+        ...(this.permitirAsignacionMantenimiento
+          ? [
+              this.tipoAtencion,
+              ...(this.tipoAtencion === 'INTERNA' ? [this.responsableUserId] : []),
+            ]
+          : []),
+        ...(this.mostrarDiagnosticoEstructurado
+          ? [this.fallaMantenimientoId, this.condicionOperativa]
+          : []),
+      ],
+      blocked: this.cargandoCatalogos || this.aparatoSinFamilia,
+    });
   }
 
   onTipoAtencionChange(): void {
