@@ -55,6 +55,20 @@ export class MaintenanceWorkActionDialogComponent {
     return this.isCompletion ? 'Trabajo realizado' : 'Motivo de devolución';
   }
 
+  get iconName(): string {
+    return this.isCompletion ? 'task_alt' : 'assignment_return';
+  }
+
+  get fieldPlaceholder(): string {
+    return this.isCompletion
+      ? 'Describe la reparación realizada'
+      : 'Indica qué debe corregirse';
+  }
+
+  get submitLabel(): string {
+    return this.isCompletion ? 'Marcar trabajo terminado' : 'Devolver trabajo';
+  }
+
   get maxLength(): number {
     return this.isCompletion ? 2000 : 500;
   }
