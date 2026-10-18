@@ -190,3 +190,41 @@ def test_reassignment_endpoint_denies_mutating_foreign_assigned_ticket(monkeypat
     })
     assert response.status_code == 403
     assert "que tenga asignados" in response.get_json()["mensaje"]
+
+def test_tecnico_asignado_no_puede_solicitar_cierre_sin_revision_coordinacion(monkeypatch):
+    """Contrato futuro: el técnico marca trabajo terminado; no pide cierre."""
+
+    from flask import Flask
+    from app.routes import ticket_routes
+
+    tecnico = user()
+    tecnico.sucursal_id = 8  # Sin atajo corporativo por sucursal 100.
+
+    calls = []
+    t = SimpleNamespace(
+        id=3011,
+        departamento_id=1,
+        asignado_a="SR_MANT_TIJ",
+        tipo_atencion="INTERNA",
+        estado="en progreso",
+        solicitar_cierre=lambda: calls.append("solicitar_cierre"),
+    )
+
+    monkeypatch.setattr(ticket_routes.UserORM, "get_by_id", lambda _id: tecnico)
+    monkeypatch.setattr(ticket_routes, "get_jwt_identity", lambda: tecnico.id)
+    monkeypatch.setattr(
+        ticket_routes, "Ticket",
+        SimpleNamespace(query=SimpleNamespace(get=lambda _id: t)),
+    )
+    monkeypatch.setattr(ticket_routes, "_notificar_evento_ticket", lambda **_kwargs: [])
+
+    app = Flask(__name__)
+    with app.test_request_context(
+        "/api/tickets/cierre/solicitar/3011",
+        method="POST",
+        json={"notas_cierre": "QA - tecnico reporta reparacion terminada"},
+    ):
+        _body, status = ticket_routes.cierre_solicitar.__wrapped__(3011)
+
+    assert status == 403
+    assert calls == []
