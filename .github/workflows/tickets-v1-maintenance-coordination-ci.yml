@@ -9,6 +9,9 @@ on:
       - "backend/app/utils/ticket_filters.py"
       - "backend/app/utils/maintenance_ticket_update_guard.py"
       - "frontend/src/app/services/maintenance-coordination.service.ts"
+      - "frontend/scripts/verify-tickets-responsable-filter.cjs"
+      - "frontend/src/app/utils/ticket-utils.ts"
+      - "frontend/src/app/pantalla-ver-tickets/helpers/**"
       - "frontend/src/app/types/ticket.ts"
       - "frontend/src/app/shared/asignar-fecha-modal/**"
       - "frontend/src/app/pantalla-ver-tickets/pantalla-ver-tickets.component.*"
@@ -82,6 +85,9 @@ jobs:
       - name: Compile Angular application
         working-directory: frontend
         run: node node_modules/typescript/bin/tsc --noEmit --project tsconfig.app.json
+      - name: Verify Responsible cross-filter behavior
+        working-directory: frontend
+        run: node scripts/verify-tickets-responsable-filter.cjs
       - name: Build Angular templates
         working-directory: frontend
         run: npm run build
