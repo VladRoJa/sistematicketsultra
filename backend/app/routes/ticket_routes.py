@@ -271,7 +271,9 @@ def _puede_validar_cierre_gerente(user: UserORM, ticket: Ticket) -> bool:
     - Admin puede validar cualquier ticket.
     - Gerente puede validar tickets de su sucursal destino.
     """
-    if _es_creador(user, ticket):
+    # En Mantenimiento la conformidad debe darla el GERENTE de la
+    # sucursal o un administrador; el creador no puede autoaprobarse.
+    if ticket.departamento_id != 1 and _es_creador(user, ticket):
         return True
 
     if _es_admin_para_validar_cierre(user):
@@ -298,6 +300,11 @@ def _puede_cerrar_ticket_desde_cero(user: UserORM, ticket: Ticket) -> bool:
     - No incluye corporativo.
     - No incluye gerente regional.
     """
+    # Mantenimiento siempre requiere revisión de coordinación y doble check.
+    # El cierre de limpieza no puede saltarse ese contrato.
+    if ticket.departamento_id == 1:
+        return False
+
     if _es_admin_para_cierre_desde_cero(user):
         return True
 
