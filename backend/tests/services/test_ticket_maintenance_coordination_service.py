@@ -477,3 +477,59 @@ def test_trabajo_terminado_repetido_no_duplica_historial(monkeypatch):
             501, tecnico, {"notas_trabajo": "Reparado otra vez"}, now=NOW,
         )
     assert t.historial_fechas == []
+
+
+def test_yuliana_devuelve_trabajo_interno_sin_borrar_asignacion(monkeypatch):
+    t = ticket(state="en progreso")
+    t.tipo_atencion = "INTERNA"
+    t.asignado_a = "SR_MANT_TIJ"
+    t.estado_cierre = coordination.MAINTENANCE_WORK_REVIEW_PENDING
+    t.fecha_solucion = NOW
+    t.costo_solucion = 145
+    setup_queries(monkeypatch, t)
+    monkeypatch.setattr(
+        coordination, "has_maintenance_coordination_permission", lambda _user: True,
+    )
+
+    coordination.prepare_maintenance_work_return(
+        501, actor(), {"motivo": "Falta colocar la cubierta"}, now=NOW,
+    )
+
+    assert t.estado == "en progreso"
+    assert t.estado_cierre is None
+    assert t.asignado_a == "SR_MANT_TIJ"
+    assert t.fecha_solucion == NOW
+    assert t.costo_solucion == 145
+    assert t.historial_fechas[0]["tipo"] == "maintenance_work_returned_v1"
+    assert t.historial_fechas[0]["motivo"] == "Falta colocar la cubierta"
+    assert t.historial_fechas[0]["cambiadoPor"] == "COORDINADORA_TEST"
+
+
+@pytest.mark.parametrize(
+    "branch,review_state,body",
+    [
+        (17, coordination.MAINTENANCE_WORK_REVIEW_PENDING, {"motivo": "Rehacer"}),
+        (8, None, {"motivo": "Rehacer"}),
+        (8, coordination.MAINTENANCE_WORK_REVIEW_PENDING, {"motivo": ""}),
+        (8, coordination.MAINTENANCE_WORK_REVIEW_PENDING, {"motivo": "Rehacer", "estado": "finalizado"}),
+    ],
+)
+def test_devolucion_ilegal_no_muta_ticket(
+    monkeypatch, branch, review_state, body,
+):
+    t = ticket(branch=branch, state="en progreso")
+    t.tipo_atencion = "INTERNA"
+    t.asignado_a = "SR_MANT_TIJ"
+    t.estado_cierre = review_state
+    setup_queries(monkeypatch, t)
+    monkeypatch.setattr(
+        coordination, "has_maintenance_coordination_permission", lambda _user: True,
+    )
+
+    with pytest.raises(coordination.TicketCoordinationError):
+        coordination.prepare_maintenance_work_return(
+            501, actor(), body, now=NOW,
+        )
+
+    assert t.estado_cierre == review_state
+    assert t.historial_fechas == []
