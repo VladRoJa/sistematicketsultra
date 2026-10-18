@@ -533,3 +533,46 @@ def test_devolucion_ilegal_no_muta_ticket(
 
     assert t.estado_cierre == review_state
     assert t.historial_fechas == []
+
+
+def test_reasignacion_invalida_trabajo_terminado_de_tecnico_anterior(monkeypatch):
+    t = ticket(state="en progreso")
+    t.tipo_atencion = "INTERNA"
+    t.asignado_a = "SR_MANT_TIJ"
+    t.estado_cierre = coordination.MAINTENANCE_WORK_REVIEW_PENDING
+    setup_queries(monkeypatch, t)
+    monkeypatch.setattr(
+        coordination, "has_maintenance_coordination_permission", lambda _user: True,
+    )
+
+    coordination.prepare_maintenance_reassignment(
+        501, actor(), {
+            "tipo_atencion": "EXTERNA",
+            "asignado_user_id": None,
+            "motivo": "Se requiere proveedor externo",
+        }, now=NOW,
+    )
+
+    assert t.estado == "en progreso"
+    assert t.tipo_atencion == "EXTERNA"
+    assert t.asignado_a is None
+    assert t.estado_cierre is None
+    assert t.historial_fechas[0]["revision_tecnica_invalidada"] is True
+
+
+def test_reprogramacion_sin_cambiar_responsable_conserva_revision(monkeypatch):
+    t = ticket(state="en progreso")
+    t.tipo_atencion = "INTERNA"
+    t.asignado_a = "SR_MANT_TIJ"
+    t.estado_cierre = coordination.MAINTENANCE_WORK_REVIEW_PENDING
+    setup_queries(monkeypatch, t)
+    monkeypatch.setattr(
+        coordination, "has_maintenance_coordination_permission", lambda _user: True,
+    )
+
+    coordination.prepare_maintenance_coordination(
+        501, actor(), payload(), now=NOW,
+    )
+
+    assert t.estado_cierre == coordination.MAINTENANCE_WORK_REVIEW_PENDING
+    assert t.historial_fechas[0]["revision_tecnica_invalidada"] is False
