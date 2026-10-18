@@ -171,15 +171,18 @@
         [class.historial-card-rechazo]="esRechazoCierre(item)">
 
         <!-- Fila compacta: evento, usuario, fechas y motivo -->
-        <div class="historial-compact-row">
+        <div
+          class="historial-compact-row"
+          [class.historial-compact-row--reasignacion]="esReasignacion(item)"
+          [class.historial-compact-row--coordinacion]="esCoordinacion(item)">
 
-          <!-- Tipo de evento: Cambio / Rechazo / Cierre -->
+          <!-- Tipo real del evento; los eventos legacy conservan Cambio. -->
           <span
             class="evento-chip"
             [class.evento-rechazo]="esRechazoCierre(item)">
 
             <mat-icon inline>
-              {{ esRechazoCierre(item) ? 'report' : 'history' }}
+              {{ esRechazoCierre(item) ? 'report' : (esReasignacion(item) ? 'person' : 'history') }}
             </mat-icon>
 
             {{ getEventoLabel(item) }}
@@ -192,8 +195,8 @@
           </span>
 
 
-          <!-- Fecha solución / compromiso -->
-          <div class="compact-cell">
+          <!-- Una reasignación NO cambia la fecha compromiso: no mostrar fecha vacía. -->
+          <div class="compact-cell" *ngIf="!esReasignacion(item)">
             <span class="compact-label">
               <mat-icon inline>event</mat-icon>
               Solución
@@ -240,6 +243,16 @@
             </ng-template>
           </div>
 
+        </div>
+
+        <!-- Campo afectado: transición real conservada en el registro auditado. -->
+        <div class="historial-cambio-responsable" *ngIf="getCambioResponsableItem(item) as cambio">
+          <span class="historial-cambio-responsable__label">Responsable</span>
+          <span class="historial-cambio-responsable__valores">
+            <span class="historial-cambio-responsable__anterior">{{ cambio.anterior }}</span>
+            <mat-icon inline>arrow_forward</mat-icon>
+            <strong>{{ cambio.nuevo }}</strong>
+          </span>
         </div>
       </article>
 
