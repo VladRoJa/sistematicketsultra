@@ -1849,22 +1849,41 @@ test('Campaign V2: compact top navigation keeps all admin operations and hash ro
 });
 
 
-test('Campaign V2 readable fields: visible fill surface, 14px labels and 16px values, no outlines', () => {
+test('Campaign V2 fields reuse Suite Ultra UI v1 Material fill styles and first two dialogs use its labels', () => {
   const dir = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
   const shared = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-form-fields.css'), 'utf8');
+  const v1 = fs.readFileSync(
+    path.join(process.cwd(), 'src/app/pantalla-crear-ticket/crear-ticket-refactor.component.css'), 'utf8',
+  );
   const page = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.css'), 'utf8');
   const excel = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-excel-dialog.component.css'), 'utf8');
   const qa = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-qa-manual-dialog.component.css'), 'utf8');
-  assert.ok(shared.includes('--mdc-filled-text-field-container-color: #f1f5f9'));
-  assert.ok(shared.includes('--mdc-filled-text-field-label-text-size: 14px'));
-  assert.ok(shared.includes('--mdc-filled-text-field-input-text-size: 16px'));
-  assert.ok(shared.includes('--mat-form-field-container-height: 60px'));
-  assert.ok(shared.includes('--mdc-filled-text-field-focus-active-indicator-color:'));
-  assert.equal(shared.includes('--mdc-filled-text-field-container-color: transparent'), false);
+
+  for (const token of [
+    '--mdc-filled-text-field-container-color: var(--ultra-gray-50)',
+    '--mdc-filled-text-field-label-text-color: var(--ultra-gray-600)',
+    '--mdc-filled-text-field-focus-label-text-color: var(--ultra-orange)',
+    '--mdc-filled-text-field-active-indicator-color: var(--ultra-gray-300)',
+    '--mdc-filled-text-field-focus-active-indicator-color: var(--ultra-orange)',
+    'border-radius: 14px 14px 8px 8px',
+    'font-weight: 700',
+  ]) {
+    assert.ok(v1.includes(token), 'V1 reference missing ' + token);
+    assert.ok(shared.includes(token), 'Campaign V2 differs from V1: ' + token);
+  }
+  assert.equal(shared.includes('--mat-form-field-container-height:'), false);
+  assert.equal(shared.includes('--mdc-filled-text-field-input-text-size:'), false);
+  assert.equal(shared.includes('container-color: transparent'), false);
   assert.ok(page.includes('.field-grid,'));
-  assert.ok(page.includes('.workflow-step small { font-size: 12px'));
   assert.ok(excel.includes('.fields { gap: 16px 18px;'));
   assert.ok(qa.includes('.qa-fields { gap: 14px 18px;'));
+  for (const [name, expected] of [['excel-dialog', 3], ['qa-manual-dialog', 5]] as const) {
+    const html = fs.readFileSync(
+      path.join(dir, 'marketing-campaign-v2-' + name + '.component.html'), 'utf8',
+    );
+    assert.equal((html.match(/<mat-form-field\b/g) ?? []).length, expected);
+    assert.equal((html.match(/floatLabel="always"/g) ?? []).length, expected);
+  }
   for (const name of [
     'page', 'governed-console-dialog', 'preparation-dialog',
     'dispatch-admin-dialog', 'quota-admin-dialog', 'readiness-dialog',
@@ -1872,7 +1891,8 @@ test('Campaign V2 readable fields: visible fill surface, 14px labels and 16px va
     'excel-dialog', 'tariff-classifier-dialog',
   ]) {
     const file = fs.readFileSync(
-      path.join(dir, 'marketing-campaign-v2-' + name + '.component.html'), 'utf8');
+      path.join(dir, 'marketing-campaign-v2-' + name + '.component.html'), 'utf8',
+    );
     assert.equal(file.includes('appearance="outline"'), false, name);
   }
 });

@@ -1,40 +1,45 @@
-/* Campaigns V2: readable MATERIAL FILL fields, never outline.
- * Background and focus indicator distinguish input areas from plain text.
- * Scope through component :host to avoid altering other Suite Ultra modules.
- */
-:host {
-  --mdc-filled-text-field-container-color: #f1f5f9;
-  --mdc-filled-text-field-disabled-container-color: #f4f5f7;
-  --mdc-filled-text-field-container-shape: 8px 8px 0 0;
-  --mdc-filled-text-field-hover-state-layer-opacity: 0.025;
-
-  --mdc-filled-text-field-active-indicator-color: #94a3b8;
-  --mdc-filled-text-field-hover-active-indicator-color: #64748b;
-  --mdc-filled-text-field-focus-active-indicator-color: var(--ultra-orange, #e54525);
-  --mdc-filled-text-field-caret-color: var(--ultra-orange, #e54525);
-
-  --mdc-filled-text-field-label-text-color: #475569;
-  --mdc-filled-text-field-hover-label-text-color: #334155;
-  --mdc-filled-text-field-focus-label-text-color: #a53319;
-  --mdc-filled-text-field-label-text-size: 14px;
-
-  --mdc-filled-text-field-input-text-color: #0f172a;
-  --mdc-filled-text-field-input-text-size: 16px;
-  --mdc-filled-text-field-disabled-input-text-color: #64748b;
-
-  /* Default 48px caused cramped labels, floating text and invisible inputs. */
-  --mat-form-field-container-height: 60px;
-  --mat-form-field-container-vertical-padding: 18px;
-  --mat-form-field-subscript-text-size: 12px;
-}
+/* ==========================================================================
+   Suite Ultra UI v1 - Formularios Material fill
+   Referencia fiel: pantalla-crear-ticket/crear-ticket-refactor.component.css
+   (secciones "Campos" y "Ajuste visual de campos Material fill").
+   NO crear una paleta o escala de campos paralela para Campañas V2.
+   ========================================================================== */
 
 :host mat-form-field {
-  min-width: 0;
-  font-size: 15px;
+  width: 100%;
 }
 
-:host mat-hint,
-:host mat-error {
-  font-size: 12px;
-  line-height: 1.45;
+:host ::ng-deep .mat-mdc-form-field {
+  --mdc-filled-text-field-container-color: var(--ultra-gray-50);
+  --mdc-filled-text-field-label-text-color: var(--ultra-gray-600);
+  --mdc-filled-text-field-focus-label-text-color: var(--ultra-orange);
+  --mdc-filled-text-field-active-indicator-color: var(--ultra-gray-300);
+  --mdc-filled-text-field-focus-active-indicator-color: var(--ultra-orange);
+  --mdc-filled-text-field-hover-active-indicator-color: rgba(229, 69, 37, 0.55);
+}
+
+:host ::ng-deep .mat-mdc-text-field-wrapper {
+  border-radius: 14px 14px 8px 8px;
+  overflow: hidden;
+}
+
+:host ::ng-deep .mat-mdc-form-field-infix {
+  min-height: 48px;
+  padding-top: 14px;
+  padding-bottom: 10px;
+}
+
+:host ::ng-deep .mat-mdc-select-value,
+:host ::ng-deep .mat-mdc-input-element {
+  color: var(--ultra-gray-900);
+  font-weight: 700;
+}
+
+:host ::ng-deep .mat-mdc-form-field-icon-suffix,
+:host ::ng-deep .mat-mdc-select-arrow {
+  color: var(--ultra-gray-500);
+}
+
+:host ::ng-deep .mat-mdc-form-field.mat-focused .mat-mdc-select-arrow {
+  color: var(--ultra-orange);
 }
