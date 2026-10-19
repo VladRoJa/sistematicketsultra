@@ -1862,9 +1862,15 @@ puedeCoordinarTicket(ticket: Ticket): boolean {
 }
 
 puedeReasignarTicket(ticket: Ticket): boolean {
-  return this.puedeCoordinarTicket(ticket)
-    && (Boolean(String(ticket.asignado_a || '').trim())
-      || ticket.tipo_atencion === 'EXTERNA');
+  // Incluye tickets legacy sin responsable, incluso si ya tienen compromiso.
+  // El backend exige coordinación y alcance por sucursal para guardar.
+  return this.puedeCoordinarTicket(ticket);
+}
+
+etiquetaAccionResponsableTicket(ticket: Ticket): string {
+  return ticket.tipo_atencion === 'EXTERNA' || String(ticket.asignado_a || '').trim()
+    ? 'Reasignar responsable'
+    : 'Asignar responsable';
 }
 
 abrirReasignarResponsable(ticket: Ticket): void {
