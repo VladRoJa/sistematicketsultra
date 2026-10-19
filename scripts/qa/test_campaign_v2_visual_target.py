@@ -6,7 +6,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from campaign_v2_visual_audit import validate_target, open_tool
+from campaign_v2_visual_audit import AuditNavigationTimeout, validate_target, open_tool
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
 
 class VisualAuditTargetTests(unittest.TestCase):
@@ -39,6 +40,25 @@ class VisualAuditTargetTests(unittest.TestCase):
             call("button", name=trigger.group(1), exact=True),
             call("menuitem", name="Preparar prueba interna · 1 contacto", exact=True),
         ])
+
+    def test_tools_trigger_timeout_is_classified(self):
+        from unittest.mock import MagicMock
+
+        page = MagicMock()
+        page.get_by_role.return_value.click.side_effect = PlaywrightTimeout("private page details")
+        with self.assertRaisesRegex(AuditNavigationTimeout, "^tools_trigger_click_timeout$"):
+            open_tool(page, "Preparar prueba interna · 1 contacto")
+
+    def test_tools_menu_option_timeout_is_classified(self):
+        from unittest.mock import MagicMock
+
+        page = MagicMock()
+        button = MagicMock()
+        item = MagicMock()
+        item.click.side_effect = PlaywrightTimeout("private page details")
+        page.get_by_role.side_effect = [button, item]
+        with self.assertRaisesRegex(AuditNavigationTimeout, "^tools_menu_item_click_timeout$"):
+            open_tool(page, "Preparar prueba interna · 1 contacto")
 
     def test_real_local_explicitly_authorized(self):
         with self.config(SUITE_QA_REAL_LOCAL_READONLY_CONFIRMED="YES"):
