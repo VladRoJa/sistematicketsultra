@@ -755,8 +755,9 @@ td.col-descripcion {
   text-align: center;
 }
 
+/* Iconos decorativos ocultos: priorizar la acción completa en la tabla compacta. */
 .acciones-mantenimiento .ticket-action mat-icon {
-  flex-shrink: 0;
+  display: none;
 }
 
 .acciones-mantenimiento .ticket-action span {
