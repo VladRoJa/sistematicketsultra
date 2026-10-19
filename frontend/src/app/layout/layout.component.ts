@@ -510,6 +510,8 @@ const menuMantenimientoGerencial = [
     this.menuItems = soloTickets;
   }
 
+// El perfil exclusivo de coordinación no publica otros módulos dinámicos.
+if (!this.esCoordinadorMantenimiento) {
 this.habilitarControlEnMenuSiAplica(menuControl);
 this.habilitarSistemasEnMenuSiAplica(menuSistemas);
 this.habilitarContactCenterEnMenuSiAplica(menuContactCenter);
@@ -576,6 +578,7 @@ this.habilitarWarehouseEnMenuSiAplica(menuWarehouse);
   this.habilitarInternalDocumentsEnMenuSiAplica(menuNubeCorporativa);
   this.habilitarPermisosObservabilidadEnMenuSiAplica();
   this.habilitarAdminUsuariosEnMenuSiAplica();
+}
   this.sincronizarMenuConRutaActual();
 
   if (this.puedeVerAccionesFlotantesGlobales) {
