@@ -306,11 +306,11 @@ def _effective_action_decision(action, user, context: dict) -> dict:
 
     # PM
     if full_key == "pm.read":
-        from app.utils.pm_permissions import has_compras_maintenance_read_grant
+        from app.utils.pm_permissions import has_scoped_maintenance_read_grant
 
         compras_grant = (
-            role == "COMPRAS"
-            and has_compras_maintenance_read_grant(user)
+            role in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"}
+            and has_scoped_maintenance_read_grant(user)
         )
         allowed = role in LEGACY_PM_VIEW_ROLES or compras_grant
         branch_scope = (
