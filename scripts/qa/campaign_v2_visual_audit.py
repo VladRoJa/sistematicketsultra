@@ -165,11 +165,10 @@ def close_dialog(page) -> None:
         close.first.click(timeout=6000)
     else:
         page.keyboard.press("Escape")
+    # Closing a dialog should verify its own teardown, not gate the entire
+    # viewport on a later control. open_tool() reports accessible-trigger
+    # failures for each affected case without aborting remaining audit cases.
     dialog.wait_for(state="detached", timeout=5000)
-    # A detached dialog alone does not prove the main page is accessible.
-    page.get_by_role(
-        "button", name="Abrir herramientas de campañas", exact=True
-    ).wait_for(state="visible", timeout=5000)
 
 
 class AuditNavigationTimeout(RuntimeError):
