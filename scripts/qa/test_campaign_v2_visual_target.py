@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from campaign_v2_visual_audit import validate_target
+from campaign_v2_visual_audit import validate_target, open_tool
 
 
 class VisualAuditTargetTests(unittest.TestCase):
@@ -18,6 +18,27 @@ class VisualAuditTargetTests(unittest.TestCase):
         }
         defaults.update(kwargs)
         return patch.dict(os.environ, defaults, clear=True)
+
+    def test_tools_menu_uses_declared_accessible_name(self):
+        # Angular aria-label overrides the visible text "Herramientas".
+        import re
+        from unittest.mock import MagicMock, call
+
+        html_path = Path(__file__).resolve().parents[2] / (
+            "frontend/src/app/marketing-campaign-v2/marketing-campaign-v2-page.component.html"
+        )
+        markup = html_path.read_text(encoding="utf-8")
+        trigger = re.search(
+            r'\\[matMenuTriggerFor\\]="campaignToolsMenu"\\s+aria-label="([^"]+)"',
+            markup,
+        )
+        self.assertIsNotNone(trigger, "Herramientas trigger missing an accessible label")
+        page = MagicMock()
+        open_tool(page, "Preparar prueba interna · 1 contacto")
+        self.assertEqual(page.get_by_role.call_args_list, [
+            call("button", name=trigger.group(1), exact=True),
+            call("menuitem", name="Preparar prueba interna · 1 contacto", exact=True),
+        ])
 
     def test_real_local_explicitly_authorized(self):
         with self.config(SUITE_QA_REAL_LOCAL_READONLY_CONFIRMED="YES"):
