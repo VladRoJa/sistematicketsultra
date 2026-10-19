@@ -85,11 +85,16 @@ def assigned_branch_ids(user: UserORM | None) -> tuple[int, ...]:
 
 
 def can_purchase_requisition_access(user: UserORM | None) -> bool:
-    return user is not None
+    """El coordinador de Mantenimiento no participa en Requisiciones."""
+    return bool(
+        user is not None
+        and normalize_role(getattr(user, "rol", None))
+        != "COORDINADOR_MANTENIMIENTO"
+    )
 
 
 def can_purchase_requisition_create(user: UserORM | None) -> bool:
-    if user is None:
+    if not can_purchase_requisition_access(user):
         return False
     return normalize_role(getattr(user, "rol", None)) not in NO_CREATE_ROLES
 
@@ -116,6 +121,8 @@ def can_purchase_requisition_approve_quote(
     *,
     session: Session | None = None,
 ) -> bool:
+    if not can_purchase_requisition_access(user):
+        return False
     user_id = _positive_int(getattr(user, "id", None)) if user else None
     if user_id is None:
         return False
@@ -193,7 +200,7 @@ def can_purchase_requisition_view(
     *,
     session: Session | None = None,
 ) -> bool:
-    if user is None or requisition is None:
+    if not can_purchase_requisition_access(user) or requisition is None:
         return False
 
     user_id = _positive_int(getattr(user, "id", None))
@@ -250,7 +257,7 @@ def can_upload_purchase_requisition_attachment(
     requisition,
     attachment_type: str,
 ) -> bool:
-    if user is None or requisition is None:
+    if not can_purchase_requisition_access(user) or requisition is None:
         return False
     if normalize_role(getattr(user, "rol", None)) == "LECTOR_GLOBAL":
         return False
