@@ -1849,6 +1849,29 @@ test('Campaign V2: compact top navigation keeps all admin operations and hash ro
 });
 
 
+test('Campaign V2 compact fields restore the Crear Ticket V1 value scale without changing Excel', () => {
+  const compact = fs.readFileSync(
+    path.join(process.cwd(), 'src/styles.compact-modules.scss'), 'utf8',
+  );
+  const scss75 = fs.readFileSync(
+    path.join(process.cwd(), 'src/styles.compact-75.scss'), 'utf8',
+  );
+  // Source-of-truth regression: the global compact skin compresses values to
+  // 10px, but the main V2 page needs the established V1 13px value scale.
+  assert.ok(scss75.includes('font-size: 10px !important;'));
+  assert.ok(compact.includes(
+    'body.suite-compact-review .campaign-v2-page .mat-mdc-select-value,\n' +
+    'body.suite-compact-review .campaign-v2-page input.mat-mdc-input-element {\n' +
+    '  font-size: 13px !important;\n' +
+    '  line-height: 1.3 !important;\n}',
+  ));
+  // This selector cannot match dialogs rendered in the CDK overlay outside
+  // .campaign-v2-page; approved Excel styles remain unchanged.
+  assert.ok(compact.includes(
+    ':is(.crear-ticket-page, .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog)',
+  ));
+});
+
 test('Campaign V2 fields reuse Suite Ultra UI v1 Material fill styles and first two dialogs use its labels', () => {
   const dir = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
   const shared = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-form-fields.css'), 'utf8');
