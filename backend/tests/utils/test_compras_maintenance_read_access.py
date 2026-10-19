@@ -1,6 +1,8 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
 from flask import Blueprint, Flask
 from sqlalchemy import Integer, String, column
 
@@ -145,6 +147,7 @@ def test_compras_cannot_close_maintenance_ticket_via_legacy_endpoint(monkeypatch
     maintenance_ticket = SimpleNamespace(departamento_id=1)
     monkeypatch.setattr(ticket_guard, "verify_jwt_in_request", lambda: None)
     monkeypatch.setattr(ticket_guard, "get_jwt_identity", lambda: actor.id)
+    monkeypatch.setattr(ticket_guard, "has_maintenance_coordination_permission", lambda _actor: False)
     monkeypatch.setattr(ticket_guard.UserORM, "get_by_id", lambda _id: actor)
     monkeypatch.setattr(
         ticket_guard,
@@ -158,6 +161,76 @@ def test_compras_cannot_close_maintenance_ticket_via_legacy_endpoint(monkeypatch
     assert response.status_code == 403
     assert "Compras tiene acceso de consulta" in response.get_json()["mensaje"]
 
+
+
+@pytest.mark.parametrize(
+    "endpoint,route",
+    [
+        ("cierre_aceptar_creador", "/cierre/aceptar-creador/99"),
+        ("notify_ticket", "/notify/99"),
+    ],
+)
+def test_compras_coordinator_does_not_gain_other_maintenance_writes(
+    monkeypatch, endpoint, route
+):
+    app = Flask(__name__)
+    tickets = Blueprint("tickets", __name__)
+
+    tickets.add_url_rule(
+        route.replace("99", "<int:ticket_id>"),
+        endpoint=endpoint,
+        view_func=lambda ticket_id: ("unexpected write", 200),
+        methods=["POST"],
+    )
+    app.register_blueprint(tickets)
+
+    actor = _compras(branches=(8,))
+    maintenance_ticket = SimpleNamespace(departamento_id=1, sucursal_id_destino=8)
+    monkeypatch.setattr(ticket_guard, "verify_jwt_in_request", lambda: None)
+    monkeypatch.setattr(ticket_guard, "get_jwt_identity", lambda: actor.id)
+    monkeypatch.setattr(ticket_guard.UserORM, "get_by_id", lambda _id: actor)
+    monkeypatch.setattr(
+        ticket_guard,
+        "Ticket",
+        SimpleNamespace(query=SimpleNamespace(get=lambda _id: maintenance_ticket)),
+    )
+    monkeypatch.setattr(
+        ticket_guard, "has_maintenance_coordination_permission", lambda _actor: True
+    )
+    ticket_guard.register_maintenance_ticket_update_guard(app)
+
+    response = app.test_client().post(route)
+    assert response.status_code == 403
+    assert "Compras tiene acceso de consulta" in response.get_json()["mensaje"]
+
+
+def test_compras_con_grant_coordinacion_pasa_al_endpoint_de_revision(monkeypatch):
+    app = Flask(__name__)
+    tickets = Blueprint("tickets", __name__)
+
+    @tickets.route("/cierre/solicitar/<int:ticket_id>", methods=["POST"])
+    def cierre_solicitar(ticket_id):
+        return "revision autorizada por ruta", 200
+
+    app.register_blueprint(tickets)
+
+    actor = _compras(branches=(8,))
+    maintenance_ticket = SimpleNamespace(departamento_id=1, sucursal_id_destino=8)
+    monkeypatch.setattr(ticket_guard, "verify_jwt_in_request", lambda: None)
+    monkeypatch.setattr(ticket_guard, "get_jwt_identity", lambda: actor.id)
+    monkeypatch.setattr(ticket_guard.UserORM, "get_by_id", lambda _id: actor)
+    monkeypatch.setattr(
+        ticket_guard,
+        "Ticket",
+        SimpleNamespace(query=SimpleNamespace(get=lambda _id: maintenance_ticket)),
+    )
+    monkeypatch.setattr(
+        ticket_guard, "has_maintenance_coordination_permission", lambda _actor: True
+    )
+    ticket_guard.register_maintenance_ticket_update_guard(app)
+
+    response = app.test_client().post("/cierre/solicitar/99")
+    assert response.status_code == 200
 
 def test_compras_guard_does_not_block_other_department_ticket(monkeypatch):
     app = Flask(__name__)
