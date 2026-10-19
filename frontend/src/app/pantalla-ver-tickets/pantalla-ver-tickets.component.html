@@ -755,6 +755,7 @@
                 *ngIf="puedeSolicitarCierreMantenimiento(ticket)"
                 type="button"
                 class="ticket-action ticket-action--finish"
+                [matTooltip]="ayudaSolicitarCierreMantenimiento(ticket)"
                 (click)="solicitarCierre(ticket)"
               >
                 <mat-icon>fact_check</mat-icon>
@@ -764,6 +765,7 @@
                 *ngIf="puedeDevolverTrabajoMantenimiento(ticket)"
                 type="button"
                 class="ticket-action ticket-action--manager"
+                matTooltip="Devolver al técnico con motivo obligatorio"
                 (click)="devolverTrabajoMantenimiento(ticket)"
               >
                 <mat-icon>assignment_return</mat-icon>
