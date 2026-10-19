@@ -6,7 +6,10 @@ from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 from app.models.ticket_model import Ticket
 from app.models.user_model import UserORM
 from app.utils.pm_permissions import can_pm_execute
-from app.utils.tickets_maintenance_permissions import has_assigned_only_maintenance_scope
+from app.utils.tickets_maintenance_permissions import (
+    has_assigned_only_maintenance_scope,
+    has_maintenance_coordination_permission,
+)
 
 
 MAINTENANCE_DEPARTMENT_ID = 1
@@ -173,6 +176,17 @@ def register_maintenance_ticket_update_guard(app) -> None:
 
         ticket = Ticket.query.get(ticket_id)
         if ticket is None or not is_maintenance_ticket(ticket):
+            return None
+
+        # Excepción estrictamente para la solicitud de conformidad de
+        # Mantenimiento: una coordinación explícitamente autorizada puede
+        # entrar al endpoint, que vuelve a validar sucursal, estado,
+        # terminación técnica y notas obligatorias.
+        # El permiso PM de lectura por sí solo NO habilita escrituras.
+        if (
+            request.endpoint == "tickets.cierre_solicitar"
+            and has_maintenance_coordination_permission(actor)
+        ):
             return None
 
         return (
