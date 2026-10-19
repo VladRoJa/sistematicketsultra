@@ -22,7 +22,7 @@ from app.warehouse.services.kpi_desempeno_semantic_diff import (
 from app.warehouse.services.kpi_desempeno_m3b_continuity_plan import (
     BLOCKED,
     READY_FOR_REVIEW,
-    M3BSourceRevisionEvidence,
+    M3BSourceRevisionClaim,
     plan_kpi_desempeno_mtd_impact,
 )
 
@@ -469,7 +469,7 @@ def _revision_evidence(
     reviewer_user_id=101,
     review_reference="QA-SYNTHETIC-REVISION-001",
 ):
-    return M3BSourceRevisionEvidence(
+    return M3BSourceRevisionClaim(
         branch_key=branch,
         track_mtd_field=metric,
         earlier_date=earlier_date,
@@ -485,26 +485,29 @@ def _revision_evidence(
     )
 
 
-def test_exact_documented_bajas_decrease_remains_visible_but_is_ready_for_review():
+def test_shape_valid_bajas_revision_claim_stays_blocked_until_verified():
     observed = _series()
     before = deepcopy(observed)
     plan = plan_kpi_desempeno_mtd_impact(
         business_date=DAY,
         diff=_diff(fields=[("bajas", 25, 19)]),
         observed_mtd=observed,
-        source_revision_evidence=(_revision_evidence(),),
+        source_revision_claims=(_revision_evidence(),),
     )
-    assert plan.status == READY_FOR_REVIEW
-    assert plan.blocking_issues == ()
+    assert plan.status == BLOCKED
     assert [(x.code, x.branch_key, x.track_mtd_field, x.delta)
-            for x in plan.documented_decreases] == [
-        ("MTD_SOURCE_REVISION_REVIEW", CENTRO, "bajas_reales_mtd", -1),
+            for x in plan.blocking_issues] == [
+        ("SOURCE_REVISION_UNVERIFIED", CENTRO, "bajas_reales_mtd", -1),
+    ]
+    assert [(x.code, x.branch_key, x.track_mtd_field, x.delta)
+            for x in plan.matched_revision_claims] == [
+        ("MTD_SOURCE_REVISION_CLAIM", CENTRO, "bajas_reales_mtd", -1),
     ]
     assert [(x.previous, x.current) for x in plan.track_field_changes] == [(25, 19)]
     assert observed == before
 
 
-def test_source_revision_evidence_must_match_exact_values_and_dates():
+def test_source_revision_claims_must_match_exact_values_and_dates():
     for correction in (
         _revision_evidence(earlier=21),
         _revision_evidence(later=18),
@@ -516,11 +519,11 @@ def test_source_revision_evidence_must_match_exact_values_and_dates():
             business_date=DAY,
             diff=_diff(fields=[("bajas", 25, 19)]),
             observed_mtd=_series(),
-            source_revision_evidence=(correction,),
+            source_revision_claims=(correction,),
         )
         assert plan.status == BLOCKED
         assert any(x.code == "MTD_DECREASE" for x in plan.blocking_issues)
-        assert plan.documented_decreases == ()
+        assert plan.matched_revision_claims == ()
 
 
 @pytest.mark.parametrize("kwargs", [
@@ -537,10 +540,10 @@ def test_malformed_revision_evidence_fails_closed(kwargs):
         business_date=DAY,
         diff=_diff(fields=[("bajas", 25, 19)]),
         observed_mtd=_series(),
-        source_revision_evidence=(_revision_evidence(**kwargs),),
+        source_revision_claims=(_revision_evidence(**kwargs),),
     )
     assert plan.status == BLOCKED
-    assert {"INVALID_SOURCE_REVISION_EVIDENCE", "MTD_DECREASE"}.issubset({
+    assert {"INVALID_SOURCE_REVISION_CLAIM", "MTD_DECREASE"}.issubset({
         x.code for x in plan.blocking_issues
     })
 
@@ -551,10 +554,10 @@ def test_duplicate_revision_evidence_fails_closed():
         business_date=DAY,
         diff=_diff(fields=[("bajas", 25, 19)]),
         observed_mtd=_series(),
-        source_revision_evidence=(evidence, evidence),
+        source_revision_claims=(evidence, evidence),
     )
     assert plan.status == BLOCKED
-    assert any(x.code == "DUPLICATE_SOURCE_REVISION_EVIDENCE"
+    assert any(x.code == "DUPLICATE_SOURCE_REVISION_CLAIM"
                for x in plan.blocking_issues)
 
 
@@ -563,10 +566,10 @@ def test_unrelated_evidence_blocks_even_when_there_are_no_decreases():
         business_date=DAY,
         diff=_diff(fields=[("bajas", 25, 27)]),
         observed_mtd=_series(),
-        source_revision_evidence=(_revision_evidence(),),
+        source_revision_claims=(_revision_evidence(),),
     )
     assert plan.status == BLOCKED
-    assert any(x.code == "UNMATCHED_SOURCE_REVISION_EVIDENCE"
+    assert any(x.code == "UNMATCHED_SOURCE_REVISION_CLAIM"
                for x in plan.blocking_issues)
 
 
@@ -575,13 +578,13 @@ def test_verified_bajas_revision_cannot_waive_unrelated_reactivaciones_decrease(
         business_date=DAY,
         diff=_diff(fields=[("reactivaciones", 150, 100), ("bajas", 25, 19)]),
         observed_mtd=_series(),
-        source_revision_evidence=(_revision_evidence(),),
+        source_revision_claims=(_revision_evidence(),),
     )
     assert plan.status == BLOCKED
     assert any(x.code == "MTD_DECREASE"
                and x.track_mtd_field == "reactivaciones_real_mtd"
                for x in plan.blocking_issues)
-    assert [x.track_mtd_field for x in plan.documented_decreases] == [
+    assert [x.track_mtd_field for x in plan.matched_revision_claims] == [
         "bajas_reales_mtd"
     ]
 
@@ -593,11 +596,11 @@ def test_revision_evidence_never_bypasses_missing_neighbor():
         business_date=DAY,
         diff=_diff(fields=[("bajas", 25, 19)]),
         observed_mtd=observed,
-        source_revision_evidence=(_revision_evidence(),),
+        source_revision_claims=(_revision_evidence(),),
     )
     assert plan.status == BLOCKED
     assert any(x.code == "MISSING_DAY" for x in plan.blocking_issues)
-    assert any(x.code == "UNMATCHED_SOURCE_REVISION_EVIDENCE"
+    assert any(x.code == "UNMATCHED_SOURCE_REVISION_CLAIM"
                for x in plan.blocking_issues)
 
 
@@ -606,9 +609,32 @@ def test_document_only_metric_with_revision_evidence_is_blocked():
         business_date=DAY,
         diff=_diff(fields=[("renovaciones", 40, 41)]),
         observed_mtd={},
-        source_revision_evidence=(_revision_evidence(),),
+        source_revision_claims=(_revision_evidence(),),
     )
     assert plan.status == BLOCKED
     assert plan.track_field_changes == ()
-    assert any(x.code == "UNMATCHED_SOURCE_REVISION_EVIDENCE"
+    assert any(x.code == "UNMATCHED_SOURCE_REVISION_CLAIM"
                for x in plan.blocking_issues)
+
+
+def test_plausible_but_fabricated_reviewer_and_sha_cannot_clear_gate():
+    """No Warehouse verifier exists: all metadata-valid claims stay blocked."""
+    claim = _revision_evidence(
+        sha_before="1" * 64,
+        sha_after="2" * 64,
+        reviewer_user_id=999999,
+        review_reference="FAKE-REVIEW-BUT-WELL-FORMED",
+    )
+    plan = plan_kpi_desempeno_mtd_impact(
+        business_date=DAY,
+        diff=_diff(fields=[("bajas", 25, 19)]),
+        observed_mtd=_series(),
+        source_revision_claims=(claim,),
+    )
+    assert plan.status == BLOCKED
+    assert [x.code for x in plan.blocking_issues] == [
+        "SOURCE_REVISION_UNVERIFIED"
+    ]
+    assert [x.code for x in plan.matched_revision_claims] == [
+        "MTD_SOURCE_REVISION_CLAIM"
+    ]
