@@ -215,70 +215,72 @@ body.suite-compact-review .ticket-card__drag {
  * El modo compacto global reduce demasiado los controles Material de esta
  * pantalla. Crear Ticket necesita conservar jerarquía entre label, valor,
  * placeholder y mensajes de ayuda para que la captura sea guiada.
+ * El diálogo Excel de Campañas V2 comparte exactamente esas reglas V1,
+ * sin otra escala y sin afectar otros diálogos o el flujo de envío.
  */
-body.suite-compact-review .crear-ticket-page .mat-mdc-form-field {
+body.suite-compact-review :is(.crear-ticket-page, .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog) .mat-mdc-form-field {
   --mat-form-field-container-height: 52px;
   --mat-form-field-container-vertical-padding: 8px;
 }
 
-body.suite-compact-review .crear-ticket-page .mat-mdc-text-field-wrapper {
+body.suite-compact-review :is(.crear-ticket-page, .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog) .mat-mdc-text-field-wrapper {
   min-height: 52px;
 }
 
-body.suite-compact-review .crear-ticket-page .mat-mdc-form-field-infix {
+body.suite-compact-review :is(.crear-ticket-page, .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog) .mat-mdc-form-field-infix {
   min-height: 52px !important;
   padding: 18px 12px 8px !important;
 }
 
-body.suite-compact-review .crear-ticket-page .mat-mdc-select-value,
-body.suite-compact-review .crear-ticket-page .mat-mdc-input-element {
+body.suite-compact-review :is(.crear-ticket-page, .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog) .mat-mdc-select-value,
+body.suite-compact-review :is(.crear-ticket-page, .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog) .mat-mdc-input-element {
   font-size: 13px !important;
   line-height: 1.3 !important;
 }
 
-body.suite-compact-review .crear-ticket-page .mat-mdc-select-value {
+body.suite-compact-review :is(.crear-ticket-page, .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog) .mat-mdc-select-value {
   padding: 2px 0 !important;
 }
 
-body.suite-compact-review .crear-ticket-page .mat-mdc-select-placeholder,
-body.suite-compact-review .crear-ticket-page .mat-mdc-input-element::placeholder {
+body.suite-compact-review :is(.crear-ticket-page, .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog) .mat-mdc-select-placeholder,
+body.suite-compact-review :is(.crear-ticket-page, .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog) .mat-mdc-input-element::placeholder {
   color: #667085 !important;
   opacity: 1;
   font-weight: 600;
 }
 
-body.suite-compact-review .crear-ticket-page .mat-mdc-floating-label,
-body.suite-compact-review .crear-ticket-page .mdc-floating-label {
+body.suite-compact-review :is(.crear-ticket-page, .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog) .mat-mdc-floating-label,
+body.suite-compact-review :is(.crear-ticket-page, .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog) .mdc-floating-label {
   font-size: 11px !important;
   font-weight: 700;
 }
 
-body.suite-compact-review .crear-ticket-page .mat-mdc-form-field-subscript-wrapper {
+body.suite-compact-review :is(.crear-ticket-page, .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog) .mat-mdc-form-field-subscript-wrapper {
   font-size: 11px !important;
   line-height: 1.3 !important;
 }
 
-body.suite-compact-review .crear-ticket-page .mat-mdc-form-field-hint-wrapper,
-body.suite-compact-review .crear-ticket-page .mat-mdc-form-field-error-wrapper {
+body.suite-compact-review :is(.crear-ticket-page, .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog) .mat-mdc-form-field-hint-wrapper,
+body.suite-compact-review :is(.crear-ticket-page, .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog) .mat-mdc-form-field-error-wrapper {
   padding: 4px 10px 0;
 }
 
-body.suite-compact-review .crear-ticket-page textarea.mat-mdc-input-element {
+body.suite-compact-review :is(.crear-ticket-page, .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog) textarea.mat-mdc-input-element {
   min-height: 88px !important;
   padding: 10px 10px 8px !important;
   font-size: 13px !important;
   line-height: 1.45 !important;
 }
 
-body.suite-compact-review .crear-ticket-page .mat-mdc-button,
-body.suite-compact-review .crear-ticket-page .mat-mdc-raised-button,
-body.suite-compact-review .crear-ticket-page .mat-mdc-unelevated-button,
-body.suite-compact-review .crear-ticket-page .mat-mdc-outlined-button {
+body.suite-compact-review :is(.crear-ticket-page, .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog) .mat-mdc-button,
+body.suite-compact-review :is(.crear-ticket-page, .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog) .mat-mdc-raised-button,
+body.suite-compact-review :is(.crear-ticket-page, .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog) .mat-mdc-unelevated-button,
+body.suite-compact-review :is(.crear-ticket-page, .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog) .mat-mdc-outlined-button {
   min-height: 34px;
   font-size: 12px;
 }
 
-body.suite-compact-review .crear-ticket-page .crear-ticket-grid {
+body.suite-compact-review :is(.crear-ticket-page, .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog) .crear-ticket-grid {
   gap: 14px 16px;
 }
 
