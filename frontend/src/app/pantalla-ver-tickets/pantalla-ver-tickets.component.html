@@ -972,8 +972,8 @@
                 mat-icon-button
                 type="button"
                 class="ticket-responsable__editar"
-                matTooltip="Reasignar responsable"
-                aria-label="Reasignar responsable"
+                [matTooltip]="etiquetaAccionResponsableTicket(ticket)"
+                [attr.aria-label]="etiquetaAccionResponsableTicket(ticket)"
                 (click)="abrirReasignarResponsable(ticket)"
               >
                 <mat-icon>edit</mat-icon>
