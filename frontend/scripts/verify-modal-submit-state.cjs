@@ -64,4 +64,28 @@ for (const rel of [
 const css = fs.readFileSync(path.resolve(__dirname, '../src/styles.scss'), 'utf8');
 assert.match(css, /ultra-modal-confirm:disabled/, 'Debe existir estilo disabled visible');
 assert.match(css, /ultra-modal-confirm:not\(:disabled\)/, 'Debe conservar naranja en enabled');
+// Regresión Planner: el coordinador debe escoger responsable y guardar fecha + asignación
+// mediante una sola transacción, no mediante la ruta de programación simple.
+const plannerHtml = fs.readFileSync(path.resolve(__dirname,
+  '../src/app/maintenance-planner/maintenance-planner-ticket-dialog.component.html'), 'utf8');
+const plannerTs = fs.readFileSync(path.resolve(__dirname,
+  '../src/app/maintenance-planner/maintenance-planner-ticket-dialog.component.ts'), 'utf8');
+assert.match(plannerHtml, /\[permitirAsignacionMantenimiento\]="useCoordinatedAssignment"/,
+  'Planner debe activar el selector del modal de mantenimiento');
+assert.match(plannerHtml, /\[responsablesMantenimiento\]="responsablesMantenimiento"/,
+  'Planner debe entregar el catálogo autorizado al modal compartido');
+assert.match(plannerHtml, /\*ngIf="canShowInitialCommitmentForm"/,
+  'Planner debe esperar el contexto de coordinación antes de mostrar el formulario');
+assert.match(plannerTs, /getContext\(\)/,
+  'Los responsables deben venir del endpoint de contexto autorizado');
+assert.match(plannerTs, /this\.canRequestClosure && !this\.canCaptureDiagnosis/,
+  'La coordinación no debe reemplazar el flujo técnico de diagnóstico');
+assert.match(plannerTs, /this\.maintenanceCoordinationService\.coordinateTicket\(this\.ticket\.ticket_id/,
+  'Planner debe guardar asignación y compromiso con el endpoint transaccional');
+assert.match(plannerTs, /this\.plannerService\.assignInitialCommitmentFromForm\(/,
+  'Planner debe conservar la programación anterior para otros perfiles');
+assert.match(plannerTs, /!this\.coordinationReady/,
+  'Un fallo del catálogo no debe habilitar un guardado sin asignación');
+console.log('PASS: Planner exige asignación coordinada y conserva el flujo técnico');
+
 console.log('PASS: habilitación reusable y estilo enabled/disabled en ambos modales');
