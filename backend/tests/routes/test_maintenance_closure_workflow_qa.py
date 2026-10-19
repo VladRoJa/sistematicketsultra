@@ -239,8 +239,29 @@ def test_qa_flujo_interno_devolucion_revision_y_conformidad(qa_http):
     assert post(
         91002, close, {"notas_cierre": "Segunda revisión satisfactoria"},
     ).status_code == 200
+    fecha_finalizada_por_coordinacion = ticket.fecha_finalizado
+    assert fecha_finalizada_por_coordinacion is not None
+
     assert post(91003, approve).status_code == 200
     assert ticket.estado == "finalizado"
+    assert ticket.fecha_finalizado == fecha_finalizada_por_coordinacion
+    aceptaciones = [
+        item for item in ticket.historial_fechas
+        if item.get("tipo") == "maintenance_conformity_accepted_v1"
+    ]
+    assert len(aceptaciones) == 1
+    assert aceptaciones[0]["cambiadoPor"] == "QA_GERENTE"
+    assert aceptaciones[0]["estado_cierre_anterior"] == "pendiente_creador"
+    assert aceptaciones[0]["estado"] == "finalizado"
+    assert aceptaciones[0]["fecha"] == fecha_finalizada_por_coordinacion.isoformat()
+
+    # Reintentar una aceptación no duplica la auditoría ni cambia la fecha.
+    assert post(91003, approve).status_code == 400
+    assert len([
+        item for item in ticket.historial_fechas
+        if item.get("tipo") == "maintenance_conformity_accepted_v1"
+    ]) == 1
+    assert ticket.fecha_finalizado == fecha_finalizada_por_coordinacion
     assert commit.call_count == 8
 
 
@@ -265,4 +286,9 @@ def test_qa_externa_solo_coordinacion_solicita_y_gerente_valida(qa_http):
     assert ticket.estado == "por_validar"
     assert post(91003, "cierre/aceptar-creador/990001").status_code == 200
     assert ticket.estado == "finalizado"
+    assert len([
+        item for item in ticket.historial_fechas
+        if item.get("tipo") == "maintenance_conformity_accepted_v1"
+        and item.get("cambiadoPor") == "QA_GERENTE"
+    ]) == 1
     assert commit.call_count == 2
