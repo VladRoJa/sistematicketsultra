@@ -73,6 +73,24 @@ METRICS_JS = r"""(root) => {
 }"""
 
 
+def calibrate_detector(page) -> None:
+    """Confirm that tiny labels/values and truncated inputs are detectable."""
+    page.set_content("""
+      <div id="metric-probe">
+        <div class="mat-mdc-form-field">
+          <span class="mat-mdc-floating-label" style="font-size:8px">Tiny label</span>
+          <div class="mat-mdc-select-value" style="font-size:10px">Tiny value</div>
+          <input class="mat-mdc-input-element"
+                 style="display:block;width:65px;font-size:10px"
+                 value="THIS IS A LONG SYNTHETIC CAMPAIGN NAME">
+        </div>
+      </div>
+    """)
+    result = page.locator("#metric-probe").evaluate(METRICS_JS)
+    if not all(result[key] > 0 for key in ("tiny_labels", "tiny_values", "clipped_inputs")):
+        raise RuntimeError("Visual metric calibration failed")
+
+
 def validate_target(mode: str, base: str) -> None:
     parsed = urlparse(base)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
@@ -248,6 +266,10 @@ def main() -> int:
                 context.route("**/*", readonly)
                 page = context.new_page()
                 try:
+                    if name == "desktop":
+                        calibrate_detector(page)
+                        cases.append({"viewport": name, "case": "detector-calibration",
+                                      "status": "PASS"})
                     if args.mode == "anonymous":
                         navigate(page, args.base_url, CAMPAIGNS_ROUTE)
                         page.locator("#usuario-login").wait_for(state="visible", timeout=20000)
@@ -265,6 +287,10 @@ def main() -> int:
                     context.close()
         finally:
             browser.close()
+    if blocked_writes[0]:
+        failures.append("Unexpected write requests blocked by the browser")
+    if blocked_external_api[0]:
+        failures.append("Unapproved API origin blocked by the browser")
     report = {
         "mode": args.mode,
         "viewports": list(VIEWPORTS),
