@@ -79,6 +79,11 @@ def has_maintenance_coordination_permission(user) -> bool:
     if role in ADMIN_ROLES:
         return True
 
+    # Un grant accidental no convierte al personal técnico en coordinador.
+    # PM execution (SR/AUX/MANTENIMIENTO/TECNICO) es una capacidad separada.
+    if role not in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"}:
+        return False
+
     return bool(
         can_pm_view(user)
         and _has_active_user_grant(user, COORDINATE_ACTION)
