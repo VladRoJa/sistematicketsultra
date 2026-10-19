@@ -197,16 +197,18 @@ def test_compras_coordinacion_does_not_enable_schedule_for_other_roles():
         assert service._can_schedule_maintenance(actor) is False
 
 
-def test_existing_pm_execute_role_retains_planner_schedule():
-    actor = SimpleNamespace(rol="SR_MANTENIMIENTO", sucursales_ids=[])
+@pytest.mark.parametrize("role", [
+    "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO", "TECNICO", "MANTENIMIENTO",
+])
+def test_pm_execution_never_grants_commitment_date_control(role):
+    actor = SimpleNamespace(rol=role, sucursales_ids=[8])
     with (
         patch.object(service, "can_pm_execute", return_value=True),
         patch.object(
             service, "has_maintenance_coordination_permission", return_value=False
-        ) as permission,
+        ),
     ):
-        assert service._can_schedule_maintenance(actor) is True
-    permission.assert_not_called()
+        assert service._can_schedule_maintenance(actor) is False
 
 
 def test_board_exposes_coordinators_schedule_permission():
