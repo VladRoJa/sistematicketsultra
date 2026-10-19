@@ -166,9 +166,21 @@ def close_dialog(page) -> None:
         page.locator("mat-dialog-container").wait_for(state="hidden", timeout=3500)
 
 
+class AuditNavigationTimeout(RuntimeError):
+    """Safe diagnostic stage; never include element text or Playwright details."""
+
+
 def open_tool(page, label: str) -> None:
-    page.get_by_role("button", name="Abrir herramientas de campañas", exact=True).click()
-    page.get_by_role("menuitem", name=label, exact=True).click()
+    try:
+        page.get_by_role(
+            "button", name="Abrir herramientas de campañas", exact=True
+        ).click(timeout=6000)
+    except PlaywrightTimeout as exc:
+        raise AuditNavigationTimeout("tools_trigger_click_timeout") from exc
+    try:
+        page.get_by_role("menuitem", name=label, exact=True).click(timeout=6000)
+    except PlaywrightTimeout as exc:
+        raise AuditNavigationTimeout("tools_menu_item_click_timeout") from exc
 
 
 def audit_authenticated(page, output: Path, viewport: str,
@@ -192,12 +204,17 @@ def audit_authenticated(page, output: Path, viewport: str,
     def dialog_case(name: str, opener) -> None:
         try:
             opener()
-            page.locator("mat-dialog-container").wait_for(state="visible", timeout=10000)
+            try:
+                page.locator("mat-dialog-container").wait_for(state="visible", timeout=10000)
+            except PlaywrightTimeout as exc:
+                raise AuditNavigationTimeout("dialog_visibility_timeout") from exc
             record_case(page, output, viewport, name, "mat-dialog-container",
                         failures, cases)
-        except (PlaywrightTimeout, Exception) as exc:
+        except Exception as exc:
+            safe_reason = (str(exc) if isinstance(exc, AuditNavigationTimeout)
+                           else type(exc).__name__)
             cases.append({"viewport": viewport, "case": name, "status": "BLOCKED",
-                          "reason": type(exc).__name__})
+                          "reason": safe_reason})
             failures.append(f"{viewport}/{name}: BLOCKED")
         finally:
             if page.locator("mat-dialog-container").count():
