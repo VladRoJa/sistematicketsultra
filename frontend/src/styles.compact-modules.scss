@@ -284,3 +284,10 @@ body.suite-compact-review :is(.crear-ticket-page, .campaign-v2-admin-dialog app-
   gap: 14px 16px;
 }
 
+/* Excel V2: MDC scales floating labels down visually; restore a readable
+ * label size only in this dialog, retaining the V1 fill geometry/tokens. */
+body.suite-compact-review .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog .mat-mdc-floating-label,
+body.suite-compact-review .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog .mdc-floating-label {
+  font-size: 15px !important;
+}
+
