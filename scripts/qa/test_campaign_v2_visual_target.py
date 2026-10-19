@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from campaign_v2_visual_audit import (AuditNavigationTimeout, classify_tools_trigger,
-                                      validate_target, open_tool)
+                                      close_dialog, validate_target, open_tool)
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
 
@@ -57,6 +57,34 @@ class VisualAuditTargetTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(AuditNavigationTimeout, "^tools_trigger_click_timeout$"):
             open_tool(page, "Preparar prueba interna · 1 contacto")
+
+    def test_close_dialog_waits_until_detached(self):
+        from unittest.mock import MagicMock
+
+        page = MagicMock()
+        close_dialog(page)
+        page.keyboard.press.assert_called_once_with("Escape")
+        page.locator.assert_called_once_with("mat-dialog-container")
+        page.locator.return_value.wait_for.assert_called_once_with(
+            state="detached", timeout=3500
+        )
+
+    def test_close_dialog_falls_back_to_explicit_close(self):
+        from unittest.mock import MagicMock, call
+
+        page = MagicMock()
+        dialog = page.locator.return_value
+        dialog.wait_for.side_effect = [
+            PlaywrightTimeout("not yet detached"), None,
+        ]
+        dialog.get_by_role.return_value.count.return_value = 1
+        close_dialog(page)
+        dialog.get_by_role.assert_called_once_with("button", name="Cerrar")
+        dialog.get_by_role.return_value.first.click.assert_called_once()
+        self.assertEqual(dialog.wait_for.call_args_list, [
+            call(state="detached", timeout=3500),
+            call(state="detached", timeout=5000),
+        ])
 
     def test_tools_trigger_safe_diagnostic_codes(self):
         from unittest.mock import MagicMock
