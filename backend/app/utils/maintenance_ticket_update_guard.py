@@ -191,12 +191,14 @@ def register_maintenance_ticket_update_guard(app) -> None:
         ):
             return None
 
-        return (
-            jsonify({
-                "mensaje": (
-                    "Este perfil no puede ejecutar cambios operativos generales; "
-                    "no puede ejecutar cambios, cierres ni notificaciones."
-                )
-            }),
-            403,
+        role = str(getattr(actor, "rol", "") or "").strip().upper()
+        mensaje = (
+            "Compras tiene acceso de consulta a Mantenimiento; "
+            "no puede ejecutar cambios, cierres ni notificaciones."
+            if role == "COMPRAS"
+            else (
+                "La coordinación de Mantenimiento no puede ejecutar "
+                "acciones técnicas, validar conformidad ni notificar por esta ruta."
+            )
         )
+        return jsonify({"mensaje": mensaje}), 403
