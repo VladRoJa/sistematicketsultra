@@ -79,9 +79,9 @@ def has_maintenance_coordination_permission(user) -> bool:
     if role in ADMIN_ROLES:
         return True
 
-    # Un grant accidental no convierte al personal técnico en coordinador.
-    # PM execution (SR/AUX/MANTENIMIENTO/TECNICO) es una capacidad separada.
-    if role not in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"}:
+    # Los perfiles que ejecutan tickets asignados no deben convertirse en
+    # coordinación por un grant incidental. Preservar otros roles legacy.
+    if role in {"SR_MANTENIMIENTO", "AUX_MANTENIMIENTO", "TECNICO"}:
         return False
 
     return bool(
