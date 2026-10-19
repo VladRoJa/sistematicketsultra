@@ -5,7 +5,7 @@
 :host {
   display: block;
   --desc-col-width: 420px;
-  --table-min-width: 2534px;
+  --table-min-width: 2574px;
 }
 
 /* ==========================================================================
@@ -399,7 +399,7 @@
 }
 
 .tabla-tickets .c-acc {
-  width: 150px;
+  width: 190px;
 }
 
 .tabla-tickets .c-resp {
@@ -731,6 +731,34 @@ td.col-descripcion {
 .td-acciones,
 .td-acciones > div {
   text-align: center;
+}
+
+/* Acciones de Mantenimiento: texto completo y jerarquía clara en la tabla. */
+.acciones-mantenimiento {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.td-acciones .acciones-mantenimiento .ticket-action {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 10px;
+  margin-top: 0;
+  white-space: normal;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.acciones-mantenimiento .ticket-action mat-icon {
+  flex-shrink: 0;
+}
+
+.acciones-mantenimiento .ticket-action span {
+  min-width: 0;
+  white-space: normal;
 }
 
 .ticket-action {
