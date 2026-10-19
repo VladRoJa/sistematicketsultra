@@ -101,7 +101,7 @@ def _verificar_permiso_sucursal(user, sucursal_id_int):
 
     # COMPRAS con lectura individual: SOLO la lista administrada en Permisos.
     # Su sucursal principal (normalmente corporativa) no amplía el acceso.
-    if rol != "COMPRAS":
+    if rol not in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"}:
         primary_sucursal_id = getattr(user, "sucursal_id", None)
         try:
             primary_sucursal_id = int(primary_sucursal_id) if primary_sucursal_id is not None else None
@@ -924,7 +924,7 @@ def pm_read_access():
         return jsonify(user_err[0]), user_err[1]
 
     allowed = can_pm_view(user)
-    if _pm_user_role(user) == "COMPRAS":
+    if _pm_user_role(user) in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"}:
         # La excepción individual solo es útil con sucursales asignadas.
         allowed = allowed and bool(_pm_user_assigned_sucursales(user))
 

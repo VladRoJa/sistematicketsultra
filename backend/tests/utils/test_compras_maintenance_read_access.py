@@ -255,3 +255,131 @@ def test_compras_guard_does_not_block_other_department_ticket(monkeypatch):
     ticket_guard.register_maintenance_ticket_update_guard(app)
 
     assert app.test_client().post("/cierre/solicitar/99").status_code == 200
+
+
+def _maintenance_coordinator(*, branches=(8, 9)):
+    return SimpleNamespace(
+        id=91,
+        username="MANT_YULIANA",
+        rol="COORDINADOR_MANTENIMIENTO",
+        department_id=1,
+        sucursal_id=100,
+        sucursales_ids=list(branches),
+    )
+
+
+def test_maintenance_coordinator_requires_individual_read_grant(monkeypatch):
+    user = _maintenance_coordinator()
+    _mock_grant(monkeypatch, allowed=False)
+    assert pm_permissions.can_pm_view(user) is False
+    _mock_grant(monkeypatch, allowed=True)
+    assert pm_permissions.can_pm_view(user) is True
+    assert pm_permissions.can_pm_execute(user) is False
+    assert pm_permissions.can_pm_validate(user) is False
+    assert pm_permissions.can_pm_configure(user) is False
+    assert generic_pm_update_is_forbidden(
+        user, SimpleNamespace(departamento_id=1)
+    ) is True
+
+
+def test_maintenance_coordinator_reads_only_assigned_maintenance_branches(monkeypatch):
+    _mock_grant(monkeypatch, allowed=True)
+    query = _mock_tickets_query(monkeypatch)
+    query.filter.return_value = MagicMock()
+
+    ticket_filters.filtrar_tickets_por_usuario(_maintenance_coordinator())
+    sql = str(query.filter.call_args.args[0].compile(
+        compile_kwargs={"literal_binds": True}
+    ))
+    assert "departamento_id = 1" in sql
+    assert "IN (8, 9)" in sql
+    assert "departamento_id = 6" not in sql
+    # Nunca hereda Compras: ni por departamento ni por ser creadora.
+    assert "departamento_id != 1" not in sql
+    assert "username" not in sql.lower()
+
+
+def test_maintenance_coordinator_does_not_inherit_corporate_branch():
+    user = _maintenance_coordinator()
+    assert _verificar_permiso_sucursal(user, 8) is None
+    assert _verificar_permiso_sucursal(user, 9) is None
+    assert _verificar_permiso_sucursal(user, 100)[1] == 403
+    assert _verificar_permiso_sucursal(user, 1000)[1] == 403
+    assert _verificar_permiso_sucursal(user, 21)[1] == 403
+
+
+def test_maintenance_coordinator_denies_manager_conformity(monkeypatch):
+    app = Flask(__name__)
+    tickets = Blueprint("tickets", __name__)
+    @tickets.route("/cierre/aceptar-creador/<int:ticket_id>", methods=["POST"])
+    def cierre_aceptar_creador(ticket_id):
+        return "unexpected write", 200
+    app.register_blueprint(tickets)
+
+    user = _maintenance_coordinator()
+    monkeypatch.setattr(ticket_guard, "verify_jwt_in_request", lambda: None)
+    monkeypatch.setattr(ticket_guard, "get_jwt_identity", lambda: user.id)
+    monkeypatch.setattr(ticket_guard.UserORM, "get_by_id", lambda _id: user)
+    monkeypatch.setattr(
+        ticket_guard,
+        "Ticket",
+        SimpleNamespace(query=SimpleNamespace(get=lambda _id: SimpleNamespace(
+            departamento_id=1, sucursal_id_destino=8
+        ))),
+    )
+    monkeypatch.setattr(
+        ticket_guard, "has_maintenance_coordination_permission", lambda _: True
+    )
+    ticket_guard.register_maintenance_ticket_update_guard(app)
+    response = app.test_client().post("/cierre/aceptar-creador/99")
+    assert response.status_code == 403
+    assert "coordinación" in response.get_json()["mensaje"].lower()
+
+
+def test_maintenance_coordinator_without_individual_grant_sees_no_tickets(monkeypatch):
+    _mock_grant(monkeypatch, allowed=False)
+    query = _mock_tickets_query(monkeypatch)
+    result = ticket_filters.filtrar_tickets_por_usuario(_maintenance_coordinator())
+    assert result is query.filter.return_value
+    query.filter.assert_called_once_with(False)
+
+
+def test_maintenance_coordinator_without_branches_sees_no_tickets(monkeypatch):
+    _mock_grant(monkeypatch, allowed=True)
+    query = _mock_tickets_query(monkeypatch)
+    result = ticket_filters.filtrar_tickets_por_usuario(
+        _maintenance_coordinator(branches=())
+    )
+    assert result is query.filter.return_value
+    query.filter.assert_called_once_with(False)
+
+
+def test_maintenance_coordinator_never_inherits_technical_branch_scope(monkeypatch):
+    _mock_grant(monkeypatch, allowed=True)
+    query = _mock_tickets_query(monkeypatch)
+    actor = _maintenance_coordinator(branches=(8, 100, 1000))
+    ticket_filters.filtrar_tickets_por_usuario(actor)
+    sql = str(query.filter.call_args.args[0].compile(
+        compile_kwargs={"literal_binds": True}
+    ))
+    assert "IN (8)" in sql
+    assert "1000" not in sql
+    assert "100)" not in sql
+
+
+def test_yuliana_coordinator_uses_exact_twelve_maintenance_branches(monkeypatch):
+    """El cambio de identidad conserva alcance sin heredar tickets de Compras."""
+    branches = (7, 8, 9, 10, 11, 12, 13, 19, 21, 22, 23, 25)
+    _mock_grant(monkeypatch, allowed=True)
+    query = _mock_tickets_query(monkeypatch)
+    actor = _maintenance_coordinator(branches=branches)
+
+    ticket_filters.filtrar_tickets_por_usuario(actor)
+    compiled = str(query.filter.call_args.args[0].compile(
+        compile_kwargs={"literal_binds": True}
+    ))
+
+    assert "departamento_id = 1" in compiled
+    assert f"IN ({', '.join(map(str, branches))})" in compiled
+    assert "departamento_id = 6" not in compiled
+    assert "username" not in compiled.lower()

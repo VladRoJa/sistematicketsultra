@@ -4,6 +4,15 @@ on:
   pull_request:
     paths:
       - "backend/app/utils/tickets_maintenance_permissions.py"
+      - "backend/app/utils/pm_permissions.py"
+      - "backend/app/utils/purchase_requisition_permissions.py"
+      - "backend/app/routes/purchase_requisition_routes.py"
+      - "backend/app/routes/pm_routes.py"
+      - "backend/app/routes/permissions_catalog_routes.py"
+      - "frontend/src/app/layout/layout.component.ts"
+      - "backend/tests/purchase_requisitions/test_purchase_requisition_permissions.py"
+      - "backend/tests/services/test_yuliana_coordinator_migration_postgres.py"
+      - "backend/migrations/versions/a19c10202601_yuliana_maintenance_coordinator.py"
       - "backend/app/models/ticket_model.py"
       - "backend/app/routes/ticket_routes.py"
       - "backend/app/utils/ticket_filters.py"
@@ -60,6 +69,9 @@ jobs:
       - name: Compile authorization module
         run: |
           python -m py_compile backend/app/utils/tickets_maintenance_permissions.py \
+            backend/app/utils/pm_permissions.py \
+            backend/app/utils/purchase_requisition_permissions.py \
+            backend/migrations/versions/a19c10202601_yuliana_maintenance_coordinator.py \
             backend/app/models/ticket_model.py \
             backend/app/services/ticket_maintenance_coordination_service.py \
             backend/app/routes/ticket_routes.py \
@@ -72,11 +84,13 @@ jobs:
         env:
           SECRET_KEY: tickets-v1-maint-ci
           JWT_SECRET_KEY: tickets-v1-maint-jwt-ci
+          SQLALCHEMY_DATABASE_URI: 'sqlite:///:memory:'
         run: |
           python -m pytest -q --tb=short tests/utils/test_tickets_maintenance_permissions.py \
             tests/services/test_ticket_maintenance_coordination_service.py \
             tests/utils/test_tickets_assigned_only_scope.py \
             tests/utils/test_compras_maintenance_read_access.py \
+            tests/purchase_requisitions/test_purchase_requisition_permissions.py \
             tests/maintenance_planner/test_service.py \
             tests/routes/test_maintenance_closure_workflow_qa.py \
             tests/utils/test_maintenance_closure_qa_seed_safety.py \
@@ -90,7 +104,7 @@ jobs:
           cfg.set_main_option("script_location", "backend/migrations")
           heads = ScriptDirectory.from_config(cfg).get_heads()
           print("ALEMBIC_HEADS =", heads)
-          assert heads == ["c17a10202601"], heads
+          assert heads == ["a19c10202601"], heads
           PY
 
   frontend:
@@ -155,7 +169,7 @@ jobs:
           JWT_SECRET_KEY: tickets-v1-maint-jwt-ci
           PG_COORD_TEST_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/coordination_test
         run: |
-          python -m pytest -q --tb=short tests/services/test_tickets_attention_migration_postgres.py
+          python -m pytest -q --tb=short tests/services/test_tickets_attention_migration_postgres.py tests/services/test_yuliana_coordinator_migration_postgres.py
 
   qa-seed-postgres:
     runs-on: ubuntu-latest

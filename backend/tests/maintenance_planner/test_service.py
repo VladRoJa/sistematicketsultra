@@ -337,3 +337,42 @@ def test_coordinator_cannot_reschedule_finalized_ticket():
     assert ticket.fecha_solucion.astimezone(service.BUSINESS_TZ).date() == date(2026, 10, 20)
     assert ticket.historial_fechas == []
     modified.assert_not_called()
+
+
+def test_new_maintenance_coordinator_scoped_planner_write_and_board():
+    actor = SimpleNamespace(
+        id=91, username="MANT_YULIANA",
+        rol="COORDINADOR_MANTENIMIENTO", department_id=1,
+        sucursal_id=100, sucursales_ids=[8, 9],
+    )
+    with (
+        patch.object(service, "can_pm_execute", return_value=False),
+        patch.object(service, "has_maintenance_coordination_permission", return_value=True),
+    ):
+        assert service._can_schedule_maintenance(actor) is True
+        assert service._branch_catalog_ids(actor, MagicMock()) == [8, 9]
+        query = MagicMock()
+        result = service._apply_planner_role_scope(query, actor)
+        assert result is query.filter.return_value
+        sql = str(query.filter.call_args.args[0].compile(
+            compile_kwargs={"literal_binds": True}
+        ))
+        assert "IN (8, 9)" in sql
+
+    actor.sucursales_ids = []
+    with (
+        patch.object(service, "can_pm_execute", return_value=False),
+        patch.object(service, "has_maintenance_coordination_permission", return_value=True),
+    ):
+        assert service._can_schedule_maintenance(actor) is False
+
+
+def test_new_maintenance_coordinator_without_grant_cannot_schedule():
+    actor = SimpleNamespace(
+        rol="COORDINADOR_MANTENIMIENTO", sucursales_ids=[8],
+    )
+    with (
+        patch.object(service, "can_pm_execute", return_value=False),
+        patch.object(service, "has_maintenance_coordination_permission", return_value=False),
+    ):
+        assert service._can_schedule_maintenance(actor) is False

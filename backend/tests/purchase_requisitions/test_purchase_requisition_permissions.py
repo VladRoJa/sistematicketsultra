@@ -330,3 +330,32 @@ def test_logistics_receipt_and_admin_correction_capabilities():
         manager,
         _requisition(branch_id=10, status="SHIPPING_IN_PROGRESS"),
     )
+
+
+def test_maintenance_coordinator_has_no_purchase_requisitions_access(monkeypatch):
+    from unittest.mock import patch
+
+    from app.utils import purchase_requisition_permissions as perms
+
+    actor = _user(
+        user_id=91, role="COORDINADOR_MANTENIMIENTO",
+        branch_id=100, branch_ids=(8, 9), username="MANT_YULIANA",
+    )
+    own_requisition = _requisition(creator_id=91, branch_id=100)
+    assert not perms.can_purchase_requisition_access(actor)
+    assert not can_purchase_requisition_create(actor)
+    assert not can_create_for_branch(actor, 100)
+    assert not can_purchase_requisition_view(actor, own_requisition)
+    assert not can_purchase_requisition_review(actor)
+    assert not can_purchase_requisition_manage_quotation(actor)
+    assert not can_purchase_requisition_manage_logistics(actor)
+    assert not perms.can_upload_purchase_requisition_attachment(
+        actor, own_requisition, "EVIDENCE"
+    )
+    with (
+        patch.object(perms, "get_jwt_identity", return_value="91"),
+        patch.object(perms.UserORM, "get_by_id", return_value=actor),
+    ):
+        import pytest
+        with pytest.raises(perms.PurchaseRequisitionAuthorizationError):
+            perms.get_current_purchase_requisition_user()

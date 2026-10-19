@@ -245,7 +245,7 @@ def _user_scope_branch_ids(user) -> list[int]:
 
 
 def _can_schedule_maintenance(user) -> bool:
-    """Planner: ejecución PM existente o coordinación individual de Compras.
+    """Planner: ejecución PM existente o coordinación individual autorizada.
 
     El permiso de coordinación no equivale a can_pm_execute: únicamente
     habilita el compromiso del ticket en el Planner. El endpoint restringe
@@ -254,7 +254,7 @@ def _can_schedule_maintenance(user) -> bool:
     if can_pm_execute(user):
         return True
     return bool(
-        _user_role(user) == "COMPRAS"
+        _user_role(user) in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"}
         and _user_scope_branch_ids(user)
         and has_maintenance_coordination_permission(user)
     )
@@ -269,7 +269,7 @@ def _apply_planner_role_scope(query, user):
     no debe entrar al board.
     """
 
-    if _user_role(user) not in {REGIONAL_ROLE, "COMPRAS"}:
+    if _user_role(user) not in {REGIONAL_ROLE, "COMPRAS", "COORDINADOR_MANTENIMIENTO"}:
         return query
 
     branch_ids = _user_scope_branch_ids(user)
@@ -310,7 +310,7 @@ def _branch_catalog_ids(user, query) -> list[int]:
     Los demás perfiles conservan el comportamiento derivado del query autorizado.
     """
 
-    if _user_role(user) in {REGIONAL_ROLE, "COMPRAS"}:
+    if _user_role(user) in {REGIONAL_ROLE, "COMPRAS", "COORDINADOR_MANTENIMIENTO"}:
         return _user_scope_branch_ids(user)
 
     branch_id_expr = _effective_ticket_branch_id_expression().label("branch_id")
