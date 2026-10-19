@@ -987,12 +987,7 @@
               {{ ticket.fecha_solucion | date:'dd/MM/yy' }}
 
               <button
-                *ngIf="
-                  (puedeCoordinarTicket(ticket) ||
-                   (puedeEditarTickets &&
-                    !(user?.rol === 'COMPRAS' && ticket.departamento_id === 1))) &&
-                  ((ticket.estado ?? '').toString().trim().toLowerCase() === 'en progreso')
-                "
+                *ngIf="puedeMostrarEditarFechaSolucion(ticket)"
                 mat-icon-button
                 class="boton-editar-fecha"
                 matTooltip="Editar fecha solución"
