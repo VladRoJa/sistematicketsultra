@@ -79,6 +79,11 @@ def has_maintenance_coordination_permission(user) -> bool:
     if role in ADMIN_ROLES:
         return True
 
+    # Los perfiles que ejecutan tickets asignados no deben convertirse en
+    # coordinación por un grant incidental. Preservar otros roles legacy.
+    if role in {"SR_MANTENIMIENTO", "AUX_MANTENIMIENTO", "TECNICO"}:
+        return False
+
     return bool(
         can_pm_view(user)
         and _has_active_user_grant(user, COORDINATE_ACTION)
