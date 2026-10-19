@@ -25,6 +25,7 @@ on:
       - "backend/tests/utils/test_tickets_maintenance_permissions.py"
       - "backend/tests/services/test_ticket_maintenance_coordination_service.py"
       - "backend/tests/utils/test_tickets_assigned_only_scope.py"
+      - "backend/tests/utils/test_compras_maintenance_read_access.py"
       - "backend/tests/routes/test_maintenance_closure_workflow_qa.py"
       - "backend/tests/test_ticket_creator_closure_flow.py"
       - "frontend/src/app/shared/modal-cierre-ticket/**"
@@ -73,6 +74,7 @@ jobs:
           python -m pytest -q --tb=short tests/utils/test_tickets_maintenance_permissions.py \
             tests/services/test_ticket_maintenance_coordination_service.py \
             tests/utils/test_tickets_assigned_only_scope.py \
+            tests/utils/test_compras_maintenance_read_access.py \
             tests/routes/test_maintenance_closure_workflow_qa.py \
             tests/utils/test_maintenance_closure_qa_seed_safety.py \
             tests/test_ticket_creator_closure_flow.py
