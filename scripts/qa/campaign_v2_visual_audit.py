@@ -215,6 +215,17 @@ def main() -> int:
     output.mkdir(parents=True, exist_ok=True)
     failures, cases = [], []
     blocked_writes = [0]
+    blocked_external_api = [0]
+    primary = urlparse(args.base_url)
+    allowed_api_origins = {f"{primary.scheme}://{primary.netloc.lower()}"}
+    extra_api_origin = os.getenv("SUITE_QA_ALLOWED_API_ORIGIN", "").rstrip("/")
+    if extra_api_origin:
+        api = urlparse(extra_api_origin)
+        if not api.hostname or (api.scheme != "https" and
+                api.hostname.lower() not in {"127.0.0.1", "localhost", "::1"}):
+            print("CONFIG_ERROR: API origin must be HTTPS or local", file=sys.stderr)
+            return 2
+        allowed_api_origins.add(f"{api.scheme}://{api.netloc.lower()}")
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
@@ -223,6 +234,10 @@ def main() -> int:
                                               device_scale_factor=1, reduced_motion="reduce")
                 def readonly(route):
                     url = urlparse(route.request.url)
+                    origin = f"{url.scheme}://{url.netloc.lower()}"
+                    if url.path.startswith("/api/") and origin not in allowed_api_origins:
+                        blocked_external_api[0] += 1
+                        return route.abort("blockedbyclient")
                     if route.request.method.upper() in WRITE_METHODS:
                         login = url.path.rstrip("/").endswith("/api/auth/login")
                         if args.mode == "authenticated" and login:
@@ -255,6 +270,7 @@ def main() -> int:
         "viewports": list(VIEWPORTS),
         "cases": cases,
         "blocked_write_requests": blocked_writes[0],
+        "blocked_external_api_requests": blocked_external_api[0],
         "summary": {
             "pass": sum(x["status"] == "PASS" for x in cases),
             "fail_visual": sum(x["status"] == "FAIL_VISUAL" for x in cases),
