@@ -248,13 +248,17 @@ def _user_scope_branch_ids(user) -> list[int]:
 def _can_schedule_maintenance(user) -> bool:
     """Programación exige autoridad de coordinación, NO ejecución técnica PM.
 
-    SR/AUX/TECNICO/MANTENIMIENTO pueden ejecutar PM en su ámbito, pero eso
-    no permite fijar ni mover la fecha compromiso (modal o drag & drop).
+    SR/AUX/TECNICO ejecutan tareas sin poder fijar o mover compromisos.
+    El rol legacy MANTENIMIENTO conserva temporalmente su captura
+    estructurada existente; no confundirlo con SR_MANTENIMIENTO.
     El endpoint aplica además el scope del ticket y sucursal.
     """
     role = _user_role(user)
     if role in ADMIN_ROLES:
         return True
+    if role == "MANTENIMIENTO":
+        # Captura técnica estructurada legacy: evitar romper su contrato.
+        return can_pm_execute(user)
     return bool(
         role in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"}
         and _user_scope_branch_ids(user)
