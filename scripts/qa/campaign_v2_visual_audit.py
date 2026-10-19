@@ -170,13 +170,61 @@ class AuditNavigationTimeout(RuntimeError):
     """Safe diagnostic stage; never include element text or Playwright details."""
 
 
-def open_tool(page, label: str) -> None:
+# Only report fixed diagnostic codes: never emit text, attributes, DOM or
+# underlying Playwright exception messages from a real-data session.
+TOOLS_TRIGGER_PROBE_JS = """(el) => {
+    const r = el.getBoundingClientRect();
+    const left = Math.max(0, r.left), right = Math.min(innerWidth, r.right);
+    const top = Math.max(0, r.top), bottom = Math.min(innerHeight, r.bottom);
+    const inViewport = left < right && top < bottom;
+    const hit = inViewport
+        ? document.elementFromPoint((left + right) / 2, (top + bottom) / 2)
+        : null;
+    return {
+        in_viewport: inViewport,
+        center_hits_button: !!hit && el.contains(hit),
+        dialog_open: !!document.querySelector('mat-dialog-container'),
+        active_backdrop: !!document.querySelector(
+            '.cdk-overlay-backdrop.cdk-overlay-backdrop-showing'
+        ),
+    };
+}"""
+
+
+def classify_tools_trigger(trigger) -> str:
+    """Classify click actionability failure without recording private DOM."""
     try:
-        page.get_by_role(
-            "button", name="Abrir herramientas de campañas", exact=True
-        ).click(timeout=6000)
+        matches = trigger.count()
+        if matches == 0:
+            return "tools_trigger_missing"
+        if matches > 1:
+            return "tools_trigger_ambiguous"
+        if not trigger.is_visible():
+            return "tools_trigger_hidden"
+        if not trigger.is_enabled():
+            return "tools_trigger_disabled"
+        state = trigger.evaluate(TOOLS_TRIGGER_PROBE_JS, timeout=1500)
+        if state["dialog_open"]:
+            return "tools_trigger_dialog_still_open"
+        if state["active_backdrop"]:
+            return "tools_trigger_backdrop_active"
+        if not state["in_viewport"]:
+            return "tools_trigger_outside_viewport"
+        if not state["center_hits_button"]:
+            return "tools_trigger_center_obstructed"
+    except Exception:
+        return "tools_trigger_state_unavailable"
+    return "tools_trigger_click_timeout"
+
+
+def open_tool(page, label: str) -> None:
+    trigger = page.get_by_role(
+        "button", name="Abrir herramientas de campañas", exact=True
+    )
+    try:
+        trigger.click(timeout=6000)
     except PlaywrightTimeout as exc:
-        raise AuditNavigationTimeout("tools_trigger_click_timeout") from exc
+        raise AuditNavigationTimeout(classify_tools_trigger(trigger)) from exc
     try:
         page.get_by_role("menuitem", name=label, exact=True).click(timeout=6000)
     except PlaywrightTimeout as exc:
