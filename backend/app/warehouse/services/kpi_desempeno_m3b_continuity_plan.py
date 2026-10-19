@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 import math
+import re
 from typing import Mapping
 
 from app.warehouse.services.kpi_desempeno_semantic_diff import (
@@ -66,6 +67,28 @@ class M3BContinuityIssue:
 
 
 @dataclass(frozen=True, slots=True)
+class M3BSourceRevisionEvidence:
+    """Attestation scoped to one *negative* MTD day-pair, not a waiver.
+
+    The future trusted loader MUST verify upload IDs, SHA-256, source values,
+    reviewer authorization and review_reference against Warehouse/audit data.
+    This pure function only validates shape and matches exact values.
+    """
+    branch_key: str
+    track_mtd_field: str
+    earlier_date: date
+    later_date: date
+    earlier: int
+    later: int
+    earlier_upload_id: int
+    later_upload_id: int
+    earlier_sha256: str
+    later_sha256: str
+    reviewer_user_id: int
+    review_reference: str
+
+
+@dataclass(frozen=True, slots=True)
 class M3BImpactPlan:
     status: str
     business_date: date
@@ -74,6 +97,7 @@ class M3BImpactPlan:
     continuity_days: tuple[date, ...]
     derived_delta_impacts: tuple[M3BDerivedDailyImpact, ...]
     blocking_issues: tuple[M3BContinuityIssue, ...]
+    documented_decreases: tuple[M3BContinuityIssue, ...] = ()
 
 
 def _date(value: date | str) -> date:
@@ -117,19 +141,100 @@ def _observed_value(
     return value
 
 
+def _valid_revision_evidence(item: M3BSourceRevisionEvidence) -> bool:
+    """Validate exact pair and metadata shape, NOT external provenance."""
+    return (
+        bool(item.branch_key and item.branch_key == item.branch_key.strip())
+        and item.track_mtd_field in MTD_TRACK_FIELDS
+        and type(item.earlier_date) is date
+        and type(item.later_date) is date
+        and item.later_date == item.earlier_date + timedelta(days=1)
+        and (item.earlier_date.year, item.earlier_date.month)
+            == (item.later_date.year, item.later_date.month)
+        and type(item.earlier) is int and type(item.later) is int
+        and item.earlier > item.later >= 0
+        and type(item.earlier_upload_id) is int and item.earlier_upload_id > 0
+        and type(item.later_upload_id) is int and item.later_upload_id > 0
+        and item.earlier_upload_id != item.later_upload_id
+        and type(item.reviewer_user_id) is int and item.reviewer_user_id > 0
+        and isinstance(item.review_reference, str)
+        and 1 <= len(item.review_reference.strip()) <= 200
+        and item.review_reference == item.review_reference.strip()
+        and isinstance(item.earlier_sha256, str)
+        and re.fullmatch(r"[0-9a-f]{64}", item.earlier_sha256) is not None
+        and isinstance(item.later_sha256, str)
+        and re.fullmatch(r"[0-9a-f]{64}", item.later_sha256) is not None
+    )
+
+
+def _revision_key(
+    branch: str, metric: str, earlier_date: date, later_date: date,
+    earlier: int, later: int,
+) -> tuple[str, str, date, date, int, int]:
+    return (branch, metric, earlier_date, later_date, earlier, later)
+
+
 def plan_kpi_desempeno_mtd_impact(
     *,
     business_date: date | str,
     diff: KpiDesempenoSemanticDiffResult,
     observed_mtd: Mapping[date, Mapping[str, Mapping[str, int]]],
+    source_revision_evidence: tuple[M3BSourceRevisionEvidence, ...] = (),
 ) -> M3BImpactPlan:
     """Compute exact impact cells and neighbor-day MTD checks, without IO.
 
     observed_mtd is indexed by M1's *exact normalized branch_key*, not by
     guessed aliases. No mutation of input maps, Track or Warehouse.
+
+    Evidence is accepted only from a trusted caller that has independently
+    checked the Warehouse artifacts and authorized review record. The planner
+    never verifies cryptographic provenance by itself and never publishes.
     """
     day = _date(business_date)
     issues: list[M3BContinuityIssue] = []
+    documented_decreases: list[M3BContinuityIssue] = []
+    evidence_index: dict[
+        tuple[str, str, date, date, int, int], M3BSourceRevisionEvidence
+    ] = {}
+    consumed_evidence: set[tuple[str, str, date, date, int, int]] = set()
+
+    for item in source_revision_evidence:
+        if not isinstance(item, M3BSourceRevisionEvidence) or not _valid_revision_evidence(item):
+            issues.append(M3BContinuityIssue(
+                "INVALID_SOURCE_REVISION_EVIDENCE",
+                getattr(item, "branch_key", ""),
+                getattr(item, "track_mtd_field", ""),
+            ))
+            continue
+        key = _revision_key(
+            item.branch_key, item.track_mtd_field, item.earlier_date,
+            item.later_date, item.earlier, item.later,
+        )
+        if key in evidence_index:
+            issues.append(M3BContinuityIssue(
+                "DUPLICATE_SOURCE_REVISION_EVIDENCE",
+                item.branch_key, item.track_mtd_field,
+                item.earlier_date, item.later_date, item.earlier, item.later,
+            ))
+            continue
+        evidence_index[key] = item
+
+    def record_decrease(
+        branch: str, metric: str, earlier_day: date, later_day: date,
+        earlier: int, later: int,
+    ) -> None:
+        key = _revision_key(branch, metric, earlier_day, later_day, earlier, later)
+        finding = M3BContinuityIssue(
+            "MTD_SOURCE_REVISION_REVIEW" if key in evidence_index else "MTD_DECREASE",
+            branch, metric, earlier_day, later_day, earlier, later,
+            later - earlier,
+        )
+        if key in evidence_index:
+            consumed_evidence.add(key)
+            documented_decreases.append(finding)
+        else:
+            issues.append(finding)
+
     snapshot_impacts: list[M3BSnapshotFieldImpact] = []
     track_impacts: list[M3BTrackFieldImpact] = []
     changed_mtd: dict[tuple[str, str], tuple[int, int]] = {}
@@ -238,19 +343,21 @@ def plan_kpi_desempeno_mtd_impact(
         )
 
         if previous_is_same_month and prev_value is not None and corrected < prev_value:
-            issues.append(M3BContinuityIssue(
-                "MTD_DECREASE", branch, metric, prev_day, day,
-                prev_value, corrected, corrected-prev_value,
-            ))
+            record_decrease(branch, metric, prev_day, day, prev_value, corrected)
         if next_is_same_month and next_value is not None and next_value < corrected:
-            issues.append(M3BContinuityIssue(
-                "MTD_DECREASE", branch, metric, day, next_day,
-                corrected, next_value, next_value-corrected,
-            ))
+            record_decrease(branch, metric, day, next_day, corrected, next_value)
 
         derived_impacts.append(M3BDerivedDailyImpact(day, branch, metric))
         if next_is_same_month:
             derived_impacts.append(M3BDerivedDailyImpact(next_day, branch, metric))
+
+    for key, item in evidence_index.items():
+        if key not in consumed_evidence:
+            issues.append(M3BContinuityIssue(
+                "UNMATCHED_SOURCE_REVISION_EVIDENCE",
+                item.branch_key, item.track_mtd_field,
+                item.earlier_date, item.later_date, item.earlier, item.later,
+            ))
 
     return M3BImpactPlan(
         status=BLOCKED if issues else READY_FOR_REVIEW,
@@ -266,4 +373,5 @@ def plan_kpi_desempeno_mtd_impact(
             derived_impacts, key=lambda x: (x.business_date, x.branch_key, x.track_mtd_field),
         )),
         blocking_issues=tuple(issues),
+        documented_decreases=tuple(documented_decreases),
     )
