@@ -352,3 +352,16 @@ def test_maintenance_coordinator_without_branches_sees_no_tickets(monkeypatch):
     )
     assert result is query.filter.return_value
     query.filter.assert_called_once_with(False)
+
+
+def test_maintenance_coordinator_never_inherits_technical_branch_scope(monkeypatch):
+    _mock_grant(monkeypatch, allowed=True)
+    query = _mock_tickets_query(monkeypatch)
+    actor = _maintenance_coordinator(branches=(8, 100, 1000))
+    ticket_filters.filtrar_tickets_por_usuario(actor)
+    sql = str(query.filter.call_args.args[0].compile(
+        compile_kwargs={"literal_binds": True}
+    ))
+    assert "IN (8)" in sql
+    assert "1000" not in sql
+    assert "100)" not in sql
