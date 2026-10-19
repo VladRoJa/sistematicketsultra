@@ -29,7 +29,7 @@ class VisualAuditTargetTests(unittest.TestCase):
         )
         markup = html_path.read_text(encoding="utf-8")
         trigger = re.search(
-            r'\\[matMenuTriggerFor\\]="campaignToolsMenu"\\s+aria-label="([^"]+)"',
+            r'\[matMenuTriggerFor\]="campaignToolsMenu"\s+aria-label="([^"]+)"',
             markup,
         )
         self.assertIsNotNone(trigger, "Herramientas trigger missing an accessible label")
