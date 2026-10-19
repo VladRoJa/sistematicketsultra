@@ -403,3 +403,197 @@ def test_reassign_ignores_noop_and_does_not_pollute_audit(monkeypatch):
             now=NOW,
         )
     assert t.historial_fechas == []
+
+
+def test_tecnico_interno_declara_trabajo_terminado_sin_cerrar_ni_costear(monkeypatch):
+    t = ticket(state="en progreso")
+    t.tipo_atencion = "INTERNA"
+    t.asignado_a = "SR_MANT_TIJ"
+    t.estado_cierre = None
+    t.costo_solucion = 275
+    t.fecha_finalizado = None
+    setup_queries(monkeypatch, t)
+    tecnico = SimpleNamespace(
+        id=68, username="SR_MANT_TIJ", rol="SR_MANTENIMIENTO", department_id=1,
+    )
+
+    result = coordination.prepare_maintenance_work_completion(
+        501, tecnico, {"notas_trabajo": "Se reemplazo pieza y funciona"}, now=NOW,
+    )
+
+    assert result is t
+    assert t.estado == "en progreso"
+    assert t.estado_cierre == coordination.MAINTENANCE_WORK_REVIEW_PENDING
+    assert t.costo_solucion == 275
+    assert t.fecha_finalizado is None
+    assert t.historial_fechas[0]["tipo"] == "maintenance_work_completed_v1"
+    assert t.historial_fechas[0]["cambiadoPor"] == "SR_MANT_TIJ"
+    assert t.historial_fechas[0]["motivo"] == "Se reemplazo pieza y funciona"
+
+
+@pytest.mark.parametrize(
+    "assignment,mode,notes",
+    [
+        ("OTRO_TECNICO", "INTERNA", {"notas_trabajo": "Reparado"}),
+        ("SR_MANT_TIJ", "EXTERNA", {"notas_trabajo": "Reparado"}),
+        ("SR_MANT_TIJ", "INTERNA", {"notas_trabajo": ""}),
+        ("SR_MANT_TIJ", "INTERNA", {"notas_trabajo": "Reparado", "costo_solucion": 0}),
+    ],
+)
+def test_trabajo_terminado_invalido_no_cambia_ticket(
+    monkeypatch, assignment, mode, notes,
+):
+    t = ticket(state="en progreso")
+    t.tipo_atencion = mode
+    t.asignado_a = assignment
+    t.estado_cierre = None
+    setup_queries(monkeypatch, t)
+    tecnico = SimpleNamespace(
+        id=68, username="SR_MANT_TIJ", rol="SR_MANTENIMIENTO", department_id=1,
+    )
+
+    with pytest.raises(coordination.TicketCoordinationError):
+        coordination.prepare_maintenance_work_completion(
+            501, tecnico, notes, now=NOW,
+        )
+
+    assert t.estado == "en progreso"
+    assert t.estado_cierre is None
+    assert t.historial_fechas == []
+
+
+def test_trabajo_terminado_repetido_no_duplica_historial(monkeypatch):
+    t = ticket(state="en progreso")
+    t.tipo_atencion = "INTERNA"
+    t.asignado_a = "SR_MANT_TIJ"
+    t.estado_cierre = coordination.MAINTENANCE_WORK_REVIEW_PENDING
+    setup_queries(monkeypatch, t)
+    tecnico = SimpleNamespace(
+        id=68, username="SR_MANT_TIJ", rol="SR_MANTENIMIENTO", department_id=1,
+    )
+
+    with pytest.raises(coordination.TicketCoordinationError):
+        coordination.prepare_maintenance_work_completion(
+            501, tecnico, {"notas_trabajo": "Reparado otra vez"}, now=NOW,
+        )
+    assert t.historial_fechas == []
+
+
+def test_yuliana_devuelve_trabajo_interno_sin_borrar_asignacion(monkeypatch):
+    t = ticket(state="en progreso")
+    t.tipo_atencion = "INTERNA"
+    t.asignado_a = "SR_MANT_TIJ"
+    t.estado_cierre = coordination.MAINTENANCE_WORK_REVIEW_PENDING
+    t.fecha_solucion = NOW
+    t.costo_solucion = 145
+    setup_queries(monkeypatch, t)
+    monkeypatch.setattr(
+        coordination, "has_maintenance_coordination_permission", lambda _user: True,
+    )
+
+    coordination.prepare_maintenance_work_return(
+        501, actor(), {"motivo": "Falta colocar la cubierta"}, now=NOW,
+    )
+
+    assert t.estado == "en progreso"
+    assert t.estado_cierre is None
+    assert t.asignado_a == "SR_MANT_TIJ"
+    assert t.fecha_solucion == NOW
+    assert t.costo_solucion == 145
+    assert t.historial_fechas[0]["tipo"] == "maintenance_work_returned_v1"
+    assert t.historial_fechas[0]["motivo"] == "Falta colocar la cubierta"
+    assert t.historial_fechas[0]["cambiadoPor"] == "COORDINADORA_TEST"
+
+
+@pytest.mark.parametrize(
+    "branch,review_state,body",
+    [
+        (17, coordination.MAINTENANCE_WORK_REVIEW_PENDING, {"motivo": "Rehacer"}),
+        (8, None, {"motivo": "Rehacer"}),
+        (8, coordination.MAINTENANCE_WORK_REVIEW_PENDING, {"motivo": ""}),
+        (8, coordination.MAINTENANCE_WORK_REVIEW_PENDING, {"motivo": "Rehacer", "estado": "finalizado"}),
+    ],
+)
+def test_devolucion_ilegal_no_muta_ticket(
+    monkeypatch, branch, review_state, body,
+):
+    t = ticket(branch=branch, state="en progreso")
+    t.tipo_atencion = "INTERNA"
+    t.asignado_a = "SR_MANT_TIJ"
+    t.estado_cierre = review_state
+    setup_queries(monkeypatch, t)
+    monkeypatch.setattr(
+        coordination, "has_maintenance_coordination_permission", lambda _user: True,
+    )
+
+    with pytest.raises(coordination.TicketCoordinationError):
+        coordination.prepare_maintenance_work_return(
+            501, actor(), body, now=NOW,
+        )
+
+    assert t.estado_cierre == review_state
+    assert t.historial_fechas == []
+
+
+def test_reasignacion_invalida_trabajo_terminado_de_tecnico_anterior(monkeypatch):
+    t = ticket(state="en progreso")
+    t.tipo_atencion = "INTERNA"
+    t.asignado_a = "SR_MANT_TIJ"
+    t.estado_cierre = coordination.MAINTENANCE_WORK_REVIEW_PENDING
+    setup_queries(monkeypatch, t)
+    monkeypatch.setattr(
+        coordination, "has_maintenance_coordination_permission", lambda _user: True,
+    )
+
+    coordination.prepare_maintenance_reassignment(
+        501, actor(), {
+            "tipo_atencion": "EXTERNA",
+            "asignado_user_id": None,
+            "motivo": "Se requiere proveedor externo",
+        }, now=NOW,
+    )
+
+    assert t.estado == "en progreso"
+    assert t.tipo_atencion == "EXTERNA"
+    assert t.asignado_a is None
+    assert t.estado_cierre is None
+    assert t.historial_fechas[0]["revision_tecnica_invalidada"] is True
+
+
+def test_reprogramacion_sin_cambiar_responsable_conserva_revision(monkeypatch):
+    t = ticket(state="en progreso")
+    t.tipo_atencion = "INTERNA"
+    t.asignado_a = "SR_MANT_TIJ"
+    t.estado_cierre = coordination.MAINTENANCE_WORK_REVIEW_PENDING
+    setup_queries(monkeypatch, t)
+    monkeypatch.setattr(
+        coordination, "has_maintenance_coordination_permission", lambda _user: True,
+    )
+
+    coordination.prepare_maintenance_coordination(
+        501, actor(), payload(), now=NOW,
+    )
+
+    assert t.estado_cierre == coordination.MAINTENANCE_WORK_REVIEW_PENDING
+    assert t.historial_fechas[0]["revision_tecnica_invalidada"] is False
+
+
+def test_tecnico_puede_volver_a_terminar_tras_rechazo_del_gerente(monkeypatch):
+    t = ticket(state="en progreso")
+    t.tipo_atencion = "INTERNA"
+    t.asignado_a = "SR_MANT_TIJ"
+    t.estado_cierre = "rechazado_por_gerente"
+    setup_queries(monkeypatch, t)
+    tecnico = SimpleNamespace(
+        id=68, username="SR_MANT_TIJ", rol="SR_MANTENIMIENTO", department_id=1,
+    )
+
+    coordination.prepare_maintenance_work_completion(
+        501, tecnico, {"notas_trabajo": "Se corrigió el problema reportado"},
+        now=NOW,
+    )
+
+    assert t.estado == "en progreso"
+    assert t.estado_cierre == coordination.MAINTENANCE_WORK_REVIEW_PENDING
+    assert t.historial_fechas[0]["estado_cierre_anterior"] == "rechazado_por_gerente"
+    assert t.historial_fechas[0]["motivo"] == "Se corrigió el problema reportado"

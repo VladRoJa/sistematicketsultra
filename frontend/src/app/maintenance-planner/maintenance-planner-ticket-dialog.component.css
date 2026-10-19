@@ -582,6 +582,17 @@
   box-shadow: 0 12px 24px rgba(22, 163, 74, 0.22);
 }
 
+.side-card__finish--return {
+  border: 1px solid var(--ultra-gray-300);
+  background: var(--ultra-gray-100);
+  color: var(--ultra-gray-800);
+  box-shadow: none;
+}
+
+.side-card__finish--return:hover:not(:disabled) {
+  box-shadow: var(--ultra-shadow-sm);
+}
+
 .side-card__finish:disabled {
   cursor: default;
   opacity: 0.55;

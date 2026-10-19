@@ -8,6 +8,11 @@ import {
   EditarFechaSolucionModalComponent,
 } from '../shared/editar-fecha-solucion-modal/editar-fecha-solucion-modal.component';
 import { ModalCierreTicketComponent } from '../shared/modal-cierre-ticket/modal-cierre-ticket.component';
+import {
+  MaintenanceWorkAction,
+  MaintenanceWorkActionDialogComponent,
+} from '../shared/maintenance-work-action-dialog/maintenance-work-action-dialog.component';
+import { MaintenanceCoordinationService } from '../services/maintenance-coordination.service';
 import { AsignarFechaPayload } from '../types/ticket';
 import {
   MaintenancePlannerHistoryItem,
@@ -55,6 +60,7 @@ export class MaintenancePlannerTicketDialogComponent {
     private readonly dialogRef: MatDialogRef<MaintenancePlannerTicketDialogComponent>,
     private readonly dialog: MatDialog,
     private readonly plannerService: MaintenancePlannerService,
+    private readonly maintenanceCoordinationService: MaintenanceCoordinationService,
   ) {}
 
   get hasCommitment(): boolean {
@@ -85,8 +91,43 @@ export class MaintenancePlannerTicketDialogComponent {
     return Boolean(
       this.canRequestClosure
       && this.normalizedState === 'en progreso'
-      && this.ticket.estado_cierre !== 'pendiente_creador',
+      && (
+        this.ticket.tipo_atencion === 'EXTERNA'
+        || (
+          this.ticket.tipo_atencion === 'INTERNA'
+          && this.ticket.estado_cierre === 'pendiente_revision_coord'
+        )
+      ),
     );
+  }
+
+  get canMarkWorkCompleted(): boolean {
+    return Boolean(this.ticket.can_mark_work_completed && this.normalizedState === 'en progreso');
+  }
+
+  get canReturnWork(): boolean {
+    return Boolean(
+      this.canRequestClosure
+      && this.normalizedState === 'en progreso'
+      && this.ticket.tipo_atencion === 'INTERNA'
+      && this.ticket.estado_cierre === 'pendiente_revision_coord',
+    );
+  }
+
+  get closureActionLabel(): string {
+    return this.ticket.tipo_atencion === 'INTERNA'
+      ? 'Revisar y solicitar cierre'
+      : 'Solicitar cierre';
+  }
+
+  get closureStageLabel(): string {
+    if (this.ticket.estado_cierre === 'pendiente_revision_coord') {
+      return 'Trabajo terminado · Pendiente de revisión de coordinación';
+    }
+    if (this.ticket.estado_cierre === 'pendiente_creador') {
+      return 'Cierre pendiente de conformidad del gerente';
+    }
+    return this.ticket.estado_cierre || 'Sin flujo de cierre activo';
   }
 
   get history(): MaintenancePlannerHistoryItem[] {
@@ -172,6 +213,40 @@ export class MaintenancePlannerTicketDialogComponent {
     });
   }
 
+  openWorkActionDialog(action: MaintenanceWorkAction): void {
+    const permitted = action === 'complete'
+      ? this.canMarkWorkCompleted
+      : this.canReturnWork;
+    if (!permitted || this.saving) return;
+
+    const ref = this.dialog.open(MaintenanceWorkActionDialogComponent, {
+      width: '520px',
+      maxWidth: '94vw',
+      data: { ticketId: this.ticket.ticket_id, action },
+      autoFocus: false,
+    });
+
+    ref.afterClosed().subscribe((notes: string | null) => {
+      if (!notes) return;
+      this.saving = true;
+      this.errorMessage = '';
+      const actionRequest = action === 'complete'
+        ? this.maintenanceCoordinationService.markWorkCompleted(this.ticket.ticket_id, notes)
+        : this.maintenanceCoordinationService.returnWorkToTechnician(this.ticket.ticket_id, notes);
+      actionRequest.subscribe({
+        next: () => {
+          this.saving = false;
+          this.dialogRef.close({ updated: true });
+        },
+        error: (error) => {
+          this.saving = false;
+          this.errorMessage =
+            error?.error?.mensaje || 'No fue posible guardar la acción de Mantenimiento.';
+        },
+      });
+    });
+  }
+
   openClosureDialog(): void {
     if (!this.canFinalizeTicket || this.saving) {
       return;
@@ -180,7 +255,7 @@ export class MaintenancePlannerTicketDialogComponent {
     const dialogRef = this.dialog.open(ModalCierreTicketComponent, {
       width: '560px',
       maxWidth: '92vw',
-      data: { ticketId: this.ticket.ticket_id },
+      data: { ticketId: this.ticket.ticket_id, modo: 'maintenance_request' },
       autoFocus: false,
     });
 

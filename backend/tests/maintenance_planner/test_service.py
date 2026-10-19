@@ -147,3 +147,193 @@ def test_regional_planner_without_assignments_returns_empty_scope():
 
     assert result is empty_query
     query.filter.assert_called_once_with(False)
+
+
+def _compras_coordinacion(*, branches=(8,)):
+    return SimpleNamespace(
+        id=91,
+        username="QA_COMPRAS_COORDINACION",
+        rol="COMPRAS",
+        department_id=6,
+        sucursal_id=100,
+        sucursales_ids=list(branches),
+    )
+
+
+@pytest.mark.parametrize(
+    "branches,coordinator,expected",
+    [
+        ((8,), True, True),
+        ((8,), False, False),
+        ((), True, False),
+    ],
+)
+def test_compras_planner_schedule_requires_individual_grant_and_branches(
+    branches, coordinator, expected
+):
+    actor = _compras_coordinacion(branches=branches)
+    with (
+        patch.object(service, "can_pm_execute", return_value=False),
+        patch.object(
+            service,
+            "has_maintenance_coordination_permission",
+            return_value=coordinator,
+        ) as permission,
+    ):
+        assert service._can_schedule_maintenance(actor) is expected
+
+    if expected:
+        permission.assert_called_once_with(actor)
+
+
+def test_compras_coordinacion_does_not_enable_schedule_for_other_roles():
+    actor = SimpleNamespace(rol="GERENTE", sucursales_ids=[8])
+    with (
+        patch.object(service, "can_pm_execute", return_value=False),
+        patch.object(
+            service, "has_maintenance_coordination_permission", return_value=True
+        ),
+    ):
+        assert service._can_schedule_maintenance(actor) is False
+
+
+def test_existing_pm_execute_role_retains_planner_schedule():
+    actor = SimpleNamespace(rol="SR_MANTENIMIENTO", sucursales_ids=[])
+    with (
+        patch.object(service, "can_pm_execute", return_value=True),
+        patch.object(
+            service, "has_maintenance_coordination_permission", return_value=False
+        ) as permission,
+    ):
+        assert service._can_schedule_maintenance(actor) is True
+    permission.assert_not_called()
+
+
+def test_board_exposes_coordinators_schedule_permission():
+    actor = _compras_coordinacion()
+    query = MagicMock()
+    query.filter.return_value = query
+    query.order_by.return_value = query
+    query.all.return_value = []
+
+    with (
+        patch.object(service, "_base_query", return_value=query),
+        patch.object(service, "_build_authorized_branch_catalog", return_value=[]),
+        patch.object(service, "can_pm_execute", return_value=False),
+        patch.object(service, "has_maintenance_coordination_permission", return_value=True),
+    ):
+        board = service.build_planner_board(
+            actor, start_date="2026-10-18", end_date="2026-10-24"
+        )
+    assert board["permissions"]["can_schedule"] is True
+
+
+def test_compras_coordinacion_schedule_intersects_ticket_and_assigned_branch():
+    actor = _compras_coordinacion(branches=(8,))
+    ticket = SimpleNamespace(
+        id=990002,
+        departamento_id=1,
+        sucursal_id_destino=8,
+        estado="en progreso",
+        fecha_solucion=datetime(2026, 10, 20, 14, 0, tzinfo=timezone.utc),
+        fecha_en_progreso=datetime(2026, 10, 18, 14, 0, tzinfo=timezone.utc),
+        historial_fechas=[],
+    )
+    query = MagicMock()
+    query.filter.return_value = query
+    query.first.return_value = ticket
+
+    with (
+        patch.object(service, "can_pm_execute", return_value=False),
+        patch.object(service, "has_maintenance_coordination_permission", return_value=True),
+        patch.object(service, "filtrar_tickets_por_usuario", return_value=query),
+        patch.object(service, "flag_modified") as modified,
+    ):
+        result = service.schedule_ticket(
+            ticket.id, actor, due_date="2026-10-21", reason="QA - reprogramacion local"
+        )
+
+    assert result is ticket
+    assert ticket.fecha_solucion.astimezone(service.BUSINESS_TZ).date() == date(2026, 10, 21)
+    assert ticket.historial_fechas[0]["cambiadoPor"] == actor.username
+    assert ticket.historial_fechas[0]["motivo"] == "QA - reprogramacion local"
+    assert ticket.historial_fechas[0]["origen"] == "maintenance_planner_v2"
+    assert query.filter.call_count == 2
+    clause = str(
+        query.filter.call_args.args[0].compile(
+            compile_kwargs={"literal_binds": True}
+        )
+    )
+    assert "coalesce(" in clause.lower()
+    assert "IN (8)" in clause
+    modified.assert_called_once_with(ticket, "historial_fechas")
+
+
+def test_compras_coordinacion_cannot_schedule_ticket_outside_region():
+    actor = _compras_coordinacion(branches=(8,))
+    query = MagicMock()
+    query.filter.return_value = query
+    # Un ticket de sucursal 9 no se encuentra tras la interseccion SQL.
+    query.first.return_value = None
+
+    with (
+        patch.object(service, "can_pm_execute", return_value=False),
+        patch.object(service, "has_maintenance_coordination_permission", return_value=True),
+        patch.object(service, "filtrar_tickets_por_usuario", return_value=query),
+        patch.object(service, "flag_modified") as modified,
+    ):
+        with pytest.raises(service.MaintenancePlannerNotFoundError):
+            service.schedule_ticket(
+                990009, actor, due_date="2026-10-21", reason="Fuera de region"
+            )
+
+    clause = str(
+        query.filter.call_args.args[0].compile(
+            compile_kwargs={"literal_binds": True}
+        )
+    )
+    assert "IN (8)" in clause
+    modified.assert_not_called()
+
+
+def test_compras_without_coordination_cannot_schedule_even_visible_ticket():
+    actor = _compras_coordinacion(branches=(8,))
+    with (
+        patch.object(service, "can_pm_execute", return_value=False),
+        patch.object(service, "has_maintenance_coordination_permission", return_value=False),
+        patch.object(service, "filtrar_tickets_por_usuario") as tickets,
+    ):
+        with pytest.raises(service.MaintenancePlannerAuthorizationError):
+            service.schedule_ticket(
+                990002, actor, due_date="2026-10-21", reason="No autorizado"
+            )
+    tickets.assert_not_called()
+
+
+def test_coordinator_cannot_reschedule_finalized_ticket():
+    actor = _compras_coordinacion(branches=(8,))
+    ticket = SimpleNamespace(
+        id=990002,
+        departamento_id=1,
+        sucursal_id_destino=8,
+        estado="finalizado",
+        fecha_solucion=datetime(2026, 10, 20, 14, 0, tzinfo=timezone.utc),
+        historial_fechas=[],
+    )
+    query = MagicMock()
+    query.filter.return_value = query
+    query.first.return_value = ticket
+
+    with (
+        patch.object(service, "can_pm_execute", return_value=False),
+        patch.object(service, "has_maintenance_coordination_permission", return_value=True),
+        patch.object(service, "filtrar_tickets_por_usuario", return_value=query),
+        patch.object(service, "flag_modified") as modified,
+    ):
+        with pytest.raises(service.MaintenancePlannerError, match="finalizado"):
+            service.schedule_ticket(
+                ticket.id, actor, due_date="2026-10-21", reason="No reabrir"
+            )
+    assert ticket.fecha_solucion.astimezone(service.BUSINESS_TZ).date() == date(2026, 10, 20)
+    assert ticket.historial_fechas == []
+    modified.assert_not_called()

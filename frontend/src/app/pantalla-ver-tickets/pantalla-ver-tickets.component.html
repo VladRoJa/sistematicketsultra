@@ -741,6 +741,40 @@
               </button>
             </div>
 
+            <div *ngIf="puedeEditarTickets" class="acciones-mantenimiento">
+              <button
+                *ngIf="puedeMarcarTrabajoTerminado(ticket)"
+                type="button"
+                class="ticket-action ticket-action--finish"
+                matTooltip="Reportar trabajo terminado; queda pendiente de revisión por coordinación"
+                aria-label="Reportar trabajo terminado para revisión de coordinación"
+                (click)="marcarTrabajoTerminado(ticket)"
+              >
+                <mat-icon>task_alt</mat-icon>
+                <span>Marcar listo</span>
+              </button>
+              <button
+                *ngIf="puedeSolicitarCierreMantenimiento(ticket)"
+                type="button"
+                class="ticket-action ticket-action--finish"
+                [matTooltip]="ayudaSolicitarCierreMantenimiento(ticket)"
+                (click)="solicitarCierre(ticket)"
+              >
+                <mat-icon>fact_check</mat-icon>
+                <span>{{ etiquetaSolicitarCierreMantenimiento(ticket) }}</span>
+              </button>
+              <button
+                *ngIf="puedeDevolverTrabajoMantenimiento(ticket)"
+                type="button"
+                class="ticket-action ticket-action--manager"
+                matTooltip="Devolver al técnico con motivo obligatorio"
+                (click)="devolverTrabajoMantenimiento(ticket)"
+              >
+                <mat-icon>assignment_return</mat-icon>
+                <span>Devolver trabajo</span>
+              </button>
+            </div>
+
             <!-- Botón: Cierre administrativo por gerente/admin -->
             <button
               *ngIf="puedeMostrarBotonCerrarDesdeCero(ticket)"
@@ -894,7 +928,12 @@
           </td>
 
           <td>{{ getNombreSucursal(ticket) }}</td>
-          <td>{{ ticket.estado }}</td>
+          <td class="td-estado">
+            <div class="ticket-estado" *ngIf="presentacionEstadoTicket(ticket) as estadoVisible">
+              <span class="ticket-estado__principal">{{ estadoVisible.principal }}</span>
+              <span *ngIf="estadoVisible.detalle" class="ticket-estado__detalle">{{ estadoVisible.detalle }}</span>
+            </div>
+          </td>
           <td>{{ ticket.criticidad }}</td>
 
           <td>

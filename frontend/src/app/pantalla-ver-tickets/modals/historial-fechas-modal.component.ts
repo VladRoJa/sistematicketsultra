@@ -166,6 +166,10 @@ export class HistorialFechasModalComponent {
       return 'Rechazo';
     }
 
+    if (item?.tipo === 'maintenance_conformity_accepted_v1') {
+      return 'Conformidad aceptada';
+    }
+
     if (this.esReasignacion(item)) return 'Reasignación';
     if (this.esCoordinacion(item)) return 'Coordinación';
 

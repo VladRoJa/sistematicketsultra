@@ -56,6 +56,7 @@ import {
 } from '../services/maintenance-coordination.service';
 import { ReasignarResponsableModalComponent } from '../shared/reasignar-responsable-modal/reasignar-responsable-modal.component';
 import { DialogoConfirmacionComponent } from '../shared/dialogo-confirmacion/dialogo-confirmacion.component';
+import { MaintenanceWorkActionDialogComponent } from '../shared/maintenance-work-action-dialog/maintenance-work-action-dialog.component';
 import {
   MantenimientoEquiposService,
   RegionReporteMantenimientoDTO,
@@ -130,9 +131,11 @@ export interface Ticket {
   refaccion_definida_por_jefe?: boolean;
   estado_cierre?:
   | 'pendiente_jefe'
+  | 'pendiente_revision_coord'
   | 'pendiente_creador'
   | 'rechazado_por_jefe'
   | 'rechazado_por_creador'
+  | 'rechazado_por_gerente'
   | 'cerrado_por_gerente_desde_cero'
   | null;
 
@@ -2624,7 +2627,10 @@ async solicitarCierre(ticket: Ticket) {
   // 🔹 1. Abrir modal de cierre y esperar datos
   const dialogRef = this.dialog.open(ModalCierreTicketComponent, {
     width: '560px',
-    data: { ticketId: ticket.id }
+    data: {
+      ticketId: ticket.id,
+      modo: this.esTicketMantenimiento(ticket) ? 'maintenance_request' : undefined,
+    }
   });
 
   const result = await dialogRef.afterClosed().toPromise();
@@ -2675,7 +2681,7 @@ private ticketPerteneceASucursalDelGerente(ticket: Ticket): boolean {
 }
 
 puedeMostrarBotonCerrarDesdeCero(ticket: Ticket): boolean {
-  if (!ticket?.id) return false;
+  if (!ticket?.id || this.esTicketMantenimiento(ticket)) return false;
 
   const estado = (ticket.estado || '').toString().trim().toLowerCase();
 
@@ -2832,11 +2838,101 @@ puedeMostrarBotonEnProgreso(ticket: Ticket): boolean {
       && Number(ticket.departamento_id) === 1);
 }
 
+getUserMaintenanceRole(): string {
+  return String(this.user?.rol || '').trim().toUpperCase();
+}
+
+puedeMarcarTrabajoTerminado(ticket: Ticket): boolean {
+  if (!this.esTicketMantenimiento(ticket)) return false;
+  const roles = ['SR_MANTENIMIENTO', 'AUX_MANTENIMIENTO', 'MANTENIMIENTO', 'TECNICO'];
+  return roles.includes(this.getUserMaintenanceRole())
+    && Number(this.user?.department_id) === 1
+    && String(ticket.estado || '').trim().toLowerCase() === 'en progreso'
+    && ticket.tipo_atencion === 'INTERNA'
+    && (!ticket.estado_cierre || ticket.estado_cierre === 'rechazado_por_gerente')
+    && String(ticket.asignado_a || '').trim().toLowerCase()
+      === String(this.user?.username || '').trim().toLowerCase();
+}
+
+puedeSolicitarCierreMantenimiento(ticket: Ticket): boolean {
+  if (!this.puedeCoordinarTicket(ticket)) return false;
+  if (String(ticket.estado || '').trim().toLowerCase() !== 'en progreso') return false;
+  return ticket.tipo_atencion === 'EXTERNA'
+    || (ticket.tipo_atencion === 'INTERNA'
+      && ticket.estado_cierre === 'pendiente_revision_coord');
+}
+
+puedeDevolverTrabajoMantenimiento(ticket: Ticket): boolean {
+  return this.puedeCoordinarTicket(ticket)
+    && ticket.tipo_atencion === 'INTERNA'
+    && ticket.estado_cierre === 'pendiente_revision_coord';
+}
+
+etiquetaSolicitarCierreMantenimiento(ticket: Ticket): string {
+  return ticket.tipo_atencion === 'INTERNA'
+    ? 'Revisar cierre'
+    : 'Solicitar cierre';
+}
+
+ayudaSolicitarCierreMantenimiento(ticket: Ticket): string {
+  return ticket.tipo_atencion === 'INTERNA'
+    ? 'Revisar trabajo terminado y solicitar conformidad al gerente'
+    : 'Revisar proveedor y solicitar conformidad al gerente';
+}
+
+presentacionEstadoTicket(ticket: Ticket): { principal: string; detalle: string | null } {
+  if (this.esTicketMantenimiento(ticket)
+      && ticket.estado_cierre === 'pendiente_revision_coord') {
+    return { principal: 'En progreso', detalle: 'Pendiente de revisión' };
+  }
+
+  return { principal: ticket.estado, detalle: null };
+}
+
+marcarTrabajoTerminado(ticket: Ticket): void {
+  if (!this.puedeMarcarTrabajoTerminado(ticket)) return;
+  const ref = this.dialog.open(MaintenanceWorkActionDialogComponent, {
+    width: 'min(520px, 94vw)',
+    data: { ticketId: ticket.id, action: 'complete' },
+  });
+  ref.afterClosed().subscribe((notes: string | null) => {
+    if (!notes) return;
+    this.maintenanceCoordinationService.markWorkCompleted(ticket.id, notes).subscribe({
+      next: (resp) => {
+        mostrarAlertaToast(resp.mensaje, 'success');
+        this.refrescarTicketsPreservandoFiltros();
+      },
+      error: (err) => {
+        mostrarAlertaToast(err?.error?.mensaje || 'No se pudo terminar el trabajo.', 'error');
+      },
+    });
+  });
+}
+
+devolverTrabajoMantenimiento(ticket: Ticket): void {
+  if (!this.puedeDevolverTrabajoMantenimiento(ticket)) return;
+  const ref = this.dialog.open(MaintenanceWorkActionDialogComponent, {
+    width: 'min(520px, 94vw)',
+    data: { ticketId: ticket.id, action: 'return' },
+  });
+  ref.afterClosed().subscribe((reason: string | null) => {
+    if (!reason) return;
+    this.maintenanceCoordinationService.returnWorkToTechnician(ticket.id, reason).subscribe({
+      next: (resp) => {
+        mostrarAlertaToast(resp.mensaje, 'success');
+        this.refrescarTicketsPreservandoFiltros();
+      },
+      error: (err) => {
+        mostrarAlertaToast(err?.error?.mensaje || 'No se pudo devolver el trabajo.', 'error');
+      },
+    });
+  });
+}
+
 puedeMostrarBotonFinalizar(ticket: Ticket): boolean {
   const estado = (ticket?.estado || '').trim().toLowerCase();
   return this.puedeEditarTickets &&
-         !(String(this.user?.rol || '').toUpperCase() === 'COMPRAS'
-           && Number(ticket.departamento_id) === 1) &&
+         !this.esTicketMantenimiento(ticket) &&
          estado === 'en progreso' &&
          ticket?.estado_cierre !== 'pendiente_creador';
 }
@@ -2874,7 +2970,7 @@ puedeMostrarBotonesValidarCierre(ticket: Ticket): boolean {
 
   if (!estaPendienteDeValidacion) return false;
 
-  if (this.esCreador(ticket)) return true;
+  if (!this.esTicketMantenimiento(ticket) && this.esCreador(ticket)) return true;
 
   if (this.esAdminParaValidarCierre()) return true;
 

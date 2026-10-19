@@ -10,6 +10,10 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.models.sucursal_model import Sucursal
 from app.models.ticket_model import Ticket
 from app.utils.pm_permissions import can_pm_execute, can_pm_view
+from app.utils.tickets_maintenance_permissions import (
+    ASSIGNED_ONLY_ELIGIBLE_ROLES,
+    has_maintenance_coordination_permission,
+)
 from app.utils.sucursal_audience import (
     SUCURSAL_AUDIENCE_ANALYTICAL,
     SUCURSAL_AUDIENCE_OPERATIONAL,
@@ -182,6 +186,7 @@ def _serialize_ticket(ticket: Ticket, today: date) -> dict:
         "sucursal": _ticket_branch_name(ticket),
         "sucursal_is_demo": bool(getattr(branch, "is_demo", False)),
         "asignado_a": ticket.asignado_a,
+        "tipo_atencion": ticket.tipo_atencion,
         "fecha_creacion": _iso_business(ticket.fecha_creacion),
         "fecha_en_progreso": _iso_business(ticket.fecha_en_progreso),
         "fecha_finalizado": _iso_business(ticket.fecha_finalizado),
@@ -237,6 +242,22 @@ def _user_scope_branch_ids(user) -> list[int]:
         if parsed > 0 and parsed not in TECHNICAL_SUCURSAL_IDS:
             branch_ids.add(parsed)
     return sorted(branch_ids)
+
+
+def _can_schedule_maintenance(user) -> bool:
+    """Planner: ejecución PM existente o coordinación individual de Compras.
+
+    El permiso de coordinación no equivale a can_pm_execute: únicamente
+    habilita el compromiso del ticket en el Planner. El endpoint restringe
+    la escritura a las sucursales individuales del usuario.
+    """
+    if can_pm_execute(user):
+        return True
+    return bool(
+        _user_role(user) == "COMPRAS"
+        and _user_scope_branch_ids(user)
+        and has_maintenance_coordination_permission(user)
+    )
 
 
 def _apply_planner_role_scope(query, user):
@@ -379,6 +400,23 @@ def build_planner_board(
     tickets = query.order_by(Ticket.fecha_solucion.asc().nullsfirst(), Ticket.id.asc()).all()
     rows = [_serialize_ticket(ticket, today) for ticket in tickets]
 
+    # Indicador de UI solamente: los endpoints vuelven a validar cada mutación.
+    current_username = str(getattr(user, "username", "") or "").strip().casefold()
+    technician_allowed = (
+        _user_role(user) in ASSIGNED_ONLY_ELIGIBLE_ROLES
+        and int(getattr(user, "department_id", 0) or 0) == MAINTENANCE_DEPARTMENT_ID
+        and can_pm_execute(user)
+    )
+    for row in rows:
+        row["can_mark_work_completed"] = bool(
+            technician_allowed
+            and current_username
+            and str(row["asignado_a"] or "").strip().casefold() == current_username
+            and row["tipo_atencion"] == "INTERNA"
+            and str(row["estado"] or "").strip().lower() == "en progreso"
+            and row["estado_cierre"] in {None, "", "rechazado_por_gerente"}
+        )
+
     active_rows = [row for row in rows if str(row["estado"]).lower() in ACTIVE_STATES]
     week_rows = [
         row
@@ -443,25 +481,25 @@ def build_planner_board(
         "future": scheduled_future,
         "permissions": {
             "can_view": True,
-            "can_schedule": can_pm_execute(user),
+            "can_schedule": _can_schedule_maintenance(user),
         },
     }
 
 
 def _scoped_maintenance_ticket(ticket_id: int, user) -> Ticket:
-    if not can_pm_execute(user):
+    if not _can_schedule_maintenance(user):
         raise MaintenancePlannerAuthorizationError(
             "No tienes permiso para programar tickets de Mantenimiento."
         )
 
-    ticket = (
-        filtrar_tickets_por_usuario(user)
-        .filter(
-            Ticket.id == ticket_id,
-            Ticket.departamento_id == MAINTENANCE_DEPARTMENT_ID,
-        )
-        .first()
+    query = filtrar_tickets_por_usuario(user).filter(
+        Ticket.id == ticket_id,
+        Ticket.departamento_id == MAINTENANCE_DEPARTMENT_ID,
     )
+    # Para Compras, intersectar además con su alcance por sucursal,
+    # sin fallback por creador ni por sede corporativa.
+    query = _apply_planner_role_scope(query, user)
+    ticket = query.first()
     if ticket is None:
         raise MaintenancePlannerNotFoundError(
             "Ticket de Mantenimiento no encontrado o fuera de tu alcance."

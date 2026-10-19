@@ -12,7 +12,7 @@ from app.maintenance_planner.service import (
 from app.services.mantenimiento_equipos_service import (
     puede_capturar_diagnostico_mantenimiento,
 )
-from app.utils.scope_utils import CORPORATE_BRANCH_ID, ROOT_BRANCH_ID
+from app.utils.tickets_maintenance_permissions import has_maintenance_coordination_permission
 
 
 maintenance_planner_bp = Blueprint("maintenance_planner", __name__)
@@ -36,35 +36,8 @@ def _parse_branch_ids() -> list[int]:
 
 
 def _can_request_maintenance_closure(user) -> bool:
-    """Replica la autorización real de /tickets/cierre/solicitar para PM.
-
-    Todos los tickets servidos por este blueprint pertenecen a Mantenimiento,
-    por lo que ``_es_jefe_depto(user, ticket)`` equivale a tener department_id=1.
-    Conservamos también los perfiles corporativos/root aceptados por Tickets.
-    """
-
-    if not user:
-        return False
-
-    role = str(getattr(user, "rol", "") or "").strip().upper()
-    # El permiso individual de COMPRAS habilita consulta, nunca cierres.
-    if role == "COMPRAS":
-        return False
-
-    if role in {"ADMINISTRADOR", "SUPER_ADMIN", "EDITOR_CORPORATIVO"}:
-        return True
-
-    try:
-        branch_id = int(getattr(user, "sucursal_id", 0) or 0)
-    except (TypeError, ValueError):
-        branch_id = 0
-    if branch_id in {CORPORATE_BRANCH_ID, ROOT_BRANCH_ID}:
-        return True
-
-    try:
-        return int(getattr(user, "department_id", 0) or 0) == MAINTENANCE_DEPARTMENT_ID
-    except (TypeError, ValueError):
-        return False
+    """Comparte exactamente el permiso de coordinación de Tickets V1."""
+    return has_maintenance_coordination_permission(user)
 
 
 @maintenance_planner_bp.route("/board", methods=["GET"])

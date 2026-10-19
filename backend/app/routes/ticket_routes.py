@@ -20,6 +20,9 @@ from app.services.ticket_maintenance_coordination_service import (
     list_maintenance_assignees,
     prepare_maintenance_coordination,
     prepare_maintenance_reassignment,
+    prepare_maintenance_work_completion,
+    prepare_maintenance_work_return,
+    MAINTENANCE_WORK_REVIEW_PENDING,
 )
 from app.utils.tickets_maintenance_permissions import (
     has_maintenance_coordination_permission,
@@ -268,7 +271,9 @@ def _puede_validar_cierre_gerente(user: UserORM, ticket: Ticket) -> bool:
     - Admin puede validar cualquier ticket.
     - Gerente puede validar tickets de su sucursal destino.
     """
-    if _es_creador(user, ticket):
+    # En Mantenimiento la conformidad debe darla el GERENTE de la
+    # sucursal o un administrador; el creador no puede autoaprobarse.
+    if ticket.departamento_id != 1 and _es_creador(user, ticket):
         return True
 
     if _es_admin_para_validar_cierre(user):
@@ -295,6 +300,11 @@ def _puede_cerrar_ticket_desde_cero(user: UserORM, ticket: Ticket) -> bool:
     - No incluye corporativo.
     - No incluye gerente regional.
     """
+    # Mantenimiento siempre requiere revisión de coordinación y doble check.
+    # El cierre de limpieza no puede saltarse ese contrato.
+    if ticket.departamento_id == 1:
+        return False
+
     if _es_admin_para_cierre_desde_cero(user):
         return True
 
@@ -930,6 +940,60 @@ def reassign_maintenance_ticket(ticket_id):
     except Exception as exc:
         db.session.rollback()
         return manejar_error(exc, "reassign_maintenance_ticket")
+
+
+@ticket_bp.route('/maintenance/<int:ticket_id>/work-completed', methods=['POST'])
+@jwt_required()
+def maintenance_mark_work_completed(ticket_id):
+    """Técnico asignado declara terminada la reparación, sin solicitar cierre."""
+    actor = UserORM.get_by_id(get_jwt_identity())
+    if actor is None:
+        return jsonify({"mensaje": "Usuario no encontrado"}), 401
+
+    try:
+        ticket = prepare_maintenance_work_completion(
+            ticket_id,
+            actor,
+            request.get_json(silent=True),
+        )
+        db.session.commit()
+        return jsonify({
+            "mensaje": "Trabajo terminado; pendiente de revisión de coordinación.",
+            "ticket": ticket.to_dict(),
+        }), 200
+    except TicketCoordinationError as exc:
+        db.session.rollback()
+        return jsonify({"mensaje": exc.message}), exc.status_code
+    except Exception as exc:
+        db.session.rollback()
+        return manejar_error(exc, "maintenance_mark_work_completed")
+
+
+@ticket_bp.route('/maintenance/<int:ticket_id>/return-to-technician', methods=['POST'])
+@jwt_required()
+def maintenance_return_work_to_technician(ticket_id):
+    """Coordinación devuelve trabajo interno pendiente de revisión."""
+    actor = UserORM.get_by_id(get_jwt_identity())
+    if actor is None:
+        return jsonify({"mensaje": "Usuario no encontrado"}), 401
+
+    try:
+        ticket = prepare_maintenance_work_return(
+            ticket_id,
+            actor,
+            request.get_json(silent=True),
+        )
+        db.session.commit()
+        return jsonify({
+            "mensaje": "Trabajo devuelto al técnico para corrección.",
+            "ticket": ticket.to_dict(),
+        }), 200
+    except TicketCoordinationError as exc:
+        db.session.rollback()
+        return jsonify({"mensaje": exc.message}), exc.status_code
+    except Exception as exc:
+        db.session.rollback()
+        return manejar_error(exc, "maintenance_return_work_to_technician")
 
 
 # RUTA: Actualizar estado de un ticket
@@ -2525,14 +2589,49 @@ def cierre_solicitar(ticket_id):
     t = Ticket.query.get(ticket_id)
     if not t:
         return jsonify({"mensaje":"Ticket no encontrado"}), 404
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado"}), 401
 
-    # Puede iniciar el proceso el jefe o admin; (si quieres, también el asignado)
-    if not (_es_admin_o_corporativo(user) or _es_jefe_depto(user, t)):
-        return jsonify({"mensaje":"No autorizado"}), 403
+    if t.departamento_id == 1:
+        # Cierre PM: solo coordinación explícita dentro de sus sucursales.
+        # Nunca heredar autoridad por pertenecer al departamento Mantenimiento
+        # ni por tener una sucursal principal corporativa.
+        if not has_maintenance_coordination_permission(user):
+            return jsonify({"mensaje": "Sin permiso para solicitar cierre de Mantenimiento."}), 403
+
+        ticket_en_scope = (
+            filtrar_tickets_por_usuario(user)
+            .filter(Ticket.id == ticket_id)
+            .first()
+        )
+        if not ticket_en_scope:
+            return jsonify({"mensaje": "Ticket de Mantenimiento fuera de alcance."}), 404
+
+        if str(t.estado or "").strip().lower() != "en progreso":
+            return jsonify({"mensaje": "Solo se puede solicitar cierre de Mantenimiento en progreso."}), 409
+
+        tipo_atencion = str(t.tipo_atencion or "").strip().upper()
+        if tipo_atencion == "INTERNA":
+            # El técnico debe registrar trabajo terminado antes de que
+            # coordinación revise y solicite conformidad al gerente.
+            if str(t.estado_cierre or "").strip().lower() != MAINTENANCE_WORK_REVIEW_PENDING:
+                return jsonify({"mensaje": "Falta la terminación técnica y revisión de coordinación."}), 409
+        elif tipo_atencion != "EXTERNA":
+            return jsonify({"mensaje": "Define atención INTERNA o EXTERNA antes del cierre."}), 409
+    elif not (_es_admin_o_corporativo(user) or _es_jefe_depto(user, t)):
+        # Contrato legacy intacto para departamentos distintos de Mantenimiento.
+        return jsonify({"mensaje": "No autorizado"}), 403
 
     data = request.get_json() or {}
     costo = data.get("costo_solucion")
     notas = data.get("notas_cierre")
+
+    if t.departamento_id == 1 and (
+        not isinstance(notas, str) or not 1 <= len(notas.strip()) <= 2000
+    ):
+        return jsonify({
+            "mensaje": "Describe la revisión de Mantenimiento (1-2000 caracteres)."
+        }), 400
 
     # Validar y asignar costo_solucion
     if costo is not None:
@@ -2541,13 +2640,40 @@ def cierre_solicitar(ticket_id):
             t.costo_solucion = Decimal(str(costo))
         except (InvalidOperation, ValueError):
             return jsonify({"mensaje": "costo_solucion inválido"}), 400
-    else:
+    elif t.departamento_id != 1:
+        # Mantener semántica legacy fuera de Mantenimiento. En PM, un costo
+        # previamente registrado no se borra al solicitar el cierre sin precio.
         t.costo_solucion = None
 
     # Asignar notas de cierre (texto libre)
     t.notas_cierre = (notas or None)
 
-    # Estado de cierre: queda pendiente aprobación del creador
+    if t.departamento_id == 1:
+        # Evento explícito de revisión de coordinación; el técnico solo puede
+        # declarar trabajo terminado, nunca solicitar conformidad del gerente.
+        # Se registra antes de que solicitar_cierre() haga el commit legacy.
+        previous_review_state = t.estado_cierre
+        now = datetime.now(timezone.utc)
+        history = list(t.historial_fechas or [])
+        history.append({
+            "tipo": "maintenance_closure_reviewed_v1",
+            "origen": "tickets_v1",
+            "fechaCambio": now.isoformat(),
+            "cambiadoPor": str(user.username).strip(),
+            "motivo": str(notas or "").strip(),
+            "tipo_atencion": tipo_atencion,
+            "estado": t.estado,
+            "estado_cierre_anterior": previous_review_state,
+            "estado_cierre_nuevo": "pendiente_creador",
+        })
+        history.sort(
+            key=lambda item: str(item.get("fechaCambio") or item.get("fecha") or ""),
+            reverse=True,
+        )
+        t.historial_fechas = history
+        flag_modified(t, "historial_fechas")
+
+    # Estado de cierre: queda pendiente conformidad del gerente en Mantenimiento.
     t.solicitar_cierre()
     
     notificados = _notificar_evento_ticket(
@@ -2577,6 +2703,14 @@ def cierre_rechazar_jefe(ticket_id):
     t = Ticket.query.get(ticket_id)
     if not t:
         return jsonify({"mensaje":"Ticket no encontrado"}), 404
+
+    # En Mantenimiento la devolución técnica pertenece exclusivamente a
+    # coordinación (return-to-technician); la devolución tras conformidad
+    # pertenece al gerente (rechazar-creador). Esta ruta legacy no aplica.
+    if t.departamento_id == 1:
+        return jsonify({
+            "mensaje": "Para Mantenimiento usa la revisión de coordinación o conformidad del gerente."
+        }), 403
 
     if not (_es_admin_o_corporativo(user) or _es_jefe_depto(user, t)):
         return jsonify({"mensaje":"No autorizado"}), 403
@@ -2616,13 +2750,35 @@ def cierre_aceptar_creador(ticket_id):
             "mensaje": "Solo se pueden aceptar tickets en estado por_validar."
         }), 400
 
-    finalized_at = datetime.now(timezone.utc)
+    accepted_at = datetime.now(timezone.utc)
 
+    # La fecha finalizada se fijó cuando coordinación solicitó el cierre.
+    # La conformidad del gerente registra su propio momento, sin sustituirla.
     t.aceptar_conformidad_creador(commit=False)
+
+    if t.departamento_id == 1:
+        historial = list(t.historial_fechas or [])
+        historial.append({
+            "tipo": "maintenance_conformity_accepted_v1",
+            "origen": "tickets_v1",
+            "fecha": t.fecha_finalizado.isoformat() if t.fecha_finalizado else None,
+            "fechaCambio": accepted_at.isoformat(),
+            "cambiadoPor": str(user.username).strip(),
+            "motivo": "Conformidad aceptada por el gerente",
+            "estado": t.estado,
+            "estado_cierre_anterior": estado_cierre_actual,
+            "estado_cierre_nuevo": t.estado_cierre,
+        })
+        historial.sort(
+            key=lambda item: str(item.get("fechaCambio") or item.get("fecha") or ""),
+            reverse=True,
+        )
+        t.historial_fechas = historial
+        flag_modified(t, "historial_fechas")
 
     schedule_ticket_attachment_retention(
         ticket_id=t.id,
-        finalized_at=finalized_at,
+        finalized_at=accepted_at,
     )
 
     db.session.commit()

@@ -190,3 +190,83 @@ def test_reassignment_endpoint_denies_mutating_foreign_assigned_ticket(monkeypat
     })
     assert response.status_code == 403
     assert "que tenga asignados" in response.get_json()["mensaje"]
+
+def test_tecnico_asignado_no_puede_solicitar_cierre_sin_revision_coordinacion(monkeypatch):
+    """Contrato futuro: el técnico marca trabajo terminado; no pide cierre."""
+
+    from flask import Flask
+    from app.routes import ticket_routes
+
+    tecnico = user()
+    tecnico.sucursal_id = 8  # Sin atajo corporativo por sucursal 100.
+
+    calls = []
+    t = SimpleNamespace(
+        id=3011,
+        departamento_id=1,
+        asignado_a="SR_MANT_TIJ",
+        tipo_atencion="INTERNA",
+        estado="en progreso",
+        solicitar_cierre=lambda: calls.append("solicitar_cierre"),
+    )
+
+    monkeypatch.setattr(ticket_routes.UserORM, "get_by_id", lambda _id: tecnico)
+    monkeypatch.setattr(ticket_routes, "get_jwt_identity", lambda: tecnico.id)
+    # El permiso se valida en sus tests dedicados; aquí aislamos el endpoint.
+    monkeypatch.setattr(
+        ticket_routes, "has_maintenance_coordination_permission",
+        lambda _actor: False,
+    )
+    monkeypatch.setattr(
+        ticket_routes, "Ticket",
+        SimpleNamespace(query=SimpleNamespace(get=lambda _id: t)),
+    )
+    monkeypatch.setattr(ticket_routes, "_notificar_evento_ticket", lambda **_kwargs: [])
+
+    app = Flask(__name__)
+    with app.test_request_context(
+        "/api/tickets/cierre/solicitar/3011",
+        method="POST",
+        json={"notas_cierre": "QA - tecnico reporta reparacion terminada"},
+    ):
+        _body, status = ticket_routes.cierre_solicitar.__wrapped__(3011)
+
+    assert status == 403
+    assert calls == []
+
+
+def test_conformidad_mantenimiento_es_de_gerente_no_creador():
+    from app.routes import ticket_routes
+
+    mantenimiento = SimpleNamespace(
+        id=501, departamento_id=1, username="RECEPCIONISTA_QA",
+        sucursal_id=8, sucursal_id_destino=8,
+    )
+    creador = SimpleNamespace(
+        username="RECEPCIONISTA_QA", rol="RECEPCIONISTA", sucursal_id=8,
+    )
+    gerente = SimpleNamespace(
+        username="GERENTE_QA", rol="GERENTE", sucursal_id=8,
+    )
+    gerente_ajeno = SimpleNamespace(
+        username="GERENTE_AJENO", rol="GERENTE", sucursal_id=9,
+    )
+    admin = SimpleNamespace(
+        username="ADMIN_QA", rol="ADMINISTRADOR", sucursal_id=1000,
+    )
+
+    assert not ticket_routes._puede_validar_cierre_gerente(creador, mantenimiento)
+    assert ticket_routes._puede_validar_cierre_gerente(gerente, mantenimiento)
+    assert not ticket_routes._puede_validar_cierre_gerente(gerente_ajeno, mantenimiento)
+    assert ticket_routes._puede_validar_cierre_gerente(admin, mantenimiento)
+
+    assert not ticket_routes._puede_cerrar_ticket_desde_cero(gerente, mantenimiento)
+    assert not ticket_routes._puede_cerrar_ticket_desde_cero(admin, mantenimiento)
+
+    # El resto de departamentos conserva el doble check heredado.
+    otro_departamento = SimpleNamespace(
+        id=502, departamento_id=6, username="RECEPCIONISTA_QA",
+        sucursal_id=8, sucursal_id_destino=8,
+    )
+    assert ticket_routes._puede_validar_cierre_gerente(creador, otro_departamento)
+    assert ticket_routes._puede_cerrar_ticket_desde_cero(gerente, otro_departamento)

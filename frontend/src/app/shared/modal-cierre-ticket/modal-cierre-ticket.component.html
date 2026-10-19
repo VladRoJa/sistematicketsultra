@@ -11,21 +11,21 @@
     </span>
 
     <span class="modal-cierre__title">
-      <strong>Finalizar ticket #{{ data.ticketId }}</strong>
-      <small>Registra el costo y las notas del cierre antes de continuar.</small>
+      <strong>{{ dialogTitle }}</strong>
+      <small>{{ dialogDescription }}</small>
     </span>
   </header>
 
   <mat-dialog-content class="modal-cierre__content">
     <div class="modal-cierre__notice">
-      <strong>Confirmación de cierre</strong>
+      <strong>{{ noticeTitle }}</strong>
       <span>
-        Al aceptar, el cierre se enviará directamente. Ya no se mostrará una segunda confirmación.
+        {{ noticeDescription }}
       </span>
     </div>
 
     <mat-form-field appearance="fill" class="w-full">
-      <mat-label>Costo de la solución</mat-label>
+      <mat-label>{{ costLabel }}</mat-label>
       <input
         matInput
         type="number"
@@ -35,11 +35,12 @@
     </mat-form-field>
 
     <mat-form-field appearance="fill" class="w-full">
-      <mat-label>Notas de cierre</mat-label>
+      <mat-label>{{ reviewLabel }}</mat-label>
       <textarea
         matInput
         rows="4"
         [(ngModel)]="notas"
+        [maxlength]="2000"
         placeholder="Describe trabajos realizados, piezas cambiadas o contexto del cierre."
       ></textarea>
     </mat-form-field>
@@ -60,8 +61,9 @@
       type="button"
       class="modal-cierre__accept"
       (click)="aceptar()"
+      [disabled]="!canSubmit"
     >
-      Aceptar cierre
+      {{ submitLabel }}
     </button>
   </mat-dialog-actions>
 </section>

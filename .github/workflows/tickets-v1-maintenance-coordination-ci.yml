@@ -25,7 +25,19 @@ on:
       - "backend/tests/utils/test_tickets_maintenance_permissions.py"
       - "backend/tests/services/test_ticket_maintenance_coordination_service.py"
       - "backend/tests/utils/test_tickets_assigned_only_scope.py"
+      - "backend/tests/utils/test_compras_maintenance_read_access.py"
+      - "backend/tests/routes/test_maintenance_closure_workflow_qa.py"
+      - "backend/tests/test_ticket_creator_closure_flow.py"
+      - "frontend/src/app/shared/modal-cierre-ticket/**"
+      - "backend/tests/utils/test_maintenance_closure_qa_seed_safety.py"
+      - "backend/scripts/seed_maintenance_closure_qa.py"
+      - "backend/app/maintenance_planner/routes.py"
+      - "backend/app/maintenance_planner/service.py"
+      - "backend/tests/maintenance_planner/test_service.py"
+      - "frontend/src/app/maintenance-planner/**"
+      - "frontend/src/app/shared/maintenance-work-action-dialog/**"
       - "backend/tests/services/test_tickets_attention_migration_postgres.py"
+      - "backend/tests/services/test_maintenance_closure_seed_postgres.py"
       - "backend/migrations/versions/c17a10202601_tickets_v1_maintenance_attention.py"
       - ".github/workflows/tickets-v1-maintenance-coordination-ci.yml"
 
@@ -53,6 +65,7 @@ jobs:
             backend/app/routes/ticket_routes.py \
             backend/app/utils/ticket_filters.py \
             backend/app/utils/maintenance_ticket_update_guard.py \
+            backend/app/maintenance_planner/service.py \
             backend/migrations/versions/c17a10202601_tickets_v1_maintenance_attention.py
       - name: Run authorization unit tests
         working-directory: backend
@@ -62,7 +75,12 @@ jobs:
         run: |
           python -m pytest -q --tb=short tests/utils/test_tickets_maintenance_permissions.py \
             tests/services/test_ticket_maintenance_coordination_service.py \
-            tests/utils/test_tickets_assigned_only_scope.py
+            tests/utils/test_tickets_assigned_only_scope.py \
+            tests/utils/test_compras_maintenance_read_access.py \
+            tests/maintenance_planner/test_service.py \
+            tests/routes/test_maintenance_closure_workflow_qa.py \
+            tests/utils/test_maintenance_closure_qa_seed_safety.py \
+            tests/test_ticket_creator_closure_flow.py
       - name: Inspect Alembic migration heads (read-only)
         run: |
           python - <<'PY'
@@ -138,3 +156,38 @@ jobs:
           PG_COORD_TEST_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/coordination_test
         run: |
           python -m pytest -q --tb=short tests/services/test_tickets_attention_migration_postgres.py
+
+  qa-seed-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: suite_ultra_tickets_qa
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d suite_ultra_tickets_qa"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend requirements
+        run: |
+          python -m pip install -r backend/requirements.txt
+          python -m pip install "pytest==8.3.5"
+      - name: Persist synthetic QA tickets twice on isolated PostgreSQL 16
+        working-directory: backend
+        env:
+          SECRET_KEY: tickets-v1-maint-seed-ci
+          JWT_SECRET_KEY: tickets-v1-maint-seed-jwt-ci
+          PG_QA_SEED_TEST_URL: postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/suite_ultra_tickets_qa
+        run: |
+          python -m pytest -q --tb=short tests/services/test_maintenance_closure_seed_postgres.py

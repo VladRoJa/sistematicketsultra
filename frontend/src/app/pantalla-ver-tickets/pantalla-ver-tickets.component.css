@@ -5,7 +5,7 @@
 :host {
   display: block;
   --desc-col-width: 420px;
-  --table-min-width: 2486px;
+  --table-min-width: 2564px;
 }
 
 /* ==========================================================================
@@ -373,7 +373,7 @@
 }
 
 .tabla-tickets .c-est {
-  width: 110px;
+  width: 158px;
 }
 
 .tabla-tickets .c-cri {
@@ -398,8 +398,9 @@
   width: 125px;
 }
 
+.tabla-tickets col.c-acc,
 .tabla-tickets .c-acc {
-  width: 150px;
+  width: 180px;
 }
 
 .tabla-tickets .c-resp {
@@ -492,6 +493,26 @@
 
 .tabla-tickets tbody td {
   vertical-align: middle;
+}
+
+.tabla-tickets td.td-estado {
+  white-space: normal;
+  text-overflow: clip;
+}
+
+.ticket-estado {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  line-height: 1.2;
+}
+
+.ticket-estado__detalle {
+  color: var(--ultra-gray-600);
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 /* Header con filtro activo */
@@ -711,6 +732,37 @@ td.col-descripcion {
 .td-acciones,
 .td-acciones > div {
   text-align: center;
+}
+
+/* Acciones de Mantenimiento: texto completo y jerarquía clara en la tabla. */
+.acciones-mantenimiento {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.td-acciones .acciones-mantenimiento .ticket-action {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 34px;
+  height: auto;
+  padding: 7px 8px;
+  margin-top: 0;
+  white-space: nowrap;
+  line-height: 1.2;
+  text-align: center;
+}
+
+/* Iconos decorativos ocultos: priorizar la acción completa en la tabla compacta. */
+.acciones-mantenimiento .ticket-action mat-icon {
+  display: none;
+}
+
+.acciones-mantenimiento .ticket-action span {
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .ticket-action {
