@@ -2173,7 +2173,7 @@ def historial_equipo(equipo_id):
         # Si no eres admin, filtra solo tickets de tu sucursal
         query = Ticket.query.filter(Ticket.aparato_id == equipo_id)
         if (
-            str(user.rol or "").strip().upper() == "COMPRAS"
+            str(user.rol or "").strip().upper() in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"}
             or has_assigned_only_maintenance_scope(user)
         ):
             query = filtrar_tickets_por_usuario(user).filter(
@@ -2227,9 +2227,9 @@ def historial_por_equipo(aparato_id):
 
         query = Ticket.query.filter_by(aparato_id=aparato_id)
 
-        # COMPRAS siempre reutiliza su scope individual, incluso con sede root.
+        # Compras legacy y coordinacion: scope individual incluso con sede root.
         if (
-            str(user.rol or "").strip().upper() == "COMPRAS"
+            str(user.rol or "").strip().upper() in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"}
             or has_assigned_only_maintenance_scope(user)
         ):
             query = filtrar_tickets_por_usuario(user).filter_by(aparato_id=aparato_id)
@@ -2264,7 +2264,7 @@ def historial_global():
         sucursal_id = request.args.get('sucursal_id', type=int)
         estado = request.args.get('estado')  # abierto/en progreso/finalizado
 
-        is_compras_reader = str(user.rol or "").strip().upper() == "COMPRAS"
+        is_compras_reader = str(user.rol or "").strip().upper() in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"}
         is_scoped_reader = is_compras_reader or has_assigned_only_maintenance_scope(user)
         query = filtrar_tickets_por_usuario(user) if is_scoped_reader else Ticket.query
 
@@ -2274,7 +2274,7 @@ def historial_global():
             query = query.join(Ticket.inventario)
             query = query.filter(InventarioGeneral.tipo == tipo)
 
-        # Compras nunca recibe visibilidad implícita por sucursal corporativa.
+        # El scope coordinador nunca hereda visibilidad por sede corporativa.
         if is_scoped_reader:
             if sucursal_id:
                 query = query.filter(or_(
@@ -2315,8 +2315,8 @@ def historial_aparato(aparato_id):
         if not user:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
-        # COMPRAS: alcance exclusivamente asignado, sin excepción corporativa.
-        is_compras_reader = str(user.rol or "").strip().upper() == "COMPRAS"
+        # Coordinacion/Compras legacy: solo asignadas, sin excepción corporativa.
+        is_compras_reader = str(user.rol or "").strip().upper() in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"}
         is_assigned_reader = has_assigned_only_maintenance_scope(user)
         filtro_sucursal = []
         if is_compras_reader:
