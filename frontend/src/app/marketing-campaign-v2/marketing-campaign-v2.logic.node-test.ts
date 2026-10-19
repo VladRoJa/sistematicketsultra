@@ -1881,7 +1881,7 @@ test('Campaign V2 fields reuse Suite Ultra UI v1 Material fill styles and first 
     const html = fs.readFileSync(
       path.join(dir, 'marketing-campaign-v2-' + name + '.component.html'), 'utf8',
     );
-    assert.equal((html.match(/<mat-form-field\\b/g) ?? []).length, expected);
+    assert.equal((html.match(/<mat-form-field\b/g) ?? []).length, expected);
     assert.equal((html.match(/floatLabel="always"/g) ?? []).length, expected);
   }
   for (const name of [
