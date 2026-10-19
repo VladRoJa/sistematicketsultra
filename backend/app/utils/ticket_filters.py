@@ -3,6 +3,7 @@ from sqlalchemy import or_, and_, func
 from app.models import Ticket
 from app.utils.pm_permissions import has_scoped_maintenance_read_grant
 from app.utils.tickets_maintenance_permissions import has_assigned_only_maintenance_scope
+from app.utils.sucursal_audience import TECHNICAL_SUCURSAL_IDS
 
 GERENTE_ROLES = {"GERENTE", "GERENTE_SUCURSAL", "GERENTE_GENERAL", "GERENTE_DEPTO"}
 
@@ -97,7 +98,11 @@ def filtrar_tickets_por_usuario(user):
     if rol == "COORDINADOR_MANTENIMIENTO":
         if not has_scoped_maintenance_read_grant(user):
             return q.filter(False)
-        assigned_branches = _condicion_multiples_sucursales(scope)
+        physical_branches = [
+            branch_id for branch_id in scope
+            if int(branch_id) not in TECHNICAL_SUCURSAL_IDS
+        ]
+        assigned_branches = _condicion_multiples_sucursales(physical_branches)
         if assigned_branches is None:
             return q.filter(False)
         return q.filter(and_(
