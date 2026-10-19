@@ -1,7 +1,7 @@
 # backend/app/utils/ticket_filters.py
 from sqlalchemy import or_, and_, func
 from app.models import Ticket
-from app.utils.pm_permissions import has_compras_maintenance_read_grant
+from app.utils.pm_permissions import has_scoped_maintenance_read_grant
 from app.utils.tickets_maintenance_permissions import has_assigned_only_maintenance_scope
 
 GERENTE_ROLES = {"GERENTE", "GERENTE_SUCURSAL", "GERENTE_GENERAL", "GERENTE_DEPTO"}
@@ -92,10 +92,9 @@ def filtrar_tickets_por_usuario(user):
             _condicion_multiples_sucursales(scope),
         )
 
-    # Compras: una concesion individual de lectura habilita tickets de
-    # Mantenimiento UNICAMENTE dentro de las sucursales asignadas. No
-    # heredar el fallback de creador para Mantenimiento fuera del scope.
-    if rol == "COMPRAS" and has_compras_maintenance_read_grant(user):
+    # Compras legacy y coordinacion de Mantenimiento: lectura individual
+    # limitada a sucursales asignadas, sin fallback por creador.
+    if rol in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"} and has_scoped_maintenance_read_grant(user):
         conditions = []
         try:
             depto_int = int(depto) if depto is not None else None
