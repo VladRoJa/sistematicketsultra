@@ -294,8 +294,9 @@ def test_maintenance_coordinator_reads_only_assigned_maintenance_branches(monkey
     assert "departamento_id = 1" in sql
     assert "IN (8, 9)" in sql
     assert "departamento_id = 6" not in sql
-    # Fallback de creador solo para otros departamentos; Mantenimiento exige región.
-    assert "departamento_id != 1" in sql
+    # Nunca hereda Compras: ni por departamento ni por ser creadora.
+    assert "departamento_id != 1" not in sql
+    assert "username" not in sql.lower()
 
 
 def test_maintenance_coordinator_does_not_inherit_corporate_branch():
@@ -333,3 +334,21 @@ def test_maintenance_coordinator_denies_manager_conformity(monkeypatch):
     response = app.test_client().post("/cierre/aceptar-creador/99")
     assert response.status_code == 403
     assert "coordinación" in response.get_json()["mensaje"].lower()
+
+
+def test_maintenance_coordinator_without_individual_grant_sees_no_tickets(monkeypatch):
+    _mock_grant(monkeypatch, allowed=False)
+    query = _mock_tickets_query(monkeypatch)
+    result = ticket_filters.filtrar_tickets_por_usuario(_maintenance_coordinator())
+    assert result is query.filter.return_value
+    query.filter.assert_called_once_with(False)
+
+
+def test_maintenance_coordinator_without_branches_sees_no_tickets(monkeypatch):
+    _mock_grant(monkeypatch, allowed=True)
+    query = _mock_tickets_query(monkeypatch)
+    result = ticket_filters.filtrar_tickets_por_usuario(
+        _maintenance_coordinator(branches=())
+    )
+    assert result is query.filter.return_value
+    query.filter.assert_called_once_with(False)
