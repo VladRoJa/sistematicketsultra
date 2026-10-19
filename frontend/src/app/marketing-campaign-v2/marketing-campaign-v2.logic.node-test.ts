@@ -1877,6 +1877,21 @@ test('Campaign V2 fields reuse Suite Ultra UI v1 Material fill styles and first 
   assert.ok(page.includes('.field-grid,'));
   assert.ok(excel.includes('.fields { gap: 16px 18px;'));
   assert.ok(qa.includes('.qa-fields { gap: 14px 18px;'));
+  // The default compact-75 density applies 8px labels and 10px values globally.
+  // Excel must reuse the exact V1 compact exception rather than inherit those sizes.
+  const compact = fs.readFileSync(
+    path.join(process.cwd(), 'src/styles.compact-modules.scss'), 'utf8',
+  );
+  const v1CompactSelector = 'body.suite-compact-review :is(.crear-ticket-page, .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog)';
+  for (const suffix of [
+    ' .mat-mdc-form-field-infix {',
+    ' .mat-mdc-select-value,',
+    ' .mat-mdc-input-element {',
+    ' .mat-mdc-floating-label,',
+    ' .mat-mdc-unelevated-button,',
+  ]) {
+    assert.ok(compact.includes(v1CompactSelector + suffix), 'Excel missing compact V1 rule: ' + suffix);
+  }
   for (const [name, expected] of [['excel-dialog', 3], ['qa-manual-dialog', 5]] as const) {
     const html = fs.readFileSync(
       path.join(dir, 'marketing-campaign-v2-' + name + '.component.html'), 'utf8',
