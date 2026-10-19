@@ -88,6 +88,29 @@ def _source_values(rows, *, label: str, expected_count: int, parsed: bool) -> di
     return values
 
 
+def _db_get(model, object_id):
+    return db.session.get(model, object_id)
+
+
+def _upload_has_audit(upload: WarehouseUploadORM) -> bool:
+    return WarehouseAuditLogORM.query.filter_by(
+        upload_id=upload.id, action="UPLOAD",
+        performed_by_user_id=upload.uploaded_by_user_id,
+    ).first() is not None
+
+
+def _stored_rows(snapshot_id: int):
+    return KpiDesempenoSnapshotRowORM.query.filter_by(snapshot_id=snapshot_id).all()
+
+
+def _canonical_ids(day: date) -> tuple[int, ...]:
+    return tuple(
+        s.id for s in KpiDesempenoSnapshotORM.query.filter_by(
+            business_date=day, snapshot_kind="daily", is_canonical=True,
+        ).all()
+    )
+
+
 def _load_verified_source(
     *,
     day: date,
@@ -95,7 +118,7 @@ def _load_verified_source(
     expected_canonical: bool,
     expected_count: int,
 ) -> VerifiedKpiSource:
-    snapshot = db.session.get(KpiDesempenoSnapshotORM, snapshot_id)
+    snapshot = _db_get(KpiDesempenoSnapshotORM, snapshot_id)
     if (
         snapshot is None or snapshot.business_date != day
         or snapshot.snapshot_kind != "daily"
@@ -106,18 +129,13 @@ def _load_verified_source(
     ):
         raise M3BProvenanceError(f"{day}: snapshot identity/count/canonicality mismatch")
 
-    upload = db.session.get(WarehouseUploadORM, snapshot.warehouse_upload_id)
+    upload = _db_get(WarehouseUploadORM, snapshot.warehouse_upload_id)
     if upload is None:
         raise M3BProvenanceError(f"{day}: missing upload")
 
     # An UPLOAD event proves Warehouse recorded this file and the named actor.
     # It does NOT prove a Gasca revision was approved by that actor.
-    recorded = WarehouseAuditLogORM.query.filter_by(
-        upload_id=upload.id,
-        action="UPLOAD",
-        performed_by_user_id=upload.uploaded_by_user_id,
-    ).first()
-    if recorded is None:
+    if not _upload_has_audit(upload):
         raise M3BProvenanceError(f"{day}: missing upload audit event")
 
     # Reuses M3-A byte-size/SHA, path, report type, cutoff, embedded-date,
@@ -128,7 +146,7 @@ def _load_verified_source(
     raw = _source_values(
         parsed.rows, label=f"{day}/XLSX", expected_count=expected_count, parsed=True,
     )
-    saved_rows = KpiDesempenoSnapshotRowORM.query.filter_by(snapshot_id=snapshot_id).all()
+    saved_rows = _stored_rows(snapshot_id)
     saved = _source_values(
         saved_rows, label=f"{day}/DB", expected_count=expected_count, parsed=False,
     )
@@ -203,10 +221,7 @@ def audit_kpi_desempeno_m3b_provenance(
             or type(baseline_id) is not int or baseline_id <= 0
         ):
             raise M3BProvenanceError(f"{day}: invalid snapshot id")
-        current = KpiDesempenoSnapshotORM.query.filter_by(
-            business_date=day, snapshot_kind="daily", is_canonical=True,
-        ).all()
-        if len(current) != 1 or current[0].id != baseline_id:
+        if _canonical_ids(day) != (baseline_id,):
             raise M3BProvenanceError(f"{day}: expected canonical has changed")
         original[day] = _load_verified_source(
             day=day, snapshot_id=baseline_id, expected_canonical=True,
