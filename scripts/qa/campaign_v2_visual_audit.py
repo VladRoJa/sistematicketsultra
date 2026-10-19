@@ -156,17 +156,20 @@ def authenticate(page, base: str) -> None:
 
 
 def close_dialog(page) -> None:
-    # Hidden is too early: Material can still keep the application aria-hidden
-    # until the dialog overlay is disposed, especially at narrow viewports.
+    # Reproduce the validated user flow: clicking Cerrar releases the Material
+    # backdrop and aria-hidden state at compact/mobile widths. Escape remains
+    # the fallback for dialogs without a dedicated close button.
     dialog = page.locator("mat-dialog-container")
-    page.keyboard.press("Escape")
-    try:
-        dialog.wait_for(state="detached", timeout=3500)
-    except PlaywrightTimeout:
-        close = dialog.get_by_role("button", name="Cerrar")
-        if close.count():
-            close.first.click()
-        dialog.wait_for(state="detached", timeout=5000)
+    close = dialog.get_by_role("button", name="Cerrar", exact=True)
+    if close.count():
+        close.first.click(timeout=6000)
+    else:
+        page.keyboard.press("Escape")
+    dialog.wait_for(state="detached", timeout=5000)
+    # A detached dialog alone does not prove the main page is accessible.
+    page.get_by_role(
+        "button", name="Abrir herramientas de campañas", exact=True
+    ).wait_for(state="visible", timeout=5000)
 
 
 class AuditNavigationTimeout(RuntimeError):
