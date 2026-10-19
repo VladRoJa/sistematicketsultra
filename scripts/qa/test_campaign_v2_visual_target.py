@@ -6,7 +6,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from campaign_v2_visual_audit import AuditNavigationTimeout, validate_target, open_tool
+from campaign_v2_visual_audit import (AuditNavigationTimeout, classify_tools_trigger,
+                                      validate_target, open_tool)
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
 
@@ -45,9 +46,42 @@ class VisualAuditTargetTests(unittest.TestCase):
         from unittest.mock import MagicMock
 
         page = MagicMock()
-        page.get_by_role.return_value.click.side_effect = PlaywrightTimeout("private page details")
+        trigger = page.get_by_role.return_value
+        trigger.click.side_effect = PlaywrightTimeout("private page details")
+        trigger.count.return_value = 1
+        trigger.is_visible.return_value = True
+        trigger.is_enabled.return_value = True
+        trigger.evaluate.return_value = {
+            "dialog_open": False, "active_backdrop": False,
+            "in_viewport": True, "center_hits_button": True,
+        }
         with self.assertRaisesRegex(AuditNavigationTimeout, "^tools_trigger_click_timeout$"):
             open_tool(page, "Preparar prueba interna · 1 contacto")
+
+    def test_tools_trigger_safe_diagnostic_codes(self):
+        from unittest.mock import MagicMock
+
+        trigger = MagicMock()
+        trigger.count.return_value = 1
+        trigger.is_visible.return_value = True
+        trigger.is_enabled.return_value = True
+        base = {
+            "dialog_open": False, "active_backdrop": False,
+            "in_viewport": True, "center_hits_button": True,
+        }
+        for change, expected in (
+            ({"dialog_open": True}, "tools_trigger_dialog_still_open"),
+            ({"active_backdrop": True}, "tools_trigger_backdrop_active"),
+            ({"in_viewport": False}, "tools_trigger_outside_viewport"),
+            ({"center_hits_button": False}, "tools_trigger_center_obstructed"),
+        ):
+            trigger.evaluate.return_value = {**base, **change}
+            self.assertEqual(classify_tools_trigger(trigger), expected)
+        trigger.count.return_value = 0
+        self.assertEqual(classify_tools_trigger(trigger), "tools_trigger_missing")
+        trigger.count.return_value = 1
+        trigger.is_visible.return_value = False
+        self.assertEqual(classify_tools_trigger(trigger), "tools_trigger_hidden")
 
     def test_tools_menu_option_timeout_is_classified(self):
         from unittest.mock import MagicMock
