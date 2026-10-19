@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace as NS
 
 import pytest
-from sqlalchemy import Column, Integer, MetaData, Table, create_engine
+from sqlalchemy import Column, Integer, MetaData, Table, create_engine, event
 from sqlalchemy.orm import Session
 
 from app.models.sucursal_model import Sucursal
@@ -102,3 +102,89 @@ def test_phone_only_recipient_is_unresolved(session):
         recipient,
         session=session,
     ) is None
+
+
+def test_preflight_scoped_resolver_reads_catalog_and_alias_once(session):
+    engine = session.get_bind()
+    table_names = (
+        TrackBranchCatalogORM.__tablename__.lower(),
+        TrackBranchAliasORM.__tablename__.lower(),
+    )
+    counts = [0, 0]
+
+    def count_lookup(_conn, _cursor, statement, _params, _context, _many):
+        sql = statement.lower()
+        for index, name in enumerate(table_names):
+            if name in sql:
+                counts[index] += 1
+
+    event.listen(engine, "before_cursor_execute", count_lookup)
+    try:
+        resolver = service.CampaignV2DispatchBranchResolver(session=session)
+        expected = {
+            key: service.resolve_frozen_recipient_branch(
+                NS(sucursal=key, evidence_rows=[]),
+                session=session,
+                resolver=resolver,
+            )
+            for key in ("Tecnológico", "tecnologico-2", "TEC_MXL", "TEC MXL")
+        }
+        for _ in range(250):
+            for key, branch in expected.items():
+                assert service.resolve_frozen_recipient_branch(
+                    NS(sucursal=key, evidence_rows=[]),
+                    session=session,
+                    resolver=resolver,
+                ) == branch
+    finally:
+        event.remove(engine, "before_cursor_execute", count_lookup)
+
+    assert counts == [1, 1]
+    assert all(branch is not None for branch in expected.values())
+    assert {branch.sucursal_canon for branch in expected.values()} == {"TEC_MXL"}
+
+
+def test_scoped_resolver_preserves_ambiguous_alias_block(session):
+    session.add(
+        Sucursal(
+            sucursal_id=5,
+            serie="ALT",
+            sucursal="Otra sucursal",
+            estado="BC",
+            operational_status="ACTIVA",
+            is_demo=False,
+            municipio="Mexicali",
+            direccion="QA",
+        )
+    )
+    session.add(
+        TrackBranchCatalogORM(
+            sucursal_canon="TEC_OTHER",
+            sucursal_id=5,
+            track_label="tecnologico-2",
+            display_order=5,
+            is_track_active=True,
+        )
+    )
+    session.commit()
+
+    resolver = service.CampaignV2DispatchBranchResolver(session=session)
+    assert service.resolve_dispatch_branch_key("tecnologico-2", session=session) is None
+    assert resolver.resolve("tecnologico-2") is None
+    assert resolver.resolve("TEC_MXL").sucursal_id == 4
+
+
+def test_fresh_resolver_observes_subsequent_alias_change(session):
+    first = service.CampaignV2DispatchBranchResolver(session=session)
+    assert first.resolve("tecnologico-2").sucursal_id == 4
+
+    alias = session.query(TrackBranchAliasORM).filter_by(
+        raw_branch_name="tecnologico-2"
+    ).one()
+    alias.is_active = False
+    session.commit()
+
+    assert first.resolve("tecnologico-2").sucursal_id == 4
+    assert service.CampaignV2DispatchBranchResolver(
+        session=session
+    ).resolve("tecnologico-2") is None
