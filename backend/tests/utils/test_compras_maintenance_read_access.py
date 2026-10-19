@@ -294,7 +294,8 @@ def test_maintenance_coordinator_reads_only_assigned_maintenance_branches(monkey
     assert "departamento_id = 1" in sql
     assert "IN (8, 9)" in sql
     assert "departamento_id = 6" not in sql
-    assert "username" not in sql.lower()
+    # Fallback de creador solo para otros departamentos; Mantenimiento exige región.
+    assert "departamento_id != 1" in sql
 
 
 def test_maintenance_coordinator_does_not_inherit_corporate_branch():
