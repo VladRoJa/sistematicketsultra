@@ -1,7 +1,9 @@
 @import './marketing-campaign-v2-form-fields.css';
 .excel-import { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; }
 .explanation { font-size: 13px; line-height: 1.5; }
-.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+/* V1: priorizar la captura principal, sin forzar tres controles en una fila. */
+.fields > mat-form-field:first-child { grid-column: 1 / -1; }
 .file-field { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
 .file-field input { max-width: 100%; }
 .error { color: #b91c1c; }

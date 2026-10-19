@@ -1876,6 +1876,10 @@ test('Campaign V2 fields reuse Suite Ultra UI v1 Material fill styles and first 
   assert.equal(shared.includes('container-color: transparent'), false);
   assert.ok(page.includes('.field-grid,'));
   assert.ok(excel.includes('.fields { gap: 16px 18px;'));
+  // The long campaign-name placeholder must not share a cramped three-column row.
+  assert.ok(excel.includes('grid-template-columns: repeat(2, minmax(0, 1fr))'));
+  assert.ok(excel.includes('.fields > mat-form-field:first-child { grid-column: 1 / -1; }'));
+  assert.ok(excel.includes('.fields { grid-template-columns: minmax(0, 1fr); }'));
   assert.ok(qa.includes('.qa-fields { gap: 14px 18px;'));
   // The default compact-75 density applies 8px labels and 10px values globally.
   // Excel must reuse the exact V1 compact exception rather than inherit those sizes.
