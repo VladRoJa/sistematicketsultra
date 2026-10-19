@@ -1897,7 +1897,7 @@ test('Campaign V2 fields reuse Suite Ultra UI v1 Material fill styles and first 
   const excelLabelScope =
     'body.suite-compact-review .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog';
   assert.ok(compact.includes(excelLabelScope + ' .mat-mdc-floating-label,'));
-  assert.ok(compact.includes(excelLabelScope + ' .mdc-floating-label {\\n  font-size: 15px !important;'));
+  assert.ok(compact.includes(excelLabelScope + ' .mdc-floating-label {\n  font-size: 15px !important;'));
   for (const [name, expected] of [['excel-dialog', 3], ['qa-manual-dialog', 5]] as const) {
     const html = fs.readFileSync(
       path.join(dir, 'marketing-campaign-v2-' + name + '.component.html'), 'utf8',
