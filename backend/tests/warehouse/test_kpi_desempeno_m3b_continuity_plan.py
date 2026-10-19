@@ -22,6 +22,7 @@ from app.warehouse.services.kpi_desempeno_semantic_diff import (
 from app.warehouse.services.kpi_desempeno_m3b_continuity_plan import (
     BLOCKED,
     READY_FOR_REVIEW,
+    M3BSourceRevisionEvidence,
     plan_kpi_desempeno_mtd_impact,
 )
 
@@ -452,3 +453,162 @@ def test_negative_socios_activos_is_not_masked_by_mtd_absence():
     assert plan.blocking_issues[0].code == "INVALID_M1_FIELD"
     assert plan.blocking_issues[0].track_mtd_field == "socios_activos_del_mes"
     assert plan.track_field_changes == ()
+
+
+# M3-B origin-revision classification; entirely synthetic, no Warehouse writes.
+def _revision_evidence(
+    *,
+    branch=CENTRO,
+    metric="bajas_reales_mtd",
+    earlier=20,
+    later=19,
+    earlier_date=DAY - timedelta(days=1),
+    later_date=DAY,
+    sha_before="a" * 64,
+    sha_after="b" * 64,
+    reviewer_user_id=101,
+    review_reference="QA-SYNTHETIC-REVISION-001",
+):
+    return M3BSourceRevisionEvidence(
+        branch_key=branch,
+        track_mtd_field=metric,
+        earlier_date=earlier_date,
+        later_date=later_date,
+        earlier=earlier,
+        later=later,
+        earlier_upload_id=1001,
+        later_upload_id=1002,
+        earlier_sha256=sha_before,
+        later_sha256=sha_after,
+        reviewer_user_id=reviewer_user_id,
+        review_reference=review_reference,
+    )
+
+
+def test_exact_documented_bajas_decrease_remains_visible_but_is_ready_for_review():
+    observed = _series()
+    before = deepcopy(observed)
+    plan = plan_kpi_desempeno_mtd_impact(
+        business_date=DAY,
+        diff=_diff(fields=[("bajas", 25, 19)]),
+        observed_mtd=observed,
+        source_revision_evidence=(_revision_evidence(),),
+    )
+    assert plan.status == READY_FOR_REVIEW
+    assert plan.blocking_issues == ()
+    assert [(x.code, x.branch_key, x.track_mtd_field, x.delta)
+            for x in plan.documented_decreases] == [
+        ("MTD_SOURCE_REVISION_REVIEW", CENTRO, "bajas_reales_mtd", -1),
+    ]
+    assert [(x.previous, x.current) for x in plan.track_field_changes] == [(25, 19)]
+    assert observed == before
+
+
+def test_source_revision_evidence_must_match_exact_values_and_dates():
+    for correction in (
+        _revision_evidence(earlier=21),
+        _revision_evidence(later=18),
+        _revision_evidence(branch=NORTE),
+        _revision_evidence(earlier_date=DAY - timedelta(days=2)),
+        _revision_evidence(metric="reactivaciones_real_mtd"),
+    ):
+        plan = plan_kpi_desempeno_mtd_impact(
+            business_date=DAY,
+            diff=_diff(fields=[("bajas", 25, 19)]),
+            observed_mtd=_series(),
+            source_revision_evidence=(correction,),
+        )
+        assert plan.status == BLOCKED
+        assert any(x.code == "MTD_DECREASE" for x in plan.blocking_issues)
+        assert plan.documented_decreases == ()
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"sha_before": "not-a-hash"},
+    {"sha_after": "A" * 64},
+    {"reviewer_user_id": 0},
+    {"reviewer_user_id": True},
+    {"review_reference": ""},
+    {"earlier_date": DAY, "later_date": DAY},
+    {"earlier": 19, "later": 20},
+])
+def test_malformed_revision_evidence_fails_closed(kwargs):
+    plan = plan_kpi_desempeno_mtd_impact(
+        business_date=DAY,
+        diff=_diff(fields=[("bajas", 25, 19)]),
+        observed_mtd=_series(),
+        source_revision_evidence=(_revision_evidence(**kwargs),),
+    )
+    assert plan.status == BLOCKED
+    assert {"INVALID_SOURCE_REVISION_EVIDENCE", "MTD_DECREASE"}.issubset({
+        x.code for x in plan.blocking_issues
+    })
+
+
+def test_duplicate_revision_evidence_fails_closed():
+    evidence = _revision_evidence()
+    plan = plan_kpi_desempeno_mtd_impact(
+        business_date=DAY,
+        diff=_diff(fields=[("bajas", 25, 19)]),
+        observed_mtd=_series(),
+        source_revision_evidence=(evidence, evidence),
+    )
+    assert plan.status == BLOCKED
+    assert any(x.code == "DUPLICATE_SOURCE_REVISION_EVIDENCE"
+               for x in plan.blocking_issues)
+
+
+def test_unrelated_evidence_blocks_even_when_there_are_no_decreases():
+    plan = plan_kpi_desempeno_mtd_impact(
+        business_date=DAY,
+        diff=_diff(fields=[("bajas", 25, 27)]),
+        observed_mtd=_series(),
+        source_revision_evidence=(_revision_evidence(),),
+    )
+    assert plan.status == BLOCKED
+    assert any(x.code == "UNMATCHED_SOURCE_REVISION_EVIDENCE"
+               for x in plan.blocking_issues)
+
+
+def test_verified_bajas_revision_cannot_waive_unrelated_reactivaciones_decrease():
+    plan = plan_kpi_desempeno_mtd_impact(
+        business_date=DAY,
+        diff=_diff(fields=[("reactivaciones", 150, 100), ("bajas", 25, 19)]),
+        observed_mtd=_series(),
+        source_revision_evidence=(_revision_evidence(),),
+    )
+    assert plan.status == BLOCKED
+    assert any(x.code == "MTD_DECREASE"
+               and x.track_mtd_field == "reactivaciones_real_mtd"
+               for x in plan.blocking_issues)
+    assert [x.track_mtd_field for x in plan.documented_decreases] == [
+        "bajas_reales_mtd"
+    ]
+
+
+def test_revision_evidence_never_bypasses_missing_neighbor():
+    observed = _series()
+    del observed[DAY - timedelta(days=1)]
+    plan = plan_kpi_desempeno_mtd_impact(
+        business_date=DAY,
+        diff=_diff(fields=[("bajas", 25, 19)]),
+        observed_mtd=observed,
+        source_revision_evidence=(_revision_evidence(),),
+    )
+    assert plan.status == BLOCKED
+    assert any(x.code == "MISSING_DAY" for x in plan.blocking_issues)
+    assert any(x.code == "UNMATCHED_SOURCE_REVISION_EVIDENCE"
+               for x in plan.blocking_issues)
+
+
+def test_document_only_metric_with_revision_evidence_is_blocked():
+    plan = plan_kpi_desempeno_mtd_impact(
+        business_date=DAY,
+        diff=_diff(fields=[("renovaciones", 40, 41)]),
+        observed_mtd={},
+        source_revision_evidence=(_revision_evidence(),),
+    )
+    assert plan.status == BLOCKED
+    assert plan.track_field_changes == ()
+    assert any(x.code == "UNMATCHED_SOURCE_REVISION_EVIDENCE"
+               for x in plan.blocking_issues)
