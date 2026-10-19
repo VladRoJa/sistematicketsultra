@@ -5,7 +5,7 @@
 :host {
   display: block;
   --desc-col-width: 420px;
-  --table-min-width: 2486px;
+  --table-min-width: 2534px;
 }
 
 /* ==========================================================================
@@ -373,7 +373,7 @@
 }
 
 .tabla-tickets .c-est {
-  width: 110px;
+  width: 158px;
 }
 
 .tabla-tickets .c-cri {
@@ -492,6 +492,26 @@
 
 .tabla-tickets tbody td {
   vertical-align: middle;
+}
+
+.tabla-tickets td.td-estado {
+  white-space: normal;
+  text-overflow: clip;
+}
+
+.ticket-estado {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  line-height: 1.2;
+}
+
+.ticket-estado__detalle {
+  color: var(--ultra-gray-600);
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 /* Header con filtro activo */
