@@ -2874,11 +2874,13 @@ etiquetaSolicitarCierreMantenimiento(ticket: Ticket): string {
     : 'Solicitar cierre';
 }
 
-etiquetaEstadoTicket(ticket: Ticket): string {
-  return this.esTicketMantenimiento(ticket)
-    && ticket.estado_cierre === 'pendiente_revision_coord'
-    ? 'En progreso · Pendiente de revisión'
-    : ticket.estado;
+presentacionEstadoTicket(ticket: Ticket): { principal: string; detalle: string | null } {
+  if (this.esTicketMantenimiento(ticket)
+      && ticket.estado_cierre === 'pendiente_revision_coord') {
+    return { principal: 'En progreso', detalle: 'Pendiente de revisión' };
+  }
+
+  return { principal: ticket.estado, detalle: null };
 }
 
 marcarTrabajoTerminado(ticket: Ticket): void {
