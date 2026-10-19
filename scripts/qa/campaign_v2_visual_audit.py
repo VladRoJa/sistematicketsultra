@@ -2,7 +2,8 @@
 """Read-only Playwright audit of Suite Ultra Campaigns V2.
 
 Anonymous mode works against a frontend-only build.
-Authenticated mode REQUIRES a non-production QA URL and synthetic QA data.
+Authenticated mode supports synthetic QA, or explicitly authorized real data
+on loopback-only localhost; never against a production URL.
 Never exports browser storage, tokens, usernames, passwords or request bodies.
 """
 from __future__ import annotations
@@ -100,12 +101,16 @@ def validate_target(mode: str, base: str) -> None:
     if not local and parsed.scheme != "https":
         raise ValueError("Remote QA audit requires HTTPS")
     if mode == "authenticated":
-        if os.getenv("SUITE_QA_SYNTHETIC_DATA_CONFIRMED") != "YES":
-            raise ValueError("Only a QA environment with synthetic data is permitted")
+        synthetic_qa = os.getenv("SUITE_QA_SYNTHETIC_DATA_CONFIRMED") == "YES"
+        real_local = os.getenv("SUITE_QA_REAL_LOCAL_READONLY_CONFIRMED") == "YES"
+        if synthetic_qa == real_local:
+            raise ValueError("Choose exactly one data mode: synthetic QA OR real local read-only")
+        if real_local and not local:
+            raise ValueError("Real-data audit is permitted only on localhost / 127.0.0.1 / ::1")
         if os.getenv("SUITE_QA_ALLOWED_HOST", "").lower() != host:
-            raise ValueError("Set SUITE_QA_ALLOWED_HOST to the exact QA hostname")
+            raise ValueError("Set SUITE_QA_ALLOWED_HOST to the exact audit hostname")
         if not os.getenv("SUITE_QA_USERNAME") or not os.getenv("SUITE_QA_PASSWORD"):
-            raise ValueError("QA credentials missing (provide via environment, not CLI)")
+            raise ValueError("Audit credentials missing (provide via environment, not CLI)")
 
 
 def navigate(page, base: str, route: str) -> None:
@@ -242,6 +247,10 @@ def main() -> int:
         if not api.hostname or (api.scheme != "https" and
                 api.hostname.lower() not in {"127.0.0.1", "localhost", "::1"}):
             print("CONFIG_ERROR: API origin must be HTTPS or local", file=sys.stderr)
+            return 2
+        if os.getenv("SUITE_QA_REAL_LOCAL_READONLY_CONFIRMED") == "YES" and (
+                api.hostname.lower() not in {"localhost", "127.0.0.1", "::1"}):
+            print("CONFIG_ERROR: Real local audit forbids non-loopback API hosts", file=sys.stderr)
             return 2
         allowed_api_origins.add(f"{api.scheme}://{api.netloc.lower()}")
     with sync_playwright() as playwright:
