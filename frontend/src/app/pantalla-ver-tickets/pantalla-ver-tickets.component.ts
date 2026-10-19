@@ -2834,8 +2834,19 @@ puedeMostrarBotonEnProgreso(ticket: Ticket): boolean {
   if (this.puedeCoordinarTicket(ticket)) return true;
 
   return this.puedeEditarTickets
-    && !(String(this.user?.rol || '').toUpperCase() === 'COMPRAS'
-      && Number(ticket.departamento_id) === 1);
+    && !(['COMPRAS', 'COORDINADOR_MANTENIMIENTO'].includes(
+      this.getUserMaintenanceRole(),
+    ) && Number(ticket.departamento_id) === 1);
+}
+
+puedeMostrarEditarFechaSolucion(ticket: Ticket): boolean {
+  const estado = String(ticket?.estado || '').trim().toLowerCase();
+  if (estado !== 'en progreso') return false;
+  if (this.puedeCoordinarTicket(ticket)) return true;
+  const scopedRole = ['COMPRAS', 'COORDINADOR_MANTENIMIENTO'].includes(
+    this.getUserMaintenanceRole(),
+  );
+  return this.puedeEditarTickets && !(scopedRole && Number(ticket.departamento_id) === 1);
 }
 
 getUserMaintenanceRole(): string {
