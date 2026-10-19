@@ -1,0 +1,71 @@
+name: Campaign V2 Playwright Visual Audit
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/qa/campaign_v2_visual_audit.py'
+      - '.github/workflows/campaign-v2-playwright-visual-audit.yml'
+      - 'frontend/src/app/marketing-campaign-v2/**'
+      - 'frontend/src/styles.compact*.scss'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  anonymous-ui-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install and build Angular frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install Playwright Chromium
+        run: |
+          python -m pip install 'playwright==1.55.0'
+          python -m playwright install --with-deps chromium
+
+      - name: Check Python audit syntax
+        run: python -m py_compile scripts/qa/campaign_v2_visual_audit.py
+
+      - name: Serve built Angular app (no backend or credentials)
+        run: |
+          python -m http.server 4173 --bind 127.0.0.1 \
+            --directory frontend/dist/frontend-angular > /tmp/suite-ui-http.log 2>&1 &
+          for i in $(seq 1 25); do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          echo "Angular test server did not start" >&2
+          exit 1
+
+      - name: Anonymous protected-route smoke and viewport screenshots
+        run: |
+          python scripts/qa/campaign_v2_visual_audit.py \
+            --mode anonymous \
+            --base-url http://127.0.0.1:4173 \
+            --out artifacts/campaign-v2-visual
+
+      - name: Upload synthetic-safe anonymous evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: campaign-v2-anonymous-playwright
+          path: artifacts/campaign-v2-visual/
+          retention-days: 7
+          if-no-files-found: warn
