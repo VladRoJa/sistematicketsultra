@@ -365,3 +365,21 @@ def test_maintenance_coordinator_never_inherits_technical_branch_scope(monkeypat
     assert "IN (8)" in sql
     assert "1000" not in sql
     assert "100)" not in sql
+
+
+def test_yuliana_coordinator_uses_exact_twelve_maintenance_branches(monkeypatch):
+    """El cambio de identidad conserva alcance sin heredar tickets de Compras."""
+    branches = (7, 8, 9, 10, 11, 12, 13, 19, 21, 22, 23, 25)
+    _mock_grant(monkeypatch, allowed=True)
+    query = _mock_tickets_query(monkeypatch)
+    actor = _maintenance_coordinator(branches=branches)
+
+    ticket_filters.filtrar_tickets_por_usuario(actor)
+    compiled = str(query.filter.call_args.args[0].compile(
+        compile_kwargs={"literal_binds": True}
+    ))
+
+    assert "departamento_id = 1" in compiled
+    assert f"IN ({', '.join(map(str, branches))})" in compiled
+    assert "departamento_id = 6" not in compiled
+    assert "username" not in compiled.lower()
