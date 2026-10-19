@@ -51,10 +51,14 @@ las variables siguientes, sin pegar contraseñas en commits ni en el chat:
     SUITE_QA_USERNAME
     SUITE_QA_PASSWORD
     SUITE_QA_ALLOWED_HOST
+    SUITE_QA_ALLOWED_API_ORIGIN    (opcional, origen HTTPS exacto si API está en otro host/puerto)
     SUITE_QA_SYNTHETIC_DATA_CONFIRMED=YES
 
 El hostname debe coincidir exactamente con el de --base-url; QA remota exige
-HTTPS. Ejemplo de formato con un hostname deliberadamente inválido:
+HTTPS. Las peticiones /api/ hacia orígenes no permitidos se bloquean:
+por defecto solo se autoriza el mismo origen de frontend, más el origen QA
+adicional explícitamente declarado. Verificar que frontend QA no apunte a una
+API de producción antes de ejecutar. Ejemplo de hostname inválido:
 
     python scripts/qa/campaign_v2_visual_audit.py --mode authenticated --base-url https://qa.example.invalid
 
