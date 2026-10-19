@@ -11,6 +11,7 @@ from app.models.sucursal_model import Sucursal
 from app.models.ticket_model import Ticket
 from app.utils.pm_permissions import can_pm_execute, can_pm_view
 from app.utils.tickets_maintenance_permissions import (
+    ADMIN_ROLES,
     ASSIGNED_ONLY_ELIGIBLE_ROLES,
     has_maintenance_coordination_permission,
 )
@@ -245,16 +246,17 @@ def _user_scope_branch_ids(user) -> list[int]:
 
 
 def _can_schedule_maintenance(user) -> bool:
-    """Planner: ejecución PM existente o coordinación individual autorizada.
+    """Programación exige autoridad de coordinación, NO ejecución técnica PM.
 
-    El permiso de coordinación no equivale a can_pm_execute: únicamente
-    habilita el compromiso del ticket en el Planner. El endpoint restringe
-    la escritura a las sucursales individuales del usuario.
+    SR/AUX/TECNICO/MANTENIMIENTO pueden ejecutar PM en su ámbito, pero eso
+    no permite fijar ni mover la fecha compromiso (modal o drag & drop).
+    El endpoint aplica además el scope del ticket y sucursal.
     """
-    if can_pm_execute(user):
+    role = _user_role(user)
+    if role in ADMIN_ROLES:
         return True
     return bool(
-        _user_role(user) in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"}
+        role in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"}
         and _user_scope_branch_ids(user)
         and has_maintenance_coordination_permission(user)
     )
