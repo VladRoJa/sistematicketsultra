@@ -154,6 +154,55 @@ def register_maintenance_ticket_update_guard(app) -> None:
         return None
 
     @app.before_request
+    def guard_technical_commitment_changes():
+        """Impedir cambios de fecha por rutas Tickets legacy sin bloquear ejecución PM.
+
+        El Planner protege su propia ruta en schedule_ticket(). Aquí protegemos
+        PUT /tickets/update y PUT /tickets/compromiso, que antes aceptaban
+        cambios de compromiso de personal técnico con can_pm_execute.
+        """
+        if request.method != "PUT" or request.endpoint not in {
+            "tickets.update_ticket_status", "tickets.set_compromiso",
+        }:
+            return None
+
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return None
+
+        # La ruta update admite historial del cliente; no permitir inyectar
+        # historial de cambios de fecha sin autoridad de coordinación.
+        if request.endpoint == "tickets.update_ticket_status":
+            changing_date = bool(data.get("fecha_solucion")) or bool(
+                data.get("historial_fechas")
+            )
+        else:
+            changing_date = bool(data.get("fecha_solucion"))
+        if not changing_date:
+            return None
+
+        verify_jwt_in_request()
+        actor = UserORM.get_by_id(get_jwt_identity())
+        if actor is None or has_maintenance_coordination_permission(actor):
+            return None
+
+        ticket_id = (request.view_args or {}).get(
+            "ticket_id", (request.view_args or {}).get("id")
+        )
+        if ticket_id is None:
+            return None
+        ticket = Ticket.query.get(ticket_id)
+        if ticket is None or not is_maintenance_ticket(ticket):
+            return None
+
+        return jsonify({
+            "mensaje": (
+                "La fecha compromiso de Mantenimiento solo puede ser "
+                "asignada o reprogramada por coordinación autorizada."
+            ),
+        }), 403
+
+    @app.before_request
     def guard_compras_maintenance_mutations():
         if (
             request.method not in {"POST", "PUT", "PATCH", "DELETE"}
