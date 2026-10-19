@@ -299,6 +299,55 @@ def test_reassign_only_updates_assignee_and_history(monkeypatch):
     assert t.historial_fechas[0]["asignado_nuevo"] == "SR_MANT_TIJ"
 
 
+@pytest.mark.parametrize("synthetic_id,original_due,closure", [
+    (95001, "2026-09-18T07:00:00-07:00", "rechazado_por_gerente"),
+    (95002, "2026-08-28T07:00:00-07:00", None),
+    (95003, "2026-08-28T07:00:00-07:00", None),
+    (95004, "2026-08-21T07:00:00-07:00", "rechazado_por_gerente"),
+])
+def test_initial_assignment_of_legacy_in_progress_ticket_preserves_commitment_and_rejection(
+    monkeypatch, synthetic_id, original_due, closure,
+):
+    """Tickets legacy sin responsable se rescatan sin reprogramar ni limpiar rechazos."""
+    t = ticket(branch=9, state="en progreso")
+    t.id = synthetic_id
+    t.fecha_solucion = datetime.fromisoformat(original_due)
+    t.fecha_en_progreso = datetime(2026, 8, 19, 23, 0, tzinfo=timezone.utc)
+    t.estado_cierre = closure
+    legacy_event = {"tipo": "legacy", "fechaCambio": "2026-08-19T19:00:00+00:00"}
+    t.historial_fechas = [legacy_event.copy()]
+    setup_queries(monkeypatch, t)
+    monkeypatch.setattr(
+        coordination, "has_maintenance_coordination_permission", lambda _u: True
+    )
+
+    result = coordination.prepare_maintenance_reassignment(
+        t.id,
+        actor(branches=(9,)),
+        {
+            "tipo_atencion": "INTERNA",
+            "asignado_user_id": 68,
+            "motivo": "Recuperar ticket histórico sin responsable",
+        },
+        now=NOW,
+    )
+
+    assert result is t
+    assert t.asignado_a == "SR_MANT_TIJ"
+    assert t.tipo_atencion == "INTERNA"
+    assert t.estado == "en progreso"
+    assert t.estado_cierre == closure
+    assert t.fecha_solucion == datetime.fromisoformat(original_due)
+    assert t.fecha_en_progreso == datetime(2026, 8, 19, 23, 0, tzinfo=timezone.utc)
+    assert t.historial_fechas[1] == legacy_event
+    event = t.historial_fechas[0]
+    assert event["tipo"] == "maintenance_reassignment_v1"
+    assert event["asignado_anterior"] is None
+    assert event["asignado_nuevo"] == "SR_MANT_TIJ"
+    assert event["cambiadoPor"] == "COORDINADORA_TEST"
+    assert event["revision_tecnica_invalidada"] is False
+
+
 def test_reassign_can_change_to_external_without_touching_date(monkeypatch):
     t = ticket(branch=8, state="en progreso")
     t.tipo_atencion = "INTERNA"
