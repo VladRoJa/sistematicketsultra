@@ -84,7 +84,7 @@ jobs:
         env:
           SECRET_KEY: tickets-v1-maint-ci
           JWT_SECRET_KEY: tickets-v1-maint-jwt-ci
-          SQLALCHEMY_DATABASE_URI: sqlite:///:memory:
+          SQLALCHEMY_DATABASE_URI: 'sqlite:///:memory:'
         run: |
           python -m pytest -q --tb=short tests/utils/test_tickets_maintenance_permissions.py \
             tests/services/test_ticket_maintenance_coordination_service.py \
