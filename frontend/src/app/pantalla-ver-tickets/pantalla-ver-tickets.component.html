@@ -924,7 +924,12 @@
           </td>
 
           <td>{{ getNombreSucursal(ticket) }}</td>
-          <td>{{ etiquetaEstadoTicket(ticket) }}</td>
+          <td class="td-estado">
+            <div class="ticket-estado" *ngIf="presentacionEstadoTicket(ticket) as estadoVisible">
+              <span class="ticket-estado__principal">{{ estadoVisible.principal }}</span>
+              <span *ngIf="estadoVisible.detalle" class="ticket-estado__detalle">{{ estadoVisible.detalle }}</span>
+            </div>
+          </td>
           <td>{{ ticket.criticidad }}</td>
 
           <td>
