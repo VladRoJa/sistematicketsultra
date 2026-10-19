@@ -117,6 +117,7 @@ isMoreMenuActive(): boolean {
     (item) => item.label === this.currentSubmenu
   );
 }
+  esCoordinadorMantenimiento = false;
   puedeVerMantenimiento = false;
   puedeVerMantenimientoCompleto = false;
   puedeVerMantenimientoOperativo = false;
@@ -420,6 +421,26 @@ const menuMantenimientoGerencial = [
   }
 ];
 
+  const menuMantenimientoCoordinador = [
+    {
+      label: 'Tickets',
+      path: '/main/ver-tickets',
+      submenu: [
+        { label: 'Ver Tickets', path: '/main/ver-tickets' },
+        { label: 'Crear Ticket', path: '/main/crear-ticket' },
+      ],
+    },
+    {
+      label: 'Mantenimiento',
+      path: '/maintenance-planner',
+      submenu: [
+        { label: 'Planner de Mantenimiento', path: '/maintenance-planner' },
+        { label: 'Consulta / Historial', path: '/pm/consulta-historial' },
+        { label: 'Calendario', path: '/pm/calendario' },
+      ],
+    },
+  ];
+
   const menuCompleto = [
     {
       label: 'Tickets',
@@ -483,6 +504,8 @@ const menuMantenimientoGerencial = [
     this.menuItems = menuMantenimientoOperativo;
   } else if (this.puedeVerMantenimientoGerencial) {
     this.menuItems = menuMantenimientoGerencial;
+  } else if (this.esCoordinadorMantenimiento) {
+    this.menuItems = menuMantenimientoCoordinador;
   } else {
     this.menuItems = soloTickets;
   }
@@ -773,6 +796,7 @@ private puedeVerMaintenancePlannerPorRol(): boolean {
     'MANTENIMIENTO',
     'SR_MANTENIMIENTO',
     'AUX_MANTENIMIENTO',
+    'COORDINADOR_MANTENIMIENTO',
     'SISTEMAS',
     'TECNICO',
     'GERENTE',
@@ -1099,6 +1123,7 @@ private verificarRolUsuario(): void {
   const user = this.authService.getUser();
   const rol = (user?.rol || '').toUpperCase();
 
+  this.esCoordinadorMantenimiento = rol === 'COORDINADOR_MANTENIMIENTO';
   this.esAdmin = rol === 'ADMINISTRADOR' || rol === 'SUPER_ADMIN';
   this.esSoloLectura = rol === 'LECTOR_GLOBAL';
 
