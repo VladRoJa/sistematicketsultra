@@ -58,7 +58,7 @@ class VisualAuditTargetTests(unittest.TestCase):
         with self.assertRaisesRegex(AuditNavigationTimeout, "^tools_trigger_click_timeout$"):
             open_tool(page, "Preparar prueba interna · 1 contacto")
 
-    def test_close_dialog_uses_explicit_button_and_restores_accessibility(self):
+    def test_close_dialog_uses_explicit_button_without_global_accessibility_gate(self):
         from unittest.mock import MagicMock
 
         page = MagicMock()
@@ -73,12 +73,9 @@ class VisualAuditTargetTests(unittest.TestCase):
         )
         page.keyboard.press.assert_not_called()
         dialog.wait_for.assert_called_once_with(state="detached", timeout=5000)
-        page.get_by_role.assert_called_once_with(
-            "button", name="Abrir herramientas de campañas", exact=True
-        )
-        page.get_by_role.return_value.wait_for.assert_called_once_with(
-            state="visible", timeout=5000
-        )
+        # A missing unrelated trigger must be recorded by the next dialog
+        # case, never interrupt cleanup of the current dialog.
+        page.get_by_role.assert_not_called()
 
     def test_close_dialog_falls_back_to_escape_if_no_close_button(self):
         from unittest.mock import MagicMock
@@ -90,9 +87,7 @@ class VisualAuditTargetTests(unittest.TestCase):
         page.keyboard.press.assert_called_once_with("Escape")
         dialog.get_by_role.return_value.first.click.assert_not_called()
         dialog.wait_for.assert_called_once_with(state="detached", timeout=5000)
-        page.get_by_role.return_value.wait_for.assert_called_once_with(
-            state="visible", timeout=5000
-        )
+        page.get_by_role.assert_not_called()
 
     def test_tools_trigger_safe_diagnostic_codes(self):
         from unittest.mock import MagicMock
