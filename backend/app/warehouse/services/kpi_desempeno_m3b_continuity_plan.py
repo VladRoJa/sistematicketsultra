@@ -144,7 +144,10 @@ def _observed_value(
 def _valid_revision_evidence(item: M3BSourceRevisionEvidence) -> bool:
     """Validate exact pair and metadata shape, NOT external provenance."""
     return (
-        bool(item.branch_key and item.branch_key == item.branch_key.strip())
+        isinstance(item.branch_key, str)
+        and bool(item.branch_key.strip())
+        and item.branch_key == item.branch_key.strip()
+        and isinstance(item.track_mtd_field, str)
         and item.track_mtd_field in MTD_TRACK_FIELDS
         and type(item.earlier_date) is date
         and type(item.later_date) is date
