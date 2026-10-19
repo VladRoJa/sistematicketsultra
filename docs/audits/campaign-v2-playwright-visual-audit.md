@@ -1,6 +1,6 @@
 # Suite Ultra — Auditoría visual Playwright de Campañas V2
 
-**Estado:** infraestructura DRAFT, pendiente de auditoría autenticada con datos sintéticos.
+**Estado:** auditor anónimo aprobado; auditoría autenticada pendiente de ejecutarse. Permite QA sintético o datos reales **solo en localhost con autorización explícita**.
 
 ## Dos modos (nunca confundir)
 
@@ -9,8 +9,8 @@
 a login. Guarda capturas, sin backend ni credenciales. PASS aquí **no aprueba**
 la UI del módulo.
 
-**Autenticado / QA:** usa una cuenta temporal de un ambiente no productivo
-con datos sintéticos. Captura Crear Ticket V1 (referencia), Nueva campaña,
+**Autenticado / QA o local:** usa una cuenta autorizada, en un ambiente QA
+sintético o una instancia **localhost con datos reales**. Captura Crear Ticket V1 (referencia), Nueva campaña,
 Resultados, Historial, Crear desde Excel, Prueba interna, Estado de los canales,
 Plantillas/canales/tarifas, Límites de envío y detalle de campaña presembrada
 (si existe). No necesita crear campañas ni disparar preview para auditar.
@@ -21,11 +21,15 @@ Plantillas/canales/tarifas, Límites de envío y detalle de campaña presembrada
   POST /api/auth/login, que se permite exclusivamente durante login QA.
 - No pulsa Congelar, Guardar, Autorizar, Enviar, Importar ni acciones mutantes.
 - No registra bodies, credenciales, tokens, cookies o localStorage.
-- Exige SUITE_QA_SYNTHETIC_DATA_CONFIRMED=YES, hostname QA explícito,
-  usuario temporal y contraseña temporal.
-- No ejecutar el modo autenticado en producción o sobre datos reales:
-  las capturas pueden contener nombres, teléfonos y métricas. Los artefactos
-  autenticados permanecen locales; CI solo publica capturas del login anónimo.
+- Exige **exactamente una** confirmación: QA sintético o real local de solo lectura,
+  el hostname exacto, un usuario autorizado y su contraseña privada.
+- El modo real está restringido a localhost / 127.0.0.1 / ::1; rechaza
+  dominios externos y destinos API remotos no autorizados.
+- Las capturas con datos reales pueden mostrar nombres, teléfonos y métricas:
+  **NO subirlas a GitHub, tickets, chats, Drive ni CI**. El directorio
+  /artifacts/ está excluido mediante el .gitignore de la raíz.
+- Nunca ejecutar esta modalidad frente a una URL de producción. Las capturas
+  autenticadas solo permanecen locales; CI solo publica el login anónimo.
 
 ## Ejecución anónima local
 
@@ -65,6 +69,41 @@ API de producción antes de ejecutar. Ejemplo de hostname inválido:
 Los resultados quedan en artifacts/campaign-v2-visual/report.json y sus PNG.
 No subir capturas autenticadas hasta verificar que son 100% sintéticas.
 
+## Ejecución autenticada con PostgreSQL real local (Windows / PowerShell)
+
+Esta opción usa el frontend local http://localhost:4200 y el backend configurado
+en el proxy Angular (normalmente 127.0.0.1:5000). Los endpoints /api se consultan
+en el mismo origen. **No altera la base de datos**, aunque el login pueda crear
+registros normales de sesión/auditoría. El navegador bloquea otras llamadas HTTP
+de escritura. Nunca establecer SUITE_QA_SYNTHETIC_DATA_CONFIRMED=YES
+sobre datos reales.
+
+Desde la raíz del repositorio en una terminal PowerShell:
+
+    git pull --ff-only
+    py -m pip install playwright==1.55.0
+    py -m playwright install chromium
+    $env:SUITE_QA_ALLOWED_HOST = "localhost"
+    $env:SUITE_QA_REAL_LOCAL_READONLY_CONFIRMED = "YES"
+    $env:SUITE_QA_USERNAME = Read-Host "Usuario de la Suite local"
+    $secure = Read-Host "Contraseña de la Suite local" -AsSecureString
+    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+    try { $env:SUITE_QA_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
+    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+    py scripts/qa/campaign_v2_visual_audit.py --mode authenticated --base-url http://localhost:4200 --out artifacts/campaign-v2-visual
+    Remove-Item Env:SUITE_QA_PASSWORD
+
+Previamente verificar que Angular y Flask están levantados, que /api usa el
+proxy local y que **ninguna configuración** apunta a producción. Si se desea
+permitir explícitamente otra API en un puerto local, usar
+SUITE_QA_ALLOWED_API_ORIGIN=http://127.0.0.1:5000; jamás una API remota
+en modo real local.
+
+Resultados: artifacts/campaign-v2-visual/report.json y capturas PNG que
+contendrán datos reales locales. Compartir únicamente un resumen numérico
+del reporte o capturas redactadas. Un exit code 1 es normal cuando se detectan
+problemas visuales o pantallas bloqueadas: no significa que se enviaran datos.
+
 ## Métricas y gate
 
 Heurísticas: tamaño efectivo de etiqueta flotante (<9.5px), tamaño de valor
@@ -73,7 +112,7 @@ horizontal por panel. PASS = pruebas automáticas superadas; FAIL_VISUAL =
 hallazgo medido; BLOCKED = acceso/dato/caso inaccesible. BLOCKED no es PASS.
 El exit code es distinto de cero si hay hallazgos o casos bloqueados.
 
-**Gate:** CI anónimo PASS, auditoría QA autenticada con datos sintéticos y
-revisión humana de todas las capturas frente a Crear Ticket V1. Solo después
+**Gate:** CI anónimo PASS, auditoría local autenticada con consentimiento explícito
+(o QA sintética) y revisión humana de las capturas frente a Crear Ticket V1. Solo después
 priorizar correcciones en una PR separada. Esta PR es infraestructura de QA,
 sin cambios en TS, HTML, CSS, backend, permisos, DB ni envíos.
