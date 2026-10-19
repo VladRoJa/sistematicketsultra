@@ -104,6 +104,70 @@ const plannerBoardHtml = fs.readFileSync(path.resolve(__dirname,
   '../src/app/maintenance-planner/maintenance-planner.component.html'), 'utf8');
 assert.match(plannerBoardHtml, /\[cdkDragDisabled\]="!canDrag\(ticket\)"/,
   'cdkDrag debe deshabilitarse sin canDrag');
+// Recuperación de tickets legacy sin responsable: ejecutar los métodos reales
+// aislados del componente, sin iniciar Angular ni tocar la base productiva.
+const ticketsV1Ts = fs.readFileSync(path.resolve(__dirname,
+  '../src/app/pantalla-ver-tickets/pantalla-ver-tickets.component.ts'), 'utf8');
+const method = (name, returnType) => {
+  const match = ticketsV1Ts.match(new RegExp(
+    '^' + name + '\\(ticket: Ticket\\): ' + returnType + ' \\{[\\s\\S]*?^\\}', 'm',
+  ));
+  assert.ok(match, 'Debe existir el método de Tickets V1 ' + name);
+  return match[0];
+};
+const ticketMethodsSource = [
+  'class TestReassignment {',
+  '  puedeCoordinarMantenimiento = false;',
+  method('puedeCoordinarTicket', 'boolean'),
+  method('puedeReasignarTicket', 'boolean'),
+  method('etiquetaAccionResponsableTicket', 'string'),
+  '}',
+  'module.exports = { TestReassignment };',
+].join('\n');
+const ticketMethodsJs = ts.transpileModule(ticketMethodsSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText;
+const ticketMethodsModule = new Module('tickets-reassignment-qa', module);
+ticketMethodsModule.filename = 'tickets-reassignment-qa.js';
+ticketMethodsModule.paths = Module._nodeModulePaths(__dirname);
+ticketMethodsModule._compile(ticketMethodsJs, 'tickets-reassignment-qa.js');
+const assignment = new ticketMethodsModule.exports.TestReassignment();
+const unassigned = {
+  departamento_id: 1, estado: 'en progreso',
+  asignado_a: null, tipo_atencion: null,
+  fecha_solucion: '2026-08-28T07:00:00-07:00',
+  estado_cierre: 'rechazado_por_gerente',
+};
+assignment.puedeCoordinarMantenimiento = true;
+assert.equal(assignment.puedeReasignarTicket(unassigned), true,
+  'Coordinación puede rescatar ticket antiguo en progreso sin responsable');
+assert.equal(assignment.puedeReasignarTicket({ ...unassigned, estado: 'abierto' }), true,
+  'Coordinación puede asignar ticket abierto sin responsable');
+assert.equal(assignment.etiquetaAccionResponsableTicket(unassigned), 'Asignar responsable');
+assert.equal(assignment.puedeReasignarTicket({ ...unassigned, asignado_a: 'SR_MANT' }), true,
+  'La reasignación normal se conserva');
+assert.equal(assignment.etiquetaAccionResponsableTicket({ ...unassigned, asignado_a: 'SR_MANT' }),
+  'Reasignar responsable');
+assert.equal(assignment.puedeReasignarTicket({
+  ...unassigned, tipo_atencion: 'EXTERNA',
+}), true, 'Proveedor externo sigue siendo reasignable');
+for (const estado of ['por_validar', 'finalizado']) {
+  assert.equal(assignment.puedeReasignarTicket({ ...unassigned, estado }), false,
+    'No permitir asignación en estado ' + estado);
+}
+assert.equal(assignment.puedeReasignarTicket({ ...unassigned, departamento_id: 7 }), false,
+  'Nunca extender coordinación a otro departamento');
+assignment.puedeCoordinarMantenimiento = false;
+assert.equal(assignment.puedeReasignarTicket(unassigned), false,
+  'SR sin coordinación no puede asignar aunque el ticket esté huérfano');
+const ticketTableHtml = fs.readFileSync(path.resolve(__dirname,
+  '../src/app/pantalla-ver-tickets/pantalla-ver-tickets.component.html'), 'utf8');
+assert.match(ticketTableHtml, /\*ngIf="puedeReasignarTicket\(ticket\)"/,
+  'El icono debe respetar el permiso de coordinación');
+assert.match(ticketTableHtml, /\[matTooltip\]="etiquetaAccionResponsableTicket\(ticket\)"/,
+  'El botón debe indicar Asignar cuando el ticket nunca tuvo responsable');
+console.log('PASS: tickets huérfanos de Mantenimiento asignables solo por coordinación');
+
 console.log('PASS: Planner protege fecha inicial, botón Cambiar fecha y arrastre');
 
 console.log('PASS: Planner exige asignación coordinada y conserva el flujo técnico');
