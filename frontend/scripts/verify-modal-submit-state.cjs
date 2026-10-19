@@ -86,6 +86,26 @@ assert.match(plannerTs, /this\.plannerService\.assignInitialCommitmentFromForm\(
   'Planner debe conservar la programación anterior para otros perfiles');
 assert.match(plannerTs, /!this\.coordinationReady/,
   'Un fallo del catálogo no debe habilitar un guardado sin asignación');
+// Un SR puede consultar y terminar su trabajo, pero no fijar/mover compromisos.
+// Las tres entradas visuales deben usar can_schedule del backend (no can_pm_execute).
+const plannerBoardTs = fs.readFileSync(path.resolve(__dirname,
+  '../src/app/maintenance-planner/maintenance-planner.component.ts'), 'utf8');
+assert.match(plannerBoardTs, /canSchedule:\\s*Boolean\\(this\\.board\\?\\.permissions\\.can_schedule\\)/,
+  'El modal del Planner debe recibir can_schedule del backend');
+assert.match(plannerTs, /get canAssignInitialCommitment\\(\\): boolean \\{[\\s\\S]*?this\\.canSchedule/,
+  'La asignación inicial debe bloquearse sin can_schedule');
+assert.match(plannerTs, /get canReprogramCommitment\\(\\): boolean \\{[\\s\\S]*?this\\.canSchedule/,
+  'El botón Cambiar fecha debe bloquearse sin can_schedule');
+assert.match(plannerBoardTs, /canDrag\\(ticket:[\\s\\S]*?this\\.board\\?\\.permissions\\.can_schedule/,
+  'Mover por drag & drop debe bloquearse sin can_schedule');
+assert.match(plannerBoardTs, /if \\(!this\\.canDrag\\(ticket\\)\\)/,
+  'dropTicket debe volver a verificar el permiso antes de enviar el PUT');
+const plannerBoardHtml = fs.readFileSync(path.resolve(__dirname,
+  '../src/app/maintenance-planner/maintenance-planner.component.html'), 'utf8');
+assert.match(plannerBoardHtml, /\\[cdkDragDisabled\\]="!canDrag\\(ticket\\)"/,
+  'cdkDrag debe deshabilitarse sin canDrag');
+console.log('PASS: Planner protege fecha inicial, botón Cambiar fecha y arrastre');
+
 console.log('PASS: Planner exige asignación coordinada y conserva el flujo técnico');
 
 console.log('PASS: habilitación reusable y estilo enabled/disabled en ambos modales');
