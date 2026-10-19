@@ -167,7 +167,7 @@ def close_dialog(page) -> None:
 
 
 def open_tool(page, label: str) -> None:
-    page.get_by_role("button", name="Herramientas", exact=True).click()
+    page.get_by_role("button", name="Abrir herramientas de campañas", exact=True).click()
     page.get_by_role("menuitem", name=label, exact=True).click()
 
 
