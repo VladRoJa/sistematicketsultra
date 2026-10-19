@@ -5,7 +5,7 @@
 :host {
   display: block;
   --desc-col-width: 420px;
-  --table-min-width: 2574px;
+  --table-min-width: 2564px;
 }
 
 /* ==========================================================================
@@ -398,8 +398,9 @@
   width: 125px;
 }
 
+.tabla-tickets col.c-acc,
 .tabla-tickets .c-acc {
-  width: 190px;
+  width: 180px;
 }
 
 .tabla-tickets .c-resp {
@@ -743,11 +744,13 @@ td.col-descripcion {
 }
 
 .td-acciones .acciones-mantenimiento .ticket-action {
+  box-sizing: border-box;
   width: 100%;
   min-height: 34px;
-  padding: 7px 10px;
+  height: auto;
+  padding: 7px 8px;
   margin-top: 0;
-  white-space: normal;
+  white-space: nowrap;
   line-height: 1.2;
   text-align: center;
 }
@@ -758,7 +761,7 @@ td.col-descripcion {
 
 .acciones-mantenimiento .ticket-action span {
   min-width: 0;
-  white-space: normal;
+  white-space: nowrap;
 }
 
 .ticket-action {
