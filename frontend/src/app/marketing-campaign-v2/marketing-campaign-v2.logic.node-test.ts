@@ -1892,6 +1892,12 @@ test('Campaign V2 fields reuse Suite Ultra UI v1 Material fill styles and first 
   ]) {
     assert.ok(compact.includes(v1CompactSelector + suffix), 'Excel missing compact V1 rule: ' + suffix);
   }
+  // MDC reduces the rendered size of floating labels; keep the Excel-only
+  // compact-density adjustment isolated without affecting Crear Ticket V1.
+  const excelLabelScope =
+    'body.suite-compact-review .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog';
+  assert.ok(compact.includes(excelLabelScope + ' .mat-mdc-floating-label,'));
+  assert.ok(compact.includes(excelLabelScope + ' .mdc-floating-label {\\n  font-size: 15px !important;'));
   for (const [name, expected] of [['excel-dialog', 3], ['qa-manual-dialog', 5]] as const) {
     const html = fs.readFileSync(
       path.join(dir, 'marketing-campaign-v2-' + name + '.component.html'), 'utf8',
