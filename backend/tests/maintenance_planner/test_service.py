@@ -198,7 +198,7 @@ def test_compras_coordinacion_does_not_enable_schedule_for_other_roles():
 
 
 @pytest.mark.parametrize("role", [
-    "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO", "TECNICO", "MANTENIMIENTO",
+    "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO", "TECNICO",
 ])
 def test_pm_execution_never_grants_commitment_date_control(role):
     actor = SimpleNamespace(rol=role, sucursales_ids=[8])
@@ -378,6 +378,12 @@ def test_new_maintenance_coordinator_without_grant_cannot_schedule():
         patch.object(service, "has_maintenance_coordination_permission", return_value=False),
     ):
         assert service._can_schedule_maintenance(actor) is False
+
+
+def test_legacy_mantenimiento_diagnosis_role_keeps_existing_planner_capture():
+    actor = SimpleNamespace(rol="MANTENIMIENTO", sucursales_ids=[8])
+    with patch.object(service, "can_pm_execute", return_value=True):
+        assert service._can_schedule_maintenance(actor) is True
 
 
 def test_sr_cannot_schedule_even_assigned_ticket_via_backend():
