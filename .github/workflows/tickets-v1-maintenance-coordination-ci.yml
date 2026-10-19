@@ -33,6 +33,7 @@ on:
       - "backend/scripts/seed_maintenance_closure_qa.py"
       - "backend/app/maintenance_planner/routes.py"
       - "backend/app/maintenance_planner/service.py"
+      - "backend/tests/maintenance_planner/test_service.py"
       - "frontend/src/app/maintenance-planner/**"
       - "frontend/src/app/shared/maintenance-work-action-dialog/**"
       - "backend/tests/services/test_tickets_attention_migration_postgres.py"
@@ -64,6 +65,7 @@ jobs:
             backend/app/routes/ticket_routes.py \
             backend/app/utils/ticket_filters.py \
             backend/app/utils/maintenance_ticket_update_guard.py \
+            backend/app/maintenance_planner/service.py \
             backend/migrations/versions/c17a10202601_tickets_v1_maintenance_attention.py
       - name: Run authorization unit tests
         working-directory: backend
@@ -75,6 +77,7 @@ jobs:
             tests/services/test_ticket_maintenance_coordination_service.py \
             tests/utils/test_tickets_assigned_only_scope.py \
             tests/utils/test_compras_maintenance_read_access.py \
+            tests/maintenance_planner/test_service.py \
             tests/routes/test_maintenance_closure_workflow_qa.py \
             tests/utils/test_maintenance_closure_qa_seed_safety.py \
             tests/test_ticket_creator_closure_flow.py
