@@ -16,7 +16,7 @@ MAINTENANCE_DEPARTMENT_ID = 1
 GENERIC_TICKET_UPDATE_ENDPOINT = "tickets.update_ticket_status"
 
 # Algunas rutas legacy permiten acciones a cuentas corporativas por sucursal
-# principal. COMPRAS no debe heredar escrituras sobre tickets de Mantenimiento.
+# principal. Compras y coordinacion no heredan ejecucion tecnica.
 COMPRAS_MAINTENANCE_MUTATION_ENDPOINTS = frozenset({
     "tickets.update_ticket_status",
     "tickets.set_compromiso",
@@ -165,7 +165,9 @@ def register_maintenance_ticket_update_guard(app) -> None:
         actor = UserORM.get_by_id(get_jwt_identity())
         if (
             actor is None
-            or str(getattr(actor, "rol", "") or "").strip().upper() != "COMPRAS"
+            or str(getattr(actor, "rol", "") or "").strip().upper() not in {
+                "COMPRAS", "COORDINADOR_MANTENIMIENTO"
+            }
         ):
             return None
 
@@ -192,7 +194,7 @@ def register_maintenance_ticket_update_guard(app) -> None:
         return (
             jsonify({
                 "mensaje": (
-                    "Compras tiene acceso de consulta a Mantenimiento; "
+                    "Este perfil no puede ejecutar cambios operativos generales; "
                     "no puede ejecutar cambios, cierres ni notificaciones."
                 )
             }),
