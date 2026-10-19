@@ -746,10 +746,12 @@
                 *ngIf="puedeMarcarTrabajoTerminado(ticket)"
                 type="button"
                 class="ticket-action ticket-action--finish"
+                matTooltip="Reportar trabajo terminado; queda pendiente de revisión por coordinación"
+                aria-label="Reportar trabajo terminado para revisión de coordinación"
                 (click)="marcarTrabajoTerminado(ticket)"
               >
                 <mat-icon>task_alt</mat-icon>
-                <span>Trabajo terminado</span>
+                <span>Marcar listo</span>
               </button>
               <button
                 *ngIf="puedeSolicitarCierreMantenimiento(ticket)"
