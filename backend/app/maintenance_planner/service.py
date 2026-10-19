@@ -10,7 +10,10 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.models.sucursal_model import Sucursal
 from app.models.ticket_model import Ticket
 from app.utils.pm_permissions import can_pm_execute, can_pm_view
-from app.utils.tickets_maintenance_permissions import ASSIGNED_ONLY_ELIGIBLE_ROLES
+from app.utils.tickets_maintenance_permissions import (
+    ASSIGNED_ONLY_ELIGIBLE_ROLES,
+    has_maintenance_coordination_permission,
+)
 from app.utils.sucursal_audience import (
     SUCURSAL_AUDIENCE_ANALYTICAL,
     SUCURSAL_AUDIENCE_OPERATIONAL,
@@ -241,6 +244,22 @@ def _user_scope_branch_ids(user) -> list[int]:
     return sorted(branch_ids)
 
 
+def _can_schedule_maintenance(user) -> bool:
+    """Planner: ejecución PM existente o coordinación individual de Compras.
+
+    El permiso de coordinación no equivale a can_pm_execute: únicamente
+    habilita el compromiso del ticket en el Planner. El endpoint restringe
+    la escritura a las sucursales individuales del usuario.
+    """
+    if can_pm_execute(user):
+        return True
+    return bool(
+        _user_role(user) == "COMPRAS"
+        and _user_scope_branch_ids(user)
+        and has_maintenance_coordination_permission(user)
+    )
+
+
 def _apply_planner_role_scope(query, user):
     """Endurece el scope del Planner sin alterar la semántica general de Tickets.
 
@@ -462,25 +481,25 @@ def build_planner_board(
         "future": scheduled_future,
         "permissions": {
             "can_view": True,
-            "can_schedule": can_pm_execute(user),
+            "can_schedule": _can_schedule_maintenance(user),
         },
     }
 
 
 def _scoped_maintenance_ticket(ticket_id: int, user) -> Ticket:
-    if not can_pm_execute(user):
+    if not _can_schedule_maintenance(user):
         raise MaintenancePlannerAuthorizationError(
             "No tienes permiso para programar tickets de Mantenimiento."
         )
 
-    ticket = (
-        filtrar_tickets_por_usuario(user)
-        .filter(
-            Ticket.id == ticket_id,
-            Ticket.departamento_id == MAINTENANCE_DEPARTMENT_ID,
-        )
-        .first()
+    query = filtrar_tickets_por_usuario(user).filter(
+        Ticket.id == ticket_id,
+        Ticket.departamento_id == MAINTENANCE_DEPARTMENT_ID,
     )
+    # Para Compras, intersectar además con su alcance por sucursal,
+    # sin fallback por creador ni por sede corporativa.
+    query = _apply_planner_role_scope(query, user)
+    ticket = query.first()
     if ticket is None:
         raise MaintenancePlannerNotFoundError(
             "Ticket de Mantenimiento no encontrado o fuera de tu alcance."
