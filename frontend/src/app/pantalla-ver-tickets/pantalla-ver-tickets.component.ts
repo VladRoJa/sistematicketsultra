@@ -2870,8 +2870,14 @@ puedeDevolverTrabajoMantenimiento(ticket: Ticket): boolean {
 
 etiquetaSolicitarCierreMantenimiento(ticket: Ticket): string {
   return ticket.tipo_atencion === 'INTERNA'
-    ? 'Revisar y solicitar cierre'
+    ? 'Revisar cierre'
     : 'Solicitar cierre';
+}
+
+ayudaSolicitarCierreMantenimiento(ticket: Ticket): string {
+  return ticket.tipo_atencion === 'INTERNA'
+    ? 'Revisar trabajo terminado y solicitar conformidad al gerente'
+    : 'Revisar proveedor y solicitar conformidad al gerente';
 }
 
 presentacionEstadoTicket(ticket: Ticket): { principal: string; detalle: string | null } {
