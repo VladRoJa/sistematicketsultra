@@ -2750,13 +2750,35 @@ def cierre_aceptar_creador(ticket_id):
             "mensaje": "Solo se pueden aceptar tickets en estado por_validar."
         }), 400
 
-    finalized_at = datetime.now(timezone.utc)
+    accepted_at = datetime.now(timezone.utc)
 
+    # La fecha finalizada se fijó cuando coordinación solicitó el cierre.
+    # La conformidad del gerente registra su propio momento, sin sustituirla.
     t.aceptar_conformidad_creador(commit=False)
+
+    if t.departamento_id == 1:
+        historial = list(t.historial_fechas or [])
+        historial.append({
+            "tipo": "maintenance_conformity_accepted_v1",
+            "origen": "tickets_v1",
+            "fecha": t.fecha_finalizado.isoformat() if t.fecha_finalizado else None,
+            "fechaCambio": accepted_at.isoformat(),
+            "cambiadoPor": str(user.username).strip(),
+            "motivo": "Conformidad aceptada por el gerente",
+            "estado": t.estado,
+            "estado_cierre_anterior": estado_cierre_actual,
+            "estado_cierre_nuevo": t.estado_cierre,
+        })
+        historial.sort(
+            key=lambda item: str(item.get("fechaCambio") or item.get("fecha") or ""),
+            reverse=True,
+        )
+        t.historial_fechas = historial
+        flag_modified(t, "historial_fechas")
 
     schedule_ticket_attachment_retention(
         ticket_id=t.id,
-        finalized_at=finalized_at,
+        finalized_at=accepted_at,
     )
 
     db.session.commit()
