@@ -139,3 +139,47 @@ def test_planner_route_shows_legacy_closure_without_coordination_grant():
     from app.maintenance_planner.routes import _can_request_maintenance_closure
     assert _can_request_maintenance_closure(chief()) is True
     assert _can_request_maintenance_closure(chief(branches=[100])) is False
+
+
+@pytest.mark.parametrize("handler_name,path", [
+    ("pm_listar_bitacoras", "/bitacoras"),
+    ("pm_listar_configuraciones", "/configuraciones"),
+    ("pm_calendario", "/calendario?anio=2026&mes=10"),
+])
+def test_pm_unfiltered_list_queries_still_intersect_regional_scope(
+    monkeypatch, handler_name, path,
+):
+    from flask import Flask
+    from sqlalchemy import func, and_
+    from app.routes import pm_routes
+
+    query = MagicMock()
+    query.join.return_value = query
+    query.outerjoin.return_value = query
+    query.filter.return_value = query
+    query.order_by.return_value = query
+    query.all.return_value = []
+
+    session = SimpleNamespace(query=MagicMock(return_value=query))
+    monkeypatch.setattr(pm_routes, "db", SimpleNamespace(
+        session=session, func=func, and_=and_,
+    ))
+    monkeypatch.setattr(pm_routes, "get_jwt_identity", lambda: "45")
+    monkeypatch.setattr(
+        pm_routes, "_obtener_usuario_actual_pm",
+        lambda _uid: (chief(branches=[1, 20, 9, 100]), None),
+    )
+    monkeypatch.setattr(pm_routes, "require_pm_view", lambda _: None)
+
+    app = Flask(__name__)
+    with app.test_request_context(path):
+        # Invocamos el handler real tras omitir solo @jwt_required en QA.
+        response, code = getattr(pm_routes, handler_name).__wrapped__()
+    assert code == 200
+    assert response is not None
+    compiled = [
+        str(call.args[0].compile(compile_kwargs={"literal_binds": True}))
+        for call in query.filter.call_args_list
+    ]
+    assert any("IN (1, 20)" in sql and "sucursal_id" in sql for sql in compiled), compiled
+    assert all("IN (9" not in sql for sql in compiled)
