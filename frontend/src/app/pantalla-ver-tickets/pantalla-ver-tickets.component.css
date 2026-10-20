@@ -4,6 +4,11 @@
 
 :host {
   display: block;
+  /* La cabecera de Suite Ultra ocupa 72px. Solo la tabla debe desplazarse. */
+  height: calc(100vh - 72px);
+  height: calc(100dvh - 72px);
+  min-height: 0;
+  overflow: hidden;
   --desc-col-width: 420px;
   --table-min-width: 2564px;
 }
@@ -13,12 +18,15 @@
    ========================================================================== */
 
 .tickets-page {
-  min-height: calc(100vh - 72px);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
   min-width: 0;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  overflow-x: clip;
+  overflow: hidden;
   padding: 24px;
   background:
     radial-gradient(circle at top left, rgba(229, 69, 37, 0.08), transparent 28%),
@@ -28,6 +36,7 @@
 
 .tickets-page__header {
   display: flex;
+  flex: 0 0 auto;
   justify-content: space-between;
   gap: 18px;
   align-items: flex-end;
@@ -133,6 +142,7 @@
 
 .tickets-kpi-grid {
   display: grid;
+  flex: 0 0 auto;
   grid-template-columns: repeat(6, minmax(140px, 1fr));
   gap: 12px;
   margin-bottom: 14px;
@@ -251,20 +261,29 @@
 
 .tickets-table-card {
   --tickets-horizontal-rail-height: 18px;
+  flex: 1 1 0;
   width: 100%;
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
   margin: 0 auto;
-  padding: 0 14px 14px;
-  overflow: auto;
+  padding: 0 14px;
+  overflow-x: auto;
+  overflow-y: auto;
   position: relative;
   border: 1px solid var(--ultra-gray-200);
   border-radius: var(--ultra-radius-xl);
   background: var(--ultra-surface);
   box-shadow: var(--ultra-shadow-md);
-  max-height: calc(100vh - 330px);
+  min-height: 0;
+  max-height: none;
   overscroll-behavior: contain;
+}
+
+/* Ocultar únicamente el segundo riel horizontal nativo en Chromium/Edge.
+   Se conserva la barra vertical del contenedor y el riel superior sticky. */
+.tickets-table-card::-webkit-scrollbar:horizontal {
+  height: 0;
 }
 
 /* Barra horizontal siempre alcanzable al inicio del área con scroll.
@@ -1034,9 +1053,8 @@ td.col-descripcion {
    ========================================================================== */
 
 .pagination-export-container {
-  position: sticky;
-  bottom: 0;
-  left: 0;
+  position: relative;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 14px;
