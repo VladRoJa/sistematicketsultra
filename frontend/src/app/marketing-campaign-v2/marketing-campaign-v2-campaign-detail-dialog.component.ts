@@ -26,6 +26,7 @@ import {
   CampaignV2Purpose,
   CampaignV2SubmitResponse,
   CampaignV2RecipientSummary,
+  CampaignV2RecipientProviderStatusCode,
   CampaignV2Source,
   CampaignV2SourceMetadata,
 } from './marketing-campaign-v2.models';
@@ -57,6 +58,59 @@ import {
   MarketingCampaignV2SubmitConfirmDialogComponent,
   MarketingCampaignV2SubmitConfirmDialogData,
 } from './marketing-campaign-v2-submit-confirm-dialog.component';
+
+
+interface RecipientStatusDisplay {
+  label: string;
+  className: string;
+  explanation: string;
+}
+
+const RECIPIENT_STATUS_DISPLAY: Record<
+  CampaignV2RecipientProviderStatusCode, RecipientStatusDisplay
+> = {
+  VIEWED: {
+    label: 'Leído',
+    className: 'recipient-status--viewed',
+    explanation: 'Lectura confirmada por iVentas.',
+  },
+  DELIVERED: {
+    label: 'Entregado',
+    className: 'recipient-status--delivered',
+    explanation: 'Entrega confirmada; no hay confirmación de lectura en este corte.',
+  },
+  SENT: {
+    label: 'Enviado',
+    className: 'recipient-status--sent',
+    explanation: 'Enviado; aún no hay confirmación de entrega en este corte.',
+  },
+  FAILED: {
+    label: 'Fallido',
+    className: 'recipient-status--failed',
+    explanation: 'El proveedor reportó fallo, sin causa individual disponible.',
+  },
+  SUCCESSFUL: {
+    label: 'Aceptado',
+    className: 'recipient-status--accepted',
+    explanation: 'Aceptado por el proveedor; sin etapa de entrega identificada.',
+  },
+  NO_PROVIDER_STATUS: {
+    label: 'Sin estado',
+    className: 'recipient-status--unknown',
+    explanation: 'Este destinatario no aparece en el último corte del proveedor.',
+  },
+  NO_SNAPSHOT: {
+    label: 'Sin captura',
+    className: 'recipient-status--unknown',
+    explanation: 'Esta campaña todavía no tiene estadísticas persistidas.',
+  },
+};
+
+const RECIPIENT_STATUS_NOT_AVAILABLE: RecipientStatusDisplay = {
+  label: 'No disponible',
+  className: 'recipient-status--unknown',
+  explanation: 'Esta respuesta no incluye información del proveedor.',
+};
 
 export interface MarketingCampaignV2CampaignDetailDialogData {
   campaignId: number;
@@ -583,6 +637,42 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
 
   reportingCostLabel(status: string): string {
     return campaignV2ReportingCostLabel(status);
+  }
+
+
+  recipientProviderStatusLabel(recipient: CampaignV2RecipientSummary): string {
+    return this.recipientStatusDisplay(recipient).label;
+  }
+
+  recipientProviderStatusClass(recipient: CampaignV2RecipientSummary): string {
+    return this.recipientStatusDisplay(recipient).className;
+  }
+
+  recipientProviderStatusTooltip(recipient: CampaignV2RecipientSummary): string {
+    const explanation = this.recipientStatusDisplay(recipient).explanation;
+    const status = recipient.provider_status;
+    if (status?.snapshot_id != null && status.observed_at) {
+      return `${explanation} Snapshot #${status.snapshot_id} · ${this.formatHistoryObservedAt(status.observed_at)}`;
+    }
+    return explanation;
+  }
+
+  recipientsStatusSnapshotLabel(): string {
+    const status = this.recipients[0]?.provider_status;
+    if (!status) {
+      return 'Estado no disponible';
+    }
+    if (status.snapshot_id == null || !status.observed_at) {
+      return 'Sin captura de estadísticas';
+    }
+    return `Snapshot #${status.snapshot_id} · ${this.formatHistoryObservedAt(status.observed_at)}`;
+  }
+
+  private recipientStatusDisplay(recipient: CampaignV2RecipientSummary): RecipientStatusDisplay {
+    const status = recipient.provider_status?.status;
+    return status
+      ? RECIPIENT_STATUS_DISPLAY[status]
+      : RECIPIENT_STATUS_NOT_AVAILABLE;
   }
 
   previousRecipientsPage(): void {
