@@ -460,6 +460,55 @@ def test_postgres16_reads_real_synthetic_warehouse_without_writes(tmp_path):
             assert len(report.declines) == 1
             assert report.new_declines == 1
             assert report.shared_declines == 0
+
+            # Integration, not a mocked audit: use the actual PostgreSQL
+            # Warehouse rows and SHA-verified XLSX to release the exact
+            # authoritative MTD decrease at the final day of the cutoff.
+            from app.warehouse.services.kpi_desempeno_m3b_verified_plan import (
+                plan_kpi_desempeno_verified_source_impact,
+            )
+            from app.warehouse.services.kpi_desempeno_m3b_continuity_plan import (
+                READY_FOR_PROCESSING,
+            )
+            from app.warehouse.services.kpi_desempeno_semantic_diff import (
+                DIFFERENCES_DETECTED, KpiDesempenoSemanticDiffResult,
+                KpiDesempenoBranchDifference, KpiDesempenoFieldChange,
+            )
+
+            last_day = FIRST + timedelta(days=1)
+            verified_diff = KpiDesempenoSemanticDiffResult(
+                status=DIFFERENCES_DETECTED, business_date=last_day.isoformat(),
+                previous_row_count=2, current_row_count=2,
+                differences=(KpiDesempenoBranchDifference(
+                    branch_key="centro", kind="CHANGED",
+                    previous_branch_name="Centro", current_branch_name="Centro",
+                    fields=(KpiDesempenoFieldChange(
+                        field="bajas", previous=8, current=5, delta=-3,
+                    ),),
+                ),),
+            )
+            audited_plan = plan_kpi_desempeno_verified_source_impact(
+                business_date=last_day, diff=verified_diff,
+                candidate_snapshot_ids={FIRST: 11, last_day: 12},
+                canonical_snapshot_ids={FIRST: 1, last_day: 2},
+                expected_branch_count=2,
+            )
+            assert audited_plan.status == READY_FOR_PROCESSING
+            assert audited_plan.blocking_issues == ()
+            assert [(x.code, x.delta) for x in audited_plan.verified_source_revisions] == [
+                ("MTD_VERIFIED_SOURCE_REVISION", -2),
+            ]
+            assert [x.business_date for x in audited_plan.derived_delta_impacts] == [
+                last_day,
+            ]
+            after_bridge = [
+                db.session.execute(sa.text(f"SELECT COUNT(*) FROM {name}")).scalar_one()
+                for name in (
+                    "warehouse_uploads", "warehouse_audit_logs",
+                    "kpi_desempeno_snapshots", "kpi_desempeno_snapshot_rows",
+                )
+            ]
+            assert after_bridge == before
             assert not sa.inspect(db.engine).has_table("track_daily_mart")
             db.session.remove()
     finally:
