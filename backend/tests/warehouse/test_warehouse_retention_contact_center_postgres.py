@@ -75,6 +75,19 @@ def isolated_postgres():
                     REFERENCES public.venta_total_snapshot_rows(id) ON DELETE SET NULL
                 )
             """))
+        with engine.begin() as connection:
+            connection.execute(text("""
+                CREATE INDEX ix_venta_total_snapshots_business_date
+                ON public.venta_total_snapshots (business_date)
+            """))
+            connection.execute(text("""
+                CREATE INDEX ix_venta_total_snapshots_is_canonical
+                ON public.venta_total_snapshots (is_canonical)
+            """))
+            connection.execute(text("""
+                CREATE INDEX ix_venta_total_snapshot_rows_snapshot_id
+                ON public.venta_total_snapshot_rows (snapshot_id)
+            """))
         yield engine
     finally:
         with engine.begin() as connection:
@@ -274,3 +287,113 @@ def test_concurrent_contact_center_verification_cannot_lose_evidence(
     assert snapshot == 201
     assert row == 301
     assert tuple(ref) == (ref_snapshot, ref_row)
+
+
+def test_retention_batched_volume_and_evidence(monkeypatch, isolated_postgres):
+    """Volume smoke test on synthetic schema with production's existing indexes.
+
+    220 old snapshots, 8,800 line items, 30,000 Contact Center records.
+    Protect four snapshots through each of the four evidence reference paths.
+    Track elapsed seconds without a brittle runner-speed assertion.
+    """
+    from time import perf_counter
+
+    engine = isolated_postgres
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO public.venta_total_snapshots (id, business_date, is_canonical)
+            SELECT gs, :old, false FROM generate_series(1000, 1219) gs
+        """), {"old": date(2020, 1, 1)})
+        conn.execute(text("""
+            INSERT INTO public.venta_total_snapshot_rows (id, snapshot_id)
+            SELECT s.id * 100 + n, s.id
+            FROM public.venta_total_snapshots s
+            CROSS JOIN generate_series(1, 40) n
+        """))
+        conn.execute(text("""
+            INSERT INTO public.contact_center_appointments
+                (id, venta_total_snapshot_id, venta_total_snapshot_row_id)
+            SELECT gs, 999 + gs, NULL FROM generate_series(1, 4) gs
+        """))
+        conn.execute(text("""
+            INSERT INTO public.contact_center_appointments
+                (id, venta_total_snapshot_id, venta_total_snapshot_row_id)
+            SELECT gs + 4, NULL, (1003 + gs) * 100 + 1
+            FROM generate_series(1, 4) gs
+        """))
+        conn.execute(text("""
+            INSERT INTO public.contact_center_appointment_result_events
+                (id, venta_total_snapshot_id, venta_total_snapshot_row_id)
+            SELECT gs, 1007 + gs, NULL FROM generate_series(1, 4) gs
+        """))
+        conn.execute(text("""
+            INSERT INTO public.contact_center_appointment_result_events
+                (id, venta_total_snapshot_id, venta_total_snapshot_row_id)
+            SELECT gs + 4, NULL, (1011 + gs) * 100 + 1
+            FROM generate_series(1, 4) gs
+        """))
+        conn.execute(text("""
+            INSERT INTO public.contact_center_appointments
+                (id, venta_total_snapshot_id, venta_total_snapshot_row_id)
+            SELECT 100000 + gs, NULL, NULL
+            FROM generate_series(1, 15000) gs
+        """))
+        conn.execute(text("""
+            INSERT INTO public.contact_center_appointment_result_events
+                (id, venta_total_snapshot_id, venta_total_snapshot_row_id)
+            SELECT 100000 + gs, NULL, NULL
+            FROM generate_series(1, 15000) gs
+        """))
+        conn.execute(text("ANALYZE public.venta_total_snapshots"))
+        conn.execute(text("ANALYZE public.venta_total_snapshot_rows"))
+        conn.execute(text("ANALYZE public.contact_center_appointments"))
+        conn.execute(text("ANALYZE public.contact_center_appointment_result_events"))
+
+    with Session(engine) as session:
+        monkeypatch.setattr(retention, "db", SimpleNamespace(session=session))
+        start = perf_counter()
+        preview = retention.purge_venta_total_non_canonical_snapshots(
+            retention_days=7, dry_run=True,
+        )
+        preview_seconds = perf_counter() - start
+        assert preview["target_snapshots"] == 204
+        assert preview["target_rows"] == 8160
+
+        start = perf_counter()
+        result = retention.purge_venta_total_non_canonical_snapshots(
+            retention_days=7, batch_limit=100, max_batches=10,
+        )
+        purge_seconds = perf_counter() - start
+        assert result["deleted_snapshots"] == 204
+        assert result["deleted_rows"] == 8160
+        assert result["batches"] == 3
+
+    with engine.connect() as conn:
+        remaining_ids = [
+            row[0] for row in conn.execute(text("""
+                SELECT id FROM public.venta_total_snapshots ORDER BY id
+            """))
+        ]
+        assert remaining_ids == list(range(1000, 1016))
+        remaining_rows = conn.execute(
+            text("SELECT COUNT(*) FROM public.venta_total_snapshot_rows")
+        ).scalar_one()
+        assert remaining_rows == 640
+        assert conn.execute(text("""
+            SELECT COUNT(*) FROM public.contact_center_appointments
+            WHERE venta_total_snapshot_id IS NOT NULL
+               OR venta_total_snapshot_row_id IS NOT NULL
+        """)).scalar_one() == 8
+        assert conn.execute(text("""
+            SELECT COUNT(*) FROM public.contact_center_appointment_result_events
+            WHERE venta_total_snapshot_id IS NOT NULL
+               OR venta_total_snapshot_row_id IS NOT NULL
+        """)).scalar_one() == 8
+
+    print(
+        "RETENTION_VOLUME_SMOKE "
+        "snapshots=220 rows=8800 contact_center_records=30016 "
+        f"preview_seconds={preview_seconds:.3f} "
+        f"purge_seconds={purge_seconds:.3f} "
+        f"batches={result['batches']}"
+    )
