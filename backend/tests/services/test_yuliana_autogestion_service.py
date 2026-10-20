@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.services import ticket_maintenance_coordination_service as service
-from tests.services.test_ticket_maintenance_coordination_service import (
+from test_ticket_maintenance_coordination_service import (
     NOW, actor, ticket, setup_queries, payload,
 )
 
