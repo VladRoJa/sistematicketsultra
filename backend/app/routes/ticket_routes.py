@@ -16,6 +16,8 @@ from app.utils.notify_utils import render_ticket_html, render_ticket_whatsapp_te
 from app.utils.ticket_filters import filtrar_tickets_por_usuario
 from app.utils.maintenance_regional_lead import (
     can_regional_maintenance_lead_request_legacy_closure,
+    is_regional_maintenance_lead,
+    regional_maintenance_lead_branches,
 )
 from app.services.ticket_validation_summary_service import get_ticket_validation_summary_for_user
 from app.services.ticket_maintenance_coordination_service import (
@@ -419,6 +421,16 @@ def create_ticket():
         else:
             # usuario normal: destino = su sucursal
             sucursal_id_destino = user.sucursal_id
+
+        # El jefe regional usa sede principal corporativa 100, pero eso
+        # no le autoriza a crear tickets fuera de sus 14 sucursales.
+        if is_regional_maintenance_lead(user):
+            try:
+                branch_target = int(sucursal_id_destino)
+            except (TypeError, ValueError):
+                return jsonify({"mensaje": "Sucursal destino inválida."}), 400
+            if branch_target not in regional_maintenance_lead_branches(user):
+                return jsonify({"mensaje": "Sucursal fuera del alcance de Mantenimiento."}), 403
 
         # Requisitos mínimos
         if not descripcion or not departamento_id or not criticidad:
@@ -2178,6 +2190,7 @@ def historial_equipo(equipo_id):
         if (
             str(user.rol or "").strip().upper() in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"}
             or has_assigned_only_maintenance_scope(user)
+            or is_regional_maintenance_lead(user)
         ):
             query = filtrar_tickets_por_usuario(user).filter(
                 Ticket.aparato_id == equipo_id
@@ -2234,6 +2247,7 @@ def historial_por_equipo(aparato_id):
         if (
             str(user.rol or "").strip().upper() in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"}
             or has_assigned_only_maintenance_scope(user)
+            or is_regional_maintenance_lead(user)
         ):
             query = filtrar_tickets_por_usuario(user).filter_by(aparato_id=aparato_id)
         elif not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
@@ -2268,7 +2282,11 @@ def historial_global():
         estado = request.args.get('estado')  # abierto/en progreso/finalizado
 
         is_compras_reader = str(user.rol or "").strip().upper() in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"}
-        is_scoped_reader = is_compras_reader or has_assigned_only_maintenance_scope(user)
+        is_scoped_reader = (
+            is_compras_reader
+            or has_assigned_only_maintenance_scope(user)
+            or is_regional_maintenance_lead(user)
+        )
         query = filtrar_tickets_por_usuario(user) if is_scoped_reader else Ticket.query
 
         # Filtro por tipo de inventario
@@ -2321,8 +2339,11 @@ def historial_aparato(aparato_id):
         # Coordinacion/Compras legacy: solo asignadas, sin excepción corporativa.
         is_compras_reader = str(user.rol or "").strip().upper() in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"}
         is_assigned_reader = has_assigned_only_maintenance_scope(user)
+        is_regional_lead = is_regional_maintenance_lead(user)
         filtro_sucursal = []
-        if is_compras_reader:
+        if is_regional_lead:
+            filtro_sucursal = list(regional_maintenance_lead_branches(user))
+        elif is_compras_reader:
             filtro_sucursal = [
                 int(x) for x in (getattr(user, "sucursales_ids", None) or [])
                 if str(x).isdigit() and int(x) not in {100, 1000}
@@ -2331,7 +2352,7 @@ def historial_aparato(aparato_id):
             filtro_sucursal = [user.sucursal_id]
 
         # --- Tickets relacionados ---
-        if is_compras_reader or is_assigned_reader:
+        if is_compras_reader or is_assigned_reader or is_regional_lead:
             tickets_query = filtrar_tickets_por_usuario(user).filter_by(
                 aparato_id=aparato_id
             )
@@ -2351,7 +2372,7 @@ def historial_aparato(aparato_id):
         for d in detalles:
             mov = d.movimiento
             # Filtramos por sucursal si aplica
-            if (is_compras_reader or filtro_sucursal) and mov.sucursal_id not in filtro_sucursal:
+            if (is_compras_reader or is_regional_lead or filtro_sucursal) and mov.sucursal_id not in filtro_sucursal:
                 continue
             movimientos.append({
                 'id': mov.id,
