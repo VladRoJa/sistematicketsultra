@@ -168,6 +168,7 @@ def run_worker_loop() -> None:
                                 if _has_pending_requests():
                                     cancel_pulse_before_send(pulse_slot)
                                     continue
+                                sender_confirmed = False
                                 try:
                                     if sender_session is None:
                                         sender_session = GoogleMessagesSmsSenderSession()
@@ -175,6 +176,7 @@ def run_worker_loop() -> None:
                                         pulse_phone,
                                         f"ULTRA GYM SMS HEALTH - REF {pulse_slot}. Mensaje de control.",
                                     )
+                                    sender_confirmed = True
                                     finish_pulse(pulse_slot, sent=True)
                                     last_activity_at = _utc_now()
                                     LOGGER.info("Pulso SMS confirmado por Google Messages. slot=%s", pulse_slot)
@@ -185,15 +187,18 @@ def run_worker_loop() -> None:
                                         else "UNEXPECTED_ERROR"
                                     )
                                     LOGGER.warning(
-                                        "Pulso SMS fallido. slot=%s code=%s",
-                                        pulse_slot, error_code,
+                                        "Pulso SMS sin resultado persistido. slot=%s code=%s sender_confirmed=%s",
+                                        pulse_slot, error_code, sender_confirmed,
                                     )
                                     db.session.rollback()
-                                    try:
-                                        finish_pulse(pulse_slot, sent=False, error_code=error_code)
-                                    except Exception:
-                                        LOGGER.exception("No se pudo persistir fallo de pulso. slot=%s", pulse_slot)
-                                        db.session.rollback()
+                                    if not sender_confirmed:
+                                        try:
+                                            finish_pulse(pulse_slot, sent=False, error_code=error_code)
+                                        except Exception:
+                                            LOGGER.exception("No se pudo persistir fallo de pulso. slot=%s", pulse_slot)
+                                            db.session.rollback()
+                                    # If sending succeeded but DB failed, leave STARTED
+                                    # ambiguous; never persist a false send failure.
                                     _close_sender_session(sender_session)
                                     sender_session = None
                                     last_activity_at = None
