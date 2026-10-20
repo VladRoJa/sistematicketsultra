@@ -21,3 +21,22 @@ class SystemWorkerHeartbeatORM(db.Model):
         ),
         db.Index("ix_system_worker_heartbeat_last_seen", "last_seen_at"),
     )
+
+
+class GascaSmsHealthPulseORM(db.Model):
+    """One reserved attempt per two-hour UTC slot; no recipient or SMS body stored."""
+    __tablename__ = "gasca_sms_health_pulses"
+
+    slot_id = db.Column(db.BigInteger, primary_key=True)
+    status = db.Column(db.String(16), nullable=False)
+    attempted_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    finished_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    error_code = db.Column(db.String(32), nullable=True)
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "status IN ('STARTED', 'SENT', 'FAILED')",
+            name="ck_gasca_sms_health_pulse_status",
+        ),
+        db.Index("ix_gasca_sms_health_pulse_attempt", "attempted_at"),
+    )
