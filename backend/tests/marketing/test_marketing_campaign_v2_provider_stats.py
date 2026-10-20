@@ -308,6 +308,24 @@ def test_one_submitted_child_with_complete_frozen_cohort_is_resolved(session):
     _add_frozen(session, count=4)
     _add_child(session)
     session.commit()
+    from sqlalchemy import func
+    from app.models.marketing import (
+        MarketingCampaignV2ProviderCampaignORM,
+        MarketingCampaignV2RecipientORM,
+    )
+    child = session.query(
+        MarketingCampaignV2ProviderCampaignORM.status,
+        MarketingCampaignV2ProviderCampaignORM.provider,
+        MarketingCampaignV2ProviderCampaignORM.provider_campaign_id,
+        MarketingCampaignV2ProviderCampaignORM.recipient_count,
+    ).filter_by(campaign_v2_id=2).one()
+    frozen_count = session.query(func.count(MarketingCampaignV2RecipientORM.id)).filter_by(
+        campaign_id=2
+    ).scalar()
+    assert (child.status, child.provider, child.provider_campaign_id,
+            child.recipient_count, frozen_count) == (
+        "SUBMITTED", "IVENTAS", "external-child-2", 4, 4,
+    )
     provider = FakeProvider(stats=_stats())
     result = get_campaign_v2_provider_stats(
         campaign_id=2,
