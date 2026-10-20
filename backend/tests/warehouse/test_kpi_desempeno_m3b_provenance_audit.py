@@ -399,9 +399,22 @@ def test_postgres16_reads_real_synthetic_warehouse_without_writes(tmp_path):
                     })
                     db.session.execute(sa.text(
                         """INSERT INTO warehouse_audit_logs
-                         (id,upload_id,action,performed_by_user_id,created_at)
-                         VALUES (:id,:id,'UPLOAD',999,:now)"""
-                    ), {"id": upload_id, "now": now})
+                         (id,upload_id,action,performed_by_user_id,created_at,details)
+                         VALUES (
+                           :id,:id,'UPLOAD',999,:now,
+                           CAST(:details AS json)
+                         )"""
+                    ), {
+                        "id": upload_id, "now": now,
+                        "details": __import__("json").dumps({
+                            "upload_origin": "internal_pipeline",
+                            "source_key": "gasca",
+                            "bridge_source": (
+                                "recent_disk_scan" if canonical
+                                else "direct_path_result"
+                            ),
+                        }),
+                    })
                     db.session.execute(sa.text(
                         """INSERT INTO kpi_desempeno_snapshots (
                          id,warehouse_upload_id,report_type_key,business_date,
@@ -555,6 +568,33 @@ def test_postgres16_reads_real_synthetic_warehouse_without_writes(tmp_path):
                 )
             ]
             assert after_preflight == before
+
+            # Evidence classification against genuine PG16 JSON audit rows,
+            # without claiming that either file is the latest Gasca revision.
+            from app.warehouse.services.kpi_desempeno_m3c_source_evidence_service import (
+                DISK_FALLBACK_UNVERIFIED, DIRECT_ARTIFACT_UNVERIFIED,
+                classify_kpi_desempeno_warehouse_evidence,
+            )
+            disk_evidence = classify_kpi_desempeno_warehouse_evidence(
+                warehouse_upload_id=101, business_date=FIRST,
+            )
+            direct_evidence = classify_kpi_desempeno_warehouse_evidence(
+                warehouse_upload_id=201, business_date=FIRST,
+            )
+            assert disk_evidence.status == DISK_FALLBACK_UNVERIFIED
+            assert direct_evidence.status == DIRECT_ARTIFACT_UNVERIFIED
+            assert not disk_evidence.provider_latest_verified
+            assert not direct_evidence.provider_latest_verified
+            assert not disk_evidence.execution_allowed
+            assert not direct_evidence.execution_allowed
+            after_evidence = [
+                db.session.execute(sa.text(f"SELECT COUNT(*) FROM {name}")).scalar_one()
+                for name in (
+                    "warehouse_uploads", "warehouse_audit_logs",
+                    "kpi_desempeno_snapshots", "kpi_desempeno_snapshot_rows",
+                )
+            ]
+            assert after_evidence == before
             assert not sa.inspect(db.engine).has_table("track_daily_mart")
             db.session.remove()
     finally:
