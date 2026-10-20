@@ -674,6 +674,48 @@ test('M24 UI Funnel conserva source-specific + Historical Targeting común', () 
 });
 
 
+test('Campaign V2 muestra estados de destinatarios desde snapshot sin filtros parciales', () => {
+  const dir = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const ts = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-campaign-detail-dialog.component.ts'),
+    'utf8',
+  );
+  const html = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-campaign-detail-dialog.component.html'),
+    'utf8',
+  );
+  const css = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-campaign-detail-dialog.component.css'),
+    'utf8',
+  );
+  const models = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2.models.ts'),
+    'utf8',
+  );
+  for (const [status, label] of [
+    ['VIEWED', 'Leído'],
+    ['DELIVERED', 'Entregado'],
+    ['SENT', 'Enviado'],
+    ['FAILED', 'Fallido'],
+    ['SUCCESSFUL', 'Aceptado'],
+    ['NO_PROVIDER_STATUS', 'Sin estado'],
+    ['NO_SNAPSHOT', 'Sin captura'],
+  ]) {
+    assert.ok(ts.includes(status), status);
+    assert.ok(ts.includes(`label: '${label}'`), label);
+  }
+  assert.ok(models.includes('provider_status?: CampaignV2RecipientProviderStatus'));
+  assert.ok(html.includes('Estado del envío'));
+  assert.ok(html.includes('recipientProviderStatusLabel(recipient)'));
+  assert.ok(html.includes('recipientProviderStatusTooltip(recipient)'));
+  assert.ok(html.includes('recipientsStatusSnapshotLabel()'));
+  assert.ok(ts.includes("timeZone: 'America/Tijuana'"));
+  assert.ok(css.includes('.recipient-status--viewed'));
+  assert.ok(css.includes('.recipient-status--failed'));
+  // No filtrar localmente la página de 25; eso recortaría mal la audiencia global.
+  assert.equal(html.includes('Filtrar por estado'), false);
+});
+
 test('M30 reporting query vacío omite params y fechas usan límites locales con offset', () => {
   const empty = buildCampaignV2ReportingQuery({
     observedFromDate: '',
