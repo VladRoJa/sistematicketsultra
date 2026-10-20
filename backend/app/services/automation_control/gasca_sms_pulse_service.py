@@ -21,6 +21,13 @@ def _now(value: datetime | None = None) -> datetime:
     return result.astimezone(timezone.utc)
 
 
+def _database_time(value: datetime) -> datetime:
+    """PostgreSQL returns tz-aware values; SQLite tests may lose tzinfo."""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def pulse_slot_id(now: datetime | None = None) -> int:
     """Stable UTC slot; does not depend on process uptime or DST."""
     return int(_now(now).timestamp() // PULSE_INTERVAL_SECONDS)
@@ -85,10 +92,10 @@ def read_pulse_health(now: datetime | None = None) -> dict:
     elif latest.status == "STARTED":
         state = (
             "FAILED"
-            if stamp - _now(latest.attempted_at) > PULSE_RUNNING_LIMIT
+            if stamp - _database_time(latest.attempted_at) > PULSE_RUNNING_LIMIT
             else "RUNNING"
         )
-    elif stamp - _now(latest.attempted_at) > timedelta(seconds=PULSE_INTERVAL_SECONDS) + PULSE_GRACE:
+    elif stamp - _database_time(latest.attempted_at) > timedelta(seconds=PULSE_INTERVAL_SECONDS) + PULSE_GRACE:
         state = "LATE"
     else:
         state = "HEALTHY"
@@ -105,8 +112,8 @@ def read_pulse_health(now: datetime | None = None) -> dict:
         "coverage": "PERSISTED_SMS_PULSE",
         "state": state,
         "interval_seconds": PULSE_INTERVAL_SECONDS,
-        "last_attempt_at_utc": _now(latest.attempted_at).isoformat() if latest else None,
-        "last_success_at_utc": _now(last_sent.finished_at).isoformat() if last_sent and last_sent.finished_at else None,
+        "last_attempt_at_utc": _database_time(latest.attempted_at).isoformat() if latest else None,
+        "last_success_at_utc": _database_time(last_sent.finished_at).isoformat() if last_sent and last_sent.finished_at else None,
         "last_error_code": latest.error_code if latest and latest.status == "FAILED" else None,
         "consecutive_failures": int(failures),
         "delivery_verified": False,
