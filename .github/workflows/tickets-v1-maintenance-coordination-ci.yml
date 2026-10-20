@@ -4,7 +4,7 @@ on:
   pull_request:
     paths:
       - "backend/app/utils/tickets_maintenance_permissions.py"
-      - "backend/migrations/versions/c21c10202601_yuliana_self_management_attention.py"
+      - "backend/migrations/versions/d22c10202601_yuliana_self_management_attention.py"
       - "backend/tests/services/test_yuliana_autogestion_service.py"
       - "backend/tests/services/test_yuliana_autogestion_migration_postgres.py"
       - "frontend/src/app/services/maintenance-coordination.service.ts"
@@ -77,7 +77,7 @@ jobs:
           python -m pip install "pytest==8.3.5"
       - name: Compile authorization module
         run: |
-          python -m py_compile backend/migrations/versions/c21c10202601_yuliana_self_management_attention.py \
+          python -m py_compile backend/migrations/versions/d22c10202601_yuliana_self_management_attention.py \
             backend/app/utils/maintenance_regional_lead.py \
             backend/migrations/versions/b20c10202601_maintenance_lead_regional_scope.py \
             backend/app/utils/tickets_maintenance_permissions.py \
@@ -118,7 +118,7 @@ jobs:
           cfg.set_main_option("script_location", "backend/migrations")
           heads = ScriptDirectory.from_config(cfg).get_heads()
           print("ALEMBIC_HEADS =", heads)
-          assert heads == ["c21c10202601"], heads
+          assert heads == ["d22c10202601"], heads
           PY
 
   frontend:
