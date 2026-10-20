@@ -54,7 +54,7 @@ export interface EffectiveSchedulesResponse {
 export interface GascaSmsQueueTelemetry {
   checked_at_utc:string;
   coverage:'REQUEST_STATUSES';
-  session_status:'UNVERIFIED';
+  session_status:'UNVERIFIED'|'REQUIRES_PAIRING';
   session_reason:string;
   pending:number;
   in_progress:number;
