@@ -10,7 +10,7 @@ import { AutomationControlService } from './automation-control.service';
 import { DataFreshnessService, DatasetFreshness, FreshnessDatasetKey } from '../shared/data-freshness-indicator/data-freshness.service';
 import { DataFreshnessIndicatorComponent } from '../shared/data-freshness-indicator/data-freshness-indicator.component';
 import { classifyObservationRuns, classifyReferenceHour, currentTijuanaClock, ObservationState, ReferenceState } from './automation-control-timeline-display';
-import { Job, Run, Summary, Dataset, TimelineWorker, TimelineJob, TimelineObservation, WorkerHealth, WorkerLiveness, EffectiveJobSchedule, GascaSmsQueueTelemetry } from './automation-control.models';
+import { Job, Run, Summary, Dataset, TimelineWorker, TimelineJob, TimelineObservation, WorkerHealth, WorkerLiveness, EffectiveJobSchedule, GascaSmsQueueTelemetry, GascaSmsPulseTelemetry, GascaSmsPulseState } from './automation-control.models';
 
 @Component({ selector:'app-automation-control',standalone:true,imports:[CommonModule,FormsModule,MatDialogModule,MatIconModule,DataFreshnessIndicatorComponent],
   templateUrl:'./automation-control.component.html',styleUrls:['./automation-control.component.css'] })
@@ -23,6 +23,8 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
   workerHealth:WorkerHealth[]=[];
   smsQueue:GascaSmsQueueTelemetry|null=null;
   smsQueueUnavailable=false;
+  smsPulse:GascaSmsPulseTelemetry|null=null;
+  smsPulseUnavailable=false;
   effectiveSchedules:EffectiveJobSchedule[]=[];
   configUnavailable=false;
   healthUnavailable=false;
@@ -126,6 +128,28 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
   workerState(workerKey:string):WorkerHealth|undefined {
     return this.workerHealth.find(worker=>worker.worker_key===workerKey);
   }
+  get smsPulseState():GascaSmsPulseState {
+    return this.smsPulse?.state??'UNKNOWN';
+  }
+  get smsPulseLabel():string {
+    const names:Record<GascaSmsPulseState,string>={
+      HEALTHY:'Envío confirmado',FAILED:'Fallo de envío',
+      LATE:'Pulso atrasado',RUNNING:'En proceso',UNKNOWN:'Sin comprobar',
+    };
+    return names[this.smsPulseState];
+  }
+  get smsPulseClass():string {
+    return 'sms-pulse-'+this.smsPulseState.toLowerCase();
+  }
+  get smsPulseDescription():string {
+    const state=this.smsPulseState;
+    if(this.smsPulseUnavailable)return 'No fue posible consultar el estado del pulso.';
+    if(state==='FAILED')return 'Último pulso falló o quedó interrumpido. Revisa Google Messages.';
+    if(state==='LATE')return 'Han pasado más de 2 h y 15 min sin un pulso confirmado.';
+    if(state==='RUNNING')return 'Envío de control iniciado; pendiente de confirmación.';
+    if(state==='HEALTHY')return 'Google Messages mostró el SMS de control como enviado.';
+    return 'Aún no existe un pulso registrado o el monitoreo sigue desactivado.';
+  }
   get smsSessionNeedsPairing():boolean {
     return this.smsQueue?.session_status==='REQUIRES_PAIRING';
   }
@@ -171,13 +195,15 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
     forkJoin({summary:this.api.summary(),jobs:this.api.jobs(),datasets:this.api.datasets(),
       health:this.api.workerHealth().pipe(catchError(() => of(null))),
       sms:this.api.smsQueue().pipe(catchError(() => of(null))),
+      pulse:this.api.smsPulse().pipe(catchError(() => of(null))),
       schedules:this.api.effectiveSchedules().pipe(catchError(() => of(null))),
       funnel:this.freshnessApi.get('marketing.sales_funnel','GLOBAL').pipe(catchError(() => of(null))),
       track:this.freshnessApi.get('track.daily','GLOBAL').pipe(catchError(() => of(null)))})
       .pipe(takeUntil(this.destroyed$)).subscribe({
-        next:({summary,jobs,datasets,health,schedules,funnel,track,sms})=>{
+        next:({summary,jobs,datasets,health,schedules,funnel,track,sms,pulse})=>{
           this.summary=summary;this.jobs=jobs.jobs;this.datasets=datasets.datasets;this.loading=false;
           this.smsQueue=sms;this.smsQueueUnavailable=!sms;
+          this.smsPulse=pulse;this.smsPulseUnavailable=!pulse;
           this.loadLatestRuns(this.jobs);
           this.configUnavailable=!schedules;
           this.effectiveSchedules=schedules?.jobs??[];
@@ -189,7 +215,7 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
           const selected=this.jobs.find(j=>j.key===this.selected?.key);
           if(selected){this.select(selected);} else{this.close();}
         },
-        error:()=>{this.loading=false;this.summary=null;this.jobs=[];this.datasets=[];this.smsQueue=null;this.close();
+        error:()=>{this.loading=false;this.summary=null;this.jobs=[];this.datasets=[];this.smsQueue=null;this.smsPulse=null;this.close();
           this.error='No se pudo cargar Control de Automatizaciones.';}
       });
   }

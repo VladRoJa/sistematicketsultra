@@ -11,10 +11,14 @@ from app import create_app, db
 from app.models.rpa import GascaSmsRequestORM, GascaSmsRequestStatus
 from app.services.automation_control.effective_schedule_service import schedule_spec
 from app.services.automation_control.worker_health_service import emit_worker_heartbeat
+from app.services.automation_control.gasca_sms_pulse_service import (
+    cancel_pulse_before_send, finish_pulse, reserve_pulse,
+)
 from app.rpa.services.gasca_sms_request_service import process_gasca_sms_request
 from app.rpa.services.google_messages_sms_sender_service import (
     GoogleMessagesSmsSenderError,
     GoogleMessagesSmsSenderSession,
+    normalize_phone_digits,
 )
 
 
@@ -132,6 +136,17 @@ def run_worker_loop() -> None:
     last_activity_at: datetime | None = None
     next_heartbeat_at = 0.0
 
+    # Fail closed: the control SMS is opt-in, never an implicit production send.
+    pulse_phone = None
+    if os.getenv("GASCA_SMS_PULSE_ENABLED", "").strip().lower() in {"1", "true", "yes"}:
+        try:
+            candidate = normalize_phone_digits(os.getenv("GASCA_SMS_PULSE_PHONE", ""))
+            if not 10 <= len(candidate) <= 15:
+                raise ValueError("Longitud inválida")
+            pulse_phone = candidate
+        except (ValueError, GoogleMessagesSmsSenderError):
+            LOGGER.warning("Pulso SMS deshabilitado: número de control inválido o ausente.")
+
     with app.app_context():
         try:
             while not _shutdown_requested:
@@ -144,6 +159,54 @@ def run_worker_loop() -> None:
                     request = _claim_next_pending_request()
 
                     if request is None:
+                        # Customer requests are always claimed first. The pulse never
+                        # launches another Chrome or runs in parallel with the sender.
+                        if pulse_phone is not None and not _has_pending_requests():
+                            pulse_slot = reserve_pulse()
+                            if pulse_slot is not None:
+                                # A request may have arrived while reserving the slot.
+                                if _has_pending_requests():
+                                    cancel_pulse_before_send(pulse_slot)
+                                    continue
+                                sender_confirmed = False
+                                try:
+                                    if sender_session is None:
+                                        sender_session = GoogleMessagesSmsSenderSession()
+                                    sender_session.send(
+                                        pulse_phone,
+                                        f"ULTRA GYM SMS HEALTH - REF {pulse_slot}. Mensaje de control.",
+                                    )
+                                    sender_confirmed = True
+                                    finish_pulse(pulse_slot, sent=True)
+                                    last_activity_at = _utc_now()
+                                    LOGGER.info("Pulso SMS confirmado por Google Messages. slot=%s", pulse_slot)
+                                except Exception as pulse_exc:
+                                    error_code = (
+                                        "SENDER_ERROR"
+                                        if isinstance(pulse_exc, GoogleMessagesSmsSenderError)
+                                        else "UNEXPECTED_ERROR"
+                                    )
+                                    LOGGER.warning(
+                                        "Pulso SMS sin resultado persistido. slot=%s code=%s sender_confirmed=%s",
+                                        pulse_slot, error_code, sender_confirmed,
+                                    )
+                                    db.session.rollback()
+                                    if not sender_confirmed:
+                                        try:
+                                            finish_pulse(pulse_slot, sent=False, error_code=error_code)
+                                        except Exception:
+                                            LOGGER.exception("No se pudo persistir fallo de pulso. slot=%s", pulse_slot)
+                                            db.session.rollback()
+                                    # If sending succeeded but DB failed, leave STARTED
+                                    # ambiguous; never persist a false send failure.
+                                    _close_sender_session(sender_session)
+                                    sender_session = None
+                                    last_activity_at = None
+                                finally:
+                                    db.session.remove()
+                                time.sleep(BATCH_SLEEP_SECONDS)
+                                continue
+
                         if sender_session is not None and last_activity_at is not None:
                             idle_for = (_utc_now() - last_activity_at).total_seconds()
 
