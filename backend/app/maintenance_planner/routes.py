@@ -13,6 +13,9 @@ from app.services.mantenimiento_equipos_service import (
     puede_capturar_diagnostico_mantenimiento,
 )
 from app.utils.tickets_maintenance_permissions import has_maintenance_coordination_permission
+from app.utils.maintenance_regional_lead import (
+    is_regional_maintenance_lead, regional_maintenance_lead_branches,
+)
 
 
 maintenance_planner_bp = Blueprint("maintenance_planner", __name__)
@@ -36,8 +39,14 @@ def _parse_branch_ids() -> list[int]:
 
 
 def _can_request_maintenance_closure(user) -> bool:
-    """Comparte exactamente el permiso de coordinación de Tickets V1."""
-    return has_maintenance_coordination_permission(user)
+    """Coordinación o flujo legacy del jefe, siempre dentro de su scope."""
+    return bool(
+        has_maintenance_coordination_permission(user)
+        or (
+            is_regional_maintenance_lead(user)
+            and regional_maintenance_lead_branches(user)
+        )
+    )
 
 
 @maintenance_planner_bp.route("/board", methods=["GET"])
