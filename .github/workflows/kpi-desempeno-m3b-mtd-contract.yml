@@ -18,6 +18,8 @@ on:
       - 'backend/app/warehouse/services/gasca_job_orchestrator.py'
       - 'backend/app/warehouse/services/warehouse_upload_creator_existing_service.py'
       - 'backend/tests/warehouse/test_gasca_provenance_reserved_metadata.py'
+      - 'backend/app/warehouse/services/gasca_script_bridge.py'
+      - 'backend/tests/warehouse/test_gasca_disk_fallback_business_date.py'
       - '.github/workflows/kpi-desempeno-m3b-mtd-contract.yml'
   workflow_dispatch:
 
@@ -74,12 +76,14 @@ jobs:
             app/warehouse/services/kpi_desempeno_m3c_preflight_service.py \
             app/warehouse/services/kpi_desempeno_m3c_source_evidence_service.py \
             app/warehouse/services/gasca_job_orchestrator.py \
+            app/warehouse/services/gasca_script_bridge.py \
             app/warehouse/services/warehouse_upload_creator_existing_service.py \
             tests/warehouse/test_kpi_desempeno_m3b_continuity_plan.py \
             tests/warehouse/test_kpi_desempeno_m3b_provenance_audit.py \
             tests/warehouse/test_kpi_desempeno_m3b_verified_plan.py \
             tests/warehouse/test_kpi_desempeno_m3c_preflight.py \
             tests/warehouse/test_gasca_provenance_reserved_metadata.py \
+            tests/warehouse/test_gasca_disk_fallback_business_date.py \
             tests/warehouse/test_kpi_desempeno_m3c_source_evidence.py
       - name: Synthetic contract / real PostgreSQL 16 / M1 regressions
         run: |
@@ -89,5 +93,6 @@ jobs:
             tests/warehouse/test_kpi_desempeno_m3b_verified_plan.py \
             tests/warehouse/test_kpi_desempeno_m3c_preflight.py \
             tests/warehouse/test_gasca_provenance_reserved_metadata.py \
+            tests/warehouse/test_gasca_disk_fallback_business_date.py \
             tests/warehouse/test_kpi_desempeno_m3c_source_evidence.py \
             tests/warehouse/test_kpi_desempeno_semantic_diff.py
