@@ -29,6 +29,7 @@ on:
       - "frontend/src/app/services/maintenance-coordination.service.ts"
       - "frontend/scripts/verify-tickets-responsable-filter.cjs"
       - "frontend/scripts/verify-modal-submit-state.cjs"
+      - "frontend/scripts/verify-tickets-sticky-horizontal-scroll.cjs"
       - "frontend/scripts/verify-tickets-history-assignment.cjs"
       - "frontend/src/app/pantalla-ver-tickets/modals/historial-fechas-*"
       - "frontend/src/app/shared/modal-submit-state.ts"
@@ -143,6 +144,9 @@ jobs:
       - name: Verify reusable confirm disabled states
         working-directory: frontend
         run: node scripts/verify-modal-submit-state.cjs
+      - name: Verify sticky horizontal scrollbar in Tickets V1
+        working-directory: frontend
+        run: node scripts/verify-tickets-sticky-horizontal-scroll.cjs
       - name: Verify ticket assignment history display
         working-directory: frontend
         run: node scripts/verify-tickets-history-assignment.cjs

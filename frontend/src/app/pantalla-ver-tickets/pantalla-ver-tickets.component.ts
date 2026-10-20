@@ -1,6 +1,6 @@
 // frontend-angular\src\app\pantalla-ver-tickets\pantalla-ver-tickets.component.ts
 
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NgxPaginationModule } from 'ngx-pagination';
@@ -322,6 +322,75 @@ export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
 
 
 
+  // Dos rieles de scroll sincronizados: el nativo (fondo) y uno sticky
+  // sobre el encabezado de la tabla. La rueda vertical NO se intercepta.
+  anchoContenidoScrollTickets = 0;
+  mostrarBarraHorizontalTickets = false;
+  private ticketsScrollContainer: HTMLDivElement | null = null;
+  private ticketsScrollResizeObserver: ResizeObserver | null = null;
+  private ticketsScrollMeasureFrame: number | null = null;
+
+  @ViewChild('ticketsScrollContainer')
+  set ticketsScrollContainerRef(ref: ElementRef<HTMLDivElement> | undefined) {
+    this.ticketsScrollResizeObserver?.disconnect();
+    this.ticketsScrollContainer = ref?.nativeElement ?? null;
+    if (!this.ticketsScrollContainer) return;
+
+    this.ticketsScrollResizeObserver = new ResizeObserver(() => {
+      this.programarMedicionBarraHorizontalTickets();
+    });
+    this.ticketsScrollResizeObserver.observe(this.ticketsScrollContainer);
+    const table = this.ticketsScrollContainer.querySelector('.tabla-tickets');
+    if (table) this.ticketsScrollResizeObserver.observe(table);
+    this.programarMedicionBarraHorizontalTickets();
+  }
+
+  private programarMedicionBarraHorizontalTickets(): void {
+    if (this.ticketsScrollMeasureFrame !== null) return;
+    this.ticketsScrollMeasureFrame = requestAnimationFrame(() => {
+      this.ticketsScrollMeasureFrame = null;
+      this.actualizarBarraHorizontalTickets();
+    });
+  }
+
+  private actualizarBarraHorizontalTickets(): void {
+    const container = this.ticketsScrollContainer;
+    const table = container?.querySelector<HTMLTableElement>('.tabla-tickets');
+    const rail = container?.querySelector<HTMLDivElement>('.tickets-table-rail');
+    if (!container || !table || !rail) return;
+
+    const width = table.scrollWidth;
+    // El rail ocupa exclusivamente el ancho disponible, no el ancho de las 17 columnas.
+    const overflows = width > rail.clientWidth + 1;
+    if (
+      this.anchoContenidoScrollTickets !== width
+      || this.mostrarBarraHorizontalTickets !== overflows
+    ) {
+      this.anchoContenidoScrollTickets = width;
+      this.mostrarBarraHorizontalTickets = overflows;
+      this.changeDetectorRef.detectChanges();
+    }
+    if (rail.scrollLeft !== container.scrollLeft) {
+      rail.scrollLeft = container.scrollLeft;
+    }
+  }
+
+  sincronizarTablaDesdeBarraTickets(): void {
+    const rail = this.ticketsScrollContainer?.querySelector<HTMLDivElement>('.tickets-table-rail');
+    if (this.ticketsScrollContainer && rail
+        && this.ticketsScrollContainer.scrollLeft !== rail.scrollLeft) {
+      this.ticketsScrollContainer.scrollLeft = rail.scrollLeft;
+    }
+  }
+
+  sincronizarBarraDesdeTablaTickets(): void {
+    const rail = this.ticketsScrollContainer?.querySelector<HTMLDivElement>('.tickets-table-rail');
+    if (this.ticketsScrollContainer && rail
+        && rail.scrollLeft !== this.ticketsScrollContainer.scrollLeft) {
+      rail.scrollLeft = this.ticketsScrollContainer.scrollLeft;
+    }
+  }
+
   @ViewChild('triggerFiltroCategoria') triggerFiltroCategoria: any;
   @ViewChild('triggerFiltroDesc') triggerFiltroDesc: any;
   @ViewChild('triggerFiltroUsuario') triggerFiltroUsuario: any;
@@ -431,6 +500,11 @@ async ngOnInit() {
 }
 
 ngOnDestroy(): void {
+  this.ticketsScrollResizeObserver?.disconnect();
+  if (this.ticketsScrollMeasureFrame !== null) {
+    cancelAnimationFrame(this.ticketsScrollMeasureFrame);
+    this.ticketsScrollMeasureFrame = null;
+  }
   this.queryParamsSubscription?.unsubscribe();
 
   if (this.filtroEstadoQueryRetryId) {
