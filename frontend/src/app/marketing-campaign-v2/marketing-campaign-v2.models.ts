@@ -1092,6 +1092,24 @@ export interface CampaignV2PreflightResponse {
   quota?: CampaignV2PreflightQuota;
 }
 
+export type CampaignV2RecipientProviderStatusCode =
+  | 'NO_SNAPSHOT'
+  | 'NO_PROVIDER_STATUS'
+  | 'FAILED'
+  | 'SUCCESSFUL'
+  | 'SENT'
+  | 'DELIVERED'
+  | 'VIEWED';
+
+export interface CampaignV2RecipientProviderStatus {
+  status: CampaignV2RecipientProviderStatusCode;
+  snapshot_id: number | null;
+  observed_at: string | null;
+  outcome: 'SUCCESSFUL' | 'FAILED' | null;
+  delivery_bucket: 'SENT' | 'DELIVERED' | 'VIEWED' | null;
+  button_labels: string[];
+}
+
 export interface CampaignV2RecipientSummary {
   id: number;
   phone_mx10: string;
@@ -1107,6 +1125,8 @@ export interface CampaignV2RecipientSummary {
   inclusion_reason: string | null;
   conflict_fields: string[];
   evidence_count: number;
+  // Disponible en la lista paginada; el detalle de evidencia conserva su contrato.
+  provider_status?: CampaignV2RecipientProviderStatus;
 }
 
 export interface CampaignV2RecipientEvidence {
