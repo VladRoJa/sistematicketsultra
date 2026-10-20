@@ -126,6 +126,12 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
   workerState(workerKey:string):WorkerHealth|undefined {
     return this.workerHealth.find(worker=>worker.worker_key===workerKey);
   }
+  get smsSessionNeedsPairing():boolean {
+    return this.smsQueue?.session_status==='REQUIRES_PAIRING';
+  }
+  get smsSessionLabel():string {
+    return this.smsSessionNeedsPairing ? 'Requiere vinculación' : 'Sin comprobar';
+  }
   workerHealthLabel(workerKey:string):string {
     const status=this.workerState(workerKey)?.status??'UNKNOWN';
     const names:Record<WorkerLiveness,string>={
@@ -200,7 +206,14 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
     return job.observed[hour] || [];
   }
   timelineState(job:TimelineJob,hour:string):ObservationState {
-    return classifyObservationRuns(this.timelineRuns(job,hour));
+    const runs=this.timelineRuns(job,hour);
+    if(job.job_key==='gasca.sms_dispatch'&&runs.length){
+      const state=runs[0].status_raw.toLowerCase();
+      if(state==='sent')return 'completed';
+      if(state==='failed')return 'error';
+      if(['gasca_searching','ready_to_send','sms_sending'].includes(state))return 'running';
+    }
+    return classifyObservationRuns(runs);
   }
   timelineIcon(job:TimelineJob,hour:string):string {
     const icons:Record<ObservationState,string>={
