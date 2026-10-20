@@ -9,6 +9,8 @@ from datetime import datetime, timedelta, timezone
 
 from app import create_app, db
 from app.models.rpa import GascaSmsRequestORM, GascaSmsRequestStatus
+from app.services.automation_control.effective_schedule_service import schedule_spec
+from app.services.automation_control.worker_health_service import emit_worker_heartbeat
 from app.rpa.services.gasca_sms_request_service import process_gasca_sms_request
 from app.rpa.services.google_messages_sms_sender_service import (
     GoogleMessagesSmsSenderError,
@@ -21,6 +23,7 @@ LOGGER = logging.getLogger("gasca_sms_worker")
 POLL_INTERVAL_SECONDS = float(os.getenv("GASCA_SMS_WORKER_POLL_SECONDS", "2"))
 IDLE_TIMEOUT_SECONDS = float(os.getenv("GASCA_SMS_WORKER_IDLE_TIMEOUT_SECONDS", "300"))
 BATCH_SLEEP_SECONDS = float(os.getenv("GASCA_SMS_WORKER_BATCH_SLEEP_SECONDS", "0.5"))
+HEARTBEAT_INTERVAL_SECONDS = 30
 
 _shutdown_requested = False
 
@@ -86,6 +89,27 @@ def _close_sender_session(sender_session: GoogleMessagesSmsSenderSession | None)
         LOGGER.exception("Error cerrando sesión Google Messages.")
 
 
+def _report_worker_health() -> None:
+    """Heartbeat independiente; jamás confirma que Google Messages esté vinculado."""
+    try:
+        emit_worker_heartbeat(
+            "gasca-sms-worker",
+            poll_interval_seconds=HEARTBEAT_INTERVAL_SECONDS,
+            schedules_provider=lambda: {
+                "gasca.sms_dispatch": schedule_spec(
+                    enabled=True,
+                    timezone_name="America/Tijuana",
+                    kind="PENDING_REQUEST",
+                    conditional=True,
+                    interval_seconds=max(1, int(POLL_INTERVAL_SECONDS)),
+                ),
+            },
+        )
+    except Exception as exc:
+        # Observabilidad best effort: nunca detener el consumo de solicitudes SMS.
+        LOGGER.warning("No se pudo emitir heartbeat SMS: %s", type(exc).__name__)
+
+
 def run_worker_loop() -> None:
     global _shutdown_requested
 
@@ -106,10 +130,14 @@ def run_worker_loop() -> None:
 
     sender_session: GoogleMessagesSmsSenderSession | None = None
     last_activity_at: datetime | None = None
+    next_heartbeat_at = 0.0
 
     with app.app_context():
         try:
             while not _shutdown_requested:
+                if time.monotonic() >= next_heartbeat_at:
+                    _report_worker_health()
+                    next_heartbeat_at = time.monotonic() + HEARTBEAT_INTERVAL_SECONDS
                 request = None
 
                 try:
