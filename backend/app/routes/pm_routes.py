@@ -22,6 +22,9 @@ from app.utils.pm_permissions import (
     require_pm_view,
 )
 from app.models.user_model import UserORM
+from app.utils.maintenance_regional_lead import (
+    is_regional_maintenance_lead, regional_maintenance_lead_branches,
+)
 
 
 pm_bp = Blueprint("pm", __name__)
@@ -73,7 +76,8 @@ def _verificar_permiso_sucursal(user, sucursal_id_int):
 
     PM conserva por ahora el comportamiento legacy:
     - ADMINISTRADOR / SUPER_ADMIN / ADMIN: global.
-    - MANTENIMIENTO / SISTEMAS / TECNICO: global.
+    - Cuenta MANTENIMIENTO ID 45: 14 sucursales asignadas, no global.
+    - Otros roles técnicos legacy: políticas vigentes sin cambios.
     - Resto: scope por usuario_sucursal o sucursal principal.
     """
     try:
@@ -91,6 +95,16 @@ def _verificar_permiso_sucursal(user, sucursal_id_int):
         )
 
     rol = str(getattr(user, "rol", "") or "").strip().upper()
+
+    # Excepción por identidad exacta: el jefe MANTENIMIENTO dejó de ser
+    # global. La sede corporativa 100 no suma permisos operativos.
+    if is_regional_maintenance_lead(user):
+        if target_sucursal_id in regional_maintenance_lead_branches(user):
+            return None
+        return (
+            {"error": "Forbidden", "detail": "No tienes acceso a esta sucursal"},
+            403,
+        )
 
     if rol in _PM_LEGACY_GLOBAL_SCOPE_ROLES:
         return None
