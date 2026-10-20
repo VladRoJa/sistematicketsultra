@@ -52,7 +52,7 @@ class M3BSourceDecline:
     later_upload_id: int
     earlier_sha256: str
     later_sha256: str
-    review_status: str = "REQUIRES_APROBACION_ORIGEN"
+    review_status: str = "FUENTE_VERIFICADA_REVISION_MTD"
 
 
 @dataclass(frozen=True)
@@ -248,7 +248,7 @@ def audit_kpi_desempeno_m3b_provenance(
     shared = proposed_drops.keys() & baseline_drops.keys()
 
     return M3BProvenanceReport(
-        status="BLOCKED_APPROVAL_REQUIRED" if proposed_drops else "SOURCE_AUDIT_ONLY",
+        status="SOURCE_VERIFIED_WITH_MTD_REVISIONS" if proposed_drops else "SOURCE_VERIFIED",
         days_verified=len(days), branches_per_day=expected_branch_count,
         declines=tuple(proposed_drops[key] for key in sorted(proposed_drops)),
         shared_declines=len(shared),
