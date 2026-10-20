@@ -9,7 +9,7 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 
 PATH = (Path(__file__).resolve().parents[2] / "migrations" / "versions"
-        / "c21c10202601_yuliana_self_management_attention.py")
+        / "d22c10202601_yuliana_self_management_attention.py")
 
 
 def _migration():
@@ -25,7 +25,7 @@ def test_autogestion_constraint_migration_and_safe_downgrade():
     if not url:
         pytest.skip("Solo corre con PG_COORD_TEST_URL PostgreSQL sintético")
     migration = _migration()
-    assert migration.down_revision == "b20c10202601"
+    assert migration.down_revision == "c21c10202601"
     engine = sa.create_engine(url)
     try:
         with engine.begin() as conn:
