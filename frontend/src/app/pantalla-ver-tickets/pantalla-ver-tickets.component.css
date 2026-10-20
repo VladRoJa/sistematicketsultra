@@ -14,6 +14,11 @@
 
 .tickets-page {
   min-height: calc(100vh - 72px);
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: clip;
   padding: 24px;
   background:
     radial-gradient(circle at top left, rgba(229, 69, 37, 0.08), transparent 28%),
@@ -246,7 +251,9 @@
 
 .tickets-table-card {
   width: 100%;
-  max-width: 100vw;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   margin: 0 auto;
   padding: 0 14px 14px;
   overflow: auto;
