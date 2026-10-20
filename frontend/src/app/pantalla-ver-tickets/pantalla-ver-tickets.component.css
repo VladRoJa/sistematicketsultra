@@ -250,6 +250,7 @@
    ========================================================================== */
 
 .tickets-table-card {
+  --tickets-horizontal-rail-height: 18px;
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -264,6 +265,50 @@
   box-shadow: var(--ultra-shadow-md);
   max-height: calc(100vh - 330px);
   overscroll-behavior: contain;
+}
+
+/* Barra horizontal siempre alcanzable al inicio del área con scroll.
+   La cabecera de la tabla queda inmediatamente debajo de este riel. */
+.tickets-table-rail {
+  position: sticky;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: var(--tickets-horizontal-rail-height);
+  box-sizing: border-box;
+  overflow-x: auto;
+  overflow-y: hidden;
+  z-index: 140;
+  background: var(--ultra-surface);
+  scrollbar-width: auto;
+  scrollbar-color: var(--ultra-gray-500) var(--ultra-gray-100);
+}
+
+.tickets-table-rail::-webkit-scrollbar {
+  height: 14px;
+}
+
+.tickets-table-rail::-webkit-scrollbar-thumb {
+  background: var(--ultra-gray-500);
+  border-radius: 999px;
+  border: 2px solid var(--ultra-gray-100);
+}
+
+.tickets-table-rail::-webkit-scrollbar-track {
+  background: var(--ultra-gray-100);
+}
+
+.tickets-table-rail__spacer {
+  height: 1px;
+}
+
+.tickets-table-card--no-horizontal-overflow {
+  --tickets-horizontal-rail-height: 0px;
+}
+
+.tickets-table-card--no-horizontal-overflow .tickets-table-rail {
+  visibility: hidden;
+  overflow: hidden;
 }
 
 /* ==========================================================================
@@ -440,7 +485,8 @@
 
 .tabla-tickets th {
   position: sticky;
-  top: 0;
+  top: var(--tickets-horizontal-rail-height);
+
   z-index: 120;
   background:
     linear-gradient(135deg, var(--ultra-black-90), var(--ultra-charcoal));
