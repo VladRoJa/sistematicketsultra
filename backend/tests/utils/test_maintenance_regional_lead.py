@@ -183,3 +183,71 @@ def test_pm_unfiltered_list_queries_still_intersect_regional_scope(
     ]
     assert any("IN (1, 20)" in sql and "sucursal_id" in sql for sql in compiled), compiled
     assert all("IN (9" not in sql for sql in compiled)
+
+
+def test_chief_cannot_create_ticket_for_outside_branch(monkeypatch):
+    from flask import Flask
+    from unittest.mock import Mock
+    from app.routes import ticket_routes
+
+    actor = chief()
+    monkeypatch.setattr(ticket_routes, "get_jwt_identity", lambda: "45")
+    monkeypatch.setattr(ticket_routes.UserORM, "get_by_id", lambda _: actor)
+    insert = Mock()
+    monkeypatch.setattr(ticket_routes.Ticket, "create_ticket", insert)
+
+    app = Flask(__name__)
+    payload = {
+        "descripcion": "Ticket QA no guardado", "departamento_id": 1,
+        "criticidad": 2, "clasificacion_id": 3, "sucursal_id_destino": 9,
+    }
+    with app.test_request_context("/api/tickets/create", method="POST", json=payload):
+        response, code = ticket_routes.create_ticket.__wrapped__()
+    assert code == 403
+    assert "fuera del alcance" in response.get_json()["mensaje"]
+    insert.assert_not_called()
+
+
+@pytest.mark.parametrize("handler_name,path,args", [
+    ("historial_equipo", "/historial-equipo/12", (12,)),
+    ("historial_por_equipo", "/historial-por-equipo/12", (12,)),
+    ("historial_global", "/historial-global", ()),
+    ("historial_aparato", "/historial/12", (12,)),
+])
+def test_chief_legacy_history_endpoints_always_use_scope(
+    monkeypatch, handler_name, path, args,
+):
+    from flask import Flask
+    from sqlalchemy import Integer, DateTime, column
+    from app.routes import ticket_routes
+
+    actor = chief()
+    monkeypatch.setattr(ticket_routes, "get_jwt_identity", lambda: "45")
+    monkeypatch.setattr(ticket_routes.UserORM, "get_by_id", lambda _: actor)
+
+    query = MagicMock()
+    query.filter.return_value = query
+    query.filter_by.return_value = query
+    query.order_by.return_value = query
+    query.all.return_value = []
+    fake_ticket = SimpleNamespace(
+        query=MagicMock(),
+        aparato_id=column("aparato_id", Integer),
+        fecha_creacion=column("fecha_creacion", DateTime),
+    )
+    monkeypatch.setattr(ticket_routes, "Ticket", fake_ticket)
+    scoped = MagicMock(return_value=query)
+    monkeypatch.setattr(ticket_routes, "filtrar_tickets_por_usuario", scoped)
+
+    if handler_name == "historial_aparato":
+        from app.models import inventario
+        details = MagicMock()
+        details.query.filter_by.return_value.all.return_value = []
+        monkeypatch.setattr(inventario, "DetalleMovimiento", details)
+
+    app = Flask(__name__)
+    with app.test_request_context(path):
+        response, code = getattr(ticket_routes, handler_name).__wrapped__(*args)
+    assert code == 200
+    assert response is not None
+    scoped.assert_called_once_with(actor)
