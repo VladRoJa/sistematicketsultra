@@ -123,6 +123,7 @@
           [ticket]="commitmentTicket"
           [puedeCapturarDiagnostico]="canCaptureDiagnosis"
           [permitirAsignacionMantenimiento]="useCoordinatedAssignment"
+          [permitirAutogestionMantenimiento]="canSelfManage"
           [responsablesMantenimiento]="responsablesMantenimiento"
           (onGuardar)="saveInitialCommitment($event)"
           (onCancelar)="close()"
