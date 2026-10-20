@@ -33,7 +33,7 @@
         <div><small>Fallidos · 24 h</small><strong>{{queue.failed_last_24h}}</strong></div>
       </div>
       <p class="disclaimer" *ngIf="smsQueue as queue">
-        Vinculación: <b>Sin comprobar</b> · Último SMS confirmado: {{formatDate(queue.last_sent_at_utc)}}.
+        Vinculación: <b [class.sms-requires-pairing]="smsSessionNeedsPairing">{{smsSessionLabel}}</b> · Último SMS confirmado: {{formatDate(queue.last_sent_at_utc)}}.
         El estado de la cola proviene de transacciones confirmadas, no identifica un SMS en curso sin confirmar.
       </p>
       <details class="sms-recovery">
