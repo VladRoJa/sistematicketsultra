@@ -167,3 +167,92 @@ def test_retention_preserves_four_contact_center_reference_paths(
         assert [tuple(row) for row in events] == [
             (1, 4, None), (2, None, 105),
         ]
+
+
+def test_concurrent_contact_center_verification_cannot_lose_evidence(
+    monkeypatch, isolated_postgres,
+):
+    """Reproduce a late verification while retention waits for the parent row.
+
+    The verifying transaction locks the snapshot first. Retention starts while
+    no reference is committed, then waits on that lock. A reference is created
+    and committed *before* retention can delete. The evidence must survive.
+    """
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    engine = isolated_postgres
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO public.venta_total_snapshots
+                (id, business_date, is_canonical)
+            VALUES (201, :old, false)
+        """), {"old": date(2020, 1, 1)})
+        conn.execute(text("""
+            INSERT INTO public.venta_total_snapshot_rows (id, snapshot_id)
+            VALUES (301, 201)
+        """))
+
+    ready = Event()
+    backend_pid = []
+    def run_retention():
+        with Session(engine) as session:
+            session.execute(text("SET LOCAL lock_timeout = '8s'"))
+            backend_pid.append(session.execute(text("SELECT pg_backend_pid()")).scalar_one())
+            monkeypatch.setattr(retention, "db", SimpleNamespace(session=session))
+            ready.set()
+            return retention.purge_venta_total_non_canonical_snapshots(
+                retention_days=7, batch_limit=1, max_batches=1,
+            )
+
+    with Session(engine) as verifying:
+        # Hold the parent lock, then insert the verification within this same
+        # transaction after the retention DELETE is already waiting for it.
+        verifying.execute(text("""
+            SELECT id FROM public.venta_total_snapshots
+            WHERE id = 201 FOR UPDATE
+        """)).one()
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(run_retention)
+            try:
+                assert ready.wait(5), "Retention thread did not initialize."
+                deadline = time.monotonic() + 5
+                blocked = False
+                while time.monotonic() < deadline:
+                    with engine.connect() as observer:
+                        wait = observer.execute(text("""
+                            SELECT wait_event_type
+                            FROM pg_stat_activity WHERE pid = :pid
+                        """), {"pid": backend_pid[0]}).scalar_one_or_none()
+                    if wait == "Lock":
+                        blocked = True
+                        break
+                    if future.done():
+                        break
+                    time.sleep(0.05)
+                assert blocked, "Retention never waited on snapshot lock."
+                verifying.execute(text("""
+                    INSERT INTO public.contact_center_appointments (
+                        id, venta_total_snapshot_id, venta_total_snapshot_row_id
+                    ) VALUES (10, 201, 301)
+                """))
+                verifying.commit()
+                result = future.result(timeout=12)
+            finally:
+                if verifying.in_transaction():
+                    verifying.rollback()
+
+    with engine.connect() as conn:
+        snapshot = conn.execute(text("""
+            SELECT id FROM public.venta_total_snapshots WHERE id = 201
+        """)).scalar_one_or_none()
+        ref = conn.execute(text("""
+            SELECT venta_total_snapshot_id, venta_total_snapshot_row_id
+            FROM public.contact_center_appointments WHERE id = 10
+        """)).one()
+    assert result["deleted_snapshots"] == 0, (
+        "Retention deleted evidence committed while it waited for a row lock."
+    )
+    assert snapshot == 201
+    assert tuple(ref) == (201, 301)
