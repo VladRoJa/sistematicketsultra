@@ -388,6 +388,45 @@
   background: var(--ultra-bg);
 }
 
+/* La ruta de Tickets necesita un viewport fijo con scroll SOLO en su
+   tabla. No se usa 72px: flex descuenta el alto REAL de .suite-header,
+   que puede variar por zoom/resolución. :has limita el cambio a Tickets. */
+:host:has(app-pantalla-ver-tickets) {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+:host:has(app-pantalla-ver-tickets) .suite-header {
+  flex: 0 0 auto;
+}
+
+.suite-main-content:has(app-pantalla-ver-tickets) {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Las vistas compactas usan el fallback de scroll de página ya previsto
+   por Ver Tickets; no debemos ocultar controles fuera de pantalla. */
+@media (max-width: 768px), (max-height: 560px) {
+  :host:has(app-pantalla-ver-tickets) {
+    display: block;
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .suite-main-content:has(app-pantalla-ver-tickets) {
+    min-height: 0;
+    overflow: visible;
+  }
+}
+
 /* ==========================================================================
    Alerta flotante de tickets por validar
    ========================================================================== */
