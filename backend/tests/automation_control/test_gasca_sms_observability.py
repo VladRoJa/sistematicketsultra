@@ -8,6 +8,8 @@ from flask_jwt_extended import JWTManager, create_access_token
 
 from app.extensions import db
 from app.models.rpa import GascaSmsRequestORM
+from app.rpa.services.gasca_sms_request_service import _is_explicit_session_gate_error
+from app.rpa.services.google_messages_sms_sender_service import GoogleMessagesSmsSenderError
 from app.services.automation_control.diagnostic_service import _safe_response
 from app.services.automation_control.job_read_service import (
     _serialize_gasca_sms_request, list_job_runs,
@@ -101,3 +103,15 @@ def test_telemetry_endpoint_is_read_only_jwt_and_admicorp():
     assert result.get_json()["session_status"] == "UNVERIFIED"
     assert result.get_json()["pending"] == 1
     assert client.post(url, headers=headers).status_code == 405
+
+
+def test_only_explicit_google_messages_login_gates_require_pairing():
+    assert _is_explicit_session_gate_error(GoogleMessagesSmsSenderError(
+        "Google Messages requiere iniciar sesión en Google. No se envió SMS."
+    ))
+    assert _is_explicit_session_gate_error(GoogleMessagesSmsSenderError(
+        "Google Messages sigue en pantalla de bienvenida. No se envió SMS."
+    ))
+    assert not _is_explicit_session_gate_error(GoogleMessagesSmsSenderError(
+        "Google Messages no confirmó el envío; no afirmar sesión caída."
+    ))
