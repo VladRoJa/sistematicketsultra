@@ -325,6 +325,8 @@ def _branch_catalog_ids(user, query) -> list[int]:
     Los demás perfiles conservan el comportamiento derivado del query autorizado.
     """
 
+    if is_regional_maintenance_lead(user):
+        return list(regional_maintenance_lead_branches(user))
     if _user_role(user) in {REGIONAL_ROLE, "COMPRAS", "COORDINADOR_MANTENIMIENTO"}:
         return _user_scope_branch_ids(user)
 
