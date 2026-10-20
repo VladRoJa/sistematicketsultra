@@ -52,7 +52,7 @@ def _job(result, key="track.base_nocturna_canonica"):
 
 def test_unknown_without_heartbeats(appdb):
     x=read_effective_schedules(NOW)
-    assert len(x["jobs"])==18
+    assert len(x["jobs"])==19
     assert all(j["state"]=="UNVERIFIED" and j["next_due_at"] is None for j in x["jobs"])
 
 
@@ -119,7 +119,7 @@ def test_endpoint_jwt_and_admicorp_only(appdb):
                return_value=SimpleNamespace(username="ADMICORP",rol="ADMINISTRADOR")):
         result=c.get(url,headers=auth)
     assert result.status_code==200
-    assert len(result.get_json()["jobs"])==18
+    assert len(result.get_json()["jobs"])==19
 
 
 def test_query_returns_single_newest_heartbeat_after_many_restarts(appdb):
