@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 from flask import Flask
 from flask_jwt_extended import JWTManager, create_access_token
 
+from app.extensions import db
 from app.models.rpa import GascaSmsRequestORM
 from app.services.automation_control.diagnostic_service import _safe_response
 from app.services.automation_control.job_read_service import (
@@ -62,8 +63,12 @@ def test_sms_history_paginates_by_real_request_rows():
     for method in ("filter", "order_by", "offset", "limit"):
         getattr(q, method).return_value = q
     q.all.return_value = [_sample_request("sent"), _sample_request("pending")]
-    with patch.object(GascaSmsRequestORM, "query", q):
-        data = list_job_runs("gasca.sms_dispatch", limit=1, offset=3)
+    app = Flask(__name__)
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+    db.init_app(app)
+    with app.app_context():
+        with patch.object(GascaSmsRequestORM, "query", q):
+            data = list_job_runs("gasca.sms_dispatch", limit=1, offset=3)
     assert data["coverage"] == "DOMAIN_RUNS"
     assert data["has_more"] is True
     assert len(data["rows"]) == 1
