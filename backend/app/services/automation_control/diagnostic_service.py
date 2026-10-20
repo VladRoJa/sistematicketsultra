@@ -5,12 +5,14 @@ causas de mensajes libres ni reutilizar fallos de otros jobs/cortes.
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 from typing import Any
 
 from app.models.attendance import WarehouseAttendanceRunORM
 from app.models.marketing import MarketingIventasSyncRunORM, MarketingMetaSyncRunORM, MarketingIventasBranchFailureORM
 from app.models.routine_control import RoutineControlPipelineRunORM
+from app.models.rpa import GascaSmsRequestORM, GascaSmsRequestStatus
 from app.models.warehouse import TrackDailyVersionORM, WarehouseAuditLogORM
 from app.services.automation_control.job_read_service import (
     _RUN_SOURCES, _date_iso, _filter_reports_completion,
@@ -83,6 +85,29 @@ def _iventas_structured_summary(row: MarketingIventasSyncRunORM) -> dict:
 
 def _safe_response(job_key: str, row: Any) -> dict:
     status = str(row.status or "").upper()
+    if isinstance(row, GascaSmsRequestORM):
+        failed = status == GascaSmsRequestStatus.FAILED.upper()
+        return {
+            "job_key": job_key,
+            "run_id": int(row.id),
+            "business_date": None,
+            "status": status,
+            "started_at_utc": _utc_iso(row.last_attempt_at),
+            "finished_at_utc": _utc_iso(row.sent_at or row.processed_at),
+            "diagnostic_state": "LOG_NOT_AVAILABLE" if failed else "NOT_APPLICABLE",
+            "error_code": None,
+            "log_state": "LOG_NOT_AVAILABLE",
+            "sanitized_message": (
+                "Solicitud fallida. No existe causa técnica estructurada y "
+                "sanitizada para esta solicitud; revisar el diagnóstico operativo."
+                if failed else "La solicitud no registra estado FAILED."
+            ),
+            "failed_stage": None,
+            "correlation_id": None,
+            "log_lines": [],
+            "truncated": False,
+            "source": "GASCA_SMS_REQUEST_METADATA_ONLY",
+        }
     date_value = (
         row.track_date if isinstance(row, TrackDailyVersionORM)
         else row.date_to if isinstance(row, (MarketingIventasSyncRunORM, MarketingMetaSyncRunORM))
@@ -189,7 +214,15 @@ def last_error_diagnostic(job_key: str, *, business_date: date | None = None) ->
             "log_lines": [], "truncated": False,
         }
     if business_date is not None:
-        query = query.filter(_date_field(model) == business_date)
+        if model is GascaSmsRequestORM:
+            # Solicitudes no tienen business_date. Limitar por día local de
+            # creación, sin atribuirles falsamente un corte de negocio.
+            tz = ZoneInfo("America/Tijuana")
+            begin = datetime.combine(business_date, time.min, tz).astimezone(timezone.utc)
+            end = datetime.combine(business_date + timedelta(days=1), time.min, tz).astimezone(timezone.utc)
+            query = query.filter(model.created_at >= begin, model.created_at < end)
+        else:
+            query = query.filter(_date_field(model) == business_date)
     status_upper = model.status
     query = query.filter(status_upper.in_(
         ("FAILED", "ERROR", "TIMED_OUT", "PARTIAL", "failed", "error", "timed_out", "partial")
