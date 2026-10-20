@@ -230,6 +230,7 @@ export class MaintenancePlannerComponent implements OnInit {
         canRequestClosure: Boolean(
           this.board?.permissions.can_request_closure,
         ),
+        canSelfManage: Boolean(this.board?.permissions.can_self_manage),
         initialDate: initialDate || null,
       },
       width: '1180px',
