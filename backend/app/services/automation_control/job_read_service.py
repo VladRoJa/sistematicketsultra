@@ -11,6 +11,7 @@ from typing import Any
 from app.models.attendance import WarehouseAttendanceRunORM
 from app.models.marketing import MarketingIventasSyncRunORM, MarketingMetaSyncRunORM
 from app.models.routine_control import RoutineControlPipelineRunORM
+from app.models.rpa import GascaSmsRequestORM, GascaSmsRequestStatus
 from sqlalchemy import func
 from app.models.warehouse import TrackDailyVersionORM, WarehouseAuditLogORM
 
@@ -19,6 +20,7 @@ from app.models.warehouse import TrackDailyVersionORM, WarehouseAuditLogORM
 # correlación suficiente de corridas para declarar historial instrumentado.
 _RUN_SOURCES: dict[str, tuple[type, str | None]] = {
     "marketing.iventas_sync": (MarketingIventasSyncRunORM, None),
+    "gasca.sms_dispatch": (GascaSmsRequestORM, None),
     "marketing.meta_sync": (MarketingMetaSyncRunORM, None),
     "reports.attendance_daily_capture": (
         WarehouseAttendanceRunORM, "REPORTS_SCHEDULER",
@@ -137,6 +139,34 @@ def _serialize_attendance_run(row: Any) -> dict[str, Any]:
     }
 
 
+def _serialize_gasca_sms_request(row: Any) -> dict[str, Any]:
+    """Solo metadatos de cola; nunca PIN, teléfono, código ni error raw."""
+    status = str(row.status or "")
+    finished = (
+        row.sent_at if status == GascaSmsRequestStatus.SENT
+        else row.processed_at if status not in {
+            GascaSmsRequestStatus.PENDING,
+            GascaSmsRequestStatus.GASCA_SEARCHING,
+            GascaSmsRequestStatus.READY_TO_SEND,
+            GascaSmsRequestStatus.SMS_SENDING,
+        } else None
+    )
+    return {
+        "run_id": int(row.id),
+        "business_date": None,
+        "started_at_utc": _utc_iso(row.last_attempt_at),
+        "finished_at_utc": _utc_iso(finished),
+        "observed_at_utc": _utc_iso(row.created_at),
+        "status_raw": status,
+        "evidence_type": "SMS_REQUEST",
+        "is_canonical": None,
+        "is_current": None,
+        "trigger_source": "sms_queue",
+        "error_available": bool(row.internal_error),
+        "counts": {"attempts": int(row.attempt_count or 0)},
+    }
+
+
 AUDIT_COMPLETION_COVERAGE = "COMPLETION_MARKERS_ONLY"
 
 
@@ -239,6 +269,9 @@ def list_job_runs(
     elif model is RoutineControlPipelineRunORM:
         query = query.order_by(model.created_at.desc(), model.id.desc())
         serializer = _serialize_routine_pipeline_run
+    elif model is GascaSmsRequestORM:
+        query = query.order_by(model.created_at.desc(), model.id.desc())
+        serializer = _serialize_gasca_sms_request
     elif model is TrackDailyVersionORM:
         query = query.order_by(model.created_at.desc(), model.id.desc())
         serializer = _serialize_track_run
