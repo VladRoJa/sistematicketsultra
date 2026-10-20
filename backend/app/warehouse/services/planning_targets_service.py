@@ -19,6 +19,9 @@ from app.models.warehouse import (
     TrackDailyMartORM,
     TrackMonthlyTargetORM,
 )
+from app.warehouse.services.track_daily_query_version_service import (
+    find_latest_effective_track_mart_row_for_branch,
+)
 
 
 class PlanningTargetsServiceError(RuntimeError):
@@ -169,17 +172,9 @@ def _latest_track_mart_row_for_month(
 ):
     normalized_target_month = _normalize_target_month(target_month)
 
-    return (
-        TrackDailyMartORM.query
-        .filter(
-            TrackDailyMartORM.sucursal_canon == sucursal_canon,
-            TrackDailyMartORM.target_month == normalized_target_month,
-        )
-        .order_by(
-            TrackDailyMartORM.track_date.desc(),
-            TrackDailyMartORM.id.desc(),
-        )
-        .first()
+    return find_latest_effective_track_mart_row_for_branch(
+        sucursal_canon=sucursal_canon,
+        exact_target_month=normalized_target_month,
     )
 
 
@@ -1710,23 +1705,10 @@ def get_branch_prefill(
     if target_month is not None:
         normalized_target_month = _normalize_target_month(target_month)
 
-    query = TrackDailyMartORM.query.filter(
-        TrackDailyMartORM.sucursal_canon == normalized_sucursal_canon,
-        TrackDailyMartORM.m2_sin_circulaciones.isnot(None),
-    )
-
-    if normalized_target_month is not None:
-        query = query.filter(
-            TrackDailyMartORM.target_month <= normalized_target_month,
-        )
-
-    latest_mart_row = (
-        query
-        .order_by(
-            TrackDailyMartORM.track_date.desc(),
-            TrackDailyMartORM.id.desc(),
-        )
-        .first()
+    latest_mart_row = find_latest_effective_track_mart_row_for_branch(
+        sucursal_canon=normalized_sucursal_canon,
+        latest_target_month=normalized_target_month,
+        require_m2_sin_circulaciones=True,
     )
     return {
         "status": "ok",

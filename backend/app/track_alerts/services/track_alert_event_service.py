@@ -32,7 +32,9 @@ def generate_track_alert_events(
         )
 
     events = [
-        _candidate_to_event(candidate)
+        _candidate_to_event(
+            candidate, requested_generation_mode=generation_mode,
+        )
         for candidate in candidates
     ]
 
@@ -73,7 +75,18 @@ def _delete_existing_events(
     db.session.flush()
 def _candidate_to_event(
     candidate: TrackAlertCandidate,
+    *,
+    requested_generation_mode: str,
 ) -> TrackAlertEventORM:
+    # The requested mode is the stable event identity used by replace,
+    # previews and delivery. Historic manual_preview can legitimately
+    # read official_closed_day; retain that mode separately as provenance.
+    metadata = dict(candidate.metadata_json or {})
+    source_generation_mode = metadata.get("generation_mode")
+    if source_generation_mode is not None:
+        metadata["source_generation_mode"] = source_generation_mode
+    metadata["generation_mode"] = requested_generation_mode
+
     return TrackAlertEventORM(
         track_date=candidate.track_date,
         sucursal_canon=candidate.sucursal_canon,
@@ -85,7 +98,7 @@ def _candidate_to_event(
         threshold_value=candidate.threshold_value,
         ranking_position=candidate.ranking_position,
         was_sent=False,
-        metadata_json=candidate.metadata_json or {},
+        metadata_json=metadata,
     )
 
 

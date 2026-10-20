@@ -14,6 +14,10 @@ from app.models.warehouse import (
     TrackDailyVersionORM,
     VentaTotalSnapshotORM,
 )
+from app.warehouse.services.track_daily_query_version_service import (
+    PREFERRED_TRACK_VERSION_TYPES,
+    resolve_preferred_track_daily_version,
+)
 
 from app.warehouse.services.track_branch_cohort_service import (
     TRACK_BRANCH_COHORT_LEGACY_21,
@@ -2308,6 +2312,32 @@ def load_first_store_income_dates_bulk(
         func.trim(TrackDailyMartORM.sucursal_canon)
     )
 
+    # Discover dates only from published-type versions, then resolve the
+    # *effective* version of each date. An unpromoted candidate must never
+    # establish a branch's first store-income date.
+    candidate_dates = (
+        db.session.query(TrackDailyMartORM.track_date)
+        .join(
+            TrackDailyVersionORM,
+            TrackDailyVersionORM.id == TrackDailyMartORM.track_daily_version_id,
+        )
+        .filter(
+            normalized_branch.in_(normalized_canons),
+            TrackDailyMartORM.venta_tienda_real_mtd > 0,
+            TrackDailyVersionORM.version_type.in_(PREFERRED_TRACK_VERSION_TYPES),
+        )
+        .distinct()
+        .order_by(TrackDailyMartORM.track_date.asc())
+        .all()
+    )
+    effective_ids = []
+    for (track_date,) in candidate_dates:
+        version = resolve_preferred_track_daily_version(track_date=track_date)
+        if version is not None:
+            effective_ids.append(version.id)
+    if not effective_ids:
+        return {}
+
     rows = (
         db.session.query(
             normalized_branch.label("sucursal_canon"),
@@ -2317,6 +2347,7 @@ def load_first_store_income_dates_bulk(
         )
         .filter(
             normalized_branch.in_(normalized_canons),
+            TrackDailyMartORM.track_daily_version_id.in_(effective_ids),
             TrackDailyMartORM.venta_tienda_real_mtd > 0,
         )
         .group_by(normalized_branch)
