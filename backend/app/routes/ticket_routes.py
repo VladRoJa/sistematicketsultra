@@ -14,6 +14,9 @@ from app.utils.email_sender import send_email_html
 from app.utils.notify_targets import build_subject, pick_recipients
 from app.utils.notify_utils import render_ticket_html, render_ticket_whatsapp_text
 from app.utils.ticket_filters import filtrar_tickets_por_usuario
+from app.utils.maintenance_regional_lead import (
+    can_regional_maintenance_lead_request_legacy_closure,
+)
 from app.services.ticket_validation_summary_service import get_ticket_validation_summary_for_user
 from app.services.ticket_maintenance_coordination_service import (
     TicketCoordinationError,
@@ -2593,10 +2596,10 @@ def cierre_solicitar(ticket_id):
         return jsonify({"mensaje": "Usuario no encontrado"}), 401
 
     if t.departamento_id == 1:
-        # Cierre PM: solo coordinación explícita dentro de sus sucursales.
-        # Nunca heredar autoridad por pertenecer al departamento Mantenimiento
-        # ni por tener una sucursal principal corporativa.
-        if not has_maintenance_coordination_permission(user):
+        # El usuario 45 conserva cierre legacy SIN responsable, con alcance
+        # regional explícito. Para Yuliana se mantiene la revisión técnica.
+        legacy_lead = can_regional_maintenance_lead_request_legacy_closure(user, t)
+        if not (legacy_lead or has_maintenance_coordination_permission(user)):
             return jsonify({"mensaje": "Sin permiso para solicitar cierre de Mantenimiento."}), 403
 
         ticket_en_scope = (
@@ -2611,13 +2614,13 @@ def cierre_solicitar(ticket_id):
             return jsonify({"mensaje": "Solo se puede solicitar cierre de Mantenimiento en progreso."}), 409
 
         tipo_atencion = str(t.tipo_atencion or "").strip().upper()
-        if tipo_atencion == "INTERNA":
-            # El técnico debe registrar trabajo terminado antes de que
-            # coordinación revise y solicite conformidad al gerente.
-            if str(t.estado_cierre or "").strip().lower() != MAINTENANCE_WORK_REVIEW_PENDING:
-                return jsonify({"mensaje": "Falta la terminación técnica y revisión de coordinación."}), 409
-        elif tipo_atencion != "EXTERNA":
-            return jsonify({"mensaje": "Define atención INTERNA o EXTERNA antes del cierre."}), 409
+        if not legacy_lead:
+            if tipo_atencion == "INTERNA":
+                # La coordinación nunca se salta la terminación del técnico.
+                if str(t.estado_cierre or "").strip().lower() != MAINTENANCE_WORK_REVIEW_PENDING:
+                    return jsonify({"mensaje": "Falta la terminación técnica y revisión de coordinación."}), 409
+            elif tipo_atencion != "EXTERNA":
+                return jsonify({"mensaje": "Define atención INTERNA o EXTERNA antes del cierre."}), 409
     elif not (_es_admin_o_corporativo(user) or _es_jefe_depto(user, t)):
         # Contrato legacy intacto para departamentos distintos de Mantenimiento.
         return jsonify({"mensaje": "No autorizado"}), 403
