@@ -58,6 +58,6 @@ jobs:
             tests/warehouse/test_warehouse_retention_contact_center_postgres.py
       - name: PostgreSQL 16 evidence preservation and SQL contract
         run: |
-          python -m pytest -q --tb=short -o addopts= \
+          python -m pytest -q --tb=short --capture=tee-sys -o addopts= \
             tests/warehouse/test_warehouse_retention_contact_center_evidence.py \
             tests/warehouse/test_warehouse_retention_contact_center_postgres.py
