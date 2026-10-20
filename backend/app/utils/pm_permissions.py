@@ -5,6 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
+SCOPED_MAINTENANCE_READER_ROLES = frozenset({
+    "COMPRAS",  # compatibilidad con asignaciones existentes
+    "COORDINADOR_MANTENIMIENTO",
+})
+
+
 PM_ADMIN_ROLES = {
     "ADMINISTRADOR",
     "SUPER_ADMIN",
@@ -65,10 +71,10 @@ def get_user_role(user) -> str:
     return normalize_pm_role(getattr(user, "rol", None))
 
 
-def has_compras_maintenance_read_grant(user) -> bool:
-    """Individual read grant; COMPRAS role alone never enables Maintenance."""
+def has_scoped_maintenance_read_grant(user) -> bool:
+    """Grant individual de lectura; el rol por sí solo nunca concede acceso."""
 
-    if get_user_role(user) != "COMPRAS":
+    if get_user_role(user) not in SCOPED_MAINTENANCE_READER_ROLES:
         return False
 
     user_id = getattr(user, "id", None)
@@ -86,6 +92,14 @@ def has_compras_maintenance_read_grant(user) -> bool:
             es_admin=False,
         ).first()
         is not None
+    )
+
+
+def has_compras_maintenance_read_grant(user) -> bool:
+    """Compatibilidad con consumidores legacy que preguntan solo por Compras."""
+    return (
+        get_user_role(user) == "COMPRAS"
+        and has_scoped_maintenance_read_grant(user)
     )
 
 
@@ -108,12 +122,12 @@ def _check_pm_role(user, allowed_roles: set[str], action: str) -> PmPermissionRe
             reason="role_allowed",
         )
 
-    if action == "view" and has_compras_maintenance_read_grant(user):
+    if action == "view" and has_scoped_maintenance_read_grant(user):
         return PmPermissionResult(
             allowed=True,
             action=action,
             role=role,
-            reason="explicit_compras_maintenance_read_grant",
+            reason="explicit_scoped_maintenance_read_grant",
         )
 
     return PmPermissionResult(

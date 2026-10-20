@@ -12,9 +12,11 @@ export function pendingGovernedBatchIds(
   monitor: CampaignV2GovernedMonitor | null,
   review: CampaignV2GovernedExecutionReviewReady | null,
 ): number[] {
+  const continuing = monitor?.status === 'CONTINUATION_REVIEW_REQUIRED';
   if (!monitor || !review?.execution ||
-      !monitor.approval || monitor.approval.expired ||
-      !monitor.quota.all_current ||
+      !monitor.approval ||
+      (monitor.approval.expired && !continuing) ||
+      (!monitor.quota.all_current && !continuing) ||
       monitor.execution?.status !== 'AUTHORIZED' ||
       review.execution.status !== 'AUTHORIZED' ||
       review.manifest_digest !== monitor.approval.manifest_digest ||
@@ -55,6 +57,7 @@ export function pendingGovernedBatchIds(
       eligible.slice(firstReady).some(child => child.status !== 'READY')) {
     return [];
   }
+  if (continuing && firstReady === 0) { return []; }
   const lastSubmittedId = firstReady > 0 ? eligible[firstReady - 1].child_id : null;
   if (monitor.execution.last_child_id !== lastSubmittedId ||
       review.execution.last_child_id !== lastSubmittedId) {

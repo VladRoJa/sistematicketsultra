@@ -6,6 +6,7 @@ on:
       - "backend/tests/marketing/test_issue_856_stage_e_gates.py"
       - "backend/app/routes/marketing_campaign_v2_routes.py"
       - "backend/app/services/marketing_campaign_v2_governed_dispatch_service.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_started_continuation.py"
       - "backend/app/services/marketing_campaign_v2_dispatch_approval_service.py"
       - "backend/app/services/marketing_campaign_v2_reauthorization_service.py"
       - "backend/tests/marketing/test_marketing_campaign_v2_reauthorization.py"
@@ -67,6 +68,7 @@ jobs:
             tests/marketing/test_issue_856_stage_e_gates.py \
             tests/marketing/test_marketing_campaign_v2_reauthorization.py \
             tests/marketing/test_marketing_campaign_v2_quota_routes.py \
+            tests/marketing/test_marketing_campaign_v2_started_continuation.py \
             tests/marketing/test_marketing_campaign_v2_quota_execution.py \
             tests/marketing/test_marketing_campaign_v2_quota_dispatch_real_pg.py \
             tests/marketing/test_marketing_campaign_v2_quota_monitor.py \

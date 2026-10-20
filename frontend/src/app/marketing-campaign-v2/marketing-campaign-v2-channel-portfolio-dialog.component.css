@@ -1,3 +1,4 @@
+@import './marketing-campaign-v2-form-fields.css';
 .mapping-dialog { min-width: min(720px, 82vw); }
 .notice { font-size: 13px; line-height: 1.55; }
 .summary { display:flex; gap:10px; align-items:baseline; margin:12px 0; }

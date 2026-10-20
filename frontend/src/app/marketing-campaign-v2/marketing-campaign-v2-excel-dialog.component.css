@@ -1,6 +1,9 @@
+@import './marketing-campaign-v2-form-fields.css';
 .excel-import { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; }
 .explanation { font-size: 13px; line-height: 1.5; }
-.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+/* V1: priorizar la captura principal, sin forzar tres controles en una fila. */
+.fields > mat-form-field:first-child { grid-column: 1 / -1; }
 .file-field { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
 .file-field input { max-width: 100%; }
 .error { color: #b91c1c; }
@@ -11,3 +14,16 @@
 .fingerprint { font-family: monospace; font-size: 11px; }
 .branch-counts { display: flex; flex-wrap: wrap; gap: 8px; max-height: 160px; overflow: auto; }
 .branch-counts span { background: #f1f5f9; border-radius: 4px; padding: 5px 8px; font-size: 12px; color: #0f172a; }
+
+
+/* A three-field form should read as a form, not as a row of faint lines. */
+.excel-import { font-size: 14px; gap: 18px; padding: 18px 20px; }
+.explanation { font-size: 14px; line-height: 1.55; }
+.fields { gap: 16px 18px; align-items: start; }
+.fields mat-form-field { min-width: 0; width: 100%; }
+.file-field { font-size: 14px; gap: 11px; }
+.file-field input { font-size: 14px; }
+@media (max-width: 720px) {
+  .excel-import { padding: 12px 5px; }
+  .fields { grid-template-columns: minmax(0, 1fr); }
+}

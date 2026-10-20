@@ -1,3 +1,4 @@
+@import './marketing-campaign-v2-form-fields.css';
 :host { display: block; }
 .readiness { font-size: 12px; min-width: 0; }
 .description,.notice { color:#475569; line-height:1.5; margin:6px 0 16px; }

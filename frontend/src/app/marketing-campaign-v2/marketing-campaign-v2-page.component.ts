@@ -1,4 +1,4 @@
-import { CommonModule } from '@angular/common';
+import { CommonModule, DOCUMENT } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, OnInit, inject } from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
@@ -8,6 +8,7 @@ import { MatCheckboxChange, MatCheckboxModule } from '@angular/material/checkbox
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 
@@ -101,6 +102,7 @@ import { MarketingCampaignV2ReadinessDialogComponent } from './marketing-campaig
     MatDialogModule,
     MatFormFieldModule,
     MatInputModule,
+    MatMenuModule,
     MatProgressSpinnerModule,
     MatSelectModule,
     DateRangeSelectorComponent,
@@ -112,6 +114,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   private readonly service = inject(MarketingCampaignV2Service);
   private readonly funnelService = inject(MarketingSalesFunnelService);
   private readonly dialog = inject(MatDialog);
+  private readonly document = inject(DOCUMENT);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly source = new FormControl<CampaignV2Source>('EXPIRED_MEMBERS', {
@@ -224,6 +227,10 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   campaignTotalPages = 0;
 
   private previewRequest: CampaignV2AudienceDefinitionRequest | null = null;
+
+  goToCampaignSection(section: 'campaign-v2-builder' | 'campaign-v2-reporting' | 'campaign-v2-history'): void {
+    this.document.getElementById(section)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 
   ngOnInit(): void {
     this.purpose.valueChanges

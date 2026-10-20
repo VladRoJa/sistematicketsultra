@@ -110,10 +110,20 @@
           {{ errorMessage }}
         </div>
 
+        <div *ngIf="coordinationLoading" class="commitment-card__saving">
+          Cargando responsables de Mantenimiento…
+        </div>
+        <div *ngIf="coordinationError" class="commitment-card__error">
+          {{ coordinationError }}
+        </div>
+
         <app-asignar-fecha-modal
+          *ngIf="canShowInitialCommitmentForm"
           [fechaSeleccionada]="initialCommitmentDate"
           [ticket]="commitmentTicket"
           [puedeCapturarDiagnostico]="canCaptureDiagnosis"
+          [permitirAsignacionMantenimiento]="useCoordinatedAssignment"
+          [responsablesMantenimiento]="responsablesMantenimiento"
           (onGuardar)="saveInitialCommitment($event)"
           (onCancelar)="close()"
         ></app-asignar-fecha-modal>
@@ -149,7 +159,7 @@
         </button>
 
         <small *ngIf="!canReprogramCommitment">
-          La fecha solo puede modificarse cuando el ticket está en progreso y tu perfil tiene permiso de ejecución.
+          La fecha solo puede modificarse cuando el ticket está en progreso y tu perfil tiene permiso de programación.
         </small>
 
         <div *ngIf="saving" class="commitment-card__saving">
@@ -170,8 +180,18 @@
       <div class="side-card side-card--closure">
         <span class="side-card__eyebrow">Flujo de cierre</span>
         <h3>Estado de cierre</h3>
-        <p>{{ ticket.estado_cierre || 'Sin flujo de cierre activo' }}</p>
+        <p>{{ closureStageLabel }}</p>
         <small *ngIf="ticket.motivo_rechazo_cierre">{{ ticket.motivo_rechazo_cierre }}</small>
+
+        <button
+          *ngIf="canMarkWorkCompleted"
+          type="button"
+          class="side-card__finish"
+          (click)="openWorkActionDialog('complete')"
+          [disabled]="saving"
+        >
+          Trabajo terminado
+        </button>
 
         <button
           *ngIf="canFinalizeTicket"
@@ -180,7 +200,17 @@
           (click)="openClosureDialog()"
           [disabled]="saving"
         >
-          Finalizar ticket
+          {{ closureActionLabel }}
+        </button>
+
+        <button
+          *ngIf="canReturnWork"
+          type="button"
+          class="side-card__finish side-card__finish--return"
+          (click)="openWorkActionDialog('return')"
+          [disabled]="saving"
+        >
+          Devolver al técnico
         </button>
       </div>
 

@@ -46,15 +46,23 @@ import { mostrarAlertaToast,solicitarMotivoRechazoCierre } from '../utils/alerta
 import { SucursalesService } from '../services/sucursales.service';
 import { EvidenciaPreviewComponent } from './modals/evidencia-preview.component';
 import { ModalCierreTicketComponent } from '../shared/modal-cierre-ticket/modal-cierre-ticket.component';
-import { buscarAncestroNivel, filtrarTicketsConFiltros } from '../utils/ticket-utils';
+import { buscarAncestroNivel, filtrarTicketsConFiltros, obtenerResponsableVisible } from '../utils/ticket-utils';
 import { MatSelectModule } from '@angular/material/select';
 import { AuthService } from '../services/auth.service';
+import {
+  MaintenanceAssignee,
+  MaintenanceCoordinationService,
+  ReassignMaintenanceTicketPayload,
+} from '../services/maintenance-coordination.service';
+import { ReasignarResponsableModalComponent } from '../shared/reasignar-responsable-modal/reasignar-responsable-modal.component';
 import { DialogoConfirmacionComponent } from '../shared/dialogo-confirmacion/dialogo-confirmacion.component';
+import { MaintenanceWorkActionDialogComponent } from '../shared/maintenance-work-action-dialog/maintenance-work-action-dialog.component';
 import {
   MantenimientoEquiposService,
   RegionReporteMantenimientoDTO,
 } from '../services/mantenimiento-equipos.service';
 import {
+  AsignarFechaPayload,
   CondicionOperativa,
   FallaMantenimientoDTO,
   FamiliaEquipoDTO,
@@ -118,12 +126,16 @@ export interface Ticket {
   sucursal_id_destino?: number | null;
   url_evidencia?: string | null;
   has_attachment?: boolean;
+  asignado_a?: string | null;
+  tipo_atencion?: 'INTERNA' | 'EXTERNA' | null;
   refaccion_definida_por_jefe?: boolean;
   estado_cierre?:
   | 'pendiente_jefe'
+  | 'pendiente_revision_coord'
   | 'pendiente_creador'
   | 'rechazado_por_jefe'
   | 'rechazado_por_creador'
+  | 'rechazado_por_gerente'
   | 'cerrado_por_gerente_desde_cero'
   | null;
 
@@ -160,6 +172,7 @@ interface RegionReporteMantenimientoOption
     MatDatepickerModule,
     HistorialFechasModalComponent,
     AsignarFechaModalComponent,
+    ReasignarResponsableModalComponent,
     MatTooltipModule,
     MatSelectModule,
 
@@ -216,6 +229,7 @@ export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
       categoria: [],
       descripcion: [],
       username: [],
+      responsable: [],
       estado: [],
       criticidad: [],
       departamento: [],
@@ -230,6 +244,7 @@ export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
   categoriasDisponibles: any[] = [];
   descripcionesDisponibles: any[] = [];
   usuariosDisponibles: any[] = [];
+  responsablesDisponibles: { valor: string; etiqueta: string; seleccionado: boolean }[] = [];
   estadosDisponibles: any[] = [];
   criticidadesDisponibles: any[] = [];
   fechasCreacionDisponibles: any[] = [];
@@ -245,6 +260,7 @@ export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
   categoriasFiltradas: any[] = [];
   descripcionesFiltradas: any[] = [];
   usuariosFiltrados: any[] = [];
+  responsablesFiltrados: { valor: string; etiqueta: string; seleccionado: boolean }[] = [];
   estadosFiltrados: any[] = [];
   criticidadesFiltradas: any[] = [];
   fechasCreacionFiltradas: any[] = [];
@@ -259,12 +275,18 @@ export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
   showModalAsignarFecha: boolean = false;
   ticketParaAsignarFecha: Ticket | null = null;
   fechaSolucionTentativa: Date | null = null;
+  puedeCoordinarMantenimiento = false;
+  responsablesMantenimiento: MaintenanceAssignee[] = [];
+  esCoordinacionMantenimiento = false;
+  ticketParaReasignar: Ticket | null = null;
+  guardandoReasignacion = false;
   
 
   // Controles
   seleccionarTodoCategoria = false;
   seleccionarTodoDescripcion = false;
   seleccionarTodoUsuario = false;
+  seleccionarTodoResponsable = false;
   seleccionarTodoEstado = false;
   seleccionarTodoCriticidad = false;
   seleccionarTodoFechaC = false;
@@ -279,6 +301,7 @@ export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
   filtroDescripcionTexto = '';
   filtroDescripcionAplicadoTexto = '';
   filtroUsuarioTexto = '';
+  filtroResponsableTexto = '';
   filtroEstadoTexto = '';
   filtroCriticidadTexto = '';
   filtroFechaTexto = '';
@@ -302,6 +325,7 @@ export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
   @ViewChild('triggerFiltroCategoria') triggerFiltroCategoria: any;
   @ViewChild('triggerFiltroDesc') triggerFiltroDesc: any;
   @ViewChild('triggerFiltroUsuario') triggerFiltroUsuario: any;
+  @ViewChild('triggerFiltroResponsable') triggerFiltroResponsable: any;
   @ViewChild('triggerFiltroEstado') triggerFiltroEstado: any;
   @ViewChild('triggerFiltroCriticidad') triggerFiltroCriticidad: any;
   @ViewChild('triggerFiltroFechaC') triggerFiltroFechaC: any;
@@ -324,6 +348,7 @@ export class PantallaVerTicketsComponent implements OnInit, OnDestroy {
     private sucursalesService: SucursalesService,
     private authService: AuthService, 
     private mantenimientoEquiposService: MantenimientoEquiposService,
+    private maintenanceCoordinationService: MaintenanceCoordinationService,
     private route: ActivatedRoute,
     private router: Router,
   ) {}
@@ -332,6 +357,7 @@ ngAfterViewInit(): void {
     { ref: this.triggerFiltroCategoria,    key: 'categoria' },
     { ref: this.triggerFiltroDesc,         key: 'descripcion' },
     { ref: this.triggerFiltroUsuario,      key: 'username' },
+    { ref: this.triggerFiltroResponsable,  key: 'responsable' },
     { ref: this.triggerFiltroEstado,       key: 'estado' },
     { ref: this.triggerFiltroCriticidad,   key: 'criticidad' },
     { ref: this.triggerFiltroDepartamento, key: 'departamento' },
@@ -366,6 +392,7 @@ async ngOnInit() {
 
   // 👇 NUEVO: setear usuarioActual a partir de this.user
   this.usuarioActual = (this.user?.username || '').trim().toUpperCase();
+  this.cargarContextoCoordinacionMantenimiento();
 
   if (this.puedeDescargarReporteMantenimiento) {
     this.cargarRegionesReporteMantenimiento();
@@ -980,6 +1007,7 @@ private obtenerTextoFiltroColumna(columna: string): string {
     categoria: this.filtroCategoriaTexto,
     descripcion: this.filtroDescripcionTexto,
     username: this.filtroUsuarioTexto,
+    responsable: this.filtroResponsableTexto,
     estado: this.filtroEstadoTexto,
     criticidad: this.filtroCriticidadTexto,
     departamento: this.filtroDeptoTexto,
@@ -1125,7 +1153,9 @@ private normalizarTextoFiltro(value: any): string {
 
   abrirHistorialModal(ticket: Ticket): void {
     this.dialog.open(HistorialFechasModalComponent, {
-      width: '920px',
+      // Crece en escritorio y respeta el viewport en pantallas pequeñas.
+      // El historial adapta sus columnas al contenido mediante CSS.
+      width: 'min(1080px, 96vw)',
       maxWidth: '96vw',
       maxHeight: '90vh',
       data: ticket
@@ -1205,6 +1235,7 @@ private obtenerPluralFiltro(columna: string): string | null {
     categoria: 'categorias',
     descripcion: 'descripciones',
     username: 'usuarios',
+    responsable: 'responsables',
     estado: 'estados',
     criticidad: 'criticidades',
     departamento: 'departamentos',
@@ -1296,7 +1327,11 @@ private prepararOpcionesFiltro(columna: string, path: string): void {
   // 1) Recolector genérico: usa todos los filtros activos EXCEPTO la columna actual.
   (baseOpciones || []).forEach((t: any) => {
     let valor: any = t;
-    for (const part of path.split('.')) valor = valor?.[part];
+    if (columna === 'responsable') {
+      valor = obtenerResponsableVisible(t);
+    } else {
+      for (const part of path.split('.')) valor = valor?.[part];
+    }
 
     if (columna === 'departamento') {
       const esId = valor != null && /^[0-9]+$/.test(String(valor));
@@ -1393,6 +1428,7 @@ if (columna === 'subcategoria') {
     categoria: 'categoria',
     descripcion: 'descripcion',
     username: 'username',
+    responsable: 'asignado_a',
     estado: 'estado',
     criticidad: 'criticidad',
     departamento: 'departamento',
@@ -1567,6 +1603,7 @@ private limpiarTextoFiltroColumnaLocal(columna: string): void {
     this.filtroDescripcionAplicadoTexto = '';
   }
   if (columna === 'username') this.filtroUsuarioTexto = '';
+  if (columna === 'responsable') this.filtroResponsableTexto = '';
   if (columna === 'estado') this.filtroEstadoTexto = '';
   if (columna === 'criticidad') this.filtroCriticidadTexto = '';
   if (columna === 'departamento') this.filtroDeptoTexto = '';
@@ -1790,13 +1827,119 @@ aplicarFiltroColumnaConReset = (col: string) => aplicarFiltroColumnaConReset(thi
 
   /** Sólo estas columnas muestran buscador de texto */
 permiteBusqueda(col: string): boolean {
-  return ['categoria','descripcion','inventario','estado','departamento','subcategoria','detalle','sucursal','username','criticidad'].includes(col);
+  return ['categoria','descripcion','inventario','estado','departamento','subcategoria','detalle','sucursal','username','responsable','criticidad'].includes(col);
 }
 
 
+cargarContextoCoordinacionMantenimiento(): void {
+  this.maintenanceCoordinationService.getContext().subscribe({
+    next: (context) => {
+      this.puedeCoordinarMantenimiento = !!context.can_coordinate;
+      this.responsablesMantenimiento = context.can_coordinate
+        ? (context.assignees || [])
+        : [];
+    },
+    error: () => {
+      this.puedeCoordinarMantenimiento = false;
+      this.responsablesMantenimiento = [];
+    },
+  });
+}
+
+esTicketMantenimiento(ticket: Ticket): boolean {
+  return Number(ticket?.departamento_id) === 1;
+}
+
+obtenerResponsableTicket(ticket: Ticket): string {
+  return obtenerResponsableVisible(ticket);
+}
+
+puedeCoordinarTicket(ticket: Ticket): boolean {
+  const estado = String(ticket?.estado || '').trim().toLowerCase();
+  return this.puedeCoordinarMantenimiento
+    && Number(ticket?.departamento_id) === 1
+    && (estado === 'abierto' || estado === 'en progreso');
+}
+
+puedeReasignarTicket(ticket: Ticket): boolean {
+  // Incluye tickets legacy sin responsable, incluso si ya tienen compromiso.
+  // El backend exige coordinación y alcance por sucursal para guardar.
+  return this.puedeCoordinarTicket(ticket);
+}
+
+etiquetaAccionResponsableTicket(ticket: Ticket): string {
+  return ticket.tipo_atencion === 'EXTERNA' || String(ticket.asignado_a || '').trim()
+    ? 'Reasignar responsable'
+    : 'Asignar responsable';
+}
+
+abrirReasignarResponsable(ticket: Ticket): void {
+  if (!this.puedeReasignarTicket(ticket)) return;
+  this.ticketParaReasignar = ticket;
+}
+
+onCancelarReasignacion(): void {
+  if (!this.guardandoReasignacion) this.ticketParaReasignar = null;
+}
+
+onGuardarReasignacion(payload: ReassignMaintenanceTicketPayload): void {
+  const ticket = this.ticketParaReasignar;
+  if (!ticket || !this.puedeReasignarTicket(ticket) || this.guardandoReasignacion) return;
+
+  this.guardandoReasignacion = true;
+  this.maintenanceCoordinationService.reassignTicket(ticket.id, payload)
+    .pipe(finalize(() => { this.guardandoReasignacion = false; }))
+    .subscribe({
+      next: () => {
+        this.ticketParaReasignar = null;
+        this.refrescarTicketsPreservandoFiltros();
+        mostrarAlertaToast('Responsable reasignado correctamente.', 'success');
+      },
+      error: (err) => {
+        mostrarAlertaToast(
+          err?.error?.mensaje || 'No se pudo reasignar el responsable.',
+          'error',
+        );
+      },
+    });
+}
+
+abrirFechaSolucionConCoordinacion(ticket: Ticket): void {
+  if (!this.puedeCoordinarTicket(ticket)) return;
+
+  this.ticketParaAsignarFecha = ticket;
+  this.esCoordinacionMantenimiento = true;
+  const actual = ticket.fecha_solucion ? new Date(ticket.fecha_solucion) : null;
+
+  if (actual && !Number.isNaN(actual.getTime())) {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Tijuana',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const partes = formatter.format(actual).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    this.fechaSolucionTentativa = partes
+      ? new Date(Number(partes[1]), Number(partes[2]) - 1, Number(partes[3]))
+      : null;
+  } else {
+    this.fechaSolucionTentativa = null;
+  }
+
+  this.showModalAsignarFecha = true;
+}
+
 cambiarEstadoEnProgreso(ticket: Ticket) {
+  // Una única entrada al modal de fecha. Para coordinadores incluye la
+  // asignación interna/externa; los demás conservan el flujo anterior.
+  if (this.puedeCoordinarTicket(ticket)) {
+    this.abrirFechaSolucionConCoordinacion(ticket);
+    return;
+  }
+
   if (!ticket.fecha_solucion) {
     this.ticketParaAsignarFecha = ticket;
+    this.esCoordinacionMantenimiento = false;
     this.fechaSolucionTentativa = null;
     this.showModalAsignarFecha = true;
   } else {
@@ -1805,15 +1948,7 @@ cambiarEstadoEnProgreso(ticket: Ticket) {
 }
 
 
-onGuardarFechaSolucion(event: {
-  fecha: Date;
-  motivo: string;
-  necesita_refaccion?: boolean;
-  descripcion_refaccion?: string;
-  refaccion_definida_por_jefe?: boolean;
-  falla_mantenimiento_id?: number;
-  condicion_operativa?: CondicionOperativa;
-}) {
+onGuardarFechaSolucion(event: AsignarFechaPayload) {
   if (!this.ticketParaAsignarFecha) return;
 
   if (!event.motivo || !event.motivo.trim()) {
@@ -1822,6 +1957,49 @@ onGuardarFechaSolucion(event: {
   }
 
   const id = this.ticketParaAsignarFecha.id;
+
+  if (this.esCoordinacionMantenimiento) {
+    if (!event.tipo_atencion ||
+        (event.tipo_atencion === 'INTERNA' && !event.asignado_user_id)) {
+      mostrarAlertaToast('Selecciona tipo de atención y responsable.', 'error');
+      return;
+    }
+
+    const dueDate = [
+      event.fecha.getFullYear(),
+      String(event.fecha.getMonth() + 1).padStart(2, '0'),
+      String(event.fecha.getDate()).padStart(2, '0'),
+    ].join('-');
+
+    this.maintenanceCoordinationService.coordinateTicket(id, {
+      due_date: dueDate,
+      motivo: event.motivo.trim(),
+      tipo_atencion: event.tipo_atencion,
+      asignado_user_id: event.tipo_atencion === 'INTERNA'
+        ? (event.asignado_user_id ?? null)
+        : null,
+      ...(event.necesita_refaccion !== undefined
+        ? { necesita_refaccion: !!event.necesita_refaccion }
+        : {}),
+      descripcion_refaccion: event.descripcion_refaccion,
+    }).subscribe({
+      next: () => {
+        this.refrescarTicketsPreservandoFiltros();
+        this.showModalAsignarFecha = false;
+        this.ticketParaAsignarFecha = null;
+        this.esCoordinacionMantenimiento = false;
+        mostrarAlertaToast('Responsable y compromiso guardados.', 'success');
+      },
+      error: (err) => {
+        mostrarAlertaToast(
+          err?.error?.mensaje || 'No se pudo asignar la atención.',
+          'error',
+        );
+      },
+    });
+    return;
+  }
+
   const capturaEstructurada = this.puedeGuardarCompromisoMantenimiento(
     this.ticketParaAsignarFecha,
   );
@@ -1945,13 +2123,19 @@ private puedeGuardarCompromisoMantenimiento(ticket: Ticket | null): boolean {
 
 
 onCancelarAsignarFecha() {
+  this.esCoordinacionMantenimiento = false;
   this.showModalAsignarFecha = false;
   this.ticketParaAsignarFecha = null;
 }
 
 abrirEditarFechaSolucion(ticket: Ticket) {
   const estado = (ticket.estado ?? '').toString().trim().toLowerCase();
-  if (estado !== 'en progreso') return; // ✅ solo editable en progreso
+  if (estado !== 'en progreso') return;
+
+  if (this.puedeCoordinarTicket(ticket)) {
+    this.abrirFechaSolucionConCoordinacion(ticket);
+    return;
+  }
 
   const dialogRef = this.dialog.open(EditarFechaSolucionModalComponent, {
     width: '560px',
@@ -2295,6 +2479,7 @@ private obtenerPluralColumna(columna: string): string {
     categoria: 'categorias',
     descripcion: 'descripciones',
     username: 'usuarios',
+    responsable: 'responsables',
     estado: 'estados',
     criticidad: 'criticidades',
     departamento: 'departamentos',
@@ -2448,7 +2633,10 @@ async solicitarCierre(ticket: Ticket) {
   // 🔹 1. Abrir modal de cierre y esperar datos
   const dialogRef = this.dialog.open(ModalCierreTicketComponent, {
     width: '560px',
-    data: { ticketId: ticket.id }
+    data: {
+      ticketId: ticket.id,
+      modo: this.esTicketMantenimiento(ticket) ? 'maintenance_request' : undefined,
+    }
   });
 
   const result = await dialogRef.afterClosed().toPromise();
@@ -2499,7 +2687,7 @@ private ticketPerteneceASucursalDelGerente(ticket: Ticket): boolean {
 }
 
 puedeMostrarBotonCerrarDesdeCero(ticket: Ticket): boolean {
-  if (!ticket?.id) return false;
+  if (!ticket?.id || this.esTicketMantenimiento(ticket)) return false;
 
   const estado = (ticket.estado || '').toString().trim().toLowerCase();
 
@@ -2647,12 +2835,137 @@ esPendienteCierreCreador(ticket: Ticket): boolean {
 
 puedeMostrarBotonEnProgreso(ticket: Ticket): boolean {
   const estado = (ticket?.estado || '').trim().toLowerCase();
-  return this.puedeEditarTickets && estado === 'abierto';
+  if (estado !== 'abierto') return false;
+
+  if (this.puedeCoordinarTicket(ticket)) return true;
+
+  return this.puedeEditarTickets
+    && !(['COMPRAS', 'COORDINADOR_MANTENIMIENTO'].includes(
+      this.getUserMaintenanceRole(),
+    ) && Number(ticket.departamento_id) === 1);
+}
+
+puedeMostrarEditarFechaSolucion(ticket: Ticket): boolean {
+  const estado = String(ticket?.estado || '').trim().toLowerCase();
+  if (estado !== 'en progreso') return false;
+  if (this.puedeCoordinarTicket(ticket)) return true;
+  const scopedRole = ['COMPRAS', 'COORDINADOR_MANTENIMIENTO'].includes(
+    this.getUserMaintenanceRole(),
+  );
+  return this.puedeEditarTickets && !(scopedRole && Number(ticket.departamento_id) === 1);
+}
+
+getUserMaintenanceRole(): string {
+  return String(this.user?.rol || '').trim().toUpperCase();
+}
+
+puedeMarcarTrabajoTerminado(ticket: Ticket): boolean {
+  if (!this.esTicketMantenimiento(ticket)) return false;
+  const roles = ['SR_MANTENIMIENTO', 'AUX_MANTENIMIENTO', 'MANTENIMIENTO', 'TECNICO'];
+  return roles.includes(this.getUserMaintenanceRole())
+    && Number(this.user?.department_id) === 1
+    && String(ticket.estado || '').trim().toLowerCase() === 'en progreso'
+    && ticket.tipo_atencion === 'INTERNA'
+    && (!ticket.estado_cierre || ticket.estado_cierre === 'rechazado_por_gerente')
+    && String(ticket.asignado_a || '').trim().toLowerCase()
+      === String(this.user?.username || '').trim().toLowerCase();
+}
+
+esJefeMantenimientoRegional(): boolean {
+  return Number(this.user?.id) === 45
+    && String(this.user?.username || '').trim().toUpperCase() === 'MANTENIMIENTO'
+    && String(this.user?.rol || '').trim().toUpperCase() === 'MANTENIMIENTO'
+    && Number(this.user?.department_id) === 1;
+}
+
+puedeSolicitarCierreMantenimiento(ticket: Ticket): boolean {
+  if (String(ticket.estado || '').trim().toLowerCase() !== 'en progreso') return false;
+  if (this.esJefeMantenimientoRegional()) {
+    // El backend valida alcance regional y ausencia de delegación.
+    return Number(ticket.departamento_id) === 1
+      && !String(ticket.asignado_a || '').trim()
+      && !String(ticket.tipo_atencion || '').trim();
+  }
+  if (!this.puedeCoordinarTicket(ticket)) return false;
+  return ticket.tipo_atencion === 'EXTERNA'
+    || (ticket.tipo_atencion === 'INTERNA'
+      && ticket.estado_cierre === 'pendiente_revision_coord');
+}
+
+puedeDevolverTrabajoMantenimiento(ticket: Ticket): boolean {
+  return this.puedeCoordinarTicket(ticket)
+    && ticket.tipo_atencion === 'INTERNA'
+    && ticket.estado_cierre === 'pendiente_revision_coord';
+}
+
+etiquetaSolicitarCierreMantenimiento(ticket: Ticket): string {
+  return ticket.tipo_atencion === 'INTERNA'
+    ? 'Revisar cierre'
+    : 'Solicitar cierre';
+}
+
+ayudaSolicitarCierreMantenimiento(ticket: Ticket): string {
+  if (this.esJefeMantenimientoRegional() && !ticket.tipo_atencion) {
+    return 'Solicitar conformidad del gerente sin asignación de técnico';
+  }
+  return ticket.tipo_atencion === 'INTERNA'
+    ? 'Revisar trabajo terminado y solicitar conformidad al gerente'
+    : 'Revisar proveedor y solicitar conformidad al gerente';
+}
+
+presentacionEstadoTicket(ticket: Ticket): { principal: string; detalle: string | null } {
+  if (this.esTicketMantenimiento(ticket)
+      && ticket.estado_cierre === 'pendiente_revision_coord') {
+    return { principal: 'En progreso', detalle: 'Pendiente de revisión' };
+  }
+
+  return { principal: ticket.estado, detalle: null };
+}
+
+marcarTrabajoTerminado(ticket: Ticket): void {
+  if (!this.puedeMarcarTrabajoTerminado(ticket)) return;
+  const ref = this.dialog.open(MaintenanceWorkActionDialogComponent, {
+    width: 'min(520px, 94vw)',
+    data: { ticketId: ticket.id, action: 'complete' },
+  });
+  ref.afterClosed().subscribe((notes: string | null) => {
+    if (!notes) return;
+    this.maintenanceCoordinationService.markWorkCompleted(ticket.id, notes).subscribe({
+      next: (resp) => {
+        mostrarAlertaToast(resp.mensaje, 'success');
+        this.refrescarTicketsPreservandoFiltros();
+      },
+      error: (err) => {
+        mostrarAlertaToast(err?.error?.mensaje || 'No se pudo terminar el trabajo.', 'error');
+      },
+    });
+  });
+}
+
+devolverTrabajoMantenimiento(ticket: Ticket): void {
+  if (!this.puedeDevolverTrabajoMantenimiento(ticket)) return;
+  const ref = this.dialog.open(MaintenanceWorkActionDialogComponent, {
+    width: 'min(520px, 94vw)',
+    data: { ticketId: ticket.id, action: 'return' },
+  });
+  ref.afterClosed().subscribe((reason: string | null) => {
+    if (!reason) return;
+    this.maintenanceCoordinationService.returnWorkToTechnician(ticket.id, reason).subscribe({
+      next: (resp) => {
+        mostrarAlertaToast(resp.mensaje, 'success');
+        this.refrescarTicketsPreservandoFiltros();
+      },
+      error: (err) => {
+        mostrarAlertaToast(err?.error?.mensaje || 'No se pudo devolver el trabajo.', 'error');
+      },
+    });
+  });
 }
 
 puedeMostrarBotonFinalizar(ticket: Ticket): boolean {
   const estado = (ticket?.estado || '').trim().toLowerCase();
   return this.puedeEditarTickets &&
+         !this.esTicketMantenimiento(ticket) &&
          estado === 'en progreso' &&
          ticket?.estado_cierre !== 'pendiente_creador';
 }
@@ -2690,7 +3003,7 @@ puedeMostrarBotonesValidarCierre(ticket: Ticket): boolean {
 
   if (!estaPendienteDeValidacion) return false;
 
-  if (this.esCreador(ticket)) return true;
+  if (!this.esTicketMantenimiento(ticket) && this.esCreador(ticket)) return true;
 
   if (this.esAdminParaValidarCierre()) return true;
 

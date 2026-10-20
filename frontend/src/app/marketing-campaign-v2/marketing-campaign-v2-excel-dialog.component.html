@@ -6,11 +6,11 @@
   <p class="error" *ngIf="error" role="alert">{{ error }}</p>
 
   <div class="fields" *ngIf="!frozen">
-    <mat-form-field appearance="outline">
+    <mat-form-field appearance="fill" floatLabel="always">
       <mat-label>Nombre de campaña</mat-label>
       <input matInput maxlength="255" [formControl]="name" placeholder="ANUAL 3999 · Vencidos · Oct 2026">
     </mat-form-field>
-    <mat-form-field appearance="outline">
+    <mat-form-field appearance="fill" floatLabel="always">
       <mat-label>Propósito</mat-label>
       <mat-select [formControl]="purpose">
         <mat-option value="REACTIVATION">Reactivación</mat-option>
@@ -19,7 +19,7 @@
         <mat-option value="UNCLASSIFIED">Sin clasificar</mat-option>
       </mat-select>
     </mat-form-field>
-    <mat-form-field appearance="outline">
+    <mat-form-field appearance="fill" floatLabel="always">
       <mat-label>Plantilla iVentas</mat-label>
       <mat-select [formControl]="templateId">
         <mat-option *ngFor="let template of availableTemplates" [value]="template.id">

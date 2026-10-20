@@ -8,6 +8,12 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import {
+  CambioResponsableHistorial,
+  esEventoCoordinacion,
+  esEventoReasignacion,
+  obtenerCambioResponsableHistorial,
+} from './historial-fechas-display';
 
 @Component({
   standalone: true,
@@ -143,10 +149,29 @@ export class HistorialFechasModalComponent {
     );
   }
 
+  esReasignacion(item: any): boolean {
+    return esEventoReasignacion(item);
+  }
+
+  esCoordinacion(item: any): boolean {
+    return esEventoCoordinacion(item);
+  }
+
+  getCambioResponsableItem(item: any): CambioResponsableHistorial | null {
+    return obtenerCambioResponsableHistorial(item);
+  }
+
   getEventoLabel(item: any): string {
     if (this.esRechazoCierre(item)) {
       return 'Rechazo';
     }
+
+    if (item?.tipo === 'maintenance_conformity_accepted_v1') {
+      return 'Conformidad aceptada';
+    }
+
+    if (this.esReasignacion(item)) return 'Reasignación';
+    if (this.esCoordinacion(item)) return 'Coordinación';
 
     const tipo = (item?.tipo || item?.evento || '').toString().toLowerCase();
 

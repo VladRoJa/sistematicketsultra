@@ -1673,6 +1673,27 @@ test('Bulk send explicit: only authorized pending suffix, never previously accep
   assert.deepEqual(pendingGovernedBatchIds({...monitor, execution: {...monitor.execution!, last_child_id: null}}, review), []);
   assert.deepEqual(pendingGovernedBatchIds({...monitor, approval: {...monitor.approval!, expired: true}}, review), []);
   assert.deepEqual(pendingGovernedBatchIds({...monitor, approval: {...monitor.approval!, manifest_digest: 'x'.repeat(64)}}, review), []);
+
+  // After a valid first provider claim, expiry is no longer a blanket timer:
+  // backend will validate current quota before each pending child.
+  const continued: CampaignV2GovernedMonitor = {
+    ...monitor, status: 'CONTINUATION_REVIEW_REQUIRED',
+    next_manual_action: 'MANUAL_NEXT_PENDING_WITH_FRESH_QUOTA',
+    approval: {...monitor.approval!, expired: true},
+    quota: {...monitor.quota, all_current: false},
+  };
+  assert.deepEqual(pendingGovernedBatchIds(continued, review), [80, 81]);
+  assert.deepEqual(pendingGovernedBatchIds({
+    ...continued, status: 'APPROVAL_EXPIRED',
+  }, review), []);
+  assert.deepEqual(pendingGovernedBatchIds({
+    ...continued,
+    execution: {...continued.execution!, last_child_id: null},
+  }, review), []);
+  assert.deepEqual(pendingGovernedBatchIds({
+    ...continued, children: continued.children.map(child => child.child_id === 79
+      ? {...child, provider_campaign_id: null} : child),
+  }, review), []);
 });
 
 test('Bulk send explicit: one gesture, sequential per-child guarded requests, no replay or secrets persisted', () => {
@@ -1763,4 +1784,163 @@ test('Campaign V2 shows unresolved provider result without claiming an accepted 
   assert.ok(html.includes('item.child_id'));
   assert.ok(html.includes('No se cuentan'.toLowerCase()) || html.includes('NO se cuentan'));
   assert.ok(html.includes('resultados') || html.includes('rechazo'));
+});
+
+
+test('Campaign V2 UI: envio compacto, una zona vertical de scroll y seguridad visible', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.html'), 'utf8');
+  const css = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.css'), 'utf8');
+  const ts = fs.readFileSync(path.join(root, 'marketing-campaign-v2-governed-console-dialog.component.ts'), 'utf8');
+  assert.ok(html.includes('class="dispatch-overview"'));
+  assert.ok(html.includes('class="setup-history"'));
+  assert.ok(html.includes('[open]="setupInitiallyOpen"'));
+  assert.ok(html.includes('class="manifest-details"'));
+  assert.ok(html.includes('class="batch-details"'));
+  assert.ok(html.includes('class="send-panel bulk-execution"'));
+  assert.ok(html.includes('class="single-send"'));
+  assert.ok(html.indexOf('class="send-panel bulk-execution"') <
+    html.indexOf('class="single-send"'));
+  assert.ok(html.includes('(click)="executePendingSequentially()"'));
+  assert.ok(html.includes('(click)="executeOne()"'));
+  assert.ok(html.includes('El envío real siempre requiere confirmación'));
+  assert.ok(html.includes('No hay reintentos automáticos'));
+  assert.equal(html.includes('appearance="outline"'), false);
+  assert.equal(html.includes('style="'), false);
+  assert.ok(css.includes('.table-scroll { overflow-x: auto; overflow-y: visible; }'));
+  assert.equal(css.includes('max-height:260px'), false);
+  assert.ok(ts.includes('get sentLotCount(): number'));
+  assert.ok(ts.includes('get acceptedContactCount(): number'));
+  for (const name of [
+    'governed-console-dialog', 'preparation-dialog', 'dispatch-admin-dialog',
+    'quota-admin-dialog', 'readiness-dialog', 'channel-portfolio-dialog',
+    'portfolio-review-dialog', 'qa-manual-dialog', 'excel-dialog',
+    'tariff-classifier-dialog',
+  ]) {
+    const fields = fs.readFileSync(
+      path.join(root, 'marketing-campaign-v2-' + name + '.component.html'), 'utf8',
+    );
+    assert.equal(fields.includes('appearance="outline"'), false, name);
+  }
+});
+
+
+test('Campaign V2: compact top navigation keeps all admin operations and hash routing intact', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-page.component.html'), 'utf8');
+  const ts = fs.readFileSync(path.join(root, 'marketing-campaign-v2-page.component.ts'), 'utf8');
+  assert.ok(html.includes('[matMenuTriggerFor]="campaignToolsMenu"'));
+  assert.ok(html.includes('<mat-menu #campaignToolsMenu="matMenu">'));
+  for (const action of [
+    'openExcelImport()', 'openQaManual()', 'openChannelReadiness()',
+    'openDispatchConfiguration()', 'openQuotaEvidence()',
+  ]) {
+    assert.ok(html.includes('(click)="' + action + '"'), action);
+  }
+  for (const section of [
+    'campaign-v2-builder', 'campaign-v2-reporting', 'campaign-v2-history',
+  ]) {
+    assert.ok(html.includes("goToCampaignSection('" + section + "')"), section);
+  }
+  assert.ok(ts.includes('MatMenuModule'));
+  assert.ok(ts.includes('inject(DOCUMENT)'));
+  assert.ok(ts.includes('scrollIntoView('));
+  assert.equal(html.includes('href="#campaign-v2-'), false); // hash router is reserved
+});
+
+
+test('Campaign V2 compact fields restore the Crear Ticket V1 value scale without changing Excel', () => {
+  const compact = fs.readFileSync(
+    path.join(process.cwd(), 'src/styles.compact-modules.scss'), 'utf8',
+  );
+  const scss75 = fs.readFileSync(
+    path.join(process.cwd(), 'src/styles.compact-75.scss'), 'utf8',
+  );
+  // Source-of-truth regression: the global compact skin compresses values to
+  // 10px, but the main V2 page needs the established V1 13px value scale.
+  assert.ok(scss75.includes('font-size: 10px !important;'));
+  assert.ok(compact.includes(
+    'body.suite-compact-review .campaign-v2-page .mat-mdc-select-value,\n' +
+    'body.suite-compact-review .campaign-v2-page input.mat-mdc-input-element {\n' +
+    '  font-size: 13px !important;\n' +
+    '  line-height: 1.3 !important;\n}',
+  ));
+  // This selector cannot match dialogs rendered in the CDK overlay outside
+  // .campaign-v2-page; approved Excel styles remain unchanged.
+  assert.ok(compact.includes(
+    ':is(.crear-ticket-page, .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog)',
+  ));
+});
+
+test('Campaign V2 fields reuse Suite Ultra UI v1 Material fill styles and first two dialogs use its labels', () => {
+  const dir = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const shared = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-form-fields.css'), 'utf8');
+  const v1 = fs.readFileSync(
+    path.join(process.cwd(), 'src/app/pantalla-crear-ticket/crear-ticket-refactor.component.css'), 'utf8',
+  );
+  const page = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-page.component.css'), 'utf8');
+  const excel = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-excel-dialog.component.css'), 'utf8');
+  const qa = fs.readFileSync(path.join(dir, 'marketing-campaign-v2-qa-manual-dialog.component.css'), 'utf8');
+
+  for (const token of [
+    '--mdc-filled-text-field-container-color: var(--ultra-gray-50)',
+    '--mdc-filled-text-field-label-text-color: var(--ultra-gray-600)',
+    '--mdc-filled-text-field-focus-label-text-color: var(--ultra-orange)',
+    '--mdc-filled-text-field-active-indicator-color: var(--ultra-gray-300)',
+    '--mdc-filled-text-field-focus-active-indicator-color: var(--ultra-orange)',
+    'border-radius: 14px 14px 8px 8px',
+    'font-weight: 700',
+  ]) {
+    assert.ok(v1.includes(token), 'V1 reference missing ' + token);
+    assert.ok(shared.includes(token), 'Campaign V2 differs from V1: ' + token);
+  }
+  assert.equal(shared.includes('--mat-form-field-container-height:'), false);
+  assert.equal(shared.includes('--mdc-filled-text-field-input-text-size:'), false);
+  assert.equal(shared.includes('container-color: transparent'), false);
+  assert.ok(page.includes('.field-grid,'));
+  assert.ok(excel.includes('.fields { gap: 16px 18px;'));
+  // The long campaign-name placeholder must not share a cramped three-column row.
+  assert.ok(excel.includes('grid-template-columns: repeat(2, minmax(0, 1fr))'));
+  assert.ok(excel.includes('.fields > mat-form-field:first-child { grid-column: 1 / -1; }'));
+  assert.ok(excel.includes('.fields { grid-template-columns: minmax(0, 1fr); }'));
+  assert.ok(qa.includes('.qa-fields { gap: 14px 18px;'));
+  // The default compact-75 density applies 8px labels and 10px values globally.
+  // Excel must reuse the exact V1 compact exception rather than inherit those sizes.
+  const compact = fs.readFileSync(
+    path.join(process.cwd(), 'src/styles.compact-modules.scss'), 'utf8',
+  );
+  const v1CompactSelector = 'body.suite-compact-review :is(.crear-ticket-page, .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog)';
+  for (const suffix of [
+    ' .mat-mdc-form-field-infix {',
+    ' .mat-mdc-select-value,',
+    ' .mat-mdc-input-element {',
+    ' .mat-mdc-floating-label,',
+    ' .mat-mdc-unelevated-button,',
+  ]) {
+    assert.ok(compact.includes(v1CompactSelector + suffix), 'Excel missing compact V1 rule: ' + suffix);
+  }
+  // MDC reduces the rendered size of floating labels; keep the Excel-only
+  // compact-density adjustment isolated without affecting Crear Ticket V1.
+  const excelLabelScope =
+    'body.suite-compact-review .campaign-v2-admin-dialog app-marketing-campaign-v2-excel-dialog';
+  assert.ok(compact.includes(excelLabelScope + ' .mat-mdc-floating-label,'));
+  assert.ok(compact.includes(excelLabelScope + ' .mdc-floating-label {\n  font-size: 15px !important;'));
+  for (const [name, expected] of [['excel-dialog', 3], ['qa-manual-dialog', 5]] as const) {
+    const html = fs.readFileSync(
+      path.join(dir, 'marketing-campaign-v2-' + name + '.component.html'), 'utf8',
+    );
+    assert.equal((html.match(/<mat-form-field\b/g) ?? []).length, expected);
+    assert.equal((html.match(/floatLabel="always"/g) ?? []).length, expected);
+  }
+  for (const name of [
+    'page', 'governed-console-dialog', 'preparation-dialog',
+    'dispatch-admin-dialog', 'quota-admin-dialog', 'readiness-dialog',
+    'channel-portfolio-dialog', 'portfolio-review-dialog', 'qa-manual-dialog',
+    'excel-dialog', 'tariff-classifier-dialog',
+  ]) {
+    const file = fs.readFileSync(
+      path.join(dir, 'marketing-campaign-v2-' + name + '.component.html'), 'utf8',
+    );
+    assert.equal(file.includes('appearance="outline"'), false, name);
+  }
 });

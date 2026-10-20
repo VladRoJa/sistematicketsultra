@@ -1,3 +1,4 @@
+@import './marketing-campaign-v2-form-fields.css';
 :host { display:block; color:var(--ultra-gray-900,#0f172a); }
 * { box-sizing:border-box; }
 .campaign-v2-page { min-height:calc(100vh - 72px); padding:16px; display:flex; flex-direction:column; gap:14px; background:var(--ultra-bg,#f5f7fa); }
@@ -137,4 +138,75 @@ dl { margin:0; }.metadata-panel dl div { display:grid; grid-template-columns:170
 @media (max-width: 760px) {
   .page-header { padding: 12px; }
   .workspace { padding: 12px; }
+}
+
+
+/* Menos acciones simultáneas: navegación ligera y herramientas bajo menú. */
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.header-actions button { white-space: nowrap; }
+.campaign-section-nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px 8px;
+  padding: 3px 12px 7px;
+  border-bottom: 1px solid var(--ultra-gray-200, #e2e8f0);
+}
+.campaign-section-nav > span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  margin-right: 5px;
+}
+.campaign-section-nav button { font-size: 13px; }
+#campaign-v2-builder, #campaign-v2-reporting, #campaign-v2-history { scroll-margin-top: 20px; }
+@media (max-width: 760px) {
+  .header-actions { justify-content: flex-start; }
+  .campaign-section-nav { padding: 3px 1px 7px; }
+}
+
+
+/* Readability pass: restore a clear text hierarchy around filled controls. */
+.campaign-v2-page { font-size: 14px; }
+.section-heading p,
+.commercial-panel-heading p,
+.blacklist-copy span,
+.families-header span,
+.helper-text,
+.builder-actions span,
+.iventas-current-status-heading span,
+.history-builder-heading span {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.workflow-step strong { font-size: 14px; }
+.workflow-step small { font-size: 12px; line-height: 1.35; }
+.commercial-panel-heading > span,
+.freeze-readiness span,
+.history-rule-title,
+.eyebrow { font-size: 12px; }
+.blacklist-copy strong { font-size: 14px; }
+.freeze-readiness small,
+.history-evaluation div,
+.history-breakdown div,
+.reporting-validation,
+.history-validation { font-size: 12px; line-height: 1.5; }
+.field-grid,
+.reporting-filters { gap: 14px 16px; }
+.field-grid mat-form-field,
+.reporting-filters mat-form-field,
+.commercial-panel mat-form-field { min-width: 0; }
+.campaign-section-nav button,
+.header-actions button { font-size: 14px; }
+@media (max-width: 760px) {
+  .field-grid,
+  .reporting-filters { row-gap: 12px; }
 }

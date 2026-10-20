@@ -1,0 +1,45 @@
+/* ==========================================================================
+   Suite Ultra UI v1 - Formularios Material fill
+   Referencia fiel: pantalla-crear-ticket/crear-ticket-refactor.component.css
+   (secciones "Campos" y "Ajuste visual de campos Material fill").
+   NO crear una paleta o escala de campos paralela para Campañas V2.
+   ========================================================================== */
+
+:host mat-form-field {
+  width: 100%;
+}
+
+:host ::ng-deep .mat-mdc-form-field {
+  --mdc-filled-text-field-container-color: var(--ultra-gray-50);
+  --mdc-filled-text-field-label-text-color: var(--ultra-gray-600);
+  --mdc-filled-text-field-focus-label-text-color: var(--ultra-orange);
+  --mdc-filled-text-field-active-indicator-color: var(--ultra-gray-300);
+  --mdc-filled-text-field-focus-active-indicator-color: var(--ultra-orange);
+  --mdc-filled-text-field-hover-active-indicator-color: rgba(229, 69, 37, 0.55);
+}
+
+:host ::ng-deep .mat-mdc-text-field-wrapper {
+  border-radius: 14px 14px 8px 8px;
+  overflow: hidden;
+}
+
+:host ::ng-deep .mat-mdc-form-field-infix {
+  min-height: 48px;
+  padding-top: 14px;
+  padding-bottom: 10px;
+}
+
+:host ::ng-deep .mat-mdc-select-value,
+:host ::ng-deep .mat-mdc-input-element {
+  color: var(--ultra-gray-900);
+  font-weight: 700;
+}
+
+:host ::ng-deep .mat-mdc-form-field-icon-suffix,
+:host ::ng-deep .mat-mdc-select-arrow {
+  color: var(--ultra-gray-500);
+}
+
+:host ::ng-deep .mat-mdc-form-field.mat-focused .mat-mdc-select-arrow {
+  color: var(--ultra-orange);
+}

@@ -18,6 +18,8 @@ import {
   FallaMantenimientoDTO,
 } from 'src/app/types/ticket';
 import { mostrarAlertaToast } from 'src/app/utils/alertas';
+import { MaintenanceAssignee, MaintenanceAttentionMode } from 'src/app/services/maintenance-coordination.service';
+import { isModalSubmitDisabled } from '../modal-submit-state';
 
 @Component({
   selector: 'app-asignar-fecha-modal',
@@ -40,11 +42,15 @@ import { mostrarAlertaToast } from 'src/app/utils/alertas';
 export class AsignarFechaModalComponent implements OnChanges {
   @Input() fechaSeleccionada: Date | null = null;
   @Input() puedeCapturarDiagnostico = false;
+  @Input() permitirAsignacionMantenimiento = false;
+  @Input() responsablesMantenimiento: MaintenanceAssignee[] = [];
 
   @Input() set ticket(value: any | null) {
     this._ticket = value;
 
     if (value) {
+      this.tipoAtencion = value.tipo_atencion ?? (value.asignado_a ? 'INTERNA' : null);
+      this.responsableUserId = null;
       this.necesitaRefaccion = !!value.necesita_refaccion;
       this.descripcionRefaccion = value.descripcion_refaccion || '';
       this.familiaEquipoId = (
@@ -66,6 +72,8 @@ export class AsignarFechaModalComponent implements OnChanges {
       );
       this.condicionOperativa = value.condicion_operativa ?? null;
     } else {
+      this.tipoAtencion = null;
+      this.responsableUserId = null;
       this.familiaEquipoId = null;
       this.familiaEquipoNombre = '';
       this.fallaMantenimientoId = null;
@@ -89,6 +97,8 @@ export class AsignarFechaModalComponent implements OnChanges {
   @Output() onCancelar = new EventEmitter<void>();
 
   motivo = '';
+  tipoAtencion: MaintenanceAttentionMode | null = null;
+  responsableUserId: number | null = null;
   necesitaRefaccion = false;
   descripcionRefaccion = '';
   fallas: FallaMantenimientoDTO[] = [];
@@ -117,6 +127,11 @@ export class AsignarFechaModalComponent implements OnChanges {
   ) {}
 
   ngOnChanges(): void {
+    if (this.permitirAsignacionMantenimiento && this.tipoAtencion === 'INTERNA' && !this.responsableUserId) {
+      const assigned = String(this._ticket?.asignado_a || '').trim().toUpperCase();
+      const found = this.responsablesMantenimiento.find((person) => person.username.trim().toUpperCase() === assigned);
+      this.responsableUserId = found?.id ?? null;
+    }
     if (!this.mostrarDiagnosticoEstructurado) {
       return;
     }
@@ -144,8 +159,41 @@ export class AsignarFechaModalComponent implements OnChanges {
     );
   }
 
+  get modalTitulo(): string {
+    // Es el modal de fecha existente, incluso cuando incluye asignación.
+    return 'Asignar fecha de solución';
+  }
+
+  get modalDescripcion(): string {
+    return this.permitirAsignacionMantenimiento
+      ? 'Define responsable, fecha compromiso y motivo del seguimiento.'
+      : 'Define la fecha compromiso y registra el motivo para mantener trazabilidad.';
+  }
+
   get guardarDeshabilitado(): boolean {
-    return this.cargandoCatalogos || this.aparatoSinFamilia;
+    const fechaValida = this.fechaSeleccionada instanceof Date
+      && !Number.isNaN(this.fechaSeleccionada.getTime());
+
+    return isModalSubmitDisabled({
+      requiredText: [this.motivo],
+      requiredSelections: [
+        fechaValida ? this.fechaSeleccionada : null,
+        ...(this.permitirAsignacionMantenimiento
+          ? [
+              this.tipoAtencion,
+              ...(this.tipoAtencion === 'INTERNA' ? [this.responsableUserId] : []),
+            ]
+          : []),
+        ...(this.mostrarDiagnosticoEstructurado
+          ? [this.fallaMantenimientoId, this.condicionOperativa]
+          : []),
+      ],
+      blocked: this.cargandoCatalogos || this.aparatoSinFamilia,
+    });
+  }
+
+  onTipoAtencionChange(): void {
+    this.responsableUserId = null;
   }
 
   get mostrarRefaccionJefe(): boolean {
@@ -172,6 +220,14 @@ export class AsignarFechaModalComponent implements OnChanges {
       return;
     }
 
+    if (this.permitirAsignacionMantenimiento && (
+      !this.tipoAtencion ||
+      (this.tipoAtencion === 'INTERNA' && !this.responsableUserId)
+    )) {
+      mostrarAlertaToast('Selecciona atención interna y responsable, o Proveedor externo.', 'error');
+      return;
+    }
+
     if (this.aparatoSinFamilia) {
       mostrarAlertaToast(
         'Este aparato no tiene una familia asignada. Clasifícalo primero desde Inventario.',
@@ -195,6 +251,11 @@ export class AsignarFechaModalComponent implements OnChanges {
       fecha: this.fechaSeleccionada,
       motivo: this.motivo.trim(),
     };
+
+    if (this.permitirAsignacionMantenimiento && this.tipoAtencion) {
+      payload.tipo_atencion = this.tipoAtencion;
+      payload.asignado_user_id = this.tipoAtencion === 'INTERNA' ? this.responsableUserId : null;
+    }
 
     if (this.mostrarRefaccionJefe) {
       payload.necesita_refaccion = !!this.necesitaRefaccion;

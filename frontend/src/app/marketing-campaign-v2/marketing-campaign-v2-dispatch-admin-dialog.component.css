@@ -1,3 +1,4 @@
+@import './marketing-campaign-v2-form-fields.css';
 :host { display: block; }
 .dispatch-admin { min-width: min(850px, 88vw); max-width: 100%; max-height: min(74vh, 760px); }
 .disclaimer { margin: 0 0 14px; padding: 12px 14px; border-left: 3px solid #2563eb; border-radius: 6px; background: #eff6ff; color: #1e3a5f; line-height: 1.5; font-size: 13px; }

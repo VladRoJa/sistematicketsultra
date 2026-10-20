@@ -1,7 +1,12 @@
 # backend/app/utils/ticket_filters.py
 from sqlalchemy import or_, and_, func
 from app.models import Ticket
-from app.utils.pm_permissions import has_compras_maintenance_read_grant
+from app.utils.pm_permissions import has_scoped_maintenance_read_grant
+from app.utils.tickets_maintenance_permissions import has_assigned_only_maintenance_scope
+from app.utils.sucursal_audience import TECHNICAL_SUCURSAL_IDS
+from app.utils.maintenance_regional_lead import (
+    is_regional_maintenance_lead, regional_maintenance_lead_branches,
+)
 
 GERENTE_ROLES = {"GERENTE", "GERENTE_SUCURSAL", "GERENTE_GENERAL", "GERENTE_DEPTO"}
 
@@ -70,6 +75,29 @@ def filtrar_tickets_por_usuario(user):
     if rol in ADMIN_ROLES:
         return q
 
+    # El jefe regional MANTENIMIENTO no es un lector corporativo global.
+    # Sus únicas sucursales son las M:N explícitas, intersectadas con la
+    # allowlist aprobada; ni sucursal principal 100 ni autoría dan fallback.
+    if is_regional_maintenance_lead(user):
+        allowed = regional_maintenance_lead_branches(user)
+        if not allowed:
+            return q.filter(False)
+        return q.filter(and_(
+            Ticket.departamento_id == 1,
+            _condicion_multiples_sucursales(list(allowed)),
+        ))
+
+    # Permiso individual de bandeja asignada: no se heredan tickets por
+    # departamento, sucursal ni por creador. No afecta al rol completo.
+    if has_assigned_only_maintenance_scope(user):
+        username = str(getattr(user, "username", "") or "").strip()
+        if not username:
+            return q.filter(False)
+        return q.filter(and_(
+            Ticket.departamento_id == 1,
+            func.lower(Ticket.asignado_a) == username.lower(),
+        ))
+
     # 2) Gerente regional: SIEMPRE por scope (aunque suc=1000)
     if rol == "GERENTE_REGIONAL":
         if not scope:
@@ -80,10 +108,26 @@ def filtrar_tickets_por_usuario(user):
             _condicion_multiples_sucursales(scope),
         )
 
-    # Compras: una concesion individual de lectura habilita tickets de
-    # Mantenimiento UNICAMENTE dentro de las sucursales asignadas. No
-    # heredar el fallback de creador para Mantenimiento fuera del scope.
-    if rol == "COMPRAS" and has_compras_maintenance_read_grant(user):
+    # Coordinador: EXCLUSIVAMENTE Mantenimiento asignado y con grant
+    # individual. No heredar tickets de Compras por autoría ni por depto.
+    if rol == "COORDINADOR_MANTENIMIENTO":
+        if not has_scoped_maintenance_read_grant(user):
+            return q.filter(False)
+        physical_branches = [
+            branch_id for branch_id in scope
+            if int(branch_id) not in TECHNICAL_SUCURSAL_IDS
+        ]
+        assigned_branches = _condicion_multiples_sucursales(physical_branches)
+        if assigned_branches is None:
+            return q.filter(False)
+        return q.filter(and_(
+            Ticket.departamento_id == 1,
+            assigned_branches,
+        ))
+
+    # Compras legacy: conserva lectores existentes, con el fallback
+    # de creador solo para tickets NO pertenecientes a Mantenimiento.
+    if rol == "COMPRAS" and has_scoped_maintenance_read_grant(user):
         conditions = []
         try:
             depto_int = int(depto) if depto is not None else None

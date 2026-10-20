@@ -7,25 +7,27 @@
     </div>
     <div class="header-actions">
       <span *ngIf="options" class="scope-note">{{ scopeLabel }}</span>
-      <button *ngIf="canManageDispatchConfig" mat-flat-button type="button" (click)="openExcelImport()">Crear desde Excel/CSV</button>
-      <button *ngIf="canManageDispatchConfig" mat-stroked-button type="button"
-        (click)="openQaManual()">
-        Preparar prueba interna · 1 contacto
-      </button>
       <button *ngIf="canManageDispatchConfig" mat-flat-button type="button"
-        (click)="openChannelReadiness()">
-        Estado de los canales
-      </button>
+        (click)="openExcelImport()">Crear desde Excel/CSV</button>
       <button *ngIf="canManageDispatchConfig" mat-stroked-button type="button"
-        (click)="openDispatchConfiguration()">
-        Plantillas, canales y tarifas
+        [matMenuTriggerFor]="campaignToolsMenu" aria-label="Abrir herramientas de campañas">
+        Herramientas
       </button>
-      <button *ngIf="canManageDispatchConfig" mat-stroked-button type="button"
-        (click)="openQuotaEvidence()">
-        Límites de envío
-      </button>
+      <mat-menu #campaignToolsMenu="matMenu">
+        <button mat-menu-item type="button" (click)="openQaManual()">Preparar prueba interna · 1 contacto</button>
+        <button mat-menu-item type="button" (click)="openChannelReadiness()">Estado de los canales</button>
+        <button mat-menu-item type="button" (click)="openDispatchConfiguration()">Plantillas, canales y tarifas</button>
+        <button mat-menu-item type="button" (click)="openQuotaEvidence()">Límites de envío</button>
+      </mat-menu>
     </div>
   </header>
+
+  <nav *ngIf="options && !accessDenied" class="campaign-section-nav" aria-label="Ir a las secciones de Campañas V2">
+    <span>Ir a</span>
+    <button mat-button type="button" (click)="goToCampaignSection('campaign-v2-builder')">Nueva campaña</button>
+    <button mat-button type="button" (click)="goToCampaignSection('campaign-v2-reporting')">Resultados</button>
+    <button mat-button type="button" (click)="goToCampaignSection('campaign-v2-history')">Historial</button>
+  </nav>
 
   <div *ngIf="loadingOptions" class="state-panel" role="status">
     <mat-spinner diameter="24"></mat-spinner>

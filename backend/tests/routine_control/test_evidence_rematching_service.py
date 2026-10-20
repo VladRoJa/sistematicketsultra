@@ -336,7 +336,7 @@ class RoutineEvidenceRematchingPostgresTestCase(unittest.TestCase):
         db.session.refresh(link)
         db.session.refresh(member)
         self.assertFalse(link.is_active)
-        self.assertEqual(link.unlink_reason, "IDENTITY_TEMPORAL_V2_REMATCH")
+        self.assertEqual(link.unlink_reason, "IDENTITY_TEMPORAL_V3_REMATCH")
         self.assertEqual(member.current_status, "SIN_RUTINA")
         self.assertIsNone(member.first_routine_at)
         self.assertEqual(result.members_reconciled, 1)
@@ -380,7 +380,7 @@ class RoutineEvidenceRematchingPostgresTestCase(unittest.TestCase):
         self.assertEqual(links[0].temporal_delta_days, -7)
         self.assertEqual(
             links[0].matching_contract_version,
-            "IDENTITY_TEMPORAL_V2",
+            "IDENTITY_TEMPORAL_V3",
         )
 
     def test_inactive_winner_requires_reactivation_without_duplicate(self) -> None:

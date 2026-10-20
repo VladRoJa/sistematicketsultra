@@ -1,0 +1,46 @@
+.maintenance-work-dialog {
+  width: 100%;
+  max-width: 520px;
+}
+
+.maintenance-work-dialog__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 4px;
+}
+
+.maintenance-work-dialog__header mat-icon {
+  color: var(--mat-sys-primary, #305b94);
+}
+
+.maintenance-work-dialog__header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 650;
+}
+
+.maintenance-work-dialog__header small {
+  color: var(--mat-sys-on-surface-variant, #666);
+}
+
+.maintenance-work-dialog__content p {
+  margin: 0 0 18px;
+  line-height: 1.5;
+}
+
+.maintenance-work-dialog__field {
+  display: block;
+  width: 100%;
+}
+
+.maintenance-work-dialog__hint {
+  display: block;
+  color: var(--mat-sys-on-surface-variant, #666);
+  margin-top: 4px;
+}
+
+.maintenance-work-dialog__actions {
+  padding: 12px 20px 20px;
+  gap: 10px;
+}

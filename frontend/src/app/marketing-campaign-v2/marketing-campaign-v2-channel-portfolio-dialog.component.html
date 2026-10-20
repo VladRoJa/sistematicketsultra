@@ -15,7 +15,7 @@
     Primero registra los Business IDs en el catálogo de portafolios de la pantalla anterior.
   </p>
   <div class="mapping-form" *ngIf="!loading">
-    <mat-form-field appearance="outline">
+    <mat-form-field appearance="fill">
       <mat-label>Canal predeterminado activo</mat-label>
       <mat-select [formControl]="channelId">
         <mat-option *ngFor="let row of channelRows" [value]="row.binding.provider_channel_id">
@@ -23,7 +23,7 @@
         </mat-option>
       </mat-select>
     </mat-form-field>
-    <mat-form-field appearance="outline">
+    <mat-form-field appearance="fill">
       <mat-label>ID de empresa Meta registrado</mat-label>
       <mat-select [formControl]="businessId">
         <mat-option *ngFor="let portfolio of portfolios" [value]="portfolio.business_id">
@@ -31,12 +31,12 @@
         </mat-option>
       </mat-select>
     </mat-form-field>
-    <mat-form-field appearance="outline">
+    <mat-form-field appearance="fill">
       <mat-label>WABA ID (opcional; sin suposiciones)</mat-label>
       <input matInput [formControl]="wabaId" maxlength="32" inputmode="numeric"
         placeholder="Solo cuando exista evidencia">
     </mat-form-field>
-    <mat-form-field appearance="outline">
+    <mat-form-field appearance="fill">
       <mat-label>Origen de la información</mat-label>
       <mat-select [formControl]="evidenceKind">
         <mat-option value="OPERATOR_STATEMENT">Información proporcionada por el equipo</mat-option>
@@ -44,7 +44,7 @@
         <mat-option value="IVENTAS_CONFIRMATION">Confirmación recibida de iVentas</mat-option>
       </mat-select>
     </mat-form-field>
-    <mat-form-field appearance="outline" class="full-width">
+    <mat-form-field appearance="fill" class="full-width">
       <mat-label>Documento, enlace o comprobante de referencia</mat-label>
       <input matInput [formControl]="sourceReference" maxlength="255"
         placeholder="Referencia administrativa, ticket o comprobante (sin secretos)">

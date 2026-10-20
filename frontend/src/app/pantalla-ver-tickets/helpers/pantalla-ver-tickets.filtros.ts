@@ -34,6 +34,7 @@ const PLURAL: Record<string, string> = {
   detalle: 'detalles',
   inventario: 'inventarios',
   sucursal: 'sucursales',
+  responsable: 'responsables',
 };
 
 const TEXTO_PROP: Record<string, string> = {
@@ -203,14 +204,14 @@ export function obtenerFiltrosActivos(
 
   const campos = [
     'categoria','descripcion','username','estado','criticidad',
-    'departamento','subcategoria','detalle','inventario','sucursal'
+    'departamento','subcategoria','detalle','inventario','sucursal','responsable'
   ] as const;
 
   const pluralMap: Record<string, string> = {
     categoria:'categorias', descripcion:'descripciones', username:'usuarios',
     estado:'estados', criticidad:'criticidades', departamento:'departamentos',
     subcategoria:'subcategorias', detalle:'detalles', inventario:'inventarios',
-    sucursal:'sucursales'
+    sucursal:'sucursales', responsable:'responsables'
   };
 
 campos.forEach(campo => {
@@ -426,6 +427,7 @@ function resyncTemporalesDesdeFiltradas(c: PantallaVerTicketsComponent): void {
     detalle: 'detallesFiltrados',
     inventario: 'inventariosFiltrados',
     sucursal: 'sucursalesFiltradas',
+    responsable: 'responsablesFiltrados',
   };
 
   Object.entries(map).forEach(([col, key]) => {

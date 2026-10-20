@@ -36,6 +36,7 @@ on:
       - "backend/migrations/versions/a856d2a01013_campaign_v2_dispatch_approval_reservations.py"
       - "backend/migrations/versions/b856d2c01013_governed_execution.py"
       - "backend/tests/marketing/test_marketing_campaign_v2_quota_*.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_started_continuation.py"
       - "backend/app/services/marketing_campaign_v2_usd_pricing_service.py"
       - "backend/tests/marketing/test_marketing_campaign_v2_automatic_usd.py"
       - "backend/tests/marketing/test_marketing_campaign_v2_usd_migration.py"
@@ -104,6 +105,7 @@ jobs:
             tests/marketing/test_marketing_campaign_v2_quota_routes.py \
             tests/marketing/test_marketing_campaign_v2_submit_service.py \
             tests/marketing/test_marketing_campaign_v2_retry_service.py \
+            tests/marketing/test_marketing_campaign_v2_started_continuation.py \
             tests/marketing/test_marketing_campaign_v2_quota_execution.py \
             tests/marketing/test_marketing_campaign_v2_quota_execution_postgres.py \
             tests/marketing/test_marketing_campaign_v2_quota_dispatch_real_pg.py \
