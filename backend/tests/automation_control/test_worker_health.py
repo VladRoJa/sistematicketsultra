@@ -45,7 +45,7 @@ def _status(payload, key="track-scheduler"):
 
 def test_unknown_without_heartbeats_never_green(health_app):
     result=read_worker_health(datetime(2026,10,14,18,tzinfo=timezone.utc))
-    assert len(result["workers"]) == 5
+    assert len(result["workers"]) == 6
     assert all(x["status"] == "UNKNOWN" for x in result["workers"])
     assert all(x["reason_code"] == "NO_HEARTBEAT" for x in result["workers"])
 
