@@ -1681,6 +1681,13 @@ td.col-descripcion {
   box-shadow: 3px 0 7px -6px rgba(15, 23, 42, 0.45);
 }
 
+/* Conservar la señal naranja de un filtro activo en Descripción. */
+.tabla-tickets thead th.col-sticky-descripcion.filtro-activo {
+  box-shadow:
+    inset 0 -3px 0 var(--ultra-orange),
+    3px 0 7px -6px rgba(15, 23, 42, 0.45);
+}
+
 .tabla-tickets .col-gestion {
   position: sticky;
   right: 0;
