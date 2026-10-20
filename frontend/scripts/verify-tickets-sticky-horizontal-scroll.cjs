@@ -1,11 +1,10 @@
 'use strict';
 
-// QA en aislamiento de los métodos TS originales. No requiere navegador ni DB.
+// Regresión CSS / Angular de Tickets V1. Conserva el nombre de script en CI,
+// pero comprueba que solo exista el scrollbar horizontal nativo inferior.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const Module = require('node:module');
-const ts = require('typescript');
 
 const base = path.resolve(__dirname, '../src/app/pantalla-ver-tickets');
 const source = fs.readFileSync(path.join(base, 'pantalla-ver-tickets.component.ts'), 'utf8');
@@ -14,75 +13,6 @@ const css = fs.readFileSync(path.join(base, 'pantalla-ver-tickets.component.css'
 const layoutCss = fs.readFileSync(path.resolve(__dirname,
   '../src/app/layout/layout.component.css'), 'utf8');
 
-function extract(name) {
-  const match = source.match(new RegExp(
-    '^  ' + name + '\\(\\): void \\{[\\s\\S]*?^  \\}', 'm',
-  ));
-  assert.ok(match, 'Método original faltante: ' + name);
-  return match[0];
-}
-
-const code = [
-  'class TicketsHorizontalScrollTest {',
-  '  ticketsScrollContainer: any = null;',
-  '  anchoContenidoScrollTickets = 0;',
-  '  mostrarBarraHorizontalTickets = false;',
-  '  changeDetectorRef = { detectChanges() {} };',
-  extract('sincronizarTablaDesdeBarraTickets'),
-  extract('sincronizarBarraDesdeTablaTickets'),
-  '  ' + source.match(/private actualizarBarraHorizontalTickets\(\): void \{[\s\S]*?^  \}/m)?.[0],
-  '}',
-  'module.exports = { TicketsHorizontalScrollTest };',
-].join('\n');
-assert.ok(!code.includes('undefined'), 'Debe existir el método de medición');
-const js = ts.transpileModule(code, {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
-}).outputText;
-const mod = new Module('ticket-horizontal-scroll-qa', module);
-mod.filename = 'ticket-horizontal-scroll-qa.js';
-mod.paths = Module._nodeModulePaths(__dirname);
-mod._compile(js, mod.filename);
-
-const instance = new mod.exports.TicketsHorizontalScrollTest();
-const table = { scrollWidth: 2486 };
-const rail = { scrollLeft: 0, clientWidth: 1200 };
-const viewport = {
-  scrollLeft: 0,
-  querySelector(selector) {
-    return selector === '.tickets-table-rail' ? rail : table;
-  },
-};
-instance.ticketsScrollContainer = viewport;
-instance.actualizarBarraHorizontalTickets();
-assert.equal(instance.mostrarBarraHorizontalTickets, true, 'Debe habilitar el riel si hay desborde');
-assert.equal(instance.anchoContenidoScrollTickets, 2486, 'El riel usa ancho real de la tabla');
-
-rail.scrollLeft = 600;
-instance.sincronizarTablaDesdeBarraTickets();
-assert.equal(viewport.scrollLeft, 600, 'Arrastrar la barra superior mueve la tabla');
-viewport.scrollLeft = 1150;
-instance.sincronizarBarraDesdeTablaTickets();
-assert.equal(rail.scrollLeft, 1150, 'Arrastrar barra inferior mueve la superior');
-
-rail.clientWidth = 2900;
-instance.actualizarBarraHorizontalTickets();
-assert.equal(instance.mostrarBarraHorizontalTickets, false,
-  'El riel desaparece si la tabla cabe en el viewport');
-
-assert.match(template, /#ticketsScrollContainer/, 'Tabla necesita referencia de contenedor');
-assert.match(template, /\(scroll\)="sincronizarTablaDesdeBarraTickets\(\)"/,
-  'El riel debe enviar los cambios a la tabla');
-assert.match(template, /\(scroll\)="sincronizarBarraDesdeTablaTickets\(\)"/,
-  'La tabla debe actualizar el riel');
-assert.match(template, /\[style\.width\.px\]="anchoContenidoScrollTickets"/,
-  'El spacer reproduce el ancho real de tabla');
-assert.doesNotMatch(template, /\(wheel\)=/, 'La rueda vertical NO debe secuestrarse');
-assert.match(css, /\.tickets-table-rail\s*\{[\s\S]*?position:\s*sticky;[\s\S]*?top:\s*0;/,
-  'El riel debe permanecer visible al desplazarse verticalmente');
-assert.match(css, /\.tickets-table-card\s*\{[\s\S]*?box-sizing:\s*border-box;/,
-  'El contenedor no puede desbordar la ventana por sumar padding');
-// Contrato desktop: solo la tabla se desplaza, sin cortar paginación.
-// Leer la regla específica evita aceptar reglas parecidas en otros módulos.
 function cssRule(selector) {
   const start = css.indexOf(selector + ' {');
   assert.ok(start >= 0, 'Regla CSS faltante: ' + selector);
@@ -90,50 +20,50 @@ function cssRule(selector) {
   const end = css.indexOf('}', open);
   return css.slice(open + 1, end);
 }
+
+// Una sola barra horizontal, nativa y debajo de las filas.
+assert.match(template, /class="tickets-table-card table-container"/,
+  'El contenedor de la tabla debe conservar su scrollbar nativo');
+assert.doesNotMatch(template, /tickets-table-rail|ticketsScrollContainer|sincronizarBarraDesdeTablaTickets/,
+  'No debe existir el riel horizontal superior ni su listener');
+assert.doesNotMatch(source, /ticketsScrollContainer|sincronizarTablaDesdeBarraTickets|sincronizarBarraDesdeTablaTickets|anchoContenidoScrollTickets|mostrarBarraHorizontalTickets|ticketsScrollResizeObserver/,
+  'Eliminar código de sincronización y ResizeObserver que ya no se usa');
+assert.doesNotMatch(css, /tickets-table-rail|tickets-horizontal-rail-height|::-webkit-scrollbar:horizontal/,
+  'No debe ocultarse el scrollbar nativo inferior ni reservar altura al superior');
+assert.match(cssRule('.tickets-table-card'), /overflow-x:\s*auto;/,
+  'El scroll horizontal nativo debe seguir funcionando');
+assert.match(cssRule('.tickets-table-card'), /overflow-y:\s*auto;/,
+  'Conservar el scroll vertical dentro de la tabla');
+assert.match(cssRule('.tabla-tickets th'), /position:\s*sticky;\s*top:\s*0;/,
+  'Encabezado sticky al inicio de la tabla, sin espacio para el riel superior');
+assert.doesNotMatch(template, /\(wheel\)=/,
+  'La rueda vertical conserva su comportamiento nativo');
+
+// Layout corregido en PR 977: no introducir una segunda barra en la ventana
+// ni volver a ocultar paginación/exportación.
 const hostRule = cssRule(':host');
 const pageRule = cssRule('.tickets-page');
 const tableRule = cssRule('.tickets-table-card');
 const footerRule = cssRule('.pagination-export-container');
 assert.match(hostRule, /height:\s*100%;/,
-  'Ver Tickets ocupa la altura que le asigna el layout, no resta 72px');
-assert.doesNotMatch(hostRule, /height:\s*calc\(100dvh - 72px\)/,
-  'No asumir altura fija de la cabecera; en producción midió 38px');
+  'El componente toma la altura real asignada por el layout');
 assert.match(hostRule, /overflow:\s*hidden;/,
-  'Sin scroll duplicado en el host');
+  'La ventana no debe volver a desplazarse por el componente');
 assert.match(pageRule, /display:\s*flex;[\s\S]*?flex-direction:\s*column;/,
-  'Layout vertical de KPIs + tabla + paginación');
+  'La página debe tener un layout vertical flexible');
 assert.match(pageRule, /height:\s*100%;[\s\S]*?overflow:\s*hidden;/,
-  'Sin scroll horizontal/vertical exterior a la tabla');
+  'El scroll global exterior permanece bloqueado');
 assert.match(tableRule, /flex:\s*1 1 0;/,
-  'Tabla utiliza el espacio restante de la ventana');
-assert.match(tableRule, /overflow-y:\s*auto;/,
-  'Scroll vertical conservado dentro de la tabla');
-assert.match(tableRule, /min-height:\s*0;[\s\S]*?max-height:\s*none;/,
-  'Eliminar tope fijo de altura de tabla');
-assert.match(css, /\.tickets-table-card::-webkit-scrollbar:horizontal\s*\{\s*height:\s*0;/,
-  'Ocultar únicamente scrollbar horizontal nativo inferior');
+  'La tabla toma solo el espacio disponible');
 assert.match(footerRule, /flex:\s*0 0 auto;/,
-  'Paginación siempre visible fuera del scroll de la tabla');
-assert.match(css, /@media \(max-width: 768px\), \(max-height: 560px\)/,
-  'Móvil o ventana reducida usa layout sin recortar controles');
-assert.doesNotMatch(css, /html\s*,\s*body\s*\{[\s\S]*?overflow:\s*hidden;/,
-  'No desactivar scroll global de la aplicación');
-// La altura real de .suite-header se descuenta con flex, no con
-// un cálculo fijo de 72px (la medición real de producción fue 38px).
+  'La paginación se mantiene visible fuera de la tabla');
 assert.match(layoutCss,
   /:host:has\(app-pantalla-ver-tickets\)\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*height:\s*100dvh;/,
-  'El layout de Tickets debe ocupar el viewport como columna flexible');
-assert.match(layoutCss,
-  /:host:has\(app-pantalla-ver-tickets\)\s+\.suite-header\s*\{[^}]*flex:\s*0 0 auto;/,
-  'El encabezado conserva su altura real sin comprimir');
+  'El layout descuenta dinámicamente la altura real del header');
 assert.match(layoutCss,
   /\.suite-main-content:has\(app-pantalla-ver-tickets\)\s*\{[^}]*flex:\s*1 1 0;[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/,
-  'El contenido Tickets debe tomar el espacio restante y no expandir la página');
-assert.match(layoutCss,
-  /@media \(max-width: 768px\), \(max-height: 560px\)/,
-  'Conservar scroll de página en pantallas pequeñas');
-assert.doesNotMatch(layoutCss,
-  /html\s*,\s*body\s*\{[^}]*overflow:\s*hidden;/,
-  'El ajuste de viewport debe ser exclusivo de Tickets');
+  'Ver Tickets no aumenta la altura total del documento');
+assert.match(css, /@media \(max-width: 768px\), \(max-height: 560px\)/,
+  'Las ventanas pequeñas deben conservar acceso a controles');
 
-console.log('PASS: barra superior sticky, scroll vertical de tabla y viewport sin doble scroll');
+console.log('PASS: única barra horizontal inferior, scroll vertical interno y paginación visible');

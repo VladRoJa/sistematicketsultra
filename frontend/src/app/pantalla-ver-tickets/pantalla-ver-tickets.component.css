@@ -259,7 +259,6 @@
    ========================================================================== */
 
 .tickets-table-card {
-  --tickets-horizontal-rail-height: 18px;
   flex: 1 1 0;
   width: 100%;
   max-width: 100%;
@@ -277,56 +276,6 @@
   min-height: 0;
   max-height: none;
   overscroll-behavior: contain;
-}
-
-/* Ocultar únicamente el segundo riel horizontal nativo en Chromium/Edge.
-   Se conserva la barra vertical del contenedor y el riel superior sticky. */
-.tickets-table-card::-webkit-scrollbar:horizontal {
-  height: 0;
-}
-
-/* Barra horizontal siempre alcanzable al inicio del área con scroll.
-   La cabecera de la tabla queda inmediatamente debajo de este riel. */
-.tickets-table-rail {
-  position: sticky;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: var(--tickets-horizontal-rail-height);
-  box-sizing: border-box;
-  overflow-x: auto;
-  overflow-y: hidden;
-  z-index: 140;
-  background: var(--ultra-surface);
-  scrollbar-width: auto;
-  scrollbar-color: var(--ultra-gray-500) var(--ultra-gray-100);
-}
-
-.tickets-table-rail::-webkit-scrollbar {
-  height: 14px;
-}
-
-.tickets-table-rail::-webkit-scrollbar-thumb {
-  background: var(--ultra-gray-500);
-  border-radius: 999px;
-  border: 2px solid var(--ultra-gray-100);
-}
-
-.tickets-table-rail::-webkit-scrollbar-track {
-  background: var(--ultra-gray-100);
-}
-
-.tickets-table-rail__spacer {
-  height: 1px;
-}
-
-.tickets-table-card--no-horizontal-overflow {
-  --tickets-horizontal-rail-height: 0px;
-}
-
-.tickets-table-card--no-horizontal-overflow .tickets-table-rail {
-  visibility: hidden;
-  overflow: hidden;
 }
 
 /* ==========================================================================
@@ -503,8 +452,7 @@
 
 .tabla-tickets th {
   position: sticky;
-  top: var(--tickets-horizontal-rail-height);
-
+  top: 0;
   z-index: 120;
   background:
     linear-gradient(135deg, var(--ultra-black-90), var(--ultra-charcoal));

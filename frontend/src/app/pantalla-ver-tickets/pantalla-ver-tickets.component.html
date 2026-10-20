@@ -130,26 +130,7 @@
        Suite Ultra UI v1 - Card de filtros y tabla
        ========================================================================== -->
 
-  <div
-    #ticketsScrollContainer
-    class="tickets-table-card table-container"
-    [class.tickets-table-card--no-horizontal-overflow]="!mostrarBarraHorizontalTickets"
-    (scroll)="sincronizarBarraDesdeTablaTickets()"
-  >
-    <!-- Barra horizontal visible arriba; conserva también el scroll nativo inferior. -->
-    <div
-      class="tickets-table-rail"
-      (scroll)="sincronizarTablaDesdeBarraTickets()"
-      role="region"
-      aria-label="Desplazamiento horizontal de la tabla de tickets"
-      tabindex="0"
-    >
-      <div
-        class="tickets-table-rail__spacer"
-        [style.width.px]="anchoContenidoScrollTickets"
-      ></div>
-    </div>
-
+  <div class="tickets-table-card table-container">
     <table class="tabla-tickets">
       <colgroup>
         <col class="c-id">
