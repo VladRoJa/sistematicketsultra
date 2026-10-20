@@ -32,6 +32,35 @@ Y en TigerVNC conecta a:
 EOF
 }
 
+# Seguridad: el perfil Playwright se comparte entre backend y gasca-sms-worker.
+# No iniciar otra instancia Chrome mientras el worker puede estar enviando.
+require_sms_worker_stopped() {
+  local container_id
+  if ! container_id="$(docker compose --profile scheduler ps -a -q gasca-sms-worker)"; then
+    echo "No se pudo verificar el estado de gasca-sms-worker. Operación cancelada." >&2
+    return 1
+  fi
+
+  if [[ -z "${container_id}" ]]; then
+    return 0
+  fi
+
+  local running
+  if ! running="$(docker inspect --format '{{.State.Running}}' "${container_id}")"; then
+    echo "No se pudo inspeccionar gasca-sms-worker. Operación cancelada." >&2
+    return 1
+  fi
+  if [[ "${running}" == "true" ]]; then
+    echo "gasca-sms-worker sigue activo: no se abrirá el perfil compartido." >&2
+    echo "Confirma que no haya un SMS en vuelo y detén el worker en una ventana de mantenimiento." >&2
+    return 1
+  fi
+  if [[ "${running}" != "false" ]]; then
+    echo "Estado de gasca-sms-worker desconocido. Operación cancelada." >&2
+    return 1
+  fi
+}
+
 kill_temp_processes() {
   docker compose exec "$BACKEND_SERVICE" sh -lc 'python - <<PY
 from pathlib import Path
@@ -121,6 +150,7 @@ PY'
 }
 
 start_pairing() {
+  require_sms_worker_stopped
   echo "Cerrando procesos temporales..."
   kill_temp_processes || true
   clean_profile_locks
@@ -210,6 +240,7 @@ stop_pairing() {
 }
 
 diagnose() {
+  require_sms_worker_stopped
   docker compose exec -T "$BACKEND_SERVICE" sh -lc 'cd /app && python -' <<'PY'
 from playwright.sync_api import sync_playwright
 import json
@@ -263,6 +294,7 @@ PY
 }
 
 test_sms() {
+  require_sms_worker_stopped
   local phone="${1:-}"
   shift || true
   local message="${*:-Prueba Suite Ultra: Google Messages operativo.}"
