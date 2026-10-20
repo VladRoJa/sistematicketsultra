@@ -60,7 +60,7 @@ export interface TicketDTO {
   descripcion: string;
   username: string;                // creador
   asignado_a?: string | null;
-  tipo_atencion?: 'INTERNA' | 'EXTERNA' | null;
+  tipo_atencion?: 'INTERNA' | 'EXTERNA' | 'AUTOGESTION' | null;
 
   // Catálogo jerárquico
   departamento?: string | number;
