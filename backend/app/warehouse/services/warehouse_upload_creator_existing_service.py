@@ -381,9 +381,12 @@ def create_warehouse_upload_via_existing_service(
             date_from=period_data.get("date_from"),
             date_to=period_data.get("date_to"),
             audit_details={
+                # System-owned source identifiers cannot be overwritten by
+                # free-form producer metadata. This records internal origin,
+                # NOT an independently certified Gasca release/version.
+                **(metadata or {}),
                 "upload_origin": "internal_pipeline",
                 "source_key": source_key or DEFAULT_SOURCE_KEY,
-                **(metadata or {}),
             },
         )
     except Exception as exc:
