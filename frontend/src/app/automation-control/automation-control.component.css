@@ -113,3 +113,5 @@ td .run-result+button{margin-left:7px}
 .sms-recovery code{display:block;margin:4px 0;padding:6px 8px;background:#f1f5f9;
   border-radius:4px;font-size:11px;white-space:pre-wrap;overflow-wrap:anywhere}
 @media(max-width:640px){.sms-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.sms-requires-pairing{color:#b91c1c}
