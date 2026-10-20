@@ -79,7 +79,39 @@ assert.match(css, /\.tickets-table-rail\s*\{[\s\S]*?position:\s*sticky;[\s\S]*?t
   'El riel debe permanecer visible al desplazarse verticalmente');
 assert.match(css, /\.tickets-table-card\s*\{[\s\S]*?box-sizing:\s*border-box;/,
   'El contenedor no puede desbordar la ventana por sumar padding');
-assert.match(css, /\.tickets-page\s*\{[\s\S]*?overflow-x:\s*clip;/,
-  'La página no debe crear scroll horizontal independiente');
-
-console.log('PASS: barra horizontal superior sincronizada y página sin overflow horizontal extra');
+// Contrato desktop: solo la tabla se desplaza, sin cortar paginación.
+// Leer la regla específica evita aceptar reglas parecidas en otros módulos.
+function cssRule(selector) {
+  const start = css.indexOf(selector + ' {');
+  assert.ok(start >= 0, 'Regla CSS faltante: ' + selector);
+  const open = css.indexOf('{', start);
+  const end = css.indexOf('}', open);
+  return css.slice(open + 1, end);
+}
+const hostRule = cssRule(':host');
+const pageRule = cssRule('.tickets-page');
+const tableRule = cssRule('.tickets-table-card');
+const footerRule = cssRule('.pagination-export-container');
+assert.match(hostRule, /height:\s*calc\(100dvh - 72px\);/,
+  'Ver Tickets ocupa el viewport menos los 72px de cabecera');
+assert.match(hostRule, /overflow:\s*hidden;/,
+  'Sin scroll duplicado en el host');
+assert.match(pageRule, /display:\s*flex;[\s\S]*?flex-direction:\s*column;/,
+  'Layout vertical de KPIs + tabla + paginación');
+assert.match(pageRule, /height:\s*100%;[\s\S]*?overflow:\s*hidden;/,
+  'Sin scroll horizontal/vertical exterior a la tabla');
+assert.match(tableRule, /flex:\s*1 1 0;/,
+  'Tabla utiliza el espacio restante de la ventana');
+assert.match(tableRule, /overflow-y:\s*auto;/,
+  'Scroll vertical conservado dentro de la tabla');
+assert.match(tableRule, /min-height:\s*0;[\s\S]*?max-height:\s*none;/,
+  'Eliminar tope fijo de altura de tabla');
+assert.match(css, /\.tickets-table-card::-webkit-scrollbar:horizontal\s*\{\s*height:\s*0;/,
+  'Ocultar únicamente scrollbar horizontal nativo inferior');
+assert.match(footerRule, /flex:\s*0 0 auto;/,
+  'Paginación siempre visible fuera del scroll de la tabla');
+assert.match(css, /@media \(max-width: 768px\), \(max-height: 560px\)/,
+  'Móvil o ventana reducida usa layout sin recortar controles');
+assert.doesNotMatch(css, /html\s*,\s*body\s*\{[\s\S]*?overflow:\s*hidden;/,
+  'No desactivar scroll global de la aplicación');
+console.log('PASS: barra superior sticky, scroll vertical de tabla y viewport sin doble scroll');
