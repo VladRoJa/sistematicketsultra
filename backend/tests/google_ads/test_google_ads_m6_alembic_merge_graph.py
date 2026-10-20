@@ -21,7 +21,10 @@ COMMON = "f62a1b9d4c07"
 
 def test_m6_and_main_have_exactly_one_alembic_head():
     script = ScriptDirectory(str(MIGRATIONS))
-    assert list(script.get_heads()) == [FINAL]
+    # The historical M6 join remains unchanged; later linear migrations
+    # legitimately advance the single current Alembic head.
+    assert list(script.get_heads()) == ["f22c10202601"]
+    assert script.get_revision("f22c10202601").down_revision == "d22c10202601"
     join = script.get_revision(FINAL)
     assert set(join.down_revision) == {M6_CORRECTION_FINAL, NEW_MARKETING_HEAD}
     assert script.get_revision(NEW_MARKETING_HEAD).down_revision == TRACK_ROSTER
