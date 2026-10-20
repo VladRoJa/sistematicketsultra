@@ -82,6 +82,10 @@ jobs:
         run: |
           python -m py_compile \
             app/models/marketing.py \
+            app/models/automation_control.py \
+            app/rpa/workers/gasca_sms_worker.py \
+            app/services/automation_control/gasca_sms_pulse_service.py \
+            migrations/versions/f22c10202601_gasca_sms_health_pulses.py \
             app/services/automation_control/diagnostic_service.py \
             app/services/marketing_iventas_run_lifecycle_service.py \
             app/services/marketing_iventas_run_sync_service.py \
@@ -173,6 +177,7 @@ jobs:
         run: |
           python -m pytest -q --tb=short -o addopts= \
             tests/automation_control/test_worker_health.py \
+            tests/automation_control/test_gasca_sms_pulse_pg_ci.py \
             tests/automation_control/test_worker_health_postgres_ci.py \
             tests/automation_control/test_marketing_slot_sla_service.py \
             tests/automation_control/test_track_roster_m1f6_postgres.py \
