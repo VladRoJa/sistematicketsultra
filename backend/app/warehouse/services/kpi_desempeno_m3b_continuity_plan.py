@@ -179,12 +179,13 @@ def _revision_key(
     return (branch, metric, earlier_date, later_date, earlier, later)
 
 
-def plan_kpi_desempeno_mtd_impact(
+def _plan_kpi_desempeno_mtd_impact(
     *,
     business_date: date | str,
     diff: KpiDesempenoSemanticDiffResult,
     observed_mtd: Mapping[date, Mapping[str, Mapping[str, int]]],
     source_revision_claims: tuple[M3BSourceRevisionClaim, ...] = (),
+    _verified_series_end: date | None = None,
 ) -> M3BImpactPlan:
     """Compute exact impact cells and neighbor-day MTD checks, without IO.
 
@@ -196,6 +197,12 @@ def plan_kpi_desempeno_mtd_impact(
     provenance verifier. The planner never publishes.
     """
     day = _date(business_date)
+    if _verified_series_end is not None and (
+        type(_verified_series_end) is not date or _verified_series_end < day
+        or (_verified_series_end.year, _verified_series_end.month)
+        != (day.year, day.month)
+    ):
+        raise ValueError("Invalid trusted series end")
     issues: list[M3BContinuityIssue] = []
     matched_revision_claims: list[M3BContinuityIssue] = []
     evidence_index: dict[
@@ -327,7 +334,10 @@ def plan_kpi_desempeno_mtd_impact(
     for (branch, metric), (old, corrected) in sorted(changed_mtd.items()):
         prev_day, next_day = day - timedelta(days=1), day + timedelta(days=1)
         previous_is_same_month = (prev_day.year, prev_day.month) == (day.year, day.month)
-        next_is_same_month = (next_day.year, next_day.month) == (day.year, day.month)
+        next_is_same_month = (
+            (next_day.year, next_day.month) == (day.year, day.month)
+            and (_verified_series_end is None or next_day <= _verified_series_end)
+        )
 
         continuity_days.add(day)
         if previous_is_same_month:
@@ -385,4 +395,23 @@ def plan_kpi_desempeno_mtd_impact(
         )),
         blocking_issues=tuple(issues),
         matched_revision_claims=tuple(matched_revision_claims),
+    )
+
+
+def plan_kpi_desempeno_mtd_impact(
+    *,
+    business_date: date | str,
+    diff: KpiDesempenoSemanticDiffResult,
+    observed_mtd: Mapping[date, Mapping[str, Mapping[str, int]]],
+    source_revision_claims: tuple[M3BSourceRevisionClaim, ...] = (),
+) -> M3BImpactPlan:
+    """Pure diagnostic contract: unknown neighbor days remain blocking.
+
+    Only the internal provenance-audited bridge can establish the last known
+    source day and avoid fabricating a nonexistent next-day report.
+    """
+    return _plan_kpi_desempeno_mtd_impact(
+        business_date=business_date, diff=diff,
+        observed_mtd=observed_mtd,
+        source_revision_claims=source_revision_claims,
     )
