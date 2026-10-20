@@ -88,6 +88,30 @@ def isolated_postgres():
                 CREATE INDEX ix_venta_total_snapshot_rows_snapshot_id
                 ON public.venta_total_snapshot_rows (snapshot_id)
             """))
+            # Four child-side FK indexes absent from the current Alembic
+            # schema. PostgreSQL does not index referencing FK columns.
+            connection.execute(text("""
+                CREATE INDEX ix_cc_appointments_vt_snapshot_id
+                ON public.contact_center_appointments (venta_total_snapshot_id)
+                WHERE venta_total_snapshot_id IS NOT NULL
+            """))
+            connection.execute(text("""
+                CREATE INDEX ix_cc_appointments_vt_snapshot_row_id
+                ON public.contact_center_appointments (venta_total_snapshot_row_id)
+                WHERE venta_total_snapshot_row_id IS NOT NULL
+            """))
+            connection.execute(text("""
+                CREATE INDEX ix_cc_result_events_vt_snapshot_id
+                ON public.contact_center_appointment_result_events
+                    (venta_total_snapshot_id)
+                WHERE venta_total_snapshot_id IS NOT NULL
+            """))
+            connection.execute(text("""
+                CREATE INDEX ix_cc_result_events_vt_snapshot_row_id
+                ON public.contact_center_appointment_result_events
+                    (venta_total_snapshot_row_id)
+                WHERE venta_total_snapshot_row_id IS NOT NULL
+            """))
         yield engine
     finally:
         with engine.begin() as connection:
