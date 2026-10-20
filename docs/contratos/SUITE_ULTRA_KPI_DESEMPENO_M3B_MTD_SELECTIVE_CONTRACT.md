@@ -84,7 +84,8 @@ procesar. Errores de SHA, fecha, roster, M1, vecino o procedencia provocan
 excepción o `BLOCKED`.
 
 **Pendiente en otro gate:** comprobar última entrega oficial Gasca con
-metadatos del proveedor, diseñar el límite de ventana para los últimos días
-sin vecino D+1, y orquestar en orden seguro publicación canónica, actualización
-de Track, reportes e idempotencia/recuperación ante fallos. Nada de este módulo
+metadatos del proveedor, orquestar en orden seguro publicación canónica, actualización de Track,
+reportes e idempotencia/recuperación ante fallos. El puente ya distingue el
+último día del lote auditado, por lo que no exige un D+1 inexistente. Un día
+**intermedio** faltante continúa siendo inconsistencia bloqueante. Nada de este módulo
 ejecuta escritura, reingesta, promoción o reconstrucción en producción.
