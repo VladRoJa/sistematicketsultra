@@ -9,6 +9,7 @@ from app.services.automation_control.freshness_service import read_freshness
 from app.services.marketing_access import resolve_marketing_access, MarketingAuthorizationError
 from app.services.automation_control.worker_health_service import read_worker_health
 from app.services.automation_control.gasca_sms_health_service import read_gasca_sms_queue
+from app.services.automation_control.gasca_sms_pulse_service import read_pulse_health
 from app.services.automation_control.effective_schedule_service import read_effective_schedules
 from app.services.automation_control.diagnostic_service import (
     run_diagnostic, last_error_diagnostic,
@@ -362,4 +363,20 @@ def automation_control_gasca_sms_queue():
         return jsonify({
             "status": "error",
             "message": "No fue posible verificar la cola SMS.",
+        }), 503
+
+
+@automation_control_bp.get("/sms-gasca/pulse")
+@jwt_required()
+def automation_control_gasca_sms_pulse():
+    """ADMICORP only. Read-only pulse signal, with no phone or message."""
+    if not _require_read_access():
+        return _deny()
+    try:
+        return jsonify({"status": "ok", **read_pulse_health()})
+    except Exception:
+        current_app.logger.exception("No fue posible leer pulso de salud SMS Gasca")
+        return jsonify({
+            "status": "error",
+            "message": "No fue posible verificar el pulso SMS.",
         }), 503
