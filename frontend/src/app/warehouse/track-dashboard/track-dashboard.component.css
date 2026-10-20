@@ -740,7 +740,7 @@
 .track-form--topbar {
   margin-top: 0;
   display: grid;
-  grid-template-columns: 210px 190px auto;
+  grid-template-columns: 210px auto;
   gap: 10px;
   align-items: end;
 }
@@ -965,13 +965,13 @@
   }
 
   .track-form--topbar {
-    grid-template-columns: 210px 190px auto;
+    grid-template-columns: 210px auto;
   }
 }
 
 @media (max-width: 1050px) {
   .track-form--topbar {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
 
   .track-form--topbar .track-actions {

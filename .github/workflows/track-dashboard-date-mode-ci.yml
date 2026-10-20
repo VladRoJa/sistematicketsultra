@@ -1,0 +1,38 @@
+name: Track Dashboard Date Mode CI
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/src/app/warehouse/track-dashboard/track-dashboard.component.ts'
+      - 'frontend/src/app/warehouse/track-dashboard/track-dashboard.component.html'
+      - 'frontend/src/app/warehouse/track-dashboard/track-dashboard.component.css'
+      - 'frontend/scripts/verify-track-dashboard-date-mode.cjs'
+      - '.github/workflows/track-dashboard-date-mode-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  track-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - name: Test date-driven mode using real component methods
+        working-directory: frontend
+        run: node scripts/verify-track-dashboard-date-mode.cjs
+      - name: Compile Angular TypeScript
+        working-directory: frontend
+        run: node node_modules/typescript/bin/tsc --noEmit --project tsconfig.app.json
+      - name: Build Angular templates
+        working-directory: frontend
+        run: npm run build

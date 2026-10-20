@@ -133,11 +133,6 @@ interface TrackColumnGroupOption {
   label: string;
 }
 
-interface GenerationModeOption {
-  value: TrackGenerationMode;
-  label: string;
-}
-
 interface TrackSummaryCard {
   label: string;
   value: string;
@@ -271,18 +266,7 @@ interface TrackViewRow {
 export class TrackDashboardComponent implements OnInit, OnDestroy {
   readonly pageTitle = 'Track diario';
   readonly pageSubtitle =
-    'Genera snapshots manuales y consulta resultados del track dentro de Warehouse.';
-
-  readonly generationModeOptions: GenerationModeOption[] = [
-    {
-      value: 'manual_preview',
-      label: 'Manual preview',
-    },
-    {
-      value: 'official_closed_day',
-      label: 'Official closed day',
-    },
-  ];
+    'Consulta el corte preliminar de hoy y los cierres consolidados de fechas anteriores.';
 
   readonly branchOpeningOrder: string[] = [
     'VILLAS_DEL_REY',
@@ -381,7 +365,7 @@ getTrackViewModeButtonClass(mode: TrackViewMode): string {
 }
 
 
-  trackDate = this.buildTodayIsoDate();
+  trackDate = this.getTodayIsoDate();
   generationMode: TrackGenerationMode = 'manual_preview';
 
   isSubmitting = false;
@@ -426,7 +410,7 @@ getTrackViewModeButtonClass(mode: TrackViewMode): string {
   ) {}
 
   ngOnInit(): void {
-    this.syncSelectedModeLabel();
+    this.applyHistoricalModeForSelectedDate();
     this.loadDailyMart();
     this.loadCanonicalCloseStatus();
   }
@@ -760,9 +744,9 @@ loadDailyMart(): void {
     return;
   }
 
+  this.applyHistoricalModeForSelectedDate();
   this.isLoadingMart = true;
   this.martErrorMessage = '';
-  this.syncSelectedModeLabel();
 
   this.fetchDailyMart();
 }
@@ -1379,15 +1363,17 @@ private getTrackSortColumnLabel(key: TrackSortKey): string {
   return labels[key];
 }
 
-onGenerationModeChanged(): void {
-  this.syncSelectedModeLabel();
-  this.resetLoadedMartState();
-}
-
 onTrackDateChanged(): void {
+  // A requested day always determines the mode. Prevent future dates
+  // even when the date is entered by typing instead of using the arrows.
+  if (this.trackDate > this.getTodayIsoDate()) {
+    this.trackDate = this.getTodayIsoDate();
+  }
+  this.applyHistoricalModeForSelectedDate();
   this.clearCanonicalClosePoll();
   this.resetCanonicalCloseState();
   this.resetLoadedMartState();
+  this.loadDailyMart();
   this.loadCanonicalCloseStatus();
 }
  
@@ -1428,9 +1414,7 @@ private shiftTrackDateByDays(days: number): void {
   }
 
   this.trackDate = nextTrackDate;
-  this.applyHistoricalModeForSelectedDate();
-  this.loadDailyMart();
-  this.loadCanonicalCloseStatus();
+  this.onTrackDateChanged();
 }
 
 private applyHistoricalModeForSelectedDate(): void {
@@ -1512,10 +1496,6 @@ shouldDisableTrackDateInput(): boolean {
   return this.isLoadingMart;
 }
 
-shouldDisableGenerationModeSelect(): boolean {
-  return this.isLoadingMart;
-}
-
 shouldDisableGenerateTrackButton(): boolean {
   return this.isSubmitting || this.isSelectedTrackDateInPast();
 }
@@ -1574,7 +1554,7 @@ private getRemainingTargetTone(value: number | null | undefined): ProgressTone {
   return 'danger';
 }
 
-private getTodayIsoDate(): string {
+getTodayIsoDate(): string {
   const now = new Date();
 
   const formatter = new Intl.DateTimeFormat('en-CA', {
@@ -2315,11 +2295,15 @@ private averagePositiveNumber(
 }
 
   private syncSelectedModeLabel(): void {
-    const option = this.generationModeOptions.find(
-      (item) => item.value === this.generationMode,
-    );
+    this.selectedModeLabel = this.generationMode === 'official_closed_day'
+      ? 'Cierre consolidado'
+      : 'Corte preliminar';
+  }
 
-    this.selectedModeLabel = option?.label || this.generationMode;
+  getEmptyTrackMessage(): string {
+    return this.isSelectedTrackDateInPast()
+      ? 'Cierre no disponible para la fecha seleccionada.'
+      : 'Corte preliminar no disponible para hoy.';
   }
 
 private buildTrackVersionLabel(
@@ -2354,7 +2338,7 @@ private buildTrackGeneratedAtLabel(
   const formattedDateTime = this.formatIsoDateTimeLabel(generatedAt);
 
   if (resolvedVersion.version_type === 'preview_operativo') {
-    return `Preview generada: ${formattedDateTime}`;
+    return `Corte preliminar generado: ${formattedDateTime}`;
   }
 
   if (resolvedVersion.version_type === 'base_nocturna_canonica') {
@@ -2371,7 +2355,7 @@ private buildTrackGeneratedAtLabel(
 
 private formatTrackVersionTypeLabel(versionType: string): string {
   if (versionType === 'preview_operativo') {
-    return 'Preview operativo';
+    return 'Corte preliminar';
   }
 
   if (versionType === 'base_nocturna_canonica') {
@@ -2752,15 +2736,6 @@ private formatSignedCurrency(value: number | null | undefined): string {
 
   return formatted;
 }
-
-  private buildTodayIsoDate(): string {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = `${today.getMonth() + 1}`.padStart(2, '0');
-    const day = `${today.getDate()}`.padStart(2, '0');
-
-    return `${year}-${month}-${day}`;
-  }
 
 showAllTrackColumnGroups(): void {
   this.selectedTrackColumnGroups = [];
