@@ -11,6 +11,8 @@ const base = path.resolve(__dirname, '../src/app/pantalla-ver-tickets');
 const source = fs.readFileSync(path.join(base, 'pantalla-ver-tickets.component.ts'), 'utf8');
 const template = fs.readFileSync(path.join(base, 'pantalla-ver-tickets.component.html'), 'utf8');
 const css = fs.readFileSync(path.join(base, 'pantalla-ver-tickets.component.css'), 'utf8');
+const layoutCss = fs.readFileSync(path.resolve(__dirname,
+  '../src/app/layout/layout.component.css'), 'utf8');
 
 function extract(name) {
   const match = source.match(new RegExp(
@@ -92,8 +94,10 @@ const hostRule = cssRule(':host');
 const pageRule = cssRule('.tickets-page');
 const tableRule = cssRule('.tickets-table-card');
 const footerRule = cssRule('.pagination-export-container');
-assert.match(hostRule, /height:\s*calc\(100dvh - 72px\);/,
-  'Ver Tickets ocupa el viewport menos los 72px de cabecera');
+assert.match(hostRule, /height:\s*100%;/,
+  'Ver Tickets ocupa la altura que le asigna el layout, no resta 72px');
+assert.doesNotMatch(hostRule, /height:\s*calc\(100dvh - 72px\)/,
+  'No asumir altura fija de la cabecera; en producción midió 38px');
 assert.match(hostRule, /overflow:\s*hidden;/,
   'Sin scroll duplicado en el host');
 assert.match(pageRule, /display:\s*flex;[\s\S]*?flex-direction:\s*column;/,
@@ -114,4 +118,22 @@ assert.match(css, /@media \(max-width: 768px\), \(max-height: 560px\)/,
   'Móvil o ventana reducida usa layout sin recortar controles');
 assert.doesNotMatch(css, /html\s*,\s*body\s*\{[\s\S]*?overflow:\s*hidden;/,
   'No desactivar scroll global de la aplicación');
+// La altura real de .suite-header se descuenta con flex, no con
+// un cálculo fijo de 72px (la medición real de producción fue 38px).
+assert.match(layoutCss,
+  /:host:has\(app-pantalla-ver-tickets\)\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*height:\s*100dvh;/,
+  'El layout de Tickets debe ocupar el viewport como columna flexible');
+assert.match(layoutCss,
+  /:host:has\(app-pantalla-ver-tickets\)\s+\.suite-header\s*\{[^}]*flex:\s*0 0 auto;/,
+  'El encabezado conserva su altura real sin comprimir');
+assert.match(layoutCss,
+  /\.suite-main-content:has\(app-pantalla-ver-tickets\)\s*\{[^}]*flex:\s*1 1 0;[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/,
+  'El contenido Tickets debe tomar el espacio restante y no expandir la página');
+assert.match(layoutCss,
+  /@media \(max-width: 768px\), \(max-height: 560px\)/,
+  'Conservar scroll de página en pantallas pequeñas');
+assert.doesNotMatch(layoutCss,
+  /html\s*,\s*body\s*\{[^}]*overflow:\s*hidden;/,
+  'El ajuste de viewport debe ser exclusivo de Tickets');
+
 console.log('PASS: barra superior sticky, scroll vertical de tabla y viewport sin doble scroll');
