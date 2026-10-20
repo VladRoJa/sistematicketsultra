@@ -162,7 +162,7 @@ def _serialize_gasca_sms_request(row: Any) -> dict[str, Any]:
         "is_canonical": None,
         "is_current": None,
         "trigger_source": "sms_queue",
-        "error_available": bool(row.internal_error),
+        "error_available": False,  # No existe diagnóstico técnico sanitizado.
         "counts": {"attempts": int(row.attempt_count or 0)},
     }
 
