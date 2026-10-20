@@ -8,8 +8,11 @@
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  --desc-col-width: 420px;
-  --table-min-width: 2564px;
+  --desc-col-width: 320px;
+  --table-min-width: 2378px;
+  --ticket-id-width: 72px;
+  --ticket-sucursal-width: 120px;
+  --ticket-gestion-width: 220px;
 }
 
 /* ==========================================================================
@@ -357,7 +360,7 @@
    ========================================================================== */
 
 .tabla-tickets {
-  /* 17 columnas dentro del mismo ancho base de Suite Ultra V1. */
+  /* 16 columnas: identidad y gestión fijas, atributos desplazables. */
   table-layout: fixed;
   width: max(100%, var(--table-min-width));
   min-width: var(--table-min-width);
@@ -372,7 +375,7 @@
    ========================================================================== */
 
 .tabla-tickets .c-id {
-  width: 72px;
+  width: var(--ticket-id-width);
 }
 
 .tabla-tickets .c-cat {
@@ -388,7 +391,7 @@
 }
 
 .tabla-tickets .c-suc {
-  width: 120px;
+  width: var(--ticket-sucursal-width);
 }
 
 .tabla-tickets .c-est {
@@ -419,7 +422,7 @@
 
 .tabla-tickets col.c-acc,
 .tabla-tickets .c-acc {
-  width: 180px;
+  width: var(--ticket-gestion-width);
 }
 
 .tabla-tickets .c-resp {
@@ -1657,4 +1660,153 @@ td.col-descripcion {
 
 .ticket-responsable--externo {
   color: var(--ultra-orange, #e54525);
+}
+
+/* ==========================================================================
+   Tickets - Identidad y gestión fijas, compatible con scroll V1
+   ========================================================================== */
+.tabla-tickets .col-sticky-id {
+  position: sticky;
+  left: 0;
+}
+
+.tabla-tickets .col-sticky-sucursal {
+  position: sticky;
+  left: var(--ticket-id-width);
+}
+
+.tabla-tickets .col-sticky-descripcion {
+  position: sticky;
+  left: calc(var(--ticket-id-width) + var(--ticket-sucursal-width));
+  box-shadow: 3px 0 7px -6px rgba(15, 23, 42, 0.45);
+}
+
+.tabla-tickets .col-gestion {
+  position: sticky;
+  right: 0;
+  box-shadow: -3px 0 7px -6px rgba(15, 23, 42, 0.45);
+}
+
+.tabla-tickets thead th.col-sticky-id,
+.tabla-tickets thead th.col-sticky-sucursal,
+.tabla-tickets thead th.col-sticky-descripcion {
+  z-index: 135;
+}
+
+.tabla-tickets thead th.col-gestion {
+  z-index: 136;
+}
+
+.tabla-tickets tbody td:is(
+  .col-sticky-id,
+  .col-sticky-sucursal,
+  .col-sticky-descripcion,
+  .col-gestion
+) {
+  z-index: 4;
+  background: var(--ultra-surface);
+}
+
+.tabla-tickets tbody tr:nth-child(even) td:is(
+  .col-sticky-id,
+  .col-sticky-sucursal,
+  .col-sticky-descripcion,
+  .col-gestion
+) {
+  background: var(--ultra-gray-50);
+}
+
+.tabla-tickets tbody tr:hover td:is(
+  .col-sticky-id,
+  .col-sticky-sucursal,
+  .col-sticky-descripcion,
+  .col-gestion
+) {
+  background: #fff7f4;
+}
+
+/* Las transiciones conservan sus etiquetas; los atajos usan iconos y tooltip. */
+.tabla-tickets td.td-acciones.col-gestion {
+  min-width: 0;
+  padding: 7px 10px;
+  white-space: normal;
+  text-overflow: clip;
+}
+
+.td-acciones.col-gestion > .ticket-action,
+.td-acciones.col-gestion > div > .ticket-action {
+  width: 100%;
+  min-width: 0;
+  max-width: 182px;
+  min-height: 27px;
+  padding: 6px 9px;
+  font-size: 11px;
+}
+
+.td-acciones.col-gestion .acciones-mantenimiento .ticket-action {
+  min-height: 27px;
+  padding: 6px 8px;
+  font-size: 11px;
+}
+
+.td-acciones.col-gestion .ticket-validation-button {
+  min-height: 27px;
+  font-size: 11px;
+}
+
+.td-acciones .gestion-atajos {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.td-acciones .gestion-atajo {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  color: var(--ultra-gray-600);
+  background: var(--ultra-gray-50);
+  border: 1px solid var(--ultra-gray-200);
+  --mdc-icon-button-state-layer-size: 32px;
+}
+
+.td-acciones .gestion-atajo:hover {
+  color: var(--ultra-orange);
+  background: var(--ultra-orange-soft);
+}
+
+.td-acciones .gestion-atajo mat-icon {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  font-size: 18px;
+  line-height: 18px;
+}
+
+/* En pantallas estrechas dejamos más superficie para navegar las columnas. */
+@media (max-width: 1100px) {
+  .tabla-tickets thead th.col-sticky-sucursal,
+  .tabla-tickets thead th.col-sticky-descripcion {
+    left: auto;
+    z-index: 120;
+    box-shadow: none;
+  }
+
+  .tabla-tickets tbody td.col-sticky-sucursal,
+  .tabla-tickets tbody td.col-sticky-descripcion {
+    position: static;
+    box-shadow: none;
+  }
+}
+
+@media (max-width: 768px) {
+  :host {
+    --ticket-gestion-width: 184px;
+    --table-min-width: 2342px;
+  }
 }
