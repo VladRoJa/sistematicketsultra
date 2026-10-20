@@ -3,12 +3,20 @@ from datetime import date, timedelta
 from types import SimpleNamespace
 
 import pytest
+from flask import Flask
 
 from app.models.warehouse import WarehouseUploadORM
 from app.warehouse.services import kpi_desempeno_m3c_source_evidence_service as evidence
 
 
 DAY = date(2026, 10, 20)
+
+@pytest.fixture(autouse=True)
+def _synthetic_app_context():
+    app = Flask("m3c_source_evidence_unit")
+    with app.app_context():
+        yield
+
 
 
 def _mock_upload(monkeypatch, details, *, audit_present=True, source_status="ACTIVE",
