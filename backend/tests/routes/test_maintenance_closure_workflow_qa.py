@@ -94,6 +94,11 @@ class SyntheticTicket:
 @pytest.fixture
 def qa_http(monkeypatch):
     users = {
+        45: SimpleNamespace(
+            id=45, username="MANTENIMIENTO", rol="MANTENIMIENTO",
+            department_id=1, sucursal_id=100,
+            sucursales_ids=[1, 2, 3, 4, 5, 6, 14, 15, 16, 17, 18, 20, 24, 26],
+        ),
         91001: SimpleNamespace(
             id=91001, username="QA_TECNICO", rol="SR_MANTENIMIENTO",
             department_id=1, sucursal_id=8, sucursales_ids=[8],
@@ -292,3 +297,57 @@ def test_qa_externa_solo_coordinacion_solicita_y_gerente_valida(qa_http):
         and item.get("cambiadoPor") == "QA_GERENTE"
     ]) == 1
     assert commit.call_count == 2
+
+
+def test_qa_chief_legacy_own_work_requires_manager_conformity(qa_http):
+    ticket, post, commit = qa_http
+    ticket.sucursal_id_destino = 1
+    ticket.sucursal_id = 1
+    ticket.tipo_atencion = None
+    ticket.asignado_a = None
+    ticket.estado_cierre = "rechazado_por_gerente"
+    old_due = ticket.fecha_solucion
+
+    # Jefe no requiere seleccionar técnico, conserva reprogramación anterior.
+    response = post(
+        45, "cierre/solicitar/990001",
+        {"notas_cierre": "Reparación ejecutada personalmente por Mantenimiento"},
+    )
+    assert response.status_code == 200
+    assert ticket.estado == "por_validar"
+    assert ticket.estado_cierre == "pendiente_creador"
+    assert ticket.asignado_a is None
+    assert ticket.tipo_atencion is None
+    assert ticket.fecha_solucion == old_due
+    assert commit.call_count == 1
+    assert ticket.historial_fechas[0]["estado_cierre_anterior"] == "rechazado_por_gerente"
+
+    # No puede aprobar su propio trabajo, aunque sea jefe regional.
+    assert post(45, "cierre/aceptar-creador/990001").status_code == 403
+    assert ticket.estado == "por_validar"
+
+    # Gerente de la sucursal sí confirma el cierre.
+    assert post(91005, "cierre/aceptar-creador/990001").status_code == 403
+    assert ticket.estado == "por_validar"
+
+
+def test_qa_chief_cannot_close_work_outside_scope_or_delegated(qa_http):
+    ticket, post, commit = qa_http
+    ticket.tipo_atencion = None
+    ticket.asignado_a = None
+    # Sucursal 8: fuera de las 14 asignadas.
+    assert post(
+        45, "cierre/solicitar/990001",
+        {"notas_cierre": "No autorizado"},
+    ).status_code == 403
+    assert ticket.estado == "en progreso"
+    assert commit.call_count == 0
+
+    ticket.sucursal_id_destino = 1
+    ticket.tipo_atencion = "INTERNA"
+    ticket.asignado_a = "QA_TECNICO"
+    assert post(
+        45, "cierre/solicitar/990001",
+        {"notas_cierre": "No saltar revisión de Yuliana"},
+    ).status_code == 403
+    assert commit.call_count == 0
