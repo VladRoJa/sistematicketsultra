@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
+from sqlalchemy.dialects import postgresql
 from flask import Flask
 from flask_jwt_extended import JWTManager, create_access_token
 
@@ -103,7 +104,7 @@ def test_claim_idempotent_on_insert_conflict_contract(app):
             assert reserve_pulse(datetime(2026, 10, 20, 20, 0, tzinfo=timezone.utc)) is None
             execute.assert_called_once()
             assert "ON CONFLICT DO NOTHING" in str(execute.call_args.args[0].compile(
-                dialect=__import__("sqlalchemy").dialects.postgresql.dialect()
+                dialect=postgresql.dialect()
             )).upper()
             commit.assert_called_once()
 
