@@ -41,11 +41,12 @@ def read_gasca_sms_queue(now: datetime | None = None) -> dict:
         .group_by(table.status).all()
     )
     since = now - timedelta(hours=24)
-    recent = dict(
-        db.session.query(table.status, func.count(table.id))
-        .filter(table.created_at >= since)
-        .group_by(table.status).all()
-    )
+    sent_last_24h = db.session.query(func.count(table.id)).filter(
+        table.status == Status.SENT, table.sent_at >= since
+    ).scalar()
+    failed_last_24h = db.session.query(func.count(table.id)).filter(
+        table.status == Status.FAILED, table.processed_at >= since
+    ).scalar()
     last_sent = db.session.query(func.max(table.sent_at)).filter(
         table.status == Status.SENT
     ).scalar()
@@ -60,8 +61,8 @@ def read_gasca_sms_queue(now: datetime | None = None) -> dict:
         "session_reason": "NO_SAFE_BROWSER_PROBE",
         "pending": int(backlog.get(Status.PENDING, 0)),
         "in_progress": sum(int(backlog.get(status, 0)) for status in _ACTIVE),
-        "sent_last_24h": int(recent.get(Status.SENT, 0)),
-        "failed_last_24h": int(recent.get(Status.FAILED, 0)),
+        "sent_last_24h": int(sent_last_24h or 0),
+        "failed_last_24h": int(failed_last_24h or 0),
         "last_sent_at_utc": _iso(last_sent),
         "last_failed_at_utc": _iso(last_failed),
     }
