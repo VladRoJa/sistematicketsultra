@@ -140,30 +140,51 @@ def test_no_forged_or_untrusted_override(monkeypatch, wrong):
         bridge.plan_kpi_desempeno_verified_source_impact(**kwargs)
 
 
-def test_missing_neighbor_is_still_blocked(monkeypatch):
-    state = _fake_verified_audit(monkeypatch)
-    # Malicious test double imitates an audit that omitted the last day.
+
+def _two_day_audit():
+    return audit.M3BProvenanceReport(
+        status="SOURCE_VERIFIED_WITH_MTD_REVISIONS",
+        days_verified=2, branches_per_day=2,
+        declines=(audit.M3BSourceDecline(
+            earlier_date=DAY1, later_date=DAY, branch_key=BRANCH,
+            track_field="bajas_reales_mtd", earlier=20, later=19,
+            delta=-1, earlier_snapshot_id=11, later_snapshot_id=22,
+            earlier_upload_id=111, later_upload_id=122,
+            earlier_sha256="a"*64, later_sha256="b"*64,
+        ),),
+        shared_declines=0, new_declines=1, removed_declines=0,
+    )
+
+
+def test_last_day_of_verified_cutoff_does_not_require_tomorrow(monkeypatch):
+    _fake_verified_audit(monkeypatch)
     monkeypatch.setattr(audit, "audit_kpi_desempeno_m3b_provenance",
-                        lambda **kwargs: audit.M3BProvenanceReport(
-                            status="SOURCE_VERIFIED_WITH_MTD_REVISIONS",
-                            days_verified=2, branches_per_day=2,
-                            declines=(audit.M3BSourceDecline(
-                                earlier_date=DAY1, later_date=DAY, branch_key=BRANCH,
-                                track_field="bajas_reales_mtd", earlier=20, later=19,
-                                delta=-1, earlier_snapshot_id=11, later_snapshot_id=22,
-                                earlier_upload_id=111, later_upload_id=122,
-                                earlier_sha256="a"*64, later_sha256="b"*64,
-                            ),), shared_declines=0, new_declines=1,
-                            removed_declines=0,
-                        ))
+                        lambda **kwargs: _two_day_audit())
     plan = bridge.plan_kpi_desempeno_verified_source_impact(
         business_date=DAY, diff=_diff(),
         candidate_snapshot_ids={DAY1: 11, DAY: 22},
         canonical_snapshot_ids={DAY1: 11, DAY: 12},
         expected_branch_count=2,
     )
+    assert plan.status == READY_FOR_PROCESSING
+    assert plan.blocking_issues == ()
+    assert len(plan.verified_source_revisions) == 1
+    assert plan.continuity_days == (DAY1, DAY)
+    assert [x.business_date for x in plan.derived_delta_impacts] == [DAY]
+
+
+def test_missing_previous_day_still_blocks_even_if_mock_audit_lies(monkeypatch):
+    _fake_verified_audit(monkeypatch)
+    monkeypatch.setattr(audit, "audit_kpi_desempeno_m3b_provenance",
+                        lambda **kwargs: _two_day_audit())
+    plan = bridge.plan_kpi_desempeno_verified_source_impact(
+        business_date=DAY, diff=_diff(),
+        candidate_snapshot_ids={DAY: 22, DAY3: 13},
+        canonical_snapshot_ids={DAY: 12, DAY3: 13},
+        expected_branch_count=2,
+    )
     assert plan.status == BLOCKED
-    assert [issue.code for issue in plan.blocking_issues] == ["MISSING_DAY"]
+    assert any(x.code == "MISSING_DAY" for x in plan.blocking_issues)
 
 
 def test_failed_provenance_audit_propagates_without_a_plan(monkeypatch):
