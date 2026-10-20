@@ -26,10 +26,10 @@
       <div class="track-topbar__content">
         <!-- Metadata de ejecución / versión -->
         <div class="track-topbar__mode">
-          <span class="track-topbar__mode-label">Ejecución manual</span>
+          <span class="track-topbar__mode-label">Corte consultado</span>
 
           <span class="track-topbar__mode-value">
-            Modo actual: <strong>{{ selectedModeLabel }}</strong>
+            Vista: <strong>{{ selectedModeLabel }}</strong>
           </span>
 
           <span
@@ -91,27 +91,9 @@
               type="date"
               [(ngModel)]="trackDate"
               (ngModelChange)="onTrackDateChanged()"
+              [max]="getTodayIsoDate()"
               [disabled]="shouldDisableTrackDateInput()"
             />
-          </div>
-
-          <!-- Modo -->
-          <div class="track-field">
-            <label for="generationMode">Modo</label>
-
-            <select
-              id="generationMode"
-              [(ngModel)]="generationMode"
-              (ngModelChange)="onGenerationModeChanged()"
-              [disabled]="shouldDisableGenerationModeSelect()"
-            >
-              <option
-                *ngFor="let option of generationModeOptions"
-                [ngValue]="option.value"
-              >
-                {{ option.label }}
-              </option>
-            </select>
           </div>
 
           <!-- Acciones -->
@@ -264,9 +246,8 @@
         <h2>Resultado del Track</h2>
 
         <p>
-          Daily mart para
-          <strong>{{ lastLoadedTrackDateLabel }}</strong>
-          en modo
+          Corte del Track para
+          <strong>{{ lastLoadedTrackDateLabel }}</strong> ·
           <strong>{{ selectedModeLabel }}</strong>.
         </p>
       </div>
@@ -350,7 +331,7 @@
       class="track-empty-state"
       *ngIf="!isLoadingMart && !martErrorMessage && viewRows.length === 0"
     >
-      <p>No hay filas para la fecha y modo seleccionados.</p>
+      <p>{{ getEmptyTrackMessage() }}</p>
     </div>
 
     <!-- Tabla principal -->
