@@ -12,7 +12,10 @@ import {
   MaintenanceWorkAction,
   MaintenanceWorkActionDialogComponent,
 } from '../shared/maintenance-work-action-dialog/maintenance-work-action-dialog.component';
-import { MaintenanceCoordinationService } from '../services/maintenance-coordination.service';
+import {
+  MaintenanceAssignee,
+  MaintenanceCoordinationService,
+} from '../services/maintenance-coordination.service';
 import { AsignarFechaPayload } from '../types/ticket';
 import {
   MaintenancePlannerHistoryItem,
@@ -40,6 +43,8 @@ export class MaintenancePlannerTicketDialogComponent {
   readonly canSchedule = this.data.canSchedule;
   readonly canCaptureDiagnosis = this.data.canCaptureDiagnosis;
   readonly canRequestClosure = this.data.canRequestClosure;
+  // El diagnóstico técnico requiere un flujo distinto; coordinación usa el PUT transaccional de Tickets V1.
+  readonly useCoordinatedAssignment = this.canRequestClosure && !this.canCaptureDiagnosis;
   readonly commitmentTicket = {
     ...this.data.ticket,
     id: this.data.ticket.ticket_id,
@@ -53,6 +58,10 @@ export class MaintenancePlannerTicketDialogComponent {
 
   saving = false;
   errorMessage = '';
+  coordinationLoading = false;
+  coordinationReady = false;
+  coordinationError = '';
+  responsablesMantenimiento: MaintenanceAssignee[] = [];
 
   constructor(
     @Inject(MAT_DIALOG_DATA)
@@ -61,7 +70,34 @@ export class MaintenancePlannerTicketDialogComponent {
     private readonly dialog: MatDialog,
     private readonly plannerService: MaintenancePlannerService,
     private readonly maintenanceCoordinationService: MaintenanceCoordinationService,
-  ) {}
+  ) {
+    if (this.useCoordinatedAssignment && this.canAssignInitialCommitment) {
+      this.loadCoordinationContext();
+    }
+  }
+
+  get canShowInitialCommitmentForm(): boolean {
+    return !this.useCoordinatedAssignment || this.coordinationReady;
+  }
+
+  private loadCoordinationContext(): void {
+    this.coordinationLoading = true;
+    this.maintenanceCoordinationService.getContext().subscribe({
+      next: (context) => {
+        this.coordinationLoading = false;
+        if (!context.can_coordinate) {
+          this.coordinationError = 'Tu perfil no tiene permiso para asignar responsables de Mantenimiento.';
+          return;
+        }
+        this.responsablesMantenimiento = context.assignees || [];
+        this.coordinationReady = true;
+      },
+      error: () => {
+        this.coordinationLoading = false;
+        this.coordinationError = 'No se pudo cargar el catálogo de responsables. Cierra y vuelve a abrir el ticket.';
+      },
+    });
+  }
 
   get hasCommitment(): boolean {
     return Boolean(this.ticket.fecha_solucion || this.ticket.fecha_solucion_date);
@@ -96,6 +132,12 @@ export class MaintenancePlannerTicketDialogComponent {
         || (
           this.ticket.tipo_atencion === 'INTERNA'
           && this.ticket.estado_cierre === 'pendiente_revision_coord'
+        )
+        || (
+          // Captura propia del jefe MANTENIMIENTO (sin técnico delegado).
+          this.canCaptureDiagnosis
+          && !this.ticket.tipo_atencion
+          && !this.ticket.asignado_a
         )
       ),
     );
@@ -143,16 +185,48 @@ export class MaintenancePlannerTicketDialogComponent {
       return;
     }
 
+    if (this.useCoordinatedAssignment && (
+      !this.coordinationReady
+      || !event.tipo_atencion
+      || (event.tipo_atencion === 'INTERNA' && !event.asignado_user_id)
+    )) {
+      this.errorMessage = 'Selecciona el tipo de atención y un responsable interno cuando corresponda.';
+      return;
+    }
+
+    // Para coordinación, fecha y asignación se guardan juntas y con historial.
+    // No usar scheduleTicket(): esa ruta únicamente registra el compromiso.
+    const fecha = event.fecha;
+    const dueDate = [
+      fecha.getFullYear(),
+      String(fecha.getMonth() + 1).padStart(2, '0'),
+      String(fecha.getDate()).padStart(2, '0'),
+    ].join('-');
+    const request$ = this.useCoordinatedAssignment
+      ? this.maintenanceCoordinationService.coordinateTicket(this.ticket.ticket_id, {
+          due_date: dueDate,
+          motivo: event.motivo.trim(),
+          tipo_atencion: event.tipo_atencion!,
+          asignado_user_id: event.tipo_atencion === 'INTERNA'
+            ? (event.asignado_user_id ?? null)
+            : null,
+          ...(event.necesita_refaccion !== undefined
+            ? { necesita_refaccion: !!event.necesita_refaccion }
+            : {}),
+          ...(event.descripcion_refaccion !== undefined
+            ? { descripcion_refaccion: event.descripcion_refaccion }
+            : {}),
+        })
+      : this.plannerService.assignInitialCommitmentFromForm(
+          this.ticket,
+          event,
+          this.canCaptureDiagnosis,
+        );
+
     this.saving = true;
     this.errorMessage = '';
 
-    this.plannerService
-      .assignInitialCommitmentFromForm(
-        this.ticket,
-        event,
-        this.canCaptureDiagnosis,
-      )
-      .subscribe({
+    request$.subscribe({
         next: () => {
           this.saving = false;
           this.dialogRef.close({ updated: true });

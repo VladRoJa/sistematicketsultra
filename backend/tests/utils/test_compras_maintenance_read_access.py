@@ -383,3 +383,75 @@ def test_yuliana_coordinator_uses_exact_twelve_maintenance_branches(monkeypatch)
     assert f"IN ({', '.join(map(str, branches))})" in compiled
     assert "departamento_id = 6" not in compiled
     assert "username" not in compiled.lower()
+
+
+@pytest.mark.parametrize("path,payload", [
+    ("/update/301", {"estado": "en progreso", "fecha_solucion": "2026-10-25T14:00:00Z"}),
+    ("/update/301", {"estado": "en progreso", "historial_fechas": [
+        {"fecha": "2026-10-25T14:00:00Z", "motivo": "Cambio no autorizado"}
+    ]}),
+    ("/compromiso/301", {"fecha_solucion": "2026-10-25T14:00:00Z"}),
+])
+def test_sr_cannot_change_maintenance_commitment_via_legacy_tickets(
+    monkeypatch, path, payload
+):
+    app = Flask(__name__)
+    tickets = Blueprint("tickets", __name__)
+
+    @tickets.route("/update/<int:id>", methods=["PUT"])
+    def update_ticket_status(id):
+        return "unexpected technical date change", 200
+
+    @tickets.route("/compromiso/<int:ticket_id>", methods=["PUT"])
+    def set_compromiso(ticket_id):
+        return "unexpected technical date change", 200
+
+    app.register_blueprint(tickets)
+    sr = SimpleNamespace(
+        id=68, username="SR_MANT_TIJ", rol="SR_MANTENIMIENTO",
+        department_id=1, sucursales_ids=[8],
+    )
+    ticket = SimpleNamespace(departamento_id=1, asignado_a="SR_MANT_TIJ")
+    monkeypatch.setattr(ticket_guard, "verify_jwt_in_request", lambda: None)
+    monkeypatch.setattr(ticket_guard, "get_jwt_identity", lambda: sr.id)
+    monkeypatch.setattr(ticket_guard, "has_assigned_only_maintenance_scope", lambda _: False)
+    monkeypatch.setattr(ticket_guard, "has_maintenance_coordination_permission", lambda _: False)
+    monkeypatch.setattr(ticket_guard.UserORM, "get_by_id", lambda _: sr)
+    monkeypatch.setattr(ticket_guard, "Ticket", SimpleNamespace(
+        query=SimpleNamespace(get=lambda _: ticket)
+    ))
+    ticket_guard.register_maintenance_ticket_update_guard(app)
+
+    response = app.test_client().put(path, json=payload)
+    assert response.status_code == 403
+    assert "coordinación" in response.get_json()["mensaje"].lower()
+
+
+def test_sr_may_still_submit_technical_state_update_without_commitment_change(monkeypatch):
+    app = Flask(__name__)
+    tickets = Blueprint("tickets", __name__)
+
+    @tickets.route("/update/<int:id>", methods=["PUT"])
+    def update_ticket_status(id):
+        return "technical state update", 200
+
+    app.register_blueprint(tickets)
+    sr = SimpleNamespace(
+        id=68, username="SR_MANT_TIJ", rol="SR_MANTENIMIENTO",
+        department_id=1, sucursales_ids=[8],
+    )
+    ticket = SimpleNamespace(departamento_id=1, asignado_a="SR_MANT_TIJ")
+    monkeypatch.setattr(ticket_guard, "verify_jwt_in_request", lambda: None)
+    monkeypatch.setattr(ticket_guard, "get_jwt_identity", lambda: sr.id)
+    monkeypatch.setattr(ticket_guard, "has_assigned_only_maintenance_scope", lambda _: False)
+    monkeypatch.setattr(ticket_guard, "has_maintenance_coordination_permission", lambda _: False)
+    monkeypatch.setattr(ticket_guard.UserORM, "get_by_id", lambda _: sr)
+    monkeypatch.setattr(ticket_guard, "Ticket", SimpleNamespace(
+        query=SimpleNamespace(get=lambda _: ticket)
+    ))
+    ticket_guard.register_maintenance_ticket_update_guard(app)
+
+    response = app.test_client().put(
+        "/update/301", json={"estado": "en progreso"}
+    )
+    assert response.status_code == 200

@@ -175,3 +175,74 @@ def resolve_effective_track_daily_version(
             return fallback_version
 
     return None
+
+
+def find_latest_effective_track_mart_row_for_branch(
+    *,
+    sucursal_canon: str,
+    exact_target_month: date | None = None,
+    latest_target_month: date | None = None,
+    require_m2_sin_circulaciones: bool = False,
+) -> TrackDailyMartORM | None:
+    """Read a latest branch row ONLY through the public effective version.
+
+    Candidate or replaced versions must never win merely by having a newer
+    mart ID. The existing close > nightly > preview and replaced-row fallback
+    contracts remain authoritative for every eligible business date.
+    """
+    candidate_dates = (
+        db.session.query(TrackDailyMartORM.track_date)
+        .join(
+            TrackDailyVersionORM,
+            TrackDailyVersionORM.id == TrackDailyMartORM.track_daily_version_id,
+        )
+        .filter(
+            TrackDailyMartORM.sucursal_canon == sucursal_canon,
+            TrackDailyVersionORM.version_type.in_(PREFERRED_TRACK_VERSION_TYPES),
+            TrackDailyVersionORM.status.in_(("success", "replaced")),
+        )
+    )
+    if exact_target_month is not None:
+        candidate_dates = candidate_dates.filter(
+            TrackDailyMartORM.target_month == exact_target_month,
+        )
+    if latest_target_month is not None:
+        candidate_dates = candidate_dates.filter(
+            TrackDailyMartORM.target_month <= latest_target_month,
+        )
+    if require_m2_sin_circulaciones:
+        candidate_dates = candidate_dates.filter(
+            TrackDailyMartORM.m2_sin_circulaciones.isnot(None),
+        )
+
+    for (track_date,) in (
+        candidate_dates.distinct()
+        .order_by(TrackDailyMartORM.track_date.desc())
+        .all()
+    ):
+        effective_version = resolve_preferred_track_daily_version(
+            track_date=track_date,
+        )
+        if effective_version is None:
+            continue
+        row_query = TrackDailyMartORM.query.filter_by(
+            track_daily_version_id=effective_version.id,
+            sucursal_canon=sucursal_canon,
+        )
+        if exact_target_month is not None:
+            row_query = row_query.filter(
+                TrackDailyMartORM.target_month == exact_target_month,
+            )
+        if latest_target_month is not None:
+            row_query = row_query.filter(
+                TrackDailyMartORM.target_month <= latest_target_month,
+            )
+        if require_m2_sin_circulaciones:
+            row_query = row_query.filter(
+                TrackDailyMartORM.m2_sin_circulaciones.isnot(None),
+            )
+        row = row_query.one_or_none()
+        if row is not None:
+            return row
+
+    return None

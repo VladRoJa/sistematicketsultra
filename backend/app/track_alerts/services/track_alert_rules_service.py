@@ -10,6 +10,9 @@ from typing import Any
 
 from app.extensions import db
 from app.models.warehouse import TrackDailyMartORM
+from app.warehouse.services.track_daily_query_version_service import (
+    resolve_effective_track_daily_version,
+)
 
 
 @dataclass(frozen=True)
@@ -44,11 +47,17 @@ def evaluate_track_alerts(
     track_date: date,
     generation_mode: str = "manual_preview",
 ) -> list[TrackAlertCandidate]:
+    effective_version = resolve_effective_track_daily_version(
+        track_date=track_date,
+        generation_mode=generation_mode,
+    )
+    if effective_version is None:
+        return []
+
     rows = (
         db.session.query(TrackDailyMartORM)
         .filter(
-            TrackDailyMartORM.track_date == track_date,
-            TrackDailyMartORM.generation_mode == generation_mode,
+            TrackDailyMartORM.track_daily_version_id == effective_version.id,
         )
         .all()
     )

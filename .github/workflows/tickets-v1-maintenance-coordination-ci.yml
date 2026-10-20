@@ -4,6 +4,10 @@ on:
   pull_request:
     paths:
       - "backend/app/utils/tickets_maintenance_permissions.py"
+      - "backend/app/utils/maintenance_regional_lead.py"
+      - "backend/tests/utils/test_maintenance_regional_lead.py"
+      - "backend/migrations/versions/b20c10202601_maintenance_lead_regional_scope.py"
+      - "backend/tests/services/test_maintenance_lead_migration_postgres.py"
       - "backend/app/utils/pm_permissions.py"
       - "backend/app/utils/purchase_requisition_permissions.py"
       - "backend/app/routes/purchase_requisition_routes.py"
@@ -68,7 +72,9 @@ jobs:
           python -m pip install "pytest==8.3.5"
       - name: Compile authorization module
         run: |
-          python -m py_compile backend/app/utils/tickets_maintenance_permissions.py \
+          python -m py_compile backend/app/utils/maintenance_regional_lead.py \
+            backend/migrations/versions/b20c10202601_maintenance_lead_regional_scope.py \
+            backend/app/utils/tickets_maintenance_permissions.py \
             backend/app/utils/pm_permissions.py \
             backend/app/utils/purchase_requisition_permissions.py \
             backend/migrations/versions/a19c10202601_yuliana_maintenance_coordinator.py \
@@ -86,7 +92,8 @@ jobs:
           JWT_SECRET_KEY: tickets-v1-maint-jwt-ci
           SQLALCHEMY_DATABASE_URI: 'sqlite:///:memory:'
         run: |
-          python -m pytest -q --tb=short tests/utils/test_tickets_maintenance_permissions.py \
+          python -m pytest -q --tb=short tests/utils/test_maintenance_regional_lead.py \
+            tests/utils/test_tickets_maintenance_permissions.py \
             tests/services/test_ticket_maintenance_coordination_service.py \
             tests/utils/test_tickets_assigned_only_scope.py \
             tests/utils/test_compras_maintenance_read_access.py \
@@ -104,7 +111,7 @@ jobs:
           cfg.set_main_option("script_location", "backend/migrations")
           heads = ScriptDirectory.from_config(cfg).get_heads()
           print("ALEMBIC_HEADS =", heads)
-          assert heads == ["a19c10202601"], heads
+          assert heads == ["b20c10202601"], heads
           PY
 
   frontend:
@@ -169,7 +176,7 @@ jobs:
           JWT_SECRET_KEY: tickets-v1-maint-jwt-ci
           PG_COORD_TEST_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/coordination_test
         run: |
-          python -m pytest -q --tb=short tests/services/test_tickets_attention_migration_postgres.py tests/services/test_yuliana_coordinator_migration_postgres.py
+          python -m pytest -q --tb=short tests/services/test_tickets_attention_migration_postgres.py tests/services/test_yuliana_coordinator_migration_postgres.py tests/services/test_maintenance_lead_migration_postgres.py
 
   qa-seed-postgres:
     runs-on: ubuntu-latest

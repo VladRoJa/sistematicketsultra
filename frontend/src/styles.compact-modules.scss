@@ -291,3 +291,12 @@ body.suite-compact-review .campaign-v2-admin-dialog app-marketing-campaign-v2-ex
   font-size: 15px !important;
 }
 
+/* Campaigns V2 main page: protect readable Material values from compact-75's
+ * global 10px controls, using the same 13px value scale as Crear Ticket V1.
+ * Scope excludes admin overlays (including the already-approved Excel dialog).
+ * No field height, label, button, layout, or color changes in this pass. */
+body.suite-compact-review .campaign-v2-page .mat-mdc-select-value,
+body.suite-compact-review .campaign-v2-page input.mat-mdc-input-element {
+  font-size: 13px !important;
+  line-height: 1.3 !important;
+}

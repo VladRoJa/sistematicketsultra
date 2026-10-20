@@ -20,6 +20,7 @@ from app.services.marketing_campaign_v2_delivery_export_service import (
     campaign_v2_first_name,
 )
 from app.services.marketing_campaign_v2_dispatch_branch_service import (
+    CampaignV2DispatchBranchResolver,
     MarketingCampaignV2DispatchBranch,
     resolve_frozen_recipient_branch,
 )
@@ -175,6 +176,8 @@ def build_campaign_v2_preflight(
 
     frozen_recipients = list(projection["frozen_recipients"])
     sendable_recipients = list(projection["sendable_recipients"])
+    # One lazy snapshot per preflight: do not re-query catalog/aliases for every row.
+    branch_resolver = CampaignV2DispatchBranchResolver(session=active_session)
     blacklisted_phones = tuple(
         sorted(str(value) for value in projection["blacklisted_phones"])
     )
@@ -204,6 +207,7 @@ def build_campaign_v2_preflight(
         branch = resolve_frozen_recipient_branch(
             recipient,
             session=active_session,
+            resolver=branch_resolver,
         )
         if branch is None:
             missing_branch.add(recipient_id)

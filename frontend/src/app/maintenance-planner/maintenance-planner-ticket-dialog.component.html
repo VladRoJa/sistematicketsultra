@@ -110,10 +110,20 @@
           {{ errorMessage }}
         </div>
 
+        <div *ngIf="coordinationLoading" class="commitment-card__saving">
+          Cargando responsables de Mantenimiento…
+        </div>
+        <div *ngIf="coordinationError" class="commitment-card__error">
+          {{ coordinationError }}
+        </div>
+
         <app-asignar-fecha-modal
+          *ngIf="canShowInitialCommitmentForm"
           [fechaSeleccionada]="initialCommitmentDate"
           [ticket]="commitmentTicket"
           [puedeCapturarDiagnostico]="canCaptureDiagnosis"
+          [permitirAsignacionMantenimiento]="useCoordinatedAssignment"
+          [responsablesMantenimiento]="responsablesMantenimiento"
           (onGuardar)="saveInitialCommitment($event)"
           (onCancelar)="close()"
         ></app-asignar-fecha-modal>
@@ -149,7 +159,7 @@
         </button>
 
         <small *ngIf="!canReprogramCommitment">
-          La fecha solo puede modificarse cuando el ticket está en progreso y tu perfil tiene permiso de ejecución.
+          La fecha solo puede modificarse cuando el ticket está en progreso y tu perfil tiene permiso de programación.
         </small>
 
         <div *ngIf="saving" class="commitment-card__saving">
