@@ -2871,9 +2871,22 @@ puedeMarcarTrabajoTerminado(ticket: Ticket): boolean {
       === String(this.user?.username || '').trim().toLowerCase();
 }
 
+esJefeMantenimientoRegional(): boolean {
+  return Number(this.user?.id) === 45
+    && String(this.user?.username || '').trim().toUpperCase() === 'MANTENIMIENTO'
+    && String(this.user?.rol || '').trim().toUpperCase() === 'MANTENIMIENTO'
+    && Number(this.user?.department_id) === 1;
+}
+
 puedeSolicitarCierreMantenimiento(ticket: Ticket): boolean {
-  if (!this.puedeCoordinarTicket(ticket)) return false;
   if (String(ticket.estado || '').trim().toLowerCase() !== 'en progreso') return false;
+  if (this.esJefeMantenimientoRegional()) {
+    // El backend valida alcance regional y ausencia de delegación.
+    return Number(ticket.departamento_id) === 1
+      && !String(ticket.asignado_a || '').trim()
+      && !String(ticket.tipo_atencion || '').trim();
+  }
+  if (!this.puedeCoordinarTicket(ticket)) return false;
   return ticket.tipo_atencion === 'EXTERNA'
     || (ticket.tipo_atencion === 'INTERNA'
       && ticket.estado_cierre === 'pendiente_revision_coord');
@@ -2892,6 +2905,9 @@ etiquetaSolicitarCierreMantenimiento(ticket: Ticket): string {
 }
 
 ayudaSolicitarCierreMantenimiento(ticket: Ticket): string {
+  if (this.esJefeMantenimientoRegional() && !ticket.tipo_atencion) {
+    return 'Solicitar conformidad del gerente sin asignación de técnico';
+  }
   return ticket.tipo_atencion === 'INTERNA'
     ? 'Revisar trabajo terminado y solicitar conformidad al gerente'
     : 'Revisar proveedor y solicitar conformidad al gerente';

@@ -133,6 +133,12 @@ export class MaintenancePlannerTicketDialogComponent {
           this.ticket.tipo_atencion === 'INTERNA'
           && this.ticket.estado_cierre === 'pendiente_revision_coord'
         )
+        || (
+          // Captura propia del jefe MANTENIMIENTO (sin técnico delegado).
+          this.canCaptureDiagnosis
+          && !this.ticket.tipo_atencion
+          && !this.ticket.asignado_a
+        )
       ),
     );
   }

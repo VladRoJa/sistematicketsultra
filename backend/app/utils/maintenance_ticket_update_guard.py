@@ -6,6 +6,10 @@ from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 from app.models.ticket_model import Ticket
 from app.models.user_model import UserORM
 from app.utils.pm_permissions import can_pm_execute
+from app.utils.maintenance_regional_lead import (
+    is_regional_maintenance_lead,
+    regional_maintenance_lead_owns_ticket,
+)
 from app.utils.tickets_maintenance_permissions import (
     has_assigned_only_maintenance_scope,
     has_maintenance_coordination_permission,
@@ -79,6 +83,37 @@ def register_maintenance_ticket_update_guard(app) -> None:
     tickets, actors must satisfy the canonical ``can_pm_execute`` policy; the route's
     own visibility/scope validation still runs afterwards for allowed actors.
     """
+
+    @app.before_request
+    def guard_regional_maintenance_lead_ticket_mutations():
+        """La cuenta 45 no puede mutar tickets ajenos a sus sucursales."""
+        endpoint = request.endpoint or ""
+        if (
+            request.method not in {"POST", "PUT", "PATCH", "DELETE"}
+            or not (
+                endpoint.startswith("tickets.")
+                or endpoint == "maintenance_planner.put_schedule"
+                or endpoint == "mantenimiento_equipos.guardar_compromiso_estructurado"
+            )
+        ):
+            return None
+
+        ticket_args = request.view_args or {}
+        ticket_id = ticket_args.get("ticket_id", ticket_args.get("id"))
+        if ticket_id is None:
+            return None
+        verify_jwt_in_request()
+        actor = UserORM.get_by_id(get_jwt_identity())
+        if not is_regional_maintenance_lead(actor):
+            return None
+        ticket = Ticket.query.get(ticket_id)
+        if ticket is None:
+            return None
+        if not regional_maintenance_lead_owns_ticket(actor, ticket):
+            return jsonify({
+                "mensaje": "Ticket fuera de las sucursales autorizadas de Mantenimiento."
+            }), 403
+        return None
 
     @app.before_request
     def guard_generic_maintenance_ticket_update():
@@ -193,6 +228,10 @@ def register_maintenance_ticket_update_guard(app) -> None:
             return None
         ticket = Ticket.query.get(ticket_id)
         if ticket is None or not is_maintenance_ticket(ticket):
+            return None
+
+        # Programación tradicional del jefe, solo en sus 14 sucursales.
+        if regional_maintenance_lead_owns_ticket(actor, ticket):
             return None
 
         return jsonify({

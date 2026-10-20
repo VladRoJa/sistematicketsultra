@@ -23,6 +23,10 @@ from app.utils.sucursal_audience import (
     normalize_sucursal_audience,
 )
 from app.utils.ticket_filters import filtrar_tickets_por_usuario
+from app.utils.maintenance_regional_lead import (
+    is_regional_maintenance_lead,
+    regional_maintenance_lead_branches,
+)
 
 
 BUSINESS_TZ = ZoneInfo("America/Tijuana")
@@ -257,7 +261,10 @@ def _can_schedule_maintenance(user) -> bool:
     if role in ADMIN_ROLES:
         return True
     if role == "MANTENIMIENTO":
-        # Captura técnica estructurada legacy: evitar romper su contrato.
+        # Jefe regional: nunca hereda sucursal corporativa 100 como scope.
+        # Para esta cuenta la programación legacy no exige asignar técnico.
+        if is_regional_maintenance_lead(user):
+            return bool(regional_maintenance_lead_branches(user)) and can_pm_execute(user)
         return can_pm_execute(user)
     return bool(
         role in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"}
@@ -275,10 +282,12 @@ def _apply_planner_role_scope(query, user):
     no debe entrar al board.
     """
 
-    if _user_role(user) not in {REGIONAL_ROLE, "COMPRAS", "COORDINADOR_MANTENIMIENTO"}:
+    if is_regional_maintenance_lead(user):
+        branch_ids = regional_maintenance_lead_branches(user)
+    elif _user_role(user) in {REGIONAL_ROLE, "COMPRAS", "COORDINADOR_MANTENIMIENTO"}:
+        branch_ids = _user_scope_branch_ids(user)
+    else:
         return query
-
-    branch_ids = _user_scope_branch_ids(user)
     if not branch_ids:
         return query.filter(False)
 
@@ -316,6 +325,8 @@ def _branch_catalog_ids(user, query) -> list[int]:
     Los demás perfiles conservan el comportamiento derivado del query autorizado.
     """
 
+    if is_regional_maintenance_lead(user):
+        return list(regional_maintenance_lead_branches(user))
     if _user_role(user) in {REGIONAL_ROLE, "COMPRAS", "COORDINADOR_MANTENIMIENTO"}:
         return _user_scope_branch_ids(user)
 
