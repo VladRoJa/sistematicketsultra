@@ -168,6 +168,51 @@ assert.match(ticketTableHtml, /\[matTooltip\]="etiquetaAccionResponsableTicket\(
   'El botón debe indicar Asignar cuando el ticket nunca tuvo responsable');
 console.log('PASS: tickets huérfanos de Mantenimiento asignables solo por coordinación');
 
+// El usuario MANTENIMIENTO 45 solicita conformidad sin asignar técnico.
+// Ejecutar la lógica TS auténtica aislada de Angular.
+const jefeMethod = ticketsV1Ts.match(
+  /^esJefeMantenimientoRegional\(\): boolean \{[\s\S]*?^\}/m
+);
+const cierreMethod = ticketsV1Ts.match(
+  /^puedeSolicitarCierreMantenimiento\(ticket: Ticket\): boolean \{[\s\S]*?^\}/m
+);
+assert.ok(jefeMethod, 'Identidad específica del jefe MANTENIMIENTO');
+assert.ok(cierreMethod, 'Regla de cierre legacy del jefe');
+const leadSource = [
+  'class LegacyChiefTest {',
+  '  user: any = null;',
+  '  puedeCoordinarTicket(_ticket: any) { return false; }',
+  jefeMethod[0],
+  cierreMethod[0],
+  '}',
+  'module.exports = { LegacyChiefTest };',
+].join('\n');
+const leadJs = ts.transpileModule(leadSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText;
+const leadModule = new Module('chief-closure-qa', module);
+leadModule.filename = 'chief-closure-qa.js';
+leadModule.paths = Module._nodeModulePaths(__dirname);
+leadModule._compile(leadJs, 'chief-closure-qa.js');
+const chief = new leadModule.exports.LegacyChiefTest();
+chief.user = { id: 45, username: 'MANTENIMIENTO', rol: 'MANTENIMIENTO', department_id: 1 };
+const ownTicket = { departamento_id: 1, estado: 'en progreso', asignado_a: null, tipo_atencion: null };
+assert.equal(chief.puedeSolicitarCierreMantenimiento(ownTicket), true,
+  'Jefe solicita validación sin responsable');
+assert.equal(chief.puedeSolicitarCierreMantenimiento({ ...ownTicket, estado: 'por_validar' }), false);
+assert.equal(chief.puedeSolicitarCierreMantenimiento({ ...ownTicket, asignado_a: 'SR_MANT' }), false);
+assert.equal(chief.puedeSolicitarCierreMantenimiento({ ...ownTicket, tipo_atencion: 'EXTERNA' }), false);
+chief.user = { ...chief.user, id: 46 };
+assert.equal(chief.puedeSolicitarCierreMantenimiento(ownTicket), false,
+  'Rol MANTENIMIENTO por sí solo no otorga cierre legacy');
+const plannerChiefTs = fs.readFileSync(path.resolve(__dirname,
+  '../src/app/maintenance-planner/maintenance-planner-ticket-dialog.component.ts'), 'utf8');
+const plannerFinalize = plannerChiefTs.match(/get canFinalizeTicket\(\): boolean \{[\s\S]*?^\s{2}\}/m);
+assert.ok(plannerFinalize, 'Planner debe exponer regla de solicitud de cierre');
+assert.match(plannerFinalize[0], /this\.canCaptureDiagnosis[\s\S]*?!this\.ticket\.tipo_atencion[\s\S]*?!this\.ticket\.asignado_a/,
+  'El jefe puede solicitar conformidad sobre trabajo propio sin asignación');
+console.log('PASS: jefe legacy sin técnico solicita conformidad, cierre delegado intacto');
+
 console.log('PASS: Planner protege fecha inicial, botón Cambiar fecha y arrastre');
 
 console.log('PASS: Planner exige asignación coordinada y conserva el flujo técnico');
