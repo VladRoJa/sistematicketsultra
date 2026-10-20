@@ -168,7 +168,9 @@
                 <span class="ticket-card__drag" *ngIf="canDrag(ticket)">Mover fecha</span>
               </button>
 
-              <div *ngIf="day.items.length === 0" class="empty-day">Suelta aquí o sin trabajos</div>
+              <div *ngIf="day.items.length === 0" class="empty-day">
+                {{ currentBoard.permissions.can_schedule ? 'Suelta aquí o sin trabajos' : 'Sin trabajos programados' }}
+              </div>
             </div>
           </article>
         </div>

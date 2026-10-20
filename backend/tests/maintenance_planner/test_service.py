@@ -197,16 +197,18 @@ def test_compras_coordinacion_does_not_enable_schedule_for_other_roles():
         assert service._can_schedule_maintenance(actor) is False
 
 
-def test_existing_pm_execute_role_retains_planner_schedule():
-    actor = SimpleNamespace(rol="SR_MANTENIMIENTO", sucursales_ids=[])
+@pytest.mark.parametrize("role", [
+    "SR_MANTENIMIENTO", "AUX_MANTENIMIENTO", "TECNICO",
+])
+def test_pm_execution_never_grants_commitment_date_control(role):
+    actor = SimpleNamespace(rol=role, sucursales_ids=[8])
     with (
         patch.object(service, "can_pm_execute", return_value=True),
         patch.object(
             service, "has_maintenance_coordination_permission", return_value=False
-        ) as permission,
+        ),
     ):
-        assert service._can_schedule_maintenance(actor) is True
-    permission.assert_not_called()
+        assert service._can_schedule_maintenance(actor) is False
 
 
 def test_board_exposes_coordinators_schedule_permission():
@@ -376,3 +378,50 @@ def test_new_maintenance_coordinator_without_grant_cannot_schedule():
         patch.object(service, "has_maintenance_coordination_permission", return_value=False),
     ):
         assert service._can_schedule_maintenance(actor) is False
+
+
+def test_legacy_mantenimiento_diagnosis_role_keeps_existing_planner_capture():
+    actor = SimpleNamespace(rol="MANTENIMIENTO", sucursales_ids=[8])
+    with patch.object(service, "can_pm_execute", return_value=True):
+        assert service._can_schedule_maintenance(actor) is True
+
+
+def test_sr_cannot_schedule_even_assigned_ticket_via_backend():
+    sr = SimpleNamespace(
+        id=68, rol="SR_MANTENIMIENTO", username="SR_MANT_TIJ",
+        department_id=1, sucursales_ids=[8],
+    )
+    with (
+        patch.object(service, "filtrar_tickets_por_usuario") as tickets,
+        patch.object(service, "flag_modified") as modified,
+    ):
+        with pytest.raises(
+            service.MaintenancePlannerAuthorizationError,
+            match="permiso para programar",
+        ) as exc:
+            service.schedule_ticket(
+                301, sr, due_date="2026-10-25", reason="Intento SR",
+            )
+    assert exc.value.status_code == 403
+    tickets.assert_not_called()
+    modified.assert_not_called()
+
+
+def test_sr_planner_board_is_readable_but_cannot_schedule():
+    sr = SimpleNamespace(
+        id=68, rol="SR_MANTENIMIENTO", username="SR_MANT_TIJ",
+        department_id=1, sucursales_ids=[8],
+    )
+    query = MagicMock()
+    query.filter.return_value = query
+    query.order_by.return_value = query
+    query.all.return_value = []
+    with (
+        patch.object(service, "_base_query", return_value=query),
+        patch.object(service, "_build_authorized_branch_catalog", return_value=[]),
+    ):
+        board = service.build_planner_board(
+            sr, start_date="2026-10-18", end_date="2026-10-24",
+        )
+    assert board["permissions"]["can_view"] is True
+    assert board["permissions"]["can_schedule"] is False

@@ -15,6 +15,9 @@ from app.models.warehouse import (
 from app.warehouse.services.track_branch_alias_resolver_service import (
     resolve_track_branch_alias,
 )
+from app.warehouse.services.track_daily_query_version_service import (
+    find_latest_effective_track_mart_row_for_branch,
+)
 
 
 KPI_DESEMPENO_REPORT_TYPE_KEY = "kpi_desempeno"
@@ -159,17 +162,10 @@ def _fetch_branch_capacity_targets_by_canon(
     capacity_by_canon: dict[str, dict[str, Any]] = {}
 
     for sucursal_canon in sorted(sucursales_canon):
-        mart_row = (
-            TrackDailyMartORM.query.filter(
-                TrackDailyMartORM.sucursal_canon == sucursal_canon,
-                TrackDailyMartORM.target_month <= normalized_target_month,
-                TrackDailyMartORM.m2_sin_circulaciones.isnot(None),
-            )
-            .order_by(
-                TrackDailyMartORM.track_date.desc(),
-                TrackDailyMartORM.id.desc(),
-            )
-            .first()
+        mart_row = find_latest_effective_track_mart_row_for_branch(
+            sucursal_canon=sucursal_canon,
+            latest_target_month=normalized_target_month,
+            require_m2_sin_circulaciones=True,
         )
 
         if mart_row is None or mart_row.m2_sin_circulaciones is None:

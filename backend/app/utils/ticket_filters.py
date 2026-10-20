@@ -4,6 +4,9 @@ from app.models import Ticket
 from app.utils.pm_permissions import has_scoped_maintenance_read_grant
 from app.utils.tickets_maintenance_permissions import has_assigned_only_maintenance_scope
 from app.utils.sucursal_audience import TECHNICAL_SUCURSAL_IDS
+from app.utils.maintenance_regional_lead import (
+    is_regional_maintenance_lead, regional_maintenance_lead_branches,
+)
 
 GERENTE_ROLES = {"GERENTE", "GERENTE_SUCURSAL", "GERENTE_GENERAL", "GERENTE_DEPTO"}
 
@@ -71,6 +74,18 @@ def filtrar_tickets_por_usuario(user):
     # 1) Admins por rol (ALL)
     if rol in ADMIN_ROLES:
         return q
+
+    # El jefe regional MANTENIMIENTO no es un lector corporativo global.
+    # Sus únicas sucursales son las M:N explícitas, intersectadas con la
+    # allowlist aprobada; ni sucursal principal 100 ni autoría dan fallback.
+    if is_regional_maintenance_lead(user):
+        allowed = regional_maintenance_lead_branches(user)
+        if not allowed:
+            return q.filter(False)
+        return q.filter(and_(
+            Ticket.departamento_id == 1,
+            _condicion_multiples_sucursales(list(allowed)),
+        ))
 
     # Permiso individual de bandeja asignada: no se heredan tickets por
     # departamento, sucursal ni por creador. No afecta al rol completo.

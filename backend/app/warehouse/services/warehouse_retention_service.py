@@ -13,6 +13,35 @@ from app import db
 
 WAREHOUSE_LOCAL_TZ = ZoneInfo("America/Tijuana")
 
+# Protect both direct snapshot references and row-only references. The FK
+# policies on Contact Center use ON DELETE SET NULL, so retention must not
+# delete snapshots still used as verification evidence.
+_CONTACT_CENTER_PROTECTED_SNAPSHOT_IDS_SQL = """
+  SELECT a.venta_total_snapshot_id AS snapshot_id
+  FROM public.contact_center_appointments a
+  WHERE a.venta_total_snapshot_id IS NOT NULL
+
+  UNION
+
+  SELECT r.snapshot_id
+  FROM public.contact_center_appointments a
+  JOIN public.venta_total_snapshot_rows r
+    ON r.id = a.venta_total_snapshot_row_id
+
+  UNION
+
+  SELECT e.venta_total_snapshot_id AS snapshot_id
+  FROM public.contact_center_appointment_result_events e
+  WHERE e.venta_total_snapshot_id IS NOT NULL
+
+  UNION
+
+  SELECT r.snapshot_id
+  FROM public.contact_center_appointment_result_events e
+  JOIN public.venta_total_snapshot_rows r
+    ON r.id = e.venta_total_snapshot_row_id
+"""
+
 
 def purge_venta_total_non_canonical_snapshots(
     *,
@@ -27,6 +56,7 @@ def purge_venta_total_non_canonical_snapshots(
     Reglas:
     - Conserva snapshots canónicos.
     - Conserva snapshots no canónicos recientes.
+    - Conserva snapshots referenciados desde citas/eventos de Contact Center.
     - Purga snapshots no canónicos con business_date anterior al cutoff.
     - No toca warehouse_uploads ni archivos raw.
     - Las rows se eliminan por ON DELETE CASCADE desde venta_total_snapshots.
@@ -41,7 +71,10 @@ def purge_venta_total_non_canonical_snapshots(
     if dry_run:
         row = db.session.execute(
             text(
-                """
+                f"""
+                WITH protected_snapshots AS (
+                  {_CONTACT_CENTER_PROTECTED_SNAPSHOT_IDS_SQL}
+                )
                 SELECT
                   COUNT(DISTINCT s.id) AS target_snapshots,
                   COUNT(r.id) AS target_rows
@@ -50,6 +83,10 @@ def purge_venta_total_non_canonical_snapshots(
                   ON r.snapshot_id = s.id
                 WHERE COALESCE(s.is_canonical, false) = false
                   AND s.business_date < :cutoff_date
+                  AND NOT EXISTS (
+                      SELECT 1 FROM protected_snapshots p
+                      WHERE p.snapshot_id = s.id
+                  )
                 """
             ),
             {"cutoff_date": cutoff_date},
@@ -71,48 +108,119 @@ def purge_venta_total_non_canonical_snapshots(
     total_deleted_rows = 0
     batches = 0
 
+    # PostgreSQL READ COMMITTED is required: re-checking in a NEW statement
+    # after acquiring row locks sees verification transactions that committed
+    # while locks were being acquired. The existing FK SET NULL alone does not
+    # preserve purchase evidence.
     try:
         for _ in range(max_batches):
-            row = db.session.execute(
+            # FOR UPDATE conflicts with the FK KEY SHARE taken by new direct
+            # snapshot references and by inserts of snapshot rows. SKIP LOCKED
+            # keeps retention from blocking Contact Center transactions.
+            candidates = db.session.execute(
                 text(
-                    """
-                    WITH target AS (
-                      SELECT id
-                      FROM public.venta_total_snapshots
-                      WHERE COALESCE(is_canonical, false) = false
-                        AND business_date < :cutoff_date
-                      ORDER BY business_date, id
-                      LIMIT :batch_limit
-                    ),
-                    target_rows AS (
-                      SELECT COUNT(*) AS rows_to_delete
-                      FROM public.venta_total_snapshot_rows r
-                      JOIN target t
-                        ON t.id = r.snapshot_id
-                    ),
-                    deleted AS (
-                      DELETE FROM public.venta_total_snapshots s
-                      USING target t
-                      WHERE s.id = t.id
-                      RETURNING s.id
+                    f"""
+                    WITH protected_snapshots AS (
+                      {_CONTACT_CENTER_PROTECTED_SNAPSHOT_IDS_SQL}
                     )
-                    SELECT
-                      (SELECT COUNT(*) FROM target) AS target_snapshots,
-                      (SELECT rows_to_delete FROM target_rows) AS target_rows,
-                      (SELECT COUNT(*) FROM deleted) AS deleted_snapshots
+                    SELECT s.id
+                    FROM public.venta_total_snapshots s
+                    WHERE COALESCE(s.is_canonical, false) = false
+                      AND s.business_date < :cutoff_date
+                      AND NOT EXISTS (
+                          SELECT 1 FROM protected_snapshots p
+                          WHERE p.snapshot_id = s.id
+                      )
+                    ORDER BY s.business_date, s.id
+                    LIMIT :batch_limit
+                    FOR UPDATE OF s SKIP LOCKED
                     """
                 ),
-                {
-                    "cutoff_date": cutoff_date,
-                    "batch_limit": batch_limit,
-                },
-            ).mappings().one()
+                {"cutoff_date": cutoff_date, "batch_limit": batch_limit},
+            ).mappings().all()
+            candidate_ids = [int(row["id"]) for row in candidates]
+            if not candidate_ids:
+                db.session.commit()
+                break
 
-            deleted_snapshots = int(row["deleted_snapshots"] or 0)
-            deleted_rows = int(row["target_rows"] or 0)
+            # Row-only Contact Center references take FK KEY SHARE locks on
+            # venta_total_snapshot_rows, not necessarily on the parent
+            # snapshot. Lock EVERY existing row, or skip the whole candidate
+            # when a concurrent verification holds one of its rows.
+            locked_counts = {
+                int(row["snapshot_id"]): int(row["locked_count"])
+                for row in db.session.execute(
+                    text(
+                        """
+                        WITH locked_rows AS (
+                          SELECT r.id, r.snapshot_id
+                          FROM public.venta_total_snapshot_rows r
+                          WHERE r.snapshot_id = ANY(:candidate_ids)
+                          ORDER BY r.snapshot_id, r.id
+                          FOR UPDATE OF r SKIP LOCKED
+                        )
+                        SELECT snapshot_id, COUNT(*) AS locked_count
+                        FROM locked_rows
+                        GROUP BY snapshot_id
+                        """
+                    ),
+                    {"candidate_ids": candidate_ids},
+                ).mappings().all()
+            }
+
+            # This MUST be a fresh SQL statement after both locking stages.
+            # Every selected snapshot and each of its existing rows remain
+            # locked until commit, closing both direct and row-only FK races.
+            verified = db.session.execute(
+                text(
+                    f"""
+                    WITH protected_snapshots AS (
+                      {_CONTACT_CENTER_PROTECTED_SNAPSHOT_IDS_SQL}
+                    )
+                    SELECT s.id,
+                           (SELECT COUNT(*)
+                            FROM public.venta_total_snapshot_rows r
+                            WHERE r.snapshot_id = s.id) AS total_rows
+                    FROM public.venta_total_snapshots s
+                    WHERE s.id = ANY(:candidate_ids)
+                      AND COALESCE(s.is_canonical, false) = false
+                      AND s.business_date < :cutoff_date
+                      AND NOT EXISTS (
+                          SELECT 1 FROM protected_snapshots p
+                          WHERE p.snapshot_id = s.id
+                      )
+                    """
+                ),
+                {"candidate_ids": candidate_ids, "cutoff_date": cutoff_date},
+            ).mappings().all()
+
+            # The row count detects FK KEY SHARE locks skipped above. Never
+            # purge a snapshot if even one row was unavailable for locking.
+            eligible_row_counts = {
+                int(row["id"]): int(row["total_rows"])
+                for row in verified
+                if locked_counts.get(int(row["id"]), 0)
+                == int(row["total_rows"])
+            }
+            if not eligible_row_counts:
+                db.session.commit()
+                break
+
+            deleted = db.session.execute(
+                text(
+                    """
+                    DELETE FROM public.venta_total_snapshots s
+                    WHERE s.id = ANY(:eligible_ids)
+                    RETURNING s.id
+                    """
+                ),
+                {"eligible_ids": list(eligible_row_counts)},
+            ).mappings().all()
+            deleted_ids = [int(row["id"]) for row in deleted]
+            deleted_snapshots = len(deleted_ids)
+            deleted_rows = sum(eligible_row_counts[id] for id in deleted_ids)
 
             db.session.commit()
-
             if deleted_snapshots == 0:
                 break
 

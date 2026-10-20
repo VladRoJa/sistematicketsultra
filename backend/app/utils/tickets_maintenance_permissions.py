@@ -9,6 +9,7 @@ from __future__ import annotations
 from sqlalchemy import func, or_
 
 from app.utils.pm_permissions import can_pm_view, normalize_pm_role
+from app.utils.maintenance_regional_lead import is_regional_maintenance_lead
 
 
 COORDINATE_ACTION = "tickets.maintenance.coordinate"
@@ -78,6 +79,16 @@ def has_maintenance_coordination_permission(user) -> bool:
     role = normalize_pm_role(getattr(user, "rol", None))
     if role in ADMIN_ROLES:
         return True
+
+    # El jefe regional ejecuta y solicita cierre legacy, sin coordinación
+    # ni selección de técnicos aunque existiera un grant incidental.
+    if is_regional_maintenance_lead(user):
+        return False
+
+    # Los perfiles que ejecutan tickets asignados no deben convertirse en
+    # coordinación por un grant incidental. Preservar otros roles legacy.
+    if role in {"SR_MANTENIMIENTO", "AUX_MANTENIMIENTO", "TECNICO"}:
+        return False
 
     return bool(
         can_pm_view(user)

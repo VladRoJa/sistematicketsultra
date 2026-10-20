@@ -14,7 +14,7 @@ from io import BytesIO
 from flask import Blueprint, jsonify, request, send_file
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
-from app.models.warehouse import TrackDailyMartORM
+from app.models.warehouse import TrackDailyMartORM, TrackDailyVersionORM
 from app.warehouse.services.track_daily_version_service import (
     TrackDailyVersionServiceError,
     get_current_track_daily_version,
@@ -29,6 +29,7 @@ from app.warehouse.services.track_excel_export_service import (
     build_track_daily_mart_excel,
 )
 from app.warehouse.services.track_daily_query_version_service import (
+    PREFERRED_TRACK_VERSION_TYPES,
     resolve_effective_track_daily_version,
 )
 from app.warehouse.services.track_source_agregadoras_daily_service import (
@@ -880,7 +881,13 @@ def get_track_branch_history_endpoint():
                 for row in (
                     db.session.query(TrackDailyMartORM.track_date)
                     .filter(TrackDailyMartORM.sucursal_canon == sucursal_canon)
-                    .filter(TrackDailyMartORM.track_daily_version_id.isnot(None))
+                    .join(
+                        TrackDailyVersionORM,
+                        TrackDailyVersionORM.id == TrackDailyMartORM.track_daily_version_id,
+                    )
+                    .filter(
+                        TrackDailyVersionORM.version_type.in_(PREFERRED_TRACK_VERSION_TYPES),
+                    )
                     .filter(db.extract("year", TrackDailyMartORM.track_date) == target_year)
                     .filter(db.extract("month", TrackDailyMartORM.track_date) == target_month)
                     .distinct()
@@ -936,7 +943,13 @@ def get_track_branch_history_endpoint():
             for row in (
                 db.session.query(TrackDailyMartORM.track_date)
                 .filter(TrackDailyMartORM.sucursal_canon == sucursal_canon)
-                .filter(TrackDailyMartORM.track_daily_version_id.isnot(None))
+                .join(
+                        TrackDailyVersionORM,
+                        TrackDailyVersionORM.id == TrackDailyMartORM.track_daily_version_id,
+                    )
+                    .filter(
+                        TrackDailyVersionORM.version_type.in_(PREFERRED_TRACK_VERSION_TYPES),
+                    )
                 .distinct()
                 .order_by(TrackDailyMartORM.track_date.desc())
                 .limit(120)

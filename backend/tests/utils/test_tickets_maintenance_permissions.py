@@ -80,3 +80,14 @@ def test_deny_explicito_prevalece_y_no_hay_allow_por_defecto():
     assert policy._effects_allow(["deny"]) is False
     assert policy._effects_allow(["allow", "deny"]) is False
     assert policy._effects_allow(["allow", "allow"]) is True
+
+
+def test_sr_never_inherits_coordination_from_pm_execution_or_incidental_grant():
+    technician = actor(role="SR_MANTENIMIENTO", user_id=68)
+    with (
+        patch.object(policy, "can_pm_view", return_value=True),
+        patch.object(policy, "_has_active_user_grant", return_value=True) as grant,
+    ):
+        assert policy.has_maintenance_coordination_permission(technician) is False
+    grant.assert_not_called()
+    assert can_pm_execute(technician) is True

@@ -2,7 +2,8 @@
 """Read-only Playwright audit of Suite Ultra Campaigns V2.
 
 Anonymous mode works against a frontend-only build.
-Authenticated mode REQUIRES a non-production QA URL and synthetic QA data.
+Authenticated mode supports synthetic QA, or explicitly authorized real data
+on loopback-only localhost; never against a production URL.
 Never exports browser storage, tokens, usernames, passwords or request bodies.
 """
 from __future__ import annotations
@@ -100,12 +101,16 @@ def validate_target(mode: str, base: str) -> None:
     if not local and parsed.scheme != "https":
         raise ValueError("Remote QA audit requires HTTPS")
     if mode == "authenticated":
-        if os.getenv("SUITE_QA_SYNTHETIC_DATA_CONFIRMED") != "YES":
-            raise ValueError("Only a QA environment with synthetic data is permitted")
+        synthetic_qa = os.getenv("SUITE_QA_SYNTHETIC_DATA_CONFIRMED") == "YES"
+        real_local = os.getenv("SUITE_QA_REAL_LOCAL_READONLY_CONFIRMED") == "YES"
+        if synthetic_qa == real_local:
+            raise ValueError("Choose exactly one data mode: synthetic QA OR real local read-only")
+        if real_local and not local:
+            raise ValueError("Real-data audit is permitted only on localhost / 127.0.0.1 / ::1")
         if os.getenv("SUITE_QA_ALLOWED_HOST", "").lower() != host:
-            raise ValueError("Set SUITE_QA_ALLOWED_HOST to the exact QA hostname")
+            raise ValueError("Set SUITE_QA_ALLOWED_HOST to the exact audit hostname")
         if not os.getenv("SUITE_QA_USERNAME") or not os.getenv("SUITE_QA_PASSWORD"):
-            raise ValueError("QA credentials missing (provide via environment, not CLI)")
+            raise ValueError("Audit credentials missing (provide via environment, not CLI)")
 
 
 def navigate(page, base: str, route: str) -> None:
@@ -151,19 +156,84 @@ def authenticate(page, base: str) -> None:
 
 
 def close_dialog(page) -> None:
-    page.keyboard.press("Escape")
+    # Reproduce the validated user flow: clicking Cerrar releases the Material
+    # backdrop and aria-hidden state at compact/mobile widths. Escape remains
+    # the fallback for dialogs without a dedicated close button.
+    dialog = page.locator("mat-dialog-container")
+    close = dialog.get_by_role("button", name="Cerrar", exact=True)
+    if close.count():
+        close.first.click(timeout=6000)
+    else:
+        page.keyboard.press("Escape")
+    # Closing a dialog should verify its own teardown, not gate the entire
+    # viewport on a later control. open_tool() reports accessible-trigger
+    # failures for each affected case without aborting remaining audit cases.
+    dialog.wait_for(state="detached", timeout=5000)
+
+
+class AuditNavigationTimeout(RuntimeError):
+    """Safe diagnostic stage; never include element text or Playwright details."""
+
+
+# Only report fixed diagnostic codes: never emit text, attributes, DOM or
+# underlying Playwright exception messages from a real-data session.
+TOOLS_TRIGGER_PROBE_JS = """(el) => {
+    const r = el.getBoundingClientRect();
+    const left = Math.max(0, r.left), right = Math.min(innerWidth, r.right);
+    const top = Math.max(0, r.top), bottom = Math.min(innerHeight, r.bottom);
+    const inViewport = left < right && top < bottom;
+    const hit = inViewport
+        ? document.elementFromPoint((left + right) / 2, (top + bottom) / 2)
+        : null;
+    return {
+        in_viewport: inViewport,
+        center_hits_button: !!hit && el.contains(hit),
+        dialog_open: !!document.querySelector('mat-dialog-container'),
+        active_backdrop: !!document.querySelector(
+            '.cdk-overlay-backdrop.cdk-overlay-backdrop-showing'
+        ),
+    };
+}"""
+
+
+def classify_tools_trigger(trigger) -> str:
+    """Classify click actionability failure without recording private DOM."""
     try:
-        page.locator("mat-dialog-container").wait_for(state="hidden", timeout=2500)
-    except PlaywrightTimeout:
-        close = page.locator("mat-dialog-container").get_by_role("button", name="Cerrar")
-        if close.count():
-            close.first.click()
-        page.locator("mat-dialog-container").wait_for(state="hidden", timeout=3500)
+        matches = trigger.count()
+        if matches == 0:
+            return "tools_trigger_missing"
+        if matches > 1:
+            return "tools_trigger_ambiguous"
+        if not trigger.is_visible():
+            return "tools_trigger_hidden"
+        if not trigger.is_enabled():
+            return "tools_trigger_disabled"
+        state = trigger.evaluate(TOOLS_TRIGGER_PROBE_JS, timeout=1500)
+        if state["dialog_open"]:
+            return "tools_trigger_dialog_still_open"
+        if state["active_backdrop"]:
+            return "tools_trigger_backdrop_active"
+        if not state["in_viewport"]:
+            return "tools_trigger_outside_viewport"
+        if not state["center_hits_button"]:
+            return "tools_trigger_center_obstructed"
+    except Exception:
+        return "tools_trigger_state_unavailable"
+    return "tools_trigger_click_timeout"
 
 
 def open_tool(page, label: str) -> None:
-    page.get_by_role("button", name="Herramientas", exact=True).click()
-    page.get_by_role("menuitem", name=label, exact=True).click()
+    trigger = page.get_by_role(
+        "button", name="Abrir herramientas de campañas", exact=True
+    )
+    try:
+        trigger.click(timeout=6000)
+    except PlaywrightTimeout as exc:
+        raise AuditNavigationTimeout(classify_tools_trigger(trigger)) from exc
+    try:
+        page.get_by_role("menuitem", name=label, exact=True).click(timeout=6000)
+    except PlaywrightTimeout as exc:
+        raise AuditNavigationTimeout("tools_menu_item_click_timeout") from exc
 
 
 def audit_authenticated(page, output: Path, viewport: str,
@@ -187,12 +257,17 @@ def audit_authenticated(page, output: Path, viewport: str,
     def dialog_case(name: str, opener) -> None:
         try:
             opener()
-            page.locator("mat-dialog-container").wait_for(state="visible", timeout=10000)
+            try:
+                page.locator("mat-dialog-container").wait_for(state="visible", timeout=10000)
+            except PlaywrightTimeout as exc:
+                raise AuditNavigationTimeout("dialog_visibility_timeout") from exc
             record_case(page, output, viewport, name, "mat-dialog-container",
                         failures, cases)
-        except (PlaywrightTimeout, Exception) as exc:
+        except Exception as exc:
+            safe_reason = (str(exc) if isinstance(exc, AuditNavigationTimeout)
+                           else type(exc).__name__)
             cases.append({"viewport": viewport, "case": name, "status": "BLOCKED",
-                          "reason": type(exc).__name__})
+                          "reason": safe_reason})
             failures.append(f"{viewport}/{name}: BLOCKED")
         finally:
             if page.locator("mat-dialog-container").count():
@@ -242,6 +317,10 @@ def main() -> int:
         if not api.hostname or (api.scheme != "https" and
                 api.hostname.lower() not in {"127.0.0.1", "localhost", "::1"}):
             print("CONFIG_ERROR: API origin must be HTTPS or local", file=sys.stderr)
+            return 2
+        if os.getenv("SUITE_QA_REAL_LOCAL_READONLY_CONFIRMED") == "YES" and (
+                api.hostname.lower() not in {"localhost", "127.0.0.1", "::1"}):
+            print("CONFIG_ERROR: Real local audit forbids non-loopback API hosts", file=sys.stderr)
             return 2
         allowed_api_origins.add(f"{api.scheme}://{api.netloc.lower()}")
     with sync_playwright() as playwright:

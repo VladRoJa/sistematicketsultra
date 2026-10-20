@@ -58,6 +58,11 @@ def has_active_track_work() -> bool:
         )
         .filter(
             TrackDailyVersionORM.is_current.is_(True),
+            TrackDailyVersionORM.version_type.in_((
+                "preview_operativo",
+                "base_nocturna_canonica",
+                "cierre_canonico",
+            )),
             TrackDailyVersionORM.status.in_(
                 TRACK_ACTIVE_STATUSES
             ),

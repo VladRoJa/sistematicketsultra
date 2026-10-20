@@ -8,6 +8,8 @@ on:
       - "backend/app/services/marketing_campaign_v2_dispatch_exclusion_service.py"
       - "backend/app/services/marketing_campaign_v2_delivery_export_service.py"
       - "backend/app/services/marketing_campaign_v2_preflight_service.py"
+      - "backend/app/services/marketing_campaign_v2_dispatch_branch_service.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_dispatch_branch_service.py"
       - "backend/migrations/versions/d8f1c3a9b204_add_campaign_v2_scoped_dispatch_exclusions.py"
       - "backend/tests/marketing/test_marketing_campaign_v2_scoped*"
       - ".github/workflows/campaign-v2-scoped-exclusions.yml"
@@ -55,4 +57,5 @@ jobs:
             tests/marketing/test_marketing_campaign_v2_scoped_dispatch_exclusions.py \
             tests/marketing/test_marketing_campaign_v2_scoped_exclusion_migration.py \
             tests/marketing/test_marketing_campaign_v2_delivery_export_service.py \
-            tests/marketing/test_marketing_campaign_v2_preflight_service.py
+            tests/marketing/test_marketing_campaign_v2_preflight_service.py \
+            tests/marketing/test_marketing_campaign_v2_dispatch_branch_service.py

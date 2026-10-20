@@ -114,6 +114,33 @@ def _install(
     )
 
 
+def test_preflight_reuses_one_request_scoped_resolver(monkeypatch):
+    rows = [
+        _recipient(index, f"686100{index:04d}", 1)
+        for index in range(1, 31)
+    ]
+    _install(monkeypatch, rows)
+    original = service.resolve_frozen_recipient_branch
+    resolvers = []
+
+    def observe(recipient, **kwargs):
+        resolvers.append(kwargs["resolver"])
+        return original(recipient, **kwargs)
+
+    monkeypatch.setattr(service, "resolve_frozen_recipient_branch", observe)
+    plan = service.build_campaign_v2_preflight(
+        campaign_id=7,
+        template_id=10,
+        allowed_sucursal_keys=None,
+        session=NS(),
+    )
+
+    assert len(resolvers) == len(rows)
+    assert len({id(resolver) for resolver in resolvers}) == 1
+    assert plan.frozen_count == len(rows)
+    assert len(plan.batches[0].recipients) == len(rows)
+
+
 def test_preflight_uses_exact_sendable_projection_and_preserves_frozen_count(
     monkeypatch,
 ):

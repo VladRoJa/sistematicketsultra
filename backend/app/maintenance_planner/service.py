@@ -11,6 +11,7 @@ from app.models.sucursal_model import Sucursal
 from app.models.ticket_model import Ticket
 from app.utils.pm_permissions import can_pm_execute, can_pm_view
 from app.utils.tickets_maintenance_permissions import (
+    ADMIN_ROLES,
     ASSIGNED_ONLY_ELIGIBLE_ROLES,
     has_maintenance_coordination_permission,
 )
@@ -22,6 +23,10 @@ from app.utils.sucursal_audience import (
     normalize_sucursal_audience,
 )
 from app.utils.ticket_filters import filtrar_tickets_por_usuario
+from app.utils.maintenance_regional_lead import (
+    is_regional_maintenance_lead,
+    regional_maintenance_lead_branches,
+)
 
 
 BUSINESS_TZ = ZoneInfo("America/Tijuana")
@@ -245,16 +250,24 @@ def _user_scope_branch_ids(user) -> list[int]:
 
 
 def _can_schedule_maintenance(user) -> bool:
-    """Planner: ejecución PM existente o coordinación individual autorizada.
+    """Programación exige autoridad de coordinación, NO ejecución técnica PM.
 
-    El permiso de coordinación no equivale a can_pm_execute: únicamente
-    habilita el compromiso del ticket en el Planner. El endpoint restringe
-    la escritura a las sucursales individuales del usuario.
+    SR/AUX/TECNICO ejecutan tareas sin poder fijar o mover compromisos.
+    El rol legacy MANTENIMIENTO conserva temporalmente su captura
+    estructurada existente; no confundirlo con SR_MANTENIMIENTO.
+    El endpoint aplica además el scope del ticket y sucursal.
     """
-    if can_pm_execute(user):
+    role = _user_role(user)
+    if role in ADMIN_ROLES:
         return True
+    if role == "MANTENIMIENTO":
+        # Jefe regional: nunca hereda sucursal corporativa 100 como scope.
+        # Para esta cuenta la programación legacy no exige asignar técnico.
+        if is_regional_maintenance_lead(user):
+            return bool(regional_maintenance_lead_branches(user)) and can_pm_execute(user)
+        return can_pm_execute(user)
     return bool(
-        _user_role(user) in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"}
+        role in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"}
         and _user_scope_branch_ids(user)
         and has_maintenance_coordination_permission(user)
     )
@@ -269,10 +282,12 @@ def _apply_planner_role_scope(query, user):
     no debe entrar al board.
     """
 
-    if _user_role(user) not in {REGIONAL_ROLE, "COMPRAS", "COORDINADOR_MANTENIMIENTO"}:
+    if is_regional_maintenance_lead(user):
+        branch_ids = regional_maintenance_lead_branches(user)
+    elif _user_role(user) in {REGIONAL_ROLE, "COMPRAS", "COORDINADOR_MANTENIMIENTO"}:
+        branch_ids = _user_scope_branch_ids(user)
+    else:
         return query
-
-    branch_ids = _user_scope_branch_ids(user)
     if not branch_ids:
         return query.filter(False)
 
@@ -310,6 +325,8 @@ def _branch_catalog_ids(user, query) -> list[int]:
     Los demás perfiles conservan el comportamiento derivado del query autorizado.
     """
 
+    if is_regional_maintenance_lead(user):
+        return list(regional_maintenance_lead_branches(user))
     if _user_role(user) in {REGIONAL_ROLE, "COMPRAS", "COORDINADOR_MANTENIMIENTO"}:
         return _user_scope_branch_ids(user)
 
