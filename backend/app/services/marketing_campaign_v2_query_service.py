@@ -445,7 +445,8 @@ def _serialize_recipient_provider_status(snapshot, observation) -> dict[str, Any
         }
 
     outcome = str(observation.outcome or "").upper() if observation else None
-    bucket = str(observation.delivery_bucket or "").upper() if observation else None
+    bucket = (str(observation.delivery_bucket).upper()
+              if observation and observation.delivery_bucket else None)
     if outcome == "FAILED":
         status = "FAILED"
     elif outcome == "SUCCESSFUL":
