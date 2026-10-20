@@ -26,6 +26,7 @@ KPI_TO_TRACK_F3 = {
 }
 MTD_TRACK_FIELDS = frozenset({"reactivaciones_real_mtd", "bajas_reales_mtd"})
 READY_FOR_REVIEW = "READY_FOR_REVIEW"
+READY_FOR_PROCESSING = "READY_FOR_PROCESSING"  # only after authenticated Warehouse source audit
 BLOCKED = "BLOCKED"
 
 
@@ -98,6 +99,7 @@ class M3BImpactPlan:
     derived_delta_impacts: tuple[M3BDerivedDailyImpact, ...]
     blocking_issues: tuple[M3BContinuityIssue, ...]
     matched_revision_claims: tuple[M3BContinuityIssue, ...] = ()
+    verified_source_revisions: tuple[M3BContinuityIssue, ...] = ()
 
 
 def _date(value: date | str) -> date:
