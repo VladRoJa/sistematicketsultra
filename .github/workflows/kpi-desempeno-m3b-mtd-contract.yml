@@ -5,6 +5,9 @@ on:
     paths:
       - 'docs/contratos/SUITE_ULTRA_KPI_DESEMPENO_M3B_MTD_SELECTIVE_CONTRACT.md'
       - 'backend/app/warehouse/services/kpi_desempeno_m3b_continuity_plan.py'
+      - 'backend/app/warehouse/services/kpi_desempeno_m3b_provenance_audit.py'
+      - 'backend/tests/warehouse/test_kpi_desempeno_m3b_provenance_audit.py'
+      - 'docs/contratos/SUITE_ULTRA_KPI_M3B_SOURCE_PROVENANCE_AUDIT.md'
       - 'backend/tests/warehouse/test_kpi_desempeno_m3b_continuity_plan.py'
       - '.github/workflows/kpi-desempeno-m3b-mtd-contract.yml'
   workflow_dispatch:
@@ -57,9 +60,12 @@ jobs:
         run: |
           python -m py_compile \
             app/warehouse/services/kpi_desempeno_m3b_continuity_plan.py \
-            tests/warehouse/test_kpi_desempeno_m3b_continuity_plan.py
+            app/warehouse/services/kpi_desempeno_m3b_provenance_audit.py \
+            tests/warehouse/test_kpi_desempeno_m3b_continuity_plan.py \
+            tests/warehouse/test_kpi_desempeno_m3b_provenance_audit.py
       - name: Synthetic contract / real PostgreSQL 16 / M1 regressions
         run: |
           python -m pytest -q --tb=short -o addopts= \
             tests/warehouse/test_kpi_desempeno_m3b_continuity_plan.py \
+            tests/warehouse/test_kpi_desempeno_m3b_provenance_audit.py \
             tests/warehouse/test_kpi_desempeno_semantic_diff.py
