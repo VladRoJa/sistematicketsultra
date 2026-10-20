@@ -224,6 +224,11 @@ def test_chief_legacy_history_endpoints_always_use_scope(
     actor = chief()
     monkeypatch.setattr(ticket_routes, "get_jwt_identity", lambda: "45")
     monkeypatch.setattr(ticket_routes.UserORM, "get_by_id", lambda _: actor)
+    # El grant assigned-only no forma parte del caso; no consultar la DB
+    # real desde esta prueba en memoria de las rutas de historial.
+    monkeypatch.setattr(
+        ticket_routes, "has_assigned_only_maintenance_scope", lambda _: False
+    )
 
     query = MagicMock()
     query.filter.return_value = query
