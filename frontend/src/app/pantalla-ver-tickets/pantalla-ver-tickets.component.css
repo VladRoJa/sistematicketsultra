@@ -4,9 +4,8 @@
 
 :host {
   display: block;
-  /* La cabecera de Suite Ultra ocupa 72px. Solo la tabla debe desplazarse. */
-  height: calc(100vh - 72px);
-  height: calc(100dvh - 72px);
+  /* El layout distribuye el viewport según el alto REAL del encabezado. */
+  height: 100%;
   min-height: 0;
   overflow: hidden;
   --desc-col-width: 420px;
@@ -1215,13 +1214,13 @@ td.col-descripcion {
 @media (max-width: 768px), (max-height: 560px) {
   :host {
     height: auto;
-    min-height: calc(100dvh - 72px);
+    min-height: 0;
     overflow: visible;
   }
 
   .tickets-page {
     height: auto;
-    min-height: calc(100dvh - 72px);
+    min-height: 0;
     overflow-x: clip;
     overflow-y: visible;
   }
