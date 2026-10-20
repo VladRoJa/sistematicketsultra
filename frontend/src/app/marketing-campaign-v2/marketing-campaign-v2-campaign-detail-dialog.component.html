@@ -445,9 +445,13 @@
         </ng-container>
       </section>
 
-      <div class="table-wrap" *ngIf="recipients.length; else emptyRecipients">
+      <p *ngIf="recipients.length" class="recipients-status-note">
+        Estados individuales de iVentas · {{ recipientsStatusSnapshotLabel() }}.
+        La información proviene del último corte guardado, no de una consulta en tiempo real.
+      </p>
+      <div class="table-wrap recipients-table" *ngIf="recipients.length; else emptyRecipients">
         <table>
-          <thead><tr><th>Teléfono</th><th>Nombre</th><th>Sucursal</th><th>Tarifa</th><th>Familia</th><th>Conflictos</th><th>Registros de origen</th><th></th></tr></thead>
+          <thead><tr><th>Teléfono</th><th>Nombre</th><th>Sucursal</th><th>Tarifa</th><th>Familia</th><th>Estado del envío</th><th>Conflictos</th><th>Registros de origen</th><th></th></tr></thead>
           <tbody>
             <tr *ngFor="let recipient of recipients">
               <td>{{ recipient.phone_mx10 }}</td>
@@ -455,6 +459,13 @@
               <td>{{ recipient.sucursal || '—' }}</td>
               <td>{{ recipient.tarifa_raw || '—' }}</td>
               <td>{{ familyLabel(recipient.audience_family) }}</td>
+              <td>
+                <span class="recipient-status-chip"
+                      [ngClass]="recipientProviderStatusClass(recipient)"
+                      [title]="recipientProviderStatusTooltip(recipient)">
+                  {{ recipientProviderStatusLabel(recipient) }}
+                </span>
+              </td>
               <td><span *ngIf="recipient.conflict_fields.length" class="conflict-label">Datos con conflicto</span><span *ngIf="!recipient.conflict_fields.length">—</span></td>
               <td>{{ recipient.evidence_count }}</td>
               <td><button mat-button type="button" (click)="openRecipient(recipient)">Ver</button></td>
