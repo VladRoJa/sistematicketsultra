@@ -20,7 +20,7 @@ from app.warehouse.services.kpi_desempeno_m3b_continuity_plan import (
     MTD_TRACK_FIELDS,
     READY_FOR_PROCESSING,
     _date,
-    plan_kpi_desempeno_mtd_impact,
+    _plan_kpi_desempeno_mtd_impact,
 )
 from app.warehouse.services.kpi_desempeno_semantic_diff import (
     DIFFERENCES_DETECTED,
@@ -135,8 +135,9 @@ def plan_kpi_desempeno_verified_source_impact(
         if neighbor in candidate_snapshot_ids:
             observed[neighbor] = _mtd_values(load(neighbor, canonical=False))
 
-    raw_plan = plan_kpi_desempeno_mtd_impact(
+    raw_plan = _plan_kpi_desempeno_mtd_impact(
         business_date=day, diff=diff, observed_mtd=observed,
+        _verified_series_end=max(candidate_snapshot_ids),
     )
 
     verified_keys = {
