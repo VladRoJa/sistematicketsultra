@@ -346,11 +346,13 @@ def _create_warehouse_upload(
             captured_at=artifact.captured_at,
             source_key="gasca",
             metadata={
+                # Untrusted extractor metadata may add context but must never
+                # override the orchestration context recorded in Warehouse.
+                **(artifact.metadata or {}),
                 "run_mode": command.run_mode,
                 "snapshot_kind": command.snapshot_kind,
                 "requested_by": command.requested_by,
                 "trigger_source": command.trigger_source,
-                **(artifact.metadata or {}),
             },
         )
     except Exception as exc:
