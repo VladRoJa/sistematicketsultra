@@ -1,0 +1,52 @@
+name: Contact Center Venta Total FK Index Migration
+
+on:
+  pull_request:
+    paths:
+      - 'backend/migrations/versions/c21c10202601_contact_center_venta_total_fk_indexes.py'
+      - 'backend/tests/warehouse/test_contact_center_venta_total_fk_index_migration_postgres.py'
+      - '.github/workflows/contact-center-venta-total-fk-indexes.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  alembic-postgresql16:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: retention_ci
+          POSTGRES_PASSWORD: synthetic_retention_only
+          POSTGRES_DB: warehouse_retention_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U retention_ci -d warehouse_retention_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+      WAREHOUSE_RETENTION_TEST_POSTGRES_URL: 'postgresql+psycopg2://retention_ci:synthetic_retention_only@127.0.0.1:5432/warehouse_retention_ci'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install pinned Alembic and test dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Run Alembic index upgrade and downgrade on PostgreSQL
+        run: |
+          python -m pytest -q --tb=short -o addopts= \
+            tests/warehouse/test_contact_center_venta_total_fk_index_migration_postgres.py
