@@ -7,8 +7,6 @@
 <section
   class="tickets-page"
   *ngIf="!loading; else ticketsLoadingTpl"
-  [style.--desc-col-width]="'420px'"
-  [style.--table-min-width]="'2486px'"
 >
 <header class="tickets-page__header">
   <div>
@@ -134,11 +132,10 @@
     <table class="tabla-tickets">
       <colgroup>
         <col class="c-id">
-        <col class="c-acc">
+        <col class="c-suc">
+        <col class="c-desc">
         <col class="c-cat">
         <col class="c-apa">
-        <col class="c-desc">
-        <col class="c-suc">
         <col class="c-est">
         <col class="c-cri">
         <col class="c-fc">
@@ -149,18 +146,108 @@
         <col class="c-det">
         <col class="c-resp">
         <col class="c-sol">
-        <col class="c-his">
+        <col class="c-acc">
       </colgroup>
 
       <thead>
         <tr>
-          <!-- (1) Id -->
-          <th>Id</th>
+          <!-- Identificación fija -->
+          <th class="col-sticky-id">Id</th>
 
-          <!-- (2) Acciones -->
-          <th>Acciones</th>
+          <!-- Sucursal fija -->
+          <th class="col-sticky-sucursal" [class.filtro-activo]="isFilterActive('sucursal')">
+            <!-- Filtros en encabezado desactivados -->
+            <ng-container *ngIf="true">
+              <button mat-button [matMenuTriggerFor]="menuSucursal"
+                      #triggerFiltroSucursal="matMenuTrigger"
+                      (click)="onAbrirFiltro('sucursal', triggerFiltroSucursal)"
+                      class="header-button">
+                Sucursal <mat-icon>arrow_drop_down</mat-icon>
+              </button>
+              <mat-menu #menuSucursal="matMenu" disableClose="true">
+                <mat-divider></mat-divider>
+                <div class="menu-filtro" (click)="$event.stopPropagation()">
+                  <strong>Filtrar Sucursal</strong>
 
-          <!-- (3) Categoría -->
+                  <mat-form-field appearance="fill" class="buscador-filtro">
+                    <mat-label>Buscar</mat-label>
+                    <input
+                      matInput
+                      [(ngModel)]="filtroSucursalTexto"
+                      (ngModelChange)="filtrarOpcionesTexto('sucursal')"
+                    />
+                  </mat-form-field>
+                  <mat-checkbox
+                    [checked]="isTodoSeleccionado('sucursal')"
+                    (change)="alternarSeleccionTemporal('sucursal', $event.checked)"
+                    (click)="$event.stopPropagation()"
+                    name="suc_selectAll">
+                    Seleccionar todo
+                  </mat-checkbox>
+                  <div class="opciones-scrollable">
+                    <mat-checkbox
+                      *ngFor="let item of temporalSeleccionados['sucursal']; let i = index"
+                      [checked]="item.seleccionado"
+                      (change)="actualizarSeleccionTemporal('sucursal', i, $event.checked)"
+                      [name]="'sucursal_' + i"
+                      (click)="$event.stopPropagation()">
+                      {{ item.etiqueta || item.valor }}
+                    </mat-checkbox>
+                  </div>
+                  <div class="menu-botones-fijos">
+                    <button mat-button color="primary" (click)="cerrarYAplicar('sucursal', triggerFiltroSucursal)">Aplicar</button>
+                    <button mat-button (click)="cerrarYLimpiar('sucursal', triggerFiltroSucursal)">Borrar Filtros</button>
+                  </div>
+                </div>
+              </mat-menu>
+            </ng-container>
+          </th>
+
+          <!-- Descripción fija -->
+          <th class="col-descripcion col-sticky-descripcion" [class.filtro-activo]="filtroDescripcionActivo">
+            <button
+              mat-button
+              [matMenuTriggerFor]="menuDescripcion"
+              #triggerFiltroDesc="matMenuTrigger"
+              class="header-button">
+              Descripción <mat-icon>arrow_drop_down</mat-icon>
+            </button>
+
+            <mat-menu #menuDescripcion="matMenu" disableClose="true">
+              <div class="menu-filtro" (click)="$event.stopPropagation()">
+                <label>Buscar en descripción</label>
+
+                <mat-form-field
+                  appearance="fill"
+                  class="buscador-filtro"
+                  (click)="$event.stopPropagation()">
+                  <mat-label>Texto</mat-label>
+                  <input
+                    matInput
+                    [(ngModel)]="filtroDescripcionTexto"
+                    placeholder="Ej. fuga, pantalla, ruido, error"
+                    (keydown.enter)="aplicarFiltroDescripcionTexto(triggerFiltroDesc)">
+                </mat-form-field>
+
+                <div class="menu-botones-fijos">
+                  <button
+                    mat-button
+                    color="primary"
+                    (click)="aplicarFiltroDescripcionTexto(triggerFiltroDesc)">
+                    Aplicar
+                  </button>
+
+                  <button
+                    mat-button
+                    (click)="limpiarFiltroDescripcionTexto(triggerFiltroDesc)">
+                    Borrar Filtro
+                  </button>
+                </div>
+              </div>
+            </mat-menu>
+          </th>
+
+          <!-- Categoría -->
           <th [class.filtro-activo]="isFilterActive('categoria')">
             <!-- Filtros en encabezado desactivados -->
             <ng-container *ngIf="true">
@@ -244,99 +331,6 @@
                   <div class="menu-botones-fijos">
                     <button mat-button (click)="cerrarYAplicar('inventario', triggerFiltroInventario)">Aplicar</button>
                     <button mat-button (click)="cerrarYLimpiar('inventario', triggerFiltroInventario)">Borrar Filtro</button>
-                  </div>
-                </div>
-              </mat-menu>
-            </ng-container>
-          </th>
-
-          <!-- (5) Descripción -->
-          <th class="col-descripcion" [class.filtro-activo]="filtroDescripcionActivo">
-            <button
-              mat-button
-              [matMenuTriggerFor]="menuDescripcion"
-              #triggerFiltroDesc="matMenuTrigger"
-              class="header-button">
-              Descripción <mat-icon>arrow_drop_down</mat-icon>
-            </button>
-
-            <mat-menu #menuDescripcion="matMenu" disableClose="true">
-              <div class="menu-filtro" (click)="$event.stopPropagation()">
-                <label>Buscar en descripción</label>
-
-                <mat-form-field
-                  appearance="fill"
-                  class="buscador-filtro"
-                  (click)="$event.stopPropagation()">
-                  <mat-label>Texto</mat-label>
-                  <input
-                    matInput
-                    [(ngModel)]="filtroDescripcionTexto"
-                    placeholder="Ej. fuga, pantalla, ruido, error"
-                    (keydown.enter)="aplicarFiltroDescripcionTexto(triggerFiltroDesc)">
-                </mat-form-field>
-
-                <div class="menu-botones-fijos">
-                  <button
-                    mat-button
-                    color="primary"
-                    (click)="aplicarFiltroDescripcionTexto(triggerFiltroDesc)">
-                    Aplicar
-                  </button>
-
-                  <button
-                    mat-button
-                    (click)="limpiarFiltroDescripcionTexto(triggerFiltroDesc)">
-                    Borrar Filtro
-                  </button>
-                </div>
-              </div>
-            </mat-menu>
-          </th>
-
-          <!-- (6) Sucursal -->
-          <th [class.filtro-activo]="isFilterActive('sucursal')">
-            <!-- Filtros en encabezado desactivados -->
-            <ng-container *ngIf="true">
-              <button mat-button [matMenuTriggerFor]="menuSucursal"
-                      #triggerFiltroSucursal="matMenuTrigger"
-                      (click)="onAbrirFiltro('sucursal', triggerFiltroSucursal)"
-                      class="header-button">
-                Sucursal <mat-icon>arrow_drop_down</mat-icon>
-              </button>
-              <mat-menu #menuSucursal="matMenu" disableClose="true">
-                <mat-divider></mat-divider>
-                <div class="menu-filtro" (click)="$event.stopPropagation()">
-                  <strong>Filtrar Sucursal</strong>
-
-                  <mat-form-field appearance="fill" class="buscador-filtro">
-                    <mat-label>Buscar</mat-label>
-                    <input
-                      matInput
-                      [(ngModel)]="filtroSucursalTexto"
-                      (ngModelChange)="filtrarOpcionesTexto('sucursal')"
-                    />
-                  </mat-form-field>
-                  <mat-checkbox
-                    [checked]="isTodoSeleccionado('sucursal')"
-                    (change)="alternarSeleccionTemporal('sucursal', $event.checked)"
-                    (click)="$event.stopPropagation()"
-                    name="suc_selectAll">
-                    Seleccionar todo
-                  </mat-checkbox>
-                  <div class="opciones-scrollable">
-                    <mat-checkbox
-                      *ngFor="let item of temporalSeleccionados['sucursal']; let i = index"
-                      [checked]="item.seleccionado"
-                      (change)="actualizarSeleccionTemporal('sucursal', i, $event.checked)"
-                      [name]="'sucursal_' + i"
-                      (click)="$event.stopPropagation()">
-                      {{ item.etiqueta || item.valor }}
-                    </mat-checkbox>
-                  </div>
-                  <div class="menu-botones-fijos">
-                    <button mat-button color="primary" (click)="cerrarYAplicar('sucursal', triggerFiltroSucursal)">Aplicar</button>
-                    <button mat-button (click)="cerrarYLimpiar('sucursal', triggerFiltroSucursal)">Borrar Filtros</button>
                   </div>
                 </div>
               </mat-menu>
@@ -706,17 +700,187 @@
           <!-- (16) Fecha Solución -->
           <th><span class="tickets-header-static">Fecha Solución</span></th>
 
-          <!-- (17) Historial -->
-          <th><span class="tickets-header-static">Historial</span></th>
+          <!-- Gestión fija: acciones según permisos -->
+          <th class="col-gestion"><span class="tickets-header-static">Gestión</span></th>
         </tr>
       </thead>
 
       <tbody>
         <tr *ngFor="let ticket of visibleTickets">
-          <td>{{ ticket.id }}</td>
+          <td class="col-sticky-id">{{ ticket.id }}</td>
 
-          <!-- Acciones -->
-          <td class="td-acciones">
+          <td class="col-sticky-sucursal">{{ getNombreSucursal(ticket) }}</td>
+
+          <td class="col-descripcion col-sticky-descripcion">
+            <div
+              class="desc-wrap"
+              [class.expanded]="isDescExpanded[ticket.id]"
+              [matTooltip]="ticket.descripcion"
+              [matTooltipDisabled]="isDescExpanded[ticket.id]"
+              matTooltipClass="tooltip-wide"
+              matTooltipShowDelay="250"
+            >
+              <ng-container *ngIf="getBugParts(ticket.descripcion) as parts">
+                <ng-container *ngIf="parts.prefix; else plainDesc">
+                  <button
+                    type="button"
+                    class="tag tag-bug"
+                    (click)="openEvidencia(ticket)"
+                    [disabled]="!ticket.url_evidencia"
+                    [attr.aria-label]="ticket.url_evidencia ? 'Abrir evidencia' : 'Sin evidencia'"
+                  >
+                    {{ parts.prefix | slice:1:-1 }}
+                  </button>
+                  <span class="desc-rest">&nbsp;{{ parts.rest }}</span>
+                </ng-container>
+                <ng-template #plainDesc>{{ ticket.descripcion }}</ng-template>
+              </ng-container>
+            </div>
+
+            <button
+              mat-icon-button
+              class="desc-more"
+              (click)="toggleDesc(ticket.id)"
+              [matTooltip]="isDescExpanded[ticket.id] ? 'Contraer' : 'Ver completo'"
+              matTooltipShowDelay="250"
+              aria-label="Ver/ocultar descripción"
+            >
+              <mat-icon>{{ isDescExpanded[ticket.id] ? 'expand_less' : 'expand_more' }}</mat-icon>
+            </button>
+          </td>
+
+
+
+
+          <td>{{ ticket.categoria || '—' }}</td>
+
+      <td class="td-aparato">
+        <div class="td-aparato-inner">
+          <span class="aparato-text">{{ getNombreCortoAparato(ticket) }}</span>
+
+          <span
+            *ngIf="necesitaRef(ticket)"
+            class="icono-refaccion-wrap"
+            [matTooltip]="ticket.descripcion_refaccion || 'Requiere refacción'"
+            matTooltipShowDelay="1500"
+            matTooltipClass="tooltip-wide"
+          >
+            <mat-icon class="icono-refaccion" color="warn">build</mat-icon>
+          </span>
+
+          <button
+            *ngIf="puedeMostrarCodigoInternoEquipo(ticket)"
+            type="button"
+            mat-icon-button
+            class="btn-codigo-equipo"
+            [matMenuTriggerFor]="menuCodigoEquipo"
+            matTooltip="Ver código del equipo"
+            matTooltipShowDelay="500"
+            (click)="$event.stopPropagation()"
+            aria-label="Ver código del equipo"
+          >
+            <mat-icon>qr_code_2</mat-icon>
+          </button>
+
+          <button
+            *ngIf="ticket.has_attachment"
+            type="button"
+            mat-icon-button
+            class="btn-ticket-attachment"
+            matTooltip="Este ticket tiene una imagen adjunta"
+            matTooltipShowDelay="500"
+            (click)="openAdjunto(ticket, $event)"
+            aria-label="Ver imagen adjunta"
+          >
+            <mat-icon>image</mat-icon>
+          </button>
+
+          <mat-menu #menuCodigoEquipo="matMenu" class="menu-codigo-equipo">
+            <div class="codigo-equipo-popover" (click)="$event.stopPropagation()">
+              <span class="codigo-equipo-popover__eyebrow">Equipo</span>
+
+              <strong class="codigo-equipo-popover__nombre">
+                {{ getNombreEquipoOInventario(ticket) }}
+              </strong>
+
+              <span class="codigo-equipo-popover__eyebrow">Código interno</span>
+
+              <code class="codigo-equipo-popover__codigo">
+                {{ getCodigoInternoEquipo(ticket) }}
+              </code>
+
+              <button
+                type="button"
+                mat-stroked-button
+                class="codigo-equipo-popover__copy"
+                (click)="copiarCodigoInternoEquipo(ticket, $event)"
+              >
+                <mat-icon>content_copy</mat-icon>
+                Copiar código
+              </button>
+            </div>
+          </mat-menu>
+        </div>
+      </td>
+
+
+
+
+          <td class="td-estado">
+            <div class="ticket-estado" *ngIf="presentacionEstadoTicket(ticket) as estadoVisible">
+              <span class="ticket-estado__principal">{{ estadoVisible.principal }}</span>
+              <span *ngIf="estadoVisible.detalle" class="ticket-estado__detalle">{{ estadoVisible.detalle }}</span>
+            </div>
+          </td>
+          <td>{{ ticket.criticidad }}</td>
+
+          <td>
+            {{ ticket.fecha_creacion
+                ? (ticket.fecha_creacion | date:'dd/MM/yyyy hh:mm a':'America/Tijuana')
+                : '—' }}
+          </td>
+
+          <td>
+            {{ ticket.fecha_en_progreso
+                ? (ticket.fecha_en_progreso | date:'dd/MM/yyyy hh:mm a':'America/Tijuana')
+                : '—' }}
+          </td>
+
+          <td>
+            {{ ticket.fecha_finalizado
+                ? (ticket.fecha_finalizado | date:'dd/MM/yyyy hh:mm a':'America/Tijuana')
+                : '—' }}
+          </td>
+
+          <td>{{ ticket.departamento }}</td>
+          <td>{{ getSubcategoriaVisible(ticket) }}</td>
+          <td>{{ getDetalleVisible(ticket) }}</td>
+
+
+          <!-- Responsable: editar abre el MISMO modal de fecha y asignación. -->
+          <td class="td-responsable">
+            <div class="ticket-responsable__contenido">
+              <span
+                class="ticket-responsable"
+                [class.ticket-responsable--externo]="ticket.tipo_atencion === 'EXTERNA'"
+                [title]="obtenerResponsableTicket(ticket)"
+              >{{ obtenerResponsableTicket(ticket) }}</span>
+            </div>
+          </td>
+
+          <!-- Fecha Solución -->
+          <td>
+            <ng-container *ngIf="ticket.fecha_solucion; else soloLecturaSinFecha">
+              {{ ticket.fecha_solucion | date:'dd/MM/yy' }}
+            </ng-container>
+
+            <ng-template #soloLecturaSinFecha>
+              <span class="text-gray-400">Sin asignar</span>
+            </ng-template>
+          </td>
+
+          <!-- Gestión: transiciones existentes más atajos -->
+          <td class="td-acciones col-gestion">
             <!-- La asignación se realiza dentro del modal de fecha, no como acción adicional. -->
             <button
               *ngIf="puedeMostrarBotonEnProgreso(ticket)"
@@ -814,198 +978,41 @@
               </button>
             </div>
             </div>
-          </td>
 
-
-          <td>{{ ticket.categoria || '—' }}</td>
-
-      <td class="td-aparato">
-        <div class="td-aparato-inner">
-          <span class="aparato-text">{{ getNombreCortoAparato(ticket) }}</span>
-
-          <span
-            *ngIf="necesitaRef(ticket)"
-            class="icono-refaccion-wrap"
-            [matTooltip]="ticket.descripcion_refaccion || 'Requiere refacción'"
-            matTooltipShowDelay="1500"
-            matTooltipClass="tooltip-wide"
-          >
-            <mat-icon class="icono-refaccion" color="warn">build</mat-icon>
-          </span>
-
-          <button
-            *ngIf="puedeMostrarCodigoInternoEquipo(ticket)"
-            type="button"
-            mat-icon-button
-            class="btn-codigo-equipo"
-            [matMenuTriggerFor]="menuCodigoEquipo"
-            matTooltip="Ver código del equipo"
-            matTooltipShowDelay="500"
-            (click)="$event.stopPropagation()"
-            aria-label="Ver código del equipo"
-          >
-            <mat-icon>qr_code_2</mat-icon>
-          </button>
-
-          <button
-            *ngIf="ticket.has_attachment"
-            type="button"
-            mat-icon-button
-            class="btn-ticket-attachment"
-            matTooltip="Este ticket tiene una imagen adjunta"
-            matTooltipShowDelay="500"
-            (click)="openAdjunto(ticket, $event)"
-            aria-label="Ver imagen adjunta"
-          >
-            <mat-icon>image</mat-icon>
-          </button>
-
-          <mat-menu #menuCodigoEquipo="matMenu" class="menu-codigo-equipo">
-            <div class="codigo-equipo-popover" (click)="$event.stopPropagation()">
-              <span class="codigo-equipo-popover__eyebrow">Equipo</span>
-
-              <strong class="codigo-equipo-popover__nombre">
-                {{ getNombreEquipoOInventario(ticket) }}
-              </strong>
-
-              <span class="codigo-equipo-popover__eyebrow">Código interno</span>
-
-              <code class="codigo-equipo-popover__codigo">
-                {{ getCodigoInternoEquipo(ticket) }}
-              </code>
-
-              <button
-                type="button"
-                mat-stroked-button
-                class="codigo-equipo-popover__copy"
-                (click)="copiarCodigoInternoEquipo(ticket, $event)"
-              >
-                <mat-icon>content_copy</mat-icon>
-                Copiar código
-              </button>
-            </div>
-          </mat-menu>
-        </div>
-      </td>
-
-          <td class="col-descripcion">
-            <div
-              class="desc-wrap"
-              [class.expanded]="isDescExpanded[ticket.id]"
-              [matTooltip]="ticket.descripcion"
-              [matTooltipDisabled]="isDescExpanded[ticket.id]"
-              matTooltipClass="tooltip-wide"
-              matTooltipShowDelay="250"
-            >
-              <ng-container *ngIf="getBugParts(ticket.descripcion) as parts">
-                <ng-container *ngIf="parts.prefix; else plainDesc">
-                  <button
-                    type="button"
-                    class="tag tag-bug"
-                    (click)="openEvidencia(ticket)"
-                    [disabled]="!ticket.url_evidencia"
-                    [attr.aria-label]="ticket.url_evidencia ? 'Abrir evidencia' : 'Sin evidencia'"
-                  >
-                    {{ parts.prefix | slice:1:-1 }}
-                  </button>
-                  <span class="desc-rest">&nbsp;{{ parts.rest }}</span>
-                </ng-container>
-                <ng-template #plainDesc>{{ ticket.descripcion }}</ng-template>
-              </ng-container>
-            </div>
-
-            <button
-              mat-icon-button
-              class="desc-more"
-              (click)="toggleDesc(ticket.id)"
-              [matTooltip]="isDescExpanded[ticket.id] ? 'Contraer' : 'Ver completo'"
-              matTooltipShowDelay="250"
-              aria-label="Ver/ocultar descripción"
-            >
-              <mat-icon>{{ isDescExpanded[ticket.id] ? 'expand_less' : 'expand_more' }}</mat-icon>
-            </button>
-          </td>
-
-          <td>{{ getNombreSucursal(ticket) }}</td>
-          <td class="td-estado">
-            <div class="ticket-estado" *ngIf="presentacionEstadoTicket(ticket) as estadoVisible">
-              <span class="ticket-estado__principal">{{ estadoVisible.principal }}</span>
-              <span *ngIf="estadoVisible.detalle" class="ticket-estado__detalle">{{ estadoVisible.detalle }}</span>
-            </div>
-          </td>
-          <td>{{ ticket.criticidad }}</td>
-
-          <td>
-            {{ ticket.fecha_creacion
-                ? (ticket.fecha_creacion | date:'dd/MM/yyyy hh:mm a':'America/Tijuana')
-                : '—' }}
-          </td>
-
-          <td>
-            {{ ticket.fecha_en_progreso
-                ? (ticket.fecha_en_progreso | date:'dd/MM/yyyy hh:mm a':'America/Tijuana')
-                : '—' }}
-          </td>
-
-          <td>
-            {{ ticket.fecha_finalizado
-                ? (ticket.fecha_finalizado | date:'dd/MM/yyyy hh:mm a':'America/Tijuana')
-                : '—' }}
-          </td>
-
-          <td>{{ ticket.departamento }}</td>
-          <td>{{ getSubcategoriaVisible(ticket) }}</td>
-          <td>{{ getDetalleVisible(ticket) }}</td>
-
-
-          <!-- Responsable: editar abre el MISMO modal de fecha y asignación. -->
-          <td class="td-responsable">
-            <div class="ticket-responsable__contenido">
-              <span
-                class="ticket-responsable"
-                [class.ticket-responsable--externo]="ticket.tipo_atencion === 'EXTERNA'"
-                [title]="obtenerResponsableTicket(ticket)"
-              >{{ obtenerResponsableTicket(ticket) }}</span>
+            <div class="gestion-atajos" role="group" aria-label="Acciones rápidas del ticket">
               <button
                 *ngIf="puedeReasignarTicket(ticket)"
                 mat-icon-button
                 type="button"
-                class="ticket-responsable__editar"
+                class="gestion-atajo"
                 [matTooltip]="etiquetaAccionResponsableTicket(ticket)"
                 [attr.aria-label]="etiquetaAccionResponsableTicket(ticket)"
                 (click)="abrirReasignarResponsable(ticket)"
               >
-                <mat-icon>edit</mat-icon>
+                <mat-icon>manage_accounts</mat-icon>
               </button>
-            </div>
-          </td>
-
-          <!-- Fecha Solución -->
-          <td>
-            <ng-container *ngIf="ticket.fecha_solucion; else soloLecturaSinFecha">
-              {{ ticket.fecha_solucion | date:'dd/MM/yy' }}
-
               <button
-                *ngIf="puedeMostrarEditarFechaSolucion(ticket)"
+                *ngIf="ticket.fecha_solucion && puedeMostrarEditarFechaSolucion(ticket)"
                 mat-icon-button
-                class="boton-editar-fecha"
+                type="button"
+                class="gestion-atajo"
                 matTooltip="Editar fecha solución"
+                aria-label="Editar fecha solución"
                 (click)="abrirEditarFechaSolucion(ticket)"
               >
-                <mat-icon>edit</mat-icon>
+                <mat-icon>event</mat-icon>
               </button>
-            </ng-container>
-
-            <ng-template #soloLecturaSinFecha>
-              <span class="text-gray-400">Sin asignar</span>
-            </ng-template>
-          </td>
-
-          <!-- Historial -->
-          <td>
-            <button mat-button color="primary" (click)="abrirHistorialModal(ticket)">
-              Ver Historial
-            </button>
+              <button
+                mat-icon-button
+                type="button"
+                class="gestion-atajo"
+                matTooltip="Ver historial"
+                aria-label="Ver historial"
+                (click)="abrirHistorialModal(ticket)"
+              >
+                <mat-icon>history</mat-icon>
+              </button>
+            </div>
           </td>
         </tr>
       </tbody>
