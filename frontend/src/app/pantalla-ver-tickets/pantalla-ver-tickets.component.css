@@ -1209,6 +1209,30 @@ td.col-descripcion {
   gap: 0.5rem;
 }
 
+/* En móviles o ventanas muy bajas, no cortar KPIs ni acciones: la
+   navegación de página vuelve a ser natural. El modo "solo tabla" es
+   exclusivo de escritorios con espacio vertical suficiente. */
+@media (max-width: 768px), (max-height: 560px) {
+  :host {
+    height: auto;
+    min-height: calc(100dvh - 72px);
+    overflow: visible;
+  }
+
+  .tickets-page {
+    height: auto;
+    min-height: calc(100dvh - 72px);
+    overflow-x: clip;
+    overflow-y: visible;
+  }
+
+  .tickets-table-card {
+    flex: 0 0 auto;
+    height: min(62dvh, 550px);
+    min-height: 230px;
+  }
+}
+
 /* ==========================================================================
    Suite Ultra UI v1 - Responsive
    ========================================================================== */
