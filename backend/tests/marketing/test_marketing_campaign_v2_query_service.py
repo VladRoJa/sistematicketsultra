@@ -306,7 +306,7 @@ def test_recipient_status_latest_snapshot_only_and_paginated(session):
     assert first["rows"][0]["provider_status"] == {
         "status": "VIEWED",
         "snapshot_id": 101,
-        "observed_at": newer.isoformat(),
+        "observed_at": newer.replace(tzinfo=None).isoformat(),
         "outcome": "SUCCESSFUL",
         "delivery_bucket": "VIEWED",
         "button_labels": ["Quiero volver"],
