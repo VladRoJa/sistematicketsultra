@@ -28,6 +28,10 @@ def _fake_docker(tmp_path: Path, *, inspect_result: str = "true") -> dict[str, s
         '  echo "$FAKE_INSPECT_RESULT"\n'
         '  exit 0\n'
         'fi\n'
+        'if [[ "$1" == "compose" && "$2" == "exec" && "$ALLOW_FAKE_EXEC" == "yes" ]]; then\n'
+        '  echo "FAKE_BACKEND_EXEC"\n'
+        '  exit 0\n'
+        'fi\n'
         'echo "Unexpected docker call" >&2\n'
         'exit 88\n',
         encoding="utf-8",
@@ -74,3 +78,19 @@ def test_recovery_fails_closed_if_worker_state_cannot_be_verified(
     assert "Operación cancelada" in result.stderr
     calls = Path(env["DOCKER_CALLS"]).read_text(encoding="utf-8").splitlines()
     assert len(calls) == 2
+
+
+def test_diagnostic_can_run_when_worker_is_stopped_without_real_browser(
+    tmp_path: Path,
+) -> None:
+    env = _fake_docker(tmp_path, inspect_result="false")
+    env["ALLOW_FAKE_EXEC"] = "yes"
+    result = subprocess.run(
+        ["bash", str(SCRIPT), "diagnose"],
+        capture_output=True, text=True, env=env, timeout=5,
+    )
+    assert result.returncode == 0
+    assert "FAKE_BACKEND_EXEC" in result.stdout
+    calls = Path(env["DOCKER_CALLS"]).read_text(encoding="utf-8").splitlines()
+    assert len(calls) == 3
+    assert calls[2].startswith("compose exec -T backend ")
