@@ -3,14 +3,14 @@ from __future__ import annotations
 from dataclasses import replace
 
 import pytest
-from sqlalchemy import Column, Integer, MetaData, Table, create_engine, event
+from sqlalchemy import BigInteger, Column, Integer, MetaData, String, Table, create_engine, event
 from sqlalchemy.orm import Session
 
 from app.integrations.iventas.campaigns_client import (
     IVentasCampaignsConfigurationError,
     IVentasCampaignsProviderError,
 )
-from app.models.marketing import MarketingCampaignV2ORM
+from app.models.marketing import MarketingCampaignV2ORM, MarketingCampaignV2RecipientORM
 from app.services.marketing_campaign_iventas_provider import (
     IVentasCampaignProvider,
 )
@@ -53,6 +53,22 @@ def session():
     metadata = MetaData()
     Table("users", metadata, Column("id", Integer, primary_key=True))
     MarketingCampaignV2ORM.__table__.to_metadata(metadata)
+    # Esquema mínimo de las tablas consultadas por el fallback, sin requerir
+    # dependencias de despacho ni datos personales en la prueba unitaria.
+    Table(
+        "marketing_campaign_v2_provider_campaigns", metadata,
+        Column("id", BigInteger, primary_key=True),
+        Column("campaign_v2_id", BigInteger),
+        Column("provider", String),
+        Column("provider_campaign_id", String),
+        Column("status", String),
+        Column("recipient_count", Integer),
+    )
+    Table("socios_vencidos_cartera", metadata,
+          Column("id", BigInteger, primary_key=True))
+    Table("socios_activos_snapshot_rows", metadata,
+          Column("id", BigInteger, primary_key=True))
+    MarketingCampaignV2RecipientORM.__table__.to_metadata(metadata)
     metadata.create_all(engine)
 
     with Session(engine) as value:
@@ -256,6 +272,110 @@ def test_unbound_campaign_does_not_call_resolver(session):
         )
 
     assert calls == []
+
+
+
+def _add_child(session, *, child_id=20, status="SUBMITTED",
+               recipient_count=4, external_id="external-child-2"):
+    session.execute(
+        Table(
+            "marketing_campaign_v2_provider_campaigns",
+            MetaData(), autoload_with=session.get_bind(),
+        ).insert(),
+        [{
+            "id": child_id,
+            "campaign_v2_id": 2,
+            "provider": "IVENTAS",
+            "provider_campaign_id": external_id,
+            "status": status,
+            "recipient_count": recipient_count,
+        }],
+    )
+
+
+def _add_frozen(session, count=4):
+    session.add_all([
+        MarketingCampaignV2RecipientORM(
+            id=100 + i,
+            campaign_id=2,
+            phone_mx10=f"686100000{i + 1}",
+            source="EXPIRED_MEMBERS",
+            conflict_fields_json=[],
+        )
+        for i in range(count)
+    ])
+
+
+def test_one_submitted_child_with_complete_frozen_cohort_is_resolved(session):
+    _add_frozen(session, count=4)
+    _add_child(session)
+    session.commit()
+    from sqlalchemy import func
+    from app.models.marketing import (
+        MarketingCampaignV2ProviderCampaignORM,
+        MarketingCampaignV2RecipientORM,
+    )
+    child = session.query(
+        MarketingCampaignV2ProviderCampaignORM.status,
+        MarketingCampaignV2ProviderCampaignORM.provider,
+        MarketingCampaignV2ProviderCampaignORM.provider_campaign_id,
+        MarketingCampaignV2ProviderCampaignORM.recipient_count,
+    ).filter_by(campaign_v2_id=2).one()
+    frozen_count = session.query(func.count(MarketingCampaignV2RecipientORM.id)).filter_by(
+        campaign_id=2
+    ).scalar()
+    assert (child.status, child.provider, child.provider_campaign_id,
+            child.recipient_count, frozen_count) == (
+        "SUBMITTED", "IVENTAS", "external-child-2", 4, 4,
+    )
+    provider = FakeProvider(stats=_stats())
+    result = get_campaign_v2_provider_stats(
+        campaign_id=2,
+        allowed_sucursal_keys=("BRANCH A",),
+        session=session,
+        provider_resolver=lambda key: provider,
+    )
+    assert provider.calls == ["external-child-2"]
+    assert result["provider"] == "IVENTAS"
+    assert result["provider_campaign_id"] == "external-child-2"
+    assert result["raw_counts"]["successful"] == 3
+
+
+@pytest.mark.parametrize("status,count", [
+    ("READY", 4),
+    ("SUBMITTED", 3),
+    ("SCHEDULED", 4),
+])
+def test_ineligible_child_fails_closed_without_calling_provider(session, status, count):
+    _add_frozen(session, count=4)
+    _add_child(session, status=status, recipient_count=count)
+    session.commit()
+    provider = FakeProvider(stats=_stats())
+    with pytest.raises(MarketingCampaignV2ProviderStatsUnboundError):
+        get_campaign_v2_provider_stats(
+            campaign_id=2,
+            allowed_sucursal_keys=("BRANCH A",),
+            session=session,
+            provider_resolver=lambda key: provider,
+        )
+    assert provider.calls == []
+
+
+def test_multiple_children_never_report_partial_campaign_stats(session):
+    _add_frozen(session, count=4)
+    _add_child(session, child_id=20, recipient_count=2)
+    _add_child(session, child_id=21, recipient_count=2,
+               external_id="external-child-3")
+    session.commit()
+    provider = FakeProvider(stats=_stats())
+    with pytest.raises(MarketingCampaignV2ProviderStatsUnboundError):
+        get_campaign_v2_provider_stats(
+            campaign_id=2,
+            allowed_sucursal_keys=("BRANCH A",),
+            session=session,
+            provider_resolver=lambda key: provider,
+        )
+    assert provider.calls == []
 
 
 def test_out_of_scope_campaign_is_not_disclosed(session):

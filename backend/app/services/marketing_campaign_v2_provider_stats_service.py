@@ -6,7 +6,13 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable
 
+from sqlalchemy import func
+
 from app.extensions import db
+from app.models.marketing import (
+    MarketingCampaignV2ProviderCampaignORM,
+    MarketingCampaignV2RecipientORM,
+)
 from app.integrations.iventas.campaigns_client import (
     IVentasCampaignsClientError,
     IVentasCampaignsProviderError,
@@ -117,13 +123,53 @@ def fetch_campaign_v2_provider_stats(
         )
 
     provider_key = _clean_required(campaign.provider)
-    provider_campaign_id = _clean_required(
-        campaign.provider_campaign_id
-    )
+    provider_campaign_id = _clean_required(campaign.provider_campaign_id)
 
+    if provider_key is None and provider_campaign_id is None:
+        with active_session.no_autoflush:
+            child_rows = (
+                active_session.query(
+                    MarketingCampaignV2ProviderCampaignORM.provider,
+                    MarketingCampaignV2ProviderCampaignORM.provider_campaign_id,
+                    MarketingCampaignV2ProviderCampaignORM.status,
+                    MarketingCampaignV2ProviderCampaignORM.recipient_count,
+                )
+                .filter(
+                    MarketingCampaignV2ProviderCampaignORM.campaign_v2_id
+                    == normalized_campaign_id
+                )
+                .limit(2)
+                .all()
+            )
+            if len(child_rows) == 1:
+                frozen_count = (
+                    active_session.query(func.count(MarketingCampaignV2RecipientORM.id))
+                    .filter(
+                        MarketingCampaignV2RecipientORM.campaign_id
+                        == normalized_campaign_id
+                    )
+                    .scalar()
+                )
+            else:
+                frozen_count = None
+
+        if len(child_rows) == 1:
+            child = child_rows[0]
+            if (
+                child.status == "SUBMITTED"
+                and _clean_required(child.provider) is not None
+                and _clean_required(child.provider_campaign_id) is not None
+                and int(child.recipient_count) > 0
+                and int(child.recipient_count) == int(frozen_count or 0)
+            ):
+                provider_key = _clean_required(child.provider)
+                provider_campaign_id = _clean_required(child.provider_campaign_id)
+
+    # Nunca mezclar resultados de varios lotes ni aceptar un binding parcial.
+    # Las campañas multisucursal requieren conciliación explícita por child.
     if provider_key is None or provider_campaign_id is None:
         raise MarketingCampaignV2ProviderStatsUnboundError(
-            "Campaign V2 no tiene provider binding completo."
+            "Campaign V2 no tiene binding único completo para estadísticas."
         )
 
     try:

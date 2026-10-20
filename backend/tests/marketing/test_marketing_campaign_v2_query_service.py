@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.models.marketing import (
     MarketingCampaignV2ORM,
+    MarketingCampaignV2ProviderRecipientObservationORM,
+    MarketingCampaignV2ProviderStatsSnapshotORM,
     MarketingCampaignV2RecipientEvidenceORM,
     MarketingCampaignV2RecipientORM,
 )
@@ -57,6 +59,8 @@ def _metadata():
     MarketingCampaignV2ORM.__table__.to_metadata(metadata)
     MarketingCampaignV2RecipientORM.__table__.to_metadata(metadata)
     MarketingCampaignV2RecipientEvidenceORM.__table__.to_metadata(metadata)
+    MarketingCampaignV2ProviderStatsSnapshotORM.__table__.to_metadata(metadata)
+    MarketingCampaignV2ProviderRecipientObservationORM.__table__.to_metadata(metadata)
     return metadata
 
 
@@ -224,6 +228,114 @@ def test_recipient_list_is_stable_paginated_and_counts_evidence_without_loading_
     assert [row["id"] for row in result["rows"]] == [10, 11]
     assert result["rows"][0]["evidence_count"] == 2
     assert result["rows"][1]["conflict_fields"] == ["member_name"]
+    assert result["rows"][0]["provider_status"]["status"] == "NO_SNAPSHOT"
+    assert result["rows"][0]["provider_status"]["observed_at"] is None
+
+
+
+def _snapshot(snapshot_id, campaign_id, observed_at):
+    return MarketingCampaignV2ProviderStatsSnapshotORM(
+        id=snapshot_id,
+        campaign_v2_id=campaign_id,
+        provider="IVENTAS",
+        provider_campaign_id=f"provider-campaign-{campaign_id}",
+        fetched_at=observed_at,
+        raw_successful=0,
+        raw_failed=0,
+        raw_sent=0,
+        raw_delivered=0,
+        raw_viewed=0,
+        raw_answered=0,
+        raw_interaction_groups=0,
+        raw_interaction_items=0,
+        provider_recipient_count=0,
+        matched_recipient_count=0,
+        unmatched_provider_count=0,
+        frozen_recipient_without_provider_status_count=0,
+        fingerprint=f"{snapshot_id:064x}",
+        created_at=observed_at,
+    )
+
+
+def test_recipient_status_latest_snapshot_only_and_paginated(session):
+    older = datetime(2026, 10, 2, 12, 0, tzinfo=timezone.utc)
+    newer = datetime(2026, 10, 3, 12, 0, tzinfo=timezone.utc)
+    session.add_all([
+        _snapshot(100, 2, older),
+        _snapshot(101, 2, newer),
+        _snapshot(200, 3, newer),
+    ])
+    session.add_all([
+        MarketingCampaignV2ProviderRecipientObservationORM(
+            snapshot_id=100,
+            normalized_phone="mx10:6861000001",
+            campaign_recipient_id=10,
+            outcome="FAILED",
+            button_labels_json=[],
+        ),
+        MarketingCampaignV2ProviderRecipientObservationORM(
+            snapshot_id=101,
+            normalized_phone="mx10:6861000001",
+            campaign_recipient_id=10,
+            outcome="SUCCESSFUL",
+            delivery_bucket="VIEWED",
+            button_labels_json=["Quiero volver"],
+        ),
+        MarketingCampaignV2ProviderRecipientObservationORM(
+            snapshot_id=200,
+            normalized_phone="mx10:6861000003",
+            campaign_recipient_id=20,
+            outcome="FAILED",
+            button_labels_json=[],
+        ),
+    ])
+    session.commit()
+
+    first = list_campaign_v2_recipients(
+        campaign_id=2,
+        allowed_sucursal_keys=("BRANCH A",),
+        page=1, page_size=1, session=session,
+    )
+    second = list_campaign_v2_recipients(
+        campaign_id=2,
+        allowed_sucursal_keys=("BRANCH A",),
+        page=2, page_size=1, session=session,
+    )
+    assert first["total"] == second["total"] == 2
+    assert first["rows"][0]["id"] == 10
+    assert first["rows"][0]["provider_status"] == {
+        "status": "VIEWED",
+        "snapshot_id": 101,
+        "observed_at": newer.replace(tzinfo=None).isoformat(),
+        "outcome": "SUCCESSFUL",
+        "delivery_bucket": "VIEWED",
+        "button_labels": ["Quiero volver"],
+    }
+    assert second["rows"][0]["id"] == 11
+    assert second["rows"][0]["provider_status"]["status"] == "NO_PROVIDER_STATUS"
+    assert second["rows"][0]["provider_status"]["snapshot_id"] == 101
+    assert second["rows"][0]["provider_status"]["outcome"] is None
+
+
+def test_recipient_status_failure_is_not_confused_with_no_observation(session):
+    observed = datetime(2026, 10, 4, 12, 0, tzinfo=timezone.utc)
+    session.add(_snapshot(102, 2, observed))
+    session.add(MarketingCampaignV2ProviderRecipientObservationORM(
+        snapshot_id=102,
+        normalized_phone="mx10:6861000002",
+        campaign_recipient_id=11,
+        outcome="FAILED",
+        delivery_bucket=None,
+        button_labels_json=[],
+    ))
+    session.commit()
+    result = list_campaign_v2_recipients(
+        campaign_id=2, allowed_sucursal_keys=("BRANCH A",),
+        page=1, page_size=10, session=session,
+    )
+    statuses = {row["id"]: row["provider_status"]["status"] for row in result["rows"]}
+    assert statuses == {10: "NO_PROVIDER_STATUS", 11: "FAILED"}
+    assert result["rows"][1]["provider_status"]["delivery_bucket"] is None
 
 
 def test_recipient_detail_reads_only_frozen_evidence_in_evidence_order(session):

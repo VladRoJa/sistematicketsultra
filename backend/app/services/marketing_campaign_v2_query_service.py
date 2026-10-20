@@ -10,6 +10,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.extensions import db
 from app.models.marketing import (
     MarketingCampaignV2ORM,
+    MarketingCampaignV2ProviderRecipientObservationORM,
+    MarketingCampaignV2ProviderStatsSnapshotORM,
     MarketingCampaignV2RecipientEvidenceORM,
     MarketingCampaignV2RecipientORM,
 )
@@ -171,13 +173,56 @@ def list_campaign_v2_recipients(
         .limit(normalized_page_size)
         .all()
     )
+
+    # El estado corresponde al último snapshot PERSISTIDO, nunca a una consulta
+    # en vivo ni al último estado histórico de cada destinatario por separado.
+    latest_snapshot = (
+        active_session.query(MarketingCampaignV2ProviderStatsSnapshotORM)
+        .filter(
+            MarketingCampaignV2ProviderStatsSnapshotORM.campaign_v2_id
+            == normalized_id
+        )
+        .order_by(
+            MarketingCampaignV2ProviderStatsSnapshotORM.fetched_at.desc(),
+            MarketingCampaignV2ProviderStatsSnapshotORM.id.desc(),
+        )
+        .first()
+    )
+    observations_by_recipient = {}
+    if latest_snapshot is not None and rows:
+        recipient_ids = [int(recipient.id) for recipient, _ in rows]
+        observations = (
+            active_session.query(MarketingCampaignV2ProviderRecipientObservationORM)
+            .filter(
+                MarketingCampaignV2ProviderRecipientObservationORM.snapshot_id
+                == latest_snapshot.id,
+                MarketingCampaignV2ProviderRecipientObservationORM.campaign_recipient_id.in_(
+                    recipient_ids
+                ),
+            )
+            .order_by(MarketingCampaignV2ProviderRecipientObservationORM.id.asc())
+            .all()
+        )
+        observations_by_recipient = {
+            int(observation.campaign_recipient_id): observation
+            for observation in observations
+        }
+
     return {
         "page": normalized_page,
         "page_size": normalized_page_size,
         "total": total,
         "total_pages": _total_pages(total, normalized_page_size),
         "rows": [
-            _serialize_recipient_summary(recipient, evidence_count=int(evidence_count or 0))
+            {
+                **_serialize_recipient_summary(
+                    recipient, evidence_count=int(evidence_count or 0)
+                ),
+                "provider_status": _serialize_recipient_provider_status(
+                    latest_snapshot,
+                    observations_by_recipient.get(int(recipient.id)),
+                ),
+            }
             for recipient, evidence_count in rows
         ],
     }
@@ -384,6 +429,38 @@ def _serialize_recipient_summary(recipient, *, evidence_count: int) -> dict[str,
         "inclusion_reason": recipient.inclusion_reason,
         "conflict_fields": list(recipient.conflict_fields_json or []),
         "evidence_count": int(evidence_count),
+    }
+
+
+def _serialize_recipient_provider_status(snapshot, observation) -> dict[str, Any]:
+    # Sin snapshot no equivale a fallido; sin match tampoco.
+    if snapshot is None:
+        return {
+            "status": "NO_SNAPSHOT",
+            "snapshot_id": None,
+            "observed_at": None,
+            "outcome": None,
+            "delivery_bucket": None,
+            "button_labels": [],
+        }
+
+    outcome = str(observation.outcome or "").upper() if observation else None
+    bucket = (str(observation.delivery_bucket).upper()
+              if observation and observation.delivery_bucket else None)
+    if outcome == "FAILED":
+        status = "FAILED"
+    elif outcome == "SUCCESSFUL":
+        status = bucket if bucket in {"SENT", "DELIVERED", "VIEWED"} else "SUCCESSFUL"
+    else:
+        status = "NO_PROVIDER_STATUS"
+
+    return {
+        "status": status,
+        "snapshot_id": int(snapshot.id),
+        "observed_at": _iso_datetime(snapshot.fetched_at),
+        "outcome": outcome,
+        "delivery_bucket": bucket,
+        "button_labels": list(observation.button_labels_json or []) if observation else [],
     }
 
 
