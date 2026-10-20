@@ -4,7 +4,7 @@
 # MODELOS: Inicialización de Modelos del Sistema
 # -------------------------------------------------------------------------------
 
-from .automation_control import SystemWorkerHeartbeatORM
+from .automation_control import SystemWorkerHeartbeatORM, GascaSmsHealthPulseORM
 from .ticket_model import Ticket
 from .ticket_attachment import TicketAttachmentORM
 from .user_model import UserORM
@@ -322,6 +322,7 @@ __all__ = [
     "RoutineControlMemberORM",
     "RoutineControlPipelineRunORM",
     "RoutineControlProviderRunORM",
+    "GascaSmsHealthPulseORM",
     "GascaSmsRequestORM",
     "GascaSmsRequestStatus",
     "TrackAttendanceDailyMartORM",
