@@ -75,7 +75,7 @@ jobs:
             tests/warehouse/test_kpi_desempeno_m3b_continuity_plan.py \
             tests/warehouse/test_kpi_desempeno_m3b_provenance_audit.py \
             tests/warehouse/test_kpi_desempeno_m3b_verified_plan.py \
-            tests/warehouse/test_kpi_desempeno_m3c_preflight.py
+            tests/warehouse/test_kpi_desempeno_m3c_preflight.py \
             tests/warehouse/test_gasca_provenance_reserved_metadata.py
       - name: Synthetic contract / real PostgreSQL 16 / M1 regressions
         run: |
