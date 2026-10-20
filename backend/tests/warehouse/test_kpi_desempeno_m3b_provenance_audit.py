@@ -509,6 +509,52 @@ def test_postgres16_reads_real_synthetic_warehouse_without_writes(tmp_path):
                 )
             ]
             assert after_bridge == before
+
+            # M3-C preflight uses real synthetic PostgreSQL 16 Warehouse
+            # snapshots, audit logs, stored XLSX bytes and hashes.
+            # All calls are read-only; no test is allowed to publish a version.
+            from app.warehouse.services.kpi_desempeno_m3c_preflight_service import (
+                ALREADY_CURRENT, CHANGES_DETECTED,
+                preflight_kpi_desempeno_existing_batch,
+            )
+            no_op_ids = {FIRST: 1, last_day: 2}
+            current_hashes = {
+                FIRST: db.session.get(WarehouseUploadORM, 101).file_hash_sha256,
+                last_day: db.session.get(WarehouseUploadORM, 102).file_hash_sha256,
+            }
+            no_op = preflight_kpi_desempeno_existing_batch(
+                selected_snapshot_ids=no_op_ids,
+                expected_canonical_snapshot_ids=no_op_ids,
+                expected_sha256_by_day=current_hashes,
+                expected_branch_count=2,
+            )
+            assert no_op.status == ALREADY_CURRENT
+            assert no_op.changed_dates == ()
+            assert not no_op.execution_allowed
+            assert not no_op.external_origin_verified
+
+            revised = preflight_kpi_desempeno_existing_batch(
+                selected_snapshot_ids={FIRST: 1, last_day: 12},
+                expected_canonical_snapshot_ids=no_op_ids,
+                expected_sha256_by_day={
+                    FIRST: current_hashes[FIRST],
+                    last_day: db.session.get(WarehouseUploadORM, 202).file_hash_sha256,
+                },
+                expected_branch_count=2,
+            )
+            assert revised.status == CHANGES_DETECTED
+            assert revised.changed_dates == (last_day,)
+            assert revised.mtd_declines == 1
+            assert revised.days[1].selected_upload_id == 202
+            assert not revised.execution_allowed
+            after_preflight = [
+                db.session.execute(sa.text(f"SELECT COUNT(*) FROM {name}")).scalar_one()
+                for name in (
+                    "warehouse_uploads", "warehouse_audit_logs",
+                    "kpi_desempeno_snapshots", "kpi_desempeno_snapshot_rows",
+                )
+            ]
+            assert after_preflight == before
             assert not sa.inspect(db.engine).has_table("track_daily_mart")
             db.session.remove()
     finally:
