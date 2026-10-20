@@ -328,6 +328,7 @@ def _resolve_recent_file_from_disk(
     *,
     report_type_key: str,
     requested_at: datetime,
+    target_business_date: date | None = None,
 ) -> ProducedGascaArtifact:
     output_dirs = _get_configured_output_dirs()
     prefixes = _get_configured_filename_prefixes()
@@ -345,7 +346,16 @@ def _resolve_recent_file_from_disk(
     min_epoch = requested_at.timestamp() - lookback_seconds
     candidates: list[Path] = []
 
-    for path in output_dir.glob(f"{prefix}*.xlsx"):
+    # KPI legacy files embed their business date in the filename. Never
+    # ingest another day's file merely because its mtime is newer.
+    if target_business_date is not None and report_type_key in {
+        "kpi_desempeno", "kpi_ventas_nuevos_socios",
+    }:
+        pattern = f"{prefix}{target_business_date.isoformat()}_*.xlsx"
+    else:
+        pattern = f"{prefix}*.xlsx"
+
+    for path in output_dir.glob(pattern):
         try:
             mtime = path.stat().st_mtime
         except OSError:
@@ -476,6 +486,7 @@ def extract_with_gasca_script(
         return _resolve_recent_file_from_disk(
             report_type_key=report_type_key,
             requested_at=effective_requested_at,
+            target_business_date=target_business_date,
         )
 
     try:
@@ -503,6 +514,7 @@ def extract_with_gasca_script(
         return _resolve_recent_file_from_disk(
             report_type_key=report_type_key,
             requested_at=effective_requested_at,
+            target_business_date=target_business_date,
         )
 
     if _result_has_direct_artifact_payload(raw_result):
