@@ -103,7 +103,7 @@ def test_claim_idempotent_on_insert_conflict_contract(app):
         with patch.object(db.session, "execute", return_value=query) as execute, patch.object(db.session, "commit") as commit:
             assert reserve_pulse(datetime(2026, 10, 20, 20, 0, tzinfo=timezone.utc)) is None
             execute.assert_called_once()
-            assert "ON CONFLICT DO NOTHING" in str(execute.call_args.args[0].compile(
+            assert "DO NOTHING RETURNING" in str(execute.call_args.args[0].compile(
                 dialect=postgresql.dialect()
             )).upper()
             commit.assert_called_once()
