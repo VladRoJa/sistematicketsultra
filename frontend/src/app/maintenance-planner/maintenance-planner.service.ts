@@ -37,7 +37,7 @@ export interface MaintenancePlannerTicket {
   sucursal: string;
   sucursal_is_demo: boolean;
   asignado_a: string | null;
-  tipo_atencion: 'INTERNA' | 'EXTERNA' | null;
+  tipo_atencion: 'INTERNA' | 'EXTERNA' | 'AUTOGESTION' | null;
   can_mark_work_completed: boolean;
   fecha_creacion: string | null;
   fecha_en_progreso: string | null;
@@ -101,6 +101,7 @@ export interface MaintenancePlannerBoard {
     can_schedule: boolean;
     can_capture_diagnosis: boolean;
     can_request_closure: boolean;
+    can_self_manage: boolean;
   };
 }
 

@@ -17,7 +17,7 @@ class Ticket(db.Model):
     descripcion = db.Column(db.Text, nullable=False)
     username = db.Column(db.String(50), db.ForeignKey('users.username'), nullable=False)
     asignado_a = db.Column(db.String(50), db.ForeignKey('users.username'), nullable=True)
-    # NULL = sin asignar; INTERNA = usuario Suite; EXTERNA = proveedor no identificado.
+    # NULL = sin asignar; INTERNA = técnico Suite; EXTERNA = proveedor; AUTOGESTION = Yuliana.
     tipo_atencion = db.Column(db.String(12), nullable=True)
 
     sucursal_id = db.Column(db.Integer, db.ForeignKey('sucursales.sucursal_id'), nullable=False)

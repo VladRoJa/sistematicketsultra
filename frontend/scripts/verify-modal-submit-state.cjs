@@ -34,6 +34,10 @@ assert.equal(isModalSubmitDisabled({
   requiredSelections: ['INTERNA', 68],
 }), false, 'Formulario interno completo habilita confirmar');
 assert.equal(isModalSubmitDisabled({
+  requiredText: ['Atenderé personalmente'],
+  requiredSelections: ['AUTOGESTION'],
+}), false, 'Autogestión con motivo no requiere selector de técnico');
+assert.equal(isModalSubmitDisabled({
   requiredText: ['Corrección de sucursal'],
   requiredSelections: ['INTERNA', 68],
   blocked: true,
@@ -60,6 +64,8 @@ for (const rel of [
   const html = fs.readFileSync(path.resolve(__dirname, rel), 'utf8');
   assert.match(html, /ultra-modal-confirm/, rel + ' debe reutilizar la clase visual');
   assert.match(html, /\[disabled\]="guardarDeshabilitado"/, rel + ' debe usar disabled nativo');
+  assert.match(html, /\*ngIf="permitirAutogestionMantenimiento" value="AUTOGESTION"/,
+    rel + ' solo habilita Autogestión para el actor autorizado');
 }
 const css = fs.readFileSync(path.resolve(__dirname, '../src/styles.scss'), 'utf8');
 assert.match(css, /ultra-modal-confirm:disabled/, 'Debe existir estilo disabled visible');
@@ -212,6 +218,26 @@ assert.ok(plannerFinalize, 'Planner debe exponer regla de solicitud de cierre');
 assert.match(plannerFinalize[0], /this\.canCaptureDiagnosis[\s\S]*?!this\.ticket\.tipo_atencion[\s\S]*?!this\.ticket\.asignado_a/,
   'El jefe puede solicitar conformidad sobre trabajo propio sin asignación');
 console.log('PASS: jefe legacy sin técnico solicita conformidad, cierre delegado intacto');
+
+assert.match(plannerTs, /this\.ticket\.tipo_atencion === 'AUTOGESTION'/,
+  'Planner debe permitir solicitar conformidad en autogestión');
+assert.match(plannerHtml, /\[permitirAutogestionMantenimiento\]="canSelfManage"/,
+  'Planner transmite permiso desde backend a su modal');
+assert.match(ticketTableHtml, /\[permitirAutogestionMantenimiento\]="puedeAutogestionMantenimiento"/,
+  'Tickets V1 transmite permiso desde backend a modales');
+const selfManagedClosure = { ...ownTicket, tipo_atencion: 'AUTOGESTION',
+  asignado_a: 'MANT_YULIANA' };
+chief.user = { id: 91, username: 'MANT_YULIANA', rol: 'COORDINADOR_MANTENIMIENTO',
+  department_id: 1 };
+chief.puedeCoordinarMantenimiento = true;
+chief.puedeAutogestionMantenimiento = true;
+chief.puedeCoordinarTicket = (_ticket) => chief.puedeCoordinarMantenimiento;
+assert.equal(chief.puedeSolicitarCierreMantenimiento(selfManagedClosure), true,
+  'Yuliana puede solicitar conformidad de su autogestión');
+chief.puedeAutogestionMantenimiento = false;
+assert.equal(chief.puedeSolicitarCierreMantenimiento(selfManagedClosure), false,
+  'Coordinador sin permiso de autogestión no tiene botón');
+console.log('PASS: Autogestión Yuliana, selector condicionado y solicitud de gerente');
 
 console.log('PASS: Planner protege fecha inicial, botón Cambiar fecha y arrastre');
 
