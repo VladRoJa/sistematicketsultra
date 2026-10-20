@@ -1019,6 +1019,7 @@
       [fechaSeleccionada]="fechaSolucionTentativa"
       [ticket]="ticketParaAsignarFecha"
       [permitirAsignacionMantenimiento]="esCoordinacionMantenimiento"
+      [permitirAutogestionMantenimiento]="puedeAutogestionMantenimiento"
       [responsablesMantenimiento]="responsablesMantenimiento"
       [puedeCapturarDiagnostico]="puedeCapturarDiagnosticoMantenimiento(ticketParaAsignarFecha)"
       (onGuardar)="onGuardarFechaSolucion($event)"
@@ -1032,6 +1033,7 @@
     <app-reasignar-responsable-modal
       [ticket]="ticketParaReasignar"
       [responsables]="responsablesMantenimiento"
+      [permitirAutogestionMantenimiento]="puedeAutogestionMantenimiento"
       [guardando]="guardandoReasignacion"
       (onGuardar)="onGuardarReasignacion($event)"
       (onCancelar)="onCancelarReasignacion()"
