@@ -94,6 +94,10 @@ class SyntheticTicket:
 @pytest.fixture
 def qa_http(monkeypatch):
     users = {
+        91: SimpleNamespace(
+            id=91, username="MANT_YULIANA", rol="COORDINADOR_MANTENIMIENTO",
+            department_id=1, sucursal_id=100, sucursales_ids=[8],
+        ),
         45: SimpleNamespace(
             id=45, username="MANTENIMIENTO", rol="MANTENIMIENTO",
             department_id=1, sucursal_id=100,
@@ -135,11 +139,11 @@ def qa_http(monkeypatch):
     )
     monkeypatch.setattr(
         ticket_routes, "has_maintenance_coordination_permission",
-        lambda user: user.username == "QA_YULIANA",
+        lambda user: user.username in {"QA_YULIANA", "MANT_YULIANA"},
     )
     monkeypatch.setattr(
         coordination, "has_maintenance_coordination_permission",
-        lambda user: user.username == "QA_YULIANA",
+        lambda user: user.username in {"QA_YULIANA", "MANT_YULIANA"},
     )
 
     class ScopedQuery:
@@ -360,3 +364,63 @@ def test_qa_chief_cannot_close_work_outside_scope_or_delegated(qa_http):
         {"notas_cierre": "No saltar revisión de Yuliana"},
     ).status_code == 403
     assert commit.call_count == 0
+
+
+def test_qa_autogestion_yuliana_manager_double_check(qa_http):
+    ticket, post, commit = qa_http
+    ticket.tipo_atencion = "AUTOGESTION"
+    ticket.asignado_a = "MANT_YULIANA"
+    ticket.estado = "en progreso"
+    ticket.costo_solucion = Decimal("100.00")
+    ticket.fecha_solucion = datetime(2026, 10, 27, tzinfo=timezone.utc)
+
+    assert post(91002, "cierre/solicitar/990001",
+                {"notas_cierre": "Otra coordinación intenta apropiarse"}).status_code == 403
+    assert post(91001, "cierre/solicitar/990001",
+                {"notas_cierre": "Técnico intenta cerrar"}).status_code == 403
+    assert ticket.estado == "en progreso"
+
+    response = post(91, "cierre/solicitar/990001",
+                    {"notas_cierre": "Resuelto personalmente por Yuliana"})
+    assert response.status_code == 200
+    assert ticket.estado == "por_validar"
+    assert ticket.estado_cierre == "pendiente_creador"
+    assert ticket.tipo_atencion == "AUTOGESTION"
+    assert ticket.asignado_a == "MANT_YULIANA"
+    assert ticket.costo_solucion == Decimal("100.00")
+    assert commit.call_count == 1
+
+    # Yuliana no se autoaprueba; tampoco el gerente de otra sucursal.
+    assert post(91, "cierre/aceptar-creador/990001").status_code == 403
+    assert post(91005, "cierre/aceptar-creador/990001").status_code == 403
+    assert ticket.estado == "por_validar"
+
+    # Rechazo del gerente devuelve el mismo ticket a En progreso.
+    assert post(91003, "cierre/rechazar-creador/990001",
+                {"motivo": "La reparación no quedó completa"}).status_code == 200
+    assert ticket.estado == "en progreso"
+    assert ticket.estado_cierre == "rechazado_por_gerente"
+
+    # Yuliana puede corregir y solicitar nuevamente la conformidad.
+    assert post(91, "cierre/solicitar/990001",
+                {"notas_cierre": "Corrección terminada personalmente"}).status_code == 200
+    assert ticket.estado == "por_validar"
+    assert post(91003, "cierre/aceptar-creador/990001").status_code == 200
+    assert ticket.estado == "finalizado"
+    assert ticket.estado_cierre is None
+
+
+def test_qa_autogestion_requires_its_true_owner(qa_http):
+    ticket, post, commit = qa_http
+    ticket.tipo_atencion = "AUTOGESTION"
+    ticket.asignado_a = "SR_MANT_TIJ"
+    assert post(91, "cierre/solicitar/990001",
+                {"notas_cierre": "Responsable manipulado"}).status_code == 403
+    assert ticket.estado == "en progreso"
+    assert commit.call_count == 0
+
+    ticket.asignado_a = "MANT_YULIANA"
+    ticket.sucursal_id_destino = 1
+    assert post(91, "cierre/solicitar/990001",
+                {"notas_cierre": "Fuera de sucursal"}).status_code == 404
+    assert ticket.estado == "en progreso"

@@ -127,7 +127,7 @@ export interface Ticket {
   url_evidencia?: string | null;
   has_attachment?: boolean;
   asignado_a?: string | null;
-  tipo_atencion?: 'INTERNA' | 'EXTERNA' | null;
+  tipo_atencion?: 'INTERNA' | 'EXTERNA' | 'AUTOGESTION' | null;
   refaccion_definida_por_jefe?: boolean;
   estado_cierre?:
   | 'pendiente_jefe'
@@ -1831,16 +1831,20 @@ permiteBusqueda(col: string): boolean {
 }
 
 
+puedeAutogestionMantenimiento = false;
+
 cargarContextoCoordinacionMantenimiento(): void {
   this.maintenanceCoordinationService.getContext().subscribe({
     next: (context) => {
       this.puedeCoordinarMantenimiento = !!context.can_coordinate;
+      this.puedeAutogestionMantenimiento = !!(context.can_coordinate && context.can_self_manage);
       this.responsablesMantenimiento = context.can_coordinate
         ? (context.assignees || [])
         : [];
     },
     error: () => {
       this.puedeCoordinarMantenimiento = false;
+      this.puedeAutogestionMantenimiento = false;
       this.responsablesMantenimiento = [];
     },
   });
@@ -2888,6 +2892,9 @@ puedeSolicitarCierreMantenimiento(ticket: Ticket): boolean {
   }
   if (!this.puedeCoordinarTicket(ticket)) return false;
   return ticket.tipo_atencion === 'EXTERNA'
+    || (ticket.tipo_atencion === 'AUTOGESTION'
+      && this.puedeAutogestionMantenimiento
+      && String(ticket.asignado_a || '').trim().toUpperCase() === 'MANT_YULIANA')
     || (ticket.tipo_atencion === 'INTERNA'
       && ticket.estado_cierre === 'pendiente_revision_coord');
 }

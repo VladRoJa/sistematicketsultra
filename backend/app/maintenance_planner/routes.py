@@ -13,6 +13,7 @@ from app.services.mantenimiento_equipos_service import (
     puede_capturar_diagnostico_mantenimiento,
 )
 from app.utils.tickets_maintenance_permissions import has_maintenance_coordination_permission
+from app.services.ticket_maintenance_coordination_service import is_yuliana_self_management_actor
 from app.utils.maintenance_regional_lead import (
     is_regional_maintenance_lead, regional_maintenance_lead_branches,
 )
@@ -70,6 +71,10 @@ def get_board():
             puede_capturar_diagnostico_mantenimiento(user)
         )
         permissions["can_request_closure"] = _can_request_maintenance_closure(user)
+        permissions["can_self_manage"] = bool(
+            is_yuliana_self_management_actor(user)
+            and has_maintenance_coordination_permission(user)
+        )
         return jsonify(payload), 200
     except MaintenancePlannerError as exc:
         return jsonify({"mensaje": exc.message}), exc.status_code

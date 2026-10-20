@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 
 import { environment } from 'src/environments/environment';
 
-export type MaintenanceAttentionMode = 'INTERNA' | 'EXTERNA';
+export type MaintenanceAttentionMode = 'INTERNA' | 'EXTERNA' | 'AUTOGESTION';
 
 export interface MaintenanceAssignee {
   id: number;
@@ -13,6 +13,7 @@ export interface MaintenanceAssignee {
 
 export interface MaintenanceCoordinationContext {
   can_coordinate: boolean;
+  can_self_manage: boolean;
   assignees: MaintenanceAssignee[];
 }
 

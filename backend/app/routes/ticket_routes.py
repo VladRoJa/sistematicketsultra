@@ -28,6 +28,7 @@ from app.services.ticket_maintenance_coordination_service import (
     prepare_maintenance_work_completion,
     prepare_maintenance_work_return,
     MAINTENANCE_WORK_REVIEW_PENDING,
+    is_yuliana_self_management_actor,
 )
 from app.utils.tickets_maintenance_permissions import (
     has_maintenance_coordination_permission,
@@ -899,6 +900,7 @@ def get_maintenance_coordination_context():
     allowed = has_maintenance_coordination_permission(actor)
     return jsonify({
         "can_coordinate": allowed,
+        "can_self_manage": bool(allowed and is_yuliana_self_management_actor(actor)),
         "assignees": list_maintenance_assignees(actor) if allowed else [],
     }), 200
 
@@ -2640,8 +2642,17 @@ def cierre_solicitar(ticket_id):
                 # La coordinación nunca se salta la terminación del técnico.
                 if str(t.estado_cierre or "").strip().lower() != MAINTENANCE_WORK_REVIEW_PENDING:
                     return jsonify({"mensaje": "Falta la terminación técnica y revisión de coordinación."}), 409
+            elif tipo_atencion == "AUTOGESTION":
+                # Solo Yuliana cierra la autogestión que tiene a su cargo;
+                # se solicita conformidad, nunca se finaliza aquí.
+                if (
+                    not is_yuliana_self_management_actor(user)
+                    or str(t.asignado_a or "").strip().casefold()
+                    != str(user.username).strip().casefold()
+                ):
+                    return jsonify({"mensaje": "Autogestión requiere a Yuliana como responsable."}), 403
             elif tipo_atencion != "EXTERNA":
-                return jsonify({"mensaje": "Define atención INTERNA o EXTERNA antes del cierre."}), 409
+                return jsonify({"mensaje": "Define atención INTERNA, EXTERNA o AUTOGESTION antes del cierre."}), 409
     elif not (_es_admin_o_corporativo(user) or _es_jefe_depto(user, t)):
         # Contrato legacy intacto para departamentos distintos de Mantenimiento.
         return jsonify({"mensaje": "No autorizado"}), 403

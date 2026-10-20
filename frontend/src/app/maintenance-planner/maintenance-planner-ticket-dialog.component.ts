@@ -28,6 +28,7 @@ export interface MaintenancePlannerTicketDialogData {
   canSchedule: boolean;
   canCaptureDiagnosis: boolean;
   canRequestClosure: boolean;
+  canSelfManage: boolean;
   initialDate?: string | null;
 }
 
@@ -43,6 +44,7 @@ export class MaintenancePlannerTicketDialogComponent {
   readonly canSchedule = this.data.canSchedule;
   readonly canCaptureDiagnosis = this.data.canCaptureDiagnosis;
   readonly canRequestClosure = this.data.canRequestClosure;
+  readonly canSelfManage = this.data.canSelfManage;
   // El diagnóstico técnico requiere un flujo distinto; coordinación usa el PUT transaccional de Tickets V1.
   readonly useCoordinatedAssignment = this.canRequestClosure && !this.canCaptureDiagnosis;
   readonly commitmentTicket = {
@@ -129,6 +131,10 @@ export class MaintenancePlannerTicketDialogComponent {
       && this.normalizedState === 'en progreso'
       && (
         this.ticket.tipo_atencion === 'EXTERNA'
+        || (
+          this.ticket.tipo_atencion === 'AUTOGESTION'
+          && this.canSelfManage
+        )
         || (
           this.ticket.tipo_atencion === 'INTERNA'
           && this.ticket.estado_cierre === 'pendiente_revision_coord'

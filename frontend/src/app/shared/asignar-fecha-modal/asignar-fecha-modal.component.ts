@@ -43,6 +43,7 @@ export class AsignarFechaModalComponent implements OnChanges {
   @Input() fechaSeleccionada: Date | null = null;
   @Input() puedeCapturarDiagnostico = false;
   @Input() permitirAsignacionMantenimiento = false;
+  @Input() permitirAutogestionMantenimiento = false;
   @Input() responsablesMantenimiento: MaintenanceAssignee[] = [];
 
   @Input() set ticket(value: any | null) {
@@ -166,7 +167,7 @@ export class AsignarFechaModalComponent implements OnChanges {
 
   get modalDescripcion(): string {
     return this.permitirAsignacionMantenimiento
-      ? 'Define responsable, fecha compromiso y motivo del seguimiento.'
+      ? 'Define tipo de atención, fecha compromiso y motivo del seguimiento.'
       : 'Define la fecha compromiso y registra el motivo para mantener trazabilidad.';
   }
 
@@ -224,7 +225,7 @@ export class AsignarFechaModalComponent implements OnChanges {
       !this.tipoAtencion ||
       (this.tipoAtencion === 'INTERNA' && !this.responsableUserId)
     )) {
-      mostrarAlertaToast('Selecciona atención interna y responsable, o Proveedor externo.', 'error');
+      mostrarAlertaToast('Selecciona el tipo de atención y un responsable solo si es Interna.', 'error');
       return;
     }
 
