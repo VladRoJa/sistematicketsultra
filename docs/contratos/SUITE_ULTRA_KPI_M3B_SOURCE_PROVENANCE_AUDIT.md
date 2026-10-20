@@ -27,21 +27,35 @@ se ejecuta solo dentro de un contexto Flask autorizado. Recibe mapas explícitos
   snapshot ID, upload ID y SHA de ambos extremos.
 - Compara contra la serie canónica previa y reporta
   `shared_declines`, `new_declines` y `removed_declines`.
-- **La salida siempre tiene `publication_authorized=False`**, incluso si no
-  existen descensos. Ante caídas devuelve `BLOCKED_APPROVAL_REQUIRED`.
+- **La salida siempre tiene `publication_authorized=False`**: la auditoría
+  nunca ejecuta ni autoriza por sí misma una publicación. Ante descensos,
+  devuelve `SOURCE_VERIFIED_WITH_MTD_REVISIONS` y anota cada disminución
+  como `FUENTE_VERIFICADA_REVISION_MTD`; sin descensos, `SOURCE_VERIFIED`.
+  La caída del acumulado no constituye por sí sola una inconsistencia.
 
-## Qué no verifica
+## Autoridad de datos y separación entre auditoría y ejecución
 
-Un SHA demuestra que el XLSX almacenado coincide con el archivo registrado,
-no que Gasca haya aprobado la interpretación de un descenso. Warehouse tiene
-auditoría de carga documental, pero no existe en esta implementación una
-autoridad KPI que apruebe por sucursal/métrica/par de fechas.
+**Gasca es la fuente de verdad de KPI Desempeño.** Cuando un operador de Suite
+Ultra autorizado ejecuta el flujo de actualización, está solicitando que el
+sistema use los últimos archivos oficiales disponibles de Gasca. No se requiere
+que un tercero apruebe individualmente una disminución MTD confirmada por los
+archivos originales.
 
-Por ello **no se fabrica una aprobación** a partir de operador de Warehouse,
-metadatos XLSX, hashes coincidentes, revisión textual, PR, CI o
-`M3BSourceRevisionClaim`. Las 75 disminuciones de octubre siguen bloqueadas
-hasta un flujo de aprobación de negocio y revisión formal de procedencia
-autorizado separadamente.
+La auditoría verifica integridad técnica de los datos **almacenados**: bytes,
+tamaño y SHA-256 frente al registro Warehouse, fecha/identidad y concordancia
+entre XLSX y snapshot. El evento UPLOAD documenta una carga; por sí solo no
+demuestra que un documento provenga externamente de Gasca. El flujo operativo
+deberá restringir fuentes/cargadores confiables y verificar que el lote seleccionado
+corresponda al corte más reciente y completo. No debe confiar en un hash,
+nombre de archivo o solicitud externa para declarar fuente oficial.
+
+**Frontera de ejecución:** este módulo solo reporta procedencia y diferencias;
+no contiene permisos de usuario, transacciones de promoción, reconstrucción,
+rollback ni revalidación del estado actual de Warehouse justo antes de escribir.
+`publication_authorized=False` significa que no tiene esa capacidad, **no**
+que se necesite una aprobación humana adicional por cada descenso. La
+publicación, canonicalidad y reconstrucción quedan en un flujo posterior que
+debe validar un lote completo e impedir lecturas mixtas.
 
 ## Caso octubre 2026 (solo referencia, no credencial de ejecución)
 
