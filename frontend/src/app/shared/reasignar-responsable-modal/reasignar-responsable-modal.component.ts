@@ -35,6 +35,7 @@ export class ReasignarResponsableModalComponent implements OnInit {
   @Input() ticket: TicketConResponsable | null = null;
   @Input() responsables: MaintenanceAssignee[] = [];
   @Input() guardando = false;
+  @Input() permitirAutogestionMantenimiento = false;
 
   @Output() onGuardar = new EventEmitter<ReassignMaintenanceTicketPayload>();
   @Output() onCancelar = new EventEmitter<void>();
@@ -64,7 +65,7 @@ export class ReasignarResponsableModalComponent implements OnInit {
     const actual = String(this.ticket?.asignado_a || '').trim().toUpperCase();
     const modoActual = this.ticket?.tipo_atencion ?? (actual ? 'INTERNA' : null);
     if (modoActual !== this.tipoAtencion) return false;
-    if (this.tipoAtencion === 'EXTERNA') return true;
+    if (this.tipoAtencion === 'EXTERNA' || this.tipoAtencion === 'AUTOGESTION') return true;
     const seleccionado = this.responsables.find(
       (person) => person.id === this.responsableUserId,
     );

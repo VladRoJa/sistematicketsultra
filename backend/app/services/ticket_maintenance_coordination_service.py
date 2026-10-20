@@ -24,8 +24,25 @@ from app.utils.pm_permissions import normalize_pm_role
 BUSINESS_TZ = ZoneInfo("America/Tijuana")
 MAINTENANCE_DEPARTMENT_ID = 1
 COORDINATABLE_STATES = frozenset({"abierto", "en progreso"})
-ATTENTION_MODES = frozenset({"INTERNA", "EXTERNA"})
+ATTENTION_MODES = frozenset({"INTERNA", "EXTERNA", "AUTOGESTION"})
 MAINTENANCE_WORK_REVIEW_PENDING = "pendiente_revision_coord"
+YULIANA_USER_ID = 91
+YULIANA_USERNAME = "MANT_YULIANA"
+
+
+def is_yuliana_self_management_actor(user) -> bool:
+    """Autogestión es personal, no un permiso implícito de coordinación."""
+    if user is None:
+        return False
+    try:
+        return (
+            int(getattr(user, "id", 0)) == YULIANA_USER_ID
+            and str(getattr(user, "username", "") or "").strip().upper() == YULIANA_USERNAME
+            and normalize_pm_role(getattr(user, "rol", None)) == "COORDINADOR_MANTENIMIENTO"
+            and int(getattr(user, "department_id", 0)) == MAINTENANCE_DEPARTMENT_ID
+        )
+    except (TypeError, ValueError):
+        return False
 
 
 class TicketCoordinationError(Exception):
@@ -154,7 +171,7 @@ def prepare_maintenance_coordination(
 
     attention_mode = str(payload.get("tipo_atencion") or "").strip().upper()
     if attention_mode not in ATTENTION_MODES:
-        raise TicketCoordinationError("Selecciona INTERNA o EXTERNA.")
+        raise TicketCoordinationError("Selecciona INTERNA, EXTERNA o AUTOGESTION.")
 
     assignee_id = payload.get("asignado_user_id")
     assigned_username = None
@@ -169,6 +186,12 @@ def prepare_maintenance_coordination(
                 "El responsable debe ser un usuario real del departamento Mantenimiento."
             )
         assigned_username = assignee.username
+    elif attention_mode == "AUTOGESTION":
+        if not is_yuliana_self_management_actor(user):
+            raise TicketCoordinationForbidden("Solo Yuliana puede registrar Autogestión.")
+        if assignee_id is not None:
+            raise TicketCoordinationError("Autogestión asigna automáticamente a Yuliana.")
+        assigned_username = user.username
     elif assignee_id is not None:
         raise TicketCoordinationError(
             "Atención EXTERNA no acepta responsable de usuario Suite."
@@ -457,7 +480,7 @@ def prepare_maintenance_reassignment(
 
     attention_mode = payload.get("tipo_atencion")
     if attention_mode not in ATTENTION_MODES:
-        raise TicketCoordinationError("Selecciona atención INTERNA o EXTERNA.")
+        raise TicketCoordinationError("Selecciona atención INTERNA, EXTERNA o AUTOGESTION.")
 
     assignee_id = payload.get("asignado_user_id")
     assigned_username = None
@@ -472,6 +495,12 @@ def prepare_maintenance_reassignment(
                 "El responsable debe pertenecer a Mantenimiento."
             )
         assigned_username = assignee.username
+    elif attention_mode == "AUTOGESTION":
+        if not is_yuliana_self_management_actor(user):
+            raise TicketCoordinationForbidden("Solo Yuliana puede seleccionar Autogestión.")
+        if assignee_id is not None:
+            raise TicketCoordinationError("Autogestión asigna automáticamente a Yuliana.")
+        assigned_username = user.username
     elif assignee_id is not None:
         raise TicketCoordinationError(
             "Atención EXTERNA no acepta un usuario Suite."
