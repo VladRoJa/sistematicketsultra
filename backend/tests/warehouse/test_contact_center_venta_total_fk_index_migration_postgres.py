@@ -83,7 +83,8 @@ def test_migration_creates_and_drops_partial_indexes_concurrently(isolated_postg
     with isolated_postgres.connect() as connection:
         context = MigrationContext.configure(connection)
         with Operations.context(context):
-            migration.upgrade()
+            with context.begin_transaction():
+                migration.upgrade()
 
         indexes = connection.execute(text("""
             SELECT indexname, indexdef
@@ -96,8 +97,10 @@ def test_migration_creates_and_drops_partial_indexes_concurrently(isolated_postg
             assert expected[name] in definition
             assert "IS NOT NULL" in definition
 
+        connection.commit()  # End the metadata SELECT transaction before DDL.
         with Operations.context(context):
-            migration.downgrade()
+            with context.begin_transaction():
+                migration.downgrade()
         remaining = connection.execute(text("""
             SELECT count(*) FROM pg_indexes
             WHERE schemaname = 'public'
