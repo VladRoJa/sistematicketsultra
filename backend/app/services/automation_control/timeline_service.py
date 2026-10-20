@@ -7,12 +7,14 @@ from zoneinfo import ZoneInfo
 from app.models.attendance import WarehouseAttendanceRunORM
 from app.models.marketing import MarketingIventasSyncRunORM, MarketingMetaSyncRunORM
 from app.models.routine_control import RoutineControlPipelineRunORM
+from app.models.rpa import GascaSmsRequestORM
 from app.models.warehouse import TrackDailyVersionORM, WarehouseAuditLogORM
 from app.services.automation_control.job_catalog import get_job_catalog
 from app.services.automation_control.job_read_service import (
     _filter_reports_completion, _serialize_reports_completion,
     _filter_routine_scheduler, _serialize_routine_pipeline_run,
     _serialize_attendance_run, _serialize_sync_run, _serialize_track_run,
+    _serialize_gasca_sms_request,
 )
 
 LOCAL_TZ = ZoneInfo("America/Tijuana")
@@ -34,6 +36,7 @@ _TRIGGERS = {
 }
 _MODELS = {
     "marketing.iventas_sync": MarketingIventasSyncRunORM,
+    "gasca.sms_dispatch": GascaSmsRequestORM,
     "marketing.meta_sync": MarketingMetaSyncRunORM,
     "track.preview_operativo": TrackDailyVersionORM,
     "track.base_nocturna_canonica": TrackDailyVersionORM,
@@ -62,7 +65,7 @@ def _observations(job_key: str, day: date) -> list[dict]:
         model.started_at
         if model in (MarketingIventasSyncRunORM, MarketingMetaSyncRunORM)
         else model.created_at if model in (
-            WarehouseAuditLogORM, RoutineControlPipelineRunORM,
+            WarehouseAuditLogORM, RoutineControlPipelineRunORM, GascaSmsRequestORM,
         )
         else model.started_at_utc
     )
@@ -84,7 +87,7 @@ def _observations(job_key: str, day: date) -> list[dict]:
             row.started_at if model in (
                 MarketingIventasSyncRunORM, MarketingMetaSyncRunORM,
             ) else row.created_at if model in (
-                WarehouseAuditLogORM, RoutineControlPipelineRunORM,
+                WarehouseAuditLogORM, RoutineControlPipelineRunORM, GascaSmsRequestORM,
             )
             else row.started_at_utc
         )
@@ -94,6 +97,8 @@ def _observations(job_key: str, day: date) -> list[dict]:
             entry = _serialize_reports_completion(row)
         elif model is RoutineControlPipelineRunORM:
             entry = _serialize_routine_pipeline_run(row)
+        elif model is GascaSmsRequestORM:
+            entry = _serialize_gasca_sms_request(row)
         elif model is TrackDailyVersionORM:
             entry = _serialize_track_run(row)
         elif model is WarehouseAttendanceRunORM:

@@ -97,3 +97,21 @@ td .run-result+button{margin-left:7px}
 .timeline-expand summary{cursor:pointer;padding:11px 12px;background:#fff;
   border:1px solid #dce2e9;border-radius:5px;font-size:13px;font-weight:600}
 .timeline-expand[open] summary{margin-bottom:10px}
+
+/* SMS Gasca: snapshot de cola independiente del estado del worker. */
+.sms-monitor .detail-head{align-items:center;gap:12px;flex-wrap:wrap}
+.sms-monitor .detail-head small{font-size:11px;color:#64748b}
+.sms-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px}
+.sms-metrics>div{padding:10px;background:#f8fafc;min-width:0}
+.sms-metrics small{display:block;font-size:11px;color:#64748b}
+.sms-metrics strong{display:block;font-size:21px;margin-top:3px}
+.sms-recovery{margin-top:14px;border-top:1px solid #e2e8f0;padding-top:10px}
+.sms-recovery summary{cursor:pointer;font-size:13px;font-weight:600}
+.sms-recovery p,.sms-recovery li{font-size:12px;line-height:1.65}
+.sms-recovery ol{padding-left:20px}
+.sms-recovery li{padding:4px 0}
+.sms-recovery code{display:block;margin:4px 0;padding:6px 8px;background:#f1f5f9;
+  border-radius:4px;font-size:11px;white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:640px){.sms-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.sms-requires-pairing{color:#b91c1c}

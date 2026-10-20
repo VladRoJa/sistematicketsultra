@@ -49,3 +49,17 @@ export interface EffectiveJobSchedule {
 export interface EffectiveSchedulesResponse {
   checked_at_utc:string; jobs:EffectiveJobSchedule[];
 }
+
+/** Observable evidence only: not a live Google Messages authentication check. */
+export interface GascaSmsQueueTelemetry {
+  checked_at_utc:string;
+  coverage:'REQUEST_STATUSES';
+  session_status:'UNVERIFIED'|'REQUIRES_PAIRING';
+  session_reason:string;
+  pending:number;
+  in_progress:number;
+  sent_last_24h:number;
+  failed_last_24h:number;
+  last_sent_at_utc:string|null;
+  last_failed_at_utc:string|null;
+}

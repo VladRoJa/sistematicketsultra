@@ -64,7 +64,7 @@ def _compiled(q):
 
 def test_catalog_five_workers_without_fabricated_health():
     jobs = get_job_catalog()
-    assert len(jobs) == 18
+    assert len(jobs) == 19
     keys = {job.key for job in jobs}
     assert "routine_control.scheduled_pipeline" in keys
     assert "reports.reporte_direccion_daily_capture" in keys

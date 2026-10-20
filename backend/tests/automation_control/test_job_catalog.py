@@ -10,7 +10,7 @@ def test_catalog_is_consistent_and_unique():
     catalog.validate_catalog()
     jobs = catalog.get_job_catalog()
     datasets = catalog.get_dataset_catalog()
-    assert len(jobs) == 18
+    assert len(jobs) == 19
     assert len(datasets) == 2
     assert len({job.key for job in jobs}) == len(jobs)
 
@@ -23,9 +23,11 @@ def test_catalog_has_distinct_worker_and_job_identity():
         "reports-scheduler",
         "routine-control-scheduler",
         "ticket-attachment-cleanup",
+        "gasca-sms-worker",
     }
     assert len([job for job in jobs if job.worker_key == "marketing-scheduler"]) == 3
     assert len([job for job in jobs if job.worker_key == "track-scheduler"]) == 7
+    assert len([job for job in jobs if job.worker_key == "gasca-sms-worker"]) == 1
 
 
 def test_catalog_never_implies_live_status_or_manual_permission():
@@ -33,7 +35,7 @@ def test_catalog_never_implies_live_status_or_manual_permission():
         assert job.manual_run_supported is False
         assert job.priority_policy in {
             "SECONDARY_TRACK_WINDOW", "TRACK_PRIMARY",
-            "NIGHTLY_TRACK_WINDOW", "DEFER_WHEN_TRACK_ACTIVE",
+            "NIGHTLY_TRACK_WINDOW", "DEFER_WHEN_TRACK_ACTIVE", "ON_DEMAND",
         }
         assert job.timezone == "America/Tijuana"
         assert job.schedule_kind

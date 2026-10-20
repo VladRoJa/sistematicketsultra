@@ -14,6 +14,51 @@
     <p class="disclaimer">Resultado de la última corrida registrada. «Sin instrumentación» no significa que el job haya fallado; «Finalización observada» no garantiza que todos sus fallos estén registrados.</p>
     <p *ngIf="healthUnavailable" class="disclaimer">No fue posible comprobar los latidos. Estados mostrados como desconocidos.</p>
     <p *ngIf="configUnavailable" class="disclaimer">No se pudo verificar la configuración efectiva de los workers.</p>
+    <section class="panel sms-monitor" aria-label="Monitoreo de SMS Gasca">
+      <div class="detail-head">
+        <div>
+          <h2>SMS Gasca · Google Messages</h2>
+          <small>Servicio bajo demanda · Worker y vinculación son estados independientes</small>
+        </div>
+        <span class="worker-health-chip" [ngClass]="workerHealthClass('gasca-sms-worker')"
+          [title]="workerHealthDetail('gasca-sms-worker')">
+          {{workerHealthLabel('gasca-sms-worker')}}
+        </span>
+      </div>
+      <p *ngIf="smsQueueUnavailable" class="disclaimer" role="status">No fue posible verificar la cola SMS. No significa que esté vacía.</p>
+      <div class="sms-metrics" *ngIf="smsQueue as queue">
+        <div><small>En cola (persistido)</small><strong>{{queue.pending}}</strong></div>
+        <div><small>En proceso (persistido)</small><strong>{{queue.in_progress}}</strong></div>
+        <div><small>Enviados · 24 h</small><strong>{{queue.sent_last_24h}}</strong></div>
+        <div><small>Fallidos · 24 h</small><strong>{{queue.failed_last_24h}}</strong></div>
+      </div>
+      <p class="disclaimer" *ngIf="smsQueue as queue">
+        Vinculación: <b [class.sms-requires-pairing]="smsSessionNeedsPairing">{{smsSessionLabel}}</b> · Último SMS confirmado: {{formatDate(queue.last_sent_at_utc)}}.
+        El estado de la cola proviene de transacciones confirmadas, no identifica un SMS en curso sin confirmar.
+      </p>
+      <details class="sms-recovery">
+        <summary>Diagnóstico y guía de revinculación</summary>
+        <p>Realiza esta operación únicamente en una ventana de mantenimiento, sin solicitudes activas.
+          La cola persistida no permite descartar un envío que aún no se ha confirmado: si existe esa posibilidad, no detengas el worker.
+          Estos comandos se ejecutan por SSH en el servidor; la Suite no ejecuta comandos de sistema.</p>
+        <p><code>cd ~/sistematicketsultra</code></p>
+        <ol>
+          <li>Detén el worker para liberar el perfil compartido:
+            <code>docker compose --profile scheduler stop gasca-sms-worker</code></li>
+          <li>Diagnostica la sesión:
+            <code>bash scripts/google_messages_rpa.sh diagnose</code></li>
+          <li>Solo si requiere re-vinculación, inicia la pantalla temporal:
+            <code>bash scripts/google_messages_rpa.sh start-pairing</code></li>
+          <li>Desde Windows abre el túnel SSH indicado por <code>bash scripts/google_messages_rpa.sh help</code>.
+            Abre TigerVNC en <code>127.0.0.1::5902</code> y vincula Google Messages.</li>
+          <li>Al terminar, libera el navegador:
+            <code>bash scripts/google_messages_rpa.sh stop</code></li>
+          <li>Reanuda el servicio:
+            <code>docker compose --profile scheduler start gasca-sms-worker</code></li>
+        </ol>
+        <p class="disclaimer">No ejecutar <code>test</code> aquí: envía un SMS real. No abrir la vinculación mientras el worker esté activo.</p>
+      </details>
+    </section>
     <div class="filters"><label>Dominio <select [(ngModel)]="domain"><option value="">Todos</option>
       <option *ngFor="let d of domains" [value]="d">{{d}}</option></select></label>
       <label>Buscar <input [(ngModel)]="search" placeholder="Job o worker"></label>

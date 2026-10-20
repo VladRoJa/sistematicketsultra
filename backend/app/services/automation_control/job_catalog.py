@@ -299,6 +299,18 @@ _JOBS = (
         evidence_tables=(),
         priority_policy="DEFER_WHEN_TRACK_ACTIVE",
     ),
+    JobSpec(
+        key="gasca.sms_dispatch",
+        worker_key="gasca-sms-worker",
+        domain="rpa",
+        label="SMS Gasca · solicitudes bajo demanda",
+        schedule_kind="PENDING_REQUEST",
+        schedule_reference="Cola de solicitudes; sin horario fijo (sondeo por defecto cada 2 s)",
+        schedule_env_keys=("GASCA_SMS_WORKER_POLL_SECONDS",),
+        evidence_tables=("gasca_sms_requests",),
+        priority_policy="ON_DEMAND",
+        manual_run_supported=False,
+    ),
 )
 
 

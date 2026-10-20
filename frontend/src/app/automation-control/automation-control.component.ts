@@ -10,7 +10,7 @@ import { AutomationControlService } from './automation-control.service';
 import { DataFreshnessService, DatasetFreshness, FreshnessDatasetKey } from '../shared/data-freshness-indicator/data-freshness.service';
 import { DataFreshnessIndicatorComponent } from '../shared/data-freshness-indicator/data-freshness-indicator.component';
 import { classifyObservationRuns, classifyReferenceHour, currentTijuanaClock, ObservationState, ReferenceState } from './automation-control-timeline-display';
-import { Job, Run, Summary, Dataset, TimelineWorker, TimelineJob, TimelineObservation, WorkerHealth, WorkerLiveness, EffectiveJobSchedule } from './automation-control.models';
+import { Job, Run, Summary, Dataset, TimelineWorker, TimelineJob, TimelineObservation, WorkerHealth, WorkerLiveness, EffectiveJobSchedule, GascaSmsQueueTelemetry } from './automation-control.models';
 
 @Component({ selector:'app-automation-control',standalone:true,imports:[CommonModule,FormsModule,MatDialogModule,MatIconModule,DataFreshnessIndicatorComponent],
   templateUrl:'./automation-control.component.html',styleUrls:['./automation-control.component.css'] })
@@ -21,6 +21,8 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
   timelineDate=new Date().toLocaleDateString('en-CA',{timeZone:'America/Tijuana'});
   timelineWorkers:TimelineWorker[]=[];
   workerHealth:WorkerHealth[]=[];
+  smsQueue:GascaSmsQueueTelemetry|null=null;
+  smsQueueUnavailable=false;
   effectiveSchedules:EffectiveJobSchedule[]=[];
   configUnavailable=false;
   healthUnavailable=false;
@@ -124,6 +126,12 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
   workerState(workerKey:string):WorkerHealth|undefined {
     return this.workerHealth.find(worker=>worker.worker_key===workerKey);
   }
+  get smsSessionNeedsPairing():boolean {
+    return this.smsQueue?.session_status==='REQUIRES_PAIRING';
+  }
+  get smsSessionLabel():string {
+    return this.smsSessionNeedsPairing ? 'Requiere vinculación' : 'Sin comprobar';
+  }
   workerHealthLabel(workerKey:string):string {
     const status=this.workerState(workerKey)?.status??'UNKNOWN';
     const names:Record<WorkerLiveness,string>={
@@ -162,12 +170,14 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
     this.sequence++;this.latestRunSequence++;this.loading=true;this.error='';
     forkJoin({summary:this.api.summary(),jobs:this.api.jobs(),datasets:this.api.datasets(),
       health:this.api.workerHealth().pipe(catchError(() => of(null))),
+      sms:this.api.smsQueue().pipe(catchError(() => of(null))),
       schedules:this.api.effectiveSchedules().pipe(catchError(() => of(null))),
       funnel:this.freshnessApi.get('marketing.sales_funnel','GLOBAL').pipe(catchError(() => of(null))),
       track:this.freshnessApi.get('track.daily','GLOBAL').pipe(catchError(() => of(null)))})
       .pipe(takeUntil(this.destroyed$)).subscribe({
-        next:({summary,jobs,datasets,health,schedules,funnel,track})=>{
+        next:({summary,jobs,datasets,health,schedules,funnel,track,sms})=>{
           this.summary=summary;this.jobs=jobs.jobs;this.datasets=datasets.datasets;this.loading=false;
+          this.smsQueue=sms;this.smsQueueUnavailable=!sms;
           this.loadLatestRuns(this.jobs);
           this.configUnavailable=!schedules;
           this.effectiveSchedules=schedules?.jobs??[];
@@ -179,7 +189,7 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
           const selected=this.jobs.find(j=>j.key===this.selected?.key);
           if(selected){this.select(selected);} else{this.close();}
         },
-        error:()=>{this.loading=false;this.summary=null;this.jobs=[];this.datasets=[];this.close();
+        error:()=>{this.loading=false;this.summary=null;this.jobs=[];this.datasets=[];this.smsQueue=null;this.close();
           this.error='No se pudo cargar Control de Automatizaciones.';}
       });
   }
@@ -196,7 +206,14 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
     return job.observed[hour] || [];
   }
   timelineState(job:TimelineJob,hour:string):ObservationState {
-    return classifyObservationRuns(this.timelineRuns(job,hour));
+    const runs=this.timelineRuns(job,hour);
+    if(job.job_key==='gasca.sms_dispatch'&&runs.length){
+      const state=runs[0].status_raw.toLowerCase();
+      if(state==='sent')return 'completed';
+      if(state==='failed')return 'error';
+      if(['gasca_searching','ready_to_send','sms_sending'].includes(state))return 'running';
+    }
+    return classifyObservationRuns(runs);
   }
   timelineIcon(job:TimelineJob,hour:string):string {
     const icons:Record<ObservationState,string>={
@@ -302,6 +319,12 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
   }
   latestRunState(job:Job):ObservationState {
     const run=this.latestRun(job);
+    if(job.key==='gasca.sms_dispatch'&&run){
+      const status=run.status_raw.toLowerCase();
+      if(status==='sent')return 'completed';
+      if(status==='failed')return 'error';
+      if(['gasca_searching','ready_to_send','sms_sending'].includes(status))return 'running';
+    }
     return run?classifyObservationRuns([run]):'unknown';
   }
   latestRunStatus(job:Job):string {
@@ -310,6 +333,14 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
     if(this.latestRunUnavailable[job.key])return 'No verificable';
     const run=this.latestRun(job);
     if(!run)return 'Sin registro';
+    if(job.key==='gasca.sms_dispatch'){
+      const status=run.status_raw.toLowerCase();
+      if(status==='sent')return 'SMS enviado';
+      if(status==='pending')return 'En cola';
+      if(['gasca_searching','ready_to_send','sms_sending'].includes(status))return 'Procesando';
+      if(status==='failed')return 'Falló';
+      return 'No enviado (regla Gasca)';
+    }
     // El audit de reportes solo acredita finalizaciones, no captura fallos.
     if(job.run_history_coverage==='COMPLETION_MARKERS_ONLY')return 'Finalización observada';
     const labels:Record<ObservationState,string>={

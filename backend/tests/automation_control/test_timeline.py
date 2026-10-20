@@ -34,7 +34,7 @@ def test_reference_schedule_is_never_verified():
         result = daily_timeline(date(2026, 10, 13))
     assert result["schedule_verified"] is False
     assert result["timezone"] == "America/Tijuana"
-    assert len(result["workers"]) == 5
+    assert len(result["workers"]) == 6
     reports = next(w for w in result["workers"] if w["worker_key"] == "reports-scheduler")
     assert len(reports["jobs"]) == 6
     assert reports["jobs"][0]["reference_slots"] == ["09:00"] or any(

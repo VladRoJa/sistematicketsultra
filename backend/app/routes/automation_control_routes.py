@@ -8,6 +8,7 @@ from app.services.automation_control.timeline_service import daily_timeline
 from app.services.automation_control.freshness_service import read_freshness
 from app.services.marketing_access import resolve_marketing_access, MarketingAuthorizationError
 from app.services.automation_control.worker_health_service import read_worker_health
+from app.services.automation_control.gasca_sms_health_service import read_gasca_sms_queue
 from app.services.automation_control.effective_schedule_service import read_effective_schedules
 from app.services.automation_control.diagnostic_service import (
     run_diagnostic, last_error_diagnostic,
@@ -345,4 +346,20 @@ def automation_control_effective_schedules():
         return jsonify({
             "status": "error",
             "message": "No se pudo verificar la programación efectiva.",
+        }), 503
+
+
+@automation_control_bp.get("/sms-gasca/queue")
+@jwt_required()
+def automation_control_gasca_sms_queue():
+    """Solo ADMICORP; no exportar números, códigos ni mensajes."""
+    if not _require_read_access():
+        return _deny()
+    try:
+        return jsonify({"status": "ok", **read_gasca_sms_queue()})
+    except Exception:
+        current_app.logger.exception("No fue posible leer cola SMS Gasca")
+        return jsonify({
+            "status": "error",
+            "message": "No fue posible verificar la cola SMS.",
         }), 503

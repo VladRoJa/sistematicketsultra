@@ -39,6 +39,17 @@ RECENT_DUPLICATE_STATUSES = [
     GascaSmsRequestStatus.SENT,
 ]
 GOOGLE_MESSAGES_ADVISORY_LOCK_KEY = 5247002301
+SESSION_REQUIRES_PAIRING_CODE = "GOOGLE_MESSAGES_SESSION_REQUIRES_PAIRING"
+_SESSION_GATE_MESSAGES = (
+    "Google Messages requiere iniciar sesión en Google.",
+    "Google Messages sigue en pantalla de bienvenida.",
+)
+
+
+def _is_explicit_session_gate_error(exc: GoogleMessagesSmsSenderError) -> bool:
+    """Solo señales explícitas del sender; nunca interpretar logs libres de legacy."""
+    return str(exc).startswith(_SESSION_GATE_MESSAGES)
+
 
 
 class GascaSmsRequestMotivo:
@@ -293,10 +304,16 @@ def process_gasca_sms_request(
 
     except GoogleMessagesSmsSenderError as exc:
         request.status = GascaSmsRequestStatus.FAILED
-        request.user_message = (
-            "El código fue validado en Gasca, pero no se pudo enviar el SMS por Google Messages."
-        )
-        request.internal_error = str(exc)
+        if _is_explicit_session_gate_error(exc):
+            request.user_message = (
+                "Google Messages requiere vinculación. No se envió el SMS."
+            )
+            request.internal_error = SESSION_REQUIRES_PAIRING_CODE
+        else:
+            request.user_message = (
+                "El código fue validado en Gasca, pero no se pudo enviar el SMS por Google Messages."
+            )
+            request.internal_error = str(exc)
         request.processed_at = db.func.now()
 
     except Exception as exc:
