@@ -10,7 +10,7 @@ from app.integrations.iventas.campaigns_client import (
     IVentasCampaignsConfigurationError,
     IVentasCampaignsProviderError,
 )
-from app.models.marketing import MarketingCampaignV2ORM
+from app.models.marketing import MarketingCampaignV2ORM, MarketingCampaignV2RecipientORM
 from app.services.marketing_campaign_iventas_provider import (
     IVentasCampaignProvider,
 )
@@ -64,11 +64,11 @@ def session():
         Column("status", String),
         Column("recipient_count", Integer),
     )
-    Table(
-        "marketing_campaign_v2_recipients", metadata,
-        Column("id", BigInteger, primary_key=True),
-        Column("campaign_id", BigInteger),
-    )
+    Table("socios_vencidos_cartera", metadata,
+          Column("id", BigInteger, primary_key=True))
+    Table("socios_activos_snapshot_rows", metadata,
+          Column("id", BigInteger, primary_key=True))
+    MarketingCampaignV2RecipientORM.__table__.to_metadata(metadata)
     metadata.create_all(engine)
 
     with Session(engine) as value:
@@ -294,12 +294,14 @@ def _add_child(session, *, child_id=20, status="SUBMITTED",
 
 
 def _add_frozen(session, count=4):
-    recipients = Table(
-        "marketing_campaign_v2_recipients",
-        MetaData(), autoload_with=session.get_bind(),
-    )
-    session.execute(recipients.insert(), [
-        {"id": 100 + i, "campaign_id": 2}
+    session.add_all([
+        MarketingCampaignV2RecipientORM(
+            id=100 + i,
+            campaign_id=2,
+            phone_mx10=f"686100000{i + 1}",
+            source="EXPIRED_MEMBERS",
+            conflict_fields_json=[],
+        )
         for i in range(count)
     ])
 
