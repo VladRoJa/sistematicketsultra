@@ -63,3 +63,13 @@ export interface GascaSmsQueueTelemetry {
   last_sent_at_utc:string|null;
   last_failed_at_utc:string|null;
 }
+
+/** Sender-confirmed SMS probe. Not carrier delivery or worker liveness. */
+export type GascaSmsPulseState = 'HEALTHY'|'FAILED'|'LATE'|'RUNNING'|'UNKNOWN';
+export interface GascaSmsPulseTelemetry {
+  checked_at_utc:string; coverage:'PERSISTED_SMS_PULSE';
+  state:GascaSmsPulseState; interval_seconds:number;
+  last_attempt_at_utc:string|null; last_success_at_utc:string|null;
+  last_error_code:string|null; consecutive_failures:number;
+  delivery_verified:false;
+}
