@@ -38,8 +38,10 @@
       </p>
       <details class="sms-recovery">
         <summary>Diagnóstico y guía de revinculación</summary>
-        <p>Primero confirma que no haya envíos en proceso y realiza esta operación en una ventana de mantenimiento.
-          Los comandos se ejecutan por SSH en el servidor; la Suite no ejecuta comandos de sistema.</p>
+        <p>Realiza esta operación únicamente en una ventana de mantenimiento, sin solicitudes activas.
+          La cola persistida no permite descartar un envío que aún no se ha confirmado: si existe esa posibilidad, no detengas el worker.
+          Estos comandos se ejecutan por SSH en el servidor; la Suite no ejecuta comandos de sistema.</p>
+        <p><code>cd ~/sistematicketsultra</code></p>
         <ol>
           <li>Detén el worker para liberar el perfil compartido:
             <code>docker compose --profile scheduler stop gasca-sms-worker</code></li>
