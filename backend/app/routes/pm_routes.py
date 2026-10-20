@@ -1095,7 +1095,12 @@ def pm_listar_bitacoras():
     else:
         rol = _pm_user_role(user)
 
-        if rol not in _ADMIN_ROLES and rol != "MANTENIMIENTO":
+        if is_regional_maintenance_lead(user):
+            allowed = regional_maintenance_lead_branches(user)
+            if not allowed:
+                return jsonify({"error": "Forbidden", "detail": "No tienes acceso a sucursales"}), 403
+            query = query.filter(PmBitacoraORM.sucursal_id.in_(allowed))
+        elif rol not in _ADMIN_ROLES and rol != "MANTENIMIENTO":
             if rol == "AUX_MANTENIMIENTO":
                 user_sucursal = _pm_user_primary_sucursal_id(user)
                 try:
@@ -1192,7 +1197,12 @@ def pm_listar_configuraciones():
 
         query = query.filter(PmPreventivoConfigORM.sucursal_id == sucursal_id)
     else:
-        if rol not in _ADMIN_ROLES and rol != "MANTENIMIENTO":
+        if is_regional_maintenance_lead(user):
+            allowed = regional_maintenance_lead_branches(user)
+            if not allowed:
+                return jsonify({"error": "Forbidden", "detail": "No tienes acceso a sucursales"}), 403
+            query = query.filter(PmPreventivoConfigORM.sucursal_id.in_(allowed))
+        elif rol not in _ADMIN_ROLES and rol != "MANTENIMIENTO":
             if rol == "AUX_MANTENIMIENTO":
                 user_sucursal = _pm_user_primary_sucursal_id(user)
                 try:
@@ -1580,7 +1590,12 @@ def pm_calendario():
     else:
         rol = _pm_user_role(user)
 
-        if rol not in _ADMIN_ROLES and rol not in {"MANTENIMIENTO", "SISTEMAS", "TECNICO"}:
+        if is_regional_maintenance_lead(user):
+            allowed = regional_maintenance_lead_branches(user)
+            if not allowed:
+                return jsonify({"error": "Forbidden", "detail": "No tienes acceso a sucursales"}), 403
+            query = query.filter(PmPreventivoConfigORM.sucursal_id.in_(allowed))
+        elif rol not in _ADMIN_ROLES and rol not in {"MANTENIMIENTO", "SISTEMAS", "TECNICO"}:
             if rol == "AUX_MANTENIMIENTO":
                 user_sucursal = _pm_user_primary_sucursal_id(user)
                 try:
