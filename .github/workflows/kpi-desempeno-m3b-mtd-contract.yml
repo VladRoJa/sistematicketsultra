@@ -13,6 +13,8 @@ on:
       - 'backend/tests/warehouse/test_kpi_desempeno_m3b_verified_plan.py'
       - 'backend/app/warehouse/services/kpi_desempeno_m3c_preflight_service.py'
       - 'backend/tests/warehouse/test_kpi_desempeno_m3c_preflight.py'
+      - 'backend/app/warehouse/services/kpi_desempeno_m3c_source_evidence_service.py'
+      - 'backend/tests/warehouse/test_kpi_desempeno_m3c_source_evidence.py'
       - 'backend/app/warehouse/services/gasca_job_orchestrator.py'
       - 'backend/app/warehouse/services/warehouse_upload_creator_existing_service.py'
       - 'backend/tests/warehouse/test_gasca_provenance_reserved_metadata.py'
@@ -70,13 +72,15 @@ jobs:
             app/warehouse/services/kpi_desempeno_m3b_provenance_audit.py \
             app/warehouse/services/kpi_desempeno_m3b_verified_plan.py \
             app/warehouse/services/kpi_desempeno_m3c_preflight_service.py \
+            app/warehouse/services/kpi_desempeno_m3c_source_evidence_service.py \
             app/warehouse/services/gasca_job_orchestrator.py \
             app/warehouse/services/warehouse_upload_creator_existing_service.py \
             tests/warehouse/test_kpi_desempeno_m3b_continuity_plan.py \
             tests/warehouse/test_kpi_desempeno_m3b_provenance_audit.py \
             tests/warehouse/test_kpi_desempeno_m3b_verified_plan.py \
             tests/warehouse/test_kpi_desempeno_m3c_preflight.py \
-            tests/warehouse/test_gasca_provenance_reserved_metadata.py
+            tests/warehouse/test_gasca_provenance_reserved_metadata.py \
+            tests/warehouse/test_kpi_desempeno_m3c_source_evidence.py
       - name: Synthetic contract / real PostgreSQL 16 / M1 regressions
         run: |
           python -m pytest -q --tb=short -o addopts= \
@@ -85,4 +89,5 @@ jobs:
             tests/warehouse/test_kpi_desempeno_m3b_verified_plan.py \
             tests/warehouse/test_kpi_desempeno_m3c_preflight.py \
             tests/warehouse/test_gasca_provenance_reserved_metadata.py \
+            tests/warehouse/test_kpi_desempeno_m3c_source_evidence.py \
             tests/warehouse/test_kpi_desempeno_semantic_diff.py
