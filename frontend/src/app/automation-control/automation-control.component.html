@@ -36,6 +36,22 @@
         Vinculación: <b [class.sms-requires-pairing]="smsSessionNeedsPairing">{{smsSessionLabel}}</b> · Último SMS confirmado: {{formatDate(queue.last_sent_at_utc)}}.
         El estado de la cola proviene de transacciones confirmadas, no identifica un SMS en curso sin confirmar.
       </p>
+      <div class="sms-pulse-health" aria-label="Pulso SMS Gasca cada 2 horas">
+        <div class="sms-pulse-heading">
+          <div>
+            <strong>Pulso de envío · Cada 2 horas</strong>
+            <small>Verifica un SMS real por Google Messages; independiente del latido del worker.</small>
+          </div>
+          <span class="sms-pulse-chip" [ngClass]="smsPulseClass" role="status">{{smsPulseLabel}}</span>
+        </div>
+        <p class="sms-pulse-message">{{smsPulseDescription}}</p>
+        <div class="sms-pulse-details" *ngIf="smsPulse as pulse">
+          <div><small>Último intento</small><strong>{{formatDate(pulse.last_attempt_at_utc)}}</strong></div>
+          <div><small>Último envío confirmado</small><strong>{{formatDate(pulse.last_success_at_utc)}}</strong></div>
+          <div><small>Fallos consecutivos</small><strong>{{pulse.consecutive_failures}}</strong></div>
+        </div>
+        <p class="disclaimer">Un envío confirmado por Google Messages no garantiza la recepción en la red celular.</p>
+      </div>
       <details class="sms-recovery">
         <summary>Diagnóstico y guía de revinculación</summary>
         <p>Realiza esta operación únicamente en una ventana de mantenimiento, sin solicitudes activas.
