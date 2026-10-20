@@ -119,6 +119,10 @@ def qa_http(monkeypatch):
             id=91005, username="QA_OTRO_GERENTE", rol="GERENTE",
             department_id=2, sucursal_id=9, sucursales_ids=[9],
         ),
+        91006: SimpleNamespace(
+            id=91006, username="QA_GERENTE_REGIONAL_TEST", rol="GERENTE",
+            department_id=2, sucursal_id=1, sucursales_ids=[1],
+        ),
     }
 
     ticket = SyntheticTicket(990001, "INTERNA")
@@ -329,6 +333,11 @@ def test_qa_chief_legacy_own_work_requires_manager_conformity(qa_http):
     # Gerente de la sucursal sí confirma el cierre.
     assert post(91005, "cierre/aceptar-creador/990001").status_code == 403
     assert ticket.estado == "por_validar"
+    assert post(91006, "cierre/aceptar-creador/990001").status_code == 200
+    assert ticket.estado == "finalizado"
+    assert ticket.estado_cierre is None
+    assert ticket.fecha_solucion == old_due
+    assert commit.call_count == 2
 
 
 def test_qa_chief_cannot_close_work_outside_scope_or_delegated(qa_http):
