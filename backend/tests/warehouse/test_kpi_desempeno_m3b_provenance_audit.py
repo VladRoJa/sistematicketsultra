@@ -57,14 +57,14 @@ def test_two_day_provenance_report_flags_new_and_removed_declines(monkeypatch):
         canonical_snapshot_ids=canon,
         expected_branch_count=2,
     )
-    assert report.status == "BLOCKED_APPROVAL_REQUIRED"
+    assert report.status == "SOURCE_VERIFIED_WITH_MTD_REVISIONS"
     assert report.publication_authorized is False
     assert report.days_verified == 2
     assert len(report.declines) == 2
     assert report.new_declines == 2
     assert report.shared_declines == 0
     assert report.removed_declines == 0
-    assert all(item.review_status == "REQUIRES_APROBACION_ORIGEN" for item in report.declines)
+    assert all(item.review_status == "FUENTE_VERIFICADA_REVISION_MTD" for item in report.declines)
     assert {(item.earlier_upload_id, item.later_upload_id) for item in report.declines} == {
         (111, 112)
     }
@@ -115,7 +115,7 @@ def test_baseline_drop_removed_by_new_series(monkeypatch):
         candidate_snapshot_ids=candidates, canonical_snapshot_ids=originals,
         expected_branch_count=2,
     )
-    assert report.status == "SOURCE_AUDIT_ONLY"
+    assert report.status == "SOURCE_VERIFIED"
     assert report.removed_declines == 2
     assert report.declines == ()
     assert report.publication_authorized is False
@@ -455,7 +455,7 @@ def test_postgres16_reads_real_synthetic_warehouse_without_writes(tmp_path):
                 )
             ]
             assert before == after == [4, 4, 4, 8]
-            assert report.status == "BLOCKED_APPROVAL_REQUIRED"
+            assert report.status == "SOURCE_VERIFIED_WITH_MTD_REVISIONS"
             assert report.publication_authorized is False
             assert len(report.declines) == 1
             assert report.new_declines == 1
