@@ -72,7 +72,11 @@ def create_app():
     # ──────────────────────────────────────
     db.init_app(app)
     migrate.init_app(app, db)
-    JWTManager(app)
+    jwt_manager = JWTManager(app)
+    # New access JWTs contain a session ID: revoked sessions become invalid.
+    # Legacy JWTs without a session ID retain their existing 45-minute expiry.
+    from app.services.auth_refresh_service import is_access_revoked
+    jwt_manager.token_in_blocklist_loader(is_access_revoked)
     register_maintenance_ticket_update_guard(app)
 
     # ──────────────────────────────────────
