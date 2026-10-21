@@ -46,7 +46,16 @@ export class TokenInterceptor implements HttpInterceptor {
           return throwError(() => error);
         }),
         switchMap(token => {
-          if (!token || this.session.getToken() !== token) {
+          if (!token) {
+            // If Web Locks are unavailable, the existing JWT remains usable
+            // until its real expiry; never rotate an uncoordinated cookie.
+            if (this.session.getToken() === observed && this.isValidToken(observed)) {
+              return this.dispatch(req, next, observed);
+            }
+            this.endInvalidSession();
+            return throwError(() => new Error('No fue posible renovar la sesión'));
+          }
+          if (this.session.getToken() !== token) {
             // A concurrent logout must never resurrect authorization.
             return throwError(() => new Error('La sesión cambió durante la renovación'));
           }
