@@ -106,7 +106,7 @@ def exportar_inventario():
                 "Marca": i.marca,
                 "Proveedor": i.proveedor,
                 "Categoría": i.categoria,
-                "Unidad": i.unidad,
+                "Unidad": i.unidad_medida,
                 "Código Interno": i.codigo_interno,
                 "No. de Equipo": i.no_equipo,
                 "Gasto Semanal": i.gasto_sem,
