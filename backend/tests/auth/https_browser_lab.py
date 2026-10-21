@@ -18,7 +18,7 @@ from app.models.user_model import UserORM
 from app.routes.auth_routes import auth_bp
 from app.services.auth_refresh_service import is_access_revoked
 
-ORIGIN = "https://localhost:4443"
+ORIGIN = "https://127.0.0.1:4443"
 USER = SimpleNamespace(
     id=47,
     username="qa_browser",
