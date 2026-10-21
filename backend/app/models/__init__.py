@@ -78,6 +78,7 @@ from .marketing import (
     MarketingCampaignV2ChannelBindingORM,
     MarketingCampaignV2TemplateORM,
     MarketingCampaignV2ORM,
+    MarketingCampaignV2CommercialResultORM,
     MarketingCampaignV2ProviderCampaignORM,
     MarketingCampaignV2RecipientORM,
     MarketingCampaignV2RecipientDispatchExclusionORM,

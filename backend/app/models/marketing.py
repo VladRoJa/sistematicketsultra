@@ -954,6 +954,24 @@ class MarketingCampaignV2ORM(db.Model):
     )
 
 
+class MarketingCampaignV2CommercialResultORM(db.Model):
+    """One scheduler-maintained commercial reconciliation per frozen campaign."""
+
+    __tablename__ = "marketing_campaign_v2_commercial_results"
+
+    campaign_v2_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("marketing_campaign_v2_campaigns.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    status = db.Column(db.String(48), nullable=False)
+    result_json = db.Column(db.JSON, nullable=False, default=dict)
+    checked_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    __table_args__ = (
+        db.Index("ix_mkt_v2_commercial_results_checked", "checked_at"),
+    )
+
+
 class MarketingCampaignV2ProviderCampaignORM(db.Model):
     __tablename__ = "marketing_campaign_v2_provider_campaigns"
 

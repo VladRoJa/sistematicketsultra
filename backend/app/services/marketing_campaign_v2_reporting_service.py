@@ -14,6 +14,7 @@ from sqlalchemy import func
 from app.extensions import db
 from app.models.marketing import (
     MarketingCampaignV2ORM,
+    MarketingCampaignV2CommercialResultORM,
     MarketingCampaignV2ProviderCampaignORM,
     MarketingCampaignV2ProviderRecipientObservationORM,
     MarketingCampaignV2ProviderStatsSnapshotORM,
@@ -1560,6 +1561,37 @@ def _summarize_campaign_v2_multichild_membership_movements(
     }
 
 
+def _materialized_multichild_commercial_payload(
+    *,
+    record: Any | None,
+    children: Iterable[Any],
+) -> dict[str, Any] | None:
+    """Read bounded cached metrics; never accept an outdated child set as READY."""
+    if record is None:
+        return None
+    payload = dict(record.result_json or {})
+    status = str(payload.get("status", record.status))
+    if status == "READY":
+        submitted_ids = sorted(
+            int(child.id) for child in children
+            if getattr(child, "status", None) == "SUBMITTED"
+        )
+        actual = sorted(payload.get("submitted_child_ids") or [])
+        if not submitted_ids or actual != submitted_ids or any(
+            child.status not in {"SUBMITTED", "PREPARED", "READY", "BLOCKED", "HELD"}
+            for child in children
+        ):
+            return {
+                "campaign_id": int(record.campaign_v2_id),
+                "status": "PENDING_RECONCILIATION",
+                "buyers_attributed": None,
+                "transactions_attributed": None,
+                "revenue_attributed_mxn": None,
+            }
+    payload["checked_at_utc"] = _iso_datetime(record.checked_at)
+    return payload
+
+
 def build_campaign_v2_commercial_attribution(
     *,
     campaign_id: Any,
@@ -1593,6 +1625,15 @@ def build_campaign_v2_commercial_attribution(
             "revenue_attributed_mxn": None,
         }
         if len(children) != 1:
+            if len(children) >= 2:
+                record = active_session.get(
+                    MarketingCampaignV2CommercialResultORM, normalized_id
+                )
+                materialized = _materialized_multichild_commercial_payload(
+                    record=record, children=children,
+                )
+                if materialized is not None:
+                    return {**base, **materialized}
             return {**base, "status": "UNSUPPORTED_MULTICHILD_OR_UNSENT"}
         child = children[0]
         if child.submitted_at is None or not child.provider_campaign_id:
@@ -1786,12 +1827,15 @@ def build_campaign_v2_commercial_attribution_batch(
 
         statuses: dict[int, dict[str, Any]] = {}
         candidates: dict[int, tuple[Any, datetime]] = {}
+        multichild_ids: list[int] = []
         for identifier in ids:
             child_rows = children_by_campaign.get(identifier, [])
             if len(child_rows) != 1:
                 statuses[identifier] = _commercial_batch_base(
                     identifier, "UNSUPPORTED_MULTICHILD_OR_UNSENT"
                 )
+                if len(child_rows) >= 2:
+                    multichild_ids.append(identifier)
                 continue
             child = child_rows[0]
             if child.submitted_at is None or not child.provider_campaign_id:
@@ -1805,6 +1849,28 @@ def build_campaign_v2_commercial_attribution_batch(
             candidates[identifier] = (
                 child, submitted.astimezone(_COMMERCIAL_TZ)
             )
+
+        # Materialized multi-child rows are one indexed lookup for the page;
+        # never query or scan Gasca from a web request for multi-child campaigns.
+        if multichild_ids:
+            cached = active_session.query(
+                MarketingCampaignV2CommercialResultORM
+            ).filter(
+                MarketingCampaignV2CommercialResultORM.campaign_v2_id.in_(
+                    multichild_ids
+                )
+            ).all()
+            for record in cached:
+                identifier = int(record.campaign_v2_id)
+                payload = _materialized_multichild_commercial_payload(
+                    record=record,
+                    children=children_by_campaign[identifier],
+                )
+                if payload is not None:
+                    statuses[identifier] = {
+                        **_commercial_batch_base(identifier, payload["status"]),
+                        **payload,
+                    }
 
         if not candidates:
             return {"rows": [statuses[i] for i in ids]}
