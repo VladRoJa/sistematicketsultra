@@ -152,7 +152,13 @@ def reconcile_multichild_campaign(*, campaign_id: int, session: Any) -> dict[str
         )
         for snapshot_id, recipient_id, raw_phone in observations:
             child_id = snapshot_id_to_child[int(snapshot_id)]
-            phone = normalize_phone(raw_phone)
+            # Persisted iVentas observation identity is "mx10:<10 digits>",
+            # not a raw telephone; passing that whole token to normalize_phone
+            # would incorrectly include the "10" in the prefix.
+            phone = normalize_phone(
+                raw_phone[5:] if isinstance(raw_phone, str)
+                and raw_phone.startswith("mx10:") else raw_phone
+            )
             if (
                 phone is not None
                 and recipient_id is not None
