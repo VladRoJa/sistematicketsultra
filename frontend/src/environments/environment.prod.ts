@@ -3,5 +3,5 @@
 export const environment = {
   production: true,
   apiUrl: '/api',
-  sessionRefreshEnabled: false // Enable only with migrated Flask refresh sessions
+  sessionRefreshEnabled: true // Production rollout: backend refresh sessions are migrated and enabled
 };

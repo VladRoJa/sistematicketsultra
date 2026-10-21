@@ -224,3 +224,26 @@ test('401 from POST is never retried automatically', async () => {
   );
   assert.equal(calls, 1);
 });
+
+test('refresh rollout is enabled only in the production Angular build', () => {
+  const root = path.join(__dirname, '../');
+  const prod = fs.readFileSync(
+    path.join(root, 'src/environments/environment.prod.ts'), 'utf8'
+  );
+  const dev = fs.readFileSync(
+    path.join(root, 'src/environments/environment.ts'), 'utf8'
+  );
+  const angular = JSON.parse(fs.readFileSync(
+    path.join(root, 'angular.json'), 'utf8'
+  ));
+
+  assert.match(prod, /sessionRefreshEnabled:\s*true\b/);
+  assert.match(dev, /sessionRefreshEnabled:\s*false\b/);
+
+  const replacements = angular.projects['frontend-angular']
+    .architect.build.configurations.production.fileReplacements;
+  assert.ok(replacements.some(item =>
+    item.replace === 'src/environments/environment.ts' &&
+    item.with === 'src/environments/environment.prod.ts'
+  ), 'production build must select the enabled environment');
+});
