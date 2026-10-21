@@ -53,6 +53,11 @@ class FollowupFreezeConflictError(RuntimeError):
     pass
 
 
+def _require_postgresql(session: Any) -> None:
+    if session.get_bind().dialect.name != "postgresql":
+        raise FollowupFreezeConflictError("El congelamiento de seguimiento exige PostgreSQL.")
+
+
 def _fields(row: Any, excluded: set[str]) -> dict:
     return {
         column.name: deepcopy(getattr(row, column.name))
@@ -90,8 +95,7 @@ def freeze_followup_campaign(
         raise FollowupFreezeValidationError("Se requiere el fingerprint SHA256 exacto del preview.")
 
     active = session if session is not None else db.session
-    if active.get_bind().dialect.name != "postgresql":
-        raise FollowupFreezeConflictError("El congelamiento de seguimiento exige PostgreSQL.")
+    _require_postgresql(active)
     scope = _normalize_current_scope(allowed_sucursal_keys)
     timestamp = now if now is not None else datetime.now(timezone.utc)
     if timestamp.tzinfo is None or timestamp.utcoffset() is None:
