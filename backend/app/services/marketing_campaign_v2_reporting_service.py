@@ -1482,6 +1482,74 @@ def _summarize_campaign_v2_membership_movements(
     }
 
 
+def _summarize_campaign_v2_multichild_membership_movements(
+    *,
+    child_inputs: Iterable[Mapping[str, Any]],
+    alias_map: Mapping[str, int],
+) -> dict[str, Any]:
+    """Combine proven per-child results without adding snapshots as revenue.
+
+    Callers must supply one canonical, cumulative Venta Total cut and one
+    provider-success evidence set for every eligible child. This pure function
+    deliberately does not fetch either source and MUST NOT mark missing
+    evidence as a zero. Children with no successful sends may have zero sales.
+    """
+    seen_child_ids: set[int] = set()
+    seen_phones: set[str] = set()
+    total_buyers = 0
+    total_transactions = 0
+    total_revenue = Decimal("0")
+    children: list[dict[str, Any]] = []
+
+    for entry in child_inputs:
+        child_id = int(entry["child_id"])
+        if child_id <= 0 or child_id in seen_child_ids:
+            raise MarketingCampaignV2ReportingValidationError(
+                "Children comerciales duplicados o inválidos."
+            )
+        seen_child_ids.add(child_id)
+        successful_phones = set(entry["successful_phones"])
+        if successful_phones & seen_phones:
+            raise MarketingCampaignV2ReportingValidationError(
+                "Un teléfono exitoso no puede atribuirse a dos children."
+            )
+        if any(normalize_phone(p) != p for p in successful_phones):
+            raise MarketingCampaignV2ReportingValidationError(
+                "El teléfono exitoso no tiene identidad MX10 verificable."
+            )
+        seen_phones.update(successful_phones)
+
+        metrics = _summarize_campaign_v2_membership_movements(
+            rows=entry["rows"],
+            sent_local=entry["sent_local"],
+            successful_phones=successful_phones,
+            branch_id=int(entry["branch_id"]),
+            alias_map=alias_map,
+        )
+        total_buyers += metrics["buyers_attributed"]
+        total_transactions += metrics["transactions_attributed"]
+        total_revenue += Decimal(metrics["revenue_attributed_mxn"])
+        children.append({
+            "child_id": child_id,
+            "successful_recipient_count": len(successful_phones),
+            **metrics,
+        })
+
+    if not children:
+        raise MarketingCampaignV2ReportingValidationError(
+            "No hay children enviados con evidencia comercial completa."
+        )
+    return {
+        "successful_recipient_count": len(seen_phones),
+        "buyers_attributed": total_buyers,
+        "transactions_attributed": total_transactions,
+        "revenue_attributed_mxn": str(
+            total_revenue.quantize(Decimal("0.01"))
+        ),
+        "children": sorted(children, key=lambda row: row["child_id"]),
+    }
+
+
 def build_campaign_v2_commercial_attribution(
     *,
     campaign_id: Any,
