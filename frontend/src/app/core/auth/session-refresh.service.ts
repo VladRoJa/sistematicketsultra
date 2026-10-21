@@ -54,6 +54,14 @@ export class SessionRefreshService {
     }
   }
 
+  /** Only renew on expiry proximity, and never for background polling. */
+  shouldRenewSoon(token: string | null): boolean {
+    return Boolean(
+      this.enabled && token && !this.activity.isLocked()
+      && this.activity.isRecent() && this.needsRenewal(token!)
+    );
+  }
+
   /** Request at most one refresh for an actual recent human interaction. */
   renewIfNeeded(observedToken: string | null): Promise<string | null> {
     if (!this.enabled || !this.activity.isRecent() || !observedToken) {

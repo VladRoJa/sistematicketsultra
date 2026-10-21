@@ -1,48 +1,61 @@
-// frontend/src/app/guards/auth.guard.ts
-
 import { Injectable } from '@angular/core';
 import { CanActivate, Router } from '@angular/router';
-import { Observable, of } from 'rxjs';
-import { catchError, map, tap } from 'rxjs/operators';
+import { JwtHelperService } from '@auth0/angular-jwt';
+import { Observable, from, of } from 'rxjs';
+import { catchError, map, switchMap } from 'rxjs/operators';
 
 import { SessionService } from '../core/auth/session.service';
+import { SessionRefreshService } from '../core/auth/session-refresh.service';
+import { AuthActivityService } from '../core/auth/auth-activity.service';
 import { AuthService } from '../services/auth.service';
 
-@Injectable({
-  providedIn: 'root'
-})
+@Injectable({ providedIn: 'root' })
 export class AuthGuard implements CanActivate {
   constructor(
-    private session: SessionService,
-    private authService: AuthService,
-    private router: Router
+    private readonly session: SessionService,
+    private readonly authService: AuthService,
+    private readonly refresh: SessionRefreshService,
+    private readonly activity: AuthActivityService,
+    private readonly jwt: JwtHelperService,
+    private readonly router: Router,
   ) {}
 
   canActivate(): Observable<boolean> {
     const token = this.session.getToken();
-    const user = this.session.getUser();
+    if (!token) return this.deny();
 
-    // 1) Sin token => login
-    if (!token) {
-      this.router.navigate(['/login']);
-      return of(false);
+    let expired = true;
+    try {
+      expired = this.jwt.isTokenExpired(token);
+    } catch {
+      expired = true;
     }
 
-    // 2) Ya hay user => ok
-    if (user) {
-      return of(true);
+    if (expired) {
+      if (!this.refresh.enabled || !this.activity.isRecent()) {
+        return this.deny();
+      }
+      return from(this.refresh.renewIfNeeded(token)).pipe(
+        switchMap(fresh => fresh ? this.authorizeStoredUser() : this.deny()),
+        catchError(() => this.deny()),
+      );
     }
+    return this.authorizeStoredUser();
+  }
 
-    // 3) Token existe pero user aún no => hidratar
+  private authorizeStoredUser(): Observable<boolean> {
+    if (this.session.getUser()) return of(true);
+    // Hydrate only after a valid access token. The backend owns permissions.
     return this.authService.obtenerUsuarioAutenticado().pipe(
-      map(() => true),
-      tap(() => console.log('✅ AuthGuard: sesión hidratada')),
-      catchError((err) => { 
-        this.session.clearSession();
-        this.router.navigate(['/login']);
-        console.log('AuthGuard hydration error status:', err?.status, err);
-        return of(false);
-      }),
+      map(result => Boolean(result?.user)),
+      catchError(() => this.deny()),
     );
+  }
+
+  private deny(): Observable<boolean> {
+    this.session.clearSession();
+    this.activity.clear();
+    this.router.navigate(['/login']);
+    return of(false);
   }
 }

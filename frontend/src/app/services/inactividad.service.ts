@@ -5,7 +5,7 @@ import { Injectable } from '@angular/core';
 export class InactividadService {
   private callbackReiniciar: (() => void) | null = null;
 
-  registrarCallback(cb: () => void) {
+  registrarCallback(cb: (() => void) | null) {
     this.callbackReiniciar = cb;
   }
 
