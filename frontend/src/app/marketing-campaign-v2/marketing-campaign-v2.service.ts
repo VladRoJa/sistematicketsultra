@@ -67,6 +67,8 @@ import {
   CampaignV2RecipientDetail,
   CampaignV2RecipientPage,
   CampaignV2RecipientProviderStatusCode,
+  CampaignV2FollowupPreview,
+  CampaignV2FollowupStatus,
   CampaignV2ReportingFilters,
   CampaignV2SubmitResponse,
   CampaignV2TariffClassificationRequest,
@@ -444,6 +446,25 @@ export class MarketingCampaignV2Service {
     return this.http.get<CampaignV2RecipientPage>(
       `${this.apiUrl}/${campaignId}/recipients`,
       { params },
+    );
+  }
+
+  previewFollowup(
+    campaignId: number,
+    selectedStatuses: ReadonlyArray<CampaignV2FollowupStatus>,
+    expectedSnapshotId: number | null = null,
+  ): Observable<CampaignV2FollowupPreview> {
+    const body: {
+      selected_statuses: CampaignV2FollowupStatus[];
+      expected_snapshot_id?: number;
+    } = {
+      selected_statuses: [...selectedStatuses],
+    };
+    if (expectedSnapshotId !== null) {
+      body.expected_snapshot_id = expectedSnapshotId;
+    }
+    return this.http.post<CampaignV2FollowupPreview>(
+      `${this.apiUrl}/${campaignId}/followup/preview`, body,
     );
   }
 
