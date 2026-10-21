@@ -117,9 +117,13 @@ jobs:
           from alembic.script import ScriptDirectory
           cfg = Config()
           cfg.set_main_option("script_location", "backend/migrations")
-          heads = ScriptDirectory.from_config(cfg).get_heads()
+          script = ScriptDirectory.from_config(cfg)
+          heads = script.get_heads()
           print("ALEMBIC_HEADS =", heads)
-          assert heads == ["d22c10202601"], heads
+          # La migración Tickets debe existir y el grafo permanecer lineal,
+          # pero migraciones posteriores pueden avanzar el HEAD.
+          assert len(heads) == 1, heads
+          assert script.get_revision("d22c10202601") is not None
           PY
 
   frontend:
