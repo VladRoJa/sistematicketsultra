@@ -800,3 +800,36 @@ def test_commercial_attribution_batch_is_scoped_and_has_constant_query_count(mon
             session=denied_session,
         )
     assert denied_session.queries == 1
+
+    # A giant submitted campaign on the same visible page cannot hide
+    # legitimate results of a smaller one (#26).
+    big_phones = [f"6{i:09d}" for i in range(10001)]
+    big_session = FakeSession([
+        [campaign(25), campaign(26)],
+        [child(25, "provider-25"), child(26, "provider-26")],
+        [
+            SimpleNamespace(
+                id=25, campaign_v2_id=25,
+                provider_campaign_id="provider-25", fetched_at=when,
+            ),
+            SimpleNamespace(
+                id=1, campaign_v2_id=26,
+                provider_campaign_id="provider-26", fetched_at=when,
+            ),
+        ],
+        [SimpleNamespace(
+            id=3332, business_date=date(2026, 10, 21),
+            captured_at=datetime(2026, 10, 21, 18, 0, tzinfo=timezone.utc),
+        )],
+        ([(25, 25, phone) for phone in big_phones] +
+         [(1, 26, "6861111111")]),
+        [sale(1, "6861111111", "CONVENIOS $549", "549")],
+    ])
+    big_result = build_campaign_v2_commercial_attribution_batch(
+        campaign_ids=[25, 26], allowed_sucursal_keys=None, session=big_session,
+    )
+    assert big_session.queries == 6
+    assert big_result["rows"][0]["status"] == "BATCH_SCOPE_TOO_LARGE"
+    assert big_result["rows"][0]["revenue_attributed_mxn"] is None
+    assert big_result["rows"][1]["status"] == "READY"
+    assert big_result["rows"][1]["revenue_attributed_mxn"] == "549.00"
