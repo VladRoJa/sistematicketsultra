@@ -931,7 +931,8 @@ def buscar_inventario():
 @jwt_required()
 def eliminar_movimiento(id):
     try:
-        mov = MovimientoInventario.query.get(id)
+        # Impide que dos eliminaciones concurrentes reviertan el mismo movimiento.
+        mov = MovimientoInventario.query.filter_by(id=id).with_for_update().first()
         if not mov:
             return jsonify({"error": "Movimiento no encontrado"}), 404
 
@@ -965,7 +966,11 @@ def eliminar_movimiento(id):
                 .with_for_update()
                 .first()
             )
-            if not inventario_sucursal or inventario_sucursal.stock is None:
+            if (
+                not inventario_sucursal
+                or inventario_sucursal.stock is None
+                or inventario_sucursal.stock < 0
+            ):
                 return conflicto(f"No se encontró stock válido para el inventario {inventario_id}")
 
             cantidad = cantidades_por_inventario[inventario_id]
