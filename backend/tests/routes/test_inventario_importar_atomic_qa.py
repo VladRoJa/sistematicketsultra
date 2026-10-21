@@ -51,9 +51,9 @@ def importar(monkeypatch):
 def test_csv_valido_importa_dos_filas_con_un_solo_commit(importar):
     enviar, session = importar
     contenido = (
-        "nombre,tipo,categoria,marca,descripcion\\n"
-        "Banca QA,aparato,Equipo,FLEX,Primera\\n"
-        "Tapete QA,producto,Consumible,ULTRA,Segunda\\n"
+        "nombre,tipo,categoria,marca,descripcion\n"
+        "Banca QA,aparato,Equipo,FLEX,Primera\n"
+        "Tapete QA,producto,Consumible,ULTRA,Segunda\n"
     ).encode()
     response = enviar(contenido)
     assert response.status_code == 200
@@ -82,18 +82,18 @@ def test_xlsx_valido_importa_una_fila(importar):
 @pytest.mark.parametrize(
     "contenido,filename",
     [
-        (b"nombre,tipo,categoria\\nValido,aparato,Equipo\\n,aparato,Equipo\\n", "lote.csv"),
-        (b"nombre,tipo\\nValido,aparato\\n", "sin-categoria.csv"),
-        (b"nombre,tipo,categoria,marca\\nA,producto,Equipo,X\\nA,producto,Equipo,X\\n", "duplicado.csv"),
-        (b"nombre,tipo,categoria\\nValido,producto,Equipo\\nB,producto,\\n", "incompleto.csv"),
-        (b"nombre,tipo,categoria\\n", "vacio.csv"),
+        (b"nombre,tipo,categoria\nValido,aparato,Equipo\n,aparato,Equipo\n", "lote.csv"),
+        (b"nombre,tipo\nValido,aparato\n", "sin-categoria.csv"),
+        (b"nombre,tipo,categoria,marca\nA,producto,Equipo,X\nA,producto,Equipo,X\n", "duplicado.csv"),
+        (b"nombre,tipo,categoria\nValido,producto,Equipo\nB,producto,\n", "incompleto.csv"),
+        (b"nombre,tipo,categoria\n", "vacio.csv"),
         (b"contenido-que-no-es-xlsx", "falso.xlsx"),
-        (b"nombre,tipo,categoria\\nValido,producto,Equipo\\n", "prohibido.txt"),
+        (b"nombre,tipo,categoria\nValido,producto,Equipo\n", "prohibido.txt"),
     ],
 )
 def test_archivo_invalido_nunca_escribe(importar, contenido, filename):
     enviar, session = importar
-    response = enviar(contenido.replace(b"\\n", b"\n"), filename)
+    response = enviar(contenido.replace(b"\n", b"\n"), filename)
     assert response.status_code == 400
     session.add_all.assert_not_called()
     session.commit.assert_not_called()
