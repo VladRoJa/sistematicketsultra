@@ -19,6 +19,7 @@ from app.models.marketing import (
 from app.services.marketing_campaign_provider import CampaignProviderStats
 from app.services.marketing_campaign_v2_provider_stats_service import (
     ProviderResolver,
+    MarketingCampaignV2ProviderStatsUnboundError,
     fetch_campaign_v2_provider_stats,
 )
 from app.services.marketing_campaign_provider_registry import (
@@ -45,6 +46,7 @@ def capture_campaign_v2_provider_stats_snapshot(
     *,
     campaign_id: Any,
     allowed_sucursal_keys: Iterable[str] | None,
+    child_id: Any | None = None,
     session=None,
     provider_resolver: ProviderResolver = resolve_campaign_provider,
     now: datetime | None = None,
@@ -53,6 +55,7 @@ def capture_campaign_v2_provider_stats_snapshot(
     fetched = fetch_campaign_v2_provider_stats(
         campaign_id=campaign_id,
         allowed_sucursal_keys=allowed_sucursal_keys,
+        child_id=child_id,
         session=active_session,
         provider_resolver=provider_resolver,
     )
@@ -84,6 +87,16 @@ def capture_campaign_v2_provider_stats_snapshot(
         row.phone_mx10: int(row.id)
         for row in frozen_rows
     }
+    if fetched.child_phones is not None:
+        if not fetched.child_phones.issubset(frozen_by_phone):
+            raise MarketingCampaignV2ProviderStatsUnboundError(
+                "El child contiene teléfonos fuera de la campaña congelada."
+            )
+        # Provider diagnostics and successful IDs are scoped to the exact
+        # submitted child, not to recipients belonging to sibling branches.
+        frozen_by_phone = {
+            phone: frozen_by_phone[phone] for phone in fetched.child_phones
+        }
     observation_specs = _build_observation_specs(
         fetched.stats,
         frozen_by_phone=frozen_by_phone,

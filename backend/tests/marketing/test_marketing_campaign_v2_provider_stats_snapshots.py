@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import BigInteger, Column, Integer, MetaData, Table, create_engine
+from sqlalchemy import BigInteger, Column, DateTime, Integer, JSON, MetaData, String, Table, create_engine
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -58,6 +58,19 @@ def session():
     )
     MarketingCampaignV2ORM.__table__.to_metadata(metadata)
     MarketingCampaignV2RecipientORM.__table__.to_metadata(metadata)
+    # Only the columns selected by the child-specific fetch are needed here.
+    Table(
+        "marketing_campaign_v2_provider_campaigns", metadata,
+        Column("id", BigInteger, primary_key=True),
+        Column("campaign_v2_id", BigInteger),
+        Column("provider", String),
+        Column("provider_campaign_id", String),
+        Column("status", String),
+        Column("submitted_at", DateTime(timezone=True)),
+        Column("recipient_count", Integer),
+        Column("provider_channel_id", String),
+        Column("request_snapshot_json", JSON),
+    )
     MarketingCampaignV2ProviderStatsSnapshotORM.__table__.to_metadata(metadata)
     MarketingCampaignV2ProviderRecipientObservationORM.__table__.to_metadata(metadata)
     metadata.create_all(engine)
@@ -382,3 +395,128 @@ def test_snapshot_unique_constraint_supports_idempotency(session):
     with pytest.raises(IntegrityError):
         session.commit()
     session.rollback()
+
+
+def test_multichild_provider_snapshots_match_only_their_sent_recipients(session):
+    """One parent, two submitted children, separate provider evidence and phones."""
+    from app.services.marketing_campaign_provider import CampaignProviderRawCounts
+    from app.services.marketing_campaign_v2_provider_stats_service import (
+        MarketingCampaignV2ProviderStatsUnboundError,
+    )
+
+    session.add(
+        MarketingCampaignV2ORM(
+            id=2,
+            name="Campaign with two branches",
+            source="EXPIRED_MEMBERS",
+            audience_definition_json=_definition(),
+            frozen_at=NOW,
+            created_at=NOW,
+            updated_at=NOW,
+        )
+    )
+    session.add_all([
+        MarketingCampaignV2RecipientORM(
+            id=20, campaign_id=2, phone_mx10="6861000001",
+            source="EXPIRED_MEMBERS",
+        ),
+        MarketingCampaignV2RecipientORM(
+            id=21, campaign_id=2, phone_mx10="6861000002",
+            source="EXPIRED_MEMBERS",
+        ),
+        MarketingCampaignV2RecipientORM(
+            id=22, campaign_id=2, phone_mx10="6641000003",
+            source="EXPIRED_MEMBERS",
+        ),
+    ])
+    child_table = Table(
+        "marketing_campaign_v2_provider_campaigns",
+        MetaData(), autoload_with=session.get_bind(),
+    )
+
+    def child(identifier, external, channel, phones):
+        return {
+            "id": identifier, "campaign_v2_id": 2,
+            "provider": "IVENTAS", "provider_campaign_id": external,
+            "status": "SUBMITTED", "submitted_at": NOW,
+            "recipient_count": len(phones),
+            "provider_channel_id": channel,
+            "request_snapshot_json": {
+                "provider_channel_id": channel,
+                "leads": [{"phone": f"521{phone}"} for phone in phones],
+            },
+        }
+
+    session.execute(child_table.insert(), [
+        child(101, "external-branch-a", "channel-a", ["6861000001", "6861000002"]),
+        child(102, "external-branch-b", "channel-b", ["6641000003"]),
+    ])
+    session.commit()
+
+    def provider_stats(successful, failed=()):
+        successes = frozenset(f"mx10:{phone}" for phone in successful)
+        failures = frozenset(f"mx10:{phone}" for phone in failed)
+        return replace(
+            _stats(),
+            raw_counts=CampaignProviderRawCounts(
+                successful=len(successes), failed=len(failures),
+                sent=len(successes), delivered=0, viewed=0, answered=0,
+                interaction_groups=0, interaction_items=0,
+            ),
+            successful_phones=successes,
+            failed_phones=failures,
+            sent_phones=successes,
+            delivered_phones=frozenset(),
+            viewed_phones=frozenset(),
+            button_interactions=(),
+        )
+
+    evidence = {
+        "external-branch-a": provider_stats(["6861000001"], ["6861000002"]),
+        "external-branch-b": provider_stats(["6641000003"]),
+    }
+    class PerChildProvider:
+        def __init__(self):
+            self.calls = []
+
+        def get_campaign_stats(self, external):
+            self.calls.append(external)
+            return evidence[external]
+
+    provider = PerChildProvider()
+    for child_id, external, matched_ids, frozen_count in [
+        (101, "external-branch-a", {20, 21}, 2),
+        (102, "external-branch-b", {22}, 1),
+    ]:
+        result = capture_campaign_v2_provider_stats_snapshot(
+            campaign_id=2,
+            child_id=child_id,
+            allowed_sucursal_keys=("BRANCH A",),
+            session=session,
+            provider_resolver=lambda key: provider,
+            now=NOW,
+        )
+        assert result["created"] is True
+        assert result["provider_campaign_id"] == external
+        assert result["diagnostics"]["matched_recipient_count"] == len(matched_ids)
+        assert result["diagnostics"]["frozen_recipient_without_provider_status_count"] == (
+            frozen_count - len(matched_ids)
+        )
+        assert {
+            row["campaign_recipient_id"]
+            for row in result["observations"]
+            if row["campaign_recipient_id"] is not None
+        } == matched_ids
+
+    assert provider.calls == ["external-branch-a", "external-branch-b"]
+    assert session.query(MarketingCampaignV2ProviderStatsSnapshotORM).count() == 2
+
+    # Legacy parent-level call must still reject ambiguous multichild bindings.
+    with pytest.raises(MarketingCampaignV2ProviderStatsUnboundError):
+        capture_campaign_v2_provider_stats_snapshot(
+            campaign_id=2,
+            allowed_sucursal_keys=("BRANCH A",),
+            session=session,
+            provider_resolver=lambda key: provider,
+        )
+    assert provider.calls == ["external-branch-a", "external-branch-b"]
