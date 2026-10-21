@@ -58,6 +58,12 @@ async function jump(page, minutes) {
       }
     }, 'HTTPS lab was not ready', 180_000);
 
+    // The Flask health endpoint is ready before Angular's first compilation.
+    // Wait for the actual frontend document to avoid a false proxy 502.
+    await eventually(() => require('node:child_process').spawnSync(
+      'curl', ['-kfsS', '--max-time', '2', BASE + '/']
+    ).status === 0, 'Angular HTTPS frontend not ready', 180_000);
+
     browser = await chromium.launch({ headless: true });
     const context = await browser.newContext({
       ignoreHTTPSErrors: true,
