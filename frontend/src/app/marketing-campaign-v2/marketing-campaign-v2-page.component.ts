@@ -1256,7 +1256,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
             return;
           }
           this.loadingCommercialSummaries = false;
-          this.commercialSummaries = new Map(
+          this.commercialSummaries = new Map<number, CampaignV2CommercialAttributionSummary>(
             result.rows
               .filter(row => visibleSet.has(row.campaign_id))
               .map(row => [row.campaign_id, row]),
