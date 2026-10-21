@@ -47,6 +47,7 @@ jobs:
             tests/marketing/test_marketing_campaign_v2_followup_freeze_service.py \
             tests/marketing/test_marketing_campaign_v2_provider_stats.py \
             tests/marketing/test_marketing_campaign_v2_provider_stats_snapshots.py \
+            tests/marketing/test_marketing_campaign_v2_provider_stats_scheduler_service.py \
             tests/marketing/test_marketing_campaign_v2_quota_service.py \
             tests/marketing/test_marketing_campaign_v2_quota_routes.py \
             tests/marketing/test_marketing_campaign_v2_preparation_service.py \
