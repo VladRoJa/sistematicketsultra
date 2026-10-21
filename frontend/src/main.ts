@@ -12,7 +12,6 @@ import { MatDialogModule } from '@angular/material/dialog';
 import { MatNativeDateModule } from '@angular/material/core';
 import { importProvidersFrom } from '@angular/core';
 import { JwtHelperService, JWT_OPTIONS } from '@auth0/angular-jwt';
-import { JwtInterceptor } from './app/interceptors/jwt.interceptor';
 
 bootstrapApplication(AppComponent, {
   providers: [
@@ -23,11 +22,6 @@ bootstrapApplication(AppComponent, {
     {
       provide: HTTP_INTERCEPTORS,
       useClass: TokenInterceptor,
-      multi: true
-    },
-    {
-      provide: HTTP_INTERCEPTORS,
-      useClass: JwtInterceptor,
       multi: true
     },
     { provide: JWT_OPTIONS, useValue: JWT_OPTIONS },
