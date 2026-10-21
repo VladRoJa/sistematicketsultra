@@ -1,14 +1,14 @@
 """Materialize Campaign V2 multi-child commercial attribution in the worker.
 
 Revision ID: g21c10202601
-Revises: f22c10202601
+Revises: a21c10202621
 Create Date: 2026-10-21
 """
 from alembic import op
 import sqlalchemy as sa
 
 revision = "g21c10202601"
-down_revision = "f22c10202601"
+down_revision = "a21c10202621"
 branch_labels = None
 depends_on = None
 
