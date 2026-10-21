@@ -6,6 +6,10 @@ import type { CampaignV2DispatchTemplate, CampaignV2ChannelBinding, CampaignV2Qu
 import { campaignV2IndicativeBudget } from './marketing-campaign-v2-budget.logic';
 import { isDispatchTemplateDraftValid, DispatchTemplateDraft } from './marketing-campaign-v2-dispatch-admin.logic';
 import { isCampaignV2MxnUnitCostValid, isCampaignV2NominalLimitValid, isCampaignV2RemainingCountValid, isCampaignV2ZonedDateString } from './marketing-campaign-v2-admin-validation.logic';
+import {
+  CAMPAIGN_V2_FOLLOWUP_STATUS_OPTIONS,
+  toggleCampaignV2FollowupStatus,
+} from './marketing-campaign-v2-followup.logic';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -759,6 +763,58 @@ test('Campaign V2 filtra todos los destinatarios desde servidor sin afectar expo
   assert.ok(html.includes('!campaign?.recipient_count'));
   assert.equal(html.includes('exportingDeliveryPackage || recipientsTotal <= 0'), false);
   assert.equal(html.includes('exportingSendablePackage || recipientsTotal <= 0'), false);
+});
+
+test('Followup multi-select accumulates OR statuses without replacing prior selections', () => {
+  const first = toggleCampaignV2FollowupStatus([], 'VIEWED');
+  const second = toggleCampaignV2FollowupStatus(first, 'DELIVERED');
+  assert.deepEqual(first, ['VIEWED']);
+  assert.deepEqual(second, ['VIEWED', 'DELIVERED']);
+  assert.deepEqual(toggleCampaignV2FollowupStatus(second, 'VIEWED'), ['DELIVERED']);
+  assert.deepEqual(toggleCampaignV2FollowupStatus(['FAILED', 'VIEWED'], 'SENT'), [
+    'VIEWED', 'SENT', 'FAILED',
+  ]);
+  assert.equal(CAMPAIGN_V2_FOLLOWUP_STATUS_OPTIONS.some(s => s.value === 'NO_SNAPSHOT'), false);
+});
+
+test('Followup preview is a separate server-side read-only workflow, never a send', () => {
+  const dir = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const component = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-campaign-detail-dialog.component.ts'), 'utf8',
+  );
+  const html = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-campaign-detail-dialog.component.html'), 'utf8',
+  );
+  const service = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2.service.ts'), 'utf8',
+  );
+  const css = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-campaign-detail-dialog.component.css'), 'utf8',
+  );
+  assert.ok(html.includes('Preparar campaña de seguimiento'));
+  assert.ok(html.includes('type="checkbox"'));
+  assert.ok(html.includes('(change)="toggleFollowupStatus(option.value)"'));
+  assert.ok(html.includes('(click)="previewFollowup()"'));
+  assert.ok(html.includes('preview.candidate_count | number'));
+  assert.ok(html.includes('preview.source_snapshot_id'));
+  assert.ok(html.includes('preview.preview_fingerprint'));
+  assert.ok(html.includes('Solo vista previa'));
+  assert.ok(css.includes('.followup-status-option.is-selected'));
+  assert.ok(service.includes('previewFollowup('));
+  assert.ok(service.includes('selected_statuses: [...selectedStatuses]'));
+  assert.ok(service.includes("body.expected_snapshot_id = expectedSnapshotId;"));
+  assert.ok(service.includes('/followup/preview'));
+  assert.ok(component.includes('toggleCampaignV2FollowupStatus('));
+  assert.ok(component.includes('this.followupPreviewResult = null'));
+  assert.ok(component.includes('const requestId = ++this.followupPreviewRequestId'));
+  assert.ok(component.includes('if (requestId !== this.followupPreviewRequestId)'));
+  assert.ok(component.includes('this.followupKnownSnapshotId = result.source_snapshot_id'));
+  assert.ok(component.includes('error.status === 409'));
+  // El filtro simple de consulta conserva sus controles y API independientes.
+  assert.ok(html.includes('selectRecipientsProviderFilter(filter.value)'));
+  assert.ok(component.includes('this.recipientsProviderFilter'));
+  assert.equal(html.includes('freezeFollowup('), false);
+  assert.equal(html.includes('sendFollowup('), false);
 });
 
 test('M30 reporting query vacío omite params y fechas usan límites locales con offset', () => {
