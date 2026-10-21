@@ -24,6 +24,10 @@ from app.services.marketing_campaign_v2_followup_freeze_service import (
     FollowupFreezeValidationError, freeze_followup_campaign, _require_postgresql,
 )
 from app.services.marketing_campaign_v2_query_service import MarketingCampaignV2NotFoundError
+from app.services.marketing_campaign_v2_preflight_service import build_campaign_v2_preflight
+from app.services.marketing_campaign_v2_contact_gate_service import verify_outbound_contact_admission, CampaignV2ContactGateConflict
+from app.services.marketing_campaign_v2_dispatch_config_service import MarketingCampaignV2DispatchConfigValidationError
+from types import SimpleNamespace
 
 NOW = datetime(2026, 10, 20, 17, 0, tzinfo=timezone.utc)
 
@@ -224,3 +228,23 @@ def test_disjoint_freeze_after_first_does_not_reuse_contacts(session):
         )["preview_fingerprint"])
     assert first["derived_campaign_id"] != second["derived_campaign_id"]
     assert len(_derived(session)) == 2
+
+
+def test_dispatch_preflight_rejects_frozen_followup_even_with_template(session):
+    frozen = _freeze(session)
+    with patch(
+        "app.services.marketing_campaign_v2_preflight_service.build_campaign_v2_sendable_projection",
+        return_value={"campaign": {"source": FOLLOWUP_DERIVED_SOURCE}},
+    ):
+        with pytest.raises(MarketingCampaignV2DispatchConfigValidationError, match="bloqueado"):
+            build_campaign_v2_preflight(
+                campaign_id=frozen["derived_campaign_id"],
+                template_id=1, allowed_sucursal_keys=["BRANCH A"], session=session,
+            )
+
+
+def test_outbound_contact_gate_still_rejects_followup_even_if_bypassing_preflight(session):
+    frozen = _freeze(session)
+    child = SimpleNamespace(campaign_v2_id=frozen["derived_campaign_id"])
+    with pytest.raises(CampaignV2ContactGateConflict, match="no tiene autorización"):
+        verify_outbound_contact_admission(child=child, session=session)
