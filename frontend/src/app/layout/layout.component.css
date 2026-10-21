@@ -839,6 +839,28 @@
   min-width: 0;
 }
 
+/* Alerta ámbar real: contraste visual con el rojo CRITICAL.
+   Aislado a automatizaciones: NO altera el warning de Tickets V1. */
+.automation-floating-alert.validation-floating-alert--warning .validation-floating-alert__content {
+  background: linear-gradient(135deg, #fcd34d, #f59e0b);
+  color: #3b2505;
+  border: 2px solid #fde68a;
+}
+
+.automation-floating-alert.validation-floating-alert--warning .validation-floating-alert__icon-wrap {
+  background: rgba(59, 37, 5, 0.12);
+  color: #3b2505;
+}
+
+.automation-floating-alert.validation-floating-alert--warning .validation-floating-alert__badge {
+  background: #3b2505;
+  color: #fff4cf;
+}
+
+.automation-floating-alert.validation-floating-alert--warning .validation-floating-alert__halo {
+  border-color: rgba(245, 158, 11, 0.55);
+}
+
 .automation-floating-alert .validation-floating-alert__text strong,
 .automation-floating-alert .validation-floating-alert__text small {
   overflow: hidden;
