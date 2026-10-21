@@ -63,6 +63,7 @@ export class InventarioComponent implements OnInit {
 
   readonly columnasFiltrables = [
     'nombre',
+    'sucursales',
     'descripcion',
     'marca',
     'proveedor',
@@ -75,6 +76,7 @@ export class InventarioComponent implements OnInit {
 
   readonly etiquetasColumnas: Record<string, string> = {
     nombre: 'Nombre',
+    sucursales: 'Sucursal(es)',
     descripcion: 'Descripción',
     marca: 'Marca',
     proveedor: 'Proveedor',
@@ -89,6 +91,7 @@ export class InventarioComponent implements OnInit {
     'id',
     'tipo',
     'nombre',
+    'sucursales',
     'descripcion',
     'marca',
     'proveedor',
@@ -170,6 +173,7 @@ export class InventarioComponent implements OnInit {
 
           return {
             ...it,
+            sucursales: it?.sucursales ?? 'Sin asignación',
             categoria,
             subcategoria,
             unidad,
