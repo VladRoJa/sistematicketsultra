@@ -744,7 +744,7 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
       case 'NO_CANONICAL_VENTA_TOTAL':
         return 'Aún no existe un corte canónico de Venta Total posterior al envío.';
       case 'UNSUPPORTED_MULTICHILD_OR_UNSENT':
-        return 'La conciliación multirregional todavía no está disponible en esta versión.';
+        return 'Sin un único lote enviado conciliable: la campaña aún no se envió o tiene varios lotes. La atribución multirregional está pendiente.';
       case 'READY':
         return '';
       default:
