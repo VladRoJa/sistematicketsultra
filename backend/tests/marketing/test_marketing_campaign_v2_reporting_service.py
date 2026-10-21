@@ -575,3 +575,91 @@ def test_individual_report_uses_bulk_query_pattern_without_n_plus_one(session):
 
     assert report["audience"]["total_recipients"] == 5
     assert len(statements) <= 5
+
+
+def test_commercial_attribution_simple_rule_successful_not_failed():
+    """Azahares: 549 and 649 count, failed 399, passes and penalties do not."""
+    from datetime import datetime
+    from decimal import Decimal
+    from types import SimpleNamespace
+    from zoneinfo import ZoneInfo
+
+    from app.services.marketing_campaign_v2_reporting_service import (
+        _summarize_campaign_v2_membership_movements,
+    )
+
+    def sale(
+        identifier, phone, product, total, *,
+        when="18:47:00", status="ACTIVO", branch="AZAHARES CULIACAN",
+        order=None, pin="PIN-OTHER", clave="MEMBRESIA",
+    ):
+        return SimpleNamespace(
+            id=identifier, telefono=phone, sucursal=branch,
+            estatus=status, descripcion=product, total=Decimal(str(total)),
+            fecha="2026-10-20", hora=when,
+            id_orden=order or f"ORDER-{identifier}",
+            folio=f"FOLIO-{identifier}", pin=pin,
+            clave_producto=clave, tipo="CONTRATO",
+        )
+
+    rows = [
+        sale(1, "6861000001", "CONVENIOS $549", "549", when="18:47:00"),
+        sale(2, "6861000002", "DOMICILIADO 6 MESES $399 JULIO", "399"),
+        sale(3, "5216861000003", "RECURRENTE $649 LE", "649"),
+        sale(4, "6861000001", "PENALIZACION PAGO", "100"),
+        sale(5, "6861000001", "PASE GYMPASS", "0"),
+        sale(6, "6861000001", "CONVENIOS $549", "549", when="15:59:00"),
+        sale(7, "6861000001", "CONVENIOS $549", "549", branch="OTRA SUCURSAL"),
+        sale(8, "6861000001", "CONVENIOS $549", "549", status="CANCELADO"),
+    ]
+    result = _summarize_campaign_v2_membership_movements(
+        rows=rows,
+        sent_local=datetime(2026, 10, 20, 16, 0, 53, tzinfo=ZoneInfo("America/Tijuana")),
+        successful_phones={"6861000001", "6861000003"},
+        branch_id=16,
+        alias_map={"AZAHARES CULIACAN": 16, "OTRA SUCURSAL": 17},
+    )
+    assert result == {
+        "buyers_attributed": 2,
+        "transactions_attributed": 2,
+        "revenue_attributed_mxn": "1198.00",
+    }
+
+
+def test_commercial_attribution_groups_invoice_lines_once():
+    from datetime import datetime
+    from decimal import Decimal
+    from types import SimpleNamespace
+    from zoneinfo import ZoneInfo
+
+    from app.services.marketing_campaign_v2_reporting_service import (
+        _summarize_campaign_v2_membership_movements,
+    )
+
+    def line(identifier, order, amount, description="CONVENIOS $549"):
+        return SimpleNamespace(
+            id=identifier, telefono="6861000001", sucursal="AZAHARES CULIACAN",
+            estatus="ACTIVO", descripcion=description,
+            total=Decimal(str(amount)), fecha="2026-10-21",
+            hora="06:00:00", id_orden=order, folio="FOLIO-1",
+            clave_producto="MEMBRESIA", tipo="CONTRATO",
+        )
+
+    result = _summarize_campaign_v2_membership_movements(
+        rows=[
+            line(1, "A", 549),
+            line(2, "A", -50),
+            line(3, "B", 399, "DOMICILIADO $399"),
+            line(4, "C", -200),
+            line(5, "D", 0, "PASE RECORRIDO"),
+        ],
+        sent_local=datetime(2026, 10, 20, 16, 0, 53, tzinfo=ZoneInfo("America/Tijuana")),
+        successful_phones={"6861000001"},
+        branch_id=16,
+        alias_map={"AZAHARES CULIACAN": 16},
+    )
+    assert result == {
+        "buyers_attributed": 1,
+        "transactions_attributed": 2,
+        "revenue_attributed_mxn": "898.00",
+    }

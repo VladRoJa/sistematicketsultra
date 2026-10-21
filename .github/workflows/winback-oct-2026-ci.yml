@@ -55,6 +55,17 @@ jobs:
             tests/marketing/test_marketing_campaign_v2_dispatch_config_service.py \
             tests/marketing/test_iventas_template_inventory.py
 
+      - name: Campaign V2 commercial attribution read-only tests
+        working-directory: backend
+        env:
+          SECRET_KEY: winback-ci-synthetic-only
+          JWT_SECRET_KEY: winback-ci-jwt-synthetic-only
+          CAMPAIGN_V2_PROVIDER_SEND_ENABLED: "false"
+        run: |
+          python -m pytest -q --tb=short \
+            tests/marketing/test_marketing_campaign_v2_reporting_service.py \
+            -k commercial_attribution
+
   frontend:
     runs-on: ubuntu-latest
     timeout-minutes: 20

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from decimal import Decimal, InvalidOperation
+from zoneinfo import ZoneInfo
 from numbers import Real
 from typing import Any, Iterable, Mapping
 
@@ -12,6 +14,7 @@ from sqlalchemy import func
 from app.extensions import db
 from app.models.marketing import (
     MarketingCampaignV2ORM,
+    MarketingCampaignV2ProviderCampaignORM,
     MarketingCampaignV2ProviderRecipientObservationORM,
     MarketingCampaignV2ProviderStatsSnapshotORM,
     MarketingCampaignV2RecipientEvidenceORM,
@@ -31,6 +34,16 @@ from app.services.marketing_campaign_v2_provider_binding_service import (
 )
 from app.services.marketing_campaign_v2_reporting_cost_service import (
     extract_campaign_cost_projection,
+)
+from app.models.warehouse import (
+    TrackBranchAliasORM, TrackBranchCatalogORM,
+    VentaTotalSnapshotORM, VentaTotalSnapshotRowORM,
+)
+from app.services.marketing_phone import normalize_phone
+from app.services.marketing_sales_funnel_service import _is_valid_status, _normalize_text
+from app.services.contact_center_service import (
+    _is_membership_purchase_row,
+    _parse_venta_total_row_local_datetime,
 )
 
 
@@ -1402,3 +1415,223 @@ def _iso_datetime(value: datetime | None) -> str | None:
     if normalized.tzinfo is None:
         normalized = normalized.replace(tzinfo=timezone.utc)
     return normalized.astimezone(timezone.utc).isoformat()
+
+# Commercial correlation, deliberately separate from provider delivery reporting.
+# A successful submitted message + a later valid membership sale counts as
+# commercially attributable. This does NOT establish causal attribution.
+_COMMERCIAL_TZ = ZoneInfo("America/Tijuana")
+_NON_MEMBERSHIP_PREFIXES = (
+    "PASE ", "PENALIZACION", "RECARGO", "INSCRIPCION",
+)
+
+
+def _commercial_month_end_exclusive(value: date) -> date:
+    if value.month == 12:
+        return date(value.year + 1, 1, 1)
+    return date(value.year, value.month + 1, 1)
+
+
+def _summarize_campaign_v2_membership_movements(
+    *,
+    rows: Iterable[Any],
+    sent_local: datetime,
+    successful_phones: set[str],
+    branch_id: int,
+    alias_map: Mapping[str, int],
+) -> dict[str, Any]:
+    """Deduplicate Venta Total transactions without requiring matching member PIN."""
+    grouped: dict[tuple[str, str], Decimal] = {}
+    for row in rows:
+        phone = normalize_phone(row.telefono)
+        if phone not in successful_phones:
+            continue
+        if alias_map.get(_normalize_text(row.sucursal)) != branch_id:
+            continue
+        if not _is_valid_status(row.estatus):
+            continue
+        description = _normalize_text(row.descripcion)
+        if description.startswith(_NON_MEMBERSHIP_PREFIXES):
+            continue
+        if not _is_membership_purchase_row(row):
+            continue
+        occurred_at = _parse_venta_total_row_local_datetime(row)
+        if occurred_at is None or occurred_at <= sent_local:
+            continue
+        try:
+            amount = Decimal(str(row.total))
+        except (InvalidOperation, TypeError, ValueError):
+            continue
+        order_id = str(row.id_orden or "").strip()
+        folio = str(row.folio or "").strip()
+        transaction_key = (
+            f"order:{order_id}" if order_id else
+            f"folio:{folio}" if folio else
+            f"row:{row.id}"
+        )
+        key = (phone, transaction_key)
+        grouped[key] = grouped.get(key, Decimal("0")) + amount
+
+    paid = {key: amount for key, amount in grouped.items() if amount > 0}
+    return {
+        "buyers_attributed": len({phone for phone, _ in paid}),
+        "transactions_attributed": len(paid),
+        "revenue_attributed_mxn": str(
+            sum(paid.values(), Decimal("0")).quantize(Decimal("0.01"))
+        ),
+    }
+
+
+def build_campaign_v2_commercial_attribution(
+    *,
+    campaign_id: Any,
+    allowed_sucursal_keys: Iterable[str] | None,
+    session=None,
+) -> dict[str, Any]:
+    """Read-only initial scope: one submitted child, one send-month canonical cut.
+
+    Never interprets a frozen campaign as sent. Provider FAILED recipients
+    cannot contribute. Multi-branch campaigns remain explicitly unsupported
+    until their per-child recipient-level evidence can be reconciled.
+    """
+    active_session = session if session is not None else db.session
+    normalized_id = _positive_int(campaign_id, field_name="campaign_id", maximum=None)
+    scope = _normalize_current_scope(allowed_sucursal_keys)
+    with active_session.no_autoflush:
+        _load_visible_campaign_orm(
+            campaign_id=normalized_id, scope=scope, session=active_session
+        )
+        children = (
+            active_session.query(MarketingCampaignV2ProviderCampaignORM)
+            .filter(MarketingCampaignV2ProviderCampaignORM.campaign_v2_id == normalized_id)
+            .all()
+        )
+        base = {
+            "campaign_id": normalized_id,
+            "rule": "SUCCESSFUL_PROVIDER_SEND_AND_LATER_MEMBERSHIP_PAYMENT",
+            "source": "VENTA_TOTAL_CANONICAL",
+            "buyers_attributed": None,
+            "transactions_attributed": None,
+            "revenue_attributed_mxn": None,
+        }
+        if len(children) != 1:
+            return {**base, "status": "UNSUPPORTED_MULTICHILD_OR_UNSENT"}
+        child = children[0]
+        if child.submitted_at is None or not child.provider_campaign_id:
+            return {**base, "status": "NOT_SUBMITTED"}
+        sent = child.submitted_at
+        if sent.tzinfo is None:
+            sent = sent.replace(tzinfo=timezone.utc)
+        sent_local = sent.astimezone(_COMMERCIAL_TZ)
+
+        provider_snapshot = (
+            active_session.query(MarketingCampaignV2ProviderStatsSnapshotORM)
+            .filter(
+                MarketingCampaignV2ProviderStatsSnapshotORM.campaign_v2_id == normalized_id,
+                MarketingCampaignV2ProviderStatsSnapshotORM.provider_campaign_id
+                == child.provider_campaign_id,
+            )
+            .order_by(
+                MarketingCampaignV2ProviderStatsSnapshotORM.fetched_at.desc(),
+                MarketingCampaignV2ProviderStatsSnapshotORM.id.desc(),
+            )
+            .first()
+        )
+        if provider_snapshot is None:
+            return {**base, "status": "NO_PROVIDER_SNAPSHOT"}
+
+        recipients = (
+            active_session.query(MarketingCampaignV2RecipientORM)
+            .filter(MarketingCampaignV2RecipientORM.campaign_id == normalized_id)
+            .all()
+        )
+        recipient_by_id = {int(r.id): r.phone_mx10 for r in recipients}
+        successful_ids = (
+            active_session.query(
+                MarketingCampaignV2ProviderRecipientObservationORM.campaign_recipient_id
+            )
+            .filter(
+                MarketingCampaignV2ProviderRecipientObservationORM.snapshot_id
+                == provider_snapshot.id,
+                MarketingCampaignV2ProviderRecipientObservationORM.outcome == "SUCCESSFUL",
+                MarketingCampaignV2ProviderRecipientObservationORM.campaign_recipient_id.isnot(None),
+            )
+            .all()
+        )
+        successful_phones = {
+            recipient_by_id[int(recipient_id)]
+            for (recipient_id,) in successful_ids
+            if int(recipient_id) in recipient_by_id
+        }
+
+        venta_snapshot = (
+            active_session.query(VentaTotalSnapshotORM)
+            .filter(
+                VentaTotalSnapshotORM.report_type_key == "venta_total",
+                VentaTotalSnapshotORM.snapshot_kind == "daily",
+                VentaTotalSnapshotORM.is_canonical.is_(True),
+                VentaTotalSnapshotORM.business_date >= sent_local.date(),
+                VentaTotalSnapshotORM.business_date
+                < _commercial_month_end_exclusive(sent_local.date()),
+                VentaTotalSnapshotORM.captured_at >= sent,
+            )
+            .order_by(
+                VentaTotalSnapshotORM.business_date.desc(),
+                VentaTotalSnapshotORM.captured_at.desc(),
+                VentaTotalSnapshotORM.id.desc(),
+            )
+            .first()
+        )
+        if venta_snapshot is None:
+            return {**base, "status": "NO_CANONICAL_VENTA_TOTAL"}
+
+        alias_rows = (
+            active_session.query(TrackBranchAliasORM, TrackBranchCatalogORM)
+            .join(
+                TrackBranchCatalogORM,
+                TrackBranchCatalogORM.sucursal_canon
+                == TrackBranchAliasORM.sucursal_canon,
+            )
+            .filter(
+                TrackBranchAliasORM.source_family == "gasca_family",
+                TrackBranchAliasORM.is_active.is_(True),
+                TrackBranchCatalogORM.is_track_active.is_(True),
+                TrackBranchCatalogORM.sucursal_id.isnot(None),
+            )
+            .all()
+        )
+        alias_map = {
+            _normalize_text(alias.raw_branch_name): int(catalog.sucursal_id)
+            for alias, catalog in alias_rows
+        }
+
+        rows = []
+        if successful_phones:
+            phone_digits = func.regexp_replace(
+                VentaTotalSnapshotRowORM.telefono, "[^0-9]", "", "g"
+            )
+            rows = (
+                active_session.query(VentaTotalSnapshotRowORM)
+                .filter(
+                    VentaTotalSnapshotRowORM.snapshot_id == venta_snapshot.id,
+                    func.right(phone_digits, 10).in_(sorted(successful_phones)),
+                )
+                .all()
+            )
+        metrics = _summarize_campaign_v2_membership_movements(
+            rows=rows,
+            sent_local=sent_local,
+            successful_phones=successful_phones,
+            branch_id=int(child.sucursal_id),
+            alias_map=alias_map,
+        )
+        return {
+            **base,
+            "status": "READY",
+            "submitted_at_local": sent_local.isoformat(),
+            "provider_snapshot_id": int(provider_snapshot.id),
+            "venta_total_snapshot_id": int(venta_snapshot.id),
+            "venta_total_cutoff": venta_snapshot.business_date.isoformat(),
+            "coverage": "LATEST_CANONICAL_WITHIN_SEND_MONTH",
+            "successful_recipient_count": len(successful_phones),
+            **metrics,
+        }
