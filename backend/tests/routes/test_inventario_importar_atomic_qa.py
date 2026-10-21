@@ -32,6 +32,9 @@ def importar(monkeypatch):
     session = Mock()
     session.query.return_value.all.return_value = []
     monkeypatch.setattr(routes, "db", SimpleNamespace(session=session))
+    monkeypatch.setattr(
+        routes, "manejar_error", lambda _error, _contexto: ({"error": "sintético"}, 500)
+    )
 
     with app.app_context():
         token = create_access_token(identity="91")
@@ -93,7 +96,7 @@ def test_xlsx_valido_importa_una_fila(importar):
 )
 def test_archivo_invalido_nunca_escribe(importar, contenido, filename):
     enviar, session = importar
-    response = enviar(contenido.replace(b"\n", b"\n"), filename)
+    response = enviar(contenido, filename)
     assert response.status_code == 400
     session.add_all.assert_not_called()
     session.commit.assert_not_called()
