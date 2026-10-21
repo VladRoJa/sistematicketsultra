@@ -179,3 +179,48 @@ test('login 401 remains in form without session redirect', async () => {
   );
   assert.equal(redirected, 0);
 });
+
+test('near-expiry user activity refreshes before sending a POST', async () => {
+  const { Class } = loadClass('interceptors/auth.interceptor.ts', 'TokenInterceptor', {});
+  let current = 'old-token';
+  const seen = [];
+  const interceptor = new Class(
+    { getToken: () => current },
+    {
+      shouldRenewSoon: () => true,
+      renewIfNeeded: async () => {
+        current = 'new-token';
+        return current;
+      },
+    },
+    { isLocked: () => false, isRecent: () => true },
+    { isTokenExpired: () => false },
+    { url: '/main', navigate: () => {} }
+  );
+  const result = await firstValueFrom(interceptor.intercept(
+    request('/api/tickets/create', 'POST'),
+    { handle: req => { seen.push(req.headers.Authorization); return of('ok'); } }
+  ));
+  assert.equal(result, 'ok');
+  assert.deepEqual(seen, ['Bearer new-token']);
+});
+
+test('401 from POST is never retried automatically', async () => {
+  const { Class } = loadClass('interceptors/auth.interceptor.ts', 'TokenInterceptor', {});
+  let calls = 0;
+  const interceptor = new Class(
+    { getToken: () => 'existing', clearSession: () => undefined },
+    { shouldRenewSoon: () => false },
+    { isLocked: () => false, millisecondsUntilIdle: () => 1000, isRecent: () => true, clear: () => {} },
+    { isTokenExpired: () => false },
+    { url: '/main', navigate: () => {} },
+  );
+  await assert.rejects(
+    () => firstValueFrom(interceptor.intercept(
+      request('/api/tickets/create', 'POST'),
+      { handle: () => { calls++; return throwError(() => new FakeHttpError(401)); } }
+    )),
+    e => e.status === 401
+  );
+  assert.equal(calls, 1);
+});
