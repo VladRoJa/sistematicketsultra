@@ -5,6 +5,7 @@ import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatTableModule } from '@angular/material/table';
 import { MatSelectModule } from '@angular/material/select';
+import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { FormsModule } from '@angular/forms';
 import { InventarioService } from '../../services/inventario.service';
@@ -17,6 +18,7 @@ import { InventarioService } from '../../services/inventario.service';
     MatCardModule,
     MatTableModule,
     MatSelectModule,
+    MatFormFieldModule,
     MatProgressSpinnerModule,
     FormsModule
   ],
@@ -28,7 +30,11 @@ export class ExistenciasComponent implements OnInit {
   esAdmin = this.user?.rol === 'ADMINISTRADOR';
 
   sucursales: any[] = [];
-  sucursalSeleccionada: number | 'global' = this.user?.sucursal_id || 1;
+  // Un administrador consulta el conjunto global por defecto.
+  // Su sucursal corporativa puede no existir en el selector de sucursales operativas.
+  sucursalSeleccionada: number | 'global' = this.esAdmin
+    ? 'global'
+    : this.user?.sucursal_id || 1;
   existencias: any[] = [];
   displayedColumns: string[] = [
     'id', 'nombre', 'tipo', 'marca', 'proveedor', 'categoria', 'unidad', 'stock', 'sucursal'
