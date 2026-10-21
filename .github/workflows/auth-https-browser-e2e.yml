@@ -1,0 +1,81 @@
+name: Auth HTTPS Angular-Flask Browser E2E
+
+on:
+  pull_request:
+    paths:
+      - "backend/tests/auth/https_browser_lab.py"
+      - "frontend/tests/auth-https-proxy.cjs"
+      - "frontend/tests/auth-https-browser-e2e.cjs"
+      - ".github/workflows/auth-https-browser-e2e.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SECRET_KEY: synthetic-ci-not-production
+      JWT_SECRET_KEY: synthetic-jwt-ci-not-production
+      PYTHONPATH: backend
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install Flask and Angular dependency locks
+        run: |
+          python -m pip install -r backend/requirements.txt
+          npm ci --prefix frontend --legacy-peer-deps --no-audit --no-fund
+      - name: Install isolated Chromium browser
+        run: |
+          mkdir -p "$RUNNER_TEMP/suite-auth-playwright"
+          npm install --prefix "$RUNNER_TEMP/suite-auth-playwright" \
+            --no-save --ignore-scripts --no-package-lock playwright@1.56.1
+          node "$RUNNER_TEMP/suite-auth-playwright/node_modules/playwright/cli.js" \
+            install --with-deps chromium
+      - name: Run same-origin HTTPS Angular + Flask browser contract
+        env:
+          AUTH_QA_TLS_KEY: "/tmp/suite-ultra-auth-qa-key.pem"
+          AUTH_QA_TLS_CERT: "/tmp/suite-ultra-auth-qa-cert.pem"
+        run: |
+          set -euo pipefail
+          python -m py_compile backend/tests/auth/https_browser_lab.py
+          node --check frontend/tests/auth-https-proxy.cjs
+          node --check frontend/tests/auth-https-browser-e2e.cjs
+          openssl req -x509 -newkey rsa:2048 -sha256 -nodes \
+            -days 1 -keyout "$AUTH_QA_TLS_KEY" -out "$AUTH_QA_TLS_CERT" \
+            -subj "/CN=127.0.0.1" -addext "subjectAltName=IP:127.0.0.1" \
+            > /tmp/auth-qa-openssl.log 2>&1
+          sed -i 's/sessionRefreshEnabled: false/sessionRefreshEnabled: true/' \
+            frontend/src/environments/environment.ts
+          grep -q 'sessionRefreshEnabled: true' frontend/src/environments/environment.ts
+          python backend/tests/auth/https_browser_lab.py > /tmp/auth-qa-flask.log 2>&1 &
+          BACKEND_PID=$!
+          node frontend/tests/auth-https-proxy.cjs > /tmp/auth-qa-proxy.log 2>&1 &
+          PROXY_PID=$!
+          (
+            cd frontend
+            node node_modules/@angular/cli/bin/ng.js serve \
+              --host 127.0.0.1 --port 4300 \
+              > /tmp/auth-qa-angular.log 2>&1
+          ) &
+          FRONTEND_PID=$!
+          trap 'kill "$BACKEND_PID" "$PROXY_PID" "$FRONTEND_PID" 2>/dev/null || true' EXIT
+          NODE_PATH="$RUNNER_TEMP/suite-auth-playwright/node_modules" \
+            node frontend/tests/auth-https-browser-e2e.cjs
+      - name: Isolated server diagnostics on failure
+        if: failure()
+        run: |
+          grep -E "ERROR|Traceback|Failed|Error|AUTH_LAB" /tmp/auth-qa-flask.log 2>/dev/null | tail -25 || true
+          grep -E "ERROR|Error|failed|error" /tmp/auth-qa-angular.log 2>/dev/null | tail -25 || true
