@@ -798,7 +798,7 @@ test('Followup preview is a separate server-side read-only workflow, never a sen
   assert.ok(html.includes('preview.candidate_count | number'));
   assert.ok(html.includes('preview.source_snapshot_id'));
   assert.ok(html.includes('preview.preview_fingerprint'));
-  assert.ok(html.includes('Solo vista previa'));
+  assert.ok(html.includes('Envíos bloqueados'));
   assert.ok(css.includes('.followup-status-option.is-selected'));
   assert.ok(service.includes('previewFollowup('));
   assert.ok(service.includes('selected_statuses: [...selectedStatuses]'));
