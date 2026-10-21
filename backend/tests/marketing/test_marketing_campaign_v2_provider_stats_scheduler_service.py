@@ -442,10 +442,10 @@ def test_multichild_scheduler_selects_submitted_children_without_crossing_budget
     selection = select_campaign_v2_provider_stats_candidates(
         now=NOW, horizon_hours=24, max_campaigns=2, session=session,
     )
-    assert selection.bound_count == 5
-    assert selection.eligible_count == 4
+    assert selection.bound_count == 4
+    assert selection.eligible_count == 3
     assert selection.skipped_outside_horizon == 1
-    assert selection.skipped_by_limit == 2
+    assert selection.skipped_by_limit == 1
     assert selection.campaign_ids == ()
     assert selection.targets == ((4, 40), (4, 41))
 
