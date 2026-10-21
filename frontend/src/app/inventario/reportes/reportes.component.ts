@@ -100,12 +100,21 @@ export class ReportesComponent implements OnInit {
     }
     const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
 
-    this.http.get(url, { headers, responseType: 'blob' }).subscribe({
-      next: (blob: Blob) => {
+    this.http.get(url, { headers, responseType: 'blob', observe: 'response' }).subscribe({
+      next: (response) => {
+        if (!response.body) {
+          mostrarAlertaToast('El reporte se recibió vacío.', 'error');
+          return;
+        }
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1]
+          || 'reporte_movimientos.xlsx';
+        const objectUrl = window.URL.createObjectURL(response.body);
         const a = document.createElement('a');
-        a.href = window.URL.createObjectURL(blob);
-        a.download = 'reporte_movimientos.xlsx';
+        a.href = objectUrl;
+        a.download = filename;
         a.click();
+        window.URL.revokeObjectURL(objectUrl);
         mostrarAlertaToast('Movimientos exportados.');
       },
       error: () => mostrarAlertaToast('Error al exportar movimientos', 'error')
