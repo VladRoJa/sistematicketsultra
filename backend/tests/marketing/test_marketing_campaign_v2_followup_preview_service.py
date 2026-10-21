@@ -164,7 +164,7 @@ def test_combined_statuses_use_or_union_and_canonical_fingerprint(session):
     assert first["campaign_created"] is False
     assert first["send_authorized"] is False
     assert first["sendable_count"] is None
-    assert session.new == session.dirty == set()
+    assert not session.new and not session.dirty
     # No member phone, contact list, or recipient identifier is returned.
     serialized = json.dumps(first)
     for phone in ("6861000010", "6861000011", "6861000014"):
@@ -201,9 +201,7 @@ def test_no_snapshot_and_stale_snapshot_fail_closed(session):
     with pytest.raises(FollowupPreviewConflictError):
         _preview(session, ["VIEWED"], expected_snapshot_id=100)
     with pytest.raises(FollowupPreviewValidationError):
-        _preview(session, ["VIEWED"], expected_snapshot_id=None) if False else _preview(
-            session, ["VIEWED"], expected_snapshot_id=True
-        )
+        _preview(session, ["VIEWED"], expected_snapshot_id=True)
     with pytest.raises(FollowupPreviewUnavailableError):
         build_followup_preview(
             source_campaign_id=4,
