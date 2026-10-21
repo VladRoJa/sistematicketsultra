@@ -1447,50 +1447,119 @@ def importar_inventario():
         return forbidden
 
     file = request.files.get('file')
-    if not file:
-        return jsonify({"message": "No se subió archivo"}), 400
-    filename = secure_filename(file.filename)
-    tmp_dir = tempfile.gettempdir()
-    filepath = os.path.join(tmp_dir, filename)
-    file.save(filepath)
-    
-    # Soporte para encoding flexible
-    if filename.lower().endswith('.csv'):
-        import chardet
-        with open(filepath, 'rb') as f:
-            encoding = chardet.detect(f.read())['encoding'] or 'utf-8'
-        df = pd.read_csv(filepath, encoding=encoding)
-    else:
-        df = pd.read_excel(filepath)
+    if not file or not file.filename:
+        return error_response('No se subió archivo', 400)
 
-    def _excel_text(value):
-        if pd.isna(value):
-            return ''
-        return str(value).strip()
+    extension = os.path.splitext(secure_filename(file.filename))[1].lower()
+    if extension not in {'.csv', '.xlsx'}:
+        return error_response('Formato no permitido: utiliza CSV o XLSX', 400)
 
-    agregados, errores = 0, 0
-    for idx, row in df.iterrows():
-        try:
-            # Ajusta estos campos a los de tu modelo de inventario
-            inv = InventarioGeneral(
-                nombre=_excel_text(row['nombre']),
-                descripcion=_excel_text(row['descripcion']),
-                tipo=_excel_text(row['tipo']),
-                marca=_excel_text(row['marca']),
-                proveedor=_excel_text(row['proveedor']),
-                categoria=_excel_text(row['categoria']),
-                unidad_medida=_excel_text(row['unidad_medida']),
-                grupo_muscular=_excel_text(row['grupo_muscular']),
-                codigo_interno=_excel_text(row['codigo_interno'])
-            )
-            db.session.add(inv)
-            agregados += 1
-        except Exception as e:
-            print(f"Error en fila {idx+2}: {e}")
-            errores += 1
-    db.session.commit()
-    os.remove(filepath)
-    return jsonify({"message": f"Importación exitosa. Agregados: {agregados}. Errores: {errores}"}), 200
+    # Leer el contenido en memoria: nunca escribir uploads en rutas temporales
+    # compartidas bajo el nombre proporcionado por el cliente.
+    max_bytes = 10 * 1024 * 1024
+    contenido = file.read(max_bytes + 1)
+    if not contenido:
+        return error_response('El archivo está vacío', 400)
+    if len(contenido) > max_bytes:
+        return error_response('El archivo excede el límite de 10 MB', 413)
+
+    try:
+        if extension == '.csv':
+            import chardet
+            encoding = chardet.detect(contenido).get('encoding') or 'utf-8-sig'
+            df = pd.read_csv(BytesIO(contenido), encoding=encoding, dtype=str)
+        else:
+            df = pd.read_excel(BytesIO(contenido), dtype=str)
+    except Exception:
+        return error_response('No se pudo leer el archivo CSV o XLSX', 400)
+
+    if df.empty:
+        return error_response('El archivo no contiene artículos', 400)
+
+    df.columns = [str(col).strip().lower() for col in df.columns]
+    if len(set(df.columns)) != len(df.columns):
+        return error_response('El archivo contiene columnas duplicadas', 400)
+
+    requeridas = {'nombre', 'tipo', 'categoria'}
+    faltantes = sorted(requeridas - set(df.columns))
+    if faltantes:
+        return error_response('Faltan columnas obligatorias: ' + ', '.join(faltantes), 400)
+
+    campos = (
+        'nombre', 'descripcion', 'tipo', 'marca', 'proveedor',
+        'categoria', 'unidad_medida', 'grupo_muscular', 'codigo_interno',
+    )
+    max_longitud = {
+        'nombre': 255, 'tipo': 20, 'marca': 100, 'proveedor': 255,
+        'categoria': 100, 'unidad_medida': 50,
+        'grupo_muscular': 100, 'codigo_interno': 50,
+    }
+
+    def texto(valor):
+        return '' if pd.isna(valor) else str(valor).strip()
+
+    filas = []
+    errores = []
+    claves_archivo = set()
+    # Validar todo el archivo antes de insertar siquiera un registro.
+    for indice, row in df.iterrows():
+        valores = {campo: texto(row.get(campo)) for campo in campos}
+        fila_numero = indice + 2
+        vacios = [campo for campo in requeridas if not valores[campo]]
+        largos = [
+            campo for campo, maximo in max_longitud.items()
+            if len(valores[campo]) > maximo
+        ]
+        clave = (valores['nombre'], valores['marca'])
+
+        if vacios:
+            errores.append(f"Fila {fila_numero}: faltan {', '.join(sorted(vacios))}")
+        elif largos:
+            errores.append(f"Fila {fila_numero}: longitud excedida en {', '.join(largos)}")
+        elif clave in claves_archivo:
+            errores.append(f"Fila {fila_numero}: nombre y marca duplicados en el archivo")
+        else:
+            claves_archivo.add(clave)
+            filas.append(valores)
+
+    if errores:
+        return jsonify({
+            'error': 'Archivo inválido: no se importó ningún artículo',
+            'detail': '; '.join(errores[:5]),
+            'errores_total': len(errores),
+        }), 400
+
+    try:
+        # Aplicar el mismo criterio de duplicidad que crear_inventario.
+        existentes = {
+            (nombre or '', marca or '')
+            for nombre, marca in db.session.query(
+                InventarioGeneral.nombre, InventarioGeneral.marca
+            ).all()
+        }
+        duplicados = [
+            fila['nombre'] for fila in filas
+            if (fila['nombre'], fila['marca']) in existentes
+        ]
+        if duplicados:
+            db.session.rollback()
+            return jsonify({
+                'error': 'El catálogo ya contiene artículos con el mismo nombre y marca',
+                'detail': ', '.join(duplicados[:5]),
+                'duplicados_total': len(duplicados),
+            }), 409
+
+        db.session.add_all([InventarioGeneral(**fila) for fila in filas])
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return manejar_error(e, 'importar_inventario')
+
+    return jsonify({
+        'message': f'Importación exitosa. Agregados: {len(filas)}. Errores: 0',
+        'agregados': len(filas),
+        'errores': 0,
+    }), 200
 
 @inventario_bp.route('/plantilla', methods=['GET'], strict_slashes=False)
 @jwt_required()
