@@ -504,6 +504,13 @@ def test_provider_stats_scheduler_respects_cadence_and_cleans_session(monkeypatc
         "run_campaign_v2_provider_stats_capture_cycle",
         lambda **kwargs: calls.append(kwargs) or result,
     )
+    commercial_calls = []
+    monkeypatch.setattr(
+        worker,
+        "run_multichild_commercial_materialization_cycle",
+        lambda **kwargs: commercial_calls.append(kwargs)
+        or {"selected": 1, "ready": 1, "pending": 0, "failed": 0},
+    )
     monkeypatch.setattr(
         worker.db.session,
         "remove",
@@ -534,7 +541,9 @@ def test_provider_stats_scheduler_respects_cadence_and_cleans_session(monkeypatc
     assert before_due is None
     assert second == result
     assert len(calls) == 2
-    assert cleanups == ["remove", "remove"]
+    assert cleanups == ["remove", "remove", "remove", "remove"]
+    assert len(commercial_calls) == 2
+    assert all(call["max_campaigns"] == 3 for call in commercial_calls)
     assert calls[0]["horizon_hours"] == 48
     assert calls[0]["max_campaigns"] == 25
 
