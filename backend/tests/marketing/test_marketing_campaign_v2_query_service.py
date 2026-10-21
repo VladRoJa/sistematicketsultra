@@ -365,7 +365,11 @@ def _add_filter_fixture(session):
     session.add_all([
         MarketingCampaignV2ProviderRecipientObservationORM(
             snapshot_id=snapshot_id,
-            normalized_phone=f"mx10:68610000{recipient_id}",
+            normalized_phone=(
+                "mx10:6861000001" if recipient_id == 10 else
+                "mx10:6861000002" if recipient_id == 11 else
+                f"mx10:68610000{recipient_id}"
+            ),
             campaign_recipient_id=recipient_id,
             outcome=outcome,
             delivery_bucket=bucket,
