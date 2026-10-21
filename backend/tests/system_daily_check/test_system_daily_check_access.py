@@ -32,3 +32,12 @@ def test_missing_user_has_no_permissions():
     assert not has_system_daily_check_mvp_access(None)
     assert not has_system_daily_check_bi_access(None)
     assert not has_system_daily_check_rollout_access(None)
+
+def test_soporte_account_can_read_bi_without_other_privileges():
+    soporte = user("SOPORTE", "soporte")
+    other_support = user("SOPORTE", "soporte2")
+
+    assert has_system_daily_check_bi_access(soporte)
+    assert not has_system_daily_check_mvp_access(soporte)
+    assert not has_system_daily_check_rollout_access(soporte)
+    assert not has_system_daily_check_bi_access(other_support)
