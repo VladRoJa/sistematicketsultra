@@ -40,7 +40,6 @@ onSubmit(): void {
 }
 
 private handleLoginSuccess(response: any): void {
-  console.log("✅ Respuesta del backend:", response);
   if (response?.token && response?.user) {
     console.log("📌 Usuario autenticado:", response.user);
 
