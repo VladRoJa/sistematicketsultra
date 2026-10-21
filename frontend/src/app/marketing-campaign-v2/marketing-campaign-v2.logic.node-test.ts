@@ -2169,3 +2169,28 @@ test('Campaign V2 commercial attribution keeps successful-only numbers and unava
   assert.ok(css.includes('.commercial-attribution-grid'));
   assert.equal(html.includes('style="'), false);
 });
+
+
+test('Campaign V2 saved list: commercial KPIs use a single scoped batch request', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const service = fs.readFileSync(path.join(root, 'marketing-campaign-v2.service.ts'), 'utf8');
+  const models = fs.readFileSync(path.join(root, 'marketing-campaign-v2.models.ts'), 'utf8');
+  const page = fs.readFileSync(path.join(root, 'marketing-campaign-v2-page.component.ts'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-page.component.html'), 'utf8');
+  assert.ok(models.includes('export interface CampaignV2CommercialAttributionBatchResponse'));
+  assert.ok(models.includes("| 'BATCH_SCOPE_TOO_LARGE'"));
+  assert.ok(service.includes('getCommercialAttributionBatch(campaignIds: number[])'));
+  assert.ok(service.includes('${this.apiUrl}/commercial-attribution/summary'));
+  assert.ok(service.includes('{ campaign_ids: campaignIds }'));
+  assert.ok(page.includes('this.loadCampaignCommercialSummaries(result.rows);'));
+  assert.ok(page.includes('rows.map(campaign => campaign.id)'));
+  assert.ok(page.includes('this.service.getCommercialAttributionBatch(visibleIds)'));
+  assert.ok(page.includes('requestId !== this.commercialBatchRequestId'));
+  assert.ok(page.includes("result?.status === 'READY'"));
+  assert.ok(page.includes('this.loadingCommercialSummaries ? \'…\' : \'—\''));
+  assert.ok(html.includes('<th class="commercial-kpi-column">Compradores</th>'));
+  assert.ok(html.includes('<th class="commercial-kpi-column">Ingreso atribuible</th>'));
+  assert.ok(html.includes('{{ commercialBuyersLabel(campaign.id) }}'));
+  assert.ok(html.includes('{{ commercialRevenueLabel(campaign.id) }}'));
+  assert.ok(html.includes('role="alert">{{ commercialSummaryError }}'));
+});
