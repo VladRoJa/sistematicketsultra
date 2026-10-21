@@ -42,6 +42,9 @@ from app.models.warehouse import (
     VentaTotalSnapshotORM, VentaTotalSnapshotRowORM,
 )
 from app.services.marketing_phone import normalize_phone
+from app.services.marketing_campaign_v2_commercial_attribution_service import (
+    direct_attribution_ineligibility_reason,
+)
 from app.services.marketing_sales_funnel_service import _is_valid_status, _normalize_text
 from app.services.contact_center_service import (
     _is_membership_purchase_row,
@@ -1565,10 +1568,24 @@ def _materialized_multichild_commercial_payload(
     *,
     record: Any | None,
     children: Iterable[Any],
+    campaign: Any,
 ) -> dict[str, Any] | None:
-    """Read bounded cached metrics; never accept an outdated child set as READY."""
+    """Reject stale/ineligible cached READY without running Gasca queries."""
     if record is None:
         return None
+    reason = direct_attribution_ineligibility_reason(
+        purpose=getattr(campaign, "purpose", None),
+        source=getattr(campaign, "source", None),
+    )
+    if reason is not None:
+        return {
+            "campaign_id": int(record.campaign_v2_id),
+            "status": "NOT_ATTRIBUTABLE",
+            "reason": reason,
+            "buyers_attributed": None,
+            "transactions_attributed": None,
+            "revenue_attributed_mxn": None,
+        }
     payload = dict(record.result_json or {})
     status = str(payload.get("status", record.status))
     if status == "READY":
@@ -1608,7 +1625,7 @@ def build_campaign_v2_commercial_attribution(
     normalized_id = _positive_int(campaign_id, field_name="campaign_id", maximum=None)
     scope = _normalize_current_scope(allowed_sucursal_keys)
     with active_session.no_autoflush:
-        _load_visible_campaign_orm(
+        campaign = _load_visible_campaign_orm(
             campaign_id=normalized_id, scope=scope, session=active_session
         )
         children = (
@@ -1630,7 +1647,7 @@ def build_campaign_v2_commercial_attribution(
                     MarketingCampaignV2CommercialResultORM, normalized_id
                 )
                 materialized = _materialized_multichild_commercial_payload(
-                    record=record, children=children,
+                    record=record, children=children, campaign=campaign,
                 )
                 if materialized is not None:
                     return {**base, **materialized}
@@ -1865,6 +1882,7 @@ def build_campaign_v2_commercial_attribution_batch(
                 payload = _materialized_multichild_commercial_payload(
                     record=record,
                     children=children_by_campaign[identifier],
+                    campaign=by_id[identifier],
                 )
                 if payload is not None:
                     statuses[identifier] = {
