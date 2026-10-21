@@ -8,6 +8,8 @@ import { tap, shareReplay, finalize } from 'rxjs/operators';
 import { NoAuthHttpClient } from './no-auth-http-client.service';
 import { environment } from '../../environments/environment';
 import { SessionService } from '../core/auth/session.service';
+import { AuthActivityService } from '../core/auth/auth-activity.service';
+import { SessionRefreshService } from '../core/auth/session-refresh.service';
 
 
 
@@ -24,6 +26,8 @@ export class AuthService {
     private router: Router,
     private noAuthHttp: NoAuthHttpClient,
     private session: SessionService,
+    private activity: AuthActivityService,
+    private refresh: SessionRefreshService,
   ) {}
 
   login(username: string, password: string): Observable<any> {
@@ -32,8 +36,13 @@ export class AuthService {
     return this.http.post<any>(
       `${this.apiUrl}/login`,
       { username, password },
+      { withCredentials: true },
     ).pipe(
       tap({
+        next: () => {
+          this.activity.unlock();
+          this.activity.recordInteraction();
+        },
         error: (error) => {
           console.error("❌ Error recibido del backend:", error);
         }
@@ -41,11 +50,16 @@ export class AuthService {
     );
   }
 
-  logout() {
-    console.log("🚪 Cerrando sesión...");
-    this.session.clearSession(); // ✅ antes: localStorage.removeItem(...)
-    console.log("✅ Sesión eliminada.");
+  logout(): void {
+    this.session.clearSession();
+    this.activity.clear();
     this.router.navigate(['/login']);
+    if (this.refresh.enabled) {
+      // Logout must remain effective locally even when the network is down.
+      this.noAuthHttp.post(
+        `${this.apiUrl}/logout`, {}, { withCredentials: true }
+      ).subscribe({ error: () => undefined });
+    }
   }
 
   setSession(token: string, user: any, redirigir: boolean = true) {
