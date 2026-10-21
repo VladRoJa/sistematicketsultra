@@ -104,7 +104,10 @@ def login():
             if user.verify_password(password):
                 refresh_cookie = None
                 session_id = None
-                if _refresh_enabled():
+                if _refresh_enabled() and "Origin" in request.headers:
+                    # Browser origins must be allowlisted before a refresh
+                    # cookie is created. Clients without Origin retain the
+                    # legacy JWT-only contract, never a refresh session.
                     if not _origin_allowed():
                         return jsonify({"error": "INVALID_ORIGIN"}), 403
                     refresh_cookie, session_id = issue_refresh(user.id)
