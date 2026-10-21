@@ -12,6 +12,7 @@ from app.extensions import db
 from app.models.marketing import (
     MarketingCampaignV2ORM, MarketingCampaignV2HeldReleaseIntentORM,
 )
+from app.services.marketing_campaign_v2_followup_preview_service import FOLLOWUP_DERIVED_SOURCE
 from app.services.marketing_campaign_v2_derived_contact_guard import (
     DERIVED_SOURCE, DerivedContactConflict, assert_no_prior_or_pending_contact,
 )
@@ -120,6 +121,12 @@ def build_campaign_v2_preflight(
         session=active_session,
     )
     campaign = projection["campaign"]
+    if campaign.get("source") == FOLLOWUP_DERIVED_SOURCE:
+        # Freeze only: follow-up recontact needs a separate governed
+        # admission/approval policy. No standard D2a/D2b/D2c bypass.
+        raise MarketingCampaignV2DispatchConfigValidationError(
+            "Seguimiento congelado: envío bloqueado hasta implementar la política de recontacto."
+        )
     if campaign.get("source") == DERIVED_SOURCE:
         # Only an actual, completed D3c1 intent may produce a derived
         # campaign. Never trust source text or client-supplied metadata alone.
