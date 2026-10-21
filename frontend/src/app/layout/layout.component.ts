@@ -16,6 +16,8 @@ import { AuthService } from '../services/auth.service';
 import { ReauthModalComponent } from '../reauth-modal/reauth-modal.component';
 import { InactividadService } from '../services/inactividad.service';
 import { SessionService } from '../core/auth/session.service';
+import { AuthActivityService } from '../core/auth/auth-activity.service';
+import { SessionRefreshService } from '../core/auth/session-refresh.service';
 import { CdkDragEnd, DragDropModule } from '@angular/cdk/drag-drop';
 import { TicketService, TicketValidationSummary } from '../services/ticket.service';
 import { AutomationControlService } from '../automation-control/automation-control.service';
@@ -158,8 +160,27 @@ isMoreMenuActive(): boolean {
 
   // ⏳ Configuración de inactividad
   private tiempoInactividad = 45 * 60 * 1000; // 45 minutos en ms
-  private temporizadorInactividad: any;
+  private temporizadorInactividad: ReturnType<typeof setTimeout> | null = null;
   private reauthPorInactividadAbierto = false;
+  private readonly eventosActividad = [
+    'pointermove', 'pointerdown', 'keydown', 'touchstart', 'wheel', 'scroll'
+  ];
+  private ultimoChequeoRefreshAt = 0;
+  private readonly escucharActividadHumana = (event: Event): void => {
+    if (!event.isTrusted || this.reauthPorInactividadAbierto) return;
+    this.activity.recordInteraction();
+    this.reiniciarTimerInactividad();
+    this.verificarRenovacionSilenciosa();
+  };
+  private readonly comprobarActividadExterna = (): void => {
+    this.reiniciarTimerInactividad();
+    this.verificarRenovacionSilenciosa();
+  };
+  private readonly onAuthStorageChange = (event: StorageEvent): void => {
+    if (event.key === this.activity.storageKey || event.key === 'token') {
+      this.comprobarActividadExterna();
+    }
+  };
 
   constructor(
     private router: Router,
@@ -169,6 +190,8 @@ isMoreMenuActive(): boolean {
     private authService: AuthService,
     private inactividadService: InactividadService,
     private session: SessionService,
+    private activity: AuthActivityService,
+    private refreshSesion: SessionRefreshService,
     private ticketService: TicketService,
     private refrescoService: RefrescoService,
     private automationControlService: AutomationControlService,
@@ -1062,43 +1085,72 @@ private habilitarInternalDocumentsEnMenuSiAplica(menuNubeCorporativa: any): void
 }
 
 
-  // 🖱️ Lógica de inactividad
+  // El reloj se calcula contra actividad humana real, no contra polling.
   private iniciarTimerInactividad(): void {
-    const eventosUsuario = ['mousemove', 'keydown', 'click', 'scroll'];
-    eventosUsuario.forEach(evento => {
-      window.addEventListener(evento, () => this.reiniciarTimerInactividad());
+    this.activity.initializeIfAbsent();
+    this.eventosActividad.forEach(evento => {
+      // Captura incluso scroll dentro de contenedores Angular Material.
+      window.addEventListener(evento, this.escucharActividadHumana, true);
     });
+    window.addEventListener('focus', this.comprobarActividadExterna);
+    window.addEventListener('storage', this.onAuthStorageChange);
+    document.addEventListener('visibilitychange', this.comprobarActividadExterna);
     this.reiniciarTimerInactividad();
   }
 
-
   private reiniciarTimerInactividad(): void {
-    if (this.reauthPorInactividadAbierto) {
+    if (this.temporizadorInactividad) {
+      clearTimeout(this.temporizadorInactividad);
+      this.temporizadorInactividad = null;
+    }
+    if (this.reauthPorInactividadAbierto) return;
+
+    const restante = this.activity.millisecondsUntilIdle(this.tiempoInactividad);
+    if (restante <= 0) {
+      this.abrirModalReautenticacion();
       return;
     }
+    // Recalcular periódicamente por cambios en otras pestañas y pestañas
+    // suspendidas: nunca extender 45 minutos por una solicitud automática.
+    this.temporizadorInactividad = setTimeout(
+      () => {
+        this.reiniciarTimerInactividad();
+        this.verificarRenovacionSilenciosa();
+      },
+      Math.min(restante, 30 * 1000),
+    );
+  }
 
-    clearTimeout(this.temporizadorInactividad);
+  private verificarRenovacionSilenciosa(): void {
+    if (this.reauthPorInactividadAbierto || this.activity.isLocked()) return;
+    const ahora = Date.now();
+    if (ahora - this.ultimoChequeoRefreshAt < 15 * 1000) return;
 
-    this.temporizadorInactividad = setTimeout(() => {
-      this.abrirModalReautenticacion();
-    }, this.tiempoInactividad);
+    const token = this.session.getToken();
+    if (!token || !this.refreshSesion.shouldRenewSoon(token)) return;
+    this.ultimoChequeoRefreshAt = ahora;
+    this.refreshSesion.renewIfNeeded(token).catch(error => {
+      // A revoked/expired refresh session cannot be silently resumed.
+      // Never print credentials or entire backend auth responses.
+      if (error?.status === 401 && !this.activity.isLocked()) {
+        this.authService.logout();
+      }
+    });
   }
 
   private abrirModalReautenticacion(): void {
-    if (this.router.url.includes('/login')) {
-      return;
-    }
-
+    if (this.router.url.includes('/login')) return;
     const reauthYaAbierto = this.dialog.openDialogs.some(
       dialogRef => dialogRef.componentInstance instanceof ReauthModalComponent
     );
-
-    if (this.reauthPorInactividadAbierto || reauthYaAbierto) {
-      return;
-    }
+    if (this.reauthPorInactividadAbierto || reauthYaAbierto) return;
 
     this.reauthPorInactividadAbierto = true;
-    clearTimeout(this.temporizadorInactividad);
+    this.activity.lock();
+    if (this.temporizadorInactividad) {
+      clearTimeout(this.temporizadorInactividad);
+      this.temporizadorInactividad = null;
+    }
 
     mostrarAlertaToast('Sesión bloqueada por inactividad. Reautentícate para continuar.');
 
@@ -1114,22 +1166,20 @@ private habilitarInternalDocumentsEnMenuSiAplica(menuNubeCorporativa: any): void
 
     dialogRef.afterClosed().subscribe(result => {
       this.reauthPorInactividadAbierto = false;
-
-      if (result?.token) {
-        this.authService.setSession(result.token, result.user || {}, false);
+      if (result?.token && result?.user) {
+        this.authService.setSession(result.token, result.user, false);
+        this.activity.unlock();
+        this.activity.recordInteraction();
         this.reiniciarTimerInactividad();
         return;
       }
-
       this.cerrarPorInactividad();
     });
   }
 
   private cerrarPorInactividad(): void {
     mostrarAlertaToast('Sesión cerrada por inactividad.');
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    this.router.navigate(['/login']);
+    this.authService.logout();
   }
 
   ngAfterViewInit(): void {
@@ -1137,6 +1187,17 @@ private habilitarInternalDocumentsEnMenuSiAplica(menuNubeCorporativa: any): void
   }
 
 ngOnDestroy(): void {
+  if (this.temporizadorInactividad) {
+    clearTimeout(this.temporizadorInactividad);
+    this.temporizadorInactividad = null;
+  }
+  this.eventosActividad.forEach(evento => {
+    window.removeEventListener(evento, this.escucharActividadHumana, true);
+  });
+  window.removeEventListener('focus', this.comprobarActividadExterna);
+  window.removeEventListener('storage', this.onAuthStorageChange);
+  document.removeEventListener('visibilitychange', this.comprobarActividadExterna);
+  this.inactividadService.registrarCallback(null);
   if (this.validationSummaryIntervalId) {
     clearInterval(this.validationSummaryIntervalId);
     this.validationSummaryIntervalId = null;
@@ -1187,9 +1248,7 @@ private verificarRolUsuario(): void {
   }
 
   cerrarSesion(): void {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    this.router.navigate(['/login']);
+    this.authService.logout();
   }
 
   openEliminarDialog(): void {
