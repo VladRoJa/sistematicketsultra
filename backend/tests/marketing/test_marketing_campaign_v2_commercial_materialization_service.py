@@ -74,7 +74,7 @@ def _child(child_id, branch_id, channel, phone):
 
 
 def _sale(identifier, phone, branch, amount, *, order, time="18:00:00",
-          status="ACTIVO", description="CONVENIOS $549"):
+          status="ACTIVO", description="CONVENIOS $549", nuevo="NUEVO"):
     return SimpleNamespace(
         id=identifier,
         snapshot_id=300,
@@ -89,6 +89,7 @@ def _sale(identifier, phone, branch, amount, *, order, time="18:00:00",
         folio=f"F-{identifier}",
         clave_producto="MEMBRESIA",
         tipo="CONTRATO",
+        nuevo=nuevo,
     )
 
 
@@ -130,13 +131,18 @@ def _source_session(*, incomplete=False, purpose="NEW_SALE",
             SimpleNamespace(sucursal_id=17),
         ),
     ]
+    sale_kind = "REACTIVACIÓN" if purpose == "REACTIVATION" else "NUEVO"
     sales = [
-        _sale(1, "6861000001", "AZAHARES", "549", order="A"),
-        _sale(2, "6861000001", "AZAHARES", "-50", order="A"),
-        _sale(3, "6641000002", "BRANCH B", "649", order="B"),
+        _sale(1, "6861000001", "AZAHARES", "549", order="A", nuevo=sale_kind),
+        _sale(2, "6861000001", "AZAHARES", "-50", order="A", nuevo=sale_kind),
+        _sale(3, "6641000002", "BRANCH B", "649", order="B", nuevo=sale_kind),
         _sale(4, "6641000002", "BRANCH B", "200", order="C",
               description="PENALIZACION"),
         _sale(5, "6861000001", "BRANCH B", "549", order="D"),
+        _sale(6, "6861000001", "AZAHARES", "999", order="E",
+              nuevo="RENOVACIÓN"),
+        _sale(7, "6641000002", "BRANCH B", "400", order="F",
+              nuevo=""),
     ]
     if incomplete:
         return ReadSession([campaign], children, recipients, snapshots)
@@ -155,6 +161,7 @@ def test_multichild_worker_joins_proven_iventas_to_one_gasca_cut(purpose, source
     )
     assert session.queries == 8
     assert result["status"] == "READY"
+    assert result["attribution_rule_version"] == "SALE_KIND_V1"
     assert result["submitted_child_ids"] == [80, 81]
     assert result["provider_snapshot_ids"] == [180, 181]
     assert result["venta_total_snapshot_id"] == 300
