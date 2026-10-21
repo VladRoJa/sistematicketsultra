@@ -328,8 +328,9 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
       });
   }
 
-  setFollowupFreezeConfirmed(checked: boolean): void {
-    this.followupFreezeConfirmed = checked;
+  setFollowupFreezeConfirmed(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.followupFreezeConfirmed = input.checked;
   }
 
   freezeFollowup(): void {
