@@ -798,7 +798,7 @@ test('Followup preview is a separate server-side read-only workflow, never a sen
   assert.ok(html.includes('preview.candidate_count | number'));
   assert.ok(html.includes('preview.source_snapshot_id'));
   assert.ok(html.includes('preview.preview_fingerprint'));
-  assert.ok(html.includes('Solo vista previa'));
+  assert.ok(html.includes('Envíos bloqueados'));
   assert.ok(css.includes('.followup-status-option.is-selected'));
   assert.ok(service.includes('previewFollowup('));
   assert.ok(service.includes('selected_statuses: [...selectedStatuses]'));
@@ -813,8 +813,40 @@ test('Followup preview is a separate server-side read-only workflow, never a sen
   // El filtro simple de consulta conserva sus controles y API independientes.
   assert.ok(html.includes('selectRecipientsProviderFilter(filter.value)'));
   assert.ok(component.includes('this.recipientsProviderFilter'));
-  assert.equal(html.includes('freezeFollowup('), false);
+  // El preview sigue siendo lectura; el congelamiento es un paso separado y confirmado.
+  assert.ok(html.includes('(click)="freezeFollowup()"'));
   assert.equal(html.includes('sendFollowup('), false);
+});
+
+test('Followup freeze uses the exact persisted preview with explicit consent and never sends', () => {
+  const dir = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const component = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-campaign-detail-dialog.component.ts'), 'utf8',
+  );
+  const html = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-campaign-detail-dialog.component.html'), 'utf8',
+  );
+  const service = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2.service.ts'), 'utf8',
+  );
+  assert.ok(service.includes('freezeFollowup('));
+  assert.ok(service.includes('source_snapshot_id: preview.source_snapshot_id'));
+  assert.ok(service.includes('expected_preview_fingerprint: preview.preview_fingerprint'));
+  assert.ok(service.includes('expected_recipient_count: preview.candidate_count'));
+  assert.ok(service.includes('/followup/freeze'));
+  assert.ok(component.includes('this.followupFreezeConfirmed'));
+  assert.ok(component.includes('this.followupPreviewResult'));
+  assert.ok(component.includes('this.followupFreezing = true;'));
+  assert.ok(component.includes('this.followupFreezeResult = result;'));
+  assert.ok(component.includes('this.followupPreviewResult = null;'));
+  assert.ok(html.includes('Congelar campaña de seguimiento'));
+  assert.ok(html.includes('(change)="setFollowupFreezeConfirmed($event)"'));
+  assert.ok(html.includes('[formControl]="followupNameControl"'));
+  assert.ok(html.includes('[disabled]="followupFreezing || !followupFreezeConfirmed'));
+  assert.ok(html.includes('frozen.derived_campaign_id'));
+  assert.ok(html.includes('Envíos bloqueados.'));
+  assert.equal(html.includes('sendFollowup('), false);
+  assert.equal(html.includes('dispatchFollowup('), false);
 });
 
 test('M30 reporting query vacío omite params y fechas usan límites locales con offset', () => {

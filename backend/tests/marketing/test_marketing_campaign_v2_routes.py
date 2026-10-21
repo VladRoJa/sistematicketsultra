@@ -20,6 +20,10 @@ from app.services.marketing_campaign_v2_creation_service import (
     MarketingCampaignV2EmptyAudienceError,
     MarketingCampaignV2PreviewMismatchError,
 )
+from app.services.marketing_campaign_v2_followup_freeze_service import (
+    FollowupFreezeValidationError,
+    FollowupFreezeConflictError,
+)
 from app.services.marketing_campaign_v2_followup_preview_service import (
     FollowupPreviewValidationError,
     FollowupPreviewConflictError,
@@ -249,6 +253,7 @@ class TestMarketingCampaignV2Routes:
             ("get", "/api/marketing/campaigns-v2/1/report"),
             ("get", "/api/marketing/campaigns-v2/1/provider-stats"),
             ("post", "/api/marketing/campaigns-v2/1/followup/preview"),
+            ("post", "/api/marketing/campaigns-v2/1/followup/freeze"),
             ("post", "/api/marketing/campaigns-v2/1/provider-stats/snapshots"),
             ("get", "/api/marketing/campaigns-v2/1/provider-stats/snapshots"),
             ("get", "/api/marketing/campaigns-v2/1/provider-stats/snapshots/latest"),
@@ -1639,6 +1644,96 @@ class TestMarketingCampaignV2Routes:
                 headers=self.headers,
             )
         assert response.status_code == 400
+        service.assert_not_called()
+
+    def test_followup_freeze_forwards_user_scope_and_exact_preview_identity(self):
+        expected = {
+            "derived_campaign_id": 40, "status": "FROZEN_FOLLOWUP",
+            "recipient_count": 3, "send_authorized": False,
+        }
+        with (
+            self._auth(self.partial_access),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.marketing_branch_keys_by_sucursal_ids",
+                return_value={11: "BRANCH A", 22: "BRANCH B"},
+            ),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.freeze_followup_campaign",
+                return_value=expected,
+            ) as service,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/2/followup/freeze",
+                json={
+                    "name": "Seguimiento sin enviar",
+                    "selected_statuses": ["VIEWED", "DELIVERED"],
+                    "source_snapshot_id": 101,
+                    "expected_preview_fingerprint": "a" * 64,
+                    "expected_recipient_count": 3,
+                },
+                headers=self.headers,
+            )
+        assert response.status_code == 201
+        assert response.get_json() == expected
+        kwargs = service.call_args.kwargs
+        assert kwargs["source_campaign_id"] == 2
+        assert kwargs["selected_statuses"] == ["VIEWED", "DELIVERED"]
+        assert kwargs["source_snapshot_id"] == 101
+        assert kwargs["expected_preview_fingerprint"] == "a" * 64
+        assert kwargs["expected_recipient_count"] == 3
+        assert kwargs["actor_user_id"] == 7
+        assert set(kwargs["allowed_sucursal_keys"]) == {"BRANCH A", "BRANCH B"}
+
+    def test_followup_freeze_rejects_extra_client_recipient_ids(self):
+        with (
+            self._auth(),
+            patch("app.routes.marketing_campaign_v2_routes.freeze_followup_campaign") as service,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/2/followup/freeze",
+                json={"name": "No", "recipient_ids": [10], "selected_statuses": ["VIEWED"]},
+                headers=self.headers,
+            )
+        assert response.status_code == 400
+        service.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("exc", "code"),
+        [
+            (FollowupFreezeValidationError("Nombre inválido."), 400),
+            (FollowupFreezeConflictError("Cohorte cambió."), 409),
+            (MarketingCampaignV2NotFoundError("Sin acceso."), 404),
+        ],
+    )
+    def test_followup_freeze_maps_errors_without_leaking_contacts(self, exc, code):
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.freeze_followup_campaign",
+                side_effect=exc,
+            ),
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/2/followup/freeze",
+                json={"selected_statuses": ["VIEWED"]},
+                headers=self.headers,
+            )
+        assert response.status_code == code
+        assert "rows" not in response.get_json()
+
+    def test_followup_freeze_requires_manage_campaigns(self):
+        restricted = SimpleNamespace(
+            is_global=True, branch_ids=(), can_manage_campaigns=False,
+        )
+        with (
+            self._auth(restricted),
+            patch("app.routes.marketing_campaign_v2_routes.freeze_followup_campaign") as service,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/2/followup/freeze",
+                json={"selected_statuses": ["VIEWED"]}, headers=self.headers,
+            )
+        assert response.status_code == 403
         service.assert_not_called()
 
     def test_followup_preview_is_scoped_read_only_and_passes_selected_statuses(self):

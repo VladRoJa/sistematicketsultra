@@ -21,6 +21,7 @@ from app.models.marketing import (
     MarketingCampaignV2ProviderCampaignORM,
     MarketingCampaignV2RecipientORM,
 )
+from app.services.marketing_campaign_v2_followup_preview_service import FOLLOWUP_DERIVED_SOURCE
 from app.services.marketing_campaign_v2_derived_contact_guard import (
     DERIVED_SOURCE,
     DerivedContactConflict,
@@ -83,6 +84,10 @@ def verify_outbound_contact_admission(
     campaign = session.get(MarketingCampaignV2ORM, int(child.campaign_v2_id))
     if campaign is None:
         raise CampaignV2ContactGateConflict("Campaña del child inexistente.")
+    if campaign.source == FOLLOWUP_DERIVED_SOURCE:
+        raise CampaignV2ContactGateConflict(
+            "El seguimiento congelado no tiene autorización de recontacto ni envío."
+        )
     phones = _claim_phones(child)
     desired = set(phones)
     if campaign.source == DERIVED_SOURCE:

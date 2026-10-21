@@ -451,21 +451,22 @@
             <h3 id="followup-preview-title">Preparar campaña de seguimiento</h3>
             <p>Selecciona varios estados para combinarlos. Cualquier estado marcado será incluido (OR).</p>
           </div>
-          <span class="followup-preview-stage">Solo vista previa</span>
+          <span class="followup-preview-stage">Envíos bloqueados</span>
         </div>
         <div class="followup-status-options" role="group" aria-label="Estados acumulables para seguimiento">
           <label *ngFor="let option of followupStatusOptions" class="followup-status-option"
                  [class.is-selected]="isFollowupStatusSelected(option.value)">
             <input type="checkbox"
                    [checked]="isFollowupStatusSelected(option.value)"
-                   (change)="toggleFollowupStatus(option.value)" />
+                   (change)="toggleFollowupStatus(option.value)"
+                   [disabled]="followupFreezing || !!followupFreezeResult" />
             <span>{{ option.label }}</span>
           </label>
         </div>
         <div class="followup-preview-actions">
           <button mat-stroked-button type="button"
                   (click)="previewFollowup()"
-                  [disabled]="followupPreviewLoading || selectedFollowupStatuses.length === 0">
+                  [disabled]="followupPreviewLoading || followupFreezing || !!followupFreezeResult || selectedFollowupStatuses.length === 0">
             {{ followupPreviewLoading ? 'Calculando…' : 'Calcular audiencia acumulada' }}
           </button>
           <span class="muted">{{ selectedFollowupStatuses.length }} estados seleccionados</span>
@@ -486,6 +487,35 @@
             <span>Corte: {{ followupObservedAt(preview.source_snapshot_fetched_at) }}</span>
             <span [title]="preview.preview_fingerprint">Huella: {{ followupFingerprintShort(preview.preview_fingerprint) }}…</span>
           </div>
+        </div>
+        <div *ngIf="followupPreviewResult && !followupFreezeResult" class="followup-freeze-controls">
+          <h4>Congelar nueva campaña independiente</h4>
+          <p class="followup-preview-warning">
+            Se copiarán exactamente los destinatarios del preview si siguen vigentes y ninguno está en lista negra.
+            No se enviará ningún mensaje y la nueva campaña quedará bloqueada para envíos.
+          </p>
+          <label class="followup-freeze-label" for="followup-freeze-name">Nombre de la campaña</label>
+          <input id="followup-freeze-name" class="followup-freeze-name"
+                 type="text" maxlength="255" [formControl]="followupNameControl"
+                 [disabled]="followupFreezing" />
+          <label class="followup-freeze-confirm">
+            <input type="checkbox"
+                   [checked]="followupFreezeConfirmed"
+                   [disabled]="followupFreezing"
+                   (change)="setFollowupFreezeConfirmed($event)" />
+            <span>Confirmo congelar una cohorte independiente. Entiendo que esto no autoriza envíos.</span>
+          </label>
+          <button mat-stroked-button type="button"
+                  (click)="freezeFollowup()"
+                  [disabled]="followupFreezing || !followupFreezeConfirmed || !followupNameControl.value.trim() || followupPreviewResult.candidate_count === 0">
+            {{ followupFreezing ? 'Congelando…' : 'Congelar campaña de seguimiento' }}
+          </button>
+        </div>
+        <p *ngIf="followupFreezeError" class="inline-error" role="alert">{{ followupFreezeError }}</p>
+        <div *ngIf="followupFreezeResult as frozen" class="followup-freeze-success" role="status">
+          <strong>Campaña #{{ frozen.derived_campaign_id }} congelada correctamente</strong>
+          <span>{{ frozen.recipient_count | number }} destinatarios conservados · Snapshot #{{ frozen.source_snapshot_id }}</span>
+          <span>Envíos bloqueados. Falta aprobar la política de recontacto y una nueva autorización.</span>
         </div>
       </section>
 
