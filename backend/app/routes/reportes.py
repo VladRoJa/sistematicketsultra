@@ -13,6 +13,7 @@ from app.models import Ticket
 from app. utils.error_handler import manejar_error
 from io import BytesIO
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 import pandas as pd
 import os
 from uuid import uuid4
@@ -69,6 +70,19 @@ def _analytical_inventory_general_query():
     )
 
 
+def _inventario_export_query_por_sucursal(sucursal_id):
+    """Sucursal y consulta exclusivamente de sus artículos asignados."""
+    sucursal = Sucursal.query.get(sucursal_id)
+    if sucursal is None:
+        return None, None
+    query = (
+        InventarioGeneral.query
+        .join(InventarioSucursal, InventarioSucursal.inventario_id == InventarioGeneral.id)
+        .filter(InventarioSucursal.sucursal_id == sucursal_id)
+    )
+    return sucursal, query
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # EXPORTAR INVENTARIO GENERAL (con filtros avanzados)
 # ═══════════════════════════════════════════════════════════════════════
@@ -82,11 +96,25 @@ def exportar_inventario():
 
     try:
         # Filtros por query params
-        categoria = request.args.get('categoria') 
+        categoria = request.args.get('categoria')
         tipo = request.args.get('tipo')
         proveedor = request.args.get('proveedor')
+        raw_sucursal_id = request.args.get('sucursal_id')
+        sucursal = None
 
-        query = _analytical_inventory_general_query()
+        if raw_sucursal_id is not None:
+            try:
+                sucursal_id = int(raw_sucursal_id)
+            except (TypeError, ValueError):
+                return jsonify({"error": "sucursal_id inválido"}), 400
+            if sucursal_id <= 0:
+                return jsonify({"error": "sucursal_id inválido"}), 400
+
+            sucursal, query = _inventario_export_query_por_sucursal(sucursal_id)
+            if sucursal is None:
+                return jsonify({"error": "Sucursal no encontrada"}), 404
+        else:
+            query = _analytical_inventory_general_query()
 
         if categoria:
             query = query.filter(InventarioGeneral.categoria.ilike(f"%{categoria}%"))
@@ -133,7 +161,9 @@ def exportar_inventario():
             worksheet.autofilter(0, 0, len(df), len(df.columns) - 1)
 
         output.seek(0)
-        filename = f'Inventario_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        alcance = (secure_filename(sucursal.sucursal or "").upper() or f"SUCURSAL_{sucursal_id}") if sucursal else "GENERAL"
+        fecha_descarga = datetime.now(ZoneInfo("America/Tijuana")).strftime("%Y-%m-%d")
+        filename = f"Inventario_{alcance}_{fecha_descarga}.xlsx"
         return send_file(output, as_attachment=True, download_name=filename,
                          mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     except Exception as e:
