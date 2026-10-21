@@ -751,7 +751,9 @@ def test_commercial_attribution_batch_is_scoped_and_has_constant_query_count(mon
         [child(26, "provider-26"), child(28, "p-28a"),
          child(28, "p-28b"), child(29, "provider-29"),
          child(30, None, None)],
-        # 3. Provider snapshots.
+        # 3. Materialized multi-child results (none in this legacy test).
+        [],
+        # 4. Provider snapshots.
         [SimpleNamespace(
             id=1, campaign_v2_id=26, provider_campaign_id="provider-26",
             fetched_at=when,
@@ -778,7 +780,7 @@ def test_commercial_attribution_batch_is_scoped_and_has_constant_query_count(mon
         allowed_sucursal_keys=None,
         session=session,
     )
-    assert session.queries == 6  # Constant read count for a whole page.
+    assert session.queries == 7  # One extra cache read, still page-bounded.
     rows = result["rows"]
     assert [r["campaign_id"] for r in rows] == [27, 26, 28, 29, 30]
     assert [r["status"] for r in rows] == [
