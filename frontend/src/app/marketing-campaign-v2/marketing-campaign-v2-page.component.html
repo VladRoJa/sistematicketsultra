@@ -787,7 +787,7 @@
 
       <div class="table-wrapper" *ngIf="campaigns.length; else emptyHistory">
         <table>
-          <thead><tr><th scope="col">ID</th><th>Nombre</th><th>Guardada</th><th>Origen</th><th>Objetivo</th><th>Destinatarios</th><th>Acciones</th></tr></thead>
+          <thead><tr><th scope="col">ID</th><th>Nombre</th><th>Guardada</th><th>Origen</th><th>Objetivo</th><th>Destinatarios</th><th class="commercial-kpi-column">Compradores</th><th class="commercial-kpi-column">Ingreso atribuible</th><th>Acciones</th></tr></thead>
           <tbody>
             <tr *ngFor="let campaign of campaigns">
               <td><strong>#{{ campaign.id }}</strong></td>
@@ -796,11 +796,14 @@
               <td>{{ campaignOriginLabel(campaign) }}</td>
               <td>{{ purposeLabel(campaign.purpose) }}</td>
               <td>{{ campaign.recipient_count | number }}</td>
+              <td class="commercial-kpi-column commercial-kpi-value">{{ commercialBuyersLabel(campaign.id) }}</td>
+              <td class="commercial-kpi-column commercial-kpi-value">{{ commercialRevenueLabel(campaign.id) }}</td>
               <td><button mat-button type="button" (click)="openCampaign(campaign)">Ver detalle</button></td>
             </tr>
           </tbody>
         </table>
       </div>
+      <p *ngIf="commercialSummaryError" class="commercial-kpi-error" role="alert">{{ commercialSummaryError }}</p>
       <ng-template #emptyHistory><p class="empty-state" *ngIf="!loadingCampaigns">Aún no hay Campaign V2 visibles con estos filtros.</p></ng-template>
 
       <div class="pager" *ngIf="campaignTotalPages > 1">

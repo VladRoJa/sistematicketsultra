@@ -419,7 +419,20 @@ export type CampaignV2CommercialAttributionStatus =
   | 'NOT_SUBMITTED'
   | 'UNSUPPORTED_MULTICHILD_OR_UNSENT'
   | 'NO_PROVIDER_SNAPSHOT'
-  | 'NO_CANONICAL_VENTA_TOTAL';
+  | 'NO_CANONICAL_VENTA_TOTAL'
+  | 'BATCH_SCOPE_TOO_LARGE';
+
+export interface CampaignV2CommercialAttributionSummary {
+  campaign_id: number;
+  status: CampaignV2CommercialAttributionStatus;
+  buyers_attributed: number | null;
+  transactions_attributed: number | null;
+  revenue_attributed_mxn: string | null;
+}
+
+export interface CampaignV2CommercialAttributionBatchResponse {
+  rows: CampaignV2CommercialAttributionSummary[];
+}
 
 export interface CampaignV2CommercialAttribution {
   campaign_id: number;

@@ -49,6 +49,7 @@ import {
   CampaignV2AudienceFamily,
   CampaignV2BlacklistSummary,
   CampaignV2CampaignSummary,
+  CampaignV2CommercialAttributionSummary,
   CampaignV2BudgetRateRevision,
   CampaignV2DispatchTemplate,
   CampaignV2ConsolidatedReport,
@@ -200,6 +201,10 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   pricingLoaded = false;
   pricingError = '';
   campaigns: CampaignV2CampaignSummary[] = [];
+  commercialSummaries = new Map<number, CampaignV2CommercialAttributionSummary>();
+  loadingCommercialSummaries = false;
+  commercialSummaryError = '';
+  private commercialBatchRequestId = 0;
   reporting: CampaignV2ConsolidatedReport | null = null;
   blacklistSummary: CampaignV2BlacklistSummary | null = null;
   funnelCutoffDates: string[] = [];
@@ -1201,6 +1206,10 @@ export class MarketingCampaignV2PageComponent implements OnInit {
 
     this.loadingCampaigns = true;
     this.error = '';
+    ++this.commercialBatchRequestId;
+    this.commercialSummaries = new Map();
+    this.loadingCommercialSummaries = false;
+    this.commercialSummaryError = '';
     this.service.listCampaigns({
       page,
       page_size: this.campaignPageSize,
@@ -1215,6 +1224,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
           this.campaignPage = result.page;
           this.campaignTotal = result.total;
           this.campaignTotalPages = result.total_pages;
+          this.loadCampaignCommercialSummaries(result.rows);
         },
         error: (error: HttpErrorResponse) => {
           this.loadingCampaigns = false;
@@ -1227,6 +1237,61 @@ export class MarketingCampaignV2PageComponent implements OnInit {
           this.error = this.errorMessage(error, 'No fue posible cargar el historial.');
         },
       });
+  }
+
+  private loadCampaignCommercialSummaries(rows: CampaignV2CampaignSummary[]): void {
+    if (!rows.length) {
+      return;
+    }
+    const requestId = ++this.commercialBatchRequestId;
+    const visibleIds = rows.map(campaign => campaign.id);
+    const visibleSet = new Set(visibleIds);
+    this.loadingCommercialSummaries = true;
+    this.commercialSummaryError = '';
+    this.service.getCommercialAttributionBatch(visibleIds)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: result => {
+          if (requestId !== this.commercialBatchRequestId) {
+            return;
+          }
+          this.loadingCommercialSummaries = false;
+          this.commercialSummaries = new Map<number, CampaignV2CommercialAttributionSummary>(
+            result.rows
+              .filter(row => visibleSet.has(row.campaign_id))
+              .map(row => [row.campaign_id, row]),
+          );
+        },
+        error: () => {
+          if (requestId !== this.commercialBatchRequestId) {
+            return;
+          }
+          this.loadingCommercialSummaries = false;
+          this.commercialSummaries = new Map();
+          this.commercialSummaryError = 'No se pudieron consultar los resultados comerciales.';
+        },
+      });
+  }
+
+  commercialBuyersLabel(campaignId: number): string {
+    const result = this.commercialSummaries.get(campaignId);
+    if (result?.status === 'READY' && result.buyers_attributed !== null) {
+      return String(result.buyers_attributed);
+    }
+    return this.loadingCommercialSummaries ? '…' : '—';
+  }
+
+  commercialRevenueLabel(campaignId: number): string {
+    const result = this.commercialSummaries.get(campaignId);
+    if (result?.status === 'READY' && result.revenue_attributed_mxn !== null) {
+      const amount = Number(result.revenue_attributed_mxn);
+      if (Number.isFinite(amount)) {
+        return new Intl.NumberFormat('es-MX', {
+          style: 'currency', currency: 'MXN',
+        }).format(amount);
+      }
+    }
+    return this.loadingCommercialSummaries ? '…' : '—';
   }
 
   previousCampaignPage(): void {

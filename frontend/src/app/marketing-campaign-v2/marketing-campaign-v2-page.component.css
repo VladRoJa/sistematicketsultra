@@ -210,3 +210,8 @@ dl { margin:0; }.metadata-panel dl div { display:grid; grid-template-columns:170
   .field-grid,
   .reporting-filters { row-gap: 12px; }
 }
+
+/* Saved campaign outcome KPIs: compact, numeric and readable on horizontal scroll. */
+.commercial-kpi-column { text-align:right; font-variant-numeric:tabular-nums; }
+.commercial-kpi-value { font-weight:700; color:#0f172a; }
+.commercial-kpi-error { margin:8px 0 0; color:#9f1239; font-size:12px; }
