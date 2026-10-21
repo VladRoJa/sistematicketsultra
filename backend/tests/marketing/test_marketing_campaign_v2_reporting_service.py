@@ -1019,7 +1019,8 @@ def test_commercial_attribution_multichild_batch_reads_cache_without_sales_queri
             return Query(next(self.data))
 
     campaign = SimpleNamespace(
-        id=8, audience_definition_json={
+        id=8, purpose="NEW_SALE", source="FUNNEL_PORTFOLIO",
+        audience_definition_json={
             "filters": {"allowed_sucursal_keys": ["AZAHARES"]}
         },
     )
