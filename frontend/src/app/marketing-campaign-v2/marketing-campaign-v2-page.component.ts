@@ -1283,8 +1283,16 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     return labels[value];
   }
 
-  sourceLabel(value: CampaignV2Source | 'EXCEL_IMPORT'): string {
+  campaignOriginLabel(campaign: CampaignV2CampaignSummary): string {
+    if (campaign.source_campaign_id !== null) {
+      return `Seguimiento de campaña #${campaign.source_campaign_id}`;
+    }
+    return this.sourceLabel(campaign.source);
+  }
+
+  sourceLabel(value: CampaignV2Source | 'EXCEL_IMPORT' | 'FOLLOWUP_SNAPSHOT_DERIVED'): string {
     if (value === 'EXCEL_IMPORT') { return 'Excel importado'; }
+    if (value === 'FOLLOWUP_SNAPSHOT_DERIVED') { return 'Seguimiento de campaña'; }
     const labels: Record<CampaignV2Source, string> = {
       EXPIRED_MEMBERS: 'Socios vencidos',
       ACTIVE_MEMBERS: 'Socios activos',
