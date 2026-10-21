@@ -230,6 +230,7 @@ from app.services.marketing_campaign_v2_reporting_service import (
     build_campaign_v2_consolidated_report,
     build_campaign_v2_individual_report,
     build_campaign_v2_reporting_export_dataset,
+    build_campaign_v2_commercial_attribution,
 )
 from app.services.marketing_campaign_v2_reporting_excel_service import (
     XLSX_MIMETYPE,
@@ -784,6 +785,32 @@ def get_campaign_v2_endpoint(campaign_id: int):
         return _error(str(exc), 400)
     except Exception:
         return _error("Falló la consulta de Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.get(
+    "/campaigns-v2/<int:campaign_id>/commercial-attribution"
+)
+@jwt_required()
+def get_campaign_v2_commercial_attribution_endpoint(campaign_id: int):
+    """Read-only outcome correlation; does not mutate campaign or contact provider."""
+    try:
+        _, access = _resolve_campaign_v2_request()
+        _validate_query_args(set())
+        report = build_campaign_v2_commercial_attribution(
+            campaign_id=campaign_id,
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(report), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2NotFoundError:
+        return _error("Campaign V2 no encontrada.", 404)
+    except (MarketingCampaignV2RouteValidationError, MarketingCampaignV2QueryValidationError) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        current_app.logger.exception("Error en atribución comercial Campaign V2")
+        return _error("Falló la consulta de atribución comercial.", 500)
 
 
 @marketing_campaign_v2_bp.get("/campaigns-v2/reporting/export")
