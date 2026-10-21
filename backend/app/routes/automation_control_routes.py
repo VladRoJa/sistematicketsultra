@@ -8,6 +8,7 @@ from app.services.automation_control.timeline_service import daily_timeline
 from app.services.automation_control.freshness_service import read_freshness
 from app.services.marketing_access import resolve_marketing_access, MarketingAuthorizationError
 from app.services.automation_control.worker_health_service import read_worker_health
+from app.services.automation_control.scheduler_alert_service import read_scheduler_alert_summary
 from app.services.automation_control.gasca_sms_health_service import read_gasca_sms_queue
 from app.services.automation_control.gasca_sms_pulse_service import read_pulse_health
 from app.services.automation_control.effective_schedule_service import read_effective_schedules
@@ -332,6 +333,22 @@ def automation_control_worker_health():
         return jsonify({
             "status": "error",
             "message": "No se pudo verificar la salud de los workers.",
+        }), 503
+
+
+@automation_control_bp.get("/alerts/summary")
+@jwt_required()
+def automation_control_alert_summary():
+    """Global banner for ADMICORP; never expose raw logs or branch data."""
+    if not _require_read_access():
+        return _deny()
+    try:
+        return jsonify({"status": "ok", **read_scheduler_alert_summary()})
+    except Exception:
+        current_app.logger.exception("Fallo consultando alertas de automatizaciones")
+        return jsonify({
+            "status": "error",
+            "message": "No fue posible consultar el estado de automatizaciones.",
         }), 503
 
 
