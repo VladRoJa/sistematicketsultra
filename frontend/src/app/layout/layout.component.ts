@@ -177,6 +177,12 @@ isMoreMenuActive(): boolean {
     this.verificarRenovacionSilenciosa();
   };
   private readonly onAuthStorageChange = (event: StorageEvent): void => {
+    if (event.key === 'token' && !event.newValue) {
+      // Logout in another tab is not inactivity: go straight to login.
+      this.activity.clear();
+      this.router.navigate(['/login']);
+      return;
+    }
     if (event.key === this.activity.storageKey || event.key === 'token') {
       this.comprobarActividadExterna();
     }
