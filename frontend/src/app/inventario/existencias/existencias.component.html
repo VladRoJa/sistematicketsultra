@@ -3,12 +3,20 @@
 <mat-card>
   <h2>Existencias por producto</h2>
 
-  <!-- Selector sucursal (solo admins) -->
-  <div *ngIf="esAdmin" style="margin-bottom: 1rem;">
-    <mat-form-field appearance="fill" style="width: 300px;">
-      <mat-label>Seleccionar sucursal</mat-label>
-      <mat-select [(ngModel)]="sucursalSeleccionada" (selectionChange)="onSucursalChange()">
-        <mat-option value="global">Global</mat-option>
+  <!-- Selector de sucursal: los administradores inician en vista global. -->
+  <div *ngIf="esAdmin" class="existencias-toolbar">
+    <div class="existencias-toolbar__heading">
+      <strong>Consultar existencias</strong>
+      <span>Selecciona una sucursal o consulta todas en la vista global.</span>
+    </div>
+    <mat-form-field appearance="outline" class="existencias-sucursal-field">
+      <mat-label>Sucursal</mat-label>
+      <mat-select
+        [(ngModel)]="sucursalSeleccionada"
+        (selectionChange)="onSucursalChange()"
+        aria-label="Sucursal de existencias"
+      >
+        <mat-option value="global">Todas las sucursales (Global)</mat-option>
         <mat-option *ngFor="let s of sucursales" [value]="s.sucursal_id">
           {{ s.sucursal }}
         </mat-option>
