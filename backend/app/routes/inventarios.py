@@ -931,7 +931,8 @@ def buscar_inventario():
 @jwt_required()
 def eliminar_movimiento(id):
     try:
-        mov = MovimientoInventario.query.get(id)
+        # Impide que dos eliminaciones concurrentes reviertan el mismo movimiento.
+        mov = MovimientoInventario.query.filter_by(id=id).with_for_update().first()
         if not mov:
             return jsonify({"error": "Movimiento no encontrado"}), 404
 
@@ -939,20 +940,57 @@ def eliminar_movimiento(id):
         if forbidden:
             return forbidden
 
-        # Ajustar stock antes de eliminar detalles
-        for det in mov.detalles:
-            inventario_sucursal = InventarioSucursal.query.filter_by(
-                inventario_id=det.inventario_id,
-                sucursal_id=mov.sucursal_id
-            ).first()
-            if inventario_sucursal:
-                if mov.tipo_movimiento == 'entrada':
-                    inventario_sucursal.stock = max(0, inventario_sucursal.stock - det.cantidad)
-                elif mov.tipo_movimiento == 'salida':
-                    inventario_sucursal.stock += det.cantidad
+        def conflicto(mensaje):
+            db.session.rollback()
+            return jsonify({"error": mensaje}), 409
 
-        # Elimina los detalles y el movimiento
-        for det in mov.detalles:
+        # Revisar el lote completo antes de aplicar cualquier reversión.
+        detalles = list(mov.detalles)
+        if not detalles or mov.tipo_movimiento not in ('entrada', 'salida'):
+            return conflicto("El movimiento no tiene detalles válidos para revertir")
+
+        cantidades_por_inventario = {}
+        for det in detalles:
+            if not isinstance(det.cantidad, int) or det.cantidad <= 0:
+                return conflicto(f"Cantidad histórica inválida para el inventario {det.inventario_id}")
+            cantidades_por_inventario[det.inventario_id] = (
+                cantidades_por_inventario.get(det.inventario_id, 0) + det.cantidad
+            )
+
+        ajustes = []
+        # Bloquear filas en orden estable mientras se valida y aplica la reversión.
+        for inventario_id in sorted(cantidades_por_inventario):
+            inventario_sucursal = (
+                InventarioSucursal.query
+                .filter_by(inventario_id=inventario_id, sucursal_id=mov.sucursal_id)
+                .with_for_update()
+                .first()
+            )
+            if (
+                not inventario_sucursal
+                or inventario_sucursal.stock is None
+                or inventario_sucursal.stock < 0
+            ):
+                return conflicto(f"No se encontró stock válido para el inventario {inventario_id}")
+
+            cantidad = cantidades_por_inventario[inventario_id]
+            if mov.tipo_movimiento == 'entrada' and inventario_sucursal.stock < cantidad:
+                return conflicto(
+                    f"No se puede eliminar la entrada del inventario {inventario_id}: "
+                    "las existencias actuales son insuficientes para revertirla"
+                )
+            nuevo_stock = (
+                inventario_sucursal.stock - cantidad
+                if mov.tipo_movimiento == 'entrada'
+                else inventario_sucursal.stock + cantidad
+            )
+            ajustes.append((inventario_sucursal, nuevo_stock))
+
+        for inventario_sucursal, nuevo_stock in ajustes:
+            inventario_sucursal.stock = nuevo_stock
+
+        # Eliminar solamente si todas las existencias pudieron revertirse.
+        for det in detalles:
             db.session.delete(det)
         db.session.delete(mov)
         db.session.commit()
