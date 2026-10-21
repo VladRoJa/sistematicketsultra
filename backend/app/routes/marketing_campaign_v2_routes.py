@@ -204,6 +204,11 @@ from app.services.marketing_campaign_v2_provider_stats_service import (
     MarketingCampaignV2ProviderStatsUpstreamError,
     get_campaign_v2_provider_stats,
 )
+from app.services.marketing_campaign_v2_followup_freeze_service import (
+    FollowupFreezeValidationError,
+    FollowupFreezeConflictError,
+    freeze_followup_campaign,
+)
 from app.services.marketing_campaign_v2_followup_preview_service import (
     FollowupPreviewValidationError,
     FollowupPreviewConflictError,
@@ -1089,6 +1094,47 @@ def campaign_v2_followup_preview_endpoint(campaign_id: int):
         return _error(str(exc), 409)
     except Exception:
         return _error("Falló el preview de seguimiento Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/<int:campaign_id>/followup/freeze")
+@jwt_required()
+def campaign_v2_followup_freeze_endpoint(campaign_id: int):
+    """Freeze selected recipients atomically, never authorize outbound."""
+    try:
+        user, access = _resolve_campaign_v2_request()
+        _validate_query_args(set())
+        payload = _parse_payload({
+            "name", "selected_statuses", "source_snapshot_id",
+            "expected_preview_fingerprint", "expected_recipient_count",
+        })
+        result = freeze_followup_campaign(
+            source_campaign_id=campaign_id,
+            name=payload.get("name"),
+            selected_statuses=payload.get("selected_statuses"),
+            source_snapshot_id=payload.get("source_snapshot_id"),
+            expected_preview_fingerprint=payload.get("expected_preview_fingerprint"),
+            expected_recipient_count=payload.get("expected_recipient_count"),
+            actor_user_id=int(user.id),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(result), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2NotFoundError:
+        return _error("Campaign V2 no encontrada.", 404)
+    except (
+        MarketingCampaignV2RouteValidationError,
+        MarketingCampaignV2QueryValidationError,
+        FollowupFreezeValidationError,
+        FollowupPreviewValidationError,
+    ) as exc:
+        return _error(str(exc), 400)
+    except FollowupFreezeConflictError as exc:
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("Falló el congelamiento de seguimiento Campaign V2.", 500)
 
 
 @marketing_campaign_v2_bp.get("/campaigns-v2/<int:campaign_id>/export-package")
