@@ -12,6 +12,7 @@ import {
   CampaignV2BlacklistSummary,
   CampaignV2CampaignDetail,
   CampaignV2CommercialAttribution,
+  CampaignV2CommercialAttributionBatchResponse,
   CampaignV2CampaignPage,
   CampaignV2CampaignQuery,
   CampaignV2ConsolidatedReport,
@@ -165,6 +166,13 @@ export class MarketingCampaignV2Service {
 
   getCampaign(campaignId: number): Observable<CampaignV2CampaignDetail> {
     return this.http.get<CampaignV2CampaignDetail>(`${this.apiUrl}/${campaignId}`);
+  }
+
+  getCommercialAttributionBatch(campaignIds: number[]): Observable<CampaignV2CommercialAttributionBatchResponse> {
+    return this.http.post<CampaignV2CommercialAttributionBatchResponse>(
+      `${this.apiUrl}/commercial-attribution/summary`,
+      { campaign_ids: campaignIds },
+    );
   }
 
   getCommercialAttribution(campaignId: number): Observable<CampaignV2CommercialAttribution> {
