@@ -14,7 +14,7 @@ class AuthRefreshSessionORM(db.Model):
         db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False, index=True,
     )
-    refresh_hash = db.Column(db.String(64), nullable=False, unique=True)
+    refresh_hash = db.Column(db.String(64), nullable=False)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False)
     last_activity_at = db.Column(db.DateTime(timezone=True), nullable=False)
     idle_expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
@@ -24,6 +24,7 @@ class AuthRefreshSessionORM(db.Model):
     rotation_count = db.Column(db.Integer, nullable=False, default=0)
 
     __table_args__ = (
+        db.UniqueConstraint("refresh_hash", name="uq_auth_refresh_hash"),
         db.CheckConstraint("rotation_count >= 0",
                            name="ck_auth_refresh_rotation_nonnegative"),
     )
