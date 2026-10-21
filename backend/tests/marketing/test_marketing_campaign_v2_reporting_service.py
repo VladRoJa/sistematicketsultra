@@ -599,7 +599,7 @@ def test_commercial_attribution_simple_rule_successful_not_failed():
             fecha="2026-10-20", hora=when,
             id_orden=order or f"ORDER-{identifier}",
             folio=f"FOLIO-{identifier}", pin=pin,
-            clave_producto=clave, tipo="CONTRATO",
+            clave_producto=clave, tipo="CONTRATO", nuevo="NUEVO",
         )
 
     rows = [
@@ -618,6 +618,7 @@ def test_commercial_attribution_simple_rule_successful_not_failed():
         successful_phones={"6861000001", "6861000003"},
         branch_id=16,
         alias_map={"AZAHARES CULIACAN": 16, "OTRA SUCURSAL": 17},
+        required_sale_kind="NUEVO",
     )
     assert result == {
         "buyers_attributed": 2,
@@ -642,7 +643,7 @@ def test_commercial_attribution_groups_invoice_lines_once():
             estatus="ACTIVO", descripcion=description,
             total=Decimal(str(amount)), fecha="2026-10-21",
             hora="06:00:00", id_orden=order, folio="FOLIO-1",
-            clave_producto="MEMBRESIA", tipo="CONTRATO",
+            clave_producto="MEMBRESIA", tipo="CONTRATO", nuevo="NUEVO",
         )
 
     result = _summarize_campaign_v2_membership_movements(
@@ -657,6 +658,7 @@ def test_commercial_attribution_groups_invoice_lines_once():
         successful_phones={"6861000001"},
         branch_id=16,
         alias_map={"AZAHARES CULIACAN": 16},
+        required_sale_kind="NUEVO",
     )
     assert result == {
         "buyers_attributed": 1,
@@ -720,7 +722,7 @@ def test_commercial_attribution_batch_is_scoped_and_has_constant_query_count(mon
 
     def campaign(identifier, scope="AZAHARES CUL"):
         return SimpleNamespace(
-            id=identifier,
+            id=identifier, purpose="NEW_SALE", source="FUNNEL_PORTFOLIO",
             audience_definition_json={
                 "filters": {"allowed_sucursal_keys": [scope]}
             },
@@ -742,6 +744,7 @@ def test_commercial_attribution_batch_is_scoped_and_has_constant_query_count(mon
             fecha="2026-10-21", hora="10:27:00",
             clave_producto="MEMBRESIA", tipo="CONTRATO",
             id_orden=f"ORDER-{identifier}", folio=f"FOLIO-{identifier}",
+            nuevo="NUEVO",
         )
 
     session = FakeSession([
@@ -913,7 +916,7 @@ def test_commercial_attribution_multichild_sums_only_valid_separate_branch_sales
             id_orden=order or f"ORDER-{identifier}",
             folio=f"FOLIO-{identifier}",
             clave_producto="MEMBRESIA",
-            tipo="CONTRATO",
+            tipo="CONTRATO", nuevo="NUEVO",
         )
 
     tz = ZoneInfo("America/Tijuana")
@@ -950,6 +953,7 @@ def test_commercial_attribution_multichild_sums_only_valid_separate_branch_sales
     ]
     result = _summarize_campaign_v2_multichild_membership_movements(
         child_inputs=inputs, expected_submitted_child_ids=(100, 101), alias_map={"AZAHARES": 16, "BRANCH B": 17},
+        required_sale_kind="NUEVO",
     )
     assert result == {
         "successful_recipient_count": 2,
@@ -981,12 +985,14 @@ def test_commercial_attribution_multichild_sums_only_valid_separate_branch_sales
         ]
         _summarize_campaign_v2_multichild_membership_movements(
             child_inputs=duplicate, expected_submitted_child_ids=(100, 101), alias_map={"AZAHARES": 16, "BRANCH B": 17},
+            required_sale_kind="NUEVO",
         )
     with pytest.raises(MarketingCampaignV2ReportingValidationError, match="Falta evidencia"):
         _summarize_campaign_v2_multichild_membership_movements(
             child_inputs=[inputs[0]],
             expected_submitted_child_ids=(100, 101),
             alias_map={"AZAHARES": 16, "BRANCH B": 17},
+            required_sale_kind="NUEVO",
         )
 
 
@@ -1038,6 +1044,7 @@ def test_commercial_attribution_multichild_batch_reads_cache_without_sales_queri
         campaign_v2_id=8, status="READY", checked_at=BASE,
         result_json={
             "campaign_id": 8, "status": "READY",
+            "attribution_rule_version": "SALE_KIND_V1",
             "submitted_child_ids": [80, 81],
             "buyers_attributed": 2,
             "transactions_attributed": 3,
