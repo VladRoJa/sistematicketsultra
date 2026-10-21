@@ -20,7 +20,21 @@ permissions:
 jobs:
   backend-auth:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: auth_refresh_ci
+          POSTGRES_PASSWORD: isolated-ci-only
+          POSTGRES_DB: auth_refresh_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U auth_refresh_ci -d auth_refresh_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     defaults:
       run:
         working-directory: backend
@@ -31,6 +45,7 @@ jobs:
       JWT_SECRET_KEY: synthetic-jwt-refresh-ci-only
       SQLALCHEMY_DATABASE_URI: "sqlite:///:memory:"
       AUTH_REFRESH_ENABLED: "false"
+      AUTH_REFRESH_TEST_POSTGRES_URL: "postgresql+psycopg2://auth_refresh_ci:isolated-ci-only@127.0.0.1:5432/auth_refresh_ci"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -51,6 +66,7 @@ jobs:
             app/routes/auth_routes.py \
             app/services/auth_refresh_service.py \
             migrations/versions/a21c10202621_auth_refresh_sessions.py \
-            tests/auth/test_refresh_cookie_contract.py
+            tests/auth/test_refresh_cookie_contract.py \
+            tests/auth/test_refresh_postgres_migration.py
       - name: Run isolated auth session tests
-        run: python -m pytest -q --tb=short -o addopts= tests/auth/test_refresh_cookie_contract.py
+        run: python -m pytest -q --tb=short -o addopts= tests/auth/test_refresh_cookie_contract.py tests/auth/test_refresh_postgres_migration.py
