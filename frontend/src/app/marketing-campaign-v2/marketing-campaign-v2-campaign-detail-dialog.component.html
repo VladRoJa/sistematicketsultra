@@ -445,6 +445,50 @@
         </ng-container>
       </section>
 
+      <section class="followup-preview-section" aria-labelledby="followup-preview-title">
+        <div class="section-heading">
+          <div>
+            <h3 id="followup-preview-title">Preparar campaña de seguimiento</h3>
+            <p>Selecciona varios estados para combinarlos. Cualquier estado marcado será incluido (OR).</p>
+          </div>
+          <span class="followup-preview-stage">Solo vista previa</span>
+        </div>
+        <div class="followup-status-options" role="group" aria-label="Estados acumulables para seguimiento">
+          <label *ngFor="let option of followupStatusOptions" class="followup-status-option"
+                 [class.is-selected]="isFollowupStatusSelected(option.value)">
+            <input type="checkbox"
+                   [checked]="isFollowupStatusSelected(option.value)"
+                   (change)="toggleFollowupStatus(option.value)" />
+            <span>{{ option.label }}</span>
+          </label>
+        </div>
+        <div class="followup-preview-actions">
+          <button mat-stroked-button type="button"
+                  (click)="previewFollowup()"
+                  [disabled]="followupPreviewLoading || selectedFollowupStatuses.length === 0">
+            {{ followupPreviewLoading ? 'Calculando…' : 'Calcular audiencia acumulada' }}
+          </button>
+          <span class="muted">{{ selectedFollowupStatuses.length }} estados seleccionados</span>
+        </div>
+        <p class="followup-preview-warning">
+          Esta vista previa no crea una campaña, no autoriza envíos ni aplica exclusiones comerciales nuevas.
+          La lista original permanece intacta.
+        </p>
+        <div *ngIf="followupPreviewError" class="inline-error" role="alert">{{ followupPreviewError }}</div>
+        <div *ngIf="followupPreviewResult as preview" class="followup-preview-result" role="status">
+          <div class="followup-preview-metric">
+            <span>Destinatarios únicos en la unión</span>
+            <strong>{{ preview.candidate_count | number }}</strong>
+            <small>De {{ preview.source_recipient_count | number }} congelados; todavía no son contactos autorizados para envío.</small>
+          </div>
+          <div class="followup-preview-metadata">
+            <span>Campaña fuente #{{ preview.source_campaign_id }} · Snapshot #{{ preview.source_snapshot_id }}</span>
+            <span>Corte: {{ followupObservedAt(preview.source_snapshot_fetched_at) }}</span>
+            <span [title]="preview.preview_fingerprint">Huella: {{ followupFingerprintShort(preview.preview_fingerprint) }}…</span>
+          </div>
+        </div>
+      </section>
+
       <div class="recipient-filter-toolbar">
         <span class="recipient-filter-title">Filtrar por estado</span>
         <div class="recipient-filter-buttons" role="group" aria-label="Filtrar destinatarios por estado del envío">
