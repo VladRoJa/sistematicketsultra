@@ -2691,7 +2691,7 @@ private ticketPerteneceASucursalDelGerente(ticket: Ticket): boolean {
 }
 
 puedeMostrarBotonCerrarDesdeCero(ticket: Ticket): boolean {
-  if (!ticket?.id || this.esTicketMantenimiento(ticket)) return false;
+  if (!ticket?.id) return false;
 
   const estado = (ticket.estado || '').toString().trim().toLowerCase();
 
@@ -2699,6 +2699,13 @@ puedeMostrarBotonCerrarDesdeCero(ticket: Ticket): boolean {
   const noEstaFinalizado = !ticket.fecha_finalizado;
 
   if (!esEstadoPermitido || !noEstaFinalizado) return false;
+
+  // Mantenimiento solo admite cierre administrativo si nunca inició atención.
+  // Una vez iniciado, mantiene revisión de coordinación y doble check.
+  if (this.esTicketMantenimiento(ticket) &&
+      (estado !== 'abierto' || !!ticket.fecha_en_progreso || !!ticket.estado_cierre)) {
+    return false;
+  }
 
   if (this.esAdminParaCierreDesdeCero()) return true;
 

@@ -424,3 +424,90 @@ def test_qa_autogestion_requires_its_true_owner(qa_http):
     assert post(91, "cierre/solicitar/990001",
                 {"notas_cierre": "Fuera de sucursal"}).status_code == 404
     assert ticket.estado == "en progreso"
+
+@pytest.mark.parametrize(
+    ("estado", "fecha_inicio", "estado_cierre", "permiso"),
+    [
+        ("abierto", None, None, True),
+        ("abierto", datetime(2026, 10, 20, tzinfo=timezone.utc), None, False),
+        ("abierto", None, "pendiente_revision_coord", False),
+        ("abierto", None, "rechazado_por_gerente", False),
+        ("en progreso", None, None, False),
+        ("por_validar", None, "pendiente_creador", False),
+        ("finalizado", None, None, False),
+    ],
+)
+def test_cierre_administrativo_mantenimiento_solo_sin_atencion(
+    estado, fecha_inicio, estado_cierre, permiso,
+):
+    gerente = SimpleNamespace(rol="GERENTE", sucursal_id=8)
+    ticket = SimpleNamespace(
+        departamento_id=1,
+        sucursal_id=8,
+        sucursal_id_destino=8,
+        estado=estado,
+        fecha_en_progreso=fecha_inicio,
+        estado_cierre=estado_cierre,
+    )
+    assert ticket_routes._puede_cerrar_ticket_desde_cero(gerente, ticket) is permiso
+
+    otro_gerente = SimpleNamespace(rol="GERENTE", sucursal_id=9)
+    assert ticket_routes._puede_cerrar_ticket_desde_cero(otro_gerente, ticket) is False
+
+
+def test_cierre_administrativo_no_altera_permisos_otros_departamentos():
+    gerente = SimpleNamespace(rol="GERENTE", sucursal_id=8)
+    ticket = SimpleNamespace(
+        departamento_id=3,
+        sucursal_id=8,
+        sucursal_id_destino=8,
+        estado="en progreso",
+        fecha_en_progreso=datetime(2026, 10, 20, tzinfo=timezone.utc),
+        estado_cierre=None,
+    )
+    assert ticket_routes._puede_cerrar_ticket_desde_cero(gerente, ticket)
+    lector = SimpleNamespace(rol="LECTOR_GLOBAL", sucursal_id=8)
+    assert not ticket_routes._puede_cerrar_ticket_desde_cero(lector, ticket)
+
+
+def test_cierre_administrativo_mantenimiento_registra_actor_y_motivo(qa_http):
+    ticket, post, commit = qa_http
+    ticket.estado = "abierto"
+    ticket.fecha_en_progreso = None
+    ticket.estado_cierre = None
+
+    def agregar_evento(**datos):
+        ticket.historial_fechas.append(datos)
+
+    ticket._agregar_evento_historial_cierre = agregar_evento
+
+    ruta = "cierre/gerente-desde-cero/990001"
+    assert post(91005, ruta, {"motivo": "Intento fuera de sucursal"}).status_code == 403
+    assert post(91003, ruta, {"motivo": ""}).status_code == 400
+    assert commit.call_count == 0
+
+    respuesta = post(91003, ruta, {"motivo": "Solicitud duplicada, cerrar sin atención"})
+    assert respuesta.status_code == 200
+    assert ticket.estado == "finalizado"
+    assert ticket.estado_cierre == "cerrado_por_gerente_desde_cero"
+    assert ticket.notas_cierre == "Solicitud duplicada, cerrar sin atención"
+    assert ticket.fecha_finalizado is not None
+    assert commit.call_count == 1
+    assert ticket.historial_fechas[0]["actor_username"] == "QA_GERENTE"
+    assert ticket.historial_fechas[0]["motivo"] == "Solicitud duplicada, cerrar sin atención"
+    assert ticket.historial_fechas[0]["evento"] == "cierre_administrativo_gerente"
+
+
+def test_cierre_administrativo_no_salta_trabajo_iniciado(qa_http):
+    ticket, post, commit = qa_http
+    ruta = "cierre/gerente-desde-cero/990001"
+    assert post(91003, ruta, {"motivo": "Intento con trabajo iniciado"}).status_code == 403
+
+    ticket.estado = "abierto"
+    ticket.fecha_en_progreso = datetime(2026, 10, 20, tzinfo=timezone.utc)
+    assert post(91003, ruta, {"motivo": "Intento después de iniciar"}).status_code == 403
+
+    ticket.fecha_en_progreso = None
+    ticket.estado_cierre = "pendiente_revision_coord"
+    assert post(91003, ruta, {"motivo": "Intento previo a revisión"}).status_code == 403
+    assert commit.call_count == 0
