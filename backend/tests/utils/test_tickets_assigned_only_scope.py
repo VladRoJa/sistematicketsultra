@@ -238,9 +238,13 @@ def test_tecnico_asignado_no_puede_solicitar_cierre_sin_revision_coordinacion(mo
 def test_conformidad_mantenimiento_es_de_gerente_no_creador():
     from app.routes import ticket_routes
 
+    # La exclusión aplica a trabajos de Mantenimiento ya iniciados o
+    # pendientes de revisión, no a solicitudes abiertas sin atención.
     mantenimiento = SimpleNamespace(
         id=501, departamento_id=1, username="RECEPCIONISTA_QA",
         sucursal_id=8, sucursal_id_destino=8,
+        estado="en progreso", fecha_en_progreso=None,
+        estado_cierre="pendiente_revision_coord",
     )
     creador = SimpleNamespace(
         username="RECEPCIONISTA_QA", rol="RECEPCIONISTA", sucursal_id=8,
