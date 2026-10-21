@@ -103,6 +103,7 @@ export class InventarioComponent implements OnInit {
   ];
 
   filtroColumnaActual: string | null = null;
+  private opcionesDisponiblesMenu = new Set<string>();
   displayedColumns: string[] = [];
 
   loading = false;
@@ -226,20 +227,31 @@ export class InventarioComponent implements OnInit {
     return String(value ?? '').trim().toLowerCase();
   }
 
-  private refrescarVista(): void {
-    const filtradosPorColumnas = filtrarTabla(this.inventarios, this.filtros);
-    const termino = this.normalizarBusqueda(this.busquedaGlobal);
-
-    if (!termino) {
-      this.inventariosFiltrados = filtradosPorColumnas;
-      return;
+  private filasEnContexto(columnaExcluida?: string): Inventario[] {
+    // Las opciones de una columna dependen de todos los DEMÁS filtros.
+    // Ignorar el propio permite cambiar o ampliar una selección existente.
+    const filtrosAplicables: Record<string, FiltroColumna> = {};
+    for (const [col, filtro] of Object.entries(this.filtros)) {
+      if (col !== columnaExcluida) {
+        filtrosAplicables[col] = filtro;
+      }
     }
 
-    this.inventariosFiltrados = filtradosPorColumnas.filter((item) =>
+    const filas = filtrarTabla(this.inventarios, filtrosAplicables);
+    const termino = this.normalizarBusqueda(this.busquedaGlobal);
+    if (!termino) {
+      return filas;
+    }
+
+    return filas.filter((item) =>
       this.camposBusquedaGlobal.some((campo) =>
         this.normalizarBusqueda(item[campo]).includes(termino),
       ),
     );
+  }
+
+  private refrescarVista(): void {
+    this.inventariosFiltrados = this.filasEnContexto();
   }
 
   aplicarBusquedaGlobal(): void {
@@ -262,6 +274,7 @@ export class InventarioComponent implements OnInit {
       this.columnasFiltrables,
     );
     this.filtroColumnaActual = null;
+    this.opcionesDisponiblesMenu.clear();
     this.refrescarVista();
   }
 
@@ -358,6 +371,19 @@ export class InventarioComponent implements OnInit {
 
   abrirMenuFiltro(col: string): void {
     this.filtroColumnaActual = col;
+
+    // Una apertura nueva parte de la selección aplicada; cancelar el menú
+    // nunca debe dejar cambios temporales pendientes.
+    const filtro = this.filtros[col];
+    filtro.temporales = filtro.opciones.map((opcion) => ({ ...opcion }));
+
+    // Cachear solo los valores disponibles. No recortar filtro.opciones:
+    // hacerlo anularía selecciones activas al recalcular la tabla.
+    this.opcionesDisponiblesMenu = new Set(
+      this.filasEnContexto(col)
+        .map((item) => String(item[col] ?? ''))
+        .filter(Boolean),
+    );
   }
 
   buscar(col: string, texto: string): void {
@@ -368,8 +394,19 @@ export class InventarioComponent implements OnInit {
     alternarSeleccionTemporal(this.filtros[col], valor);
   }
 
-  alternarSeleccionIndividual(col: string, i: number, valor: boolean): void {
-    this.filtros[col].temporales[i].seleccionado = valor;
+  alternarSeleccionIndividual(
+    col: string,
+    valorOpcion: string,
+    seleccionado: boolean,
+  ): void {
+    // Buscar por valor evita marcar otra fila cuando se usa el buscador
+    // dentro del menú y los índices visibles dejan de coincidir.
+    const opcion = this.filtros[col].temporales.find(
+      (item) => item.valor === valorOpcion,
+    );
+    if (opcion) {
+      opcion.seleccionado = seleccionado;
+    }
   }
 
   aplicarFiltro(col: string): void {
@@ -396,7 +433,13 @@ export class InventarioComponent implements OnInit {
   }
 
   obtenerOpcionesVisibles(filtro: FiltroColumna) {
-    return obtenerOpcionesVisibles(filtro);
+    const opciones = obtenerOpcionesVisibles(filtro);
+    if (this.filtroColumnaActual !== filtro.nombre) {
+      return opciones;
+    }
+    return opciones.filter((opcion) =>
+      this.opcionesDisponiblesMenu.has(opcion.valor),
+    );
   }
 
   isFilterActive(col: string): boolean {
