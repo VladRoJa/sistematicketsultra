@@ -988,3 +988,83 @@ def test_commercial_attribution_multichild_sums_only_valid_separate_branch_sales
             expected_submitted_child_ids=(100, 101),
             alias_map={"AZAHARES": 16, "BRANCH B": 17},
         )
+
+
+def test_commercial_attribution_multichild_batch_reads_cache_without_sales_queries():
+    """Cached 26-branch-type campaign is served in 3 queries, not scanned live."""
+    from contextlib import nullcontext
+
+    from app.services.marketing_campaign_v2_reporting_service import (
+        build_campaign_v2_commercial_attribution_batch,
+    )
+
+    class Query:
+        def __init__(self, value):
+            self.value = value
+
+        def filter(self, *args):
+            return self
+
+        def all(self):
+            return self.value
+
+    class FakeSession:
+        def __init__(self, data):
+            self.data = iter(data)
+            self.no_autoflush = nullcontext()
+            self.queries = 0
+
+        def query(self, *args):
+            self.queries += 1
+            return Query(next(self.data))
+
+    campaign = SimpleNamespace(
+        id=8, audience_definition_json={
+            "filters": {"allowed_sucursal_keys": ["AZAHARES"]}
+        },
+    )
+    children = [
+        SimpleNamespace(
+            id=80, campaign_v2_id=8, status="SUBMITTED",
+            submitted_at=BASE, provider_campaign_id="external-80",
+        ),
+        SimpleNamespace(
+            id=81, campaign_v2_id=8, status="SUBMITTED",
+            submitted_at=BASE, provider_campaign_id="external-81",
+        ),
+    ]
+    cache = SimpleNamespace(
+        campaign_v2_id=8, status="READY", checked_at=BASE,
+        result_json={
+            "campaign_id": 8, "status": "READY",
+            "submitted_child_ids": [80, 81],
+            "buyers_attributed": 2,
+            "transactions_attributed": 3,
+            "revenue_attributed_mxn": "1397.00",
+        },
+    )
+    session = FakeSession([[campaign], children, [cache]])
+    rows = build_campaign_v2_commercial_attribution_batch(
+        campaign_ids=[8], allowed_sucursal_keys=None, session=session,
+    )["rows"]
+    assert session.queries == 3
+    assert rows[0]["status"] == "READY"
+    assert rows[0]["revenue_attributed_mxn"] == "1397.00"
+
+    # A newly submitted child invalidates a prior READY total until worker reruns.
+    session = FakeSession([
+        [campaign],
+        children + [
+            SimpleNamespace(
+                id=82, campaign_v2_id=8, status="SUBMITTED",
+                submitted_at=BASE, provider_campaign_id="external-82",
+            )
+        ],
+        [cache],
+    ])
+    rows = build_campaign_v2_commercial_attribution_batch(
+        campaign_ids=[8], allowed_sucursal_keys=None, session=session,
+    )["rows"]
+    assert session.queries == 3
+    assert rows[0]["status"] == "PENDING_RECONCILIATION"
+    assert rows[0]["revenue_attributed_mxn"] is None
