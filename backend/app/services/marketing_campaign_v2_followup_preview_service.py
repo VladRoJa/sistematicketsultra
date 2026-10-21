@@ -23,6 +23,7 @@ from app.services.marketing_campaign_v2_query_service import (
     _positive_int,
 )
 
+FOLLOWUP_DERIVED_SOURCE = "FOLLOWUP_SNAPSHOT_DERIVED"
 FOLLOWUP_PREVIEW_VERSION = "campaign-v2-followup-preview-or-v1"
 FOLLOWUP_PROVIDER_STATUSES = frozenset({
     "VIEWED", "DELIVERED", "SENT", "FAILED",
