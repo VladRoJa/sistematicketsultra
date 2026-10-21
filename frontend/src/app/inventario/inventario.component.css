@@ -416,7 +416,7 @@
 }
 
 .inventory-table {
-  min-width: 1420px;
+  min-width: 1570px;
   width: 100%;
   background: #ffffff;
 }
@@ -487,6 +487,12 @@
 .inventory-col-id {
   flex: 0 0 54px;
   width: 54px;
+}
+
+.inventory-table .mat-column-sucursales {
+  flex: 1.25 0 165px;
+  min-width: 165px;
+  overflow-wrap: anywhere;
 }
 
 .inventory-col-actions {

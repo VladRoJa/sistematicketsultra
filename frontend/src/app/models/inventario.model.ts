@@ -2,6 +2,7 @@ export interface Inventario {
   id: number;
   tipo?: string;
   nombre: string;
+  sucursales?: string;
   descripcion?: string;
   marca?: string;
   proveedor?: string;
