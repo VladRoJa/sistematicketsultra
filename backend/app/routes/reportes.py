@@ -70,6 +70,19 @@ def _analytical_inventory_general_query():
     )
 
 
+def _inventario_export_query_por_sucursal(sucursal_id):
+    """Sucursal y consulta exclusivamente de sus artículos asignados."""
+    sucursal = Sucursal.query.get(sucursal_id)
+    if sucursal is None:
+        return None, None
+    query = (
+        InventarioGeneral.query
+        .join(InventarioSucursal, InventarioSucursal.inventario_id == InventarioGeneral.id)
+        .filter(InventarioSucursal.sucursal_id == sucursal_id)
+    )
+    return sucursal, query
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # EXPORTAR INVENTARIO GENERAL (con filtros avanzados)
 # ═══════════════════════════════════════════════════════════════════════
@@ -97,17 +110,9 @@ def exportar_inventario():
             if sucursal_id <= 0:
                 return jsonify({"error": "sucursal_id inválido"}), 400
 
-            sucursal = Sucursal.query.get(sucursal_id)
+            sucursal, query = _inventario_export_query_por_sucursal(sucursal_id)
             if sucursal is None:
                 return jsonify({"error": "Sucursal no encontrada"}), 404
-
-            # A diferencia del catálogo general, una sucursal sólo exporta
-            # los artículos asignados a ella.
-            query = (
-                InventarioGeneral.query
-                .join(InventarioSucursal, InventarioSucursal.inventario_id == InventarioGeneral.id)
-                .filter(InventarioSucursal.sucursal_id == sucursal_id)
-            )
         else:
             query = _analytical_inventory_general_query()
 
