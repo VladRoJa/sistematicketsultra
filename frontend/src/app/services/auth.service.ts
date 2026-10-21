@@ -34,9 +34,6 @@ export class AuthService {
       { username, password },
     ).pipe(
       tap({
-        next: (response) => {
-          console.log("✅ Respuesta del backend:", response);
-        },
         error: (error) => {
           console.error("❌ Error recibido del backend:", error);
         }
