@@ -1579,6 +1579,62 @@ class TestMarketingCampaignV2Routes:
 
         assert response.status_code == 403
 
+    def test_recipient_list_accepts_provider_status_and_forwards_to_scoped_service(self):
+        expected = {"page": 2, "page_size": 1, "total": 2, "total_pages": 2, "rows": []}
+        with (
+            self._auth(self.partial_access),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.marketing_branch_keys_by_sucursal_ids",
+                return_value={11: "BRANCH A", 22: "BRANCH B"},
+            ),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.list_campaign_v2_recipients",
+                return_value=expected,
+            ) as service,
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/2/recipients"
+                "?page=2&page_size=1&provider_status=VIEWED",
+                headers=self.headers,
+            )
+        assert response.status_code == 200
+        assert response.json == expected
+        assert service.call_args.kwargs["campaign_id"] == 2
+        assert service.call_args.kwargs["provider_status"] == "VIEWED"
+        assert service.call_args.kwargs["page"] == "2"
+        assert service.call_args.kwargs["page_size"] == "1"
+        assert set(service.call_args.kwargs["allowed_sucursal_keys"]) == {
+            "BRANCH A", "BRANCH B",
+        }
+
+    def test_recipient_list_rejects_unrecognized_and_forbidden_query_filters(self):
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.list_campaign_v2_recipients",
+                side_effect=MarketingCampaignV2QueryValidationError("provider_status inválido."),
+            ) as service,
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/2/recipients?provider_status=UNREAD",
+                headers=self.headers,
+            )
+        assert response.status_code == 400
+        assert service.call_count == 1
+
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.list_campaign_v2_recipients",
+            ) as service,
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/2/recipients?phone=6861000001",
+                headers=self.headers,
+            )
+        assert response.status_code == 400
+        service.assert_not_called()
+
     def test_recipient_detail_does_not_cross_campaign_boundary(self):
         with (
             self._auth(),
