@@ -1,33 +1,61 @@
 import { Injectable } from '@angular/core';
 
 /**
- * Browser activity is a UX signal, not authorization. Flask validates the
- * refresh session's idle and absolute expiry independently.
+ * Only captured human events advance this clock, never HTTP polling or timers.
+ * The server independently enforces refresh-session idle/absolute expiry.
  */
 @Injectable({ providedIn: 'root' })
 export class AuthActivityService {
-  private readonly activityKey = 'suite.auth.lastRealActivityAt';
+  readonly storageKey = 'suite.auth.lastRealActivityAt';
+  private locked = false;
+  private lastWriteMs = 0;
 
-  recordInteraction(): void {
-    localStorage.setItem(this.activityKey, String(Date.now()));
+  initializeIfAbsent(): void {
+    const raw = Number(localStorage.getItem(this.storageKey));
+    if (!Number.isFinite(raw) || raw <= 0 || raw > Date.now()) {
+      this.recordInteraction();
+    }
   }
 
-  isRecent(maxAgeMs: number = 2 * 60 * 1000): boolean {
-    const last = Number(localStorage.getItem(this.activityKey));
+  recordInteraction(): void {
+    if (this.locked) return;
+    const now = Date.now();
+    // Pointer movement must not write to localStorage dozens of times/sec.
+    if (now - this.lastWriteMs < 1000) return;
+    this.lastWriteMs = now;
+    localStorage.setItem(this.storageKey, String(now));
+  }
+
+  isRecent(maxAgeMs = 2 * 60 * 1000): boolean {
+    if (this.locked) return false;
+    const last = Number(localStorage.getItem(this.storageKey));
     const elapsed = Date.now() - last;
     return Number.isFinite(last) && last > 0
       && elapsed >= 0 && elapsed < maxAgeMs;
   }
 
-  millisecondsUntilIdle(idleMs: number = 45 * 60 * 1000): number {
-    const last = Number(localStorage.getItem(this.activityKey));
-    if (!Number.isFinite(last) || last <= 0) {
-      return 0;
-    }
+  millisecondsUntilIdle(idleMs = 45 * 60 * 1000): number {
+    const last = Number(localStorage.getItem(this.storageKey));
+    if (!Number.isFinite(last) || last <= 0) return 0;
     return Math.max(0, idleMs - (Date.now() - last));
   }
 
+  lock(): void {
+    this.locked = true;
+  }
+
+  unlock(): void {
+    this.locked = false;
+    this.lastWriteMs = 0;
+  }
+
+  isLocked(): boolean {
+    return this.locked;
+  }
+
   clear(): void {
-    localStorage.removeItem(this.activityKey);
+    this.locked = false;
+    this.lastWriteMs = 0;
+    localStorage.removeItem(this.storageKey);
   }
 }
