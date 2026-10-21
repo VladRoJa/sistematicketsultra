@@ -885,3 +885,104 @@ def test_commercial_attribution_multichild_resolves_submitted_branch_payloads():
         (100, 16, "provider-100", (("6861000001", 1), ("6861000002", 2))),
         (101, 17, "provider-101", (("6641000003", 3),)),
     ]
+
+
+def test_commercial_attribution_multichild_sums_only_valid_separate_branch_sales():
+    """Two iVentas children, different send times, no repeated buyers or orders."""
+    from decimal import Decimal
+    from zoneinfo import ZoneInfo
+
+    from app.services.marketing_campaign_v2_reporting_service import (
+        MarketingCampaignV2ReportingValidationError,
+        _summarize_campaign_v2_multichild_membership_movements,
+    )
+
+    def sale(identifier, phone, branch, amount, *, order=None, when="19:00:00",
+             status="ACTIVO", description="CONVENIOS $549"):
+        return SimpleNamespace(
+            id=identifier,
+            telefono=phone,
+            sucursal=branch,
+            estatus=status,
+            descripcion=description,
+            total=Decimal(str(amount)),
+            fecha="2026-10-20",
+            hora=when,
+            id_orden=order or f"ORDER-{identifier}",
+            folio=f"FOLIO-{identifier}",
+            clave_producto="MEMBRESIA",
+            tipo="CONTRATO",
+        )
+
+    tz = ZoneInfo("America/Tijuana")
+    # Child 100 sent at 16:00, child 101 at 18:00. Every later sale
+    # must match the corresponding branch, never just the frozen campaign.
+    branch_a_rows = [
+        sale(1, "6861000001", "AZAHARES", 549, order="A"),
+        sale(2, "6861000001", "AZAHARES", -50, order="A"),
+        sale(3, "6861000002", "AZAHARES", 399),
+        sale(4, "6861000001", "BRANCH B", 549),
+        sale(5, "6861000001", "AZAHARES", 100, description="PENALIZACION"),
+    ]
+    branch_b_rows = [
+        sale(6, "6641000003", "BRANCH B", 649),
+        sale(7, "6641000003", "BRANCH B", 649, when="17:59:00"),
+        sale(8, "6641000003", "BRANCH B", 649, status="CANCELADO"),
+        sale(9, "6861000001", "BRANCH B", 549),
+    ]
+    inputs = [
+        {
+            "child_id": 101,
+            "branch_id": 17,
+            "sent_local": datetime(2026, 10, 20, 18, 0, tzinfo=tz),
+            "successful_phones": {"6641000003"},
+            "rows": branch_b_rows,
+        },
+        {
+            "child_id": 100,
+            "branch_id": 16,
+            "sent_local": datetime(2026, 10, 20, 16, 0, tzinfo=tz),
+            "successful_phones": {"6861000001"},
+            "rows": branch_a_rows,
+        },
+    ]
+    result = _summarize_campaign_v2_multichild_membership_movements(
+        child_inputs=inputs, expected_submitted_child_ids=(100, 101), alias_map={"AZAHARES": 16, "BRANCH B": 17},
+    )
+    assert result == {
+        "successful_recipient_count": 2,
+        "buyers_attributed": 2,
+        "transactions_attributed": 2,
+        "revenue_attributed_mxn": "1148.00",
+        "children": [
+            {
+                "child_id": 100,
+                "successful_recipient_count": 1,
+                "buyers_attributed": 1,
+                "transactions_attributed": 1,
+                "revenue_attributed_mxn": "499.00",
+            },
+            {
+                "child_id": 101,
+                "successful_recipient_count": 1,
+                "buyers_attributed": 1,
+                "transactions_attributed": 1,
+                "revenue_attributed_mxn": "649.00",
+            },
+        ],
+    }
+
+    with pytest.raises(MarketingCampaignV2ReportingValidationError, match="dos children"):
+        duplicate = [
+            {**inputs[0], "successful_phones": {"6861000001"}},
+            inputs[1],
+        ]
+        _summarize_campaign_v2_multichild_membership_movements(
+            child_inputs=duplicate, expected_submitted_child_ids=(100, 101), alias_map={"AZAHARES": 16, "BRANCH B": 17},
+        )
+    with pytest.raises(MarketingCampaignV2ReportingValidationError, match="Falta evidencia"):
+        _summarize_campaign_v2_multichild_membership_movements(
+            child_inputs=[inputs[0]],
+            expected_submitted_child_ids=(100, 101),
+            alias_map={"AZAHARES": 16, "BRANCH B": 17},
+        )
