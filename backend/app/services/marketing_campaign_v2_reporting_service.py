@@ -1840,12 +1840,25 @@ def build_campaign_v2_commercial_attribution_batch(
 
         # Hard safeguard against an unbounded live query. A dedicated
         # materialized reconciliation is needed for substantially larger pages.
-        unique_phones = set().union(*phones_by_campaign.values())
-        if len(unique_phones) > 10000:
-            for identifier in eligible:
+        unique_phones: set[str] = set()
+        covered: dict[int, tuple[Any, datetime]] = {}
+        for identifier in ids:
+            if identifier not in eligible:
+                continue
+            candidate_phones = unique_phones | phones_by_campaign[identifier]
+            if len(candidate_phones) > 10000:
                 statuses[identifier] = _commercial_batch_base(
                     identifier, "BATCH_SCOPE_TOO_LARGE"
                 )
+                continue
+            unique_phones = candidate_phones
+            covered[identifier] = eligible[identifier]
+        eligible = covered
+        phones_by_campaign = {
+            identifier: phones_by_campaign[identifier]
+            for identifier in eligible
+        }
+        if not eligible:
             return {"rows": [statuses[i] for i in ids]}
 
         from app.services.marketing_sales_funnel_service import (
