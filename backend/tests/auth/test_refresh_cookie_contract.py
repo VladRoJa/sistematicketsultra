@@ -227,3 +227,69 @@ def test_legacy_mode_no_cambia_login_ni_usa_tabla(app, fake_user):
     assert not first.headers.getlist("Set-Cookie")
     with app.app_context():
         assert AuthRefreshSessionORM.query.count() == 0
+
+def test_login_sin_origin_con_refresh_habilitado_es_solo_jwt_legacy(app, fake_user):
+    """Non-browser clients are JWT-only even after refresh feature rollout."""
+    from flask_jwt_extended import decode_token
+
+    client = app.test_client(use_cookies=False)
+    with patch(
+        "app.routes.auth_routes.UserORM.get_by_username",
+        return_value=fake_user,
+    ):
+        response = client.post(
+            "/api/auth/login", base_url=TRUSTED, json=LOGIN_JSON
+        )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["user"]["id"] == fake_user.id
+    assert payload["token"]
+    assert "sid" not in decode_token(payload["token"])
+    assert not response.headers.getlist("Set-Cookie")
+    assert response.headers["Cache-Control"] == "no-store"
+    with app.app_context():
+        assert AuthRefreshSessionORM.query.count() == 0
+
+
+@pytest.mark.parametrize("origin", ["https://evil.invalid", "null", ""])
+def test_login_origin_presente_pero_no_autorizado_se_rechaza(app, fake_user, origin):
+    """Origin present but denied must not downgrade to legacy JWT login."""
+    client = app.test_client(use_cookies=False)
+    with patch(
+        "app.routes.auth_routes.UserORM.get_by_username",
+        return_value=fake_user,
+    ):
+        response = client.post(
+            "/api/auth/login",
+            base_url=TRUSTED,
+            headers={"Origin": origin},
+            json=LOGIN_JSON,
+        )
+    assert response.status_code == 403
+    assert response.get_json()["error"] == "INVALID_ORIGIN"
+    assert not response.headers.getlist("Set-Cookie")
+    with app.app_context():
+        assert AuthRefreshSessionORM.query.count() == 0
+
+
+def test_refresh_y_logout_sin_origin_se_mantienen_protegidos(app, fake_user):
+    """No-Origin compatibility applies to login only."""
+    client = app.test_client(use_cookies=False)
+    login_response = _login(client, fake_user)
+    cookie = _cookie(login_response)
+    assert cookie
+
+    for path in ("/api/auth/refresh", "/api/auth/logout"):
+        result = client.post(
+            path,
+            base_url=TRUSTED,
+            headers={"Cookie": cookie},
+        )
+        assert result.status_code == 403
+        assert result.get_json()["error"] == "INVALID_ORIGIN"
+
+    with app.app_context():
+        row = AuthRefreshSessionORM.query.one()
+        assert row.revoked_at is None
+        assert row.rotation_count == 0
