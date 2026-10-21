@@ -25,6 +25,7 @@ from app.models.marketing import (
 from app.services.marketing_campaign_v2_blacklist_service import get_blacklisted_phones
 from app.services.marketing_campaign_v2_contact_gate_service import acquire_campaign_v2_contact_gate
 from app.services.marketing_campaign_v2_followup_preview_service import (
+    FOLLOWUP_DERIVED_SOURCE,
     FOLLOWUP_PREVIEW_VERSION,
     FollowupPreviewConflictError,
     FollowupPreviewUnavailableError,
@@ -40,7 +41,6 @@ from app.services.marketing_campaign_v2_query_service import (
 )
 from app.services.marketing_phone import normalize_phone
 
-FOLLOWUP_DERIVED_SOURCE = "FOLLOWUP_SNAPSHOT_DERIVED"
 FOLLOWUP_FREEZE_VERSION = "campaign-v2-followup-frozen-v1"
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
