@@ -2165,7 +2165,11 @@ test('Campaign V2 commercial attribution keeps successful-only numbers and unava
   assert.ok(html.includes('{{ result.transactions_attributed | number }}'));
   assert.ok(html.includes('{{ commercialRevenueLabel() }}'));
   assert.ok(html.includes('{{ commercialAttributionStatusLabel() }}'));
-  assert.ok(html.includes('No demuestra causalidad exclusiva.'));
+  assert.ok(html.includes('Corte Gasca {{ result.venta_total_cutoff }}'));
+  assert.equal(html.includes('Estos datos fueron guardados previamente'), false);
+  assert.equal(html.includes('Operaciones de membresía posteriores a un envío'), false);
+  assert.equal(html.includes('No demuestra causalidad exclusiva.'), false);
+  assert.equal(html.includes('Carga los resultados cuando necesites'), false);
   assert.ok(css.includes('.commercial-attribution-grid'));
   assert.equal(html.includes('style="'), false);
 });
