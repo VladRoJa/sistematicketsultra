@@ -1125,6 +1125,21 @@ export interface CampaignV2FollowupPreview {
   next_action: string;
 }
 
+export interface CampaignV2FollowupFrozen {
+  derived_campaign_id: number;
+  source_campaign_id: number;
+  source_snapshot_id: number;
+  source_preview_fingerprint: string;
+  selected_statuses: CampaignV2FollowupStatus[];
+  recipient_count: number;
+  status: 'FROZEN_FOLLOWUP';
+  send_authorized: false;
+  quota_reserved: false;
+  dispatch_locked: true;
+  provider_calls: 0;
+  next_action: string;
+}
+
 export interface CampaignV2RecipientProviderStatus {
   status: CampaignV2RecipientProviderStatusCode;
   snapshot_id: number | null;
