@@ -21,6 +21,7 @@ from app.models.marketing import (
     MarketingCampaignV2RecipientORM,
 )
 from app.services.marketing_campaign_v2_query_service import (
+    MarketingCampaignV2NotFoundError,
     _campaign_visible_to_scope,
     _extract_frozen_scope,
     _load_visible_campaign_orm,
