@@ -260,6 +260,7 @@ def reconcile_multichild_campaign(*, campaign_id: int, session: Any) -> dict[str
             "status": "READY",
             "coverage": "ALL_PROVEN_SUBMITTED_CHILDREN",
             "submitted_child_count": len(scope.submitted),
+            "submitted_child_ids": sorted(submitted_ids),
             "not_sent_child_count": len(scope.not_sent_child_ids),
             "provider_snapshot_ids": sorted(snapshot_id_to_child),
             "venta_total_snapshot_id": int(venta.id),
