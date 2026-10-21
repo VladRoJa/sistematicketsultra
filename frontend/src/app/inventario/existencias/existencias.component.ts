@@ -5,6 +5,7 @@ import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatTableModule } from '@angular/material/table';
 import { MatSelectModule } from '@angular/material/select';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { FormsModule } from '@angular/forms';
 import { InventarioService } from '../../services/inventario.service';
 
@@ -16,9 +17,11 @@ import { InventarioService } from '../../services/inventario.service';
     MatCardModule,
     MatTableModule,
     MatSelectModule,
+    MatProgressSpinnerModule,
     FormsModule
   ],
   templateUrl: './existencias.component.html',
+  styleUrls: ['./existencias.component.css'],
 })
 export class ExistenciasComponent implements OnInit {
   user = JSON.parse(localStorage.getItem('user') || '{}');
