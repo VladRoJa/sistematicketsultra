@@ -852,23 +852,27 @@ def eliminar_inventario(inventario_id):
         if not inventario:
             return error_response('Inventario no encontrado', 404)
 
+        def conflicto(mensaje):
+            db.session.rollback()
+            return error_response(mensaje, 409)
+
         # No borrar un artículo que otros módulos siguen utilizando.
         if DetalleMovimiento.query.filter_by(inventario_id=inventario_id).first():
-            return error_response('No se puede eliminar: el inventario tiene movimientos registrados', 409)
+            return conflicto('No se puede eliminar: el inventario tiene movimientos registrados')
 
         # Una asignación de sucursal también bloquea el borrado con stock 0.
         if InventarioSucursal.query.filter_by(inventario_id=inventario_id).first():
-            return error_response('No se puede eliminar: el inventario está asignado a sucursales', 409)
+            return conflicto('No se puede eliminar: el inventario está asignado a sucursales')
 
         if Ticket.query.filter_by(aparato_id=inventario_id).first():
-            return error_response('No se puede eliminar: el inventario está asociado a tickets', 409)
+            return conflicto('No se puede eliminar: el inventario está asociado a tickets')
 
         # Ambas relaciones de PM usan ON DELETE CASCADE: proteger su historial.
         if PmBitacoraORM.query.filter_by(inventario_id=inventario_id).first():
-            return error_response('No se puede eliminar: el inventario tiene bitácoras de mantenimiento', 409)
+            return conflicto('No se puede eliminar: el inventario tiene bitácoras de mantenimiento')
 
         if PmPreventivoConfigORM.query.filter_by(inventario_id=inventario_id).first():
-            return error_response('No se puede eliminar: el inventario tiene programación preventiva', 409)
+            return conflicto('No se puede eliminar: el inventario tiene programación preventiva')
 
         db.session.delete(inventario)
         db.session.commit()
