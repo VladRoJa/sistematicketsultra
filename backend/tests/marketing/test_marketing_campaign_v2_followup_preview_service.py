@@ -16,6 +16,7 @@ from app.models.marketing import (
 )
 from app.services.marketing_campaign_v2_query_service import (
     MarketingCampaignV2NotFoundError,
+    MarketingCampaignV2QueryValidationError,
 )
 from app.services.marketing_campaign_v2_followup_preview_service import (
     FOLLOWUP_PREVIEW_VERSION,
@@ -200,7 +201,7 @@ def test_invalid_selection_fails_closed(session, bad):
 def test_no_snapshot_and_stale_snapshot_fail_closed(session):
     with pytest.raises(FollowupPreviewConflictError):
         _preview(session, ["VIEWED"], expected_snapshot_id=100)
-    with pytest.raises(FollowupPreviewValidationError):
+    with pytest.raises(MarketingCampaignV2QueryValidationError):
         _preview(session, ["VIEWED"], expected_snapshot_id=True)
     with pytest.raises(FollowupPreviewUnavailableError):
         build_followup_preview(
