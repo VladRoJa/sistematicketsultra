@@ -204,6 +204,12 @@ from app.services.marketing_campaign_v2_provider_stats_service import (
     MarketingCampaignV2ProviderStatsUpstreamError,
     get_campaign_v2_provider_stats,
 )
+from app.services.marketing_campaign_v2_followup_preview_service import (
+    FollowupPreviewValidationError,
+    FollowupPreviewConflictError,
+    FollowupPreviewUnavailableError,
+    build_followup_preview,
+)
 from app.services.marketing_campaign_v2_provider_stats_snapshot_service import (
     MarketingCampaignV2ProviderStatsSnapshotPersistenceError,
     capture_campaign_v2_provider_stats_snapshot,
@@ -1051,6 +1057,38 @@ def latest_campaign_v2_provider_stats_snapshot_endpoint(campaign_id: int):
         return _error(str(exc), 400)
     except Exception:
         return _error("Falló la consulta del último snapshot provider stats.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/<int:campaign_id>/followup/preview")
+@jwt_required()
+def campaign_v2_followup_preview_endpoint(campaign_id: int):
+    """Read-only OR preview. No cohort is persisted and no provider is contacted."""
+    try:
+        _, access = _resolve_campaign_v2_request()
+        _validate_query_args(set())
+        payload = _parse_payload({"selected_statuses", "expected_snapshot_id"})
+        result = build_followup_preview(
+            source_campaign_id=campaign_id,
+            selected_statuses=payload.get("selected_statuses"),
+            expected_snapshot_id=payload.get("expected_snapshot_id"),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2NotFoundError:
+        return _error("Campaign V2 no encontrada.", 404)
+    except (
+        MarketingCampaignV2RouteValidationError,
+        MarketingCampaignV2QueryValidationError,
+        FollowupPreviewValidationError,
+    ) as exc:
+        return _error(str(exc), 400)
+    except (FollowupPreviewUnavailableError, FollowupPreviewConflictError) as exc:
+        return _error(str(exc), 409)
+    except Exception:
+        return _error("Falló el preview de seguimiento Campaign V2.", 500)
 
 
 @marketing_campaign_v2_bp.get("/campaigns-v2/<int:campaign_id>/export-package")
