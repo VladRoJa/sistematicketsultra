@@ -13,6 +13,10 @@ from app.models.marketing import (
     MarketingCampaignV2ProviderCampaignORM,
     MarketingCampaignV2RecipientORM,
 )
+from app.services.marketing_campaign_v2_contact_gate_service import (
+    CampaignV2ContactGateConflict,
+    _claim_phones,
+)
 from app.integrations.iventas.campaigns_client import (
     IVentasCampaignsClientError,
     IVentasCampaignsProviderError,
@@ -78,6 +82,7 @@ class CampaignV2ProviderStatsFetch:
     provider: str
     provider_campaign_id: str
     stats: CampaignProviderStats
+    child_phones: frozenset[str] | None = None
 
 
 def get_campaign_v2_provider_stats(
@@ -105,6 +110,7 @@ def fetch_campaign_v2_provider_stats(
     *,
     campaign_id: Any,
     allowed_sucursal_keys: Iterable[str] | None,
+    child_id: Any | None = None,
     session=None,
     provider_resolver: ProviderResolver = resolve_campaign_provider,
 ) -> CampaignV2ProviderStatsFetch:
@@ -122,48 +128,86 @@ def fetch_campaign_v2_provider_stats(
             session=active_session,
         )
 
-    provider_key = _clean_required(campaign.provider)
-    provider_campaign_id = _clean_required(campaign.provider_campaign_id)
-
-    if provider_key is None and provider_campaign_id is None:
+    child_phones: frozenset[str] | None = None
+    if child_id is not None:
+        # Explicit per-child capture. Never fall back to a parent binding or
+        # another child: provider evidence must retain its exact source.
+        normalized_child_id = _positive_int(
+            child_id, field_name="child_id", maximum=None
+        )
         with active_session.no_autoflush:
-            child_rows = (
+            child = (
                 active_session.query(
                     MarketingCampaignV2ProviderCampaignORM.provider,
                     MarketingCampaignV2ProviderCampaignORM.provider_campaign_id,
                     MarketingCampaignV2ProviderCampaignORM.status,
+                    MarketingCampaignV2ProviderCampaignORM.submitted_at,
                     MarketingCampaignV2ProviderCampaignORM.recipient_count,
+                    MarketingCampaignV2ProviderCampaignORM.provider_channel_id,
+                    MarketingCampaignV2ProviderCampaignORM.request_snapshot_json,
                 )
                 .filter(
+                    MarketingCampaignV2ProviderCampaignORM.id == normalized_child_id,
                     MarketingCampaignV2ProviderCampaignORM.campaign_v2_id
-                    == normalized_campaign_id
+                    == normalized_campaign_id,
                 )
-                .limit(2)
-                .all()
+                .one_or_none()
             )
-            if len(child_rows) == 1:
-                frozen_count = (
-                    active_session.query(func.count(MarketingCampaignV2RecipientORM.id))
+        if child is None or child.status != "SUBMITTED" or child.submitted_at is None:
+            raise MarketingCampaignV2ProviderStatsUnboundError(
+                "El child no tiene envío SUBMITTED verificable."
+            )
+        provider_key = _clean_required(child.provider)
+        provider_campaign_id = _clean_required(child.provider_campaign_id)
+        try:
+            child_phones = frozenset(_claim_phones(child))
+        except CampaignV2ContactGateConflict as exc:
+            raise MarketingCampaignV2ProviderStatsUnboundError(
+                "El payload del child no es verificable."
+            ) from exc
+    else:
+        provider_key = _clean_required(campaign.provider)
+        provider_campaign_id = _clean_required(campaign.provider_campaign_id)
+
+        if provider_key is None and provider_campaign_id is None:
+            with active_session.no_autoflush:
+                child_rows = (
+                    active_session.query(
+                        MarketingCampaignV2ProviderCampaignORM.provider,
+                        MarketingCampaignV2ProviderCampaignORM.provider_campaign_id,
+                        MarketingCampaignV2ProviderCampaignORM.status,
+                        MarketingCampaignV2ProviderCampaignORM.recipient_count,
+                    )
                     .filter(
-                        MarketingCampaignV2RecipientORM.campaign_id
+                        MarketingCampaignV2ProviderCampaignORM.campaign_v2_id
                         == normalized_campaign_id
                     )
-                    .scalar()
+                    .limit(2)
+                    .all()
                 )
-            else:
-                frozen_count = None
+                if len(child_rows) == 1:
+                    frozen_count = (
+                        active_session.query(func.count(MarketingCampaignV2RecipientORM.id))
+                        .filter(
+                            MarketingCampaignV2RecipientORM.campaign_id
+                            == normalized_campaign_id
+                        )
+                        .scalar()
+                    )
+                else:
+                    frozen_count = None
 
-        if len(child_rows) == 1:
-            child = child_rows[0]
-            if (
-                child.status == "SUBMITTED"
-                and _clean_required(child.provider) is not None
-                and _clean_required(child.provider_campaign_id) is not None
-                and int(child.recipient_count) > 0
-                and int(child.recipient_count) == int(frozen_count or 0)
-            ):
-                provider_key = _clean_required(child.provider)
-                provider_campaign_id = _clean_required(child.provider_campaign_id)
+            if len(child_rows) == 1:
+                child = child_rows[0]
+                if (
+                    child.status == "SUBMITTED"
+                    and _clean_required(child.provider) is not None
+                    and _clean_required(child.provider_campaign_id) is not None
+                    and int(child.recipient_count) > 0
+                    and int(child.recipient_count) == int(frozen_count or 0)
+                ):
+                    provider_key = _clean_required(child.provider)
+                    provider_campaign_id = _clean_required(child.provider_campaign_id)
 
     # Nunca mezclar resultados de varios lotes ni aceptar un binding parcial.
     # Las campañas multisucursal requieren conciliación explícita por child.
@@ -213,6 +257,7 @@ def fetch_campaign_v2_provider_stats(
         provider=provider_key,
         provider_campaign_id=provider_campaign_id,
         stats=stats,
+        child_phones=child_phones,
     )
 
 
