@@ -578,9 +578,15 @@ def historial_movimientos():
         sucursal_id = request.args.get('sucursal_id', type=int)
         tipo = request.args.get('tipo_movimiento')
 
+        allowed_sucursales, forbidden = _resolve_inventory_read_sucursal_ids(sucursal_id)
+        if forbidden:
+            return forbidden
+
         query = MovimientoInventario.query
-        if sucursal_id:
-            query = query.filter_by(sucursal_id=sucursal_id)
+        if allowed_sucursales is not None:
+            query = query.filter(MovimientoInventario.sucursal_id.in_(allowed_sucursales))
+        if sucursal_id is not None:
+            query = query.filter(MovimientoInventario.sucursal_id == sucursal_id)
         if tipo:
             query = query.filter_by(tipo_movimiento=tipo)
 
