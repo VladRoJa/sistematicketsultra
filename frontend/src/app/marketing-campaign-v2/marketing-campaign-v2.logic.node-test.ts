@@ -813,7 +813,8 @@ test('Followup preview is a separate server-side read-only workflow, never a sen
   // El filtro simple de consulta conserva sus controles y API independientes.
   assert.ok(html.includes('selectRecipientsProviderFilter(filter.value)'));
   assert.ok(component.includes('this.recipientsProviderFilter'));
-  assert.equal(html.includes('freezeFollowup('), false);
+  // El preview sigue siendo lectura; el congelamiento es un paso separado y confirmado.
+  assert.ok(html.includes('(click)="freezeFollowup()"'));
   assert.equal(html.includes('sendFollowup('), false);
 });
 
