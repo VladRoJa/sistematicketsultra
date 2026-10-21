@@ -403,6 +403,22 @@ def _normalize_current_scope(value: Iterable[str] | None) -> tuple[str, ...] | N
     return tuple(sorted(keys))
 
 
+def _followup_source_campaign_id(campaign) -> int | None:
+    """Expose the traceable origin only for snapshot-derived follow-ups."""
+    if campaign.source != "FOLLOWUP_SNAPSHOT_DERIVED":
+        return None
+    definition = campaign.audience_definition_json
+    if not isinstance(definition, dict):
+        return None
+    followup = definition.get("followup")
+    if not isinstance(followup, dict):
+        return None
+    source_id = followup.get("source_campaign_id")
+    if type(source_id) is not int or source_id <= 0 or source_id == int(campaign.id):
+        return None
+    return source_id
+
+
 def _serialize_campaign_summary(campaign, *, recipient_count: int) -> dict[str, Any]:
     fingerprint, version = _preview_identity(campaign)
     return {
@@ -410,6 +426,7 @@ def _serialize_campaign_summary(campaign, *, recipient_count: int) -> dict[str, 
         "name": campaign.name,
         "purpose": campaign.purpose,
         "source": campaign.source,
+        "source_campaign_id": _followup_source_campaign_id(campaign),
         "provider": campaign.provider,
         "provider_campaign_id": campaign.provider_campaign_id,
         "frozen_at": _iso_datetime(campaign.frozen_at),

@@ -217,6 +217,65 @@ def test_campaign_detail_uses_frozen_definition_and_recipient_count(session):
     assert result["preview_fingerprint"] == "abc"
 
 
+def test_history_exposes_followup_origin_without_changing_regular_campaigns(session):
+    session.add(MarketingCampaignV2ORM(
+        id=5,
+        name="Seguimiento de A",
+        purpose="REACTIVATION",
+        source="FOLLOWUP_SNAPSHOT_DERIVED",
+        audience_definition_json={
+            "filters": {"allowed_sucursal_keys": ["BRANCH A"]},
+            "followup": {
+                "version": "campaign-v2-followup-frozen-v1",
+                "source_campaign_id": 2,
+                "source_snapshot_id": 101,
+            },
+        },
+        frozen_at=NOW,
+        created_at=NOW,
+        updated_at=NOW,
+    ))
+    session.commit()
+
+    result = list_campaign_v2(
+        allowed_sucursal_keys=("BRANCH A",), session=session,
+    )
+    by_id = {row["id"]: row for row in result["rows"]}
+    assert by_id[5]["source"] == "FOLLOWUP_SNAPSHOT_DERIVED"
+    assert by_id[5]["source_campaign_id"] == 2
+    assert by_id[2]["source_campaign_id"] is None
+    assert get_campaign_v2(
+        campaign_id=5,
+        allowed_sucursal_keys=("BRANCH A",),
+        session=session,
+    )["source_campaign_id"] == 2
+    assert set(by_id[5]) - set(by_id[2]) == set()
+
+
+@pytest.mark.parametrize("malformed_origin", [None, False, 0, -2, "2", 5, [], {}])
+def test_history_ignores_invalid_followup_origin_without_guessing_from_name(
+    session, malformed_origin,
+):
+    session.add(MarketingCampaignV2ORM(
+        id=5,
+        name="Seg. 2 (no inferir)",
+        purpose="REACTIVATION",
+        source="FOLLOWUP_SNAPSHOT_DERIVED",
+        audience_definition_json={
+            "filters": {"allowed_sucursal_keys": ["BRANCH A"]},
+            "followup": {"source_campaign_id": malformed_origin},
+        },
+        frozen_at=NOW,
+        created_at=NOW,
+        updated_at=NOW,
+    ))
+    session.commit()
+    rows = list_campaign_v2(
+        allowed_sucursal_keys=("BRANCH A",), session=session,
+    )["rows"]
+    assert next(row for row in rows if row["id"] == 5)["source_campaign_id"] is None
+
+
 def test_recipient_list_is_stable_paginated_and_counts_evidence_without_loading_rows(session):
     result = list_campaign_v2_recipients(
         campaign_id=2,

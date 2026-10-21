@@ -765,6 +765,28 @@ test('Campaign V2 filtra todos los destinatarios desde servidor sin afectar expo
   assert.equal(html.includes('exportingSendablePackage || recipientsTotal <= 0'), false);
 });
 
+test('Historial V2 identifica seguimiento por campaña fuente y no por el nombre', () => {
+  const dir = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const page = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-page.component.ts'), 'utf8',
+  );
+  const html = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-page.component.html'), 'utf8',
+  );
+  const models = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2.models.ts'), 'utf8',
+  );
+  assert.ok(models.includes('source_campaign_id: number | null;'));
+  assert.ok(page.includes('campaignOriginLabel(campaign: CampaignV2CampaignSummary)'));
+  assert.ok(page.includes('campaign.source_campaign_id !== null'));
+  assert.ok(page.includes('Seguimiento de campaña #'));
+  assert.ok(page.includes("value === 'FOLLOWUP_SNAPSHOT_DERIVED'"));
+  assert.ok(page.includes('return this.sourceLabel(campaign.source);'));
+  assert.ok(html.includes('{{ campaignOriginLabel(campaign) }}'));
+  assert.ok(html.includes('{{ sourceLabel(campaign.campaign.source) }}'));
+  assert.equal(page.includes('campaign.name.match('), false);
+});
+
 test('Followup multi-select accumulates OR statuses without replacing prior selections', () => {
   const first = toggleCampaignV2FollowupStatus([], 'VIEWED');
   const second = toggleCampaignV2FollowupStatus(first, 'DELIVERED');

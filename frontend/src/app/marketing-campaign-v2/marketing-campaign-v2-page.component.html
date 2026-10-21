@@ -793,7 +793,7 @@
               <td><strong>#{{ campaign.id }}</strong></td>
               <td>{{ campaign.name }}</td>
               <td>{{ campaign.frozen_at | date:'short' }}</td>
-              <td>{{ sourceLabel(campaign.source) }}</td>
+              <td>{{ campaignOriginLabel(campaign) }}</td>
               <td>{{ purposeLabel(campaign.purpose) }}</td>
               <td>{{ campaign.recipient_count | number }}</td>
               <td><button mat-button type="button" (click)="openCampaign(campaign)">Ver detalle</button></td>
