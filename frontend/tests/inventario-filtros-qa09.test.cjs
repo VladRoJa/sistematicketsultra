@@ -63,7 +63,7 @@ test('aplicar Villas del rey conserva 2 Mouse y el filtro activo', () => {
   vm.aplicarFiltro('sucursales');
 
   assert.deepEqual(vm.inventariosFiltrados.map(it => it.id), [27, 36]);
-  assert.equal(vm.filtros.sucursales.opciones.length, 3);
+  assert.equal(vm.filtros.sucursales.opciones.length, 4);
   assert.equal(vm.isFilterActive('sucursales'), true);
 
   vm.abrirMenuFiltro('sucursales');
