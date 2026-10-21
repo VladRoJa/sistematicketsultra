@@ -16,9 +16,11 @@
     </mat-form-field>
   </div>
 
-  <!-- Loading spinner -->
-  <div *ngIf="loading" class="d-flex justify-content-center py-4">
-    <mat-spinner diameter="40"></mat-spinner>
+  <!-- Estado visible mientras se consultan las existencias -->
+  <div *ngIf="loading" class="existencias-loading" role="status" aria-live="polite">
+    <mat-spinner [diameter]="36" aria-label="Cargando existencias"></mat-spinner>
+    <strong>Cargando existencias...</strong>
+    <span>Consultando el inventario de la sucursal seleccionada.</span>
   </div>
 
   <!-- Tabla de existencias -->
