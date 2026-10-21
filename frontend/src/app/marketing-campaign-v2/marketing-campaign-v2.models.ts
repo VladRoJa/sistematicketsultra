@@ -414,6 +414,29 @@ export interface CampaignV2AudienceDefinition {
   preview: CampaignV2FrozenPreviewIdentity;
 }
 
+export type CampaignV2CommercialAttributionStatus =
+  | 'READY'
+  | 'NOT_SUBMITTED'
+  | 'UNSUPPORTED_MULTICHILD_OR_UNSENT'
+  | 'NO_PROVIDER_SNAPSHOT'
+  | 'NO_CANONICAL_VENTA_TOTAL';
+
+export interface CampaignV2CommercialAttribution {
+  campaign_id: number;
+  rule: 'SUCCESSFUL_PROVIDER_SEND_AND_LATER_MEMBERSHIP_PAYMENT';
+  source: 'VENTA_TOTAL_CANONICAL';
+  status: CampaignV2CommercialAttributionStatus;
+  buyers_attributed: number | null;
+  transactions_attributed: number | null;
+  revenue_attributed_mxn: string | null;
+  submitted_at_local?: string;
+  provider_snapshot_id?: number;
+  venta_total_snapshot_id?: number;
+  venta_total_cutoff?: string;
+  coverage?: 'LATEST_CANONICAL_WITHIN_SEND_MONTH';
+  successful_recipient_count?: number;
+}
+
 export interface CampaignV2CampaignDetail extends CampaignV2CampaignSummary {
   updated_at: string;
   audience_definition: CampaignV2AudienceDefinition;

@@ -83,6 +83,42 @@
         </div>
       </div>
 
+      <section class="commercial-attribution" aria-labelledby="commercial-attribution-title">
+        <div class="section-heading">
+          <div>
+            <h4 id="commercial-attribution-title">Resultados comerciales · Gasca</h4>
+            <p>Operaciones de membresía posteriores a un envío exitoso registrado en iVentas.</p>
+          </div>
+          <button mat-stroked-button type="button" (click)="loadCommercialAttribution()" [disabled]="loadingCommercialAttribution">
+            {{ loadingCommercialAttribution ? 'Consultando…' : 'Actualizar' }}
+          </button>
+        </div>
+        <div *ngIf="loadingCommercialAttribution" class="state-row compact" role="status">
+          <mat-spinner diameter="20"></mat-spinner> Consultando movimientos de Gasca…
+        </div>
+        <div *ngIf="commercialAttributionError" class="inline-error" role="alert">{{ commercialAttributionError }}</div>
+        <ng-container *ngIf="commercialAttribution as result">
+          <div *ngIf="result.status === 'READY'; else commercialNotReady" class="commercial-attribution-ready">
+            <div class="commercial-attribution-grid">
+              <div><span>Compradores atribuibles</span><strong>{{ result.buyers_attributed | number }}</strong></div>
+              <div><span>Operaciones atribuibles</span><strong>{{ result.transactions_attributed | number }}</strong></div>
+              <div><span>Ingreso atribuible</span><strong>{{ commercialRevenueLabel() }}</strong></div>
+            </div>
+            <p class="commercial-attribution-meta">
+              {{ result.successful_recipient_count | number }} envíos exitosos ·
+              Corte Gasca {{ result.venta_total_cutoff }} ·
+              iVentas #{{ result.provider_snapshot_id }} · Venta Total #{{ result.venta_total_snapshot_id }}
+            </p>
+            <p class="commercial-attribution-rule">
+              Atribución operativa: envío exitoso y pago posterior, por teléfono y sucursal. No demuestra causalidad exclusiva.
+            </p>
+          </div>
+          <ng-template #commercialNotReady>
+            <p class="commercial-attribution-unavailable" role="status">{{ commercialAttributionStatusLabel() }}</p>
+          </ng-template>
+        </ng-container>
+      </section>
+
       <div *ngIf="loadingReporting" class="state-row compact" role="status">
         <mat-spinner diameter="20"></mat-spinner>
         Cargando resultados…

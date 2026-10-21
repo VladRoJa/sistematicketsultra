@@ -17,6 +17,7 @@ import { MatSelectModule } from '@angular/material/select';
 import {
   CampaignV2AudienceDefinition,
   CampaignV2CampaignDetail,
+  CampaignV2CommercialAttribution,
   CampaignV2PreflightBudget,
   CampaignV2BudgetBatch,
   CampaignV2DispatchTemplate,
@@ -157,6 +158,10 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
 
   campaign: CampaignV2CampaignDetail | null = null;
   reporting: CampaignV2IndividualReport | null = null;
+  commercialAttribution: CampaignV2CommercialAttribution | null = null;
+  loadingCommercialAttribution = false;
+  commercialAttributionError = '';
+  private commercialAttributionRequestId = 0;
   dispatchTemplates: CampaignV2DispatchTemplate[] = [];
   preflight: CampaignV2PreflightResponse | null = null;
   submitResult: CampaignV2SubmitResponse | null = null;
@@ -231,6 +236,10 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   }
 
   loadCampaign(): void {
+    ++this.commercialAttributionRequestId;
+    this.commercialAttribution = null;
+    this.commercialAttributionError = '';
+    this.loadingCommercialAttribution = false;
     // No conservar un preview si se recarga la campaña de origen.
     ++this.followupPreviewRequestId;
     this.followupPreviewResult = null;
@@ -256,6 +265,7 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
           this.purposeControl.setValue(campaign.purpose, { emitEvent: false });
           this.loadRecipients(1);
           this.loadDispatchTemplates(campaign.purpose);
+          this.loadCommercialAttribution();
         },
         error: (error: HttpErrorResponse) => {
           this.loadingCampaignDetail = false;
@@ -693,6 +703,64 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
       TEMPLATE_CHANNEL_MISMATCH: 'Template incompatible con channel',
     };
     return labels[reason] || reason;
+  }
+
+  loadCommercialAttribution(): void {
+    if (!this.campaign || this.loadingCommercialAttribution) {
+      return;
+    }
+    const requestId = ++this.commercialAttributionRequestId;
+    this.loadingCommercialAttribution = true;
+    this.commercialAttributionError = '';
+    this.service.getCommercialAttribution(this.campaign.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: result => {
+          if (requestId !== this.commercialAttributionRequestId) {
+            return;
+          }
+          this.loadingCommercialAttribution = false;
+          this.commercialAttribution = result;
+        },
+        error: (error: HttpErrorResponse) => {
+          if (requestId !== this.commercialAttributionRequestId) {
+            return;
+          }
+          this.loadingCommercialAttribution = false;
+          this.commercialAttribution = null;
+          this.commercialAttributionError = this.errorMessage(
+            error, 'No fue posible consultar resultados comerciales de Gasca.',
+          );
+        },
+      });
+  }
+
+  commercialAttributionStatusLabel(): string {
+    switch (this.commercialAttribution?.status) {
+      case 'NOT_SUBMITTED':
+        return 'Esta campaña todavía no tiene un envío registrado.';
+      case 'NO_PROVIDER_SNAPSHOT':
+        return 'Falta un corte persistido de iVentas para atribuir operaciones.';
+      case 'NO_CANONICAL_VENTA_TOTAL':
+        return 'Aún no existe un corte canónico de Venta Total posterior al envío.';
+      case 'UNSUPPORTED_MULTICHILD_OR_UNSENT':
+        return 'Sin un único lote enviado conciliable: la campaña aún no se envió o tiene varios lotes. La atribución multirregional está pendiente.';
+      case 'READY':
+        return '';
+      default:
+        return 'La atribución comercial aún no está disponible.';
+    }
+  }
+
+  commercialRevenueLabel(): string {
+    const value = this.commercialAttribution?.revenue_attributed_mxn;
+    if (this.commercialAttribution?.status !== 'READY' || value == null) {
+      return '—';
+    }
+    const amount = Number(value);
+    return Number.isFinite(amount)
+      ? new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(amount)
+      : '—';
   }
 
   loadReporting(): void {

@@ -2141,3 +2141,31 @@ test('Campaign V2 fields reuse Suite Ultra UI v1 Material fill styles and first 
     assert.equal(file.includes('appearance="outline"'), false, name);
   }
 });
+
+
+test('Campaign V2 commercial attribution keeps successful-only numbers and unavailable states distinct', () => {
+  const root = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const service = fs.readFileSync(path.join(root, 'marketing-campaign-v2.service.ts'), 'utf8');
+  const models = fs.readFileSync(path.join(root, 'marketing-campaign-v2.models.ts'), 'utf8');
+  const detail = fs.readFileSync(path.join(root, 'marketing-campaign-v2-campaign-detail-dialog.component.ts'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'marketing-campaign-v2-campaign-detail-dialog.component.html'), 'utf8');
+  const css = fs.readFileSync(path.join(root, 'marketing-campaign-v2-campaign-detail-dialog.component.css'), 'utf8');
+  assert.ok(service.includes('getCommercialAttribution(campaignId: number)'));
+  assert.ok(service.includes('${this.apiUrl}/${campaignId}/commercial-attribution'));
+  assert.ok(models.includes('export interface CampaignV2CommercialAttribution'));
+  assert.ok(models.includes("| 'UNSUPPORTED_MULTICHILD_OR_UNSENT'"));
+  assert.ok(detail.includes('this.loadCommercialAttribution();'));
+  assert.ok(detail.includes('this.service.getCommercialAttribution(this.campaign.id)'));
+  assert.ok(detail.includes('if (requestId !== this.commercialAttributionRequestId)'));
+  assert.ok(detail.includes("case 'NO_CANONICAL_VENTA_TOTAL':"));
+  assert.ok(detail.includes("case 'NOT_SUBMITTED':"));
+  assert.ok(html.includes('id="commercial-attribution-title"'));
+  assert.ok(html.includes("result.status === 'READY'; else commercialNotReady"));
+  assert.ok(html.includes('{{ result.buyers_attributed | number }}'));
+  assert.ok(html.includes('{{ result.transactions_attributed | number }}'));
+  assert.ok(html.includes('{{ commercialRevenueLabel() }}'));
+  assert.ok(html.includes('{{ commercialAttributionStatusLabel() }}'));
+  assert.ok(html.includes('No demuestra causalidad exclusiva.'));
+  assert.ok(css.includes('.commercial-attribution-grid'));
+  assert.equal(html.includes('style="'), false);
+});

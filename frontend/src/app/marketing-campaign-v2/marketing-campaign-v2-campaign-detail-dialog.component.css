@@ -185,3 +185,20 @@ mat-dialog-content { padding: 14px 18px 18px; }
   background:#f0fdf4; color:#166534; font-size:11px;
 }
 .followup-freeze-success strong { font-size:13px; }
+
+/* Read-only commercial outcome from canonical Gasca + persisted iVentas. */
+.commercial-attribution { margin:14px 0; padding:12px; border:1px solid #e2e8f0; border-radius:10px; background:#f8fafc; }
+.commercial-attribution .section-heading { align-items:center; }
+.commercial-attribution h4 { margin:0; color:#0f172a; font-size:13px; }
+.commercial-attribution .section-heading p { margin:3px 0 0; font-size:11px; }
+.commercial-attribution-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:12px; }
+.commercial-attribution-grid > div { padding:12px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; min-width:0; }
+.commercial-attribution-grid span { display:block; font-size:11px; font-weight:700; color:#64748b; }
+.commercial-attribution-grid strong { display:block; margin-top:5px; font-size:19px; font-variant-numeric:tabular-nums; color:#0f172a; overflow-wrap:anywhere; }
+.commercial-attribution-meta { margin:10px 0 0; font-size:11px; color:#475569; }
+.commercial-attribution-rule { margin:6px 0 0; font-size:11px; color:#64748b; line-height:1.5; }
+.commercial-attribution-unavailable { margin:10px 0 0; padding:10px; font-size:12px; color:#475569; border:1px solid #cbd5e1; border-radius:8px; background:#fff; }
+@media(max-width:800px) {
+  .commercial-attribution .section-heading { align-items:flex-start; flex-wrap:wrap; }
+  .commercial-attribution-grid { grid-template-columns:1fr; }
+}
