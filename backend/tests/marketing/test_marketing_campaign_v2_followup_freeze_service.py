@@ -45,6 +45,10 @@ def session():
     )
     for model in (Campaign, Recipient, Evidence, Snapshot, Observation, Blacklist):
         model.__table__.to_metadata(metadata)
+    # SQLite autoincrements INTEGER PRIMARY KEY, not BIGINT PRIMARY KEY.
+    # Production PostgreSQL preserves the real BigInteger identity columns.
+    for model in (Campaign, Recipient, Evidence):
+        metadata.tables[model.__tablename__].c.id.type = Integer()
     engine = create_engine("sqlite://")
     metadata.create_all(engine)
     with Session(engine) as active:
