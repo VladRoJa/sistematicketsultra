@@ -25,6 +25,9 @@ from app.services.marketing_meta_run_sync_service import (
     MarketingMetaAccount,
     sync_meta_full_run,
 )
+from app.services.marketing_campaign_v2_commercial_materialization_service import (
+    run_multichild_commercial_materialization_cycle,
+)
 from app.services.marketing_campaign_v2_provider_stats_scheduler_service import (
     CampaignV2ProviderStatsCycleResult,
     run_campaign_v2_provider_stats_capture_cycle,
@@ -574,6 +577,28 @@ def _run_campaign_v2_provider_stats_if_due(
             result.failed,
             result.skipped,
         )
+        # Dedicated worker only: never run the commercial Gasca scan in Flask.
+        # If this optional calculation fails, provider stats remain committed.
+        try:
+            commercial = run_multichild_commercial_materialization_cycle(
+                now=now,
+                max_campaigns=min(config.max_campaigns_per_cycle, 3),
+            )
+            LOGGER.info(
+                "Campaign V2 commercial cycle. selected=%s ready=%s pending=%s failed=%s",
+                commercial["selected"],
+                commercial["ready"],
+                commercial["pending"],
+                commercial["failed"],
+            )
+        except Exception as exc:  # noqa: BLE001
+            db.session.rollback()
+            LOGGER.warning(
+                "Campaign V2 commercial cycle falló. error_type=%s",
+                type(exc).__name__,
+            )
+        finally:
+            db.session.remove()
         return result
     except Exception as exc:  # noqa: BLE001
         db.session.rollback()
