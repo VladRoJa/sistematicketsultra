@@ -90,3 +90,74 @@ test('si la API falla, el estado loading termina sin quedarse bloqueado', () => 
     console.error = originalConsoleError;
   }
 });
+
+
+test('QA-10D: el administrador inicia en Global y no en una sucursal corporativa sin opción', () => {
+  const oldStorage = global.localStorage;
+  global.localStorage = {
+    getItem: key => key === 'user'
+      ? JSON.stringify({ rol: 'ADMINISTRADOR', sucursal_id: 1000 })
+      : null,
+  };
+  try {
+    const Existencias = componente();
+    const vm = new Existencias({});
+    assert.equal(vm.esAdmin, true);
+    assert.equal(vm.sucursalSeleccionada, 'global');
+    assert.match(source, /MatFormFieldModule/);
+    assert.match(html, /Todas las sucursales \(Global\)/);
+    assert.match(html, /class="existencias-toolbar"/);
+    assert.match(css, /\.existencias-sucursal-field/);
+    assert.doesNotMatch(html, /style="width: 300px;"/);
+  } finally {
+    global.localStorage = oldStorage;
+  }
+});
+
+test('QA-10D: Global incluye todas las existencias y sucursal específica solo las suyas', () => {
+  const oldStorage = global.localStorage;
+  global.localStorage = {
+    getItem: key => key === 'user'
+      ? JSON.stringify({ rol: 'ADMINISTRADOR', sucursal_id: 1000 })
+      : null,
+  };
+  try {
+    let observer;
+    const vm = new (componente())({
+      verExistencias: () => ({
+        subscribe: handlers => { observer = handlers; },
+      }),
+    });
+    const rows = [
+      { inventario_id: 27, sucursal_id: 1, stock: 1 },
+      { inventario_id: 46, sucursal_id: 2, stock: 2 },
+    ];
+    vm.cargarExistencias();
+    observer.next(rows);
+    assert.deepEqual(vm.existencias, rows);
+
+    vm.sucursalSeleccionada = 1;
+    vm.onSucursalChange();
+    assert.equal(vm.loading, true);
+    observer.next(rows);
+    assert.deepEqual(vm.existencias.map(item => item.inventario_id), [27]);
+  } finally {
+    global.localStorage = oldStorage;
+  }
+});
+
+test('QA-10D: usuario no administrador conserva su sucursal predeterminada', () => {
+  const oldStorage = global.localStorage;
+  global.localStorage = {
+    getItem: key => key === 'user'
+      ? JSON.stringify({ rol: 'GERENTE', sucursal_id: 35 })
+      : null,
+  };
+  try {
+    const vm = new (componente())({});
+    assert.equal(vm.esAdmin, false);
+    assert.equal(vm.sucursalSeleccionada, 35);
+  } finally {
+    global.localStorage = oldStorage;
+  }
+});
