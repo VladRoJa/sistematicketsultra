@@ -106,6 +106,8 @@ const RECIPIENT_STATUS_DISPLAY: Record<
   },
 };
 
+type RecipientProviderFilter = CampaignV2RecipientProviderStatusCode | 'ALL';
+
 const RECIPIENT_STATUS_NOT_AVAILABLE: RecipientStatusDisplay = {
   label: 'No disponible',
   className: 'recipient-status--unknown',
@@ -156,6 +158,17 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   readonly recipientsPageSize = 25;
   recipientsTotal = 0;
   recipientsTotalPages = 0;
+  recipientsProviderFilter: RecipientProviderFilter = 'ALL';
+  readonly recipientStatusFilters: ReadonlyArray<{ value: RecipientProviderFilter; label: string }> = [
+    { value: 'ALL', label: 'Todos' },
+    { value: 'VIEWED', label: 'Leídos' },
+    { value: 'DELIVERED', label: 'Entregados' },
+    { value: 'SENT', label: 'Enviados' },
+    { value: 'FAILED', label: 'Fallidos' },
+    { value: 'NO_PROVIDER_STATUS', label: 'Sin estado' },
+    { value: 'NO_SNAPSHOT', label: 'Sin captura' },
+  ];
+  private recipientsRequestId = 0;
 
   loadingCampaignDetail = false;
   loadingRecipients = false;
@@ -217,16 +230,39 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
       });
   }
 
-  loadRecipients(page: number): void {
-    if (this.loadingRecipients) {
+  selectRecipientsProviderFilter(filter: RecipientProviderFilter): void {
+    if (filter === this.recipientsProviderFilter) {
       return;
     }
+    this.recipientsProviderFilter = filter;
+    this.recipientsPage = 1;
+    this.loadRecipients(1);
+  }
+
+  get recipientsEmptyMessage(): string {
+    return this.recipientsProviderFilter === 'ALL'
+      ? 'No hay destinatarios congelados.'
+      : 'No hay destinatarios con este estado en el último corte guardado.';
+  }
+
+  loadRecipients(page: number): void {
+    // Un cambio rápido de filtro puede adelantar una consulta HTTP anterior.
+    // Solamente la solicitud vigente puede actualizar tabla, conteo y paginación.
+    const requestId = ++this.recipientsRequestId;
     this.loadingRecipients = true;
     this.error = '';
-    this.service.listRecipients(this.data.campaignId, page, this.recipientsPageSize)
+    this.recipients = [];
+    this.recipientsTotal = 0;
+    this.recipientsTotalPages = 0;
+    this.service.listRecipients(
+      this.data.campaignId, page, this.recipientsPageSize, this.recipientsProviderFilter,
+    )
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: result => {
+          if (requestId !== this.recipientsRequestId) {
+            return;
+          }
           this.loadingRecipients = false;
           this.recipients = result.rows;
           this.recipientsPage = result.page;
@@ -234,6 +270,9 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
           this.recipientsTotalPages = result.total_pages;
         },
         error: (error: HttpErrorResponse) => {
+          if (requestId !== this.recipientsRequestId) {
+            return;
+          }
           this.loadingRecipients = false;
           this.error = this.errorMessage(error, 'No fue posible cargar los destinatarios.');
         },
@@ -558,7 +597,7 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   }
 
   exportDeliveryPackage(): void {
-    if (this.exportingDeliveryPackage || this.recipientsTotal <= 0) {
+    if (this.exportingDeliveryPackage || !this.campaign?.recipient_count) {
       return;
     }
 
@@ -588,7 +627,7 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   }
 
   exportSendablePackage(): void {
-    if (this.exportingSendablePackage || this.recipientsTotal <= 0) {
+    if (this.exportingSendablePackage || !this.campaign?.recipient_count) {
       return;
     }
 
