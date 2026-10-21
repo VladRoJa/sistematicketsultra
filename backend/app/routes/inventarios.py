@@ -55,6 +55,19 @@ def _parse_required_int(value, field_name):
     return parsed, None
 
 
+def _parse_positive_movement_quantity(value):
+    """Acepta enteros positivos (JSON numérico o cadena decimal ASCII)."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        cantidad = value
+    elif isinstance(value, str) and value.strip().isascii() and value.strip().isdecimal():
+        cantidad = int(value.strip())
+    else:
+        return None
+    return cantidad if cantidad > 0 else None
+
+
 def _get_current_user_id_required():
     user_id = _coerce_int_or_none(get_jwt_identity())
     if user_id is None:
@@ -497,8 +510,18 @@ def registrar_movimiento():
         inventarios = data.get('inventarios', [])
         observaciones = data.get('observaciones', '')
 
-        if tipo not in ['entrada', 'salida'] or not inventarios:
+        if tipo not in ['entrada', 'salida'] or not isinstance(inventarios, list) or not inventarios:
             return error_response('Datos inválidos')
+
+        # Validar todo el lote antes de crear el movimiento o modificar existencias.
+        cantidades_validadas = []
+        for indice, producto in enumerate(inventarios, start=1):
+            if not isinstance(producto, dict):
+                return error_response(f'Producto {indice}: formato inválido')
+            cantidad = _parse_positive_movement_quantity(producto.get('cantidad'))
+            if cantidad is None:
+                return error_response(f'Producto {indice}: cantidad debe ser un entero positivo')
+            cantidades_validadas.append(cantidad)
 
         nuevo_movimiento = MovimientoInventario(
             tipo_movimiento=tipo,
@@ -510,9 +533,8 @@ def registrar_movimiento():
         db.session.add(nuevo_movimiento)
         db.session.flush()  # Obtener ID antes de commit
 
-        for p in inventarios:
+        for p, cantidad in zip(inventarios, cantidades_validadas):
             inventario_id = p['inventario_id']
-            cantidad = int(p['cantidad'])
 
             # Cargar inventario para conocer sus unidades
             inv = InventarioGeneral.query.get(inventario_id)
