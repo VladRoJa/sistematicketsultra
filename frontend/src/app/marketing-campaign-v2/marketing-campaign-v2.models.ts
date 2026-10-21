@@ -392,6 +392,7 @@ export interface CampaignV2CampaignSummary {
   name: string;
   purpose: CampaignV2Purpose;
   source: CampaignV2Source;
+  source_campaign_id: number | null;
   frozen_at: string;
   created_at: string;
   created_by_user_id: number | null;
