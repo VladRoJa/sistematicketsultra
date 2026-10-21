@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import BigInteger, Column, Integer, MetaData, Table, create_engine
+from sqlalchemy import BigInteger, Column, DateTime, Integer, MetaData, String, Table, create_engine
 from sqlalchemy.orm import Session
 
 from app.models.marketing import (
@@ -66,6 +66,17 @@ def session():
     MarketingCampaignV2RecipientORM.__table__.to_metadata(metadata)
     MarketingCampaignV2ProviderStatsSnapshotORM.__table__.to_metadata(metadata)
     MarketingCampaignV2ProviderRecipientObservationORM.__table__.to_metadata(metadata)
+    # Minimal child schema queried by automatic multi-child snapshot selection.
+    Table(
+        "marketing_campaign_v2_provider_campaigns",
+        metadata,
+        Column("id", BigInteger, primary_key=True),
+        Column("campaign_v2_id", BigInteger),
+        Column("provider", String),
+        Column("provider_campaign_id", String),
+        Column("status", String),
+        Column("submitted_at", DateTime(timezone=True)),
+    )
     metadata.create_all(engine)
 
     with Session(engine) as value:
@@ -391,3 +402,64 @@ def test_default_db_session_is_removed_after_each_campaign(monkeypatch):
     assert result.attempted == 2
     assert result.unchanged == 2
     assert cleanups == ["remove", "remove"]
+
+
+def test_multichild_scheduler_selects_submitted_children_without_crossing_budget(session):
+    """Multi-branch provider calls are child-scoped; legacy parent selection unchanged."""
+    child_table = Table(
+        "marketing_campaign_v2_provider_campaigns",
+        MetaData(),
+        autoload_with=session.get_bind(),
+    )
+    # Campaign 4 is an unbound multichild parent. Campaigns 2/3 already have
+    # different persisted provider snapshots for freshness checks.
+    for campaign_id in range(1, 7):
+        campaign = session.get(MarketingCampaignV2ORM, campaign_id)
+        campaign.provider = None
+        campaign.provider_campaign_id = None
+
+    def child(child_id, campaign_id, status, external, submitted_at):
+        return {
+            "id": child_id,
+            "campaign_v2_id": campaign_id,
+            "provider": "IVENTAS",
+            "provider_campaign_id": external,
+            "status": status,
+            "submitted_at": submitted_at,
+        }
+
+    session.execute(child_table.insert(), [
+        child(40, 4, "SUBMITTED", "child-40", NOW - timedelta(hours=1)),
+        child(41, 4, "SUBMITTED", "child-41", NOW - timedelta(hours=1)),
+        child(42, 4, "HELD", None, None),
+        child(43, 4, "SCHEDULED", "child-43", NOW - timedelta(hours=1)),
+        child(44, 4, "SUBMITTED", "child-44", NOW + timedelta(hours=1)),
+        child(20, 2, "SUBMITTED", "external-2", NOW - timedelta(hours=4)),
+        child(30, 3, "SUBMITTED", "external-3", NOW - timedelta(hours=31)),
+    ])
+    session.commit()
+
+    selection = select_campaign_v2_provider_stats_candidates(
+        now=NOW, horizon_hours=24, max_campaigns=2, session=session,
+    )
+    assert selection.bound_count == 5
+    assert selection.eligible_count == 4
+    assert selection.skipped_outside_horizon == 1
+    assert selection.skipped_by_limit == 2
+    assert selection.campaign_ids == ()
+    assert selection.targets == ((4, 40), (4, 41))
+
+    calls = []
+
+    def capture(**kwargs):
+        calls.append((kwargs["campaign_id"], kwargs.get("child_id")))
+        return {"created": True}
+
+    result = run_campaign_v2_provider_stats_capture_cycle(
+        now=NOW, horizon_hours=24, max_campaigns=2,
+        session=session, capture_func=capture,
+    )
+    assert calls == [(4, 40), (4, 41)]
+    assert (result.selected, result.attempted, result.created, result.failed) == (
+        2, 2, 2, 0,
+    )
