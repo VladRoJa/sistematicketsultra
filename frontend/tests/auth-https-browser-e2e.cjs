@@ -72,7 +72,14 @@ async function jump(page, minutes) {
     const page = await context.newPage();
     const consoleLines = [];
     page.on('console', message => consoleLines.push(message.text()));
-    await page.goto(BASE + '/#/login');
+    await eventually(async () => {
+      // Angular's dev server may serve index.html before the first JS
+      // bundle has compiled. A fresh navigation is needed once ready.
+      await page.goto(BASE + '/#/login', {
+        waitUntil: 'domcontentloaded', timeout: 20_000,
+      });
+      return page.locator('#usuario-login').isVisible();
+    }, 'Angular login component did not render', 240_000);
     await page.locator('#usuario-login').fill('qa_browser');
     await page.locator('#password-login').fill('synthetic-password');
     await page.getByRole('button', { name: 'Iniciar sesión' }).click();
