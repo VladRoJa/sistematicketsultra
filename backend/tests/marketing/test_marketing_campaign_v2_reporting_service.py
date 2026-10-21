@@ -833,3 +833,55 @@ def test_commercial_attribution_batch_is_scoped_and_has_constant_query_count(mon
     assert big_result["rows"][0]["revenue_attributed_mxn"] is None
     assert big_result["rows"][1]["status"] == "READY"
     assert big_result["rows"][1]["revenue_attributed_mxn"] == "549.00"
+
+
+def test_commercial_attribution_multichild_resolves_submitted_branch_payloads():
+    """Two sent branches are separate; an untouched HELD child contributes nothing."""
+    from app.services.marketing_campaign_v2_commercial_attribution_service import (
+        resolve_submitted_child_recipients,
+    )
+
+    when = datetime(2026, 10, 21, 19, 0, tzinfo=timezone.utc)
+    frozen = [
+        SimpleNamespace(id=1, campaign_id=40, phone_mx10="6861000001"),
+        SimpleNamespace(id=2, campaign_id=40, phone_mx10="6861000002"),
+        SimpleNamespace(id=3, campaign_id=40, phone_mx10="6641000003"),
+    ]
+
+    def child(identifier, branch, channel, phones, *, status="SUBMITTED"):
+        return SimpleNamespace(
+            id=identifier,
+            campaign_v2_id=40,
+            sucursal_id=branch,
+            provider="IVENTAS",
+            provider_campaign_id=(f"provider-{identifier}" if status == "SUBMITTED" else None),
+            status=status,
+            submitted_at=(when if status == "SUBMITTED" else None),
+            submit_started_at=None,
+            provider_channel_id=channel,
+            recipient_count=len(phones),
+            request_snapshot_json={
+                "provider_channel_id": channel,
+                "leads": [{"phone": f"521{phone}"} for phone in phones],
+            },
+        )
+
+    resolution = resolve_submitted_child_recipients(
+        campaign_id=40,
+        # Deliberately out of order: resolver must be deterministic by child ID.
+        children=[
+            child(102, 18, "channel-18", [], status="HELD"),
+            child(101, 17, "channel-17", ["6641000003"]),
+            child(100, 16, "channel-16", ["6861000001", "6861000002"]),
+        ],
+        frozen_recipients=frozen,
+    )
+    assert resolution.not_sent_child_ids == (102,)
+    assert resolution.unresolved_child_ids == ()
+    assert [
+        (row.child_id, row.sucursal_id, row.provider_campaign_id, row.recipients)
+        for row in resolution.submitted
+    ] == [
+        (100, 16, "provider-100", (("6861000001", 1), ("6861000002", 2))),
+        (101, 17, "provider-101", (("6641000003", 3),)),
+    ]
