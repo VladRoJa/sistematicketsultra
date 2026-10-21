@@ -183,6 +183,13 @@
   color: #98a2b3;
 }
 
+/* Edge/Chrome ya ofrecen una X nativa en type=search.
+   Conservamos únicamente el botón explícito de Angular. */
+.search-box__control input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 .search-box__clear {
   display: inline-flex;
   align-items: center;
