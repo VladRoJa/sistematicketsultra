@@ -28,6 +28,7 @@ import {
   CampaignV2RecipientSummary,
   CampaignV2RecipientProviderStatusCode,
   CampaignV2FollowupPreview,
+  CampaignV2FollowupFrozen,
   CampaignV2FollowupStatus,
   CampaignV2Source,
   CampaignV2SourceMetadata,
@@ -177,6 +178,11 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   private recipientsRequestId = 0;
 
   readonly followupStatusOptions = CAMPAIGN_V2_FOLLOWUP_STATUS_OPTIONS;
+  readonly followupNameControl = new FormControl<string>('', { nonNullable: true });
+  followupFreezeConfirmed = false;
+  followupFreezing = false;
+  followupFreezeError = '';
+  followupFreezeResult: CampaignV2FollowupFrozen | null = null;
   selectedFollowupStatuses: CampaignV2FollowupStatus[] = [];
   followupPreviewResult: CampaignV2FollowupPreview | null = null;
   followupPreviewLoading = false;
@@ -231,6 +237,10 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
     this.followupPreviewError = '';
     this.followupPreviewLoading = false;
     this.followupKnownSnapshotId = null;
+    this.followupFreezeConfirmed = false;
+    this.followupFreezing = false;
+    this.followupFreezeError = '';
+    this.followupFreezeResult = null;
     this.loadingCampaignDetail = true;
     this.error = '';
     this.service.getCampaign(this.data.campaignId)
@@ -239,6 +249,10 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
         next: campaign => {
           this.loadingCampaignDetail = false;
           this.campaign = campaign;
+          this.followupNameControl.setValue(
+            `${campaign.name.slice(0, 230)} · Seguimiento`,
+            { emitEvent: false },
+          );
           this.purposeControl.setValue(campaign.purpose, { emitEvent: false });
           this.loadRecipients(1);
           this.loadDispatchTemplates(campaign.purpose);
@@ -255,6 +269,11 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   }
 
   toggleFollowupStatus(status: CampaignV2FollowupStatus): void {
+    if (this.followupFreezing || this.followupFreezeResult) {
+      return;
+    }
+    this.followupFreezeConfirmed = false;
+    this.followupFreezeError = '';
     this.selectedFollowupStatuses = toggleCampaignV2FollowupStatus(
       this.selectedFollowupStatuses, status,
     );
@@ -267,6 +286,8 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
 
   previewFollowup(): void {
     if (
+      this.followupFreezing ||
+      this.followupFreezeResult ||
       this.followupPreviewLoading ||
       !this.campaign ||
       this.selectedFollowupStatuses.length === 0
@@ -277,6 +298,8 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
     const statuses = [...this.selectedFollowupStatuses];
     this.followupPreviewResult = null;
     this.followupPreviewError = '';
+    this.followupFreezeConfirmed = false;
+    this.followupFreezeError = '';
     this.followupPreviewLoading = true;
     this.service.previewFollowup(
       this.data.campaignId,
@@ -301,6 +324,53 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
           this.followupPreviewError = error.status === 409
             ? 'El corte del proveedor cambió o no está disponible. Cierra y vuelve a abrir la campaña para actualizar la vista previa.'
             : this.errorMessage(error, 'No fue posible calcular la audiencia de seguimiento.');
+        },
+      });
+  }
+
+  setFollowupFreezeConfirmed(checked: boolean): void {
+    this.followupFreezeConfirmed = checked;
+  }
+
+  freezeFollowup(): void {
+    const preview = this.followupPreviewResult;
+    const name = this.followupNameControl.value.trim();
+    if (
+      !preview ||
+      !this.followupFreezeConfirmed ||
+      this.followupFreezing ||
+      this.followupPreviewLoading ||
+      this.followupFreezeResult ||
+      !name ||
+      name.length > 255 ||
+      preview.candidate_count < 1
+    ) {
+      return;
+    }
+    // Lock the selection while the irreversible freeze is in flight.
+    this.followupFreezing = true;
+    this.followupFreezeError = '';
+    this.service.freezeFollowup(this.data.campaignId, name, preview)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: result => {
+          this.followupFreezing = false;
+          this.followupFreezeResult = result;
+          this.followupFreezeConfirmed = false;
+        },
+        error: (error: HttpErrorResponse) => {
+          this.followupFreezing = false;
+          this.followupFreezeConfirmed = false;
+          // 409 means preview is no longer reliable; require explicit recalc.
+          if (error.status === 409) {
+            this.followupPreviewResult = null;
+            this.followupFreezeError =
+              'No se congeló la campaña: el corte, la lista negra o los contactos cambiaron. Revisa el motivo y vuelve a calcular el preview.';
+            return;
+          }
+          this.followupFreezeError = this.errorMessage(
+            error, 'No fue posible congelar la nueva campaña de seguimiento.',
+          );
         },
       });
   }
