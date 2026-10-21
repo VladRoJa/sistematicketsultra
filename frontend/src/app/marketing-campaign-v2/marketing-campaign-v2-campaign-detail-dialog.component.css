@@ -84,3 +84,40 @@ mat-dialog-content { padding: 14px 18px 18px; }
 .recipient-status--failed { background:#fff1f2; border-color:#fecdd3; color:#b91c1c; }
 .recipient-status--accepted { background:#fffbeb; border-color:#fde68a; color:#92400e; }
 .recipient-status--unknown { background:#f8fafc; border-color:#e2e8f0; color:#64748b; }
+
+/* Filtro V1: acciones compactas, sin form fields outlined ni filas locales filtradas. */
+.recipient-filter-toolbar {
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px 12px;
+  padding:10px 12px;
+  margin-top:14px;
+  border:1px solid #e2e8f0;
+  border-radius:10px;
+  background:#f8fafc;
+}
+.recipient-filter-title { color:#334155; font-size:12px; font-weight:700; white-space:nowrap; }
+.recipient-filter-buttons { display:flex; flex:1 1 460px; gap:6px; flex-wrap:wrap; align-items:center; }
+.recipient-filter-button {
+  appearance:none;
+  min-height:30px;
+  padding:5px 10px;
+  border:1px solid #cbd5e1;
+  border-radius:999px;
+  background:#fff;
+  color:#475569;
+  font:inherit;
+  font-size:11px;
+  font-weight:700;
+  cursor:pointer;
+}
+.recipient-filter-button:hover { border-color:#94a3b8; background:#f1f5f9; }
+.recipient-filter-button.is-selected {
+  border-color:var(--ultra-orange,#e54525);
+  background:#fff7ed;
+  color:#c2410c;
+}
+.recipient-filter-button:focus-visible { outline:2px solid var(--ultra-orange,#e54525); outline-offset:2px; }
+.recipient-filter-summary { margin-left:auto; color:#475569; font-size:12px; font-weight:700; white-space:nowrap; }
+.recipient-filter-empty { margin:12px 0 0; }
