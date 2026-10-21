@@ -73,3 +73,18 @@ export interface GascaSmsPulseTelemetry {
   last_error_code:string|null; consecutive_failures:number;
   delivery_verified:false;
 }
+
+/** Observed automation incidents; unknown coverage is never an invented failure. */
+export type SchedulerAlertState = 'CLEAR'|'WARNING'|'CRITICAL';
+export interface SchedulerAlertIssue {
+  key:string; kind:'WORKER'|'SMS_PULSE'|'JOB_RUN';
+  label:string; severity:'WARNING'|'CRITICAL';
+  reason_code:string; observed_at_utc:string|null;
+}
+export interface SchedulerAlertSummary {
+  checked_at_utc:string; state:SchedulerAlertState;
+  issue_count:number; critical_count:number; warning_count:number;
+  issues:SchedulerAlertIssue[]; coverage:string;
+  checked_worker_count:number; checked_run_job_count:number;
+  limitations:string;
+}

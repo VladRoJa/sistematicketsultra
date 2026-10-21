@@ -2,7 +2,7 @@
 
 import { Component, ElementRef, ViewChild, Renderer2, OnInit, AfterViewInit, OnDestroy } from '@angular/core';
 import { Router, RouterModule, RouterOutlet } from '@angular/router';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpHeaders, HttpErrorResponse } from '@angular/common/http';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatIconModule } from '@angular/material/icon';
@@ -18,6 +18,8 @@ import { InactividadService } from '../services/inactividad.service';
 import { SessionService } from '../core/auth/session.service';
 import { CdkDragEnd, DragDropModule } from '@angular/cdk/drag-drop';
 import { TicketService, TicketValidationSummary } from '../services/ticket.service';
+import { AutomationControlService } from '../automation-control/automation-control.service';
+import { SchedulerAlertSummary, SchedulerAlertState } from '../automation-control/automation-control.models';
 import { Subscription } from 'rxjs';
 import { RefrescoService } from '../services/refresco.service';
 import { canAccessTrackRegionalOperational } from '../warehouse/track-intelligence-regional-operational/track-regional-operational-access.guard';
@@ -140,6 +142,18 @@ isMoreMenuActive(): boolean {
   private readonly validationAlertSnoozeKey = 'suite.ticketValidationAlert.snoozeUntil';
   private readonly validationAlertPositionKey = 'suite.ticketValidationAlert.position';
 
+  automationAlertSummary: SchedulerAlertSummary | null = null;
+  automationAlertUnavailable = false;
+  automationAlertPosition = { x: 0, y: 0 };
+  automationAlertFueArrastrada = false;
+  private automationAlertLoading = false;
+  private automationAlertIntervalId: ReturnType<typeof setInterval> | null = null;
+  private automationAlertSubscription?: Subscription;
+  private readonly automationAlertRefreshMs = 60 * 1000;
+  private readonly automationAlertSnoozeMs = 3 * 60 * 1000;
+  private readonly automationAlertSnoozeKey = 'suite.automationAlert.snooze';
+  private readonly automationAlertPositionKey = 'suite.automationAlert.position';
+
   private apiUrl = `${environment.apiUrl}/tickets`;
 
   // ⏳ Configuración de inactividad
@@ -157,6 +171,7 @@ isMoreMenuActive(): boolean {
     private session: SessionService,
     private ticketService: TicketService,
     private refrescoService: RefrescoService,
+    private automationControlService: AutomationControlService,
   ) {}
 
 ngOnInit(): void {
@@ -593,6 +608,14 @@ this.habilitarWarehouseEnMenuSiAplica(menuWarehouse);
       this.refrescoService.refrescarResumenValidacionTickets$.subscribe(() => {
         this.cargarTicketValidationSummary();
       });
+  }
+
+  if (this.puedeVerAlertaAutomatizaciones) {
+    this.cargarAutomationAlertPosition();
+    this.cargarAutomationAlerts();
+    this.automationAlertIntervalId = setInterval(
+      () => this.cargarAutomationAlerts(), this.automationAlertRefreshMs
+    );
   }
   }
 
@@ -1120,6 +1143,11 @@ ngOnDestroy(): void {
   }
 
   this.validationSummaryRefreshSubscription?.unsubscribe();
+  if (this.automationAlertIntervalId) {
+    clearInterval(this.automationAlertIntervalId);
+    this.automationAlertIntervalId = null;
+  }
+  this.automationAlertSubscription?.unsubscribe();
 }
 
 private verificarRolUsuario(): void {
@@ -1308,6 +1336,144 @@ private verificarRolUsuario(): void {
   if (menuMatch) {
     this.currentSubmenu = menuMatch.label;
   }
+}
+
+get puedeVerAlertaAutomatizaciones(): boolean {
+  return String(this.session.getUser()?.username ?? '').trim().toUpperCase() === 'ADMICORP';
+}
+
+private cargarAutomationAlerts(): void {
+  if (this.automationAlertLoading) {
+    return;
+  }
+  this.automationAlertLoading = true;
+  this.automationAlertSubscription = this.automationControlService.alertSummary().subscribe({
+    next: (summary) => {
+      this.automationAlertSummary = summary;
+      this.automationAlertUnavailable = false;
+      this.automationAlertLoading = false;
+    },
+    error: (error: HttpErrorResponse) => {
+      this.automationAlertSummary = null;
+      // A denied request is not evidence of a scheduler failure.
+      this.automationAlertUnavailable = error.status !== 401 && error.status !== 403;
+      this.automationAlertLoading = false;
+    },
+  });
+}
+
+private cargarAutomationAlertPosition(): void {
+  const raw = localStorage.getItem(this.automationAlertPositionKey);
+  if (!raw) {
+    return;
+  }
+  try {
+    const value = JSON.parse(raw);
+    const x = Number(value?.x);
+    const y = Number(value?.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      throw new Error('Invalid position');
+    }
+    this.automationAlertPosition = { x, y };
+  } catch {
+    localStorage.removeItem(this.automationAlertPositionKey);
+    this.automationAlertPosition = { x: 0, y: 0 };
+  }
+}
+
+get automationAlertSeverity(): SchedulerAlertState {
+  return this.automationAlertUnavailable ? 'WARNING' : this.automationAlertSummary?.state ?? 'CLEAR';
+}
+
+get automationAlertCount(): number {
+  return this.automationAlertSummary?.issue_count ?? 0;
+}
+
+get automationAlertFingerprint(): string {
+  const issues = this.automationAlertSummary?.issues ?? [];
+  return issues.length
+    ? issues.map(issue => issue.key + ':' + issue.severity + ':' + issue.reason_code).sort().join('|')
+    : this.automationAlertUnavailable ? 'MONITOR_UNAVAILABLE' : '';
+}
+
+private isAutomationAlertSnoozed(): boolean {
+  const raw = localStorage.getItem(this.automationAlertSnoozeKey);
+  if (!raw) {
+    return false;
+  }
+  try {
+    const saved = JSON.parse(raw);
+    const until = Number(saved?.until);
+    if (!Number.isFinite(until) || typeof saved?.fingerprint !== 'string') {
+      throw new Error('Invalid snooze');
+    }
+    if (Date.now() < until && saved.fingerprint === this.automationAlertFingerprint) {
+      return true;
+    }
+    if (Date.now() >= until) {
+      localStorage.removeItem(this.automationAlertSnoozeKey);
+    }
+  } catch {
+    localStorage.removeItem(this.automationAlertSnoozeKey);
+  }
+  return false;
+}
+
+get shouldShowAutomationAlert(): boolean {
+  if (!this.puedeVerAlertaAutomatizaciones) {
+    return false;
+  }
+  if (!this.automationAlertUnavailable && this.automationAlertCount === 0) {
+    return false;
+  }
+  return !this.isAutomationAlertSnoozed();
+}
+
+get automationAlertTitle(): string {
+  return this.automationAlertUnavailable
+    ? 'Monitoreo no disponible'
+    : this.automationAlertSeverity === 'CRITICAL'
+      ? 'Fallos en automatizaciones' : 'Automatizaciones en revisión';
+}
+
+get automationAlertSubtitle(): string {
+  const count = this.automationAlertCount;
+  return this.automationAlertUnavailable
+    ? 'No se pudo verificar la salud'
+    : count + (count === 1 ? ' incidencia detectada' : ' incidencias detectadas');
+}
+
+dismissAutomationAlert(event: MouseEvent): void {
+  event.preventDefault();
+  event.stopPropagation();
+  localStorage.setItem(this.automationAlertSnoozeKey, JSON.stringify({
+    until: Date.now() + this.automationAlertSnoozeMs,
+    fingerprint: this.automationAlertFingerprint,
+  }));
+}
+
+onAutomationAlertDragStarted(): void {
+  this.automationAlertFueArrastrada = false;
+}
+
+onAutomationAlertDragEnded(event: CdkDragEnd): void {
+  this.automationAlertFueArrastrada =
+    Math.abs(event.distance?.x || 0) > 3 || Math.abs(event.distance?.y || 0) > 3;
+  const position = event.source.getFreeDragPosition();
+  this.automationAlertPosition = { x: position.x, y: position.y };
+  localStorage.setItem(
+    this.automationAlertPositionKey, JSON.stringify(this.automationAlertPosition)
+  );
+}
+
+goToAutomationControl(): void {
+  if (this.automationAlertFueArrastrada) {
+    this.automationAlertFueArrastrada = false;
+    return;
+  }
+  this.currentSubmenu = 'Sistemas';
+  this.submenuActivo['Sistemas'] = 'Control de Automatizaciones';
+  this.router.navigate(['/sistemas/automatizaciones']);
 }
 
 private cargarTicketValidationSummary(): void {

@@ -2,11 +2,14 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { Job, Run, RunsResponse, Summary, Dataset, TimelineResponse, AutomationDiagnostic, WorkerHealthResponse, EffectiveSchedulesResponse, GascaSmsQueueTelemetry, GascaSmsPulseTelemetry } from './automation-control.models';
+import { Job, Run, RunsResponse, Summary, Dataset, TimelineResponse, AutomationDiagnostic, WorkerHealthResponse, EffectiveSchedulesResponse, GascaSmsQueueTelemetry, GascaSmsPulseTelemetry, SchedulerAlertSummary } from './automation-control.models';
 @Injectable({ providedIn:'root' })
 export class AutomationControlService {
   private readonly url = `${environment.apiUrl}/automation-control`;
   constructor(private readonly http: HttpClient) {}
+  alertSummary():Observable<SchedulerAlertSummary> {
+    return this.http.get<SchedulerAlertSummary>(`${this.url}/alerts/summary`);
+  }
   summary():Observable<Summary> { return this.http.get<Summary>(`${this.url}/summary`); }
   smsPulse():Observable<GascaSmsPulseTelemetry> {
     return this.http.get<GascaSmsPulseTelemetry>(`${this.url}/sms-gasca/pulse`);
