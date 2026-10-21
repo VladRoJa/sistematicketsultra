@@ -5,6 +5,8 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 
+import pytest
+
 from sqlalchemy import BigInteger, Column, MetaData, Table, create_engine
 from sqlalchemy.orm import Session
 
@@ -90,7 +92,9 @@ def _sale(identifier, phone, branch, amount, *, order, time="18:00:00",
     )
 
 
-def _source_session(*, incomplete=False):
+def _source_session(*, incomplete=False, purpose="NEW_SALE",
+                    source="FUNNEL_PORTFOLIO"):
+    campaign = SimpleNamespace(id=8, purpose=purpose, source=source)
     children = [
         _child(80, 16, "channel-a", "6861000001"),
         _child(81, 17, "channel-b", "6641000002"),
@@ -135,17 +139,21 @@ def _source_session(*, incomplete=False):
         _sale(5, "6861000001", "BRANCH B", "549", order="D"),
     ]
     if incomplete:
-        return ReadSession(children, recipients, snapshots)
-    return ReadSession(children, recipients, snapshots, observations,
+        return ReadSession([campaign], children, recipients, snapshots)
+    return ReadSession([campaign], children, recipients, snapshots, observations,
                        [canonical], aliases, sales)
 
 
-def test_multichild_worker_joins_proven_iventas_to_one_gasca_cut():
-    session = _source_session()
+@pytest.mark.parametrize(("purpose", "source"), [
+    ("NEW_SALE", "FUNNEL_PORTFOLIO"),
+    ("REACTIVATION", "EXPIRED_MEMBERS"),
+])
+def test_multichild_worker_joins_proven_iventas_to_one_gasca_cut(purpose, source):
+    session = _source_session(purpose=purpose, source=source)
     result = service.reconcile_multichild_campaign(
         campaign_id=8, session=session,
     )
-    assert session.queries == 7
+    assert session.queries == 8
     assert result["status"] == "READY"
     assert result["submitted_child_ids"] == [80, 81]
     assert result["provider_snapshot_ids"] == [180, 181]
@@ -161,9 +169,30 @@ def test_multichild_worker_missing_provider_snapshot_is_pending_not_zero():
     result = service.reconcile_multichild_campaign(
         campaign_id=8, session=session,
     )
-    assert session.queries == 3
+    assert session.queries == 4
     assert result["status"] == "NO_PROVIDER_SNAPSHOT"
     assert result["buyers_attributed"] is None
+    assert result["revenue_attributed_mxn"] is None
+
+
+@pytest.mark.parametrize(("purpose", "source", "expected_reason"), [
+    ("NEW_SALE", "ACTIVE_MEMBERS", "INDIRECT_OR_ACTIVE_MEMBERS_AUDIENCE"),
+    ("REACTIVATION", "ACTIVE_MEMBERS", "INDIRECT_OR_ACTIVE_MEMBERS_AUDIENCE"),
+    ("NEW_SALE", "EXPIRED_MEMBERS", "PURPOSE_SOURCE_NOT_DIRECT"),
+    ("UNCLASSIFIED", "FUNNEL_PORTFOLIO", "PURPOSE_SOURCE_NOT_DIRECT"),
+])
+def test_multichild_worker_unsupported_objective_never_scans_gasca(
+    purpose, source, expected_reason,
+):
+    session = _source_session(purpose=purpose, source=source)
+    result = service.reconcile_multichild_campaign(
+        campaign_id=8, session=session,
+    )
+    assert session.queries == 1
+    assert result["status"] == "NOT_ATTRIBUTABLE"
+    assert result["reason"] == expected_reason
+    assert result["buyers_attributed"] is None
+    assert result["transactions_attributed"] is None
     assert result["revenue_attributed_mxn"] is None
 
 
