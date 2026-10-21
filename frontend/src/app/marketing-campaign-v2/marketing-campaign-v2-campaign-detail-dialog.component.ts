@@ -27,6 +27,8 @@ import {
   CampaignV2SubmitResponse,
   CampaignV2RecipientSummary,
   CampaignV2RecipientProviderStatusCode,
+  CampaignV2FollowupPreview,
+  CampaignV2FollowupStatus,
   CampaignV2Source,
   CampaignV2SourceMetadata,
 } from './marketing-campaign-v2.models';
@@ -45,6 +47,10 @@ import {
   campaignV2ReportingValue,
 } from './marketing-campaign-v2.logic';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
+import {
+  CAMPAIGN_V2_FOLLOWUP_STATUS_OPTIONS,
+  toggleCampaignV2FollowupStatus,
+} from './marketing-campaign-v2-followup.logic';
 import {
   MarketingCampaignV2PreparationDialogComponent,
   CampaignV2PreparationDialogData,
@@ -170,6 +176,14 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   ];
   private recipientsRequestId = 0;
 
+  readonly followupStatusOptions = CAMPAIGN_V2_FOLLOWUP_STATUS_OPTIONS;
+  selectedFollowupStatuses: CampaignV2FollowupStatus[] = [];
+  followupPreviewResult: CampaignV2FollowupPreview | null = null;
+  followupPreviewLoading = false;
+  followupPreviewError = '';
+  private followupPreviewRequestId = 0;
+  private followupKnownSnapshotId: number | null = null;
+
   loadingCampaignDetail = false;
   loadingRecipients = false;
   loadingReporting = false;
@@ -211,6 +225,12 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   }
 
   loadCampaign(): void {
+    // No conservar un preview si se recarga la campaña de origen.
+    ++this.followupPreviewRequestId;
+    this.followupPreviewResult = null;
+    this.followupPreviewError = '';
+    this.followupPreviewLoading = false;
+    this.followupKnownSnapshotId = null;
     this.loadingCampaignDetail = true;
     this.error = '';
     this.service.getCampaign(this.data.campaignId)
@@ -228,6 +248,69 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
           this.error = this.errorMessage(error, 'No fue posible cargar la campaña.');
         },
       });
+  }
+
+  isFollowupStatusSelected(status: CampaignV2FollowupStatus): boolean {
+    return this.selectedFollowupStatuses.includes(status);
+  }
+
+  toggleFollowupStatus(status: CampaignV2FollowupStatus): void {
+    this.selectedFollowupStatuses = toggleCampaignV2FollowupStatus(
+      this.selectedFollowupStatuses, status,
+    );
+    // A previous preview never applies to a new union of states.
+    ++this.followupPreviewRequestId;
+    this.followupPreviewResult = null;
+    this.followupPreviewError = '';
+    this.followupPreviewLoading = false;
+  }
+
+  previewFollowup(): void {
+    if (
+      this.followupPreviewLoading ||
+      !this.campaign ||
+      this.selectedFollowupStatuses.length === 0
+    ) {
+      return;
+    }
+    const requestId = ++this.followupPreviewRequestId;
+    const statuses = [...this.selectedFollowupStatuses];
+    this.followupPreviewResult = null;
+    this.followupPreviewError = '';
+    this.followupPreviewLoading = true;
+    this.service.previewFollowup(
+      this.data.campaignId,
+      statuses,
+      this.followupKnownSnapshotId,
+    )
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: result => {
+          if (requestId !== this.followupPreviewRequestId) {
+            return;
+          }
+          this.followupPreviewLoading = false;
+          this.followupKnownSnapshotId = result.source_snapshot_id;
+          this.followupPreviewResult = result;
+        },
+        error: (error: HttpErrorResponse) => {
+          if (requestId !== this.followupPreviewRequestId) {
+            return;
+          }
+          this.followupPreviewLoading = false;
+          this.followupPreviewError = error.status === 409
+            ? 'El corte del proveedor cambió o no está disponible. Cierra y vuelve a abrir la campaña para actualizar la vista previa.'
+            : this.errorMessage(error, 'No fue posible calcular la audiencia de seguimiento.');
+        },
+      });
+  }
+
+  followupObservedAt(value: string | null): string {
+    return value ? this.formatHistoryObservedAt(value) : 'Sin fecha disponible';
+  }
+
+  followupFingerprintShort(value: string): string {
+    return value.slice(0, 12);
   }
 
   selectRecipientsProviderFilter(filter: RecipientProviderFilter): void {
