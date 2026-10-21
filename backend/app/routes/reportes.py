@@ -253,7 +253,15 @@ def exportar_movimientos():
             worksheet.autofilter(0, 0, len(df), len(df.columns) - 1)
 
         output.seek(0)
-        filename = f'Movimientos_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        alcance = "GENERAL"
+        if sucursal_id:
+            sucursal_export = Sucursal.query.get(sucursal_id)
+            alcance = (
+                secure_filename(sucursal_export.sucursal or "").upper()
+                if sucursal_export else ""
+            ) or f"SUCURSAL_{sucursal_id}"
+        fecha_descarga = datetime.now(ZoneInfo("America/Tijuana")).strftime("%Y-%m-%d")
+        filename = f"Movimientos_{alcance}_{fecha_descarga}.xlsx"
         return send_file(output, as_attachment=True, download_name=filename,
                          mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     except Exception as e:
