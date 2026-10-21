@@ -20,6 +20,11 @@ from app.services.marketing_campaign_v2_creation_service import (
     MarketingCampaignV2EmptyAudienceError,
     MarketingCampaignV2PreviewMismatchError,
 )
+from app.services.marketing_campaign_v2_followup_preview_service import (
+    FollowupPreviewValidationError,
+    FollowupPreviewConflictError,
+    FollowupPreviewUnavailableError,
+)
 from app.services.marketing_campaign_v2_query_service import (
     MarketingCampaignV2NotFoundError,
     MarketingCampaignV2QueryValidationError,
@@ -243,6 +248,7 @@ class TestMarketingCampaignV2Routes:
             ("get", "/api/marketing/campaigns-v2/reporting/export"),
             ("get", "/api/marketing/campaigns-v2/1/report"),
             ("get", "/api/marketing/campaigns-v2/1/provider-stats"),
+            ("post", "/api/marketing/campaigns-v2/1/followup/preview"),
             ("post", "/api/marketing/campaigns-v2/1/provider-stats/snapshots"),
             ("get", "/api/marketing/campaigns-v2/1/provider-stats/snapshots"),
             ("get", "/api/marketing/campaigns-v2/1/provider-stats/snapshots/latest"),
@@ -1633,6 +1639,111 @@ class TestMarketingCampaignV2Routes:
                 headers=self.headers,
             )
         assert response.status_code == 400
+        service.assert_not_called()
+
+    def test_followup_preview_is_scoped_read_only_and_passes_selected_statuses(self):
+        expected = {
+            "source_snapshot_id": 101,
+            "selected_statuses": ["DELIVERED", "VIEWED"],
+            "candidate_count": 3,
+            "read_only": True,
+            "campaign_created": False,
+            "send_authorized": False,
+        }
+        with (
+            self._auth(self.partial_access),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.marketing_branch_keys_by_sucursal_ids",
+                return_value={11: "BRANCH A", 22: "BRANCH B"},
+            ),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.build_followup_preview",
+                return_value=expected,
+            ) as service,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/2/followup/preview",
+                json={
+                    "selected_statuses": ["VIEWED", "DELIVERED"],
+                    "expected_snapshot_id": 101,
+                },
+                headers=self.headers,
+            )
+        assert response.status_code == 200
+        assert response.get_json() == expected
+        assert service.call_count == 1
+        kwargs = service.call_args.kwargs
+        assert kwargs["source_campaign_id"] == 2
+        assert kwargs["selected_statuses"] == ["VIEWED", "DELIVERED"]
+        assert kwargs["expected_snapshot_id"] == 101
+        assert set(kwargs["allowed_sucursal_keys"]) == {"BRANCH A", "BRANCH B"}
+
+    def test_followup_preview_rejects_unexpected_json_and_query_params(self):
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.build_followup_preview",
+            ) as service,
+        ):
+            unexpected = self.client.post(
+                "/api/marketing/campaigns-v2/2/followup/preview",
+                json={"selected_statuses": ["VIEWED"], "recipient_ids": [10]},
+                headers=self.headers,
+            )
+            query = self.client.post(
+                "/api/marketing/campaigns-v2/2/followup/preview?force=true",
+                json={"selected_statuses": ["VIEWED"]},
+                headers=self.headers,
+            )
+            empty = self.client.post(
+                "/api/marketing/campaigns-v2/2/followup/preview",
+                json=["VIEWED"],
+                headers=self.headers,
+            )
+        assert [unexpected.status_code, query.status_code, empty.status_code] == [400, 400, 400]
+        service.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("exc", "status"),
+        [
+            (FollowupPreviewValidationError("Estado inválido."), 400),
+            (FollowupPreviewConflictError("Snapshot cambió."), 409),
+            (FollowupPreviewUnavailableError("Sin snapshot."), 409),
+            (MarketingCampaignV2NotFoundError("Sin permiso."), 404),
+        ],
+    )
+    def test_followup_preview_maps_service_errors_without_exposing_contacts(self, exc, status):
+        with (
+            self._auth(),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.build_followup_preview",
+                side_effect=exc,
+            ),
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/2/followup/preview",
+                json={"selected_statuses": ["VIEWED"]},
+                headers=self.headers,
+            )
+        assert response.status_code == status
+        assert "rows" not in response.get_json()
+
+    def test_followup_preview_denies_users_without_campaign_management(self):
+        restricted = SimpleNamespace(
+            is_global=True, branch_ids=(), can_manage_campaigns=False,
+        )
+        with (
+            self._auth(restricted),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.build_followup_preview",
+            ) as service,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/2/followup/preview",
+                json={"selected_statuses": ["VIEWED"]},
+                headers=self.headers,
+            )
+        assert response.status_code == 403
         service.assert_not_called()
 
     def test_recipient_detail_does_not_cross_campaign_boundary(self):
