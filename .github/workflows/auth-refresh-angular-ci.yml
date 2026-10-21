@@ -1,0 +1,36 @@
+name: Auth Refresh Angular CI
+
+on:
+  pull_request:
+    paths:
+      - "frontend/src/app/core/auth/**"
+      - "frontend/src/environments/**"
+      - "frontend/tests/auth-refresh-coordinator.test.cjs"
+      - ".github/workflows/auth-refresh-angular-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  angular:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Test refresh singleflight
+        run: node --test tests/auth-refresh-coordinator.test.cjs
+      - name: Type-check Angular
+        run: npx tsc --noEmit --project tsconfig.app.json
+      - name: Production build
+        run: npm run build -- --configuration production
