@@ -663,3 +663,140 @@ def test_commercial_attribution_groups_invoice_lines_once():
         "transactions_attributed": 2,
         "revenue_attributed_mxn": "898.00",
     }
+
+
+def test_commercial_attribution_batch_validation_rejects_bad_ids():
+    from app.services.marketing_campaign_v2_reporting_service import (
+        MarketingCampaignV2ReportingValidationError,
+        _validate_commercial_batch_ids,
+    )
+
+    for bad in ([], [True], ["26"], [0], [-1], [26, 26], list(range(1, 102)), None):
+        with pytest.raises(MarketingCampaignV2ReportingValidationError):
+            _validate_commercial_batch_ids(bad)
+    assert _validate_commercial_batch_ids([27, 26]) == (27, 26)
+
+
+def test_commercial_attribution_batch_is_scoped_and_has_constant_query_count(monkeypatch):
+    from contextlib import nullcontext
+    from datetime import date
+    from decimal import Decimal
+    from app.services.marketing_campaign_v2_reporting_service import (
+        build_campaign_v2_commercial_attribution_batch,
+    )
+    import app.services.marketing_sales_funnel_service as funnel
+
+    class Query:
+        def __init__(self, values):
+            self.values = values
+
+        def filter(self, *args):
+            return self
+
+        def join(self, *args):
+            return self
+
+        def order_by(self, *args):
+            return self
+
+        def yield_per(self, *args):
+            return self
+
+        def all(self):
+            return self.values
+
+        def __iter__(self):
+            return iter(self.values)
+
+    class FakeSession:
+        def __init__(self, data):
+            self.data = iter(data)
+            self.queries = 0
+            self.no_autoflush = nullcontext()
+
+        def query(self, *args):
+            self.queries += 1
+            return Query(next(self.data))
+
+    def campaign(identifier, scope="AZAHARES CUL"):
+        return SimpleNamespace(
+            id=identifier,
+            audience_definition_json={
+                "filters": {"allowed_sucursal_keys": [scope]}
+            },
+        )
+
+    when = datetime(2026, 10, 20, 23, 0, 53, tzinfo=timezone.utc)
+
+    def child(identifier, provider, submitted=when):
+        return SimpleNamespace(
+            campaign_v2_id=identifier, provider_campaign_id=provider,
+            submitted_at=submitted, sucursal_id=16,
+        )
+
+    def sale(identifier, phone, product, amount):
+        return SimpleNamespace(
+            id=identifier, snapshot_id=3332, telefono=phone,
+            sucursal="AZAHARES CUL", estatus="ACTIVO",
+            descripcion=product, total=Decimal(amount),
+            fecha="2026-10-21", hora="10:27:00",
+            clave_producto="MEMBRESIA", tipo="CONTRATO",
+            id_orden=f"ORDER-{identifier}", folio=f"FOLIO-{identifier}",
+        )
+
+    session = FakeSession([
+        # 1. Campaign visibility in ONE query, not one per campaign.
+        [campaign(i) for i in (26, 27, 28, 29, 30)],
+        # 2. All child records for requested campaigns.
+        [child(26, "provider-26"), child(28, "p-28a"),
+         child(28, "p-28b"), child(29, "provider-29"),
+         child(30, None, None)],
+        # 3. Provider snapshots.
+        [SimpleNamespace(
+            id=1, campaign_v2_id=26, provider_campaign_id="provider-26",
+            fetched_at=when,
+        )],
+        # 4. One later canonical month-cut.
+        [SimpleNamespace(
+            id=3332, business_date=date(2026, 10, 21),
+            captured_at=datetime(2026, 10, 21, 18, 0, tzinfo=timezone.utc),
+        )],
+        # 5. Already filtered SUCCESSFUL+joined recipient observations.
+        [(1, 26, "6861111111"), (1, 26, "6863333333")],
+        # 6. Sales read once for the page, including an unrelated failure.
+        [sale(1, "6861111111", "CONVENIOS $549", "549"),
+         sale(2, "6862222222", "DOMICILIADO $399", "399"),
+         sale(3, "6863333333", "RECURRENTE $649 LE", "649")],
+    ])
+    monkeypatch.setattr(
+        funnel, "_load_branch_alias_map",
+        lambda: {"AZAHARES CUL": 16},
+    )
+
+    result = build_campaign_v2_commercial_attribution_batch(
+        campaign_ids=[27, 26, 28, 29, 30],
+        allowed_sucursal_keys=None,
+        session=session,
+    )
+    assert session.queries == 6  # Constant read count for a whole page.
+    rows = result["rows"]
+    assert [r["campaign_id"] for r in rows] == [27, 26, 28, 29, 30]
+    assert [r["status"] for r in rows] == [
+        "UNSUPPORTED_MULTICHILD_OR_UNSENT", "READY",
+        "UNSUPPORTED_MULTICHILD_OR_UNSENT", "NO_PROVIDER_SNAPSHOT",
+        "NOT_SUBMITTED",
+    ]
+    assert rows[1]["buyers_attributed"] == 2
+    assert rows[1]["transactions_attributed"] == 2
+    assert rows[1]["revenue_attributed_mxn"] == "1198.00"
+    assert rows[1]["successful_recipient_count"] == 2
+    assert all(r["revenue_attributed_mxn"] is None for i, r in enumerate(rows) if i != 1)
+
+    denied_session = FakeSession([[campaign(26, "AZAHARES CUL")]])
+    with pytest.raises(MarketingCampaignV2NotFoundError):
+        build_campaign_v2_commercial_attribution_batch(
+            campaign_ids=[26],
+            allowed_sucursal_keys=["OTRA SUCURSAL"],
+            session=denied_session,
+        )
+    assert denied_session.queries == 1
