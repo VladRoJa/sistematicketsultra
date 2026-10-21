@@ -374,8 +374,8 @@ export class InventarioComponent implements OnInit {
 
   aplicarFiltro(col: string): void {
     confirmarSeleccion(this.filtros[col]);
-    this.inventariosFiltrados = filtrarTabla(this.inventarios, this.filtros);
-    this.actualizarOpcionesDeFiltros();
+    // Mantener el universo original de opciones: reducirlo a las filas
+    // filtradas haría que una selección parcial pareciera "todas".
     this.refrescarVista();
     this.menuTrigger?.closeMenu();
   }
@@ -386,8 +386,6 @@ export class InventarioComponent implements OnInit {
     this.filtros[col].temporales = this.filtros[col].opciones.map((op) => ({
       ...op,
     }));
-    this.inventariosFiltrados = filtrarTabla(this.inventarios, this.filtros);
-    this.actualizarOpcionesDeFiltros();
     this.refrescarVista();
     this.menuTrigger?.closeMenu();
   }
@@ -405,39 +403,6 @@ export class InventarioComponent implements OnInit {
     return Boolean(
       this.filtros[col]?.opciones.some((op) => !op.seleccionado),
     );
-  }
-
-  actualizarOpcionesDeFiltros(): void {
-    for (const col of this.columnasFiltrables) {
-      const valoresUnicos = Array.from(
-        new Set(
-          this.inventariosFiltrados
-            .map((row) => String(row[col] ?? ''))
-            .filter((value) => value !== ''),
-        ),
-      );
-
-      this.filtros[col].opciones = valoresUnicos.map((valor) => {
-        const existente = this.filtros[col].opciones.find(
-          (op) => op.valor === valor,
-        );
-        return {
-          valor,
-          seleccionado: existente ? existente.seleccionado : true,
-        };
-      });
-
-      this.filtros[col].temporales = this.filtros[col].opciones.map((op) => ({
-        ...op,
-      }));
-
-      if (this.filtros[col].texto) {
-        const texto = this.filtros[col].texto.toLowerCase();
-        this.filtros[col].temporales = this.filtros[col].temporales.filter(
-          (op) => op.valor.toLowerCase().includes(texto),
-        );
-      }
-    }
   }
 
   abrirDialogoImportar(): void {
