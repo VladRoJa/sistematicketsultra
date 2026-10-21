@@ -187,6 +187,49 @@
       <mat-icon>close</mat-icon>
     </button>
   </div>
+  <!-- Solo ADMICORP: incidencias verificadas de automatización. -->
+  <div
+    *ngIf="shouldShowAutomationAlert"
+    class="validation-floating-alert automation-floating-alert"
+    [class.validation-floating-alert--warning]="automationAlertSeverity === 'WARNING'"
+    [class.validation-floating-alert--critical]="automationAlertSeverity === 'CRITICAL'"
+    cdkDrag
+    cdkDragBoundary=".suite-floating-layer"
+    [cdkDragFreeDragPosition]="automationAlertPosition"
+    (cdkDragStarted)="onAutomationAlertDragStarted()"
+    (cdkDragEnded)="onAutomationAlertDragEnded($event)"
+    (click)="goToAutomationControl()"
+    (keydown.enter)="goToAutomationControl()"
+    (keydown.space)="goToAutomationControl()"
+    role="button"
+    tabindex="0"
+    aria-label="Revisar incidencias de automatizaciones"
+  >
+    <div class="validation-floating-alert__halo"></div>
+    <div class="validation-floating-alert__content">
+      <span class="validation-floating-alert__icon-wrap">
+        <mat-icon class="validation-floating-alert__icon" aria-hidden="true">
+          {{ automationAlertSeverity === 'CRITICAL' ? 'error_outline' : 'warning_amber' }}
+        </mat-icon>
+      </span>
+      <span class="validation-floating-alert__text">
+        <strong>{{ automationAlertTitle }}</strong>
+        <small>{{ automationAlertSubtitle }}</small>
+      </span>
+      <span class="validation-floating-alert__badge">
+        {{ automationAlertUnavailable ? '!' : automationAlertCount }}
+      </span>
+    </div>
+    <button
+      type="button"
+      class="validation-floating-alert__close"
+      aria-label="Ocultar alerta por 3 minutos"
+      title="Ocultar por 3 minutos"
+      (click)="dismissAutomationAlert($event)"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
 </div>
 
 
