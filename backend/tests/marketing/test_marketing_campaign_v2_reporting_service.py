@@ -947,7 +947,7 @@ def test_commercial_attribution_multichild_sums_only_valid_separate_branch_sales
         },
     ]
     result = _summarize_campaign_v2_multichild_membership_movements(
-        child_inputs=inputs, alias_map={"AZAHARES": 16, "BRANCH B": 17},
+        child_inputs=inputs, expected_submitted_child_ids=(100, 101), alias_map={"AZAHARES": 16, "BRANCH B": 17},
     )
     assert result == {
         "successful_recipient_count": 2,
@@ -978,5 +978,11 @@ def test_commercial_attribution_multichild_sums_only_valid_separate_branch_sales
             inputs[1],
         ]
         _summarize_campaign_v2_multichild_membership_movements(
-            child_inputs=duplicate, alias_map={"AZAHARES": 16, "BRANCH B": 17},
+            child_inputs=duplicate, expected_submitted_child_ids=(100, 101), alias_map={"AZAHARES": 16, "BRANCH B": 17},
+        )
+    with pytest.raises(MarketingCampaignV2ReportingValidationError, match="Falta evidencia"):
+        _summarize_campaign_v2_multichild_membership_movements(
+            child_inputs=[inputs[0]],
+            expected_submitted_child_ids=(100, 101),
+            alias_map={"AZAHARES": 16, "BRANCH B": 17},
         )
