@@ -515,83 +515,122 @@ def registrar_movimiento():
         if tipo not in ['entrada', 'salida'] or not isinstance(inventarios, list) or not inventarios:
             return error_response('Datos inválidos')
 
-        # Validar todo el lote antes de crear el movimiento o modificar existencias.
-        cantidades_validadas = []
+        # Primero validar todo el payload, sin crear movimientos ni modificar stock.
+        validados = []
         for indice, producto in enumerate(inventarios, start=1):
             if not isinstance(producto, dict):
                 return error_response(f'Producto {indice}: formato inválido')
             cantidad = _parse_positive_movement_quantity(producto.get('cantidad'))
             if cantidad is None:
                 return error_response(f'Producto {indice}: cantidad debe ser un entero positivo')
-            cantidades_validadas.append(cantidad)
+            inventario_id = _coerce_int_or_none(producto.get('inventario_id'))
+            if inventario_id is None or inventario_id <= 0:
+                return error_response(f'Producto {indice}: inventario_id inválido')
+            validados.append((producto, inventario_id, cantidad))
 
-        nuevo_movimiento = MovimientoInventario(
-            tipo_movimiento=tipo,
-            sucursal_id=sucursal_id,
-            usuario_id=usuario_id,
-            observaciones=observaciones,
-            fecha=datetime.now(tz)
-        )
-        db.session.add(nuevo_movimiento)
-        db.session.flush()  # Obtener ID antes de commit
-
-        for p, cantidad in zip(inventarios, cantidades_validadas):
-            inventario_id = p['inventario_id']
-
-            # Cargar inventario para conocer sus unidades
-            inv = InventarioGeneral.query.get(inventario_id)
+        # FOR UPDATE sobre los artículos, en orden estable. Esto serializa
+        # incluso la primera entrada cuando aún no existe InventarioSucursal.
+        # Además protege contra carreras al crear el par (inventario, sucursal).
+        inventarios_por_id = {}
+        for inventario_id in sorted({item[1] for item in validados}):
+            inv = (
+                InventarioGeneral.query
+                .filter_by(id=inventario_id)
+                .with_for_update()
+                .first()
+            )
             if not inv:
                 db.session.rollback()
                 return error_response(f'Inventario {inventario_id} no existe')
+            inventarios_por_id[inventario_id] = inv
 
-            # Unidad capturada en el movimiento (por defecto la unidad base)
-            unidad_mov = normalizar_campo(p.get('unidad_medida')) or inv.unidad_medida
-
-            # Calcular factor de conversión
+        detalles_preparados = []
+        totales_por_inventario = {}
+        for producto, inventario_id, cantidad in validados:
+            inv = inventarios_por_id[inventario_id]
+            unidad_mov = normalizar_campo(producto.get('unidad_medida')) or inv.unidad_medida
             factor = 1
             if inv.unidad_compra and inv.factor_compra and inv.factor_compra > 1:
                 if unidad_mov == normalizar_campo(inv.unidad_compra):
                     factor = inv.factor_compra
 
-            # Convertir a unidad base
             cantidad_base = cantidad * factor
-
-            # Guardar siempre en unidad base
-            detalle = DetalleMovimiento(
-                movimiento_id=nuevo_movimiento.id,
-                inventario_id=inventario_id,
-                cantidad=cantidad_base,
-                unidad_medida=inv.unidad_medida
+            detalles_preparados.append((inventario_id, cantidad_base, inv.unidad_medida))
+            totales_por_inventario[inventario_id] = (
+                totales_por_inventario.get(inventario_id, 0) + cantidad_base
             )
-            db.session.add(detalle)
 
-            # Control por sucursal
-            inventario_sucursal = InventarioSucursal.query.filter_by(
-                inventario_id=inventario_id,
-                sucursal_id=sucursal_id
-            ).first()
-
-            if not inventario_sucursal:
+        # Bloquear todas las existencias antes de validar una sola salida.
+        # Repeticiones de un mismo artículo se comprueban como una suma única.
+        ajustes = []
+        for inventario_id in sorted(totales_por_inventario):
+            inventario_sucursal = (
+                InventarioSucursal.query
+                .filter_by(inventario_id=inventario_id, sucursal_id=sucursal_id)
+                .with_for_update()
+                .first()
+            )
+            nuevo = inventario_sucursal is None
+            if nuevo:
+                if tipo == 'salida':
+                    db.session.rollback()
+                    return error_response(
+                        f'Stock insuficiente para el inventario {inventario_id}', 409
+                    )
                 inventario_sucursal = InventarioSucursal(
                     inventario_id=inventario_id,
                     sucursal_id=sucursal_id,
-                    stock=0
+                    stock=0,
                 )
+
+            stock_actual = inventario_sucursal.stock
+            if stock_actual is None or stock_actual < 0:
+                db.session.rollback()
+                return error_response(
+                    f'Stock inválido para el inventario {inventario_id}', 409
+                )
+            cantidad_total = totales_por_inventario[inventario_id]
+            if tipo == 'salida' and stock_actual < cantidad_total:
+                db.session.rollback()
+                return error_response(
+                    f'Stock insuficiente para el inventario {inventario_id}', 409
+                )
+            stock_nuevo = (
+                stock_actual + cantidad_total
+                if tipo == 'entrada'
+                else stock_actual - cantidad_total
+            )
+            ajustes.append((inventario_sucursal, stock_nuevo, nuevo))
+
+        # Todas las validaciones ya pasaron. Persistir lote y stock en un commit.
+        nuevo_movimiento = MovimientoInventario(
+            tipo_movimiento=tipo,
+            sucursal_id=sucursal_id,
+            usuario_id=usuario_id,
+            observaciones=observaciones,
+            fecha=datetime.now(tz),
+        )
+        db.session.add(nuevo_movimiento)
+        db.session.flush()
+
+        for inventario_id, cantidad_base, unidad_medida in detalles_preparados:
+            db.session.add(DetalleMovimiento(
+                movimiento_id=nuevo_movimiento.id,
+                inventario_id=inventario_id,
+                cantidad=cantidad_base,
+                unidad_medida=unidad_medida,
+            ))
+
+        for inventario_sucursal, stock_nuevo, nuevo in ajustes:
+            inventario_sucursal.stock = stock_nuevo
+            if nuevo:
                 db.session.add(inventario_sucursal)
-
-            if tipo == 'entrada':
-                inventario_sucursal.stock += cantidad_base
-            else:  # salida
-                if inventario_sucursal.stock < cantidad_base:
-                    db.session.rollback()
-                    return error_response(f'Stock insuficiente para el inventario {inventario_id}')
-                inventario_sucursal.stock -= cantidad_base
-
 
         db.session.commit()
         return success_response('Movimiento registrado correctamente', {'movimiento_id': nuevo_movimiento.id})
 
     except Exception as e:
+        db.session.rollback()
         return manejar_error(e, "registrar_movimiento")
 
 # Ver historial de movimientos
