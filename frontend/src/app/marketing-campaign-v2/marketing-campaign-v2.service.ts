@@ -68,6 +68,7 @@ import {
   CampaignV2RecipientPage,
   CampaignV2RecipientProviderStatusCode,
   CampaignV2FollowupPreview,
+  CampaignV2FollowupFrozen,
   CampaignV2FollowupStatus,
   CampaignV2ReportingFilters,
   CampaignV2SubmitResponse,
@@ -465,6 +466,22 @@ export class MarketingCampaignV2Service {
     }
     return this.http.post<CampaignV2FollowupPreview>(
       `${this.apiUrl}/${campaignId}/followup/preview`, body,
+    );
+  }
+
+  freezeFollowup(
+    campaignId: number,
+    name: string,
+    preview: CampaignV2FollowupPreview,
+  ): Observable<CampaignV2FollowupFrozen> {
+    return this.http.post<CampaignV2FollowupFrozen>(
+      `${this.apiUrl}/${campaignId}/followup/freeze`, {
+        name,
+        selected_statuses: [...preview.selected_statuses],
+        source_snapshot_id: preview.source_snapshot_id,
+        expected_preview_fingerprint: preview.preview_fingerprint,
+        expected_recipient_count: preview.candidate_count,
+      },
     );
   }
 
