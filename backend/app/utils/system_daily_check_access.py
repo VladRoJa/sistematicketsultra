@@ -14,10 +14,10 @@ def has_system_daily_check_mvp_access(user) -> bool:
 
 
 def has_system_daily_check_bi_access(user) -> bool:
-    """Acceso a panel Salud de Sistemas: SISTEMAS o ADMICORP."""
+    """Acceso BI: rol SISTEMAS o cuentas específicas ADMICORP y SOPORTE."""
     return user is not None and (
         _normalize(getattr(user, "rol", None)) == "SISTEMAS"
-        or _normalize(getattr(user, "username", None)) == "ADMICORP"
+        or _normalize(getattr(user, "username", None)) in {"ADMICORP", "SOPORTE"}
     )
 
 
