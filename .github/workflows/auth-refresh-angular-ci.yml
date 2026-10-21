@@ -4,6 +4,13 @@ on:
   pull_request:
     paths:
       - "frontend/src/app/core/auth/**"
+      - "frontend/src/app/layout/layout.component.ts"
+      - "frontend/src/app/services/auth.service.ts"
+      - "frontend/src/app/services/inactividad.service.ts"
+      - "frontend/src/app/interceptors/auth.interceptor.ts"
+      - "frontend/src/app/guards/auth.guard.ts"
+      - "frontend/src/main.ts"
+      - "frontend/tests/auth-session-activity.test.cjs"
       - "frontend/src/environments/**"
       - "frontend/tests/auth-refresh-coordinator.test.cjs"
       - ".github/workflows/auth-refresh-angular-ci.yml"
@@ -29,7 +36,7 @@ jobs:
       - name: Install locked dependencies
         run: npm ci --legacy-peer-deps --no-audit --no-fund
       - name: Test refresh singleflight
-        run: node --test tests/auth-refresh-coordinator.test.cjs
+        run: node --test tests/auth-refresh-coordinator.test.cjs tests/auth-session-activity.test.cjs
       - name: Type-check Angular
         run: npx tsc --noEmit --project tsconfig.app.json
       - name: Production build
