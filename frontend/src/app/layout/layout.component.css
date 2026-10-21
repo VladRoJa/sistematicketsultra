@@ -833,3 +833,21 @@
     padding: 9px 44px 9px 12px;
   }
 }
+/* ADMICORP: reutiliza la píldora v1; no comparte estado con Tickets. */
+.automation-floating-alert {
+  width: min(340px, calc(100vw - 32px));
+  min-width: 0;
+}
+
+.automation-floating-alert .validation-floating-alert__text strong,
+.automation-floating-alert .validation-floating-alert__text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 640px) {
+  .automation-floating-alert {
+    right: 16px;
+    bottom: 90px;
+  }
+}
