@@ -306,10 +306,15 @@ def _puede_cerrar_ticket_desde_cero(user: UserORM, ticket: Ticket) -> bool:
     - No incluye corporativo.
     - No incluye gerente regional.
     """
-    # Mantenimiento siempre requiere revisión de coordinación y doble check.
-    # El cierre de limpieza no puede saltarse ese contrato.
+    # Única excepción en Mantenimiento: limpieza de tickets aún sin atención.
+    # Un ticket iniciado o con ciclo de cierre conserva coordinación y doble check.
     if ticket.departamento_id == 1:
-        return False
+        if (
+            (ticket.estado or "").strip().lower() != "abierto"
+            or ticket.fecha_en_progreso is not None
+            or bool(ticket.estado_cierre)
+        ):
+            return False
 
     if _es_admin_para_cierre_desde_cero(user):
         return True
@@ -2570,6 +2575,19 @@ def cierre_gerente_desde_cero(ticket_id):
             }), 400
 
         ahora = datetime.now(timezone.utc)
+
+        # Los cierres administrativos de Mantenimiento conservan actor/motivo
+        # en el historial; no representan trabajo técnico concluido.
+        if t.departamento_id == 1:
+            t._agregar_evento_historial_cierre(
+                evento="cierre_administrativo_gerente",
+                actor_username=user.username,
+                motivo=motivo,
+                estado_anterior=estado_actual,
+                estado_nuevo="finalizado",
+                estado_cierre_anterior=t.estado_cierre,
+                estado_cierre_nuevo="cerrado_por_gerente_desde_cero",
+            )
 
         t.estado = "finalizado"
         t.fecha_finalizado = ahora
