@@ -416,6 +416,7 @@ export interface CampaignV2AudienceDefinition {
 
 export type CampaignV2CommercialAttributionStatus =
   | 'READY'
+  | 'NOT_ATTRIBUTABLE'
   | 'NOT_SUBMITTED'
   | 'UNSUPPORTED_MULTICHILD_OR_UNSENT'
   | 'NO_PROVIDER_SNAPSHOT'
