@@ -231,6 +231,7 @@ from app.services.marketing_campaign_v2_reporting_service import (
     build_campaign_v2_individual_report,
     build_campaign_v2_reporting_export_dataset,
     build_campaign_v2_commercial_attribution,
+    build_campaign_v2_commercial_attribution_batch,
 )
 from app.services.marketing_campaign_v2_reporting_excel_service import (
     XLSX_MIMETYPE,
@@ -731,6 +732,37 @@ def list_campaign_v2_endpoint():
         return _error(str(exc), 400)
     except Exception:
         return _error("Falló la consulta de Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.post(
+    "/campaigns-v2/commercial-attribution/summary"
+)
+@jwt_required()
+def campaign_v2_commercial_attribution_summary_endpoint():
+    """Batch read for the visible saved-campaign page, without dispatch side effects."""
+    try:
+        _, access = _resolve_campaign_v2_request()
+        _validate_query_args(set())
+        payload = _parse_payload({"campaign_ids"})
+        result = build_campaign_v2_commercial_attribution_batch(
+            campaign_ids=payload.get("campaign_ids"),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2NotFoundError:
+        return _error("Una o más campañas no están disponibles.", 404)
+    except (
+        MarketingCampaignV2RouteValidationError,
+        MarketingCampaignV2QueryValidationError,
+        MarketingCampaignV2ReportingValidationError,
+    ) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        current_app.logger.exception("Error en resumen comercial Campaign V2")
+        return _error("Falló el resumen de atribución comercial.", 500)
 
 
 @marketing_campaign_v2_bp.post(
