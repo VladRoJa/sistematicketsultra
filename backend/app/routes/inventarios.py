@@ -13,6 +13,8 @@ import qrcode
 from app. extensions import db
 from app.models.catalogos import CategoriaInventario
 from app.models.inventario import InventarioGeneral, MovimientoInventario, DetalleMovimiento, InventarioSucursal
+from app.models.pm_bitacora import PmBitacoraORM
+from app.models.pm_preventivo import PmPreventivoConfigORM
 from app.models.mantenimiento_equipo import FamiliaEquipoORM
 from app.models.ticket_model import Ticket
 from app.models.user_model import UserORM
@@ -839,13 +841,38 @@ def eliminar_inventario(inventario_id):
         if forbidden:
             return forbidden
 
-        inventario = InventarioGeneral.query.get(inventario_id)
+        # Bloquear el artículo mientras comprobamos sus relaciones, para
+        # impedir nuevas referencias concurrentes durante esta transacción.
+        inventario = (
+            InventarioGeneral.query
+            .filter_by(id=inventario_id)
+            .with_for_update()
+            .first()
+        )
         if not inventario:
             return error_response('Inventario no encontrado', 404)
 
-        # Verifica que no haya movimientos asociados antes de borrar
+        def conflicto(mensaje):
+            db.session.rollback()
+            return error_response(mensaje, 409)
+
+        # No borrar un artículo que otros módulos siguen utilizando.
         if DetalleMovimiento.query.filter_by(inventario_id=inventario_id).first():
-            return error_response('No se puede eliminar: el inventario tiene movimientos registrados')
+            return conflicto('No se puede eliminar: el inventario tiene movimientos registrados')
+
+        # Una asignación de sucursal también bloquea el borrado con stock 0.
+        if InventarioSucursal.query.filter_by(inventario_id=inventario_id).first():
+            return conflicto('No se puede eliminar: el inventario está asignado a sucursales')
+
+        if Ticket.query.filter_by(aparato_id=inventario_id).first():
+            return conflicto('No se puede eliminar: el inventario está asociado a tickets')
+
+        # Ambas relaciones de PM usan ON DELETE CASCADE: proteger su historial.
+        if PmBitacoraORM.query.filter_by(inventario_id=inventario_id).first():
+            return conflicto('No se puede eliminar: el inventario tiene bitácoras de mantenimiento')
+
+        if PmPreventivoConfigORM.query.filter_by(inventario_id=inventario_id).first():
+            return conflicto('No se puede eliminar: el inventario tiene programación preventiva')
 
         db.session.delete(inventario)
         db.session.commit()
