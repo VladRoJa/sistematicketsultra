@@ -428,7 +428,7 @@ export class InventarioComponent implements OnInit {
   }
 
   isTodoSeleccionado(col: string): boolean {
-    const visibles = obtenerOpcionesVisibles(this.filtros[col]);
+    const visibles = this.obtenerOpcionesVisibles(this.filtros[col]);
     return visibles.length > 0 && visibles.every((item) => item.seleccionado);
   }
 
