@@ -1485,6 +1485,7 @@ def _summarize_campaign_v2_membership_movements(
 def _summarize_campaign_v2_multichild_membership_movements(
     *,
     child_inputs: Iterable[Mapping[str, Any]],
+    expected_submitted_child_ids: Iterable[int],
     alias_map: Mapping[str, int],
 ) -> dict[str, Any]:
     """Combine proven per-child results without adding snapshots as revenue.
@@ -1494,6 +1495,15 @@ def _summarize_campaign_v2_multichild_membership_movements(
     deliberately does not fetch either source and MUST NOT mark missing
     evidence as a zero. Children with no successful sends may have zero sales.
     """
+    expected_ids = tuple(expected_submitted_child_ids)
+    if (
+        not expected_ids
+        or any(type(identifier) is not int or identifier <= 0 for identifier in expected_ids)
+        or len(set(expected_ids)) != len(expected_ids)
+    ):
+        raise MarketingCampaignV2ReportingValidationError(
+            "El alcance de children enviados es inválido."
+        )
     seen_child_ids: set[int] = set()
     seen_phones: set[str] = set()
     total_buyers = 0
@@ -1535,9 +1545,9 @@ def _summarize_campaign_v2_multichild_membership_movements(
             **metrics,
         })
 
-    if not children:
+    if seen_child_ids != set(expected_ids):
         raise MarketingCampaignV2ReportingValidationError(
-            "No hay children enviados con evidencia comercial completa."
+            "Falta evidencia comercial de uno o más children enviados."
         )
     return {
         "successful_recipient_count": len(seen_phones),
