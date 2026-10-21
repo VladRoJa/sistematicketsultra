@@ -21,6 +21,29 @@ class CommercialChildResolutionError(ValueError):
     """Persisted child/recipient evidence is inconsistent; fail closed."""
 
 
+_DIRECT_ATTRIBUTION_PAIRS = frozenset({
+    ("NEW_SALE", "FUNNEL_PORTFOLIO"),
+    ("REACTIVATION", "EXPIRED_MEMBERS"),
+})
+
+
+def direct_attribution_ineligibility_reason(
+    *, purpose: str | None, source: str | None,
+) -> str | None:
+    """Fail closed when the contacted person is not the direct sales target.
+
+    Referrals to third parties need a separate inviter/invitee link, which a
+    matching recipient phone and subsequent membership payment cannot prove.
+    """
+    normalized = (str(purpose or "").strip().upper(),
+                  str(source or "").strip().upper())
+    if normalized in _DIRECT_ATTRIBUTION_PAIRS:
+        return None
+    if normalized[1] == "ACTIVE_MEMBERS":
+        return "INDIRECT_OR_ACTIVE_MEMBERS_AUDIENCE"
+    return "PURPOSE_SOURCE_NOT_DIRECT"
+
+
 @dataclass(frozen=True)
 class SubmittedChildRecipientScope:
     child_id: int
