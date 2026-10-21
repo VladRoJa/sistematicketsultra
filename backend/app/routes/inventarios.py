@@ -267,6 +267,37 @@ def _familia_equipo_actual_payload(inventario):
         'familia_equipo': familia.to_dict() if familia else None,
     }
 
+
+
+def _sucursales_visibles_por_inventario(inventario_ids, sucursales_ids=None):
+    """Obtener nombres reales de sucursales en lote, según permisos de lectura.
+
+    None significa acceso global; una lista limita explícitamente las sucursales.
+    """
+    ids = sorted(set(inventario_ids))
+    if not ids or (sucursales_ids is not None and not sucursales_ids):
+        return {}
+
+    consulta = (
+        db.session.query(InventarioSucursal.inventario_id, Sucursal.sucursal)
+        .join(Sucursal, Sucursal.sucursal_id == InventarioSucursal.sucursal_id)
+        .filter(InventarioSucursal.inventario_id.in_(ids))
+    )
+    if sucursales_ids is not None:
+        consulta = consulta.filter(
+            InventarioSucursal.sucursal_id.in_(sucursales_ids)
+        )
+
+    nombres = {}
+    for inventario_id, nombre in consulta.all():
+        if nombre and nombre.strip():
+            nombres.setdefault(inventario_id, set()).add(nombre.strip())
+
+    return {
+        inventario_id: ', '.join(sorted(sucursales, key=str.casefold))
+        for inventario_id, sucursales in nombres.items()
+    }
+
 # ----------------------------------------------------------------------
 # RUTAS
 # ----------------------------------------------------------------------
@@ -422,6 +453,12 @@ def obtener_inventario():
             # q = q.filter(InventarioSucursal.stock > 0)
 
             rows = q.order_by(InventarioGeneral.nombre.asc()).all()
+            scope_sucursales = (
+                [sucursal_id] if sucursal_id is not None else allowed_sucursales
+            )
+            sucursales_por_id = _sucursales_visibles_por_inventario(
+                (inv.id for inv, _ in rows), scope_sucursales
+            )
             data = []
             for inv, stock in rows:
                 categoria_res, subcat_res = _resolver_categoria(inv)
@@ -429,6 +466,7 @@ def obtener_inventario():
                     'id': inv.id,
                     'tipo': inv.tipo,
                     'nombre': inv.nombre,
+                    'sucursales': sucursales_por_id.get(inv.id, 'Sin asignación'),
                     'descripcion': inv.descripcion,
                     'marca': inv.marca,
                     'proveedor': inv.proveedor,
@@ -457,6 +495,9 @@ def obtener_inventario():
             q = q.filter(InventarioGeneral.categoria_inventario_id == categoria_inventario_id)
 
         invs = q.order_by(InventarioGeneral.nombre.asc()).all()
+        sucursales_por_id = _sucursales_visibles_por_inventario(
+            (inv.id for inv in invs)
+        )
         data = []
         for inv in invs:
             categoria_res, subcat_res = _resolver_categoria(inv)
@@ -464,6 +505,7 @@ def obtener_inventario():
                 'id': inv.id,
                 'tipo': inv.tipo,
                 'nombre': inv.nombre,
+                'sucursales': sucursales_por_id.get(inv.id, 'Sin asignación'),
                 'descripcion': inv.descripcion,
                 'marca': inv.marca,
                 'proveedor': inv.proveedor,
