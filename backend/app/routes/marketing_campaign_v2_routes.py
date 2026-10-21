@@ -1120,12 +1120,13 @@ def export_campaign_v2_sendable_package_endpoint(campaign_id: int):
 def list_campaign_v2_recipients_endpoint(campaign_id: int):
     try:
         _, access = _resolve_campaign_v2_request()
-        _validate_query_args({"page", "page_size"})
+        _validate_query_args({"page", "page_size", "provider_status"})
         result = list_campaign_v2_recipients(
             campaign_id=campaign_id,
             allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
             page=request.args.get("page", 1),
             page_size=request.args.get("page_size", 50),
+            provider_status=request.args.get("provider_status"),
             session=db.session,
         )
         return jsonify(result), 200

@@ -338,6 +338,139 @@ def test_recipient_status_failure_is_not_confused_with_no_observation(session):
     assert result["rows"][1]["provider_status"]["delivery_bucket"] is None
 
 
+def _add_filter_fixture(session):
+    """Dos snapshots: el filtro jamás debe reutilizar los estados viejos."""
+    older = datetime(2026, 10, 2, 12, 0, tzinfo=timezone.utc)
+    newer = datetime(2026, 10, 4, 12, 0, tzinfo=timezone.utc)
+    session.add_all([_snapshot(300, 2, older), _snapshot(301, 2, newer)])
+    session.add_all([
+        MarketingCampaignV2RecipientORM(
+            id=recipient_id,
+            campaign_id=2,
+            phone_mx10=f"68610000{recipient_id}",
+            source="ACTIVE_MEMBERS",
+            conflict_fields_json=[],
+        )
+        for recipient_id in (12, 13, 14, 15)
+    ])
+    specs = [
+        (300, 10, "FAILED", None),
+        (300, 11, "SUCCESSFUL", "VIEWED"),
+        (301, 10, "SUCCESSFUL", "VIEWED"),
+        (301, 11, "FAILED", None),
+        (301, 12, "SUCCESSFUL", "VIEWED"),
+        (301, 13, "SUCCESSFUL", "SENT"),
+        (301, 14, "SUCCESSFUL", "DELIVERED"),
+    ]
+    session.add_all([
+        MarketingCampaignV2ProviderRecipientObservationORM(
+            snapshot_id=snapshot_id,
+            normalized_phone=(
+                "mx10:6861000001" if recipient_id == 10 else
+                "mx10:6861000002" if recipient_id == 11 else
+                f"mx10:68610000{recipient_id}"
+            ),
+            campaign_recipient_id=recipient_id,
+            outcome=outcome,
+            delivery_bucket=bucket,
+            button_labels_json=[],
+        )
+        for snapshot_id, recipient_id, outcome, bucket in specs
+    ])
+    session.commit()
+
+
+def test_filter_by_latest_status_before_count_and_pagination(session):
+    _add_filter_fixture(session)
+    expected = {
+        "VIEWED": [10, 12],
+        "FAILED": [11],
+        "SENT": [13],
+        "DELIVERED": [14],
+        "NO_PROVIDER_STATUS": [15],
+        "SUCCESSFUL": [],
+        "NO_SNAPSHOT": [],
+    }
+    for status, ids in expected.items():
+        result = list_campaign_v2_recipients(
+            campaign_id=2,
+            allowed_sucursal_keys=("BRANCH A",),
+            provider_status=status,
+            page=1,
+            page_size=100,
+            session=session,
+        )
+        assert result["total"] == len(ids), status
+        assert [r["id"] for r in result["rows"]] == ids, status
+        assert all(r["provider_status"]["status"] == status for r in result["rows"])
+
+    first = list_campaign_v2_recipients(
+        campaign_id=2, allowed_sucursal_keys=("BRANCH A",),
+        provider_status="VIEWED", page=1, page_size=1, session=session,
+    )
+    second = list_campaign_v2_recipients(
+        campaign_id=2, allowed_sucursal_keys=("BRANCH A",),
+        provider_status=" viewed ", page=2, page_size=1, session=session,
+    )
+    past_end = list_campaign_v2_recipients(
+        campaign_id=2, allowed_sucursal_keys=("BRANCH A",),
+        provider_status="VIEWED", page=3, page_size=1, session=session,
+    )
+    assert first["total"] == second["total"] == past_end["total"] == 2
+    assert first["total_pages"] == second["total_pages"] == 2
+    assert [r["id"] for r in first["rows"]] == [10]
+    assert [r["id"] for r in second["rows"]] == [12]
+    assert past_end["rows"] == []
+    assert first["rows"][0]["evidence_count"] == 2
+    assert second["rows"][0]["evidence_count"] == 0
+    assert first["rows"][0]["provider_status"]["snapshot_id"] == 301
+
+
+def test_unfiltered_recipients_are_backwards_compatible(session):
+    _add_filter_fixture(session)
+    for status in (None, "", "ALL", " all "):
+        result = list_campaign_v2_recipients(
+            campaign_id=2,
+            allowed_sucursal_keys=("BRANCH A",),
+            page=1, page_size=100,
+            provider_status=status,
+            session=session,
+        )
+        assert result["total"] == 6
+        assert result["total_pages"] == 1
+        assert [r["id"] for r in result["rows"]] == [10, 11, 12, 13, 14, 15]
+
+
+def test_filter_no_snapshot_not_equivalent_to_failed_or_unmatched(session):
+    no_snapshot = list_campaign_v2_recipients(
+        campaign_id=3, allowed_sucursal_keys=("BRANCH A", "BRANCH B"),
+        provider_status="NO_SNAPSHOT", session=session,
+    )
+    assert no_snapshot["total"] == 1
+    assert no_snapshot["rows"][0]["provider_status"]["status"] == "NO_SNAPSHOT"
+    for status in ("FAILED", "NO_PROVIDER_STATUS", "VIEWED"):
+        empty = list_campaign_v2_recipients(
+            campaign_id=3, allowed_sucursal_keys=("BRANCH A", "BRANCH B"),
+            provider_status=status, session=session,
+        )
+        assert empty["total"] == 0
+        assert empty["rows"] == []
+
+
+def test_recipient_provider_filter_rejects_invalid_and_preserves_scope(session):
+    for bad in ("RESPONDIÓ", "UNREAD", "NOT_VIEWED", "FAILED,VIEWED", "abc", 1, True):
+        with pytest.raises(MarketingCampaignV2QueryValidationError):
+            list_campaign_v2_recipients(
+                campaign_id=2, allowed_sucursal_keys=("BRANCH A",),
+                provider_status=bad, session=session,
+            )
+    with pytest.raises(MarketingCampaignV2NotFoundError):
+        list_campaign_v2_recipients(
+            campaign_id=3, allowed_sucursal_keys=("BRANCH A",),
+            provider_status="FAILED", session=session,
+        )
+
+
 def test_recipient_detail_reads_only_frozen_evidence_in_evidence_order(session):
     result = get_campaign_v2_recipient(
         campaign_id=2,
