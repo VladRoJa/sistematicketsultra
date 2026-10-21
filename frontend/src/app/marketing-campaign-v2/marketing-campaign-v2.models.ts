@@ -1101,6 +1101,30 @@ export type CampaignV2RecipientProviderStatusCode =
   | 'DELIVERED'
   | 'VIEWED';
 
+export type CampaignV2FollowupStatus = Exclude<
+  CampaignV2RecipientProviderStatusCode, 'NO_SNAPSHOT'
+>;
+
+export interface CampaignV2FollowupPreview {
+  source_campaign_id: number;
+  source_campaign_name: string;
+  source_snapshot_id: number;
+  source_snapshot_fetched_at: string | null;
+  source_snapshot_fingerprint: string;
+  selected_statuses: CampaignV2FollowupStatus[];
+  match_mode: 'ANY';
+  source_recipient_count: number;
+  status_counts: Record<CampaignV2FollowupStatus, number>;
+  candidate_count: number;
+  preview_fingerprint_version: string;
+  preview_fingerprint: string;
+  read_only: true;
+  campaign_created: false;
+  send_authorized: false;
+  sendable_count: null;
+  next_action: string;
+}
+
 export interface CampaignV2RecipientProviderStatus {
   status: CampaignV2RecipientProviderStatusCode;
   snapshot_id: number | null;
