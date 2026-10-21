@@ -48,6 +48,7 @@ jobs:
             tests/marketing/test_marketing_campaign_v2_provider_stats.py \
             tests/marketing/test_marketing_campaign_v2_provider_stats_snapshots.py \
             tests/marketing/test_marketing_campaign_v2_provider_stats_scheduler_service.py \
+            tests/marketing/test_marketing_scheduler_worker.py \
             tests/marketing/test_marketing_campaign_v2_quota_service.py \
             tests/marketing/test_marketing_campaign_v2_quota_routes.py \
             tests/marketing/test_marketing_campaign_v2_preparation_service.py \
@@ -65,7 +66,8 @@ jobs:
         run: |
           python -m pytest -q --tb=short \
             tests/marketing/test_marketing_campaign_v2_reporting_service.py \
-            -k commercial_attribution
+            tests/marketing/test_marketing_campaign_v2_commercial_materialization_service.py \
+            -k "commercial_attribution or multichild"
 
   frontend:
     runs-on: ubuntu-latest
