@@ -5,7 +5,7 @@
 # BLUEPRINT: AUTENTICACIÓN (LOGIN, SESIÓN)
 # -------------------------------------------------------------------------------
 
-from flask import Blueprint, request, jsonify, make_response, Response
+from flask import Blueprint, request, jsonify, make_response, Response, current_app
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required
 from datetime import timedelta
 from app.models.user_model import UserORM
@@ -13,6 +13,9 @@ import logging
 from app.config import Config
 import json
 from app. utils.error_handler import manejar_error
+from app.services.auth_refresh_service import (
+    RefreshDenied, issue_refresh, rotate_refresh, revoke_refresh,
+)
 
 
 # Configurar logging
@@ -20,6 +23,70 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 auth_bp = Blueprint('auth', __name__)
+
+
+def _refresh_enabled():
+    return bool(current_app.config.get("AUTH_REFRESH_ENABLED", False))
+
+
+def _origin_allowed():
+    origin = request.headers.get("Origin", "")
+    allowed = current_app.config.get("CORS_ORIGINS", [])
+    if origin not in allowed:
+        return False
+    # Never send session cookies to insecure public origins.
+    return origin.startswith("https://") or origin.startswith(
+        ("http://localhost", "http://127.0.0.1")
+    )
+
+
+def _set_refresh_cookie(response, value):
+    response.set_cookie(
+        current_app.config.get("AUTH_REFRESH_COOKIE_NAME", "suite_refresh"),
+        value,
+        max_age=int(current_app.config.get("AUTH_REFRESH_ABSOLUTE_HOURS", 12)) * 3600,
+        httponly=True,
+        secure=True,
+        samesite="Strict",
+        path="/api/auth",
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def _clear_refresh_cookie(response):
+    response.delete_cookie(
+        current_app.config.get("AUTH_REFRESH_COOKIE_NAME", "suite_refresh"),
+        path="/api/auth",
+        secure=True,
+        httponly=True,
+        samesite="Strict",
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def _claims_for(user, session_id=None):
+    claims = {
+        "rol": user.rol,
+        "sucursal_id": user.sucursal_id,
+        "sucursales_ids": user.sucursales_ids,
+        "department_id": user.department_id,
+    }
+    if session_id is not None:
+        claims["sid"] = session_id
+    return claims
+
+
+def _user_response(user):
+    return {
+        "id": user.id,
+        "username": user.username,
+        "rol": user.rol,
+        "sucursal_id": user.sucursal_id,
+        "sucursales_ids": user.sucursales_ids,
+        "department_id": user.department_id,
+    }
 
 # -------------------------------------------------------------------------------
 # RUTA: LOGIN (Generar token JWT)
@@ -35,31 +102,28 @@ def login():
         user = UserORM.get_by_username(username)
         if user:
             if user.verify_password(password):
-                # ✅ Usar configuración global de expiración
+                refresh_cookie = None
+                session_id = None
+                if _refresh_enabled():
+                    if not _origin_allowed():
+                        return jsonify({"error": "INVALID_ORIGIN"}), 403
+                    refresh_cookie, session_id = issue_refresh(user.id)
+
                 token = create_access_token(
                     identity=str(user.id),
-                    additional_claims={
-                        "rol": user.rol,
-                        "sucursal_id": user.sucursal_id,
-                        "sucursales_ids": user.sucursales_ids,
-                        "department_id": user.department_id,
-                    },
+                    additional_claims=_claims_for(user, session_id),
                 )
-                # Log de login exitoso SIN mostrar el token ni contraseña
-                logger.info(f"Usuario '{username}' inició sesión correctamente.")
+                logger.info("Inicio de sesión exitoso para usuario id=%s", user.id)
 
-                return jsonify({
+                response = jsonify({
                     "message": "Login exitoso",
                     "token": token,
-                    "user": {
-                        "id": user.id,
-                        "username": user.username,
-                        "rol": user.rol,
-                        "sucursal_id": user.sucursal_id,
-                        "sucursales_ids": user.sucursales_ids,
-                        "department_id": user.department_id,
-                    }
-                }), 200
+                    "user": _user_response(user),
+                })
+                response.headers["Cache-Control"] = "no-store"
+                if refresh_cookie:
+                    _set_refresh_cookie(response, refresh_cookie)
+                return response, 200
             else:
                 logger.warning(f"Intento de login fallido: contraseña incorrecta para usuario '{username}'.")
         else:
@@ -70,6 +134,51 @@ def login():
     except Exception as e:
         return manejar_error(e, "login")
 
+
+
+
+@auth_bp.route("/refresh", methods=["POST"])
+def refresh_session():
+    """Rotate a browser cookie, never accept raw refresh secrets in JSON."""
+    if not _refresh_enabled():
+        return jsonify({"error": "REFRESH_DISABLED"}), 404
+    if not _origin_allowed():
+        return jsonify({"error": "INVALID_ORIGIN"}), 403
+
+    raw_cookie = request.cookies.get(
+        current_app.config.get("AUTH_REFRESH_COOKIE_NAME", "suite_refresh")
+    )
+    try:
+        user, rotated_cookie, session_id = rotate_refresh(raw_cookie)
+    except RefreshDenied as exc:
+        return _clear_refresh_cookie(
+            jsonify({"error": exc.code})
+        ), 401
+
+    access_token = create_access_token(
+        identity=str(user.id),
+        additional_claims=_claims_for(user, session_id),
+    )
+    response = jsonify({
+        "token": access_token,
+        "user": _user_response(user),
+    })
+    return _set_refresh_cookie(response, rotated_cookie), 200
+
+
+@auth_bp.route("/logout", methods=["POST"])
+def revoke_session():
+    """Revoke only this browser session; login with password is unchanged."""
+    if not _refresh_enabled():
+        return jsonify({"error": "REFRESH_DISABLED"}), 404
+    if not _origin_allowed():
+        return jsonify({"error": "INVALID_ORIGIN"}), 403
+    revoke_refresh(
+        request.cookies.get(
+            current_app.config.get("AUTH_REFRESH_COOKIE_NAME", "suite_refresh")
+        )
+    )
+    return _clear_refresh_cookie(jsonify({"status": "logged_out"})), 200
 
 # -------------------------------------------------------------------------------
 # RUTA: OBTENER INFORMACIÓN DE SESIÓN ACTIVA

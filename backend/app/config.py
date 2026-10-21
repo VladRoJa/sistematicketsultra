@@ -32,6 +32,14 @@ class Config:
     JWT_HEADER_NAME = "Authorization"
     JWT_HEADER_TYPE = "Bearer"
     JWT_VERIFY_EXPIRATION = True
+    # Opt-in rollout: never write refresh sessions before migration is applied.
+    AUTH_REFRESH_ENABLED = os.getenv(
+        "AUTH_REFRESH_ENABLED", "false"
+    ).strip().lower() in {"1", "true", "yes", "on"}
+    AUTH_REFRESH_IDLE_MINUTES = 45
+    AUTH_REFRESH_ABSOLUTE_HOURS = 12
+    AUTH_REFRESH_COOKIE_NAME = "suite_refresh"
+
 
     # Base de datos
     SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")
