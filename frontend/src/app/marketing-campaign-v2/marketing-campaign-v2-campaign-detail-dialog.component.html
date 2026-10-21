@@ -182,7 +182,7 @@
       <div class="section-heading">
         <div>
           <h3>Destinatarios guardados</h3>
-          <p>{{ recipientsTotal | number }} registros · la cohorte congelada no se recalcula</p>
+          <p>{{ campaign?.recipient_count | number }} destinatarios congelados · la cohorte no se recalcula</p>
         </div>
         <div class="recipient-actions">
           <span *ngIf="loadingRecipients" class="loading-inline">Cargando…</span>
@@ -190,7 +190,7 @@
             mat-stroked-button
             type="button"
             (click)="exportDeliveryPackage()"
-            [disabled]="exportingDeliveryPackage || recipientsTotal <= 0"
+            [disabled]="exportingDeliveryPackage || !campaign?.recipient_count"
           >
             {{ exportingDeliveryPackage ? 'Preparando…' : 'Descargar lista original' }}
           </button>
@@ -198,7 +198,7 @@
             mat-stroked-button
             type="button"
             (click)="exportSendablePackage()"
-            [disabled]="exportingSendablePackage || recipientsTotal <= 0"
+            [disabled]="exportingSendablePackage || !campaign?.recipient_count"
           >
             {{ exportingSendablePackage ? 'Preparando…' : 'Descargar lista para envío' }}
           </button>
@@ -445,6 +445,23 @@
         </ng-container>
       </section>
 
+      <div class="recipient-filter-toolbar">
+        <span class="recipient-filter-title">Filtrar por estado</span>
+        <div class="recipient-filter-buttons" role="group" aria-label="Filtrar destinatarios por estado del envío">
+          <button
+            *ngFor="let filter of recipientStatusFilters"
+            class="recipient-filter-button"
+            [class.is-selected]="recipientsProviderFilter === filter.value"
+            [attr.aria-pressed]="recipientsProviderFilter === filter.value"
+            type="button"
+            (click)="selectRecipientsProviderFilter(filter.value)"
+          >{{ filter.label }}</button>
+        </div>
+        <span *ngIf="!loadingRecipients" class="recipient-filter-summary" aria-live="polite">
+          {{ recipientsTotal | number }} resultados
+        </span>
+      </div>
+
       <p *ngIf="recipients.length" class="recipients-status-note">
         Estados individuales de iVentas · {{ recipientsStatusSnapshotLabel() }}.
         La información proviene del último corte guardado, no de una consulta en tiempo real.
@@ -473,7 +490,7 @@
           </tbody>
         </table>
       </div>
-      <ng-template #emptyRecipients><p class="muted">No hay destinatarios congelados.</p></ng-template>
+      <ng-template #emptyRecipients><p *ngIf="!loadingRecipients && !error" class="muted recipient-filter-empty">{{ recipientsEmptyMessage }}</p></ng-template>
 
       <div class="pager" *ngIf="recipientsTotalPages > 1">
         <button mat-stroked-button type="button" (click)="previousRecipientsPage()" [disabled]="recipientsPage <= 1 || loadingRecipients">Anterior</button>

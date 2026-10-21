@@ -66,6 +66,7 @@ import {
   CampaignV2Purpose,
   CampaignV2RecipientDetail,
   CampaignV2RecipientPage,
+  CampaignV2RecipientProviderStatusCode,
   CampaignV2ReportingFilters,
   CampaignV2SubmitResponse,
   CampaignV2TariffClassificationRequest,
@@ -431,10 +432,14 @@ export class MarketingCampaignV2Service {
     campaignId: number,
     page: number,
     pageSize: number,
+    providerStatus: CampaignV2RecipientProviderStatusCode | 'ALL' = 'ALL',
   ): Observable<CampaignV2RecipientPage> {
-    const params = new HttpParams()
+    let params = new HttpParams()
       .set('page', String(page))
       .set('page_size', String(pageSize));
+    if (providerStatus !== 'ALL') {
+      params = params.set('provider_status', providerStatus);
+    }
 
     return this.http.get<CampaignV2RecipientPage>(
       `${this.apiUrl}/${campaignId}/recipients`,

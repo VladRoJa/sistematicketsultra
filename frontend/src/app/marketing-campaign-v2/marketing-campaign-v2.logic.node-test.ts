@@ -712,8 +712,53 @@ test('Campaign V2 muestra estados de destinatarios desde snapshot sin filtros pa
   assert.ok(ts.includes("timeZone: 'America/Tijuana'"));
   assert.ok(css.includes('.recipient-status--viewed'));
   assert.ok(css.includes('.recipient-status--failed'));
-  // No filtrar localmente la página de 25; eso recortaría mal la audiencia global.
-  assert.equal(html.includes('Filtrar por estado'), false);
+  // El selector visible usa el filtro SQL backend; no filtra la página actual.
+  assert.equal(html.includes('Filtrar por estado'), true);
+});
+
+test('Campaign V2 filtra todos los destinatarios desde servidor sin afectar exports', () => {
+  const dir = path.join(process.cwd(), 'src/app/marketing-campaign-v2');
+  const component = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-campaign-detail-dialog.component.ts'),
+    'utf8',
+  );
+  const service = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2.service.ts'),
+    'utf8',
+  );
+  const html = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-campaign-detail-dialog.component.html'),
+    'utf8',
+  );
+  const css = fs.readFileSync(
+    path.join(dir, 'marketing-campaign-v2-campaign-detail-dialog.component.css'),
+    'utf8',
+  );
+
+  assert.ok(service.includes("params = params.set('provider_status', providerStatus)"));
+  assert.ok(service.includes("providerStatus !== 'ALL'"));
+  assert.ok(component.includes('this.recipientsProviderFilter'));
+  assert.ok(component.includes('selectRecipientsProviderFilter(filter: RecipientProviderFilter)'));
+  assert.ok(component.includes('this.recipientsPage = 1;'));
+  assert.ok(component.includes('this.data.campaignId, page, this.recipientsPageSize, this.recipientsProviderFilter'));
+  assert.ok(component.includes('const requestId = ++this.recipientsRequestId;'));
+  assert.equal(component.split('if (requestId !== this.recipientsRequestId)').length - 1, 2);
+  assert.equal(component.includes('this.recipients.filter('), false);
+
+  for (const status of ['ALL', 'VIEWED', 'DELIVERED', 'SENT', 'FAILED', 'NO_PROVIDER_STATUS', 'NO_SNAPSHOT']) {
+    assert.ok(component.includes(`value: '${status}'`), status);
+  }
+
+  assert.ok(html.includes('(click)="selectRecipientsProviderFilter(filter.value)"'));
+  assert.ok(html.includes('[attr.aria-pressed]="recipientsProviderFilter === filter.value"'));
+  assert.ok(html.includes('{{ recipientsTotal | number }} resultados'));
+  assert.ok(html.includes('recipient-filter-toolbar'));
+  assert.ok(css.includes('.recipient-filter-button.is-selected'));
+  assert.ok(html.includes('recipientsEmptyMessage'));
+  assert.ok(component.includes('!this.campaign?.recipient_count'));
+  assert.ok(html.includes('!campaign?.recipient_count'));
+  assert.equal(html.includes('exportingDeliveryPackage || recipientsTotal <= 0'), false);
+  assert.equal(html.includes('exportingSendablePackage || recipientsTotal <= 0'), false);
 });
 
 test('M30 reporting query vacío omite params y fechas usan límites locales con offset', () => {
