@@ -1635,3 +1635,263 @@ def build_campaign_v2_commercial_attribution(
             "successful_recipient_count": len(successful_phones),
             **metrics,
         }
+
+
+def _validate_commercial_batch_ids(campaign_ids: Any) -> tuple[int, ...]:
+    """Bound an on-demand dashboard read to one visible page of campaigns."""
+    if not isinstance(campaign_ids, list) or not (1 <= len(campaign_ids) <= 100):
+        raise MarketingCampaignV2ReportingValidationError(
+            "campaign_ids debe contener entre 1 y 100 IDs."
+        )
+    if any(type(value) is not int or value <= 0 for value in campaign_ids):
+        raise MarketingCampaignV2ReportingValidationError(
+            "campaign_ids debe contener enteros positivos."
+        )
+    if len(set(campaign_ids)) != len(campaign_ids):
+        raise MarketingCampaignV2ReportingValidationError(
+            "campaign_ids no permite duplicados."
+        )
+    return tuple(campaign_ids)
+
+
+def _commercial_batch_base(campaign_id: int, status: str) -> dict[str, Any]:
+    return {
+        "campaign_id": campaign_id,
+        "status": status,
+        "buyers_attributed": None,
+        "transactions_attributed": None,
+        "revenue_attributed_mxn": None,
+    }
+
+
+def build_campaign_v2_commercial_attribution_batch(
+    *,
+    campaign_ids: Any,
+    allowed_sucursal_keys: Iterable[str] | None,
+    session=None,
+) -> dict[str, Any]:
+    """Page-scoped read-only dashboard reconciliation; never N queries per campaign.
+
+    The initial calculator intentionally covers single-child, single-month
+    campaigns, just like the individually QA-validated endpoint. Multi-child,
+    unsent and missing-evidence campaigns return a status, never a false zero.
+    """
+    from collections import defaultdict
+
+    ids = _validate_commercial_batch_ids(campaign_ids)
+    active_session = session if session is not None else db.session
+    scope = _normalize_current_scope(allowed_sucursal_keys)
+
+    with active_session.no_autoflush:
+        campaigns = active_session.query(MarketingCampaignV2ORM).filter(
+            MarketingCampaignV2ORM.id.in_(ids)
+        ).all()
+        by_id = {int(campaign.id): campaign for campaign in campaigns}
+        # Fail closed for the whole batch: no partial data leaks across branches.
+        if len(by_id) != len(ids) or any(
+            not _campaign_visible_to_scope(by_id[identifier], scope)
+            for identifier in ids
+        ):
+            raise MarketingCampaignV2NotFoundError(
+                "Una o más campañas no están disponibles."
+            )
+
+        children = active_session.query(
+            MarketingCampaignV2ProviderCampaignORM
+        ).filter(
+            MarketingCampaignV2ProviderCampaignORM.campaign_v2_id.in_(ids)
+        ).all()
+        children_by_campaign: dict[int, list[Any]] = defaultdict(list)
+        for child in children:
+            children_by_campaign[int(child.campaign_v2_id)].append(child)
+
+        statuses: dict[int, dict[str, Any]] = {}
+        candidates: dict[int, tuple[Any, datetime]] = {}
+        for identifier in ids:
+            child_rows = children_by_campaign.get(identifier, [])
+            if len(child_rows) != 1:
+                statuses[identifier] = _commercial_batch_base(
+                    identifier, "UNSUPPORTED_MULTICHILD_OR_UNSENT"
+                )
+                continue
+            child = child_rows[0]
+            if child.submitted_at is None or not child.provider_campaign_id:
+                statuses[identifier] = _commercial_batch_base(
+                    identifier, "NOT_SUBMITTED"
+                )
+                continue
+            submitted = child.submitted_at
+            if submitted.tzinfo is None:
+                submitted = submitted.replace(tzinfo=timezone.utc)
+            candidates[identifier] = (
+                child, submitted.astimezone(_COMMERCIAL_TZ)
+            )
+
+        if not candidates:
+            return {"rows": [statuses[i] for i in ids]}
+
+        # Read provider snapshots in bulk and choose the latest for the actual
+        # provider campaign attached to each submitted child.
+        snapshots = active_session.query(
+            MarketingCampaignV2ProviderStatsSnapshotORM
+        ).filter(
+            MarketingCampaignV2ProviderStatsSnapshotORM.campaign_v2_id.in_(
+                tuple(candidates)
+            )
+        ).order_by(
+            MarketingCampaignV2ProviderStatsSnapshotORM.fetched_at.desc(),
+            MarketingCampaignV2ProviderStatsSnapshotORM.id.desc(),
+        ).all()
+        provider_by_campaign = {}
+        for snapshot in snapshots:
+            identifier = int(snapshot.campaign_v2_id)
+            child = candidates[identifier][0]
+            if (
+                identifier not in provider_by_campaign
+                and snapshot.provider_campaign_id == child.provider_campaign_id
+            ):
+                provider_by_campaign[identifier] = snapshot
+        for identifier in candidates:
+            if identifier not in provider_by_campaign:
+                statuses[identifier] = _commercial_batch_base(
+                    identifier, "NO_PROVIDER_SNAPSHOT"
+                )
+
+        eligible = {
+            identifier: value for identifier, value in candidates.items()
+            if identifier in provider_by_campaign
+        }
+        if not eligible:
+            return {"rows": [statuses[i] for i in ids]}
+
+        # One canonical Venta Total cut per campaign's send month; never union
+        # cumulative snapshots or silently roll into a later month.
+        first_date = min(value[1].date() for value in eligible.values())
+        last_end = max(
+            _commercial_month_end_exclusive(value[1].date())
+            for value in eligible.values()
+        )
+        venta_snapshots = active_session.query(VentaTotalSnapshotORM).filter(
+            VentaTotalSnapshotORM.report_type_key == "venta_total",
+            VentaTotalSnapshotORM.snapshot_kind == "daily",
+            VentaTotalSnapshotORM.is_canonical.is_(True),
+            VentaTotalSnapshotORM.business_date >= first_date,
+            VentaTotalSnapshotORM.business_date < last_end,
+        ).order_by(
+            VentaTotalSnapshotORM.business_date.desc(),
+            VentaTotalSnapshotORM.captured_at.desc(),
+            VentaTotalSnapshotORM.id.desc(),
+        ).all()
+        venta_by_campaign = {}
+        for identifier, (_, sent_local) in eligible.items():
+            sent_utc = sent_local.astimezone(timezone.utc)
+            end_date = _commercial_month_end_exclusive(sent_local.date())
+            for snapshot in venta_snapshots:
+                captured_at = snapshot.captured_at
+                if captured_at.tzinfo is None:
+                    captured_at = captured_at.replace(tzinfo=timezone.utc)
+                if (
+                    sent_local.date() <= snapshot.business_date < end_date
+                    and captured_at >= sent_utc
+                ):
+                    venta_by_campaign[identifier] = snapshot
+                    break
+            if identifier not in venta_by_campaign:
+                statuses[identifier] = _commercial_batch_base(
+                    identifier, "NO_CANONICAL_VENTA_TOTAL"
+                )
+
+        eligible = {
+            identifier: value for identifier, value in eligible.items()
+            if identifier in venta_by_campaign
+        }
+        if not eligible:
+            return {"rows": [statuses[i] for i in ids]}
+
+        # Query only successful provider observations and their frozen phones,
+        # not the entire frozen audience of large historical campaigns.
+        provider_ids = {
+            int(provider_by_campaign[i].id): i for i in eligible
+        }
+        successful_rows = active_session.query(
+            MarketingCampaignV2ProviderRecipientObservationORM.snapshot_id,
+            MarketingCampaignV2RecipientORM.campaign_id,
+            MarketingCampaignV2RecipientORM.phone_mx10,
+        ).join(
+            MarketingCampaignV2RecipientORM,
+            MarketingCampaignV2ProviderRecipientObservationORM.campaign_recipient_id
+            == MarketingCampaignV2RecipientORM.id,
+        ).filter(
+            MarketingCampaignV2ProviderRecipientObservationORM.snapshot_id.in_(
+                tuple(provider_ids)
+            ),
+            MarketingCampaignV2ProviderRecipientObservationORM.outcome
+            == "SUCCESSFUL",
+            MarketingCampaignV2RecipientORM.campaign_id.in_(tuple(eligible)),
+        ).all()
+        phones_by_campaign: dict[int, set[str]] = {
+            identifier: set() for identifier in eligible
+        }
+        for snapshot_id, campaign_id, phone in successful_rows:
+            identifier = int(campaign_id)
+            if provider_ids.get(int(snapshot_id)) == identifier:
+                phones_by_campaign[identifier].add(phone)
+
+        # Hard safeguard against an unbounded live query. A dedicated
+        # materialized reconciliation is needed for substantially larger pages.
+        unique_phones = set().union(*phones_by_campaign.values())
+        if len(unique_phones) > 10000:
+            for identifier in eligible:
+                statuses[identifier] = _commercial_batch_base(
+                    identifier, "BATCH_SCOPE_TOO_LARGE"
+                )
+            return {"rows": [statuses[i] for i in ids]}
+
+        from app.services.marketing_sales_funnel_service import (
+            _load_branch_alias_map,
+        )
+        alias_map = _load_branch_alias_map()
+        snapshot_phone_campaigns: dict[tuple[int, str], set[int]] = defaultdict(set)
+        for identifier, phones in phones_by_campaign.items():
+            snapshot_id = int(venta_by_campaign[identifier].id)
+            for phone in phones:
+                snapshot_phone_campaigns[(snapshot_id, phone)].add(identifier)
+
+        rows_by_campaign: dict[int, list[Any]] = defaultdict(list)
+        if unique_phones:
+            phone_digits = func.regexp_replace(
+                VentaTotalSnapshotRowORM.telefono, "[^0-9]", "", "g"
+            )
+            venta_rows = active_session.query(
+                VentaTotalSnapshotRowORM
+            ).filter(
+                VentaTotalSnapshotRowORM.snapshot_id.in_(
+                    tuple({int(s.id) for s in venta_by_campaign.values()})
+                ),
+                func.right(phone_digits, 10).in_(sorted(unique_phones)),
+            ).yield_per(1000)
+            for row in venta_rows:
+                phone = normalize_phone(row.telefono)
+                for identifier in snapshot_phone_campaigns.get(
+                    (int(row.snapshot_id), phone), ()
+                ):
+                    rows_by_campaign[identifier].append(row)
+
+        for identifier, (child, sent_local) in eligible.items():
+            metrics = _summarize_campaign_v2_membership_movements(
+                rows=rows_by_campaign[identifier],
+                sent_local=sent_local,
+                successful_phones=phones_by_campaign[identifier],
+                branch_id=int(child.sucursal_id),
+                alias_map=alias_map,
+            )
+            statuses[identifier] = {
+                **_commercial_batch_base(identifier, "READY"),
+                "successful_recipient_count": len(phones_by_campaign[identifier]),
+                "provider_snapshot_id": int(provider_by_campaign[identifier].id),
+                "venta_total_snapshot_id": int(venta_by_campaign[identifier].id),
+                "venta_total_cutoff": venta_by_campaign[identifier].business_date.isoformat(),
+                **metrics,
+            }
+
+    return {"rows": [statuses[i] for i in ids]}
