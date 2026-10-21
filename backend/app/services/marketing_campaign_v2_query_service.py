@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from math import ceil
 from typing import Any, Iterable
 
-from sqlalchemy import func
+from sqlalchemy import and_, exists, false, func, or_, true
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.extensions import db
@@ -27,6 +27,11 @@ CAMPAIGN_V2_PURPOSES = (
     "ACTIVE_MEMBERS",
     "UNCLASSIFIED",
 )
+
+CAMPAIGN_V2_RECIPIENT_PROVIDER_STATUSES = frozenset({
+    "SENT", "DELIVERED", "VIEWED", "FAILED",
+    "SUCCESSFUL", "NO_PROVIDER_STATUS", "NO_SNAPSHOT",
+})
 
 
 class MarketingCampaignV2QueryError(RuntimeError):
@@ -137,57 +142,68 @@ def list_campaign_v2_recipients(
     allowed_sucursal_keys: Iterable[str] | None,
     page: Any = 1,
     page_size: Any = 50,
+    provider_status: Any = None,
     session=None,
 ) -> dict[str, Any]:
     active_session = session if session is not None else db.session
     normalized_id = _positive_int(campaign_id, field_name="campaign_id", maximum=None)
     normalized_page = _positive_int(page, field_name="page", maximum=1_000_000)
     normalized_page_size = _positive_int(page_size, field_name="page_size", maximum=100)
+    normalized_status = _normalize_optional_recipient_provider_status(provider_status)
     scope = _normalize_current_scope(allowed_sucursal_keys)
-    _load_visible_campaign_orm(
-        campaign_id=normalized_id,
-        scope=scope,
-        session=active_session,
-    )
 
-    total = int(
-        active_session.query(func.count(MarketingCampaignV2RecipientORM.id))
-        .filter(MarketingCampaignV2RecipientORM.campaign_id == normalized_id)
-        .scalar()
-        or 0
-    )
-    rows = (
-        active_session.query(
-            MarketingCampaignV2RecipientORM,
-            func.count(MarketingCampaignV2RecipientEvidenceORM.id).label("evidence_count"),
+    with active_session.no_autoflush:
+        _load_visible_campaign_orm(
+            campaign_id=normalized_id,
+            scope=scope,
+            session=active_session,
         )
-        .outerjoin(
-            MarketingCampaignV2RecipientEvidenceORM,
-            MarketingCampaignV2RecipientEvidenceORM.recipient_id
-            == MarketingCampaignV2RecipientORM.id,
-        )
-        .filter(MarketingCampaignV2RecipientORM.campaign_id == normalized_id)
-        .group_by(MarketingCampaignV2RecipientORM.id)
-        .order_by(MarketingCampaignV2RecipientORM.id.asc())
-        .offset((normalized_page - 1) * normalized_page_size)
-        .limit(normalized_page_size)
-        .all()
-    )
 
-    # El estado corresponde al último snapshot PERSISTIDO, nunca a una consulta
-    # en vivo ni al último estado histórico de cada destinatario por separado.
-    latest_snapshot = (
-        active_session.query(MarketingCampaignV2ProviderStatsSnapshotORM)
-        .filter(
-            MarketingCampaignV2ProviderStatsSnapshotORM.campaign_v2_id
-            == normalized_id
+        # Un único snapshot persistido rige el filtro, el total y las filas.
+        # No mezclar estados históricos ni consultar al proveedor al paginar.
+        latest_snapshot = (
+            active_session.query(MarketingCampaignV2ProviderStatsSnapshotORM)
+            .filter(
+                MarketingCampaignV2ProviderStatsSnapshotORM.campaign_v2_id
+                == normalized_id
+            )
+            .order_by(
+                MarketingCampaignV2ProviderStatsSnapshotORM.fetched_at.desc(),
+                MarketingCampaignV2ProviderStatsSnapshotORM.id.desc(),
+            )
+            .first()
         )
-        .order_by(
-            MarketingCampaignV2ProviderStatsSnapshotORM.fetched_at.desc(),
-            MarketingCampaignV2ProviderStatsSnapshotORM.id.desc(),
+        status_predicate = _recipient_provider_status_predicate(
+            latest_snapshot, normalized_status,
         )
-        .first()
-    )
+
+        count_query = (
+            active_session.query(func.count(MarketingCampaignV2RecipientORM.id))
+            .filter(MarketingCampaignV2RecipientORM.campaign_id == normalized_id)
+        )
+        page_query = (
+            active_session.query(
+                MarketingCampaignV2RecipientORM,
+                func.count(MarketingCampaignV2RecipientEvidenceORM.id).label("evidence_count"),
+            )
+            .outerjoin(
+                MarketingCampaignV2RecipientEvidenceORM,
+                MarketingCampaignV2RecipientEvidenceORM.recipient_id
+                == MarketingCampaignV2RecipientORM.id,
+            )
+            .filter(MarketingCampaignV2RecipientORM.campaign_id == normalized_id)
+        )
+        if status_predicate is not None:
+            count_query = count_query.filter(status_predicate)
+            page_query = page_query.filter(status_predicate)
+        total = int(count_query.scalar() or 0)
+        rows = (
+            page_query.group_by(MarketingCampaignV2RecipientORM.id)
+            .order_by(MarketingCampaignV2RecipientORM.id.asc())
+            .offset((normalized_page - 1) * normalized_page_size)
+            .limit(normalized_page_size)
+            .all()
+        )
     observations_by_recipient = {}
     if latest_snapshot is not None and rows:
         recipient_ids = [int(recipient.id) for recipient, _ in rows]
@@ -411,6 +427,66 @@ def _serialize_campaign_detail(campaign, *, recipient_count: int) -> dict[str, A
         "updated_at": _iso_datetime(campaign.updated_at),
         "audience_definition": _json_copy(campaign.audience_definition_json),
     }
+
+
+def _normalize_optional_recipient_provider_status(value: Any) -> str | None:
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    if not isinstance(value, str):
+        raise MarketingCampaignV2QueryValidationError("provider_status inválido.")
+    normalized = value.strip().upper()
+    if normalized == "ALL":
+        return None
+    if normalized not in CAMPAIGN_V2_RECIPIENT_PROVIDER_STATUSES:
+        raise MarketingCampaignV2QueryValidationError(
+            "provider_status debe ser SENT, DELIVERED, VIEWED, FAILED, "
+            "SUCCESSFUL, NO_PROVIDER_STATUS, NO_SNAPSHOT o ALL."
+        )
+    return normalized
+
+
+def _recipient_provider_status_predicate(snapshot, status: str | None):
+    """Filtro SQL previo a count/paginación para el snapshot más reciente."""
+    if status is None:
+        return None
+    if status == "NO_SNAPSHOT":
+        return true() if snapshot is None else false()
+    if snapshot is None:
+        return false()
+
+    obs = MarketingCampaignV2ProviderRecipientObservationORM
+    observation = exists().where(
+        and_(
+            obs.snapshot_id == snapshot.id,
+            obs.campaign_recipient_id == MarketingCampaignV2RecipientORM.id,
+        )
+    )
+    if status == "NO_PROVIDER_STATUS":
+        return ~observation
+
+    if status == "FAILED":
+        matching_outcome = obs.outcome == "FAILED"
+    elif status in {"SENT", "DELIVERED", "VIEWED"}:
+        matching_outcome = and_(
+            obs.outcome == "SUCCESSFUL",
+            obs.delivery_bucket == status,
+        )
+    else:
+        # Fallback defensivo del serializer: SUCCESSFUL sin bucket reconocido.
+        matching_outcome = and_(
+            obs.outcome == "SUCCESSFUL",
+            or_(
+                obs.delivery_bucket.is_(None),
+                ~obs.delivery_bucket.in_(("SENT", "DELIVERED", "VIEWED")),
+            ),
+        )
+    return exists().where(
+        and_(
+            obs.snapshot_id == snapshot.id,
+            obs.campaign_recipient_id == MarketingCampaignV2RecipientORM.id,
+            matching_outcome,
+        )
+    )
 
 
 def _serialize_recipient_summary(recipient, *, evidence_count: int) -> dict[str, Any]:
