@@ -31,6 +31,8 @@ from app.models.warehouse import (
 from app.services.marketing_campaign_v2_commercial_attribution_service import (
     CommercialChildResolutionError,
     direct_attribution_ineligibility_reason,
+    required_commercial_sale_kind,
+    COMMERCIAL_SALE_KIND_RULE_VERSION,
     resolve_submitted_child_recipients,
 )
 from app.services.marketing_campaign_v2_reporting_service import (
@@ -263,6 +265,9 @@ def reconcile_multichild_campaign(*, campaign_id: int, session: Any) -> dict[str
                 rows_by_child[child_id].append(row)
 
         metrics = _summarize_campaign_v2_multichild_membership_movements(
+            required_sale_kind=required_commercial_sale_kind(
+                purpose=campaign.purpose, source=campaign.source,
+            ),
             expected_submitted_child_ids=submitted_ids,
             child_inputs=[
                 {
@@ -279,6 +284,7 @@ def reconcile_multichild_campaign(*, campaign_id: int, session: Any) -> dict[str
         return {
             **base,
             "status": "READY",
+            "attribution_rule_version": COMMERCIAL_SALE_KIND_RULE_VERSION,
             "coverage": "ALL_PROVEN_SUBMITTED_CHILDREN",
             "submitted_child_count": len(scope.submitted),
             "submitted_child_ids": sorted(submitted_ids),

@@ -44,6 +44,8 @@ from app.models.warehouse import (
 from app.services.marketing_phone import normalize_phone
 from app.services.marketing_campaign_v2_commercial_attribution_service import (
     direct_attribution_ineligibility_reason,
+    required_commercial_sale_kind,
+    COMMERCIAL_SALE_KIND_RULE_VERSION,
 )
 from app.services.marketing_sales_funnel_service import _is_valid_status, _normalize_text
 from app.services.contact_center_service import (
@@ -1443,8 +1445,13 @@ def _summarize_campaign_v2_membership_movements(
     successful_phones: set[str],
     branch_id: int,
     alias_map: Mapping[str, int],
+    required_sale_kind: str,
 ) -> dict[str, Any]:
-    """Deduplicate Venta Total transactions without requiring matching member PIN."""
+    """Count only purchases whose Gasca kind matches the campaign objective."""
+    if required_sale_kind not in {"NUEVO", "REACTIVACION"}:
+        raise MarketingCampaignV2ReportingValidationError(
+            "Tipo de venta atribuible inválido."
+        )
     grouped: dict[tuple[str, str], Decimal] = {}
     for row in rows:
         phone = normalize_phone(row.telefono)
@@ -1453,6 +1460,8 @@ def _summarize_campaign_v2_membership_movements(
         if alias_map.get(_normalize_text(row.sucursal)) != branch_id:
             continue
         if not _is_valid_status(row.estatus):
+            continue
+        if _normalize_text(getattr(row, "nuevo", None)) != required_sale_kind:
             continue
         description = _normalize_text(row.descripcion)
         if description.startswith(_NON_MEMBERSHIP_PREFIXES):
@@ -1491,6 +1500,7 @@ def _summarize_campaign_v2_multichild_membership_movements(
     child_inputs: Iterable[Mapping[str, Any]],
     expected_submitted_child_ids: Iterable[int],
     alias_map: Mapping[str, int],
+    required_sale_kind: str,
 ) -> dict[str, Any]:
     """Combine proven per-child results without adding snapshots as revenue.
 
@@ -1539,6 +1549,7 @@ def _summarize_campaign_v2_multichild_membership_movements(
             successful_phones=successful_phones,
             branch_id=int(entry["branch_id"]),
             alias_map=alias_map,
+            required_sale_kind=required_sale_kind,
         )
         total_buyers += metrics["buyers_attributed"]
         total_transactions += metrics["transactions_attributed"]
@@ -1589,6 +1600,14 @@ def _materialized_multichild_commercial_payload(
     payload = dict(record.result_json or {})
     status = str(payload.get("status", record.status))
     if status == "READY":
+        if payload.get("attribution_rule_version") != COMMERCIAL_SALE_KIND_RULE_VERSION:
+            return {
+                "campaign_id": int(record.campaign_v2_id),
+                "status": "PENDING_RECONCILIATION",
+                "buyers_attributed": None,
+                "transactions_attributed": None,
+                "revenue_attributed_mxn": None,
+            }
         submitted_ids = sorted(
             int(child.id) for child in children
             if getattr(child, "status", None) == "SUBMITTED"
@@ -1655,6 +1674,14 @@ def build_campaign_v2_commercial_attribution(
         child = children[0]
         if child.submitted_at is None or not child.provider_campaign_id:
             return {**base, "status": "NOT_SUBMITTED"}
+        reason = direct_attribution_ineligibility_reason(
+            purpose=campaign.purpose, source=campaign.source,
+        )
+        if reason is not None:
+            return {**base, "status": "NOT_ATTRIBUTABLE", "reason": reason}
+        required_sale_kind = required_commercial_sale_kind(
+            purpose=campaign.purpose, source=campaign.source,
+        )
         sent = child.submitted_at
         if sent.tzinfo is None:
             sent = sent.replace(tzinfo=timezone.utc)
@@ -1760,6 +1787,7 @@ def build_campaign_v2_commercial_attribution(
             successful_phones=successful_phones,
             branch_id=int(child.sucursal_id),
             alias_map=alias_map,
+            required_sale_kind=required_sale_kind,
         )
         return {
             **base,
@@ -1859,6 +1887,16 @@ def build_campaign_v2_commercial_attribution_batch(
                 statuses[identifier] = _commercial_batch_base(
                     identifier, "NOT_SUBMITTED"
                 )
+                continue
+            reason = direct_attribution_ineligibility_reason(
+                purpose=by_id[identifier].purpose,
+                source=by_id[identifier].source,
+            )
+            if reason is not None:
+                statuses[identifier] = {
+                    **_commercial_batch_base(identifier, "NOT_ATTRIBUTABLE"),
+                    "reason": reason,
+                }
                 continue
             submitted = child.submitted_at
             if submitted.tzinfo is None:
@@ -2060,6 +2098,10 @@ def build_campaign_v2_commercial_attribution_batch(
                 successful_phones=phones_by_campaign[identifier],
                 branch_id=int(child.sucursal_id),
                 alias_map=alias_map,
+                required_sale_kind=required_commercial_sale_kind(
+                    purpose=by_id[identifier].purpose,
+                    source=by_id[identifier].source,
+                ),
             )
             statuses[identifier] = {
                 **_commercial_batch_base(identifier, "READY"),

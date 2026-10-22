@@ -591,7 +591,7 @@ def test_commercial_attribution_simple_rule_successful_not_failed():
     def sale(
         identifier, phone, product, total, *,
         when="18:47:00", status="ACTIVO", branch="AZAHARES CULIACAN",
-        order=None, pin="PIN-OTHER", clave="MEMBRESIA",
+        order=None, pin="PIN-OTHER", clave="MEMBRESIA", nuevo="NUEVO",
     ):
         return SimpleNamespace(
             id=identifier, telefono=phone, sucursal=branch,
@@ -599,7 +599,7 @@ def test_commercial_attribution_simple_rule_successful_not_failed():
             fecha="2026-10-20", hora=when,
             id_orden=order or f"ORDER-{identifier}",
             folio=f"FOLIO-{identifier}", pin=pin,
-            clave_producto=clave, tipo="CONTRATO",
+            clave_producto=clave, tipo="CONTRATO", nuevo=nuevo,
         )
 
     rows = [
@@ -611,6 +611,10 @@ def test_commercial_attribution_simple_rule_successful_not_failed():
         sale(6, "6861000001", "CONVENIOS $549", "549", when="15:59:00"),
         sale(7, "6861000001", "CONVENIOS $549", "549", branch="OTRA SUCURSAL"),
         sale(8, "6861000001", "CONVENIOS $549", "549", status="CANCELADO"),
+        sale(9, "6861000001", "CONVENIOS $549", "999", nuevo="RENOVACIÓN"),
+        sale(10, "6861000001", "CONVENIOS $549", "1200", nuevo="REACTIVACIÓN"),
+        sale(11, "6861000001", "CONVENIOS $549", "1400", nuevo=""),
+        sale(12, "6861000001", "CONVENIOS $549", "1600", nuevo="NO APLICA"),
     ]
     result = _summarize_campaign_v2_membership_movements(
         rows=rows,
@@ -618,6 +622,7 @@ def test_commercial_attribution_simple_rule_successful_not_failed():
         successful_phones={"6861000001", "6861000003"},
         branch_id=16,
         alias_map={"AZAHARES CULIACAN": 16, "OTRA SUCURSAL": 17},
+        required_sale_kind="NUEVO",
     )
     assert result == {
         "buyers_attributed": 2,
@@ -642,7 +647,7 @@ def test_commercial_attribution_groups_invoice_lines_once():
             estatus="ACTIVO", descripcion=description,
             total=Decimal(str(amount)), fecha="2026-10-21",
             hora="06:00:00", id_orden=order, folio="FOLIO-1",
-            clave_producto="MEMBRESIA", tipo="CONTRATO",
+            clave_producto="MEMBRESIA", tipo="CONTRATO", nuevo="NUEVO",
         )
 
     result = _summarize_campaign_v2_membership_movements(
@@ -657,6 +662,7 @@ def test_commercial_attribution_groups_invoice_lines_once():
         successful_phones={"6861000001"},
         branch_id=16,
         alias_map={"AZAHARES CULIACAN": 16},
+        required_sale_kind="NUEVO",
     )
     assert result == {
         "buyers_attributed": 1,
@@ -720,7 +726,7 @@ def test_commercial_attribution_batch_is_scoped_and_has_constant_query_count(mon
 
     def campaign(identifier, scope="AZAHARES CUL"):
         return SimpleNamespace(
-            id=identifier,
+            id=identifier, purpose="NEW_SALE", source="FUNNEL_PORTFOLIO",
             audience_definition_json={
                 "filters": {"allowed_sucursal_keys": [scope]}
             },
@@ -742,6 +748,7 @@ def test_commercial_attribution_batch_is_scoped_and_has_constant_query_count(mon
             fecha="2026-10-21", hora="10:27:00",
             clave_producto="MEMBRESIA", tipo="CONTRATO",
             id_orden=f"ORDER-{identifier}", folio=f"FOLIO-{identifier}",
+            nuevo="NUEVO",
         )
 
     session = FakeSession([
@@ -913,7 +920,7 @@ def test_commercial_attribution_multichild_sums_only_valid_separate_branch_sales
             id_orden=order or f"ORDER-{identifier}",
             folio=f"FOLIO-{identifier}",
             clave_producto="MEMBRESIA",
-            tipo="CONTRATO",
+            tipo="CONTRATO", nuevo="NUEVO",
         )
 
     tz = ZoneInfo("America/Tijuana")
@@ -950,6 +957,7 @@ def test_commercial_attribution_multichild_sums_only_valid_separate_branch_sales
     ]
     result = _summarize_campaign_v2_multichild_membership_movements(
         child_inputs=inputs, expected_submitted_child_ids=(100, 101), alias_map={"AZAHARES": 16, "BRANCH B": 17},
+        required_sale_kind="NUEVO",
     )
     assert result == {
         "successful_recipient_count": 2,
@@ -981,12 +989,14 @@ def test_commercial_attribution_multichild_sums_only_valid_separate_branch_sales
         ]
         _summarize_campaign_v2_multichild_membership_movements(
             child_inputs=duplicate, expected_submitted_child_ids=(100, 101), alias_map={"AZAHARES": 16, "BRANCH B": 17},
+            required_sale_kind="NUEVO",
         )
     with pytest.raises(MarketingCampaignV2ReportingValidationError, match="Falta evidencia"):
         _summarize_campaign_v2_multichild_membership_movements(
             child_inputs=[inputs[0]],
             expected_submitted_child_ids=(100, 101),
             alias_map={"AZAHARES": 16, "BRANCH B": 17},
+            required_sale_kind="NUEVO",
         )
 
 
@@ -1038,6 +1048,7 @@ def test_commercial_attribution_multichild_batch_reads_cache_without_sales_queri
         campaign_v2_id=8, status="READY", checked_at=BASE,
         result_json={
             "campaign_id": 8, "status": "READY",
+            "attribution_rule_version": "SALE_KIND_V1",
             "submitted_child_ids": [80, 81],
             "buyers_attributed": 2,
             "transactions_attributed": 3,
@@ -1102,4 +1113,162 @@ def test_multichild_cached_ready_is_hidden_for_indirect_referral_campaign():
     assert result["reason"] == "INDIRECT_OR_ACTIVE_MEMBERS_AUDIENCE"
     assert result["buyers_attributed"] is None
     assert result["transactions_attributed"] is None
+    assert result["revenue_attributed_mxn"] is None
+
+
+def test_single_campaign_indirect_purpose_never_reads_gasca(monkeypatch):
+    """Guard applies to the single-child endpoint, not just the scheduler."""
+    from contextlib import nullcontext
+    from app.services import marketing_campaign_v2_reporting_service as reporting
+
+    class Query:
+        def filter(self, *args):
+            return self
+
+        def all(self):
+            return [SimpleNamespace(
+                submitted_at=BASE, provider_campaign_id="external-26",
+            )]
+
+    class Session:
+        no_autoflush = nullcontext()
+        queries = 0
+
+        def query(self, *args):
+            self.queries += 1
+            return Query()
+
+    monkeypatch.setattr(
+        reporting, "_load_visible_campaign_orm",
+        lambda **kwargs: SimpleNamespace(
+            id=26, purpose="NEW_SALE", source="ACTIVE_MEMBERS",
+        ),
+    )
+    session = Session()
+    result = reporting.build_campaign_v2_commercial_attribution(
+        campaign_id=26, allowed_sucursal_keys=None, session=session,
+    )
+    assert session.queries == 1
+    assert result["status"] == "NOT_ATTRIBUTABLE"
+    assert result["buyers_attributed"] is None
+    assert result["revenue_attributed_mxn"] is None
+
+
+def test_commercial_batch_indirect_campaign_is_non_measurable_without_gasca():
+    """Dashboard must not infer purchases from an indirect campaign."""
+    from contextlib import nullcontext
+    from app.services.marketing_campaign_v2_reporting_service import (
+        build_campaign_v2_commercial_attribution_batch,
+    )
+
+    class Query:
+        def __init__(self, values):
+            self.values = values
+
+        def filter(self, *args):
+            return self
+
+        def all(self):
+            return self.values
+
+    class Session:
+        no_autoflush = nullcontext()
+        def __init__(self):
+            self.queries = 0
+        def query(self, *args):
+            self.queries += 1
+            if self.queries == 1:
+                return Query([SimpleNamespace(
+                    id=8, purpose="NEW_SALE", source="ACTIVE_MEMBERS",
+                    audience_definition_json={
+                        "filters": {"allowed_sucursal_keys": ["AZAHARES"]}
+                    },
+                )])
+            if self.queries == 2:
+                return Query([SimpleNamespace(
+                    id=7, campaign_v2_id=8,
+                    submitted_at=BASE, provider_campaign_id="external-7",
+                )])
+            raise AssertionError("Unexpected provider or Gasca query")
+
+    session = Session()
+    rows = build_campaign_v2_commercial_attribution_batch(
+        campaign_ids=[8], allowed_sucursal_keys=None, session=session,
+    )["rows"]
+    assert session.queries == 2
+    assert rows[0]["status"] == "NOT_ATTRIBUTABLE"
+    assert rows[0]["buyers_attributed"] is None
+    assert rows[0]["revenue_attributed_mxn"] is None
+
+
+def test_commercial_sale_kind_rejects_renewals_and_supports_reactivation():
+    from datetime import datetime
+    from decimal import Decimal
+    from zoneinfo import ZoneInfo
+    from app.services.marketing_campaign_v2_reporting_service import (
+        _summarize_campaign_v2_membership_movements,
+    )
+
+    sent_local = datetime(2026, 10, 20, 16, 0, tzinfo=ZoneInfo("America/Tijuana"))
+    def sale(identifier, classification, amount):
+        return SimpleNamespace(
+            id=identifier, telefono="6861000001", sucursal="AZAHARES",
+            estatus="ACTIVO", descripcion="CONVENIOS $549",
+            clave_producto="MEMBRESIA", tipo="CONTRATO",
+            fecha="2026-10-20", hora="19:00:00",
+            total=Decimal(str(amount)), nuevo=classification,
+            id_orden=f"order-{identifier}", folio=f"F-{identifier}",
+        )
+    rows = [
+        sale(1, "NUEVO", 549),
+        sale(2, "REACTIVACIÓN", 649),
+        sale(3, "RENOVACIÓN", 399),
+        sale(4, "", 299),
+        sale(5, "NO APLICA", 199),
+    ]
+    kwargs = dict(
+        rows=rows, sent_local=sent_local,
+        successful_phones={"6861000001"},
+        branch_id=16, alias_map={"AZAHARES": 16},
+    )
+    fresh = _summarize_campaign_v2_membership_movements(
+        **kwargs, required_sale_kind="NUEVO",
+    )
+    reactivated = _summarize_campaign_v2_membership_movements(
+        **kwargs, required_sale_kind="REACTIVACION",
+    )
+    assert fresh == {
+        "buyers_attributed": 1,
+        "transactions_attributed": 1,
+        "revenue_attributed_mxn": "549.00",
+    }
+    assert reactivated == {
+        "buyers_attributed": 1,
+        "transactions_attributed": 1,
+        "revenue_attributed_mxn": "649.00",
+    }
+
+
+def test_commercial_cached_ready_without_sale_kind_version_is_stale():
+    from app.services.marketing_campaign_v2_reporting_service import (
+        _materialized_multichild_commercial_payload,
+    )
+    record = SimpleNamespace(
+        campaign_v2_id=26, status="READY", checked_at=BASE,
+        result_json={
+            "status": "READY", "submitted_child_ids": [80, 81],
+            "buyers_attributed": 2, "transactions_attributed": 2,
+            "revenue_attributed_mxn": "1198.00",
+        },
+    )
+    result = _materialized_multichild_commercial_payload(
+        record=record,
+        campaign=SimpleNamespace(purpose="NEW_SALE", source="FUNNEL_PORTFOLIO"),
+        children=[
+            SimpleNamespace(id=80, status="SUBMITTED"),
+            SimpleNamespace(id=81, status="SUBMITTED"),
+        ],
+    )
+    assert result["status"] == "PENDING_RECONCILIATION"
+    assert result["buyers_attributed"] is None
     assert result["revenue_attributed_mxn"] is None

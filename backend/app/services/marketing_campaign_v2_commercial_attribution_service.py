@@ -21,6 +21,8 @@ class CommercialChildResolutionError(ValueError):
     """Persisted child/recipient evidence is inconsistent; fail closed."""
 
 
+COMMERCIAL_SALE_KIND_RULE_VERSION = "SALE_KIND_V1"
+
 _DIRECT_ATTRIBUTION_PAIRS = frozenset({
     ("NEW_SALE", "FUNNEL_PORTFOLIO"),
     ("REACTIVATION", "EXPIRED_MEMBERS"),
@@ -42,6 +44,16 @@ def direct_attribution_ineligibility_reason(
     if normalized[1] == "ACTIVE_MEMBERS":
         return "INDIRECT_OR_ACTIVE_MEMBERS_AUDIENCE"
     return "PURPOSE_SOURCE_NOT_DIRECT"
+
+
+def required_commercial_sale_kind(*, purpose: str | None, source: str | None) -> str | None:
+    """Gasca's 'nuevo' discriminator required for measurable direct campaigns."""
+    if direct_attribution_ineligibility_reason(purpose=purpose, source=source):
+        return None
+    return {
+        "NEW_SALE": "NUEVO",
+        "REACTIVATION": "REACTIVACION",
+    }.get(str(purpose or "").strip().upper())
 
 
 @dataclass(frozen=True)
