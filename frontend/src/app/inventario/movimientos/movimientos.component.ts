@@ -166,7 +166,10 @@ export class MovimientosComponent implements OnInit {
 
   abrirDialogoMovimiento() {
     const dialogRef = this.dialog.open(DialogoRegistrarMovimientoComponent, {
-      width: '800px',
+      width: '900px',
+      maxWidth: '96vw',
+      maxHeight: '92vh',
+      autoFocus: false,
       disableClose: false,
       data: {
         inventariosDisponibles: this.inventariosDisponibles

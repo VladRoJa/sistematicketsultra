@@ -1,99 +1,167 @@
-<!-- src/app/inventario/movimientos/dialogo-registrar-movimiento/dialogo-registrar-movimiento.component.html -->
-
-<mat-card class="formulario-card">
-  <h2 mat-dialog-title>Registrar Movimiento</h2>
-  <form [formGroup]="form" (ngSubmit)="registrarMovimiento()" class="formulario-movimiento" mat-dialog-content>
-    <mat-form-field *ngIf="esAdmin" appearance="fill" style="width: 100%;">
-      <mat-label>Sucursal</mat-label>
-      <mat-select formControlName="sucursal_id" required>
-        <mat-option *ngFor="let suc of sucursales" [value]="suc.sucursal_id">
-          {{ suc.sucursal }}
-        </mat-option>
-      </mat-select>
-    </mat-form-field>
-
-    <mat-form-field appearance="fill" style="width: 100%;">
-      <mat-label>Tipo de Movimiento</mat-label>
-      <mat-select formControlName="tipo_movimiento" required>
-        <mat-option value="entrada">Entrada</mat-option>
-        <mat-option value="salida">Salida</mat-option>
-      </mat-select>
-    </mat-form-field>
-
-    <mat-form-field appearance="fill" style="width: 100%;">
-      <mat-label>Observaciones</mat-label>
-      <input matInput formControlName="observaciones">
-    </mat-form-field>
-
-    <div class="mb-4 flex items-center gap-2">
-      <mat-form-field appearance="fill" style="width: 100%;">
-        <mat-label>Tipo de producto</mat-label>
-        <mat-select [(ngModel)]="tipoFiltro" (selectionChange)="onTipoFiltroChange()" [ngModelOptions]="{standalone: true}">
-          <mat-option *ngFor="let tipo of tiposDisponibles" [value]="tipo">
-            {{ tipo === 'todos' || tipo === 'Todos' ? 'Todos' : (tipo | titlecase) }}
-          </mat-option>
-        </mat-select>
-        <span class="text-xs text-gray-500">(Filtra la lista de productos por tipo)</span>
-      </mat-form-field>
+<div class="movement-dialog">
+  <header class="movement-dialog__header">
+    <div>
+      <span class="movement-dialog__eyebrow">Inventario · Movimientos</span>
+      <h2 mat-dialog-title>Registrar movimiento</h2>
+      <p>Indica la sucursal y selecciona cada equipo por su código interno.</p>
     </div>
-
-<div formArrayName="productos" *ngFor="let grupo of productosFormArray.controls; let i = index">
-  <div class="producto-card">
-    <div class="producto-grupo flex flex-wrap gap-2">
-      <mat-form-field appearance="fill" style="flex:2; min-width:210px; max-width:310px;">
-        <mat-label>Inventario</mat-label>
-        <input
-          type="text"
-          matInput
-          [formControl]="grupo.get('inventarioControl')"
-          [matAutocomplete]="autoInv"
-          required
-          autocomplete="off"
-          (blur)="onBlurInventario(i)"
-        />
-      <mat-autocomplete #autoInv="matAutocomplete"
-        [displayWith]="displayInventario"
-        (optionSelected)="onInventarioSeleccionado($event.option.value, i)">
-        <mat-option
-          *ngFor="let inv of inventarioFiltrado$[i] | async; let grupo = grupo"
-          [value]="inv"
-          (mousedown)="forzarObjetoEnFormArray(grupo, inv, $event)">
-          <div class="font-medium">{{ inv.nombre }}</div>
-          <div *ngIf="inv.marca || inv.proveedor || inv.categoria" class="text-xs text-gray-500">
-            <span *ngIf="inv.marca">{{ inv.marca }}</span>
-            <span *ngIf="inv.proveedor"> · {{ inv.proveedor }}</span>
-            <span *ngIf="inv.categoria"> · {{ inv.categoria }}</span>
-            <span *ngIf="inv.codigo_interno"> · {{ inv.codigo_interno }}</span> 
-          </div>
-        </mat-option>
-      </mat-autocomplete>
-      </mat-form-field>
-
-      <mat-form-field appearance="fill" style="flex:1; min-width:120px;">
-        <mat-label>Unidad</mat-label>
-        <input matInput [formControl]="grupo.get('unidad_medida')" disabled>
-      </mat-form-field>
-
-      <mat-form-field appearance="fill" style="flex:1; min-width:90px;">
-        <mat-label>Cantidad</mat-label>
-        <input matInput type="number" [formControl]="grupo.get('cantidad')" required min="1">
-      </mat-form-field>
-
-      <button mat-icon-button color="warn" type="button" (click)="eliminarProducto(i)" *ngIf="productosFormArray.length > 1">
-        <mat-icon>remove_circle</mat-icon>
-      </button>
-    </div>
-  </div>
-</div>
-
-
-    <button mat-button type="button" (click)="agregarProducto()">+ Añadir producto</button>
-  </form>
-
-  <mat-dialog-actions align="end">
-    <button mat-button (click)="cancelar()">Cancelar</button>
-    <button mat-raised-button color="primary" [disabled]="form.invalid || cargando" (click)="registrarMovimiento()">
-      Guardar
+    <button type="button" class="movement-dialog__close" (click)="cancelar()"
+      [disabled]="cargando" aria-label="Cerrar ventana">
+      <mat-icon>close</mat-icon>
     </button>
-  </mat-dialog-actions>
-</mat-card>
+  </header>
+
+  <form [formGroup]="form" (ngSubmit)="registrarMovimiento()">
+    <div mat-dialog-content class="movement-dialog__content">
+      <section class="movement-section">
+        <div class="movement-section__heading">
+          <span class="movement-section__step">1</span>
+          <div>
+            <h3>Datos del movimiento</h3>
+            <p>Selecciona la sucursal que recibirá o entregará los artículos.</p>
+          </div>
+        </div>
+
+        <div class="movement-fields movement-fields--two">
+          <div class="movement-field">
+            <label for="movimiento-sucursal">Sucursal <strong>*</strong></label>
+            <select *ngIf="esAdmin; else sucursalSoloLectura" id="movimiento-sucursal"
+              formControlName="sucursal_id" class="movement-input">
+              <option [ngValue]="null" disabled>Seleccionar sucursal</option>
+              <option *ngFor="let suc of sucursales" [ngValue]="suc.sucursal_id">
+                {{ suc.sucursal }}
+              </option>
+            </select>
+            <ng-template #sucursalSoloLectura>
+              <div class="movement-readonly">{{ nombreSucursalSeleccionada }}</div>
+            </ng-template>
+            <small *ngIf="esAdmin && !form.get('sucursal_id')?.value" class="movement-field__hint">
+              Obligatorio: elige la sucursal correcta.
+            </small>
+            <small *ngIf="errorSucursales" class="movement-field__error">
+              No se pudieron cargar las sucursales. Cierra y vuelve a abrir.
+            </small>
+          </div>
+
+          <div class="movement-field">
+            <label for="movimiento-tipo">Tipo de movimiento <strong>*</strong></label>
+            <select id="movimiento-tipo" formControlName="tipo_movimiento" class="movement-input">
+              <option value="entrada">Entrada · sumar existencias</option>
+              <option value="salida">Salida · descontar existencias</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="movement-field">
+          <label for="movimiento-observaciones">Observaciones <span>(opcional)</span></label>
+          <textarea id="movimiento-observaciones" formControlName="observaciones"
+            class="movement-input movement-input--textarea" rows="2"
+            placeholder="Ej. Alta inicial de cinco caminadoras Fitness en Santa Fe"></textarea>
+        </div>
+      </section>
+
+      <section class="movement-section">
+        <div class="movement-section__heading">
+          <span class="movement-section__step">2</span>
+          <div>
+            <h3>Equipos y cantidades</h3>
+            <p>Busca por código interno (por ejemplo, 11CCJW21) y selecciona el resultado.</p>
+          </div>
+        </div>
+
+        <div class="movement-field movement-field--filter">
+          <label for="movimiento-tipo-producto">Filtrar por tipo de producto <span>(opcional)</span></label>
+          <select id="movimiento-tipo-producto" class="movement-input"
+            [ngModel]="tipoFiltro" (ngModelChange)="cambiarTipoFiltro($event)"
+            [ngModelOptions]="{standalone: true}">
+            <option *ngFor="let tipo of tiposDisponibles" [value]="tipo">
+              {{ tipo === 'todos' ? 'Todos los tipos' : (tipo | titlecase) }}
+            </option>
+          </select>
+        </div>
+
+        <div formArrayName="productos" class="movement-products">
+          <article *ngFor="let grupo of productosFormArray.controls; let i = index"
+            [formGroupName]="i" class="movement-product">
+            <div class="movement-product__header">
+              <strong>Equipo {{ i + 1 }}</strong>
+              <button *ngIf="productosFormArray.length > 1" type="button"
+                class="movement-product__remove" (click)="eliminarProducto(i)"
+                [disabled]="cargando"
+                [attr.aria-label]="'Quitar equipo ' + (i + 1)">
+                <mat-icon>delete_outline</mat-icon>
+                Quitar
+              </button>
+            </div>
+
+            <div class="movement-product__fields">
+              <div class="movement-field movement-field--product">
+                <label [for]="'movimiento-equipo-' + i">Nombre o código interno <strong>*</strong></label>
+                <div class="movement-search">
+                  <mat-icon>search</mat-icon>
+                  <input [id]="'movimiento-equipo-' + i" type="text"
+                    class="movement-input movement-input--search"
+                    formControlName="inventarioControl" [matAutocomplete]="autoInv"
+                    placeholder="Escribe el código, ej. 11CCJW21"
+                    autocomplete="off" />
+                </div>
+                <mat-autocomplete #autoInv="matAutocomplete"
+                  [displayWith]="displayInventario"
+                  (optionSelected)="onInventarioSeleccionado($event.option.value, i)">
+                  <mat-option *ngFor="let inv of inventarioFiltrado$[i] | async" [value]="inv">
+                    <div class="movement-option">
+                      <strong>{{ inv.codigo_interno || 'Sin código' }}</strong>
+                      <span>{{ inv.nombre }} · {{ inv.marca || 'Sin marca' }}</span>
+                    </div>
+                  </mat-option>
+                </mat-autocomplete>
+
+                <div *ngIf="articuloSeleccionado(i) as seleccionado"
+                  class="movement-product__selected">
+                  <mat-icon>check_circle</mat-icon>
+                  <span>{{ seleccionado.codigo_interno || 'Sin código' }}
+                    · {{ seleccionado.nombre }} · {{ seleccionado.marca || 'Sin marca' }}
+                    · {{ seleccionado.unidad_medida || 'Unidad' }}</span>
+                </div>
+                <small *ngIf="grupo.get('inventarioControl')?.value && !grupo.get('inventario_id')?.value"
+                  class="movement-field__error">
+                  Elige una opción de la lista; escribir el nombre no basta.
+                </small>
+              </div>
+
+              <div class="movement-field movement-field--quantity">
+                <label [for]="'movimiento-cantidad-' + i">Cantidad <strong>*</strong></label>
+                <input [id]="'movimiento-cantidad-' + i" class="movement-input"
+                  type="number" min="1" step="1" inputmode="numeric"
+                  formControlName="cantidad" />
+                <small class="movement-field__hint">Unidades enteras</small>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <button type="button" class="movement-add" (click)="agregarProducto()"
+          [disabled]="cargando">
+          <mat-icon>add_circle_outline</mat-icon>
+          Añadir otro equipo
+        </button>
+      </section>
+    </div>
+
+    <footer mat-dialog-actions class="movement-dialog__footer">
+      <div class="movement-dialog__summary" aria-live="polite">
+        <strong>{{ productosSeleccionados }} de {{ productosFormArray.length }} equipos seleccionados</strong>
+        <span>{{ etiquetaTipoMovimiento }} · {{ nombreSucursalSeleccionada }}</span>
+      </div>
+      <div class="movement-dialog__footer-buttons">
+        <button type="button" class="movement-button movement-button--cancel"
+          (click)="cancelar()" [disabled]="cargando">Cancelar</button>
+        <button type="submit" class="movement-button movement-button--save"
+          [disabled]="cargando || form.invalid || productosSeleccionados !== productosFormArray.length">
+          <mat-icon *ngIf="!cargando">save</mat-icon>
+          {{ cargando ? 'Registrando...' : 'Registrar movimiento' }}
+        </button>
+      </div>
+    </footer>
+  </form>
+</div>
