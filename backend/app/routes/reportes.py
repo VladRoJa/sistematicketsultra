@@ -216,6 +216,10 @@ def exportar_movimientos():
             detalles = DetalleMovimiento.query.filter_by(movimiento_id=mov.id).all()
             usuario = UserORM.query.get(mov.usuario_id)
             sucursal = Sucursal.query.get(mov.sucursal_id)
+            usuario_anulacion = (
+                UserORM.query.get(mov.anulado_por_usuario_id)
+                if mov.anulado_por_usuario_id is not None else None
+            )
             for d in detalles:
                 inventario = InventarioGeneral.query.get(d.inventario_id)
                 if not inventario:
@@ -233,7 +237,17 @@ def exportar_movimientos():
                     "Sucursal": sucursal.sucursal if sucursal else "",
                     "Usuario ID": mov.usuario_id,
                     "Usuario": usuario.username if usuario else "",
-                    "Observaciones": mov.observaciones
+                    "Observaciones": mov.observaciones,
+                    "Estado": "Anulado" if mov.anulado else "Activo",
+                    "Anulado por": (
+                        usuario_anulacion.username if usuario_anulacion else ""
+                    ),
+                    "Fecha anulación UTC": (
+                        mov.anulado_en_utc.isoformat()
+                        if mov.anulado_en_utc else ""
+                    ),
+                    "Motivo anulación": mov.motivo_anulacion or "",
+                    "Cantidad vigente": 0 if mov.anulado else d.cantidad
                 })
 
         df = pd.DataFrame(rows)
