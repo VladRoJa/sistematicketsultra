@@ -1,0 +1,40 @@
+name: Inventario Auditoria Codigos CI
+
+on:
+  pull_request:
+    paths:
+      - "frontend/src/app/inventario/helpers/auditoria-codigos.helper.ts"
+      - "frontend/src/app/inventario/inventario.component.ts"
+      - "frontend/src/app/inventario/inventario.component.html"
+      - "frontend/src/app/inventario/inventario.component.css"
+      - "frontend/tests/inventario-auditoria-codigos.test.cjs"
+      - ".github/workflows/inventario-auditoria-codigos-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: QA-12 Duplicate codes
+        run: node --test tests/inventario-auditoria-codigos.test.cjs
+      - name: QA-09 Filter regression
+        run: node --test tests/inventario-filtros-qa09.test.cjs
+      - name: Angular TypeScript check
+        run: npx tsc --noEmit --project tsconfig.app.json
+      - name: Production build
+        run: npm run build -- --configuration production
