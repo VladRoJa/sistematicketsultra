@@ -476,3 +476,62 @@ select.movement-input {
     flex: 1 1 auto;
   }
 }
+
+/* Búsqueda accesible dentro del formulario: no depende del z-index del CDK Overlay. */
+.movement-search-results {
+  margin-top: 6px;
+  max-height: 230px;
+  overflow-y: auto;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 5px 16px rgba(16, 24, 40, 0.06);
+}
+
+.movement-search-results__hint,
+.movement-search-results__empty {
+  margin: 0;
+  padding: 10px 13px;
+  font-size: 11px;
+  color: #667085;
+  line-height: 1.4;
+}
+
+.movement-search-results__empty {
+  color: #b42318;
+}
+
+.movement-search-results__option {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 13px;
+  border: none;
+  border-top: 1px solid #eaecf0;
+  background: #fff;
+  color: #344054;
+  text-align: left;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.movement-search-results__option:hover,
+.movement-search-results__option:focus-visible {
+  background: #fff2ed;
+  outline: none;
+}
+
+.movement-search-results__option strong {
+  flex: 0 0 auto;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-weight: 850;
+  color: #b9381d;
+}
+
+.movement-search-results__option span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
