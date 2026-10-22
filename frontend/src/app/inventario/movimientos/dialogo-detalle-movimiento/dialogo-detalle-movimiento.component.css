@@ -395,13 +395,22 @@
   font-size: 17px;
 }
 
-.movement-detail__footer button {
+.movement-detail__footer-button {
   min-width: 92px;
+  min-height: 36px;
+  padding: 0 14px;
   border: 1px solid #d0d5dd;
   border-radius: 9px;
+  background: #fff;
   color: #344054;
   font-size: 12px;
   font-weight: 800;
+  cursor: pointer;
+}
+
+.movement-detail__footer-button:hover,
+.movement-detail__footer-button:focus-visible {
+  background: #f2f4f7;
 }
 
 @media (max-width: 760px) {
