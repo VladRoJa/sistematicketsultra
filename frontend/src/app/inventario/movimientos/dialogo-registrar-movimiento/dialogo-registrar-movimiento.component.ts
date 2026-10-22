@@ -42,6 +42,7 @@ export class DialogoRegistrarMovimientoComponent implements OnInit {
   errorSucursales = false;
   esAdmin = false;
   cargando = false;
+  indiceBusquedaActivo: number | null = null;
 
   tipoFiltro = 'todos';
   tiposDisponibles: string[] = ['todos'];
@@ -147,6 +148,37 @@ export class DialogoRegistrarMovimientoComponent implements OnInit {
     }).slice(0, 40);
   }
 
+  iniciarBusqueda(index: number): void {
+    this.indiceBusquedaActivo = index;
+  }
+
+  mostrarResultados(index: number): boolean {
+    const valor = this.productosFormArray.at(index)?.get('inventarioControl')?.value;
+    return this.indiceBusquedaActivo === index &&
+      typeof valor === 'string' && valor.trim().length >= 2;
+  }
+
+  opcionesBusqueda(index: number): ArticuloMovimiento[] {
+    const valor = this.productosFormArray.at(index)?.get('inventarioControl')?.value;
+    return this.mostrarResultados(index)
+      ? this.filtrarInventarios(valor).slice(0, 12)
+      : [];
+  }
+
+  procesarTeclaBusqueda(event: KeyboardEvent, index: number): void {
+    if (event.key === 'Escape') {
+      this.indiceBusquedaActivo = null;
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const opciones = this.opcionesBusqueda(index);
+      if (opciones.length === 1) {
+        this.onInventarioSeleccionado(opciones[0], index);
+      }
+    }
+  }
+
   agregarProducto(): void {
     if (this.cargando) return;
 
@@ -172,6 +204,7 @@ export class DialogoRegistrarMovimientoComponent implements OnInit {
   eliminarProducto(index: number): void {
     if (this.cargando || this.productosFormArray.length <= 1) return;
     this.productosFormArray.removeAt(index);
+    this.indiceBusquedaActivo = null;
     this.actualizarFiltrados();
   }
 
@@ -190,6 +223,7 @@ export class DialogoRegistrarMovimientoComponent implements OnInit {
     grupo.get('inventario_id')?.setValue(inv.id, { emitEvent: false });
     grupo.get('unidad_medida')?.setValue(inv.unidad_medida || '', { emitEvent: false });
     grupo.get('inventarioControl')?.setValue(inv, { emitEvent: false });
+    this.indiceBusquedaActivo = null;
   }
 
   articuloSeleccionado(index: number): ArticuloMovimiento | null {
