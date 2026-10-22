@@ -107,6 +107,22 @@
         {{ totalConCodigo }} con código interno
       </span>
 
+      <button
+        *ngIf="puedeAdministrarInventario && !loading && !error"
+        type="button"
+        class="inventory-duplicates-toggle"
+        [class.inventory-duplicates-toggle--warning]="gruposCodigosDuplicados.length > 0"
+        [attr.aria-expanded]="auditoriaCodigosAbierta"
+        aria-controls="inventory-duplicate-audit"
+        (click)="alternarAuditoriaCodigos()"
+      >
+        <mat-icon>{{ gruposCodigosDuplicados.length > 0 ? 'warning_amber' : 'verified' }}</mat-icon>
+        <span>
+          {{ gruposCodigosDuplicados.length }} códigos duplicados
+        </span>
+        <mat-icon>{{ auditoriaCodigosAbierta ? 'expand_less' : 'expand_more' }}</mat-icon>
+      </button>
+
       <span class="summary-chip" *ngIf="cantidadFiltrosActivos > 0">
         <mat-icon>filter_alt</mat-icon>
         {{ cantidadFiltrosActivos }}
@@ -121,6 +137,69 @@
       >
         Limpiar búsqueda y filtros
       </button>
+    </div>
+  </section>
+
+  <section
+    *ngIf="puedeAdministrarInventario && auditoriaCodigosAbierta && !loading && !error"
+    id="inventory-duplicate-audit"
+    class="inventory-duplicate-audit"
+    aria-label="Auditoría de códigos internos duplicados"
+  >
+    <header class="inventory-duplicate-audit__header">
+      <div>
+        <h2>Auditoría de códigos internos</h2>
+        <p>
+          Catálogo completo, independientemente de la búsqueda y los filtros de la tabla.
+          Solo lectura: no corrige ni elimina registros.
+        </p>
+      </div>
+      <button
+        type="button"
+        class="inventory-duplicate-audit__close"
+        (click)="alternarAuditoriaCodigos()"
+        aria-label="Cerrar auditoría"
+      >
+        <mat-icon>close</mat-icon>
+      </button>
+    </header>
+
+    <p class="inventory-duplicate-audit__summary" *ngIf="gruposCodigosDuplicados.length > 0">
+      {{ gruposCodigosDuplicados.length }} códigos repetidos en
+      {{ totalRegistrosConCodigoDuplicado }} registros.
+    </p>
+
+    <p class="inventory-duplicate-audit__empty" *ngIf="gruposCodigosDuplicados.length === 0">
+      No se encontraron códigos internos duplicados en el catálogo consultado.
+    </p>
+
+    <div class="inventory-duplicate-audit__groups" *ngIf="gruposCodigosDuplicados.length > 0">
+      <article class="inventory-duplicate-group" *ngFor="let grupo of gruposCodigosDuplicados">
+        <header class="inventory-duplicate-group__heading">
+          <strong>{{ grupo.codigo }}</strong>
+          <span>{{ grupo.registros.length }} registros</span>
+        </header>
+        <div class="inventory-duplicate-group__table-wrap">
+          <table class="inventory-duplicate-group__table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Equipo / producto</th>
+                <th>Marca</th>
+                <th>Sucursal(es)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let articulo of grupo.registros">
+                <td>{{ articulo.id }}</td>
+                <td>{{ articulo.nombre }}</td>
+                <td>{{ mostrarValor(articulo.marca) }}</td>
+                <td>{{ mostrarValor(articulo.sucursales) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
     </div>
   </section>
 
