@@ -25,6 +25,10 @@ import {
 } from 'src/app/utils/tabla-filtros.helper';
 import { mostrarAlertaToast } from 'src/app/utils/alertas';
 import { DialogoInventarioComponent } from './dialogo-inventario/dialogo-inventario.component';
+import {
+  detectarCodigosDuplicados,
+  GrupoCodigoDuplicado,
+} from './helpers/auditoria-codigos.helper';
 
 const INVENTORY_GLOBAL_WRITE_ROLES = new Set([
   'ADMIN',
@@ -113,6 +117,8 @@ export class InventarioComponent implements OnInit {
   puedeAdministrarInventario = false;
   totalCategorias = 0;
   totalConCodigo = 0;
+  auditoriaCodigosAbierta = false;
+  gruposCodigosDuplicados: GrupoCodigoDuplicado[] = [];
 
   @ViewChild('menuTrigger', { static: false }) menuTrigger?: MatMenuTrigger;
   @ViewChild('fileInput') fileInput?: ElementRef<HTMLInputElement>;
@@ -188,10 +194,13 @@ export class InventarioComponent implements OnInit {
           this.columnasFiltrables,
         );
         this.actualizarResumen();
+        this.gruposCodigosDuplicados = detectarCodigosDuplicados(this.inventarios);
         this.refrescarVista();
         this.loading = false;
       },
       error: (err) => {
+        this.gruposCodigosDuplicados = [];
+        this.auditoriaCodigosAbierta = false;
         this.error =
           err?.error?.detail ||
           err?.error?.error ||
@@ -200,6 +209,20 @@ export class InventarioComponent implements OnInit {
         console.error('Error al cargar inventario', err);
       },
     });
+  }
+
+  get totalRegistrosConCodigoDuplicado(): number {
+    return this.gruposCodigosDuplicados.reduce(
+      (total, grupo) => total + grupo.registros.length,
+      0,
+    );
+  }
+
+  alternarAuditoriaCodigos(): void {
+    if (!this.puedeAdministrarInventario || this.loading || this.error) {
+      return;
+    }
+    this.auditoriaCodigosAbierta = !this.auditoriaCodigosAbierta;
   }
 
   private actualizarResumen(): void {
