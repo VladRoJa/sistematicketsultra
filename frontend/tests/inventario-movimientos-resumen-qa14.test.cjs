@@ -161,3 +161,49 @@ test('QA-22B auditoría horizontal compacta conserva autor, fecha y motivo', () 
   assert.match(html, /articulo\.cantidad/);
   assert.doesNotMatch(html, /style="/);
 });
+
+test('QA-22C modal sin catálogo conserva nombre, marca y categoría desde el historial', () => {
+  const detalle = {
+    id: 6,
+    anulado: true,
+    inventarios: [{
+      inventario_id: 1827,
+      cantidad: 1,
+      unidad_medida: 'Unidad',
+      codigo_interno: '07PLJW36',
+      nombre: '2 tier dumbell rack',
+      marca: 'JW SPORT',
+      proveedor: null,
+      categoria: 'Peso Libre',
+    }],
+  };
+  const sinCatalogo = vista.detallesMovimiento(detalle, []);
+  assert.deepEqual(sinCatalogo, [{
+    inventarioId: '1827',
+    nombre: '2 tier dumbell rack',
+    codigoActual: '07PLJW36',
+    marca: 'JW SPORT',
+    proveedor: '—',
+    categoria: 'Peso Libre',
+    cantidad: 1,
+    unidadMedida: 'Unidad',
+  }]);
+});
+
+test('QA-22C catálogo antiguo sigue siendo respaldo para historial previo', () => {
+  const legado = {
+    id: 6,
+    inventarios: [{
+      inventario_id: 11,
+      cantidad: 1,
+      unidad_medida: 'Unidad',
+      codigo_interno: '11CCJW21',
+    }],
+  };
+  const vistaConCatalogo = vista.detallesMovimiento(legado, catalogo);
+  assert.equal(vistaConCatalogo[0].nombre, 'Caminadora');
+  assert.equal(vistaConCatalogo[0].marca, 'Fitness');
+  assert.equal(vistaConCatalogo[0].categoria, 'Cardio');
+  assert.equal(vista.detallesMovimiento(legado, [])[0].nombre, 'Inventario #11');
+  assert.equal(vistaConCatalogo[0].cantidad, 1);
+});
