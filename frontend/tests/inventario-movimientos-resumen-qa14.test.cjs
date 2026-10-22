@@ -95,3 +95,48 @@ test('tabla mantiene sólo resumen y abre detalle sin renderizar códigos gigant
   assert.match(detalleHtml, /articulo\.cantidad/);
   assert.match(detalleHtml, /Los códigos y datos descriptivos corresponden al catálogo actual/);
 });
+
+test('QA-22 detalle muestra estado, trazabilidad y secciones bien jerarquizadas', () => {
+  const html = load('dialogo-detalle-movimiento/dialogo-detalle-movimiento.component.html');
+  const css = load('dialogo-detalle-movimiento/dialogo-detalle-movimiento.component.css');
+  const component = load('dialogo-detalle-movimiento/dialogo-detalle-movimiento.component.ts');
+
+  assert.match(html, /mat-dialog-title>Movimiento #/);
+  assert.match(html, /etiquetaEstado/);
+  assert.match(html, /\[class\.movement-detail__status--annulled\]="data\.movimiento\.anulado"/);
+  assert.match(html, /Fecha original/);
+  assert.match(html, /Registrado por/);
+  assert.match(html, /usuarioRegistro/);
+  assert.match(html, /nombreSucursal/);
+  assert.match(html, /\*ngIf="data\.movimiento\.anulado"/);
+  assert.match(html, /Auditoría de anulación/);
+  assert.match(html, /usuarioAnulacion/);
+  assert.match(html, /anulado_en_utc/);
+  assert.match(html, /motivo_anulacion/);
+  assert.match(html, /etiquetaCantidadArticulos/);
+  assert.match(html, /Registro histórico · Solo lectura/);
+  assert.match(html, /\(click\)="cerrar\(\)"/);
+  assert.match(css, /\.movement-detail__meta\s*\{/);
+  assert.match(css, /grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(css, /@media \(max-width: 760px\)/);
+  assert.match(css, /\.movement-detail__scroll/);
+  assert.match(css, /position: sticky/);
+  assert.match(component, /MatIconModule/);
+  assert.match(component, /this\.etiquetaEstado = data\.movimiento\.anulado/);
+  assert.match(component, /this\.usuarioAnulacion = this\.etiquetaRegistro/);
+});
+
+test('QA-22 no pierde los detalles ni convierte registros anulados en existencias activas', () => {
+  const html = load('dialogo-detalle-movimiento/dialogo-detalle-movimiento.component.html');
+  const cancelado = {
+    ...mov,
+    anulado: true,
+    usuario_anulacion: 'ADMICORP',
+    motivo_anulacion: 'QA-21: anulacion controlada de prueba',
+  };
+  assert.equal(vista.detallesMovimiento(cancelado, catalogo).length, 2);
+  assert.equal(vista.detallesMovimiento(cancelado, catalogo)[0].cantidad, 1);
+  assert.match(html, /Datos originales de cantidades y unidades, sin modificaciones/);
+  assert.match(html, /Los códigos y datos descriptivos corresponden al catálogo actual/);
+  assert.doesNotMatch(html, /style="/);
+});
