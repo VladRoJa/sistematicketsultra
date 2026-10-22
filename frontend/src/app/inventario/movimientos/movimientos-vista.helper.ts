@@ -10,6 +10,11 @@ export interface ProductoEnMovimiento {
   unidad_medida?: string | null;
   codigo_interno?: string | null;
   no_equipo?: string | null;
+  /** Datos del catálogo al consultar el historial, no snapshot histórico. */
+  nombre?: string | null;
+  marca?: string | null;
+  proveedor?: string | null;
+  categoria?: string | null;
 }
 
 export interface MovimientoInventarioVista {
@@ -80,12 +85,12 @@ export function detallesMovimiento(
     const info = catalogoPorId.get(inventarioId);
     return {
       inventarioId,
-      nombre: info?.nombre || `Inventario #${inventarioId}`,
+      nombre: articulo.nombre || info?.nombre || `Inventario #${inventarioId}`,
       // GET /movimientos entrega el código ACTUAL, no una copia histórica.
       codigoActual: articulo.codigo_interno || info?.codigo_interno || '—',
-      marca: info?.marca || '—',
-      proveedor: info?.proveedor || '—',
-      categoria: info?.categoria || '—',
+      marca: articulo.marca || info?.marca || '—',
+      proveedor: articulo.proveedor || info?.proveedor || '—',
+      categoria: articulo.categoria || info?.categoria || '—',
       cantidad: articulo.cantidad ?? '—',
       unidadMedida: articulo.unidad_medida || '—',
     };
