@@ -52,7 +52,7 @@
       <div class="movement-detail__audit-grid">
         <div>
           <span>Anulado por</span>
-          <strong>{{ data.movimiento.usuario_anulacion || ('Usuario #' + data.movimiento.anulado_por_usuario_id) }}</strong>
+          <strong>{{ usuarioAnulacion }}</strong>
         </div>
         <div>
           <span>Fecha de anulación</span>
@@ -73,7 +73,7 @@
           <p>Datos originales de cantidades y unidades, sin modificaciones.</p>
         </div>
         <span class="movement-detail__count">
-          {{ articulos.length }} {{ articulos.length === 1 ? 'artículo' : 'artículos' }}
+          {{ etiquetaCantidadArticulos }}
         </span>
       </div>
 
