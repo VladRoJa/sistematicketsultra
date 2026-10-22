@@ -10,8 +10,16 @@ import { MatIconModule } from '@angular/material/icon';
 import { Observable, map, startWith } from 'rxjs';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { InventarioService } from '../../../services/inventario.service';
-import { mostrarAlertaStockInsuficiente, mostrarAlertaToast } from 'src/app/utils/alertas';
+import { mostrarAlertaToast } from 'src/app/utils/alertas';
 import { environment } from 'src/environments/environment';
+
+interface FaltanteStockMovimiento {
+  indice: number;
+  codigo: string;
+  nombre: string;
+  disponible: number;
+  solicitado: number;
+}
 
 interface ArticuloMovimiento {
   id: number;
@@ -42,6 +50,8 @@ export class DialogoRegistrarMovimientoComponent implements OnInit {
   errorSucursales = false;
   esAdmin = false;
   cargando = false;
+  errorMovimiento: string | null = null;
+  faltantesStock: FaltanteStockMovimiento[] = [];
   indiceBusquedaActivo: number | null = null;
 
   tipoFiltro = 'todos';
@@ -65,6 +75,8 @@ export class DialogoRegistrarMovimientoComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.form.get('sucursal_id')?.valueChanges.subscribe(() => this.limpiarErrorMovimiento());
+    this.form.get('tipo_movimiento')?.valueChanges.subscribe(() => this.limpiarErrorMovimiento());
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     this.esAdmin = user?.rol === 'ADMINISTRADOR';
     this.sucursalAsignada = String(user?.sucursal || user?.sucursal_nombre || user?.sucursal_id || '');
@@ -179,8 +191,18 @@ export class DialogoRegistrarMovimientoComponent implements OnInit {
     }
   }
 
+  limpiarErrorMovimiento(): void {
+    this.errorMovimiento = null;
+    this.faltantesStock = [];
+  }
+
+  faltanteStock(index: number): FaltanteStockMovimiento | undefined {
+    return this.faltantesStock.find(item => item.indice === index);
+  }
+
   agregarProducto(): void {
     if (this.cargando) return;
+    this.limpiarErrorMovimiento();
 
     const grupo = this.fb.group({
       inventario_id: [null, Validators.required],
@@ -189,7 +211,9 @@ export class DialogoRegistrarMovimientoComponent implements OnInit {
       cantidad: [1, [Validators.required, Validators.min(1), Validators.pattern(/^[1-9]\d*$/)]],
     });
 
+    grupo.get('cantidad')!.valueChanges.subscribe(() => this.limpiarErrorMovimiento());
     grupo.get('inventarioControl')!.valueChanges.subscribe(valor => {
+      if (typeof valor === 'string') this.limpiarErrorMovimiento();
       // Escribir texto nuevo invalida el ID anterior; no guardar el producto equivocado.
       if (!valor || typeof valor === 'string') {
         grupo.get('inventario_id')?.setValue(null, { emitEvent: false });
@@ -203,12 +227,14 @@ export class DialogoRegistrarMovimientoComponent implements OnInit {
 
   eliminarProducto(index: number): void {
     if (this.cargando || this.productosFormArray.length <= 1) return;
+    this.limpiarErrorMovimiento();
     this.productosFormArray.removeAt(index);
     this.indiceBusquedaActivo = null;
     this.actualizarFiltrados();
   }
 
   onInventarioSeleccionado(inv: ArticuloMovimiento, index: number): void {
+    this.limpiarErrorMovimiento();
     const grupo = this.productosFormArray.at(index);
     const yaSeleccionado = this.productosFormArray.controls.some(
       (otro, i) => i !== index && String(otro.get('inventario_id')?.value) === String(inv.id),
@@ -243,16 +269,17 @@ export class DialogoRegistrarMovimientoComponent implements OnInit {
 
   registrarMovimiento(): void {
     if (this.cargando) return;
+    this.limpiarErrorMovimiento();
     if (this.form.invalid || this.productosFormArray.length === 0) {
       this.form.markAllAsTouched();
-      mostrarAlertaToast('Selecciona la sucursal y todos los artículos de la lista.', 'warning');
+      this.errorMovimiento = 'Selecciona la sucursal y todos los artículos de la lista antes de registrar.';
       return;
     }
 
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     const token = localStorage.getItem('token');
     if (!token) {
-      mostrarAlertaToast('No autorizado.', 'error');
+      this.errorMovimiento = 'La sesión no está autorizada. No se registró el movimiento.';
       return;
     }
 
@@ -269,23 +296,38 @@ export class DialogoRegistrarMovimientoComponent implements OnInit {
     if (tipo_movimiento === 'salida') {
       this.http.get<any[]>(`${environment.apiUrl}/inventario/existencias`).subscribe({
         next: existencias => {
-          const sinStock = productos.some((item: any) => {
+          const faltantes: FaltanteStockMovimiento[] = [];
+          productos.forEach((item: any, indice: number) => {
             const ex = existencias.find(e =>
               String(e.inventario_id) === String(item.inventario_id) &&
               String(e.sucursal_id) === String(sucursal_id),
             );
-            return item.cantidad > (ex?.stock || 0);
+            const disponible = Number(ex?.stock ?? 0);
+            const solicitado = Number(item.cantidad);
+            if (solicitado > disponible) {
+              const articulo = this.inventariosDisponibles.find(inv =>
+                String(inv.id) === String(item.inventario_id)
+              );
+              faltantes.push({
+                indice,
+                codigo: articulo?.codigo_interno || ex?.codigo_interno || `ID ${item.inventario_id}`,
+                nombre: articulo?.nombre || ex?.nombre || 'Artículo',
+                disponible,
+                solicitado,
+              });
+            }
           });
-          if (sinStock) {
+          if (faltantes.length) {
             this.cargando = false;
-            mostrarAlertaStockInsuficiente('algún producto seleccionado');
+            this.faltantesStock = faltantes;
+            this.errorMovimiento = 'Salida rechazada por existencias insuficientes. No se registró el movimiento.';
             return;
           }
           this.enviarMovimiento(sucursal_id, tipo_movimiento, productos, token);
         },
         error: () => {
           this.cargando = false;
-          mostrarAlertaToast('No se pudo validar existencias.', 'error');
+          this.errorMovimiento = 'No se pudieron consultar las existencias. No se registró el movimiento.';
         },
       });
     } else {
@@ -310,10 +352,8 @@ export class DialogoRegistrarMovimientoComponent implements OnInit {
       },
       error: err => {
         this.cargando = false;
-        mostrarAlertaToast(
-          err?.error?.detail || err?.error?.error || 'Error al registrar movimiento',
-          'error',
-        );
+        this.errorMovimiento = err?.error?.detail || err?.error?.error ||
+          'No se pudo registrar el movimiento. Intenta nuevamente.';
       },
     });
   }
