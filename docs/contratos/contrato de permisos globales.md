@@ -345,6 +345,33 @@ Para una operación protegida, el backend debe poder explicar: **usuario + rol +
 
 Las asignaciones y revocaciones deben registrar quién las hizo, sobre qué usuario o rol, qué acción y scope cambiaron, valor anterior/nuevo, motivo y fecha. Evitar excepciones escondidas por nombre de usuario, cadenas dispersas de roles o controles de acceso duplicados entre frontend y backend.
 
+### Matriz bidireccional de accesos — requisito funcional obligatorio
+
+La administración de permisos debe ofrecer **la misma decisión efectiva desde cualquier punto de entrada**, no listas de roles separadas que puedan contradecirse. Las vistas deben ser filtros sobre un único resolutor backend, no una nueva fuente de autorización.
+
+1. **Usuario → módulos y acciones:** elegir o buscar usuario y mostrar una matriz tipo checklist agrupada por módulo, con visibilidad/entrada al módulo, acciones disponibles y denegadas, rol base, alcance (global/sucursales/otros), origen de la decisión (rol, grant por usuario/rol, operador o legacy) y razón. Distinguir `permitido`, `denegado` y `sin información suficiente`; `inherit` es la fuente o estado de excepción, no una autorización por sí mismo.
+2. **Módulo → usuarios:** elegir módulo y listar quién puede **ver/entrar** al módulo y, separadamente, quién puede ejecutar cada acción del módulo. Incluir usuarios sin acceso como filtro opcional; distinguir acceso base al módulo de permisos operativos, para no interpretar `ver` como `administrar`.
+3. **Acción → usuarios:** elegir acción concreta (por ejemplo `pm.validate`) y mostrar todos los usuarios activos a los que les corresponde acceso efectivo, además del alcance y la fuente de autorización. Permitir visualizar también denegados, excepciones y usuarios inactivos mediante filtros explícitos. Si el permiso depende de una sucursal, ofrecer filtro de sucursal: el mismo usuario puede estar permitido en una y no en otra.
+4. **Rol → acciones y usuarios:** elegir rol, consultar permisos base correspondientes y usuarios que lo poseen; señalar grants individuales o excepciones que alteren el resultado. Un rol por sí solo no implica acceso irrestricto a sucursales ni registros.
+5. **Navegación cruzada:** desde cada fila se podrá abrir la perspectiva contraria (usuario ↔ acción ↔ módulo), conservando filtros útiles, búsqueda y paginación. Exportación CSV de la vista filtrada cuando aporte valor operativo.
+
+#### Checklist de consulta versus edición
+
+- **Consulta primero:** casillas o indicadores muestran el permiso efectivo y su origen. No confundir una casilla marcada con un grant explícito; un permiso puede ser heredado o condicionado.
+- **Edición futura y por módulo migrado:** al cambiar un acceso, el administrador elige `allow`, `deny` o `inherit`, alcance y motivo; el backend aplica la política, registra auditoría y actualiza ambas perspectivas. No habilitar una casilla que parezca conceder acceso real cuando el módulo sigue únicamente en observabilidad.
+- No crear roles combinados para hacer coincidir el checklist con una excepción. Preferir los grants existentes, con alcance y razón.
+- El historial de cambios debe permitir reconstruir quién cambió qué, para quién, cuándo y por qué; un grant denegado o desactivado debe seguir siendo auditable.
+
+#### Consistencia, límites y criterio de aceptación
+
+- **Una sola fuente de verdad:** los resultados por usuario, módulo y acción deben derivarse del mismo resolvedor backend, con la misma precedencia, las mismas restricciones por sucursal y los mismos hard stops.
+- **Mostrar modo real:** identificar claramente si el resultado es `diagnóstico legacy`, `comparación` o `enforcement activo`; una inferencia de observabilidad no debe mostrarse como garantía de acceso operativo.
+- **Seguridad:** consultas transversales solo para administradores autorizados en backend; no divulgar la matriz completa a usuarios ordinarios.
+- **Simplicidad:** filtros por nombre/rol/sucursal/módulo/acción y paginación; evitar calcular toda la matriz global en cada carga o introducir motores genéricos de políticas solo para construir la pantalla.
+- **Prueba de aceptación cruzada:** dado el mismo usuario, acción y sucursal, la vista Usuario → Acción y la vista Acción → Usuarios deben devolver igual decisión y procedencia. El acceso a módulo debe verificarse por separado del permiso para escribir o aprobar.
+
+**Estado de implementación al agregar esta adenda:** ya existe consulta de usuario efectivo y catálogo de módulos/acciones; la búsqueda inversa por módulo/acción a todos los usuarios **queda como requerimiento pendiente**, no como una funcionalidad ya desplegada.
+
 ### Estado comprobado y alcance inmediato
 
 - Observabilidad V1 volvió a cargar después de corregir el JOIN ambiguo en PR #1049 (2026-10-22).
