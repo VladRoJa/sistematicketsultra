@@ -427,7 +427,7 @@ def test_multichild_recipient_status_uses_latest_cut_of_each_child(session):
         )
     finally:
         event.remove(session.get_bind(), "before_cursor_execute", observe)
-    assert len(statements) <= 4  # latest per child, count, page, observations
+    assert len(statements) <= 5  # permission, latest per child, count, page, observations
     assert all_rows["total"] == 3
     assert all_rows["provider_snapshot_count"] == 2
     assert all_rows["provider_latest_snapshot_id"] == 403
