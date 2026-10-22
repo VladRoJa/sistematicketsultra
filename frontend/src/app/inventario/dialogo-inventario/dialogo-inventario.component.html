@@ -1,179 +1,165 @@
-<!-- src/app/inventario/dialogo-inventario/dialogo-inventario.component.html -->
-
-<h2 mat-dialog-title>
-  {{ modo === 'crear' ? 'Agregar Inventario' : 'Editar Inventario' }}
+<!-- Formulario de catálogo maestro. No asigna existencias ni sucursal. -->
+<h2 mat-dialog-title class="inventory-dialog__title">
+  {{ modo === 'crear' ? 'Agregar inventario' : 'Editar inventario' }}
 </h2>
+
 <form [formGroup]="form" (ngSubmit)="guardar()" class="inventario-form">
-  <div class="form-grid">
+  <div mat-dialog-content class="inventory-dialog__content">
+    <p class="inventory-dialog__intro">
+      Datos del artículo en el catálogo maestro. Las existencias por sucursal se registran por separado.
+    </p>
 
-    <!-- NOMBRE -->
-    <mat-form-field appearance="fill" class="campo">
-      <mat-label>Nombre</mat-label>
-      <input matInput formControlName="nombre" />
-    </mat-form-field>
+    <div class="form-grid">
+      <div class="form-item">
+        <label for="inv-nombre" class="form-item__label">Nombre <span class="required">*</span></label>
+        <mat-form-field appearance="outline" class="campo">
+          <input matInput id="inv-nombre" formControlName="nombre" aria-label="Nombre" />
+        </mat-form-field>
+      </div>
 
-    <!-- DESCRIPCIÓN -->
-    <mat-form-field appearance="fill" class="campo">
-      <mat-label>Descripción</mat-label>
-      <input matInput formControlName="descripcion" />
-    </mat-form-field>
+      <div class="form-item">
+        <label for="inv-descripcion" class="form-item__label">Descripción</label>
+        <mat-form-field appearance="outline" class="campo">
+          <input matInput id="inv-descripcion" formControlName="descripcion" aria-label="Descripción" />
+        </mat-form-field>
+      </div>
 
-    <!-- TIPO -->
-    <mat-form-field appearance="fill" class="campo">
-      <mat-label>Tipo</mat-label>
-      <mat-select formControlName="tipo">
-        <mat-option>
-          <input matInput placeholder="Buscar tipo" [formControl]="tipoFiltroControl" (click)="$event.stopPropagation()" autocomplete="off">
-        </mat-option>
-        <mat-option *ngFor="let t of tiposFiltrados" [value]="t.nombre">
-          {{ t.nombre }}
-        </mat-option>
-      </mat-select>
-    </mat-form-field>
+      <div class="form-item">
+        <span class="form-item__label">Tipo <span class="required">*</span></span>
+        <mat-form-field appearance="outline" class="campo">
+          <mat-select formControlName="tipo" aria-label="Tipo">
+            <mat-option>
+              <input matInput placeholder="Buscar tipo" aria-label="Buscar tipo" [formControl]="tipoFiltroControl" (click)="$event.stopPropagation()" autocomplete="off" />
+            </mat-option>
+            <mat-option *ngFor="let t of tiposFiltrados" [value]="t.nombre">
+              {{ t.nombre }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
 
-    <!-- MARCA -->
-    <mat-form-field appearance="fill" class="campo">
-      <mat-label>Marca</mat-label>
-      <mat-select formControlName="marca">
-        <mat-option>
-          <input matInput placeholder="Buscar marca" [formControl]="marcaFiltroControl" (click)="$event.stopPropagation()" autocomplete="off">
-        </mat-option>
-        <mat-option *ngFor="let m of marcasFiltradas" [value]="m.nombre">
-          {{ m.nombre }}
-        </mat-option>
-      </mat-select>
-    </mat-form-field>
+      <div class="form-item">
+        <span class="form-item__label">Marca <span class="required">*</span></span>
+        <mat-form-field appearance="outline" class="campo">
+          <mat-select formControlName="marca" aria-label="Marca">
+            <mat-option>
+              <input matInput placeholder="Buscar marca" aria-label="Buscar marca" [formControl]="marcaFiltroControl" (click)="$event.stopPropagation()" autocomplete="off" />
+            </mat-option>
+            <mat-option *ngFor="let m of marcasFiltradas" [value]="m.nombre">
+              {{ m.nombre }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
 
-    <!-- PROVEEDOR -->
-    <mat-form-field appearance="fill" class="campo">
-      <mat-label>Proveedor</mat-label>
-      <mat-select formControlName="proveedor">
-        <mat-option>
-          <input matInput placeholder="Buscar proveedor" [formControl]="proveedorFiltroControl" (click)="$event.stopPropagation()" autocomplete="off">
-        </mat-option>
-        <mat-option *ngFor="let p of proveedoresFiltradas" [value]="p.nombre">
-          {{ p.nombre }}
-        </mat-option>
-      </mat-select>
-    </mat-form-field>
+      <div class="form-item">
+        <span class="form-item__label">Proveedor</span>
+        <mat-form-field appearance="outline" class="campo">
+          <mat-select formControlName="proveedor" aria-label="Proveedor">
+            <mat-option>
+              <input matInput placeholder="Buscar proveedor" aria-label="Buscar proveedor" [formControl]="proveedorFiltroControl" (click)="$event.stopPropagation()" autocomplete="off" />
+            </mat-option>
+            <mat-option *ngFor="let p of proveedoresFiltradas" [value]="p.nombre">
+              {{ p.nombre }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
 
-    <!-- CATEGORÍA -->
-    <mat-form-field appearance="fill" class="campo">
-      <mat-label>Categoría</mat-label>
-      <mat-select formControlName="categoria">
-        <!-- Buscador -->
-        <mat-option>
-          <input
-            matInput
-            placeholder="Buscar categoría"
-            [formControl]="categoriaFiltroControl"
-            (click)="$event.stopPropagation()"
-            autocomplete="off"
-          />
-        </mat-option>
+      <div class="form-item">
+        <span class="form-item__label">Categoría <span class="required">*</span></span>
+        <mat-form-field appearance="outline" class="campo">
+          <mat-select formControlName="categoria" aria-label="Categoría">
+            <mat-option>
+              <input matInput placeholder="Buscar categoría" aria-label="Buscar categoría" [formControl]="categoriaFiltroControl" (click)="$event.stopPropagation()" autocomplete="off" />
+            </mat-option>
+            <mat-option *ngFor="let c of categoriasFiltradas" [value]="c.nombre">
+              {{ c.nombre }}
+            </mat-option>
+            <mat-option *ngIf="categoriaEsNueva()" (onSelectionChange)="usarCategoriaNuevaDesdeFiltro()">
+              Usar "{{ categoriaFiltroControl.value }}" como nueva categoría
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
 
-        <!-- Lista existente -->
-        <mat-option *ngFor="let c of categoriasFiltradas" [value]="c.nombre">
-          {{ c.nombre }}
-        </mat-option>
+      <div class="form-item">
+        <span class="form-item__label">Unidad <span class="required">*</span></span>
+        <mat-form-field appearance="outline" class="campo">
+          <mat-select formControlName="unidad" aria-label="Unidad">
+            <mat-option>
+              <input matInput placeholder="Buscar unidad" aria-label="Buscar unidad" [formControl]="unidadFiltroControl" (click)="$event.stopPropagation()" autocomplete="off" />
+            </mat-option>
+            <mat-option *ngFor="let u of unidadesFiltradas" [value]="u.nombre">
+              {{ u.nombre }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
 
-        <!-- Opción para crear nueva desde el filtro -->
-        <mat-option
-          *ngIf="categoriaEsNueva()"
-          (onSelectionChange)="usarCategoriaNuevaDesdeFiltro()"
-        >
-          ➕ Usar "{{ categoriaFiltroControl.value }}" como nueva categoría
-        </mat-option>
-      </mat-select>
-    </mat-form-field>
+      <div class="form-item">
+        <span class="form-item__label">Unidad de compra</span>
+        <mat-form-field appearance="outline" class="campo">
+          <mat-select formControlName="unidad_compra" aria-label="Unidad de compra">
+            <mat-option [value]="''">Sin unidad de compra</mat-option>
+            <mat-option *ngFor="let u of unidadesFiltradas" [value]="u.nombre">
+              {{ u.nombre }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
 
+      <div class="form-item">
+        <label for="inv-factor" class="form-item__label">Factor de compra <span class="required">*</span></label>
+        <mat-form-field appearance="outline" class="campo">
+          <input matInput id="inv-factor" type="number" min="1" formControlName="factor_compra" autocomplete="off" inputmode="numeric" aria-label="Factor de compra" />
+          <mat-error *ngIf="form.get('factor_compra')?.hasError('min') || form.get('factor_compra')?.hasError('required')">
+            Debe ser un número ≥ 1
+          </mat-error>
+          <mat-hint *ngIf="detalleConversionCompra">
+            {{ detalleConversionCompra }}
+          </mat-hint>
+        </mat-form-field>
+      </div>
 
+      <div class="form-item" *ngIf="requiereCodigoInterno">
+        <label for="inv-codigo" class="form-item__label">Código interno <span class="required">*</span></label>
+        <mat-form-field appearance="outline" class="campo">
+          <input matInput id="inv-codigo" formControlName="codigo_interno" aria-label="Código interno" autocomplete="off" />
+        </mat-form-field>
+      </div>
 
-    <!-- UNIDAD -->
-    <mat-form-field appearance="fill" class="campo">
-      <mat-label>Unidad</mat-label>
-      <mat-select formControlName="unidad">
-        <mat-option>
-          <input matInput placeholder="Buscar unidad" [formControl]="unidadFiltroControl" (click)="$event.stopPropagation()" autocomplete="off">
-        </mat-option>
-        <mat-option *ngFor="let u of unidadesFiltradas" [value]="u.nombre">
-          {{ u.nombre }}
-        </mat-option>
-      </mat-select>
-    </mat-form-field>
+      <ng-container *ngIf="esTipoAparato">
+        <div class="form-item">
+          <span class="form-item__label">Familia de equipo</span>
+          <mat-form-field appearance="outline" class="campo">
+            <mat-select formControlName="familia_equipo_id" aria-label="Familia de equipo">
+              <mat-option [value]="null">Sin clasificar</mat-option>
+              <mat-option *ngFor="let familia of familiasEquipo" [value]="familia.id">
+                {{ familia.nombre }}
+              </mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
 
-
-    <!-- Unidad de compra (opcional): caja/paquete/rollo, etc. -->
-    <mat-form-field appearance="fill" class="w-full">
-      <mat-label>Unidad de compra</mat-label>
-      <mat-select formControlName="unidad_compra">
-        <!-- Puedes reutilizar el catálogo de unidades -->
-        <mat-option *ngFor="let u of unidadesFiltradas" [value]="u.nombre">
-          {{ u.nombre }}
-        </mat-option>
-      </mat-select>
-    </mat-form-field>
-
-    <!-- Factor de compra (requerido, min 1) -->
-    <mat-form-field appearance="fill" class="w-full">
-      <mat-label>Factor de compra</mat-label>
-      <input
-        matInput
-        type="number"
-        min="1"
-        formControlName="factor_compra"
-        autocomplete="off"
-        inputmode="numeric"
-      />
-      <mat-error *ngIf="form.get('factor_compra')?.hasError('min') || form.get('factor_compra')?.hasError('required')">
-        Debe ser un número ≥ 1
-      </mat-error>
-
-      <!-- Hint informativo (no lógica extra; solo interpolación simple) -->
-      <mat-hint *ngIf="form.value.unidad_compra && form.value.factor_compra">
-        1 {{ form.value.unidad_compra }} = {{ form.value.factor_compra }} {{ form.value.unidad || 'pieza' }}
-      </mat-hint>
-    </mat-form-field>
-
-
-
-    <!-- CÓDIGO INTERNO -->
-    <ng-container *ngIf="form.get('tipo')?.value === 'Aparatos' || form.get('tipo')?.value === 'Sistemas'">
-    <mat-form-field appearance="fill" class="campo">
-      <mat-label>Código Interno</mat-label>
-      <input matInput formControlName="codigo_interno" />
-    </mat-form-field>
-    </ng-container>
-
-    <!-- GRUPO MUSCULAR: solo si tipo == 'aparato' -->
-    <ng-container *ngIf="form.get('tipo')?.value === 'Aparatos'">
-      <mat-form-field appearance="fill" class="campo">
-        <mat-label>Familia de equipo</mat-label>
-        <mat-select formControlName="familia_equipo_id">
-          <mat-option [value]="null">Sin clasificar</mat-option>
-          <mat-option *ngFor="let familia of familiasEquipo" [value]="familia.id">
-            {{ familia.nombre }}
-          </mat-option>
-        </mat-select>
-      </mat-form-field>
-
-      <mat-form-field appearance="fill" class="campo">
-        <mat-label>Grupo Muscular</mat-label>
-        <mat-select formControlName="grupo_muscular">
-          <mat-option>
-            <input matInput placeholder="Buscar grupo muscular" [formControl]="grupoMuscularFiltroControl" (click)="$event.stopPropagation()" autocomplete="off">
-          </mat-option>
-          <mat-option *ngFor="let g of gruposMuscularesFiltrados" [value]="g.nombre">
-            {{ g.nombre }}
-          </mat-option>
-        </mat-select>
-      </mat-form-field>
-    </ng-container>
-
-    <!-- Puedes agregar más campos aquí... -->
+        <div class="form-item">
+          <span class="form-item__label">Grupo muscular <span class="required">*</span></span>
+          <mat-form-field appearance="outline" class="campo">
+            <mat-select formControlName="grupo_muscular" aria-label="Grupo muscular">
+              <mat-option>
+                <input matInput placeholder="Buscar grupo muscular" aria-label="Buscar grupo muscular" [formControl]="grupoMuscularFiltroControl" (click)="$event.stopPropagation()" autocomplete="off" />
+              </mat-option>
+              <mat-option *ngFor="let g of gruposMuscularesFiltrados" [value]="g.nombre">
+                {{ g.nombre }}
+              </mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
+      </ng-container>
+    </div>
   </div>
 
-  <div class="botones">
+  <div mat-dialog-actions class="botones">
     <button mat-button color="warn" (click)="cancelar()" type="button">Cancelar</button>
     <button mat-flat-button color="primary" [disabled]="form.invalid" type="submit">
       {{ modo === 'crear' ? 'Agregar' : 'Actualizar' }}
