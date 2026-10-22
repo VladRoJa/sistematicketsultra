@@ -148,6 +148,10 @@
                   type="number" min="1" step="1" inputmode="numeric"
                   formControlName="cantidad" />
                 <small class="movement-field__hint">Unidades enteras</small>
+                <small *ngIf="faltanteStock(i) as faltante" class="movement-field__error" role="alert">
+                  {{ faltante.codigo }}: disponible {{ faltante.disponible }},
+                  solicitaste {{ faltante.solicitado }}.
+                </small>
               </div>
             </div>
           </article>
@@ -162,6 +166,19 @@
     </div>
 
     <footer mat-dialog-actions class="movement-dialog__footer">
+      <div *ngIf="errorMovimiento" class="movement-dialog__feedback" role="alert" aria-live="assertive">
+        <mat-icon>warning_amber</mat-icon>
+        <div>
+          <strong>No se registró el movimiento</strong>
+          <p>{{ errorMovimiento }}</p>
+          <ul *ngIf="faltantesStock.length > 0">
+            <li *ngFor="let faltante of faltantesStock">
+              {{ faltante.codigo }} · {{ faltante.nombre }}:
+              disponible {{ faltante.disponible }}, solicitaste {{ faltante.solicitado }}.
+            </li>
+          </ul>
+        </div>
+      </div>
       <div class="movement-dialog__summary" aria-live="polite">
         <strong>{{ productosSeleccionados }} de {{ productosFormArray.length }} equipos seleccionados</strong>
         <span>{{ etiquetaTipoMovimiento }} · {{ nombreSucursalSeleccionada }}</span>
