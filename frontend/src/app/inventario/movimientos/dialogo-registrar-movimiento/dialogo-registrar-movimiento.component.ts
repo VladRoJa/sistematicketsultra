@@ -222,13 +222,17 @@ export class DialogoRegistrarMovimientoComponent implements OnInit {
 
     grupo.get('inventario_id')?.setValue(inv.id, { emitEvent: false });
     grupo.get('unidad_medida')?.setValue(inv.unidad_medida || '', { emitEvent: false });
-    grupo.get('inventarioControl')?.setValue(inv, { emitEvent: false });
+    // Input nativo: el valor debe ser texto, no el objeto completo ([object Object]).
+    // emitEvent:false conserva el ID confirmado. Al volver a escribir sí se invalida.
+    grupo.get('inventarioControl')?.setValue(this.displayInventario(inv), { emitEvent: false });
     this.indiceBusquedaActivo = null;
   }
 
   articuloSeleccionado(index: number): ArticuloMovimiento | null {
-    const control = this.productosFormArray.at(index).get('inventarioControl')?.value;
-    return control && typeof control === 'object' ? control as ArticuloMovimiento : null;
+    // La identidad proviene del ID confirmado, no del texto editable del input.
+    const id = this.productosFormArray.at(index).get('inventario_id')?.value;
+    if (id === null || id === undefined || id === '') return null;
+    return this.inventariosDisponibles.find(inv => String(inv.id) === String(id)) || null;
   }
 
   displayInventario = (inv?: ArticuloMovimiento | string | null): string => {
