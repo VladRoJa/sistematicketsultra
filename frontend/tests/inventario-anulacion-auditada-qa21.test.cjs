@@ -11,6 +11,7 @@ const listaTs = read('movimientos.component.ts');
 const listaHtml = read('movimientos.component.html');
 const listaCss = read('movimientos.component.css');
 const detalleHtml = read('dialogo-detalle-movimiento/dialogo-detalle-movimiento.component.html');
+const detalleTs = read('dialogo-detalle-movimiento/dialogo-detalle-movimiento.component.ts');
 const anularTs = read('dialogo-anular-movimiento/dialogo-anular-movimiento.component.ts');
 const anularHtml = read('dialogo-anular-movimiento/dialogo-anular-movimiento.component.html');
 
@@ -45,7 +46,8 @@ test('QA-21 motivo obligatorio con validación cliente; cancelar no envía', () 
 
 test('QA-21 detalle histórico incluye usuario, fecha UTC y motivo sin ocultar artículos', () => {
   assert.match(detalleHtml, /data\.movimiento\.anulado/);
-  assert.match(detalleHtml, /usuario_anulacion/);
+  assert.match(detalleHtml, /usuarioAnulacion/);
+  assert.match(detalleTs, /data\.movimiento\.usuario_anulacion/);
   assert.match(detalleHtml, /anulado_en_utc/);
   assert.match(detalleHtml, /motivo_anulacion/);
   assert.match(detalleHtml, /\*ngFor="let articulo of articulos"/);

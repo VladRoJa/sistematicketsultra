@@ -1,72 +1,131 @@
-<h2 mat-dialog-title>Detalle del movimiento #{{ data.movimiento.id }}</h2>
-
-<mat-dialog-content class="movement-detail">
-  <div class="movement-detail__meta">
-    <div>
-      <span>Fecha</span>
-      <strong>{{ data.movimiento.fecha || '—' }}</strong>
+<div class="movement-detail-dialog">
+  <header class="movement-detail__header">
+    <div class="movement-detail__header-text">
+      <span class="movement-detail__eyebrow">Inventario · Trazabilidad</span>
+      <div class="movement-detail__title-row">
+        <h2 mat-dialog-title>Movimiento #{{ data.movimiento.id }}</h2>
+        <span class="movement-detail__status"
+          [class.movement-detail__status--annulled]="data.movimiento.anulado">
+          {{ etiquetaEstado }}
+        </span>
+      </div>
+      <p>Consulta de la operación y su registro histórico.</p>
     </div>
-    <div>
-      <span>Tipo</span>
-      <strong>{{ data.movimiento.tipo | titlecase }}</strong>
-    </div>
-    <div>
-      <span>Artículos registrados</span>
-      <strong>{{ articulos.length }}</strong>
-    </div>
-  </div>
+    <button type="button" class="movement-detail__close" (click)="cerrar()"
+      aria-label="Cerrar detalle del movimiento">
+      <mat-icon>close</mat-icon>
+    </button>
+  </header>
 
-  <section *ngIf="data.movimiento.anulado" class="movement-detail__annulled">
-    <strong>Movimiento anulado · las existencias fueron revertidas</strong>
-    <p><b>Anulado por:</b> {{ data.movimiento.usuario_anulacion || ('Usuario #' + data.movimiento.anulado_por_usuario_id) }}</p>
-    <p><b>Fecha:</b> {{ data.movimiento.anulado_en_utc | date:'dd/MM/yyyy HH:mm' }}</p>
-    <p><b>Motivo:</b> {{ data.movimiento.motivo_anulacion }}</p>
-    <p>El registro original y sus artículos se conservan únicamente como historial.</p>
-  </section>
+  <mat-dialog-content class="movement-detail">
+    <section class="movement-detail__meta" aria-label="Datos del movimiento">
+      <div class="movement-detail__fact">
+        <span>Fecha original</span>
+        <strong>{{ data.movimiento.fecha || '—' }}</strong>
+      </div>
+      <div class="movement-detail__fact">
+        <span>Tipo de movimiento</span>
+        <strong>{{ data.movimiento.tipo | titlecase }}</strong>
+      </div>
+      <div class="movement-detail__fact">
+        <span>Registrado por</span>
+        <strong>{{ usuarioRegistro }}</strong>
+      </div>
+      <div class="movement-detail__fact">
+        <span>Sucursal</span>
+        <strong>{{ nombreSucursal }}</strong>
+      </div>
+    </section>
 
-  <p class="movement-detail__note">
-    Los códigos y datos descriptivos corresponden al catálogo actual.
-    Las cantidades y unidades provienen del movimiento registrado.
-  </p>
+    <section *ngIf="data.movimiento.anulado" class="movement-detail__annulled"
+      aria-label="Auditoría de anulación">
+      <div class="movement-detail__annulled-heading">
+        <span class="movement-detail__annulled-icon" aria-hidden="true">
+          <mat-icon>history_toggle_off</mat-icon>
+        </span>
+        <div>
+          <h3>Movimiento anulado</h3>
+          <p>Las existencias fueron revertidas; este registro se conserva como evidencia.</p>
+        </div>
+      </div>
 
-  <div class="movement-detail__scroll" *ngIf="articulos.length; else sinArticulos">
-    <table class="movement-detail__table">
-      <thead>
-        <tr>
-          <th scope="col">ID artículo</th>
-          <th scope="col">Producto</th>
-          <th scope="col">Código actual</th>
-          <th scope="col">Marca</th>
-          <th scope="col">Proveedor</th>
-          <th scope="col">Categoría</th>
-          <th scope="col">Cantidad</th>
-          <th scope="col">Unidad</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let articulo of articulos">
-          <td>{{ articulo.inventarioId }}</td>
-          <td class="movement-detail__product">{{ articulo.nombre }}</td>
-          <td class="movement-detail__code">{{ articulo.codigoActual }}</td>
-          <td>{{ articulo.marca }}</td>
-          <td>{{ articulo.proveedor }}</td>
-          <td>{{ articulo.categoria }}</td>
-          <td class="movement-detail__qty">{{ articulo.cantidad }}</td>
-          <td>{{ articulo.unidadMedida }}</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-  <ng-template #sinArticulos>
-    <p class="movement-detail__empty">Este movimiento no contiene artículos registrados.</p>
-  </ng-template>
+      <div class="movement-detail__audit-grid">
+        <div>
+          <span>Anulado por</span>
+          <strong>{{ usuarioAnulacion }}</strong>
+        </div>
+        <div>
+          <span>Fecha de anulación</span>
+          <strong>{{ data.movimiento.anulado_en_utc | date:'dd/MM/yyyy HH:mm' }}</strong>
+        </div>
+      </div>
 
-  <section class="movement-detail__observations" *ngIf="data.movimiento.observaciones">
-    <h3>Observaciones</h3>
-    <p>{{ data.movimiento.observaciones }}</p>
-  </section>
-</mat-dialog-content>
+      <div class="movement-detail__audit-reason">
+        <span>Motivo de anulación</span>
+        <p>{{ data.movimiento.motivo_anulacion || '—' }}</p>
+      </div>
+    </section>
 
-<mat-dialog-actions align="end">
-  <button mat-button type="button" (click)="cerrar()">Cerrar</button>
-</mat-dialog-actions>
+    <section class="movement-detail__items" aria-label="Artículos del movimiento">
+      <div class="movement-detail__section-heading">
+        <div>
+          <h3>Artículos del movimiento</h3>
+          <p>Datos originales de cantidades y unidades, sin modificaciones.</p>
+        </div>
+        <span class="movement-detail__count">
+          {{ etiquetaCantidadArticulos }}
+        </span>
+      </div>
+
+      <div class="movement-detail__scroll" *ngIf="articulos.length; else sinArticulos">
+        <table class="movement-detail__table">
+          <thead>
+            <tr>
+              <th scope="col">ID artículo</th>
+              <th scope="col">Producto</th>
+              <th scope="col">Código actual</th>
+              <th scope="col">Marca</th>
+              <th scope="col">Proveedor</th>
+              <th scope="col">Categoría</th>
+              <th scope="col" class="movement-detail__qty">Cantidad</th>
+              <th scope="col">Unidad</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let articulo of articulos">
+              <td class="movement-detail__id">{{ articulo.inventarioId }}</td>
+              <td class="movement-detail__product">{{ articulo.nombre }}</td>
+              <td class="movement-detail__code">{{ articulo.codigoActual }}</td>
+              <td>{{ articulo.marca }}</td>
+              <td>{{ articulo.proveedor }}</td>
+              <td>{{ articulo.categoria }}</td>
+              <td class="movement-detail__qty">{{ articulo.cantidad }}</td>
+              <td>{{ articulo.unidadMedida }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <ng-template #sinArticulos>
+        <p class="movement-detail__empty">Este movimiento no contiene artículos registrados.</p>
+      </ng-template>
+
+      <p class="movement-detail__note">
+        Los códigos y datos descriptivos corresponden al catálogo actual.
+        Las cantidades y unidades provienen del movimiento registrado.
+      </p>
+    </section>
+
+    <section class="movement-detail__observations" *ngIf="data.movimiento.observaciones">
+      <h3>Observaciones originales</h3>
+      <p>{{ data.movimiento.observaciones }}</p>
+    </section>
+  </mat-dialog-content>
+
+  <footer mat-dialog-actions class="movement-detail__footer">
+    <span class="movement-detail__readonly">
+      <mat-icon>visibility</mat-icon>
+      Registro histórico · Solo lectura
+    </span>
+    <button type="button" class="movement-detail__footer-button" (click)="cerrar()">Cerrar</button>
+  </footer>
+</div>
