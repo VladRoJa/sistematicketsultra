@@ -11,7 +11,6 @@ class InventarioCodigoCorreccionORM(db.Model):
         db.Integer,
         db.ForeignKey("inventario_general.id", ondelete="RESTRICT"),
         nullable=False,
-        index=True,
     )
     actor_usuario_id = db.Column(db.Integer, nullable=False)
     codigo_anterior = db.Column(db.String(50), nullable=False)
@@ -22,4 +21,11 @@ class InventarioCodigoCorreccionORM(db.Model):
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
         server_default=db.func.now(),
+    )
+
+    __table_args__ = (
+        db.Index(
+            "ix_inv_codigo_correcciones_inventario",
+            "inventario_id", "ocurrido_en_utc",
+        ),
     )
