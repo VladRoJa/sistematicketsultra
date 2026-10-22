@@ -726,7 +726,7 @@ def list_permission_actions():
     module_key = str(request.args.get("module", "") or "").strip()
     risk_level = str(request.args.get("risk_level", "") or "").strip().lower()
 
-    query = PermissionActionORM.query.join(PermissionModuleORM)
+    query = PermissionActionORM.query.join(PermissionActionORM.module)
 
     if active_filter is not None:
         query = query.filter(PermissionActionORM.is_active.is_(active_filter))
@@ -826,7 +826,7 @@ def get_user_effective_permissions(user_id: int):
 
     active_filter = _parse_active_filter()
 
-    query = PermissionActionORM.query.join(PermissionModuleORM)
+    query = PermissionActionORM.query.join(PermissionActionORM.module)
 
     if active_filter is not None:
         query = query.filter(PermissionActionORM.is_active.is_(active_filter))
