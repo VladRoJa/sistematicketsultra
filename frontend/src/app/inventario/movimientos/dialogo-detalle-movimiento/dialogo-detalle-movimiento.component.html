@@ -9,7 +9,6 @@
           {{ etiquetaEstado }}
         </span>
       </div>
-      <p>Consulta de la operación y su registro histórico.</p>
     </div>
     <button type="button" class="movement-detail__close" (click)="cerrar()"
       aria-label="Cerrar detalle del movimiento">
@@ -45,7 +44,7 @@
         </span>
         <div>
           <h3>Movimiento anulado</h3>
-          <p>Las existencias fueron revertidas; este registro se conserva como evidencia.</p>
+          <p>Existencias revertidas · historial conservado</p>
         </div>
       </div>
 
@@ -58,11 +57,10 @@
           <span>Fecha de anulación</span>
           <strong>{{ data.movimiento.anulado_en_utc | date:'dd/MM/yyyy HH:mm' }}</strong>
         </div>
-      </div>
-
-      <div class="movement-detail__audit-reason">
-        <span>Motivo de anulación</span>
-        <p>{{ data.movimiento.motivo_anulacion || '—' }}</p>
+        <div class="movement-detail__audit-reason">
+          <span>Motivo de anulación</span>
+          <p>{{ data.movimiento.motivo_anulacion || '—' }}</p>
+        </div>
       </div>
     </section>
 
