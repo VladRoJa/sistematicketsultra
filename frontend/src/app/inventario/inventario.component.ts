@@ -25,6 +25,7 @@ import {
 } from 'src/app/utils/tabla-filtros.helper';
 import { mostrarAlertaToast } from 'src/app/utils/alertas';
 import { DialogoInventarioComponent } from './dialogo-inventario/dialogo-inventario.component';
+import { DialogoCorregirCodigoComponent } from './dialogo-corregir-codigo/dialogo-corregir-codigo.component';
 import {
   detectarCodigosDuplicados,
   GrupoCodigoDuplicado,
@@ -223,6 +224,26 @@ export class InventarioComponent implements OnInit {
       return;
     }
     this.auditoriaCodigosAbierta = !this.auditoriaCodigosAbierta;
+  }
+
+  corregirCodigoDuplicado(articulo: Inventario): void {
+    if (!this.puedeAdministrarInventario || this.loading || this.error) {
+      return;
+    }
+
+    const dialogRef = this.dialog.open(DialogoCorregirCodigoComponent, {
+      width: '600px',
+      maxWidth: '96vw',
+      maxHeight: '90vh',
+      data: { ...articulo },
+    });
+
+    dialogRef.afterClosed().subscribe((resultado) => {
+      if (resultado?.status === 'corregido') {
+        this.cargarInventario();
+        mostrarAlertaToast('Código actualizado con historial de auditoría.');
+      }
+    });
   }
 
   private actualizarResumen(): void {
