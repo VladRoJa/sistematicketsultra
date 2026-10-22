@@ -112,7 +112,7 @@ Estos puntos necesitan información del servidor o revisión de código adiciona
 - [x] Reconocer todas las familias de fuentes de autorización en código (`rol`, `usuarios_permisos`, `permission_grants`, operadores, filtros por sucursal, guardias por objeto).
 - [x] Identificar y documentar riesgos prioritarios y el piloto.
 - [x] Verificar que el catálogo/observabilidad y el endpoint de edición de módulos no constituyen enforcement universal.
-- [ ] Obtener **conteos agregados, sin secretos ni datos personales**, de roles, grants activos/inactivos, grants con caducidad, scopes, overrides y operadores; confrontar esquema y migraciones aplicadas con producción.
+- [~] **Grants (consulta agregada, 2026-10-22):** PostgreSQL devolvió una sola agrupación `principal_type=user`, `effect=allow`, `scope_type=global`, `estado=current`, `cantidad=2`. No se observaron otras agrupaciones en esa consulta. **Pendiente:** identificar las acciones asociadas de forma agregada, revisar roles/operadores y confrontar esquema y migraciones aplicadas; un scope `global` del grant no exime restricciones del dominio y no implica enforcement universal.
 - [ ] Verificar por código la cobertura de todas las rutas críticas del piloto: consulta, detalle, creación, actualización, publicación, archivo, descarga y visibilidad documental.
 - [ ] Producir conjunto de escenarios de paridad de Nube Corporativa (rol SISTEMAS, ADMICORP, admin con otro usuario, usuario ordinario, documento sensible).
 - [ ] Decidir con responsable operativo únicamente los accesos legacy contradictorios que supongan un cambio de política, no pedir autorización para cada refactor.
