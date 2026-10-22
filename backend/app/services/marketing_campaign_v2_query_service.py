@@ -159,22 +159,41 @@ def list_campaign_v2_recipients(
             session=active_session,
         )
 
-        # Un único snapshot persistido rige el filtro, el total y las filas.
-        # No mezclar estados históricos ni consultar al proveedor al paginar.
-        latest_snapshot = (
-            active_session.query(MarketingCampaignV2ProviderStatsSnapshotORM)
-            .filter(
-                MarketingCampaignV2ProviderStatsSnapshotORM.campaign_v2_id
-                == normalized_id
+        # A multi-child campaign has one current snapshot PER provider campaign.
+        # The window discards older cuts of the same child in SQL, while keeping
+        # all current child cuts. No historical union and no provider calls.
+        snapshot_model = MarketingCampaignV2ProviderStatsSnapshotORM
+        ranked = (
+            active_session.query(
+                snapshot_model.id.label("snapshot_id"),
+                func.row_number().over(
+                    partition_by=(
+                        snapshot_model.provider,
+                        snapshot_model.provider_campaign_id,
+                    ),
+                    order_by=(
+                        snapshot_model.fetched_at.desc(),
+                        snapshot_model.id.desc(),
+                    ),
+                ).label("snapshot_rank"),
             )
-            .order_by(
-                MarketingCampaignV2ProviderStatsSnapshotORM.fetched_at.desc(),
-                MarketingCampaignV2ProviderStatsSnapshotORM.id.desc(),
-            )
-            .first()
+            .filter(snapshot_model.campaign_v2_id == normalized_id)
+            .subquery()
         )
+        latest_snapshots = (
+            active_session.query(snapshot_model)
+            .join(ranked, ranked.c.snapshot_id == snapshot_model.id)
+            .filter(ranked.c.snapshot_rank == 1)
+            .order_by(
+                snapshot_model.fetched_at.desc(), snapshot_model.id.desc(),
+            )
+            .all()
+        )
+        snapshots_by_id = {int(snapshot.id): snapshot for snapshot in latest_snapshots}
+        snapshot_ids = tuple(snapshots_by_id)
+        latest_snapshot = latest_snapshots[0] if latest_snapshots else None
         status_predicate = _recipient_provider_status_predicate(
-            latest_snapshot, normalized_status,
+            snapshot_ids, normalized_status,
         )
 
         count_query = (
@@ -205,38 +224,64 @@ def list_campaign_v2_recipients(
             .all()
         )
     observations_by_recipient = {}
-    if latest_snapshot is not None and rows:
+    if snapshot_ids and rows:
         recipient_ids = [int(recipient.id) for recipient, _ in rows]
         observations = (
             active_session.query(MarketingCampaignV2ProviderRecipientObservationORM)
             .filter(
-                MarketingCampaignV2ProviderRecipientObservationORM.snapshot_id
-                == latest_snapshot.id,
+                MarketingCampaignV2ProviderRecipientObservationORM.snapshot_id.in_(
+                    snapshot_ids
+                ),
                 MarketingCampaignV2ProviderRecipientObservationORM.campaign_recipient_id.in_(
                     recipient_ids
                 ),
             )
-            .order_by(MarketingCampaignV2ProviderRecipientObservationORM.id.asc())
             .all()
         )
-        observations_by_recipient = {
-            int(observation.campaign_recipient_id): observation
-            for observation in observations
-        }
+        # A malformed overlapping child must never duplicate a recipient.
+        # Latest current evidence wins deterministically.
+        observations.sort(
+            key=lambda observation: (
+                snapshots_by_id[int(observation.snapshot_id)].fetched_at,
+                int(observation.snapshot_id),
+                int(observation.id),
+            ),
+            reverse=True,
+        )
+        for observation in observations:
+            observations_by_recipient.setdefault(
+                int(observation.campaign_recipient_id), observation,
+            )
 
     return {
         "page": normalized_page,
         "page_size": normalized_page_size,
         "total": total,
         "total_pages": _total_pages(total, normalized_page_size),
+        "provider_snapshot_count": len(latest_snapshots),
+        "provider_latest_snapshot_id": (
+            int(latest_snapshot.id) if latest_snapshot is not None else None
+        ),
+        "provider_latest_snapshot_at": (
+            _iso_datetime(latest_snapshot.fetched_at)
+            if latest_snapshot is not None else None
+        ),
         "rows": [
             {
                 **_serialize_recipient_summary(
                     recipient, evidence_count=int(evidence_count or 0)
                 ),
-                "provider_status": _serialize_recipient_provider_status(
-                    latest_snapshot,
-                    observations_by_recipient.get(int(recipient.id)),
+                "provider_status": (
+                    _serialize_recipient_provider_status(
+                        snapshots_by_id[int(observation.snapshot_id)],
+                        observation,
+                    )
+                    if (observation := observations_by_recipient.get(int(recipient.id)))
+                    else (
+                        _serialize_recipient_provider_status(None, None, has_capture=True)
+                        if len(latest_snapshots) > 1
+                        else _serialize_recipient_provider_status(latest_snapshot, None)
+                    )
                 ),
             }
             for recipient, evidence_count in rows
@@ -462,19 +507,21 @@ def _normalize_optional_recipient_provider_status(value: Any) -> str | None:
     return normalized
 
 
-def _recipient_provider_status_predicate(snapshot, status: str | None):
-    """Filtro SQL previo a count/paginación para el snapshot más reciente."""
+def _recipient_provider_status_predicate(
+    snapshot_ids: tuple[int, ...], status: str | None,
+):
+    """One predicate for count and page over each child's latest snapshot."""
     if status is None:
         return None
     if status == "NO_SNAPSHOT":
-        return true() if snapshot is None else false()
-    if snapshot is None:
+        return true() if not snapshot_ids else false()
+    if not snapshot_ids:
         return false()
 
     obs = MarketingCampaignV2ProviderRecipientObservationORM
     observation = exists().where(
         and_(
-            obs.snapshot_id == snapshot.id,
+            obs.snapshot_id.in_(snapshot_ids),
             obs.campaign_recipient_id == MarketingCampaignV2RecipientORM.id,
         )
     )
@@ -489,7 +536,7 @@ def _recipient_provider_status_predicate(snapshot, status: str | None):
             obs.delivery_bucket == status,
         )
     else:
-        # Fallback defensivo del serializer: SUCCESSFUL sin bucket reconocido.
+        # Fallback defensivo: SUCCESSFUL without recognized delivery bucket.
         matching_outcome = and_(
             obs.outcome == "SUCCESSFUL",
             or_(
@@ -499,7 +546,7 @@ def _recipient_provider_status_predicate(snapshot, status: str | None):
         )
     return exists().where(
         and_(
-            obs.snapshot_id == snapshot.id,
+            obs.snapshot_id.in_(snapshot_ids),
             obs.campaign_recipient_id == MarketingCampaignV2RecipientORM.id,
             matching_outcome,
         )
@@ -525,11 +572,25 @@ def _serialize_recipient_summary(recipient, *, evidence_count: int) -> dict[str,
     }
 
 
-def _serialize_recipient_provider_status(snapshot, observation) -> dict[str, Any]:
+def _serialize_recipient_provider_status(
+    snapshot, observation, *, has_capture: bool = False,
+) -> dict[str, Any]:
     # Sin snapshot no equivale a fallido; sin match tampoco.
     if snapshot is None:
         return {
             "status": "NO_SNAPSHOT",
+            "snapshot_id": None,
+            "observed_at": None,
+            "outcome": None,
+            "delivery_bucket": None,
+            "button_labels": [],
+        }
+
+    if snapshot is None and has_capture:
+        # Multi-child: no individual observation in ANY latest child cut.
+        # Do not mislabel it NO_SNAPSHOT or attach an unrelated child ID.
+        return {
+            "status": "NO_PROVIDER_STATUS",
             "snapshot_id": None,
             "observed_at": None,
             "outcome": None,
