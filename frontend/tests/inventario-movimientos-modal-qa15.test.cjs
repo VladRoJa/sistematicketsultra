@@ -100,6 +100,7 @@ class ArrayGroup {
   push(group) { this.controls.push(group); }
   removeAt(i) { this.controls.splice(i, 1); }
   at(i) { return this.controls[i]; }
+  getRawValue() { return this.controls.map(group => group.getRawValue()); }
 }
 class Builder {
   group(input) {
