@@ -1,0 +1,64 @@
+<h2 mat-dialog-title>Detalle del movimiento #{{ data.movimiento.id }}</h2>
+
+<mat-dialog-content class="movement-detail">
+  <div class="movement-detail__meta">
+    <div>
+      <span>Fecha</span>
+      <strong>{{ data.movimiento.fecha || '—' }}</strong>
+    </div>
+    <div>
+      <span>Tipo</span>
+      <strong>{{ data.movimiento.tipo | titlecase }}</strong>
+    </div>
+    <div>
+      <span>Artículos registrados</span>
+      <strong>{{ articulos.length }}</strong>
+    </div>
+  </div>
+
+  <p class="movement-detail__note">
+    Los códigos y datos descriptivos corresponden al catálogo actual.
+    Las cantidades y unidades provienen del movimiento registrado.
+  </p>
+
+  <div class="movement-detail__scroll" *ngIf="articulos.length; else sinArticulos">
+    <table class="movement-detail__table">
+      <thead>
+        <tr>
+          <th scope="col">ID artículo</th>
+          <th scope="col">Producto</th>
+          <th scope="col">Código actual</th>
+          <th scope="col">Marca</th>
+          <th scope="col">Proveedor</th>
+          <th scope="col">Categoría</th>
+          <th scope="col">Cantidad</th>
+          <th scope="col">Unidad</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let articulo of articulos">
+          <td>{{ articulo.inventarioId }}</td>
+          <td class="movement-detail__product">{{ articulo.nombre }}</td>
+          <td class="movement-detail__code">{{ articulo.codigoActual }}</td>
+          <td>{{ articulo.marca }}</td>
+          <td>{{ articulo.proveedor }}</td>
+          <td>{{ articulo.categoria }}</td>
+          <td class="movement-detail__qty">{{ articulo.cantidad }}</td>
+          <td>{{ articulo.unidadMedida }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <ng-template #sinArticulos>
+    <p class="movement-detail__empty">Este movimiento no contiene artículos registrados.</p>
+  </ng-template>
+
+  <section class="movement-detail__observations" *ngIf="data.movimiento.observaciones">
+    <h3>Observaciones</h3>
+    <p>{{ data.movimiento.observaciones }}</p>
+  </section>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="cerrar()">Cerrar</button>
+</mat-dialog-actions>

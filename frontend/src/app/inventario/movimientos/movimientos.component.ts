@@ -12,6 +12,12 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDialog } from '@angular/material/dialog';
 import { DialogoRegistrarMovimientoComponent } from './dialogo-registrar-movimiento/dialogo-registrar-movimiento.component';
+import { DialogoDetalleMovimientoComponent } from './dialogo-detalle-movimiento/dialogo-detalle-movimiento.component';
+import {
+  MovimientoInventarioVista,
+  cantidadArticulosMovimiento,
+  primerArticuloMovimiento,
+} from './movimientos-vista.helper';
 import { DialogoConfirmacionComponent } from 'src/app/shared/dialogo-confirmacion/dialogo-confirmacion.component';
 import { MatIconModule } from '@angular/material/icon';
 import { mostrarAlertaToast } from 'src/app/utils/alertas';
@@ -56,7 +62,7 @@ export class MovimientosComponent implements OnInit {
   loading = false;
 
   displayedColumns: string[] = [
-    'id', 'fecha', 'tipo', 'producto', 'cantidad', 'usuario', 'sucursal', 'observaciones', 'acciones'
+    'id', 'fecha', 'tipo', 'articulos', 'usuario', 'sucursal', 'observaciones', 'acciones'
   ];
 
   ngOnInit(): void {
@@ -135,6 +141,26 @@ export class MovimientosComponent implements OnInit {
       const coincideFecha = !fecha || (mov.fecha && mov.fecha.startsWith(fecha));
 
       return coincideTexto && coincideTipo && coincideSucursal && coincideUsuario && coincideFecha;
+    });
+  }
+
+  cantidadArticulos(mov: MovimientoInventarioVista): number {
+    return cantidadArticulosMovimiento(mov);
+  }
+
+  primerArticulo(mov: MovimientoInventarioVista): string {
+    return primerArticuloMovimiento(mov, this.inventariosDisponibles);
+  }
+
+  abrirDetalleMovimiento(mov: MovimientoInventarioVista): void {
+    this.dialog.open(DialogoDetalleMovimientoComponent, {
+      width: '1100px',
+      maxWidth: '96vw',
+      maxHeight: '90vh',
+      data: {
+        movimiento: mov,
+        catalogo: this.inventariosDisponibles,
+      },
     });
   }
 
