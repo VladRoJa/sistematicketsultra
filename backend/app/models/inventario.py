@@ -95,6 +95,15 @@ class MovimientoInventario(db.Model):
     usuario_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     sucursal_id = db.Column(db.Integer, db.ForeignKey('sucursales.sucursal_id'), nullable=False)
     observaciones = db.Column(db.Text)
+    # Una anulación conserva los datos y detalles originales para auditoría.
+    anulado = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    anulado_por_usuario_id = db.Column(
+        db.Integer,
+        db.ForeignKey('users.id', name='fk_mov_inv_anulado_por_usuario', ondelete='RESTRICT'),
+        nullable=True,
+    )
+    anulado_en_utc = db.Column(db.DateTime(timezone=True), nullable=True)
+    motivo_anulacion = db.Column(db.Text, nullable=True)
 
     detalles = db.relationship('DetalleMovimiento', back_populates='movimiento', cascade='all, delete-orphan')
 
