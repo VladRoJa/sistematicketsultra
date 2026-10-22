@@ -10,7 +10,7 @@ from flask_cors import CORS
 from flask_jwt_extended import jwt_required, get_jwt_identity
 import pandas as pd
 import qrcode
-from sqlalchemy import func
+from sqlalchemy import func, text as sa_text
 from app. extensions import db
 from app.models.catalogos import CategoriaInventario
 from app.models.inventario import InventarioGeneral, MovimientoInventario, DetalleMovimiento, InventarioSucursal
@@ -354,7 +354,7 @@ def _bloquear_escritura_codigos():
     deberán usar este mismo contrato hasta depurar duplicados históricos.
     """
     db.session.execute(
-        db.text("SELECT pg_advisory_xact_lock(:dominio, :operacion)"),
+        sa_text("SELECT pg_advisory_xact_lock(:dominio, :operacion)"),
         {"dominio": 51022, "operacion": 11},
     )
 
