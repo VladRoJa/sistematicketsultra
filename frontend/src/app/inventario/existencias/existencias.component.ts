@@ -37,7 +37,7 @@ export class ExistenciasComponent implements OnInit {
     : this.user?.sucursal_id || 1;
   existencias: any[] = [];
   displayedColumns: string[] = [
-    'id', 'nombre', 'tipo', 'marca', 'proveedor', 'categoria', 'unidad', 'stock', 'sucursal'
+    'id', 'nombre', 'codigo_interno', 'tipo', 'marca', 'proveedor', 'categoria', 'unidad', 'stock', 'sucursal'
   ];
 
   loading = false;
