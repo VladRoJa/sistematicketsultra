@@ -18,7 +18,7 @@ import {
   cantidadArticulosMovimiento,
   primerArticuloMovimiento,
 } from './movimientos-vista.helper';
-import { DialogoConfirmacionComponent } from 'src/app/shared/dialogo-confirmacion/dialogo-confirmacion.component';
+import { DialogoAnularMovimientoComponent } from './dialogo-anular-movimiento/dialogo-anular-movimiento.component';
 import { MatIconModule } from '@angular/material/icon';
 import { mostrarAlertaToast } from 'src/app/utils/alertas';
 import { environment } from 'src/environments/environment';
@@ -62,6 +62,7 @@ export class MovimientosComponent implements OnInit {
   loading = false;
   cargandoCatalogo = false;
   errorCatalogo = false;
+  anulandoMovimientoId: number | null = null;
 
   displayedColumns: string[] = [
     'id', 'fecha', 'tipo', 'articulos', 'usuario', 'sucursal', 'observaciones', 'acciones'
@@ -214,31 +215,42 @@ export class MovimientosComponent implements OnInit {
     });
   }
 
-  eliminarMovimiento(id: number): void {
-    const dialogRef = this.dialog.open(DialogoConfirmacionComponent, {
-      data: {
-        titulo: '¿Eliminar movimiento?',
-        mensaje: 'Esta acción no se puede deshacer. ¿Seguro que quieres eliminar este movimiento?',
-        textoAceptar: 'Eliminar',
-        textoCancelar: 'Cancelar'
-      }
+  anularMovimiento(mov: MovimientoInventarioVista): void {
+    if (mov.anulado || this.anulandoMovimientoId !== null) return;
+
+    const dialogRef = this.dialog.open(DialogoAnularMovimientoComponent, {
+      width: '560px',
+      maxWidth: '96vw',
+      autoFocus: false,
+      data: mov,
     });
 
-    dialogRef.afterClosed().subscribe(result => {
-      if (result) {
-        const token = localStorage.getItem('token');
-        this.http.delete(`${environment.apiUrl}/inventario/movimientos/${id}`, {
-          headers: { Authorization: `Bearer ${token}` }
+    dialogRef.afterClosed().subscribe((motivo: string | null) => {
+      if (!motivo || mov.anulado || this.anulandoMovimientoId !== null) return;
+
+      const token = localStorage.getItem('token');
+      if (!token) {
+        mostrarAlertaToast('Sesión no autorizada. No se anuló el movimiento.', 'error');
+        return;
+      }
+
+      this.anulandoMovimientoId = mov.id;
+      this.http.post(`${environment.apiUrl}/inventario/movimientos/${mov.id}/anular`,
+        { motivo }, {
+          headers: { Authorization: `Bearer ${token}` },
         }).subscribe({
           next: () => {
+            this.anulandoMovimientoId = null;
             this.cargarMovimientos();
-            mostrarAlertaToast('✅ Movimiento eliminado correctamente.', 'success');
+            mostrarAlertaToast('Movimiento anulado. Historial conservado.', 'success');
           },
           error: err => {
-            mostrarAlertaToast('❌ Error al eliminar movimiento.', 'error');
-          }
+            this.anulandoMovimientoId = null;
+            const detalle = err?.error?.detail || err?.error?.error ||
+              'No se pudo anular el movimiento.';
+            mostrarAlertaToast(detalle, 'error');
+          },
         });
-      }
     });
   }
 
