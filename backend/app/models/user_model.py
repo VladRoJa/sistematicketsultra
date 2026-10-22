@@ -40,7 +40,13 @@ class UserORM(db.Model):
     email = db.Column(db.String(255), index=True, nullable=True)
 
     # ─── Relaciones ─────────────────────────────────────────
-    movimientos = db.relationship('MovimientoInventario', backref='usuario', cascade='all, delete-orphan')
+    # La relación histórica usa al creador, no al usuario anulador.
+    # No borrar movimientos en cascada al retirar usuarios: son registros auditables.
+    movimientos = db.relationship(
+        'MovimientoInventario',
+        backref='usuario',
+        foreign_keys='MovimientoInventario.usuario_id',
+    )
 
     # ─── Constantes de rol (usadas en permisos) ─────────────
     # Ajusta nombres a los que realmente usas en tu app.
