@@ -535,3 +535,45 @@ select.movement-input {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* QA-19: advertencia persistente, visible aunque el contenido esté desplazado. */
+.movement-dialog__feedback {
+  display: flex;
+  align-items: flex-start;
+  flex: 1 1 100%;
+  gap: 10px;
+  padding: 10px 13px;
+  border: 1px solid #fda29b;
+  border-radius: 10px;
+  background: #fffbfa;
+  color: #b42318;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.movement-dialog__feedback mat-icon {
+  flex: 0 0 19px;
+  width: 19px;
+  height: 19px;
+  font-size: 19px;
+}
+
+.movement-dialog__feedback strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.movement-dialog__feedback p {
+  margin: 0;
+}
+
+.movement-dialog__feedback ul {
+  padding-left: 16px;
+  margin: 4px 0 0;
+}
+
+.movement-dialog__feedback li + li {
+  margin-top: 2px;
+}
