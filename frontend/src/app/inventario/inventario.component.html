@@ -151,7 +151,7 @@
         <h2>Auditoría de códigos internos</h2>
         <p>
           Catálogo completo, independientemente de la búsqueda y los filtros de la tabla.
-          Solo lectura: no corrige ni elimina registros.
+          Corrige el código con historial obligatorio. No se fusionan ni eliminan registros.
         </p>
       </div>
       <button
@@ -187,6 +187,7 @@
                 <th>Equipo / producto</th>
                 <th>Marca</th>
                 <th>Sucursal(es)</th>
+                <th>Corrección</th>
               </tr>
             </thead>
             <tbody>
@@ -195,6 +196,16 @@
                 <td>{{ articulo.nombre }}</td>
                 <td>{{ mostrarValor(articulo.marca) }}</td>
                 <td>{{ mostrarValor(articulo.sucursales) }}</td>
+                <td>
+                  <button
+                    type="button"
+                    class="inventory-duplicate-group__edit"
+                    [attr.aria-label]="'Corregir código del registro ' + articulo.id"
+                    (click)="corregirCodigoDuplicado(articulo)"
+                  >
+                    Corregir código
+                  </button>
+                </td>
               </tr>
             </tbody>
           </table>
