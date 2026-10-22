@@ -32,6 +32,7 @@ from .inventario import (
     MovimientoInventario,
     DetalleMovimiento,
 )
+from .inventario_codigo_correccion import InventarioCodigoCorreccionORM
 from .mantenimiento_equipo import FamiliaEquipoORM, FallaMantenimientoORM
 from .departamento_model import Departamento
 from .formulario_ticket import FormularioTicket, CampoFormulario
