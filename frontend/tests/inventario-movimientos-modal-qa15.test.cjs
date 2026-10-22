@@ -345,3 +345,119 @@ test('QA-17 cinco códigos distintos mantienen texto e ID al preparar entrada a 
     [[8000, 1], [8001, 1], [8002, 1], [8003, 1], [8004, 1]],
   );
 });
+
+
+test('QA-19 rechaza salida 2 de 11CCJW21 con stock 1 e informa cifras en el modal', () => {
+  const { vm, requests, calls } = crearVm();
+  vm.http.get = () => ({
+    subscribe: ({ next }) => next([
+      { inventario_id: 8000, sucursal_id: 12, stock: 1 },
+    ]),
+  });
+  vm.form.get('sucursal_id').setValue(12);
+  vm.form.get('tipo_movimiento').setValue('salida');
+  vm.onInventarioSeleccionado(catalog[0], 0);
+  vm.productosFormArray.at(0).get('cantidad').setValue(2);
+
+  vm.registrarMovimiento();
+
+  assert.equal(requests.length, 0, 'Nunca debe hacer POST con stock insuficiente');
+  assert.equal(vm.cargando, false);
+  assert.deepEqual(vm.faltantesStock, [{
+    indice: 0,
+    codigo: '11CCJW21',
+    nombre: 'Caminadora',
+    disponible: 1,
+    solicitado: 2,
+  }]);
+  assert.equal(vm.faltanteStock(0)?.disponible, 1);
+  assert.match(vm.errorMovimiento, /Salida rechazada por existencias insuficientes/);
+  assert.match(vm.errorMovimiento, /No se registró el movimiento/);
+  assert.deepEqual(calls, [], 'No debe cerrar el formulario tras un rechazo');
+});
+
+test('QA-19 al reducir cantidad a 1 desaparece alerta y puede enviar una salida válida', () => {
+  const { vm, requests } = crearVm();
+  vm.http.get = () => ({
+    subscribe: ({ next }) => next([
+      { inventario_id: 8000, sucursal_id: 12, stock: 1 },
+    ]),
+  });
+  vm.form.get('sucursal_id').setValue(12);
+  vm.form.get('tipo_movimiento').setValue('salida');
+  vm.onInventarioSeleccionado(catalog[0], 0);
+  const cantidad = vm.productosFormArray.at(0).get('cantidad');
+  cantidad.setValue(2);
+  vm.registrarMovimiento();
+
+  assert.ok(vm.errorMovimiento);
+  cantidad.setValue(1);
+  assert.equal(vm.errorMovimiento, null);
+  assert.deepEqual(vm.faltantesStock, []);
+
+  vm.registrarMovimiento();
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].body.tipo_movimiento, 'salida');
+  assert.deepEqual(requests[0].body.inventarios.map(p => p.cantidad), [1]);
+});
+
+test('QA-19 sin stock en la sucursal reporta disponible 0 y mantiene diálogo abierto', () => {
+  const { vm, requests, calls } = crearVm();
+  vm.http.get = () => ({ subscribe: ({ next }) => next([]) });
+  vm.form.get('sucursal_id').setValue(12);
+  vm.form.get('tipo_movimiento').setValue('salida');
+  vm.onInventarioSeleccionado(catalog[0], 0);
+
+  vm.registrarMovimiento();
+
+  assert.equal(vm.faltantesStock[0]?.disponible, 0);
+  assert.equal(vm.faltantesStock[0]?.solicitado, 1);
+  assert.deepEqual(requests, []);
+  assert.deepEqual(calls, []);
+});
+
+test('QA-19 si consulta de existencias falla informa en línea y no envía movimiento', () => {
+  const { vm, requests } = crearVm();
+  vm.http.get = () => ({ subscribe: ({ error }) => error({ status: 503 }) });
+  vm.form.get('sucursal_id').setValue(12);
+  vm.form.get('tipo_movimiento').setValue('salida');
+  vm.onInventarioSeleccionado(catalog[0], 0);
+
+  vm.registrarMovimiento();
+
+  assert.match(vm.errorMovimiento, /No se pudieron consultar las existencias/);
+  assert.deepEqual(requests, []);
+  assert.equal(vm.cargando, false);
+});
+
+test('QA-19 rechazo transaccional del backend también queda visible', () => {
+  const { vm, calls } = crearVm();
+  vm.http.get = () => ({ subscribe: ({ next }) => next([
+    { inventario_id: 8000, sucursal_id: 12, stock: 1 },
+  ]) });
+  vm.http.post = () => ({
+    subscribe: ({ error }) => error({
+      status: 409,
+      error: { error: 'Stock insuficiente para el inventario 8000' },
+    }),
+  });
+  vm.form.get('sucursal_id').setValue(12);
+  vm.form.get('tipo_movimiento').setValue('salida');
+  vm.onInventarioSeleccionado(catalog[0], 0);
+
+  vm.registrarMovimiento();
+
+  assert.match(vm.errorMovimiento, /Stock insuficiente para el inventario 8000/);
+  assert.deepEqual(calls, []);
+  assert.equal(vm.cargando, false);
+});
+
+test('QA-19 modal muestra la advertencia persistente y desglose por artículo', () => {
+  assert.match(componentHtml, /errorMovimiento/);
+  assert.match(componentHtml, /class="movement-dialog__feedback" role="alert"/);
+  assert.match(componentHtml, /faltantesStock/);
+  assert.match(componentHtml, /disponible \{\{ faltante\.disponible \}\}/);
+  assert.match(componentHtml, /solicitaste \{\{ faltante\.solicitado \}\}/);
+  assert.match(componentCss, /\.movement-dialog__feedback/);
+  assert.doesNotMatch(componentTs, /mostrarAlertaStockInsuficiente\('algún producto seleccionado'\)/);
+});
