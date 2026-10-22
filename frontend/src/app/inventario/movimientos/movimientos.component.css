@@ -135,3 +135,176 @@ mat-card {
 }
 
   
+/* QA-14: historial compacto. Los detalles extensos viven en el diálogo. */
+mat-card.movimientos-listado {
+  box-sizing: border-box;
+  max-width: 1420px;
+  width: calc(100% - 48px);
+  padding: 16px;
+  overflow: hidden;
+}
+
+.movimientos-listado__scroll {
+  max-height: calc(100vh - 280px);
+  min-height: 120px;
+  overflow: auto;
+  border: 1px solid #e4e7ec;
+  border-radius: 12px;
+}
+
+.movimientos-tabla {
+  min-width: 1100px;
+  width: 100%;
+  background: #fff;
+}
+
+.movimientos-tabla .mat-mdc-header-row {
+  min-height: 44px;
+  background: #f8fafc;
+}
+
+.movimientos-tabla .mat-mdc-row {
+  min-height: 58px;
+  border-bottom-color: #eef2f6;
+}
+
+.movimientos-tabla .mat-mdc-row:hover {
+  background-color: #fffaf8;
+}
+
+.movimientos-tabla .mat-mdc-header-cell,
+.movimientos-tabla .mat-mdc-cell {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 9px 10px;
+  font-size: 11px;
+  line-height: 1.4;
+  align-items: center;
+}
+
+.movimientos-tabla .mat-mdc-header-cell {
+  font-weight: 850;
+  color: #344054;
+}
+
+.movimientos-col-id {
+  flex: 0 0 54px;
+}
+
+.movimientos-col-fecha {
+  flex: 0 0 123px;
+  white-space: nowrap;
+}
+
+.movimientos-col-tipo {
+  flex: 0 0 96px;
+}
+
+.movimientos-col-articulos {
+  flex: 1.2 1 195px;
+}
+
+.movimientos-col-usuario {
+  flex: 0.8 1 108px;
+}
+
+.movimientos-col-sucursal {
+  flex: 0.9 1 120px;
+}
+
+.movimientos-col-observaciones {
+  flex: 1.2 1 165px;
+}
+
+.movimientos-col-acciones {
+  flex: 0 0 178px;
+  justify-content: flex-end;
+  gap: 3px;
+}
+
+.movimientos-articulos-resumen {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  width: 100%;
+}
+
+.movimientos-articulos-resumen strong {
+  font-size: 12px;
+  color: #344054;
+}
+
+.movimientos-articulos-resumen span,
+.movimientos-texto-corto {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #667085;
+  font-size: 11px;
+}
+
+.movimientos-tipo {
+  display: inline-flex;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #f2f4f7;
+  color: #475467;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.movimientos-tipo--entrada {
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+.movimientos-tipo--salida {
+  background: #fef3f2;
+  color: #b42318;
+}
+
+.movimientos-col-acciones button {
+  margin-top: 0;
+}
+
+.movimientos-ver-detalle {
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.movimientos-ver-detalle mat-icon {
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
+}
+
+.movimientos-borrar {
+  flex: 0 0 auto;
+}
+
+.movimientos-listado__loading,
+.movimientos-listado__empty {
+  padding: 32px;
+  text-align: center;
+  color: #667085;
+  font-size: 13px;
+}
+
+@media (max-width: 700px) {
+  mat-card.movimientos-listado {
+    width: calc(100% - 24px);
+    padding: 10px;
+  }
+
+  .movimientos-listado__scroll {
+    max-height: calc(100vh - 250px);
+  }
+}
