@@ -315,3 +315,42 @@ El módulo será exitoso cuando Suite pueda responder:
 Y cuando una ruta sensible pueda mapearse a:
 
 > módulo + acción + guard actual + scope esperado + estado de revisión.
+
+---
+
+## Adenda vigente — separación de roles, permisos y alcance (2026-10-22)
+
+Esta adenda formaliza la decisión funcional de mantener **perfiles de trabajo separados de las capacidades y del alcance**. Aclara los apartados históricos de este contrato sin activar nuevas reglas de autorización. El objetivo es reducir condiciones especiales y evitar perfiles combinados difíciles de mantener.
+
+### Tres conceptos independientes
+
+1. **Rol o perfil:** responsabilidad operativa estable del usuario (por ejemplo, `GERENTE`, `SISTEMAS` o `COORDINADOR_MANTENIMIENTO`). Responde *qué función desempeña*, no contiene por sí solo todas las excepciones de acceso.
+2. **Permiso o acción:** capacidad concreta, nombrada por módulo y acción (por ejemplo, `pm.validate` o `warehouse.upload`). Responde *qué puede hacer*. Lectura, ejecución, validación, configuración y administración deben poder distinguirse.
+3. **Alcance o scope:** conjunto de sucursales, departamento, registros o documentos sobre los que se permite la acción. Responde *dónde y sobre qué puede hacerlo*. No se debe confundir una capacidad global con la misma capacidad limitada a sucursales.
+
+Los **grants explícitos** (`allow`/`deny`) se reservan para conceder o bloquear excepciones justificadas; **`inherit` significa retirar la excepción y volver a la política base**, no conceder un tercer permiso. Los límites inviolables (usuario inactivo, acción deshabilitada, bandera de seguridad apagada o restricciones de datos) no se omiten mediante un `allow`.
+
+### Política para nuevos roles y excepciones
+
+- **Sí se pueden crear roles nuevos** cuando representen una responsabilidad laboral real, estable y distinguible de las existentes.
+- No crear combinaciones de roles como `GERENTE_SISTEMAS`, `COORDINADOR_LECTOR_TRACK` o roles específicos por usuario/sucursal únicamente para entregar una acción adicional.
+- Si dos personas tienen el mismo puesto pero distinto alcance, conservar el rol y configurar las sucursales permitidas.
+- Si una persona requiere una capacidad extraordinaria, preferir una excepción explícita, delimitada y auditable antes que cambiar su rol principal.
+- No incorporar todavía multirrol automático o jerarquías heredadas sin una necesidad operativa demostrada: el modelo legacy actual usa un rol principal por usuario.
+- Cada rol nuevo necesita nombre funcional, responsabilidades, permisos base y alcance esperado claramente documentados; no basta crear un valor de texto para evitar una validación.
+
+### Resolución y trazabilidad exigidas
+
+Para una operación protegida, el backend debe poder explicar: **usuario + rol + acción + alcance + fuente de decisión + resultado**. La UI no autoriza por sí misma. Al migrar un módulo, las reglas de grants y su precedencia seguirán el diseño técnico de `docs/security/global_permissions_grants_technical_design.md`, sin invalidar hard stops ni controles específicos de acceso a registros.
+
+Las asignaciones y revocaciones deben registrar quién las hizo, sobre qué usuario o rol, qué acción y scope cambiaron, valor anterior/nuevo, motivo y fecha. Evitar excepciones escondidas por nombre de usuario, cadenas dispersas de roles o controles de acceso duplicados entre frontend y backend.
+
+### Estado comprobado y alcance inmediato
+
+- Observabilidad V1 volvió a cargar después de corregir el JOIN ambiguo en PR #1049 (2026-10-22).
+- Corte visual de ese día: 11 módulos, 40 acciones y 72 rutas mapeadas, de las cuales 3 aparecen inactivas. Son métricas del catálogo, no una afirmación de cobertura total.
+- Ya existen modelos y API de consulta para `permission_grants` y auditoría. El endpoint `PUT /api/permissions/catalog/users/<id>/module-access` guarda overrides por módulo, **pero expresamente no reemplaza aún el enforcement legacy**.
+- **Primer piloto propuesto:** Nube Corporativa / `internal_documents`. Separar capacidades de consulta y administración sin debilitar la visibilidad por documento, sus restricciones de sensibilidad ni los controles de escritura existentes.
+- Tickets, Inventario, PM y Track no se migran en bloque. Cada módulo se incorpora con un cambio pequeño, reversible y comprobación de permitido, denegado y alcance aplicable.
+
+**Criterio de aceptación funcional:** un operador puede comprender por qué alguien tiene acceso sin leer condiciones especiales esparcidas por el repositorio, y el backend aplica exactamente ese resultado a la operación real.
