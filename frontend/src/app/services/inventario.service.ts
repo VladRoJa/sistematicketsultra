@@ -34,6 +34,17 @@ obtenerInventario(opts?: { sucursal_id?: number }): Observable<any[]> {
     return this.http.put(`${this.url}/${id}`, data);
   }
 
+  corregirCodigoInterno(
+    inventarioId: number,
+    data: { codigo_anterior: string; codigo_nuevo: string; motivo: string },
+  ): Observable<any> {
+    return this.http.post(`${this.url}/${inventarioId}/corregir-codigo`, data);
+  }
+
+  obtenerHistorialCodigos(inventarioId: number): Observable<any[]> {
+    return this.http.get<any[]>(`${this.url}/${inventarioId}/historial-codigos`);
+  }
+
   eliminarInventario(id: number): Observable<any> {
     return this.http.delete(`${this.url}/${id}`);
   }
