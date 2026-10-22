@@ -119,3 +119,21 @@
     padding: 10px 14px;
   }
 }
+
+.movement-detail__annulled {
+  background: #f9fafb;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 12px 0;
+  color: #475467;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.movement-detail__annulled strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #344054;
+  font-size: 13px;
+}
+.movement-detail__annulled p { margin: 4px 0; }
