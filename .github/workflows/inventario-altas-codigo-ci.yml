@@ -1,0 +1,41 @@
+name: Inventario QA-11 Codigos CI
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/routes/inventarios.py"
+      - "backend/tests/routes/test_inventario_altas_codigos_qa11.py"
+      - ".github/workflows/inventario-altas-codigo-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+      SECRET_KEY: test-only-qa11
+      JWT_SECRET_KEY: test-only-qa11
+      SQLALCHEMY_DATABASE_URI: "sqlite:///:memory:"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install test dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Syntax check
+        run: python -m py_compile app/routes/inventarios.py tests/routes/test_inventario_altas_codigos_qa11.py
+      - name: QA-11 serialized inventory creation
+        run: python -m pytest -q --tb=short -o addopts= tests/routes/test_inventario_altas_codigos_qa11.py
