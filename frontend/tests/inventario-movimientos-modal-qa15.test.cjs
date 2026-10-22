@@ -294,3 +294,54 @@ test('QA-16 abrir un movimiento exige catálogo y no oculta errores de carga', (
   assert.match(parentTs, /this\.inventariosDisponibles\.length === 0/);
   assert.match(parentTs, /this\.errorCatalogo = true/);
 });
+
+
+test('QA-17 input nativo muestra código, nombre y marca en lugar de [object Object]', () => {
+  const { vm } = crearVm();
+  const grupo = vm.productosFormArray.at(0);
+  vm.iniciarBusqueda(0);
+  grupo.get('inventarioControl').setValue('11CCJW21');
+  vm.onInventarioSeleccionado(catalog[0], 0);
+
+  assert.equal(grupo.get('inventarioControl').value, '11CCJW21 · Caminadora · Fitness');
+  assert.equal(typeof grupo.get('inventarioControl').value, 'string');
+  assert.notEqual(grupo.get('inventarioControl').value, '[object Object]');
+  assert.equal(grupo.get('inventario_id').value, 8000);
+  assert.equal(vm.articuloSeleccionado(0)?.codigo_interno, '11CCJW21');
+  assert.equal(vm.articuloSeleccionado(0)?.nombre, 'Caminadora');
+  assert.equal(vm.mostrarResultados(0), false);
+  assert.equal(vm.productosSeleccionados, 1);
+});
+
+test('QA-17 editar texto después de seleccionar borra ID y la confirmación verde', () => {
+  const { vm } = crearVm();
+  const grupo = vm.productosFormArray.at(0);
+  vm.onInventarioSeleccionado(catalog[0], 0);
+  assert.equal(vm.articuloSeleccionado(0)?.id, 8000);
+
+  grupo.get('inventarioControl').setValue('11CCJW22');
+  assert.equal(grupo.get('inventario_id').value, null);
+  assert.equal(vm.articuloSeleccionado(0), null);
+  assert.equal(vm.productosSeleccionados, 0);
+  assert.equal(vm.form.invalid, true);
+});
+
+test('QA-17 cinco códigos distintos mantienen texto e ID al preparar entrada a Santa Fe', () => {
+  const { vm, requests } = crearVm();
+  vm.form.get('sucursal_id').setValue(12);
+  for (let i = 0; i < 5; i++) {
+    if (i > 0) vm.agregarProducto();
+    vm.onInventarioSeleccionado(catalog[i], i);
+    assert.equal(vm.productosFormArray.at(i).get('inventarioControl').value,
+      catalog[i].codigo_interno + ' · Caminadora · Fitness');
+    assert.equal(vm.articuloSeleccionado(i)?.id, 8000 + i);
+  }
+
+  assert.equal(vm.productosSeleccionados, 5);
+  vm.registrarMovimiento();
+  assert.equal(requests.length, 1);
+  assert.deepEqual(
+    requests[0].body.inventarios.map(p => [p.inventario_id, p.cantidad]),
+    [[8000, 1], [8001, 1], [8002, 1], [8003, 1], [8004, 1]],
+  );
+});
