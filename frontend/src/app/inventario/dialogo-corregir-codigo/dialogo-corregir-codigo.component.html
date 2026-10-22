@@ -37,7 +37,7 @@
     <p *ngIf="!cargandoHistorial && historial.length === 0">Sin correcciones anteriores.</p>
     <article *ngFor="let evento of historial" class="codigo-dialog__event">
       <strong>{{ evento.codigo_anterior }} → {{ evento.codigo_nuevo }}</strong>
-      <span>{{ evento.ocurrido_en_utc | date:'dd/MM/yyyy HH:mm':'':'es-MX' }} · Usuario #{{ evento.usuario_id }}</span>
+      <span>{{ evento.ocurrido_en_utc | date:'dd/MM/yyyy HH:mm' }} · Usuario #{{ evento.usuario_id }}</span>
       <p>{{ evento.motivo }}</p>
     </article>
   </section>
@@ -46,7 +46,7 @@
 <div mat-dialog-actions class="codigo-dialog__actions">
   <button mat-button type="button" (click)="cancelar()" [disabled]="guardando">Cancelar</button>
   <button mat-flat-button color="primary" form="form-codigo-auditado" type="submit"
-    [disabled]="form.invalid || guardando || cargandoHistorial || !!error">
+    [disabled]="form.invalid || guardando || cargandoHistorial">
     {{ guardando ? 'Guardando...' : 'Guardar corrección' }}
   </button>
 </div>
