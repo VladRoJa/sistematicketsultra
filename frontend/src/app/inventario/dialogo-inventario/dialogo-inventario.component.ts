@@ -140,6 +140,20 @@ export class DialogoInventarioComponent implements OnInit {
     return tipo === 'aparato' || tipo === 'aparatos';
   }
 
+  get requiereCodigoInterno(): boolean {
+    const tipo = String(this.form.get('tipo')?.value || '').trim().toLowerCase();
+    return ['aparato', 'aparatos', 'sistema', 'sistemas', 'dispositivo', 'dispositivos']
+      .includes(tipo);
+  }
+
+  get detalleConversionCompra(): string {
+    const valores = this.form.value;
+    if (!valores.unidad_compra || !valores.factor_compra) {
+      return '';
+    }
+    return `1 ${valores.unidad_compra} = ${valores.factor_compra} ${valores.unidad || 'pieza'}`;
+  }
+
   ngOnInit(): void {
     // Cargar catálogos y setear filtrados iniciales
     this.catalogoService.getMarcas().subscribe(res => {

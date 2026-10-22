@@ -293,8 +293,9 @@ export class InventarioComponent implements OnInit {
     }
 
     const dialogRef = this.dialog.open(DialogoInventarioComponent, {
-      width: '620px',
-      maxWidth: '94vw',
+      width: '780px',
+      maxWidth: '96vw',
+      maxHeight: '90vh',
       data: { modo: 'crear' },
     });
 
@@ -312,8 +313,9 @@ export class InventarioComponent implements OnInit {
     }
 
     const dialogRef = this.dialog.open(DialogoInventarioComponent, {
-      width: '620px',
-      maxWidth: '94vw',
+      width: '780px',
+      maxWidth: '96vw',
+      maxHeight: '90vh',
       data: { modo: 'editar', item },
     });
 

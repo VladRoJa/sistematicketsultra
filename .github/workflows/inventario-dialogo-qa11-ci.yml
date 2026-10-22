@@ -1,0 +1,36 @@
+name: Inventario Dialogo QA-11 CI
+
+on:
+  pull_request:
+    paths:
+      - "frontend/src/app/inventario/dialogo-inventario/**"
+      - "frontend/src/app/inventario/inventario.component.ts"
+      - "frontend/tests/inventario-dialogo-qa11.test.cjs"
+      - ".github/workflows/inventario-dialogo-qa11-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  angular:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: QA-11 Modal de inventario
+        run: node --test tests/inventario-dialogo-qa11.test.cjs
+      - name: Angular TypeScript
+        run: npx tsc --noEmit --project tsconfig.app.json
+      - name: Production build
+        run: npm run build -- --configuration production
