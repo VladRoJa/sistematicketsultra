@@ -376,6 +376,97 @@ def test_recipient_status_latest_snapshot_only_and_paginated(session):
     assert second["rows"][0]["provider_status"]["outcome"] is None
 
 
+def test_multichild_recipient_status_uses_latest_cut_of_each_child(session):
+    """26-child shape: per-child latest evidence, filters/count and page agree."""
+    from sqlalchemy import event
+
+    old = datetime(2026, 10, 2, 12, 0, tzinfo=timezone.utc)
+    new_a = datetime(2026, 10, 3, 12, 0, tzinfo=timezone.utc)
+    new_b = datetime(2026, 10, 4, 12, 0, tzinfo=timezone.utc)
+    old_a = _snapshot(400, 2, old)
+    current_a = _snapshot(401, 2, new_a)
+    old_b = _snapshot(402, 2, old)
+    current_b = _snapshot(403, 2, new_b)
+    old_b.provider_campaign_id = "provider-B"
+    current_b.provider_campaign_id = "provider-B"
+    session.add_all([old_a, current_a, old_b, current_b])
+    session.add(MarketingCampaignV2RecipientORM(
+        id=12, campaign_id=2, phone_mx10="6861000012",
+        source="ACTIVE_MEMBERS", conflict_fields_json=[],
+    ))
+    session.add_all([
+        MarketingCampaignV2ProviderRecipientObservationORM(
+            snapshot_id=400, normalized_phone="mx10:6861000001",
+            campaign_recipient_id=10, outcome="FAILED", button_labels_json=[],
+        ),
+        MarketingCampaignV2ProviderRecipientObservationORM(
+            snapshot_id=401, normalized_phone="mx10:6861000001",
+            campaign_recipient_id=10, outcome="SUCCESSFUL",
+            delivery_bucket="VIEWED", button_labels_json=["Quiero volver"],
+        ),
+        MarketingCampaignV2ProviderRecipientObservationORM(
+            snapshot_id=402, normalized_phone="mx10:6861000002",
+            campaign_recipient_id=11, outcome="FAILED", button_labels_json=[],
+        ),
+        MarketingCampaignV2ProviderRecipientObservationORM(
+            snapshot_id=403, normalized_phone="mx10:6861000002",
+            campaign_recipient_id=11, outcome="SUCCESSFUL",
+            delivery_bucket="DELIVERED", button_labels_json=[],
+        ),
+    ])
+    session.commit()
+
+    statements = []
+    def observe(_conn, _cursor, statement, _parameters, _context, _many):
+        statements.append(statement)
+    event.listen(session.get_bind(), "before_cursor_execute", observe)
+    try:
+        all_rows = list_campaign_v2_recipients(
+            campaign_id=2, allowed_sucursal_keys=("BRANCH A",),
+            page=1, page_size=100, session=session,
+        )
+    finally:
+        event.remove(session.get_bind(), "before_cursor_execute", observe)
+    assert len(statements) <= 4  # latest per child, count, page, observations
+    assert all_rows["total"] == 3
+    assert all_rows["provider_snapshot_count"] == 2
+    assert all_rows["provider_latest_snapshot_id"] == 403
+    statuses = {r["id"]: r["provider_status"] for r in all_rows["rows"]}
+    assert statuses[10]["status"] == "VIEWED"
+    assert statuses[10]["snapshot_id"] == 401
+    assert statuses[10]["button_labels"] == ["Quiero volver"]
+    assert statuses[11]["status"] == "DELIVERED"
+    assert statuses[11]["snapshot_id"] == 403
+    assert statuses[12]["status"] == "NO_PROVIDER_STATUS"
+    assert statuses[12]["snapshot_id"] is None  # no unrelated child assigned
+    for provider_status, expected_ids in (
+        ("VIEWED", [10]),
+        ("DELIVERED", [11]),
+        ("FAILED", []),
+        ("NO_PROVIDER_STATUS", [12]),
+        ("NO_SNAPSHOT", []),
+    ):
+        filtered = list_campaign_v2_recipients(
+            campaign_id=2, allowed_sucursal_keys=("BRANCH A",),
+            provider_status=provider_status,
+            page=1, page_size=100, session=session,
+        )
+        assert filtered["total"] == len(expected_ids), provider_status
+        assert [r["id"] for r in filtered["rows"]] == expected_ids
+    delivered = list_campaign_v2_recipients(
+        campaign_id=2, allowed_sucursal_keys=("BRANCH A",),
+        provider_status="DELIVERED", page=1, page_size=1, session=session,
+    )
+    assert delivered["total"] == 1
+    assert delivered["rows"][0]["id"] == 11
+    after_end = list_campaign_v2_recipients(
+        campaign_id=2, allowed_sucursal_keys=("BRANCH A",),
+        provider_status="DELIVERED", page=2, page_size=1, session=session,
+    )
+    assert after_end["total"] == 1
+    assert after_end["rows"] == []
+
+
 def test_recipient_status_failure_is_not_confused_with_no_observation(session):
     observed = datetime(2026, 10, 4, 12, 0, tzinfo=timezone.utc)
     session.add(_snapshot(102, 2, observed))
