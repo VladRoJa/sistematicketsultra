@@ -21,6 +21,11 @@ export interface MovimientoInventarioVista {
   sucursal?: unknown;
   sucursal_id?: number;
   observaciones?: string | null;
+  anulado?: boolean;
+  anulado_por_usuario_id?: number | null;
+  usuario_anulacion?: string | null;
+  anulado_en_utc?: string | null;
+  motivo_anulacion?: string | null;
   inventarios?: ProductoEnMovimiento[];
 }
 

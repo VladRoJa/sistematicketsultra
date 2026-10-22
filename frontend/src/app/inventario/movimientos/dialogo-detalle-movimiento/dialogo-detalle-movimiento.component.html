@@ -16,6 +16,14 @@
     </div>
   </div>
 
+  <section *ngIf="data.movimiento.anulado" class="movement-detail__annulled">
+    <strong>Movimiento anulado · las existencias fueron revertidas</strong>
+    <p><b>Anulado por:</b> {{ data.movimiento.usuario_anulacion || ('Usuario #' + data.movimiento.anulado_por_usuario_id) }}</p>
+    <p><b>Fecha:</b> {{ data.movimiento.anulado_en_utc | date:'dd/MM/yyyy HH:mm' }}</p>
+    <p><b>Motivo:</b> {{ data.movimiento.motivo_anulacion }}</p>
+    <p>El registro original y sus artículos se conservan únicamente como historial.</p>
+  </section>
+
   <p class="movement-detail__note">
     Los códigos y datos descriptivos corresponden al catálogo actual.
     Las cantidades y unidades provienen del movimiento registrado.

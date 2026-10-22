@@ -1,0 +1,75 @@
+name: Inventario QA-21 Anulación Auditada CI
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/routes/inventarios.py"
+      - "backend/app/routes/reportes.py"
+      - "backend/app/routes/ticket_routes.py"
+      - "backend/app/models/inventario.py"
+      - "backend/app/models/user_model.py"
+      - "backend/migrations/versions/j22c10202622_inventario_movimientos_anulacion.py"
+      - "backend/tests/routes/test_inventario_eliminar_movimiento_qa.py"
+      - "frontend/src/app/inventario/movimientos/**"
+      - "frontend/tests/inventario-anulacion-auditada-qa21.test.cjs"
+      - "frontend/tests/inventario-movimientos-resumen-qa14.test.cjs"
+      - ".github/workflows/inventario-anulacion-auditada-qa21-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+      SECRET_KEY: inventory-qa21-only
+      JWT_SECRET_KEY: inventory-qa21-only
+      SQLALCHEMY_DATABASE_URI: "sqlite:///:memory:"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Python syntax
+        run: python -m py_compile app/routes/inventarios.py app/routes/reportes.py app/routes/ticket_routes.py app/models/inventario.py app/models/user_model.py migrations/versions/j22c10202622_inventario_movimientos_anulacion.py
+      - name: QA-21 audited annulment
+        run: python -m pytest -q --tb=short -o addopts= tests/routes/test_inventario_eliminar_movimiento_qa.py
+      - name: Other movement regressions
+        run: python -m pytest -q --tb=short -o addopts= tests/routes/test_inventario_movimientos_cantidad_qa.py tests/routes/test_inventario_movimientos_concurrencia_qa.py
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: QA-21 annulment UI
+        run: node --test tests/inventario-anulacion-auditada-qa21.test.cjs
+      - name: QA-14 and QA-15 regression
+        run: node --test tests/inventario-movimientos-resumen-qa14.test.cjs tests/inventario-movimientos-modal-qa15.test.cjs
+      - name: Angular templates and typecheck
+        run: npx ngc -p tsconfig.app.json
+      - name: Production build
+        run: npm run build -- --configuration production

@@ -286,8 +286,25 @@ mat-card.movimientos-listado {
   font-size: 16px;
 }
 
-.movimientos-borrar {
-  flex: 0 0 auto;
+.movimientos-anular { flex: 0 0 auto; }
+
+.movimientos-anulado {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #f2f4f7;
+  border: 1px solid #d0d5dd;
+  color: #475467;
+  font-size: 10px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.movimientos-col-tipo {
+  flex: 0 0 125px;
+  gap: 4px;
+  flex-wrap: wrap;
 }
 
 .movimientos-listado__loading,

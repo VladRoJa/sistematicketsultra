@@ -73,6 +73,7 @@
           >
             {{ mov.tipo | titlecase }}
           </span>
+          <span *ngIf="mov.anulado" class="movimientos-anulado">Anulado</span>
         </mat-cell>
       </ng-container>
 
@@ -138,14 +139,17 @@
             Ver detalle
           </button>
           <button
+            *ngIf="!mov.anulado"
             type="button"
             mat-icon-button
             color="warn"
-            class="movimientos-borrar"
-            [attr.aria-label]="'Eliminar movimiento ' + mov.id"
-            (click)="eliminarMovimiento(mov.id)"
+            class="movimientos-anular"
+            [disabled]="anulandoMovimientoId !== null"
+            [attr.aria-label]="'Anular movimiento ' + mov.id"
+            (click)="anularMovimiento(mov)"
+            title="Anular con motivo; conservar historial"
           >
-            <mat-icon>delete</mat-icon>
+            <mat-icon>block</mat-icon>
           </button>
         </mat-cell>
       </ng-container>

@@ -2390,6 +2390,12 @@ def historial_aparato(aparato_id):
                 'cantidad': d.cantidad,
                 'unidad_medida': d.unidad_medida,
                 'observaciones': mov.observaciones,
+                'anulado': mov.anulado,
+                'anulado_por_usuario_id': mov.anulado_por_usuario_id,
+                'anulado_en_utc': (
+                    mov.anulado_en_utc.isoformat() if mov.anulado_en_utc else None
+                ),
+                'motivo_anulacion': mov.motivo_anulacion,
             })
 
         # --- Respuesta combinada ---

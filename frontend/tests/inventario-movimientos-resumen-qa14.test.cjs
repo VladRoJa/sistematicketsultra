@@ -88,7 +88,7 @@ test('tabla mantiene sólo resumen y abre detalle sin renderizar códigos gigant
   assert.doesNotMatch(html, /matColumnDef="detalles"/);
   assert.doesNotMatch(html, /\*ngFor="let p of mov\.inventarios"/);
   assert.match(typescript, /this\.dialog\.open\(DialogoDetalleMovimientoComponent/);
-  assert.match(typescript, /eliminarMovimiento\(id: number\)/);
+  assert.match(typescript, /anularMovimiento\(mov: MovimientoInventarioVista\)/);
   assert.match(typescript, /this\.filtrar\(texto, tipo, sucursal, usuario, fecha\)/);
   assert.match(detalleHtml, /\*ngFor="let articulo of articulos"/);
   assert.match(detalleHtml, /articulo\.codigoActual/);

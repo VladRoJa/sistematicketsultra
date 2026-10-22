@@ -1,0 +1,28 @@
+<section class="annul-dialog">
+  <h2 mat-dialog-title>Anular movimiento #{{ movimiento.id }}</h2>
+  <div mat-dialog-content class="annul-dialog__body">
+    <p class="annul-dialog__warning">
+      Se revertirán las existencias de la {{ movimiento.tipo }} en
+      <strong>{{ movimiento.sucursal }}</strong>. El movimiento original,
+      sus artículos y el usuario que lo registró permanecerán en el historial.
+      Esta operación no se puede anular por segunda vez.
+    </p>
+    <label for="motivo-anulacion" class="annul-dialog__label">
+      Motivo de anulación <strong>*</strong>
+    </label>
+    <textarea id="motivo-anulacion" rows="4"
+      [formControl]="motivo" maxlength="1000"
+      placeholder="Explica por qué es necesario anular este movimiento"></textarea>
+    <p class="annul-dialog__hint">Entre 10 y 1000 caracteres. Se registrará quién y cuándo anuló.</p>
+    <p class="annul-dialog__error" *ngIf="motivo.touched && motivo.invalid" role="alert">
+      Escribe un motivo de al menos 10 caracteres.
+    </p>
+  </div>
+  <div mat-dialog-actions class="annul-dialog__actions">
+    <button type="button" class="annul-dialog__cancel" (click)="cancelar()">Cancelar</button>
+    <button type="button" class="annul-dialog__confirm" (click)="confirmar()"
+      [disabled]="motivo.invalid || motivo.value.trim().length < 10">
+      Anular movimiento
+    </button>
+  </div>
+</section>
