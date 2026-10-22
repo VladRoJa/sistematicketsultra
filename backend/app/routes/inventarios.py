@@ -21,7 +21,7 @@ from app.models.mantenimiento_equipo import FamiliaEquipoORM
 from app.models.ticket_model import Ticket
 from app.models.user_model import UserORM
 from app.models.sucursal_model import Sucursal
-from datetime import datetime
+from datetime import datetime, timezone
 import pytz
 from app.config import Config
 from app. utils.error_handler import manejar_error
@@ -746,6 +746,10 @@ def historial_movimientos():
 
             sucursal = Sucursal.query.get(m.sucursal_id)
             usuario = UserORM.query.get(m.usuario_id)
+            actor_anulacion = (
+                UserORM.query.get(m.anulado_por_usuario_id)
+                if m.anulado_por_usuario_id is not None else None
+            )
 
             resultado.append({
                 'id': m.id,
@@ -756,6 +760,13 @@ def historial_movimientos():
                 'sucursal': sucursal.sucursal if sucursal else "Desconocida",  
                 'sucursal_id': m.sucursal_id,
                 'observaciones': m.observaciones,
+                'anulado': m.anulado,
+                'anulado_por_usuario_id': m.anulado_por_usuario_id,
+                'usuario_anulacion': actor_anulacion.username if actor_anulacion else None,
+                'anulado_en_utc': (
+                    m.anulado_en_utc.isoformat() if m.anulado_en_utc else None
+                ),
+                'motivo_anulacion': m.motivo_anulacion,
                 'inventarios': inventarios
             })
 
@@ -1192,74 +1203,104 @@ def buscar_inventario():
 @inventario_bp.route('/movimientos/<int:id>', methods=['DELETE'], strict_slashes=False)
 @jwt_required()
 def eliminar_movimiento(id):
+    """No permitir jamás la ruta legacy que borraba historial físicamente."""
+    return jsonify({
+        "error": "El borrado definitivo de movimientos está deshabilitado.",
+        "detail": "Utiliza POST /api/inventario/movimientos/<id>/anular con motivo obligatorio.",
+    }), 405
+
+
+@inventario_bp.route('/movimientos/<int:id>/anular', methods=['POST'], strict_slashes=False)
+@jwt_required()
+def anular_movimiento(id):
+    """Revertir existencias y registrar autor/motivo en una única transacción."""
     try:
-        # Impide que dos eliminaciones concurrentes reviertan el mismo movimiento.
+        data = request.get_json(silent=True) or {}
+        motivo = data.get('motivo')
+        if not isinstance(motivo, str) or not 10 <= len(motivo.strip()) <= 1000:
+            return error_response(
+                'El motivo de anulación debe contener entre 10 y 1000 caracteres.'
+            )
+        motivo = motivo.strip()
+
+        actor_id, error_actor = _get_current_user_id_required()
+        if error_actor:
+            return error_actor
+
+        # El bloqueo serializa la anulación: dos solicitudes no pueden revertir dos veces.
         mov = MovimientoInventario.query.filter_by(id=id).with_for_update().first()
         if not mov:
-            return jsonify({"error": "Movimiento no encontrado"}), 404
+            return error_response('Movimiento no encontrado', 404)
 
         forbidden = _require_inventory_movement_write(mov.sucursal_id)
         if forbidden:
+            db.session.rollback()
             return forbidden
 
         def conflicto(mensaje):
             db.session.rollback()
-            return jsonify({"error": mensaje}), 409
+            return error_response(mensaje, 409)
 
-        # Revisar el lote completo antes de aplicar cualquier reversión.
+        if mov.anulado:
+            return conflicto('El movimiento ya está anulado. No puede revertirse dos veces.')
+
         detalles = list(mov.detalles)
         if not detalles or mov.tipo_movimiento not in ('entrada', 'salida'):
-            return conflicto("El movimiento no tiene detalles válidos para revertir")
+            return conflicto('El movimiento no tiene detalles válidos para revertir.')
 
         cantidades_por_inventario = {}
         for det in detalles:
             if not isinstance(det.cantidad, int) or det.cantidad <= 0:
-                return conflicto(f"Cantidad histórica inválida para el inventario {det.inventario_id}")
+                return conflicto(
+                    f'Cantidad histórica inválida para el inventario {det.inventario_id}'
+                )
             cantidades_por_inventario[det.inventario_id] = (
                 cantidades_por_inventario.get(det.inventario_id, 0) + det.cantidad
             )
 
         ajustes = []
-        # Bloquear filas en orden estable mientras se valida y aplica la reversión.
         for inventario_id in sorted(cantidades_por_inventario):
-            inventario_sucursal = (
+            fila = (
                 InventarioSucursal.query
                 .filter_by(inventario_id=inventario_id, sucursal_id=mov.sucursal_id)
                 .with_for_update()
                 .first()
             )
-            if (
-                not inventario_sucursal
-                or inventario_sucursal.stock is None
-                or inventario_sucursal.stock < 0
-            ):
-                return conflicto(f"No se encontró stock válido para el inventario {inventario_id}")
+            if fila is None or fila.stock is None or fila.stock < 0:
+                return conflicto(f'No se encontró stock válido para el inventario {inventario_id}')
 
             cantidad = cantidades_por_inventario[inventario_id]
-            if mov.tipo_movimiento == 'entrada' and inventario_sucursal.stock < cantidad:
+            if mov.tipo_movimiento == 'entrada' and fila.stock < cantidad:
                 return conflicto(
-                    f"No se puede eliminar la entrada del inventario {inventario_id}: "
-                    "las existencias actuales son insuficientes para revertirla"
+                    f'No se puede anular la entrada del inventario {inventario_id}: '
+                    'las existencias actuales son insuficientes para revertirla.'
                 )
+
             nuevo_stock = (
-                inventario_sucursal.stock - cantidad
-                if mov.tipo_movimiento == 'entrada'
-                else inventario_sucursal.stock + cantidad
+                fila.stock - cantidad if mov.tipo_movimiento == 'entrada'
+                else fila.stock + cantidad
             )
-            ajustes.append((inventario_sucursal, nuevo_stock))
+            ajustes.append((fila, nuevo_stock))
 
-        for inventario_sucursal, nuevo_stock in ajustes:
-            inventario_sucursal.stock = nuevo_stock
+        # Una sola confirmación conserva íntegros movimiento y detalles.
+        for fila, nuevo_stock in ajustes:
+            fila.stock = nuevo_stock
 
-        # Eliminar solamente si todas las existencias pudieron revertirse.
-        for det in detalles:
-            db.session.delete(det)
-        db.session.delete(mov)
+        mov.anulado = True
+        mov.anulado_por_usuario_id = actor_id
+        mov.anulado_en_utc = datetime.now(timezone.utc)
+        mov.motivo_anulacion = motivo
+
         db.session.commit()
-        return jsonify({"mensaje": "Movimiento eliminado correctamente"}), 200
-    except Exception as e:
+        return jsonify({
+            "mensaje": "Movimiento anulado correctamente; historial conservado.",
+            "movimiento_id": mov.id,
+            "anulado": True,
+        }), 200
+    except Exception as exc:
         db.session.rollback()
-        return manejar_error(e, "eliminar_movimiento")
+        return manejar_error(exc, 'anular_movimiento')
+
 
 @inventario_bp.route('/equipos', methods=['GET'], strict_slashes=False)
 @jwt_required()
