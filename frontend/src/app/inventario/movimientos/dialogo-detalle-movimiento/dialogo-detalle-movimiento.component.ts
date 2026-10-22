@@ -26,6 +26,8 @@ export class DialogoDetalleMovimientoComponent {
   readonly etiquetaEstado: string;
   readonly usuarioRegistro: string;
   readonly nombreSucursal: string;
+  readonly usuarioAnulacion: string;
+  readonly etiquetaCantidadArticulos: string;
 
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: DatosDialogoDetalleMovimiento,
@@ -39,6 +41,12 @@ export class DialogoDetalleMovimientoComponent {
     this.nombreSucursal = this.etiquetaRegistro(
       data.movimiento.sucursal, data.movimiento.sucursal_id, 'Sucursal'
     );
+    this.usuarioAnulacion = this.etiquetaRegistro(
+      data.movimiento.usuario_anulacion,
+      data.movimiento.anulado_por_usuario_id ?? undefined,
+      'Usuario'
+    );
+    this.etiquetaCantidadArticulos = `${this.articulos.length} ${this.articulos.length === 1 ? 'artículo' : 'artículos'}`;
   }
 
   private etiquetaRegistro(valor: unknown, id: number | undefined, tipo: string): string {
