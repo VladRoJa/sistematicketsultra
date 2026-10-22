@@ -575,10 +575,12 @@ def _serialize_recipient_summary(recipient, *, evidence_count: int) -> dict[str,
 def _serialize_recipient_provider_status(
     snapshot, observation, *, has_capture: bool = False,
 ) -> dict[str, Any]:
-    # Sin snapshot no equivale a fallido; sin match tampoco.
-    if snapshot is None:
+    # No observation in any current child cut is not the same as no capture.
+    if snapshot is None and has_capture:
+        # Multi-child: no individual observation in ANY latest child cut.
+        # Do not mislabel it NO_SNAPSHOT or attach an unrelated child ID.
         return {
-            "status": "NO_SNAPSHOT",
+            "status": "NO_PROVIDER_STATUS",
             "snapshot_id": None,
             "observed_at": None,
             "outcome": None,
@@ -586,11 +588,9 @@ def _serialize_recipient_provider_status(
             "button_labels": [],
         }
 
-    if snapshot is None and has_capture:
-        # Multi-child: no individual observation in ANY latest child cut.
-        # Do not mislabel it NO_SNAPSHOT or attach an unrelated child ID.
+    if snapshot is None:
         return {
-            "status": "NO_PROVIDER_STATUS",
+            "status": "NO_SNAPSHOT",
             "snapshot_id": None,
             "observed_at": None,
             "outcome": None,
