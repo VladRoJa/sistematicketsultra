@@ -1,0 +1,52 @@
+<h2 mat-dialog-title>Corregir código interno</h2>
+
+<div mat-dialog-content class="codigo-dialog__body">
+  <p class="codigo-dialog__notice">
+    Este cambio se guardará en el historial. El ID del equipo, su sucursal,
+    existencias, tickets y mantenimientos permanecerán intactos.
+  </p>
+
+  <dl class="codigo-dialog__identity">
+    <dt>Equipo</dt>
+    <dd>{{ articulo.id }} · {{ articulo.nombre }} · {{ articulo.marca || 'Sin marca' }}</dd>
+    <dt>Sucursal(es)</dt>
+    <dd>{{ articulo.sucursales || 'Sin asignación' }}</dd>
+    <dt>Código actual</dt>
+    <dd class="codigo-dialog__code">{{ articulo.codigo_interno || '—' }}</dd>
+  </dl>
+
+  <form [formGroup]="form" class="codigo-dialog__form" (ngSubmit)="guardar()" id="form-codigo-auditado">
+    <label for="codigo-nuevo">Nuevo código interno *</label>
+    <mat-form-field appearance="outline">
+      <input id="codigo-nuevo" matInput maxlength="50" formControlName="codigo_nuevo" autocomplete="off" />
+    </mat-form-field>
+
+    <label for="motivo-correccion">Motivo de la corrección *</label>
+    <mat-form-field appearance="outline">
+      <textarea id="motivo-correccion" matInput formControlName="motivo" rows="2"
+        maxlength="500" placeholder="Explica qué código es correcto y por qué"></textarea>
+      <mat-hint>10 a 500 caracteres</mat-hint>
+    </mat-form-field>
+  </form>
+
+  <p *ngIf="error" class="codigo-dialog__error" role="alert">{{ error }}</p>
+
+  <section class="codigo-dialog__history">
+    <h3>Historial de correcciones</h3>
+    <p *ngIf="cargandoHistorial">Consultando historial...</p>
+    <p *ngIf="!cargandoHistorial && historial.length === 0">Sin correcciones anteriores.</p>
+    <article *ngFor="let evento of historial" class="codigo-dialog__event">
+      <strong>{{ evento.codigo_anterior }} → {{ evento.codigo_nuevo }}</strong>
+      <span>{{ evento.ocurrido_en_utc | date:'dd/MM/yyyy HH:mm':'':'es-MX' }} · Usuario #{{ evento.usuario_id }}</span>
+      <p>{{ evento.motivo }}</p>
+    </article>
+  </section>
+</div>
+
+<div mat-dialog-actions class="codigo-dialog__actions">
+  <button mat-button type="button" (click)="cancelar()" [disabled]="guardando">Cancelar</button>
+  <button mat-flat-button color="primary" form="form-codigo-auditado" type="submit"
+    [disabled]="form.invalid || guardando || cargandoHistorial || !!error">
+    {{ guardando ? 'Guardando...' : 'Guardar corrección' }}
+  </button>
+</div>
