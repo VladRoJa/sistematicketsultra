@@ -1019,7 +1019,8 @@ def test_commercial_attribution_multichild_batch_reads_cache_without_sales_queri
             return Query(next(self.data))
 
     campaign = SimpleNamespace(
-        id=8, audience_definition_json={
+        id=8, purpose="NEW_SALE", source="FUNNEL_PORTFOLIO",
+        audience_definition_json={
             "filters": {"allowed_sucursal_keys": ["AZAHARES"]}
         },
     )
@@ -1068,3 +1069,37 @@ def test_commercial_attribution_multichild_batch_reads_cache_without_sales_queri
     assert session.queries == 3
     assert rows[0]["status"] == "PENDING_RECONCILIATION"
     assert rows[0]["revenue_attributed_mxn"] is None
+
+
+def test_multichild_cached_ready_is_hidden_for_indirect_referral_campaign():
+    """An old READY cached before the rule change must not leak to the UI."""
+    from types import SimpleNamespace
+    from app.services.marketing_campaign_v2_reporting_service import (
+        _materialized_multichild_commercial_payload,
+    )
+
+    old_ready = SimpleNamespace(
+        campaign_v2_id=8,
+        status="READY",
+        result_json={
+            "status": "READY",
+            "submitted_child_ids": [7, 8],
+            "buyers_attributed": 4661,
+            "transactions_attributed": 4688,
+            "revenue_attributed_mxn": "2602177.00",
+        },
+        checked_at=datetime(2026, 10, 21, 23, 0, tzinfo=timezone.utc),
+    )
+    result = _materialized_multichild_commercial_payload(
+        record=old_ready,
+        campaign=SimpleNamespace(purpose="NEW_SALE", source="ACTIVE_MEMBERS"),
+        children=[
+            SimpleNamespace(id=7, status="SUBMITTED"),
+            SimpleNamespace(id=8, status="SUBMITTED"),
+        ],
+    )
+    assert result["status"] == "NOT_ATTRIBUTABLE"
+    assert result["reason"] == "INDIRECT_OR_ACTIVE_MEMBERS_AUDIENCE"
+    assert result["buyers_attributed"] is None
+    assert result["transactions_attributed"] is None
+    assert result["revenue_attributed_mxn"] is None

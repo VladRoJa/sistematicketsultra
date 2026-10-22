@@ -1275,6 +1275,9 @@ export class MarketingCampaignV2PageComponent implements OnInit {
 
   commercialBuyersLabel(campaignId: number): string {
     const result = this.commercialSummaries.get(campaignId);
+    if (result?.status === 'NOT_ATTRIBUTABLE') {
+      return 'No medible';
+    }
     if (result?.status === 'READY' && result.buyers_attributed !== null) {
       return String(result.buyers_attributed);
     }
@@ -1283,6 +1286,9 @@ export class MarketingCampaignV2PageComponent implements OnInit {
 
   commercialRevenueLabel(campaignId: number): string {
     const result = this.commercialSummaries.get(campaignId);
+    if (result?.status === 'NOT_ATTRIBUTABLE') {
+      return 'No medible';
+    }
     if (result?.status === 'READY' && result.revenue_attributed_mxn !== null) {
       const amount = Number(result.revenue_attributed_mxn);
       if (Number.isFinite(amount)) {

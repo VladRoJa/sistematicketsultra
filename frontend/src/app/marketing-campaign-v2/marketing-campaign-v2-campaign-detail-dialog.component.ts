@@ -739,6 +739,8 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
     switch (this.commercialAttribution?.status) {
       case 'NOT_SUBMITTED':
         return 'Esta campaña todavía no tiene un envío registrado.';
+      case 'NOT_ATTRIBUTABLE':
+        return 'No medible: no existe un vínculo directo verificable entre la persona contactada y la venta generada.';
       case 'NO_PROVIDER_SNAPSHOT':
         return 'Falta un corte persistido de iVentas para atribuir operaciones.';
       case 'NO_CANONICAL_VENTA_TOTAL':
@@ -753,6 +755,9 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   }
 
   commercialRevenueLabel(): string {
+    if (this.commercialAttribution?.status === 'NOT_ATTRIBUTABLE') {
+      return 'No medible';
+    }
     const value = this.commercialAttribution?.revenue_attributed_mxn;
     if (this.commercialAttribution?.status !== 'READY' || value == null) {
       return '—';

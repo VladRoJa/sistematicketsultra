@@ -15,6 +15,7 @@ from sqlalchemy import func
 
 from app.extensions import db
 from app.models.marketing import (
+    MarketingCampaignV2ORM,
     MarketingCampaignV2CommercialResultORM,
     MarketingCampaignV2ProviderCampaignORM,
     MarketingCampaignV2ProviderRecipientObservationORM,
@@ -29,6 +30,7 @@ from app.models.warehouse import (
 )
 from app.services.marketing_campaign_v2_commercial_attribution_service import (
     CommercialChildResolutionError,
+    direct_attribution_ineligibility_reason,
     resolve_submitted_child_recipients,
 )
 from app.services.marketing_campaign_v2_reporting_service import (
@@ -64,6 +66,19 @@ def reconcile_multichild_campaign(*, campaign_id: int, session: Any) -> dict[str
     """One campaign, one cumulative canonical Gasca cut, all submitted children."""
     base = _base(campaign_id, "PENDING")
     with session.no_autoflush:
+        campaign = (
+            session.query(MarketingCampaignV2ORM)
+            .filter(MarketingCampaignV2ORM.id == campaign_id)
+            .first()
+        )
+        if campaign is None:
+            return {**base, "status": "EVIDENCE_INCONSISTENT"}
+        reason = direct_attribution_ineligibility_reason(
+            purpose=campaign.purpose, source=campaign.source,
+        )
+        if reason is not None:
+            return {**base, "status": "NOT_ATTRIBUTABLE", "reason": reason}
+
         children = (
             session.query(MarketingCampaignV2ProviderCampaignORM)
             .filter(MarketingCampaignV2ProviderCampaignORM.campaign_v2_id == campaign_id)
