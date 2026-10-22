@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, Inject, OnInit } from '@angular/core';
-import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -33,17 +33,22 @@ export class DialogoCorregirCodigoComponent implements OnInit {
   error: string | null = null;
   historial: EventoCorreccionCodigo[] = [];
 
-  readonly form = this.fb.group({
-    codigo_nuevo: ['', [Validators.required, Validators.maxLength(50)]],
-    motivo: ['', [Validators.required, Validators.minLength(10), Validators.maxLength(500)]],
-  });
+  readonly form: FormGroup;
 
   constructor(
     private fb: FormBuilder,
     private inventarioService: InventarioService,
     private dialogRef: MatDialogRef<DialogoCorregirCodigoComponent>,
     @Inject(MAT_DIALOG_DATA) public articulo: Inventario,
-  ) {}
+  ) {
+    this.form = this.fb.group({
+      codigo_nuevo: ['', [Validators.required, Validators.maxLength(50)]],
+      motivo: ['', [Validators.required, Validators.minLength(10), Validators.maxLength(500)]],
+    });
+    this.form.valueChanges.subscribe(() => {
+      this.error = null;
+    });
+  }
 
   ngOnInit(): void {
     this.cargandoHistorial = true;
@@ -60,7 +65,7 @@ export class DialogoCorregirCodigoComponent implements OnInit {
   }
 
   guardar(): void {
-    if (this.guardando || this.cargandoHistorial || this.error) {
+    if (this.guardando || this.cargandoHistorial) {
       return;
     }
 
