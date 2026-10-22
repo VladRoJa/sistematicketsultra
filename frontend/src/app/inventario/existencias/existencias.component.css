@@ -1,3 +1,10 @@
+/* Identificadores legibles aun cuando el mismo nombre se repite. */
+.existencias-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 /* Selector de sucursal contextual; el input ya no ocupa toda la fila. */
 .existencias-toolbar {
   display: flex;
