@@ -14,6 +14,7 @@ from sqlalchemy import func
 from app. extensions import db
 from app.models.catalogos import CategoriaInventario
 from app.models.inventario import InventarioGeneral, MovimientoInventario, DetalleMovimiento, InventarioSucursal
+from app.models.inventario_codigo_correccion import InventarioCodigoCorreccionORM
 from app.models.pm_bitacora import PmBitacoraORM
 from app.models.pm_preventivo import PmPreventivoConfigORM
 from app.models.mantenimiento_equipo import FamiliaEquipoORM
@@ -346,6 +347,18 @@ def _validar_familia_equipo_activa(value, tipo_inventario):
     return familia.id, None
 
 
+def _bloquear_escritura_codigos():
+    """Serializa altas y correcciones de códigos mientras se sanea el legado.
+
+    No sustituye una restricción UNIQUE en PostgreSQL: otras rutas de escritura
+    deberán usar este mismo contrato hasta depurar duplicados históricos.
+    """
+    db.session.execute(
+        db.text("SELECT pg_advisory_xact_lock(:dominio, :operacion)"),
+        {"dominio": 51022, "operacion": 11},
+    )
+
+
 # Crear un nuevo inventario (producto/aparato/unificado)
 @inventario_bp.route('/', methods=['POST'], strict_slashes=False)
 @jwt_required()
@@ -374,6 +387,7 @@ def crear_inventario():
             return error_response('Código interno obligatorio para aparatos y dispositivos')
 
         if codigo:
+            _bloquear_escritura_codigos()
             existe_codigo = InventarioGeneral.query.filter(
                 func.upper(func.trim(InventarioGeneral.codigo_interno)) == codigo
             ).first()
@@ -886,6 +900,16 @@ def editar_inventario(inventario_id):
             return error_response('Inventario no encontrado', 404)
 
         data = request.get_json()
+        # El código interno solo se cambia por el flujo con historial obligatorio.
+        if 'codigo_interno' in data:
+            actual = str(inventario.codigo_interno or '').strip().upper()
+            propuesto = normalizar_campo(data['codigo_interno']).upper()
+            if actual != propuesto:
+                return error_response(
+                    'Para cambiar el código interno utiliza la corrección auditada',
+                    409,
+                )
+
         if 'familia_equipo_id' in data:
             tipo_inventario = data.get('tipo', inventario.tipo)
             familia_equipo_id, familia_error = _validar_familia_equipo_activa(
@@ -935,6 +959,113 @@ def editar_inventario(inventario_id):
     except Exception as e:
         db.session.rollback()
         return manejar_error(e, "editar_inventario")
+
+# Corrección trazable del identificador físico, sin alterar existencias.
+@inventario_bp.route(
+    '/<int:inventario_id>/corregir-codigo', methods=['POST'], strict_slashes=False
+)
+@jwt_required()
+def corregir_codigo_interno(inventario_id):
+    try:
+        forbidden = _require_inventory_global_write()
+        if forbidden:
+            return forbidden
+
+        actor_id, actor_error = _get_current_user_id_required()
+        if actor_error:
+            return actor_error
+
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict):
+            return error_response('Formato JSON inválido')
+
+        anterior_esperado = str(data.get('codigo_anterior') or '').strip().upper()
+        nuevo = normalizar_campo(data.get('codigo_nuevo')).upper()
+        motivo = str(data.get('motivo') or '').strip()
+        if not anterior_esperado or not nuevo:
+            return error_response('Código anterior y nuevo son obligatorios')
+        if len(nuevo) > 50:
+            return error_response('Código interno demasiado largo')
+        if not 10 <= len(motivo) <= 500:
+            return error_response('El motivo debe tener entre 10 y 500 caracteres')
+
+        # Serializar contra las demás correcciones y altas del catálogo.
+        _bloquear_escritura_codigos()
+        inventario = (
+            InventarioGeneral.query.filter_by(id=inventario_id)
+            .with_for_update()
+            .first()
+        )
+        if not inventario:
+            db.session.rollback()
+            return error_response('Inventario no encontrado', 404)
+
+        actual = str(inventario.codigo_interno or '').strip().upper()
+        if actual != anterior_esperado:
+            db.session.rollback()
+            return error_response(
+                'El código cambió desde que abriste el formulario; actualiza la pantalla',
+                409,
+            )
+        if actual == nuevo:
+            db.session.rollback()
+            return error_response('El código nuevo debe ser diferente al anterior')
+
+        existe = InventarioGeneral.query.filter(
+            func.upper(func.trim(InventarioGeneral.codigo_interno)) == nuevo,
+            InventarioGeneral.id != inventario_id,
+        ).first()
+        if existe:
+            db.session.rollback()
+            return error_response('El código propuesto ya está registrado', 409)
+
+        auditoria = InventarioCodigoCorreccionORM(
+            inventario_id=inventario.id,
+            actor_usuario_id=actor_id,
+            codigo_anterior=actual,
+            codigo_nuevo=nuevo,
+            motivo=motivo,
+        )
+        inventario.codigo_interno = nuevo
+        db.session.add(auditoria)
+        # Un único commit: si falla el historial, también se revierte el cambio.
+        db.session.commit()
+        return success_response('Código interno corregido correctamente', {
+            'inventario_id': inventario.id,
+            'codigo_anterior': actual,
+            'codigo_nuevo': nuevo,
+        })
+    except Exception as e:
+        db.session.rollback()
+        return manejar_error(e, 'corregir_codigo_interno')
+
+
+@inventario_bp.route(
+    '/<int:inventario_id>/historial-codigos', methods=['GET'], strict_slashes=False
+)
+@jwt_required()
+def historial_codigos_internos(inventario_id):
+    try:
+        forbidden = _require_inventory_global_write()
+        if forbidden:
+            return forbidden
+        historial = (
+            InventarioCodigoCorreccionORM.query
+            .filter_by(inventario_id=inventario_id)
+            .order_by(InventarioCodigoCorreccionORM.ocurrido_en_utc.desc())
+            .all()
+        )
+        return jsonify([{
+            'id': evento.id,
+            'usuario_id': evento.actor_usuario_id,
+            'codigo_anterior': evento.codigo_anterior,
+            'codigo_nuevo': evento.codigo_nuevo,
+            'motivo': evento.motivo,
+            'ocurrido_en_utc': evento.ocurrido_en_utc.isoformat(),
+        } for evento in historial]), 200
+    except Exception as e:
+        return manejar_error(e, 'historial_codigos_internos')
+
 
 # Eliminar inventario general
 @inventario_bp.route('/<int:inventario_id>', methods=['DELETE'], strict_slashes=False)
