@@ -10,6 +10,7 @@ from flask_cors import CORS
 from flask_jwt_extended import jwt_required, get_jwt_identity
 import pandas as pd
 import qrcode
+from sqlalchemy import func
 from app. extensions import db
 from app.models.catalogos import CategoriaInventario
 from app.models.inventario import InventarioGeneral, MovimientoInventario, DetalleMovimiento, InventarioSucursal
@@ -358,17 +359,39 @@ def crear_inventario():
         if not data.get('nombre') or not data.get('categoria'):
             return error_response('Nombre y categoría son obligatorios')
 
-        # Validar que NO exista otro producto con el mismo nombre y marca
-        existe = InventarioGeneral.query.filter_by(
-            nombre=data['nombre'].strip(),
-            marca=data.get('marca', '').strip()
-        ).first()
-        if existe:
-            return error_response('Ya existe un producto con ese nombre y marca')
+        # Los equipos individualizados pueden compartir nombre y marca, pero
+        # su código interno debe distinguirlos en TODO el catálogo.
+        # Los duplicados históricos se preservan para revisión por separado.
+        codigo = normalizar_campo(data.get('codigo_interno')).upper()
+        tipo_inventario = normalizar_campo(data.get('tipo', 'producto'))
+        tipo_normalizado = tipo_inventario.casefold()
+        requiere_codigo = tipo_normalizado in {
+            'aparato', 'aparatos', 'sistema', 'sistemas',
+            'dispositivo', 'dispositivos',
+        }
+
+        if requiere_codigo and not codigo:
+            return error_response('Código interno obligatorio para aparatos y dispositivos')
+
+        if codigo:
+            existe_codigo = InventarioGeneral.query.filter(
+                func.upper(func.trim(InventarioGeneral.codigo_interno)) == codigo
+            ).first()
+            if existe_codigo:
+                return error_response(
+                    f'El código interno {codigo} ya está registrado', 409
+                )
+        else:
+            # Productos genéricos sin código conservan la regla histórica.
+            existe = InventarioGeneral.query.filter_by(
+                nombre=data['nombre'].strip(),
+                marca=(data.get('marca') or '').strip(),
+            ).first()
+            if existe:
+                return error_response('Ya existe un producto con ese nombre y marca', 409)
 
         ahora = datetime.now(tz)
-        codigo = normalizar_campo(data.get('codigo_interno')).upper()
-                # --- Validaciones numéricas ---
+        # --- Validaciones numéricas ---
         try:
             gasto_sem = _parse_int_nonneg(data.get('gasto_sem'), 'gasto_sem')
             gasto_mes = _parse_int_nonneg(data.get('gasto_mes'), 'gasto_mes')
@@ -376,7 +399,6 @@ def crear_inventario():
         except ValueError as ve:
             return error_response(str(ve))
 
-        tipo_inventario = normalizar_campo(data.get('tipo', 'producto'))
         familia_equipo_id, familia_error = _validar_familia_equipo_activa(
             data.get('familia_equipo_id'),
             tipo_inventario,
