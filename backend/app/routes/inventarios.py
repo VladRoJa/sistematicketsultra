@@ -741,7 +741,17 @@ def historial_movimientos():
                 'cantidad': d.cantidad,
                 'unidad_medida': d.unidad_medida,
                 'codigo_interno': d.inventario.codigo_interno,
-                'no_equipo': d.inventario.no_equipo
+                'no_equipo': d.inventario.no_equipo,
+                # Descriptores del catálogo ACTUAL: el historial debe poder
+                # mostrarse aun antes de cargar GET /inventario/ en Angular.
+                'nombre': d.inventario.nombre,
+                'marca': d.inventario.marca,
+                'proveedor': d.inventario.proveedor,
+                'categoria': (
+                    d.inventario.categoria_inventario.nombre
+                    if d.inventario.categoria_inventario is not None
+                    else d.inventario.categoria
+                ),
             } for d in detalles]
 
             sucursal = Sucursal.query.get(m.sucursal_id)
