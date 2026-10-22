@@ -7,6 +7,7 @@ on:
       - "backend/app/routes/reportes.py"
       - "backend/app/routes/ticket_routes.py"
       - "backend/app/models/inventario.py"
+      - "backend/app/models/user_model.py"
       - "backend/migrations/versions/j22c10202622_inventario_movimientos_anulacion.py"
       - "backend/tests/routes/test_inventario_eliminar_movimiento_qa.py"
       - "frontend/src/app/inventario/movimientos/**"
@@ -43,7 +44,7 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install pytest==8.3.5
       - name: Python syntax
-        run: python -m py_compile app/routes/inventarios.py app/routes/reportes.py app/routes/ticket_routes.py app/models/inventario.py migrations/versions/j22c10202622_inventario_movimientos_anulacion.py
+        run: python -m py_compile app/routes/inventarios.py app/routes/reportes.py app/routes/ticket_routes.py app/models/inventario.py app/models/user_model.py migrations/versions/j22c10202622_inventario_movimientos_anulacion.py
       - name: QA-21 audited annulment
         run: python -m pytest -q --tb=short -o addopts= tests/routes/test_inventario_eliminar_movimiento_qa.py
       - name: Other movement regressions
