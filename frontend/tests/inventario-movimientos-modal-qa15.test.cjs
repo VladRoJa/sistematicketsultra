@@ -292,5 +292,5 @@ test('QA-16 abrir un movimiento exige catálogo y no oculta errores de carga', (
   assert.match(parentTs, /this\.cargarInventarios\(true\)/);
   assert.match(parentTs, /No se pudo cargar el catálogo de inventario/);
   assert.match(parentTs, /this\.inventariosDisponibles\.length === 0/);
-  assert.doesNotMatch(parentTs, /error: err => \{\}/);
+  assert.match(parentTs, /this\.errorCatalogo = true/);
 });
