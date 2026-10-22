@@ -101,20 +101,33 @@
                   <mat-icon>search</mat-icon>
                   <input [id]="'movimiento-equipo-' + i" type="text"
                     class="movement-input movement-input--search"
-                    formControlName="inventarioControl" [matAutocomplete]="autoInv"
+                    formControlName="inventarioControl"
                     placeholder="Escribe el código, ej. 11CCJW21"
-                    autocomplete="off" />
+                    autocomplete="off"
+                    (focus)="iniciarBusqueda(i)"
+                    (input)="iniciarBusqueda(i)"
+                    (keydown)="procesarTeclaBusqueda($event, i)"
+                    [attr.aria-expanded]="mostrarResultados(i)"
+                    [attr.aria-controls]="'resultados-movimiento-' + i" />
                 </div>
-                <mat-autocomplete #autoInv="matAutocomplete"
-                  [displayWith]="displayInventario"
-                  (optionSelected)="onInventarioSeleccionado($event.option.value, i)">
-                  <mat-option *ngFor="let inv of inventarioFiltrado$[i] | async" [value]="inv">
-                    <div class="movement-option">
+                <div *ngIf="mostrarResultados(i)" class="movement-search-results"
+                  [id]="'resultados-movimiento-' + i" role="group"
+                  [attr.aria-label]="'Equipos encontrados para el renglón ' + (i + 1)">
+                  <ng-container *ngIf="opcionesBusqueda(i) as opciones">
+                    <p class="movement-search-results__hint" *ngIf="opciones.length > 0">
+                      {{ opciones.length }} {{ opciones.length === 1 ? 'coincidencia' : 'coincidencias' }}.
+                      Selecciona el código correcto.
+                    </p>
+                    <button type="button" class="movement-search-results__option"
+                      *ngFor="let inv of opciones" (click)="onInventarioSeleccionado(inv, i)">
                       <strong>{{ inv.codigo_interno || 'Sin código' }}</strong>
                       <span>{{ inv.nombre }} · {{ inv.marca || 'Sin marca' }}</span>
-                    </div>
-                  </mat-option>
-                </mat-autocomplete>
+                    </button>
+                    <p *ngIf="opciones.length === 0" class="movement-search-results__empty">
+                      Sin coincidencias en el catálogo. Verifica el código o cambia el filtro de tipo.
+                    </p>
+                  </ng-container>
+                </div>
 
                 <div *ngIf="articuloSeleccionado(i) as seleccionado"
                   class="movement-product__selected">
