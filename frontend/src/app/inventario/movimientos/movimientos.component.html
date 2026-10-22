@@ -38,102 +38,120 @@
   </div>
 </mat-card>
 
-<mat-card>
-  <mat-table [dataSource]="movimientosFiltrados" *ngIf="!loading && movimientosFiltrados.length">
+<mat-card class="movimientos-listado">
+  <div class="movimientos-listado__loading" *ngIf="loading">
+    Cargando movimientos...
+  </div>
 
-    <ng-container matColumnDef="id">
-      <mat-header-cell *matHeaderCellDef class="w-14 min-w-[40px]">ID</mat-header-cell>
-      <mat-cell *matCellDef="let mov" class="w-14 min-w-[40px]">{{ mov.id }}</mat-cell>
-    </ng-container>
+  <div class="movimientos-listado__empty" *ngIf="!loading && movimientosFiltrados.length === 0">
+    No hay movimientos que coincidan con los filtros.
+  </div>
 
-    <ng-container matColumnDef="fecha">
-      <mat-header-cell *matHeaderCellDef class="w-28 min-w-[100px]">Fecha</mat-header-cell>
-      <mat-cell *matCellDef="let mov" class="w-28 min-w-[100px]">{{ mov.fecha }}</mat-cell>
-    </ng-container>
+  <div class="movimientos-listado__scroll" *ngIf="!loading && movimientosFiltrados.length > 0">
+    <mat-table [dataSource]="movimientosFiltrados" class="movimientos-tabla">
+      <ng-container matColumnDef="id">
+        <mat-header-cell *matHeaderCellDef class="movimientos-col-id">ID</mat-header-cell>
+        <mat-cell *matCellDef="let mov" class="movimientos-col-id">
+          {{ mov.id }}
+        </mat-cell>
+      </ng-container>
 
-    <ng-container matColumnDef="tipo">
-      <mat-header-cell *matHeaderCellDef class="w-24 min-w-[70px]">Tipo</mat-header-cell>
-      <mat-cell *matCellDef="let mov" class="w-24 min-w-[70px]">
-        <span [ngClass]="{'text-green-600': mov.tipo === 'entrada', 'text-red-600': mov.tipo === 'salida'}">
-          {{ mov.tipo | titlecase }}
-        </span>
-      </mat-cell>
-    </ng-container>
+      <ng-container matColumnDef="fecha">
+        <mat-header-cell *matHeaderCellDef class="movimientos-col-fecha">Fecha</mat-header-cell>
+        <mat-cell *matCellDef="let mov" class="movimientos-col-fecha">
+          {{ mov.fecha }}
+        </mat-cell>
+      </ng-container>
 
-    <ng-container matColumnDef="producto">
-      <mat-header-cell *matHeaderCellDef class="w-56 min-w-[180px]">Producto</mat-header-cell>
-      <mat-cell *matCellDef="let mov" class="w-56 min-w-[180px]">
-        <ng-container *ngIf="mov.inventarios?.length; else sinProductos">
-          <div *ngFor="let p of mov.inventarios" class="truncate" style="max-width: 220px;" [matTooltip]="getDescripcionLarga(p)">
-            {{ getNombreProducto(p) }}
-          </div>
-        </ng-container>
-        <ng-template #sinProductos>-</ng-template>
-      </mat-cell>
-    </ng-container>
+      <ng-container matColumnDef="tipo">
+        <mat-header-cell *matHeaderCellDef class="movimientos-col-tipo">Tipo</mat-header-cell>
+        <mat-cell *matCellDef="let mov" class="movimientos-col-tipo">
+          <span
+            class="movimientos-tipo"
+            [class.movimientos-tipo--entrada]="mov.tipo === 'entrada'"
+            [class.movimientos-tipo--salida]="mov.tipo === 'salida'"
+          >
+            {{ mov.tipo | titlecase }}
+          </span>
+        </mat-cell>
+      </ng-container>
 
-    <ng-container matColumnDef="cantidad">
-      <mat-header-cell *matHeaderCellDef class="w-24 min-w-[70px]">Cantidad</mat-header-cell>
-      <mat-cell *matCellDef="let mov" class="w-24 min-w-[70px]">
-        <ng-container *ngIf="mov.inventarios?.length">
-          <div *ngFor="let p of mov.inventarios">
-            {{ p.cantidad }} <span *ngIf="p.unidad_medida">{{ p.unidad_medida }}</span>
-          </div>
-        </ng-container>
-      </mat-cell>
-    </ng-container>
-
-    <ng-container matColumnDef="detalles">
-      <mat-header-cell *matHeaderCellDef class="w-56 min-w-[170px]">Detalles</mat-header-cell>
-      <mat-cell *matCellDef="let mov" class="w-56 min-w-[170px]">
-        <ng-container *ngIf="mov.inventarios?.length">
-          <div *ngFor="let p of mov.inventarios">
-            <span class="text-gray-700">
-              {{ getMarcaProducto(p) }} · {{ getProveedorProducto(p) }} · {{ getCategoriaProducto(p) }}
+      <ng-container matColumnDef="articulos">
+        <mat-header-cell *matHeaderCellDef class="movimientos-col-articulos">
+          Artículos
+        </mat-header-cell>
+        <mat-cell *matCellDef="let mov" class="movimientos-col-articulos">
+          <div class="movimientos-articulos-resumen">
+            <strong>
+              {{ cantidadArticulos(mov) }}
+              {{ cantidadArticulos(mov) === 1 ? 'artículo' : 'artículos' }}
+            </strong>
+            <span [title]="primerArticulo(mov)">
+              {{ primerArticulo(mov) }}
             </span>
           </div>
-        </ng-container>
-      </mat-cell>
-    </ng-container>
-
-      <ng-container matColumnDef="Codigo">
-        <mat-header-cell *matHeaderCellDef class="min-w-[180px] max-w-[300px] w-[240px]">Código</mat-header-cell>
-        <mat-cell *matCellDef="let mov" class="min-w-[180px] max-w-[300px] w-[240px] break-all">
-          <div *ngFor="let p of mov.inventarios">
-            {{ p.codigo_interno || '-' }}
-          </div>
         </mat-cell>
-    </ng-container>
+      </ng-container>
 
-    <ng-container matColumnDef="usuario">
-      <mat-header-cell *matHeaderCellDef class="w-36 min-w-[90px]">Usuario</mat-header-cell>
-      <mat-cell *matCellDef="let mov" class="w-36 min-w-[90px]">
-        {{ obtenerNombreUsuario(mov.usuario, mov.usuario_id) }}
-      </mat-cell>
-    </ng-container>
+      <ng-container matColumnDef="usuario">
+        <mat-header-cell *matHeaderCellDef class="movimientos-col-usuario">Usuario</mat-header-cell>
+        <mat-cell *matCellDef="let mov" class="movimientos-col-usuario">
+          <span class="movimientos-texto-corto"
+            [title]="obtenerNombreUsuario(mov.usuario, mov.usuario_id)">
+            {{ obtenerNombreUsuario(mov.usuario, mov.usuario_id) }}
+          </span>
+        </mat-cell>
+      </ng-container>
 
-    <ng-container matColumnDef="sucursal">
-      <mat-header-cell *matHeaderCellDef class="w-40 min-w-[110px]">Sucursal</mat-header-cell>
-      <mat-cell *matCellDef="let mov" class="w-40 min-w-[110px]">
-        {{ obtenerNombreSucursal(mov.sucursal, mov.sucursal_id) }}
-      </mat-cell>
-    </ng-container>
+      <ng-container matColumnDef="sucursal">
+        <mat-header-cell *matHeaderCellDef class="movimientos-col-sucursal">Sucursal</mat-header-cell>
+        <mat-cell *matCellDef="let mov" class="movimientos-col-sucursal">
+          <span class="movimientos-texto-corto"
+            [title]="obtenerNombreSucursal(mov.sucursal, mov.sucursal_id)">
+            {{ obtenerNombreSucursal(mov.sucursal, mov.sucursal_id) }}
+          </span>
+        </mat-cell>
+      </ng-container>
 
-    <ng-container matColumnDef="observaciones">
-      <mat-header-cell *matHeaderCellDef class="w-56 min-w-[130px]">Observaciones</mat-header-cell>
-      <mat-cell *matCellDef="let mov" class="w-56 min-w-[130px]">{{ mov.observaciones }}</mat-cell>
-    </ng-container>
+      <ng-container matColumnDef="observaciones">
+        <mat-header-cell *matHeaderCellDef class="movimientos-col-observaciones">
+          Observaciones
+        </mat-header-cell>
+        <mat-cell *matCellDef="let mov" class="movimientos-col-observaciones">
+          <span class="movimientos-texto-corto" [title]="mov.observaciones || ''">
+            {{ mov.observaciones || '—' }}
+          </span>
+        </mat-cell>
+      </ng-container>
 
-    <ng-container matColumnDef="acciones">
-      <mat-header-cell *matHeaderCellDef class="w-16 min-w-[40px]">Acciones</mat-header-cell>
-      <mat-cell *matCellDef="let mov" class="w-16 min-w-[40px]">
-        <button mat-icon-button color="warn" (click)="eliminarMovimiento(mov.id)">
-          <mat-icon>delete</mat-icon>
-        </button>
-      </mat-cell>
-    </ng-container>
+      <ng-container matColumnDef="acciones">
+        <mat-header-cell *matHeaderCellDef class="movimientos-col-acciones">Acciones</mat-header-cell>
+        <mat-cell *matCellDef="let mov" class="movimientos-col-acciones">
+          <button
+            type="button"
+            mat-stroked-button
+            class="movimientos-ver-detalle"
+            [attr.aria-label]="'Ver detalle del movimiento ' + mov.id"
+            (click)="abrirDetalleMovimiento(mov)"
+          >
+            <mat-icon>visibility</mat-icon>
+            Ver detalle
+          </button>
+          <button
+            type="button"
+            mat-icon-button
+            color="warn"
+            class="movimientos-borrar"
+            [attr.aria-label]="'Eliminar movimiento ' + mov.id"
+            (click)="eliminarMovimiento(mov.id)"
+          >
+            <mat-icon>delete</mat-icon>
+          </button>
+        </mat-cell>
+      </ng-container>
 
-    <mat-header-row *matHeaderRowDef="['id', 'fecha', 'tipo', 'producto', 'cantidad', 'detalles', 'Codigo', 'usuario', 'sucursal', 'observaciones', 'acciones']"></mat-header-row>
-    <mat-row *matRowDef="let row; columns: ['id', 'fecha', 'tipo', 'producto', 'cantidad', 'detalles', 'Codigo', 'usuario', 'sucursal', 'observaciones', 'acciones']"></mat-row>
-
-  </mat-table>
+      <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
+      <mat-row *matRowDef="let row; columns: displayedColumns"></mat-row>
+    </mat-table>
+  </div>
+</mat-card>
