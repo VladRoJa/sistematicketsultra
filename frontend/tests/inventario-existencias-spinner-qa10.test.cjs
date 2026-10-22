@@ -161,3 +161,28 @@ test('QA-10D: usuario no administrador conserva su sucursal predeterminada', () 
     global.localStorage = oldStorage;
   }
 });
+
+
+test('QA-10E: la tabla muestra Código interno después de Nombre', () => {
+  const { vm, pending } = fixture();
+  const indexNombre = vm.displayedColumns.indexOf('nombre');
+  const indexCodigo = vm.displayedColumns.indexOf('codigo_interno');
+  assert.equal(indexCodigo, indexNombre + 1);
+  assert.match(html, /matColumnDef="codigo_interno"/);
+  assert.match(html, /Código interno/);
+  assert.match(html, /e\.codigo_interno \|\| '—'/);
+
+  vm.cargarExistencias();
+  pending().next([
+    {
+      inventario_id: 27,
+      sucursal_id: 1,
+      nombre: 'Mouse',
+      codigo_interno: 'VDR-033-RECMOU',
+      stock: 1,
+    },
+  ]);
+  assert.equal(vm.existencias[0].codigo_interno, 'VDR-033-RECMOU');
+  assert.equal(vm.existencias[0].stock, 1);
+  assert.match(css, /\.existencias-code/);
+});

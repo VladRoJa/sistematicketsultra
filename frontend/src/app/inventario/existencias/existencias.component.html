@@ -46,6 +46,14 @@
       <td mat-cell *matCellDef="let e">{{ e.nombre }}</td>
     </ng-container>
 
+    <!-- Código interno: identificador del catálogo maestro -->
+    <ng-container matColumnDef="codigo_interno">
+      <th mat-header-cell *matHeaderCellDef>Código interno</th>
+      <td mat-cell *matCellDef="let e" class="existencias-code">
+        {{ e.codigo_interno || '—' }}
+      </td>
+    </ng-container>
+
     <!-- Tipo -->
     <ng-container matColumnDef="tipo">
       <th mat-header-cell *matHeaderCellDef>Tipo</th>

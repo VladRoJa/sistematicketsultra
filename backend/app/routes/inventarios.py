@@ -763,6 +763,7 @@ def ver_existencias():
             data.append({
                 'inventario_id': item.inventario_id,
                 'nombre': inventario_general.nombre if inventario_general else 'Desconocido',
+                'codigo_interno': inventario_general.codigo_interno if inventario_general else None,
                 'categoria': inventario_general.categoria if inventario_general else '',
                 'tipo': inventario_general.tipo if inventario_general else '',
                 'marca': inventario_general.marca if inventario_general else '',
