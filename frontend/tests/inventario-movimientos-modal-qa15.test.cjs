@@ -236,7 +236,9 @@ test('el formulario es guiado y usa etiquetas externas; no conserva handler inex
   assert.match(componentHtml, /Equipos y cantidades/);
   assert.match(componentHtml, /formArrayName="productos"/);
   assert.match(componentHtml, /\[formGroupName\]="i"/);
-  assert.match(componentHtml, /\(optionSelected\)="onInventarioSeleccionado/);
+  assert.match(componentHtml, /\(click\)="onInventarioSeleccionado\(inv, i\)"/);
+  assert.match(componentHtml, /mostrarResultados\(i\)/);
+  assert.match(componentHtml, /Sin coincidencias en el catálogo/);
   assert.match(componentHtml, /inv\.codigo_interno/);
   assert.match(componentHtml, /Selecciona una opción|Elige una opción/);
   assert.match(componentHtml, /Registrar movimiento/);
@@ -245,4 +247,50 @@ test('el formulario es guiado y usa etiquetas externas; no conserva handler inex
   assert.doesNotMatch(componentHtml, /<mat-card/);
   assert.match(componentCss, /movement-input:focus/);
   assert.match(parentTs, /maxHeight: '92vh'/);
+});
+
+
+test('QA-16 resultados visibles por código sin depender de autocomplete flotante', () => {
+  const { vm } = crearVm();
+  const grupo = vm.productosFormArray.at(0);
+
+  vm.iniciarBusqueda(0);
+  grupo.get('inventarioControl').setValue('11ccjw21');
+  assert.equal(vm.mostrarResultados(0), true);
+  assert.deepEqual(vm.opcionesBusqueda(0).map(i => i.codigo_interno), ['11CCJW21']);
+
+  vm.onInventarioSeleccionado(vm.opcionesBusqueda(0)[0], 0);
+  assert.equal(grupo.get('inventario_id').value, 8000);
+  assert.equal(vm.mostrarResultados(0), false);
+  assert.equal(vm.productosSeleccionados, 1);
+});
+
+test('QA-16 búsqueda sin coincidencias no permite guardar un código inventado', () => {
+  const { vm } = crearVm();
+  const grupo = vm.productosFormArray.at(0);
+  vm.iniciarBusqueda(0);
+  grupo.get('inventarioControl').setValue('11CCJW99');
+  assert.equal(vm.mostrarResultados(0), true);
+  assert.deepEqual(vm.opcionesBusqueda(0), []);
+  assert.equal(grupo.get('inventario_id').value, null);
+  assert.equal(vm.form.invalid, true);
+});
+
+test('QA-16 Enter selecciona coincidencia única sin enviar accidentalmente el formulario', () => {
+  const { vm } = crearVm();
+  const grupo = vm.productosFormArray.at(0);
+  vm.iniciarBusqueda(0);
+  grupo.get('inventarioControl').setValue('11CCJW24');
+  let prevented = 0;
+  vm.procesarTeclaBusqueda({ key: 'Enter', preventDefault: () => prevented++ }, 0);
+  assert.equal(prevented, 1);
+  assert.equal(grupo.get('inventario_id').value, 8003);
+});
+
+test('QA-16 abrir un movimiento exige catálogo y no oculta errores de carga', () => {
+  assert.match(parentTs, /if \(this\.cargandoCatalogo\)/);
+  assert.match(parentTs, /this\.cargarInventarios\(true\)/);
+  assert.match(parentTs, /No se pudo cargar el catálogo de inventario/);
+  assert.match(parentTs, /this\.inventariosDisponibles\.length === 0/);
+  assert.match(parentTs, /this\.errorCatalogo = true/);
 });

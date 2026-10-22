@@ -60,6 +60,8 @@ export class MovimientosComponent implements OnInit {
 
   esAdmin = false;
   loading = false;
+  cargandoCatalogo = false;
+  errorCatalogo = false;
 
   displayedColumns: string[] = [
     'id', 'fecha', 'tipo', 'articulos', 'usuario', 'sucursal', 'observaciones', 'acciones'
@@ -91,10 +93,28 @@ export class MovimientosComponent implements OnInit {
     });
   }
 
-  cargarInventarios(): void {
+  cargarInventarios(abrirAlCompletar = false): void {
+    if (this.cargandoCatalogo) return;
+    this.cargandoCatalogo = true;
+    this.errorCatalogo = false;
     this.http.get<any[]>(`${environment.apiUrl}/inventario/`).subscribe({
-      next: data => this.inventariosDisponibles = data,
-      error: err => {}
+      next: data => {
+        this.cargandoCatalogo = false;
+        this.inventariosDisponibles = Array.isArray(data) ? data : [];
+        this.errorCatalogo = this.inventariosDisponibles.length === 0;
+        if (this.errorCatalogo) {
+          mostrarAlertaToast('El catálogo de inventario está vacío. No es posible registrar un movimiento.', 'error');
+          return;
+        }
+        if (abrirAlCompletar) this.abrirDialogoMovimiento();
+      },
+      error: err => {
+        this.cargandoCatalogo = false;
+        this.errorCatalogo = true;
+        this.inventariosDisponibles = [];
+        const detalle = err?.error?.detail || err?.error?.error || `HTTP ${err?.status || 'sin respuesta'}`;
+        mostrarAlertaToast(`No se pudo cargar el catálogo de inventario: ${detalle}`, 'error');
+      }
     });
   }
 
@@ -165,6 +185,16 @@ export class MovimientosComponent implements OnInit {
   }
 
   abrirDialogoMovimiento() {
+    // La selección depende del catálogo completo; jamás abrir vacío.
+    if (this.cargandoCatalogo) {
+      mostrarAlertaToast('El catálogo aún está cargando. Intenta de nuevo.', 'warning');
+      return;
+    }
+    if (!this.inventariosDisponibles.length || this.errorCatalogo) {
+      this.cargarInventarios(true);
+      return;
+    }
+
     const dialogRef = this.dialog.open(DialogoRegistrarMovimientoComponent, {
       width: '900px',
       maxWidth: '96vw',
