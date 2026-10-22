@@ -140,3 +140,24 @@ test('QA-22 no pierde los detalles ni convierte registros anulados en existencia
   assert.match(html, /Los códigos y datos descriptivos corresponden al catálogo actual/);
   assert.doesNotMatch(html, /style="/);
 });
+
+test('QA-22B auditoría horizontal compacta conserva autor, fecha y motivo', () => {
+  const html = load('dialogo-detalle-movimiento/dialogo-detalle-movimiento.component.html');
+  const css = load('dialogo-detalle-movimiento/dialogo-detalle-movimiento.component.css');
+  const auditStart = html.indexOf('class="movement-detail__audit-grid"');
+  const auditEnd = html.indexOf('</section>', auditStart);
+  const audit = html.slice(auditStart, auditEnd);
+  assert.ok(auditStart > 0 && auditEnd > auditStart);
+  assert.match(audit, /usuarioAnulacion/);
+  assert.match(audit, /anulado_en_utc/);
+  assert.match(audit, /motivo_anulacion/);
+  assert.match(audit, /class="movement-detail__audit-reason"/);
+  assert.match(css, /grid-template-columns: minmax\(110px, 0\.8fr\) minmax\(150px, 1fr\) minmax\(300px, 2\.9fr\)/);
+  assert.match(css, /@media \(max-width: 900px\)/);
+  assert.match(css, /max-height: min\(38vh, 350px\)/);
+  assert.match(css, /overflow: auto/);
+  assert.match(html, /Observaciones originales/);
+  assert.match(html, /articulo\.inventarioId/);
+  assert.match(html, /articulo\.cantidad/);
+  assert.doesNotMatch(html, /style="/);
+});
