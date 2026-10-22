@@ -447,6 +447,22 @@
   font-size: 11px;
 }
 
+.inventory-duplicate-group__edit {
+  padding: 6px 10px;
+  border: 1px solid #f2c58e;
+  border-radius: 8px;
+  background: #fff6ea;
+  color: #92400e;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.inventory-duplicate-group__edit:hover {
+  background: #ffedce;
+}
+
 .inventory-duplicate-group__table th {
   color: #475467;
   background: #fcfcfd;
