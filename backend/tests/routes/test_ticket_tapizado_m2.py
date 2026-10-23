@@ -223,6 +223,12 @@ class EndpointTapizadoM2Test(unittest.TestCase):
         self.assertEqual(status, 400)
         self.create.assert_not_called()
 
+    def test_rechaza_clasificacion_fraccionaria(self):
+        response, status = self.enviar(payload_valido(clasificacion_id=487.5))
+        self.assertEqual(status, 400)
+        self.assertIn("Clasificación o sucursal", response.get_json()["mensaje"])
+        self.create.assert_not_called()
+
     def test_multiaparato_desactivado_por_defecto_hasta_m3(self):
         self.app.config["TICKETS_TAPIZADO_MULTI_ENABLED"] = False
         response, status = self.enviar()
