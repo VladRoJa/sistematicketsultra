@@ -187,6 +187,8 @@ La prueba en producción comparó **todos los endpoints Flask** con prefijo `/ap
 
 **QA HTTP autenticado sin lectura documental — 2026-10-23:** desde sesión legítima de Suite Ultra se llamó a `GET /api/internal-documents/by-link?entity_type=INVALIDO` con el JWT de sesión sin imprimir el token. Resultado comunicado por operador: **HTTP 400**, esperado por `entity_type` inválido. Como el handler verifica `entity_type` antes de consultar `InternalDocumentORM`, demuestra que el request autenticado alcanzó validación de parámetros **sin ejecutar consulta de documentos**. No implica haber comprobado permisos de lectura por usuario ni por documento. Siguiente prueba acotada: ruta válida con `entity_key` de QA deliberadamente imposible, validando solo HTTP e inventario vacío, sin registrar contenido ni token.
 
+**QA HTTP autenticado con filtro válido sin coincidencias — 2026-10-23:** el operador ejecutó desde Suite Ultra `GET /api/internal-documents/by-link?entity_type=GENERAL&entity_key=SUITE_ULTRA_QA_SIN_VINCULOS_20261023` usando el JWT de su sesión. Resultado reportado: **HTTP 200, `DOCUMENTOS=0`**. Confirma que el endpoint procesa parámetros válidos y devuelve lista vacía para este filtro; no prueba controles de visibilidad sobre documentos existentes, ni demuestra que la clave sea permanentemente inexistente. Con ello se completaron tres comprobaciones básicas HTTP: sin JWT → 401, JWT + tipo inválido → 400, JWT + filtro válido sin coincidencias → 200/0.
+
 **Escenarios mínimos de comparación para Fase B:** (1) sesión válida vs inválida, (2) lectura de documento publicado permitido, (3) lectura denegada de documento sensible, (4) SISTEMAS / ADMICORP vs otro rol ante el consolidado, (5) `view=true/download=false`, (6) versiones históricas vs versión actual, (7) auditoría solo manager, (8) listado general vs `/by-link` para un mismo documento, (9) borradores/archivados/visibilidad custom. **Resultado esperado:** el resolvedor podrá describir el acceso sin alterar los guards y sin fusionar todos los GET en un solo booleano `internal_documents.view`.
 
 ## 5. Política de paridad antes de activar permisos
@@ -289,7 +291,8 @@ Estos puntos necesitan información del servidor o revisión de código adiciona
 - [x] Deploy del fix #1062 confirmado por el operador: `git pull` y reconstrucción de `backend`. QA interno de código importado en el contenedor: `NUEVA_VALIDACION=True`, `VALIDACION_ANTERIOR=False`, `QA_BY_LINK=PASS`.
 - [x] **Prueba HTTP sin JWT en backend productivo (2026-10-23):** `GET /api/internal-documents/by-link?entity_type=GENERAL` respondió `401` sin cabecera Authorization. Confirma el rechazo de una solicitud anónima al endpoint, no la corrección de las restricciones entre roles/documentos autenticados.
 - [x] **HTTP autenticado sin leer documentos:** JWT de sesión legítimo + `entity_type=INVALIDO` devolvió HTTP 400; alcanzó validación previa a consulta de documentos.
-- [ ] Probar camino HTTP autenticado con vínculo ficticio inexistente y, por separado, contrastar permisos por perfil/objeto con fixtures antes de activar resolvedor global.
+- [x] **Camino HTTP autenticado con parámetros válidos y vínculo ficticio inexistente:** `GET /api/internal-documents/by-link?entity_type=GENERAL&entity_key=SUITE_ULTRA_QA_SIN_VINCULOS_20261023` devolvió **HTTP 200, `items` vacío** (`DOCUMENTOS=0`), sin exponer metadatos de documentos.
+- [ ] Contrastar **paridad por perfil/objeto con fixtures** (perfiles permitidos y restringidos, documentos ordinarios y sensibles) sin usar información documental real antes de activar resolvedor global.
 - [ ] Marcar expresamente el alcance incompleto de módulos fuera del catálogo y plan de expansión.
 
 ### Consulta posterior de producción
