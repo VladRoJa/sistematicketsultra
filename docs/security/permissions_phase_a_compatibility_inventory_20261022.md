@@ -159,7 +159,7 @@ Consulta `SELECT UPPER(TRIM(COALESCE(rol,''))), COUNT(*) FROM users GROUP BY 1` 
 - Diferenciar puestos (`GERENTE` / `GERENTE_REGIONAL`) de permisos puntuales y scopes; una coincidencia parcial de permisos no implica que sean el mismo rol.
 - Este censo **no describe permisos efectivos**, solamente `users.rol`; tampoco acredita que las cuentas estén habilitadas o que representen personas diferentes.
 - El catálogo actual de 11 módulos/40 acciones no equivale al censo de roles: son dimensiones diferentes.
-- **Siguiente evidencia pendiente:** ACL `usuarios_permisos` y verificación de migraciones/esquema, de forma agregada. Los operadores ya fueron censados en la sección siguiente.
+- **ACL departamental censada:** una sola asignación en `usuarios_permisos` a `departamento_id=1`, `es_admin=false`, para un usuario (corte 2026-10-22). **Pendiente:** confirmar rol de esa cuenta, verificar migraciones/esquema. Los operadores están censados en la sección siguiente.
 
 ## 5.2. Censo agregado de operadores Warehouse y Planning — 2026-10-22
 
@@ -175,7 +175,20 @@ Consulta SQL de solo lectura sobre `warehouse_operators` y `planning_operators`;
 - No inferir acceso universal por el rol principal del operador, ni crear roles combinados para reflejar sus flags.
 - **No eliminar `warehouse_operators` ni `planning_operators` al introducir el resolutor:** primero demostrar paridad con casos permitidos y denegados y comprobar todas las rutas consumidoras.
 - **No interpretar el `can_archive=0` de Warehouse como permiso para archivar**, aunque cualquier futuro grant `allow` global exista; el hard stop y la política de precedencia requieren aprobación explícita al migrar esa acción.
-- La siguiente consulta de producción debe cuantificar los permisos legados por departamento (`usuarios_permisos`), manteniendo el resultado sin nombres ni identificadores personales.
+- La consulta agregada de `usuarios_permisos` ya se recibió; ver sección 5.3. No se alterarán flags ni asignaciones existentes.
+
+## 5.3. ACL departamental legacy — 2026-10-22
+
+Consulta agrupada de `usuarios_permisos` en producción devolvió únicamente:
+
+| departamento_id | es_admin | Asignaciones | Usuarios distintos |
+| ---: | --- | ---: | ---: |
+| 1 (Mantenimiento) | `False` | 1 | 1 |
+
+- Esta entrada **no es un permiso de administrador**. La columna `es_admin=false` corresponde a esta ACL y no determina el conjunto completo de privilegios del usuario.
+- `backend/app/utils/pm_permissions.py::has_scoped_maintenance_read_grant()` consulta expresamente `usuarios_permisos` con `departamento_id=1` y `es_admin=False` para habilitar lectura de PM a los roles `COMPRAS` o `COORDINADOR_MANTENIMIENTO`.
+- La consulta recibida **no identifica el rol del usuario asociado**, de modo que la vinculación concreta con el helper sigue pendiente de confirmar. No asumir que los dos registros de `permission_grants` y esta ACL corresponden al mismo usuario.
+- Esta ACL debe conservarse y contrastarse con los accesos reales a PM durante la migración.
 
 ## 6. Evidencia aún pendiente para cerrar Fase A
 
@@ -186,7 +199,8 @@ Estos puntos necesitan información del servidor o revisión de código adiciona
 - [x] Verificar que el catálogo/observabilidad y el endpoint de edición de módulos no constituyen enforcement universal.
 - [x] **Grants vigentes identificados (consultas agregadas, 2026-10-22):** solo se devolvieron **2 grants** (`principal_type=user`, `effect=allow`, `scope_type=global`, estado `current`), uno para `tickets.maintenance.coordinate` y uno para `tickets.maintenance.read_assigned_only`. **Ningún grant vigente corresponde a Nube Corporativa**. Ambos deben conservarse intactos; su impacto operativo sigue subordinado a las condiciones del guard real. El scope `global` del grant no exime restricciones de sucursal ni concede por sí solo acceso de escritura. **Pendiente:** revisar operadores/ACL y confrontar esquema/migraciones aplicadas con producción. El censo agregado de 17 roles y 70 cuentas ya está documentado abajo.
 - [x] Censados operadores Warehouse y Planning en producción: 1 operador de Warehouse con lectura/subida pero sin archivo, y 1 operador activo de Planning con las 6 capacidades habilitadas. Sus identidades no están identificadas por estos agregados.
-- [ ] Censar ACL departamental `usuarios_permisos` en agregado, y contrastar migraciones/esquema de PostgreSQL productivo.
+- [x] Censo agregado `usuarios_permisos`: departamento 1 / `es_admin=false` / una asignación / un usuario.
+- [ ] Confirmar qué rol tiene la cuenta con ACL departamental (sin identificar usuario) y contrastar migraciones/esquema de PostgreSQL productivo.
 - [~] Inventariadas por código las **21 rutas HTTP** de Nube y los controles de escritura/lectura/descarga/auditoría, con excepción especial de agregadoras. **Pendiente:** matriz exhaustiva ruta → decisión por contexto y tests de paridad; esta inspección no sustituye QA.
 - [ ] Producir conjunto de escenarios de paridad de Nube Corporativa (rol SISTEMAS, ADMICORP, admin con otro usuario, usuario ordinario, documento sensible).
 - [ ] Decidir con responsable operativo únicamente los accesos legacy contradictorios que supongan un cambio de política, no pedir autorización para cada refactor.
