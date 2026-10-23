@@ -130,3 +130,79 @@ def test_snapshot_payload_is_independent_from_document_status():
         "snapshot_is_canonical": None,
         "snapshot_business_date": None,
     }
+
+
+def test_socios_snapshot_models_have_warehouse_lineage_and_correct_semantics():
+    """Un snapshot sin campo is_canonical no debe inventar un estado."""
+    model_names = {
+        model.__tablename__ for model in routes.WAREHOUSE_UPLOAD_SNAPSHOT_MODELS
+    }
+    assert {
+        "socios_vencidos_snapshots",
+        "ventas_nuevos_socios_detalle_snapshots",
+        "socios_activos_snapshots",
+    }.issubset(model_names)
+
+    assert not hasattr(routes.SociosVencidosSnapshotORM, "is_canonical")
+    assert hasattr(routes.VentasNuevosSociosDetalleSnapshotORM, "is_canonical")
+    assert hasattr(routes.SociosActivosSnapshotORM, "is_canonical")
+    assert not hasattr(routes.SociosVencidosSnapshotORM, "business_date")
+    assert hasattr(routes.SociosActivosSnapshotORM, "cutoff_date")
+
+
+def test_snapshot_lineage_for_three_socios_families_preserves_null_canonical(monkeypatch):
+    captured = {}
+
+    rows = [
+        {
+            "upload_id": 22613,
+            "report_type_key": "socios_vencidos",
+            "snapshot_id": 7001,
+            "snapshot_is_canonical": None,
+            "snapshot_business_date": None,
+        },
+        {
+            "upload_id": 22611,
+            "report_type_key": "ventas_nuevos_socios_detalle",
+            "snapshot_id": 7002,
+            "snapshot_is_canonical": False,
+            "snapshot_business_date": date(2026, 10, 23),
+        },
+        {
+            "upload_id": 22612,
+            "report_type_key": "socios_activos",
+            "snapshot_id": 7003,
+            "snapshot_is_canonical": True,
+            "snapshot_business_date": date(2026, 10, 23),
+        },
+    ]
+
+    def fake_execute(statement):
+        captured["sql"] = str(statement)
+        return SimpleNamespace(mappings=lambda: rows)
+
+    monkeypatch.setattr(
+        routes, "db",
+        SimpleNamespace(session=SimpleNamespace(execute=fake_execute)),
+    )
+
+    metadata = routes._load_upload_snapshot_metadata([22613, 22611, 22612])
+    assert metadata[(22613, "socios_vencidos")] == {
+        "snapshot_id": 7001,
+        "snapshot_is_canonical": None,
+        "snapshot_business_date": None,
+    }
+    assert metadata[(22611, "ventas_nuevos_socios_detalle")][
+        "snapshot_is_canonical"
+    ] is False
+    assert metadata[(22612, "socios_activos")] == {
+        "snapshot_id": 7003,
+        "snapshot_is_canonical": True,
+        "snapshot_business_date": "2026-10-23",
+    }
+    for table in (
+        "socios_vencidos_snapshots",
+        "ventas_nuevos_socios_detalle_snapshots",
+        "socios_activos_snapshots",
+    ):
+        assert table in captured["sql"]
