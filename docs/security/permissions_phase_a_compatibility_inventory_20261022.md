@@ -119,6 +119,22 @@ La decisión final tiene que ser backend y explicar **usuario, acción, rol, sco
 - El seed inicial fija 11 módulos, pero existen módulos operativos posteriores y endpoints no cubiertos necesariamente por el mapeo high-risk.
 - **Consecuencia:** matriz bidireccional “todos los usuarios con acceso” será exacta solo para acciones verificadas; indicar cobertura parcial hasta mapear cada dominio.
 
+### A-08 — Ruta documental transversal Aperturas → Nube; acción efectiva de Aperturas (mapeo observado en producción, 2026-10-22)
+
+- Consulta `permission_route_map` agrupada por `permission_modules.key='internal_documents'`: **11 rutas activas**, 0 inactivas, de las cuales **10** están asociadas a `internal_documents.manage` y **1** a `openings.manage`.
+- La migración `backend/migrations/versions/7b8c9d0e1f2a_seed_permission_route_map_high_risk.py` documenta explícitamente esa fila cruzada:
+  - `POST /api/openings/<int:opening_id>/tasks/<int:task_id>/documents/upload`
+  - `endpoint_function=upload_task_document`
+  - `module_key=internal_documents` (etiqueta funcional documental / Nube)
+  - `action_full_key=openings.manage` (autorización efectiva de Aperturas)
+  - `current_guard=_require_openings_admin`
+  - `source_file=backend/app/routes/openings_routes.py`
+- Inspección de `backend/app/routes/openings_routes.py::upload_task_document`: efectivamente llama a `_require_openings_admin()` y después realiza la carga documental mediante `create_warehouse_document_upload`. **No usa `require_internal_document_manager()`**.
+- **No es evidencia de IDs corruptos ni error de autorización:** esta asociación es explícita en el seed y representa un proceso transversal. **Sí es una ambigüedad para el diseño futuro** si se usa `route_map.module_id` como acción autorizante sin comprobar `action.module_id`.
+- Requisito del resolvedor y de la matriz bidireccional: distinguir **módulo donde se agrupa/expone la funcionalidad** vs **acción y módulo de autorización**, y resolver el guard real de la ruta. Un `internal_documents.manage` no debe otorgar automáticamente subida documental de Aperturas. Tampoco un `openings.manage` debe equivaler a administrar toda Nube.
+- Las **21 rutas HTTP** del blueprint `internal_documents_routes.py` no quedan automáticamente cubiertas por estas 11 filas, porque una es de Aperturas y el catálogo fue sembrado para rutas de riesgo revisadas, **no para cobertura exhaustiva de cada GET/acción**. Antes de activar permisos, verificar el mapa por `method+route+endpoint` y no inferir cobertura global por conteo.
+- **Pendiente:** consulta agregada del resto de filas cuyo módulo de agrupación difiere del módulo de su acción; clasificar cada excepción antes de centralizar enforcement. No modificar esta asociación histórica sin decidir su semántica.
+
 ## 5. Política de paridad antes de activar permisos
 
 1. Para cada acción, documentar el guard real, alcance y restricciones adicionales. Si no puede mapearse con fidelidad, **no migrar**.
@@ -177,12 +193,6 @@ Consulta SQL de solo lectura sobre `warehouse_operators` y `planning_operators`;
 - **No interpretar el `can_archive=0` de Warehouse como permiso para archivar**, aunque cualquier futuro grant `allow` global exista; el hard stop y la política de precedencia requieren aprobación explícita al migrar esa acción.
 - La consulta agregada de `usuarios_permisos` ya se recibió; ver sección 5.3. No se alterarán flags ni asignaciones existentes.
 
-## 5.4. Estado Alembic de producción — 2026-10-22
-
-- Reporte entregado: `docker compose exec -T backend flask db current` → **`j22c10202622 (head)`**.
-- Verificación en `main`: existe `backend/migrations/versions/j22c10202622_inventario_movimientos_anulacion.py`, con `revision = "j22c10202622"` y `down_revision = "i22c10202622"`. La migración afecta la auditoría de anulación en `movimientos_inventario`; **no introduce ni cambia los permisos globales**.
-- **Alcance de la prueba:** la base del contenedor reporta estar en el head conocido por su Alembic. No se ejecutó una comparación exhaustiva de tablas/constraints contra SQLAlchemy ni un `flask db upgrade`. Por tanto, no confundir `head` con auditoría integral de esquema.
-
 ## 5.3. ACL departamental legacy — 2026-10-22
 
 Consulta agrupada de `usuarios_permisos` en producción devolvió únicamente:
@@ -195,6 +205,12 @@ Consulta agrupada de `usuarios_permisos` en producción devolvió únicamente:
 - `backend/app/utils/pm_permissions.py::has_scoped_maintenance_read_grant()` consulta expresamente `usuarios_permisos` con `departamento_id=1` y `es_admin=False` para habilitar lectura de PM a los roles `COMPRAS` o `COORDINADOR_MANTENIMIENTO`.
 - Una segunda consulta agregada confirmó **`COORDINADOR_MANTENIMIENTO | 1`**. Esta combinación cumple las condiciones de rol + departamento + `es_admin=False` verificadas por `has_scoped_maintenance_read_grant()`, por lo que corresponde al permiso individual de **lectura de PM**, no al de ejecución, validación o configuración. Esto no acredita todavía la intersección precisa de sucursales ni la identidad de los titulares de los dos `permission_grants` de Tickets.
 - Esta ACL debe conservarse y contrastarse con los accesos reales a PM durante la migración.
+
+## 5.4. Estado Alembic de producción — 2026-10-22
+
+- Reporte entregado: `docker compose exec -T backend flask db current` → **`j22c10202622 (head)`**.
+- Verificación en `main`: existe `backend/migrations/versions/j22c10202622_inventario_movimientos_anulacion.py`, con `revision = "j22c10202622"` y `down_revision = "i22c10202622"`. La migración afecta la auditoría de anulación en `movimientos_inventario`; **no introduce ni cambia los permisos globales**.
+- **Alcance de la prueba:** la base del contenedor reporta estar en el head conocido por su Alembic. No se ejecutó una comparación exhaustiva de tablas/constraints contra SQLAlchemy ni un `flask db upgrade`. Por tanto, no confundir `head` con auditoría integral de esquema.
 
 ## 6. Evidencia aún pendiente para cerrar Fase A
 
@@ -212,6 +228,7 @@ Estos puntos necesitan información del servidor o revisión de código adiciona
 - [~] Inventariadas por código las **21 rutas HTTP** de Nube y los controles de escritura/lectura/descarga/auditoría, con excepción especial de agregadoras. **Pendiente:** matriz exhaustiva ruta → decisión por contexto y tests de paridad; esta inspección no sustituye QA.
 - [ ] Producir conjunto de escenarios de paridad de Nube Corporativa (rol SISTEMAS, ADMICORP, admin con otro usuario, usuario ordinario, documento sensible).
 - [ ] Decidir con responsable operativo únicamente los accesos legacy contradictorios que supongan un cambio de política, no pedir autorización para cada refactor.
+- [~] Confirmado mapeo transversal explícito de Aperturas en Nube: 10 rutas de `internal_documents.manage` más 1 de `openings.manage` bajo `module_key=internal_documents`; el guard efectivo de esa ruta es `_require_openings_admin`. Pendiente auditar otras relaciones cross-module y la cobertura integral por ruta.
 - [ ] Marcar expresamente el alcance incompleto de módulos fuera del catálogo y plan de expansión.
 
 ### Consulta posterior de producción
