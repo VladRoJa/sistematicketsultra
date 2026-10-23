@@ -319,8 +319,8 @@ def visual_audit_matrix():
         return jsonify({"error": "Selecciona module_key"}), 400
     if perspective == "action" and not action_key:
         return jsonify({"error": "Selecciona action_key"}), 400
-    if document_id and action_key and action_key != "internal_documents.view":
-        return jsonify({"error": "document_id solo corresponde a internal_documents.view"}), 400
+    if document_id and action_key != "internal_documents.view":
+        return jsonify({"error": "Selecciona internal_documents.view para evaluar document_id"}), 400
 
     actions_query = PermissionActionORM.query.options(joinedload(PermissionActionORM.module))
     actions_query = actions_query.filter(PermissionActionORM.is_active.is_(True))
