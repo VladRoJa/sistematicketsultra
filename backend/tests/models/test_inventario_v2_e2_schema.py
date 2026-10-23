@@ -19,7 +19,7 @@ from app.models.inventario_solicitud_correccion import (
 
 BASE = Path(__file__).resolve().parents[2]
 MIGRATION_PATH = (
-    BASE / "migrations/versions/l23c10202623_inventory_v2_correction_requests.py"
+    BASE / "migrations/versions/v2e2a7c92623_inventory_v2_correction_requests.py"
 )
 spec = importlib.util.spec_from_file_location("inventario_v2_e2_revision", MIGRATION_PATH)
 migration = importlib.util.module_from_spec(spec)
@@ -28,12 +28,12 @@ spec.loader.exec_module(migration)
 
 
 def test_e2_revision_continua_cadena_y_no_crea_heads_paralelos():
-    assert migration.revision == "l23c10202623"
-    assert migration.down_revision == "k23c10202623"
+    assert migration.revision == "v2e2a7c92623"
+    assert migration.down_revision == "l23c10202623"
     cfg = AlembicConfig()
     cfg.set_main_option("script_location", str(BASE / "migrations"))
     graph = ScriptDirectory.from_config(cfg)
-    assert graph.get_heads() == ["l23c10202623"]
+    assert graph.get_heads() == ["v2e2a7c92623"]
 
 
 def test_e2_modela_solo_solicitudes_con_fk_compuesta_e_idempotencia():
@@ -115,7 +115,18 @@ def test_e2_postgres_fk_scope_idempotencia_checks_y_downgrade(monkeypatch):
             migration.upgrade()
             inspector = sa.inspect(con)
             assert inspector.has_table("inventario_correccion_solicitudes")
-            assert len(inspector.get_indexes("inventario_correccion_solicitudes")) == 3
+            indexes = inspector.get_indexes("inventario_correccion_solicitudes")
+            assert {
+                "ix_inv_corr_solicitudes_sucursal_estado_fecha",
+                "ix_inv_corr_solicitudes_inventario_estado",
+                "ix_inv_corr_solicitudes_creador_fecha",
+            } <= {index["name"] for index in indexes}
+            # PostgreSQL refleja tambien el indice de la UNIQUE.
+            assert any(
+                index.get("duplicates_constraint") ==
+                "uq_inv_corr_solicitudes_actor_idempotencia"
+                for index in indexes
+            )
 
             con.exec_driver_sql("INSERT INTO users (id) VALUES (51)")
             con.exec_driver_sql(
