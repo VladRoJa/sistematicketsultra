@@ -2295,7 +2295,7 @@ def list_internal_documents_by_link():
     visible_documents = [
         document
         for document in documents
-        if can_manage or can_view_internal_document(document, context)
+        if can_view_internal_document(document, context)
     ]
 
     return jsonify(
