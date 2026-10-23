@@ -31,9 +31,11 @@ class InventarioSolicitudCorreccionORM(db.Model):
     )
     inventario_id = db.Column(db.Integer, nullable=True)
     campo = db.Column(db.String(64), nullable=True)
-    valor_original = db.Column(JSONB, nullable=True)
-    valor_propuesto = db.Column(JSONB, nullable=True)
-    hallazgo_provisional = db.Column(JSONB, nullable=True)
+    # SQL NULL, no JSONB 'null': las CHECK de identidad distinguen ausencia
+    # de referencia/propuesta frente a un documento JSON explícito.
+    valor_original = db.Column(JSONB(none_as_null=True), nullable=True)
+    valor_propuesto = db.Column(JSONB(none_as_null=True), nullable=True)
+    hallazgo_provisional = db.Column(JSONB(none_as_null=True), nullable=True)
     baseline_canonico = db.Column(JSONB, nullable=False)
     fecha_observacion_local = db.Column(db.Date, nullable=True)
     motivo = db.Column(db.Text, nullable=False)
