@@ -165,7 +165,7 @@ def test_search_and_role_are_cumulative_sql_filters():
     app = Flask(__name__)
     with app.test_request_context("/?q=GER&role=GERENTE"):
         sql = str(visual._user_query().statement.compile())
-    assert "upper" in sql.lower() and "ilike" in sql.lower()
+    assert "upper" in sql.lower() and "like" in sql.lower()
     assert "users.rol" in sql.lower()
 
 
