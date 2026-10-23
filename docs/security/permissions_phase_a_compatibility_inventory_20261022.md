@@ -153,6 +153,34 @@ La decisión final tiene que ser backend y explicar **usuario, acción, rol, sco
 - **Restricción:** no reasignar estas dos rutas mediante SQL manual ni cambiar guards durante Fase A. Cualquier cambio futuro de mapeo almacenado deberá contar con migración Alembic versionada y pruebas que preserven el acceso administrativo actual.
 - **Límite de la comprobación:** el censo cubre las filas `is_active=true` presentes en `permission_route_map`; no demuestra que todo endpoint web tenga un mapeo. Faltan cobertura de lectura, scopes y paridad por registro del piloto.
 
+### A-10 — Cobertura GET del piloto: 11 rutas sin mapeo (2026-10-22)
+
+La prueba en producción comparó **todos los endpoints Flask** con prefijo `/api/internal-documents` frente a los registros `permission_route_map` activos del mismo prefijo, mediante pares `(method, route)`:
+
+- `RUTAS_FLASK=21`; `RUTAS_MAPEADAS=10`; `SIN_MAPEO=11`.
+- **Las 11 rutas sin mapear usan GET; los 10 métodos de escritura sí están mapeados** para este blueprint. No son 11 rutas abiertas: todas las rutas del blueprint usan `@jwt_required()` y varias revalidan permisos por documento.
+- La fila transversal `POST /api/openings/.../documents/upload` (A-08) **no pertenece** al prefijo de este conteo: no confundir 11 asociaciones de `module_key=internal_documents` con 11 rutas efectivas del blueprint Nube.
+
+| GET sin mapeo | Guard/filtro real en código | Clase recomendada para futura observabilidad |
+| --- | --- | --- |
+| `/api/internal-documents/access` | JWT; contexto actual; devuelve `can_manage` real | Acceso al módulo / capacidades de sesión |
+| `/api/internal-documents/categories` | JWT; catálogo de categorías activas | Lectura de categorías; no administrar documentos |
+| `/api/internal-documents` | JWT; managers y no managers filtran diferente; no managers requieren `can_view_internal_document` y solo publicados; managers distintos de ADMICORP excluyen consolidado en listado | Listado con alcance por objeto y filtro especial |
+| `/api/internal-documents/by-link` | JWT; contexto y relación activa; visibilidad según `can_manage or can_view_internal_document` | Listado por vínculo; **riesgo de diferencia frente a lectura por documento**, revisar |
+| `/api/internal-documents/<int:document_id>` | JWT + `require_internal_document_view_access` | Lectura de detalle, reglas por documento |
+| `/api/internal-documents/<int:document_id>/versions` | JWT + view access; no manager ve solo versión vigente no oculta | Lectura de versiones restringida por contexto |
+| `/api/internal-documents/<int:document_id>/links` | JWT + view access | Lectura de vínculos, scope documental |
+| `/api/internal-documents/<int:document_id>/external-resources` | JWT + view access | Lectura de recursos, scope documental |
+| `/api/internal-documents/<int:document_id>/download` | JWT + `require_internal_document_download_access` | **Descarga actual**, requiere `can_download`, no equivale a ver |
+| `/api/internal-documents/<int:document_id>/versions/<int:version_id>/download` | JWT + `can_download_historical_internal_document_version` (manager) | **Descarga histórica**, permiso privilegiado específico |
+| `/api/internal-documents/<int:document_id>/audit` | JWT + `require_internal_document_audit_access` (manager) | **Consultar auditoría**, permiso privilegiado específico |
+
+**Hallazgo de paridad por investigar (no implica exposición productiva confirmada):** `list_internal_documents_by_link` incluye documentos cuando `can_manage_internal_documents(context)` es verdadero **sin ejecutar `can_view_internal_document(document, context)`**. Para el documento especial `Consolidado de agregadoras`, el helper de visualización exige reglas explícitas incluso al manager; el listado general lo oculta a managers distintos de ADMICORP. En consecuencia, **la misma metadata podría ser visible por `/by-link`** si el documento tiene un vínculo activo y un manager conoce sus parámetros. Las descargas y el detalle mantienen checks propios. Esto requiere una **prueba de regresión con mocks/fixtures en entorno de tests** y luego una decisión separada sobre una corrección, no intervención apresurada sobre producción.
+
+**Tests encontrados:** `backend/tests/utils/test_internal_documents_agregadoras_access.py` cubre `can_view/can_download` de ADMICORP, SISTEMAS y otros. `backend/tests/routes/test_internal_documents_agregadoras_visibility.py` cubre que el listado raíz excluye el consolidado para manager no ADMICORP. **No se encontró una prueba equivalente del handler `/by-link` en los tests revisados.** Antes de migrar, probar que todas las rutas de metadatos del documento especial respetan el alcance explícito.
+
+**Escenarios mínimos de comparación para Fase B:** (1) sesión válida vs inválida, (2) lectura de documento publicado permitido, (3) lectura denegada de documento sensible, (4) SISTEMAS / ADMICORP vs otro rol ante el consolidado, (5) `view=true/download=false`, (6) versiones históricas vs versión actual, (7) auditoría solo manager, (8) listado general vs `/by-link` para un mismo documento, (9) borradores/archivados/visibilidad custom. **Resultado esperado:** el resolvedor podrá describir el acceso sin alterar los guards y sin fusionar todos los GET en un solo booleano `internal_documents.view`.
+
 ## 5. Política de paridad antes de activar permisos
 
 1. Para cada acción, documentar el guard real, alcance y restricciones adicionales. Si no puede mapearse con fidelidad, **no migrar**.
@@ -247,7 +275,8 @@ Estos puntos necesitan información del servidor o revisión de código adiciona
 - [ ] Producir conjunto de escenarios de paridad de Nube Corporativa (rol SISTEMAS, ADMICORP, admin con otro usuario, usuario ordinario, documento sensible).
 - [ ] Decidir con responsable operativo únicamente los accesos legacy contradictorios que supongan un cambio de política, no pedir autorización para cada refactor.
 - [x] Censadas las **3 asociaciones transversales activas** del catálogo: 1 upload documental de Aperturas agrupado bajo Nube, y 2 altas/bajas de permisos departamentales (`users.manage`) agrupadas históricamente bajo Reportes. Guards efectivos cotejados en código, sin indicios de bypass y sin cambios de autorización.
-- [ ] Contrastar cobertura de rutas del blueprint de Nube (lectura/descarga incluidas), no inferir cobertura total del catálogo de rutas de riesgo.
+- [x] **Cobertura Flask vs catálogo del blueprint Nube** cotejada: 21 rutas (10 mapeadas, 11 GET sin mapeo); se categorizó el guard real de cada GET y se documentó una potencial divergencia de metadata en `/by-link`, pendiente de prueba de regresión.
+- [ ] Preparar/probar fixtures de Nube y contrastar los casos de visibilidad y descarga especial antes de considerar cambios de enforcement.
 - [ ] Marcar expresamente el alcance incompleto de módulos fuera del catálogo y plan de expansión.
 
 ### Consulta posterior de producción
