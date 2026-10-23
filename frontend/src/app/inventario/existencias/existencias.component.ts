@@ -96,6 +96,7 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
   composicion: CategoriaExistencia[] = [];
   familias: string[] = [];
   familiasDisponibles: string[] = [];
+  mostrarFiltroFamilia = false;
   composicionFamilias: FamiliaExistencia[] = [];
   totalEquiposGimnasio = 0;
   equiposSinFamilia = 0;
@@ -203,28 +204,49 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
 
   onCategoriaChange(nuevaCategoria: string): void {
     this.categoriaSeleccionada = nuevaCategoria;
-    // Nunca mantener una familia que no existe en la nueva categoría.
-    if (this.categoriaSeleccionada !== 'todas' &&
-        this.familiaSeleccionada !== 'todas' &&
+    // La categoría es autoritativa: descartar una familia incompatible.
+    if (nuevaCategoria !== 'todas' && this.familiaSeleccionada !== 'todas' &&
         !this.existencias.some(item =>
-          this.nombreCategoria(item) === this.categoriaSeleccionada &&
+          this.nombreCategoria(item) === nuevaCategoria &&
           this.nombreFamilia(item) === this.familiaSeleccionada)) {
       this.familiaSeleccionada = 'todas';
     }
+    this.quitarFamiliaRedundante();
     this.aplicarFiltros();
   }
 
   onFamiliaChange(nuevaFamilia: string): void {
     this.familiaSeleccionada = nuevaFamilia;
-    // La misma compatibilidad se aplica al cambiar primero la familia.
-    if (this.familiaSeleccionada !== 'todas' &&
-        this.categoriaSeleccionada !== 'todas' &&
-        !this.existencias.some(item =>
-          this.nombreCategoria(item) === this.categoriaSeleccionada &&
-          this.nombreFamilia(item) === this.familiaSeleccionada)) {
-      this.categoriaSeleccionada = 'todas';
+    if (nuevaFamilia !== 'todas') {
+      // Inferir la categoría sólo si todos los registros de la familia
+      // pertenecen inequívocamente a una sola. «Sin familia» podría
+      // encontrarse tanto en Cardio como en el catálogo pendiente.
+      const categoriasDeFamilia = new Set(
+        this.existencias
+          .filter(item => this.nombreFamilia(item) === nuevaFamilia)
+          .map(item => this.nombreCategoria(item)),
+      );
+      if (categoriasDeFamilia.size === 1) {
+        this.categoriaSeleccionada = [...categoriasDeFamilia][0];
+      } else if (this.categoriaSeleccionada !== 'todas' &&
+                 !categoriasDeFamilia.has(this.categoriaSeleccionada)) {
+        this.categoriaSeleccionada = 'todas';
+      }
     }
+    this.quitarFamiliaRedundante();
     this.aplicarFiltros();
+  }
+
+  private quitarFamiliaRedundante(): void {
+    if (this.categoriaSeleccionada === 'todas' || this.familiaSeleccionada === 'todas') return;
+    const registrosCategoria = this.existencias.filter(item =>
+      this.nombreCategoria(item) === this.categoriaSeleccionada);
+    // Un filtro que coincide con TODOS los registros de su categoría
+    // no aporta precisión. No conservarlo oculto en el estado.
+    if (registrosCategoria.length && registrosCategoria.every(item =>
+      this.nombreFamilia(item) === this.familiaSeleccionada)) {
+      this.familiaSeleccionada = 'todas';
+    }
   }
 
   aplicarFiltros(): void {
@@ -309,6 +331,16 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
       categoriasCompatibles.has(categoria));
     this.familiasDisponibles = this.familias.filter(familia =>
       familiasCompatibles.has(familia));
+
+    const universoCategoria = this.categoriaSeleccionada === 'todas'
+      ? this.existencias
+      : this.existencias.filter(item =>
+          this.nombreCategoria(item) === this.categoriaSeleccionada);
+    // Mostrar Familia solamente cuando permita acotar el universo visible:
+    // dos o más familias, o una familia junto con registros sin ella.
+    this.mostrarFiltroFamilia = this.familiasDisponibles.length > 0 &&
+      (this.familiasDisponibles.length > 1 || universoCategoria.some(item =>
+        this.nombreFamilia(item) !== this.familiasDisponibles[0]));
   }
 
   private actualizarPagina(): void {
@@ -372,6 +404,7 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
     this.composicion = [];
     this.familias = [];
     this.familiasDisponibles = [];
+    this.mostrarFiltroFamilia = false;
     this.composicionFamilias = [];
     this.totalEquiposGimnasio = 0;
     this.equiposSinFamilia = 0;
