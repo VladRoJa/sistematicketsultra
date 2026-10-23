@@ -32,6 +32,13 @@ class AuditedHistoricalFamilyBackfillTest(unittest.TestCase):
         ticket = sample_row()
         self.assertIsNone(validation_error(ticket, CASES[2150]))
 
+    def test_ticket_2150_preserves_exact_trailing_space(self):
+        self.assertEqual(CASES[2150]["description"], "10 pines selectores de peso ")
+        ticket = sample_row(2150)
+        self.assertIsNone(validation_error(ticket, CASES[2150]))
+        ticket["descripcion"] = ticket["descripcion"].rstrip()
+        self.assertEqual(validation_error(ticket, CASES[2150]), "DESCRIPCION_CAMBIO")
+
     def test_missing_ticket_is_rejected(self):
         self.assertEqual(validation_error(None, CASES[2150]), "TICKET_NO_EXISTE")
 
