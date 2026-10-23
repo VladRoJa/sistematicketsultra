@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 from flask import Blueprint, Response, current_app, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
+from sqlalchemy.orm import selectinload
 
 from app.extensions import db
 from app.models.rpa import GascaSmsRequestORM
@@ -444,6 +445,8 @@ def list_gasca_sms_requests_route():
 
         items = (
             query
+            # Evitar N+1 al mostrar sucursal de origen en filas sin club Gasca.
+            .options(selectinload(GascaSmsRequestORM.sucursal))
             .order_by(GascaSmsRequestORM.created_at.desc())
             .offset(offset)
             .limit(page_size)
