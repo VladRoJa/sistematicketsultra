@@ -527,6 +527,11 @@ def create_ticket():
             return jsonify({"mensaje": str(exc)}), 400
 
         if tipo_trabajo == TIPO_TRABAJO_TAPIZADO:
+            # M2 permanece inactivo hasta validar M3 (UI e historiales).
+            if not current_app.config.get("TICKETS_TAPIZADO_MULTI_ENABLED", False):
+                return jsonify({
+                    "mensaje": "La creación de tapizado multiaparato aún no está habilitada."
+                }), 409
             if departamento_id != 1 or not _es_clasificacion_mantenimiento_aparatos(
                 clasificacion_id
             ):
