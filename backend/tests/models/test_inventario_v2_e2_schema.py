@@ -143,8 +143,8 @@ def test_e2_postgres_fk_scope_idempotencia_checks_y_downgrade(monkeypatch):
                  valor_propuesto, baseline_canonico, motivo,
                  creado_por_usuario_id, idempotency_key, request_fingerprint)
                 VALUES ('QUANTITY_DIFFERENCE', :branch, 501,
-                    '{"stock":1}'::jsonb, '{"cantidad_fisica":2}'::jsonb,
-                    '{"stock":1}'::jsonb, 'Conteo físico de prueba',
+                    CAST(:original AS jsonb), CAST(:proposed AS jsonb),
+                    CAST(:baseline AS jsonb), 'Conteo físico de prueba',
                     51, CAST(:request_key AS uuid), :fingerprint)
             """)
             con.execute(insert_stmt, {
@@ -165,6 +165,12 @@ def test_e2_postgres_fk_scope_idempotencia_checks_y_downgrade(monkeypatch):
                         "branch": 7,
                         "request_key": "11111111-1111-4111-8111-111111111111",
                         "fingerprint": "a" * 64,
+                        "original": '{"stock":1}',
+                        "proposed": '{"cantidad_fisica":2}',
+                        "baseline": '{"stock":1}',
+                    "original": '{"stock":1}',
+                    "proposed": '{"cantidad_fisica":2}',
+                    "baseline": '{"stock":1}',
                     })
 
             # La sucursal 8 existe, pero la referencia 501 NO está asignada allí.
@@ -174,6 +180,9 @@ def test_e2_postgres_fk_scope_idempotencia_checks_y_downgrade(monkeypatch):
                         "branch": 8,
                         "request_key": "22222222-2222-4222-8222-222222222222",
                         "fingerprint": "b" * 64,
+                        "original": '{"stock":1}',
+                        "proposed": '{"cantidad_fisica":2}',
+                        "baseline": '{"stock":1}',
                     })
 
             # Hallazgo sin inventario_id: permitido con referencia provisional.
