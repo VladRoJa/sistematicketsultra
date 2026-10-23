@@ -810,10 +810,12 @@ def resumen_dashboard_inventario():
             return forbidden
 
         if sucursal_id is not None:
-            sucursal = Sucursal.query.filter_by(
-                sucursal_id=sucursal_id
+            sucursal_existente = db.session.query(
+                Sucursal.sucursal_id
+            ).filter(
+                Sucursal.sucursal_id == sucursal_id
             ).first()
-            if sucursal is None:
+            if sucursal_existente is None:
                 return error_response('Sucursal no encontrada', 404)
 
         return jsonify(consultar_resumen_inventario(
