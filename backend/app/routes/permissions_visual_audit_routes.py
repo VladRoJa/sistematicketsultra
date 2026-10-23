@@ -227,6 +227,11 @@ def evaluate_pair(user, action, context, grants=None, branch_id=None, document=N
     legacy, legacy_source, legacy_reason = _legacy_guard_result(
         context["user"], action.full_key, context, document,
     )
+    if document is not None and action.full_key == "internal_documents.view":
+        # El catálogo no estima el acceso sobre este objeto documental.
+        # No comparar su True genérico contra el guard por documento.
+        catalog_allowed = None
+        catalog_reason = "catalogo_no_modela_visibilidad_de_este_documento"
     if branch_id is not None:
         # La decisión base no certifica autorización sobre un registro/sucursal.
         # Solo Track/operadores globales no tienen el filtro de sucursal en sus guards base.
