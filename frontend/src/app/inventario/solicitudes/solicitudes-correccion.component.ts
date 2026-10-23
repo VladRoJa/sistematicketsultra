@@ -203,6 +203,16 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
     return !!this.campos.find(c => c.valor === this.campo)?.numerico;
   }
 
+  get maxLongitudCampo(): number {
+    return this.campo === 'tipo' ? 20 :
+      this.campo === 'codigo_interno' || this.campo === 'unidad_medida' ? 50 :
+      this.campo === 'marca' ? 100 : 255;
+  }
+
+  cerrarDetalle(): void {
+    this.detalle = null;
+  }
+
   get valorOficial(): string | number | null {
     if (!this.referencia) return null;
     const value = this.referencia[this.campo];
@@ -226,7 +236,7 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
       if (this.campoNumerico) return this.nuevoId !== null && Number.isInteger(this.nuevoId) &&
         this.nuevoId > 0 && this.nuevoId !== this.valorOficial;
       return !!this.nuevoTexto.trim() && this.nuevoTexto.trim() !== this.valorOficial &&
-        this.nuevoTexto.length <= 255;
+        this.nuevoTexto.length <= this.maxLongitudCampo;
     }
     return false;
   }
