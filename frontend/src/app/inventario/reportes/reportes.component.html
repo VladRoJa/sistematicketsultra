@@ -101,6 +101,7 @@
     </section>
 
     <div class="analysis-grid">
+      <div class="analysis-left">
       <section class="panel category-panel" aria-labelledby="categories-title">
         <header class="panel-header">
           <div>
@@ -133,6 +134,40 @@
           <p class="empty-state">Aún no hay referencias con stock en este alcance.</p>
         </ng-template>
       </section>
+
+      <section class="panel activity-panel" aria-labelledby="activity-title">
+        <header class="panel-header activity-heading">
+          <div>
+            <p class="panel-overline">MOVIMIENTOS</p>
+            <h2 id="activity-title">Actividad reciente</h2>
+            <p class="panel-description">Últimas operaciones del período, incluidas las anuladas.</p>
+          </div>
+          <a [routerLink]="['../movimientos']" class="text-link">
+            Abrir movimientos <mat-icon>arrow_forward</mat-icon>
+          </a>
+        </header>
+        <div class="activity-list" *ngIf="data.movimientos_recientes.length; else sinMovimientos">
+          <div class="activity-row" *ngFor="let mov of data.movimientos_recientes">
+            <span class="activity-icon" [class.is-exit]="movimientoEsSalida(mov.tipo)">
+              <mat-icon>{{ iconoMovimiento(mov.tipo) }}</mat-icon>
+            </span>
+            <div class="activity-main">
+              <strong>{{ etiquetaTipo(mov.tipo) }} <span>#{{ mov.movimiento_id }}</span></strong>
+              <p>{{ mov.sucursal }} · {{ mov.usuario }}</p>
+            </div>
+            <div class="activity-right">
+              <time>{{ formatearFechaLocal(mov.fecha_local) }}</time>
+              <span class="status-pill" [class.is-cancelled]="movimientoAnulado(mov.estado)">
+                {{ etiquetaEstadoMovimiento(mov.estado) }}
+              </span>
+            </div>
+          </div>
+        </div>
+        <ng-template #sinMovimientos>
+          <p class="empty-state">Sin movimientos en los últimos {{ periodoDias }} días.</p>
+        </ng-template>
+      </section>
+      </div>
 
       <section class="panel branch-panel" aria-labelledby="branches-title">
         <header class="panel-header branch-heading">
@@ -180,38 +215,6 @@
       </section>
     </div>
 
-    <section class="panel activity-panel" aria-labelledby="activity-title">
-      <header class="panel-header activity-heading">
-        <div>
-          <p class="panel-overline">MOVIMIENTOS</p>
-          <h2 id="activity-title">Actividad reciente</h2>
-          <p class="panel-description">Últimas operaciones del período, incluidas las anuladas.</p>
-        </div>
-        <a [routerLink]="['../movimientos']" class="text-link">
-          Abrir movimientos <mat-icon>arrow_forward</mat-icon>
-        </a>
-      </header>
-      <div class="activity-list" *ngIf="data.movimientos_recientes.length; else sinMovimientos">
-        <div class="activity-row" *ngFor="let mov of data.movimientos_recientes">
-          <span class="activity-icon" [class.is-exit]="movimientoEsSalida(mov.tipo)">
-            <mat-icon>{{ iconoMovimiento(mov.tipo) }}</mat-icon>
-          </span>
-          <div class="activity-main">
-            <strong>{{ etiquetaTipo(mov.tipo) }} <span>#{{ mov.movimiento_id }}</span></strong>
-            <p>{{ mov.sucursal }} · {{ mov.usuario }}</p>
-          </div>
-          <div class="activity-right">
-            <time>{{ formatearFechaLocal(mov.fecha_local) }}</time>
-            <span class="status-pill" [class.is-cancelled]="movimientoAnulado(mov.estado)">
-              {{ etiquetaEstadoMovimiento(mov.estado) }}
-            </span>
-          </div>
-        </div>
-      </div>
-      <ng-template #sinMovimientos>
-        <p class="empty-state">Sin movimientos en los últimos {{ periodoDias }} días.</p>
-      </ng-template>
-    </section>
     <p class="dashboard-footnote">
       Solo lectura · Una referencia corresponde a un artículo asignado a una sucursal.
       Las referencias nunca asignadas no se cuentan como faltantes.
