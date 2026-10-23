@@ -1,4 +1,4 @@
-"""Fase A: pruebas aisladas de diferencias de visibilidad A-12 y A-13.
+"""Fase A: pruebas aisladas de autorización de auditoría sensible A-12.
 
 Los usuarios, documentos y logs son ficticios. Nunca se abre la base productiva.
 """
