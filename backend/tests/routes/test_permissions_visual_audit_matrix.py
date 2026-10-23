@@ -210,3 +210,93 @@ def test_route_is_only_get_and_no_mutating_permission_endpoints(app):
     assert "GET" in next(iter(methods.values()))
     assert "PUT" not in next(iter(methods.values()))
     assert "POST" not in next(iter(methods.values()))
+
+
+def test_http_three_perspectives_share_same_user_action_branch(monkeypatch, app):
+    """Prueba los tres endpoints HTTP con la misma pareja y paginación ficticia.
+
+    DB aislada por doubles de consulta: no simula enforcement ni escrituras.
+    """
+    user = make_user("SISTEMAS")
+    module = SimpleNamespace(id=99, key="warehouse", name="Warehouse", base_action_id=12)
+    action = make_action("warehouse.view")
+    action.module = module
+    operator = SimpleNamespace(can_view=True, can_upload=False, can_archive=False)
+    context = make_context(user, warehouse=operator)
+
+    class FakeQuery:
+        def __init__(self, data):
+            self.data = data
+        def options(self, *args):
+            return self
+        def filter(self, *args):
+            return self
+        def filter_by(self, **kwargs):
+            return self
+        def order_by(self, *args):
+            return self
+        def offset(self, value):
+            return self
+        def limit(self, value):
+            return self
+        def count(self):
+            return len(self.data)
+        def first(self):
+            return self.data[0] if self.data else None
+        def all(self):
+            return self.data
+
+    class Loader:
+        def joinedload(self, _):
+            return self
+
+    class Column:
+        def is_(self, _):
+            return True
+
+    monkeypatch.setattr(visual, "joinedload", lambda _: Loader())
+    monkeypatch.setattr(visual, "PermissionActionORM", SimpleNamespace(
+        query=FakeQuery([action]), is_active=Column(), full_key=Column(),
+        module_id=Column(), module=Column(),
+    ))
+    monkeypatch.setattr(visual, "PermissionModuleORM", SimpleNamespace(
+        query=FakeQuery([module]), base_action=Column(),
+    ))
+    monkeypatch.setattr(visual, "UserORM", SimpleNamespace(
+        query=FakeQuery([user]), username=Column(), id=Column(),
+    ))
+    monkeypatch.setattr(visual, "_batch_context", lambda users: {user.id: context})
+    monkeypatch.setattr(visual, "_bulk_grants", lambda users, actions: {})
+    monkeypatch.setattr(catalog, "_current_admin_user_or_error", lambda: (user, None))
+    responses = []
+    with app.app_context():
+        token = create_access_token(identity="1")
+        client = app.test_client()
+        for view, extra_filters in (
+            ("user", "user_id=77"),
+            ("module", "module_key=warehouse"),
+            ("action", "action_key=warehouse.view"),
+        ):
+            result = client.get(
+                "/api/permissions/catalog/audit/matrix?"
+                f"view={view}&branch_id=7&limit=25&offset=0&{extra_filters}",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            assert result.status_code == 200, result.get_json()
+            body = result.get_json()
+            assert body["summary"]["total"] == 1
+            assert body["summary"]["allowed"] == 1
+            assert body["summary"]["denied"] == 0
+            assert body["summary"]["unknown"] == 0
+            assert len(body["rows"]) == 1
+            responses.append(body["rows"][0])
+    signatures = [
+        (
+            row["user_id"], row["action_key"], row["context"]["branch_id"],
+            row["legacy_allowed"], row["catalog_allowed"], row["comparison"],
+            row["legacy_source"], row["module_entry"],
+        )
+        for row in responses
+    ]
+    assert signatures[0] == signatures[1] == signatures[2]
+    assert signatures[0][3:6] == (True, True, "coincide")
