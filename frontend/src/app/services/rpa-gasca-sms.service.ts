@@ -40,6 +40,8 @@ export interface GascaSmsRequest {
   status: GascaSmsRequestStatus | string;
   user_message: string | null;
   sucursal_id: number | null;
+  /** Sucursal de origen registrada por Suite, aunque Gasca no valide el SMS. */
+  sucursal_origen_nombre?: string | null;
   requested_by_user_id: number | null;
   gasca_nombre_masked: string | null;
   gasca_phone_masked: string | null;

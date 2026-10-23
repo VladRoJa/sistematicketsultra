@@ -340,7 +340,7 @@
               <th mat-header-cell *matHeaderCellDef>Club</th>
               <td mat-cell *matCellDef="let item">
                 <div class="gasca-cell">
-                  <strong>{{ item.gasca_sucursal || '—' }}</strong>
+                  <strong>{{ item.gasca_sucursal || item.sucursal_origen_nombre || '—' }}</strong>
                   <span *ngIf="item.gasca_generated_raw">
                     {{ item.gasca_generated_raw }}
                   </span>
