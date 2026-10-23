@@ -855,12 +855,12 @@ export function campaignV2RecipientStatusPresentation(
     label: string;
     className: string;
   }> = [
-    { status: 'VIEWED', label: 'Leídos', className: 'viewed' },
-    { status: 'DELIVERED', label: 'Entregados', className: 'delivered' },
-    { status: 'SENT', label: 'Enviados', className: 'sent' },
-    { status: 'SUCCESSFUL', label: 'Aceptados sin etapa', className: 'successful' },
-    { status: 'FAILED', label: 'Fallidos', className: 'failed' },
-    { status: 'NO_PROVIDER_STATUS', label: 'Sin estado', className: 'unknown' },
+    { status: 'VIEWED', label: 'Leídos', className: 'recipient-overview--viewed' },
+    { status: 'DELIVERED', label: 'Entregados', className: 'recipient-overview--delivered' },
+    { status: 'SENT', label: 'Enviados', className: 'recipient-overview--sent' },
+    { status: 'SUCCESSFUL', label: 'Aceptados sin etapa', className: 'recipient-overview--successful' },
+    { status: 'FAILED', label: 'Fallidos', className: 'recipient-overview--failed' },
+    { status: 'NO_PROVIDER_STATUS', label: 'Sin estado', className: 'recipient-overview--unknown' },
   ];
   return {
     total,
