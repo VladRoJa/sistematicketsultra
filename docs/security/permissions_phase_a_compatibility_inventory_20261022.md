@@ -209,13 +209,17 @@ La prueba en producción comparó **todos los endpoints Flask** con prefijo `/ap
 **QA de despliegue A-11 — 2026-10-23:** usuario reportó `A11_CODIGO_DESPLEGADO = True` y `QA_A11 = PASS` tras reconstruir backend. El chequeo inspeccionó el código importado dentro del contenedor para confirmar presencia de `can_manage_internal_documents(context)` y `action="download"` en `can_download_historical_internal_document_version`. Combinado con CI #39999587923 (**7/7 PASS**) y merge #1067 (`df035eb02f4833dc77a4e67236472b5f5948b963`), se da **por cerrado el bloque correctivo A-11**. Esta evidencia **no** implica haber verificado acceso HTTP real por documento, explotación histórica, ni cobertura completa del sistema de permisos. **Fase A NO se cierra**, y no se ha activado ningún resolvedor global.
 
 
-### A-12 — Auditoría del consolidado: guard de manager frente a regla de lectura especial (prioridad alta, política pendiente)
+### A-12 — Auditoría del consolidado: política aprobada, corrección lista para merge (PR #1074, sin desplegar)
 
 **Revisión estática del código en main — 2026-10-23.** `backend/app/utils/internal_documents_access.py::can_view_internal_document_audit(document, context)` devuelve exclusivamente `can_manage_internal_documents(context)`, sin revisar `document` ni `can_view_internal_document`. `require_internal_document_audit_access` llama a ese helper; `GET /api/internal-documents/<int:document_id>/audit` lo ejecuta después de resolver el documento, sin un `require_internal_document_view_access` adicional.
 
 La respuesta de auditoría serializa `old_value_json`, `new_value_json`, `metadata_json`, `actor_user_id`, `ip_address` y `user_agent` (`_serialize_audit_log`). Por tanto, **bajo la regla CUSTOM simulada del caso A-11**, un contexto administrador `SISTEMAS` puede quedar denegado para lectura del consolidado pero autorizado por el helper de auditoría del mismo documento. Es una **divergencia lógica verificable por inspección**, no prueba de petición HTTP ni de lectura real de auditoría. No conocemos el contenido de logs productivos ni se consultaron.
 
-**Decisión explícita requerida antes de un cambio funcional:** ¿La auditoría del consolidado debe obedecer también la regla excepcional de visualización o se trata de un privilegio deliberado de administrador con mayor alcance? En ausencia de política aprobada, no cambiar `can_view_internal_document_audit`. Preparar fixture aislado y comparación `VIEW/AUDIT` para ADMICORP, SISTEMAS y GERENTE; comprobar la respuesta HTTP solo en entorno de pruebas. No acceder a logs reales para demostrar la hipótesis.
+**Política aprobada por el responsable operativo, 2026-10-23:** la auditoría del consolidado exige privilegio de administrador **y** visibilidad explícita (`view`) de ese documento; `SISTEMAS` sin `view` no debe leer su auditoría. Los administradores conservan la lectura de auditoría sobre documentos ordinarios. Los fixtures simulan log y perfiles, nunca acceden a datos reales.
+
+**Implementación aislada en PR [#1074](https://github.com/VladRoJa/sistematicketsultra/pull/1074), lista para revisión, aún SIN MERGE NI DESPLIEGUE:** solo cambia `backend/app/utils/internal_documents_access.py::can_view_internal_document_audit()`: exige primero `can_manage_internal_documents(context)`; si el documento es el consolidado especial, además `can_view_internal_document(document, context)`; en otros documentos mantiene retorno manager. Endpoint `/audit`, serializador y capacidades ya invocan el helper.
+
+**RED→GREEN verificado con GitHub Actions:** [RED #40005867664](https://github.com/VladRoJa/sistematicketsultra/actions/runs/40005867664) obtuvo **3 fallos esperados y 9 PASS**, incluyendo test de handler audit (simulado: HTTP 200 indebido frente a 403 esperado); [último GREEN A-12 #40006216745](https://github.com/VladRoJa/sistematicketsultra/actions/runs/40006216745) **12/12 PASS**; [regresión A-11 #40006216811](https://github.com/VladRoJa/sistematicketsultra/actions/runs/40006216811) **7/7 PASS**. Es evidencia de tests aislados, no inspección de auditoría en producción. **Siguiente paso:** aprobación de merge #1074, luego deploy y QA del helper importado; no se requieren migraciones. A-13 permanece como tema independiente.
 
 ### A-13 — Listado general: comparación exacta de título frente a normalización del helper (prioridad alta, condicionado al título)
 
@@ -262,7 +266,7 @@ Esta matriz **no es el catálogo `permission_route_map`** ni afirma cobertura de
 
 **Balance:** 11 GET y 10 mutaciones (6 POST, 2 PATCH, 1 PUT, 1 DELETE). Las diez mutaciones se protegen con `require_internal_document_manager`; esto **no** significa que todas apliquen las restricciones especiales de visualización por documento. Antes de trasladar guards al resolvedor, decidir explícitamente si un administrador de Nube que no puede leer el consolidado debe poder cambiar metadata, vínculos, visibilidad, versiones o estado de ese registro. No suponer equivalencia entre `manage`, `view`, `download`, `historical` y `audit`.
 
-**Situación del bloque:** inventario de guards de las 21 rutas **completo en código**; paridad de ejecución por rol/objeto, alcance de mutaciones específicas y correspondencia con permisos nuevos **todavía parciales**. A-12 y A-13 requieren fixtures RED y decisión de alcance; no hay modificación del backend ni del resolvedor en este bloque.
+**Situación del bloque:** inventario de guards de las 21 rutas **completo en código**; paridad de ejecución por rol/objeto, alcance de mutaciones específicas y correspondencia con permisos nuevos **todavía parciales**. A-12 tiene política aprobada y PR #1074 validado en CI sin merge/deploy; A-13 sigue en diagnóstico RED del PR draft #1072. El resolvedor global no ha sido activado.
 
 ## 5. Política de paridad antes de activar permisos
 
@@ -372,7 +376,9 @@ Estos puntos necesitan información del servidor o revisión de código adiciona
 - [x] PR #1067 revisado, CI 7/7 PASS y squash merge a `main`: `df035eb02f4833dc77a4e67236472b5f5948b963`.
 - [x] **A-11 desplegado y verificado:** el operador confirmó ejecución del bloque Git pull + reconstrucción de `backend`, y la inspección `inspect.getsource(can_download_historical_internal_document_version)` devolvió `A11_CODIGO_DESPLEGADO = True`, `QA_A11 = PASS` (2026-10-23). Verificación estática del código importado en el contenedor; las **7/7 pruebas funcionales** corresponden a CI, no a un ensayo HTTP con archivo real. Sin migraciones.
 - [x] **A-12/A-13 diagnosticados con fixtures y GitHub Actions:** PR draft #1072 RED controlado (**3 fallos de aserción / 7 PASS**, CI #40004028928), sin cambiar reglas ni consultar BD productiva.
-- [ ] **Decisión de política A-12:** ¿`audit` del consolidado requiere `view` explícito aun para manager? Hasta definirlo, no modificar guard.
+- [x] **Política A-12 aprobada:** auditoría del consolidado requiere rol manager documental **y** `view` explícito; lectura ordinaria de auditoría manager no cambia.
+- [x] **A-12 RED→GREEN aislado:** PR #1074 abierto y listo para revisión, 12/12 A-12 PASS y 7/7 A-11 PASS en el último commit.
+- [ ] **A-12 pendiente de integración productiva:** aprobar merge #1074 y después reconstruir backend y verificar código importado; sin migraciones.
 - [ ] **Corrección A-13:** armonizar exclusión del listado raíz con el helper de visibilidad especial; mantener paginación consistente y obtener CI GREEN antes de merge.
 - [ ] **Fase A sigue abierta:** completar matriz de paridad/alcance por contexto de Nube y módulos piloto, sin activar todavía el resolvedor global de permisos.
 - [ ] Ampliar fixtures a descarga actual e histórica y controles por registro de las demás rutas del piloto.
