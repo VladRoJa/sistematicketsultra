@@ -4,6 +4,11 @@ on:
   pull_request:
     paths:
       - "backend/app/models/marketing.py"
+      - "backend/app/models/rpa.py"
+      - "backend/app/routes/rpa_gasca_sms_routes.py"
+      - "backend/tests/test_gasca_sms_origin_branch_serialization.py"
+      - "frontend/src/app/rpa/gasca-sms/**"
+      - "frontend/src/app/services/rpa-gasca-sms.service.ts"
       - "backend/app/models/__init__.py"
       - "backend/app/routes/automation_control_routes.py"
       - "backend/app/services/automation_control/**"
@@ -82,6 +87,8 @@ jobs:
         run: |
           python -m py_compile \
             app/models/marketing.py \
+            app/models/rpa.py \
+            app/routes/rpa_gasca_sms_routes.py \
             app/models/automation_control.py \
             app/rpa/workers/gasca_sms_worker.py \
             app/services/automation_control/gasca_sms_pulse_service.py \
@@ -101,6 +108,7 @@ jobs:
         run: |
           python -m pytest -q --tb=short -o addopts= \
             tests/automation_control \
+            tests/test_gasca_sms_origin_branch_serialization.py \
             tests/services/test_marketing_iventas_run_lifecycle_service.py \
             tests/services/test_marketing_iventas_run_sync_service.py \
             tests/services/test_marketing_iventas_persistence_service.py \
