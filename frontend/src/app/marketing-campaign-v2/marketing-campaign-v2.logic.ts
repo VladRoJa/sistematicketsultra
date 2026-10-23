@@ -139,7 +139,7 @@ export function buildCampaignV2AudienceRequest(
   ) {
     base.adeudo_max = state.adeudoMax.trim();
   }
-  if (state.source !== 'FUNNEL_PORTFOLIO' && state.branchKeys?.length) {
+  if (state.branchKeys?.length) {
     if (state.branchFilterMode === 'INCLUDE') {
       base.selected_sucursal_keys = [...state.branchKeys];
     }
@@ -210,16 +210,14 @@ export function isCampaignV2AudienceValid(
     return false;
   }
   if (
-    state.source !== 'FUNNEL_PORTFOLIO'
-    && state.branchFilterMode !== 'ALL'
+    state.branchFilterMode !== 'ALL'
     && state.branchFilterMode !== undefined
     && !state.branchKeys?.length
   ) {
     return false;
   }
   if (
-    state.source !== 'FUNNEL_PORTFOLIO'
-    && state.branchKeys?.length
+    state.branchKeys?.length
     && options?.branch_options
     && state.branchKeys.some(key => !options.branch_options!.includes(key))
   ) {
