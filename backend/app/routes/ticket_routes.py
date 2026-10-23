@@ -532,6 +532,19 @@ def create_ticket():
                 return jsonify({
                     "mensaje": "La creación de tapizado multiaparato aún no está habilitada."
                 }), 409
+            # IDs de catálogo y sucursal deben ser enteros exactos:
+            # no convertir silenciosamente valores booleanos o fraccionarios.
+            for identificador in (clasificacion_id, sucursal_id_destino):
+                if isinstance(identificador, bool) or (
+                    not isinstance(identificador, int)
+                    and (
+                        not isinstance(identificador, str)
+                        or not identificador.strip().isdigit()
+                    )
+                ) or int(identificador) <= 0:
+                    return jsonify({
+                        "mensaje": "Clasificación o sucursal destino inválida para tapizado."
+                    }), 400
             if departamento_id != 1 or not _es_clasificacion_mantenimiento_aparatos(
                 clasificacion_id
             ):
