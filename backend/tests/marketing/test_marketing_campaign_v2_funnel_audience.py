@@ -1,8 +1,10 @@
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
 
 from app.services import marketing_campaign_v2_audience_service as audience
+from app.services import marketing_campaign_v2_creation_service as creation
 from app.services import marketing_campaign_v2_funnel_source_service as funnel_source
 
 
@@ -224,6 +226,83 @@ def test_funnel_family_bucket_is_not_applicable(monkeypatch):
             bucket="FAMILY",
             audience_family="DOMICILIADO",
             **_kwargs(),
+        )
+
+
+def test_funnel_branch_include_exclude_preview_detail_and_fingerprint(monkeypatch):
+    _install(monkeypatch)
+    loaded = replace(
+        _result(),
+        candidates=(
+            _row("6861000001", "branch-a"),
+            _row("6861000008", "branch-b", branch_id=2, key="BRANCH B"),
+            _row("6861000009", "unassigned", branch_id=None, key=None),
+        ),
+        scoped_count=3,
+    )
+    monkeypatch.setattr(
+        audience.funnel_source, "load_campaign_v2_funnel_source",
+        lambda **_kwargs: loaded,
+    )
+    monkeypatch.setattr(
+        audience, "_campaign_branch_identity_index",
+        lambda **_kwargs: {"BRANCH A": "A", "BRANCH B": "B"},
+    )
+    payload = _kwargs()
+    payload.pop("history_exclusion")
+    payload["allowed_sucursal_keys"] = None
+    payload["marketing_access"] = SimpleNamespace(is_global=True, branch_ids=())
+
+    all_preview = creation.build_campaign_v2_freeze_preview(**payload)
+    included = creation.build_campaign_v2_freeze_preview(
+        **payload, selected_sucursal_keys=["BRANCH A"],
+    )
+    excluded = creation.build_campaign_v2_freeze_preview(
+        **payload, excluded_sucursal_keys=["BRANCH A"],
+    )
+
+    assert all_preview["unique_recipient_count"] == 3
+    assert included["filtered_count"] == 1
+    assert included["unique_recipient_count"] == 1
+    assert included["filters"]["selected_sucursal_keys"] == ["BRANCH A"]
+    assert excluded["filtered_count"] == 1
+    assert excluded["unique_recipient_count"] == 1
+    assert excluded["filters"]["excluded_sucursal_keys"] == ["BRANCH A"]
+    assert len({
+        all_preview["preview_fingerprint"],
+        included["preview_fingerprint"],
+        excluded["preview_fingerprint"],
+    }) == 3
+
+    detail = audience.build_campaign_v2_audience_preview_detail(
+        **payload, excluded_sucursal_keys=["BRANCH A"], bucket="RECIPIENTS",
+    )
+    assert detail["total"] == 1
+    assert [row["phone_mx10"] for row in detail["rows"]] == ["6861000008"]
+
+
+def test_funnel_branch_filter_fails_closed_for_scope_alias_and_conflict(monkeypatch):
+    _install(monkeypatch)
+    monkeypatch.setattr(
+        audience, "_campaign_branch_identity_index",
+        lambda **_kwargs: {"BRANCH A": "A"},
+    )
+    payload = _kwargs()
+    payload.pop("history_exclusion")
+
+    with pytest.raises(audience.MarketingCampaignV2AudienceValidationError, match="alcance autorizado"):
+        audience.build_campaign_v2_audience_preview(
+            **payload, selected_sucursal_keys=["BRANCH B"],
+        )
+    with pytest.raises(audience.MarketingCampaignV2AudienceValidationError, match="identidad canónica"):
+        audience.build_campaign_v2_audience_preview(
+            **payload, excluded_sucursal_keys=["BRANCH B"],
+        )
+    with pytest.raises(audience.MarketingCampaignV2AudienceValidationError, match="No combines"):
+        audience.build_campaign_v2_audience_preview(
+            **payload,
+            selected_sucursal_keys=["BRANCH A"],
+            excluded_sucursal_keys=["BRANCH B"],
         )
 
 
