@@ -151,6 +151,9 @@ def test_e2_postgres_fk_scope_idempotencia_checks_y_downgrade(monkeypatch):
                 "branch": 7,
                 "request_key": "11111111-1111-4111-8111-111111111111",
                 "fingerprint": "a" * 64,
+                "original": '{"stock":1}',
+                "proposed": '{"cantidad_fisica":2}',
+                "baseline": '{"stock":1}',
             })
             saved = con.execute(sa.text(
                 "SELECT estado, sucursal_id, inventario_id "
@@ -168,9 +171,6 @@ def test_e2_postgres_fk_scope_idempotencia_checks_y_downgrade(monkeypatch):
                         "original": '{"stock":1}',
                         "proposed": '{"cantidad_fisica":2}',
                         "baseline": '{"stock":1}',
-                    "original": '{"stock":1}',
-                    "proposed": '{"cantidad_fisica":2}',
-                    "baseline": '{"stock":1}',
                     })
 
             # La sucursal 8 existe, pero la referencia 501 NO está asignada allí.
