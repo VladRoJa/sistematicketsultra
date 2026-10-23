@@ -13,6 +13,7 @@ from app.services.marketing_meta_historical_branch_evidence_service import (
     NO_CANONICAL_SNAPSHOT,
     NO_CITY_EVIDENCE,
     NO_CITY_IN_CATALOG,
+    PREOPENING_ONLY,
     REQUIRES_REVIEW,
     VERIFIED,
     build_canonical_kpi_month_statement,
@@ -58,6 +59,7 @@ def resolve(
     aliases=ALIASES,
     branches=BRANCHES,
     city="Mexicali",
+    opening_records=(),
 ):
     return evaluate_historical_city_branch_evidence(
         month_start=MONTH,
@@ -66,6 +68,7 @@ def resolve(
         raw_branch_names=names,
         gasca_aliases=aliases,
         catalog_branches=branches,
+        opening_records=opening_records,
     )
 
 
@@ -76,6 +79,8 @@ def test_december_2025_five_verified_mexicali_gyms():
     assert evidence.snapshot_ids == (10, 11)
     assert evidence.city_key == "MEXICALI"
     assert evidence.unresolved_branch_names == ()
+    # Only documentary presence is proven when opening dates are unavailable.
+    assert evidence.opening_date_unrecorded_branch_ids == (1, 2, 3, 4, 5)
     assert 100 not in evidence.eligible_branch_ids
     assert 1000 not in evidence.eligible_branch_ids
 
@@ -232,8 +237,8 @@ class _Scalars:
 
 
 class _ReadOnlySession:
-    def __init__(self, monthly_ids, raw_names, aliases, branches):
-        self.answers = iter((monthly_ids, raw_names, aliases, branches))
+    def __init__(self, monthly_ids, raw_names, aliases, branches, openings=()):
+        self.answers = iter((monthly_ids, raw_names, aliases, branches, openings))
         self.queries = []
 
     def execute(self, statement):
@@ -253,7 +258,8 @@ def test_db_adapter_uses_only_read_queries_and_maps_evidence():
     )
     assert evidence.status == VERIFIED
     assert evidence.eligible_branch_ids == (1, 4)
-    assert len(session.queries) == 4
+    assert len(session.queries) == 5
+    assert "openings" in session.queries[-1].lower()
     assert all(query.lstrip().startswith("SELECT") for query in session.queries)
 
 
@@ -264,3 +270,107 @@ def test_db_adapter_short_circuits_when_no_canonical_snapshot():
     )
     assert evidence.status == NO_CANONICAL_SNAPSHOT
     assert len(session.queries) == 1
+
+
+def _serrania_in_test_month(month_start, opening_records=None):
+    """Synthetic location; only the known opening date is historical evidence."""
+    return evaluate_historical_city_branch_evidence(
+        month_start=month_start,
+        city_key="CIUDAD SINTETICA",
+        snapshot_ids=(123,),
+        raw_branch_names=("SERRANIA",),
+        gasca_aliases=(("SERRANIA", 26),),
+        catalog_branches=((26, "Ciudad Sintetica", False),),
+        opening_records=(
+            opening_records if opening_records is not None
+            else ((26, date(2026, 9, 14), "ABIERTA"),)
+        ),
+    )
+
+
+@pytest.mark.parametrize("month_start", [date(2026, 5, 1), date(2026, 6, 1)])
+def test_serrania_preopening_kpi_activity_never_proves_operation(month_start):
+    # Positive May/June pre-sale metrics do not override opening 2026-09-14.
+    evidence = _serrania_in_test_month(month_start)
+    assert evidence.status == PREOPENING_ONLY
+    assert evidence.eligible_branch_ids == ()
+    assert evidence.excluded_preopening_branch_ids == (26,)
+    assert evidence.opening_date_unrecorded_branch_ids == ()
+
+
+def test_opening_month_requires_manual_review_before_monthly_split():
+    evidence = _serrania_in_test_month(date(2026, 9, 1))
+    assert evidence.status == REQUIRES_REVIEW
+    assert evidence.eligible_branch_ids == ()
+    assert evidence.opening_review_branch_ids == (26,)
+
+
+def test_month_after_confirmed_opening_is_eligible():
+    evidence = _serrania_in_test_month(date(2026, 10, 1))
+    assert evidence.status == VERIFIED
+    assert evidence.eligible_branch_ids == (26,)
+    assert evidence.opening_date_unrecorded_branch_ids == ()
+
+
+def test_known_future_opening_excluded_from_other_verified_city_gyms():
+    evidence = resolve(
+        names=(
+            "VILLAS DEL REY",
+            "VILLA VERDE MEXICALI",
+            "INDEPENDENCIA",
+            "TEC MEXICALI",
+            "SENDERO MEXICALI",
+            "FUTURE GYM",
+        ),
+        aliases=ALIASES + [("FUTURE GYM", 26)],
+        branches=BRANCHES + [(26, "Mexicali", False)],
+        opening_records=((26, date(2026, 9, 14), "ABIERTA"),),
+    )
+    assert evidence.status == VERIFIED
+    assert evidence.eligible_branch_ids == (1, 2, 3, 4, 5)
+    assert evidence.excluded_preopening_branch_ids == (26,)
+    assert evidence.opening_date_unrecorded_branch_ids == (1, 2, 3, 4, 5)
+
+
+@pytest.mark.parametrize(
+    "opening_records",
+    [
+        ((26, None, "PLANEADA"),),
+        ((26, date(2026, 9, 14), "CANCELADA"),),
+        ((26, date(2026, 9, 14), "ABIERTA"),
+         (26, date(2026, 8, 14), "ABIERTA")),
+    ],
+)
+def test_incomplete_conflicting_or_non_opened_records_require_review(opening_records):
+    evidence = _serrania_in_test_month(
+        date(2026, 6, 1), opening_records=opening_records,
+    )
+    assert evidence.status == REQUIRES_REVIEW
+    assert evidence.eligible_branch_ids == ()
+    assert evidence.opening_review_branch_ids == (26,)
+
+
+def test_invalid_opening_date_is_not_silently_ignored():
+    with pytest.raises(ValueError):
+        _serrania_in_test_month(
+            date(2026, 6, 1), opening_records=((26, "2026-09-14", "ABIERTA"),),
+        )
+
+
+def test_adapter_includes_real_opening_evidence_and_excludes_future_gym():
+    session = _ReadOnlySession(
+        [10],
+        ["SERRANIA"],
+        [("SERRANIA", 26)],
+        [(26, "Ciudad Sintetica", False)],
+        [(26, date(2026, 9, 14), "ABIERTA")],
+    )
+    evidence = read_historical_city_branch_evidence(
+        month_start=date(2026, 6, 1),
+        city_key="CIUDAD SINTETICA",
+        session=session,
+    )
+    assert evidence.status == PREOPENING_ONLY
+    assert evidence.eligible_branch_ids == ()
+    assert evidence.excluded_preopening_branch_ids == (26,)
+    assert len(session.queries) == 5
