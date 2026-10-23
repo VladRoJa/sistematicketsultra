@@ -2,7 +2,7 @@
 
 **Fecha:** 23 de octubre de 2026  
 **Alcance:** Tickets V1 / Mantenimiento → Aparatos  
-**Estado:** M1 (modelo + migración) preparado. M2 (API) y M3 (UI/reportes) pendientes; NO habilitado para usuarios.
+**Estado:** M1 aprobado y aplicado. M2 (API) propuesta para QA; M3 (UI/reportes) pendiente. NO habilitado para usuarios.
 
 ## Necesidad funcional
 
@@ -38,9 +38,9 @@ ticket_aparatos [nueva]
   INDEX (inventario_id, ticket_id)
 ```
 
-Sin columnas `tipo_trabajo` ni nuevos estados en M1. La clasificación persistente `TAPIZADO` y su validación se diseñarán en M2 antes de abrir la captura. No inferir tapizado solo porque haya más de un aparato; podrían existir otros trabajos colectivos en el futuro.
+M1 no añadió `tipo_trabajo` ni estados. M2 agrega `tickets.tipo_trabajo` (nullable, `TAPIZADO` o NULL) mediante migración Alembic `l23c10202623`, sin cambiar los estados principales. No inferir tapizado solo porque haya más de un aparato; podrían existir otros trabajos colectivos en el futuro.
 
-## M2 — Creación y lectura (pendiente)
+## M2 — Creación y lectura (implementación propuesta / QA pendiente)
 
 1. Añadir un identificador de tipo de trabajo (p. ej. `TAPIZADO`) y aceptar `aparatos_ids` **solo** en la ruta explícita Mantenimiento → Aparatos. El formato exacto será definido y probado.
 2. Validar **cada** ID: entero positivo, único, aparato real, sucursal destino autorizada y vínculo vigente en `inventario_sucursal`. Nunca usar IDs enviados por UI como fuente de permisos; el backend valida sucursal y actor.
@@ -48,6 +48,37 @@ Sin columnas `tipo_trabajo` ni nuevos estados en M1. La clasificación persisten
 4. Elegir explícitamente el aparato principal (por ejemplo, primer seleccionado), poblar `tickets.aparato_id` y la tabla `ticket_aparatos` con **todos** los IDs, incluido el principal, en una sola transacción con el ticket y sus adjuntos.
 5. Guardar actor/motivo/antes-después en historial auditable. Las ediciones posteriores requerirán control de permisos, validación e historial.
 6. Leer conjuntos mediante la unión lógica de `tickets.aparato_id` y los vínculos de `ticket_aparatos`, deduplicados, para incluir tickets legacy. No sustituir lecturas históricas sin QA y medición.
+
+## Contrato de API M2
+
+**Endpoint existente:** `POST /api/tickets/create`, `application/json` o `multipart/form-data` con `payload` JSON y archivo `image` opcional. Usa el JWT y scope actuales.
+
+Ejemplo de body (ilustrativo; **aún no activar desde el frontend**):
+
+```json
+{
+  "descripcion": "Tapizar respaldos de tres equipos",
+  "departamento_id": 1,
+  "clasificacion_id": 487,
+  "sucursal_id_destino": 4,
+  "criticidad": 3,
+  "tipo_trabajo": "TAPIZADO",
+  "aparatos_ids": [431, 432, 433]
+}
+```
+
+- `aparatos_ids`: obligatorio al declarar `TAPIZADO`, lista de 1 a 50 IDs distintos (enteros positivos o cadenas decimales enteras); se rechaza `bool`, float, nulos, duplicados y listas fuera del límite.
+- `aparato_id`: opcional; si llega, **debe coincidir con el primero** de `aparatos_ids`. El backend decide y persiste el principal.
+- `tipo_trabajo`: **exactamente** `TAPIZADO` (mayúsculas). En tickets existentes se omite o queda NULL. Se rechaza `aparatos_ids` si no se especificó el tipo.
+- Solo admite la ruta real de catálogo Mantenimiento → Aparatos (487 y descendientes); Edificio y Sistemas no pueden declararse como tapizado.
+- Para cada ID comprueba que existe en Inventarios, `tipo=aparatos` y vinculación a la sucursal destino. Se aplican las reglas actuales de usuario administrador, sucursal y jefe regional.
+- Si un ID falla, devuelve HTTP 400, sin insertar ningún ticket, vínculo, evento ni adjunto.
+- En caso válido, crea un ticket único con `aparato_id` principal, `tipo_trabajo=TAPIZADO`, un vínculo por equipo en `ticket_aparatos` y evento de creación `ticket_aparatos_vinculados_v1` con actor, timestamp, lista, principal y motivo.
+- Se usa `commit=False` para el ticket hasta que estén registrados todos los vínculos y auditoría. Sin imagen la ruta confirma; con imagen confirma el servicio de adjuntos, **en una sola transacción**.
+- La respuesta 201 agrega `tipo_trabajo`, `aparato_id`, `aparatos_ids`; otras respuestas permanecen compatibles.
+- `Ticket.to_dict()` agrega `tipo_trabajo`, `aparatos_ids` y, para TAPIZADO, `aparatos` con ID/nombre/código/familia. Para históricos V1 `aparatos_ids` retorna el `aparato_id` único cuando exista, sin consultar la tabla de vínculos.
+- M2 no habilita edición/retirada de vínculos. Cualquier mutación futura requiere control de permisos, trazabilidad y transacción independiente.
+- M2 NO modifica todavía los endpoints de historial por aparato ni los reportes; ambos se integran en M3. **No habilitar selección múltiple en producción hasta M3 y QA de lectura.**
 
 ## M3 — UI, historiales y BI (pendiente)
 
