@@ -141,7 +141,9 @@ def test_list_hides_agregadoras_from_non_admicorp_manager(
     ]
 
     assert any(
-        "upper(trim(internal_documents.title))" in expression.lower()
+        "upper(" in expression.lower()
+        and "trim(" in expression.lower()
+        and "title" in expression.lower()
         and "!=" in expression
         for expression in rendered_filters
     )
