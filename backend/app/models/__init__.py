@@ -7,6 +7,7 @@
 from .automation_control import SystemWorkerHeartbeatORM, GascaSmsHealthPulseORM
 from .ticket_model import Ticket
 from .ticket_attachment import TicketAttachmentORM
+from .ticket_aparato import TicketAparatoORM
 from .user_model import UserORM
 from .auth_refresh_session import AuthRefreshSessionORM
 from .google_ads_oauth import GoogleAdsOAuthCredentialORM
@@ -207,6 +208,7 @@ from .purchase_requisition import (
 __all__ = [
     "Ticket",
     "TicketAttachmentORM",
+    "TicketAparatoORM",
     "UserORM",
     "AuthRefreshSessionORM",
     "GoogleAdsOAuthCredentialORM",
