@@ -9,6 +9,7 @@ on:
       - "backend/tests/routes/test_permissions_action_alias_contract.py"
       - "frontend/src/app/permissions-observability/**"
       - "docs/security/permissions_visual_audit_milestone_20261023.md"
+      - "docs/security/permissions_action_aliases_20261023.md"
       - ".github/workflows/permissions-visual-audit-ci.yml"
 
 permissions:
