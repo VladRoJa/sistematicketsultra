@@ -5,6 +5,7 @@ on:
     paths:
       - "backend/app/routes/inventarios.py"
       - "backend/tests/routes/test_inventario_existencias_codigo_qa.py"
+      - "backend/tests/routes/test_inventario_existencias_v2_access_qa.py"
       - ".github/workflows/inventario-existencias-codigo-backend-ci.yml"
   workflow_dispatch:
 
@@ -36,6 +37,6 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install pytest==8.3.5
       - name: Verify Python syntax
-        run: python -m py_compile app/routes/inventarios.py tests/routes/test_inventario_existencias_codigo_qa.py
+        run: python -m py_compile app/routes/inventarios.py tests/routes/test_inventario_existencias_codigo_qa.py tests/routes/test_inventario_existencias_v2_access_qa.py
       - name: QA-10E Existencias codigo interno
-        run: python -m pytest -q --tb=short -o addopts= tests/routes/test_inventario_existencias_codigo_qa.py
+        run: python -m pytest -q --tb=short -o addopts= tests/routes/test_inventario_existencias_codigo_qa.py tests/routes/test_inventario_existencias_v2_access_qa.py
