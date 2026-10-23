@@ -138,6 +138,7 @@ def _fake_ticket_model(rows):
     return SimpleNamespace(
         query=_Query(rows),
         inventario="inventario",
+        aparatos_asociados="aparatos_asociados",
         familia_equipo="familia_equipo",
         falla_mantenimiento="falla_mantenimiento",
         sucursal="sucursal",
@@ -152,6 +153,18 @@ def _fake_ticket_model(rows):
 
 
 class MantenimientoReportServiceTest(unittest.TestCase):
+    def setUp(self):
+        # El query fake usa atributos de texto en vez de relationships ORM;
+        # el loader SQLAlchemy real se valida en los tests M3 específicos.
+        loader = patch.object(
+            report, "selectinload",
+            side_effect=lambda _relation: SimpleNamespace(
+                joinedload=lambda _related: "aparatos_asociados"
+            ),
+        )
+        loader.start()
+        self.addCleanup(loader.stop)
+
     def test_clasifica_edificio_por_jerarquia_real(self):
         building = _ticket(1, building=True)
         equipment = _ticket(2, building=False)
