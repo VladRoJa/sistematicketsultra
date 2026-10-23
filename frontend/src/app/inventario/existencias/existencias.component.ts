@@ -44,6 +44,14 @@ const ROLES_CON_ALCANCE_GLOBAL = new Set([
   'TECNICO',
 ]);
 
+// Gate de presentación E1: GERENTE y GERENTE_REGIONAL no participan
+// en el piloto. El backend sigue siendo la autoridad de permisos.
+const ROLES_PILOTO_V2 = new Set([
+  ...ROLES_CON_ALCANCE_GLOBAL,
+  'SR_MANTENIMIENTO',
+  'AUX_MANTENIMIENTO',
+]);
+
 @Component({
   selector: 'app-existencias',
   standalone: true,
@@ -65,6 +73,7 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
   readonly pageSize = 40;
 
   puedeVerGlobal = false;
+  puedeConsultarVista = false;
   sucursales: SucursalInventario[] = [];
   sucursalSeleccionada: number | 'global' = 'global';
 
@@ -98,6 +107,11 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     const rol = String(this.session.getRol() || '').trim().toUpperCase();
     this.puedeVerGlobal = ROLES_CON_ALCANCE_GLOBAL.has(rol);
+    this.puedeConsultarVista = ROLES_PILOTO_V2.has(rol);
+    if (!this.puedeConsultarVista) {
+      this.error = 'La nueva consulta de Inventarios todavía no está habilitada para este perfil.';
+      return;
+    }
 
     // El backend define el alcance autorizado incluso si no enviamos sucursal_id.
     // "global" en un perfil limitado NO equivale a acceso global.
@@ -128,6 +142,7 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
   }
 
   cargarExistencias(): void {
+    if (!this.puedeConsultarVista) return;
     this.peticionExistencias?.unsubscribe();
     const versionActual = ++this.versionConsulta;
     this.loading = true;
