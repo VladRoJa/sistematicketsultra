@@ -23,7 +23,7 @@ from app.extensions import db  # noqa: E402
 CASES = {
     2150: {
         "family": "PESO_INTEGRADO",
-        "description": "10 pines selectores de peso",
+        "description": "10 pines selectores de peso ",
         "reason": "Pines selectores de peso; familia Peso Integrado.",
     },
     2151: {
