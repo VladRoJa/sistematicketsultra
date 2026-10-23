@@ -8,11 +8,18 @@ from werkzeug.utils import secure_filename
 import hashlib
 import uuid
 from sqlalchemy.orm import joinedload
-from sqlalchemy import or_
+from sqlalchemy import or_, select, union_all
 from zoneinfo import ZoneInfo
 
 from app.extensions import db
-from app.models.warehouse import WarehouseUploadORM
+from app.models.warehouse import (
+    WarehouseUploadORM,
+    KpiDesempenoSnapshotORM,
+    KpiVentasNuevosSociosSnapshotORM,
+    VentaTotalSnapshotORM,
+    CorteCajaSnapshotORM,
+    CargosRecurrentesSnapshotORM,
+)
 from app.utils.warehouse_access import (
     require_warehouse_archive,
     require_warehouse_catalogs,
@@ -406,8 +413,63 @@ def _build_upload_created_at_range(date_preset: str, date_from_raw: str | None, 
 
     return start_dt, end_dt
 
-def _serialize_warehouse_upload_item(item: WarehouseUploadORM) -> dict:
+# Reportes estructurados con correspondencia directa upload -> snapshot.
+# Los demás tipos de archivos mantienen snapshot_id=None (sin asumir ingesta).
+WAREHOUSE_UPLOAD_SNAPSHOT_MODELS = (
+    KpiDesempenoSnapshotORM,
+    KpiVentasNuevosSociosSnapshotORM,
+    VentaTotalSnapshotORM,
+    CorteCajaSnapshotORM,
+    CargosRecurrentesSnapshotORM,
+)
+
+
+def _load_upload_snapshot_metadata(upload_ids: list[int]) -> dict[tuple[int, str], dict]:
+    """Obtiene el lineage de snapshots en una sola consulta para la página."""
+    if not upload_ids:
+        return {}
+
+    selects = [
+        select(
+            model.warehouse_upload_id.label("upload_id"),
+            model.report_type_key.label("report_type_key"),
+            model.id.label("snapshot_id"),
+            model.is_canonical.label("snapshot_is_canonical"),
+            model.business_date.label("snapshot_business_date"),
+        ).where(model.warehouse_upload_id.in_(upload_ids))
+        for model in WAREHOUSE_UPLOAD_SNAPSHOT_MODELS
+    ]
+
+    result = {}
+    for row in db.session.execute(union_all(*selects)).mappings():
+        key = (int(row["upload_id"]), row["report_type_key"])
+        result[key] = {
+            "snapshot_id": int(row["snapshot_id"]),
+            "snapshot_is_canonical": bool(row["snapshot_is_canonical"]),
+            "snapshot_business_date": (
+                row["snapshot_business_date"].isoformat()
+                if row["snapshot_business_date"]
+                else None
+            ),
+        }
+    return result
+
+
+def _upload_snapshot_payload(upload: WarehouseUploadORM, snapshots: dict) -> dict:
+    report_type_key = upload.report_type.key if upload.report_type else None
+    return snapshots.get(
+        (upload.id, report_type_key),
+        {
+            "snapshot_id": None,
+            "snapshot_is_canonical": None,
+            "snapshot_business_date": None,
+        },
+    )
+
+
+def _serialize_warehouse_upload_item(item: WarehouseUploadORM, snapshots: dict | None = None) -> dict:
     return {
+        **_upload_snapshot_payload(item, snapshots or {}),
         "id": item.id,
         "original_filename": item.original_filename,
         "stored_filename": item.stored_filename,
@@ -521,12 +583,21 @@ def warehouse_list_uploads():
 
     if search:
         search_pattern = f"%{search}%"
-        query = query.filter(
-            or_(
-                WarehouseUploadORM.original_filename.ilike(search_pattern),
-                WarehouseUploadORM.stored_filename.ilike(search_pattern),
+        search_predicates = [
+            WarehouseUploadORM.original_filename.ilike(search_pattern),
+            WarehouseUploadORM.stored_filename.ilike(search_pattern),
+        ]
+        if search.isdecimal():
+            search_id = int(search)
+            search_predicates.append(WarehouseUploadORM.id == search_id)
+            search_predicates.extend(
+                WarehouseUploadORM.id.in_(
+                    select(model.warehouse_upload_id)
+                    .where(model.id == search_id)
+                )
+                for model in WAREHOUSE_UPLOAD_SNAPSHOT_MODELS
             )
-        )
+        query = query.filter(or_(*search_predicates))
 
     query = query.order_by(WarehouseUploadORM.created_at.desc())
 
@@ -536,9 +607,13 @@ def warehouse_list_uploads():
         error_out=False,
     )
 
+    snapshots = _load_upload_snapshot_metadata(
+        [item.id for item in pagination.items]
+    )
+
     return jsonify({
         "items": [
-            _serialize_warehouse_upload_item(item)
+            _serialize_warehouse_upload_item(item, snapshots)
             for item in pagination.items
         ],
         "page": pagination.page,
@@ -584,7 +659,10 @@ def warehouse_get_upload_detail(upload_id: int):
             "detail": f"No existe un upload de Warehouse con id {upload_id}."
         }), 404
 
+    snapshots = _load_upload_snapshot_metadata([upload.id])
+
     return jsonify({
+        **_upload_snapshot_payload(upload, snapshots),
         "id": upload.id,
         "original_filename": upload.original_filename,
         "stored_filename": upload.stored_filename,
