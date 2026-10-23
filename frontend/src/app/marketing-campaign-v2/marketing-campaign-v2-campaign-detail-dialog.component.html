@@ -546,6 +546,45 @@
         </div>
       </section>
 
+      <section class="recipient-overview" *ngIf="recipientStatusView as overview"
+               aria-label="Resumen de estados de envío">
+        <div class="recipient-overview-heading">
+          <strong>Resumen de entrega</strong>
+          <span>{{ overview.total | number }} destinatarios congelados · Últimos cortes guardados por lote</span>
+        </div>
+        <p *ngIf="!overview.hasSnapshot" class="recipient-overview-empty">
+          Aún no hay estadísticas guardadas de iVentas para esta campaña.
+          Los destinatarios permanecen congelados y el estado de envío todavía no está disponible.
+        </p>
+        <ng-container *ngIf="overview.hasSnapshot">
+          <div class="recipient-overview-kpis">
+            <div class="recipient-overview-kpi">
+              <span>Aceptados por iVentas</span>
+              <strong class="recipient-overview-accepted">{{ overview.accepted | number }}</strong>
+              <small>{{ overview.acceptedRate }} de la audiencia</small>
+            </div>
+            <div class="recipient-overview-kpi">
+              <span>Entrega o lectura confirmada</span>
+              <strong>{{ overview.reached | number }}</strong>
+              <small>{{ overview.reachedRate }} de la audiencia</small>
+            </div>
+          </div>
+          <div class="recipient-overview-bar" role="img"
+               aria-label="Distribución de estados de los destinatarios">
+            <span *ngFor="let segment of overview.segments"
+                  class="recipient-overview-segment"
+                  [ngClass]="segment.className"
+                  [style.width.%]="segment.percent"></span>
+          </div>
+          <div class="recipient-overview-legend">
+            <span *ngFor="let segment of overview.segments">
+              <i class="recipient-overview-dot" [ngClass]="segment.className" aria-hidden="true"></i>
+              {{ segment.label }} {{ segment.count | number }}
+            </span>
+          </div>
+        </ng-container>
+      </section>
+
       <div class="recipient-filter-toolbar">
         <span class="recipient-filter-title">Filtrar por estado</span>
         <div class="recipient-filter-buttons" role="group" aria-label="Filtrar destinatarios por estado del envío">
