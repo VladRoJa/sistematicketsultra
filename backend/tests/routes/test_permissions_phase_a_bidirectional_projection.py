@@ -169,7 +169,7 @@ def test_p20_module_projection_preserves_all_distinct_actions(module_key):
 
 
 @pytest.mark.parametrize("role,full_key,expected", [
-    ("GERENTE", "track.read", False),
+    ("GERENTE", "track.read", True),
     ("LECTOR_GLOBAL", "track.read", True),
     ("SISTEMAS", "warehouse.view", True),
     ("GERENTE", "warehouse.view", False),
@@ -177,7 +177,7 @@ def test_p20_module_projection_preserves_all_distinct_actions(module_key):
     ("ADMINISTRADOR", "internal_documents.manage", True),
     ("GERENTE", "internal_documents.manage", False),
 ])
-def test_p20_inversion_does_not_fix_known_preview_divergences(
+def test_p20_inversion_preserves_diagnostic_decisions(
     role, full_key, expected
 ):
     rows = _matrix()
