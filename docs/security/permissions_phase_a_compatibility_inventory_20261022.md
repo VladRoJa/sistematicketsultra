@@ -208,6 +208,55 @@ La prueba en producción comparó **todos los endpoints Flask** con prefijo `/ap
 
 **QA de despliegue A-11 — 2026-10-23:** usuario reportó `A11_CODIGO_DESPLEGADO = True` y `QA_A11 = PASS` tras reconstruir backend. El chequeo inspeccionó el código importado dentro del contenedor para confirmar presencia de `can_manage_internal_documents(context)` y `action="download"` en `can_download_historical_internal_document_version`. Combinado con CI #39999587923 (**7/7 PASS**) y merge #1067 (`df035eb02f4833dc77a4e67236472b5f5948b963`), se da **por cerrado el bloque correctivo A-11**. Esta evidencia **no** implica haber verificado acceso HTTP real por documento, explotación histórica, ni cobertura completa del sistema de permisos. **Fase A NO se cierra**, y no se ha activado ningún resolvedor global.
 
+
+### A-12 — Auditoría del consolidado: guard de manager frente a regla de lectura especial (prioridad alta, política pendiente)
+
+**Revisión estática del código en main — 2026-10-23.** `backend/app/utils/internal_documents_access.py::can_view_internal_document_audit(document, context)` devuelve exclusivamente `can_manage_internal_documents(context)`, sin revisar `document` ni `can_view_internal_document`. `require_internal_document_audit_access` llama a ese helper; `GET /api/internal-documents/<int:document_id>/audit` lo ejecuta después de resolver el documento, sin un `require_internal_document_view_access` adicional.
+
+La respuesta de auditoría serializa `old_value_json`, `new_value_json`, `metadata_json`, `actor_user_id`, `ip_address` y `user_agent` (`_serialize_audit_log`). Por tanto, **bajo la regla CUSTOM simulada del caso A-11**, un contexto administrador `SISTEMAS` puede quedar denegado para lectura del consolidado pero autorizado por el helper de auditoría del mismo documento. Es una **divergencia lógica verificable por inspección**, no prueba de petición HTTP ni de lectura real de auditoría. No conocemos el contenido de logs productivos ni se consultaron.
+
+**Decisión explícita requerida antes de un cambio funcional:** ¿La auditoría del consolidado debe obedecer también la regla excepcional de visualización o se trata de un privilegio deliberado de administrador con mayor alcance? En ausencia de política aprobada, no cambiar `can_view_internal_document_audit`. Preparar fixture aislado y comparación `VIEW/AUDIT` para ADMICORP, SISTEMAS y GERENTE; comprobar la respuesta HTTP solo en entorno de pruebas. No acceder a logs reales para demostrar la hipótesis.
+
+### A-13 — Listado general: comparación exacta de título frente a normalización del helper (prioridad alta, condicionado al título)
+
+En `backend/app/routes/internal_documents_routes.py::list_internal_documents`, para administradores que no son `ADMICORP`, el filtro preventivo es `InternalDocumentORM.title != "Consolidado de agregadoras"`. En cambio, `_document_is_agregadoras_consolidado` normaliza el título (`strip().upper()`) antes de aplicar la política especial.
+
+**Riesgo condicional:** si existiese un registro cuyo título difiera en mayúsculas, espacios u otra variación que el helper sí reconoce, el listado general de un administrador podría omitir la exclusión exacta y serializar metadatos sin llamar a `can_view_internal_document`. No se ha comprobado que existan variantes en producción ni se ha consultado la tabla. La ruta `/by-link` sí usa `can_view_internal_document` por elemento después del PR #1062.
+
+**Próximo control:** prueba de regresión de listado con fixture de título normalizado distinto y rol SISTEMAS, sin consulta a datos reales. Resolver con el mismo helper de lectura por objeto si se aprueba; considerar filtrado, total de paginación y rendimiento antes de tocar una ruta de listado.
+
+### A-14 — Matriz de los 21 handlers Flask frente a autorización legacy (revisión de código 2026-10-23)
+
+Esta matriz **no es el catálogo `permission_route_map`** ni afirma cobertura del resolvedor global. Es una extracción de `@internal_documents_bp.route` y de sus guards reales de `backend/app/routes/internal_documents_routes.py` en `main`. Prefijo común: `/api/internal-documents`. **Todos los 21 handlers usan `@jwt_required()`.** Se mantienen los 10 métodos de escritura mapeados y los 11 GET sin mapeo observados en producción el 2026-10-22 (A-10); **no se recontó `permission_route_map` en producción hoy**.
+
+| # | Método y ruta (sufijo del prefijo) | Función Flask | Guard / política de autorización real |
+| ---: | --- | --- | --- |
+| 1 | GET `/access` | `internal_documents_access` | JWT + contexto; devuelve capacidad de manager |
+| 2 | GET `/categories` | `list_internal_document_categories` | JWT; catálogo activo sin guard adicional por rol |
+| 3 | GET `/` | `list_internal_documents` | JWT; administradores y otros tienen ramas separadas; no administradores con filtro por `can_view_internal_document`; ver A-13 para exclusión de consolidado por título |
+| 4 | GET `/<document_id>` | `get_internal_document_detail` | JWT + `require_internal_document_view_access`; incluye datos administrativos solo cuando `can_view_internal_document_audit` |
+| 5 | POST `/` | `create_internal_document` | JWT + `require_internal_document_manager` |
+| 6 | PATCH `/<document_id>` | `update_internal_document_metadata` | JWT + `require_internal_document_manager` |
+| 7 | POST `/<document_id>/publish` | `publish_internal_document` | JWT + `require_internal_document_manager` y precondiciones de estado |
+| 8 | POST `/<document_id>/archive` | `archive_internal_document` | JWT + `require_internal_document_manager` y precondiciones de estado |
+| 9 | POST `/<document_id>/versions` | `replace_internal_document_version` | JWT + `require_internal_document_manager` y controles de estado/upload |
+| 10 | GET `/<document_id>/versions` | `list_internal_document_versions` | JWT + `require_internal_document_view_access`; helper de histórico controla versiones visibles y datos de upload |
+| 11 | GET `/<document_id>/links` | `list_internal_document_links` | JWT + `require_internal_document_view_access` |
+| 12 | POST `/<document_id>/links` | `create_internal_document_link` | JWT + `require_internal_document_manager` |
+| 13 | PATCH `/<document_id>/links/<link_id>` | `update_internal_document_link` | JWT + `require_internal_document_manager` |
+| 14 | DELETE `/<document_id>/links/<link_id>` | `deactivate_internal_document_link` | JWT + `require_internal_document_manager` |
+| 15 | GET `/<document_id>/external-resources` | `list_internal_document_external_resources` | JWT + `require_internal_document_view_access` |
+| 16 | POST `/<document_id>/external-resources` | `create_internal_document_external_resource` | JWT + `require_internal_document_manager` |
+| 17 | GET `/by-link` | `list_internal_documents_by_link` | JWT + contexto + vínculo activo; `can_view_internal_document` por elemento (fix #1062) |
+| 18 | PUT `/<document_id>/visibility` | `update_internal_document_visibility` | JWT + `require_internal_document_manager` |
+| 19 | GET `/<document_id>/download` | `download_current_internal_document` | JWT + `require_internal_document_download_access` |
+| 20 | GET `/<document_id>/versions/<version_id>/download` | `download_internal_document_version` | JWT + `can_download_historical_internal_document_version` (fix #1067/A-11) |
+| 21 | GET `/<document_id>/audit` | `get_internal_document_audit` | JWT + `require_internal_document_audit_access`; guard de manager, sin regla de `view` por objeto (A-12) |
+
+**Balance:** 11 GET y 10 mutaciones (6 POST, 2 PATCH, 1 PUT, 1 DELETE). Las diez mutaciones se protegen con `require_internal_document_manager`; esto **no** significa que todas apliquen las restricciones especiales de visualización por documento. Antes de trasladar guards al resolvedor, decidir explícitamente si un administrador de Nube que no puede leer el consolidado debe poder cambiar metadata, vínculos, visibilidad, versiones o estado de ese registro. No suponer equivalencia entre `manage`, `view`, `download`, `historical` y `audit`.
+
+**Situación del bloque:** inventario de guards de las 21 rutas **completo en código**; paridad de ejecución por rol/objeto, alcance de mutaciones específicas y correspondencia con permisos nuevos **todavía parciales**. A-12 y A-13 requieren fixtures RED y decisión de alcance; no hay modificación del backend ni del resolvedor en este bloque.
+
 ## 5. Política de paridad antes de activar permisos
 
 1. Para cada acción, documentar el guard real, alcance y restricciones adicionales. Si no puede mapearse con fidelidad, **no migrar**.
@@ -298,7 +347,7 @@ Estos puntos necesitan información del servidor o revisión de código adiciona
 - [x] Confirmado por consulta agregada que la única ACL departamental pertenece al rol `COORDINADOR_MANTENIMIENTO` y satisface la condición legacy de lectura de PM.
 - [x] **Revisión Alembic cotejada:** `flask db current` en producción reportó `j22c10202622 (head)` el 2026-10-22; el mismo identificador aparece en `main` del repositorio (`backend/migrations/versions/j22c10202622_inventario_movimientos_anulacion.py`, `down_revision=i22c10202622`). Esto coteja revisión y código, **no** prueba paridad física total del esquema, unicidad de heads en todos los entornos ni accesos por sucursal.
 - [ ] Revisar escenarios de alcance por sucursal y documentar las diferencias conocidas del piloto antes de enforcement.
-- [~] Inventariadas por código las **21 rutas HTTP** de Nube y los controles de escritura/lectura/descarga/auditoría, con excepción especial de agregadoras. **Pendiente:** matriz exhaustiva ruta → decisión por contexto y tests de paridad; esta inspección no sustituye QA.
+- [x] **Inventario de los 21 handlers Nube completo por código** (A-14): 11 GET y 10 mutaciones, todos con JWT; se registró el guard legacy de cada ruta. **Pendiente:** pruebas de paridad por contexto y correspondencia 1:1 con el resolvedor; no confundir inventario estático con cobertura QA.
 - [ ] Producir conjunto de escenarios de paridad de Nube Corporativa (rol SISTEMAS, ADMICORP, admin con otro usuario, usuario ordinario, documento sensible).
 - [ ] Decidir con responsable operativo únicamente los accesos legacy contradictorios que supongan un cambio de política, no pedir autorización para cada refactor.
 - [x] Censadas las **3 asociaciones transversales activas** del catálogo: 1 upload documental de Aperturas agrupado bajo Nube, y 2 altas/bajas de permisos departamentales (`users.manage`) agrupadas históricamente bajo Reportes. Guards efectivos cotejados en código, sin indicios de bypass y sin cambios de autorización.
@@ -315,7 +364,8 @@ Estos puntos necesitan información del servidor o revisión de código adiciona
 - [x] **A-11 fix preparado sin desplegar:** PR #1067 con test RED (2 fallos esperados, CI #39999421770) → helper corregido → GREEN (7/7 PASS, CI #39999587923), sin migraciones.
 - [x] PR #1067 revisado, CI 7/7 PASS y squash merge a `main`: `df035eb02f4833dc77a4e67236472b5f5948b963`.
 - [x] **A-11 desplegado y verificado:** el operador confirmó ejecución del bloque Git pull + reconstrucción de `backend`, y la inspección `inspect.getsource(can_download_historical_internal_document_version)` devolvió `A11_CODIGO_DESPLEGADO = True`, `QA_A11 = PASS` (2026-10-23). Verificación estática del código importado en el contenedor; las **7/7 pruebas funcionales** corresponden a CI, no a un ensayo HTTP con archivo real. Sin migraciones.
-- [ ] **Fase A sigue abierta:** completar matriz de paridad/alcance del resto de Nube y módulos piloto, sin activar todavía el resolvedor global de permisos.
+- [ ] **A-12/A-13 prioritarios:** contrastar con fixtures no productivos la autorización de auditoría de consolidado (`VIEW=False / AUDIT posible True`) y la exclusión de listado con título normalizado diferente; resolver política antes de modificar seguridad.
+- [ ] **Fase A sigue abierta:** completar matriz de paridad/alcance por contexto de Nube y módulos piloto, sin activar todavía el resolvedor global de permisos.
 - [ ] Ampliar fixtures a descarga actual e histórica y controles por registro de las demás rutas del piloto.
 - [ ] Marcar expresamente el alcance incompleto de módulos fuera del catálogo y plan de expansión.
 
