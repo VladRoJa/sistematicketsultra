@@ -51,6 +51,11 @@ class RequisitoAparatoMantenimientoTest(unittest.TestCase):
     def test_mantenimiento_aparatos_no_permite_id_no_numerico(self):
         self.assertIn("Selecciona un aparato", self.validar("inventario-ficticio"))
 
+    def test_no_acepta_numeros_fraccionarios_ni_cadenas_decimales(self):
+        for valor in (431.5, 431.0, "431.0"):
+            with self.subTest(valor=valor):
+                self.assertIn("Selecciona un aparato", self.validar(valor))
+
     def test_aparato_valido_y_sucursal_correcta_pasa(self):
         self.assertIsNone(self.validar(431))
         self.catalogo.query.get.assert_called_with(487)
