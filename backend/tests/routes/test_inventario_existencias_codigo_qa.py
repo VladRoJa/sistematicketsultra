@@ -97,6 +97,11 @@ def test_existencias_sin_articulo_maestro_entrega_codigo_nulo():
     assert len(data) == 1
     assert data[0]["codigo_interno"] is None
     assert data[0]["stock"] == 0
+    assert data[0]["categoria_catalogo"] is None
+    assert data[0]["categoria_inventario_id"] is None
+    assert data[0]["subcategoria"] is None
+    assert data[0]["familia_equipo_id"] is None
+    assert data[0]["familia_equipo"] is None
 
 
 
