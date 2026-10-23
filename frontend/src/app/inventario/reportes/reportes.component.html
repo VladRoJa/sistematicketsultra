@@ -153,10 +153,10 @@
 
         <div class="branch-ranking" *ngIf="sucursalesFiltradas.length; else sinSucursales">
           <button type="button" class="rank-row"
-                  *ngFor="let suc of sucursalesFiltradas; let i = index"
+                  *ngFor="let suc of sucursalesFiltradas"
                   (click)="seleccionarSucursalDesdeRanking(suc.sucursal_id)"
                   [attr.aria-label]="'Consultar el inventario de ' + suc.sucursal">
-            <span class="rank-number">{{ i + 1 }}</span>
+            <span class="rank-number">{{ posicionEnRanking(suc.sucursal_id) }}</span>
             <span class="rank-main">
               <span class="rank-copy">
                 <span class="rank-name">{{ suc.sucursal }}</span>
@@ -173,8 +173,8 @@
         </ng-template>
         <div class="branch-footer" *ngIf="sucursalesOcultas > 0 || verTodasSucursales">
           <button type="button" (click)="alternarSucursales()">
-            {{ verTodasSucursales ? 'Mostrar principales' : 'Ver todas las sucursales (' + sucursalesVista.length + ')' }}
-            <mat-icon>{{ verTodasSucursales ? 'expand_less' : 'expand_more' }}</mat-icon>
+            {{ etiquetaListadoSucursales }}
+            <mat-icon>{{ iconoListadoSucursales }}</mat-icon>
           </button>
         </div>
       </section>
@@ -193,8 +193,8 @@
       </header>
       <div class="activity-list" *ngIf="data.movimientos_recientes.length; else sinMovimientos">
         <div class="activity-row" *ngFor="let mov of data.movimientos_recientes">
-          <span class="activity-icon" [class.is-exit]="mov.tipo === 'salida'">
-            <mat-icon>{{ mov.tipo === 'salida' ? 'north_east' : 'south_west' }}</mat-icon>
+          <span class="activity-icon" [class.is-exit]="movimientoEsSalida(mov.tipo)">
+            <mat-icon>{{ iconoMovimiento(mov.tipo) }}</mat-icon>
           </span>
           <div class="activity-main">
             <strong>{{ etiquetaTipo(mov.tipo) }} <span>#{{ mov.movimiento_id }}</span></strong>
@@ -202,8 +202,8 @@
           </div>
           <div class="activity-right">
             <time>{{ formatearFechaLocal(mov.fecha_local) }}</time>
-            <span class="status-pill" [class.is-cancelled]="mov.estado === 'anulado'">
-              {{ mov.estado === 'anulado' ? 'Anulado' : 'Activo' }}
+            <span class="status-pill" [class.is-cancelled]="movimientoAnulado(mov.estado)">
+              {{ etiquetaEstadoMovimiento(mov.estado) }}
             </span>
           </div>
         </div>
