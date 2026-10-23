@@ -6,7 +6,9 @@ from dateutil import parser
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
+
+from app.models.ticket_aparato import TicketAparatoORM
 import pytz
 
 from app.models.suite_governance import (
@@ -148,6 +150,7 @@ def _query_tickets_mantenimiento(user=None):
             joinedload(Ticket.falla_mantenimiento),
             joinedload(Ticket.sucursal),
             joinedload(Ticket.sucursal_destino),
+            selectinload(Ticket.aparatos_asociados).joinedload(TicketAparatoORM.inventario),
         )
         .filter(
             Ticket.departamento_id == 1,
@@ -285,12 +288,42 @@ def _condition_name(ticket):
     return str(ticket.condicion_operativa or PENDING_CAPTURE).strip()
 
 
+def _related_apparatus(ticket):
+    """Lista de aparatos del ticket, sin duplicados ni filas extra."""
+    if getattr(ticket, "tipo_trabajo", None) != "TAPIZADO":
+        return []
+
+    related = []
+    seen = set()
+    for link in getattr(ticket, "aparatos_asociados", None) or []:
+        equipment = getattr(link, "inventario", None)
+        equipment_id = getattr(link, "inventario_id", None)
+        if equipment is not None and equipment_id not in seen:
+            related.append(equipment)
+            seen.add(equipment_id)
+    return related
+
+
 def _equipment_name(ticket):
+    related = _related_apparatus(ticket)
+    if related:
+        return ", ".join(
+            str(getattr(item, "nombre", "") or "Equipo") for item in related
+        )
     inventory = ticket.inventario
     return str(getattr(inventory, "nombre", "") or "").strip()
 
 
 def _equipment_code(ticket):
+    related = _related_apparatus(ticket)
+    if related:
+        codes = list(dict.fromkeys(
+            str(getattr(item, "codigo_interno", "") or "").strip()
+            for item in related
+            if str(getattr(item, "codigo_interno", "") or "").strip()
+        ))
+        if codes:
+            return ", ".join(codes)
     inventory = ticket.inventario
     return str(getattr(inventory, "codigo_interno", "") or "").strip()
 
