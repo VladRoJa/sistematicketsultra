@@ -194,6 +194,8 @@
 }
 
 .suite-user-area__logout {
+  /* Mantiene el touch target de Material dentro del viewport (desborde +3px). */
+  margin-right: 8px;
   color: var(--ultra-surface);
   background: rgba(255, 255, 255, 0.08);
   transition:
