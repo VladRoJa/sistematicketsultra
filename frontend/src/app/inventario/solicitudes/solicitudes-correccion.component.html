@@ -79,7 +79,7 @@
           <label class="solicitud-field">
             <span>Valor propuesto *</span>
             <input *ngIf="!campoNumerico" type="text" name="e2NuevoTexto"
-              [(ngModel)]="nuevoTexto" (ngModelChange)="modificado()" maxlength="255"
+              [(ngModel)]="nuevoTexto" (ngModelChange)="modificado()" [maxlength]="maxLongitudCampo"
               placeholder="Escribe la corrección propuesta"/>
             <input *ngIf="campoNumerico" type="number" name="e2NuevoId"
               [(ngModel)]="nuevoId" (ngModelChange)="modificado()" min="1" step="1"
@@ -237,7 +237,7 @@
       <section *ngIf="detalle" class="solicitud-detail" aria-label="Detalle de solicitud">
         <div class="solicitud-detail__title">
           <strong>Solicitud #{{ detalle.id }}</strong>
-          <button type="button" (click)="detalle = null" aria-label="Cerrar detalle">
+          <button type="button" (click)="cerrarDetalle()" aria-label="Cerrar detalle">
             <mat-icon aria-hidden="true">close</mat-icon>
           </button>
         </div>
