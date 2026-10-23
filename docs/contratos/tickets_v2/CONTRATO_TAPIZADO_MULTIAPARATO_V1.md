@@ -2,7 +2,7 @@
 
 **Fecha:** 23 de octubre de 2026  
 **Alcance:** Tickets V1 / Mantenimiento → Aparatos  
-**Estado:** M1 aprobado y aplicado. M2 (API) propuesta para QA; M3 (UI/reportes) pendiente. NO habilitado para usuarios.
+**Estado:** M1 y M2 integrados; M3 (interfaz, historiales y reportes) implementado en PR pendiente de CI/QA. El backend permanece deshabilitado por defecto para escritura multiaparato.
 
 ## Necesidad funcional
 
@@ -103,3 +103,34 @@ Ejemplo de body (ilustrativo; **aún no activar desde el frontend**):
 - Hay equipos en Inventarios sin familia asignada: no inventar familia ni forzar una sola para un ticket mixto.
 - Cambios de sucursal y traslados históricos: exigir asignación correcta al momento de creación y conservar evidencia de vínculo si en el futuro un aparato se mueve de sucursal.
 - No introducir código específico de tapizado en M1 que impida después otros trabajos multiaparato.
+
+## M3 — Implementación y QA para despliegue
+
+### Captura
+
+- El subformulario Mantenimiento → Aparatos consulta `GET /api/tickets/tapizado-disponible` bajo JWT. Si devuelve `habilitado:false`, la opción de Tapizado **no aparece**; M2 rechaza peticiones manuales con HTTP 409.
+- Con el flag habilitado, el operador marca **Trabajo de tapizado · varios aparatos**. Se conserva la opción original (un solo aparato, obligatorio) sin afectar Sistemas/Edificio.
+- Los aparatos disponibles se consultan en la sucursal destino; el componente cancela consultas anteriores al cambiar de sucursal y elimina la selección previa.
+- Selector múltiple: búsqueda por nombre, código y marca; filtros combinables por categoría y familia; resumen de seleccionados, quitar uno, tope 50 y mínimo 1.
+- El primer aparato seleccionado queda como principal en `aparato_id`; la lista completa llega en `aparatos_ids` exclusivamente cuando `tipo_trabajo=TAPIZADO`. El backend vuelve a validar cada aparato, usuario y sucursal.
+
+### Lecturas e informes
+
+- `/api/tickets/historial-equipo/<id>`, `/api/tickets/historial-por-equipo/<id>`, `/api/tickets/historial/<id>` y `/api/inventario/<id>/historial` incluyen tickets vinculados como principales o secundarios.
+- `/api/inventario/equipos-historial` y los filtros por aparato de la bandeja utilizan ambas relaciones.
+- El filtro SQL emplea `EXISTS` sobre `ticket_aparatos`, sin multiplicar filas al encontrar un ticket con varios equipos. Se aplica `filtrar_tickets_por_usuario` a los resultados, incluido el alcance regional y el acceso solo asignados.
+- En la bandeja se muestra `Tapizado · N aparatos`; el tooltip enumera nombres y códigos.
+- El reporte mixto de mantenimiento y el reporte Equipos imprimen nombres/códigos vinculados dentro de la **misma fila del ticket**. Los conteos de tickets y los estados no se multiplican. La familia snapshot del ticket sigue representando el aparato principal: no se interpreta como resultado de una sumatoria de familias secundarias.
+- Ticket V1 normal y tickets históricos sin vínculos secundarios mantienen su ruta de lectura anterior.
+
+### Activación y límites
+
+1. Aprobar CI completo (pruebas específicas backend/Angular, regresión de mantenimiento, permisos e Inventarios).
+2. Integrar PR y desplegar **backend + frontend** con `TICKETS_TAPIZADO_MULTI_ENABLED=false`; confirmar que Crear Ticket → Aparatos continúe sin opción Tapizado y botón inactivo sin aparato.
+3. Confirmar `flask db current` alineado con `l23c10202623`. M3 **no añade migraciones**.
+4. Preparar QA autorizado en ULTRA DEMO. Para activación posterior al QA, cambiar configuración operativa `.env.docker` a `TICKETS_TAPIZADO_MULTI_ENABLED=true` y recrear backend mediante Docker Compose (sin editar el código fuente en el servidor). El endpoint autenticado debe devolver `habilitado:true`. Nunca activar sin verificación de scopes.
+5. Crear un solo ticket de prueba con 2–3 aparatos reales de ULTRA DEMO, probar que aparece una sola vez en lista, historia individual de cada aparato y una vez en reporte.
+6. Probar error por cambio de sucursal, lista vacía, retirar todos los seleccionados, falla de servidor y multipart con imagen.
+7. Revertir el flag a false si aparece discrepancia; los tickets previamente creados permanecen en DB y deben seguir siendo consultables.
+
+**Históricos #941/#2301/#2831/#3191–#3194:** no se editan ni vinculan automáticamente. La corrección requerirá inventario exacto y autorización específica.
