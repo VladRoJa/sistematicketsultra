@@ -204,6 +204,8 @@ La prueba en producción comparó **todos los endpoints Flask** con prefijo `/ap
 - **Superficies relacionadas:** este helper también alimenta `list_internal_document_versions` (visibilidad y detalle de versiones) y `build_internal_document_capabilities` (flag `can_download_historical_versions` enviado a la UI), además del endpoint `download_internal_document_version` (descarga del archivo). Corregir un solo guard de ruta sin revisar esos usos dejaría discrepancias funcionales.
 - **Política de seguridad para corrección aislada:** conservar el requisito de `can_manage_internal_documents` para históricos, pero exigir la regla explícita de **descarga** del consolidado mediante `can_download_internal_document(document, context)`; mantener el comportamiento actual de managers sobre documentos ordinarios. Antes de cambiar el helper, crear un test de regresión RED en PR separado; después un cambio mínimo y CI GREEN, sin migraciones. Revisar asimismo que no se autorice descarga histórica solo por permiso de lectura.
 
+**Seguimiento de la corrección A-11 — 2026-10-23:** PR [#1067](https://github.com/VladRoJa/sistematicketsultra/pull/1067) contiene exclusivamente `backend/app/utils/internal_documents_access.py` (helper de históricos), fixture de regresión y workflow. Confirmado **RED** por aserciones de autorización: [CI #39999421770](https://github.com/VladRoJa/sistematicketsultra/actions/runs/39999421770), **2 fallos esperados / 5 PASS**; confirmado **GREEN** tras cambio mínimo: [CI #39999587923](https://github.com/VladRoJa/sistematicketsultra/actions/runs/39999587923), **7/7 PASS**. Nueva condición: sigue siendo obligatorio ser manager documental; para el consolidado especial publicado también exige `has_document_visibility_access(..., action="download")`. No depende de `current_version_id` y conserva gestión de versiones históricas de otros documentos. **Estado: PR abierto, aún sin merge ni despliegue productivo.** La corrección y las pruebas no son evidencia de descarga real o incidente de explotación. Siguiente control: revisión + aprobación de merge #1067, luego deploy backend y QA interno.
+
 ## 5. Política de paridad antes de activar permisos
 
 1. Para cada acción, documentar el guard real, alcance y restricciones adicionales. Si no puede mapearse con fidelidad, **no migrar**.
@@ -308,7 +310,8 @@ Estos puntos necesitan información del servidor o revisión de código adiciona
 - [x] QA aislado con documento privado ordinario ficticio: rol `SISTEMAS` → `CAN_VIEW=True`; rol `GERENTE` sin propiedad → `CAN_VIEW=False`.
 - [x] **QA de lectura sensible CUSTOM** con fixture: `ADMICORP=True`, `SISTEMAS_QA=False`, `GERENTE_QA=False` para `Consolidado de agregadoras` simulado.
 - [x] **A-11 CONFIRMADO por fixture:** para consolidado CUSTOM, `SISTEMAS_QA` obtuvo `VIEW=False`, `DOWNLOAD=False`, `HISTORICAL=True`, frente a ADMICORP `True/True/True` y GERENTE `False/False/False`.
-- [ ] **Prioritario — A-11:** crear regresión RED y corregir `can_download_historical_internal_document_version` de forma puntual, preservando descargas normales de managers; CI y despliegue por flujo GitHub. Sin consultas a archivos productivos.
+- [x] **A-11 fix preparado sin desplegar:** PR #1067 con test RED (2 fallos esperados, CI #39999421770) → helper corregido → GREEN (7/7 PASS, CI #39999587923), sin migraciones.
+- [ ] Revisar y autorizar merge del PR #1067; desplegar backend mediante flujo Git y verificar helper dentro del contenedor. No activar permisos globales aún.
 - [ ] Ampliar fixtures a descarga actual e histórica y controles por registro de las demás rutas del piloto.
 - [ ] Marcar expresamente el alcance incompleto de módulos fuera del catálogo y plan de expansión.
 
