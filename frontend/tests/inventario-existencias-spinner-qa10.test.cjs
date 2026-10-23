@@ -119,7 +119,15 @@ test('E1: GERENTE no participa en piloto, ni por URL directa a la pantalla', () 
   vm.cargarExistencias();
   assert.equal(peticiones.length, 0);
   assert.match(html, /\*ngIf="puedeConsultarVista"/);
-  assert.doesNotMatch(html, /Solicitar corrección/);
+  // E2 agrega controles para el piloto, pero un GERENTE no puede abrirlos.
+  vm.abrirHallazgo();
+  assert.equal(vm.panelSolicitudesVisible, false);
+  vm.abrirSeguimiento();
+  assert.equal(vm.panelSolicitudesVisible, false);
+  vm.abrirSolicitud(rows[0]);
+  assert.equal(vm.panelSolicitudesVisible, false);
+  assert.match(html, /\*ngIf="puedeConsultarVista" class="solicitudes-actions"/);
+  assert.match(html, /<app-solicitudes-correccion \*ngIf="puedeConsultarVista"/);
   assert.doesNotMatch(html, /Verificado/);
 });
 
