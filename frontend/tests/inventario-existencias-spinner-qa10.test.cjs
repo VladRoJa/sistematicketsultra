@@ -108,16 +108,28 @@ test('E1: rol global inicia en Global y consulta su sucursal en backend, no filt
   assert.match(serviceSource, /verExistencias\(opts\?: \{ sucursal_id\?: number \}\)/);
 });
 
-test('E1: un rol de sucursal no ve selector global y el backend define sus filas', () => {
+test('E1: GERENTE no participa en piloto, ni por URL directa a la pantalla', () => {
   const { vm, peticiones } = fixture('GERENTE');
   vm.ngOnInit();
+  assert.equal(vm.puedeConsultarVista, false);
+  assert.equal(peticiones.length, 0);
+  assert.match(vm.error, /no está habilitada/);
+  vm.cargarExistencias();
+  assert.equal(peticiones.length, 0);
+  assert.match(html, /\*ngIf="puedeConsultarVista"/);
+  assert.doesNotMatch(html, /Solicitar corrección/);
+  assert.doesNotMatch(html, /Verificado/);
+});
+
+test('E1: un perfil operativo permitido no ofrece selector global y respeta alcance backend', () => {
+  const { vm, peticiones } = fixture('SR_MANTENIMIENTO');
+  vm.ngOnInit();
   assert.equal(vm.puedeVerGlobal, false);
+  assert.equal(vm.puedeConsultarVista, true);
   assert.equal(peticiones[0].opts, undefined);
   peticiones[0].observer.next(rows.slice(0, 1));
   assert.equal(vm.totalReferencias, 1);
   assert.match(html, /\*ngIf="puedeVerGlobal"/);
-  assert.doesNotMatch(html, /Solicitar corrección/);
-  assert.doesNotMatch(html, /Verificado/);
 });
 
 test('E1: búsqueda sin acentos, categoría y estado stock filtran la tabla sin alterar el resumen', () => {
