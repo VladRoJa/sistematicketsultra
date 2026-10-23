@@ -32,6 +32,7 @@ import {
     MatSelectModule
   ],
   templateUrl: './mantenimiento-aparatos.component.html',
+  styleUrls: ['./mantenimiento-aparatos.component.css'],
 })
 export class MantenimientoAparatosComponent implements OnInit, OnDestroy {
   @Input() parentForm!: FormGroup;
@@ -43,6 +44,7 @@ export class MantenimientoAparatosComponent implements OnInit, OnDestroy {
   sucursalSeleccionada!: number;
 
   private formSub?: Subscription;
+  private sucursalSub?: Subscription;
 
   constructor(
     private fb: FormBuilder,
@@ -65,7 +67,15 @@ ngOnInit(): void {
   // --- Inicializar controles propios ---
   this.parentForm.addControl('detalle', this.fb.control(''));
   this.parentForm.addControl('subcategoria', this.fb.control(''));
-  this.parentForm.addControl('aparato_id', this.fb.control(null));
+  if (!this.parentForm.contains('aparato_id')) {
+    this.parentForm.addControl(
+      'aparato_id',
+      this.fb.control(null, this.tipo === 'aparato' ? [Validators.required] : [])
+    );
+  } else if (this.tipo === 'aparato') {
+    this.parentForm.get('aparato_id')?.addValidators(Validators.required);
+    this.parentForm.get('aparato_id')?.updateValueAndValidity({ emitEvent: false });
+  }
 
   // --- Detectar sucursal desde el padre (ya viene en parentForm) ---
   this.sucursalSeleccionada = sucursalCtrl.value;
@@ -74,7 +84,7 @@ ngOnInit(): void {
   this.cargarEquiposPorSucursal(this.sucursalSeleccionada);
 
   // Escucha cambios de sucursal desde el padre
-  sucursalCtrl.valueChanges.subscribe((sucId: number) => {
+  this.sucursalSub = sucursalCtrl.valueChanges.subscribe((sucId: number) => {
     this.sucursalSeleccionada = sucId;
     // Reset controles dependientes
     this.parentForm.get('detalle')!.reset();
@@ -96,6 +106,7 @@ ngOnInit(): void {
 
   ngOnDestroy(): void {
     this.formSub?.unsubscribe();
+    this.sucursalSub?.unsubscribe();
     // Evita que se “hereden” valores a otros flujos
     ['detalle','subcategoria','aparato_id'].forEach(c => {
       if (this.parentForm.contains(c)) this.parentForm.removeControl(c);

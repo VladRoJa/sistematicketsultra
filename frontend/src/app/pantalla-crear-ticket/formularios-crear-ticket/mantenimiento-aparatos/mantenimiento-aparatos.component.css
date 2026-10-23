@@ -1,0 +1,6 @@
+.selector-equipo-requerido {
+  margin: -0.25rem 0 1rem;
+  color: var(--mat-sys-error, #b3261e);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}

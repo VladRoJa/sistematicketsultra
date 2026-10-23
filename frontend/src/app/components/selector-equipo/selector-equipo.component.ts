@@ -49,9 +49,13 @@ export class SelectorEquipoComponent implements OnInit, OnChanges {
   ngOnInit(): void {
     this.setupBusqueda();
     this.filtroControl.valueChanges.subscribe(value => {
-      if (typeof value === 'string' && value.trim() === '') {
-        this.equipoSeleccionadoInterno = null;
-        this.equipoSeleccionado.emit(null);
+      // Teclear sobre una selección anterior invalida ese ID, incluso
+      // cuando el nuevo texto no está vacío.
+      if (typeof value === 'string') {
+        if (this.equipoSeleccionadoInterno !== null || value.trim() === '') {
+          this.equipoSeleccionadoInterno = null;
+          this.equipoSeleccionado.emit(null);
+        }
       }
     });
   }

@@ -87,7 +87,7 @@ export class CrearTicketRefactorComponent implements OnInit, OnDestroy {
     descripcion_aparato: 'Descripción del problema',
     descripcion:    'Descripción del problema',
     criticidad:    'Criticidad',
-    aparato_id:     'Equipo',
+    aparato_id:     'Aparato del inventario',
     descripcion_refaccion: 'Descripción técnica de la refacción',
   };
 
@@ -265,6 +265,16 @@ actualizarValidadoresDescripcion() {
   const general = this.form.get('descripcion_general');
   const aparato = this.form.get('descripcion_aparato');
   const sist    = this.form.get('descripcion');
+  const aparatoId = this.form.get('aparato_id');
+
+  // Aparatos requiere elegir un elemento real del inventario.
+  // Al pasar a Edificio u otra ruta se retira este requisito.
+  if (this.mostrarSubformAparatos) {
+    aparatoId?.setValidators([Validators.required]);
+  } else {
+    aparatoId?.clearValidators();
+  }
+  aparatoId?.updateValueAndValidity({ emitEvent: false });
 
   // Limpia validadores de todos
   [general, aparato, sist].forEach(ctrl => {

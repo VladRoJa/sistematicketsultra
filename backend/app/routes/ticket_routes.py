@@ -9,7 +9,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 import pytz
 from sqlalchemy import or_
-from app.models.inventario import InventarioGeneral
+from app.models.inventario import InventarioGeneral, InventarioSucursal
+from app.models.catalogos import CatalogoClasificacion
 from app.utils.email_sender import send_email_html
 from app.utils.notify_targets import build_subject, pick_recipients
 from app.utils.notify_utils import render_ticket_html, render_ticket_whatsapp_text
@@ -155,6 +156,77 @@ def _parse_create_ticket_request():
     raise ValueError(
         "Content-Type no soportado para crear tickets"
     )
+
+
+def _es_clasificacion_mantenimiento_aparatos(clasificacion_id):
+    """Reconoce Aparatos (ID 487) y sus descendientes mediante el catálogo real."""
+    try:
+        nodo_id = int(clasificacion_id)
+    except (TypeError, ValueError):
+        return False
+    if nodo_id <= 0:
+        return False
+
+    nodo = CatalogoClasificacion.query.get(nodo_id)
+    visitados = set()
+    while nodo is not None and nodo.id not in visitados:
+        visitados.add(nodo.id)
+        if nodo.id == 487 and nodo.departamento_id == 1:
+            return True
+        nodo = nodo.padre
+    return False
+
+
+def _validar_aparato_mantenimiento_creacion(
+    departamento_id, clasificacion_id, aparato_id, sucursal_id_destino
+):
+    """Valida el vínculo real con Inventarios ANTES de crear el ticket.
+
+    No exige aparatos en Edificio ni en otros departamentos.
+    Si Mantenimiento declara un aparato, verifica que sea de su sucursal.
+    """
+    if departamento_id != 1:
+        return None
+
+    en_rama_aparatos = _es_clasificacion_mantenimiento_aparatos(clasificacion_id)
+    if not en_rama_aparatos and aparato_id in (None, ""):
+        return None
+
+    if isinstance(aparato_id, bool) or (
+        not isinstance(aparato_id, int)
+        and (
+            not isinstance(aparato_id, str)
+            or not aparato_id.strip().isdigit()
+        )
+    ):
+        return "Selecciona un aparato válido del inventario."
+
+    try:
+        inventario_id = int(aparato_id)
+    except (TypeError, ValueError):
+        return "Selecciona un aparato válido del inventario."
+
+    if inventario_id <= 0:
+        return "Selecciona un aparato válido del inventario."
+
+    inventario = InventarioGeneral.query.get(inventario_id)
+    if not inventario or str(inventario.tipo or "").strip().lower() not in {
+        "aparato", "aparatos"
+    }:
+        return "El aparato seleccionado no existe o no pertenece a Inventarios de Aparatos."
+
+    try:
+        destino_id = int(sucursal_id_destino)
+    except (TypeError, ValueError):
+        return "Sucursal destino inválida."
+
+    asignacion = InventarioSucursal.query.filter_by(
+        inventario_id=inventario_id, sucursal_id=destino_id
+    ).first()
+    if not asignacion:
+        return "El aparato seleccionado no pertenece a la sucursal destino."
+
+    return None
 
 
 def _get_current_operational_year() -> int:
@@ -445,6 +517,14 @@ def create_ticket():
         # Fuente de jerarquía obligatoria
         if not aparato_id and not clasificacion_id:
             return jsonify({"mensaje": "Debes enviar 'aparato_id' (si viene de inventario) o 'clasificacion_id' (si no)."}), 400
+
+        # Una clasificación de Aparatos no puede sustituir el vínculo real
+        # al inventario. También se comprueba el tipo y la sucursal destino.
+        error_aparato = _validar_aparato_mantenimiento_creacion(
+            departamento_id, clasificacion_id, aparato_id, sucursal_id_destino
+        )
+        if error_aparato:
+            return jsonify({"mensaje": error_aparato}), 400
 
         current_app.logger.info("DEBUG Ticket class: %s.%s", getattr(Ticket, "__module__", "?"), getattr(Ticket, "__name__", "?"))
 
