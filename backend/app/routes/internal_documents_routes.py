@@ -10,7 +10,7 @@ from urllib.parse import parse_qs, urlparse
 
 from flask import Blueprint, current_app, jsonify, request, send_file
 from flask_jwt_extended import jwt_required
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
@@ -33,6 +33,7 @@ from app.models import (
     InternalDocumentExternalResourceORM,
 )
 from app.utils.internal_documents_access import (
+    AGREGADORAS_CONSOLIDADO_TITLE,
     build_internal_document_capabilities,
     can_download_historical_internal_document_version,
     can_manage_internal_documents,
@@ -1173,9 +1174,11 @@ def list_internal_documents():
             str(context.username or "").strip().upper()
             != "ADMICORP"
         ):
+            # El filtro SQL debe coincidir con la detección del título
+            # especial y ejecutarse ANTES de count/offset/limit.
             query = query.filter(
-                InternalDocumentORM.title
-                != "Consolidado de agregadoras"
+                func.upper(func.trim(InternalDocumentORM.title))
+                != AGREGADORAS_CONSOLIDADO_TITLE
             )
 
         if requested_status and requested_status != "ALL":
