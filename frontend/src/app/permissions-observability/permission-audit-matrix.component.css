@@ -42,3 +42,9 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .audit-sort[aria-pressed="true"]{color:#1d4ed8;background:#dbeafe}
 .audit-toolbar label{white-space:nowrap}
 .audit-group td{border-top:1px solid #c7d2fe}
+
+.audit-reason strong{display:block;font-size:11px;font-weight:700;margin-bottom:4px}
+.audit-reason>small{margin:3px 0;max-width:320px}
+.audit-technical{margin-top:6px;border-top:1px solid #e2e8f0;padding-top:4px}
+.audit-technical summary{cursor:pointer;color:#1d4ed8;font-size:11px;font-weight:600}
+.audit-technical small{margin:4px 0;overflow-wrap:anywhere}
