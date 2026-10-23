@@ -146,6 +146,8 @@ class GascaSmsRequestORM(db.Model):
             "status": self.status,
             "user_message": self.user_message,
             "sucursal_id": self.sucursal_id,
+            # Origen Suite, disponible incluso si Gasca no pudo validar PIN/teléfono.
+            "sucursal_origen_nombre": self.sucursal.sucursal if self.sucursal is not None else None,
             "requested_by_user_id": self.requested_by_user_id,
             "gasca_nombre_masked": self.gasca_nombre_masked,
             "gasca_phone_masked": self.gasca_phone_masked,
