@@ -162,7 +162,7 @@ def _validate_payload(payload):
         return None, _error(400, "El cuerpo debe ser un objeto JSON.")
     if set(payload) - _ALLOWED_KEYS:
         return None, _error(400, "El cuerpo contiene campos no permitidos.")
-    if payload.get("tipo") not in _TYPES:
+    if not isinstance(payload.get("tipo"), str) or payload["tipo"] not in _TYPES:
         return None, _error(400, "Tipo de solicitud inválido.")
     branch = _positive_id(payload.get("sucursal_id"))
     if branch is None:
@@ -222,8 +222,10 @@ def _validate_payload(payload):
     else:
         if _positive_id(inventory) is None or provisional is not None:
             return None, _error(400, "Se necesita inventario_id válido, sin hallazgo provisional.")
+        if "valor_original" not in payload:
+            return None, _error(400, "valor_original es obligatorio para contrastar el dato oficial.")
         if kind == "MASTER_FIELD":
-            if field not in set(_MASTER_TEXT) | _MASTER_INT:
+            if not isinstance(field, str) or field not in set(_MASTER_TEXT) | _MASTER_INT:
                 return None, _error(400, "Campo maestro fuera de la lista permitida.")
             if field in _MASTER_TEXT:
                 if (not isinstance(proposed, str) or not proposed.strip()
@@ -330,7 +332,7 @@ def crear_solicitud():
         return _error(403, "No tienes autorización para esta sucursal.")
 
     fingerprint_input = {
-        k: (v.isoformat() if isinstance(v, (date, uuid.UUID)) else v)
+        k: (v.isoformat() if isinstance(v, date) else str(v) if isinstance(v, uuid.UUID) else v)
         for k, v in data.items()
     }
     fingerprint = _canonical_fingerprint(fingerprint_input)
