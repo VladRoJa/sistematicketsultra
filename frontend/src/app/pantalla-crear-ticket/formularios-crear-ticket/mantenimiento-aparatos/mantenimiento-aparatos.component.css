@@ -4,3 +4,95 @@
   font-size: 0.8rem;
   line-height: 1.35;
 }
+
+.tapizado-modo {
+  margin: 12px 0 20px;
+  padding: 12px 16px;
+  background: var(--ultra-orange-soft, #fff4ef);
+  border: 1px solid var(--ultra-gray-200, #ddd);
+  border-radius: 10px;
+}
+.tapizado-modo p {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--ultra-gray-600, #666);
+}
+.tapizado-seleccion {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.tapizado-buscador {
+  width: 100%;
+}
+.tapizado-resumen {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.tapizado-resumen span,
+.tapizado-seleccion small {
+  color: var(--ultra-gray-600, #666);
+  font-size: 12px;
+}
+.tapizado-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tapizado-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  gap: 7px;
+  padding: 6px 8px 6px 10px;
+  border: 1px solid var(--ultra-gray-200, #ddd);
+  border-radius: 18px;
+  background: var(--ultra-surface, #fff);
+  font-size: 12px;
+}
+.tapizado-chip button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 1;
+}
+.tapizado-listado {
+  display: flex;
+  flex-direction: column;
+  max-height: 250px;
+  overflow-y: auto;
+  border: 1px solid var(--ultra-gray-200, #ddd);
+  border-radius: 10px;
+}
+.tapizado-opcion {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ultra-gray-200, #ddd);
+  font-size: 13px;
+}
+.tapizado-opcion:last-child { border-bottom: none; }
+.tapizado-vacio {
+  margin: 12px;
+  font-size: 12px;
+  color: var(--ultra-gray-600, #666);
+}
+@media (max-width: 560px) {
+  .tapizado-resumen { flex-direction: column; }
+  .tapizado-chip { max-width: 100%; overflow-wrap: anywhere; }
+}
+
+.tapizado-filtros {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.tapizado-filtros mat-form-field { min-width: 0; }
+@media (max-width: 560px) {
+  .tapizado-filtros { grid-template-columns: minmax(0, 1fr); }
+}

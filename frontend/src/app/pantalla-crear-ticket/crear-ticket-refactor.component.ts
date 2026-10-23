@@ -88,6 +88,7 @@ export class CrearTicketRefactorComponent implements OnInit, OnDestroy {
     descripcion:    'Descripción del problema',
     criticidad:    'Criticidad',
     aparato_id:     'Aparato del inventario',
+    aparatos_ids: 'Aparatos para tapizado',
     descripcion_refaccion: 'Descripción técnica de la refacción',
   };
 
@@ -181,6 +182,8 @@ private limpiarRastroDeOtrosSubforms() {
     descripcion_aparato: '',
     necesita_refaccion: false,
     aparato_id: null,
+    tipo_trabajo: null,
+    aparatos_ids: [],
   }, { emitEvent: false });
 
   // recorta los niveles pintados en UI
@@ -203,6 +206,8 @@ ngOnInit(): void {
     detalle: [''],
     subcategoria: [''],
     aparato_id: [''],
+    tipo_trabajo: [null],
+    aparatos_ids: [[]],
     necesita_refaccion: [false],
     descripcion_refaccion: [''],
   });
@@ -672,6 +677,12 @@ enviar() {
     descripcion_refaccion: this.form.value.descripcion_refaccion,
   };
 
+  // Sólo Tapizado envía el contrato multiaparato; ninguna otra ruta lo hereda.
+  if (this.mostrarSubformAparatos && this.form.value.tipo_trabajo === 'TAPIZADO') {
+    body.tipo_trabajo = 'TAPIZADO';
+    body.aparatos_ids = this.form.value.aparatos_ids;
+  }
+
   // Para flujo genérico, puedes mandar detalle/categoría/subcategoría (texto/ids -> backend los limpia)
   if (!esSisDisp) {
     body.categoria = n2 ?? null;
@@ -740,7 +751,9 @@ enviar() {
 
         this.form.reset({
           sucursal_id: this.sucursalIdUsuario,
-          criticidad: null
+          criticidad: null,
+          tipo_trabajo: null,
+          aparatos_ids: [],
         });
         this.imagenSeleccionada = null;
         this.nivel2Sub?.unsubscribe();

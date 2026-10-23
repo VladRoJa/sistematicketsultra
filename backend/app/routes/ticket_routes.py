@@ -15,6 +15,10 @@ from app.utils.email_sender import send_email_html
 from app.utils.notify_targets import build_subject, pick_recipients
 from app.utils.notify_utils import render_ticket_html, render_ticket_whatsapp_text
 from app.utils.ticket_filters import filtrar_tickets_por_usuario
+from app.utils.ticket_aparatos_filters import (
+    ticket_relacionado_con_aparato,
+    ticket_relacionado_con_alguno,
+)
 from app.utils.maintenance_regional_lead import (
     can_regional_maintenance_lead_request_legacy_closure,
     is_regional_maintenance_lead,
@@ -64,6 +68,15 @@ from decimal import Decimal, InvalidOperation
 # BLUEPRINT: TICKETS
 # ─────────────────────────────────────────────────────────────
 ticket_bp = Blueprint('tickets', __name__, url_prefix='/api/tickets')
+
+
+@ticket_bp.route('/tapizado-disponible', methods=['GET'])
+@jwt_required()
+def tapizado_disponible():
+    """Flag operativo de backend; la UI no puede activar M3 por su cuenta."""
+    return jsonify({
+        'habilitado': bool(current_app.config.get('TICKETS_TAPIZADO_MULTI_ENABLED', False))
+    }), 200
 
 # ─────────────────────────────────────────────────────────────
 # Helpers
@@ -1436,11 +1449,11 @@ def export_excel():
             inventario_ids = [inv.id for inv in inventario_objs]
             if "—" in inventarios:
                 query = query.filter(or_(
-                    Ticket.aparato_id.in_(inventario_ids) if inventario_ids else False,
+                    ticket_relacionado_con_alguno(inventario_ids) if inventario_ids else False,
                     Ticket.aparato_id.is_(None)
                 ))
             else:
-                query = query.filter(Ticket.aparato_id.in_(inventario_ids))
+                query = query.filter(ticket_relacionado_con_alguno(inventario_ids))
 
         from datetime import datetime
         if fecha_desde:
@@ -2344,18 +2357,10 @@ def historial_equipo(equipo_id):
         if not user:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
-        # Si no eres admin, filtra solo tickets de tu sucursal
-        query = Ticket.query.filter(Ticket.aparato_id == equipo_id)
-        if (
-            str(user.rol or "").strip().upper() in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"}
-            or has_assigned_only_maintenance_scope(user)
-            or is_regional_maintenance_lead(user)
-        ):
-            query = filtrar_tickets_por_usuario(user).filter(
-                Ticket.aparato_id == equipo_id
-            )
-        elif not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
-            query = query.filter(Ticket.sucursal_id == user.sucursal_id)
+        # Un único filtro de autorización para principal y secundarios.
+        query = filtrar_tickets_por_usuario(user).filter(
+            ticket_relacionado_con_aparato(equipo_id)
+        )
 
         tickets = query.order_by(Ticket.fecha_creacion.desc()).all()
 
@@ -2377,6 +2382,11 @@ def historial_equipo(equipo_id):
                 "categoria": t.categoria,
                 "subcategoria": t.subcategoria,
                 "detalle": t.detalle,
+                "tipo_trabajo": t.tipo_trabajo,
+                "aparatos_ids": (
+                    t.to_dict()["aparatos_ids"] if t.tipo_trabajo == "TAPIZADO"
+                    else ([t.aparato_id] if t.aparato_id is not None else [])
+                ),
             })
         return jsonify(data), 200
     except Exception as e:
@@ -2400,17 +2410,10 @@ def historial_por_equipo(aparato_id):
         if not user:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
-        query = Ticket.query.filter_by(aparato_id=aparato_id)
-
-        # Compras legacy y coordinacion: scope individual incluso con sede root.
-        if (
-            str(user.rol or "").strip().upper() in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"}
-            or has_assigned_only_maintenance_scope(user)
-            or is_regional_maintenance_lead(user)
-        ):
-            query = filtrar_tickets_por_usuario(user).filter_by(aparato_id=aparato_id)
-        elif not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000):
-            query = query.filter_by(sucursal_id=user.sucursal_id)
+        # Permisos de lectura de Tickets (destino, región, asignación).
+        query = filtrar_tickets_por_usuario(user).filter(
+            ticket_relacionado_con_aparato(aparato_id)
+        )
 
         tickets = query.order_by(Ticket.fecha_creacion.desc()).all()
         return jsonify([t.to_dict() for t in tickets]), 200
@@ -2511,14 +2514,9 @@ def historial_aparato(aparato_id):
             filtro_sucursal = [user.sucursal_id]
 
         # --- Tickets relacionados ---
-        if is_compras_reader or is_assigned_reader or is_regional_lead:
-            tickets_query = filtrar_tickets_por_usuario(user).filter_by(
-                aparato_id=aparato_id
-            )
-        else:
-            tickets_query = Ticket.query.filter_by(aparato_id=aparato_id)
-            if filtro_sucursal:
-                tickets_query = tickets_query.filter(Ticket.sucursal_id.in_(filtro_sucursal))
+        tickets_query = filtrar_tickets_por_usuario(user).filter(
+            ticket_relacionado_con_aparato(aparato_id)
+        )
         tickets = tickets_query.order_by(Ticket.fecha_creacion.desc()).all()
         tickets_serializados = [t.to_dict() for t in tickets]
 

@@ -93,6 +93,14 @@ export interface Ticket {
   categoria: string | null;
   fecha_solucion?: string | null;
   aparato_id?: number | null;
+  tipo_trabajo?: string | null;
+  aparatos_ids?: number[];
+  aparatos?: Array<{
+    id: number;
+    nombre: string | null;
+    codigo_interno: string | null;
+    familia_equipo_id: number | null;
+  }> | null;
   subcategoria?: string | null;
   detalle?: string | null;
   historial_fechas?: Array<{
@@ -2196,6 +2204,9 @@ public getNombreEquipoOInventario(ticket: Ticket): string {
 // ticket.inventario?.nombre + " " + últimos 2 dígitos del ticket.inventario?.codigo_interno
 
 getNombreCortoAparato(ticket: Ticket): string {
+  if (ticket.tipo_trabajo === 'TAPIZADO' && (ticket.aparatos_ids?.length ?? 0) > 0) {
+    return `Tapizado · ${ticket.aparatos_ids!.length} aparatos`;
+  }
   if (!ticket.inventario || !ticket.inventario.nombre)
     return "—";
 
@@ -2212,6 +2223,13 @@ getNombreCortoAparato(ticket: Ticket): string {
 
   // Para sistemas/dispositivos y otros, solo nombre
   return ticket.inventario.nombre;
+}
+
+getResumenTapizado(ticket: Ticket): string {
+  if (ticket.tipo_trabajo !== 'TAPIZADO') return '';
+  return (ticket.aparatos || []).map(eq =>
+    `${eq.codigo_interno || 'Sin código'} · ${eq.nombre || 'Equipo'}`
+  ).join(' | ');
 }
 
 getSubcategoriaVisible(t: Ticket): string {

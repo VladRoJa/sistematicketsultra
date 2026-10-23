@@ -7,7 +7,9 @@ from io import BytesIO
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
+
+from app.models.ticket_aparato import TicketAparatoORM
 
 from app.models.ticket_model import Ticket
 from app.services import mantenimiento_equipos_report_service as legacy
@@ -122,6 +124,7 @@ def _query_tickets_mantenimiento(user=None):
             joinedload(Ticket.sucursal),
             joinedload(Ticket.sucursal_destino),
             joinedload(Ticket.clasificacion),
+            selectinload(Ticket.aparatos_asociados).joinedload(TicketAparatoORM.inventario),
         )
         .filter(Ticket.departamento_id == 1)
     )
@@ -227,6 +230,12 @@ def _building_classification(ticket):
 
 
 def _subject_name(ticket):
+    if getattr(ticket, 'tipo_trabajo', None) == 'TAPIZADO':
+        relacionados = _equipos_tapizado(ticket)
+        if relacionados:
+            return 'Tapizado · ' + ', '.join(
+                str(getattr(equipo, 'nombre', '') or 'Equipo') for equipo in relacionados
+            )
     if _maintenance_type(ticket) == TYPE_EQUIPMENT:
         equipment_name = legacy._equipment_name(ticket)
         if equipment_name:
@@ -240,9 +249,32 @@ def _subject_name(ticket):
     return detail or subcategory or category or "Sin elemento"
 
 
+def _equipos_tapizado(ticket):
+    """Lista única de equipos enlazados; no multiplica filas del ticket."""
+    if getattr(ticket, 'tipo_trabajo', None) != 'TAPIZADO':
+        return []
+    relacionados = []
+    vistos = set()
+    for vinculo in getattr(ticket, 'aparatos_asociados', None) or []:
+        equipo = getattr(vinculo, 'inventario', None)
+        identificador = getattr(vinculo, 'inventario_id', None)
+        if equipo is not None and identificador not in vistos:
+            vistos.add(identificador)
+            relacionados.append(equipo)
+    return relacionados
+
+
 def _equipment_code(ticket):
     if _maintenance_type(ticket) != TYPE_EQUIPMENT:
         return ""
+    if getattr(ticket, 'tipo_trabajo', None) == 'TAPIZADO':
+        codes = []
+        for equipo in _equipos_tapizado(ticket):
+            codigo = str(getattr(equipo, 'codigo_interno', '') or '').strip()
+            if codigo and codigo not in codes:
+                codes.append(codigo)
+        if codes:
+            return ', '.join(codes)
     return legacy._equipment_code(ticket)
 
 
