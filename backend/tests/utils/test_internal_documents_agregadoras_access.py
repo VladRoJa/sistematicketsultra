@@ -108,3 +108,76 @@ def test_sistemas_keeps_admin_access_for_other_documents():
         document,
         sistemas,
     ) is True
+
+
+def test_agregadoras_historical_download_respects_document_visibility(monkeypatch):
+    """
+    A-11: ser administrador de Nube no permite descargar versiones historicas
+    de un consolidado cuya visibilidad CUSTOM impide descargarlo.
+    """
+    document = _agregadoras_document()
+    monkeypatch.setattr(
+        access,
+        "_has_custom_visibility_access",
+        lambda _document, context, action: (
+            context.username == "ADMICORP" and action in {"view", "download"}
+        ),
+    )
+
+    admicorp = _context(user_id=77, username="ADMICORP", role="LECTOR_GLOBAL")
+    sistemas = _context(user_id=88, username="SISTEMAS_QA", role="SISTEMAS")
+    gerente = _context(user_id=99, username="GERENTE_QA", role="GERENTE")
+
+    assert access.can_manage_internal_documents(admicorp) is True
+    assert access.can_manage_internal_documents(sistemas) is True
+
+    for context, allowed in (
+        (admicorp, True),
+        (sistemas, False),
+        (gerente, False),
+    ):
+        assert access.can_download_historical_internal_document_version(
+            document, context
+        ) is allowed
+
+
+def test_agregadoras_historical_download_requires_download_not_only_view(
+    monkeypatch,
+):
+    document = _agregadoras_document()
+    monkeypatch.setattr(
+        access,
+        "_has_custom_visibility_access",
+        lambda _document, context, action: (
+            context.username == "ADMICORP" and action == "view"
+        ),
+    )
+    admicorp = _context(user_id=77, username="ADMICORP", role="LECTOR_GLOBAL")
+
+    assert access.can_view_internal_document(document, admicorp) is True
+    assert access.can_download_internal_document(document, admicorp) is False
+    assert access.can_download_historical_internal_document_version(
+        document, admicorp
+    ) is False
+
+
+def test_historical_download_preserves_manager_access_for_ordinary_documents():
+    document = SimpleNamespace(
+        id=910,
+        title="Manual operativo",
+        status=access.InternalDocumentStatus.PUBLISHED,
+        visibility_mode=access.InternalDocumentVisibilityMode.PRIVATE,
+        is_sensitive=False,
+        current_version_id=911,
+        created_by=7,
+        owner_user_id=None,
+    )
+    sistemas = _context(user_id=88, username="SISTEMAS_QA", role="SISTEMAS")
+    gerente = _context(user_id=99, username="GERENTE_QA", role="GERENTE")
+
+    assert access.can_download_historical_internal_document_version(
+        document, sistemas
+    ) is True
+    assert access.can_download_historical_internal_document_version(
+        document, gerente
+    ) is False
