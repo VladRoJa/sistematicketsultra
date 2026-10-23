@@ -292,12 +292,12 @@ def test_recipient_list_is_stable_paginated_and_counts_evidence_without_loading_
 
 
 
-def _snapshot(snapshot_id, campaign_id, observed_at):
+def _snapshot(snapshot_id, campaign_id, observed_at, *, provider_campaign_id=None):
     return MarketingCampaignV2ProviderStatsSnapshotORM(
         id=snapshot_id,
         campaign_v2_id=campaign_id,
         provider="IVENTAS",
-        provider_campaign_id=f"provider-campaign-{campaign_id}",
+        provider_campaign_id=provider_campaign_id or f"provider-campaign-{campaign_id}",
         fetched_at=observed_at,
         raw_successful=0,
         raw_failed=0,
@@ -374,6 +374,103 @@ def test_recipient_status_latest_snapshot_only_and_paginated(session):
     assert second["rows"][0]["provider_status"]["status"] == "NO_PROVIDER_STATUS"
     assert second["rows"][0]["provider_status"]["snapshot_id"] == 101
     assert second["rows"][0]["provider_status"]["outcome"] is None
+
+
+def test_multichild_latest_per_provider_shows_all_recipients_and_filters(session):
+    """El snapshot global más reciente NO debe ocultar otros lotes enviados."""
+    older = datetime(2026, 10, 2, 12, 0, tzinfo=timezone.utc)
+    branch_b = datetime(2026, 10, 3, 12, 0, tzinfo=timezone.utc)
+    branch_a = datetime(2026, 10, 4, 12, 0, tzinfo=timezone.utc)
+    branch_c = datetime(2026, 10, 5, 12, 0, tzinfo=timezone.utc)
+    session.add_all([
+        _snapshot(310, 3, older, provider_campaign_id="child-a"),
+        _snapshot(311, 3, branch_a, provider_campaign_id="child-a"),
+        _snapshot(320, 3, branch_b, provider_campaign_id="child-b"),
+        _snapshot(330, 3, branch_c, provider_campaign_id="child-c"),
+    ])
+    session.add_all([
+        MarketingCampaignV2RecipientORM(
+            id=rid, campaign_id=3, phone_mx10=f"68610000{rid}",
+            source="EXPIRED_MEMBERS", conflict_fields_json=[],
+        )
+        for rid in (21, 22, 23, 24)
+    ])
+    specs = [
+        # Historía reemplazada del mismo child: NO debe regresar a FAILED.
+        (310, 20, "FAILED", None),
+        (311, 20, "SUCCESSFUL", "VIEWED"),
+        # Una identidad duplicada entre children elige el corte más reciente.
+        (320, 20, "SUCCESSFUL", "DELIVERED"),
+        (320, 21, "SUCCESSFUL", "VIEWED"),
+        (330, 22, "SUCCESSFUL", "DELIVERED"),
+        (330, 23, "FAILED", None),
+    ]
+    session.add_all([
+        MarketingCampaignV2ProviderRecipientObservationORM(
+            snapshot_id=sid,
+            normalized_phone=f"mx10:68610000{rid if rid != 20 else '03'}",
+            campaign_recipient_id=rid,
+            outcome=outcome, delivery_bucket=bucket,
+            button_labels_json=[],
+        )
+        for sid, rid, outcome, bucket in specs
+    ])
+    session.commit()
+
+    args = {
+        "campaign_id": 3,
+        "allowed_sucursal_keys": ("BRANCH A", "BRANCH B"),
+        "page_size": 100,
+        "session": session,
+    }
+    overall = list_campaign_v2_recipients(**args)
+    assert overall["total"] == 5
+    statuses = {
+        row["id"]: row["provider_status"]["status"]
+        for row in overall["rows"]
+    }
+    assert statuses == {
+        20: "VIEWED", 21: "VIEWED", 22: "DELIVERED",
+        23: "FAILED", 24: "NO_PROVIDER_STATUS",
+    }
+    snapshots = {
+        row["id"]: row["provider_status"]["snapshot_id"]
+        for row in overall["rows"]
+    }
+    assert snapshots[20] == 311
+    assert snapshots[21] == 320
+    assert snapshots[22] == snapshots[23] == 330
+
+    expected = {
+        "VIEWED": [20, 21],
+        "DELIVERED": [22],
+        "FAILED": [23],
+        "SENT": [],
+        "SUCCESSFUL": [],
+        "NO_PROVIDER_STATUS": [24],
+        "NO_SNAPSHOT": [],
+    }
+    for status, ids in expected.items():
+        result = list_campaign_v2_recipients(**args, provider_status=status)
+        assert result["total"] == len(ids), status
+        assert [row["id"] for row in result["rows"]] == ids, status
+        assert all(
+            row["provider_status"]["status"] == status
+            for row in result["rows"]
+        )
+
+    # Paginación cruzando dos snapshots: total idéntico y cero duplicados.
+    paginated = dict(args, page_size=1)
+    first = list_campaign_v2_recipients(
+        **paginated, provider_status="VIEWED", page=1,
+    )
+    second = list_campaign_v2_recipients(
+        **paginated, provider_status="VIEWED", page=2,
+    )
+    assert first["total"] == second["total"] == 2
+    assert first["total_pages"] == second["total_pages"] == 2
+    assert [row["id"] for row in first["rows"]] == [20]
+    assert [row["id"] for row in second["rows"]] == [21]
 
 
 def test_recipient_status_failure_is_not_confused_with_no_observation(session):
