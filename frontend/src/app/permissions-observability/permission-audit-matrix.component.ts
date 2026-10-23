@@ -30,8 +30,8 @@ export class PermissionAuditMatrixComponent implements OnInit {
   moduleKey = '';
   actionKey = '';
   role = '';
-  branchId = '';
-  documentId = '';
+  branchId: string | number = '';
+  documentId: string | number = '';
   userSearch = '';
   search = '';
   decisionFilter: DecisionFilter = 'todos';
@@ -115,8 +115,8 @@ export class PermissionAuditMatrixComponent implements OnInit {
     this.load();
   }
 
-  private positiveInteger(input: string): number | undefined {
-    if (!input.trim()) { return undefined; }
+  private positiveInteger(input: string | number | null | undefined): number | undefined {
+    if (input === null || input === undefined || !String(input).trim()) { return undefined; }
     const value = Number(input);
     return Number.isSafeInteger(value) && value > 0 ? value : undefined;
   }
