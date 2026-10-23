@@ -33,6 +33,7 @@ def coverage():
                 "method": method,
                 "route": rule.rule,
                 "endpoint": rule.endpoint.rsplit(".", 1)[-1],
+                "function_name": app.view_functions[rule.endpoint].__name__,
                 "blueprint": rule.endpoint.split(".", 1)[0]
                 if "." in rule.endpoint else "",
             })
@@ -55,6 +56,15 @@ def coverage():
         for row in mapped_rows
     }
     flask_pairs = {(row["method"], row["route"]) for row in flask_rows}
+    alias_function_matches = sorted({
+        (row["method"], row["route"], seed["endpoint_function"], row["endpoint"])
+        for row in flask_rows
+        for seed in mapped_rows
+        if row["method"] == seed["method"]
+        and row["route"] == seed["route"]
+        and row["function_name"] == seed["endpoint_function"]
+        and row["endpoint"] != seed["endpoint_function"]
+    })
     mapped_pairs = {(row["method"], row["route"]) for row in mapped_rows}
 
     return {
@@ -67,6 +77,7 @@ def coverage():
         "seed_only": mapped_full - flask_full,
         "method_route_overlap": flask_pairs & mapped_pairs,
         "flask_pairs": flask_pairs,
+        "alias_function_matches": alias_function_matches,
         "mapped_pairs": mapped_pairs,
     }
 
@@ -97,12 +108,19 @@ def test_p21_report_route_coverage_without_touching_database(coverage):
         "runtime_flask_method_handler_rows": len(coverage["flask"]),
         "historical_active_seed_rows": len(mapped_rows),
         "seed_exact_matches": len(matched),
-        "flask_unmapped_by_historical_seed": len(unmatched),
+        "flask_unmatched_exact_endpoint_name": len(unmatched),
+        "flask_methods_without_seed_method_route": len(
+            coverage["flask_pairs"] - coverage["mapped_pairs"]
+        ),
+        "matched_handler_via_explicit_endpoint_alias": len(
+            coverage["alias_function_matches"]
+        ),
         "historical_seed_not_matching_flask": len(seed_only),
         "method_route_pair_overlap": len(coverage["method_route_overlap"]),
         "family_stats": dict(sorted(family_stats.items())),
         "sample_unmapped": sample_unmapped,
         "sample_seed_only": sample_seed_only,
+        "explicit_endpoint_aliases": coverage["alias_function_matches"],
     }
     print("\\nFASE_A_P21_COVERAGE=" + json.dumps(summary, ensure_ascii=False, sort_keys=True))
     assert len(flask_rows) > len(mapped_rows)
@@ -191,15 +209,19 @@ def test_p21_family_coverage_identifies_later_modules_without_mappings(coverage)
     # Registro diagnóstico: no crear acciones basadas en el nombre de ruta.
 
 
-def test_p21_seed_only_or_handler_drift_is_not_labeled_security_bug(coverage):
+def test_p21_explicit_flask_endpoint_alias_is_not_handler_drift(coverage):
     pairs_only_in_seed = (
         coverage["mapped_pairs"] - coverage["flask_pairs"]
     )
-    handler_drift = sorted(
-        item for item in coverage["seed_only"]
-        if (item[0], item[1]) in coverage["flask_pairs"]
-    )
+    alias_matches = coverage["alias_function_matches"]
     print("P21_SEED_ROUTE_ABSENT_COUNT=", len(pairs_only_in_seed))
-    print("P21_MATCHED_PATH_HANDLER_DRIFT=", json.dumps(handler_drift, ensure_ascii=False))
-    assert len(coverage["seed_only"]) >= len(pairs_only_in_seed)
-    # Sin inspeccionar el guard vivo de cada ruta no etiquetamos bypass.
+    print("P21_REGISTERED_ENDPOINT_ALIASES=", json.dumps(alias_matches, ensure_ascii=False))
+    assert alias_matches == [
+        (
+            "PUT", "/api/admin/usuarios/<int:user_id>/sucursales",
+            "put_sucursales_usuario_admin", "admin_put_sucursales_usuario",
+        )
+    ]
+    assert not pairs_only_in_seed
+    assert len(coverage["seed_only"]) == len(alias_matches)
+    # Alias explicito Flask: no es una ruta perdida ni un guard roto.
