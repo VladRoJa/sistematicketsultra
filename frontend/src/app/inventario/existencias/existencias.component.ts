@@ -92,8 +92,10 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
   existenciasFiltradas: ExistenciaInventario[] = [];
   filasPagina: ExistenciaInventario[] = [];
   categorias: string[] = [];
+  categoriasDisponibles: string[] = [];
   composicion: CategoriaExistencia[] = [];
   familias: string[] = [];
+  familiasDisponibles: string[] = [];
   composicionFamilias: FamiliaExistencia[] = [];
   totalEquiposGimnasio = 0;
   equiposSinFamilia = 0;
@@ -199,7 +201,34 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
     this.cargarExistencias();
   }
 
+  onCategoriaChange(nuevaCategoria: string): void {
+    this.categoriaSeleccionada = nuevaCategoria;
+    // Nunca mantener una familia que no existe en la nueva categoría.
+    if (this.categoriaSeleccionada !== 'todas' &&
+        this.familiaSeleccionada !== 'todas' &&
+        !this.existencias.some(item =>
+          this.nombreCategoria(item) === this.categoriaSeleccionada &&
+          this.nombreFamilia(item) === this.familiaSeleccionada)) {
+      this.familiaSeleccionada = 'todas';
+    }
+    this.aplicarFiltros();
+  }
+
+  onFamiliaChange(nuevaFamilia: string): void {
+    this.familiaSeleccionada = nuevaFamilia;
+    // La misma compatibilidad se aplica al cambiar primero la familia.
+    if (this.familiaSeleccionada !== 'todas' &&
+        this.categoriaSeleccionada !== 'todas' &&
+        !this.existencias.some(item =>
+          this.nombreCategoria(item) === this.categoriaSeleccionada &&
+          this.nombreFamilia(item) === this.familiaSeleccionada)) {
+      this.categoriaSeleccionada = 'todas';
+    }
+    this.aplicarFiltros();
+  }
+
   aplicarFiltros(): void {
+    this.actualizarOpcionesCruzadas();
     const termino = this.normalizar(this.busqueda);
     this.existenciasFiltradas = this.existencias.filter(item => {
       const categoria = this.nombreCategoria(item);
@@ -259,6 +288,29 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
       this.estadoStock !== 'todos';
   }
 
+  private actualizarOpcionesCruzadas(): void {
+    // Cada selector se calcula con el OTRO selector activo: jamás ofrece
+    // Peso Libre bajo Cardio ni familias de gimnasio en dispositivos.
+    // Se conserva el dataset autorizado completo para los KPIs superiores.
+    const categoriasCompatibles = new Set<string>();
+    const familiasCompatibles = new Set<string>();
+    for (const item of this.existencias) {
+      const categoria = this.nombreCategoria(item);
+      const familia = this.nombreFamilia(item);
+      if (this.familiaSeleccionada === 'todas' || familia === this.familiaSeleccionada) {
+        categoriasCompatibles.add(categoria);
+      }
+      if (familia !== null &&
+          (this.categoriaSeleccionada === 'todas' || categoria === this.categoriaSeleccionada)) {
+        familiasCompatibles.add(familia);
+      }
+    }
+    this.categoriasDisponibles = this.categorias.filter(categoria =>
+      categoriasCompatibles.has(categoria));
+    this.familiasDisponibles = this.familias.filter(familia =>
+      familiasCompatibles.has(familia));
+  }
+
   private actualizarPagina(): void {
     const inicio = this.paginaActual * this.pageSize;
     this.filasPagina = this.existenciasFiltradas.slice(inicio, inicio + this.pageSize);
@@ -316,8 +368,10 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
     this.existenciasFiltradas = [];
     this.filasPagina = [];
     this.categorias = [];
+    this.categoriasDisponibles = [];
     this.composicion = [];
     this.familias = [];
+    this.familiasDisponibles = [];
     this.composicionFamilias = [];
     this.totalEquiposGimnasio = 0;
     this.equiposSinFamilia = 0;
