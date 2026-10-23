@@ -159,7 +159,23 @@ Consulta `SELECT UPPER(TRIM(COALESCE(rol,''))), COUNT(*) FROM users GROUP BY 1` 
 - Diferenciar puestos (`GERENTE` / `GERENTE_REGIONAL`) de permisos puntuales y scopes; una coincidencia parcial de permisos no implica que sean el mismo rol.
 - Este censo **no describe permisos efectivos**, solamente `users.rol`; tampoco acredita que las cuentas estén habilitadas o que representen personas diferentes.
 - El catálogo actual de 11 módulos/40 acciones no equivale al censo de roles: son dimensiones diferentes.
-- **Siguiente evidencia pendiente:** operadores `warehouse_operators` y `planning_operators`, así como ACL `usuarios_permisos`, de forma agregada.
+- **Siguiente evidencia pendiente:** ACL `usuarios_permisos` y verificación de migraciones/esquema, de forma agregada. Los operadores ya fueron censados en la sección siguiente.
+
+## 5.2. Censo agregado de operadores Warehouse y Planning — 2026-10-22
+
+Consulta SQL de solo lectura sobre `warehouse_operators` y `planning_operators`; no se devolvieron identidades. La consulta acredita los valores de las flags, no que ambos operadores sean la misma persona ni que todos los endpoints compartan idénticos checks.
+
+| Módulo | Operadores registrados | Estado | Capacidades habilitadas |
+| --- | ---: | --- | --- |
+| Warehouse | **1** | El modelo no declara `is_active` | `can_view=1`, `can_upload=1`, `can_archive=0` |
+| Planning | **1** | **1 activo** | `can_view=1`, `can_edit=1`, `can_submit=1`, `can_approve=1`, `can_publish=1`, `can_configure_model=1` |
+
+**Decisiones de compatibilidad:**
+- Mantener ambas asignaciones y todas las flags sin alterarlas en la Fase A. `warehouse_access.py` distingue `require_warehouse_view`, `require_warehouse_upload` y `require_warehouse_archive`, y `planning_access.py` utiliza operador activo y flags independientes.
+- No inferir acceso universal por el rol principal del operador, ni crear roles combinados para reflejar sus flags.
+- **No eliminar `warehouse_operators` ni `planning_operators` al introducir el resolutor:** primero demostrar paridad con casos permitidos y denegados y comprobar todas las rutas consumidoras.
+- **No interpretar el `can_archive=0` de Warehouse como permiso para archivar**, aunque cualquier futuro grant `allow` global exista; el hard stop y la política de precedencia requieren aprobación explícita al migrar esa acción.
+- La siguiente consulta de producción debe cuantificar los permisos legados por departamento (`usuarios_permisos`), manteniendo el resultado sin nombres ni identificadores personales.
 
 ## 6. Evidencia aún pendiente para cerrar Fase A
 
@@ -169,6 +185,8 @@ Estos puntos necesitan información del servidor o revisión de código adiciona
 - [x] Identificar y documentar riesgos prioritarios y el piloto.
 - [x] Verificar que el catálogo/observabilidad y el endpoint de edición de módulos no constituyen enforcement universal.
 - [x] **Grants vigentes identificados (consultas agregadas, 2026-10-22):** solo se devolvieron **2 grants** (`principal_type=user`, `effect=allow`, `scope_type=global`, estado `current`), uno para `tickets.maintenance.coordinate` y uno para `tickets.maintenance.read_assigned_only`. **Ningún grant vigente corresponde a Nube Corporativa**. Ambos deben conservarse intactos; su impacto operativo sigue subordinado a las condiciones del guard real. El scope `global` del grant no exime restricciones de sucursal ni concede por sí solo acceso de escritura. **Pendiente:** revisar operadores/ACL y confrontar esquema/migraciones aplicadas con producción. El censo agregado de 17 roles y 70 cuentas ya está documentado abajo.
+- [x] Censados operadores Warehouse y Planning en producción: 1 operador de Warehouse con lectura/subida pero sin archivo, y 1 operador activo de Planning con las 6 capacidades habilitadas. Sus identidades no están identificadas por estos agregados.
+- [ ] Censar ACL departamental `usuarios_permisos` en agregado, y contrastar migraciones/esquema de PostgreSQL productivo.
 - [~] Inventariadas por código las **21 rutas HTTP** de Nube y los controles de escritura/lectura/descarga/auditoría, con excepción especial de agregadoras. **Pendiente:** matriz exhaustiva ruta → decisión por contexto y tests de paridad; esta inspección no sustituye QA.
 - [ ] Producir conjunto de escenarios de paridad de Nube Corporativa (rol SISTEMAS, ADMICORP, admin con otro usuario, usuario ordinario, documento sensible).
 - [ ] Decidir con responsable operativo únicamente los accesos legacy contradictorios que supongan un cambio de política, no pedir autorización para cada refactor.
