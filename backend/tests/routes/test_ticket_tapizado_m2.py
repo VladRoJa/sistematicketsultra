@@ -95,6 +95,7 @@ class PayloadTapizadoM2Test(unittest.TestCase):
 class EndpointTapizadoM2Test(unittest.TestCase):
     def setUp(self):
         self.app = Flask(__name__)
+        self.app.config["TICKETS_TAPIZADO_MULTI_ENABLED"] = True
         self.user = SimpleNamespace(
             rol="GERENTE",
             sucursal_id=4,
@@ -221,6 +222,14 @@ class EndpointTapizadoM2Test(unittest.TestCase):
         response, status = self.enviar(payload_valido(departamento_id=7))
         self.assertEqual(status, 400)
         self.create.assert_not_called()
+
+    def test_multiaparato_desactivado_por_defecto_hasta_m3(self):
+        self.app.config["TICKETS_TAPIZADO_MULTI_ENABLED"] = False
+        response, status = self.enviar()
+        self.assertEqual(status, 409)
+        self.assertIn("aún no está habilitada", response.get_json()["mensaje"])
+        self.create.assert_not_called()
+        self.session.add_all.assert_not_called()
 
     def test_no_admite_multiselect_sin_tipo(self):
         response, status = self.enviar(payload_valido(tipo_trabajo=None))
