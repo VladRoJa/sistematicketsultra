@@ -4,6 +4,9 @@ on:
   pull_request:
     paths:
       - "frontend/src/app/inventario/existencias/**"
+      - "frontend/src/app/inventario/solicitudes/**"
+      - "frontend/src/app/services/inventario.service.ts"
+      - "frontend/tests/inventario-e2-solicitudes-ui.test.cjs"
       - "frontend/tests/inventario-existencias-spinner-qa10.test.cjs"
       - ".github/workflows/inventario-existencias-spinner-ci.yml"
   workflow_dispatch:
@@ -28,7 +31,7 @@ jobs:
       - name: Install locked dependencies
         run: npm ci --legacy-peer-deps --no-audit --no-fund
       - name: QA-10C Existencias loading spinner
-        run: node --test tests/inventario-existencias-spinner-qa10.test.cjs
+        run: node --test tests/inventario-existencias-spinner-qa10.test.cjs tests/inventario-e2-solicitudes-ui.test.cjs
       - name: Type-check Angular
         run: npx tsc --noEmit --project tsconfig.app.json
       - name: Production build

@@ -4,6 +4,48 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from 'src/environments/environment';
 
+export type TipoSolicitudInventario =
+  'MASTER_FIELD' | 'QUANTITY_DIFFERENCE' | 'NOT_LOCATED' | 'UNREGISTERED_FIND';
+
+export interface SolicitudCorreccionInput {
+  tipo: TipoSolicitudInventario;
+  sucursal_id: number;
+  motivo: string;
+  idempotency_key: string;
+  inventario_id?: number;
+  campo?: string;
+  valor_original?: unknown;
+  valor_propuesto?: unknown;
+  hallazgo_provisional?: { nombre: string; tipo?: string; marca?: string; codigo_interno?: string };
+  fecha_observacion_local?: string;
+  evidencia_descriptiva?: string;
+}
+
+export interface SolicitudCorreccionInventario {
+  id: number;
+  tipo: TipoSolicitudInventario;
+  estado: 'PENDING' | 'APPROVED' | 'REJECTED';
+  sucursal_id: number;
+  inventario_id: number | null;
+  campo: string | null;
+  valor_original: unknown;
+  valor_propuesto: unknown;
+  hallazgo_provisional: Record<string, string> | null;
+  baseline_canonico: Record<string, unknown>;
+  motivo: string;
+  evidencia_descriptiva: string | null;
+  fecha_observacion_local: string | null;
+  creado_por_usuario_id: number;
+  creado_en_utc: string;
+}
+
+export interface ListaSolicitudesInventario {
+  items: SolicitudCorreccionInventario[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class InventarioService {
   private url = `${environment.apiUrl}/inventario`;
@@ -75,6 +117,36 @@ obtenerInventario(opts?: { sucursal_id?: number }): Observable<any[]> {
       params = params.set('sucursal_id', String(opts.sucursal_id));
     }
     return this.http.get<any[]>(`${this.url}/v2/existencias`, { params });
+  }
+
+  // E2: almacena y consulta propuestas, nunca aplica cambios al inventario V1.
+  crearSolicitudCorreccion(data: SolicitudCorreccionInput): Observable<{
+    solicitud: SolicitudCorreccionInventario;
+    replayed: boolean;
+    possible_pending_duplicate?: boolean;
+  }> {
+    return this.http.post<{
+      solicitud: SolicitudCorreccionInventario;
+      replayed: boolean;
+      possible_pending_duplicate?: boolean;
+    }>(`${this.url}/solicitudes`, data);
+  }
+
+  listarSolicitudesCorreccion(params?: {
+    sucursal_id?: number; tipo?: TipoSolicitudInventario;
+    estado?: 'PENDING' | 'APPROVED' | 'REJECTED'; page?: number; per_page?: number;
+  }): Observable<ListaSolicitudesInventario> {
+    let httpParams = new HttpParams();
+    if (params?.sucursal_id != null) httpParams = httpParams.set('sucursal_id', String(params.sucursal_id));
+    if (params?.tipo) httpParams = httpParams.set('tipo', params.tipo);
+    if (params?.estado) httpParams = httpParams.set('estado', params.estado);
+    if (params?.page != null) httpParams = httpParams.set('page', String(params.page));
+    if (params?.per_page != null) httpParams = httpParams.set('per_page', String(params.per_page));
+    return this.http.get<ListaSolicitudesInventario>(`${this.url}/solicitudes`, { params: httpParams });
+  }
+
+  obtenerSolicitudCorreccion(id: number): Observable<{ solicitud: SolicitudCorreccionInventario }> {
+    return this.http.get<{ solicitud: SolicitudCorreccionInventario }>(`${this.url}/solicitudes/${id}`);
   }
 
   registrarMovimiento(data: any): Observable<any> {
