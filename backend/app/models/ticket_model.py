@@ -43,6 +43,8 @@ class Ticket(db.Model):
     departamento_id = db.Column(db.Integer, db.ForeignKey('departamentos.id'), nullable=True)
     criticidad = db.Column(db.Integer, default=1, nullable=False)
     aparato_id = db.Column(db.Integer, db.ForeignKey('inventario_general.id'), nullable=True)
+    # M2: trabajo colectivo explícito, nulo en tickets V1 existentes.
+    tipo_trabajo = db.Column(db.String(24), nullable=True)
     problema_detectado = db.Column(db.Text)
     familia_equipo_id = db.Column(
         db.Integer,
@@ -123,6 +125,10 @@ class Ticket(db.Model):
     categoria_inventario = db.relationship('CategoriaInventario', foreign_keys=[categoria_inventario_id])
 
     __table_args__ = (
+        db.CheckConstraint(
+            "tipo_trabajo IS NULL OR tipo_trabajo = 'TAPIZADO'",
+            name='ck_tickets_tipo_trabajo_tapizado',
+        ),
         db.CheckConstraint(
             "condicion_operativa IS NULL "
             "OR condicion_operativa IN ('TRABAJA', 'NO_TRABAJA')",
@@ -219,6 +225,25 @@ class Ticket(db.Model):
         sucursal_nombre = safe_sucursal_nombre(self.sucursal)
         sucursal_nombre_destino = safe_sucursal_nombre(self.sucursal_destino)
 
+        # Evitar consultas a la tabla secundaria en tickets V1 normales.
+        # El principal se mantiene primero; los demás se deduplican.
+        aparatos_ids = ([self.aparato_id] if self.aparato_id is not None else [])
+        aparatos_info = None
+        if self.tipo_trabajo == 'TAPIZADO':
+            vinculos = list(self.aparatos_asociados or [])
+            for vinculo in vinculos:
+                if vinculo.inventario_id not in aparatos_ids:
+                    aparatos_ids.append(vinculo.inventario_id)
+            aparatos_info = [
+                {
+                    'id': vinculo.inventario_id,
+                    'nombre': vinculo.inventario.nombre if vinculo.inventario else None,
+                    'codigo_interno': vinculo.inventario.codigo_interno if vinculo.inventario else None,
+                    'familia_equipo_id': vinculo.inventario.familia_equipo_id if vinculo.inventario else None,
+                }
+                for vinculo in vinculos
+            ]
+
         return {
             'id': self.id,
             'descripcion': self.descripcion,
@@ -247,6 +272,9 @@ class Ticket(db.Model):
 
             'criticidad': self.criticidad,
             'aparato_id': self.aparato_id,
+            'aparatos_ids': aparatos_ids,
+            'aparatos': aparatos_info,
+            'tipo_trabajo': self.tipo_trabajo,
             'clasificacion_id': self.clasificacion_id,
             'clasificacion_nombre': self.clasificacion and self.clasificacion.nombre,
             'jerarquia_clasificacion': self._obtener_jerarquia_clasificacion(),
@@ -327,7 +355,8 @@ class Ticket(db.Model):
                     aprobador_username: str | None = None,
                     aprobacion_fecha=None,
                     aprobacion_comentario: str | None = None,
-                    commit: bool = True):
+                    commit: bool = True,
+                    tipo_trabajo: str | None = None):
         # Sanitizar: si llega un número como texto, lo consideramos vacío (derivaremos la ruta)
         def _clean_text(v):
             if v is None:
@@ -351,6 +380,7 @@ class Ticket(db.Model):
             subcategoria=subcategoria,
             detalle=detalle,
             aparato_id=aparato_id,
+            tipo_trabajo=tipo_trabajo,
             problema_detectado=problema_detectado,
             necesita_refaccion=necesita_refaccion,
             descripcion_refaccion=descripcion_refaccion,
