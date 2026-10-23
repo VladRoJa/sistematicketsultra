@@ -152,16 +152,16 @@
         </div>
         <div class="filter-select">
           <label for="categoria-existencias">Categoría</label>
-          <select id="categoria-existencias" [(ngModel)]="categoriaSeleccionada" (ngModelChange)="aplicarFiltros()">
+          <select id="categoria-existencias" [(ngModel)]="categoriaSeleccionada" (ngModelChange)="onCategoriaChange($event)">
             <option value="todas">Todas las categorías</option>
-            <option *ngFor="let categoria of categorias" [value]="categoria">{{ categoria }}</option>
+            <option *ngFor="let categoria of categoriasDisponibles" [value]="categoria">{{ categoria }}</option>
           </select>
         </div>
-        <div *ngIf="familias.length" class="filter-select filter-select--family">
+        <div *ngIf="familiasDisponibles.length" class="filter-select filter-select--family">
           <label for="familia-existencias">Familia</label>
-          <select id="familia-existencias" [(ngModel)]="familiaSeleccionada" (ngModelChange)="aplicarFiltros()">
+          <select id="familia-existencias" [(ngModel)]="familiaSeleccionada" (ngModelChange)="onFamiliaChange($event)">
             <option value="todas">Todas las familias</option>
-            <option *ngFor="let familia of familias" [value]="familia">{{ familia }}</option>
+            <option *ngFor="let familia of familiasDisponibles" [value]="familia">{{ familia }}</option>
           </select>
         </div>
         <div class="filter-select filter-select--stock">
