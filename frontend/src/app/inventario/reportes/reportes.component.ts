@@ -132,6 +132,16 @@ export class ReportesComponent implements OnInit, OnDestroy {
     });
   }
 
+  cambiarSucursal(sucursalId: number | null): void {
+    this.sucursalSeleccionada = sucursalId;
+    this.cargarResumen();
+  }
+
+  cambiarPeriodo(dias: 7 | 30 | 90): void {
+    this.periodoDias = dias;
+    this.cargarResumen();
+  }
+
   cargarResumen(): void {
     this.peticionResumen?.unsubscribe();
     this.errorResumen = '';
