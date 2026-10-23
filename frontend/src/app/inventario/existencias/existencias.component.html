@@ -135,7 +135,15 @@
           <h2 id="lista-existencias-titulo">Listado de existencias</h2>
           <p>Busca por nombre, código o marca. Combina categoría, familia y stock sin alterar el inventario.</p>
         </div>
-        <span class="section-count">{{ existenciasFiltradas.length | number }} resultados</span>
+        <div class="solicitudes-actions">
+          <button class="solicitudes-btn" type="button" (click)="abrirHallazgo()">
+            <mat-icon aria-hidden="true">add_circle_outline</mat-icon> Reportar sin registro
+          </button>
+          <button class="solicitudes-btn solicitudes-btn--primary" type="button" (click)="abrirSeguimiento()">
+            <mat-icon aria-hidden="true">fact_check</mat-icon> Seguimiento de solicitudes
+          </button>
+          <span class="section-count">{{ existenciasFiltradas.length | number }} resultados</span>
+        </div>
       </div>
 
       <div class="filters">
@@ -229,6 +237,15 @@
             <th mat-header-cell *matHeaderCellDef>Sucursal</th>
             <td mat-cell *matCellDef="let e">{{ e.sucursal_nombre }}</td>
           </ng-container>
+          <ng-container matColumnDef="solicitud">
+            <th mat-header-cell *matHeaderCellDef>Corrección</th>
+            <td mat-cell *matCellDef="let e">
+              <button class="solicitud-row-action" type="button" (click)="abrirSolicitud(e)"
+                [attr.aria-label]="'Solicitar corrección de ' + e.nombre">
+                <mat-icon aria-hidden="true">edit_note</mat-icon> Solicitar
+              </button>
+            </td>
+          </ng-container>
           <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
           <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
         </table>
@@ -255,4 +272,12 @@
     </section>
     <p class="scope-note">Las cifras reflejan las mismas referencias consultadas en esta pantalla. La vista global de Existencias puede incluir sucursales DEMO, a diferencia del consolidado de Reportes.</p>
   </ng-container>
+  <app-solicitudes-correccion
+    [visible]="panelSolicitudesVisible"
+    [referencia]="referenciaSolicitud"
+    [vistaInicial]="vistaSolicitudes"
+    [sucursales]="sucursalesE2"
+    [sucursalPreferida]="sucursalSeleccionada"
+    (cerrar)="cerrarSolicitudes()"
+  ></app-solicitudes-correccion>
 </section>
