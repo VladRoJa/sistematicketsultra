@@ -314,17 +314,20 @@ test('E1 filtros cruzados: Cardio sólo ofrece sus familias y no Peso Libre', ()
   vm.onCategoriaChange('Peso Libre');
   assert.equal(vm.familiaSeleccionada, 'todas');
   assert.deepEqual(vm.familiasDisponibles, ['Peso Libre']);
+  assert.equal(vm.mostrarFiltroFamilia, false); // Redundante con categoría.
   assert.deepEqual(vm.existenciasFiltradas.map(e => e.inventario_id), [4]);
 
   // También funciona al seleccionar primero familia y después categoría.
   vm.onFamiliaChange('Peso Integrado');
-  assert.equal(vm.categoriaSeleccionada, 'todas');
-  assert.deepEqual(vm.categoriasDisponibles, ['Selectorizado']);
+  assert.equal(vm.categoriaSeleccionada, 'Selectorizado'); // Autoselección segura.
+  assert.equal(vm.familiaSeleccionada, 'todas'); // Evita filtro redundante oculto.
+  assert.equal(vm.mostrarFiltroFamilia, false);
   assert.deepEqual(vm.existenciasFiltradas.map(e => e.inventario_id), [5]);
 
   vm.onFamiliaChange('todas');
   vm.onCategoriaChange('Equipo recepción');
   assert.deepEqual(vm.familiasDisponibles, []); // Sin familias para dispositivos.
+  assert.equal(vm.mostrarFiltroFamilia, false);
   assert.deepEqual(vm.existenciasFiltradas.map(e => e.inventario_id), [6]);
 
   vm.limpiarFiltros();
@@ -345,4 +348,69 @@ test('E1 filtros cruzados: Cardio sólo ofrece sus familias y no Peso Libre', ()
   assert.match(html, /\*ngFor="let categoria of categoriasDisponibles"/);
   assert.match(html, /onCategoriaChange\(\$event\)/);
   assert.match(html, /onFamiliaChange\(\$event\)/);
+  assert.match(html, /\*ngIf="mostrarFiltroFamilia"/);
+});
+
+test('E1 UX: familia seleccionada primero autocompleta categoría solo cuando es única', () => {
+  const { vm, peticiones } = fixture();
+  const aparato = { ...rows[0], tipo: 'Aparatos', categoria: 'Maquinas', stock: 1 };
+  vm.ngOnInit();
+  peticiones[0].observer.next([
+    { ...aparato, inventario_id: 1, categoria_catalogo: 'Cardio',
+      familia_equipo: { nombre: 'Caminadora' } },
+    { ...aparato, inventario_id: 2, categoria_catalogo: 'Cardio',
+      familia_equipo: { nombre: 'Elíptica' } },
+    { ...aparato, inventario_id: 3, categoria_catalogo: 'Cardio', familia_equipo: null },
+    { ...aparato, inventario_id: 4, categoria_catalogo: 'Peso Libre',
+      familia_equipo: { nombre: 'Peso Libre' } },
+    { ...aparato, inventario_id: 5, categoria_catalogo: 'Selectorizado',
+      familia_equipo: { nombre: 'Peso Integrado' } },
+    { ...aparato, inventario_id: 6, categoria_catalogo: null, familia_equipo: null },
+    { ...rows[0], inventario_id: 7, categoria_catalogo: 'Equipo recepción' },
+  ]);
+  vm.onFamiliaChange('Caminadora');
+  assert.equal(vm.categoriaSeleccionada, 'Cardio');
+  assert.equal(vm.familiaSeleccionada, 'Caminadora');
+  assert.equal(vm.mostrarFiltroFamilia, true); // Cardio sí tiene varias familias.
+  assert.deepEqual(vm.existenciasFiltradas.map(e => e.inventario_id), [1]);
+
+  vm.limpiarFiltros();
+  vm.onFamiliaChange('Peso Libre');
+  assert.equal(vm.categoriaSeleccionada, 'Peso Libre');
+  assert.equal(vm.familiaSeleccionada, 'todas');
+  assert.equal(vm.mostrarFiltroFamilia, false);
+  assert.deepEqual(vm.existenciasFiltradas.map(e => e.inventario_id), [4]);
+
+  vm.limpiarFiltros();
+  vm.onFamiliaChange('Sin familia');
+  assert.equal(vm.categoriaSeleccionada, 'todas'); // Ambigua en 2 categorías.
+  assert.equal(vm.familiaSeleccionada, 'Sin familia');
+  assert.equal(vm.mostrarFiltroFamilia, true);
+  assert.deepEqual(vm.existenciasFiltradas.map(e => e.inventario_id), [3, 6]);
+
+  vm.onCategoriaChange('Sin categoría de catálogo');
+  assert.equal(vm.familiaSeleccionada, 'todas');
+  assert.equal(vm.mostrarFiltroFamilia, false);
+  assert.deepEqual(vm.existenciasFiltradas.map(e => e.inventario_id), [6]);
+});
+
+test('E1 UX: una sola familia visible puede ser útil si hay referencias sin familia', () => {
+  const { vm, peticiones } = fixture();
+  const aparato = { ...rows[0], tipo: 'Aparatos', categoria_catalogo: 'Cardio' };
+  vm.ngOnInit();
+  peticiones[0].observer.next([
+    { ...aparato, inventario_id: 11, familia_equipo: { nombre: 'Caminadora' } },
+    { ...aparato, inventario_id: 12, familia_equipo: null },
+  ]);
+  vm.onCategoriaChange('Cardio');
+  assert.deepEqual(vm.familiasDisponibles, ['Caminadora', 'Sin familia']);
+  assert.equal(vm.mostrarFiltroFamilia, true);
+  vm.onFamiliaChange('Caminadora');
+  assert.equal(vm.mostrarFiltroFamilia, true);
+  assert.deepEqual(vm.existenciasFiltradas.map(e => e.inventario_id), [11]);
+
+  vm.limpiarFiltros();
+  vm.onCategoriaChange('Cardio');
+  assert.equal(vm.familiaSeleccionada, 'todas');
+  assert.deepEqual(vm.existenciasFiltradas.map(e => e.inventario_id), [11, 12]);
 });

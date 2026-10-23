@@ -157,7 +157,7 @@
             <option *ngFor="let categoria of categoriasDisponibles" [value]="categoria">{{ categoria }}</option>
           </select>
         </div>
-        <div *ngIf="familiasDisponibles.length" class="filter-select filter-select--family">
+        <div *ngIf="mostrarFiltroFamilia" class="filter-select filter-select--family">
           <label for="familia-existencias">Familia</label>
           <select id="familia-existencias" [(ngModel)]="familiaSeleccionada" (ngModelChange)="onFamiliaChange($event)">
             <option value="todas">Todas las familias</option>
