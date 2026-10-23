@@ -821,7 +821,7 @@
 
       <td class="td-aparato">
         <div class="td-aparato-inner">
-          <span class="aparato-text">{{ getNombreCortoAparato(ticket) }}</span>
+          <span class="aparato-text" [matTooltip]="getResumenTapizado(ticket) || ''">{{ getNombreCortoAparato(ticket) }}</span>
 
           <span
             *ngIf="necesitaRef(ticket)"
