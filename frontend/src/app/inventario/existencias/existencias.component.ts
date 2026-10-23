@@ -8,6 +8,7 @@ import { Subscription } from 'rxjs';
 
 import { SessionService } from '../../core/auth/session.service';
 import { InventarioService } from '../../services/inventario.service';
+import { ReferenciaSolicitud, SolicitudesCorreccionComponent, SucursalParaSolicitud } from '../solicitudes/solicitudes-correccion.component';
 
 interface SucursalInventario {
   sucursal_id: number;
@@ -72,6 +73,7 @@ const ROLES_PILOTO_V2 = new Set([
     MatIconModule,
     MatProgressSpinnerModule,
     MatTableModule,
+    SolicitudesCorreccionComponent,
   ],
   templateUrl: './existencias.component.html',
   styleUrls: ['./existencias.component.css'],
@@ -79,7 +81,7 @@ const ROLES_PILOTO_V2 = new Set([
 export class ExistenciasComponent implements OnInit, OnDestroy {
   readonly displayedColumns = [
     'id', 'nombre', 'codigo_interno', 'tipo', 'marca',
-    'proveedor', 'categoria', 'familia', 'unidad', 'stock', 'sucursal',
+    'proveedor', 'categoria', 'familia', 'unidad', 'stock', 'sucursal', 'solicitud',
   ];
   readonly pageSize = 40;
 
@@ -113,6 +115,50 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
   paginaActual = 0;
   loading = false;
   error = '';
+
+  panelSolicitudesVisible = false;
+  vistaSolicitudes: 'solicitud' | 'hallazgo' | 'seguimiento' = 'seguimiento';
+  referenciaSolicitud: ReferenciaSolicitud | null = null;
+
+  get sucursalesE2(): SucursalParaSolicitud[] {
+    const opciones = new Map<number, string>();
+    // Los perfiles regionales sólo reciben las sucursales del dataset
+    // filtrado por el backend; un ID enviado desde Angular nunca concede acceso.
+    if (this.puedeVerGlobal) {
+      for (const sucursal of this.sucursales) opciones.set(sucursal.sucursal_id, sucursal.sucursal);
+    }
+    for (const item of this.existencias) {
+      if (!opciones.has(item.sucursal_id)) opciones.set(item.sucursal_id, item.sucursal_nombre);
+    }
+    return [...opciones].map(([sucursal_id, sucursal]) => ({ sucursal_id, sucursal }))
+      .sort((a, b) => a.sucursal.localeCompare(b.sucursal, 'es'));
+  }
+
+  abrirSolicitud(item: ExistenciaInventario): void {
+    if (!this.puedeConsultarVista || this.loading) return;
+    this.referenciaSolicitud = item;
+    this.vistaSolicitudes = 'solicitud';
+    this.panelSolicitudesVisible = true;
+  }
+
+  abrirHallazgo(): void {
+    if (!this.puedeConsultarVista || this.loading) return;
+    this.referenciaSolicitud = null;
+    this.vistaSolicitudes = 'hallazgo';
+    this.panelSolicitudesVisible = true;
+  }
+
+  abrirSeguimiento(): void {
+    if (!this.puedeConsultarVista || this.loading) return;
+    this.referenciaSolicitud = null;
+    this.vistaSolicitudes = 'seguimiento';
+    this.panelSolicitudesVisible = true;
+  }
+
+  cerrarSolicitudes(): void {
+    this.panelSolicitudesVisible = false;
+    this.referenciaSolicitud = null;
+  }
 
   private peticionExistencias?: Subscription;
   private peticionSucursales?: Subscription;
@@ -194,6 +240,7 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
   }
 
   onSucursalChange(nuevaSucursal: number | 'global'): void {
+    this.cerrarSolicitudes();
     this.sucursalSeleccionada = nuevaSucursal;
     this.busqueda = '';
     this.categoriaSeleccionada = 'todas';
