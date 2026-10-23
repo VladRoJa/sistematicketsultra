@@ -374,11 +374,21 @@ class Ticket(db.Model):
         if ticket.clasificacion and ticket.departamento_id and ticket.clasificacion.departamento_id != ticket.departamento_id:
             ticket.clasificacion_id = None
 
-        # Si viene de inventario, copiar el leaf del catálogo de inventario
-        if aparato_id and not ticket.categoria_inventario_id:
+        # Si viene de inventario, copiar el leaf del catálogo de inventario.
+        if aparato_id:
             inv = ticket.inventario
-            if inv and getattr(inv, 'categoria_inventario_id', None):
+            if inv and not ticket.categoria_inventario_id and getattr(inv, 'categoria_inventario_id', None):
                 ticket.categoria_inventario_id = inv.categoria_inventario_id
+
+            # Mantenimiento: conservar la familia válida del aparato como
+            # snapshot del ticket desde su creación (no depender del diagnóstico).
+            if (
+                inv
+                and ticket.departamento_id == 1
+                and getattr(inv, 'familia_equipo_id', None)
+                and getattr(getattr(inv, 'familia_equipo', None), 'activo', False)
+            ):
+                ticket.familia_equipo_id = inv.familia_equipo_id
 
         # Si hay categoria_inventario_id, poblar textos desde el árbol de inventario
         if ticket.categoria_inventario_id and (not ticket.categoria or not ticket.subcategoria or not ticket.detalle):
