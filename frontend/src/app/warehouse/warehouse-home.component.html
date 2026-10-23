@@ -192,8 +192,18 @@
 
       <div class="warehouse-detail-grid">
         <div class="warehouse-detail-item">
-          <span class="warehouse-detail-item__label">ID</span>
+          <span class="warehouse-detail-item__label">ID Warehouse</span>
           <strong class="warehouse-detail-item__value">{{ selectedUploadDetail.id }}</strong>
+        </div>
+
+        <div class="warehouse-detail-item">
+          <span class="warehouse-detail-item__label">ID snapshot estructurado</span>
+          <strong class="warehouse-detail-item__value">{{ selectedUploadDetail.snapshot_id ?? '—' }}</strong>
+        </div>
+
+        <div class="warehouse-detail-item" *ngIf="selectedUploadDetail.snapshot_business_date">
+          <span class="warehouse-detail-item__label">Fecha de negocio del snapshot</span>
+          <strong class="warehouse-detail-item__value">{{ selectedUploadDetail.snapshot_business_date }}</strong>
         </div>
 
         <div class="warehouse-detail-item warehouse-detail-item--wide">
@@ -300,7 +310,7 @@
       <div class="warehouse-panel__header warehouse-panel__header--with-action">
         <div>
           <h2>Histórico de uploads</h2>
-          <p>Consulta archivos por periodo, tipo de reporte, estatus o nombre.</p>
+          <p>Consulta archivos por fecha de carga, tipo, estatus, nombre o ID.</p>
         </div>
 
         <span class="warehouse-list-summary">
@@ -379,13 +389,13 @@
         </div>
 
         <div class="warehouse-form__group warehouse-list-filters__search">
-          <label for="warehouse-filter-search">Buscar archivo</label>
+          <label for="warehouse-filter-search">Buscar archivo o ID</label>
           <input
             id="warehouse-filter-search"
             type="search"
             [value]="uploadListFilters.search"
             (input)="setUploadListSearch($any($event.target).value)"
-            placeholder="Nombre de archivo..."
+            placeholder="Nombre, ID Warehouse o ID snapshot..."
           />
         </div>
 
@@ -420,7 +430,8 @@
         <table *ngIf="uploads.length > 0" class="warehouse-table">
           <thead>
             <tr>
-              <th>ID</th>
+              <th>ID Warehouse</th>
+              <th>ID snapshot</th>
               <th>Archivo</th>
               <th>Tipo de reporte</th>
               <th>Periodo</th>
@@ -432,7 +443,24 @@
 
           <tbody>
             <tr *ngFor="let upload of uploads">
-              <td>{{ upload.id }}</td>
+              <td class="warehouse-table__id">{{ upload.id }}</td>
+              <td>
+                <div class="warehouse-snapshot-cell" *ngIf="upload.snapshot_id !== null; else snapshotNotAvailable">
+                  <strong class="warehouse-snapshot-cell__id">{{ upload.snapshot_id }}</strong>
+                  <span
+                    class="warehouse-snapshot-cell__tag warehouse-snapshot-cell__tag--canonical"
+                    *ngIf="upload.snapshot_is_canonical === true"
+                  >CANÓNICO</span>
+                  <span
+                    class="warehouse-snapshot-cell__tag warehouse-snapshot-cell__tag--historical"
+                    *ngIf="upload.snapshot_is_canonical === false"
+                  >NO CANÓNICO</span>
+                  <small class="warehouse-snapshot-cell__date" *ngIf="upload.snapshot_business_date">
+                    {{ upload.snapshot_business_date }}
+                  </small>
+                </div>
+                <ng-template #snapshotNotAvailable>—</ng-template>
+              </td>
               <td>{{ upload.display_filename }}</td>
               <td>{{ upload.report_type_label || upload.report_type_key }}</td>
               <td>{{ upload.period_type }}</td>
