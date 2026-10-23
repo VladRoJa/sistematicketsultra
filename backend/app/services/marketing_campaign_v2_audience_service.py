@@ -397,12 +397,6 @@ def _build_campaign_v2_audience_plan(
             raise MarketingCampaignV2AudienceValidationError(
                 "La selección de sucursales excede el alcance autorizado."
             )
-    if normalized_source == SOURCE_FUNNEL_PORTFOLIO and (
-        included is not None or excluded is not None
-    ):
-        raise MarketingCampaignV2AudienceValidationError(
-            "El filtro de sucursales no aplica a FUNNEL_PORTFOLIO."
-        )
     history_resolution = _resolve_historical_targeting_input(
         history_exclusion=history_exclusion,
         historical_targeting=historical_targeting,
@@ -432,6 +426,8 @@ def _build_campaign_v2_audience_plan(
         return _build_funnel_audience_plan(
             audience_families=audience_families,
             allowed_sucursal_keys=normalized_scope,
+            selected_sucursal_keys=included,
+            excluded_sucursal_keys=excluded,
             expiration_date_from=expiration_date_from,
             expiration_date_to=expiration_date_to,
             history_resolution=history_resolution,
@@ -641,6 +637,8 @@ def _build_funnel_audience_plan(
     *,
     audience_families: Any,
     allowed_sucursal_keys: tuple[str, ...] | None,
+    selected_sucursal_keys: tuple[str, ...] | None,
+    excluded_sucursal_keys: tuple[str, ...] | None,
     expiration_date_from: Any,
     expiration_date_to: Any,
     history_resolution: _HistoricalTargetingResolution,
@@ -692,6 +690,37 @@ def _build_funnel_audience_plan(
     )
     valid_rows = tuple(_funnel_candidate(row) for row in loaded.candidates)
 
+    # Funnel ya aplica el scope de Marketing; la selección comercial sólo lo reduce.
+    commercially_scoped_rows = valid_rows
+    if selected_sucursal_keys is not None or excluded_sucursal_keys is not None:
+        branch_index = _campaign_branch_identity_index(session=session)
+        requested = (
+            selected_sucursal_keys
+            if selected_sucursal_keys is not None
+            else excluded_sucursal_keys
+        )
+        resolved = {branch_index.get(key) for key in requested}
+        if None in resolved:
+            raise MarketingCampaignV2AudienceValidationError(
+                "La selección contiene una sucursal sin identidad canónica válida."
+            )
+        commercially_scoped_rows = tuple(
+            row for row in valid_rows
+            if (
+                (identity := branch_index.get(
+                    current_status.normalize_socios_vencidos_branch_key(
+                        row.sucursal_key or row.sucursal
+                    )
+                )) is not None
+                and (
+                    (identity in resolved)
+                    if selected_sucursal_keys is not None
+                    else (identity not in resolved)
+                )
+            )
+        )
+        valid_rows = commercially_scoped_rows
+
     normalized_filters: dict[str, Any] = {
         "source": SOURCE_FUNNEL_PORTFOLIO,
         "funnel_month": loaded.funnel_month,
@@ -702,6 +731,10 @@ def _build_funnel_audience_plan(
             else None
         ),
     }
+    if selected_sucursal_keys is not None:
+        normalized_filters["selected_sucursal_keys"] = list(selected_sucursal_keys)
+    if excluded_sucursal_keys is not None:
+        normalized_filters["excluded_sucursal_keys"] = list(excluded_sucursal_keys)
     if history_resolution.filter_key is not None:
         normalized_filters[history_resolution.filter_key] = (
             history_resolution.filter_value
@@ -766,9 +799,7 @@ def _build_funnel_audience_plan(
         current_status_counts={},
         current_status_blocked=(),
         classified_candidates=funnel_candidates,
-        selected_candidates=tuple(
-            _funnel_candidate(row) for row in loaded.candidates
-        ),
+        selected_candidates=commercially_scoped_rows,
         invalid_phone_rows=invalid_phone_rows,
         duplicate_rows=duplicate_rows,
         recipients=recipients,

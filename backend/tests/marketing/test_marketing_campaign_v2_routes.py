@@ -647,8 +647,6 @@ class TestMarketingCampaignV2Routes:
                 "expiration_date_to",
                 "adeudo_min",
                 "adeudo_max",
-                "selected_sucursal_keys",
-                "excluded_sucursal_keys",
                 "tarifa",
                 "categoria_tarifa",
             ],
@@ -989,6 +987,37 @@ class TestMarketingCampaignV2Routes:
         assert service.call_args.kwargs["funnel_cutoff_date"] == "2026-09-30"
         assert service.call_args.kwargs["marketing_access"] is self.partial_access
         assert service.call_args.kwargs["audience_families"] is None
+
+    @pytest.mark.parametrize(
+        "field", ["selected_sucursal_keys", "excluded_sucursal_keys"]
+    )
+    def test_funnel_preview_forwards_commercial_branch_filter(self, field):
+        with (
+            self._auth(self.partial_access),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.marketing_branch_keys_by_sucursal_ids",
+                return_value={11: "BRANCH A", 22: "BRANCH B"},
+            ),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.build_campaign_v2_freeze_preview",
+                return_value={"preview_fingerprint": "f" * 64},
+            ) as service,
+        ):
+            response = self.client.post(
+                "/api/marketing/campaigns-v2/preview",
+                json={
+                    "source": "FUNNEL_PORTFOLIO",
+                    "funnel_month": "2026-09",
+                    "funnel_cutoff_date": "2026-09-30",
+                    field: ["BRANCH A"],
+                },
+                headers=self.headers,
+            )
+        assert response.status_code == 200
+        assert service.call_args.kwargs[field] == ["BRANCH A"]
+        assert service.call_args.kwargs["allowed_sucursal_keys"] == (
+            "BRANCH A", "BRANCH B"
+        )
 
     @pytest.mark.parametrize("field", ["tarifa", "categoria_tarifa"])
     def test_funnel_preview_rejects_tariff_filters_at_route_boundary(self, field):

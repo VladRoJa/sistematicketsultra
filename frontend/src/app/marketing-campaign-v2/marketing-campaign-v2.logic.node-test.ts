@@ -636,6 +636,15 @@ test('M24 Funnel usa contract options y envía sólo filtros aplicables + target
   assert.equal('audience_families' in request, false);
   assert.equal('expiration_date_from' in request, false);
   assert.equal('expiration_date_to' in request, false);
+
+  const branchOptions = { ...options, branch_options: ['BRANCH A', 'BRANCH B'] };
+  const include = { ...base, branchFilterMode: 'INCLUDE' as const, branchKeys: ['BRANCH A'] };
+  const exclude = { ...base, branchFilterMode: 'EXCLUDE' as const, branchKeys: ['BRANCH B'] };
+  assert.deepEqual(buildCampaignV2AudienceRequest(include, branchOptions).selected_sucursal_keys, ['BRANCH A']);
+  assert.deepEqual(buildCampaignV2AudienceRequest(exclude, branchOptions).excluded_sucursal_keys, ['BRANCH B']);
+  assert.equal(isCampaignV2AudienceValid(include, branchOptions), true);
+  assert.equal(isCampaignV2AudienceValid({ ...include, branchKeys: [] }, branchOptions), false);
+  assert.equal(isCampaignV2AudienceValid({ ...include, branchKeys: ['FORGED'] }, branchOptions), false);
 });
 
 test('M24 buckets e invalidación Funnel conservan M20', () => {
@@ -665,6 +674,9 @@ test('M24 UI Funnel conserva source-specific + Historical Targeting común', () 
 
   assert.equal(page.includes("FUNNEL_PORTFOLIO: 'Cartera Funnel / Venta Nueva'"), true);
   assert.equal(html.includes('Mes Funnel'), true);
+  assert.equal(html.includes('<mat-label>Alcance comercial por sucursal</mat-label>'), true);
+  assert.equal(html.includes('*ngIf="!showsFunnelFilters"'), false);
+  assert.equal(html.includes('*ngIf="branchFilterMode.value !== \'ALL\'"'), true);
   assert.equal(html.includes('<mat-label>Corte Funnel</mat-label>'), false);
   assert.equal(page.includes('funnelService.getDashboard(month)'), true);
   assert.equal(page.includes('this.funnelCutoffDate.setValue(selected, { emitEvent: false });'), true);
