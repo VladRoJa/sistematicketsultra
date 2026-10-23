@@ -300,3 +300,103 @@ def test_http_three_perspectives_share_same_user_action_branch(monkeypatch, app)
     ]
     assert signatures[0] == signatures[1] == signatures[2]
     assert signatures[0][3:6] == (True, True, "coincide")
+
+
+def _sortable_row(uid, username, legacy, catalog_allowed, comparison, module="track"):
+    return {
+        "user_id": uid, "username": username, "role": "GERENTE",
+        "module_key": module, "module_name": module,
+        "action_id": 12, "action_key": "track.read", "action_name": "Ver Track",
+        "legacy_allowed": legacy, "catalog_allowed": catalog_allowed,
+        "comparison": comparison,
+        "status": "permitido" if legacy is True else "denegado" if legacy is False
+        else "no_concluyente",
+    }
+
+
+def test_sorting_legacy_across_page_boundary_not_only_visible_page():
+    # Los primeros 25 registros alfabéticos podrían ser denegados; el permitido
+    # al final debe aparecer en la primera página tras el reordenamiento global.
+    rows = [
+        _sortable_row(index, f"AAA_{index:02d}", False, False, "coincide")
+        for index in range(1, 31)
+    ]
+    rows.append(_sortable_row(31, "ZZZ_PERMITIDO", True, True, "coincide"))
+    ordered, groups = visual._prepare_rows(
+        rows, "legacy", "asc", "legacy_permitido", "todos",
+    )
+    assert ordered[0]["username"] == "ZZZ_PERMITIDO"
+    assert ordered[0]["group_key"] == "legacy_allowed:permitido"
+    assert groups == {
+        "legacy_allowed:permitido": 1, "legacy_allowed:denegado": 30,
+    }
+    assert len(ordered[:25]) == 25
+    assert len(ordered[25:]) == 6
+    assert len({row["user_id"] for row in ordered}) == 31
+
+
+def test_group_denied_first_and_keep_legacy_null_distinct():
+    rows = [
+        _sortable_row(1, "A", True, True, "coincide"),
+        _sortable_row(2, "B", None, True, "no_concluyente"),
+        _sortable_row(3, "C", False, False, "coincide"),
+    ]
+    arranged, groups = visual._prepare_rows(
+        rows, "user", "asc", "legacy_denegado", "todos",
+    )
+    assert [row["username"] for row in arranged] == ["C", "A", "B"]
+    assert len(groups) == 3
+    assert arranged[2]["group_label"] == "Sin comprobar"
+
+
+def test_global_filters_before_pagination_and_counts_match_filtered_population():
+    rows = [
+        _sortable_row(index, f"USER_{index:02d}", index % 2 == 0,
+                      index % 2 == 0, "coincide")
+        for index in range(1, 41)
+    ]
+    allowed, _ = visual._prepare_rows(rows, "user", "asc", "none", "permitido")
+    assert len(allowed) == 20
+    assert [row["user_id"] for row in allowed[:5]] == [2, 4, 6, 8, 10]
+    assert [row["user_id"] for row in allowed[5:10]] == [12, 14, 16, 18, 20]
+    assert all(row["legacy_allowed"] is True for row in allowed)
+
+
+def test_global_difference_and_comparison_grouping():
+    rows = [
+        _sortable_row(1, "A", True, False, "diferencia"),
+        _sortable_row(2, "B", False, False, "coincide"),
+        _sortable_row(3, "C", None, True, "no_concluyente"),
+    ]
+    arranged, counts = visual._prepare_rows(
+        rows, "user", "asc", "comparison_diferencia", "todos",
+    )
+    assert [r["comparison"] for r in arranged] == [
+        "diferencia", "coincide", "no_concluyente",
+    ]
+    assert counts["comparison:diferencia"] == 1
+    differences, _ = visual._prepare_rows(
+        rows, "user", "asc", "none", "diferencia",
+    )
+    assert [row["user_id"] for row in differences] == [1]
+
+
+@pytest.mark.parametrize("query", [
+    "sort_by=no_existe", "sort_dir=invalid", "group_by=invalid",
+    "decision=permitido_o_denegado",
+])
+def test_matrix_controls_fail_closed_on_invalid_values(query):
+    app = Flask(__name__)
+    with app.test_request_context("/?" + query):
+        with pytest.raises(ValueError):
+            visual._matrix_controls()
+
+
+def test_matrix_controls_accept_all_grouping_modes():
+    app = Flask(__name__)
+    for group in visual.GROUP_MODES:
+        with app.test_request_context("/?sort_by=legacy&sort_dir=desc&group_by=" + group):
+            sort_by, sort_dir, group_by, decision = visual._matrix_controls()
+            assert (sort_by, sort_dir, group_by, decision) == (
+                "legacy", "desc", group, "todos",
+            )

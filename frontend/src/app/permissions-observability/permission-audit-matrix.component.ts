@@ -7,11 +7,10 @@ import {
   PermissionsObservabilityService,
 } from './permissions-observability.service';
 import {
-  AuditPerspective, PermissionVisualAuditService, VisualAuditFilters,
-  VisualAuditResponse, VisualAuditRow,
+  AuditDecisionFilter, AuditGroupBy, AuditPerspective, AuditSortBy,
+  PermissionVisualAuditService, VisualAuditFilters, VisualAuditResponse,
+  VisualAuditRow,
 } from './permission-visual-audit.service';
-
-type DecisionFilter = 'todos' | 'permitido' | 'denegado' | 'no_concluyente' | 'diferencia';
 
 @Component({
   selector: 'app-permission-audit-matrix',
@@ -34,7 +33,23 @@ export class PermissionAuditMatrixComponent implements OnInit {
   documentId: string | number = '';
   userSearch = '';
   search = '';
-  decisionFilter: DecisionFilter = 'todos';
+  decisionFilter: AuditDecisionFilter = 'todos';
+  groupBy: AuditGroupBy = 'module';
+  sortBy: AuditSortBy = 'action';
+  sortDir: 'asc' | 'desc' = 'asc';
+
+  readonly groupOptions: { value: AuditGroupBy; label: string }[] = [
+    { value: 'none', label: 'Sin agrupar' },
+    { value: 'legacy_permitido', label: 'Legacy · permitidos primero' },
+    { value: 'legacy_denegado', label: 'Legacy · denegados primero' },
+    { value: 'legacy_no_concluyente', label: 'Legacy · sin comprobar primero' },
+    { value: 'catalog_permitido', label: 'Catálogo · permitidos primero' },
+    { value: 'catalog_denegado', label: 'Catálogo · denegados primero' },
+    { value: 'comparison_diferencia', label: 'Comparación · diferencias primero' },
+    { value: 'comparison_coincide', label: 'Comparación · coincidencias primero' },
+    { value: 'module', label: 'Por módulo' },
+    { value: 'role', label: 'Por rol' },
+  ];
 
   readonly pageSize = 25;
   offset = 0;
@@ -88,6 +103,9 @@ export class PermissionAuditMatrixComponent implements OnInit {
     this.result = null;
     this.error = '';
     this.decisionFilter = 'todos';
+    this.groupBy = view === 'user' ? 'module' : 'none';
+    this.sortBy = view === 'user' ? 'action' : 'user';
+    this.sortDir = 'asc';
     this.requestVersion++;
     this.load();
   }
@@ -113,6 +131,16 @@ export class PermissionAuditMatrixComponent implements OnInit {
   applyFilters(): void {
     this.offset = 0;
     this.load();
+  }
+
+  setSort(key: AuditSortBy): void {
+    this.sortDir = this.sortBy === key && this.sortDir === 'asc' ? 'desc' : 'asc';
+    this.sortBy = key;
+    this.applyFilters();
+  }
+
+  sortArrow(key: AuditSortBy): string {
+    return this.sortBy !== key ? '↕' : this.sortDir === 'asc' ? '▲' : '▼';
   }
 
   private positiveInteger(input: string | number | null | undefined): number | undefined {
@@ -143,8 +171,11 @@ export class PermissionAuditMatrixComponent implements OnInit {
       role: this.view === 'user' ? undefined : this.role.trim() || undefined,
       q: this.view === 'user' ? undefined : this.search.trim() || undefined,
       limit: this.pageSize, offset: this.offset,
+      sort_by: this.sortBy, sort_dir: this.sortDir,
+      group_by: this.groupBy, decision: this.decisionFilter,
     };
     const version = ++this.requestVersion;
+    this.result = null;
     this.loading = true;
     this.audit.getMatrix(filters)
       .pipe(finalize(() => { if (version === this.requestVersion) { this.loading = false; } }))
@@ -162,18 +193,16 @@ export class PermissionAuditMatrixComponent implements OnInit {
   }
 
   get rows(): VisualAuditRow[] {
-    const rows = this.result?.rows || [];
-    if (this.decisionFilter === 'todos') { return rows; }
-    return rows.filter(row =>
-      this.decisionFilter === 'diferencia'
-        ? row.comparison === 'diferencia'
-        : row.status === this.decisionFilter
-    );
+    return this.result?.rows || [];
   }
 
-  startsModule(index: number): boolean {
-    return this.view === 'user' &&
-      (index === 0 || this.rows[index].module_key !== this.rows[index - 1].module_key);
+  startsGroup(index: number): boolean {
+    return this.groupBy !== 'none' &&
+      (index === 0 || this.rows[index].group_key !== this.rows[index - 1].group_key);
+  }
+
+  groupCount(row: VisualAuditRow): number {
+    return this.result?.group_counts[row.group_key] || 0;
   }
 
   navigateTo(view: AuditPerspective, row: VisualAuditRow): void {
@@ -184,6 +213,9 @@ export class PermissionAuditMatrixComponent implements OnInit {
     this.actionKey = row.action_key || '';
     this.view = view;
     this.decisionFilter = 'todos';
+    this.groupBy = view === 'user' ? 'module' : 'none';
+    this.sortBy = view === 'user' ? 'action' : 'user';
+    this.sortDir = 'asc';
     this.offset = 0;
     this.result = null;
     this.load();

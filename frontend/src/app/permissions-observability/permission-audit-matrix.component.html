@@ -66,7 +66,7 @@
   <p class="audit-loading" role="status" *ngIf="loading">Evaluando página de resultados…</p>
 
   <ng-container *ngIf="result as data">
-    <div class="audit-stats" aria-label="Resumen de página evaluada">
+    <div class="audit-stats" aria-label="Resumen de todos los resultados filtrados">
       <div><small>Permitidos comprobados</small><strong>{{ data.summary.allowed }}</strong></div>
       <div><small>Denegados comprobados</small><strong>{{ data.summary.denied }}</strong></div>
       <div><small>Sin comprobar</small><strong>{{ data.summary.unknown }}</strong></div>
@@ -75,8 +75,8 @@
     </div>
 
     <div class="audit-toolbar">
-      <label>Filtrar página
-        <select [(ngModel)]="decisionFilter">
+      <label>Filtrar todos los resultados
+        <select [(ngModel)]="decisionFilter" (ngModelChange)="applyFilters()">
           <option value="todos">Todos</option>
           <option value="permitido">Permitidos</option>
           <option value="denegado">Denegados</option>
@@ -84,25 +84,39 @@
           <option value="diferencia">Diferencias</option>
         </select>
       </label>
-      <span>Resultados {{ data.summary.total ? data.summary.offset + 1 : 0 }}–{{ lastRow }} de {{ rowCount }} · Totales de checks: página actual</span>
+      <label>Agrupar por
+        <select [(ngModel)]="groupBy" (ngModelChange)="applyFilters()">
+          <option *ngFor="let option of groupOptions" [ngValue]="option.value">{{ option.label }}</option>
+        </select>
+      </label>
+      <span>Resultados {{ data.summary.total ? data.summary.offset + 1 : 0 }}–{{ lastRow }} de {{ rowCount }}
+        <ng-container *ngIf="data.summary.unfiltered_total !== rowCount"> ({{ data.summary.unfiltered_total }} antes del filtro)</ng-container>
+        · Contadores: conjunto completo filtrado
+      </span>
       <button type="button" (click)="exportCurrentPageCsv()" [disabled]="!rows.length">CSV página filtrada</button>
     </div>
 
     <div class="audit-table-wrap" *ngIf="rows.length; else auditEmptyFiltered">
       <table class="audit-table">
         <thead><tr>
-          <th *ngIf="view !== 'user'">Usuario / rol</th>
-          <th>Módulo / acción</th>
-          <th>Legacy (guard base)</th>
-          <th>Catálogo estimado</th>
-          <th>Comparación</th>
+          <th *ngIf="view !== 'user'">
+            <button type="button" class="audit-sort" [attr.aria-pressed]="sortBy === 'user'" (click)="setSort('user')">Usuario {{ sortArrow('user') }}</button>
+            <button type="button" class="audit-sort" [attr.aria-pressed]="sortBy === 'role'" (click)="setSort('role')">Rol {{ sortArrow('role') }}</button>
+          </th>
+          <th>
+            <button type="button" class="audit-sort" [attr.aria-pressed]="sortBy === 'module'" (click)="setSort('module')">Módulo {{ sortArrow('module') }}</button>
+            <button type="button" class="audit-sort" [attr.aria-pressed]="sortBy === 'action'" (click)="setSort('action')">Acción {{ sortArrow('action') }}</button>
+          </th>
+          <th><button type="button" class="audit-sort" [attr.aria-pressed]="sortBy === 'legacy'" (click)="setSort('legacy')">Legacy (guard base) {{ sortArrow('legacy') }}</button></th>
+          <th><button type="button" class="audit-sort" [attr.aria-pressed]="sortBy === 'catalog'" (click)="setSort('catalog')">Catálogo estimado {{ sortArrow('catalog') }}</button></th>
+          <th><button type="button" class="audit-sort" [attr.aria-pressed]="sortBy === 'comparison'" (click)="setSort('comparison')">Comparación {{ sortArrow('comparison') }}</button></th>
           <th>Alcance y razón</th>
           <th>Explorar</th>
         </tr></thead>
         <tbody>
           <ng-container *ngFor="let row of rows; let i = index; trackBy: trackRow">
-            <tr class="audit-group" *ngIf="startsModule(i)">
-              <td colspan="7">{{ row.module_name || row.module_key }} · acciones catalogadas (cobertura parcial)</td>
+            <tr class="audit-group" *ngIf="startsGroup(i)">
+              <td [attr.colspan]="view === 'user' ? 6 : 7">{{ row.group_label }} · {{ groupCount(row) }} en consulta</td>
             </tr>
             <tr>
               <td *ngIf="view !== 'user'">
@@ -142,7 +156,7 @@
         </tbody>
       </table>
     </div>
-    <ng-template #auditEmptyFiltered><div class="audit-empty">Sin resultados en la página con ese filtro.</div></ng-template>
+    <ng-template #auditEmptyFiltered><div class="audit-empty">No hay resultados con estos filtros. Modifica la selección para ver otras decisiones.</div></ng-template>
     <div class="audit-pagination">
       <button type="button" (click)="previous()" [disabled]="loading || offset === 0">Anterior</button>
       <span>Página {{ (offset / pageSize) + 1 }} · máximo {{ pageSize }} registros</span>

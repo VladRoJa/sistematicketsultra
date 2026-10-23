@@ -14,7 +14,7 @@ Fuente de autoridad: guard operativo legacy. La estimación del catálogo **nunc
 
 Las tres usan `evaluate_pair()`, misma tupla usuario + acción + contexto. El resultado contiene `legacy_allowed: true|false|null`, `catalog_allowed: true|false|null`, fuentes, motivos y `comparison: coincide|diferencia|no_concluyente`.
 
-**Los contadores reflejan solo los elementos efectivamente evaluados de la página**, nunca estimaciones de toda la plantilla. `unknown` no se suma a `allowed` ni a `denied`. La paginación y los filtros de usuario/rol/módulo/acción son server-side; el filtro visual de estado se aplica exclusivamente a la página actual y se etiqueta así. La exportación CSV abarca solo la página filtrada, no una descarga silenciosa de todos los usuarios.
+**Extensión de ordenación/agrupación global (2026-10-23):** los contadores ahora reflejan **todas las filas del conjunto filtrado**, no solo la página actual. `unknown` no se suma a `allowed` ni a `denied`. El servidor evalúa cada candidato de la consulta, aplica el filtro de decisión, ordena y agrupa **antes** de cortar la página. Se retorna `summary.total` filtrado, `summary.unfiltered_total`, `group_counts` y las selecciones `sorting`. El CSV sigue exportando **solo la página visible y ya filtrada**, nunca todas las filas sin aviso.
 
 ## Cobertura efectiva comprobable en V1
 
@@ -35,13 +35,16 @@ La proyección del catálogo usa los predicados V1 del mismo módulo y las regla
 
 ## Consultas, rendimiento y seguridad
 
-- `view=user`: pagina acciones y consulta solo un usuario.
-- `view=module`: pagina usuarios y evalúa la acción base, o una acción elegida en el mismo módulo.
-- `view=action`: pagina usuarios y evalúa una acción concreta.
-- Límite duro: 50 filas de origen por solicitud. No se calcula usuarios × acciones en la consulta inversa.
-- Las sucursales M:N, operadores Warehouse, Planning y ACL específica PM se precargan por lote. Los grants de acciones seleccionadas se precargan con una consulta.
+- `view=user`: evalúa las acciones del usuario identificado y después filtra/agrupa/ordena/pagina.
+- `view=module`: evalúa la acción base por cada usuario candidato, o una acción elegida en el módulo.
+- `view=action`: evalúa una acción concreta por cada usuario candidato.
+- Límite por respuesta: `limit` entre 1 y 50 (por defecto 25). Se evalúan a lo sumo **3000 candidatos** antes de paginar; si la consulta es demasiado amplia se devuelve HTTP 422 pidiendo acotar filtros.
+- `sort_by`: user, role, module, action, legacy, catalog, comparison; `sort_dir`: asc/desc. Orden estable con desempate por usuario/acción.
+- `group_by`: none, module, role, legacy_permitido, legacy_denegado, legacy_no_concluyente, catalog_permitido, catalog_denegado, comparison_diferencia, comparison_coincide. Los conteos de cada grupo corresponden al conjunto filtrado, aun cuando ocupen varias páginas.
+- `decision`: todos, permitido, denegado, no_concluyente, diferencia; siempre filtrado global antes de paginar.
+- Las sucursales M:N, operadores Warehouse, Planning y ACL específica PM se precargan por lote de candidatos. Los grants de acciones seleccionadas se precargan con una consulta. Las consultas amplias implican más lectura, pero no cambian permisos.
 - `q` + `role` son filtros acumulables para consultas inversas; `branch_id` es contexto de evaluación, **no** prueba de pertenencia.
-- Las comprobaciones por documento pueden requerir lecturas de visibilidad sobre la relación; se mantiene el límite duro de página.
+- Las comprobaciones por documento pueden requerir lecturas de visibilidad sobre la relación. El límite de 3000 candidatos protege el análisis global; el límite de 50 corresponde a filas devueltas por solicitud, no al número de evaluaciones.
 - Sin PUT/POST/DELETE nuevos, sin mutación `db.session`, sin cambios a tablas, migraciones o enforcement legacy.
 - Pendiente: permitir `document_id` en acciones de descarga solo después de mapear esa acción en catálogo y sus hard stops; actualmente el ID solo prueba `internal_documents.view`.
 - Pendiente: agregar evaluación real de sucursal/objeto para PM, Inventario y Tickets mediante helpers puros, y validación end-to-end de los predicados a nivel HTTP.
@@ -63,3 +66,7 @@ El issue [#1053](https://github.com/VladRoJa/sistematicketsultra/issues/1053) pe
 ## Después de merge (bajo aprobación)
 
 Reconstruir `backend` y `frontend` por Docker Compose a partir del repo actualizado. Sin migraciones Alembic. Comprobar acceso administrativo, 403 para usuarios ordinarios, tres vistas en `/#/admin/permisos-observabilidad` y comparación de casos de prueba; no desplegar ni fusionar desde este PR.
+
+## QA de la extensión de agrupación (2026-10-23)
+
+Regresiones sintéticas: caso de 31 usuarios con permiso al final del orden alfabético que debe aparecer en la primera página tras ordenar por legacy; filtro de permitidos aplicado antes de paginar sobre 40 filas; prioridad de denegados; preservación de `None` como desconocido; diferencias/coincidencias; enums inválidos HTTP 400. Misma función de evaluación real para las tres vistas. El ordenamiento es *observabilidad*, no enforcement. El módulo y las pestañas de catálogo histórico permanecen diagnósticos.
