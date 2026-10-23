@@ -57,6 +57,7 @@ class InventarioSolicitudCorreccionORM(db.Model):
     request_fingerprint = db.Column(db.String(64), nullable=False)
 
     __table_args__ = (
+        db.PrimaryKeyConstraint("id", name="pk_inv_corr_solicitudes"),
         # La unicidad existente del par en inventario_sucursal permite
         # impedir referencias cruzadas a otra sucursal directamente en DB.
         # Para UNREGISTERED_FIND inventario_id es NULL y la FK compuesta
