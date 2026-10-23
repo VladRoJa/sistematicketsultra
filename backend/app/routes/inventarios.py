@@ -21,6 +21,7 @@ from app.models.mantenimiento_equipo import FamiliaEquipoORM
 from app.models.ticket_model import Ticket
 from app.models.user_model import UserORM
 from app.models.sucursal_model import Sucursal
+from app.services.inventario_dashboard_service import consultar_resumen_inventario
 from datetime import datetime, timezone
 import pytz
 from app.config import Config
@@ -784,6 +785,45 @@ def historial_movimientos():
 
     except Exception as e:
         return manejar_error(e, "historial_movimientos")
+
+# Reportes · Resumen para dashboard (únicamente agregados de lectura).
+@inventario_bp.route('/reportes/resumen', methods=['GET'], strict_slashes=False)
+@jwt_required()
+def resumen_dashboard_inventario():
+    try:
+        raw_sucursal = request.args.get('sucursal_id')
+        sucursal_id = None
+        if raw_sucursal is not None:
+            sucursal_id = _coerce_int_or_none(raw_sucursal)
+            if sucursal_id is None or sucursal_id <= 0:
+                return error_response('sucursal_id debe ser un entero positivo')
+
+        raw_dias = request.args.get('periodo_dias', '30')
+        periodo_dias = _coerce_int_or_none(raw_dias)
+        if periodo_dias not in (7, 30, 90):
+            return error_response('periodo_dias debe ser 7, 30 o 90')
+
+        ids_autorizados, forbidden = _resolve_inventory_read_sucursal_ids(
+            sucursal_id
+        )
+        if forbidden:
+            return forbidden
+
+        if sucursal_id is not None:
+            sucursal = Sucursal.query.filter_by(
+                sucursal_id=sucursal_id
+            ).first()
+            if sucursal is None:
+                return error_response('Sucursal no encontrada', 404)
+
+        return jsonify(consultar_resumen_inventario(
+            sucursal_id=sucursal_id,
+            ids_autorizados=ids_autorizados,
+            periodo_dias=periodo_dias,
+        )), 200
+    except Exception as exc:
+        return manejar_error(exc, 'resumen_dashboard_inventario')
+
 
 # Ver existencias globales
 @inventario_bp.route('/existencias', methods=['GET'], strict_slashes=False)
