@@ -5,6 +5,12 @@ import { environment } from 'src/environments/environment';
 
 export type AuditPerspective = 'user' | 'module' | 'action';
 export type AuditComparison = 'coincide' | 'diferencia' | 'no_concluyente';
+export type AuditDecisionFilter = 'todos' | 'permitido' | 'denegado' | 'no_concluyente' | 'diferencia';
+export type AuditSortBy = 'user' | 'role' | 'module' | 'action' | 'legacy' | 'catalog' | 'comparison';
+export type AuditGroupBy = 'none' | 'module' | 'role'
+  | 'legacy_permitido' | 'legacy_denegado' | 'legacy_no_concluyente'
+  | 'catalog_permitido' | 'catalog_denegado'
+  | 'comparison_diferencia' | 'comparison_coincide';
 
 export interface VisualAuditRow {
   user_id: number;
@@ -29,6 +35,8 @@ export interface VisualAuditRow {
   scope: string;
   context: { branch_id: number | null; document_id: number | null };
   diagnostic_only: true;
+  group_key: string;
+  group_label: string;
 }
 
 export interface VisualAuditResponse {
@@ -36,8 +44,10 @@ export interface VisualAuditResponse {
   note: string;
   view: AuditPerspective;
   rows: VisualAuditRow[];
+  group_counts: Record<string, number>;
   summary: {
     total: number;
+    unfiltered_total: number;
     limit: number;
     offset: number;
     evaluated: number;
@@ -61,6 +71,10 @@ export interface VisualAuditFilters {
   q?: string;
   limit: number;
   offset: number;
+  sort_by: AuditSortBy;
+  sort_dir: 'asc' | 'desc';
+  group_by: AuditGroupBy;
+  decision: AuditDecisionFilter;
 }
 
 @Injectable({ providedIn: 'root' })
