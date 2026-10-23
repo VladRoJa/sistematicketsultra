@@ -103,8 +103,9 @@ def test_document_scope_without_object_unknown_then_guard_evaluated(monkeypatch)
     row = visual.evaluate_pair(user, action, context, document=SimpleNamespace(id=999))
     assert calls == [999]
     assert row["legacy_allowed"] is False
-    assert row["catalog_allowed"] is True
-    assert row["comparison"] == "diferencia"
+    assert row["catalog_allowed"] is None
+    assert row["comparison"] == "no_concluyente"
+    assert row["catalog_reason"] == "catalogo_no_modela_visibilidad_de_este_documento"
     assert row["scope"] == "documento"
 
 
