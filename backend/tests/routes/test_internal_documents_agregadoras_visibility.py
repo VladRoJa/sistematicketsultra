@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 from flask import Flask
+from sqlalchemy import column
 
 import app.routes.internal_documents_routes as routes
 from app.utils import internal_documents_access as access
@@ -65,7 +66,7 @@ def test_list_hides_agregadoras_from_non_admicorp_manager(
     fake_query = _FakeQuery()
     fake_model = SimpleNamespace(
         query=fake_query,
-        title=_FakeColumn("internal_documents.title"),
+        title=column("internal_documents.title"),
         status=_FakeColumn("internal_documents.status"),
         created_at=_FakeColumn("internal_documents.created_at"),
         id=_FakeColumn("internal_documents.id"),
@@ -140,7 +141,9 @@ def test_list_hides_agregadoras_from_non_admicorp_manager(
     ]
 
     assert any(
-        "internal_documents.title" in expression
+        "upper(" in expression.lower()
+        and "trim(" in expression.lower()
+        and "title" in expression.lower()
         and "!=" in expression
         for expression in rendered_filters
     )
