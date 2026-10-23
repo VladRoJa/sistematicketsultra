@@ -1,25 +1,196 @@
-<!-- src/app/inventario/reportes/reportes.component.html -->
+<section class="dashboard-shell">
+  <header class="page-header">
+    <div class="page-heading">
+      <p class="eyebrow">Inventario / Reportes</p>
+      <h1>Panel de Inventario</h1>
+      <p class="page-subtitle">Existencias actuales y actividad operativa por sucursal.</p>
+    </div>
+    <div class="export-actions" aria-label="Descargas de reportes">
+      <button mat-stroked-button type="button" (click)="descargarInventario()">
+        <mat-icon>download</mat-icon>
+        Exportar inventario
+      </button>
+      <button mat-stroked-button type="button" (click)="descargarMovimientos()">
+        <mat-icon>download</mat-icon>
+        Exportar movimientos
+      </button>
+    </div>
+  </header>
 
-<mat-card>
-  <h2 class="text-xl font-bold mb-4">Exportar Reportes</h2>
-
-  <!-- Selector sucursal (sólo admins, muestra si hay más de una sucursal) -->
-  <mat-form-field *ngIf="esAdmin && sucursales.length > 0" appearance="fill" style="width: 300px; margin-bottom: 24px;">
-    <mat-label>Sucursal</mat-label>
-    <mat-select [(ngModel)]="sucursalSeleccionada">
-      <mat-option [value]="null">Todas</mat-option>
-      <mat-option *ngFor="let suc of sucursales" [value]="suc.sucursal_id">
-        {{ suc.sucursal }}
-      </mat-option>
-    </mat-select>
-  </mat-form-field>
-
-  <div class="flex gap-4 mb-2">
-    <button mat-raised-button color="primary" (click)="descargarInventario()">
-      Exportar Inventario
-    </button>
-    <button mat-raised-button color="accent" (click)="descargarMovimientos()">
-      Exportar Movimientos
-    </button>
+  <div class="filter-bar">
+    <div class="filter-fields">
+      <mat-form-field appearance="outline" class="filter-field" *ngIf="puedeElegirSucursal">
+        <mat-label>Sucursal</mat-label>
+        <mat-select [ngModel]="sucursalSeleccionada" (ngModelChange)="cambiarSucursal($event)">
+          <mat-option [value]="null">Consolidado sin DEMO</mat-option>
+          <mat-option *ngFor="let suc of sucursales" [value]="suc.sucursal_id">
+            {{ suc.sucursal }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+      <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>Actividad del período</mat-label>
+        <mat-select [ngModel]="periodoDias" (ngModelChange)="cambiarPeriodo($event)">
+          <mat-option *ngFor="let dias of opcionesPeriodo" [value]="dias">
+            Últimos {{ dias }} días
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
+    <span class="filter-note">
+      <mat-icon>info_outline</mat-icon>
+      El período no cambia las existencias actuales.
+    </span>
   </div>
-</mat-card>
+
+  <div class="loading-state" *ngIf="cargandoResumen" role="status">
+    <mat-spinner [diameter]="36"></mat-spinner>
+    <span>Consultando indicadores de inventario…</span>
+  </div>
+
+  <div class="error-state" *ngIf="errorResumen && !cargandoResumen" role="alert">
+    <mat-icon>error_outline</mat-icon>
+    <span>{{ errorResumen }}</span>
+    <button mat-stroked-button type="button" (click)="cargarResumen()">Reintentar</button>
+  </div>
+
+  <ng-container *ngIf="resumen as data">
+    <p class="period-caption">
+      Actividad del {{ data.periodo.desde }} al {{ data.periodo.hasta }}
+      <span *ngIf="data.alcance.excluye_demo">· Consolidado sin ULTRA DEMO</span>
+    </p>
+
+    <section class="kpi-grid" aria-label="Indicadores principales">
+      <mat-card class="kpi-card">
+        <div class="kpi-top"><span>Referencias con stock</span><mat-icon>inventory_2</mat-icon></div>
+        <strong>{{ data.indicadores.referencias_con_stock | number:'1.0-0' }}</strong>
+        <small>Existencias actuales</small>
+      </mat-card>
+      <mat-card class="kpi-card">
+        <div class="kpi-top"><span>Referencias sin stock</span><mat-icon>remove_shopping_cart</mat-icon></div>
+        <strong>{{ data.indicadores.referencias_sin_stock | number:'1.0-0' }}</strong>
+        <small>Stock cero, negativo o nulo</small>
+      </mat-card>
+      <mat-card class="kpi-card">
+        <div class="kpi-top"><span>Entradas</span><mat-icon>south_west</mat-icon></div>
+        <strong>{{ data.indicadores.entradas_vigentes_periodo | number:'1.0-0' }}</strong>
+        <small>Operaciones vigentes del período</small>
+      </mat-card>
+      <mat-card class="kpi-card">
+        <div class="kpi-top"><span>Salidas</span><mat-icon>north_east</mat-icon></div>
+        <strong>{{ data.indicadores.salidas_vigentes_periodo | number:'1.0-0' }}</strong>
+        <small>Operaciones vigentes del período</small>
+      </mat-card>
+      <mat-card class="kpi-card">
+        <div class="kpi-top"><span>Anulaciones</span><mat-icon>history_toggle_off</mat-icon></div>
+        <strong>{{ data.indicadores.anulaciones_periodo | number:'1.0-0' }}</strong>
+        <small>Por fecha real de anulación</small>
+      </mat-card>
+    </section>
+
+    <div class="detail-grid">
+      <mat-card class="detail-card">
+        <div class="section-heading">
+          <div>
+            <h2>Distribución por categoría</h2>
+            <p>Referencias con stock, agrupadas por categoría</p>
+          </div>
+          <span class="section-count">{{ categoriasVista.length }} categorías</span>
+        </div>
+        <div class="category-list" *ngIf="categoriasVista.length; else sinCategorias">
+          <div class="category-row" *ngFor="let cat of categoriasVista">
+            <div class="category-label">
+              <span [title]="cat.categoria">{{ cat.categoria }}</span>
+              <strong>{{ cat.referencias_con_stock | number:'1.0-0' }}</strong>
+            </div>
+            <div class="category-track">
+              <span class="category-fill" [style.width.%]="cat.anchoBarra"></span>
+            </div>
+            <small>{{ cat.porcentaje }}% del total con stock</small>
+          </div>
+        </div>
+        <ng-template #sinCategorias>
+          <p class="empty-state">No hay referencias con stock para este alcance.</p>
+        </ng-template>
+      </mat-card>
+
+      <mat-card class="detail-card">
+        <div class="section-heading">
+          <div>
+            <h2>Inventario por sucursal</h2>
+            <p>Comparativo de referencias asignadas</p>
+          </div>
+          <span class="section-count">{{ sucursalesVista.length }} sucursales</span>
+        </div>
+        <div class="table-scroll branch-scroll" *ngIf="sucursalesVista.length; else sinSucursales">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th scope="col">Sucursal</th>
+                <th scope="col" class="numeric-cell">Con stock</th>
+                <th scope="col" class="numeric-cell">Sin stock</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let suc of sucursalesVista">
+                <td>{{ suc.sucursal }}</td>
+                <td class="numeric-cell">{{ suc.referencias_con_stock | number:'1.0-0' }}</td>
+                <td class="numeric-cell">{{ suc.referencias_sin_stock | number:'1.0-0' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <ng-template #sinSucursales>
+          <p class="empty-state">No hay sucursales disponibles en el alcance consultado.</p>
+        </ng-template>
+      </mat-card>
+    </div>
+
+    <mat-card class="detail-card movements-card">
+      <div class="section-heading">
+        <div>
+          <h2>Actividad reciente</h2>
+          <p>Últimos movimientos registrados en el período, incluidos los anulados</p>
+        </div>
+        <a mat-stroked-button [routerLink]="['../movimientos']">
+          Ver movimientos <mat-icon>arrow_forward</mat-icon>
+        </a>
+      </div>
+      <div class="table-scroll" *ngIf="data.movimientos_recientes.length; else sinMovimientos">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th scope="col">ID</th>
+              <th scope="col">Fecha local</th>
+              <th scope="col">Movimiento</th>
+              <th scope="col">Sucursal</th>
+              <th scope="col">Usuario</th>
+              <th scope="col">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let mov of data.movimientos_recientes">
+              <td class="id-cell">#{{ mov.movimiento_id }}</td>
+              <td>{{ formatearFechaLocal(mov.fecha_local) }}</td>
+              <td>{{ etiquetaTipo(mov.tipo) }}</td>
+              <td>{{ mov.sucursal }}</td>
+              <td>{{ mov.usuario }}</td>
+              <td>
+                <span class="status-pill" [class.is-cancelled]="mov.estado === 'anulado'">
+                  {{ mov.estado === 'anulado' ? 'Anulado' : 'Activo' }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <ng-template #sinMovimientos>
+        <p class="empty-state">Sin movimientos registrados en este período.</p>
+      </ng-template>
+    </mat-card>
+    <p class="dashboard-footnote">
+      Cada referencia equivale a un artículo asignado a una sucursal. No se suman unidades de diferentes tipos;
+      los artículos nunca asignados no aparecen como faltantes.
+    </p>
+  </ng-container>
+</section>
