@@ -177,6 +177,12 @@ Consulta SQL de solo lectura sobre `warehouse_operators` y `planning_operators`;
 - **No interpretar el `can_archive=0` de Warehouse como permiso para archivar**, aunque cualquier futuro grant `allow` global exista; el hard stop y la política de precedencia requieren aprobación explícita al migrar esa acción.
 - La consulta agregada de `usuarios_permisos` ya se recibió; ver sección 5.3. No se alterarán flags ni asignaciones existentes.
 
+## 5.4. Estado Alembic de producción — 2026-10-22
+
+- Reporte entregado: `docker compose exec -T backend flask db current` → **`j22c10202622 (head)`**.
+- Verificación en `main`: existe `backend/migrations/versions/j22c10202622_inventario_movimientos_anulacion.py`, con `revision = "j22c10202622"` y `down_revision = "i22c10202622"`. La migración afecta la auditoría de anulación en `movimientos_inventario`; **no introduce ni cambia los permisos globales**.
+- **Alcance de la prueba:** la base del contenedor reporta estar en el head conocido por su Alembic. No se ejecutó una comparación exhaustiva de tablas/constraints contra SQLAlchemy ni un `flask db upgrade`. Por tanto, no confundir `head` con auditoría integral de esquema.
+
 ## 5.3. ACL departamental legacy — 2026-10-22
 
 Consulta agrupada de `usuarios_permisos` en producción devolvió únicamente:
@@ -201,7 +207,8 @@ Estos puntos necesitan información del servidor o revisión de código adiciona
 - [x] Censados operadores Warehouse y Planning en producción: 1 operador de Warehouse con lectura/subida pero sin archivo, y 1 operador activo de Planning con las 6 capacidades habilitadas. Sus identidades no están identificadas por estos agregados.
 - [x] Censo agregado `usuarios_permisos`: departamento 1 / `es_admin=false` / una asignación / un usuario.
 - [x] Confirmado por consulta agregada que la única ACL departamental pertenece al rol `COORDINADOR_MANTENIMIENTO` y satisface la condición legacy de lectura de PM.
-- [ ] Contrastar migraciones/esquema de PostgreSQL productivo y revisar escenarios de alcance por sucursal.
+- [x] **Revisión Alembic cotejada:** `flask db current` en producción reportó `j22c10202622 (head)` el 2026-10-22; el mismo identificador aparece en `main` del repositorio (`backend/migrations/versions/j22c10202622_inventario_movimientos_anulacion.py`, `down_revision=i22c10202622`). Esto coteja revisión y código, **no** prueba paridad física total del esquema, unicidad de heads en todos los entornos ni accesos por sucursal.
+- [ ] Revisar escenarios de alcance por sucursal y documentar las diferencias conocidas del piloto antes de enforcement.
 - [~] Inventariadas por código las **21 rutas HTTP** de Nube y los controles de escritura/lectura/descarga/auditoría, con excepción especial de agregadoras. **Pendiente:** matriz exhaustiva ruta → decisión por contexto y tests de paridad; esta inspección no sustituye QA.
 - [ ] Producir conjunto de escenarios de paridad de Nube Corporativa (rol SISTEMAS, ADMICORP, admin con otro usuario, usuario ordinario, documento sensible).
 - [ ] Decidir con responsable operativo únicamente los accesos legacy contradictorios que supongan un cambio de política, no pedir autorización para cada refactor.
