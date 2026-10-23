@@ -52,7 +52,7 @@
       <label for="audit-branch">ID sucursal</label>
       <input id="audit-branch" type="number" min="1" [(ngModel)]="branchId" (keyup.enter)="applyFilters()" placeholder="Sin contexto">
     </div>
-    <div class="audit-field audit-short" *ngIf="view === 'user' || actionKey === 'internal_documents.view'">
+    <div class="audit-field audit-short" *ngIf="actionKey === 'internal_documents.view'">
       <label for="audit-document">ID documento</label>
       <input id="audit-document" type="number" min="1" [(ngModel)]="documentId" (keyup.enter)="applyFilters()" placeholder="Opcional">
     </div>
@@ -93,7 +93,7 @@
         <thead><tr>
           <th *ngIf="view !== 'user'">Usuario / rol</th>
           <th>Módulo / acción</th>
-          <th>Legacy comprobable</th>
+          <th>Legacy (guard base)</th>
           <th>Catálogo estimado</th>
           <th>Comparación</th>
           <th>Alcance y razón</th>
