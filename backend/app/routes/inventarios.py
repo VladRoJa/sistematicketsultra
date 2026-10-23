@@ -38,6 +38,9 @@ tz = pytz.timezone('America/Tijuana')
 INVENTORY_ADMIN_ROLES = {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN"}
 INVENTORY_GLOBAL_WRITE_ROLES = INVENTORY_ADMIN_ROLES | {"MANTENIMIENTO", "SISTEMAS", "TECNICO"}
 INVENTORY_SCOPED_WRITE_ROLES = {"SR_MANTENIMIENTO", "AUX_MANTENIMIENTO"}
+# Inventarios V2: piloto explicito. No equivale a lectura legacy ni a escritura.
+# GERENTE y GERENTE_REGIONAL permanecen fuera hasta el gate E5.
+INVENTORY_V2_READ_ROLES = INVENTORY_GLOBAL_WRITE_ROLES | INVENTORY_SCOPED_WRITE_ROLES
 
 
 def _coerce_int_or_none(value):
@@ -827,10 +830,43 @@ def resumen_dashboard_inventario():
         return manejar_error(exc, 'resumen_dashboard_inventario')
 
 
-# Ver existencias globales
+# Existencias V1: endpoint legacy compartido por movimientos y otras pantallas.
+# No modificar su politica de acceso al separar el piloto de Inventarios V2.
 @inventario_bp.route('/existencias', methods=['GET'], strict_slashes=False)
 @jwt_required()
 def ver_existencias():
+    return _consultar_existencias_autorizadas()
+
+
+@inventario_bp.route('/v2/existencias', methods=['GET'], strict_slashes=False)
+@jwt_required()
+def ver_existencias_v2():
+    # Guard real en backend: ni la navegacion ni el catalogo diagnostico
+    # de permisos habilitan por si solos a un rol no liberado.
+    user = _get_current_inventory_user()
+    if not user:
+        return jsonify({"error": "Unauthorized", "detail": "Sesion invalida."}), 401
+
+    rol = str(getattr(user, 'rol', '') or '').strip().upper()
+    if rol not in INVENTORY_V2_READ_ROLES:
+        return jsonify({
+            "error": "Forbidden",
+            "detail": "Inventarios V2 no esta habilitado para este perfil.",
+        }), 403
+
+    # En V2 una sucursal_id invalida nunca debe interpretarse como global.
+    requested = request.args.get('sucursal_id')
+    if requested is not None:
+        sucursal_id = _coerce_int_or_none(requested)
+        if sucursal_id is None or sucursal_id <= 0:
+            return jsonify({
+                "error": "Bad Request", "detail": "sucursal_id invalido.",
+            }), 400
+
+    return _consultar_existencias_autorizadas()
+
+
+def _consultar_existencias_autorizadas():
     try:
         requested_sucursal_id = request.args.get('sucursal_id', type=int)
         allowed_sucursales, forbidden = _resolve_inventory_read_sucursal_ids(requested_sucursal_id)
