@@ -202,3 +202,76 @@ mat-dialog-content { padding: 14px 18px 18px; }
   .commercial-attribution .section-heading { align-items:flex-start; flex-wrap:wrap; }
   .commercial-attribution-grid { grid-template-columns:1fr; }
 }
+
+/* Resumen total de entrega: independiente de filtros y paginación. */
+.recipient-overview {
+  margin-top:14px;
+  padding:13px 16px 14px;
+  border-radius:12px;
+  background:#101820;
+  color:#f8fafc;
+}
+.recipient-overview-heading {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px 16px;
+  flex-wrap:wrap;
+}
+.recipient-overview-heading strong { font-size:13px; font-weight:800; }
+.recipient-overview-heading span { font-size:11px; color:#b9c6d3; }
+.recipient-overview-kpis {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  padding:14px 0 13px;
+}
+.recipient-overview-kpi {
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  min-width:0;
+  gap:3px;
+}
+.recipient-overview-kpi span { font-size:11px; font-weight:700; color:#d4dbe2; }
+.recipient-overview-kpi strong { font-size:26px; line-height:1.2; font-weight:800; }
+.recipient-overview-kpi strong.recipient-overview-accepted { color:#38cd88; }
+.recipient-overview-kpi small { font-size:11px; color:#cbd5e1; }
+.recipient-overview-bar {
+  display:flex;
+  width:100%;
+  height:12px;
+  overflow:hidden;
+  border-radius:999px;
+  background:#334155;
+}
+.recipient-overview-segment { display:block; min-width:0; height:100%; }
+.recipient-overview-legend {
+  display:flex;
+  justify-content:space-between;
+  gap:6px 14px;
+  flex-wrap:wrap;
+  margin-top:9px;
+}
+.recipient-overview-legend > span {
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  font-size:11px;
+  white-space:nowrap;
+  color:#e2e8f0;
+}
+.recipient-overview-dot { width:9px; height:9px; border-radius:50%; display:inline-block; flex:none; }
+.recipient-overview--viewed { background:#1a9476; }
+.recipient-overview--delivered { background:#5c9acb; }
+.recipient-overview--sent { background:#d9a84d; }
+.recipient-overview--successful { background:#9672c5; }
+.recipient-overview--failed { background:#ce6a71; }
+.recipient-overview--unknown { background:#8d9baa; }
+.recipient-overview-empty { color:#cbd5e1; font-size:12px; line-height:1.5; margin:12px 0 0; }
+@media(max-width:600px) {
+  .recipient-overview { padding:12px; }
+  .recipient-overview-kpis { gap:10px; }
+  .recipient-overview-kpi strong { font-size:23px; }
+  .recipient-overview-legend { justify-content:flex-start; }
+}

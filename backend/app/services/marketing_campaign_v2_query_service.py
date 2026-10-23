@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from math import ceil
 from typing import Any, Iterable
 
-from sqlalchemy import and_, exists, false, func, or_, select, true
+from sqlalchemy import and_, case, exists, false, func, or_, select, true
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.extensions import db
@@ -243,6 +243,68 @@ def list_campaign_v2_recipients(
             .limit(normalized_page_size)
             .all()
         )
+
+        # El resumen se obtiene de TODA la cohorte congelada, sin filtro
+        # ni paginación, con el mismo corte multichild de la tabla.
+        status_counts = {
+            status: 0 for status in CAMPAIGN_V2_RECIPIENT_PROVIDER_STATUSES
+        }
+        if latest_snapshot is None:
+            frozen_total = int(
+                active_session.query(func.count(MarketingCampaignV2RecipientORM.id))
+                .filter(MarketingCampaignV2RecipientORM.campaign_id == normalized_id)
+                .scalar()
+                or 0
+            )
+            status_counts["NO_SNAPSHOT"] = frozen_total
+        else:
+            effective_status = case(
+                (observation_ranks.c.outcome == "FAILED", "FAILED"),
+                (
+                    and_(
+                        observation_ranks.c.outcome == "SUCCESSFUL",
+                        observation_ranks.c.delivery_bucket == "VIEWED",
+                    ),
+                    "VIEWED",
+                ),
+                (
+                    and_(
+                        observation_ranks.c.outcome == "SUCCESSFUL",
+                        observation_ranks.c.delivery_bucket == "DELIVERED",
+                    ),
+                    "DELIVERED",
+                ),
+                (
+                    and_(
+                        observation_ranks.c.outcome == "SUCCESSFUL",
+                        observation_ranks.c.delivery_bucket == "SENT",
+                    ),
+                    "SENT",
+                ),
+                (observation_ranks.c.outcome == "SUCCESSFUL", "SUCCESSFUL"),
+                else_="NO_PROVIDER_STATUS",
+            )
+            summary_rows = (
+                active_session.query(
+                    effective_status.label("status"),
+                    func.count(MarketingCampaignV2RecipientORM.id),
+                )
+                .select_from(MarketingCampaignV2RecipientORM)
+                .outerjoin(
+                    observation_ranks,
+                    and_(
+                        observation_ranks.c.recipient_id
+                        == MarketingCampaignV2RecipientORM.id,
+                        observation_ranks.c.observation_rank == 1,
+                    ),
+                )
+                .filter(MarketingCampaignV2RecipientORM.campaign_id == normalized_id)
+                .group_by(effective_status)
+                .all()
+            )
+            for status, count in summary_rows:
+                status_counts[status] = int(count)
+            frozen_total = sum(status_counts.values())
     observations_by_recipient = {}
     if latest_snapshot is not None and rows:
         recipient_ids = [int(recipient.id) for recipient, _ in rows]
@@ -266,6 +328,11 @@ def list_campaign_v2_recipients(
         "page_size": normalized_page_size,
         "total": total,
         "total_pages": _total_pages(total, normalized_page_size),
+        "status_summary": {
+            "total_recipients": frozen_total,
+            "has_snapshot": latest_snapshot is not None,
+            "counts": status_counts,
+        },
         "rows": [
             {
                 **_serialize_recipient_summary(

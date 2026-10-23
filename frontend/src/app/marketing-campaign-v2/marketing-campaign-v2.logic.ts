@@ -17,6 +17,8 @@ import {
   CampaignV2Purpose,
   CampaignV2ReportingFilters,
   CampaignV2ReportingObservation,
+  CampaignV2RecipientProviderStatusCode,
+  CampaignV2RecipientStatusSummary,
   CampaignV2Source,
 } from './marketing-campaign-v2.models';
 
@@ -816,4 +818,65 @@ function campaignV2IsIsoDate(value: string): boolean {
     && parsed.getMonth() === month - 1
     && parsed.getDate() === day
   );
+}
+
+/** Panel ejecutivo basado exclusivamente en el resumen no paginado del API. */
+export interface CampaignV2RecipientStatusSegment {
+  status: CampaignV2RecipientProviderStatusCode;
+  label: string;
+  count: number;
+  percent: number;
+  className: string;
+}
+
+export interface CampaignV2RecipientStatusPresentation {
+  total: number;
+  hasSnapshot: boolean;
+  accepted: number;
+  reached: number;
+  acceptedRate: string;
+  reachedRate: string;
+  segments: CampaignV2RecipientStatusSegment[];
+}
+
+export function campaignV2RecipientStatusPresentation(
+  summary: CampaignV2RecipientStatusSummary,
+): CampaignV2RecipientStatusPresentation {
+  const total = summary.total_recipients;
+  const counts = summary.counts;
+  const accepted =
+    counts.VIEWED + counts.DELIVERED + counts.SENT + counts.SUCCESSFUL;
+  const reached = counts.VIEWED + counts.DELIVERED;
+  const rate = (value: number): string => total > 0
+    ? (100 * value / total).toFixed(1) + '%'
+    : '—';
+  const definitions: Array<{
+    status: CampaignV2RecipientProviderStatusCode;
+    label: string;
+    className: string;
+  }> = [
+    { status: 'VIEWED', label: 'Leídos', className: 'recipient-overview--viewed' },
+    { status: 'DELIVERED', label: 'Entregados', className: 'recipient-overview--delivered' },
+    { status: 'SENT', label: 'Enviados', className: 'recipient-overview--sent' },
+    { status: 'SUCCESSFUL', label: 'Aceptados sin etapa', className: 'recipient-overview--successful' },
+    { status: 'FAILED', label: 'Fallidos', className: 'recipient-overview--failed' },
+    { status: 'NO_PROVIDER_STATUS', label: 'Sin estado', className: 'recipient-overview--unknown' },
+  ];
+  return {
+    total,
+    hasSnapshot: summary.has_snapshot,
+    accepted,
+    reached,
+    acceptedRate: rate(accepted),
+    reachedRate: rate(reached),
+    segments: definitions
+      .filter(({ status }) => counts[status] > 0)
+      .map(({ status, label, className }) => ({
+        status,
+        label,
+        className,
+        count: counts[status],
+        percent: total > 0 ? (100 * counts[status] / total) : 0,
+      })),
+  };
 }

@@ -289,6 +289,19 @@ def test_recipient_list_is_stable_paginated_and_counts_evidence_without_loading_
     assert result["rows"][1]["conflict_fields"] == ["member_name"]
     assert result["rows"][0]["provider_status"]["status"] == "NO_SNAPSHOT"
     assert result["rows"][0]["provider_status"]["observed_at"] is None
+    assert result["status_summary"] == {
+        "total_recipients": 2,
+        "has_snapshot": False,
+        "counts": {
+            "NO_SNAPSHOT": 2,
+            "NO_PROVIDER_STATUS": 0,
+            "FAILED": 0,
+            "SUCCESSFUL": 0,
+            "SENT": 0,
+            "DELIVERED": 0,
+            "VIEWED": 0,
+        },
+    }
 
 
 
@@ -425,6 +438,16 @@ def test_multichild_latest_per_provider_shows_all_recipients_and_filters(session
     }
     overall = list_campaign_v2_recipients(**args)
     assert overall["total"] == 5
+    expected_summary = {
+        "total_recipients": 5,
+        "has_snapshot": True,
+        "counts": {
+            "VIEWED": 2, "DELIVERED": 1, "FAILED": 1,
+            "SENT": 0, "SUCCESSFUL": 0,
+            "NO_PROVIDER_STATUS": 1, "NO_SNAPSHOT": 0,
+        },
+    }
+    assert overall["status_summary"] == expected_summary
     statuses = {
         row["id"]: row["provider_status"]["status"]
         for row in overall["rows"]
@@ -453,6 +476,7 @@ def test_multichild_latest_per_provider_shows_all_recipients_and_filters(session
     for status, ids in expected.items():
         result = list_campaign_v2_recipients(**args, provider_status=status)
         assert result["total"] == len(ids), status
+        assert result["status_summary"] == expected_summary, status
         assert [row["id"] for row in result["rows"]] == ids, status
         assert all(
             row["provider_status"]["status"] == status
@@ -471,6 +495,7 @@ def test_multichild_latest_per_provider_shows_all_recipients_and_filters(session
     assert first["total_pages"] == second["total_pages"] == 2
     assert [row["id"] for row in first["rows"]] == [20]
     assert [row["id"] for row in second["rows"]] == [21]
+    assert first["status_summary"] == second["status_summary"] == expected_summary
 
 
 def test_recipient_status_failure_is_not_confused_with_no_observation(session):
@@ -491,6 +516,9 @@ def test_recipient_status_failure_is_not_confused_with_no_observation(session):
     )
     statuses = {row["id"]: row["provider_status"]["status"] for row in result["rows"]}
     assert statuses == {10: "NO_PROVIDER_STATUS", 11: "FAILED"}
+    assert result["status_summary"]["counts"]["FAILED"] == 1
+    assert result["status_summary"]["counts"]["NO_PROVIDER_STATUS"] == 1
+    assert result["status_summary"]["total_recipients"] == 2
     assert result["rows"][1]["provider_status"]["delivery_bucket"] is None
 
 

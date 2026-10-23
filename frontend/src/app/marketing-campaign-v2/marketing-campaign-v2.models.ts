@@ -1235,7 +1235,15 @@ export interface CampaignV2RecipientDetail extends CampaignV2RecipientSummary {
 }
 
 export type CampaignV2CampaignPage = CampaignV2Pagination<CampaignV2CampaignSummary>;
-export type CampaignV2RecipientPage = CampaignV2Pagination<CampaignV2RecipientSummary>;
+export interface CampaignV2RecipientStatusSummary {
+  total_recipients: number;
+  has_snapshot: boolean;
+  counts: Record<CampaignV2RecipientProviderStatusCode, number>;
+}
+
+export type CampaignV2RecipientPage = CampaignV2Pagination<CampaignV2RecipientSummary> & {
+  status_summary: CampaignV2RecipientStatusSummary;
+};
 
 export interface CampaignV2CampaignQuery {
   page: number;
