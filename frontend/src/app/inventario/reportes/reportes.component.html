@@ -21,7 +21,7 @@
     <div class="filter-fields">
       <mat-form-field appearance="outline" class="filter-field" *ngIf="puedeElegirSucursal">
         <mat-label>Sucursal</mat-label>
-        <mat-select [(ngModel)]="sucursalSeleccionada" (selectionChange)="cargarResumen()">
+        <mat-select [ngModel]="sucursalSeleccionada" (ngModelChange)="cambiarSucursal($event)">
           <mat-option [value]="null">Consolidado sin DEMO</mat-option>
           <mat-option *ngFor="let suc of sucursales" [value]="suc.sucursal_id">
             {{ suc.sucursal }}
@@ -30,7 +30,7 @@
       </mat-form-field>
       <mat-form-field appearance="outline" class="filter-field">
         <mat-label>Actividad del período</mat-label>
-        <mat-select [(ngModel)]="periodoDias" (selectionChange)="cargarResumen()">
+        <mat-select [ngModel]="periodoDias" (ngModelChange)="cambiarPeriodo($event)">
           <mat-option *ngFor="let dias of opcionesPeriodo" [value]="dias">
             Últimos {{ dias }} días
           </mat-option>
