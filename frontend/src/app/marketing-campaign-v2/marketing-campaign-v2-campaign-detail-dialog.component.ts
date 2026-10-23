@@ -27,6 +27,7 @@ import {
   CampaignV2Purpose,
   CampaignV2SubmitResponse,
   CampaignV2RecipientSummary,
+  CampaignV2RecipientStatusSummary,
   CampaignV2RecipientProviderStatusCode,
   CampaignV2FollowupPreview,
   CampaignV2FollowupFrozen,
@@ -47,6 +48,8 @@ import {
   campaignV2ReportingPercent,
   campaignV2ReportingSnapshotLabel,
   campaignV2ReportingValue,
+  campaignV2RecipientStatusPresentation,
+  CampaignV2RecipientStatusPresentation,
 } from './marketing-campaign-v2.logic';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
 import {
@@ -166,6 +169,8 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   preflight: CampaignV2PreflightResponse | null = null;
   submitResult: CampaignV2SubmitResponse | null = null;
   recipients: CampaignV2RecipientSummary[] = [];
+  recipientStatusSummary: CampaignV2RecipientStatusSummary | null = null;
+  recipientStatusView: CampaignV2RecipientStatusPresentation | null = null;
   recipientsPage = 1;
   readonly recipientsPageSize = 25;
   recipientsTotal = 0;
@@ -251,6 +256,8 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
     this.followupFreezeError = '';
     this.followupFreezeResult = null;
     this.loadingCampaignDetail = true;
+    this.recipientStatusSummary = null;
+    this.recipientStatusView = null;
     this.error = '';
     this.service.getCampaign(this.data.campaignId)
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -432,6 +439,10 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
           this.recipientsPage = result.page;
           this.recipientsTotal = result.total;
           this.recipientsTotalPages = result.total_pages;
+          this.recipientStatusSummary = result.status_summary;
+          this.recipientStatusView = campaignV2RecipientStatusPresentation(
+            result.status_summary,
+          );
         },
         error: (error: HttpErrorResponse) => {
           if (requestId !== this.recipientsRequestId) {
@@ -928,10 +939,10 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
     if (!status) {
       return 'Estado no disponible';
     }
-    if (status.snapshot_id == null || !status.observed_at) {
-      return 'Sin captura de estadísticas';
+    if (this.recipientStatusView?.hasSnapshot) {
+      return 'Últimos cortes guardados por lote';
     }
-    return `Snapshot #${status.snapshot_id} · ${this.formatHistoryObservedAt(status.observed_at)}`;
+    return 'Sin captura de estadísticas';
   }
 
   private recipientStatusDisplay(recipient: CampaignV2RecipientSummary): RecipientStatusDisplay {
