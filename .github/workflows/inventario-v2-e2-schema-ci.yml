@@ -5,7 +5,7 @@ on:
     paths:
       - "backend/app/models/inventario_solicitud_correccion.py"
       - "backend/app/models/__init__.py"
-      - "backend/migrations/versions/l23c10202623_inventory_v2_correction_requests.py"
+      - "backend/migrations/versions/v2e2a7c92623_inventory_v2_correction_requests.py"
       - "backend/tests/models/test_inventario_v2_e2_schema.py"
       - ".github/workflows/inventario-v2-e2-schema-ci.yml"
   workflow_dispatch:
@@ -45,7 +45,7 @@ jobs:
         run: |
           python -m py_compile \
             app/models/inventario_solicitud_correccion.py \
-            migrations/versions/l23c10202623_inventory_v2_correction_requests.py \
+            migrations/versions/v2e2a7c92623_inventory_v2_correction_requests.py \
             tests/models/test_inventario_v2_e2_schema.py
       - name: Verify Alembic heads and PostgreSQL constraints
         working-directory: backend
