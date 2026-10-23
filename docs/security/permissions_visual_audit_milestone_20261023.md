@@ -25,7 +25,7 @@ Las tres usan `evaluate_pair()`, misma tupla usuario + acción + contexto. El re
 | `warehouse.view/upload/archive/catalogs` | Operador + flag exactos de `warehouse_access` | Base del guard, no autorización de objeto/documento específico |
 | `planning.read/edit/submit/approve/publish/configure_model` | Operador activo + flag exacto de `planning_access` | Base de guard, no estado de batch ni transición específica |
 | `internal_documents.manage` | `can_manage_internal_documents` | Manager legado por rol/usuario |
-| `internal_documents.view` | `can_view_internal_document` | Solo con ID de documento existente y visibilidad evaluable |
+| `internal_documents.view` | `can_view_internal_document` | Solo con ID de documento existente y visibilidad evaluable. El catálogo no modela visibilidad por objeto: comparación no concluyente incluso cuando el legacy puede evaluarse |
 
 Los demás módulos/acciones (Tickets, Inventario, PM, usuarios, catálogos, aperturas, reportes, permisos de detalle) **no se proclaman legacy verificables**. Sus checks reales muestran `Sin comprobar`, aunque exista estimación diagnóstica. `branch_id` no convierte una comprobación de rol global en permiso de sucursal. La comparación se computa exclusivamente cuando **ambas decisiones** son booleanas y sustentadas; un seed ausente, acción inactiva, grant temporal o scoped sin semántica completa produce `no_concluyente`.
 
