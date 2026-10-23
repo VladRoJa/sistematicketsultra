@@ -36,4 +36,5 @@ jobs:
       - name: Reproduce by-link visibility discrepancy
         run: |
           python -m pytest -q --tb=short -o addopts= \
-            tests/routes/test_internal_documents_agregadoras_visibility.py::test_by_link_does_not_expose_agregadoras_metadata_to_sistemas
+            tests/routes/test_internal_documents_agregadoras_visibility.py \
+            tests/utils/test_internal_documents_agregadoras_access.py
