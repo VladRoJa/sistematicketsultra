@@ -191,7 +191,17 @@ La prueba en producción comparó **todos los endpoints Flask** con prefijo `/ap
 
 **QA paridad por perfil / documento privado ficticio — 2026-10-23:** el operador ejecutó dentro de `backend` un script que invoca `can_view_internal_document` sobre un `SimpleNamespace` publicado, no sensible y `PRIVATE` (id ficticio negativo, sin DB) con contextos ficticios de rol `SISTEMAS` y `GERENTE`. Obtuvo `SISTEMAS | CAN_VIEW=True`, `GERENTE | CAN_VIEW=False`. **PASS**: corrobora la política legacy de administrador documental para un documento ordinario privado y la denegación del gerente no propietario; **no** prueba HTTP ni permisos reales de otros perfiles/documentos. Pendiente comprobar la excepción de documento sensible `Consolidado de agregadoras` bajo visibilidad explícita simulada.
 
+**QA de excepción de visibilidad sensible con fixture — 2026-10-23:** ejecutado por el operador dentro del backend sin acceso documental real: documento `PUBLISHED`, `CUSTOM`, `is_sensitive=True`, título `Consolidado de agregadoras`; helper de reglas CUSTOM simulado para permitir únicamente username `ADMICORP`. `can_view_internal_document` devolvió `ADMICORP=True`, `SISTEMAS_QA=False`, `GERENTE_QA=False` (**PASS**). Confirma que un manager `SISTEMAS` no salta la restricción especial de lectura en este helper, bajo la regla simulada. Quedan fuera de este caso la descarga actual y la descarga histórica (riesgo A-11).
+
 **Escenarios mínimos de comparación para Fase B:** (1) sesión válida vs inválida, (2) lectura de documento publicado permitido, (3) lectura denegada de documento sensible, (4) SISTEMAS / ADMICORP vs otro rol ante el consolidado, (5) `view=true/download=false`, (6) versiones históricas vs versión actual, (7) auditoría solo manager, (8) listado general vs `/by-link` para un mismo documento, (9) borradores/archivados/visibilidad custom. **Resultado esperado:** el resolvedor podrá describir el acceso sin alterar los guards y sin fusionar todos los GET en un solo booleano `internal_documents.view`.
+
+### A-11 — Riesgo de alcance en descarga de versiones históricas de documento sensible (revisión de código 2026-10-23)
+
+- Tras el QA **PASS** de `can_view_internal_document` para `Consolidado de agregadoras` con visibilidad `CUSTOM` simulada (ADMICORP=True, SISTEMAS=False, GERENTE=False), se revisó el helper de descarga de versiones.
+- `backend/app/utils/internal_documents_access.py::can_download_historical_internal_document_version(document, context)` **devuelve únicamente** `can_manage_internal_documents(context)`; ignora su parámetro `document` y no llama a `can_view_internal_document` ni a `has_document_visibility_access`.
+- `backend/app/routes/internal_documents_routes.py::download_internal_document_version` verifica el documento y llama a ese helper; si devuelve True, busca la versión del documento y pasa al envío del archivo. No se observó en ese handler otra comprobación de visibilidad explícita del documento.
+- **Riesgo a confirmar con fixture:** la cuenta con rol `SISTEMAS` que no puede `view` ni descargar la versión actual del documento especial podría aprobar la autorización de **descarga de versión histórica** si conoce identificadores válidos. No se ejecutó ninguna petición real ni acceso a ficheros, por lo que no se afirma que haya ocurrido una exposición en producción.
+- **Regla de seguridad a decidir:** la autorización de descarga histórica debe conservar el requisito de administración para archivos históricos, pero también respetar los hard stops y visibilidad especial de cada documento. Antes de modificar código, ejecutar una única prueba aislada que contraste `can_view`, `can_download` y `can_download_historical` para la excepción `CUSTOM` simulada. Si se confirma, preparar corrección puntual por PR con CI RED→GREEN y QA posterior.
 
 ## 5. Política de paridad antes de activar permisos
 
@@ -295,7 +305,9 @@ Estos puntos necesitan información del servidor o revisión de código adiciona
 - [x] **HTTP autenticado sin leer documentos:** JWT de sesión legítimo + `entity_type=INVALIDO` devolvió HTTP 400; alcanzó validación previa a consulta de documentos.
 - [x] **Camino HTTP autenticado con parámetros válidos y vínculo ficticio inexistente:** `GET /api/internal-documents/by-link?entity_type=GENERAL&entity_key=SUITE_ULTRA_QA_SIN_VINCULOS_20261023` devolvió **HTTP 200, `items` vacío** (`DOCUMENTOS=0`), sin exponer metadatos de documentos.
 - [x] QA aislado con documento privado ordinario ficticio: rol `SISTEMAS` → `CAN_VIEW=True`; rol `GERENTE` sin propiedad → `CAN_VIEW=False`.
-- [ ] Completar paridad por perfil/objeto sobre **documentos sensibles con regla CUSTOM simulada**, y ampliar fixtures antes de activar resolvedor global.
+- [x] **QA de lectura sensible CUSTOM** con fixture: `ADMICORP=True`, `SISTEMAS_QA=False`, `GERENTE_QA=False` para `Consolidado de agregadoras` simulado.
+- [ ] **Prioritario — A-11:** probar por fixture y resolver posible bypass de restricción especial en descarga de versiones históricas para managers `SISTEMAS`, antes de migrar el resolvedor global.
+- [ ] Ampliar fixtures a descarga actual e histórica y controles por registro de las demás rutas del piloto.
 - [ ] Marcar expresamente el alcance incompleto de módulos fuera del catálogo y plan de expansión.
 
 ### Consulta posterior de producción
