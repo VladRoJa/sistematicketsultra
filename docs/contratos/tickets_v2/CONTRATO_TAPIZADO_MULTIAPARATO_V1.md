@@ -70,6 +70,7 @@ Ejemplo de body (ilustrativo; **aún no activar desde el frontend**):
 - `aparatos_ids`: obligatorio al declarar `TAPIZADO`, lista de 1 a 50 IDs distintos (enteros positivos o cadenas decimales enteras); se rechaza `bool`, float, nulos, duplicados y listas fuera del límite.
 - `aparato_id`: opcional; si llega, **debe coincidir con el primero** de `aparatos_ids`. El backend decide y persiste el principal.
 - `tipo_trabajo`: **exactamente** `TAPIZADO` (mayúsculas). En tickets existentes se omite o queda NULL. Se rechaza `aparatos_ids` si no se especificó el tipo.
+- **Activación:** `TICKETS_TAPIZADO_MULTI_ENABLED=false` por defecto. Hasta completar M3 y QA, cualquier solicitud `TAPIZADO` devuelve HTTP 409 sin escrituras. Los tickets V1 normales no dependen del flag.
 - Solo admite la ruta real de catálogo Mantenimiento → Aparatos (487 y descendientes); Edificio y Sistemas no pueden declararse como tapizado.
 - Para cada ID comprueba que existe en Inventarios, `tipo=aparatos` y vinculación a la sucursal destino. Se aplican las reglas actuales de usuario administrador, sucursal y jefe regional.
 - Si un ID falla, devuelve HTTP 400, sin insertar ningún ticket, vínculo, evento ni adjunto.
