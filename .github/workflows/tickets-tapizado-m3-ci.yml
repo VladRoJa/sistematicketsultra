@@ -7,6 +7,7 @@ on:
       - "backend/app/routes/inventarios.py"
       - "backend/app/utils/ticket_aparatos_filters.py"
       - "backend/app/services/mantenimiento_report_service.py"
+      - "backend/app/services/mantenimiento_equipos_report_service.py"
       - "backend/tests/routes/test_ticket_tapizado_m3_historiales.py"
       - "frontend/src/app/pantalla-crear-ticket/**"
       - "frontend/src/app/pantalla-ver-tickets/**"
@@ -43,7 +44,7 @@ jobs:
           python -m pip install pytest==8.3.5
       - name: Compile affected backend
         run: |
-          python -m py_compile app/routes/ticket_routes.py app/routes/inventarios.py app/utils/ticket_aparatos_filters.py app/services/mantenimiento_report_service.py
+          python -m py_compile app/routes/ticket_routes.py app/routes/inventarios.py app/utils/ticket_aparatos_filters.py app/services/mantenimiento_report_service.py app/services/mantenimiento_equipos_report_service.py
       - name: Tapizado M3, M2 and permissions regression
         run: |
           python -m pytest -q --tb=short -o addopts= \
@@ -51,6 +52,7 @@ jobs:
             tests/routes/test_ticket_tapizado_m2.py \
             tests/routes/test_create_ticket_requires_apparatus.py \
             tests/services/test_mantenimiento_report_service.py \
+            tests/services/test_mantenimiento_equipos_report_service.py \
             tests/utils/test_maintenance_regional_lead.py
 
   frontend-m3:
