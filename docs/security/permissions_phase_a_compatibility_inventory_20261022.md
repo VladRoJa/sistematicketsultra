@@ -185,6 +185,8 @@ La prueba en producción comparó **todos los endpoints Flask** con prefijo `/ap
 
 **QA HTTP anónimo en producción — 2026-10-23:** se ejecutó `curl` sin JWT a `http://127.0.0.1:5000/api/internal-documents/by-link?entity_type=GENERAL` y el operador confirmó **HTTP 401**. Esto comprueba que la ruta rechaza una solicitud sin autenticación (junto con el código correcto cargado y las pruebas unitarias verdes). **No demuestra** el acceso/denegación real por visibilidad documental con sesión autenticada. Próximo chequeo de bajo riesgo: JWT válido + `entity_type` deliberadamente inválido debe devolver `400`, sin leer documentos.
 
+**QA HTTP autenticado sin lectura documental — 2026-10-23:** desde sesión legítima de Suite Ultra se llamó a `GET /api/internal-documents/by-link?entity_type=INVALIDO` con el JWT de sesión sin imprimir el token. Resultado comunicado por operador: **HTTP 400**, esperado por `entity_type` inválido. Como el handler verifica `entity_type` antes de consultar `InternalDocumentORM`, demuestra que el request autenticado alcanzó validación de parámetros **sin ejecutar consulta de documentos**. No implica haber comprobado permisos de lectura por usuario ni por documento. Siguiente prueba acotada: ruta válida con `entity_key` de QA deliberadamente imposible, validando solo HTTP e inventario vacío, sin registrar contenido ni token.
+
 **Escenarios mínimos de comparación para Fase B:** (1) sesión válida vs inválida, (2) lectura de documento publicado permitido, (3) lectura denegada de documento sensible, (4) SISTEMAS / ADMICORP vs otro rol ante el consolidado, (5) `view=true/download=false`, (6) versiones históricas vs versión actual, (7) auditoría solo manager, (8) listado general vs `/by-link` para un mismo documento, (9) borradores/archivados/visibilidad custom. **Resultado esperado:** el resolvedor podrá describir el acceso sin alterar los guards y sin fusionar todos los GET en un solo booleano `internal_documents.view`.
 
 ## 5. Política de paridad antes de activar permisos
@@ -286,7 +288,8 @@ Estos puntos necesitan información del servidor o revisión de código adiciona
 - [x] Corrección puntual de `/by-link` validada (4 tests PASS en CI #39980308075) y fusionada a `main` con PR #1062, commit `e27e63b77a8ce1f3afaefa079902c9e247ce31e9`.
 - [x] Deploy del fix #1062 confirmado por el operador: `git pull` y reconstrucción de `backend`. QA interno de código importado en el contenedor: `NUEVA_VALIDACION=True`, `VALIDACION_ANTERIOR=False`, `QA_BY_LINK=PASS`.
 - [x] **Prueba HTTP sin JWT en backend productivo (2026-10-23):** `GET /api/internal-documents/by-link?entity_type=GENERAL` respondió `401` sin cabecera Authorization. Confirma el rechazo de una solicitud anónima al endpoint, no la corrección de las restricciones entre roles/documentos autenticados.
-- [ ] Validar con JWT legítimo la rama HTTP autenticada usando parámetros inválidos sin consultar documentos y, por separado, contrastar permisos por perfil/objeto con fixtures; revisar escenarios adicionales antes de activar resolvedor global.
+- [x] **HTTP autenticado sin leer documentos:** JWT de sesión legítimo + `entity_type=INVALIDO` devolvió HTTP 400; alcanzó validación previa a consulta de documentos.
+- [ ] Probar camino HTTP autenticado con vínculo ficticio inexistente y, por separado, contrastar permisos por perfil/objeto con fixtures antes de activar resolvedor global.
 - [ ] Marcar expresamente el alcance incompleto de módulos fuera del catálogo y plan de expansión.
 
 ### Consulta posterior de producción
