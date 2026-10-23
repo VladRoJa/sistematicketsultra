@@ -257,7 +257,7 @@ def test_http_three_perspectives_share_same_user_action_branch(monkeypatch, app)
     monkeypatch.setattr(visual, "joinedload", lambda _: Loader())
     monkeypatch.setattr(visual, "PermissionActionORM", SimpleNamespace(
         query=FakeQuery([action]), is_active=Column(), full_key=Column(),
-        module_id=Column(), module=Column(),
+        module_id=Column(), module=Column(), id=Column(),
     ))
     monkeypatch.setattr(visual, "PermissionModuleORM", SimpleNamespace(
         query=FakeQuery([module]), base_action=Column(),
