@@ -170,6 +170,9 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   readonly recipientsPageSize = 25;
   recipientsTotal = 0;
   recipientsTotalPages = 0;
+  recipientsSnapshotCount = 0;
+  recipientsLatestSnapshotId: number | null = null;
+  recipientsLatestSnapshotAt: string | null = null;
   recipientsProviderFilter: RecipientProviderFilter = 'ALL';
   readonly recipientStatusFilters: ReadonlyArray<{ value: RecipientProviderFilter; label: string }> = [
     { value: 'ALL', label: 'Todos' },
@@ -406,7 +409,7 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   get recipientsEmptyMessage(): string {
     return this.recipientsProviderFilter === 'ALL'
       ? 'No hay destinatarios congelados.'
-      : 'No hay destinatarios con este estado en el último corte guardado.';
+      : 'No hay destinatarios con este estado en los cortes guardados.';
   }
 
   loadRecipients(page: number): void {
@@ -418,6 +421,9 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
     this.recipients = [];
     this.recipientsTotal = 0;
     this.recipientsTotalPages = 0;
+    this.recipientsSnapshotCount = 0;
+    this.recipientsLatestSnapshotId = null;
+    this.recipientsLatestSnapshotAt = null;
     this.service.listRecipients(
       this.data.campaignId, page, this.recipientsPageSize, this.recipientsProviderFilter,
     )
@@ -432,6 +438,9 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
           this.recipientsPage = result.page;
           this.recipientsTotal = result.total;
           this.recipientsTotalPages = result.total_pages;
+          this.recipientsSnapshotCount = result.provider_snapshot_count ?? 0;
+          this.recipientsLatestSnapshotId = result.provider_latest_snapshot_id ?? null;
+          this.recipientsLatestSnapshotAt = result.provider_latest_snapshot_at ?? null;
         },
         error: (error: HttpErrorResponse) => {
           if (requestId !== this.recipientsRequestId) {
@@ -924,14 +933,19 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   }
 
   recipientsStatusSnapshotLabel(): string {
-    const status = this.recipients[0]?.provider_status;
-    if (!status) {
-      return 'Estado no disponible';
+    if (this.recipientsSnapshotCount > 1) {
+      const date = this.recipientsLatestSnapshotAt
+        ? ` · último ${this.formatHistoryObservedAt(this.recipientsLatestSnapshotAt)}`
+        : '';
+      return `${this.recipientsSnapshotCount} cortes por lote${date}`;
     }
-    if (status.snapshot_id == null || !status.observed_at) {
+    if (this.recipientsSnapshotCount === 0) {
       return 'Sin captura de estadísticas';
     }
-    return `Snapshot #${status.snapshot_id} · ${this.formatHistoryObservedAt(status.observed_at)}`;
+    if (this.recipientsLatestSnapshotId != null && this.recipientsLatestSnapshotAt) {
+      return `Snapshot #${this.recipientsLatestSnapshotId} · ${this.formatHistoryObservedAt(this.recipientsLatestSnapshotAt)}`;
+    }
+    return 'Estado no disponible';
   }
 
   private recipientStatusDisplay(recipient: CampaignV2RecipientSummary): RecipientStatusDisplay {

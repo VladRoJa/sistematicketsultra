@@ -1235,7 +1235,11 @@ export interface CampaignV2RecipientDetail extends CampaignV2RecipientSummary {
 }
 
 export type CampaignV2CampaignPage = CampaignV2Pagination<CampaignV2CampaignSummary>;
-export type CampaignV2RecipientPage = CampaignV2Pagination<CampaignV2RecipientSummary>;
+export type CampaignV2RecipientPage = CampaignV2Pagination<CampaignV2RecipientSummary> & {
+  provider_snapshot_count?: number;
+  provider_latest_snapshot_id?: number | null;
+  provider_latest_snapshot_at?: string | null;
+};
 
 export interface CampaignV2CampaignQuery {
   page: number;
