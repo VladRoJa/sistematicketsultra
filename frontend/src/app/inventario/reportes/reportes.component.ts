@@ -175,6 +175,36 @@ export class ReportesComponent implements OnInit, OnDestroy {
     return maximo > 0 ? Math.max(0, Math.min(100, cantidad / maximo * 100)) : 0;
   }
 
+  get etiquetaListadoSucursales(): string {
+    return this.verTodasSucursales
+      ? 'Mostrar principales'
+      : 'Ver todas las sucursales (' + this.sucursalesVista.length + ')';
+  }
+
+  get iconoListadoSucursales(): string {
+    return this.verTodasSucursales ? 'expand_less' : 'expand_more';
+  }
+
+  posicionEnRanking(sucursalId: number): number {
+    return this.sucursalesVista.findIndex(s => s.sucursal_id === sucursalId) + 1;
+  }
+
+  movimientoEsSalida(tipo: string): boolean {
+    return tipo === 'salida';
+  }
+
+  iconoMovimiento(tipo: string): string {
+    return this.movimientoEsSalida(tipo) ? 'north_east' : 'south_west';
+  }
+
+  movimientoAnulado(estado: string): boolean {
+    return estado === 'anulado';
+  }
+
+  etiquetaEstadoMovimiento(estado: string): string {
+    return this.movimientoAnulado(estado) ? 'Anulado' : 'Activo';
+  }
+
   get movimientosVigentes(): number {
     const i = this.resumen?.indicadores;
     return i ? i.entradas_vigentes_periodo + i.salidas_vigentes_periodo : 0;
