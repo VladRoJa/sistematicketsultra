@@ -192,13 +192,19 @@ def _validar_aparato_mantenimiento_creacion(
     if not en_rama_aparatos and aparato_id in (None, ""):
         return None
 
-    if isinstance(aparato_id, bool):
+    if isinstance(aparato_id, bool) or (
+        not isinstance(aparato_id, int)
+        and (
+            not isinstance(aparato_id, str)
+            or not aparato_id.strip().isdigit()
+        )
+    ):
         return "Selecciona un aparato válido del inventario."
 
     try:
         inventario_id = int(aparato_id)
     except (TypeError, ValueError):
-        return "Selecciona un aparato del inventario para Mantenimiento > Aparatos."
+        return "Selecciona un aparato válido del inventario."
 
     if inventario_id <= 0:
         return "Selecciona un aparato válido del inventario."
