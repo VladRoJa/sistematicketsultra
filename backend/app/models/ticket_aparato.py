@@ -46,6 +46,11 @@ class TicketAparatoORM(db.Model):
     inventario = db.relationship("InventarioGeneral")
 
     __table_args__ = (
+        db.PrimaryKeyConstraint(
+            "ticket_id",
+            "inventario_id",
+            name="pk_ticket_aparatos",
+        ),
         db.Index(
             "ix_ticket_aparatos_inventario_ticket",
             "inventario_id",
