@@ -29,7 +29,8 @@ interface CategoriaReporte {
 
 interface CategoriaVista extends CategoriaReporte {
   porcentaje: number;
-  anchoBarra: number;
+  participacion: number;
+  claseColor: string;
 }
 
 interface SucursalStock extends SucursalReporte {
@@ -92,6 +93,8 @@ export class ReportesComponent implements OnInit, OnDestroy {
   resumen: ResumenInventario | null = null;
   categoriasVista: CategoriaVista[] = [];
   sucursalesVista: SucursalStock[] = [];
+  busquedaSucursal = '';
+  verTodasSucursales = false;
   private peticionResumen?: Subscription;
 
   constructor(private http: HttpClient) {}
@@ -142,12 +145,49 @@ export class ReportesComponent implements OnInit, OnDestroy {
     this.cargarResumen();
   }
 
+  cambiarBusquedaSucursal(texto: string): void {
+    this.busquedaSucursal = texto;
+  }
+
+  alternarSucursales(): void {
+    this.verTodasSucursales = !this.verTodasSucursales;
+  }
+
+  seleccionarSucursalDesdeRanking(id: number): void {
+    this.cambiarSucursal(id);
+  }
+
+  get sucursalesFiltradas(): SucursalStock[] {
+    const termino = this.busquedaSucursal.trim().toLocaleLowerCase('es');
+    const resultado = termino
+      ? this.sucursalesVista.filter(s => s.sucursal.toLocaleLowerCase('es').includes(termino))
+      : this.sucursalesVista;
+    return this.verTodasSucursales || termino ? resultado : resultado.slice(0, 8);
+  }
+
+  get sucursalesOcultas(): number {
+    if (this.busquedaSucursal.trim() || this.verTodasSucursales) return 0;
+    return Math.max(0, this.sucursalesVista.length - 8);
+  }
+
+  anchoSucursal(cantidad: number): number {
+    const maximo = this.sucursalesVista[0]?.referencias_con_stock || 0;
+    return maximo > 0 ? Math.max(0, Math.min(100, cantidad / maximo * 100)) : 0;
+  }
+
+  get movimientosVigentes(): number {
+    const i = this.resumen?.indicadores;
+    return i ? i.entradas_vigentes_periodo + i.salidas_vigentes_periodo : 0;
+  }
+
   cargarResumen(): void {
     this.peticionResumen?.unsubscribe();
     this.errorResumen = '';
     this.resumen = null;
     this.categoriasVista = [];
     this.sucursalesVista = [];
+    this.busquedaSucursal = '';
+    this.verTodasSucursales = false;
 
     const token = localStorage.getItem('token');
     if (!token) {
@@ -194,11 +234,11 @@ export class ReportesComponent implements OnInit, OnDestroy {
 
   private prepararCategorias(categorias: CategoriaReporte[]): CategoriaVista[] {
     const total = categorias.reduce((suma, cat) => suma + cat.referencias_con_stock, 0);
-    const maximo = Math.max(1, ...categorias.map(cat => cat.referencias_con_stock));
-    return categorias.map(cat => ({
+    return categorias.map((cat, indice) => ({
       ...cat,
       porcentaje: total ? Math.round(cat.referencias_con_stock / total * 100) : 0,
-      anchoBarra: Math.round(cat.referencias_con_stock / maximo * 100),
+      participacion: total ? cat.referencias_con_stock / total * 100 : 0,
+      claseColor: 'category-' + (indice % 6),
     }));
   }
 
