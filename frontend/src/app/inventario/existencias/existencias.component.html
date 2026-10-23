@@ -41,7 +41,7 @@
       <strong>No pudimos cargar las existencias</strong>
       <p>{{ error }}</p>
     </div>
-    <button type="button" (click)="cargarExistencias()">Reintentar</button>
+    <button *ngIf="puedeConsultarVista" type="button" (click)="cargarExistencias()">Reintentar</button>
   </div>
 
   <ng-container *ngIf="!loading && !error">
