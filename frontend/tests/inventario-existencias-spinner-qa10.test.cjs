@@ -1,6 +1,6 @@
 'use strict';
 
-// QA-10C: el indicador debe existir y la carga terminar tanto con éxito como con error.
+// Inventarios V2 E1: compatibilidad de carga QA-10 y coherencia dashboard/listado.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -11,6 +11,7 @@ const base = path.join(__dirname, '../src/app/inventario/existencias');
 const source = fs.readFileSync(path.join(base, 'existencias.component.ts'), 'utf8');
 const html = fs.readFileSync(path.join(base, 'existencias.component.html'), 'utf8');
 const css = fs.readFileSync(path.join(base, 'existencias.component.css'), 'utf8');
+const serviceSource = fs.readFileSync(path.join(__dirname, '../src/app/services/inventario.service.ts'), 'utf8');
 
 function componente() {
   const js = ts.transpileModule(source, {
@@ -20,169 +21,176 @@ function componente() {
       experimentalDecorators: true,
     },
   }).outputText;
-  const module = { exports: {} };
+  const mod = { exports: {} };
   new Function('require', 'module', 'exports', js)(
     name => name === '@angular/core'
       ? { Component: () => klass => klass }
       : {},
-    module,
-    module.exports,
+    mod,
+    mod.exports,
   );
-  return module.exports.ExistenciasComponent;
+  return mod.exports.ExistenciasComponent;
 }
 
-function fixture() {
-  const oldStorage = global.localStorage;
-  global.localStorage = {
-    getItem: key => key === 'user'
-      ? JSON.stringify({ rol: 'ADMINISTRADOR', sucursal_id: 1000 })
-      : null,
+function fixture(rol = 'ADMINISTRADOR') {
+  const peticiones = [];
+  const servicio = {
+    listarSucursales: () => ({
+      subscribe: observer => {
+        observer.next([{ sucursal_id: 1, sucursal: 'Santa Fe' }]);
+        return { unsubscribe() {} };
+      },
+    }),
+    verExistencias: opts => ({
+      subscribe: observer => {
+        const peticion = {
+          opts,
+          observer,
+          cancelada: false,
+        };
+        peticiones.push(peticion);
+        return { unsubscribe: () => { peticion.cancelada = true; } };
+      },
+    }),
   };
-  try {
-    let pending;
-    const service = {
-      verExistencias: () => ({
-        subscribe: observers => { pending = observers; },
-      }),
-    };
-    const Existencias = componente();
-    const vm = new Existencias(service);
-    vm.sucursalSeleccionada = 1;
-    return { vm, pending: () => pending };
-  } finally {
-    global.localStorage = oldStorage;
-  }
+  const session = { getRol: () => rol };
+  const vm = new (componente())(servicio, session);
+  return { vm, peticiones };
 }
 
-test('spinner de Angular Material registrado y visible cuando loading=true', () => {
-  assert.match(source, /import \{ MatProgressSpinnerModule \} from '@angular\/material\/progress-spinner'/);
-  assert.match(source, /imports:\s*\[[\s\S]*?MatProgressSpinnerModule/);
-  assert.match(source, /styleUrls:\s*\['\.\/existencias\.component\.css'\]/);
-  assert.match(html, /<div \*ngIf="loading" class="existencias-loading"/);
+const rows = [
+  { inventario_id: 25, sucursal_id: 1, sucursal_nombre: 'Santa Fe',
+    nombre: 'CPU', codigo_interno: 'SF-025', tipo: 'Dispositivos', marca: 'Dell',
+    proveedor: 'Proveedor A', categoria: 'Equipo recepción', unidad_medida: 'Pieza', stock: 1 },
+  { inventario_id: 26, sucursal_id: 1, sucursal_nombre: 'Santa Fe',
+    nombre: 'Monitor', codigo_interno: 'SF-026', tipo: 'Dispositivos', marca: 'HP',
+    proveedor: 'Proveedor B', categoria: 'Equipo gerencia', unidad_medida: 'Pieza', stock: 0 },
+  { inventario_id: 27, sucursal_id: 1, sucursal_nombre: 'Santa Fe',
+    nombre: 'Impresora', codigo_interno: 'SF-027', tipo: 'Impresora', marca: null,
+    proveedor: null, categoria: 'Equipo recepción', unidad_medida: 'Pieza', stock: 2 },
+];
+
+test('QA-10: spinner y plantilla externa siguen presentes', () => {
+  assert.match(source, /MatProgressSpinnerModule/);
+  assert.match(source, /SessionService/);
+  assert.match(source, /templateUrl: '\.\/existencias\.component\.html'/);
+  assert.match(source, /styleUrls: \['\.\/existencias\.component\.css'\]/);
+  assert.match(html, /\*ngIf="loading" class="existencias-loading"/);
   assert.match(html, /<mat-spinner/);
   assert.match(html, /Cargando existencias\.\.\./);
   assert.match(css, /\.existencias-loading \{/);
 });
 
-test('al cambiar de sucursal se ve loading hasta respuesta y se filtra el stock', () => {
-  const { vm, pending } = fixture();
+test('E1: rol global inicia en Global y consulta su sucursal en backend, no filtra globalmente en Angular', () => {
+  const { vm, peticiones } = fixture();
+  vm.ngOnInit();
+  assert.equal(vm.puedeVerGlobal, true);
+  assert.equal(vm.sucursalSeleccionada, 'global');
+  assert.equal(vm.loading, true);
+  assert.equal(peticiones[0].opts, undefined);
+
+  peticiones[0].observer.next(rows);
+  assert.equal(vm.loading, false);
+  assert.equal(vm.totalReferencias, 3);
+  assert.equal(vm.referenciasConStock, 2);
+  assert.equal(vm.referenciasSinStock, 1);
+  assert.equal(vm.totalCategorias, 2);
+
+  vm.onSucursalChange(1);
+  assert.deepEqual(peticiones[1].opts, { sucursal_id: 1 });
+  assert.equal(peticiones[0].cancelada, true);
+  assert.equal(vm.loading, true);
+  assert.equal(vm.totalReferencias, 0);
+  peticiones[1].observer.next(rows.slice(0, 1));
+  assert.equal(vm.totalReferencias, 1);
+  assert.equal(vm.existenciasFiltradas.length, 1);
+  assert.equal(vm.filasPagina[0].codigo_interno, 'SF-025');
+  assert.match(serviceSource, /verExistencias\(opts\?: \{ sucursal_id\?: number \}\)/);
+});
+
+test('E1: GERENTE no participa en piloto, ni por URL directa a la pantalla', () => {
+  const { vm, peticiones } = fixture('GERENTE');
+  vm.ngOnInit();
+  assert.equal(vm.puedeConsultarVista, false);
+  assert.equal(peticiones.length, 0);
+  assert.match(vm.error, /no está habilitada/);
+  vm.cargarExistencias();
+  assert.equal(peticiones.length, 0);
+  assert.match(html, /\*ngIf="puedeConsultarVista"/);
+  assert.doesNotMatch(html, /Solicitar corrección/);
+  assert.doesNotMatch(html, /Verificado/);
+});
+
+test('E1: un perfil operativo permitido no ofrece selector global y respeta alcance backend', () => {
+  const { vm, peticiones } = fixture('SR_MANTENIMIENTO');
+  vm.ngOnInit();
+  assert.equal(vm.puedeVerGlobal, false);
+  assert.equal(vm.puedeConsultarVista, true);
+  assert.equal(peticiones[0].opts, undefined);
+  peticiones[0].observer.next(rows.slice(0, 1));
+  assert.equal(vm.totalReferencias, 1);
+  assert.match(html, /\*ngIf="puedeVerGlobal"/);
+});
+
+test('E1: búsqueda sin acentos, categoría y estado stock filtran la tabla sin alterar el resumen', () => {
+  const { vm, peticiones } = fixture();
+  vm.ngOnInit();
+  peticiones[0].observer.next(rows);
+
+  vm.busqueda = 'recepcion';
+  vm.aplicarFiltros();
+  assert.deepEqual(vm.existenciasFiltradas.map(e => e.inventario_id), [25, 27]);
+  assert.equal(vm.totalReferencias, 3);
+
+  vm.busqueda = '';
+  vm.categoriaSeleccionada = 'Equipo gerencia';
+  vm.estadoStock = 'sin-stock';
+  vm.aplicarFiltros();
+  assert.deepEqual(vm.existenciasFiltradas.map(e => e.inventario_id), [26]);
+  assert.equal(vm.totalReferencias, 3);
+
+  vm.limpiarFiltros();
+  assert.equal(vm.existenciasFiltradas.length, 3);
+  assert.equal(vm.composicion.reduce((n, cat) => n + cat.cantidad, 0), 3);
+  assert.match(html, /e\.unidad_medida \|\| '—'/);
+  assert.match(html, /e\.codigo_interno \|\| '—'/);
+});
+
+test('E1: paginación no renderiza miles de filas y conserva total filtrado', () => {
+  const { vm, peticiones } = fixture();
+  vm.ngOnInit();
+  peticiones[0].observer.next(Array.from({ length: 85 }, (_, i) => ({
+    ...rows[0],
+    inventario_id: i + 1,
+  })));
+  assert.equal(vm.totalReferencias, 85);
+  assert.equal(vm.filasPagina.length, 40);
+  assert.equal(vm.totalPaginas, 3);
+  vm.irPagina(2);
+  assert.equal(vm.filasPagina.length, 5);
+  assert.equal(vm.rangoInicio, 81);
+  assert.equal(vm.rangoFin, 85);
+  vm.irPagina(3);
+  assert.equal(vm.paginaActual, 2);
+  vm.busqueda = 'no-existe';
+  vm.aplicarFiltros();
+  assert.equal(vm.paginaActual, 0);
+  assert.equal(vm.filasPagina.length, 0);
+});
+
+test('QA-10: error y respuesta tardía no dejan spinner ni cifras obsoletas', () => {
+  const { vm, peticiones } = fixture();
+  vm.ngOnInit();
+  vm.onSucursalChange(1);
+  peticiones[0].observer.next(rows);
+  assert.equal(vm.totalReferencias, 0); // Ignorar respuesta de consulta anterior.
+  peticiones[1].observer.error({ status: 403 });
+  assert.equal(vm.loading, false);
+  assert.equal(vm.totalReferencias, 0);
+  assert.match(vm.error, /permiso/);
   vm.cargarExistencias();
   assert.equal(vm.loading, true);
-  pending().next([
-    { inventario_id: 27, sucursal_id: 1, nombre: 'Mouse', stock: 1 },
-    { inventario_id: 46, sucursal_id: 2, nombre: 'Mouse', stock: 5 },
-  ]);
+  peticiones[2].observer.next(rows);
   assert.equal(vm.loading, false);
-  assert.deepEqual(vm.existencias.map(item => item.inventario_id), [27]);
-});
-
-test('si la API falla, el estado loading termina sin quedarse bloqueado', () => {
-  const { vm, pending } = fixture();
-  const originalConsoleError = console.error;
-  console.error = () => {};
-  try {
-    vm.cargarExistencias();
-    assert.equal(vm.loading, true);
-    pending().error(new Error('simulated'));
-    assert.equal(vm.loading, false);
-    assert.deepEqual(vm.existencias, []);
-  } finally {
-    console.error = originalConsoleError;
-  }
-});
-
-
-test('QA-10D: el administrador inicia en Global y no en una sucursal corporativa sin opción', () => {
-  const oldStorage = global.localStorage;
-  global.localStorage = {
-    getItem: key => key === 'user'
-      ? JSON.stringify({ rol: 'ADMINISTRADOR', sucursal_id: 1000 })
-      : null,
-  };
-  try {
-    const Existencias = componente();
-    const vm = new Existencias({});
-    assert.equal(vm.esAdmin, true);
-    assert.equal(vm.sucursalSeleccionada, 'global');
-    assert.match(source, /MatFormFieldModule/);
-    assert.match(html, /Todas las sucursales \(Global\)/);
-    assert.match(html, /class="existencias-toolbar"/);
-    assert.match(css, /\.existencias-sucursal-field/);
-    assert.doesNotMatch(html, /style="width: 300px;"/);
-  } finally {
-    global.localStorage = oldStorage;
-  }
-});
-
-test('QA-10D: Global incluye todas las existencias y sucursal específica solo las suyas', () => {
-  const oldStorage = global.localStorage;
-  global.localStorage = {
-    getItem: key => key === 'user'
-      ? JSON.stringify({ rol: 'ADMINISTRADOR', sucursal_id: 1000 })
-      : null,
-  };
-  try {
-    let observer;
-    const vm = new (componente())({
-      verExistencias: () => ({
-        subscribe: handlers => { observer = handlers; },
-      }),
-    });
-    const rows = [
-      { inventario_id: 27, sucursal_id: 1, stock: 1 },
-      { inventario_id: 46, sucursal_id: 2, stock: 2 },
-    ];
-    vm.cargarExistencias();
-    observer.next(rows);
-    assert.deepEqual(vm.existencias, rows);
-
-    vm.sucursalSeleccionada = 1;
-    vm.onSucursalChange();
-    assert.equal(vm.loading, true);
-    observer.next(rows);
-    assert.deepEqual(vm.existencias.map(item => item.inventario_id), [27]);
-  } finally {
-    global.localStorage = oldStorage;
-  }
-});
-
-test('QA-10D: usuario no administrador conserva su sucursal predeterminada', () => {
-  const oldStorage = global.localStorage;
-  global.localStorage = {
-    getItem: key => key === 'user'
-      ? JSON.stringify({ rol: 'GERENTE', sucursal_id: 35 })
-      : null,
-  };
-  try {
-    const vm = new (componente())({});
-    assert.equal(vm.esAdmin, false);
-    assert.equal(vm.sucursalSeleccionada, 35);
-  } finally {
-    global.localStorage = oldStorage;
-  }
-});
-
-
-test('QA-10E: la tabla muestra Código interno después de Nombre', () => {
-  const { vm, pending } = fixture();
-  const indexNombre = vm.displayedColumns.indexOf('nombre');
-  const indexCodigo = vm.displayedColumns.indexOf('codigo_interno');
-  assert.equal(indexCodigo, indexNombre + 1);
-  assert.match(html, /matColumnDef="codigo_interno"/);
-  assert.match(html, /Código interno/);
-  assert.match(html, /e\.codigo_interno \|\| '—'/);
-
-  vm.cargarExistencias();
-  pending().next([
-    {
-      inventario_id: 27,
-      sucursal_id: 1,
-      nombre: 'Mouse',
-      codigo_interno: 'VDR-033-RECMOU',
-      stock: 1,
-    },
-  ]);
-  assert.equal(vm.existencias[0].codigo_interno, 'VDR-033-RECMOU');
-  assert.equal(vm.existencias[0].stock, 1);
-  assert.match(css, /\.existencias-code/);
+  assert.equal(vm.error, '');
 });

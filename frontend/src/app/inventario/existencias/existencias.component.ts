@@ -1,90 +1,288 @@
-// src/app/inventario/existencias/existencias.component.ts
-
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MatCardModule } from '@angular/material/card';
-import { MatTableModule } from '@angular/material/table';
-import { MatSelectModule } from '@angular/material/select';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { FormsModule } from '@angular/forms';
+import { MatIconModule } from '@angular/material/icon';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTableModule } from '@angular/material/table';
+import { Subscription } from 'rxjs';
+
+import { SessionService } from '../../core/auth/session.service';
 import { InventarioService } from '../../services/inventario.service';
+
+interface SucursalInventario {
+  sucursal_id: number;
+  sucursal: string;
+}
+
+interface ExistenciaInventario {
+  inventario_id: number;
+  sucursal_id: number;
+  sucursal_nombre: string;
+  nombre: string;
+  codigo_interno: string | null;
+  tipo: string | null;
+  marca: string | null;
+  proveedor: string | null;
+  categoria: string | null;
+  unidad_medida: string | null;
+  stock: number | null;
+}
+
+interface CategoriaExistencia {
+  nombre: string;
+  cantidad: number;
+  porcentaje: number;
+  color: string;
+}
+
+const ROLES_CON_ALCANCE_GLOBAL = new Set([
+  'ADMIN',
+  'ADMINISTRADOR',
+  'SUPER_ADMIN',
+  'MANTENIMIENTO',
+  'SISTEMAS',
+  'TECNICO',
+]);
+
+// Gate de presentación E1: GERENTE y GERENTE_REGIONAL no participan
+// en el piloto. El backend sigue siendo la autoridad de permisos.
+const ROLES_PILOTO_V2 = new Set([
+  ...ROLES_CON_ALCANCE_GLOBAL,
+  'SR_MANTENIMIENTO',
+  'AUX_MANTENIMIENTO',
+]);
 
 @Component({
   selector: 'app-existencias',
   standalone: true,
   imports: [
     CommonModule,
-    MatCardModule,
-    MatTableModule,
-    MatSelectModule,
-    MatFormFieldModule,
+    FormsModule,
+    MatIconModule,
     MatProgressSpinnerModule,
-    FormsModule
+    MatTableModule,
   ],
   templateUrl: './existencias.component.html',
   styleUrls: ['./existencias.component.css'],
 })
-export class ExistenciasComponent implements OnInit {
-  user = JSON.parse(localStorage.getItem('user') || '{}');
-  esAdmin = this.user?.rol === 'ADMINISTRADOR';
-
-  sucursales: any[] = [];
-  // Un administrador consulta el conjunto global por defecto.
-  // Su sucursal corporativa puede no existir en el selector de sucursales operativas.
-  sucursalSeleccionada: number | 'global' = this.esAdmin
-    ? 'global'
-    : this.user?.sucursal_id || 1;
-  existencias: any[] = [];
-  displayedColumns: string[] = [
-    'id', 'nombre', 'codigo_interno', 'tipo', 'marca', 'proveedor', 'categoria', 'unidad', 'stock', 'sucursal'
+export class ExistenciasComponent implements OnInit, OnDestroy {
+  readonly displayedColumns = [
+    'id', 'nombre', 'codigo_interno', 'tipo', 'marca',
+    'proveedor', 'categoria', 'unidad', 'stock', 'sucursal',
   ];
+  readonly pageSize = 40;
 
+  puedeVerGlobal = false;
+  puedeConsultarVista = false;
+  sucursales: SucursalInventario[] = [];
+  sucursalSeleccionada: number | 'global' = 'global';
+
+  existencias: ExistenciaInventario[] = [];
+  existenciasFiltradas: ExistenciaInventario[] = [];
+  filasPagina: ExistenciaInventario[] = [];
+  categorias: string[] = [];
+  composicion: CategoriaExistencia[] = [];
+
+  totalReferencias = 0;
+  referenciasConStock = 0;
+  referenciasSinStock = 0;
+  totalCategorias = 0;
+
+  busqueda = '';
+  categoriaSeleccionada = 'todas';
+  estadoStock = 'todos';
+  paginaActual = 0;
   loading = false;
+  error = '';
 
-  constructor(private inventarioService: InventarioService) {}
+  private peticionExistencias?: Subscription;
+  private peticionSucursales?: Subscription;
+  private versionConsulta = 0;
+
+  constructor(
+    private readonly inventarioService: InventarioService,
+    private readonly session: SessionService,
+  ) {}
 
   ngOnInit(): void {
-    if (this.esAdmin) this.cargarSucursales();
+    const rol = String(this.session.getRol() || '').trim().toUpperCase();
+    this.puedeVerGlobal = ROLES_CON_ALCANCE_GLOBAL.has(rol);
+    this.puedeConsultarVista = ROLES_PILOTO_V2.has(rol);
+    if (!this.puedeConsultarVista) {
+      this.error = 'La nueva consulta de Inventarios todavía no está habilitada para este perfil.';
+      return;
+    }
+
+    // El backend define el alcance autorizado incluso si no enviamos sucursal_id.
+    // "global" en un perfil limitado NO equivale a acceso global.
+    if (this.puedeVerGlobal) this.cargarSucursales();
     this.cargarExistencias();
   }
 
+  ngOnDestroy(): void {
+    this.versionConsulta++;
+    this.peticionExistencias?.unsubscribe();
+    this.peticionSucursales?.unsubscribe();
+  }
+
   cargarSucursales(): void {
-    this.inventarioService.listarSucursales().subscribe({
-      next: (data) => {
-        this.sucursales = data.filter(
-          s => !['corporativo', 'administrador'].includes((s.sucursal || '').toLowerCase())
-        );
+    this.peticionSucursales?.unsubscribe();
+    this.peticionSucursales = this.inventarioService.listarSucursales().subscribe({
+      next: (data: SucursalInventario[]) => {
+        this.sucursales = Array.isArray(data)
+          ? data.filter(s => !['corporativo', 'administrador'].includes(
+            String(s.sucursal || '').trim().toLowerCase(),
+          ))
+          : [];
       },
-      error: (err) => console.error('Error al cargar sucursales', err)
+      error: () => {
+        this.sucursales = [];
+      },
     });
   }
 
   cargarExistencias(): void {
+    if (!this.puedeConsultarVista) return;
+    this.peticionExistencias?.unsubscribe();
+    const versionActual = ++this.versionConsulta;
     this.loading = true;
-    this.inventarioService.verExistencias().subscribe({
-      next: (data) => {
-        // Si es admin y selecciona "global", muestra todas
-        if (this.esAdmin && this.sucursalSeleccionada === 'global') {
-          this.existencias = data;
-        } else {
-          // Sucursal específica (la del usuario, o la que admin elija)
-          const id = this.sucursalSeleccionada === 'global'
-            ? this.user?.sucursal_id || 1
-            : this.sucursalSeleccionada;
-          this.existencias = data.filter((inv: any) => inv.sucursal_id == id);
-        }
+    this.error = '';
+    this.limpiarDatos();
+
+    const sucursalId = this.puedeVerGlobal && this.sucursalSeleccionada !== 'global'
+      ? Number(this.sucursalSeleccionada)
+      : null;
+
+    this.peticionExistencias = this.inventarioService.verExistencias(
+      sucursalId !== null ? { sucursal_id: sucursalId } : undefined,
+    ).subscribe({
+      next: (data: ExistenciaInventario[]) => {
+        if (versionActual !== this.versionConsulta) return;
+        this.existencias = Array.isArray(data) ? data : [];
+        this.actualizarResumen();
+        this.aplicarFiltros();
         this.loading = false;
       },
-      error: (err) => {
-        this.existencias = [];
+      error: (err: any) => {
+        if (versionActual !== this.versionConsulta) return;
+        this.limpiarDatos();
+        this.error = err?.status === 403
+          ? 'No tienes permiso para consultar las existencias de esta sucursal.'
+          : 'No fue posible consultar las existencias. Intenta nuevamente.';
         this.loading = false;
-        console.error('Error al cargar existencias', err);
-      }
+      },
     });
   }
 
-  onSucursalChange() {
+  onSucursalChange(nuevaSucursal: number | 'global'): void {
+    this.sucursalSeleccionada = nuevaSucursal;
+    this.busqueda = '';
+    this.categoriaSeleccionada = 'todas';
+    this.estadoStock = 'todos';
     this.cargarExistencias();
+  }
+
+  aplicarFiltros(): void {
+    const termino = this.normalizar(this.busqueda);
+    this.existenciasFiltradas = this.existencias.filter(item => {
+      const categoria = this.nombreCategoria(item);
+      const conStock = Number(item.stock ?? 0) > 0;
+      if (this.categoriaSeleccionada !== 'todas' && categoria !== this.categoriaSeleccionada) {
+        return false;
+      }
+      if (this.estadoStock === 'con-stock' && !conStock) return false;
+      if (this.estadoStock === 'sin-stock' && conStock) return false;
+      if (!termino) return true;
+
+      return [
+        item.nombre, item.codigo_interno, item.tipo, item.marca,
+        item.proveedor, item.categoria, item.sucursal_nombre, item.inventario_id,
+      ].some(valor => this.normalizar(valor).includes(termino));
+    });
+    this.paginaActual = 0;
+    this.actualizarPagina();
+  }
+
+  limpiarFiltros(): void {
+    this.busqueda = '';
+    this.categoriaSeleccionada = 'todas';
+    this.estadoStock = 'todos';
+    this.aplicarFiltros();
+  }
+
+  irPagina(indice: number): void {
+    if (indice < 0 || indice >= this.totalPaginas) return;
+    this.paginaActual = indice;
+    this.actualizarPagina();
+  }
+
+  get totalPaginas(): number {
+    return Math.max(1, Math.ceil(this.existenciasFiltradas.length / this.pageSize));
+  }
+
+  get rangoInicio(): number {
+    return this.existenciasFiltradas.length === 0 ? 0 : this.paginaActual * this.pageSize + 1;
+  }
+
+  get rangoFin(): number {
+    return Math.min((this.paginaActual + 1) * this.pageSize, this.existenciasFiltradas.length);
+  }
+
+  get hayFiltros(): boolean {
+    return !!this.busqueda.trim() ||
+      this.categoriaSeleccionada !== 'todas' ||
+      this.estadoStock !== 'todos';
+  }
+
+  private actualizarPagina(): void {
+    const inicio = this.paginaActual * this.pageSize;
+    this.filasPagina = this.existenciasFiltradas.slice(inicio, inicio + this.pageSize);
+  }
+
+  private actualizarResumen(): void {
+    this.totalReferencias = this.existencias.length;
+    this.referenciasConStock = this.existencias.filter(e => Number(e.stock ?? 0) > 0).length;
+    this.referenciasSinStock = this.totalReferencias - this.referenciasConStock;
+
+    const porCategoria = new Map<string, number>();
+    for (const item of this.existencias) {
+      const categoria = this.nombreCategoria(item);
+      porCategoria.set(categoria, (porCategoria.get(categoria) || 0) + 1);
+    }
+    this.categorias = [...porCategoria.keys()].sort((a, b) => a.localeCompare(b, 'es'));
+    this.totalCategorias = this.categorias.length;
+    const orden = [...porCategoria.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'es'));
+    const principales = orden.slice(0, 5);
+    const otras = orden.slice(5).reduce((total, [, cantidad]) => total + cantidad, 0);
+    if (otras) principales.push(['Otras categorías', otras]);
+
+    this.composicion = principales.map(([nombre, cantidad], indice) => ({
+      nombre,
+      cantidad,
+      porcentaje: this.totalReferencias ? cantidad / this.totalReferencias * 100 : 0,
+      color: 'category-' + indice,
+    }));
+  }
+
+  private limpiarDatos(): void {
+    this.existencias = [];
+    this.existenciasFiltradas = [];
+    this.filasPagina = [];
+    this.categorias = [];
+    this.composicion = [];
+    this.totalReferencias = 0;
+    this.referenciasConStock = 0;
+    this.referenciasSinStock = 0;
+    this.totalCategorias = 0;
+    this.paginaActual = 0;
+  }
+
+  private nombreCategoria(item: ExistenciaInventario): string {
+    return String(item.categoria || '').trim() || 'Sin categoría';
+  }
+
+  private normalizar(valor: unknown): string {
+    return String(valor ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .trim().toLocaleLowerCase('es');
   }
 }

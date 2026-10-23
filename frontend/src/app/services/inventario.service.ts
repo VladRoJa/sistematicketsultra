@@ -59,8 +59,12 @@ obtenerInventario(opts?: { sucursal_id?: number }): Observable<any[]> {
     return this.http.get<any[]>(`${this.url}/sucursales`);
   }
 
-  verExistencias(): Observable<any[]> {
-    return this.http.get<any[]>(`${this.url}/existencias`);
+  verExistencias(opts?: { sucursal_id?: number }): Observable<any[]> {
+    let params = new HttpParams();
+    if (opts?.sucursal_id != null) {
+      params = params.set('sucursal_id', String(opts.sucursal_id));
+    }
+    return this.http.get<any[]>(`${this.url}/existencias`, { params });
   }
 
   registrarMovimiento(data: any): Observable<any> {

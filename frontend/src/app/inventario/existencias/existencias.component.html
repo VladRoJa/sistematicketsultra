@@ -1,107 +1,221 @@
-<!-- src/app/inventario/existencias/existencias.component.html -->
-
-<mat-card>
-  <h2>Existencias por producto</h2>
-
-  <!-- Selector de sucursal: los administradores inician en vista global. -->
-  <div *ngIf="esAdmin" class="existencias-toolbar">
-    <div class="existencias-toolbar__heading">
-      <strong>Consultar existencias</strong>
-      <span>Selecciona una sucursal o consulta todas en la vista global.</span>
+<section class="existencias-page" aria-labelledby="existencias-titulo">
+  <header class="page-heading">
+    <div>
+      <div class="eyebrow"><span class="eyebrow-mark"></span> INVENTARIOS · EXISTENCIAS</div>
+      <h1 id="existencias-titulo">Inventario por sucursal</h1>
+      <p>Consulta de activos registrados y sus existencias actuales. Las cifras no representan una auditoría física.</p>
     </div>
-    <mat-form-field appearance="outline" class="existencias-sucursal-field">
-      <mat-label>Sucursal</mat-label>
-      <mat-select
+    <span class="read-only-tag"><mat-icon aria-hidden="true">visibility</mat-icon> Solo consulta</span>
+  </header>
+
+  <section *ngIf="puedeVerGlobal" class="existencias-toolbar" aria-label="Alcance de consulta">
+    <div class="existencias-toolbar__heading">
+      <strong>Consultar sucursal</strong>
+      <span>Los indicadores y el listado corresponden al mismo alcance.</span>
+    </div>
+    <div class="existencias-sucursal-field">
+      <label for="sucursal-inventario">Sucursal</label>
+      <select
+        id="sucursal-inventario"
         [(ngModel)]="sucursalSeleccionada"
-        (selectionChange)="onSucursalChange()"
+        (ngModelChange)="onSucursalChange($event)"
         aria-label="Sucursal de existencias"
       >
-        <mat-option value="global">Todas las sucursales (Global)</mat-option>
-        <mat-option *ngFor="let s of sucursales" [value]="s.sucursal_id">
-          {{ s.sucursal }}
-        </mat-option>
-      </mat-select>
-    </mat-form-field>
-  </div>
+        <option value="global">Todas las sucursales (Global)</option>
+        <option *ngFor="let sucursal of sucursales" [ngValue]="sucursal.sucursal_id">
+          {{ sucursal.sucursal }}
+        </option>
+      </select>
+    </div>
+  </section>
 
-  <!-- Estado visible mientras se consultan las existencias -->
   <div *ngIf="loading" class="existencias-loading" role="status" aria-live="polite">
     <mat-spinner [diameter]="36" aria-label="Cargando existencias"></mat-spinner>
     <strong>Cargando existencias...</strong>
-    <span>Consultando el inventario de la sucursal seleccionada.</span>
+    <span>Consultando los registros del alcance autorizado.</span>
   </div>
 
-  <!-- Tabla de existencias -->
-  <table mat-table [dataSource]="existencias" class="mat-elevation-z2" style="width: 100%;" *ngIf="!loading && existencias.length > 0">
-
-    <!-- ID -->
-    <ng-container matColumnDef="id">
-      <th mat-header-cell *matHeaderCellDef>ID</th>
-      <td mat-cell *matCellDef="let e">{{ e.inventario_id }}</td>
-    </ng-container>
-
-    <!-- Nombre -->
-    <ng-container matColumnDef="nombre">
-      <th mat-header-cell *matHeaderCellDef>Nombre</th>
-      <td mat-cell *matCellDef="let e">{{ e.nombre }}</td>
-    </ng-container>
-
-    <!-- Código interno: identificador del catálogo maestro -->
-    <ng-container matColumnDef="codigo_interno">
-      <th mat-header-cell *matHeaderCellDef>Código interno</th>
-      <td mat-cell *matCellDef="let e" class="existencias-code">
-        {{ e.codigo_interno || '—' }}
-      </td>
-    </ng-container>
-
-    <!-- Tipo -->
-    <ng-container matColumnDef="tipo">
-      <th mat-header-cell *matHeaderCellDef>Tipo</th>
-      <td mat-cell *matCellDef="let e">{{ e.tipo }}</td>
-    </ng-container>
-
-    <!-- Marca -->
-    <ng-container matColumnDef="marca">
-      <th mat-header-cell *matHeaderCellDef>Marca</th>
-      <td mat-cell *matCellDef="let e">{{ e.marca }}</td>
-    </ng-container>
-
-    <!-- Proveedor -->
-    <ng-container matColumnDef="proveedor">
-      <th mat-header-cell *matHeaderCellDef>Proveedor</th>
-      <td mat-cell *matCellDef="let e">{{ e.proveedor }}</td>
-    </ng-container>
-
-    <!-- Categoría -->
-    <ng-container matColumnDef="categoria">
-      <th mat-header-cell *matHeaderCellDef>Categoría</th>
-      <td mat-cell *matCellDef="let e">{{ e.categoria }}</td>
-    </ng-container>
-
-    <!-- Unidad -->
-    <ng-container matColumnDef="unidad">
-      <th mat-header-cell *matHeaderCellDef>Unidad</th>
-      <td mat-cell *matCellDef="let e">{{ e.unidad }}</td>
-    </ng-container>
-
-    <!-- Stock -->
-    <ng-container matColumnDef="stock">
-      <th mat-header-cell *matHeaderCellDef>Stock</th>
-      <td mat-cell *matCellDef="let e">{{ e.stock }}</td>
-    </ng-container>
-
-    <!-- Sucursal -->
-    <ng-container matColumnDef="sucursal">
-      <th mat-header-cell *matHeaderCellDef>Sucursal</th>
-      <td mat-cell *matCellDef="let e">{{ e.sucursal_nombre }}</td>
-    </ng-container>
-
-    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-    <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
-  </table>
-
-  <!-- Mensaje si no hay existencias -->
-  <div *ngIf="!loading && existencias.length === 0" class="py-3 text-center text-muted">
-    <span>No hay existencias para mostrar.</span>
+  <div *ngIf="!loading && error" class="existencias-error" role="alert">
+    <mat-icon aria-hidden="true">error_outline</mat-icon>
+    <div>
+      <strong>No pudimos cargar las existencias</strong>
+      <p>{{ error }}</p>
+    </div>
+    <button *ngIf="puedeConsultarVista" type="button" (click)="cargarExistencias()">Reintentar</button>
   </div>
-</mat-card>
+
+  <ng-container *ngIf="!loading && !error">
+    <section class="overview-grid" aria-label="Resumen de existencias">
+      <article class="hero-card">
+        <div class="hero-card__mark"><mat-icon aria-hidden="true">inventory_2</mat-icon> REFERENCIAS REGISTRADAS</div>
+        <div class="hero-card__value">{{ totalReferencias | number }}</div>
+        <p>Referencias de inventario asignadas a sucursales</p>
+        <div class="hero-card__footer">
+          <mat-icon aria-hidden="true">location_on</mat-icon>
+          {{ puedeVerGlobal && sucursalSeleccionada === 'global' ? 'Vista global' : 'Alcance consultado' }}
+        </div>
+      </article>
+
+      <div class="metric-grid">
+        <article class="metric-card">
+          <mat-icon aria-hidden="true">check_circle_outline</mat-icon>
+          <span>Con stock</span>
+          <strong>{{ referenciasConStock | number }}</strong>
+          <small>Referencias con stock mayor a cero</small>
+        </article>
+        <article class="metric-card">
+          <mat-icon aria-hidden="true">remove_circle_outline</mat-icon>
+          <span>Sin stock</span>
+          <strong>{{ referenciasSinStock | number }}</strong>
+          <small>Referencias en cero o sin cantidad</small>
+        </article>
+        <article class="metric-card metric-card--wide">
+          <mat-icon aria-hidden="true">category</mat-icon>
+          <span>Categorías registradas</span>
+          <strong>{{ totalCategorias | number }}</strong>
+          <small>Clasificaciones presentes en este inventario</small>
+        </article>
+      </div>
+    </section>
+
+    <section class="composition-card" aria-labelledby="composicion-titulo">
+      <div class="section-heading">
+        <div>
+          <div class="eyebrow">COMPOSICIÓN</div>
+          <h2 id="composicion-titulo">¿Qué tenemos registrado?</h2>
+          <p>Distribución por categoría, basada en referencias y no en piezas.</p>
+        </div>
+        <span class="section-count">{{ totalCategorias }} categorías</span>
+      </div>
+      <div *ngIf="composicion.length" class="composition-chart" role="img" aria-label="Distribución de referencias por categoría">
+        <span *ngFor="let categoria of composicion"
+          class="composition-segment"
+          [ngClass]="categoria.color"
+          [style.width.%]="categoria.porcentaje"
+          [attr.title]="categoria.nombre + ': ' + categoria.cantidad + ' referencias'">
+        </span>
+      </div>
+      <div *ngIf="composicion.length" class="composition-legend">
+        <div *ngFor="let categoria of composicion" class="composition-legend__item">
+          <span class="composition-dot" [ngClass]="categoria.color"></span>
+          <span class="composition-name">{{ categoria.nombre }}</span>
+          <strong>{{ categoria.porcentaje | number:'1.0-0' }}%</strong>
+          <small>{{ categoria.cantidad | number }} referencias</small>
+        </div>
+      </div>
+      <p *ngIf="!composicion.length" class="composition-empty">Este alcance todavía no tiene artículos registrados.</p>
+    </section>
+
+    <section class="list-panel" aria-labelledby="lista-existencias-titulo">
+      <div class="section-heading list-heading">
+        <div>
+          <div class="eyebrow">DETALLE DEL INVENTARIO</div>
+          <h2 id="lista-existencias-titulo">Listado de existencias</h2>
+          <p>Busca por nombre, código, marca o tipo. Filtra sin alterar los registros.</p>
+        </div>
+        <span class="section-count">{{ existenciasFiltradas.length | number }} resultados</span>
+      </div>
+
+      <div class="filters">
+        <div class="filter-search">
+          <mat-icon aria-hidden="true">search</mat-icon>
+          <input
+            type="search"
+            name="buscarExistencias"
+            [(ngModel)]="busqueda"
+            (ngModelChange)="aplicarFiltros()"
+            placeholder="Buscar artículo, código, marca..."
+            aria-label="Buscar existencias"
+          />
+        </div>
+        <div class="filter-select">
+          <label for="categoria-existencias">Categoría</label>
+          <select id="categoria-existencias" [(ngModel)]="categoriaSeleccionada" (ngModelChange)="aplicarFiltros()">
+            <option value="todas">Todas las categorías</option>
+            <option *ngFor="let categoria of categorias" [value]="categoria">{{ categoria }}</option>
+          </select>
+        </div>
+        <div class="filter-select filter-select--stock">
+          <label for="estado-stock">Existencia</label>
+          <select id="estado-stock" [(ngModel)]="estadoStock" (ngModelChange)="aplicarFiltros()">
+            <option value="todos">Todas</option>
+            <option value="con-stock">Con stock</option>
+            <option value="sin-stock">Sin stock</option>
+          </select>
+        </div>
+        <button *ngIf="hayFiltros" class="clear-filters" type="button" (click)="limpiarFiltros()">
+          <mat-icon aria-hidden="true">close</mat-icon> Limpiar
+        </button>
+      </div>
+
+      <div class="table-scroll">
+        <table mat-table [dataSource]="filasPagina" class="existencias-table">
+          <ng-container matColumnDef="id">
+            <th mat-header-cell *matHeaderCellDef>ID</th>
+            <td mat-cell *matCellDef="let e">{{ e.inventario_id }}</td>
+          </ng-container>
+          <ng-container matColumnDef="nombre">
+            <th mat-header-cell *matHeaderCellDef>Nombre</th>
+            <td mat-cell *matCellDef="let e" class="cell-name">{{ e.nombre }}</td>
+          </ng-container>
+          <ng-container matColumnDef="codigo_interno">
+            <th mat-header-cell *matHeaderCellDef>Código interno</th>
+            <td mat-cell *matCellDef="let e" class="existencias-code">{{ e.codigo_interno || '—' }}</td>
+          </ng-container>
+          <ng-container matColumnDef="tipo">
+            <th mat-header-cell *matHeaderCellDef>Tipo</th>
+            <td mat-cell *matCellDef="let e">{{ e.tipo || '—' }}</td>
+          </ng-container>
+          <ng-container matColumnDef="marca">
+            <th mat-header-cell *matHeaderCellDef>Marca</th>
+            <td mat-cell *matCellDef="let e">{{ e.marca || '—' }}</td>
+          </ng-container>
+          <ng-container matColumnDef="proveedor">
+            <th mat-header-cell *matHeaderCellDef>Proveedor</th>
+            <td mat-cell *matCellDef="let e">{{ e.proveedor || '—' }}</td>
+          </ng-container>
+          <ng-container matColumnDef="categoria">
+            <th mat-header-cell *matHeaderCellDef>Categoría</th>
+            <td mat-cell *matCellDef="let e">{{ e.categoria || 'Sin categoría' }}</td>
+          </ng-container>
+          <ng-container matColumnDef="unidad">
+            <th mat-header-cell *matHeaderCellDef>Unidad</th>
+            <td mat-cell *matCellDef="let e">{{ e.unidad_medida || '—' }}</td>
+          </ng-container>
+          <ng-container matColumnDef="stock">
+            <th mat-header-cell *matHeaderCellDef>Stock</th>
+            <td mat-cell *matCellDef="let e">
+              <span class="stock-pill" [class.stock-pill--empty]="!e.stock || e.stock <= 0">{{ e.stock ?? 0 }}</span>
+            </td>
+          </ng-container>
+          <ng-container matColumnDef="sucursal">
+            <th mat-header-cell *matHeaderCellDef>Sucursal</th>
+            <td mat-cell *matCellDef="let e">{{ e.sucursal_nombre }}</td>
+          </ng-container>
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+        </table>
+      </div>
+
+      <div *ngIf="!existenciasFiltradas.length" class="empty-results" role="status">
+        <mat-icon aria-hidden="true">inventory_2</mat-icon>
+        <strong>{{ existencias.length ? 'Sin coincidencias' : 'Sin existencias registradas' }}</strong>
+        <p>{{ existencias.length ? 'Prueba otros filtros o términos de búsqueda.' : 'No hay referencias para el alcance consultado.' }}</p>
+      </div>
+
+      <footer class="table-footer" *ngIf="existenciasFiltradas.length">
+        <span>Mostrando {{ rangoInicio | number }}–{{ rangoFin | number }} de {{ existenciasFiltradas.length | number }} referencias</span>
+        <nav class="pager" aria-label="Paginación de existencias">
+          <button type="button" (click)="irPagina(paginaActual - 1)" [disabled]="paginaActual === 0" aria-label="Página anterior">
+            <mat-icon aria-hidden="true">chevron_left</mat-icon>
+          </button>
+          <span>Página {{ paginaActual + 1 }} de {{ totalPaginas }}</span>
+          <button type="button" (click)="irPagina(paginaActual + 1)" [disabled]="paginaActual + 1 >= totalPaginas" aria-label="Página siguiente">
+            <mat-icon aria-hidden="true">chevron_right</mat-icon>
+          </button>
+        </nav>
+      </footer>
+    </section>
+    <p class="scope-note">Las cifras reflejan las mismas referencias consultadas en esta pantalla. La vista global de Existencias puede incluir sucursales DEMO, a diferencia del consolidado de Reportes.</p>
+  </ng-container>
+</section>
