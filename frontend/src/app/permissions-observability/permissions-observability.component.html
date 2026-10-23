@@ -201,8 +201,9 @@
               <td>{{ getModuleName(action.module_key) }}</td>
               <td><code>{{ action.full_key }}</code></td>
               <td>
-                <strong>{{ action.name }}</strong>
-                <span>{{ action.description }}</span>
+                <strong>{{ actionLabel(action.full_key, action.name) }}</strong>
+                <span>{{ actionExplanation(action.full_key, action.description) }}</span>
+                <small>{{ actionPurpose(action.full_key) }}</small>
               </td>
               <td>
                 <span [class]="getRiskBadgeClass(action.risk_level)">
@@ -363,7 +364,11 @@
               <td><code>{{ route.route }}</code></td>
               <td>{{ route.endpoint_function }}</td>
               <td>{{ getModuleName(route.module_key) }}</td>
-              <td><code>{{ route.action_full_key || 'Sin acción activa' }}</code></td>
+              <td>
+                <strong *ngIf="route.action_full_key">{{ actionLabel(route.action_full_key) }}</strong>
+                <span *ngIf="!route.action_full_key">Sin acción activa</span>
+                <small *ngIf="route.action_full_key">{{ route.action_full_key }}</small>
+              </td>
               <td>
                 <span>{{ route.current_guard || 'Sin guard documentado' }}</span>
                 <small>{{ route.current_scope }}</small>
@@ -495,8 +500,8 @@
                 <small>{{ grant.principal_type }}</small>
               </td>
               <td>
-                <code>{{ grant.action_full_key || grant.module_key || 'Sin acción' }}</code>
-                <small>{{ grant.action_name || grant.module_name || 'Grant por módulo' }}</small>
+                <strong>{{ grant.action_full_key ? actionLabel(grant.action_full_key, grant.action_name) : (grant.module_name || 'Grant por módulo') }}</strong>
+                <small>{{ grant.action_full_key || grant.module_key || 'Sin acción' }}</small>
               </td>
               <td>
                 <span [class]="getGrantEffectBadgeClass(grant)">
@@ -760,11 +765,15 @@
               *ngFor="let action of allowedEffectiveActions; trackBy: trackByEffectiveAction"
             >
               <div>
-                <code>{{ action.full_key }}</code>
+                <strong>{{ actionLabel(action.full_key, action.name) }}</strong>
                 <span [class]="getDecisionBadgeClass(action)">Permitido</span>
               </div>
-              <p>{{ action.reason }}</p>
-              <small>{{ action.source }} · {{ action.scope_type }}</small>
+              <p>{{ actionExplanation(action.full_key, action.description) }}</p>
+              <small>{{ actionPurpose(action.full_key) }} · {{ action.full_key }}</small>
+              <details>
+                <summary>Motivo técnico de la estimación</summary>
+                <small>{{ action.reason }} · {{ action.source }} · {{ action.scope_type }}</small>
+              </details>
             </article>
           </section>
 
@@ -776,11 +785,15 @@
               *ngFor="let action of deniedEffectiveActions; trackBy: trackByEffectiveAction"
             >
               <div>
-                <code>{{ action.full_key }}</code>
+                <strong>{{ actionLabel(action.full_key, action.name) }}</strong>
                 <span [class]="getDecisionBadgeClass(action)">Denegado</span>
               </div>
-              <p>{{ action.reason }}</p>
-              <small>{{ action.source }} · {{ action.scope_type }}</small>
+              <p>{{ actionExplanation(action.full_key, action.description) }}</p>
+              <small>{{ actionPurpose(action.full_key) }} · {{ action.full_key }}</small>
+              <details>
+                <summary>Motivo técnico de la estimación</summary>
+                <small>{{ action.reason }} · {{ action.source }} · {{ action.scope_type }}</small>
+              </details>
             </article>
           </section>
         </div>
