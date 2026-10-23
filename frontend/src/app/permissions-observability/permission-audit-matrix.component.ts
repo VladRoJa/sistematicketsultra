@@ -245,6 +245,54 @@ export class PermissionAuditMatrixComponent implements OnInit {
     return value === null ? 'Sin comprobar' : value ? 'Permitido' : 'Denegado';
   }
 
+  getScopeLabel(row: VisualAuditRow): string {
+    if (row.scope === 'global') { return 'Guard de alcance global'; }
+    if (row.scope === 'documento') { return 'Depende de la visibilidad del documento'; }
+    return 'Se requiere contexto adicional';
+  }
+
+  getAuditReason(row: VisualAuditRow, origin: 'legacy' | 'catalog'): string {
+    const allowed = origin === 'legacy' ? row.legacy_allowed : row.catalog_allowed;
+    const reason = origin === 'legacy' ? row.legacy_reason : row.catalog_reason;
+    const source = origin === 'legacy' ? row.legacy_source : row.catalog_source;
+
+    if (origin === 'catalog' && source === 'grant_diagnostico_no_enforcement') {
+      return 'Existe un grant en el catálogo diagnóstico. No modifica el acceso real.';
+    }
+    if (row.action_key === 'track.read' &&
+        (origin === 'legacy' || reason === 'track_read_role_matches_guard_v2')) {
+      const label = allowed === true ? 'incluido entre los roles autorizados'
+        : allowed === false ? 'fuera de los roles autorizados'
+        : 'sin verificar';
+      return (origin === 'legacy' ? 'Guard real de Track: ' : 'Catálogo diagnóstico de Track: ') +
+        'rol ' + label + ' para consultar indicadores.';
+    }
+
+    const explanations: Record<string, string> = {
+      'guard_de_rol_track': 'La consulta se determina por el rol del usuario.',
+      'guard_admin_track': 'La ejecución de procesos de Track exige un rol administrador.',
+      'manager_legacy_verificado': 'El permiso de administración documental se comprobó con la regla vigente.',
+      'documento_y_visibilidad_evaluados': 'Se evaluó el acceso al documento específico.',
+      'allowlist_y_flag': 'La regla valida el registro y las facultades del operador Warehouse.',
+      'operador_activo_y_flag': 'La regla requiere un operador activo y una facultad habilitada.',
+      'requiere_guard_especifico_o_contexto_de_objeto': 'No se puede comprobar sin el guard o el registro correspondiente.',
+      'branch_guard_no_evaluable_sin_recurso': 'La sucursal indicada no basta para validar acceso al registro.',
+      'modulo_sin_accion_base': 'No hay una acción base que permita comprobar esta entrada.',
+      'grant_con_alcance_o_vigencia_no_resuelta': 'El alcance o vigencia del grant no se puede resolver aquí.',
+      'catalogo_no_modela_visibilidad_de_este_documento': 'El catálogo no determina permisos de lectura para este documento específico.',
+      'accion_sin_proyeccion_mapeada_o_inactiva': 'El catálogo todavía no tiene una proyección vigente para esta acción.',
+    };
+    if (explanations[reason]) { return explanations[reason]; }
+    if (origin === 'legacy') {
+      return allowed === null ? 'El guard real todavía no puede comprobarse desde esta consulta.'
+        : allowed ? 'La regla operativa permite esta acción.' : 'La regla operativa deniega esta acción.';
+    }
+    return allowed === null ? 'El catálogo no puede estimar esta decisión.'
+      : allowed ? 'El catálogo estima que la acción está permitida.'
+      : 'El catálogo estima que la acción está denegada.';
+  }
+
+
   exportCurrentPageCsv(): void {
     if (!this.rows.length) { return; }
     const fields: (keyof VisualAuditRow)[] = [
