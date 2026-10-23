@@ -86,3 +86,13 @@
   .tapizado-resumen { flex-direction: column; }
   .tapizado-chip { max-width: 100%; overflow-wrap: anywhere; }
 }
+
+.tapizado-filtros {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.tapizado-filtros mat-form-field { min-width: 0; }
+@media (max-width: 560px) {
+  .tapizado-filtros { grid-template-columns: minmax(0, 1fr); }
+}
