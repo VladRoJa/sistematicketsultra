@@ -67,6 +67,16 @@ obtenerInventario(opts?: { sucursal_id?: number }): Observable<any[]> {
     return this.http.get<any[]>(`${this.url}/existencias`, { params });
   }
 
+  // Piloto V2: lectura por endpoint con autorizacion propia en backend.
+  // No sustituye el metodo legacy usado por V1 y el flujo de movimientos.
+  verExistenciasV2(opts?: { sucursal_id?: number }): Observable<any[]> {
+    let params = new HttpParams();
+    if (opts?.sucursal_id != null) {
+      params = params.set('sucursal_id', String(opts.sucursal_id));
+    }
+    return this.http.get<any[]>(`${this.url}/v2/existencias`, { params });
+  }
+
   registrarMovimiento(data: any): Observable<any> {
     return this.http.post(`${this.url}/movimientos`, data);
   }

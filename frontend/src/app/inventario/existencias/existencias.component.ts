@@ -172,7 +172,7 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
       ? Number(this.sucursalSeleccionada)
       : null;
 
-    this.peticionExistencias = this.inventarioService.verExistencias(
+    this.peticionExistencias = this.inventarioService.verExistenciasV2(
       sucursalId !== null ? { sucursal_id: sucursalId } : undefined,
     ).subscribe({
       next: (data: ExistenciaInventario[]) => {

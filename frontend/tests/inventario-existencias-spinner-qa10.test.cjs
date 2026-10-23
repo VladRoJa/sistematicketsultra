@@ -41,7 +41,7 @@ function fixture(rol = 'ADMINISTRADOR') {
         return { unsubscribe() {} };
       },
     }),
-    verExistencias: opts => ({
+    verExistenciasV2: opts => ({
       subscribe: observer => {
         const peticion = {
           opts,
@@ -106,6 +106,8 @@ test('E1: rol global inicia en Global y consulta su sucursal en backend, no filt
   assert.equal(vm.existenciasFiltradas.length, 1);
   assert.equal(vm.filasPagina[0].codigo_interno, 'SF-025');
   assert.match(serviceSource, /verExistencias\(opts\?: \{ sucursal_id\?: number \}\)/);
+  assert.match(serviceSource, /verExistenciasV2\(opts\?: \{ sucursal_id\?: number \}\)/);
+  assert.match(serviceSource, /\$\{this\.url\}\/v2\/existencias/);
 });
 
 test('E1: GERENTE no participa en piloto, ni por URL directa a la pantalla', () => {
