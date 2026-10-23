@@ -3,7 +3,7 @@
 **Proyecto:** Suite Ultra (Angular + Flask + PostgreSQL).
 **Fecha de acuerdo:** 2026-10-23.
 **Versión del contrato:** 1.0.
-**Estado:** E1 ACEPTADO (2026-10-23) / E2 PENDIENTE DE DISEÑO E IMPLEMENTACIÓN / E5 GERENTES NO AUTORIZADO.
+**Estado:** E1 ACEPTADO (2026-10-23) / E2 IMPLEMENTACIÓN TÉCNICA INTEGRADA, PENDIENTE DE DESPLIEGUE FRONTEND Y QA VISUAL / E5 GERENTES NO AUTORIZADO.
 **Organización:** UN milestone lógico con CINCO entregables secuenciales (E1–E5). No equivale a cinco milestones distintos de GitHub.
 **Decisión irrevocable sin nueva autorización explícita:** NO abrir Inventarios V2 a GERENTE antes de terminar y aprobar E1–E4 y el gate de E5.
 
@@ -74,7 +74,7 @@ Referencias a inspeccionar (las ubicaciones son evidencia de partida, **no garan
 
 **Observación de datos:** el HTML actual pide `e.unidad`, mientras el backend devuelve `unidad_medida`. Corregir el mapeo al renovar la vista, conservando compatibilidad si existen variantes.
 
-**Hallazgo de seguridad real, no resuelto por este documento:** `_resolve_inventory_read_sucursal_ids` actualmente contempla lectura acotada para roles no globales mediante `sucursal_id`. Como la ruta Angular está protegida solo por `AuthGuard`, **un GERENTE podría alcanzar la lectura mediante URL directa aunque no tenga menú**, sujeto al alcance que resuelva el backend. No afirmar que GERENTE ya está bloqueado; hay que verificarlo con QA de rol real y diseñar el gate adecuado. **No ampliar permisos durante E1–E4.** Antes de publicar endpoints/datos V2 o afirmar aislamiento de gerentes, cerrar el hardening necesario en un PR de seguridad separado, conservando las capacidades existentes autorizadas. El gate final exige bloqueo backend+frontend probado para rol no liberado y alcance correcto al habilitarlo.
+**Hallazgo legacy y mitigación V2:** `_resolve_inventory_read_sucursal_ids` conserva alcance acotado por `sucursal_id` para ciertos roles en **V1**. El PR #1103 separó la lectura visual V2 como `GET /api/inventario/v2/existencias`, con guard de rol piloto que deniega GERENTE/GERENTE_REGIONAL; E2 incorpora guard DB propio para la API de solicitudes (PR #1105) y la interfaz no ofrece acciones a esos roles (PR #1108). **No confundir esto con bloqueo total de V1:** `GET /api/inventario/existencias` sigue con política legacy por compatibilidad y necesita evaluación/hardening sin romper consumidores. No ampliar permisos durante E1–E4 ni declarar abierto el gate E5 sin QA real de rol/API/ruta.
 
 ## 4. Conceptos de datos obligatorios
 
@@ -220,7 +220,7 @@ Estas decisiones **no se deben inventar ni bloquear E1 si todavía no le afectan
 | Entregable | Estado al 2026-10-23 | Evidencia / siguiente acción |
 |---|---|---|
 | E1 — Dashboard Existencias + listado | **ACEPTADO — QA visual por sucursal** | Último PR E1 **#1086**, merge **`9781cbee`**. QA-E1 Villas del Rey: tarjetas, categorías, familias y listado conciliados. CI verdes reportados. |
-| E2 — Solicitudes de corrección | **SIGUIENTE — POR DISEÑAR / NO IMPLEMENTADO** | Definir modelo de solicitudes, alcance de datos maestros, APIs, permisos, auditoría y Alembic; ninguna aplicación automática al inventario oficial. |
+| E2 — Solicitudes de corrección | **IMPLEMENTADO TÉCNICAMENTE — QA VISUAL PENDIENTE** | Modelo y Alembic #1104; API de crear/listar/detalle #1105; frontend formulario/seguimiento #1108. Validaciones automáticas en CI aprobadas, sin actualización del maestro/stock; falta desplegar frontend y QA autenticado por sucursal. |
 | E3 — Validaciones | **BLOQUEADO por E2** | No implementado. |
 | E4 — Levantamiento/corte | **BLOQUEADO por E3** | No implementado. |
 | E5 — GERENTES | **BLOQUEADO por E1–E4 y autorización explícita** | `GERENTE_ROLLOUT = OFF / NO AUTORIZADO`; no agregar menú, permisos V2 ni habilitar mediante URL directa. |
@@ -232,10 +232,10 @@ Estas decisiones **no se deben inventar ni bloquear E1 si todavía no le afectan
 - **Categorías:** 6 categorías; Cardio 53, Peso Libre 47, Selectorizado 37, Equipo gerencia 9, Equipo recepción 9, Uso común 1. Conciliación: `53 + 47 + 37 + 9 + 9 + 1 = 156`.
 - **Familias (solo aparatos):** 137 referencias; Peso Libre 47, Peso Integrado 37, Spinning 26, Caminadora 11, Elíptica 11, Recumbente 3, Escaladora 1, Sin familia 1. Conciliación: `47 + 37 + 26 + 11 + 11 + 3 + 1 + 1 = 137`. Dispositivos/otras categorías: `156 - 137 = 19`, sin contarlos como pendientes de familia.
 - **Cardio:** `26 + 11 + 11 + 3 + 1 + 1 = 53` (incluye un aparato sin familia); coincide con la categoría.
-- **Listado:** 156 resultados sin filtros adicionales; las filas visibles en la captura tienen sucursal **Villas del rey**. La ruta `GET /api/inventario/existencias?sucursal_id=...` aplica filtro SQL por sucursal autorizada; el componente reconstruye tarjetas/composición/listado sobre esa misma respuesta, limpia filtros al cambiar sucursal e ignora respuestas obsoletas.
+- **Listado:** 156 resultados sin filtros adicionales; las filas visibles en la captura tienen sucursal **Villas del rey**. La ruta piloto `GET /api/inventario/v2/existencias?sucursal_id=...` aplica filtro SQL por sucursal autorizada; el componente reconstruye tarjetas/composición/listado sobre esa misma respuesta, limpia filtros al cambiar sucursal e ignora respuestas obsoletas.
 - **QA técnico:** PR **#1086** integró filtros de familia/categoría no redundantes; sus pruebas cubren autoselección cuando es inequívoca, filtros cruzados, estado de carga, alcance, errores y paginación. Los CI se reportaron verdes al retomar esta fase. No se ejecutó aquí una nueva prueba automatizada de producción.
 - **Observación no bloqueante:** 1 aparato sin familia real en Villas del Rey. Clasificarlo corresponde a la calidad de datos, no a recalcular E1 ni a modificar automáticamente el catálogo.
-- **Alcance de la aprobación:** E1 es una vista de **solo lectura** para perfiles ya autorizados. No representa levantamiento físico ni confirma existencias verificadas; no autoriza apertura a GERENTES. El hallazgo de posible acceso V1 por API/ruta directa descrito en §3 sigue siendo deuda de hardening que debe cerrarse antes de exponer V2 a roles no liberados.
+- **Alcance de la aprobación:** E1 es una vista de **solo lectura** para perfiles ya autorizados. No representa levantamiento físico ni confirma existencias verificadas; no autoriza apertura a GERENTES. El acceso V2 tiene guard backend propio desde #1103; la lectura legacy V1 conserva su política y su deuda de hardening descrita en §3. Ninguno de esos cambios autoriza E5.
 
 ### Estado de partida que se conserva
 
@@ -243,11 +243,19 @@ Estas decisiones **no se deben inventar ni bloquear E1 si todavía no le afectan
 - Reportes/dashboard V1: PRs **#1059**, **#1060**, **#1061**, layout **#1064**, corrección de scroll **#1066**. No confundir Reportes con E1 de Existencias.
 - E1 de Existencias: dashboard, categorías oficiales, familias, filtros inteligentes y listado conservado; último PR **#1086**, commit merge **`9781cbee`**.
 
-### Siguiente trabajo — E2, solicitudes de corrección SIN aplicación automática
+### Registro de implementación E2 (2026-10-23)
 
-1. **Preparar el diseño**, sin escrituras de inventario ni habilitación gerencial: identificar modelos maestros/por sucursal, esquema de propuesta, captura de valores original/propuesto, actor autenticado, motivo, evidencia, timestamps, baseline/concurrencia, estados y tratamiento de hallazgos sin inventario_id.
-2. **Auditar permisos efectivos antes de codificar rutas:** backend define sucursal y creador, identidad JWT, roles autorizados al piloto, controles anti-IDOR; GERENTE y GERENTE_REGIONAL siguen fuera del piloto V2. Separar en PR el hardening necesario, sin ampliar permisos inadvertidamente.
-3. **Planear un PR acotado con migración Alembic** para persistencia de solicitudes, índices/constraints y pruebas de inmutabilidad del inventario V1. Una solicitud `PENDING` **no** llama a edición, movimientos, ni cambia stock, código o categoría oficiales.
-4. E3 implementará posteriormente revisión y aplicación autorizada, **no** durante la creación de E2.
+- **Seguridad piloto:** PR **#1103**, endpoint `/api/inventario/v2/existencias` protegido por rol y sucursal, sin alterar V1. El gate `GERENTE_ROLLOUT = OFF` permanece vigente.
+- **Persistencia aislada:** PR **#1104**, modelo `InventarioSolicitudCorreccionORM` y migración Alembic `v2e2a7c92623`. Se verificó PostgreSQL 16 temporal, constraints de sucursal e idempotencia, rollback protegido; ninguna modificación a maestro ni stock. El responsable confirmó posteriormente que el despliegue del esquema levantó correctamente.
+- **API autenticada:** PR **#1105**, `POST/GET /api/inventario/solicitudes` y `GET /api/inventario/solicitudes/<id>`, guard por rol DB y sucursal, cuatro tipos, 409 por stale baseline/UUID conflicto, paginación/filtros SQL; **13 pruebas** de PostgreSQL temporal y regresiones aprobadas. El responsable confirmó que el backend actualizado levantó bien.
+- **Interfaz:** PR **#1108**, acciones por referencia, hallazgo no registrado, formulario aislado, seguimiento con filtros, mensajes de éxito/error, estados PENDING, reintento idempotente y prohibición de abrir modal para GERENTE; QA y type-check Angular, build de producción y regresión QA-13 en CI aprobados. **Aún no hay confirmación de despliegue frontend ni QA visual real.**
+- **No incluido en E2:** aprobación/rechazo, modificación de códigos oficiales, movimientos, ajustes de existencias, revisión transaccional de E3, levantamiento/corte E4, apertura GERENTE E5. No confundir estado `PENDING` con corrección aplicada.
+
+### Próximo control para aceptar E2
+
+1. Desplegar **frontend** desde `main` por el flujo Docker establecido. No ejecutar migración adicional para el PR #1108.
+2. En `/#/inventario/existencias` hacer QA visual por sucursal piloto (por ejemplo, Villas del Rey): formulario por fila y hallazgo provisional, obligatorio motivo, stock/maestro oficiales en solo lectura, guardado `PENDING` y filtro de seguimiento, sin modificar KPI/listado E1.
+3. Verificar por rol y sucursal real (API directa inclusive) que GERENTE/GERENTE_REGIONAL no puedan utilizar E2; comprobar SR/AUX y rol global. No cambiar permisos hasta la aprobación del gate correspondiente.
+4. Comparar registros oficiales antes/después del piloto: `inventario_general`, `inventario_sucursal` y movimientos sin cambios. Solo entonces registrar **E2 ACEPTADO**. E3 continúa bloqueado hasta ese control.
 
 **Gobierno de cambios:** un PR lógico a la vez; explicar archivo, método, objetivo y motivo antes de tocar código. No iniciar E5 sin aprobación explícita tras E1–E4.
