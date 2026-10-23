@@ -37,6 +37,9 @@
 
   <section class="permissions-panel">
     <div class="permissions-tabs">
+      <button type="button" [class]="getTabClass('audit')" (click)="setActiveTab('audit')">
+        Matriz visual · Auditoría
+      </button>
       <button
         type="button"
         [class]="getTabClass('modules')"
@@ -78,7 +81,9 @@
       </button>
     </div>
 
-    <div class="permissions-filters">
+    <app-permission-audit-matrix *ngIf="activeTab === 'audit'"></app-permission-audit-matrix>
+
+    <div class="permissions-filters" *ngIf="activeTab !== 'audit'">
       <label>
         Módulo
         <select [(ngModel)]="selectedModuleKey">
