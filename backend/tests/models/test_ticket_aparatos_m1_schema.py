@@ -29,7 +29,7 @@ class TicketAparatosM1SchemaTest(unittest.TestCase):
     def test_nombre_y_columnas_canonicos(self):
         self.assertEqual(self.table.name, "ticket_aparatos")
         self.assertEqual(
-            set(self.table.columns),
+            {column.name for column in self.table.columns},
             {"ticket_id", "inventario_id", "vinculado_en_utc"},
         )
 
