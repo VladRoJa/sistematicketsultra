@@ -41,6 +41,11 @@ class Config:
     AUTH_REFRESH_COOKIE_NAME = "suite_refresh"
 
 
+    # M2: nuevas escrituras de tapizado desactivadas hasta QA M3.
+    TICKETS_TAPIZADO_MULTI_ENABLED = os.getenv(
+        "TICKETS_TAPIZADO_MULTI_ENABLED", "false"
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
     # Base de datos
     SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
