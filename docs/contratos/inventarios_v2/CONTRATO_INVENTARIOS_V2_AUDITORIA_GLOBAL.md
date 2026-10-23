@@ -3,7 +3,7 @@
 **Proyecto:** Suite Ultra (Angular + Flask + PostgreSQL).
 **Fecha de acuerdo:** 2026-10-23.
 **Versión del contrato:** 1.0.
-**Estado:** ALCANCE FUNCIONAL ACORDADO / IMPLEMENTACIÓN V2 PENDIENTE.
+**Estado:** E1 ACEPTADO (2026-10-23) / E2 PENDIENTE DE DISEÑO E IMPLEMENTACIÓN / E5 GERENTES NO AUTORIZADO.
 **Organización:** UN milestone lógico con CINCO entregables secuenciales (E1–E5). No equivale a cinco milestones distintos de GitHub.
 **Decisión irrevocable sin nueva autorización explícita:** NO abrir Inventarios V2 a GERENTE antes de terminar y aprobar E1–E4 y el gate de E5.
 
@@ -217,25 +217,37 @@ Estas decisiones **no se deben inventar ni bloquear E1 si todavía no le afectan
 
 ## 14. Bitácora viva y siguiente paso
 
-| Entregable | Estado al crear contrato (2026-10-23) | Evidencia |
+| Entregable | Estado al 2026-10-23 | Evidencia / siguiente acción |
 |---|---|---|
-| E1 — Dashboard Existencias + listado | **PENDIENTE** | Vista V1 existente inspeccionada; sin PR V2. |
-| E2 — Solicitudes | **BLOQUEADO por E1** | No implementado. |
+| E1 — Dashboard Existencias + listado | **ACEPTADO — QA visual por sucursal** | Último PR E1 **#1086**, merge **`9781cbee`**. QA-E1 Villas del Rey: tarjetas, categorías, familias y listado conciliados. CI verdes reportados. |
+| E2 — Solicitudes de corrección | **SIGUIENTE — POR DISEÑAR / NO IMPLEMENTADO** | Definir modelo de solicitudes, alcance de datos maestros, APIs, permisos, auditoría y Alembic; ninguna aplicación automática al inventario oficial. |
 | E3 — Validaciones | **BLOQUEADO por E2** | No implementado. |
 | E4 — Levantamiento/corte | **BLOQUEADO por E3** | No implementado. |
-| E5 — GERENTES | **BLOQUEADO por E1–E4 y autorización explícita** | Rollout V2 no autorizado. |
+| E5 — GERENTES | **BLOQUEADO por E1–E4 y autorización explícita** | `GERENTE_ROLLOUT = OFF / NO AUTORIZADO`; no agregar menú, permisos V2 ni habilitar mediante URL directa. |
 
-### Estado de partida, que NO debe reimplementarse
+### Evidencia de aceptación E1 — Villas del Rey (2026-10-23)
 
-- Inventarios V1 QA: catálogo, entradas, salidas, existencias, anulaciones y exportación existentes.
-- Reportes/dashboard V1 ya desarrollados; referencias PRs **#1059**, **#1060**, **#1061** y ajuste de layout **#1064**. La corrección global de scroll del layout fue PR **#1066**. **Estos PR no aceptan E1 de Inventarios V2**.
-- `/#/inventario/existencias` aún es tabla básica; la captura gerencial propuesta debe construirse allí sin eliminar lista.
-- Esta fase **NO ha sido desplegada ni habilitada** por crear el contrato.
+- **Fuente:** dos capturas de la pantalla desplegada `/#/inventario/existencias`, aportadas durante el QA operativo de Villas del Rey. Las capturas muestran resumen, composición, filtros y las primeras filas del listado. La verificación de todas las filas se apoya adicionalmente en la implementación de filtrado por sucursal en backend y en los QA automatizados; no se afirma haber inspeccionado individualmente las 156 filas en pantalla.
+- **Tarjetas:** 156 referencias registradas; 156 con stock; 0 sin stock. Conciliación: `156 = 156 + 0`.
+- **Categorías:** 6 categorías; Cardio 53, Peso Libre 47, Selectorizado 37, Equipo gerencia 9, Equipo recepción 9, Uso común 1. Conciliación: `53 + 47 + 37 + 9 + 9 + 1 = 156`.
+- **Familias (solo aparatos):** 137 referencias; Peso Libre 47, Peso Integrado 37, Spinning 26, Caminadora 11, Elíptica 11, Recumbente 3, Escaladora 1, Sin familia 1. Conciliación: `47 + 37 + 26 + 11 + 11 + 3 + 1 + 1 = 137`. Dispositivos/otras categorías: `156 - 137 = 19`, sin contarlos como pendientes de familia.
+- **Cardio:** `26 + 11 + 11 + 3 + 1 + 1 = 53` (incluye un aparato sin familia); coincide con la categoría.
+- **Listado:** 156 resultados sin filtros adicionales; las filas visibles en la captura tienen sucursal **Villas del rey**. La ruta `GET /api/inventario/existencias?sucursal_id=...` aplica filtro SQL por sucursal autorizada; el componente reconstruye tarjetas/composición/listado sobre esa misma respuesta, limpia filtros al cambiar sucursal e ignora respuestas obsoletas.
+- **QA técnico:** PR **#1086** integró filtros de familia/categoría no redundantes; sus pruebas cubren autoselección cuando es inequívoca, filtros cruzados, estado de carga, alcance, errores y paginación. Los CI se reportaron verdes al retomar esta fase. No se ejecutó aquí una nueva prueba automatizada de producción.
+- **Observación no bloqueante:** 1 aparato sin familia real en Villas del Rey. Clasificarlo corresponde a la calidad de datos, no a recalcular E1 ni a modificar automáticamente el catálogo.
+- **Alcance de la aprobación:** E1 es una vista de **solo lectura** para perfiles ya autorizados. No representa levantamiento físico ni confirma existencias verificadas; no autoriza apertura a GERENTES. El hallazgo de posible acceso V1 por API/ruta directa descrito en §3 sigue siendo deuda de hardening que debe cerrarse antes de exponer V2 a roles no liberados.
 
-### Primer trabajo permitido al reanudar
+### Estado de partida que se conserva
 
-**E1 — Renovación de Existencias, en un PR únicamente frontend y de lectura.** Primero planificar cambios concretos para `frontend/src/app/inventario/existencias/existencias.component.ts`, `.html` y `.css`; evaluar si `inventario.service.ts` debe aceptar `sucursal_id` y asegurar coherencia de datos por sucursal. No introducir solicitudes falsas, tablas de auditoría, cambios de roles ni menú gerente. **No abrir a GERENTE.**
+- Inventarios V1 QA: catálogo, entradas, salidas, existencias, anulaciones y exportación existentes, sin reimplementarlos.
+- Reportes/dashboard V1: PRs **#1059**, **#1060**, **#1061**, layout **#1064**, corrección de scroll **#1066**. No confundir Reportes con E1 de Existencias.
+- E1 de Existencias: dashboard, categorías oficiales, familias, filtros inteligentes y listado conservado; último PR **#1086**, commit merge **`9781cbee`**.
 
-**Instrucción útil para una nueva conversación:** “Lee `docs/contratos/inventarios_v2/CONTRATO_INVENTARIOS_V2_AUDITORIA_GLOBAL.md` en main, revisa el estado real del repositorio y continúa solo el primer entregable pendiente respetando el gate de no habilitar GERENTES”.
+### Siguiente trabajo — E2, solicitudes de corrección SIN aplicación automática
 
-**Gobierno de cambios:** actualizar esta sección al aceptar cada etapa y enmendar el contrato mediante PR si cambia una decisión funcional; no desplazar reglas de manera tácita ni confundir un objetivo contractual con una función ya existente.
+1. **Preparar el diseño**, sin escrituras de inventario ni habilitación gerencial: identificar modelos maestros/por sucursal, esquema de propuesta, captura de valores original/propuesto, actor autenticado, motivo, evidencia, timestamps, baseline/concurrencia, estados y tratamiento de hallazgos sin inventario_id.
+2. **Auditar permisos efectivos antes de codificar rutas:** backend define sucursal y creador, identidad JWT, roles autorizados al piloto, controles anti-IDOR; GERENTE y GERENTE_REGIONAL siguen fuera del piloto V2. Separar en PR el hardening necesario, sin ampliar permisos inadvertidamente.
+3. **Planear un PR acotado con migración Alembic** para persistencia de solicitudes, índices/constraints y pruebas de inmutabilidad del inventario V1. Una solicitud `PENDING` **no** llama a edición, movimientos, ni cambia stock, código o categoría oficiales.
+4. E3 implementará posteriormente revisión y aplicación autorizada, **no** durante la creación de E2.
+
+**Gobierno de cambios:** un PR lógico a la vez; explicar archivo, método, objetivo y motivo antes de tocar código. No iniciar E5 sin aprobación explícita tras E1–E4.
