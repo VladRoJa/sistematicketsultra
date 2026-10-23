@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from math import ceil
 from typing import Any, Iterable
 
-from sqlalchemy import and_, exists, false, func, or_, true
+from sqlalchemy import and_, exists, false, func, or_, select, true
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.extensions import db
@@ -159,8 +159,8 @@ def list_campaign_v2_recipients(
             session=active_session,
         )
 
-        # Un único snapshot persistido rige el filtro, el total y las filas.
-        # No mezclar estados históricos ni consultar al proveedor al paginar.
+        # El último snapshot de cada provider campaign forma un corte multichild.
+        # No se pueden mezclar capturas históricas del mismo child.
         latest_snapshot = (
             active_session.query(MarketingCampaignV2ProviderStatsSnapshotORM)
             .filter(
@@ -173,8 +173,47 @@ def list_campaign_v2_recipients(
             )
             .first()
         )
+        snapshot_ranks = (
+            active_session.query(
+                MarketingCampaignV2ProviderStatsSnapshotORM.id.label("snapshot_id"),
+                func.row_number().over(
+                    partition_by=MarketingCampaignV2ProviderStatsSnapshotORM.provider_campaign_id,
+                    order_by=(
+                        MarketingCampaignV2ProviderStatsSnapshotORM.fetched_at.desc(),
+                        MarketingCampaignV2ProviderStatsSnapshotORM.id.desc(),
+                    ),
+                ).label("snapshot_rank"),
+            )
+            .filter(
+                MarketingCampaignV2ProviderStatsSnapshotORM.campaign_v2_id == normalized_id
+            )
+            .subquery()
+        )
+        latest_snapshot_ids = select(snapshot_ranks.c.snapshot_id).where(
+            snapshot_ranks.c.snapshot_rank == 1
+        )
+        obs = MarketingCampaignV2ProviderRecipientObservationORM
+        snap = MarketingCampaignV2ProviderStatsSnapshotORM
+        observation_ranks = (
+            active_session.query(
+                obs.id.label("observation_id"),
+                obs.campaign_recipient_id.label("recipient_id"),
+                obs.outcome.label("outcome"),
+                obs.delivery_bucket.label("delivery_bucket"),
+                func.row_number().over(
+                    partition_by=obs.campaign_recipient_id,
+                    order_by=(snap.fetched_at.desc(), snap.id.desc(), obs.id.desc()),
+                ).label("observation_rank"),
+            )
+            .join(snap, snap.id == obs.snapshot_id)
+            .filter(
+                obs.snapshot_id.in_(latest_snapshot_ids),
+                obs.campaign_recipient_id.isnot(None),
+            )
+            .subquery()
+        )
         status_predicate = _recipient_provider_status_predicate(
-            latest_snapshot, normalized_status,
+            latest_snapshot, normalized_status, observation_ranks,
         )
 
         count_query = (
@@ -208,20 +247,18 @@ def list_campaign_v2_recipients(
     if latest_snapshot is not None and rows:
         recipient_ids = [int(recipient.id) for recipient, _ in rows]
         observations = (
-            active_session.query(MarketingCampaignV2ProviderRecipientObservationORM)
+            active_session.query(obs, snap)
+            .join(snap, snap.id == obs.snapshot_id)
+            .join(observation_ranks, observation_ranks.c.observation_id == obs.id)
             .filter(
-                MarketingCampaignV2ProviderRecipientObservationORM.snapshot_id
-                == latest_snapshot.id,
-                MarketingCampaignV2ProviderRecipientObservationORM.campaign_recipient_id.in_(
-                    recipient_ids
-                ),
+                observation_ranks.c.observation_rank == 1,
+                observation_ranks.c.recipient_id.in_(recipient_ids),
             )
-            .order_by(MarketingCampaignV2ProviderRecipientObservationORM.id.asc())
             .all()
         )
         observations_by_recipient = {
-            int(observation.campaign_recipient_id): observation
-            for observation in observations
+            int(observation.campaign_recipient_id): (snapshot, observation)
+            for observation, snapshot in observations
         }
 
     return {
@@ -235,8 +272,9 @@ def list_campaign_v2_recipients(
                     recipient, evidence_count=int(evidence_count or 0)
                 ),
                 "provider_status": _serialize_recipient_provider_status(
-                    latest_snapshot,
-                    observations_by_recipient.get(int(recipient.id)),
+                    *observations_by_recipient.get(
+                        int(recipient.id), (latest_snapshot, None)
+                    ),
                 ),
             }
             for recipient, evidence_count in rows
@@ -462,8 +500,15 @@ def _normalize_optional_recipient_provider_status(value: Any) -> str | None:
     return normalized
 
 
-def _recipient_provider_status_predicate(snapshot, status: str | None):
-    """Filtro SQL previo a count/paginación para el snapshot más reciente."""
+def _recipient_provider_status_predicate(
+    snapshot, status: str | None, observation_ranks,
+):
+    """Filtra por la observación efectiva del último corte de cada child.
+
+    Una observación antigua del mismo provider campaign nunca se reutiliza.
+    Si un destinatario aparece en más de un child, gana el corte más reciente,
+    igual que en la serialización paginada.
+    """
     if status is None:
         return None
     if status == "NO_SNAPSHOT":
@@ -471,40 +516,32 @@ def _recipient_provider_status_predicate(snapshot, status: str | None):
     if snapshot is None:
         return false()
 
-    obs = MarketingCampaignV2ProviderRecipientObservationORM
-    observation = exists().where(
-        and_(
-            obs.snapshot_id == snapshot.id,
-            obs.campaign_recipient_id == MarketingCampaignV2RecipientORM.id,
-        )
+    effective = and_(
+        observation_ranks.c.recipient_id == MarketingCampaignV2RecipientORM.id,
+        observation_ranks.c.observation_rank == 1,
     )
+    observation = exists().where(effective)
     if status == "NO_PROVIDER_STATUS":
         return ~observation
 
     if status == "FAILED":
-        matching_outcome = obs.outcome == "FAILED"
+        matching_outcome = observation_ranks.c.outcome == "FAILED"
     elif status in {"SENT", "DELIVERED", "VIEWED"}:
         matching_outcome = and_(
-            obs.outcome == "SUCCESSFUL",
-            obs.delivery_bucket == status,
+            observation_ranks.c.outcome == "SUCCESSFUL",
+            observation_ranks.c.delivery_bucket == status,
         )
     else:
-        # Fallback defensivo del serializer: SUCCESSFUL sin bucket reconocido.
         matching_outcome = and_(
-            obs.outcome == "SUCCESSFUL",
+            observation_ranks.c.outcome == "SUCCESSFUL",
             or_(
-                obs.delivery_bucket.is_(None),
-                ~obs.delivery_bucket.in_(("SENT", "DELIVERED", "VIEWED")),
+                observation_ranks.c.delivery_bucket.is_(None),
+                ~observation_ranks.c.delivery_bucket.in_(
+                    ("SENT", "DELIVERED", "VIEWED")
+                ),
             ),
         )
-    return exists().where(
-        and_(
-            obs.snapshot_id == snapshot.id,
-            obs.campaign_recipient_id == MarketingCampaignV2RecipientORM.id,
-            matching_outcome,
-        )
-    )
-
+    return exists().where(and_(effective, matching_outcome))
 
 def _serialize_recipient_summary(recipient, *, evidence_count: int) -> dict[str, Any]:
     return {
