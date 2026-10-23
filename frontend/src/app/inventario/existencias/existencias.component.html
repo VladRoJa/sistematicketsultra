@@ -78,12 +78,13 @@
       </div>
     </section>
 
-    <section class="composition-card" aria-labelledby="composicion-titulo">
+    <section class="composition-card" aria-labelledby="composicion-titulo" [class.composition-card--single]="!totalEquiposGimnasio">
+      <div class="composition-categories">
       <div class="section-heading">
         <div>
           <div class="eyebrow">COMPOSICIÓN</div>
-          <h2 id="composicion-titulo">¿Qué tenemos registrado?</h2>
-          <p>Distribución por categoría, basada en referencias y no en piezas.</p>
+          <h2 id="composicion-titulo">Categorías del inventario</h2>
+          <p>Catálogo oficial cuando está asignado; referencias, no piezas.</p>
         </div>
         <span class="section-count">{{ totalCategorias }} categorías</span>
       </div>
@@ -99,11 +100,32 @@
         <div *ngFor="let categoria of composicion" class="composition-legend__item">
           <span class="composition-dot" [ngClass]="categoria.color"></span>
           <span class="composition-name">{{ categoria.nombre }}</span>
-          <strong>{{ categoria.porcentaje | number:'1.0-0' }}%</strong>
+          <strong>{{ formatoPorcentaje(categoria.porcentaje) }}</strong>
           <small>{{ categoria.cantidad | number }} referencias</small>
         </div>
       </div>
       <p *ngIf="!composicion.length" class="composition-empty">Este alcance todavía no tiene artículos registrados.</p>
+      </div>
+      <div *ngIf="totalEquiposGimnasio" class="family-summary">
+        <div class="family-summary__heading">
+          <div>
+            <div class="eyebrow">MANTENIMIENTO · EQUIPOS</div>
+            <h3>Familias de gimnasio</h3>
+          </div>
+          <span class="section-count">{{ totalEquiposGimnasio | number }} referencias</span>
+        </div>
+        <div class="family-grid" aria-label="Referencias por familia de equipo">
+          <div *ngFor="let familia of composicionFamilias"
+               class="family-grid__item" [class.family-grid__item--unclassified]="familia.sinClasificar">
+            <span>{{ familia.nombre }}</span>
+            <strong>{{ familia.cantidad | number }}</strong>
+          </div>
+        </div>
+        <div *ngIf="equiposSinFamilia" class="family-notice">
+          <mat-icon aria-hidden="true">info_outline</mat-icon>
+          {{ equiposSinFamilia | number }} aparatos pendientes de familia; no incluye dispositivos de oficina.
+        </div>
+      </div>
     </section>
 
     <section class="list-panel" aria-labelledby="lista-existencias-titulo">
@@ -111,7 +133,7 @@
         <div>
           <div class="eyebrow">DETALLE DEL INVENTARIO</div>
           <h2 id="lista-existencias-titulo">Listado de existencias</h2>
-          <p>Busca por nombre, código, marca o tipo. Filtra sin alterar los registros.</p>
+          <p>Busca por nombre, código o marca. Combina categoría, familia y stock sin alterar el inventario.</p>
         </div>
         <span class="section-count">{{ existenciasFiltradas.length | number }} resultados</span>
       </div>
@@ -133,6 +155,13 @@
           <select id="categoria-existencias" [(ngModel)]="categoriaSeleccionada" (ngModelChange)="aplicarFiltros()">
             <option value="todas">Todas las categorías</option>
             <option *ngFor="let categoria of categorias" [value]="categoria">{{ categoria }}</option>
+          </select>
+        </div>
+        <div *ngIf="familias.length" class="filter-select filter-select--family">
+          <label for="familia-existencias">Familia</label>
+          <select id="familia-existencias" [(ngModel)]="familiaSeleccionada" (ngModelChange)="aplicarFiltros()">
+            <option value="todas">Todas las familias</option>
+            <option *ngFor="let familia of familias" [value]="familia">{{ familia }}</option>
           </select>
         </div>
         <div class="filter-select filter-select--stock">
@@ -176,7 +205,15 @@
           </ng-container>
           <ng-container matColumnDef="categoria">
             <th mat-header-cell *matHeaderCellDef>Categoría</th>
-            <td mat-cell *matCellDef="let e">{{ e.categoria || 'Sin categoría' }}</td>
+            <td mat-cell *matCellDef="let e">{{ nombreCategoria(e) }}</td>
+          </ng-container>
+          <ng-container matColumnDef="familia">
+            <th mat-header-cell *matHeaderCellDef>Familia</th>
+            <td mat-cell *matCellDef="let e">
+              <span [class.family-cell--missing]="nombreFamilia(e) === 'Sin familia'">
+                {{ nombreFamilia(e) || '—' }}
+              </span>
+            </td>
           </ng-container>
           <ng-container matColumnDef="unidad">
             <th mat-header-cell *matHeaderCellDef>Unidad</th>
