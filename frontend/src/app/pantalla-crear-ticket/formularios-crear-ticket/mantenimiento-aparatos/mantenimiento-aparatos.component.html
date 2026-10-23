@@ -17,6 +17,12 @@
     [modoAutocomplete]="true" 
     (equipoSeleccionado)="onEquipoSeleccionado($event)">
   </app-selector-equipo>
+  <p
+    class="selector-equipo-requerido"
+    *ngIf="parentForm.get('aparato_id')?.hasError('required')"
+  >
+    Selecciona un aparato del inventario para continuar.
+  </p>
 
   <!-- Descripción del problema -->
   <mat-form-field *ngIf="parentForm.get('descripcion_aparato')" appearance="fill" class="form-group-description">
