@@ -70,41 +70,64 @@ export class MantenimientoAparatosComponent implements OnInit, OnDestroy {
   private configSub?: Subscription;
   private equiposReqSub?: Subscription;
 
-  get categoriasDisponiblesTapizado(): string[] {
-    return [...new Set(this.equipos
-      .filter(eq => !this.filtroFamiliaTapizado.value ||
-        String(eq.familia_equipo_id ?? '') === this.filtroFamiliaTapizado.value)
-      .map(eq => String(eq.categoria || 'Sin categoría'))
-    )].sort();
-  }
+  // Arrays estables: Angular Material no debe recibir objetos nuevos
+  // durante cada ciclo de change detection.
+  categoriasDisponiblesTapizado: string[] = [];
+  familiasDisponiblesTapizado: Array<{ id: string; nombre: string }> = [];
+  aparatosDisponiblesTapizado: EquipoTapizado[] = [];
+  private filtroTapizadoSub?: Subscription;
 
-  get familiasDisponiblesTapizado(): Array<{ id: string; nombre: string }> {
-    const porId = new Map<string, string>();
-    this.equipos
-      .filter(eq => !this.filtroCategoriaTapizado.value ||
-        String(eq.categoria || 'Sin categoría') === this.filtroCategoriaTapizado.value)
-      .forEach(eq => {
-        if (eq.familia_equipo_id != null) {
-          porId.set(String(eq.familia_equipo_id), eq.familia_equipo?.nombre || 'Familia ' + eq.familia_equipo_id);
-        }
-      });
-    return Array.from(porId, ([id, nombre]) => ({ id, nombre }))
-      .sort((a, b) => a.nombre.localeCompare(b.nombre));
-  }
+  private actualizarOpcionesTapizado(): void {
+    if (!this.modoTapizado) {
+      this.categoriasDisponiblesTapizado = [];
+      this.familiasDisponiblesTapizado = [];
+      this.aparatosDisponiblesTapizado = [];
+      return;
+    }
 
-  get aparatosDisponiblesTapizado(): EquipoTapizado[] {
     const filtro = this.normalizarTexto(this.filtroTapizado.value);
     const categoria = this.filtroCategoriaTapizado.value;
     const familia = this.filtroFamiliaTapizado.value;
-    return this.equipos.filter(eq => {
-      const coincide = !filtro || this.normalizarTexto(
-        `${eq.nombre || ''} ${eq.codigo_interno || ''} ${eq.marca || ''}`
-      ).includes(filtro);
-      return coincide
-        && (!categoria || String(eq.categoria || 'Sin categoría') === categoria)
-        && (!familia || String(eq.familia_equipo_id ?? '') === familia)
-        && !this.aparatosSeleccionados.some(selected => selected.id === Number(eq.id));
-    }).slice(0, 25);
+    const seleccionados = new Set(this.aparatosSeleccionados.map(eq => eq.id));
+    const categorias = new Set<string>();
+    const familias = new Map<string, string>();
+    const disponibles: EquipoTapizado[] = [];
+
+    // Un recorrido sólo cuando cambian equipos, filtros o selección.
+    for (const eq of this.equipos) {
+      const categoriaEq = String(eq.categoria || 'Sin categoría');
+      const familiaEq = eq.familia_equipo_id == null
+        ? ''
+        : String(eq.familia_equipo_id);
+
+      if (!familia || familia === familiaEq) {
+        categorias.add(categoriaEq);
+      }
+      if ((!categoria || categoria === categoriaEq) && familiaEq) {
+        familias.set(
+          familiaEq,
+          eq.familia_equipo?.nombre || 'Familia ' + familiaEq
+        );
+      }
+
+      if (
+        disponibles.length < 25
+        && (!categoria || categoria === categoriaEq)
+        && (!familia || familia === familiaEq)
+        && !seleccionados.has(Number(eq.id))
+        && (!filtro || this.normalizarTexto(
+          `${eq.nombre || ''} ${eq.codigo_interno || ''} ${eq.marca || ''}`
+        ).includes(filtro))
+      ) {
+        disponibles.push(eq);
+      }
+    }
+
+    this.categoriasDisponiblesTapizado = Array.from(categorias).sort();
+    this.familiasDisponiblesTapizado = Array.from(
+      familias, ([id, nombre]) => ({ id, nombre })
+    ).sort((a, b) => a.nombre.localeCompare(b.nombre));
+    this.aparatosDisponiblesTapizado = disponibles;
   }
 
   private normalizarTexto(value: string): string {
@@ -153,6 +176,10 @@ ngOnInit(): void {
     this.parentForm.addControl('aparatos_ids', this.fb.control([]));
   }
 
+  this.filtroTapizadoSub = this.filtroTapizado.valueChanges.subscribe(() => {
+    this.actualizarOpcionesTapizado();
+  });
+
   // --- Inicializar controles propios ---
   this.parentForm.addControl('detalle', this.fb.control(''));
   this.parentForm.addControl('subcategoria', this.fb.control(''));
@@ -180,9 +207,9 @@ ngOnInit(): void {
     this.parentForm.get('subcategoria')!.reset();
     this.parentForm.get('aparato_id')!.reset();
     this.aparatosSeleccionados = [];
-    this.filtroTapizado.setValue('');
-    this.filtroCategoriaTapizado.setValue('');
-    this.filtroFamiliaTapizado.setValue('');
+    this.filtroTapizado.setValue('', { emitEvent: false });
+    this.filtroCategoriaTapizado.setValue('', { emitEvent: false });
+    this.filtroFamiliaTapizado.setValue('', { emitEvent: false });
     this.sincronizarMultiaparato();
     this.cargarEquiposPorSucursal(sucId);
   });
@@ -203,6 +230,7 @@ ngOnInit(): void {
     this.sucursalSub?.unsubscribe();
     this.configSub?.unsubscribe();
     this.equiposReqSub?.unsubscribe();
+    this.filtroTapizadoSub?.unsubscribe();
     this.aparatosSeleccionados = [];
     this.modoTapizado = false;
     this.parentForm.get('tipo_trabajo')?.setValue(null, { emitEvent: false });
@@ -238,9 +266,9 @@ ngOnInit(): void {
     if (activar && !this.tapizadoHabilitado) return;
     this.modoTapizado = activar;
     this.aparatosSeleccionados = [];
-    this.filtroTapizado.setValue('');
-    this.filtroCategoriaTapizado.setValue('');
-    this.filtroFamiliaTapizado.setValue('');
+    this.filtroTapizado.setValue('', { emitEvent: false });
+    this.filtroCategoriaTapizado.setValue('', { emitEvent: false });
+    this.filtroFamiliaTapizado.setValue('', { emitEvent: false });
     this.parentForm.get('tipo_trabajo')?.setValue(activar ? 'TAPIZADO' : null);
     const lista = this.parentForm.get('aparatos_ids');
     if (activar) {
@@ -252,19 +280,24 @@ ngOnInit(): void {
     this.parentForm.get('detalle')?.reset();
     this.parentForm.get('subcategoria')?.reset();
     this.sincronizarMultiaparato();
+    this.actualizarOpcionesTapizado();
   }
 
   cambiarCategoriaTapizado(categoria: string): void {
     this.filtroCategoriaTapizado.setValue(categoria);
+    this.actualizarOpcionesTapizado();
     if (!this.familiasDisponiblesTapizado.some(f => f.id === this.filtroFamiliaTapizado.value)) {
       this.filtroFamiliaTapizado.setValue('');
+      this.actualizarOpcionesTapizado();
     }
   }
 
   cambiarFamiliaTapizado(familia: string): void {
     this.filtroFamiliaTapizado.setValue(familia);
+    this.actualizarOpcionesTapizado();
     if (!this.categoriasDisponiblesTapizado.includes(this.filtroCategoriaTapizado.value)) {
       this.filtroCategoriaTapizado.setValue('');
+      this.actualizarOpcionesTapizado();
     }
   }
 
@@ -279,6 +312,7 @@ ngOnInit(): void {
       this.aparatosSeleccionados = this.aparatosSeleccionados.filter(item => item.id !== id);
     }
     this.sincronizarMultiaparato();
+    this.actualizarOpcionesTapizado();
   }
 
   eliminarAparatoTapizado(equipo: EquipoTapizado): void {
@@ -299,16 +333,19 @@ ngOnInit(): void {
 
     this.equiposReqSub?.unsubscribe();
     this.equipos = [];
+    this.actualizarOpcionesTapizado();
     if (!Number.isInteger(Number(sucursalId)) || Number(sucursalId) <= 0) return;
     this.equiposReqSub = this.equiposService.obtenerEquipos({ sucursal_id: sucursalId, tipo: this.tipo })
       .subscribe({
         next: resp => {
           console.log('[cargarEquiposPorSucursal] Respuesta del backend:', resp);
           this.equipos = resp || [];
+          this.actualizarOpcionesTapizado();
         },
         error: err => {
           console.error('Error al cargar equipos:', err);
           this.equipos = [];
+          this.actualizarOpcionesTapizado();
         }
       });
 }
