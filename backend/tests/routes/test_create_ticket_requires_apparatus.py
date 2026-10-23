@@ -1,7 +1,10 @@
+import io
+import json
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from flask import Flask
 from app.routes import ticket_routes
 
 
@@ -101,6 +104,52 @@ class RequisitoAparatoMantenimientoTest(unittest.TestCase):
         nodo.padre = nodo
         self.catalogo.query.get.return_value = nodo
         self.assertIsNone(self.validar(None, clasificacion_id=123))
+
+    def _assert_endpoint_rejects_missing_apparatus(self, *, multipart):
+        app = Flask(__name__)
+        payload = {
+            "descripcion": "Tapizar una pieza",
+            "departamento_id": 1,
+            "criticidad": 4,
+            "clasificacion_id": 487,
+            "aparato_id": None,
+            "sucursal_id_destino": 4,
+        }
+        if multipart:
+            request_kwargs = {
+                "data": {
+                    "payload": json.dumps(payload),
+                    "image": (io.BytesIO(b"imagen de prueba"), "foto.png"),
+                },
+                "content_type": "multipart/form-data",
+            }
+        else:
+            request_kwargs = {"json": payload}
+
+        actor = SimpleNamespace(
+            username="tester", rol="GERENTE", sucursal_id=4
+        )
+        with app.test_request_context(
+            "/api/tickets/create", method="POST", **request_kwargs
+        ), patch.object(
+            ticket_routes, "get_jwt_identity", return_value=1
+        ), patch.object(
+            ticket_routes.UserORM, "get_by_id", return_value=actor
+        ), patch.object(
+            ticket_routes, "is_regional_maintenance_lead", return_value=False
+        ), patch.object(
+            ticket_routes.Ticket, "create_ticket"
+        ) as create_ticket:
+            response, status = ticket_routes.create_ticket.__wrapped__()
+            self.assertEqual(status, 400)
+            self.assertIn("Selecciona un aparato", response.get_json()["mensaje"])
+            create_ticket.assert_not_called()
+
+    def test_endpoint_json_devuelve_400_sin_aparato(self):
+        self._assert_endpoint_rejects_missing_apparatus(multipart=False)
+
+    def test_endpoint_multipart_devuelve_400_antes_de_adjuntar(self):
+        self._assert_endpoint_rejects_missing_apparatus(multipart=True)
 
 
 if __name__ == "__main__":
