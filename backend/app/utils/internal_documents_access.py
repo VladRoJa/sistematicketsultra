@@ -684,7 +684,16 @@ def can_view_internal_document_audit(
     document: InternalDocumentORM | None = None,
     context: InternalDocumentUserContext | None = None,
 ) -> bool:
-    return can_manage_internal_documents(context)
+    context = context or get_current_internal_document_context()
+    if not can_manage_internal_documents(context):
+        return False
+
+    # La auditoría del consolidado requiere respetar su visibilidad especial,
+    # incluso para un administrador de Nube como SISTEMAS.
+    if document is not None and _document_is_agregadoras_consolidado(document):
+        return can_view_internal_document(document, context)
+
+    return True
 
 
 def can_download_historical_internal_document_version(
