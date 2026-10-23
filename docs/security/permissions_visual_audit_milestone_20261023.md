@@ -69,4 +69,4 @@ Reconstruir `backend` y `frontend` por Docker Compose a partir del repo actualiz
 
 ## QA de la extensión de agrupación (2026-10-23)
 
-Regresiones sintéticas: caso de 31 usuarios con permiso al final del orden alfabético que debe aparecer en la primera página tras ordenar por legacy; filtro de permitidos aplicado antes de paginar sobre 40 filas; prioridad de denegados; preservación de `None` como desconocido; diferencias/coinicidencias; enums inválidos HTTP 400. Misma función de evaluación real para las tres vistas. El ordenamiento es *observabilidad*, no enforcement. El módulo y las pestañas de catálogo histórico permanecen diagnósticos.
+Regresiones sintéticas: caso de 31 usuarios con permiso al final del orden alfabético que debe aparecer en la primera página tras ordenar por legacy; filtro de permitidos aplicado antes de paginar sobre 40 filas; prioridad de denegados; preservación de `None` como desconocido; diferencias/coincidencias; enums inválidos HTTP 400. Misma función de evaluación real para las tres vistas. El ordenamiento es *observabilidad*, no enforcement. El módulo y las pestañas de catálogo histórico permanecen diagnósticos.

@@ -100,16 +100,16 @@
       <table class="audit-table">
         <thead><tr>
           <th *ngIf="view !== 'user'">
-            <button type="button" class="audit-sort" [attr.aria-sort]="ariaSort('user')" (click)="setSort('user')">Usuario {{ sortArrow('user') }}</button>
-            <button type="button" class="audit-sort" [attr.aria-sort]="ariaSort('role')" (click)="setSort('role')">Rol {{ sortArrow('role') }}</button>
+            <button type="button" class="audit-sort" [attr.aria-pressed]="sortBy === 'user'" (click)="setSort('user')">Usuario {{ sortArrow('user') }}</button>
+            <button type="button" class="audit-sort" [attr.aria-pressed]="sortBy === 'role'" (click)="setSort('role')">Rol {{ sortArrow('role') }}</button>
           </th>
           <th>
-            <button type="button" class="audit-sort" [attr.aria-sort]="ariaSort('module')" (click)="setSort('module')">Módulo {{ sortArrow('module') }}</button>
-            <button type="button" class="audit-sort" [attr.aria-sort]="ariaSort('action')" (click)="setSort('action')">Acción {{ sortArrow('action') }}</button>
+            <button type="button" class="audit-sort" [attr.aria-pressed]="sortBy === 'module'" (click)="setSort('module')">Módulo {{ sortArrow('module') }}</button>
+            <button type="button" class="audit-sort" [attr.aria-pressed]="sortBy === 'action'" (click)="setSort('action')">Acción {{ sortArrow('action') }}</button>
           </th>
-          <th><button type="button" class="audit-sort" [attr.aria-sort]="ariaSort('legacy')" (click)="setSort('legacy')">Legacy (guard base) {{ sortArrow('legacy') }}</button></th>
-          <th><button type="button" class="audit-sort" [attr.aria-sort]="ariaSort('catalog')" (click)="setSort('catalog')">Catálogo estimado {{ sortArrow('catalog') }}</button></th>
-          <th><button type="button" class="audit-sort" [attr.aria-sort]="ariaSort('comparison')" (click)="setSort('comparison')">Comparación {{ sortArrow('comparison') }}</button></th>
+          <th><button type="button" class="audit-sort" [attr.aria-pressed]="sortBy === 'legacy'" (click)="setSort('legacy')">Legacy (guard base) {{ sortArrow('legacy') }}</button></th>
+          <th><button type="button" class="audit-sort" [attr.aria-pressed]="sortBy === 'catalog'" (click)="setSort('catalog')">Catálogo estimado {{ sortArrow('catalog') }}</button></th>
+          <th><button type="button" class="audit-sort" [attr.aria-pressed]="sortBy === 'comparison'" (click)="setSort('comparison')">Comparación {{ sortArrow('comparison') }}</button></th>
           <th>Alcance y razón</th>
           <th>Explorar</th>
         </tr></thead>

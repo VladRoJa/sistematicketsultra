@@ -39,6 +39,6 @@ button:disabled{opacity:.5;cursor:not-allowed}
 
 .audit-sort{display:inline-flex;align-items:center;gap:3px;background:transparent;border:0;color:inherit;font:inherit;font-weight:700;cursor:pointer;padding:3px 5px;border-radius:4px;white-space:nowrap}
 .audit-sort:hover,.audit-sort:focus-visible{background:#dbeafe;outline-offset:2px}
-.audit-sort[aria-sort="ascending"],.audit-sort[aria-sort="descending"]{color:#1d4ed8;background:#dbeafe}
+.audit-sort[aria-pressed="true"]{color:#1d4ed8;background:#dbeafe}
 .audit-toolbar label{white-space:nowrap}
 .audit-group td{border-top:1px solid #c7d2fe}

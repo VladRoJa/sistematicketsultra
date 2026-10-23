@@ -143,10 +143,6 @@ export class PermissionAuditMatrixComponent implements OnInit {
     return this.sortBy !== key ? '↕' : this.sortDir === 'asc' ? '▲' : '▼';
   }
 
-  ariaSort(key: AuditSortBy): string {
-    return this.sortBy !== key ? 'none' : this.sortDir === 'asc' ? 'ascending' : 'descending';
-  }
-
   private positiveInteger(input: string | number | null | undefined): number | undefined {
     if (input === null || input === undefined || !String(input).trim()) { return undefined; }
     const value = Number(input);
