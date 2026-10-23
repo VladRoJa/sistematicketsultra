@@ -19,6 +19,8 @@ from app.models.pm_bitacora import PmBitacoraORM
 from app.models.pm_preventivo import PmPreventivoConfigORM
 from app.models.mantenimiento_equipo import FamiliaEquipoORM
 from app.models.ticket_model import Ticket
+from app.utils.ticket_filters import filtrar_tickets_por_usuario
+from app.utils.ticket_aparatos_filters import ticket_relacionado_con_aparato
 from app.models.user_model import UserORM
 from app.models.sucursal_model import Sucursal
 from app.services.inventario_dashboard_service import consultar_resumen_inventario
@@ -1549,17 +1551,18 @@ def equipos_con_historial():
         tipo = request.args.get('tipo')  # "aparato", "sistema" o None
         sucursal_id = request.args.get('sucursal_id', type=int)
 
-        # Construye el query base
-        q = db.session.query(InventarioGeneral).join(Ticket, InventarioGeneral.id == Ticket.aparato_id)
-        
+        # Principal o vínculo secundario, con alcance real de Tickets.
+        # Una única unión (no repetir JOIN); distinct evita repetir equipos.
+        autorizados = filtrar_tickets_por_usuario(user).with_entities(Ticket.id).subquery()
+        q = db.session.query(InventarioGeneral).join(
+            Ticket, ticket_relacionado_con_aparato(InventarioGeneral.id)
+        ).filter(Ticket.id.in_(db.session.query(autorizados.c.id)))
+
         if tipo:
             q = q.filter(InventarioGeneral.tipo == tipo)
-        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000 or user.sucursal_id == 100):
-            q = q.join(Ticket).filter(Ticket.sucursal_id == user.sucursal_id)
-        elif sucursal_id:
-            q = q.join(Ticket).filter(Ticket.sucursal_id == sucursal_id)
+        if sucursal_id:
+            q = q.filter(Ticket.sucursal_id_destino == sucursal_id)
 
-        # Distintos (porque puede haber muchos tickets por equipo)
         equipos = q.distinct().all()
 
         data = [{
@@ -1589,10 +1592,9 @@ def historial_equipo(equipo_id):
         if not user:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
-        query = Ticket.query.filter(Ticket.aparato_id == equipo_id)
-
-        if not (user.rol == "ADMINISTRADOR" or user.sucursal_id == 1000 or user.sucursal_id == 100):
-            query = query.filter(Ticket.sucursal_id == user.sucursal_id)
+        query = filtrar_tickets_por_usuario(user).filter(
+            ticket_relacionado_con_aparato(equipo_id)
+        )
 
         tickets = query.order_by(Ticket.fecha_creacion.desc()).all()
 
