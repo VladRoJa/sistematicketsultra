@@ -1,0 +1,39 @@
+name: Nube Corporativa — By-link regression (diagnostic)
+
+on:
+  pull_request:
+    paths:
+      - "backend/tests/routes/test_internal_documents_agregadoras_visibility.py"
+      - ".github/workflows/internal-documents-by-link-regression-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  backend-by-link-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+      SECRET_KEY: permissions-phase-a-test-only
+      JWT_SECRET_KEY: permissions-phase-a-test-only
+      SQLALCHEMY_DATABASE_URI: "sqlite:///:memory:"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend test dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Reproduce by-link visibility discrepancy
+        run: |
+          python -m pytest -q --tb=short -o addopts= \
+            tests/routes/test_internal_documents_agregadoras_visibility.py::test_by_link_does_not_expose_agregadoras_metadata_to_sistemas
