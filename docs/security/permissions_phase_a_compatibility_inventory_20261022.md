@@ -133,7 +133,25 @@ La decisión final tiene que ser backend y explicar **usuario, acción, rol, sco
 - **No es evidencia de IDs corruptos ni error de autorización:** esta asociación es explícita en el seed y representa un proceso transversal. **Sí es una ambigüedad para el diseño futuro** si se usa `route_map.module_id` como acción autorizante sin comprobar `action.module_id`.
 - Requisito del resolvedor y de la matriz bidireccional: distinguir **módulo donde se agrupa/expone la funcionalidad** vs **acción y módulo de autorización**, y resolver el guard real de la ruta. Un `internal_documents.manage` no debe otorgar automáticamente subida documental de Aperturas. Tampoco un `openings.manage` debe equivaler a administrar toda Nube.
 - Las **21 rutas HTTP** del blueprint `internal_documents_routes.py` no quedan automáticamente cubiertas por estas 11 filas, porque una es de Aperturas y el catálogo fue sembrado para rutas de riesgo revisadas, **no para cobertura exhaustiva de cada GET/acción**. Antes de activar permisos, verificar el mapa por `method+route+endpoint` y no inferir cobertura global por conteo.
-- **Pendiente:** consulta agregada del resto de filas cuyo módulo de agrupación difiere del módulo de su acción; clasificar cada excepción antes de centralizar enforcement. No modificar esta asociación histórica sin decidir su semántica.
+- **Seguimiento:** censo global efectuado; se encontraron 2 asociaciones adicionales (`reports` → `users.manage`), descritas en A-09. No modificar mapeos históricos sin decidir su semántica ni cambiar el guard real.
+
+### A-09 — Censo global de rutas transversales; legacy permisos mal agrupados bajo Reportes
+
+**Consulta productiva de 2026-10-22:** solo **3 filas activas** de `permission_route_map` tienen `route_map.module_id != action.module_id`.
+
+| Módulo de agrupación | Acción / módulo autorizante | Método | Ruta |
+| --- | --- | --- | --- |
+| `internal_documents` | `openings.manage` / `openings` | POST | `/api/openings/<int:opening_id>/tasks/<int:task_id>/documents/upload` |
+| `reports` | `users.manage` / `users` | POST | `/api/permisos/asignar` |
+| `reports` | `users.manage` / `users` | DELETE | `/api/permisos/eliminar` |
+
+**Cotejo del código del repositorio (no se ejecutaron escrituras):**
+- En `backend/migrations/versions/7b8c9d0e1f2a_seed_permission_route_map_high_risk.py`, el seed coloca expresamente ambas rutas `/api/permisos` bajo `module_key='reports'`, pero con `action_full_key='users.manage'` y `current_guard='_require_permisos_admin'`. El comentario original para ambas indica `module_label=General / Otro`, por lo que **Reportes es una clasificación de conveniencia heredada**, no su dominio funcional.
+- En `backend/app/routes/permisos_routes.py`, `asignar_permiso` y `eliminar_permiso` efectivamente invocan `_require_permisos_admin()` (rol actual desde `UserORM`; roles `ADMIN`, `ADMINISTRADOR`, `SUPER_ADMIN`) y crean/eliminan filas de la tabla `usuarios_permisos`.
+- Por ello, **no hay evidencia de bypass actual por esta divergencia del catálogo**. El riesgo futuro sería convertir `reports` en puerta de entrada a `users.manage` o decidir privilegios basándose solo en `permission_route_map.module_id`.
+- **Política de compatibilidad:** `users.manage` representa ahora operaciones administrativas de permisos legacy; la etiqueta del catálogo debe corregirse semánticamente en una etapa posterior y separarse de la autorización de `reports`. Evaluar si conviene acción granular `users.permissions_manage` antes de migrar, sin crearla todavía ni reescribir migraciones históricas ya aplicadas.
+- **Restricción:** no reasignar estas dos rutas mediante SQL manual ni cambiar guards durante Fase A. Cualquier cambio futuro de mapeo almacenado deberá contar con migración Alembic versionada y pruebas que preserven el acceso administrativo actual.
+- **Límite de la comprobación:** el censo cubre las filas `is_active=true` presentes en `permission_route_map`; no demuestra que todo endpoint web tenga un mapeo. Faltan cobertura de lectura, scopes y paridad por registro del piloto.
 
 ## 5. Política de paridad antes de activar permisos
 
@@ -228,7 +246,8 @@ Estos puntos necesitan información del servidor o revisión de código adiciona
 - [~] Inventariadas por código las **21 rutas HTTP** de Nube y los controles de escritura/lectura/descarga/auditoría, con excepción especial de agregadoras. **Pendiente:** matriz exhaustiva ruta → decisión por contexto y tests de paridad; esta inspección no sustituye QA.
 - [ ] Producir conjunto de escenarios de paridad de Nube Corporativa (rol SISTEMAS, ADMICORP, admin con otro usuario, usuario ordinario, documento sensible).
 - [ ] Decidir con responsable operativo únicamente los accesos legacy contradictorios que supongan un cambio de política, no pedir autorización para cada refactor.
-- [~] Confirmado mapeo transversal explícito de Aperturas en Nube: 10 rutas de `internal_documents.manage` más 1 de `openings.manage` bajo `module_key=internal_documents`; el guard efectivo de esa ruta es `_require_openings_admin`. Pendiente auditar otras relaciones cross-module y la cobertura integral por ruta.
+- [x] Censadas las **3 asociaciones transversales activas** del catálogo: 1 upload documental de Aperturas agrupado bajo Nube, y 2 altas/bajas de permisos departamentales (`users.manage`) agrupadas históricamente bajo Reportes. Guards efectivos cotejados en código, sin indicios de bypass y sin cambios de autorización.
+- [ ] Contrastar cobertura de rutas del blueprint de Nube (lectura/descarga incluidas), no inferir cobertura total del catálogo de rutas de riesgo.
 - [ ] Marcar expresamente el alcance incompleto de módulos fuera del catálogo y plan de expansión.
 
 ### Consulta posterior de producción
