@@ -157,6 +157,11 @@ def _list(monkeypatch, documents, username="SISTEMAS_QA", role="SISTEMAS", query
 def test_a13_manager_list_excludes_consolidado_variants(monkeypatch, title):
     restricted = _document(title, 900)
     context = _context("SISTEMAS_QA", "SISTEMAS")
+    monkeypatch.setattr(
+        access,
+        "_has_custom_visibility_access",
+        lambda _doc, ctx, _action: ctx.username == "ADMICORP",
+    )
     assert access.can_view_internal_document(restricted, context) is False
 
     payload, status = _list(monkeypatch, [restricted])
