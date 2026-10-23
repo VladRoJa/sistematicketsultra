@@ -6,6 +6,7 @@ on:
       - "backend/app/routes/permissions_visual_audit_routes.py"
       - "backend/app/__init__.py"
       - "backend/tests/routes/test_permissions_visual_audit_matrix.py"
+      - "backend/tests/routes/test_permissions_action_alias_contract.py"
       - "frontend/src/app/permissions-observability/**"
       - "docs/security/permissions_visual_audit_milestone_20261023.md"
       - ".github/workflows/permissions-visual-audit-ci.yml"
@@ -43,6 +44,7 @@ jobs:
         run: |
           python -m pytest -q --tb=short -o addopts= \
             tests/routes/test_permissions_visual_audit_matrix.py \
+            tests/routes/test_permissions_action_alias_contract.py \
             tests/routes/test_permissions_phase_a_bidirectional_projection.py \
             tests/routes/test_permissions_phase_a_bidirectional_classification.py \
             tests/routes/test_permissions_phase_a_track_parity.py \
