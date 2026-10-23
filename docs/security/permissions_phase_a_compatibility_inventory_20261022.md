@@ -55,6 +55,30 @@ La decisión final tiene que ser backend y explicar **usuario, acción, rol, sco
 - Enforcement actual: `backend/app/utils/internal_documents_access.py::is_internal_document_admin` reconoce **rol SISTEMAS** y **cuenta ADMICORP**.
 - Consecuencia posible: falso permitido y falso denegado en una matriz inversa si se reutiliza la aproximación. **No usar el diagnóstico actual para activar grants**. `internal_documents.view` tampoco equivale a leer cualquier documento: tiene reglas de visibilidad y sensibilidad.
 
+### Evidencia productiva y rutas del piloto — 2026-10-22
+
+**Comparación agregada de 70 cuentas de `users`, sin datos personales:**
+
+| Guard real de `internal_documents.manage` | Diagnóstico `_effective_action_decision` | Cuentas |
+| --- | --- | ---: |
+| No | No | 68 |
+| Sí | No | **1** |
+| Sí | Sí | 1 |
+| No | Sí | 0 |
+
+- **2 cuentas autorizadas realmente** a administrar Nube; **1 falso negativo** en observabilidad; **0 falsos positivos** en este corte. La cuenta con verdadero acceso y falso diagnóstico cumple la condición del rol `SISTEMAS`. La consulta compara predicados de los dos helpers, no llamadas HTTP; no confirma el estado de documentos particulares ni evalúa sesiones.
+- **No cambiar el rol, no denegar permisos ni inferir que ADMINISTRADOR obtiene automáticamente acceso a documentos**: primero fijar la política real de Nube y reproducir esta matriz en tests.
+- Los dos grants vigentes de producción corresponden a Tickets Mantenimiento, no a Nube: por tanto hoy el piloto carece de grants individuales actuales que deban conservarse para `internal_documents.*`.
+
+**Inspección inicial del código de rutas de Nube** (`backend/app/routes/internal_documents_routes.py`, sin probar endpoints productivos):
+
+- Se identificaron **21 handlers HTTP** protegidos con `@jwt_required()` en este blueprint, con controles adicionales según la operación.
+- La creación, edición de metadata, publicación, archivo, reemplazo de versión, creación/edición/desactivación de vínculos, recursos externos y cambios de visibilidad usan `require_internal_document_manager()`: **10 handlers de escritura**. Antes de migrar deben verificarse también las validaciones de objeto y negocio dentro de cada handler.
+- Detalle, lectura de versiones/vínculos, recursos externos, descarga actual y auditoría aplican comprobaciones por documento distintas; **descarga de versión histórica** usa `can_download_historical_internal_document_version()`, que remite al permiso de manager.
+- La lista general `GET /internal-documents` no concede acceso uniforme: managers consultan borradores y estados adicionales; no managers reciben solo documentos publicados que pueden ver. **Además, a managers distintos de ADMICORP se les excluye el documento con título `Consolidado de agregadoras`** en la consulta de listado.
+- `can_view_internal_document()` trata `Consolidado de agregadoras` como **caso especial**: exige publicación y reglas de visibilidad incluso para el manager; las descargas siguen una excepción equivalente. Otros controles distinguen `DRAFT`, `ARCHIVED`, sensibles, visibilidad `GLOBAL/CUSTOM/PRIVATE`, propietario y reglas específicas de cobranza recurrente.
+- **Conclusión:** el piloto debe comparar por separado **capacidad de administrar** y **acceso a cada documento**. Sustituir `is_internal_document_admin()` por un `allow` global no puede eliminar estos filtros ni modificar quién visualiza el consolidado.
+
 ### A-02 — `module-access` puede aparentar enforcement que no existe
 
 - `GET /users/<id>/module-access` usa `_get_latest_active_grants_by_action` y `_apply_module_access_override`; reporta `effective_allowed` con preferencia usuario/rol.
@@ -113,7 +137,7 @@ Estos puntos necesitan información del servidor o revisión de código adiciona
 - [x] Identificar y documentar riesgos prioritarios y el piloto.
 - [x] Verificar que el catálogo/observabilidad y el endpoint de edición de módulos no constituyen enforcement universal.
 - [x] **Grants vigentes identificados (consultas agregadas, 2026-10-22):** solo se devolvieron **2 grants** (`principal_type=user`, `effect=allow`, `scope_type=global`, estado `current`), uno para `tickets.maintenance.coordinate` y uno para `tickets.maintenance.read_assigned_only`. **Ningún grant vigente corresponde a Nube Corporativa**. Ambos deben conservarse intactos; su impacto operativo sigue subordinado a las condiciones del guard real. El scope `global` del grant no exime restricciones de sucursal ni concede por sí solo acceso de escritura. **Pendiente:** revisar roles y operadores y confrontar esquema/migraciones aplicadas con producción.
-- [ ] Verificar por código la cobertura de todas las rutas críticas del piloto: consulta, detalle, creación, actualización, publicación, archivo, descarga y visibilidad documental.
+- [~] Inventariadas por código las **21 rutas HTTP** de Nube y los controles de escritura/lectura/descarga/auditoría, con excepción especial de agregadoras. **Pendiente:** matriz exhaustiva ruta → decisión por contexto y tests de paridad; esta inspección no sustituye QA.
 - [ ] Producir conjunto de escenarios de paridad de Nube Corporativa (rol SISTEMAS, ADMICORP, admin con otro usuario, usuario ordinario, documento sensible).
 - [ ] Decidir con responsable operativo únicamente los accesos legacy contradictorios que supongan un cambio de política, no pedir autorización para cada refactor.
 - [ ] Marcar expresamente el alcance incompleto de módulos fuera del catálogo y plan de expansión.
