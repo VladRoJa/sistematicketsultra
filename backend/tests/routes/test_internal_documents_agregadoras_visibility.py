@@ -193,6 +193,7 @@ def test_by_link_does_not_expose_agregadoras_metadata_to_sistemas(monkeypatch):
     fake_query = _LinkedDocumentQuery()
     fake_model = SimpleNamespace(
         query=fake_query,
+        id=_FakeColumn("internal_documents.id"),
         status=_FakeColumn("internal_documents.status"),
         created_at=_FakeColumn("internal_documents.created_at"),
         category=object(),
