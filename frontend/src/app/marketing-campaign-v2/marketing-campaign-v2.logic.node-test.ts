@@ -38,6 +38,7 @@ import {
   campaignV2ReportingPercent,
   campaignV2ReportingSnapshotLabel,
   campaignV2ReportingValue,
+  campaignV2RecipientStatusPresentation,
   canFreezeCampaignV2,
   isCampaignV2AudienceValid,
   isCampaignV2AdeudoMinValid,
@@ -2209,4 +2210,77 @@ test('Campaign V2 saved list: commercial KPIs use a single scoped batch request'
   assert.ok(html.includes('{{ commercialBuyersLabel(campaign.id) }}'));
   assert.ok(html.includes('{{ commercialRevenueLabel(campaign.id) }}'));
   assert.ok(html.includes('role="alert">{{ commercialSummaryError }}'));
+});
+
+test('resumen multichild usa cohorte completa y conserva estados absolutos', () => {
+  const view = campaignV2RecipientStatusPresentation({
+    total_recipients: 861,
+    has_snapshot: true,
+    counts: {
+      VIEWED: 192,
+      DELIVERED: 552,
+      SENT: 61,
+      FAILED: 56,
+      SUCCESSFUL: 0,
+      NO_PROVIDER_STATUS: 0,
+      NO_SNAPSHOT: 0,
+    },
+  });
+  assert.equal(view.total, 861);
+  assert.equal(view.accepted, 805);
+  assert.equal(view.reached, 744);
+  assert.equal(view.acceptedRate, '93.5%');
+  assert.equal(view.reachedRate, '86.4%');
+  assert.deepEqual(view.segments.map(s => [s.status, s.count]), [
+    ['VIEWED', 192],
+    ['DELIVERED', 552],
+    ['SENT', 61],
+    ['FAILED', 56],
+  ]);
+  assert.ok(Math.abs(view.segments.reduce((sum, s) => sum + s.percent, 0) - 100) < 0.001);
+});
+
+test('resumen sin snapshots y con estados parciales no confunde ausencia con fallos', () => {
+  const empty = campaignV2RecipientStatusPresentation({
+    total_recipients: 215,
+    has_snapshot: false,
+    counts: {
+      VIEWED: 0, DELIVERED: 0, SENT: 0, FAILED: 0,
+      SUCCESSFUL: 0, NO_PROVIDER_STATUS: 0, NO_SNAPSHOT: 215,
+    },
+  });
+  assert.equal(empty.hasSnapshot, false);
+  assert.equal(empty.accepted, 0);
+  assert.equal(empty.reached, 0);
+  assert.equal(empty.segments.length, 0);
+  const partial = campaignV2RecipientStatusPresentation({
+    total_recipients: 4,
+    has_snapshot: true,
+    counts: {
+      VIEWED: 1, DELIVERED: 0, SENT: 0, FAILED: 1,
+      SUCCESSFUL: 1, NO_PROVIDER_STATUS: 1, NO_SNAPSHOT: 0,
+    },
+  });
+  assert.equal(partial.accepted, 2);
+  assert.equal(partial.reached, 1);
+  assert.deepEqual(partial.segments.map(s => s.status), [
+    'VIEWED', 'SUCCESSFUL', 'FAILED', 'NO_PROVIDER_STATUS',
+  ]);
+});
+
+test('modal inserta resumen sobre filtros y mantiene toda la lógica fuera del HTML', () => {
+  const template = fs.readFileSync(
+    path.join(process.cwd(), 'src/app/marketing-campaign-v2/marketing-campaign-v2-campaign-detail-dialog.component.html'),
+    'utf8',
+  );
+  assert.ok(template.indexOf('class="recipient-overview"') >= 0);
+  assert.ok(template.indexOf('class="recipient-overview"') < template.indexOf('class="recipient-filter-toolbar"'));
+  assert.ok(template.includes('[style.width.%]="segment.percent"'));
+  assert.ok(template.includes('overview.hasSnapshot'));
+  const component = fs.readFileSync(
+    path.join(process.cwd(), 'src/app/marketing-campaign-v2/marketing-campaign-v2-campaign-detail-dialog.component.ts'),
+    'utf8',
+  );
+  assert.ok(component.includes('result.status_summary'));
+  assert.ok(component.includes('campaignV2RecipientStatusPresentation('));
 });
