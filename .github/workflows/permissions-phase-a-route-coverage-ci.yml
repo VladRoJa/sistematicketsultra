@@ -1,0 +1,39 @@
+name: Fase A — Flask Route Catalog Coverage Diagnostics
+
+on:
+  pull_request:
+    paths:
+      - "backend/tests/routes/test_permissions_phase_a_route_coverage.py"
+      - ".github/workflows/permissions-phase-a-route-coverage-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  route-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+      SECRET_KEY: permissions-phase-a-test-only
+      JWT_SECRET_KEY: permissions-phase-a-test-only
+      SQLALCHEMY_DATABASE_URI: "sqlite:///:memory:"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend test dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Compare Flask url_map with historical seed (no DB)
+        run: |
+          python -m pytest -s -q --tb=short -o addopts= \
+            tests/routes/test_permissions_phase_a_route_coverage.py
