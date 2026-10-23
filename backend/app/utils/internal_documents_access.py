@@ -691,7 +691,20 @@ def can_download_historical_internal_document_version(
     document: InternalDocumentORM | None = None,
     context: InternalDocumentUserContext | None = None,
 ) -> bool:
-    return can_manage_internal_documents(context)
+    context = context or get_current_internal_document_context()
+    if not can_manage_internal_documents(context):
+        return False
+
+    # La administración general de Nube no omite la regla de descarga del
+    # consolidado. Las versiones históricas conservan su validación propia
+    # y no dependen de que exista una versión actual.
+    if document is not None and _document_is_agregadoras_consolidado(document):
+        return (
+            document.status == InternalDocumentStatus.PUBLISHED
+            and has_document_visibility_access(document, context, action="download")
+        )
+
+    return True
 
 
 def build_internal_document_capabilities(
