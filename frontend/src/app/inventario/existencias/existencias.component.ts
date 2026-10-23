@@ -24,6 +24,11 @@ interface ExistenciaInventario {
   marca: string | null;
   proveedor: string | null;
   categoria: string | null;
+  subcategoria?: string | null;
+  categoria_inventario_id?: number | null;
+  categoria_catalogo?: string | null;
+  familia_equipo_id?: number | null;
+  familia_equipo?: { id: number; key: string; nombre: string } | null;
   unidad_medida: string | null;
   stock: number | null;
 }
@@ -33,6 +38,12 @@ interface CategoriaExistencia {
   cantidad: number;
   porcentaje: number;
   color: string;
+}
+
+interface FamiliaExistencia {
+  nombre: string;
+  cantidad: number;
+  sinClasificar: boolean;
 }
 
 const ROLES_CON_ALCANCE_GLOBAL = new Set([
@@ -68,7 +79,7 @@ const ROLES_PILOTO_V2 = new Set([
 export class ExistenciasComponent implements OnInit, OnDestroy {
   readonly displayedColumns = [
     'id', 'nombre', 'codigo_interno', 'tipo', 'marca',
-    'proveedor', 'categoria', 'unidad', 'stock', 'sucursal',
+    'proveedor', 'categoria', 'familia', 'unidad', 'stock', 'sucursal',
   ];
   readonly pageSize = 40;
 
@@ -82,6 +93,10 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
   filasPagina: ExistenciaInventario[] = [];
   categorias: string[] = [];
   composicion: CategoriaExistencia[] = [];
+  familias: string[] = [];
+  composicionFamilias: FamiliaExistencia[] = [];
+  totalEquiposGimnasio = 0;
+  equiposSinFamilia = 0;
 
   totalReferencias = 0;
   referenciasConStock = 0;
@@ -90,6 +105,7 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
 
   busqueda = '';
   categoriaSeleccionada = 'todas';
+  familiaSeleccionada = 'todas';
   estadoStock = 'todos';
   paginaActual = 0;
   loading = false;
@@ -178,6 +194,7 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
     this.sucursalSeleccionada = nuevaSucursal;
     this.busqueda = '';
     this.categoriaSeleccionada = 'todas';
+    this.familiaSeleccionada = 'todas';
     this.estadoStock = 'todos';
     this.cargarExistencias();
   }
@@ -186,8 +203,12 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
     const termino = this.normalizar(this.busqueda);
     this.existenciasFiltradas = this.existencias.filter(item => {
       const categoria = this.nombreCategoria(item);
+      const familia = this.nombreFamilia(item);
       const conStock = Number(item.stock ?? 0) > 0;
       if (this.categoriaSeleccionada !== 'todas' && categoria !== this.categoriaSeleccionada) {
+        return false;
+      }
+      if (this.familiaSeleccionada !== 'todas' && familia !== this.familiaSeleccionada) {
         return false;
       }
       if (this.estadoStock === 'con-stock' && !conStock) return false;
@@ -196,7 +217,9 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
 
       return [
         item.nombre, item.codigo_interno, item.tipo, item.marca,
-        item.proveedor, item.categoria, item.sucursal_nombre, item.inventario_id,
+        item.proveedor, item.categoria, item.subcategoria,
+        item.categoria_catalogo, categoria, familia,
+        item.sucursal_nombre, item.inventario_id,
       ].some(valor => this.normalizar(valor).includes(termino));
     });
     this.paginaActual = 0;
@@ -206,6 +229,7 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
   limpiarFiltros(): void {
     this.busqueda = '';
     this.categoriaSeleccionada = 'todas';
+    this.familiaSeleccionada = 'todas';
     this.estadoStock = 'todos';
     this.aplicarFiltros();
   }
@@ -231,6 +255,7 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
   get hayFiltros(): boolean {
     return !!this.busqueda.trim() ||
       this.categoriaSeleccionada !== 'todas' ||
+      this.familiaSeleccionada !== 'todas' ||
       this.estadoStock !== 'todos';
   }
 
@@ -262,6 +287,26 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
       porcentaje: this.totalReferencias ? cantidad / this.totalReferencias * 100 : 0,
       color: 'category-' + indice,
     }));
+
+    // Sólo los aparatos necesitan una familia de Mantenimiento.
+    // Dispositivos de recepción/gerencia sin familia NO son pendientes.
+    const aparatos = this.existencias.filter(item => this.esAparato(item));
+    this.totalEquiposGimnasio = aparatos.length;
+    const porFamilia = new Map<string, number>();
+    for (const item of aparatos) {
+      const familia = this.nombreFamilia(item)!;
+      porFamilia.set(familia, (porFamilia.get(familia) || 0) + 1);
+    }
+    this.equiposSinFamilia = porFamilia.get('Sin familia') || 0;
+    this.familias = [...porFamilia.keys()].sort((a, b) => a.localeCompare(b, 'es'));
+    this.composicionFamilias = [...porFamilia.entries()]
+      .sort((a, b) => (
+        a[0] === 'Sin familia' ? 1 : b[0] === 'Sin familia' ? -1 :
+        b[1] - a[1] || a[0].localeCompare(b[0], 'es')
+      ))
+      .map(([nombre, cantidad]) => ({
+        nombre, cantidad, sinClasificar: nombre === 'Sin familia',
+      }));
   }
 
   private limpiarDatos(): void {
@@ -270,6 +315,10 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
     this.filasPagina = [];
     this.categorias = [];
     this.composicion = [];
+    this.familias = [];
+    this.composicionFamilias = [];
+    this.totalEquiposGimnasio = 0;
+    this.equiposSinFamilia = 0;
     this.totalReferencias = 0;
     this.referenciasConStock = 0;
     this.referenciasSinStock = 0;
@@ -277,8 +326,28 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
     this.paginaActual = 0;
   }
 
-  private nombreCategoria(item: ExistenciaInventario): string {
+  // Prioridad: categoría de catálogo. En aparatos legados sin vínculo NO
+  // presumimos que el texto libre (Maquinas/Cardio) sea catálogo oficial.
+  nombreCategoria(item: ExistenciaInventario): string {
+    const catalogo = String(item.categoria_catalogo || '').trim();
+    if (catalogo) return catalogo;
+    if (this.esAparato(item)) return 'Sin categoría de catálogo';
     return String(item.categoria || '').trim() || 'Sin categoría';
+  }
+
+  nombreFamilia(item: ExistenciaInventario): string | null {
+    if (!this.esAparato(item)) return null;
+    return String(item.familia_equipo?.nombre || '').trim() || 'Sin familia';
+  }
+
+  formatoPorcentaje(porcentaje: number): string {
+    if (porcentaje > 0 && porcentaje < 1) return '<1%';
+    return Math.round(porcentaje) + '%';
+  }
+
+  private esAparato(item: ExistenciaInventario): boolean {
+    const tipo = this.normalizar(item.tipo);
+    return tipo === 'aparato' || tipo === 'aparatos';
   }
 
   private normalizar(valor: unknown): string {
