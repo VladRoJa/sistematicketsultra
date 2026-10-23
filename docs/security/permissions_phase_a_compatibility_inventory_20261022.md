@@ -504,6 +504,43 @@ Consulta agrupada de `usuarios_permisos` en producción devolvió únicamente:
 
 **Criterio de cierre:** CI verde de P20 demuestra únicamente que la **proyección derivada** es consistente y que las divergencias se clasifican, **no** que tres pantallas o endpoints productivos ya estén construidos, ni que el catálogo sea paritario con todos los guards. Antes de migrar: cobertura Flask↔catálogo, algoritmos de precedencia/fecha/scope, identidad de permisos por registro, comparador de ruta end-to-end (con tests negativos) y validación de inversos reales. **PR #1092 fusionado por squash a `main` (`87abf0499195d18304b6061a7310c983ef95b448`), sin despliegue necesario: solo suites diagnósticas y workflow.** Resolvedor global sigue desactivado.
 
+
+## 5.11. P21 — Inventario reproducible Flask vs seed histórico de rutas (2026-10-23)
+
+**PR diagnóstico:** [#1094](https://github.com/VladRoJa/sistematicketsultra/pull/1094), commit de prueba corregida `febd015630637dcf6745c703bce582351f9f1e0b`, [GitHub Actions #40026591278](https://github.com/VladRoJa/sistematicketsultra/actions/runs/40026591278), **7/7 PASS**. La prueba compara `create_app().url_map` de `main`, por pares `(method,route)` y tripletas `(method,route,endpoint)`, con las **declaraciones** de las migraciones `3d4f6a8b9c10` (catálogo) y `7b8c9d0e1f2a` (ROUTE_MAP_ROWS). La lectura con `runpy.run_path` no invoca `upgrade/downgrade`, y la creación de la app no envía requests. **No se consultó la tabla actual `permission_route_map` ni PostgreSQL, y NO se recontó producción.** Las asociaciones del seed de alto riesgo constituyen **línea histórica parcial**, no catálogo vigente completo.
+
+| Métrica CI | Conteo / hallazgo |
+| --- | --- |
+| **Métodos HTTP bajo /api registrados por Flask** | **419** combinaciones de método + endpoint (sin HEAD/OPTIONS). **No** son 419 rutas únicas ni 419 acciones del catálogo |
+| **Filas activas del seed histórico de `permission_route_map`** | **69** |
+| **Coincidencias por mismo método y ruta** | **69/69**; **ninguna ruta del seed ha desaparecido** en este censo |
+| **Coincidencias por método + ruta + nombre de endpoint registrado** | **68/69** |
+| **Una diferencia nominal legítima (alias Flask)** | `PUT /api/admin/usuarios/<int:user_id>/sucursales` se registra con `endpoint="admin_put_sucursales_usuario"` aunque la función Python se denomina `put_sucursales_usuario_admin`. El seed conserva el **nombre de la función real**: no es endpoint faltante ni prueba de bypass |
+| **Métodos Flask no incluidos en las 69 rutas del seed** | **350/419**; se obtiene por método+ruta, **no** incluyendo el alias como faltante |
+| **Referencias inexistentes dentro de los seeds inspeccionados** | **0 acciones desconocidas**, **0 módulos desconocidos**; identidades de filas del seed sin duplicados |
+| **Agrupaciones de módulo ≠ acción** | **3 intencionales**: Aperturas→Nube (`openings.manage`), y 2 rutas de `/api/permisos` agrupadas en Reportes con `users.manage`. **No** convertir módulo agrupador en decisión autorizante |
+
+**Cobertura por familias (conteos de métodos HTTP, no riesgo ni número de usuarios):**
+
+| Prefijo / familia | Flask | Con coincidencia exacta seed | Sin coincidencia exacta |
+| --- | ---: | ---: | ---: |
+| `/api/marketing` | 82 | 0 | 82 |
+| `/api/purchase-requisitions` | 24 | 0 | 24 |
+| `/api/contact-center` | 18 | 0 | 18 |
+| `/api/system-daily-checks` | 16 | 0 | 16 |
+| `/api/automation-control` | 14 | 0 | 14 |
+| `/api/internal-documents` | 21 | 10 | 11 |
+| `/api/inventario` | 28 | 6 | 22 |
+| `/api/tickets` | 26 | 11 | 15 |
+| `/api/track` | 14 | 2 | 12 |
+| `/api/warehouse` | 17 | 2 | 15 |
+
+**Nube A-14 confirmado sin reabrir A-10–A-13:** 21 handlers (10 mutaciones en seed y 11 GET sin mapear allí). Esos GET tienen JWT y validaciones específicas según función/objeto; **sin mapeo NO significa abiertos al público**. La suite se limita a la existencia de rutas/métodos y **no ejecuta el guard**. Para las demás familias tampoco se infiere vulnerabilidad o permiso ausente solo por no aparecer en una migración histórica.
+
+**Advertencia metodológica:** el censo de `permission_route_map` en producción del 22/oct reportó 72 asociaciones (incluidas 3 inactivas). P21 contrasta **solo 69 filas activas del seed histórico** con el runtime del código actual, de modo que **no prueba paridad de esas 72 filas actuales ni detecta asignaciones agregadas por otras migraciones/operaciones**. Verificar estado vigente y `is_active` de la DB, y cotejar guard/autenticación por endpoint, antes de aprobar nuevas acciones. Para una matriz de permisos real no basta que una ruta esté asociada: requiere `action_full_key` correcto, contexto de sucursal/documento/estado y guard backend efectivo.
+
+**Próxima etapa P22 — prioridad de revisión, NO ejecución de cambios:** separar las 350 asociaciones históricamente ausentes en **GET y mutaciones**, priorizar rutas de escritura de Marketing, Contact Center, Requisiciones y Sistemas, e inventariar fuente de autorización/alcance real de cada grupo. Comparar después con los datos **vigentes** de `permission_route_map` con permisos administrativos de solo lectura, antes de extender catálogo, emitir grants o diseñar enforcement. PR #1094 solo tests/workflow, listo para revisión y **sin merge ni deploy** al documentar. **Resolvedor global desactivado; Fase A abierta.**
+
 ## 6. Evidencia aún pendiente para cerrar Fase A
 
 Estos puntos necesitan información del servidor o revisión de código adicional. **No constituyen autorización para consultar datos personales sin necesidad, modificar registros ni ejecutar SQL de escritura.**
@@ -522,7 +559,8 @@ Estos puntos necesitan información del servidor o revisión de código adiciona
 - [x] **Paridad de flags Warehouse/Planning ejecutada y fusionada:** PR #1087, squash `b8d48ae2c0f1795c0da0649e3e0801baf95c3d54`, [CI #40022512067](https://github.com/VladRoJa/sistematicketsultra/actions/runs/40022512067) **106/106 PASS** (39 Warehouse + 67 Planning), guards reales vs diagnóstico del catálogo; operadores/JWT/consultas ficticios. **Solo tests y workflow; sin cambio productivo ni despliegue requerido.**
 - [x] **Nube por documento P19 ejecutada y fusionada:** PR #1089, squash `61ef1bcf4f256885953303c51518af6316addfba`, [CI #40023930914](https://github.com/VladRoJa/sistematicketsultra/actions/runs/40023930914) **81/81 PASS**, incluyendo **63 escenarios nuevos** de visibilidad, sensibilidad, CUSTOM/PRIVATE/GLOBAL, versiones, auditoría/histórico, cobranza y manager vs catálogo. Solo fixtures y CI, **sin cambios productivos ni despliegue requerido**.
 - [x] **Contrato bidireccional P20 diagnosticado e integrado:** PR #1092, squash `87abf0499195d18304b6061a7310c983ef95b448`, [CI #40024767865](https://github.com/VladRoJa/sistematicketsultra/actions/runs/40024767865) **53/53 PASS** (31 proyección + 22 clasificación). Proyecciones inversas **solo in-memory**, NO hay endpoints efectivos `Acción→Usuarios` ni `Módulo→Usuarios`; sin cambios de runtime, sin deploy ni migraciones.
-- [ ] **Resto pendiente para paridad operativa:** implementar/probar futuros endpoints inversos desde fuente común sin activar enforcement; revisar rutas/acciones no cubiertas, reglas de fechas/scope/grants y comparación HTTP por `(user, action, branch, document)`. Usar `match`, `legacy_allow_catalog_deny`, `legacy_deny_catalog_allow`, `incomplete_context` sin inferir derechos de objeto por módulo.
+- [x] **P21 Cobertura Flask vs seed histórico inspeccionada:** PR #1094, [CI #40026591278](https://github.com/VladRoJa/sistematicketsultra/actions/runs/40026591278) **7/7 PASS**; Flask registra 419 métodos, seed activo histórico contiene 69 asociaciones (68 nombres exactos + 1 alias explícito válido), **350 métodos fuera del seed**. Los 3 cruces transversales y Nube 10 writes/11 GET se conservaron. **No se consultó DB productiva; PR pendiente merge.**
+- [ ] **Resto pendiente para paridad operativa:** inventariar guard/alcance de mutaciones históricamente fuera del seed (P22), cotejar `permission_route_map` vigente de producción y endpoints inversos futuros sin activar enforcement; revisar precedencia/fecha/scope de grants y paridad HTTP por `(user, action, branch, document)`. Usar `match`, `legacy_allow_catalog_deny`, `legacy_deny_catalog_allow`, `incomplete_context` sin inferir derechos de objeto por módulo.
 - [x] **Inventario de los 21 handlers Nube completo por código** (A-14): 11 GET y 10 mutaciones, todos con JWT; se registró el guard legacy de cada ruta. **Pendiente:** pruebas de paridad por contexto y correspondencia 1:1 con el resolvedor; no confundir inventario estático con cobertura QA.
 - [ ] Producir conjunto de escenarios de paridad de Nube Corporativa (rol SISTEMAS, ADMICORP, admin con otro usuario, usuario ordinario, documento sensible).
 - [ ] Decidir con responsable operativo únicamente los accesos legacy contradictorios que supongan un cambio de política, no pedir autorización para cada refactor.
@@ -547,7 +585,7 @@ Estos puntos necesitan información del servidor o revisión de código adiciona
 - [x] **A-13 preparada RED→GREEN:** PR [#1077](https://github.com/VladRoJa/sistematicketsultra/pull/1077) corrige en SQL el filtro de título antes de contar y paginar. RED limpio CI #40008420077 = 4 fallos esperados / 14 PASS; GREEN última CI #40009002764 = **18/18 PASS** y suites A-12 12/12, A-11 7/7, `/by-link` 7/7 PASS. **Fusionado a main; operador indicó que el bloque de despliegue y QA A-13 quedó bien, sin pegar valores de consola.**
 - [x] **Merge A-13 autorizado y completado:** PR #1077 fusionado por squash como `ebb9e9080fb76d98696b451c429610701f43a779`, con 4 workflows verdes en último commit.
 - [x] **Validación operativa A-13 confirmada verbalmente por el operador (2026-10-23):** ante el bloque de despliegue y QA para filtro normalizado, respondió «si bien». Se registra como confirmación positiva del bloque, pero **no se recibieron impresos** `A13_CODIGO_DESPLEGADO` ni `QA_A13`; no atribuirles valores textuales ni tratarlo como prueba HTTP end-to-end. CI previo 18/18 PASS, sin migraciones.
-- [ ] **Fase A sigue abierta:** Track/Tickets (#1079), Inventario/PM (#1081), Warehouse/Planning (#1087), Nube por documento (#1089) y contrato bidireccional P20 (#1092) integrados en `main`, con CI GREEN. **No existen aún endpoints inversos reales**. Faltan revisión de rutas fuera del catálogo, paridad HTTP/objeto/fechas y decisión sobre regla GLOBAL bajo CUSTOM sensible. No activar el resolvedor global.
+- [ ] **Fase A sigue abierta:** Track/Tickets (#1079), Inventario/PM (#1081), Warehouse/Planning (#1087), Nube por documento (#1089) y P20 (#1092) integrados en `main`. P21 (#1094) CI GREEN y pendiente de merge; **350 métodos Flask fuera del seed histórico**, sin implicar endpoints inseguros. Faltan mapa vigente/guards por mutación, endpoints inversos reales, paridad HTTP/objeto/fechas y decisión CUSTOM sensible. No activar resolvedor global.
 - [ ] Ampliar fixtures a descarga actual e histórica y controles por registro de las demás rutas del piloto.
 - [ ] Marcar expresamente el alcance incompleto de módulos fuera del catálogo y plan de expansión.
 
