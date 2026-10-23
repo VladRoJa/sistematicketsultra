@@ -189,6 +189,8 @@ La prueba en producción comparó **todos los endpoints Flask** con prefijo `/ap
 
 **QA HTTP autenticado con filtro válido sin coincidencias — 2026-10-23:** el operador ejecutó desde Suite Ultra `GET /api/internal-documents/by-link?entity_type=GENERAL&entity_key=SUITE_ULTRA_QA_SIN_VINCULOS_20261023` usando el JWT de su sesión. Resultado reportado: **HTTP 200, `DOCUMENTOS=0`**. Confirma que el endpoint procesa parámetros válidos y devuelve lista vacía para este filtro; no prueba controles de visibilidad sobre documentos existentes, ni demuestra que la clave sea permanentemente inexistente. Con ello se completaron tres comprobaciones básicas HTTP: sin JWT → 401, JWT + tipo inválido → 400, JWT + filtro válido sin coincidencias → 200/0.
 
+**QA paridad por perfil / documento privado ficticio — 2026-10-23:** el operador ejecutó dentro de `backend` un script que invoca `can_view_internal_document` sobre un `SimpleNamespace` publicado, no sensible y `PRIVATE` (id ficticio negativo, sin DB) con contextos ficticios de rol `SISTEMAS` y `GERENTE`. Obtuvo `SISTEMAS | CAN_VIEW=True`, `GERENTE | CAN_VIEW=False`. **PASS**: corrobora la política legacy de administrador documental para un documento ordinario privado y la denegación del gerente no propietario; **no** prueba HTTP ni permisos reales de otros perfiles/documentos. Pendiente comprobar la excepción de documento sensible `Consolidado de agregadoras` bajo visibilidad explícita simulada.
+
 **Escenarios mínimos de comparación para Fase B:** (1) sesión válida vs inválida, (2) lectura de documento publicado permitido, (3) lectura denegada de documento sensible, (4) SISTEMAS / ADMICORP vs otro rol ante el consolidado, (5) `view=true/download=false`, (6) versiones históricas vs versión actual, (7) auditoría solo manager, (8) listado general vs `/by-link` para un mismo documento, (9) borradores/archivados/visibilidad custom. **Resultado esperado:** el resolvedor podrá describir el acceso sin alterar los guards y sin fusionar todos los GET en un solo booleano `internal_documents.view`.
 
 ## 5. Política de paridad antes de activar permisos
@@ -292,7 +294,8 @@ Estos puntos necesitan información del servidor o revisión de código adiciona
 - [x] **Prueba HTTP sin JWT en backend productivo (2026-10-23):** `GET /api/internal-documents/by-link?entity_type=GENERAL` respondió `401` sin cabecera Authorization. Confirma el rechazo de una solicitud anónima al endpoint, no la corrección de las restricciones entre roles/documentos autenticados.
 - [x] **HTTP autenticado sin leer documentos:** JWT de sesión legítimo + `entity_type=INVALIDO` devolvió HTTP 400; alcanzó validación previa a consulta de documentos.
 - [x] **Camino HTTP autenticado con parámetros válidos y vínculo ficticio inexistente:** `GET /api/internal-documents/by-link?entity_type=GENERAL&entity_key=SUITE_ULTRA_QA_SIN_VINCULOS_20261023` devolvió **HTTP 200, `items` vacío** (`DOCUMENTOS=0`), sin exponer metadatos de documentos.
-- [ ] Contrastar **paridad por perfil/objeto con fixtures** (perfiles permitidos y restringidos, documentos ordinarios y sensibles) sin usar información documental real antes de activar resolvedor global.
+- [x] QA aislado con documento privado ordinario ficticio: rol `SISTEMAS` → `CAN_VIEW=True`; rol `GERENTE` sin propiedad → `CAN_VIEW=False`.
+- [ ] Completar paridad por perfil/objeto sobre **documentos sensibles con regla CUSTOM simulada**, y ampliar fixtures antes de activar resolvedor global.
 - [ ] Marcar expresamente el alcance incompleto de módulos fuera del catálogo y plan de expansión.
 
 ### Consulta posterior de producción
