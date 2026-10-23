@@ -277,8 +277,10 @@ export class ExistenciasComponent implements OnInit, OnDestroy {
     this.categorias = [...porCategoria.keys()].sort((a, b) => a.localeCompare(b, 'es'));
     this.totalCategorias = this.categorias.length;
     const orden = [...porCategoria.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'es'));
-    const principales = orden.slice(0, 5);
-    const otras = orden.slice(5).reduce((total, [, cantidad]) => total + cantidad, 0);
+    // Mostrar todas las categorias reales del alcance actual (7 en global).
+    // Sólo consolidar en «Otras» si hubiera más de ocho categorías.
+    const principales = orden.slice(0, 8);
+    const otras = orden.slice(8).reduce((total, [, cantidad]) => total + cantidad, 0);
     if (otras) principales.push(['Otras categorías', otras]);
 
     this.composicion = principales.map(([nombre, cantidad], indice) => ({
