@@ -41,11 +41,12 @@ def _classification(legacy, observed, context_complete):
 
 
 @pytest.mark.parametrize("role,legacy,observed,status", [
-    ("GERENTE", True, False, "legacy_allow_catalog_deny"),
-    ("GERENTE_REGIONAL", True, False, "legacy_allow_catalog_deny"),
-    ("SISTEMAS", True, False, "legacy_allow_catalog_deny"),
-    ("MARKETING", True, False, "legacy_allow_catalog_deny"),
-    ("TIENDA", True, False, "legacy_allow_catalog_deny"),
+    ("GERENTE", True, True, "match"),
+    ("GERENTE_REGIONAL", True, True, "match"),
+    ("SISTEMAS", True, True, "match"),
+    ("MARKETING", True, True, "match"),
+    ("TIENDA", True, True, "match"),
+    ("GERENCIA DEPORTIVA", True, True, "match"),
     ("LECTOR_GLOBAL", True, True, "match"),
     ("ADMINISTRADOR", True, True, "match"),
     ("RECEPCIONISTA", False, False, "match"),

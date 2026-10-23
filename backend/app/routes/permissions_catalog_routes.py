@@ -23,6 +23,12 @@ permissions_catalog_bp = Blueprint("permissions_catalog", __name__)
 PERMISSIONS_CATALOG_ADMIN_ROLES = {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN"}
 
 LEGACY_ADMIN_ROLES = {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN"}
+# Proyección diagnóstica de la allowlist actual de track_routes._require_track_read_role.
+# La paridad se prueba contra el guard real. NO se usa para autorizar endpoints.
+TRACK_READ_PREVIEW_ROLES = LEGACY_ADMIN_ROLES | {
+    "LECTOR_GLOBAL", "GERENTE", "GERENTE_REGIONAL", "SISTEMAS",
+    "GERENCIA DEPORTIVA", "MARKETING", "TIENDA",
+}
 LEGACY_INVENTORY_GLOBAL_WRITE_ROLES = LEGACY_ADMIN_ROLES | {
     "MANTENIMIENTO",
     "SISTEMAS",
@@ -448,11 +454,12 @@ def _effective_action_decision(action, user, context: dict) -> dict:
 
     # Track
     if full_key == "track.read":
-        allowed = is_admin or role == "LECTOR_GLOBAL"
+        # Solo diagnóstico. Debe reflejar el guard de lectura real de Track.
+        allowed = role in TRACK_READ_PREVIEW_ROLES
         return _decision(
             allowed=allowed,
             source="legacy_role",
-            reason="track_read_admin_or_lector_global",
+            reason="track_read_role_matches_guard_v2",
             scope_type="global" if allowed else "none",
         )
 

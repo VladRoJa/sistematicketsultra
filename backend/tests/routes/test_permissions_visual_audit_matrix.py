@@ -41,11 +41,16 @@ def make_context(user, *, warehouse=None, planning=None):
 
 
 @pytest.mark.parametrize("role,legacy,catalog_allowed,comparison", [
-    ("GERENTE", True, False, "diferencia"),
+    ("GERENTE", True, True, "coincide"),
+    ("GERENTE_REGIONAL", True, True, "coincide"),
+    ("GERENCIA DEPORTIVA", True, True, "coincide"),
+    ("SISTEMAS", True, True, "coincide"),
+    ("MARKETING", True, True, "coincide"),
+    ("TIENDA", True, True, "coincide"),
     ("RECEPCIONISTA", False, False, "coincide"),
     ("ADMINISTRADOR", True, True, "coincide"),
 ])
-def test_track_read_shared_evaluator_detects_gaps(role, legacy, catalog_allowed, comparison):
+def test_track_read_shared_evaluator_matches_guard(role, legacy, catalog_allowed, comparison):
     user = make_user(role)
     row = visual.evaluate_pair(user, make_action("track.read"), make_context(user))
     assert row["legacy_allowed"] is legacy

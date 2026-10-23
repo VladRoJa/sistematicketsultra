@@ -41,7 +41,7 @@
       <label for="audit-action">Acción específica</label>
       <select id="audit-action" [(ngModel)]="actionKey" (ngModelChange)="onActionChanged()">
         <option value="">{{ view === 'action' ? 'Selecciona acción' : view === 'module' ? 'Entrada al módulo' : 'Todas las acciones' }}</option>
-        <option *ngFor="let action of moduleActions" [value]="action.full_key">{{ action.full_key }}</option>
+        <option *ngFor="let action of moduleActions" [value]="action.full_key">{{ action.name }} · {{ action.full_key }}</option>
       </select>
     </div>
     <div class="audit-field" *ngIf="view !== 'user'">
@@ -142,9 +142,15 @@
               </td>
               <td><span class="audit-result" [class.diff]="row.comparison === 'diferencia'" [class.match]="row.comparison === 'coincide'">{{ row.comparison === 'coincide' ? 'Coincide' : row.comparison === 'diferencia' ? 'Diferencia' : 'No concluyente' }}</span></td>
               <td class="audit-reason">
-                <span>{{ row.scope }} · {{ row.branch_ids.join(', ') || '—' }}</span>
-                <small title="Fuente de guard legacy">{{ row.legacy_source }}: {{ row.legacy_reason }}</small>
-                <small title="Fuente de catálogo">{{ row.catalog_source }}: {{ row.catalog_reason }}</small>
+                <strong>{{ getScopeLabel(row) }}</strong>
+                <small>Guard real: {{ getAuditReason(row, 'legacy') }}</small>
+                <small>Catálogo: {{ getAuditReason(row, 'catalog') }}</small>
+                <details class="audit-technical">
+                  <summary>Ver fundamento técnico</summary>
+                  <small>Sucursales asignadas: {{ row.branch_ids.join(', ') || 'Ninguna' }}</small>
+                  <small>Guard: {{ row.legacy_source }} · {{ row.legacy_reason }}</small>
+                  <small>Catálogo: {{ row.catalog_source }} · {{ row.catalog_reason }}</small>
+                </details>
               </td>
               <td class="audit-row-actions">
                 <button type="button" *ngIf="view !== 'user'" (click)="navigateTo('user', row)" title="Ver permisos del usuario">Usuario</button>
