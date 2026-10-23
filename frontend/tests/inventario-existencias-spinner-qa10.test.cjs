@@ -273,3 +273,76 @@ test('E1 familias: dispositivos no generan pendientes y los porcentajes pequenos
   assert.match(html, /formatoPorcentaje\(categoria.porcentaje\)/);
   assert.match(css, /\.family-summary \{/);
 });
+
+
+test('E1 filtros cruzados: Cardio sólo ofrece sus familias y no Peso Libre', () => {
+  const { vm, peticiones } = fixture();
+  const aparato = { ...rows[0], tipo: 'Aparatos', categoria: 'Maquinas', stock: 1 };
+  const registros = [
+    { ...aparato, inventario_id: 1, nombre: 'Caminadora', categoria_catalogo: 'Cardio',
+      familia_equipo: { id: 1, key: 'CAMINADORA', nombre: 'Caminadora' } },
+    { ...aparato, inventario_id: 2, nombre: 'Elíptica', categoria_catalogo: 'Cardio',
+      familia_equipo: { id: 2, key: 'ELIPTICA', nombre: 'Elíptica' } },
+    { ...aparato, inventario_id: 3, nombre: 'Bicicleta Vertical', categoria_catalogo: 'Cardio',
+      familia_equipo: null },
+    { ...aparato, inventario_id: 4, nombre: 'Mancuerna', categoria_catalogo: 'Peso Libre',
+      familia_equipo: { id: 7, key: 'PESO_LIBRE', nombre: 'Peso Libre' } },
+    { ...aparato, inventario_id: 5, nombre: 'Peso Integrado', categoria_catalogo: 'Selectorizado',
+      familia_equipo: { id: 6, key: 'PESO_INTEGRADO', nombre: 'Peso Integrado' } },
+    { ...rows[0], inventario_id: 6, categoria_catalogo: 'Equipo recepción',
+      familia_equipo: null },
+  ];
+
+  vm.ngOnInit();
+  peticiones[0].observer.next(registros);
+  assert.equal(vm.totalReferencias, 6);
+  assert.deepEqual(vm.familiasDisponibles,
+    ['Caminadora', 'Elíptica', 'Peso Integrado', 'Peso Libre', 'Sin familia']);
+  assert.deepEqual(vm.categoriasDisponibles, vm.categorias);
+
+  vm.onCategoriaChange('Cardio');
+  assert.deepEqual(vm.familiasDisponibles, ['Caminadora', 'Elíptica', 'Sin familia']);
+  assert.equal(vm.familiasDisponibles.includes('Peso Libre'), false);
+  assert.equal(vm.familiasDisponibles.includes('Peso Integrado'), false);
+  assert.deepEqual(vm.existenciasFiltradas.map(e => e.inventario_id), [1, 2, 3]);
+
+  vm.onFamiliaChange('Caminadora');
+  assert.deepEqual(vm.categoriasDisponibles, ['Cardio']);
+  assert.deepEqual(vm.existenciasFiltradas.map(e => e.inventario_id), [1]);
+
+  // Si se cambia de categoría, no se conserva una familia imposible.
+  vm.onCategoriaChange('Peso Libre');
+  assert.equal(vm.familiaSeleccionada, 'todas');
+  assert.deepEqual(vm.familiasDisponibles, ['Peso Libre']);
+  assert.deepEqual(vm.existenciasFiltradas.map(e => e.inventario_id), [4]);
+
+  // También funciona al seleccionar primero familia y después categoría.
+  vm.onFamiliaChange('Peso Integrado');
+  assert.equal(vm.categoriaSeleccionada, 'todas');
+  assert.deepEqual(vm.categoriasDisponibles, ['Selectorizado']);
+  assert.deepEqual(vm.existenciasFiltradas.map(e => e.inventario_id), [5]);
+
+  vm.onFamiliaChange('todas');
+  vm.onCategoriaChange('Equipo recepción');
+  assert.deepEqual(vm.familiasDisponibles, []); // Sin familias para dispositivos.
+  assert.deepEqual(vm.existenciasFiltradas.map(e => e.inventario_id), [6]);
+
+  vm.limpiarFiltros();
+  assert.deepEqual(vm.categoriasDisponibles, vm.categorias);
+  assert.deepEqual(vm.familiasDisponibles, vm.familias);
+  assert.equal(vm.totalReferencias, 6);
+  assert.equal(vm.equiposSinFamilia, 1);
+  assert.equal(vm.referenciasConStock, 6);
+
+  vm.onSucursalChange(1);
+  assert.deepEqual(vm.familiasDisponibles, []);
+  assert.deepEqual(vm.categoriasDisponibles, []);
+  peticiones[1].observer.next(registros.slice(0, 1));
+  assert.deepEqual(vm.familiasDisponibles, ['Caminadora']);
+  assert.deepEqual(vm.categoriasDisponibles, ['Cardio']);
+  assert.equal(vm.totalReferencias, 1);
+  assert.match(html, /\*ngFor="let familia of familiasDisponibles"/);
+  assert.match(html, /\*ngFor="let categoria of categoriasDisponibles"/);
+  assert.match(html, /onCategoriaChange\(\$event\)/);
+  assert.match(html, /onFamiliaChange\(\$event\)/);
+});
