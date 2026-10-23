@@ -381,3 +381,10 @@ La administración de permisos debe ofrecer **la misma decisión efectiva desde 
 - Tickets, Inventario, PM y Track no se migran en bloque. Cada módulo se incorpora con un cambio pequeño, reversible y comprobación de permitido, denegado y alcance aplicable.
 
 **Criterio de aceptación funcional:** un operador puede comprender por qué alguien tiene acceso sin leer condiciones especiales esparcidas por el repositorio, y el backend aplica exactamente ese resultado a la operación real.
+
+
+## Adenda 2026-10-23 — Auditoría visual read-only
+
+Se incorpora como propuesta en rama de milestone la pestaña **Matriz visual · Auditoría** en la pantalla actual de Observabilidad. Tres perspectivas usan el mismo evaluador trivalente (permitido / denegado / no concluyente), y la comparación solo considera coincidencia o diferencia cuando legacy real y catálogo son comprobables. La UI NO edita grants ni sustituye guards. La fuente de autoridad es el guard legacy y el catálogo sigue siendo diagnóstico.
+
+La cobertura probada se limita a predicados seguros de Track, Warehouse, Planning y Nube Corporativa; los scopes de sucursal y objeto restantes quedan pendientes, igual que el catálogo histórico parcial. Se documentan límites, API, QA y seguimiento en `docs/security/permissions_visual_audit_milestone_20261023.md`. El issue #1053 y PR documental #1058 siguen independientes. La aprobación de merge/despliegue corresponde al responsable del proyecto.

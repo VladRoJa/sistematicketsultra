@@ -1,0 +1,155 @@
+<div class="audit-root">
+  <header class="audit-head">
+    <div>
+      <h2>Matriz de acceso · solo consulta</h2>
+      <p>Legacy comprobado frente a estimación del catálogo. Los checks no conceden permisos.</p>
+    </div>
+    <span class="audit-pill">Enforcement legacy sin cambios</span>
+  </header>
+
+  <nav class="audit-perspectives" aria-label="Perspectiva de auditoría">
+    <button type="button" [class.active]="view === 'user'" (click)="setView('user')">Usuario → Permisos</button>
+    <button type="button" [class.active]="view === 'module'" (click)="setView('module')">Módulo → Usuarios</button>
+    <button type="button" [class.active]="view === 'action'" (click)="setView('action')">Acción → Usuarios</button>
+  </nav>
+
+  <section class="audit-controls">
+    <div class="audit-field" *ngIf="view === 'user'">
+      <label for="audit-user-search">Buscar usuario</label>
+      <div class="audit-search">
+        <input id="audit-user-search" [(ngModel)]="userSearch" (keyup.enter)="searchUsers()" placeholder="Nombre, rol, email o ID">
+        <button type="button" (click)="searchUsers()" [disabled]="loadingUsers">{{ loadingUsers ? 'Buscando…' : 'Buscar' }}</button>
+      </div>
+      <select aria-label="Usuario seleccionado" [(ngModel)]="selectedUserId" (ngModelChange)="applyFilters()">
+        <option [ngValue]="null">Selecciona usuario</option>
+        <option *ngFor="let user of users" [ngValue]="user.id">{{ user.username }} · {{ user.rol }} (#{{ user.id }})</option>
+        <option *ngIf="selectedUserId && !users.length" [ngValue]="selectedUserId">#{{ selectedUserId }}</option>
+      </select>
+    </div>
+    <div class="audit-field" *ngIf="view !== 'user'">
+      <label for="audit-search">Buscar usuarios</label>
+      <input id="audit-search" [(ngModel)]="search" (keyup.enter)="applyFilters()" placeholder="Usuario, email o rol">
+    </div>
+    <div class="audit-field">
+      <label for="audit-module">Módulo</label>
+      <select id="audit-module" [(ngModel)]="moduleKey" (ngModelChange)="onModuleChanged()" [disabled]="loadingCatalog">
+        <option value="">{{ view === 'module' ? 'Selecciona módulo' : 'Todos los módulos' }}</option>
+        <option *ngFor="let module of modules" [value]="module.key">{{ module.name }}</option>
+      </select>
+    </div>
+    <div class="audit-field">
+      <label for="audit-action">Acción específica</label>
+      <select id="audit-action" [(ngModel)]="actionKey" (ngModelChange)="onActionChanged()">
+        <option value="">{{ view === 'action' ? 'Selecciona acción' : view === 'module' ? 'Entrada al módulo' : 'Todas las acciones' }}</option>
+        <option *ngFor="let action of moduleActions" [value]="action.full_key">{{ action.full_key }}</option>
+      </select>
+    </div>
+    <div class="audit-field" *ngIf="view !== 'user'">
+      <label for="audit-role">Rol exacto</label>
+      <input id="audit-role" [(ngModel)]="role" (keyup.enter)="applyFilters()" placeholder="Todos los roles">
+    </div>
+    <div class="audit-field audit-short">
+      <label for="audit-branch">ID sucursal</label>
+      <input id="audit-branch" type="number" min="1" [(ngModel)]="branchId" (keyup.enter)="applyFilters()" placeholder="Sin contexto">
+    </div>
+    <div class="audit-field audit-short" *ngIf="actionKey === 'internal_documents.view'">
+      <label for="audit-document">ID documento</label>
+      <input id="audit-document" type="number" min="1" [(ngModel)]="documentId" (keyup.enter)="applyFilters()" placeholder="Opcional">
+    </div>
+    <div class="audit-field audit-actions">
+      <button type="button" class="audit-primary" (click)="applyFilters()" [disabled]="loading">Consultar</button>
+    </div>
+  </section>
+
+  <div class="audit-notice">El catálogo es parcial. Una acción no mapeada no significa acceso denegado. Los resultados marcados como «sin comprobar» no son autorizaciones.</div>
+  <p class="audit-error" role="alert" *ngIf="error">{{ error }}</p>
+  <p class="audit-loading" role="status" *ngIf="loading">Evaluando página de resultados…</p>
+
+  <ng-container *ngIf="result as data">
+    <div class="audit-stats" aria-label="Resumen de página evaluada">
+      <div><small>Permitidos comprobados</small><strong>{{ data.summary.allowed }}</strong></div>
+      <div><small>Denegados comprobados</small><strong>{{ data.summary.denied }}</strong></div>
+      <div><small>Sin comprobar</small><strong>{{ data.summary.unknown }}</strong></div>
+      <div><small>Diferencias comprobables</small><strong>{{ data.summary.differences }}</strong></div>
+      <div><small>Coincidencias</small><strong>{{ data.summary.matches }}</strong></div>
+    </div>
+
+    <div class="audit-toolbar">
+      <label>Filtrar página
+        <select [(ngModel)]="decisionFilter">
+          <option value="todos">Todos</option>
+          <option value="permitido">Permitidos</option>
+          <option value="denegado">Denegados</option>
+          <option value="no_concluyente">Sin comprobar</option>
+          <option value="diferencia">Diferencias</option>
+        </select>
+      </label>
+      <span>Resultados {{ data.summary.total ? data.summary.offset + 1 : 0 }}–{{ lastRow }} de {{ rowCount }} · Totales de checks: página actual</span>
+      <button type="button" (click)="exportCurrentPageCsv()" [disabled]="!rows.length">CSV página filtrada</button>
+    </div>
+
+    <div class="audit-table-wrap" *ngIf="rows.length; else auditEmptyFiltered">
+      <table class="audit-table">
+        <thead><tr>
+          <th *ngIf="view !== 'user'">Usuario / rol</th>
+          <th>Módulo / acción</th>
+          <th>Legacy (guard base)</th>
+          <th>Catálogo estimado</th>
+          <th>Comparación</th>
+          <th>Alcance y razón</th>
+          <th>Explorar</th>
+        </tr></thead>
+        <tbody>
+          <ng-container *ngFor="let row of rows; let i = index; trackBy: trackRow">
+            <tr class="audit-group" *ngIf="startsModule(i)">
+              <td colspan="7">{{ row.module_name || row.module_key }} · acciones catalogadas (cobertura parcial)</td>
+            </tr>
+            <tr>
+              <td *ngIf="view !== 'user'">
+                <strong>{{ row.username }}</strong><small>#{{ row.user_id }} · {{ row.role }}</small>
+                <small>Sucursales: {{ row.branch_ids.join(', ') || 'Ninguna' }}</small>
+              </td>
+              <td><strong>{{ row.action_name }}</strong><small>{{ row.action_key || 'Sin acción base' }}</small>
+                <small *ngIf="row.module_entry">Entrada / visibilidad del módulo</small>
+                <small *ngIf="view !== 'user'">{{ row.module_name }}</small>
+              </td>
+              <td>
+                <label class="audit-check" [class.unknown]="row.legacy_allowed === null">
+                  <input type="checkbox" disabled [checked]="row.legacy_allowed === true">
+                  {{ getBooleanLabel(row.legacy_allowed) }}
+                </label>
+              </td>
+              <td>
+                <label class="audit-check" [class.unknown]="row.catalog_allowed === null">
+                  <input type="checkbox" disabled [checked]="row.catalog_allowed === true">
+                  {{ getBooleanLabel(row.catalog_allowed) }}
+                </label>
+                <small>Solo diagnóstico</small>
+              </td>
+              <td><span class="audit-result" [class.diff]="row.comparison === 'diferencia'" [class.match]="row.comparison === 'coincide'">{{ row.comparison === 'coincide' ? 'Coincide' : row.comparison === 'diferencia' ? 'Diferencia' : 'No concluyente' }}</span></td>
+              <td class="audit-reason">
+                <span>{{ row.scope }} · {{ row.branch_ids.join(', ') || '—' }}</span>
+                <small title="Fuente de guard legacy">{{ row.legacy_source }}: {{ row.legacy_reason }}</small>
+                <small title="Fuente de catálogo">{{ row.catalog_source }}: {{ row.catalog_reason }}</small>
+              </td>
+              <td class="audit-row-actions">
+                <button type="button" *ngIf="view !== 'user'" (click)="navigateTo('user', row)" title="Ver permisos del usuario">Usuario</button>
+                <button type="button" *ngIf="view !== 'module'" (click)="navigateTo('module', row)" title="Usuarios del módulo">Módulo</button>
+                <button type="button" *ngIf="view !== 'action' && row.action_key" (click)="navigateTo('action', row)" title="Usuarios de la acción">Acción</button>
+              </td>
+            </tr>
+          </ng-container>
+        </tbody>
+      </table>
+    </div>
+    <ng-template #auditEmptyFiltered><div class="audit-empty">Sin resultados en la página con ese filtro.</div></ng-template>
+    <div class="audit-pagination">
+      <button type="button" (click)="previous()" [disabled]="loading || offset === 0">Anterior</button>
+      <span>Página {{ (offset / pageSize) + 1 }} · máximo {{ pageSize }} registros</span>
+      <button type="button" (click)="next()" [disabled]="loading || offset + pageSize >= rowCount">Siguiente</button>
+    </div>
+  </ng-container>
+  <div class="audit-empty" *ngIf="!result && !loading && !error">
+    Selecciona {{ view === 'user' ? 'un usuario' : view === 'module' ? 'un módulo' : 'una acción' }} para consultar permisos.
+  </div>
+</div>

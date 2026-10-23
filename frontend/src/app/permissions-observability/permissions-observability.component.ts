@@ -6,6 +6,7 @@ import { FormsModule } from '@angular/forms';
 import { finalize, forkJoin } from 'rxjs';
 
 import { SessionService } from '../core/auth/session.service';
+import { PermissionAuditMatrixComponent } from './permission-audit-matrix.component';
 import {
   EffectivePermissionAction,
   EffectivePermissionResponse,
@@ -18,7 +19,7 @@ import {
   PermissionsObservabilityService,
 } from './permissions-observability.service';
 
-type PermissionsTab = 'modules' | 'actions' | 'routes' | 'effective' | 'grants';
+type PermissionsTab = 'audit' | 'modules' | 'actions' | 'routes' | 'effective' | 'grants';
 type EffectiveDecisionFilter = 'all' | 'allowed' | 'denied';
 type RouteAuditFilter = 'all' | 'active' | 'inactive' | 'without_action';
 
@@ -34,6 +35,7 @@ interface SummaryCard {
   imports: [
     CommonModule,
     FormsModule,
+    PermissionAuditMatrixComponent,
   ],
   templateUrl: './permissions-observability.component.html',
   styleUrls: ['./permissions-observability.component.css'],
@@ -43,7 +45,7 @@ export class PermissionsObservabilityComponent implements OnInit {
   readonly pageSubtitle =
     'Consulta módulos, acciones, rutas high-risk y permisos efectivos por usuario. Esta vista es solo diagnóstico.';
 
-  activeTab: PermissionsTab = 'modules';
+  activeTab: PermissionsTab = 'audit';
 
   modules: PermissionModule[] = [];
   actions: PermissionAction[] = [];
@@ -100,7 +102,7 @@ export class PermissionsObservabilityComponent implements OnInit {
     this.loadGrants();
     this.loadUserOptions();
 
-    if (this.userIdInput) {
+    if (this.userIdInput && this.activeTab === 'effective') {
       this.loadEffectivePermissions();
     }
   }
