@@ -129,6 +129,38 @@ La decisión final tiene que ser backend y explicar **usuario, acción, rol, sco
 6. Activar **una sola acción** de Nube Corporativa tras paridad aprobada. Retirar guard legacy equivalente **solo después** de comprobar cobertura sin perder restricciones por documento.
 7. Reutilizar el mismo resolutor para pantalla por usuario, por módulo, por acción y por rol. Mostrar si es **diagnóstico**, **comparación** o **enforcement real**.
 
+## 5.1. Censo agregado de roles reales — 2026-10-22
+
+Consulta `SELECT UPPER(TRIM(COALESCE(rol,''))), COUNT(*) FROM users GROUP BY 1` ejecutada en producción; **70 usuarios distribuidos en 17 roles** (coincide con las 70 cuentas de la comparación de Nube Corporativa). La consulta no incluyó nombres de usuario ni asignaciones individuales.
+
+| Rol | Cantidad |
+| --- | ---: |
+| `GERENTE` | 26 |
+| `AUX_MANTENIMIENTO` | 11 |
+| `LECTOR_GLOBAL` | 11 |
+| `GERENTE_REGIONAL` | 5 |
+| `RECURSOS HUMANOS` | 3 |
+| `SR_MANTENIMIENTO` | 3 |
+| `ADMINISTRADOR` | 1 |
+| `COMPRAS` | 1 |
+| `COMUNICACION Y SERVICIOS` | 1 |
+| `COORDINADOR_MANTENIMIENTO` | 1 |
+| `FINANZAS` | 1 |
+| `GERENCIA DEPORTIVA` | 1 |
+| `MANTENIMIENTO` | 1 |
+| `MARKETING` | 1 |
+| `SISTEMAS` | 1 |
+| `TECNICO` | 1 |
+| `TIENDA` | 1 |
+| **Total** | **70** |
+
+**Interpretación para la migración:**
+- No eliminar ni fusionar roles por frecuencia. Un rol con un solo usuario puede representar una responsabilidad laboral válida.
+- Diferenciar puestos (`GERENTE` / `GERENTE_REGIONAL`) de permisos puntuales y scopes; una coincidencia parcial de permisos no implica que sean el mismo rol.
+- Este censo **no describe permisos efectivos**, solamente `users.rol`; tampoco acredita que las cuentas estén habilitadas o que representen personas diferentes.
+- El catálogo actual de 11 módulos/40 acciones no equivale al censo de roles: son dimensiones diferentes.
+- **Siguiente evidencia pendiente:** operadores `warehouse_operators` y `planning_operators`, así como ACL `usuarios_permisos`, de forma agregada.
+
 ## 6. Evidencia aún pendiente para cerrar Fase A
 
 Estos puntos necesitan información del servidor o revisión de código adicional. **No constituyen autorización para consultar datos personales sin necesidad, modificar registros ni ejecutar SQL de escritura.**
@@ -136,7 +168,7 @@ Estos puntos necesitan información del servidor o revisión de código adiciona
 - [x] Reconocer todas las familias de fuentes de autorización en código (`rol`, `usuarios_permisos`, `permission_grants`, operadores, filtros por sucursal, guardias por objeto).
 - [x] Identificar y documentar riesgos prioritarios y el piloto.
 - [x] Verificar que el catálogo/observabilidad y el endpoint de edición de módulos no constituyen enforcement universal.
-- [x] **Grants vigentes identificados (consultas agregadas, 2026-10-22):** solo se devolvieron **2 grants** (`principal_type=user`, `effect=allow`, `scope_type=global`, estado `current`), uno para `tickets.maintenance.coordinate` y uno para `tickets.maintenance.read_assigned_only`. **Ningún grant vigente corresponde a Nube Corporativa**. Ambos deben conservarse intactos; su impacto operativo sigue subordinado a las condiciones del guard real. El scope `global` del grant no exime restricciones de sucursal ni concede por sí solo acceso de escritura. **Pendiente:** revisar roles y operadores y confrontar esquema/migraciones aplicadas con producción.
+- [x] **Grants vigentes identificados (consultas agregadas, 2026-10-22):** solo se devolvieron **2 grants** (`principal_type=user`, `effect=allow`, `scope_type=global`, estado `current`), uno para `tickets.maintenance.coordinate` y uno para `tickets.maintenance.read_assigned_only`. **Ningún grant vigente corresponde a Nube Corporativa**. Ambos deben conservarse intactos; su impacto operativo sigue subordinado a las condiciones del guard real. El scope `global` del grant no exime restricciones de sucursal ni concede por sí solo acceso de escritura. **Pendiente:** revisar operadores/ACL y confrontar esquema/migraciones aplicadas con producción. El censo agregado de 17 roles y 70 cuentas ya está documentado abajo.
 - [~] Inventariadas por código las **21 rutas HTTP** de Nube y los controles de escritura/lectura/descarga/auditoría, con excepción especial de agregadoras. **Pendiente:** matriz exhaustiva ruta → decisión por contexto y tests de paridad; esta inspección no sustituye QA.
 - [ ] Producir conjunto de escenarios de paridad de Nube Corporativa (rol SISTEMAS, ADMICORP, admin con otro usuario, usuario ordinario, documento sensible).
 - [ ] Decidir con responsable operativo únicamente los accesos legacy contradictorios que supongan un cambio de política, no pedir autorización para cada refactor.
