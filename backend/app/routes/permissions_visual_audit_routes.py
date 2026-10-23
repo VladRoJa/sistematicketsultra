@@ -354,10 +354,8 @@ def visual_audit_matrix():
     for user in users:
         for action in actions:
             context = contexts[user.id]
-            entry = bool(module and module.base_action_id == action.id)
-            if perspective == "user":
-                # El catálogo de módulos conserva la acción base; no son todos permisos de entrada.
-                entry = bool(action.module and action.module.base_action_id == action.id)
+            # Entrada real del módulo no depende de cuál perspectiva se eligió.
+            entry = bool(action.module and action.module.base_action_id == action.id)
             rows.append(evaluate_pair(
                 user, action, context, grants, branch_id, document, entry,
             ))
