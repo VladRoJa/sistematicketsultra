@@ -36,6 +36,11 @@ from app.utils.tickets_maintenance_permissions import (
     has_assigned_only_maintenance_scope,
 )
 from app.services.ticket_attachment_service import create_ticket_image_attachment
+from app.services.ticket_tapizado_service import (
+    TIPO_TRABAJO_TAPIZADO,
+    normalizar_payload_tapizado,
+    registrar_vinculos_tapizado,
+)
 from app.services.ticket_attachment_image_service import MAX_TICKET_ATTACHMENT_BYTES
 from app.services.ticket_attachment_storage_service import resolve_ticket_attachment_path
 from app.services.ticket_attachment_retention_service import schedule_ticket_attachment_retention
@@ -514,6 +519,49 @@ def create_ticket():
         if not descripcion or not departamento_id or not criticidad:
             return jsonify({"mensaje": "Faltan datos obligatorios"}), 400
 
+        # M2: la selección multiaparato es un flujo explícito. Antes de
+        # cualquier INSERT valida el payload y todos los aparatos.
+        try:
+            tipo_trabajo, aparatos_ids = normalizar_payload_tapizado(data)
+        except ValueError as exc:
+            return jsonify({"mensaje": str(exc)}), 400
+
+        if tipo_trabajo == TIPO_TRABAJO_TAPIZADO:
+            # M2 permanece inactivo hasta validar M3 (UI e historiales).
+            if not current_app.config.get("TICKETS_TAPIZADO_MULTI_ENABLED", False):
+                return jsonify({
+                    "mensaje": "La creación de tapizado multiaparato aún no está habilitada."
+                }), 409
+            # IDs de catálogo y sucursal deben ser enteros exactos:
+            # no convertir silenciosamente valores booleanos o fraccionarios.
+            for identificador in (clasificacion_id, sucursal_id_destino):
+                if isinstance(identificador, bool) or (
+                    not isinstance(identificador, int)
+                    and (
+                        not isinstance(identificador, str)
+                        or not identificador.strip().isdigit()
+                    )
+                ) or int(identificador) <= 0:
+                    return jsonify({
+                        "mensaje": "Clasificación o sucursal destino inválida para tapizado."
+                    }), 400
+            if departamento_id != 1 or not _es_clasificacion_mantenimiento_aparatos(
+                clasificacion_id
+            ):
+                return jsonify({
+                    "mensaje": "Tapizado solo está permitido en Mantenimiento > Aparatos."
+                }), 400
+            for inventario_id in aparatos_ids:
+                error_equipo = _validar_aparato_mantenimiento_creacion(
+                    departamento_id, clasificacion_id, inventario_id,
+                    sucursal_id_destino,
+                )
+                if error_equipo:
+                    return jsonify({
+                        "mensaje": f"Aparato {inventario_id}: {error_equipo}"
+                    }), 400
+            aparato_id = aparatos_ids[0]
+
         # Fuente de jerarquía obligatoria
         if not aparato_id and not clasificacion_id:
             return jsonify({"mensaje": "Debes enviar 'aparato_id' (si viene de inventario) o 'clasificacion_id' (si no)."}), 400
@@ -541,6 +589,7 @@ def create_ticket():
             subcategoria=subcategoria,
             detalle=detalle,
             aparato_id=aparato_id,
+            tipo_trabajo=tipo_trabajo,
             problema_detectado=problema_detectado,
             necesita_refaccion=necesita_refaccion,
             descripcion_refaccion=descripcion_refaccion,
@@ -559,8 +608,18 @@ def create_ticket():
 
             # Sin imagen conserva el comportamiento histórico.
             # Con imagen dejamos ticket + attachment en una sola transacción.
-            commit=(image_file is None)
+            commit=(image_file is None and tipo_trabajo is None)
         )
+
+        if tipo_trabajo == TIPO_TRABAJO_TAPIZADO:
+            registrar_vinculos_tapizado(
+                ticket=nuevo_ticket,
+                aparatos_ids=aparatos_ids,
+                actor=user.username,
+            )
+            # Comprobar FK y PK antes del commit; el adjunto sigue siendo
+            # el responsable del commit del flujo multipart.
+            db.session.flush()
 
         if image_file is not None:
             try:
@@ -591,6 +650,11 @@ def create_ticket():
                 db.session.rollback()
                 raise
 
+        # JSON sin imagen: commit de ticket + vínculos + auditoría juntos.
+        # multipart con imagen: el servicio de adjuntos ya confirmó todo.
+        if tipo_trabajo == TIPO_TRABAJO_TAPIZADO and image_file is None:
+            db.session.commit()
+
         # ⬇️ Notificación de creación + retorno de destinatarios
         recipients = []
         try:
@@ -607,13 +671,21 @@ def create_ticket():
             except Exception:
                 print("⚠️ No se pudo enviar correo de creación:", e)
 
-        return jsonify({
+        respuesta = {
             "mensaje": "Ticket creado correctamente",
             "ticket_id": nuevo_ticket.id,
-            "notificados": recipients
-        }), 201
+            "notificados": recipients,
+        }
+        if tipo_trabajo == TIPO_TRABAJO_TAPIZADO:
+            respuesta.update({
+                "tipo_trabajo": tipo_trabajo,
+                "aparato_id": aparato_id,
+                "aparatos_ids": aparatos_ids,
+            })
+        return jsonify(respuesta), 201
 
     except Exception as e:
+        db.session.rollback()
         return manejar_error(e)
 
 # ─────────────────────────────────────────────────────────────
