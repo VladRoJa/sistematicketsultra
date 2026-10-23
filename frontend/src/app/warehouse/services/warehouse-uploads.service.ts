@@ -7,6 +7,9 @@ import { environment } from 'src/environments/environment';
 
 export interface WarehouseUploadListItem {
   id: number;
+  snapshot_id: number | null;
+  snapshot_is_canonical: boolean | null;
+  snapshot_business_date: string | null;
   original_filename: string;
   stored_filename: string;
   stored_path: string;
@@ -73,6 +76,9 @@ export interface WarehouseUploadListResponse {
 
 export interface WarehouseUploadDetail {
   id: number;
+  snapshot_id: number | null;
+  snapshot_is_canonical: boolean | null;
+  snapshot_business_date: string | null;
   original_filename: string;
   stored_filename: string;
   stored_path: string;

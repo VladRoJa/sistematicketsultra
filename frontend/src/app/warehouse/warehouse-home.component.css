@@ -569,6 +569,47 @@
   color: var(--ultra-gray-800);
 }
 
+.warehouse-table__id {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.warehouse-snapshot-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.warehouse-snapshot-cell__id {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.warehouse-snapshot-cell__date {
+  font-size: 11px;
+  color: var(--ultra-gray-600);
+}
+
+.warehouse-snapshot-cell__tag {
+  border-radius: 999px;
+  padding: 3px 7px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.warehouse-snapshot-cell__tag--canonical {
+  background: var(--ultra-success-soft);
+  color: var(--ultra-success);
+}
+
+.warehouse-snapshot-cell__tag--historical {
+  background: var(--ultra-gray-100);
+  color: var(--ultra-gray-700);
+}
+
 .warehouse-table tbody tr {
   background: var(--ultra-surface);
 }
