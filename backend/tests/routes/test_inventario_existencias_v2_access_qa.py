@@ -88,9 +88,9 @@ def test_v2_rechaza_sucursal_invalida_sin_ampliar_a_global(raw):
 def test_v2_roles_globales_respetan_filtro_sql(role):
     client, headers = _client()
     query, inventory, master, branches = _fake_inventory([25])
-    with patch.object(routes, "_get_current_inventory_user", return_value=_user(role)), \\
-         patch.object(routes, "InventarioSucursal", inventory), \\
-         patch.object(routes, "InventarioGeneral", master), \\
+    with patch.object(routes, "_get_current_inventory_user", return_value=_user(role)), \
+         patch.object(routes, "InventarioSucursal", inventory), \
+         patch.object(routes, "InventarioGeneral", master), \
          patch.object(routes, "Sucursal", branches):
         response = client.get(
             "/api/inventario/v2/existencias?sucursal_id=25", headers=headers
@@ -104,9 +104,9 @@ def test_v2_sr_mantenimiento_solo_sucursales_m2m_no_hereda_primaria():
     client, headers = _client()
     user = _user("SR_MANTENIMIENTO", primary=9, branches=[7, 8])
     query, inventory, master, branches = _fake_inventory([8])
-    with patch.object(routes, "_get_current_inventory_user", return_value=user), \\
-         patch.object(routes, "InventarioSucursal", inventory), \\
-         patch.object(routes, "InventarioGeneral", master), \\
+    with patch.object(routes, "_get_current_inventory_user", return_value=user), \
+         patch.object(routes, "InventarioSucursal", inventory), \
+         patch.object(routes, "InventarioGeneral", master), \
          patch.object(routes, "Sucursal", branches):
         denied = client.get(
             "/api/inventario/v2/existencias?sucursal_id=9", headers=headers
@@ -123,9 +123,9 @@ def test_v2_aux_mantenimiento_solo_sucursal_primaria():
     client, headers = _client()
     user = _user("AUX_MANTENIMIENTO", primary=7, branches=[7, 8])
     query, inventory, master, branches = _fake_inventory([7])
-    with patch.object(routes, "_get_current_inventory_user", return_value=user), \\
-         patch.object(routes, "InventarioSucursal", inventory), \\
-         patch.object(routes, "InventarioGeneral", master), \\
+    with patch.object(routes, "_get_current_inventory_user", return_value=user), \
+         patch.object(routes, "InventarioSucursal", inventory), \
+         patch.object(routes, "InventarioGeneral", master), \
          patch.object(routes, "Sucursal", branches):
         denied = client.get(
             "/api/inventario/v2/existencias?sucursal_id=8", headers=headers
@@ -143,9 +143,9 @@ def test_v1_legacy_permanece_sin_cambios_para_consumidores_existentes():
     # distinta y cambiarla ahora podria romper clientes ya existentes.
     client, headers = _client()
     query, inventory, master, branches = _fake_inventory([9])
-    with patch.object(routes, "_get_current_inventory_user", return_value=_user("GERENTE")), \\
-         patch.object(routes, "InventarioSucursal", inventory), \\
-         patch.object(routes, "InventarioGeneral", master), \\
+    with patch.object(routes, "_get_current_inventory_user", return_value=_user("GERENTE")), \
+         patch.object(routes, "InventarioSucursal", inventory), \
+         patch.object(routes, "InventarioGeneral", master), \
          patch.object(routes, "Sucursal", branches):
         response = client.get("/api/inventario/existencias?sucursal_id=9", headers=headers)
     assert response.status_code == 200
