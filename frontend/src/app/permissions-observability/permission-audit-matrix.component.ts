@@ -104,6 +104,9 @@ export class PermissionAuditMatrixComponent implements OnInit {
     if (action?.module_key) {
       this.moduleKey = action.module_key;
     }
+    if (this.actionKey !== 'internal_documents.view') {
+      this.documentId = '';
+    }
     this.applyFilters();
   }
 
@@ -175,6 +178,8 @@ export class PermissionAuditMatrixComponent implements OnInit {
 
   navigateTo(view: AuditPerspective, row: VisualAuditRow): void {
     this.selectedUserId = row.user_id;
+    this.userSearch = row.username;
+    this.searchUsers();
     this.moduleKey = row.module_key || '';
     this.actionKey = row.action_key || '';
     this.view = view;
