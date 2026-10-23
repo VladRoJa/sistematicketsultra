@@ -1,0 +1,271 @@
+<div *ngIf="visible" class="solicitud-overlay" role="presentation">
+  <section class="solicitud-panel" role="dialog" aria-modal="true" aria-labelledby="solicitud-titulo">
+    <header class="solicitud-header">
+      <div>
+        <span class="solicitud-eyebrow">INVENTARIOS V2 · E2</span>
+        <h2 id="solicitud-titulo">Solicitudes de corrección</h2>
+        <p>Registra discrepancias para revisión. El inventario oficial no se modifica.</p>
+      </div>
+      <button type="button" class="solicitud-icon-btn" aria-label="Cerrar solicitudes"
+        (click)="cerrarPanel()" [disabled]="guardando">
+        <mat-icon aria-hidden="true">close</mat-icon>
+      </button>
+    </header>
+
+    <nav class="solicitud-tabs" aria-label="Secciones de solicitudes">
+      <button type="button" [class.is-active]="modo === 'crear'"
+        (click)="volverFormulario()" [disabled]="guardando">
+        <mat-icon aria-hidden="true">edit_note</mat-icon> Nueva solicitud
+      </button>
+      <button type="button" [class.is-active]="modo === 'seguimiento'"
+        (click)="abrirSeguimiento()" [disabled]="guardando">
+        <mat-icon aria-hidden="true">fact_check</mat-icon> Seguimiento
+      </button>
+    </nav>
+
+    <div class="solicitud-content" *ngIf="modo === 'crear'">
+      <div *ngIf="referencia && !esHallazgo" class="solicitud-reference">
+        <div>
+          <strong>{{ referencia.nombre }}</strong>
+          <span>Artículo #{{ referencia.inventario_id }} · {{ referencia.codigo_interno || 'Sin código' }}</span>
+          <small>{{ referencia.sucursal_nombre }} · Stock oficial: {{ referencia.stock ?? 'Sin dato' }}</small>
+        </div>
+        <mat-icon aria-hidden="true">inventory_2</mat-icon>
+      </div>
+
+      <p *ngIf="!referencia && !esHallazgo" class="solicitud-note">
+        Selecciona una referencia desde el listado de Existencias o cambia a un hallazgo sin registro.
+      </p>
+
+      <div *ngIf="!referencia" class="solicitud-kind-switch">
+        <button type="button" [class.is-active]="esHallazgo" (click)="seleccionarTipo('UNREGISTERED_FIND')">
+          Artículo sin registro
+        </button>
+      </div>
+
+      <ng-container *ngIf="referencia || esHallazgo">
+        <div class="solicitud-grid">
+          <label class="solicitud-field">
+            <span>Sucursal *</span>
+            <select name="e2Sucursal" [(ngModel)]="sucursalId" (ngModelChange)="modificado()"
+              [disabled]="!!referencia">
+              <option [ngValue]="null">Selecciona sucursal</option>
+              <option *ngFor="let sucursal of sucursales" [ngValue]="sucursal.sucursal_id">
+                {{ sucursal.sucursal }}
+              </option>
+            </select>
+          </label>
+          <label class="solicitud-field" *ngIf="referencia">
+            <span>Discrepancia *</span>
+            <select name="e2Tipo" [ngModel]="tipo" (ngModelChange)="seleccionarTipo($event)">
+              <option *ngFor="let opcion of tipos" [ngValue]="opcion.valor">{{ opcion.etiqueta }}</option>
+            </select>
+          </label>
+        </div>
+
+        <ng-container *ngIf="tipo === 'MASTER_FIELD' && referencia">
+          <div class="solicitud-grid">
+            <label class="solicitud-field">
+              <span>Dato incorrecto *</span>
+              <select name="e2Campo" [(ngModel)]="campo" (ngModelChange)="modificado()">
+                <option *ngFor="let opcion of campos" [ngValue]="opcion.valor">{{ opcion.etiqueta }}</option>
+              </select>
+            </label>
+            <div class="solicitud-field">
+              <span>Dato oficial (solo lectura)</span>
+              <div class="solicitud-official">{{ mostrarDato(valorOficial) }}</div>
+            </div>
+          </div>
+          <label class="solicitud-field">
+            <span>Valor propuesto *</span>
+            <input *ngIf="!campoNumerico" type="text" name="e2NuevoTexto"
+              [(ngModel)]="nuevoTexto" (ngModelChange)="modificado()" maxlength="255"
+              placeholder="Escribe la corrección propuesta"/>
+            <input *ngIf="campoNumerico" type="number" name="e2NuevoId"
+              [(ngModel)]="nuevoId" (ngModelChange)="modificado()" min="1" step="1"
+              placeholder="ID válido del catálogo"/>
+          </label>
+          <p class="solicitud-note">Los datos del maestro pueden ser compartidos entre sucursales. La propuesta no cambia el registro global.</p>
+        </ng-container>
+
+        <ng-container *ngIf="tipo === 'QUANTITY_DIFFERENCE' && referencia">
+          <div class="solicitud-grid">
+            <div class="solicitud-field">
+              <span>Stock oficial (solo lectura)</span>
+              <div class="solicitud-official">{{ referencia.stock ?? 'Sin dato' }}</div>
+            </div>
+            <label class="solicitud-field">
+              <span>Cantidad física encontrada *</span>
+              <input type="number" name="e2Cantidad" min="0" step="1"
+                [(ngModel)]="cantidadFisica" (ngModelChange)="modificado()"
+                placeholder="Cantidad contada"/>
+            </label>
+          </div>
+        </ng-container>
+
+        <div *ngIf="tipo === 'NOT_LOCATED' && referencia" class="solicitud-note">
+          Se registrará que no fue localizado físicamente. <strong>El stock oficial no se pondrá en cero.</strong>
+        </div>
+
+        <ng-container *ngIf="esHallazgo">
+          <div class="solicitud-grid">
+            <label class="solicitud-field solicitud-field--wide">
+              <span>Nombre del artículo encontrado *</span>
+              <input type="text" name="e2HallazgoNombre" maxlength="255"
+                [(ngModel)]="hallazgoNombre" (ngModelChange)="modificado()"
+                placeholder="Describe el activo encontrado"/>
+            </label>
+            <label class="solicitud-field">
+              <span>Tipo (opcional)</span>
+              <input type="text" name="e2HallazgoTipo" maxlength="40"
+                [(ngModel)]="hallazgoTipo" (ngModelChange)="modificado()" />
+            </label>
+            <label class="solicitud-field">
+              <span>Marca (opcional)</span>
+              <input type="text" name="e2HallazgoMarca" maxlength="100"
+                [(ngModel)]="hallazgoMarca" (ngModelChange)="modificado()" />
+            </label>
+            <label class="solicitud-field">
+              <span>Código o etiqueta observada (opcional)</span>
+              <input type="text" name="e2HallazgoCodigo" maxlength="50"
+                [(ngModel)]="hallazgoCodigo" (ngModelChange)="modificado()" />
+            </label>
+          </div>
+          <p class="solicitud-note">El hallazgo es provisional: no crea artículos ni asigna existencias.</p>
+        </ng-container>
+
+        <div class="solicitud-grid">
+          <label class="solicitud-field">
+            <span>Fecha de observación (opcional)</span>
+            <input type="date" name="e2Fecha"
+              [(ngModel)]="fechaObservacion" (ngModelChange)="modificado()" />
+          </label>
+          <label class="solicitud-field solicitud-field--wide">
+            <span>Motivo detallado * (mín. 10 caracteres)</span>
+            <textarea name="e2Motivo" rows="3" maxlength="2000"
+              [(ngModel)]="motivo" (ngModelChange)="modificado()"
+              placeholder="Describe qué encontraste y por qué requiere revisión"></textarea>
+          </label>
+          <label class="solicitud-field solicitud-field--wide">
+            <span>Evidencia descriptiva (opcional)</span>
+            <textarea name="e2Evidencia" rows="2" maxlength="2000"
+              [(ngModel)]="evidencia" (ngModelChange)="modificado()"
+              placeholder="Ubicación física, serie o comentario adicional"></textarea>
+          </label>
+        </div>
+
+        <div class="solicitud-alert solicitud-alert--error" *ngIf="errorGuardar" role="alert">
+          <mat-icon aria-hidden="true">error_outline</mat-icon> {{ errorGuardar }}
+        </div>
+        <div *ngIf="guardado" class="solicitud-alert solicitud-alert--success" role="status">
+          <mat-icon aria-hidden="true">check_circle_outline</mat-icon>
+          <div>
+            <strong>Solicitud #{{ guardado.id }} guardada como PENDING</strong>
+            <span>No se modificó el inventario oficial.</span>
+            <span *ngIf="advertenciaDuplicado">Ya existía otra solicitud pendiente similar; ambas se conservan para revisión.</span>
+          </div>
+        </div>
+      </ng-container>
+    </div>
+
+    <div class="solicitud-content" *ngIf="modo === 'seguimiento'">
+      <div class="solicitud-grid solicitud-filtros">
+        <label class="solicitud-field">
+          <span>Sucursal</span>
+          <select name="e2FiltroSucursal" [(ngModel)]="filtroSucursal" (ngModelChange)="cambiarFiltros()">
+            <option value="todas">Todo mi alcance</option>
+            <option *ngFor="let sucursal of sucursales" [ngValue]="sucursal.sucursal_id">
+              {{ sucursal.sucursal }}
+            </option>
+          </select>
+        </label>
+        <label class="solicitud-field">
+          <span>Estado</span>
+          <select name="e2FiltroEstado" [(ngModel)]="filtroEstado" (ngModelChange)="cambiarFiltros()">
+            <option value="todos">Todos</option>
+            <option value="PENDING">Pendiente</option>
+            <option value="APPROVED">Aprobada (futuro E3)</option>
+            <option value="REJECTED">Rechazada (futuro E3)</option>
+          </select>
+        </label>
+        <label class="solicitud-field">
+          <span>Tipo</span>
+          <select name="e2FiltroTipo" [(ngModel)]="filtroTipo" (ngModelChange)="cambiarFiltros()">
+            <option value="todos">Todos</option>
+            <option value="MASTER_FIELD">Dato incorrecto</option>
+            <option value="QUANTITY_DIFFERENCE">Cantidad física</option>
+            <option value="NOT_LOCATED">No localizado</option>
+            <option value="UNREGISTERED_FIND">Hallazgo sin registro</option>
+          </select>
+        </label>
+      </div>
+
+      <div *ngIf="cargandoListado" class="solicitud-progress" role="status">
+        <mat-spinner [diameter]="27"></mat-spinner> Cargando solicitudes...
+      </div>
+      <div *ngIf="errorListado" class="solicitud-alert solicitud-alert--error" role="alert">
+        {{ errorListado }} <button type="button" (click)="cargarSolicitudes()">Reintentar</button>
+      </div>
+
+      <div *ngIf="!cargandoListado && !errorListado">
+        <div *ngIf="!solicitudes.length" class="solicitud-empty">
+          <mat-icon aria-hidden="true">assignment_late</mat-icon>
+          <strong>Sin solicitudes para estos filtros</strong>
+          <p>Las discrepancias enviadas aparecerán aquí con su estado.</p>
+        </div>
+        <div class="solicitud-lista" *ngIf="solicitudes.length">
+          <button type="button" class="solicitud-item" *ngFor="let solicitud of solicitudes"
+            (click)="consultarDetalle(solicitud.id)">
+            <span class="solicitud-item__primary">
+              <strong>#{{ solicitud.id }} · {{ etiquetasTipo[solicitud.tipo] }}</strong>
+              <small>{{ nombreSucursal(solicitud.sucursal_id) }} · {{ solicitud.inventario_id ? 'Artículo #' + solicitud.inventario_id : 'Sin referencia oficial' }}</small>
+              <small>{{ solicitud.creado_en_utc | date:'dd/MM/yyyy HH:mm' }}</small>
+            </span>
+            <span class="solicitud-status">{{ solicitud.estado }}</span>
+            <mat-icon aria-hidden="true">chevron_right</mat-icon>
+          </button>
+        </div>
+        <div *ngIf="totalSolicitudes > tamanoPagina" class="solicitud-pager">
+          <span>{{ totalSolicitudes }} solicitudes · Página {{ pagina }} de {{ totalPaginas }}</span>
+          <div>
+            <button type="button" (click)="cambiarPagina(-1)" [disabled]="pagina <= 1">Anterior</button>
+            <button type="button" (click)="cambiarPagina(1)" [disabled]="pagina >= totalPaginas">Siguiente</button>
+          </div>
+        </div>
+      </div>
+
+      <section *ngIf="detalle" class="solicitud-detail" aria-label="Detalle de solicitud">
+        <div class="solicitud-detail__title">
+          <strong>Solicitud #{{ detalle.id }}</strong>
+          <button type="button" (click)="detalle = null" aria-label="Cerrar detalle">
+            <mat-icon aria-hidden="true">close</mat-icon>
+          </button>
+        </div>
+        <dl>
+          <div><dt>Estado</dt><dd>{{ detalle.estado }}</dd></div>
+          <div><dt>Registró</dt><dd>Usuario #{{ detalle.creado_por_usuario_id }}</dd></div>
+          <div><dt>Fecha física</dt><dd>{{ detalle.fecha_observacion_local || 'No indicada' }}</dd></div>
+          <div><dt>Dato original</dt><dd>{{ mostrarDato(detalle.valor_original) }}</dd></div>
+          <div><dt>Propuesta</dt><dd>{{ mostrarDato(detalle.valor_propuesto || detalle.hallazgo_provisional) }}</dd></div>
+          <div><dt>Motivo</dt><dd>{{ detalle.motivo }}</dd></div>
+          <div><dt>Evidencia</dt><dd>{{ detalle.evidencia_descriptiva || 'Sin nota adicional' }}</dd></div>
+        </dl>
+        <p>No se permite aprobar ni aplicar correcciones desde E2.</p>
+      </section>
+    </div>
+
+    <footer class="solicitud-footer">
+      <span><mat-icon aria-hidden="true">verified_user</mat-icon> Registro auditable · Sin cambios oficiales</span>
+      <div>
+        <button type="button" class="solicitud-secondary" (click)="cerrarPanel()" [disabled]="guardando">Cerrar</button>
+        <button *ngIf="modo === 'crear' && guardado" type="button" class="solicitud-primary"
+          (click)="abrirSeguimiento()">Ver seguimiento</button>
+        <button *ngIf="modo === 'crear' && !guardado" type="button" class="solicitud-primary"
+          [disabled]="!puedeEnviar" (click)="enviar()">
+          <mat-icon *ngIf="!guardando" aria-hidden="true">send</mat-icon>
+          {{ guardando ? 'Guardando...' : 'Enviar propuesta' }}
+        </button>
+      </div>
+    </footer>
+  </section>
+</div>
