@@ -858,12 +858,35 @@ def ver_existencias():
         for item in inventario:
             inventario_general = InventarioGeneral.query.get(item.inventario_id)
             sucursal = Sucursal.query.get(item.sucursal_id)
+            categoria_catalogo = (
+                getattr(inventario_general, 'categoria_inventario', None)
+                if inventario_general else None
+            )
+            familia_payload = (
+                _familia_equipo_actual_payload(inventario_general)
+                if inventario_general else {
+                    'familia_equipo_id': None,
+                    'familia_equipo': None,
+                }
+            )
 
             data.append({
                 'inventario_id': item.inventario_id,
                 'nombre': inventario_general.nombre if inventario_general else 'Desconocido',
                 'codigo_interno': inventario_general.codigo_interno if inventario_general else None,
                 'categoria': inventario_general.categoria if inventario_general else '',
+                'subcategoria': (
+                    getattr(inventario_general, 'subcategoria', None)
+                    if inventario_general else None
+                ),
+                'categoria_inventario_id': (
+                    getattr(inventario_general, 'categoria_inventario_id', None)
+                    if inventario_general else None
+                ),
+                'categoria_catalogo': (
+                    categoria_catalogo.nombre if categoria_catalogo else None
+                ),
+                **familia_payload,
                 'tipo': inventario_general.tipo if inventario_general else '',
                 'marca': inventario_general.marca if inventario_general else '',
                 'proveedor': inventario_general.proveedor if inventario_general else '',
