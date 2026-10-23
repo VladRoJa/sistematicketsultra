@@ -28,6 +28,9 @@ interface EquipoTapizado {
   nombre: string;
   codigo_interno?: string;
   marca?: string;
+  categoria?: string;
+  familia_equipo_id?: number | null;
+  familia_equipo?: { id: number; nombre: string } | null;
 }
 
 @Component({
@@ -61,17 +64,46 @@ export class MantenimientoAparatosComponent implements OnInit, OnDestroy {
   modoTapizado = false;
   aparatosSeleccionados: EquipoTapizado[] = [];
   filtroTapizado = new FormControl('', { nonNullable: true });
+  filtroCategoriaTapizado = new FormControl('', { nonNullable: true });
+  filtroFamiliaTapizado = new FormControl('', { nonNullable: true });
   private readonly maxAparatosTapizado = 50;
   private configSub?: Subscription;
   private equiposReqSub?: Subscription;
 
+  get categoriasDisponiblesTapizado(): string[] {
+    return [...new Set(this.equipos
+      .filter(eq => !this.filtroFamiliaTapizado.value ||
+        String(eq.familia_equipo_id ?? '') === this.filtroFamiliaTapizado.value)
+      .map(eq => String(eq.categoria || 'Sin categoría'))
+    )].sort();
+  }
+
+  get familiasDisponiblesTapizado(): Array<{ id: string; nombre: string }> {
+    const porId = new Map<string, string>();
+    this.equipos
+      .filter(eq => !this.filtroCategoriaTapizado.value ||
+        String(eq.categoria || 'Sin categoría') === this.filtroCategoriaTapizado.value)
+      .forEach(eq => {
+        if (eq.familia_equipo_id != null) {
+          porId.set(String(eq.familia_equipo_id), eq.familia_equipo?.nombre || 'Familia ' + eq.familia_equipo_id);
+        }
+      });
+    return Array.from(porId, ([id, nombre]) => ({ id, nombre }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }
+
   get aparatosDisponiblesTapizado(): EquipoTapizado[] {
     const filtro = this.normalizarTexto(this.filtroTapizado.value);
+    const categoria = this.filtroCategoriaTapizado.value;
+    const familia = this.filtroFamiliaTapizado.value;
     return this.equipos.filter(eq => {
       const coincide = !filtro || this.normalizarTexto(
         `${eq.nombre || ''} ${eq.codigo_interno || ''} ${eq.marca || ''}`
       ).includes(filtro);
-      return coincide && !this.aparatosSeleccionados.some(selected => selected.id === Number(eq.id));
+      return coincide
+        && (!categoria || String(eq.categoria || 'Sin categoría') === categoria)
+        && (!familia || String(eq.familia_equipo_id ?? '') === familia)
+        && !this.aparatosSeleccionados.some(selected => selected.id === Number(eq.id));
     }).slice(0, 25);
   }
 
@@ -149,6 +181,8 @@ ngOnInit(): void {
     this.parentForm.get('aparato_id')!.reset();
     this.aparatosSeleccionados = [];
     this.filtroTapizado.setValue('');
+    this.filtroCategoriaTapizado.setValue('');
+    this.filtroFamiliaTapizado.setValue('');
     this.sincronizarMultiaparato();
     this.cargarEquiposPorSucursal(sucId);
   });
@@ -205,6 +239,8 @@ ngOnInit(): void {
     this.modoTapizado = activar;
     this.aparatosSeleccionados = [];
     this.filtroTapizado.setValue('');
+    this.filtroCategoriaTapizado.setValue('');
+    this.filtroFamiliaTapizado.setValue('');
     this.parentForm.get('tipo_trabajo')?.setValue(activar ? 'TAPIZADO' : null);
     const lista = this.parentForm.get('aparatos_ids');
     if (activar) {
@@ -216,6 +252,20 @@ ngOnInit(): void {
     this.parentForm.get('detalle')?.reset();
     this.parentForm.get('subcategoria')?.reset();
     this.sincronizarMultiaparato();
+  }
+
+  cambiarCategoriaTapizado(categoria: string): void {
+    this.filtroCategoriaTapizado.setValue(categoria);
+    if (!this.familiasDisponiblesTapizado.some(f => f.id === this.filtroFamiliaTapizado.value)) {
+      this.filtroFamiliaTapizado.setValue('');
+    }
+  }
+
+  cambiarFamiliaTapizado(familia: string): void {
+    this.filtroFamiliaTapizado.setValue(familia);
+    if (!this.categoriasDisponiblesTapizado.includes(this.filtroCategoriaTapizado.value)) {
+      this.filtroCategoriaTapizado.setValue('');
+    }
   }
 
   alternarAparatoTapizado(equipo: EquipoTapizado, marcado: boolean): void {
