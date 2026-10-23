@@ -10,6 +10,7 @@ from app.config import Config
 from app.extensions import db, migrate
 from app.routes import auth_bp, ticket_bp, main_bp
 from app.routes.inventarios import inventario_bp
+from app.routes.inventario_solicitudes_routes import inventario_solicitudes_bp
 from app.routes.permisos_routes import permisos_bp
 from app.routes.departamentos_routes import departamentos_bp
 from app.routes.reportes import reportes_bp
@@ -109,6 +110,7 @@ def create_app():
     app.register_blueprint(ticket_bp, url_prefix='/api/tickets')
     app.register_blueprint(main_bp, url_prefix='/api')
     app.register_blueprint(inventario_bp, url_prefix='/api/inventario')
+    app.register_blueprint(inventario_solicitudes_bp, url_prefix='/api/inventario/solicitudes')
     app.register_blueprint(permisos_bp, url_prefix='/api/permisos')
     app.register_blueprint(departamentos_bp, url_prefix='/api/departamentos')
     app.register_blueprint(reportes_bp, url_prefix='/api/reportes')
