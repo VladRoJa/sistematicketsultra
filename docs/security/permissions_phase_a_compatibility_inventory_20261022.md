@@ -225,6 +225,13 @@ En `backend/app/routes/internal_documents_routes.py::list_internal_documents`, p
 
 **Próximo control:** prueba de regresión de listado con fixture de título normalizado distinto y rol SISTEMAS, sin consulta a datos reales. Resolver con el mismo helper de lectura por objeto si se aprueba; considerar filtrado, total de paginación y rendimiento antes de tocar una ruta de listado.
 
+
+**Diagnóstico automatizado A-12/A-13 — 2026-10-23:** PR DRAFT [#1072](https://github.com/VladRoJa/sistematicketsultra/pull/1072), exclusivo de fixtures y workflow, ejecutó [GitHub Actions #40004028928](https://github.com/VladRoJa/sistematicketsultra/actions/runs/40004028928): **3 fallos de aserción deliberados y 7 tests previos PASS** (no fallos de instalación ni de mock).
+- **A-12 helper:** SISTEMAS con documento de consolidado `CUSTOM` ficticio ⇒ `VIEW=False`, pero `AUDIT=True` cuando el contrato propuesto esperaría `False`.
+- **A-12 handler:** con Flask `test_request_context` y log falso, endpoint de auditoría de consolidado restringido respondió **200** donde el contrato propuesto esperaría **403**.
+- **A-13 listado:** título ficticio `CONSOLIDADO DE AGREGADORAS` (mayúsculas), que el helper especial reconoce pero el SQL `title != "Consolidado de agregadoras"` no excluye, produjo **total=1**, donde el contrato propuesto esperaba **0**.
+**Alcance:** resultado de simulación; sin afirmar que exista título variante, contenido de auditoría expuesto o acceso no autorizado en producción. **PR #1072 permanece DRAFT y ROJO, NO fusionar.** A-12 exige decisión operativa explícita; A-13 puede atenderse en corrección aislada con CI RED→GREEN tras aprobar su alcance.
+
 ### A-14 — Matriz de los 21 handlers Flask frente a autorización legacy (revisión de código 2026-10-23)
 
 Esta matriz **no es el catálogo `permission_route_map`** ni afirma cobertura del resolvedor global. Es una extracción de `@internal_documents_bp.route` y de sus guards reales de `backend/app/routes/internal_documents_routes.py` en `main`. Prefijo común: `/api/internal-documents`. **Todos los 21 handlers usan `@jwt_required()`.** Se mantienen los 10 métodos de escritura mapeados y los 11 GET sin mapeo observados en producción el 2026-10-22 (A-10); **no se recontó `permission_route_map` en producción hoy**.
@@ -364,7 +371,9 @@ Estos puntos necesitan información del servidor o revisión de código adiciona
 - [x] **A-11 fix preparado sin desplegar:** PR #1067 con test RED (2 fallos esperados, CI #39999421770) → helper corregido → GREEN (7/7 PASS, CI #39999587923), sin migraciones.
 - [x] PR #1067 revisado, CI 7/7 PASS y squash merge a `main`: `df035eb02f4833dc77a4e67236472b5f5948b963`.
 - [x] **A-11 desplegado y verificado:** el operador confirmó ejecución del bloque Git pull + reconstrucción de `backend`, y la inspección `inspect.getsource(can_download_historical_internal_document_version)` devolvió `A11_CODIGO_DESPLEGADO = True`, `QA_A11 = PASS` (2026-10-23). Verificación estática del código importado en el contenedor; las **7/7 pruebas funcionales** corresponden a CI, no a un ensayo HTTP con archivo real. Sin migraciones.
-- [ ] **A-12/A-13 prioritarios:** contrastar con fixtures no productivos la autorización de auditoría de consolidado (`VIEW=False / AUDIT posible True`) y la exclusión de listado con título normalizado diferente; resolver política antes de modificar seguridad.
+- [x] **A-12/A-13 diagnosticados con fixtures y GitHub Actions:** PR draft #1072 RED controlado (**3 fallos de aserción / 7 PASS**, CI #40004028928), sin cambiar reglas ni consultar BD productiva.
+- [ ] **Decisión de política A-12:** ¿`audit` del consolidado requiere `view` explícito aun para manager? Hasta definirlo, no modificar guard.
+- [ ] **Corrección A-13:** armonizar exclusión del listado raíz con el helper de visibilidad especial; mantener paginación consistente y obtener CI GREEN antes de merge.
 - [ ] **Fase A sigue abierta:** completar matriz de paridad/alcance por contexto de Nube y módulos piloto, sin activar todavía el resolvedor global de permisos.
 - [ ] Ampliar fixtures a descarga actual e histórica y controles por registro de las demás rutas del piloto.
 - [ ] Marcar expresamente el alcance incompleto de módulos fuera del catálogo y plan de expansión.
