@@ -8,6 +8,7 @@ on:
       - "backend/app/models/__init__.py"
       - "backend/migrations/versions/i22c10202622_inventario_codigo_correcciones.py"
       - "backend/tests/routes/test_inventario_correccion_codigo_auditada_qa13.py"
+      - "backend/tests/routes/test_inventario_existencias_codigo_qa.py"
       - "frontend/src/app/inventario/**"
       - "frontend/src/app/services/inventario.service.ts"
       - "frontend/tests/inventario-correccion-auditada-qa13.test.cjs"
@@ -43,8 +44,8 @@ jobs:
           python -m pip install pytest==8.3.5
       - name: Python syntax
         run: python -m py_compile app/routes/inventarios.py app/models/inventario_codigo_correccion.py migrations/versions/i22c10202622_inventario_codigo_correcciones.py
-      - name: QA-13 Audited code correction
-        run: python -m pytest -q --tb=short -o addopts= tests/routes/test_inventario_correccion_codigo_auditada_qa13.py tests/routes/test_inventario_altas_codigos_qa11.py
+      - name: QA-13 Correcciones y E1 contrato lectura de Existencias
+        run: python -m pytest -q --tb=short -o addopts= tests/routes/test_inventario_correccion_codigo_auditada_qa13.py tests/routes/test_inventario_altas_codigos_qa11.py tests/routes/test_inventario_existencias_codigo_qa.py
 
   frontend:
     runs-on: ubuntu-latest
