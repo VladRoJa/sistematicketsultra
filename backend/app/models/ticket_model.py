@@ -106,6 +106,13 @@ class Ticket(db.Model):
     usuario = db.relationship('UserORM', foreign_keys=[username])
     sucursal = db.relationship('Sucursal', backref='tickets', foreign_keys=[sucursal_id])
     inventario = db.relationship('InventarioGeneral', foreign_keys=[aparato_id])
+    # M1: relación multiaparato disponible, no utilizada por flujos V1 todavía.
+    aparatos_asociados = db.relationship(
+        'TicketAparatoORM',
+        back_populates='ticket',
+        cascade='all, delete-orphan',
+        passive_deletes=True,
+    )
     familia_equipo = db.relationship('FamiliaEquipoORM', foreign_keys=[familia_equipo_id])
     falla_mantenimiento = db.relationship(
         'FallaMantenimientoORM',
