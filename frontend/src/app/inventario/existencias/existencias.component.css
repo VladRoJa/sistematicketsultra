@@ -154,17 +154,29 @@
 }
 .composition-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
-  align-items: center;
-  gap: 10px 24px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  align-items: start;
+  gap: 14px 22px;
   margin-bottom: 13px;
   padding: 15px 19px;
 }
-.composition-card .section-heading { grid-column: 1; grid-row: 1; }
-.composition-card .section-heading p { margin-top: 5px; }
-.composition-card .composition-chart { grid-column: 1; grid-row: 2; }
-.composition-card .composition-legend { grid-column: 2; grid-row: 1 / span 2; }
-.composition-card .composition-empty { grid-column: 1 / -1; }
+.composition-card--single { grid-template-columns: minmax(0, 1fr); }
+.composition-categories { min-width: 0; }
+.composition-categories .section-heading p { margin-top: 5px; }
+.composition-categories .composition-chart { margin: 12px 0 8px; }
+.family-summary { min-width: 0; border-left: 1px solid var(--inventory-line); padding-left: 19px; }
+.family-summary__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.family-summary__heading h3 { margin: 0; color: #163a61; font-size: 17px; font-weight: 850; }
+.family-summary__heading .eyebrow { margin-bottom: 5px; }
+.family-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 9px; }
+.family-grid__item { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; padding: 7px 9px; border: 1px solid #e6edf5; border-radius: 7px; background: #f8fafd; font-size: 11px; color: #365672; }
+.family-grid__item span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.family-grid__item strong { flex: none; color: #17446d; font-size: 12px; font-variant-numeric: tabular-nums; }
+.family-grid__item--unclassified { border-color: #f0d6c6; background: #fff8f1; color: #9b603c; }
+.family-grid__item--unclassified strong { color: #9b603c; }
+.family-notice { display: flex; align-items: center; gap: 5px; margin-top: 10px; color: #98603a; font-size: 10px; line-height: 1.4; }
+.family-notice mat-icon { flex: none; width: 16px; height: 16px; font-size: 16px; }
+.family-cell--missing { color: #a86439; font-weight: 800; }
 .section-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
 .section-heading h2 { margin: 0; color: #163a61; font-size: 19px; font-weight: 850; letter-spacing: -.025em; }
 .section-heading p { margin: 7px 0 0; color: var(--inventory-muted); font-size: 11px; }
@@ -208,7 +220,7 @@
 .clear-filters mat-icon { font-size: 16px; height: 16px; width: 16px; }
 
 .table-scroll { width: 100%; min-width: 0; overflow-x: auto; scrollbar-width: thin; border: 1px solid #e7edf4; border-radius: 9px; }
-.existencias-table { min-width: 1130px; width: 100%; table-layout: auto; background: #fff; }
+.existencias-table { min-width: 1250px; width: 100%; table-layout: auto; background: #fff; }
 .existencias-table th.mat-mdc-header-cell { font-size: 11px; color: #5e7490; font-weight: 850; white-space: nowrap; border-bottom-color: #dde6ef; background: #f6f9fd; }
 .existencias-table td.mat-mdc-cell { font-size: 11px; color: #344760; border-bottom-color: #edf1f5; }
 .existencias-table th.mat-mdc-header-cell, .existencias-table td.mat-mdc-cell { padding: 8px 11px; }
@@ -240,7 +252,8 @@
 @media (max-width: 1000px) {
   .overview-grid { grid-template-columns: minmax(0, 1fr); }
   .composition-card { display: block; }
-  .composition-card .composition-chart { margin: 12px 0 8px; }
+  .family-summary { margin-top: 16px; padding: 14px 0 0; border-left: 0; border-top: 1px solid var(--inventory-line); }
+  .family-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .composition-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .metric-card--wide { grid-column: 1 / -1; }
 }
@@ -257,6 +270,7 @@
   .composition-card, .list-panel { padding: 15px 12px; }
   .list-panel { padding-bottom: 0; }
   .composition-legend { grid-template-columns: 1fr; }
-  .filter-search, .filter-select, .filter-select--stock { flex: 1 1 100%; }
+  .family-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .filter-search, .filter-select, .filter-select--family, .filter-select--stock { flex: 1 1 100%; }
   .table-footer { justify-content: center; text-align: center; }
 }

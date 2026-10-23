@@ -194,3 +194,82 @@ test('QA-10: error y respuesta tardía no dejan spinner ni cifras obsoletas', ()
   assert.equal(vm.loading, false);
   assert.equal(vm.error, '');
 });
+
+
+test('E1 familias: categorias de catalogo prevalecen sobre Maquinas/Cardio heredados', () => {
+  const { vm, peticiones } = fixture();
+  const equipos = [
+    { ...rows[0], inventario_id: 201, nombre: 'Caminadora', tipo: 'Aparatos',
+      categoria: 'Maquinas', subcategoria: 'Cardio', categoria_catalogo: 'Cardio',
+      familia_equipo_id: 1, familia_equipo: { id: 1, key: 'CAMINADORA', nombre: 'Caminadora' } },
+    { ...rows[0], inventario_id: 202, nombre: 'Bicicleta Vertical', tipo: 'Aparatos',
+      categoria: 'Maquinas', subcategoria: 'Cardio', categoria_catalogo: 'Cardio',
+      familia_equipo_id: null, familia_equipo: null },
+    { ...rows[0], inventario_id: 203, nombre: 'Peso Integrado', tipo: 'Aparatos',
+      categoria: 'Maquinas', subcategoria: 'Selectorizado', categoria_catalogo: 'Selectorizado',
+      familia_equipo_id: 6, familia_equipo: { id: 6, key: 'PESO_INTEGRADO', nombre: 'Peso Integrado' } },
+    { ...rows[0], inventario_id: 204, nombre: 'Caminadora', tipo: 'Aparatos',
+      categoria: 'Cardio', subcategoria: '', categoria_catalogo: null,
+      familia_equipo_id: null, familia_equipo: null },
+    { ...rows[0], inventario_id: 205, nombre: 'Monitor', tipo: 'Dispositivos',
+      categoria: 'Equipo recepción', categoria_catalogo: 'Equipo recepción',
+      familia_equipo_id: null, familia_equipo: null },
+  ];
+  const original = JSON.stringify(equipos);
+  vm.ngOnInit();
+  peticiones[0].observer.next(equipos);
+
+  assert.equal(vm.totalReferencias, 5);
+  assert.equal(vm.totalEquiposGimnasio, 4);
+  assert.equal(vm.equiposSinFamilia, 2); // NO cuenta el monitor sin familia.
+  assert.equal(vm.totalCategorias, 4);
+  assert.equal(vm.composicion.reduce((total, c) => total + c.cantidad, 0), 5);
+  assert.deepEqual(vm.categorias,
+    ['Cardio', 'Equipo recepción', 'Selectorizado', 'Sin categoría de catálogo']);
+  assert.equal(vm.composicionFamilias.reduce((total, f) => total + f.cantidad, 0), 4);
+  assert.equal(vm.composicionFamilias.at(-1).nombre, 'Sin familia');
+  assert.deepEqual(vm.familias, ['Caminadora', 'Peso Integrado', 'Sin familia']);
+  assert.equal(vm.nombreCategoria(equipos[0]), 'Cardio');
+  assert.equal(vm.nombreCategoria(equipos[3]), 'Sin categoría de catálogo');
+  assert.equal(vm.nombreFamilia(equipos[4]), null);
+  assert.equal(JSON.stringify(equipos), original); // No hay reclasificación ni escritura.
+
+  vm.familiaSeleccionada = 'Sin familia';
+  vm.categoriaSeleccionada = 'Cardio';
+  vm.aplicarFiltros();
+  assert.deepEqual(vm.existenciasFiltradas.map(e => e.inventario_id), [202]);
+  assert.equal(vm.totalReferencias, 5); // Filtros sólo afectan tabla.
+
+  vm.categoriaSeleccionada = 'Sin categoría de catálogo';
+  vm.aplicarFiltros();
+  assert.deepEqual(vm.existenciasFiltradas.map(e => e.inventario_id), [204]);
+
+  vm.limpiarFiltros();
+  assert.equal(vm.existenciasFiltradas.length, 5);
+  assert.equal(vm.familiaSeleccionada, 'todas');
+  assert.equal(vm.hayFiltros, false);
+
+  vm.familiaSeleccionada = 'Caminadora';
+  assert.equal(vm.hayFiltros, true);
+  vm.onSucursalChange(1);
+  assert.equal(vm.familiaSeleccionada, 'todas');
+  assert.equal(peticiones[1].opts.sucursal_id, 1);
+});
+
+test('E1 familias: dispositivos no generan pendientes y los porcentajes pequenos son legibles', () => {
+  const { vm, peticiones } = fixture();
+  vm.ngOnInit();
+  peticiones[0].observer.next(rows);
+  assert.equal(vm.totalEquiposGimnasio, 0);
+  assert.equal(vm.equiposSinFamilia, 0);
+  assert.deepEqual(vm.familias, []);
+  assert.equal(vm.formatoPorcentaje(0.25), '<1%');
+  assert.equal(vm.formatoPorcentaje(25.8), '26%');
+  assert.equal(vm.formatoPorcentaje(0), '0%');
+  assert.match(html, /familiaSeleccionada/);
+  assert.match(html, /nombreCategoria\(e\)/);
+  assert.match(html, /nombreFamilia\(e\)/);
+  assert.match(html, /equiposSinFamilia/);
+  assert.match(html, /formatoPorcentaje\(categoria.porcentaje\)/);
+  assert.match(css, /\.family-summary \{/);
+});
