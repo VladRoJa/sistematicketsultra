@@ -239,6 +239,20 @@
 .empty-results mat-icon { display: block; margin: 0 auto 9px; width: 26px; height: 26px; font-size: 26px; }
 .empty-results strong { display: block; color: #34577c; font-size: 13px; }
 .empty-results p { font-size: 11px; }
+/* E2: acciones de propuesta visibles sin mezclar edición con existencias oficiales. */
+.solicitudes-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.solicitudes-btn, .solicitud-row-action {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 8px 11px; border: 1px solid #d5e3f1; border-radius: 8px;
+  background: #f4f8fe; color: #2b608f; font: inherit; font-size: 11px;
+  font-weight: 800; white-space: nowrap; cursor: pointer;
+}
+.solicitudes-btn mat-icon, .solicitud-row-action mat-icon { width: 16px; height: 16px; font-size: 16px; }
+.solicitudes-btn:hover, .solicitud-row-action:hover { border-color: #91b6d8; background: #eaf4ff; }
+.solicitudes-btn--primary { border-color: #206699; background: #206699; color: #fff; }
+.solicitudes-btn--primary:hover { background: #174e7a; border-color: #174e7a; }
+.solicitud-row-action { padding: 5px 7px; font-size: 10px; background: #fff; }
+
 .scope-note { margin: 10px 1px 0; color: #8798aa; font-size: 10px; }
 
 .existencias-loading { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; padding: 36px 15px; min-height: 190px; color: #63778e; }
@@ -272,5 +286,8 @@
   .composition-legend { grid-template-columns: 1fr; }
   .family-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .filter-search, .filter-select, .filter-select--family, .filter-select--stock { flex: 1 1 100%; }
+  .solicitudes-actions { width: 100%; }
+  .solicitudes-actions .section-count { margin-left: auto; }
+  .solicitudes-btn { flex: 1 1 auto; }
   .table-footer { justify-content: center; text-align: center; }
 }
