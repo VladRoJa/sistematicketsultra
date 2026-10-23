@@ -67,6 +67,111 @@ def _pagination():
     return limit, offset
 
 
+
+MAX_AUDIT_CANDIDATES = 3000
+SORT_FIELDS = {"user", "role", "module", "action", "legacy", "catalog", "comparison"}
+GROUP_MODES = {
+    "none", "module", "role", "legacy_permitido", "legacy_denegado",
+    "legacy_no_concluyente", "catalog_permitido", "catalog_denegado",
+    "comparison_diferencia", "comparison_coincide",
+}
+DECISION_MODES = {"todos", "permitido", "denegado", "no_concluyente", "diferencia"}
+
+
+def _matrix_controls():
+    sort_by = request.args.get("sort_by", "action")
+    sort_dir = request.args.get("sort_dir", "asc")
+    group_by = request.args.get("group_by", "none")
+    decision = request.args.get("decision", "todos")
+    if (sort_by not in SORT_FIELDS or sort_dir not in {"asc", "desc"}
+            or group_by not in GROUP_MODES or decision not in DECISION_MODES):
+        raise ValueError("Orden, agrupación o filtro de decisión inválido")
+    return sort_by, sort_dir, group_by, decision
+
+
+def _decision_label(value):
+    return "Permitidos comprobados" if value is True else (
+        "Denegados comprobados" if value is False else "Sin comprobar"
+    )
+
+
+def _group_identity(row, group_by):
+    """Clave, etiqueta y prioridad estables; las agrupaciones no conceden acceso."""
+    if group_by == "module":
+        label = row.get("module_name") or row.get("module_key") or "Sin módulo"
+        return "module:" + (row.get("module_key") or ""), label, (0, label.casefold())
+    if group_by == "role":
+        label = row.get("role") or "Sin rol"
+        return "role:" + label, label, (0, label.casefold())
+    if group_by.startswith(("legacy_", "catalog_")):
+        field = "legacy_allowed" if group_by.startswith("legacy_") else "catalog_allowed"
+        value = row[field]
+        status = "permitido" if value is True else "denegado" if value is False else "no_concluyente"
+        first = group_by.removeprefix("legacy_").removeprefix("catalog_")
+        order = [first] + [item for item in ("permitido", "denegado", "no_concluyente") if item != first]
+        label = _decision_label(value)
+        if field == "catalog_allowed":
+            label += " · catálogo estimado"
+        return field + ":" + status, label, (order.index(status), "")
+    if group_by.startswith("comparison_"):
+        status = row["comparison"]
+        first = group_by.removeprefix("comparison_")
+        order = [first] + [item for item in ("diferencia", "coincide", "no_concluyente") if item != first]
+        label = {
+            "diferencia": "Diferencias comprobables",
+            "coincide": "Coincidencias",
+            "no_concluyente": "Comparación no concluyente",
+        }[status]
+        return "comparison:" + status, label, (order.index(status), "")
+    return "", "", (0, "")
+
+
+def _sort_value(row, sort_by):
+    """Triage consistente del triestado; None siempre distinto de False."""
+    if sort_by in {"legacy", "catalog"}:
+        value = row["legacy_allowed" if sort_by == "legacy" else "catalog_allowed"]
+        return 0 if value is True else 1 if value is False else 2
+    if sort_by == "comparison":
+        return {"diferencia": 0, "coincide": 1, "no_concluyente": 2}[row["comparison"]]
+    field = {
+        "user": "username", "role": "role", "module": "module_name",
+        "action": "action_name",
+    }[sort_by]
+    return (row.get(field) or "").casefold()
+
+
+def _prepare_rows(rows, sort_by, sort_dir, group_by, decision):
+    """Filtra/ordena el universo ANTES de paginar; nunca ordena solo la página."""
+    filtered = [
+        dict(row) for row in rows
+        if decision == "todos" or (
+            row["comparison"] == "diferencia" if decision == "diferencia"
+            else row["status"] == decision
+        )
+    ]
+    # Empates deterministas para evitar duplicados/saltos entre páginas.
+    filtered.sort(key=lambda row: (
+        (row.get("username") or "").casefold(), row["user_id"],
+        (row.get("module_key") or "").casefold(),
+        (row.get("action_key") or "").casefold(), row.get("action_id") or 0,
+    ))
+    filtered.sort(key=lambda row: _sort_value(row, sort_by), reverse=sort_dir == "desc")
+    group_counts = {}
+    if group_by != "none":
+        for row in filtered:
+            key, label, priority = _group_identity(row, group_by)
+            row["group_key"], row["group_label"] = key, label
+            row["_group_priority"] = priority
+            group_counts[key] = group_counts.get(key, 0) + 1
+        filtered.sort(key=lambda row: row["_group_priority"])
+        for row in filtered:
+            del row["_group_priority"]
+    else:
+        for row in filtered:
+            row["group_key"], row["group_label"] = "", ""
+    return filtered, group_counts
+
+
 def _batch_context(users):
     """Carga sucursales/operadores en 3 consultas para una página completa."""
     ids = [u.id for u in users]
@@ -299,6 +404,7 @@ def visual_audit_matrix():
         branch_id = _optional_positive("branch_id")
         document_id = _optional_positive("document_id")
         limit, offset = _pagination()
+        sort_by, sort_dir, group_by, decision = _matrix_controls()
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     module_key = (request.args.get("module_key") or "").strip()[:120]
@@ -339,8 +445,10 @@ def visual_audit_matrix():
         else:
             actions_query = actions_query.filter(PermissionActionORM.id == module.base_action_id)
     if perspective == "user":
-        total = actions_query.count()
-        actions = actions_query.order_by(PermissionActionORM.full_key).offset(offset).limit(limit).all()
+        candidates = actions_query.count()
+        if candidates > MAX_AUDIT_CANDIDATES:
+            return jsonify({"error": "Demasiadas acciones; filtra por módulo/acción"}), 422
+        actions = actions_query.order_by(PermissionActionORM.full_key).all()
         users = UserORM.query.filter_by(id=user_id).all()
         if not users:
             return jsonify({"error": "Usuario no encontrado"}), 404
@@ -351,8 +459,10 @@ def visual_audit_matrix():
             if not (perspective == "module" and module and not action_key):
                 return jsonify({"error": "Acción no encontrada en el módulo"}), 404
         user_query = _user_query()
-        total = user_query.count()
-        users = user_query.order_by(UserORM.username, UserORM.id).offset(offset).limit(limit).all()
+        candidates = user_query.count()
+        if candidates > MAX_AUDIT_CANDIDATES:
+            return jsonify({"error": "Demasiados usuarios; usa búsqueda o rol para acotar"}), 422
+        users = user_query.order_by(UserORM.username, UserORM.id).all()
     contexts = _batch_context(users)
     grants = _bulk_grants(users, actions)
     rows = []
@@ -378,18 +488,23 @@ def visual_audit_matrix():
                 "scope": "requiere_contexto", "context": {"branch_id": branch_id, "document_id": document_id},
                 "diagnostic_only": True,
             })
+    unfiltered_total = len(rows)
+    filtered, group_counts = _prepare_rows(rows, sort_by, sort_dir, group_by, decision)
+    page = filtered[offset:offset + limit]
     return jsonify({
         "status": "ok", "mode": "visual_audit_readonly_v1",
         "note": "Solo consulta. Legacy comprobado únicamente en predicados declarados; no reemplaza enforcement.",
-        "view": perspective, "rows": rows,
+        "view": perspective, "rows": page, "group_counts": group_counts,
+        "sorting": {"sort_by": sort_by, "sort_dir": sort_dir, "group_by": group_by, "decision": decision},
         "summary": {
-            "total": total, "limit": limit, "offset": offset,
-            "evaluated": sum(row["legacy_allowed"] is not None for row in rows),
-            "allowed": sum(row["legacy_allowed"] is True for row in rows),
-            "denied": sum(row["legacy_allowed"] is False for row in rows),
-            "unknown": sum(row["legacy_allowed"] is None for row in rows),
-            "differences": sum(row["comparison"] == "diferencia" for row in rows),
-            "matches": sum(row["comparison"] == "coincide" for row in rows),
+            "total": len(filtered), "unfiltered_total": unfiltered_total,
+            "limit": limit, "offset": offset,
+            "evaluated": sum(row["legacy_allowed"] is not None for row in filtered),
+            "allowed": sum(row["legacy_allowed"] is True for row in filtered),
+            "denied": sum(row["legacy_allowed"] is False for row in filtered),
+            "unknown": sum(row["legacy_allowed"] is None for row in filtered),
+            "differences": sum(row["comparison"] == "diferencia" for row in filtered),
+            "matches": sum(row["comparison"] == "coincide" for row in filtered),
         },
         "coverage": {
             "catalog_partial": True,
