@@ -20,6 +20,27 @@
       <input matInput [formControl]="filtroTapizado" autocomplete="off" />
     </mat-form-field>
 
+    <div class="tapizado-filtros">
+      <mat-form-field appearance="outline">
+        <mat-label>Categoría</mat-label>
+        <mat-select [value]="filtroCategoriaTapizado.value"
+                    (selectionChange)="cambiarCategoriaTapizado($event.value)">
+          <mat-option value="">Todas</mat-option>
+          <mat-option *ngFor="let categoria of categoriasDisponiblesTapizado"
+                      [value]="categoria">{{ categoria }}</mat-option>
+        </mat-select>
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Familia</mat-label>
+        <mat-select [value]="filtroFamiliaTapizado.value"
+                    (selectionChange)="cambiarFamiliaTapizado($event.value)">
+          <mat-option value="">Todas</mat-option>
+          <mat-option *ngFor="let familia of familiasDisponiblesTapizado"
+                      [value]="familia.id">{{ familia.nombre }}</mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
+
     <div class="tapizado-resumen">
       <strong>{{ aparatosSeleccionados.length }} de 50 aparatos seleccionados</strong>
       <span *ngIf="!aparatosSeleccionados.length">Elige al menos un equipo de la sucursal.</span>
