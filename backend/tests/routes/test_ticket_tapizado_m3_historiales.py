@@ -11,6 +11,7 @@ from app.models.ticket_model import Ticket
 from app.models.inventario import InventarioGeneral
 from app.routes import ticket_routes
 from app.services import mantenimiento_report_service as report
+from app.services import mantenimiento_equipos_report_service as legacy
 from app.utils.ticket_aparatos_filters import (
     ticket_relacionado_con_aparato,
     ticket_relacionado_con_alguno,
@@ -77,6 +78,20 @@ class TapizadoM3BackendTest(unittest.TestCase):
         )
         self.assertEqual(len(report._equipos_tapizado(t)), 2)
         self.assertEqual(report._equipment_code(t), "EQ-101, EQ-102")
+
+    def test_reporte_legacy_muestra_todos_los_aparatos_sin_filas_extra(self):
+        t = SimpleNamespace(
+            tipo_trabajo="TAPIZADO",
+            aparato_id=101,
+            inventario=SimpleNamespace(nombre="Press", codigo_interno="EQ-101"),
+            aparatos_asociados=[
+                equipo(101, "EQ-101", "Press"),
+                equipo(102, "EQ-102", "Curl"),
+            ],
+        )
+        self.assertEqual(legacy._equipment_name(t), "Press, Curl")
+        self.assertEqual(legacy._equipment_code(t), "EQ-101, EQ-102")
+        self.assertEqual(len(legacy._related_apparatus(t)), 2)
 
     def test_disponibilidad_del_backend_por_defecto_apagada(self):
         app = Flask(__name__)
