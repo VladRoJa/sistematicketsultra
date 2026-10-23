@@ -135,7 +135,7 @@
           <h2 id="lista-existencias-titulo">Listado de existencias</h2>
           <p>Busca por nombre, código o marca. Combina categoría, familia y stock sin alterar el inventario.</p>
         </div>
-        <div class="solicitudes-actions">
+        <div *ngIf="puedeConsultarVista" class="solicitudes-actions">
           <button class="solicitudes-btn" type="button" (click)="abrirHallazgo()">
             <mat-icon aria-hidden="true">add_circle_outline</mat-icon> Reportar sin registro
           </button>
@@ -240,7 +240,7 @@
           <ng-container matColumnDef="solicitud">
             <th mat-header-cell *matHeaderCellDef>Corrección</th>
             <td mat-cell *matCellDef="let e">
-              <button class="solicitud-row-action" type="button" (click)="abrirSolicitud(e)"
+              <button *ngIf="puedeConsultarVista" class="solicitud-row-action" type="button" (click)="abrirSolicitud(e)"
                 [attr.aria-label]="'Solicitar corrección de ' + e.nombre">
                 <mat-icon aria-hidden="true">edit_note</mat-icon> Solicitar
               </button>
@@ -272,7 +272,7 @@
     </section>
     <p class="scope-note">Las cifras reflejan las mismas referencias consultadas en esta pantalla. La vista global de Existencias puede incluir sucursales DEMO, a diferencia del consolidado de Reportes.</p>
   </ng-container>
-  <app-solicitudes-correccion
+  <app-solicitudes-correccion *ngIf="puedeConsultarVista"
     [visible]="panelSolicitudesVisible"
     [referencia]="referenciaSolicitud"
     [vistaInicial]="vistaSolicitudes"
