@@ -8,7 +8,7 @@ from werkzeug.utils import secure_filename
 import hashlib
 import uuid
 from sqlalchemy.orm import joinedload
-from sqlalchemy import or_, select, union_all
+from sqlalchemy import Boolean, Date, literal, or_, select, union_all
 from zoneinfo import ZoneInfo
 
 from app.extensions import db
@@ -19,6 +19,9 @@ from app.models.warehouse import (
     VentaTotalSnapshotORM,
     CorteCajaSnapshotORM,
     CargosRecurrentesSnapshotORM,
+    SociosVencidosSnapshotORM,
+    VentasNuevosSociosDetalleSnapshotORM,
+    SociosActivosSnapshotORM,
 )
 from app.utils.warehouse_access import (
     require_warehouse_archive,
@@ -421,6 +424,9 @@ WAREHOUSE_UPLOAD_SNAPSHOT_MODELS = (
     VentaTotalSnapshotORM,
     CorteCajaSnapshotORM,
     CargosRecurrentesSnapshotORM,
+    SociosVencidosSnapshotORM,
+    VentasNuevosSociosDetalleSnapshotORM,
+    SociosActivosSnapshotORM,
 )
 
 
@@ -429,23 +435,41 @@ def _load_upload_snapshot_metadata(upload_ids: list[int]) -> dict[tuple[int, str
     if not upload_ids:
         return {}
 
-    selects = [
-        select(
-            model.warehouse_upload_id.label("upload_id"),
-            model.report_type_key.label("report_type_key"),
-            model.id.label("snapshot_id"),
-            model.is_canonical.label("snapshot_is_canonical"),
-            model.business_date.label("snapshot_business_date"),
-        ).where(model.warehouse_upload_id.in_(upload_ids))
-        for model in WAREHOUSE_UPLOAD_SNAPSHOT_MODELS
-    ]
+    selects = []
+    for model in WAREHOUSE_UPLOAD_SNAPSHOT_MODELS:
+        # Socios vencidos registra un rango pero no tiene canonicalidad.
+        canonical = getattr(model, "is_canonical", None)
+        if canonical is None:
+            canonical = literal(None, type_=Boolean)
+
+        # Socios activos usa cutoff_date como fecha de referencia.
+        # Socios vencidos no tiene business_date ni cutoff_date.
+        reference_date = getattr(model, "business_date", None)
+        if reference_date is None:
+            reference_date = getattr(model, "cutoff_date", None)
+        if reference_date is None:
+            reference_date = literal(None, type_=Date)
+
+        selects.append(
+            select(
+                model.warehouse_upload_id.label("upload_id"),
+                model.report_type_key.label("report_type_key"),
+                model.id.label("snapshot_id"),
+                canonical.label("snapshot_is_canonical"),
+                reference_date.label("snapshot_business_date"),
+            ).where(model.warehouse_upload_id.in_(upload_ids))
+        )
 
     result = {}
     for row in db.session.execute(union_all(*selects)).mappings():
         key = (int(row["upload_id"]), row["report_type_key"])
         result[key] = {
             "snapshot_id": int(row["snapshot_id"]),
-            "snapshot_is_canonical": bool(row["snapshot_is_canonical"]),
+            "snapshot_is_canonical": (
+                bool(row["snapshot_is_canonical"])
+                if row["snapshot_is_canonical"] is not None
+                else None
+            ),
             "snapshot_business_date": (
                 row["snapshot_business_date"].isoformat()
                 if row["snapshot_business_date"]
