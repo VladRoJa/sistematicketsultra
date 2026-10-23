@@ -1,0 +1,61 @@
+name: Inventarios V2 E2 Solicitudes Schema CI
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/models/inventario_solicitud_correccion.py"
+      - "backend/app/models/__init__.py"
+      - "backend/migrations/versions/v2e2a7c92623_inventory_v2_correction_requests.py"
+      - "backend/tests/models/test_inventario_v2_e2_schema.py"
+      - ".github/workflows/inventario-v2-e2-schema-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2-schema-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: inventario_e2_ci
+          POSTGRES_PASSWORD: inventario_e2_ci_only
+          POSTGRES_DB: inventario_e2_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U inventario_e2_ci -d inventario_e2_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend dependencies
+        run: |
+          python -m pip install -r backend/requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Compile model, migration and QA
+        working-directory: backend
+        run: |
+          python -m py_compile \
+            app/models/inventario_solicitud_correccion.py \
+            migrations/versions/v2e2a7c92623_inventory_v2_correction_requests.py \
+            tests/models/test_inventario_v2_e2_schema.py
+      - name: Verify Alembic heads and PostgreSQL constraints
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+          SECRET_KEY: e2-schema-ci-test-only
+          JWT_SECRET_KEY: e2-schema-ci-test-only
+          SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://inventario_e2_ci:inventario_e2_ci_only@127.0.0.1:5432/inventario_e2_ci
+          INVENTARIO_E2_TEST_POSTGRES_URL: postgresql+psycopg2://inventario_e2_ci:inventario_e2_ci_only@127.0.0.1:5432/inventario_e2_ci
+        run: |
+          python -m pytest -q --tb=short -o addopts= \
+            tests/models/test_inventario_v2_e2_schema.py
