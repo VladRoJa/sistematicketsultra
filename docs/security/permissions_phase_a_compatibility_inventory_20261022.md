@@ -159,7 +159,7 @@ Consulta `SELECT UPPER(TRIM(COALESCE(rol,''))), COUNT(*) FROM users GROUP BY 1` 
 - Diferenciar puestos (`GERENTE` / `GERENTE_REGIONAL`) de permisos puntuales y scopes; una coincidencia parcial de permisos no implica que sean el mismo rol.
 - Este censo **no describe permisos efectivos**, solamente `users.rol`; tampoco acredita que las cuentas estén habilitadas o que representen personas diferentes.
 - El catálogo actual de 11 módulos/40 acciones no equivale al censo de roles: son dimensiones diferentes.
-- **ACL departamental censada:** una sola asignación en `usuarios_permisos` a `departamento_id=1`, `es_admin=false`, para un usuario (corte 2026-10-22). **Pendiente:** confirmar rol de esa cuenta, verificar migraciones/esquema. Los operadores están censados en la sección siguiente.
+- **ACL departamental verificada:** una sola asignación en `usuarios_permisos` a `departamento_id=1`, `es_admin=false`, cuyo titular tiene rol `COORDINADOR_MANTENIMIENTO` (consultas agregadas 2026-10-22). **Pendiente:** verificar migraciones/esquema. Los operadores están censados en la sección siguiente.
 
 ## 5.2. Censo agregado de operadores Warehouse y Planning — 2026-10-22
 
@@ -187,7 +187,7 @@ Consulta agrupada de `usuarios_permisos` en producción devolvió únicamente:
 
 - Esta entrada **no es un permiso de administrador**. La columna `es_admin=false` corresponde a esta ACL y no determina el conjunto completo de privilegios del usuario.
 - `backend/app/utils/pm_permissions.py::has_scoped_maintenance_read_grant()` consulta expresamente `usuarios_permisos` con `departamento_id=1` y `es_admin=False` para habilitar lectura de PM a los roles `COMPRAS` o `COORDINADOR_MANTENIMIENTO`.
-- La consulta recibida **no identifica el rol del usuario asociado**, de modo que la vinculación concreta con el helper sigue pendiente de confirmar. No asumir que los dos registros de `permission_grants` y esta ACL corresponden al mismo usuario.
+- Una segunda consulta agregada confirmó **`COORDINADOR_MANTENIMIENTO | 1`**. Esta combinación cumple las condiciones de rol + departamento + `es_admin=False` verificadas por `has_scoped_maintenance_read_grant()`, por lo que corresponde al permiso individual de **lectura de PM**, no al de ejecución, validación o configuración. Esto no acredita todavía la intersección precisa de sucursales ni la identidad de los titulares de los dos `permission_grants` de Tickets.
 - Esta ACL debe conservarse y contrastarse con los accesos reales a PM durante la migración.
 
 ## 6. Evidencia aún pendiente para cerrar Fase A
@@ -200,7 +200,8 @@ Estos puntos necesitan información del servidor o revisión de código adiciona
 - [x] **Grants vigentes identificados (consultas agregadas, 2026-10-22):** solo se devolvieron **2 grants** (`principal_type=user`, `effect=allow`, `scope_type=global`, estado `current`), uno para `tickets.maintenance.coordinate` y uno para `tickets.maintenance.read_assigned_only`. **Ningún grant vigente corresponde a Nube Corporativa**. Ambos deben conservarse intactos; su impacto operativo sigue subordinado a las condiciones del guard real. El scope `global` del grant no exime restricciones de sucursal ni concede por sí solo acceso de escritura. **Pendiente:** revisar operadores/ACL y confrontar esquema/migraciones aplicadas con producción. El censo agregado de 17 roles y 70 cuentas ya está documentado abajo.
 - [x] Censados operadores Warehouse y Planning en producción: 1 operador de Warehouse con lectura/subida pero sin archivo, y 1 operador activo de Planning con las 6 capacidades habilitadas. Sus identidades no están identificadas por estos agregados.
 - [x] Censo agregado `usuarios_permisos`: departamento 1 / `es_admin=false` / una asignación / un usuario.
-- [ ] Confirmar qué rol tiene la cuenta con ACL departamental (sin identificar usuario) y contrastar migraciones/esquema de PostgreSQL productivo.
+- [x] Confirmado por consulta agregada que la única ACL departamental pertenece al rol `COORDINADOR_MANTENIMIENTO` y satisface la condición legacy de lectura de PM.
+- [ ] Contrastar migraciones/esquema de PostgreSQL productivo y revisar escenarios de alcance por sucursal.
 - [~] Inventariadas por código las **21 rutas HTTP** de Nube y los controles de escritura/lectura/descarga/auditoría, con excepción especial de agregadoras. **Pendiente:** matriz exhaustiva ruta → decisión por contexto y tests de paridad; esta inspección no sustituye QA.
 - [ ] Producir conjunto de escenarios de paridad de Nube Corporativa (rol SISTEMAS, ADMICORP, admin con otro usuario, usuario ordinario, documento sensible).
 - [ ] Decidir con responsable operativo únicamente los accesos legacy contradictorios que supongan un cambio de política, no pedir autorización para cada refactor.
