@@ -1,4 +1,4 @@
-"""Paridad diagnostica Track: comparar guard real con observabilidad V1.
+"""Paridad diagnóstica Track: verificar guard real contra catálogo actualizado.
 
 No llama endpoints, usuarios reales, JWT, scheduler ni PostgreSQL.
 Un falso negativo de catalogo NO concede ni revoca permisos.
@@ -32,12 +32,12 @@ def _catalog_action(full_key, role):
         ("ADMINISTRADOR", True, True),
         ("SUPER_ADMIN", True, True),
         ("LECTOR_GLOBAL", True, True),
-        ("GERENTE", True, False),
-        ("GERENTE_REGIONAL", True, False),
-        ("SISTEMAS", True, False),
-        ("GERENCIA DEPORTIVA", True, False),
-        ("MARKETING", True, False),
-        ("TIENDA", True, False),
+        ("GERENTE", True, True),
+        ("GERENTE_REGIONAL", True, True),
+        ("SISTEMAS", True, True),
+        ("GERENCIA DEPORTIVA", True, True),
+        ("MARKETING", True, True),
+        ("TIENDA", True, True),
         ("RECEPCIONISTA", False, False),
         ("COMPRAS", False, False),
     ],
@@ -56,20 +56,10 @@ def test_p16_track_read_role_guard_vs_catalog(
     observed = _catalog_action("track.read", role)
     assert observed["allowed"] is catalog_allowed
 
-    comparison = (
-        "match"
-        if legacy_allowed == observed["allowed"]
-        else "legacy_allow_catalog_deny"
-        if legacy_allowed
-        else "legacy_deny_catalog_allow"
-    )
-    assert comparison == (
-        "legacy_allow_catalog_deny"
-        if legacy_allowed and not catalog_allowed
-        else "match"
-    )
-    if comparison != "match":
-        assert observed["reason"] == "track_read_admin_or_lector_global"
+    assert observed["allowed"] is legacy_allowed
+    assert observed["reason"] == "track_read_role_matches_guard_v2"
+    assert observed["source"] == "legacy_role"
+
 
 
 @pytest.mark.parametrize(
