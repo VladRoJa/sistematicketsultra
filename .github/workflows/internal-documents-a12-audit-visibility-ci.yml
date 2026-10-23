@@ -1,0 +1,44 @@
+name: Nube Corporativa — A-12 Sensitive Audit Authorization
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/utils/internal_documents_access.py"
+      - "backend/tests/routes/test_internal_documents_a12_audit_visibility.py"
+      - "backend/tests/routes/test_internal_documents_agregadoras_visibility.py"
+      - "backend/tests/utils/test_internal_documents_agregadoras_access.py"
+      - ".github/workflows/internal-documents-a12-audit-visibility-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  sensitive-audit-authorization:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+      SECRET_KEY: permissions-phase-a-test-only
+      JWT_SECRET_KEY: permissions-phase-a-test-only
+      SQLALCHEMY_DATABASE_URI: "sqlite:///:memory:"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend test dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Validate A-12 audit parity and previous visibility regressions
+        run: |
+          python -m pytest -q --tb=short -o addopts= \
+            tests/routes/test_internal_documents_a12_audit_visibility.py \
+            tests/routes/test_internal_documents_agregadoras_visibility.py \
+            tests/utils/test_internal_documents_agregadoras_access.py
