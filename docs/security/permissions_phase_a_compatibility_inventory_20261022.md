@@ -541,6 +541,36 @@ Consulta agrupada de `usuarios_permisos` en producción devolvió únicamente:
 
 **Próxima etapa P22 — prioridad de revisión, NO ejecución de cambios:** separar las 350 asociaciones históricamente ausentes en **GET y mutaciones**, priorizar rutas de escritura de Marketing, Contact Center, Requisiciones y Sistemas, e inventariar fuente de autorización/alcance real de cada grupo. Comparar después con los datos **vigentes** de `permission_route_map` con permisos administrativos de solo lectura, antes de extender catálogo, emitir grants o diseñar enforcement. PR #1094 **fusionado por squash a `main`** (`3ea6269276d5a421832bdcc51f845f2dfda916e3`); solo tests/workflow, **sin despliegue ni migración necesarios**. **Resolvedor global desactivado; Fase A abierta.**
 
+
+## 5.12. P22 — GET vs mutaciones históricamente no mapeadas y trazado de guards (2026-10-23)
+
+**PR diagnóstico [#1095](https://github.com/VladRoJa/sistematicketsultra/pull/1095)**, [CI #40028312672](https://github.com/VladRoJa/sistematicketsultra/actions/runs/40028312672) **29/29 PASS** (22 tests P22 + 7 de regresión P21). El PR agrega **una suite y un workflow**; sin cambios de rutas, guards, servicios, grants, catálogo, DB, migrations o frontend. La fuente es `create_app().url_map` del código y **solo las declaraciones del seed histórico** `7b8c9d0e1f2a` por `runpy.run_path`: sin `upgrade/downgrade`, requests HTTP, mutaciones ni conexión PostgreSQL. **No se conoce el estado de `permission_route_map` vigente mediante estos tests.**
+
+| Métodos Flask fuera de seed histórico | Conteo |
+| --- | ---: |
+| GET | **241** |
+| POST | **95** |
+| PUT | **13** |
+| PATCH | **1** |
+| DELETE | **0** |
+| **Total 350** | **241 GET + 109 POST/PUT/PATCH** |
+
+**GET indica únicamente método HTTP, no prueba de ausencia de efectos secundarios.** Los **109** métodos de mutación no son **109 fallas de permisos**. La coincidencia ausente con un seed antiguo no verifica accesibilidad real, JWT, guard, registro, alcance, permisos en producción ni si existe un mapeo posterior en la BD vigente.
+
+| Familia `/api/…` | GET no incluidos en seed | Mutaciones no incluidas | Evidencia complementaria |
+| --- | ---: | ---: | --- |
+| `marketing` | **40** | **42** | Marketing Input y Campaign V2 usan roles/capacidades comerciales; algunas operaciones de envío requieren bandera y validaciones de despacho |
+| `purchase-requisitions` | **5** | **19** | Control de actor y autorización específica delegada a servicios por transición |
+| `contact-center` | **8** | **10** | Contexto operador/supervisor y comprobaciones por cita; otras escrituras delegan contexto a servicios |
+| `system-daily-checks` (incluye BI) | **13** | **3** | Sumisión/posposición delega verificación de actor y sucursal al servicio |
+| `automation-control` | **14** | **0** | Esta familia registró solo GET en este corte; no suponer lectura inocua por ser GET |
+
+**Trazabilidad limitada de 14 handlers prioritarios (AST del source importado):** se comprobó que registran decorador `@jwt_required()` y contienen las llamadas/atributos esperados, **sin ejecutarlas**. Ejemplos: `put_marketing_input_endpoint` exige `can_edit_inputs` y cruza `sucursal_id` con el scope visible; Campaign V2 `submit` usa `_resolve_campaign_v2_send_request` y kill switch, `dispatch/execute` además verifica configuración y contraseña actual del actor, importación de blacklist requiere alcance global; Contact Center `post_merge_contacts` exige operador y supervisor y `post_close_appointment` valida cita; Requisiciones `post_purchase_requisition_approve`/`post_purchase_requisition_finance_approve_quote` invocan servicios con actor; `today_submit` y `today_postpone` delegan en servicios y reciben `requested_branch_id`. **Presencia estática de dependencia ≠ prueba de denegación HTTP ni de autorización del servicio.**
+
+**Clasificación por tipo de evidencia:** `inline_branch_capability` (chequeo visible en handler), `object_guard` (guard contextual llamado directamente) y `service_delegated` (autorización potencialmente en servicio, por inspeccionar). No transformar llamadas observadas a «permisos verificados» sin leer/ejercitar el servicio y su interacción real con los datos.
+
+**P23 propuesto:** probar *un módulo y un control a la vez* en servicios de escritura críticos, empezando por aprobación financiera/requisiciones o envío comercial, usando casos negativos de actor/alcance/estado sin producción, y confrontar después un extracto de solo lectura de `permission_route_map` vigente con autorización administrativa. No derivar nuevas acciones de nombres de rutas, no emitir grants, no modificar policy hasta reconciliar los guards y scopes. **PR #1095 CI GREEN, abierto sin merge/despliegue al documentar; Fase A abierta y resolvedor global OFF.**
+
 ## 6. Evidencia aún pendiente para cerrar Fase A
 
 Estos puntos necesitan información del servidor o revisión de código adicional. **No constituyen autorización para consultar datos personales sin necesidad, modificar registros ni ejecutar SQL de escritura.**
@@ -560,7 +590,8 @@ Estos puntos necesitan información del servidor o revisión de código adiciona
 - [x] **Nube por documento P19 ejecutada y fusionada:** PR #1089, squash `61ef1bcf4f256885953303c51518af6316addfba`, [CI #40023930914](https://github.com/VladRoJa/sistematicketsultra/actions/runs/40023930914) **81/81 PASS**, incluyendo **63 escenarios nuevos** de visibilidad, sensibilidad, CUSTOM/PRIVATE/GLOBAL, versiones, auditoría/histórico, cobranza y manager vs catálogo. Solo fixtures y CI, **sin cambios productivos ni despliegue requerido**.
 - [x] **Contrato bidireccional P20 diagnosticado e integrado:** PR #1092, squash `87abf0499195d18304b6061a7310c983ef95b448`, [CI #40024767865](https://github.com/VladRoJa/sistematicketsultra/actions/runs/40024767865) **53/53 PASS** (31 proyección + 22 clasificación). Proyecciones inversas **solo in-memory**, NO hay endpoints efectivos `Acción→Usuarios` ni `Módulo→Usuarios`; sin cambios de runtime, sin deploy ni migraciones.
 - [x] **P21 Cobertura Flask vs seed histórico inspeccionada y fusionada:** PR #1094, squash `3ea6269276d5a421832bdcc51f845f2dfda916e3`, [CI #40026591278](https://github.com/VladRoJa/sistematicketsultra/actions/runs/40026591278) **7/7 PASS**; Flask registra 419 métodos, seed activo histórico contiene 69 asociaciones (68 nombres exactos + 1 alias explícito válido), **350 métodos fuera del seed**. Los 3 cruces transversales y Nube 10 writes/11 GET se conservaron. **Sin consultas a DB productiva, cambios productivos, migraciones ni despliegue.**
-- [ ] **Resto pendiente para paridad operativa:** inventariar guard/alcance de mutaciones históricamente fuera del seed (P22), cotejar `permission_route_map` vigente de producción y endpoints inversos futuros sin activar enforcement; revisar precedencia/fecha/scope de grants y paridad HTTP por `(user, action, branch, document)`. Usar `match`, `legacy_allow_catalog_deny`, `legacy_deny_catalog_allow`, `incomplete_context` sin inferir derechos de objeto por módulo.
+- [x] **P22 método y guard de muestra diagnosticados:** PR #1095, [CI #40028312672](https://github.com/VladRoJa/sistematicketsultra/actions/runs/40028312672) **29/29 PASS** (7 regresión P21 + 22 P22). Del total de 350 fuera de seed: **241 GET y 109 mutaciones (95 POST, 13 PUT, 1 PATCH)**. Se inspeccionaron **14 handlers prioritarios por AST**, sin afirmar paridad real HTTP/service. **PR pendiente de merge**.
+- [ ] **Resto pendiente para paridad operativa:** P23 tests negativos por guard de servicios delegados, revisar resto de mutaciones históricamente fuera del seed y cotejar `permission_route_map` vigente de producción. Después evaluar endpoints inversos, fechas/scope de grants y paridad HTTP por `(user, action, branch, document)`; registrar `match`, `legacy_allow_catalog_deny`, `legacy_deny_catalog_allow`, `incomplete_context` sin inferir accesos por módulo.
 - [x] **Inventario de los 21 handlers Nube completo por código** (A-14): 11 GET y 10 mutaciones, todos con JWT; se registró el guard legacy de cada ruta. **Pendiente:** pruebas de paridad por contexto y correspondencia 1:1 con el resolvedor; no confundir inventario estático con cobertura QA.
 - [ ] Producir conjunto de escenarios de paridad de Nube Corporativa (rol SISTEMAS, ADMICORP, admin con otro usuario, usuario ordinario, documento sensible).
 - [ ] Decidir con responsable operativo únicamente los accesos legacy contradictorios que supongan un cambio de política, no pedir autorización para cada refactor.
@@ -585,7 +616,7 @@ Estos puntos necesitan información del servidor o revisión de código adiciona
 - [x] **A-13 preparada RED→GREEN:** PR [#1077](https://github.com/VladRoJa/sistematicketsultra/pull/1077) corrige en SQL el filtro de título antes de contar y paginar. RED limpio CI #40008420077 = 4 fallos esperados / 14 PASS; GREEN última CI #40009002764 = **18/18 PASS** y suites A-12 12/12, A-11 7/7, `/by-link` 7/7 PASS. **Fusionado a main; operador indicó que el bloque de despliegue y QA A-13 quedó bien, sin pegar valores de consola.**
 - [x] **Merge A-13 autorizado y completado:** PR #1077 fusionado por squash como `ebb9e9080fb76d98696b451c429610701f43a779`, con 4 workflows verdes en último commit.
 - [x] **Validación operativa A-13 confirmada verbalmente por el operador (2026-10-23):** ante el bloque de despliegue y QA para filtro normalizado, respondió «si bien». Se registra como confirmación positiva del bloque, pero **no se recibieron impresos** `A13_CODIGO_DESPLEGADO` ni `QA_A13`; no atribuirles valores textuales ni tratarlo como prueba HTTP end-to-end. CI previo 18/18 PASS, sin migraciones.
-- [ ] **Fase A sigue abierta:** Track/Tickets (#1079), Inventario/PM (#1081), Warehouse/Planning (#1087), Nube por documento (#1089), P20 (#1092) y P21 (#1094) integrados en `main` con CI GREEN. **350 métodos Flask fuera del seed histórico** no implican endpoints inseguros. Faltan mapa vigente/guards por mutación, endpoints inversos reales, paridad HTTP/objeto/fechas y decisión CUSTOM sensible. No activar resolvedor global.
+- [ ] **Fase A sigue abierta:** Track/Tickets (#1079), Inventario/PM (#1081), Warehouse/Planning (#1087), Nube por documento (#1089), P20 (#1092) y P21 (#1094) integrados en `main`. P22 (#1095) CI GREEN, pendiente de merge; del seed antiguo faltan 241 GET y 109 mutaciones, sin implicar vulnerabilidad. Faltan verificación de servicios/guards, mapa vigente, endpoints inversos, paridad HTTP/objeto/fechas y decisión CUSTOM sensible. No activar resolvedor global.
 - [ ] Ampliar fixtures a descarga actual e histórica y controles por registro de las demás rutas del piloto.
 - [ ] Marcar expresamente el alcance incompleto de módulos fuera del catálogo y plan de expansión.
 
