@@ -50,7 +50,7 @@ def _seed_keys():
 def _alias_rows():
     source = ALIAS_PATH.read_text(encoding="utf-8")
     return re.findall(
-        r'^  \'([^\']+)\': \\{ label: "([^"]+)", explanation: "([^"]+)", purpose: "([^"]+)" \\},$',
+        r'^  \'([^\']+)\': \{ label: "([^"]+)", explanation: "([^"]+)", purpose: "([^"]+)" \},$',
         source, flags=re.MULTILINE,
     )
 
@@ -67,7 +67,7 @@ def test_action_labels_are_readable_and_do_not_masquerade_as_permissions():
         assert "." in key and " " in label, key
         assert "_" not in label and len(explanation) >= 25, key
         assert len(purpose) >= 5 and len(label) <= 65, key
-        assert not re.search(r"\\b(autorizado|concedido)\\b", label, re.I), key
+        assert not re.search(r"\b(autorizado|concedido)\b", label, re.I), key
 
 
 def test_unknown_actions_fall_back_without_inventing_a_permission():
