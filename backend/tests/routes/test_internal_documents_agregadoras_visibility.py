@@ -19,6 +19,9 @@ class _FakeColumn:
     def desc(self):
         return f"{self.name} DESC"
 
+    def is_(self, other):
+        return f"{self.name} IS {other!r}"
+
 
 class _FakeQuery:
     def __init__(self):
