@@ -70,3 +70,16 @@ Reconstruir `backend` y `frontend` por Docker Compose a partir del repo actualiz
 ## QA de la extensión de agrupación (2026-10-23)
 
 Regresiones sintéticas: caso de 31 usuarios con permiso al final del orden alfabético que debe aparecer en la primera página tras ordenar por legacy; filtro de permitidos aplicado antes de paginar sobre 40 filas; prioridad de denegados; preservación de `None` como desconocido; diferencias/coincidencias; enums inválidos HTTP 400. Misma función de evaluación real para las tres vistas. El ordenamiento es *observabilidad*, no enforcement. El módulo y las pestañas de catálogo histórico permanecen diagnósticos.
+
+
+## Ajuste diagnóstico Track: paridad de lectura y textos amigables (2026-10-23)
+
+Durante el QA en producción, la consulta `Acción → Usuarios → track.read` mostró 35 diferencias comprobables en un conjunto de 70 usuarios. El guard operativo `track_routes._require_track_read_role()` permite ADMIN, ADMINISTRADOR, SUPER_ADMIN, LECTOR_GLOBAL, GERENTE, GERENTE_REGIONAL, SISTEMAS, GERENCIA DEPORTIVA, MARKETING y TIENDA. La proyección diagnóstica del catálogo solo consideraba administradores y LECTOR_GLOBAL.
+
+**Cambio:** `permissions_catalog_routes._effective_action_decision()` ahora estima `track.read` con los diez roles del guard de lectura, bajo `track_read_role_matches_guard_v2`. La lista es diagnóstica y cuenta con test de paridad contra el guard. **No se modificó ningún guard real, menú de autorización, grant, rol, job de Track o resolución global; no requiere migración.** `track.run_daily_pipeline` y `track.run_agregadoras` continúan limitadas al guard administrador.
+
+La matriz presenta motivos comprensibles para la regla real y la estimación, y mueve los códigos y las sucursales asignadas a un detalle técnico expandible; conserva la trazabilidad original en las respuestas JSON y el CSV. El filtro de acciones muestra nombre legible + clave técnica, sin cambiar claves del catálogo ni persistencia.
+
+**QA esperado tras despliegue:** repetir `Acción → Usuarios → Consultar Track`, verificar que los roles enumerados coincidan y que los 35 falsos positivos previos desaparezcan, salvo diferencias originadas en grants diagnósticos particulares u otros cambios de datos. Revisar que roles no habilitados sigan denegados y que permisos de ejecución del pipeline permanezcan exclusivamente administrativos. Esto no constituye una certificación de acceso por sucursal ni de todos los endpoints de Track.
+
+**Trabajo aparte:** catálogo completo de alias/explicaciones para todas las acciones de Suite Ultra y sus nombres funcionales; este cambio solo hace más legibles las razones de auditoría y la selección de acciones.
