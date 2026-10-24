@@ -155,6 +155,44 @@
 .solicitud-detail dd { overflow-wrap: anywhere; font-size: 12px; color: #365472; margin: 0; }
 .solicitud-detail p { font-size: 10px; margin: 10px 0 0; color: #7890a8; }
 
+/* E2: bandeja de revisión; acciones E3 mostradas pero inhabilitadas. */
+.solicitud-bandeja { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.solicitud-bandeja__barra {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 8px; padding: 4px 2px;
+}
+.solicitud-bandeja__seleccion { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 800; color: #335977; cursor: pointer; }
+.solicitud-bandeja__seleccion input, .solicitud-bandeja__check input { width: 16px; height: 16px; margin: 0; accent-color: #1f6ea5; cursor: pointer; }
+.solicitud-bandeja__check input:disabled { cursor: not-allowed; opacity: .45; }
+.solicitud-bandeja__conteo { color: #718ba4; font-size: 11px; }
+.solicitud-bandeja__lista { display: flex; flex-direction: column; gap: 7px; max-height: min(47dvh, 390px); overflow-y: auto; padding-right: 3px; overscroll-behavior: contain; }
+.solicitud-bandeja__fila { border: 1px solid #dce6f1; background: #fff; border-radius: 10px; }
+.solicitud-bandeja__fila--abierta { border-color: #aac8e6; background: #fafdff; }
+.solicitud-bandeja__resumen { display: flex; align-items: center; gap: 12px; padding: 10px 12px; min-width: 0; }
+.solicitud-bandeja__check { display: flex; flex: none; align-items: center; }
+.solicitud-bandeja__descripcion { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 4px; }
+.solicitud-bandeja__descripcion strong { font-size: 12px; color: #254e73; overflow-wrap: anywhere; }
+.solicitud-bandeja__descripcion span, .solicitud-bandeja__descripcion small { font-size: 10px; color: #6b859c; }
+.solicitud-bandeja__detalles { display: inline-flex; align-items: center; gap: 2px; border: 1px solid #d2e2f0; background: #f3f8fd; color: #24608d; padding: 7px 9px; border-radius: 8px; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; white-space: nowrap; }
+.solicitud-bandeja__detalles mat-icon { font-size: 16px; width: 16px; height: 16px; }
+.solicitud-bandeja__expandido { padding: 0 12px 12px 40px; }
+.solicitud-bandeja__expandido .solicitud-detail { padding: 12px; }
+.solicitud-bandeja__acciones { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; border-top: 1px solid #e6edf5; padding-top: 11px; }
+.solicitud-bandeja__acciones > span { font-size: 10px; color: #7c90a4; max-width: 320px; line-height: 1.45; }
+.solicitud-bandeja__acciones > div { display: flex; gap: 8px; flex-wrap: wrap; }
+.solicitud-bandeja__acciones button { padding: 9px 12px; border-radius: 8px; font: inherit; font-size: 11px; font-weight: 800; }
+.solicitud-bandeja__rechazar { color: #a64643; border: 1px solid #efc4c2; background: #fff4f4; }
+.solicitud-bandeja__autorizar { color: #fff; border: 1px solid #287b69; background: #287b69; }
+.solicitud-bandeja__acciones button:disabled { cursor: not-allowed; opacity: .48; }
+@media (max-width: 640px) {
+  .solicitud-bandeja__resumen { gap: 7px; padding: 10px 8px; flex-wrap: wrap; }
+  .solicitud-bandeja__descripcion { flex-basis: calc(100% - 32px); }
+  .solicitud-bandeja__detalles { margin-left: 24px; }
+  .solicitud-bandeja__expandido { padding: 0 8px 10px; }
+  .solicitud-bandeja__acciones > div { width: 100%; }
+  .solicitud-bandeja__acciones button { flex: 1; }
+}
+
 .solicitud-footer {
   display: flex; gap: 10px; align-items: center; justify-content: space-between;
   padding: 9px 22px; border-top: 1px solid #e5ebf3; background: #fff;
