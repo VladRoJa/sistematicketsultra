@@ -145,6 +145,7 @@ def test_inventory_movement_write_parity_per_branch(
     ("LECTOR_GLOBAL", True, False),
     ("ADMINISTRADOR", False, False),
     ("GERENTE", False, False),
+    ("ADMINISTRADOR ", True, False),  # La ruta no hace strip del rol.
 ])
 def test_tickets_delete_all_double_gate_read_only(monkeypatch, role, enabled, expected):
     user = _user(role)
