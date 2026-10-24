@@ -223,9 +223,13 @@ export class HistorialFechasModalComponent implements OnInit {
   }
 
   getMotivoItem(item: any): string {
-    return (item?.motivo || item?.comentario || item?.razon || '')
-      .toString()
-      .trim();
+    const motivo = (item?.motivo || item?.comentario || item?.razon || '')
+      .toString().trim();
+    if (item?.tipo === 'tapizado_recepcion_aparato_v1') {
+      const codigo = (item?.codigo_interno || item?.aparato_nombre || '').toString().trim();
+      return codigo ? `${codigo} · ${motivo}` : motivo;
+    }
+    return motivo;
   }
 
   debeMostrarTooltipMotivo(item: any): boolean {
