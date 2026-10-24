@@ -37,7 +37,7 @@
         Selecciona una referencia desde el listado de Existencias o cambia a un hallazgo sin registro.
       </p>
 
-      <div *ngIf="!referencia" class="solicitud-kind-switch">
+      <div *ngIf="!referencia && !esHallazgo" class="solicitud-kind-switch">
         <button type="button" [class.is-active]="esHallazgo" (click)="seleccionarTipo('UNREGISTERED_FIND')">
           Artículo sin registro
         </button>
@@ -108,7 +108,7 @@
         </div>
 
         <ng-container *ngIf="esHallazgo">
-          <div class="solicitud-grid">
+          <div class="solicitud-grid solicitud-grid--hallazgo">
             <label class="solicitud-field solicitud-field--wide">
               <span>Nombre del artículo encontrado *</span>
               <input type="text" name="e2HallazgoNombre" maxlength="255"
@@ -134,7 +134,7 @@
           <p class="solicitud-note">El hallazgo es provisional: no crea artículos ni asigna existencias.</p>
         </ng-container>
 
-        <div class="solicitud-grid">
+        <div class="solicitud-grid solicitud-grid--details">
           <label class="solicitud-field">
             <span>Fecha de observación (opcional)</span>
             <input type="date" name="e2Fecha"
