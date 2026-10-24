@@ -271,10 +271,12 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
       return solicitud.hallazgo_provisional?.['nombre'] || 'Artículo sin referencia oficial';
     }
     if (solicitud.tipo === 'MASTER_FIELD') {
-      return `${solicitud.campo || 'Dato maestro'}: ${this.mostrarDato(solicitud.valor_propuesto)}`;
+      return `${solicitud.campo || 'Dato maestro'}: ${this.mostrarDato(solicitud.valor_original)} → ${this.mostrarDato(solicitud.valor_propuesto)}`;
     }
     if (solicitud.tipo === 'QUANTITY_DIFFERENCE') {
-      return `Cantidad física: ${this.mostrarDato(solicitud.valor_propuesto)}`;
+      const original = solicitud.valor_original as { stock?: number } | null;
+      const propuesto = solicitud.valor_propuesto as { cantidad_fisica?: number } | null;
+      return `Existencia: ${this.mostrarDato(original?.stock)} → ${this.mostrarDato(propuesto?.cantidad_fisica)}`;
     }
     return 'No localizado físicamente';
   }
