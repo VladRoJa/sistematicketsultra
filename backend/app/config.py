@@ -41,6 +41,11 @@ class Config:
     AUTH_REFRESH_COOKIE_NAME = "suite_refresh"
 
 
+    # M4: recepción individual inactiva hasta migración y QA del modal.
+    TICKETS_TAPIZADO_RECEPCION_ENABLED = os.getenv(
+        "TICKETS_TAPIZADO_RECEPCION_ENABLED", "false"
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
     # M2: nuevas escrituras de tapizado desactivadas hasta QA M3.
     TICKETS_TAPIZADO_MULTI_ENABLED = os.getenv(
         "TICKETS_TAPIZADO_MULTI_ENABLED", "false"
