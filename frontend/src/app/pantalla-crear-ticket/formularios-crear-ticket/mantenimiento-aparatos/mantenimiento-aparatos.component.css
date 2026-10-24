@@ -1,98 +1,259 @@
+/* Tapizado utiliza el mismo lenguaje visual que Crear Ticket: Material fill,
+   superficies Ultra y controles compactos. No afecta al selector legacy. */
+
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.subformulario-box {
+  min-width: 0;
+}
+
+.subformulario-box > h3 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 750;
+  color: var(--ultra-gray-900, #24272d);
+}
+
 .selector-equipo-requerido {
-  margin: -0.25rem 0 1rem;
+  margin: 0;
   color: var(--mat-sys-error, #b3261e);
-  font-size: 0.8rem;
-  line-height: 1.35;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .tapizado-modo {
-  margin: 12px 0 20px;
-  padding: 12px 16px;
-  background: var(--ultra-orange-soft, #fff4ef);
-  border: 1px solid var(--ultra-gray-200, #ddd);
-  border-radius: 10px;
+  margin: 0 0 16px;
+  padding: 10px 14px 12px;
+  border: 1px solid var(--ultra-gray-200, #e3e6eb);
+  border-radius: 14px;
+  background: var(--ultra-orange-soft, #fff0ea);
 }
+
 .tapizado-modo p {
-  margin: 6px 0 0;
+  margin: 2px 0 0 34px;
+  color: var(--ultra-gray-600, #5f6774);
   font-size: 12px;
-  color: var(--ultra-gray-600, #666);
+  line-height: 1.5;
 }
+
 .tapizado-seleccion {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 16px;
+  min-width: 0;
+  margin-bottom: 18px;
 }
-.tapizado-buscador {
+
+.tapizado-campos {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 14px;
+}
+
+.tapizado-campos mat-form-field {
   width: 100%;
+  min-width: 0;
 }
+
+/* Los campos de filtros no tienen hints ni errores de Material: eliminar
+   su hueco inferior evita separaciones innecesarias entre filas. */
+.tapizado-campos ::ng-deep .mat-mdc-form-field-subscript-wrapper {
+  display: none;
+}
+
+.tapizado-panel {
+  overflow: hidden;
+  min-width: 0;
+  border: 1px solid var(--ultra-gray-200, #e3e6eb);
+  border-radius: 14px;
+  background: var(--ultra-surface, #fff);
+}
+
 .tapizado-resumen {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
   flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 11px 14px;
+  background: var(--ultra-gray-50, #f7f8fa);
+  border-bottom: 1px solid var(--ultra-gray-200, #e3e6eb);
+}
+
+.tapizado-resumen strong {
+  color: var(--ultra-gray-900, #24272d);
   font-size: 13px;
+  font-weight: 800;
 }
+
 .tapizado-resumen span,
-.tapizado-seleccion small {
-  color: var(--ultra-gray-600, #666);
+.tapizado-pie small {
+  color: var(--ultra-gray-600, #5f6774);
   font-size: 12px;
+  line-height: 1.4;
 }
+
 .tapizado-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 7px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ultra-gray-200, #e3e6eb);
 }
+
 .tapizado-chip {
   display: inline-flex;
   align-items: center;
+  min-width: 0;
   max-width: 100%;
-  gap: 7px;
-  padding: 6px 8px 6px 10px;
-  border: 1px solid var(--ultra-gray-200, #ddd);
-  border-radius: 18px;
-  background: var(--ultra-surface, #fff);
+  min-height: 30px;
+  gap: 6px;
+  padding: 3px 5px 3px 9px;
+  border: 1px solid var(--ultra-gray-200, #e3e6eb);
+  border-radius: 8px;
+  background: var(--ultra-gray-50, #f7f8fa);
   font-size: 12px;
 }
+
+.tapizado-chip strong {
+  color: var(--ultra-orange, #e54525);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.tapizado-chip__nombre {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .tapizado-chip button {
-  border: none;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
   background: transparent;
-  cursor: pointer;
-  font-weight: 700;
+  color: var(--ultra-gray-600, #5f6774);
   font-size: 18px;
   line-height: 1;
+  cursor: pointer;
 }
+
+.tapizado-chip button:hover,
+.tapizado-chip button:focus-visible {
+  color: var(--ultra-orange, #e54525);
+  background: var(--ultra-orange-soft, #fff0ea);
+}
+
 .tapizado-listado {
   display: flex;
   flex-direction: column;
-  max-height: 250px;
+  max-height: 245px;
+  min-height: 52px;
   overflow-y: auto;
-  border: 1px solid var(--ultra-gray-200, #ddd);
-  border-radius: 10px;
-}
-.tapizado-opcion {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--ultra-gray-200, #ddd);
-  font-size: 13px;
-}
-.tapizado-opcion:last-child { border-bottom: none; }
-.tapizado-vacio {
-  margin: 12px;
-  font-size: 12px;
-  color: var(--ultra-gray-600, #666);
-}
-@media (max-width: 560px) {
-  .tapizado-resumen { flex-direction: column; }
-  .tapizado-chip { max-width: 100%; overflow-wrap: anywhere; }
 }
 
-.tapizado-filtros {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+.tapizado-opcion {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--ultra-gray-200, #e3e6eb);
+  font-size: 13px;
 }
-.tapizado-filtros mat-form-field { min-width: 0; }
-@media (max-width: 560px) {
-  .tapizado-filtros { grid-template-columns: minmax(0, 1fr); }
+
+.tapizado-opcion:last-of-type {
+  border-bottom: 0;
+}
+
+.tapizado-opcion:hover {
+  background: var(--ultra-gray-50, #f7f8fa);
+}
+
+.tapizado-opcion ::ng-deep .mdc-form-field {
+  width: 100%;
+  min-height: 46px;
+}
+
+.tapizado-opcion ::ng-deep .mdc-label {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 3px 7px;
+  min-width: 0;
+  width: 100%;
+}
+
+.tapizado-opcion__codigo {
+  color: var(--ultra-orange, #e54525);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tapizado-opcion__nombre {
+  min-width: 0;
+  color: var(--ultra-gray-900, #24272d);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.tapizado-opcion__marca {
+  color: var(--ultra-gray-600, #5f6774);
+  font-size: 12px;
+}
+
+.tapizado-vacio {
+  padding: 16px;
+  margin: 0;
+  color: var(--ultra-gray-600, #5f6774);
+  font-size: 12px;
+  text-align: center;
+}
+
+.tapizado-pie {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 9px 14px;
+  background: var(--ultra-gray-50, #f7f8fa);
+  border-top: 1px solid var(--ultra-gray-200, #e3e6eb);
+}
+
+@media (max-width: 760px) {
+  .tapizado-campos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tapizado-buscador {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 500px) {
+  .tapizado-campos {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .tapizado-buscador {
+    grid-column: auto;
+  }
+
+  .tapizado-resumen,
+  .tapizado-pie {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .tapizado-modo p {
+    margin-left: 0;
+  }
 }
