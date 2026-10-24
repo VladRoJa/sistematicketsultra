@@ -484,7 +484,7 @@ def consultar_avance_tapizado(ticket_id):
     if not ticket or ticket.tipo_trabajo != TIPO_TRABAJO_TAPIZADO:
         return jsonify({"mensaje": "Ticket de tapizado no encontrado"}), 404
 
-    editable = puede_editar_recepcion_tapizado(
+    editable = bool(current_app.config.get("TICKETS_TAPIZADO_RECEPCION_ENABLED", False)) and puede_editar_recepcion_tapizado(
         user, ticket,
         es_coordinador=has_maintenance_coordination_permission(user),
         es_jefe_regional=is_regional_maintenance_lead(user),
