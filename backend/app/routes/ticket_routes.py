@@ -510,6 +510,9 @@ def cambiar_recepcion_aparato(ticket_id, inventario_id):
     if not user:
         return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
+    if not current_app.config.get("TICKETS_TAPIZADO_RECEPCION_ENABLED", False):
+        return jsonify({"mensaje": "La recepción parcial de Tapizado aún no está habilitada."}), 409
+
     # Serializar modificaciones del ticket (incluye cambios de historial).
     ticket = (
         Ticket.query
