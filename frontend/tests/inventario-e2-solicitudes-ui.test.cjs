@@ -114,7 +114,10 @@ test('E2: estructura Angular separada y botones disponibles sin editar inventari
   assert.match(parent, /cerrarSolicitudes\(\)/);
   assert.match(css, /\.solicitud-panel\s*\{/);
   assert.match(html, /no se modifica/);
-  assert.match(html, /No se permite aprobar ni aplicar/);
+  assert.match(html, /class="solicitud-bandeja__autorizar" disabled/);
+  assert.match(html, /class="solicitud-bandeja__rechazar" disabled/);
+  assert.doesNotMatch(html, /\(click\)="aprobar/);
+  assert.doesNotMatch(html, /\(click\)="rechazar/);
   assert.match(service, /crearSolicitudCorreccion/);
   assert.match(service, /listarSolicitudesCorreccion/);
   assert.match(service, /obtenerSolicitudCorreccion/);
@@ -243,18 +246,69 @@ test('E2 UX: modal centrado y compacto conserva scroll accesible en pantallas ba
   assert.match(html, /\(click\)="abrirSeguimiento\(\)"/);
 });
 
-test('E2 UX: seguimiento en columnas y filtros compactos sin alterar permisos ni acciones', () => {
+test('E2 UX: bandeja con selección por página, detalles por fila y decisiones E3 bloqueadas', () => {
   assert.match(html, /class="solicitud-grid solicitud-filtros"/);
-  assert.match(html, /class="solicitud-seguimiento-layout"/);
-  assert.match(html, /\[class\.solicitud-seguimiento-layout--detalle\]="!!detalle"/);
-  assert.match(html, /class="solicitud-seguimiento-lista"/);
-  assert.match(html, /\[class\.solicitud-item--seleccionada\]="detalle\?\.id === solicitud\.id"/);
-  assert.match(html, /aria-label="Detalle de solicitud"/);
-  assert.match(css, /\.solicitud-filtros\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/s);
-  assert.match(css, /\.solicitud-seguimiento-layout--detalle\s*\{[^}]*display:\s*grid;/s);
-  assert.match(css, /\.solicitud-seguimiento-layout--detalle\s*\{[^}]*grid-template-columns:/s);
-  assert.match(css, /@media \(max-width:\s*760px\)/);
-  assert.match(css, /@media \(max-width:\s*640px\)/);
-  assert.match(html, /\(click\)="consultarDetalle\(solicitud\.id\)"/);
+  assert.match(html, /class="solicitud-bandeja__barra"/);
+  assert.match(html, /\[checked\]="todosSeleccionadosPagina"/);
+  assert.match(html, /\[indeterminate\]="algunosSeleccionadosPagina"/);
+  assert.match(html, /\(change\)="alternarPagina\(\)"/);
+  assert.match(html, /\(change\)="alternarSeleccion\(solicitud\.id\)"/);
+  assert.match(html, /\[disabled\]="solicitud\.estado !== 'PENDING'"/);
+  assert.match(html, /\(click\)="toggleDetalle\(solicitud\.id\)"/);
+  assert.match(html, /\[attr\.aria-expanded\]="detalleIdAbierto === solicitud\.id"/);
+  assert.match(html, /Autorizar seleccionadas/);
+  assert.match(html, /Rechazar seleccionadas/);
+  assert.match(html, /class="solicitud-bandeja__autorizar" disabled/);
+  assert.match(html, /class="solicitud-bandeja__rechazar" disabled/);
+  assert.match(css, /\.solicitud-bandeja__lista\s*\{[^}]*max-height:/s);
+  assert.match(css, /\.solicitud-filtros\s*\{[^}]*repeat\(3,/s);
   assert.doesNotMatch(html, /aprobarSolicitud\(|rechazarSolicitud\(|aplicarCorreccion\(/);
+  assert.doesNotMatch(src, /\.(aprobarSolicitud|rechazarSolicitud|aplicarCorreccion)\(/);
+});
+
+test('E2: solo PENDING se seleccionan y seleccionar página nunca incluye otras páginas', () => {
+  const { vm } = fixture({ referencia: null, vistaInicial: 'seguimiento' });
+  vm.solicitudes = [
+    { id: 11, estado: 'PENDING', tipo: 'MASTER_FIELD', sucursal_id: 7 },
+    { id: 12, estado: 'REJECTED', tipo: 'NOT_LOCATED', sucursal_id: 7 },
+    { id: 13, estado: 'PENDING', tipo: 'QUANTITY_DIFFERENCE', sucursal_id: 8 },
+  ];
+  vm.totalSolicitudes = 200;
+  vm.alternarSeleccion(12);
+  assert.equal(vm.totalSeleccionados, 0);
+  vm.alternarPagina();
+  assert.equal(vm.totalSeleccionados, 2);
+  assert.equal(vm.estaSeleccionada(11), true);
+  assert.equal(vm.estaSeleccionada(13), true);
+  assert.equal(vm.estaSeleccionada(12), false);
+  assert.equal(vm.todosSeleccionadosPagina, true);
+  vm.alternarPagina();
+  assert.equal(vm.totalSeleccionados, 0);
+});
+
+test('E2: filtros y páginas limpian selección para evitar aprobar fuera del contexto visible', () => {
+  const { vm, calls } = fixture({ referencia: null, vistaInicial: 'seguimiento' });
+  vm.alternarSeleccion(7);
+  assert.equal(vm.totalSeleccionados, 1);
+  vm.cambiarFiltros();
+  assert.equal(vm.totalSeleccionados, 0);
+  vm.alternarSeleccion(7);
+  vm.totalSolicitudes = 26;
+  vm.cambiarPagina(1);
+  assert.equal(vm.totalSeleccionados, 0);
+  assert.equal(calls.gets.at(-1).page, 2);
+});
+
+test('E2: detalles se expanden bajo demanda sin alterar la selección', () => {
+  const { vm, calls } = fixture({ referencia: null, vistaInicial: 'seguimiento' });
+  vm.alternarSeleccion(7);
+  vm.toggleDetalle(7);
+  assert.deepEqual(calls.details, [7]);
+  assert.equal(vm.detalleIdAbierto, 7);
+  assert.equal(vm.detalle.id, 7);
+  assert.equal(vm.totalSeleccionados, 1);
+  vm.toggleDetalle(7);
+  assert.equal(vm.detalle, null);
+  assert.equal(vm.detalleIdAbierto, null);
+  assert.equal(vm.totalSeleccionados, 1);
 });

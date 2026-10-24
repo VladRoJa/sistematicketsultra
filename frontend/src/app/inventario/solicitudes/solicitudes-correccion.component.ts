@@ -102,6 +102,9 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
   filtroEstado: 'PENDING' | 'APPROVED' | 'REJECTED' | 'todos' = 'todos';
   filtroTipo: TipoSolicitudInventario | 'todos' = 'todos';
   detalle: SolicitudCorreccionInventario | null = null;
+  detalleIdAbierto: number | null = null;
+  errorDetalle = '';
+  seleccionados = new Set<number>();
   private peticionListado?: Subscription;
   private peticionDetalle?: Subscription;
   private consultaVersion = 0;
@@ -156,6 +159,9 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
     this.filtroEstado = 'todos';
     this.filtroTipo = 'todos';
     this.detalle = null;
+    this.detalleIdAbierto = null;
+    this.errorDetalle = '';
+    this.seleccionados = new Set<number>();
     if (this.modo === 'seguimiento') this.cargarSolicitudes();
   }
 
@@ -169,6 +175,8 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
     if (this.guardando) return;
     this.modo = 'seguimiento';
     this.detalle = null;
+    this.detalleIdAbierto = null;
+    this.seleccionados = new Set<number>();
     this.pagina = 1;
     this.cargarSolicitudes();
   }
@@ -210,8 +218,69 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
   }
 
   cerrarDetalle(): void {
+    this.peticionDetalle?.unsubscribe();
     this.detalle = null;
+    this.detalleIdAbierto = null;
+    this.errorDetalle = '';
   }
+
+  // Solo se pueden seleccionar solicitudes pendientes de la página actual.
+  // La selección se reinicia en cada búsqueda o cambio de página: no alcanza
+  // silenciosamente otras sucursales, filtros o páginas.
+  get pendientesPagina(): SolicitudCorreccionInventario[] {
+    return this.solicitudes.filter(solicitud => solicitud.estado === 'PENDING');
+  }
+
+  get totalSeleccionados(): number {
+    return this.seleccionados.size;
+  }
+
+  get todosSeleccionadosPagina(): boolean {
+    return this.pendientesPagina.length > 0 &&
+      this.pendientesPagina.every(solicitud => this.seleccionados.has(solicitud.id));
+  }
+
+  get algunosSeleccionadosPagina(): boolean {
+    return this.pendientesPagina.some(solicitud => this.seleccionados.has(solicitud.id)) &&
+      !this.todosSeleccionadosPagina;
+  }
+
+  estaSeleccionada(id: number): boolean {
+    return this.seleccionados.has(id);
+  }
+
+  alternarSeleccion(id: number): void {
+    const solicitud = this.pendientesPagina.find(item => item.id === id);
+    if (!solicitud) return;
+    const nuevaSeleccion = new Set(this.seleccionados);
+    if (nuevaSeleccion.has(id)) nuevaSeleccion.delete(id);
+    else nuevaSeleccion.add(id);
+    this.seleccionados = nuevaSeleccion;
+  }
+
+  alternarPagina(): void {
+    const nuevaSeleccion = new Set<number>();
+    if (!this.todosSeleccionadosPagina) {
+      for (const solicitud of this.pendientesPagina) nuevaSeleccion.add(solicitud.id);
+    }
+    this.seleccionados = nuevaSeleccion;
+  }
+
+  resumenSolicitud(solicitud: SolicitudCorreccionInventario): string {
+    if (solicitud.tipo === 'UNREGISTERED_FIND') {
+      return solicitud.hallazgo_provisional?.['nombre'] || 'Artículo sin referencia oficial';
+    }
+    if (solicitud.tipo === 'MASTER_FIELD') {
+      return `${solicitud.campo || 'Dato maestro'}: ${this.mostrarDato(solicitud.valor_original)} → ${this.mostrarDato(solicitud.valor_propuesto)}`;
+    }
+    if (solicitud.tipo === 'QUANTITY_DIFFERENCE') {
+      const original = solicitud.valor_original as { stock?: number } | null;
+      const propuesto = solicitud.valor_propuesto as { cantidad_fisica?: number } | null;
+      return `Existencia: ${this.mostrarDato(original?.stock)} → ${this.mostrarDato(propuesto?.cantidad_fisica)}`;
+    }
+    return 'No localizado físicamente';
+  }
+
 
   get valorOficial(): string | number | null {
     if (!this.referencia) return null;
@@ -309,12 +378,13 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
 
   cambiarFiltros(): void {
     this.pagina = 1;
-    this.detalle = null;
     this.cargarSolicitudes();
   }
 
   cargarSolicitudes(): void {
     this.peticionListado?.unsubscribe();
+    this.cerrarDetalle();
+    this.seleccionados = new Set<number>();
     const version = ++this.consultaVersion;
     this.cargandoListado = true;
     this.errorListado = '';
@@ -341,12 +411,28 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
     });
   }
 
+  toggleDetalle(id: number): void {
+    if (this.detalleIdAbierto === id) {
+      this.cerrarDetalle();
+      return;
+    }
+    this.consultarDetalle(id);
+  }
+
   consultarDetalle(id: number): void {
     this.peticionDetalle?.unsubscribe();
     this.detalle = null;
+    this.errorDetalle = '';
+    this.detalleIdAbierto = id;
     this.peticionDetalle = this.inventario.obtenerSolicitudCorreccion(id).subscribe({
-      next: ({ solicitud }) => this.detalle = solicitud,
-      error: () => this.errorListado = 'No fue posible abrir el detalle de la solicitud.',
+      next: ({ solicitud }) => {
+        if (this.detalleIdAbierto === id) this.detalle = solicitud;
+      },
+      error: () => {
+        if (this.detalleIdAbierto === id) {
+          this.errorDetalle = 'No fue posible abrir este detalle.';
+        }
+      },
     });
   }
 

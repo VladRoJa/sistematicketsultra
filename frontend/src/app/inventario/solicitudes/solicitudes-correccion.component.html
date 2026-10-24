@@ -207,57 +207,100 @@
         {{ errorListado }} <button type="button" (click)="cargarSolicitudes()">Reintentar</button>
       </div>
 
-      <div class="solicitud-seguimiento-layout" [class.solicitud-seguimiento-layout--detalle]="!!detalle">
-        <div class="solicitud-seguimiento-lista">
-          <div *ngIf="!cargandoListado && !errorListado">
-        <div *ngIf="!solicitudes.length" class="solicitud-empty">
+      <section class="solicitud-bandeja" aria-label="Bandeja de solicitudes">
+        <div class="solicitud-bandeja__barra" *ngIf="!cargandoListado && !errorListado && solicitudes.length">
+          <label class="solicitud-bandeja__seleccion">
+            <input type="checkbox"
+              [checked]="todosSeleccionadosPagina"
+              [indeterminate]="algunosSeleccionadosPagina"
+              [disabled]="!pendientesPagina.length"
+              (change)="alternarPagina()" />
+            <span>Seleccionar pendientes de esta página</span>
+          </label>
+          <span class="solicitud-bandeja__conteo">
+            {{ totalSeleccionados }} seleccionadas · {{ totalSolicitudes }} resultados
+          </span>
+        </div>
+
+        <div *ngIf="!cargandoListado && !errorListado && !solicitudes.length" class="solicitud-empty">
           <mat-icon aria-hidden="true">assignment_late</mat-icon>
           <strong>Sin solicitudes para estos filtros</strong>
           <p>Las discrepancias enviadas aparecerán aquí con su estado.</p>
         </div>
-        <div class="solicitud-lista" *ngIf="solicitudes.length">
-          <button type="button" class="solicitud-item" *ngFor="let solicitud of solicitudes"
-            [class.solicitud-item--seleccionada]="detalle?.id === solicitud.id"
-            [attr.aria-pressed]="detalle?.id === solicitud.id"
-            (click)="consultarDetalle(solicitud.id)">
-            <span class="solicitud-item__primary">
-              <strong>#{{ solicitud.id }} · {{ etiquetasTipo[solicitud.tipo] }}</strong>
-              <small>{{ nombreSucursal(solicitud.sucursal_id) }} · {{ solicitud.inventario_id ? 'Artículo #' + solicitud.inventario_id : 'Sin referencia oficial' }}</small>
-              <small>{{ solicitud.creado_en_utc | date:'dd/MM/yyyy HH:mm' }}</small>
-            </span>
-            <span class="solicitud-status">{{ solicitud.estado }}</span>
-            <mat-icon aria-hidden="true">chevron_right</mat-icon>
-          </button>
+
+        <div class="solicitud-bandeja__lista" *ngIf="!cargandoListado && !errorListado && solicitudes.length">
+          <div class="solicitud-bandeja__fila" *ngFor="let solicitud of solicitudes"
+            [class.solicitud-bandeja__fila--abierta]="detalleIdAbierto === solicitud.id">
+            <div class="solicitud-bandeja__resumen">
+              <label class="solicitud-bandeja__check">
+                <input type="checkbox" [checked]="estaSeleccionada(solicitud.id)"
+                  [disabled]="solicitud.estado !== 'PENDING'"
+                  [attr.aria-label]="'Seleccionar solicitud ' + solicitud.id"
+                  (change)="alternarSeleccion(solicitud.id)" />
+              </label>
+              <div class="solicitud-bandeja__descripcion">
+                <strong>#{{ solicitud.id }} · {{ resumenSolicitud(solicitud) }}</strong>
+                <span>{{ nombreSucursal(solicitud.sucursal_id) }} · {{ etiquetasTipo[solicitud.tipo] }}</span>
+                <small>{{ solicitud.creado_en_utc | date:'dd/MM/yyyy HH:mm' }}</small>
+              </div>
+              <span class="solicitud-status">{{ solicitud.estado }}</span>
+              <button class="solicitud-bandeja__detalles" type="button"
+                [attr.aria-expanded]="detalleIdAbierto === solicitud.id"
+                (click)="toggleDetalle(solicitud.id)">
+                {{ detalleIdAbierto === solicitud.id ? 'Ocultar' : 'Detalles' }}
+                <mat-icon aria-hidden="true">{{ detalleIdAbierto === solicitud.id ? 'expand_less' : 'expand_more' }}</mat-icon>
+              </button>
+            </div>
+            <div class="solicitud-bandeja__expandido" *ngIf="detalleIdAbierto === solicitud.id">
+              <div *ngIf="!detalle && !errorDetalle" class="solicitud-progress" role="status">
+                <mat-spinner [diameter]="22"></mat-spinner> Consultando detalle...
+              </div>
+              <div *ngIf="errorDetalle" class="solicitud-alert solicitud-alert--error" role="alert">
+                {{ errorDetalle }}
+                <button type="button" (click)="consultarDetalle(solicitud.id)">Reintentar</button>
+              </div>
+              <section *ngIf="detalle?.id === solicitud.id" class="solicitud-detail"
+                aria-label="Detalle de solicitud">
+                <div class="solicitud-detail__title">
+                  <strong>Detalle de solicitud #{{ detalle?.id }}</strong>
+                  <button type="button" (click)="cerrarDetalle()" aria-label="Cerrar detalle">
+                    <mat-icon aria-hidden="true">close</mat-icon>
+                  </button>
+                </div>
+                <dl>
+                  <div><dt>Estado</dt><dd>{{ detalle?.estado }}</dd></div>
+                  <div><dt>Registró</dt><dd>Usuario #{{ detalle?.creado_por_usuario_id }}</dd></div>
+                  <div><dt>Fecha física</dt><dd>{{ detalle?.fecha_observacion_local || 'No indicada' }}</dd></div>
+                  <div><dt>Dato original</dt><dd>{{ mostrarDato(detalle?.valor_original) }}</dd></div>
+                  <div><dt>Propuesta</dt><dd>{{ mostrarDato(detalle?.valor_propuesto || detalle?.hallazgo_provisional) }}</dd></div>
+                  <div><dt>Motivo</dt><dd>{{ detalle?.motivo }}</dd></div>
+                  <div><dt>Evidencia</dt><dd>{{ detalle?.evidencia_descriptiva || 'Sin nota adicional' }}</dd></div>
+                </dl>
+                <p>En E3, autorizar aplicará la corrección y registrará su movimiento o auditoría.</p>
+              </section>
+            </div>
+          </div>
         </div>
-        <div *ngIf="totalSolicitudes > tamanoPagina" class="solicitud-pager">
-          <span>{{ totalSolicitudes }} solicitudes · Página {{ pagina }} de {{ totalPaginas }}</span>
+
+        <div *ngIf="!cargandoListado && !errorListado && totalSolicitudes > tamanoPagina"
+          class="solicitud-pager">
+          <span>Página {{ pagina }} de {{ totalPaginas }} · {{ totalSolicitudes }} solicitudes</span>
           <div>
             <button type="button" (click)="cambiarPagina(-1)" [disabled]="pagina <= 1">Anterior</button>
             <button type="button" (click)="cambiarPagina(1)" [disabled]="pagina >= totalPaginas">Siguiente</button>
           </div>
         </div>
+
+        <div *ngIf="!cargandoListado && !errorListado" class="solicitud-bandeja__acciones">
+          <span>La autorización y el rechazo formal se habilitarán en E3, con permisos y auditoría.</span>
+          <div>
+            <button type="button" class="solicitud-bandeja__rechazar" disabled
+              title="Pendiente de backend transaccional E3">Rechazar seleccionadas</button>
+            <button type="button" class="solicitud-bandeja__autorizar" disabled
+              title="Pendiente de backend transaccional E3">Autorizar seleccionadas</button>
           </div>
         </div>
-
-      <section *ngIf="detalle" class="solicitud-detail" aria-label="Detalle de solicitud">
-        <div class="solicitud-detail__title">
-          <strong>Solicitud #{{ detalle.id }}</strong>
-          <button type="button" (click)="cerrarDetalle()" aria-label="Cerrar detalle">
-            <mat-icon aria-hidden="true">close</mat-icon>
-          </button>
-        </div>
-        <dl>
-          <div><dt>Estado</dt><dd>{{ detalle.estado }}</dd></div>
-          <div><dt>Registró</dt><dd>Usuario #{{ detalle.creado_por_usuario_id }}</dd></div>
-          <div><dt>Fecha física</dt><dd>{{ detalle.fecha_observacion_local || 'No indicada' }}</dd></div>
-          <div><dt>Dato original</dt><dd>{{ mostrarDato(detalle.valor_original) }}</dd></div>
-          <div><dt>Propuesta</dt><dd>{{ mostrarDato(detalle.valor_propuesto || detalle.hallazgo_provisional) }}</dd></div>
-          <div><dt>Motivo</dt><dd>{{ detalle.motivo }}</dd></div>
-          <div><dt>Evidencia</dt><dd>{{ detalle.evidencia_descriptiva || 'Sin nota adicional' }}</dd></div>
-        </dl>
-        <p>No se permite aprobar ni aplicar correcciones desde E2.</p>
       </section>
-      </div>
     </div>
 
     <footer class="solicitud-footer">
