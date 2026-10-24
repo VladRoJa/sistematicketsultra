@@ -207,7 +207,9 @@
         {{ errorListado }} <button type="button" (click)="cargarSolicitudes()">Reintentar</button>
       </div>
 
-      <div *ngIf="!cargandoListado && !errorListado">
+      <div class="solicitud-seguimiento-layout" [class.solicitud-seguimiento-layout--detalle]="!!detalle">
+        <div class="solicitud-seguimiento-lista">
+          <div *ngIf="!cargandoListado && !errorListado">
         <div *ngIf="!solicitudes.length" class="solicitud-empty">
           <mat-icon aria-hidden="true">assignment_late</mat-icon>
           <strong>Sin solicitudes para estos filtros</strong>
@@ -215,6 +217,8 @@
         </div>
         <div class="solicitud-lista" *ngIf="solicitudes.length">
           <button type="button" class="solicitud-item" *ngFor="let solicitud of solicitudes"
+            [class.solicitud-item--seleccionada]="detalle?.id === solicitud.id"
+            [attr.aria-pressed]="detalle?.id === solicitud.id"
             (click)="consultarDetalle(solicitud.id)">
             <span class="solicitud-item__primary">
               <strong>#{{ solicitud.id }} · {{ etiquetasTipo[solicitud.tipo] }}</strong>
@@ -232,7 +236,8 @@
             <button type="button" (click)="cambiarPagina(1)" [disabled]="pagina >= totalPaginas">Siguiente</button>
           </div>
         </div>
-      </div>
+          </div>
+        </div>
 
       <section *ngIf="detalle" class="solicitud-detail" aria-label="Detalle de solicitud">
         <div class="solicitud-detail__title">
@@ -252,6 +257,7 @@
         </dl>
         <p>No se permite aprobar ni aplicar correcciones desde E2.</p>
       </section>
+      </div>
     </div>
 
     <footer class="solicitud-footer">
