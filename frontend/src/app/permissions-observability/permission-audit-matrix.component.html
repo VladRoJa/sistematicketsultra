@@ -61,14 +61,14 @@
     </div>
   </section>
 
-  <div class="audit-notice">El catálogo es parcial. Una acción no mapeada no significa acceso denegado. Los resultados marcados como «sin comprobar» no son autorizaciones.</div>
+  <div class="audit-notice">Auditoría de guards base, no autorización para operar sobre un ticket, bitácora, equipo o sucursal. El catálogo es parcial; una acción no mapeada no significa acceso denegado. «Sin comprobar» no equivale a denegado.</div>
   <p class="audit-error" role="alert" *ngIf="error">{{ error }}</p>
   <p class="audit-loading" role="status" *ngIf="loading">Evaluando página de resultados…</p>
 
   <ng-container *ngIf="result as data">
     <div class="audit-stats" aria-label="Resumen de todos los resultados filtrados">
-      <div><small>Permitidos comprobados</small><strong>{{ data.summary.allowed }}</strong></div>
-      <div><small>Denegados comprobados</small><strong>{{ data.summary.denied }}</strong></div>
+      <div><small>Permitidos (guard base)</small><strong>{{ data.summary.allowed }}</strong></div>
+      <div><small>Denegados (guard base)</small><strong>{{ data.summary.denied }}</strong></div>
       <div><small>Sin comprobar</small><strong>{{ data.summary.unknown }}</strong></div>
       <div><small>Diferencias comprobables</small><strong>{{ data.summary.differences }}</strong></div>
       <div><small>Coincidencias</small><strong>{{ data.summary.matches }}</strong></div>
