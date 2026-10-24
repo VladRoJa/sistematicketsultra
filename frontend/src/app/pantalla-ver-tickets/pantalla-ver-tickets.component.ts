@@ -100,7 +100,18 @@ export interface Ticket {
     nombre: string | null;
     codigo_interno: string | null;
     familia_equipo_id: number | null;
+    recibido?: boolean;
+    recibido_en?: string | null;
+    recibido_por?: string | null;
   }> | null;
+  avance_tapizado?: {
+    total: number;
+    recibidos: number;
+    pendientes: number;
+    porcentaje: number;
+    completo: boolean;
+    parcial: boolean;
+  } | null;
   subcategoria?: string | null;
   detalle?: string | null;
   historial_fechas?: Array<{
@@ -1167,6 +1178,10 @@ private normalizarTextoFiltro(value: any): string {
       maxWidth: '96vw',
       maxHeight: '90vh',
       data: ticket
+    }).afterClosed().subscribe((seActualizo: boolean) => {
+      if (seActualizo === true) {
+        this.refrescarTicketsPreservandoFiltros();
+      }
     });
   }
   inicializarCategoriaTemp() {
@@ -2205,7 +2220,9 @@ public getNombreEquipoOInventario(ticket: Ticket): string {
 
 getNombreCortoAparato(ticket: Ticket): string {
   if (ticket.tipo_trabajo === 'TAPIZADO' && (ticket.aparatos_ids?.length ?? 0) > 0) {
-    return `Tapizado · ${ticket.aparatos_ids!.length} aparatos`;
+    const total = ticket.avance_tapizado?.total ?? ticket.aparatos_ids!.length;
+    const recibidos = ticket.avance_tapizado?.recibidos ?? 0;
+    return `Tapizado · ${recibidos}/${total} recibidos`;
   }
   if (!ticket.inventario || !ticket.inventario.nombre)
     return "—";
@@ -2228,7 +2245,7 @@ getNombreCortoAparato(ticket: Ticket): string {
 getResumenTapizado(ticket: Ticket): string {
   if (ticket.tipo_trabajo !== 'TAPIZADO') return '';
   return (ticket.aparatos || []).map(eq =>
-    `${eq.codigo_interno || 'Sin código'} · ${eq.nombre || 'Equipo'}`
+    `${eq.codigo_interno || 'Sin código'} · ${eq.nombre || 'Equipo'} · ${eq.recibido ? 'Recibido' : 'Pendiente'}`
   ).join(' | ');
 }
 

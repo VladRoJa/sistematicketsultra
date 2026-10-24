@@ -39,6 +39,10 @@ class TicketAparatoORM(db.Model):
         server_default=db.func.now(),
     )
 
+    # M4: NULL implica pendiente. El actor y la fecha se actualizan juntos.
+    recibido_en_utc = db.Column(db.DateTime(timezone=True), nullable=True)
+    recibido_por = db.Column(db.String(100), nullable=True)
+
     ticket = db.relationship(
         "Ticket",
         back_populates="aparatos_asociados",
@@ -46,6 +50,11 @@ class TicketAparatoORM(db.Model):
     inventario = db.relationship("InventarioGeneral")
 
     __table_args__ = (
+        db.CheckConstraint(
+            "(recibido_en_utc IS NULL AND recibido_por IS NULL) OR "
+            "(recibido_en_utc IS NOT NULL AND recibido_por IS NOT NULL)",
+            name="ck_ticket_aparatos_recepcion_par",
+        ),
         db.PrimaryKeyConstraint(
             "ticket_id",
             "inventario_id",

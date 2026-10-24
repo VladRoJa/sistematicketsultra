@@ -229,8 +229,13 @@ class Ticket(db.Model):
         # El principal se mantiene primero; los demás se deduplican.
         aparatos_ids = ([self.aparato_id] if self.aparato_id is not None else [])
         aparatos_info = None
+        avance_tapizado = None
         if self.tipo_trabajo == 'TAPIZADO':
+            from app.services.ticket_tapizado_recepcion_service import (
+                resumen_recepcion_tapizado,
+            )
             vinculos = list(self.aparatos_asociados or [])
+            avance_tapizado = resumen_recepcion_tapizado(self)
             for vinculo in vinculos:
                 if vinculo.inventario_id not in aparatos_ids:
                     aparatos_ids.append(vinculo.inventario_id)
@@ -240,8 +245,17 @@ class Ticket(db.Model):
                     'nombre': vinculo.inventario.nombre if vinculo.inventario else None,
                     'codigo_interno': vinculo.inventario.codigo_interno if vinculo.inventario else None,
                     'familia_equipo_id': vinculo.inventario.familia_equipo_id if vinculo.inventario else None,
+                    'recibido': vinculo.recibido_en_utc is not None,
+                    'recibido_en': safe_dt_iso(vinculo.recibido_en_utc),
+                    'recibido_por': vinculo.recibido_por,
                 }
-                for vinculo in vinculos
+                for vinculo in sorted(
+                    vinculos,
+                    key=lambda v: (
+                        v.inventario_id != self.aparato_id,
+                        v.inventario_id,
+                    ),
+                )
             ]
 
         return {
@@ -274,6 +288,7 @@ class Ticket(db.Model):
             'aparato_id': self.aparato_id,
             'aparatos_ids': aparatos_ids,
             'aparatos': aparatos_info,
+            'avance_tapizado': avance_tapizado,
             'tipo_trabajo': self.tipo_trabajo,
             'clasificacion_id': self.clasificacion_id,
             'clasificacion_nombre': self.clasificacion and self.clasificacion.nombre,

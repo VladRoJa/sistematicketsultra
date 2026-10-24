@@ -18,6 +18,34 @@ export interface TicketValidationSummary {
   severity: 'none' | 'normal' | 'warning' | 'critical';
 }
 
+export interface AparatoTapizadoRecepcion {
+  id: number;
+  nombre: string | null;
+  codigo_interno: string | null;
+  familia_equipo_id: number | null;
+  recibido: boolean;
+  recibido_en: string | null;
+  recibido_por: string | null;
+}
+
+export interface AvanceTapizado {
+  total: number;
+  recibidos: number;
+  pendientes: number;
+  porcentaje: number;
+  completo: boolean;
+  parcial: boolean;
+}
+
+export interface DetalleRecepcionTapizado {
+  ticket_id: number;
+  estado?: string;
+  aparatos: AparatoTapizadoRecepcion[];
+  avance: AvanceTapizado;
+  puede_editar?: boolean;
+  historial_fechas?: any[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class TicketService {
   private apiUrl = `${environment.apiUrl}/tickets`;
@@ -241,6 +269,27 @@ getValidationSummary(): Observable<TicketValidationSummary> {
       `${this.apiUrl}/cierre/rechazar-creador/${id}`,
       body,
       { headers, withCredentials: true }
+    );
+  }
+
+  // ── Tapizado M4: recepción individual controlada en backend ───────
+  consultarRecepcionTapizado(id: number): Observable<DetalleRecepcionTapizado> {
+    return this.http.get<DetalleRecepcionTapizado>(
+      `${this.apiUrl}/tapizado/${id}/avance`,
+      { headers: this.authJsonHeaders(), withCredentials: true },
+    );
+  }
+
+  registrarRecepcionTapizado(
+    ticketId: number,
+    inventarioId: number,
+    recibido: boolean,
+    motivo?: string
+  ): Observable<DetalleRecepcionTapizado> {
+    return this.http.patch<DetalleRecepcionTapizado>(
+      `${this.apiUrl}/tapizado/${ticketId}/aparatos/${inventarioId}/recepcion`,
+      { recibido, motivo: motivo ?? null },
+      { headers: this.authJsonHeaders(), withCredentials: true },
     );
   }
 

@@ -43,7 +43,7 @@ test('v1 de un aparato conserva selector clásico y payload intacto', () => {
 });
 
 test('bandeja muestra número de aparatos sin crear filas nuevas', () => {
-  assert.match(tickets, /Tapizado · \$\{ticket\.aparatos_ids!\.length\} aparatos/);
+  assert.match(tickets, /Tapizado · \$\{recibidos\}\/\$\{total\} recibidos/);
   assert.match(tickets, /getResumenTapizado\(ticket: Ticket\)/);
   assert.match(ticketsHtml, /\[matTooltip\]="getResumenTapizado\(ticket\)/);
 });

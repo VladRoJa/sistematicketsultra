@@ -134,3 +134,37 @@ Ejemplo de body (ilustrativo; **aún no activar desde el frontend**):
 7. Revertir el flag a false si aparece discrepancia; los tickets previamente creados permanecen en DB y deben seguir siendo consultables.
 
 **Históricos #941/#2301/#2831/#3191–#3194:** no se editan ni vinculan automáticamente. La corrección requerirá inventario exacto y autorización específica.
+
+## M4 — Recepción parcial por aparato (2026-10-23)
+
+**Problema:** el ticket #3209 demuestra que seis equipos pueden salir a tapizarse y regresar en entregas parciales. El estado global y el cierre no pueden sustituir la recepción individual.
+
+### Persistencia y trazabilidad
+- Alembic `m23c10202623` agrega a `ticket_aparatos` `recibido_en_utc` y `recibido_por`, ambos opcionales y vinculados por CHECK. **NULL** implica pendiente.
+- Los tickets M3 existentes, incluido #3209, inician con sus equipos **pendientes**; ningún backfill de recepciones ni reasignación automática.
+- Cada check confirma recepción con actor y timestamp UTC. Reversión exige motivo (máximo 500 caracteres) y deja evento `tapizado_recepcion_aparato_v1` en `tickets.historial_fechas`, con equipo/código, estado previo/nuevo y usuario.
+- Cambiar estado individual no modifica la existencia, familia, sucursal, código ni stock del aparato. No modifica automáticamente el estado global del ticket.
+- `avance_tapizado` se calcula por lecturas de registros vinculados: `total`, `recibidos`, `pendientes`, `porcentaje`, `parcial` y `completo`. **No se persiste porcentaje**.
+
+### API y permisos
+- `GET /api/tickets/tapizado/<ticket_id>/avance`: requiere JWT, lectura scoped con `filtrar_tickets_por_usuario`. Devuelve equipos, progreso, autorización de edición e historial.
+- `PATCH /api/tickets/tapizado/<ticket_id>/aparatos/<inventario_id>/recepcion`, JSON `{"recibido":true}` o `{"recibido":false,"motivo":"corrección"}`: requiere JWT, scope del ticket, permiso específico y lock de ticket. No se aceptan operaciones sobre equipos ajenos, cambios duplicados ni edición después de `por_validar` o `finalizado`.
+- Editan solo administradores, gerente de la sucursal destino, coordinación autorizada con scope, jefe regional explícito en su alcance, o técnico de mantenimiento asignado al ticket. Ser lector o tener acceso de lectura no concede edición.
+- Flag de despliegue independiente `TICKETS_TAPIZADO_RECEPCION_ENABLED` (default `false`). La creación multiaparato conserva `TICKETS_TAPIZADO_MULTI_ENABLED`, sin dependencia de M4.
+
+### Cierre y presentación
+- Con 0/6, 3/6 o 5/6 recepciones, se bloquea `cierre/solicitar`, `cierre/gerente-desde-cero` y `cierre/aceptar-creador` con HTTP 409. Con 6/6 puede continuar el flujo normal según rol, atención y validaciones de Mantenimiento; **no se cierra automáticamente**.
+- En bandeja: `Tapizado · 3/6 recibidos` y tooltip por equipo con nombre/código y pendiente/recibido.
+- Modal de resumen: seis equipos, check individual, progreso porcentual, actor, fecha/hora, historial con código, corrección auditada con motivo. Si falla el GET, la interfaz conserva lectura pero no permite escritura.
+- Al cerrar el modal después de cambios, la bandeja refresca preservando filtros.
+
+### Despliegue en orden
+1. Aprobar CI e integrar PR. M4 requiere migración antes de iniciar código nuevo, para evitar que el ORM lea columnas inexistentes.
+2. En servidor: `git pull` → `docker compose build backend frontend` → `docker compose run --rm --no-deps backend flask db upgrade heads` → `docker compose up -d --no-build backend frontend`.
+3. Con `TICKETS_TAPIZADO_RECEPCION_ENABLED=false`, confirmar visualmente el detalle de #3209 en solo lectura y la migración aplicada.
+4. Habilitar flag M4 y recrear backend. Sin cambiar el flag M3 (ya activo). Probar **sin marcar todos** una recepción y ver contador 1/6; verificar motivo en reversión y regresar a 0/6. No cerrar el ticket #3209 durante QA si se usa como referencia.
+5. Confirmar en API que un usuario sin permisos de mantenimiento/gerencia recibe 403/404, y un ticket parcial recibe 409 al intentar solicitar cierre.
+6. Si aparece discrepancia, apagar **solo** `TICKETS_TAPIZADO_RECEPCION_ENABLED`; no borrar columnas ni recepciones.
+
+### Límite funcional
+`Recibido` se refiere a entrega física de tapicería; no implica instalado o listo para uso. No existe entrega automática por lotes ni progresión de ticket por porcentaje. El cierre sigue siendo explícito y validado.
