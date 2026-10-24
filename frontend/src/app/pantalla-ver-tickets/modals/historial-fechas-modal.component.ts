@@ -63,7 +63,15 @@ export class HistorialFechasModalComponent implements OnInit {
 
   ngOnInit(): void {
     if (!this.esTapizado) return;
-    this.aparatosTapizado = this.data.aparatos || [];
+    this.aparatosTapizado = (this.data.aparatos || []).map(ap => ({
+      id: ap.id,
+      nombre: ap.nombre,
+      codigo_interno: ap.codigo_interno,
+      familia_equipo_id: ap.familia_equipo_id,
+      recibido: ap.recibido === true,
+      recibido_en: ap.recibido_en ?? null,
+      recibido_por: ap.recibido_por ?? null,
+    }));
     this.avanceTapizado = this.data.avance_tapizado || null;
     this.cargandoRecepcion = true;
     this.ticketService.consultarRecepcionTapizado(this.data.id).subscribe({
