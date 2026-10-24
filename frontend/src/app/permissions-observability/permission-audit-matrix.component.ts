@@ -7,6 +7,9 @@ import {
   PermissionsObservabilityService,
 } from './permissions-observability.service';
 import {
+  permissionActionExplanation, permissionActionLabel, permissionActionPurpose,
+} from './permission-action-labels';
+import {
   AuditDecisionFilter, AuditGroupBy, AuditPerspective, AuditSortBy,
   PermissionVisualAuditService, VisualAuditFilters, VisualAuditResponse,
   VisualAuditRow,
@@ -95,6 +98,18 @@ export class PermissionAuditMatrixComponent implements OnInit {
 
   get moduleActions(): PermissionAction[] {
     return this.actions.filter(action => !this.moduleKey || action.module_key === this.moduleKey);
+  }
+
+  actionLabel(key: string | null | undefined, fallback?: string | null): string {
+    return permissionActionLabel(key, fallback);
+  }
+
+  actionExplanation(key: string | null | undefined, fallback?: string | null): string {
+    return permissionActionExplanation(key, fallback);
+  }
+
+  actionPurpose(key: string | null | undefined): string {
+    return permissionActionPurpose(key);
   }
 
   setView(view: AuditPerspective): void {
@@ -300,11 +315,19 @@ export class PermissionAuditMatrixComponent implements OnInit {
       'legacy_allowed', 'legacy_source', 'legacy_reason', 'catalog_allowed',
       'catalog_source', 'catalog_reason', 'comparison', 'scope',
     ];
+    const headers = [
+      ...fields, 'action_label', 'action_purpose', 'action_explanation',
+    ];
     const value = (raw: unknown): string =>
       '"' + String(raw === null || raw === undefined ? '?' : raw)
         .replace(/"/g, '""').replace(/^[=+@-]/, "'$&") + '"';
-    const csv = '\uFEFF' + fields.join(',') + '\r\n' +
-      this.rows.map(row => fields.map(field => value(row[field])).join(',')).join('\r\n');
+    const csv = '\uFEFF' + headers.join(',') + '\r\n' +
+      this.rows.map(row => [
+        ...fields.map(field => row[field]),
+        this.actionLabel(row.action_key, row.action_name),
+        this.actionPurpose(row.action_key),
+        this.actionExplanation(row.action_key),
+      ].map(value).join(',')).join('\r\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');

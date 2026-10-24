@@ -8,6 +8,9 @@ import { finalize, forkJoin } from 'rxjs';
 import { SessionService } from '../core/auth/session.service';
 import { PermissionAuditMatrixComponent } from './permission-audit-matrix.component';
 import {
+  permissionActionExplanation, permissionActionLabel, permissionActionPurpose,
+} from './permission-action-labels';
+import {
   EffectivePermissionAction,
   EffectivePermissionResponse,
   PermissionAction,
@@ -469,6 +472,8 @@ export class PermissionsObservabilityComponent implements OnInit {
       const searchable = [
         action.full_key,
         action.name,
+        this.actionLabel(action.full_key, action.name),
+        this.actionExplanation(action.full_key, action.description),
         action.reason,
         action.source,
         action.scope_type,
@@ -596,6 +601,18 @@ export class PermissionsObservabilityComponent implements OnInit {
     return module?.name || moduleKey || 'Sin módulo';
   }
 
+  actionLabel(key: string | null | undefined, fallback?: string | null): string {
+    return permissionActionLabel(key, fallback);
+  }
+
+  actionExplanation(key: string | null | undefined, fallback?: string | null): string {
+    return permissionActionExplanation(key, fallback);
+  }
+
+  actionPurpose(key: string | null | undefined): string {
+    return permissionActionPurpose(key);
+  }
+
   getSummaryCardClass(card: SummaryCard): string {
     return `permissions-summary-card permissions-summary-card--${card.tone}`;
   }
@@ -655,6 +672,9 @@ export class PermissionsObservabilityComponent implements OnInit {
       full_key: action.full_key,
       key: action.key,
       name: action.name,
+      friendly_name: this.actionLabel(action.full_key, action.name),
+      friendly_description: this.actionExplanation(action.full_key, action.description),
+      purpose: this.actionPurpose(action.full_key),
       description: action.description || '',
       risk_level: action.risk_level,
       is_active: action.is_active ? 'true' : 'false',
@@ -703,6 +723,9 @@ export class PermissionsObservabilityComponent implements OnInit {
       module_name: this.getModuleName(action.module_key),
       full_key: action.full_key,
       name: action.name,
+      friendly_name: this.actionLabel(action.full_key, action.name),
+      friendly_description: this.actionExplanation(action.full_key, action.description),
+      purpose: this.actionPurpose(action.full_key),
       risk_level: action.risk_level,
       allowed: action.allowed ? 'true' : 'false',
       source: action.source,
