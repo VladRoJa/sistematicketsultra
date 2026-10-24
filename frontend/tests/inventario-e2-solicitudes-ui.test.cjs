@@ -242,3 +242,19 @@ test('E2 UX: modal centrado y compacto conserva scroll accesible en pantallas ba
   assert.match(html, /\(click\)="enviar\(\)"/);
   assert.match(html, /\(click\)="abrirSeguimiento\(\)"/);
 });
+
+test('E2 UX: seguimiento en columnas y filtros compactos sin alterar permisos ni acciones', () => {
+  assert.match(html, /class="solicitud-grid solicitud-filtros"/);
+  assert.match(html, /class="solicitud-seguimiento-layout"/);
+  assert.match(html, /\[class\.solicitud-seguimiento-layout--detalle\]="!!detalle"/);
+  assert.match(html, /class="solicitud-seguimiento-lista"/);
+  assert.match(html, /\[class\.solicitud-item--seleccionada\]="detalle\?\.id === solicitud\.id"/);
+  assert.match(html, /aria-label="Detalle de solicitud"/);
+  assert.match(css, /\.solicitud-filtros\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/s);
+  assert.match(css, /\.solicitud-seguimiento-layout--detalle\s*\{[^}]*display:\s*grid;/s);
+  assert.match(css, /\.solicitud-seguimiento-layout--detalle\s*\{[^}]*grid-template-columns:/s);
+  assert.match(css, /@media \(max-width:\s*760px\)/);
+  assert.match(css, /@media \(max-width:\s*640px\)/);
+  assert.match(html, /\(click\)="consultarDetalle\(solicitud\.id\)"/);
+  assert.doesNotMatch(html, /aprobarSolicitud\(|rechazarSolicitud\(|aplicarCorreccion\(/);
+});
