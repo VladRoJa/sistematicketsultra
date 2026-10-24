@@ -15,13 +15,15 @@
   </div>
 
   <div *ngIf="modoTapizado" class="tapizado-seleccion">
-    <mat-form-field appearance="outline" class="tapizado-buscador">
-      <mat-label>Buscar aparatos por nombre, código o marca</mat-label>
-      <input matInput [formControl]="filtroTapizado" autocomplete="off" />
-    </mat-form-field>
+    <!-- Misma apariencia Material fill del formulario principal. -->
+    <div class="tapizado-campos">
+      <mat-form-field appearance="fill" floatLabel="always" class="tapizado-buscador">
+        <mat-label>Buscar aparato</mat-label>
+        <input matInput [formControl]="filtroTapizado"
+               placeholder="Nombre, código o marca" autocomplete="off" />
+      </mat-form-field>
 
-    <div class="tapizado-filtros">
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="fill" floatLabel="always" class="tapizado-categoria">
         <mat-label>Categoría</mat-label>
         <mat-select [value]="filtroCategoriaTapizado.value"
                     (selectionChange)="cambiarCategoriaTapizado($event.value)">
@@ -30,7 +32,8 @@
                       [value]="categoria">{{ categoria }}</mat-option>
         </mat-select>
       </mat-form-field>
-      <mat-form-field appearance="outline">
+
+      <mat-form-field appearance="fill" floatLabel="always" class="tapizado-familia">
         <mat-label>Familia</mat-label>
         <mat-select [value]="filtroFamiliaTapizado.value"
                     (selectionChange)="cambiarFamiliaTapizado($event.value)">
@@ -41,36 +44,44 @@
       </mat-form-field>
     </div>
 
-    <div class="tapizado-resumen">
-      <strong>{{ aparatosSeleccionados.length }} de 50 aparatos seleccionados</strong>
-      <span *ngIf="!aparatosSeleccionados.length">Elige al menos un equipo de la sucursal.</span>
-    </div>
+    <div class="tapizado-panel">
+      <div class="tapizado-resumen">
+        <strong>{{ aparatosSeleccionados.length }} de 50 aparatos seleccionados</strong>
+        <span *ngIf="!aparatosSeleccionados.length">Selecciona los equipos que se tapizarán.</span>
+        <span *ngIf="aparatosSeleccionados.length">Todos compartirán el mismo ticket.</span>
+      </div>
 
-    <div class="tapizado-chips" *ngIf="aparatosSeleccionados.length">
-      <span class="tapizado-chip" *ngFor="let seleccionado of aparatosSeleccionados">
-        {{ seleccionado.codigo_interno || 'Sin código' }} · {{ seleccionado.nombre }}
-        <button type="button" (click)="eliminarAparatoTapizado(seleccionado)"
-                [attr.aria-label]="'Quitar ' + seleccionado.nombre">×</button>
-      </span>
-    </div>
+      <div class="tapizado-chips" *ngIf="aparatosSeleccionados.length">
+        <span class="tapizado-chip" *ngFor="let seleccionado of aparatosSeleccionados">
+          <strong>{{ seleccionado.codigo_interno || 'Sin código' }}</strong>
+          <span class="tapizado-chip__nombre">{{ seleccionado.nombre }}</span>
+          <button type="button" (click)="eliminarAparatoTapizado(seleccionado)"
+                  [attr.aria-label]="'Quitar ' + seleccionado.nombre">×</button>
+        </span>
+      </div>
 
-    <div class="tapizado-listado" role="group" aria-label="Aparatos de la sucursal">
-      <mat-checkbox class="tapizado-opcion"
-                    *ngFor="let equipo of aparatosDisponiblesTapizado"
-                    [checked]="false"
-                    [disabled]="aparatosSeleccionados.length >= 50"
-                    (change)="alternarAparatoTapizado(equipo, $event.checked)">
-        <strong>{{ equipo.codigo_interno || 'Sin código' }}</strong>
-        {{ equipo.nombre }} <span *ngIf="equipo.marca">· {{ equipo.marca }}</span>
-      </mat-checkbox>
-      <p class="tapizado-vacio" *ngIf="!aparatosDisponiblesTapizado.length">
-        No hay más aparatos que coincidan con la búsqueda.
-      </p>
+      <div class="tapizado-listado" role="group" aria-label="Aparatos de la sucursal">
+        <mat-checkbox class="tapizado-opcion"
+                      *ngFor="let equipo of aparatosDisponiblesTapizado"
+                      [checked]="false"
+                      [disabled]="aparatosSeleccionados.length >= 50"
+                      (change)="alternarAparatoTapizado(equipo, $event.checked)">
+          <span class="tapizado-opcion__codigo">{{ equipo.codigo_interno || 'Sin código' }}</span>
+          <span class="tapizado-opcion__nombre">{{ equipo.nombre }}</span>
+          <span class="tapizado-opcion__marca" *ngIf="equipo.marca">· {{ equipo.marca }}</span>
+        </mat-checkbox>
+        <p class="tapizado-vacio" *ngIf="!aparatosDisponiblesTapizado.length">
+          No hay más aparatos que coincidan con los filtros.
+        </p>
+      </div>
+
+      <div class="tapizado-pie">
+        <p class="selector-equipo-requerido" *ngIf="parentForm.get('aparatos_ids')?.invalid">
+          Selecciona al menos un aparato del inventario.
+        </p>
+        <small>Hasta 25 resultados visibles. Busca por código para encontrar otro equipo.</small>
+      </div>
     </div>
-    <p class="selector-equipo-requerido" *ngIf="parentForm.get('aparatos_ids')?.invalid">
-      Selecciona al menos un aparato del inventario.
-    </p>
-    <small>Se muestran hasta 25 resultados a la vez. Escribe un código para localizar otro aparato.</small>
   </div>
 
   <!-- Selector reutilizable para equipos -->
@@ -91,7 +102,7 @@
   </p>
 
   <!-- Descripción del problema -->
-  <mat-form-field *ngIf="parentForm.get('descripcion_aparato')" appearance="fill" class="form-group-description">
+  <mat-form-field *ngIf="parentForm.get('descripcion_aparato')" appearance="fill" floatLabel="always" class="form-group-description">
     <mat-label>📋 Descripción del problema</mat-label>
     <textarea
       matInput
