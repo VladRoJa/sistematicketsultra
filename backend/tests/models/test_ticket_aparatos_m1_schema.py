@@ -30,7 +30,8 @@ class TicketAparatosM1SchemaTest(unittest.TestCase):
         self.assertEqual(self.table.name, "ticket_aparatos")
         self.assertEqual(
             {column.name for column in self.table.columns},
-            {"ticket_id", "inventario_id", "vinculado_en_utc"},
+            {"ticket_id", "inventario_id", "vinculado_en_utc",
+             "recibido_en_utc", "recibido_por"},
         )
 
     def test_clave_primaria_compuesta_impide_repetir_equipo(self):
