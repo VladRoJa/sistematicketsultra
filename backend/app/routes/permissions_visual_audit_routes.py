@@ -316,7 +316,7 @@ def _legacy_guard_result(user, action_key, context, document, branch_id=None):
     if action_key == "tickets.delete_all":
         # La ruta DELETE /eliminar-todos requiere admin y literalmente
         # ALLOW_TICKET_DELETE_ALL=true; no ejecutamos la operación.
-        allowed = role in TRACK_ADMIN and context["allow_ticket_delete_all"]
+        allowed = str(user.rol or "").upper() in TRACK_ADMIN and context["allow_ticket_delete_all"]
         return allowed, "ticket_routes._require_ticket_admin_action+env", "tickets_borrado_masivo_guard_doble"
 
     if action_key == "internal_documents.manage":
