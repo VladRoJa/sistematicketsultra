@@ -115,7 +115,7 @@ def test_document_scope_without_object_unknown_then_guard_evaluated(monkeypatch)
 
 
 @pytest.mark.parametrize("action_key", [
-    "pm.validate", "inventory.movement_write", "tickets.delete_all", "tickets.close",
+    "pm.validate", "tickets.close", "tickets.view", "inventory.read",
 ])
 def test_unverified_specific_guards_remain_unknown(action_key):
     user = make_user("ADMINISTRADOR")

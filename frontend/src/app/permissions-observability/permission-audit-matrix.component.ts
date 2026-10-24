@@ -262,6 +262,10 @@ export class PermissionAuditMatrixComponent implements OnInit {
 
   getScopeLabel(row: VisualAuditRow): string {
     if (row.scope === 'global') { return 'Guard de alcance global'; }
+    if (row.scope === 'guard_rol_base') { return 'Solo condición inicial del rol (no valida sucursal ni registro)'; }
+    if (row.scope === 'sucursal') {
+      return 'Guard de movimiento para sucursal #' + row.context.branch_id;
+    }
     if (row.scope === 'documento') { return 'Depende de la visibilidad del documento'; }
     return 'Se requiere contexto adicional';
   }
@@ -285,6 +289,12 @@ export class PermissionAuditMatrixComponent implements OnInit {
 
     const explanations: Record<string, string> = {
       'guard_de_rol_track': 'La consulta se determina por el rol del usuario.',
+      'pm_gate_rol_o_lectura_individual': 'El rol o permiso individual cumple el control inicial de PM; faltan los controles del registro y sucursal.',
+      'pm_sucursal_requiere_validacion_de_recurso': 'PM necesita validar el alcance por sucursal y el registro específico.',
+      'inventario_guard_global_rol': 'El rol cumple o incumple el control de administración del inventario maestro.',
+      'inventario_movimiento_requiere_sucursal': 'Para evaluar movimientos es obligatorio seleccionar una sucursal.',
+      'inventario_movimiento_guard_sucursal': 'Se comprobó el control de rol y sucursal de un movimiento; no la validez de la operación.',
+      'tickets_borrado_masivo_guard_doble': 'La operación masiva exige administrador y ALLOW_TICKET_DELETE_ALL=true; no se ejecutó ningún borrado.',
       'guard_admin_track': 'La ejecución de procesos de Track exige un rol administrador.',
       'manager_legacy_verificado': 'El permiso de administración documental se comprobó con la regla vigente.',
       'documento_y_visibilidad_evaluados': 'Se evaluó el acceso al documento específico.',

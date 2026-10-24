@@ -19,6 +19,10 @@ from app.models.planning_targets import PlanningOperatorORM
 from app.models.internal_documents import InternalDocumentORM
 from app.models.permiso_model import Permiso
 from app.routes import permissions_catalog_routes as catalog
+from app.utils.pm_permissions import (
+    PM_VIEW_ROLES, PM_EXECUTE_ROLES, PM_VALIDATE_ROLES,
+    PM_CONFIGURE_ROLES, SCOPED_MAINTENANCE_READER_ROLES,
+)
 from app.utils.internal_documents_access import (
     InternalDocumentUserContext, can_manage_internal_documents,
     can_view_internal_document,
@@ -215,8 +219,8 @@ def _batch_context(users):
             "warehouse_operator": warehouse.get(u.id),
             "planning_operator": planning.get(u.id),
             "allow_ticket_delete_all": catalog.os.getenv(
-                "ALLOW_TICKET_DELETE_ALL", ""
-            ).strip().lower() in {"1", "true", "yes", "si", "sí"},
+                "ALLOW_TICKET_DELETE_ALL", "false"
+            ).lower() == "true",
             "pm_scoped_read": u.id in scoped_read,
         }
     return result
@@ -249,7 +253,7 @@ def _bulk_grants(users, actions):
     return latest
 
 
-def _legacy_guard_result(user, action_key, context, document):
+def _legacy_guard_result(user, action_key, context, document, branch_id=None):
     """(allowed, source, reason). None = NO verificable; nunca interpretar como deny."""
     role = context["role"]
     if action_key == "track.read":
@@ -268,6 +272,53 @@ def _legacy_guard_result(user, action_key, context, document):
         return bool(op and op.is_active and getattr(op, PLANNING_FLAGS[action_key], False)), (
             "planning_access.require_planning_*"
         ), "operador_activo_y_flag"
+    # Predicados de puerta de entrada únicamente; no simulan mutaciones ni
+    # evaluación final de un ticket/equipo. Los contextos de sucursal PM siguen
+    # requiriendo la validación del recurso y nunca se promueven a true.
+    if action_key in {"pm.read", "pm.execute", "pm.validate", "pm.configure"}:
+        pm_roles = {
+            "pm.read": PM_VIEW_ROLES,
+            "pm.execute": PM_EXECUTE_ROLES,
+            "pm.validate": PM_VALIDATE_ROLES,
+            "pm.configure": PM_CONFIGURE_ROLES,
+        }
+        if branch_id is not None:
+            return None, "pm_permissions.role_gate", "pm_sucursal_requiere_validacion_de_recurso"
+        allowed = role in pm_roles[action_key]
+        if action_key == "pm.read" and role in SCOPED_MAINTENANCE_READER_ROLES:
+            # PM /access exige además alguna sucursal M:N para lecturas
+            # individualmente concedidas; la sucursal corporativa no cuenta.
+            allowed = bool(context.get("pm_scoped_read") and user.sucursales_ids)
+        return allowed, "pm_permissions.can_pm_*", "pm_gate_rol_o_lectura_individual"
+
+    if action_key == "inventory.master_write":
+        # _require_inventory_global_write: solo rol, sin argumento de objeto.
+        allowed = role in catalog.LEGACY_INVENTORY_GLOBAL_WRITE_ROLES
+        return allowed, "inventarios._require_inventory_global_write", "inventario_guard_global_rol"
+
+    if action_key == "inventory.movement_write":
+        # La operación exige sucursal_id; sin ella sería erróneo certificar
+        # acceso a cualquier movimiento o sucursal.
+        if branch_id is None:
+            return None, "inventarios._require_inventory_movement_write", "inventario_movimiento_requiere_sucursal"
+        if role in catalog.LEGACY_INVENTORY_GLOBAL_WRITE_ROLES:
+            allowed = True
+        elif role == "AUX_MANTENIMIENTO":
+            allowed = user.sucursal_id is not None and int(user.sucursal_id) == branch_id
+        elif role == "SR_MANTENIMIENTO":
+            # M:N precargada desde usuario_sucursal. NO usar sucursal_id
+            # principal como fallback para SR: el guard real tampoco lo hace.
+            allowed = branch_id in user.sucursales_ids
+        else:
+            allowed = False
+        return allowed, "inventarios._require_inventory_movement_write", "inventario_movimiento_guard_sucursal"
+
+    if action_key == "tickets.delete_all":
+        # La ruta DELETE /eliminar-todos requiere admin y literalmente
+        # ALLOW_TICKET_DELETE_ALL=true; no ejecutamos la operación.
+        allowed = str(user.rol or "").upper() in TRACK_ADMIN and context["allow_ticket_delete_all"]
+        return allowed, "ticket_routes._require_ticket_admin_action+env", "tickets_borrado_masivo_guard_doble"
+
     if action_key == "internal_documents.manage":
         doc_context = InternalDocumentUserContext(
             user_id=user.id, username=user.username, role=role,
@@ -330,7 +381,7 @@ def evaluate_pair(user, action, context, grants=None, branch_id=None, document=N
         else:
             catalog_allowed = candidate.effect == "allow"
     legacy, legacy_source, legacy_reason = _legacy_guard_result(
-        context["user"], action.full_key, context, document,
+        context["user"], action.full_key, context, document, branch_id=branch_id,
     )
     if document is not None and action.full_key == "internal_documents.view":
         # El catálogo no estima el acceso sobre este objeto documental.
@@ -343,7 +394,8 @@ def evaluate_pair(user, action, context, grants=None, branch_id=None, document=N
         if action.full_key not in (
             set(WAREHOUSE_FLAGS) | set(PLANNING_FLAGS) |
             {"warehouse.catalogs", "track.read", "track.run_daily_pipeline",
-             "track.run_agregadoras", "internal_documents.manage", "internal_documents.view"}
+             "track.run_agregadoras", "internal_documents.manage", "internal_documents.view",
+             "inventory.master_write", "inventory.movement_write", "tickets.delete_all"}
         ):
             legacy, legacy_reason = None, "branch_guard_no_evaluable_sin_recurso"
         # Documentos mantienen sus propios controles, no heredados del filtro global.
@@ -366,8 +418,12 @@ def evaluate_pair(user, action, context, grants=None, branch_id=None, document=N
         "scope": "global" if legacy is not None and action.full_key in (
             set(WAREHOUSE_FLAGS) | set(PLANNING_FLAGS) |
             {"warehouse.catalogs", "track.read", "track.run_daily_pipeline",
-             "track.run_agregadoras", "internal_documents.manage"}
-        ) else "documento" if document and action.full_key == "internal_documents.view"
+             "track.run_agregadoras", "internal_documents.manage",
+             "inventory.master_write", "tickets.delete_all"}
+        ) else "sucursal" if legacy is not None and action.full_key == "inventory.movement_write" and branch_id is not None
+        else "guard_rol_base" if legacy is not None and action.full_key in {
+            "pm.read", "pm.execute", "pm.validate", "pm.configure"
+        } else "documento" if document and action.full_key == "internal_documents.view"
         else "requiere_contexto",
         "context": {"branch_id": branch_id, "document_id": getattr(document, "id", None)},
         "diagnostic_only": True,
