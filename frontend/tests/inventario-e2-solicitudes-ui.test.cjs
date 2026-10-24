@@ -114,7 +114,10 @@ test('E2: estructura Angular separada y botones disponibles sin editar inventari
   assert.match(parent, /cerrarSolicitudes\(\)/);
   assert.match(css, /\.solicitud-panel\s*\{/);
   assert.match(html, /no se modifica/);
-  assert.match(html, /No se permite aprobar ni aplicar/);
+  assert.match(html, /class="solicitud-bandeja__autorizar" disabled/);
+  assert.match(html, /class="solicitud-bandeja__rechazar" disabled/);
+  assert.doesNotMatch(html, /\(click\)="aprobar/);
+  assert.doesNotMatch(html, /\(click\)="rechazar/);
   assert.match(service, /crearSolicitudCorreccion/);
   assert.match(service, /listarSolicitudesCorreccion/);
   assert.match(service, /obtenerSolicitudCorreccion/);
