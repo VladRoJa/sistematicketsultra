@@ -224,3 +224,21 @@ test('E2: mensaje de conflicto no finge guardado', () => {
   assert.equal(vm.guardado, null);
   assert.match(vm.errorGuardar, /datos oficiales cambiaron/);
 });
+
+test('E2 UX: modal centrado y compacto conserva scroll accesible en pantallas bajas', () => {
+  assert.match(css, /\.solicitud-overlay\s*\{[^}]*justify-content:\s*center;/s);
+  assert.match(css, /\.solicitud-overlay\s*\{[^}]*align-items:\s*center;/s);
+  assert.match(css, /\.solicitud-panel\s*\{[^}]*width:\s*min\(920px,\s*100%\);/s);
+  assert.match(css, /\.solicitud-panel\s*\{[^}]*max-height:\s*min\(88dvh,\s*820px\);/s);
+  assert.match(css, /\.solicitud-grid--hallazgo\s*\{[^}]*repeat\(3,/s);
+  assert.match(css, /\.solicitud-grid--details\s*\{[^}]*grid-template-columns:/s);
+  assert.match(css, /\.solicitud-content\s*\{[^}]*overflow-y:\s*auto;/s);
+  assert.match(css, /@media \(max-width:\s*640px\)/);
+  assert.match(css, /@media \(max-height:\s*700px\)/);
+  assert.match(html, /class="solicitud-grid solicitud-grid--hallazgo"/);
+  assert.match(html, /class="solicitud-grid solicitud-grid--details"/);
+  // En un hallazgo ya seleccionado no repetir el botón que activa ese mismo tipo.
+  assert.match(html, /\*ngIf="!referencia && !esHallazgo" class="solicitud-kind-switch"/);
+  assert.match(html, /\(click\)="enviar\(\)"/);
+  assert.match(html, /\(click\)="abrirSeguimiento\(\)"/);
+});
