@@ -312,6 +312,7 @@
     mat-button
     class="btn-cerrar"
     type="button"
+    [disabled]="guardandoAparatoId !== null"
     (click)="cerrar()">
     Cerrar
   </button>
