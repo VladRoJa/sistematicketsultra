@@ -495,6 +495,7 @@ def consultar_avance_tapizado(ticket_id):
         "aparatos": ticket.to_dict()["aparatos"],
         "avance": resumen_recepcion_tapizado(ticket),
         "puede_editar": editable,
+        "historial_fechas": ticket.to_dict()["historial_fechas"],
     }), 200
 
 
@@ -561,6 +562,7 @@ def cambiar_recepcion_aparato(ticket_id, inventario_id):
         "ticket_id": ticket_id,
         "avance": avance,
         "aparatos": ticket.to_dict()["aparatos"],
+        "historial_fechas": ticket.to_dict()["historial_fechas"],
     }), 200
 
 
