@@ -45,6 +45,13 @@ from app.services.ticket_tapizado_service import (
     normalizar_payload_tapizado,
     registrar_vinculos_tapizado,
 )
+from app.services.ticket_tapizado_recepcion_service import (
+    RecepcionTapizadoError,
+    actualizar_recepcion_tapizado,
+    puede_editar_recepcion_tapizado,
+    resumen_recepcion_tapizado,
+    validar_recepcion_completa,
+)
 from app.services.ticket_attachment_image_service import MAX_TICKET_ATTACHMENT_BYTES
 from app.services.ticket_attachment_storage_service import resolve_ticket_attachment_path
 from app.services.ticket_attachment_retention_service import schedule_ticket_attachment_retention
@@ -466,6 +473,97 @@ def _notificar_evento_ticket(ticket: Ticket, actor_username: str, event: str, su
 # ─────────────────────────────────────────────────────────────
 # RUTA: Crear ticket
 # ─────────────────────────────────────────────────────────────
+@ticket_bp.route('/tapizado/<int:ticket_id>/avance', methods=['GET'])
+@jwt_required()
+def consultar_avance_tapizado(ticket_id):
+    user = UserORM.get_by_id(get_jwt_identity())
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado"}), 404
+
+    ticket = filtrar_tickets_por_usuario(user).filter(Ticket.id == ticket_id).first()
+    if not ticket or ticket.tipo_trabajo != TIPO_TRABAJO_TAPIZADO:
+        return jsonify({"mensaje": "Ticket de tapizado no encontrado"}), 404
+
+    editable = puede_editar_recepcion_tapizado(
+        user, ticket,
+        es_coordinador=has_maintenance_coordination_permission(user),
+        es_jefe_regional=is_regional_maintenance_lead(user),
+    )
+    return jsonify({
+        "ticket_id": ticket.id,
+        "estado": ticket.estado,
+        "aparatos": ticket.to_dict()["aparatos"],
+        "avance": resumen_recepcion_tapizado(ticket),
+        "puede_editar": editable,
+    }), 200
+
+
+@ticket_bp.route(
+    '/tapizado/<int:ticket_id>/aparatos/<int:inventario_id>/recepcion',
+    methods=['PATCH'],
+)
+@jwt_required()
+@bloquea_lectores_globales
+def cambiar_recepcion_aparato(ticket_id, inventario_id):
+    user = UserORM.get_by_id(get_jwt_identity())
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado"}), 404
+
+    # Serializar modificaciones del ticket (incluye cambios de historial).
+    ticket = (
+        Ticket.query
+        .filter(Ticket.id == ticket_id)
+        .with_for_update()
+        .first()
+    )
+    if not ticket or ticket.tipo_trabajo != TIPO_TRABAJO_TAPIZADO:
+        return jsonify({"mensaje": "Ticket de tapizado no encontrado"}), 404
+
+    # Los scopes de lectura NO equivalen a permiso de escritura.
+    autorizado = (
+        filtrar_tickets_por_usuario(user)
+        .filter(Ticket.id == ticket_id)
+        .first()
+    )
+    if not autorizado:
+        return jsonify({"mensaje": "Ticket fuera de alcance"}), 404
+
+    if not puede_editar_recepcion_tapizado(
+        user, ticket,
+        es_coordinador=has_maintenance_coordination_permission(user),
+        es_jefe_regional=is_regional_maintenance_lead(user),
+    ):
+        return jsonify({"mensaje": "Sin permiso para registrar recepciones"}), 403
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"mensaje": "Se requiere JSON válido"}), 400
+
+    try:
+        avance = actualizar_recepcion_tapizado(
+            ticket,
+            inventario_id=inventario_id,
+            recibido=data.get("recibido"),
+            actor=user.username,
+            motivo=data.get("motivo"),
+        )
+        db.session.commit()
+    except RecepcionTapizadoError as exc:
+        db.session.rollback()
+        return jsonify({"mensaje": str(exc)}), 409
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Error guardando recepción tapizado")
+        return jsonify({"mensaje": "No se pudo actualizar la recepción"}), 500
+
+    return jsonify({
+        "mensaje": "Recepción actualizada",
+        "ticket_id": ticket_id,
+        "avance": avance,
+        "aparatos": ticket.to_dict()["aparatos"],
+    }), 200
+
+
 @ticket_bp.route('/create', methods=['POST'])
 @jwt_required()
 def create_ticket():
@@ -2708,6 +2806,11 @@ def cierre_gerente_desde_cero(ticket_id):
         if not _puede_cerrar_ticket_desde_cero(user, t):
             return jsonify({"mensaje": "No autorizado"}), 403
 
+        try:
+            validar_recepcion_completa(t)
+        except RecepcionTapizadoError as exc:
+            return jsonify({"mensaje": str(exc)}), 409
+
         estado_actual = (t.estado or "").strip().lower()
 
         estados_permitidos = {"abierto", "en progreso"}
@@ -2830,6 +2933,11 @@ def cierre_solicitar(ticket_id):
     elif not (_es_admin_o_corporativo(user) or _es_jefe_depto(user, t)):
         # Contrato legacy intacto para departamentos distintos de Mantenimiento.
         return jsonify({"mensaje": "No autorizado"}), 403
+
+    try:
+        validar_recepcion_completa(t)
+    except RecepcionTapizadoError as exc:
+        return jsonify({"mensaje": str(exc)}), 409
 
     data = request.get_json() or {}
     costo = data.get("costo_solucion")
@@ -2958,6 +3066,11 @@ def cierre_aceptar_creador(ticket_id):
         return jsonify({
             "mensaje": "Solo se pueden aceptar tickets en estado por_validar."
         }), 400
+
+    try:
+        validar_recepcion_completa(t)
+    except RecepcionTapizadoError as exc:
+        return jsonify({"mensaje": str(exc)}), 409
 
     accepted_at = datetime.now(timezone.utc)
 
