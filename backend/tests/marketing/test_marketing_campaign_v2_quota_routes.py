@@ -143,7 +143,6 @@ def test_approval_needs_both_capabilities_and_global_scope(
     provider.assert_not_called()
 
 
-
 @pytest.mark.parametrize(
     "operation,service_name,payload",
     [
@@ -356,6 +355,7 @@ def test_reauthorize_requires_explicit_campaign_bound_confirmation(
     fake_db.session.add.assert_not_called()
     fake_db.session.commit.assert_not_called()
     fake_db.session.execute.assert_not_called()
+
 
 def test_governed_materialization_rejects_provider_or_kill_switch_override(
     client, global_access,
