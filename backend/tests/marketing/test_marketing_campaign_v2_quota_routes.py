@@ -977,7 +977,7 @@ def test_excel_freeze_denies_before_service(
         "purpose": "ACTIVE_MEMBERS",
         "template_id": "2",
         "expected_preview_fingerprint": "a" * 64,
-        "file": (BytesIO(b"phone_mx10,sucursal\\n6861234567,BRANCH A\\n"), "synthetic.csv"),
+        "file": (BytesIO(b"phone_mx10,sucursal\n6861234567,BRANCH A\n"), "synthetic.csv"),
     }
     with auth(access), patch.object(
         routes, "freeze_excel_campaign",
@@ -1019,7 +1019,7 @@ def test_excel_freeze_preserves_authorized_partial_scope_without_send(
     assert partial_access.is_global is False
     assert partial_access.can_manage_campaigns is True
     assert partial_access.can_send_campaigns is False
-    file_bytes = b"phone_mx10,sucursal\\n6861234567,BRANCH A\\n"
+    file_bytes = b"phone_mx10,sucursal\n6861234567,BRANCH A\n"
     data = {
         "name": "Synthetic Excel campaign",
         "purpose": "ACTIVE_MEMBERS",
