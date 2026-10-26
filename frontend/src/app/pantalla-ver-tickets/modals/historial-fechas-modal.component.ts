@@ -42,17 +42,41 @@ export class HistorialFechasModalComponent implements OnInit {
   fmtDateTime = 'dd/MM/yyyy hh:mm a';
 
   cargandoRecepcion = false;
-  guardandoAparatoId: number | null = null;
+  guardandoRecepciones = false;
   puedeEditarRecepcion = false;
   errorRecepcion = '';
   huboCambioRecepcion = false;
-  revertirAparatoId: number | null = null;
-  motivoReversion = '';
+  confirmarGuardadoVisible = false;
+  confirmarDescarteVisible = false;
+  motivosReversion: Record<number, string> = {};
   aparatosTapizado: AparatoTapizadoRecepcion[] = [];
   avanceTapizado: AvanceTapizado | null = null;
 
+  // El check es un borrador local; el servidor conserva los datos oficiales.
+  private borradorRecepciones = new Map<number, boolean>();
+  cambiosPendientes: Array<{
+    inventario_id: number;
+    recibido: boolean;
+    estado_anterior: boolean;
+    motivo?: string;
+  }> = [];
+
   get esTapizado(): boolean {
     return this.data?.tipo_trabajo === 'TAPIZADO';
+  }
+
+  get cantidadAltas(): number {
+    return this.cambiosPendientes.filter(cambio => cambio.recibido).length;
+  }
+
+  get cantidadReversiones(): number {
+    return this.cambiosPendientes.filter(cambio => !cambio.recibido).length;
+  }
+
+  get cambiosValidos(): boolean {
+    return this.cambiosPendientes.length > 0 && this.cambiosPendientes.every(cambio =>
+      cambio.recibido || (this.motivosReversion[cambio.inventario_id] || '').trim().length > 0
+    );
   }
 
   constructor(
@@ -73,16 +97,22 @@ export class HistorialFechasModalComponent implements OnInit {
       recibido_por: ap.recibido_por ?? null,
     }));
     this.avanceTapizado = this.data.avance_tapizado || null;
+    this.recargarRecepciones();
+  }
+
+  private recargarRecepciones(): void {
     this.cargandoRecepcion = true;
+    this.puedeEditarRecepcion = false;
     this.ticketService.consultarRecepcionTapizado(this.data.id).subscribe({
       next: result => {
         this.actualizarDatosRecepcion(result);
         this.puedeEditarRecepcion = result.puede_editar === true;
         this.cargandoRecepcion = false;
+        this.errorRecepcion = '';
       },
       error: err => {
         this.cargandoRecepcion = false;
-        this.errorRecepcion = err?.error?.mensaje || 'No fue posible actualizar la información de Tapizado.';
+        this.errorRecepcion = err?.error?.mensaje || 'No se pudo consultar las recepciones.';
       },
     });
   }
@@ -95,50 +125,109 @@ export class HistorialFechasModalComponent implements OnInit {
     if (result.historial_fechas) {
       this.data.historial_fechas = result.historial_fechas as any;
     }
+    this.restablecerBorrador();
+  }
+
+  private restablecerBorrador(): void {
+    this.borradorRecepciones = new Map(
+      this.aparatosTapizado.map(aparato => [aparato.id, aparato.recibido])
+    );
+    this.motivosReversion = {};
+    this.cambiosPendientes = [];
+    this.confirmarGuardadoVisible = false;
+    this.confirmarDescarteVisible = false;
+    this.dialogRef.disableClose = false;
+  }
+
+  estaMarcado(aparato: AparatoTapizadoRecepcion): boolean {
+    return this.borradorRecepciones.get(aparato.id) ?? aparato.recibido;
+  }
+
+  cambioPendiente(aparato: AparatoTapizadoRecepcion): boolean {
+    return this.estaMarcado(aparato) !== aparato.recibido;
   }
 
   cambiarRecepcion(aparato: AparatoTapizadoRecepcion, event: MatCheckboxChange): void {
-    // Sólo la respuesta del servidor puede modificar un checkbox.
-    event.source.checked = aparato.recibido;
-    if (!this.puedeEditarRecepcion || this.guardandoAparatoId !== null) return;
-    if (aparato.recibido && !event.checked) {
-      this.revertirAparatoId = aparato.id;
-      this.motivoReversion = '';
+    if (!this.puedeEditarRecepcion || this.cargandoRecepcion || this.guardandoRecepciones) {
+      event.source.checked = this.estaMarcado(aparato);
       return;
     }
-    if (!aparato.recibido && event.checked) {
-      this.guardarRecepcion(aparato, true);
-    }
+    this.borradorRecepciones.set(aparato.id, event.checked);
+    this.recalcularCambios();
   }
 
-  cancelarReversion(): void {
-    this.revertirAparatoId = null;
-    this.motivoReversion = '';
+  private recalcularCambios(): void {
+    this.cambiosPendientes = this.aparatosTapizado
+      .filter(aparato => this.cambioPendiente(aparato))
+      .map(aparato => ({
+        inventario_id: aparato.id,
+        estado_anterior: aparato.recibido,
+        recibido: this.estaMarcado(aparato),
+      }));
+    this.confirmarGuardadoVisible = false;
+    this.confirmarDescarteVisible = false;
+    this.dialogRef.disableClose = this.cambiosPendientes.length > 0;
   }
 
-  confirmarReversion(aparato: AparatoTapizadoRecepcion): void {
-    if (this.motivoReversion.trim().length === 0) {
-      this.errorRecepcion = 'Escribe el motivo para revertir la recepción.';
-      return;
-    }
-    this.guardarRecepcion(aparato, false, this.motivoReversion.trim());
-  }
-
-  private guardarRecepcion(aparato: AparatoTapizadoRecepcion, recibido: boolean, motivo?: string): void {
-    this.guardandoAparatoId = aparato.id;
+  descartarSeleccion(): void {
+    if (this.guardandoRecepciones) return;
+    this.restablecerBorrador();
     this.errorRecepcion = '';
-    this.ticketService.registrarRecepcionTapizado(this.data.id, aparato.id, recibido, motivo).subscribe({
+  }
+
+  prepararGuardado(): void {
+    if (!this.cambiosValidos || this.guardandoRecepciones) {
+      this.errorRecepcion = 'Completa el motivo de cada recepción que vas a revertir.';
+      return;
+    }
+    this.errorRecepcion = '';
+    this.confirmarGuardadoVisible = true;
+  }
+
+  cancelarConfirmacion(): void {
+    this.confirmarGuardadoVisible = false;
+  }
+
+  confirmarGuardado(): void {
+    if (!this.confirmarGuardadoVisible || !this.cambiosValidos || this.guardandoRecepciones) return;
+    const cambios = this.cambiosPendientes.map(cambio => ({
+      ...cambio,
+      motivo: cambio.recibido
+        ? undefined
+        : this.motivosReversion[cambio.inventario_id]?.trim(),
+    }));
+    this.guardandoRecepciones = true;
+    this.errorRecepcion = '';
+    this.ticketService.guardarRecepcionesTapizado(this.data.id, cambios).subscribe({
       next: result => {
+        this.guardandoRecepciones = false;
         this.actualizarDatosRecepcion(result);
         this.huboCambioRecepcion = true;
-        this.guardandoAparatoId = null;
-        this.cancelarReversion();
       },
       error: err => {
-        this.guardandoAparatoId = null;
-        this.errorRecepcion = err?.error?.mensaje || 'No se pudo guardar la recepción.';
+        this.guardandoRecepciones = false;
+        this.confirmarGuardadoVisible = false;
+        this.errorRecepcion = err?.error?.mensaje || 'No se guardó ningún cambio. Revisa e intenta nuevamente.';
+        // Mantener la selección para que el usuario pueda revisar/reintentar.
       },
     });
+  }
+
+  cancelarDescarte(): void {
+    this.confirmarDescarteVisible = false;
+  }
+
+  descartarYCerrar(): void {
+    if (this.guardandoRecepciones) return;
+    this.descartarSeleccion();
+    this.dialogRef.close(this.huboCambioRecepcion);
+  }
+
+  getNombreCambio(inventarioId: number): string {
+    const aparato = this.aparatosTapizado.find(item => item.id === inventarioId);
+    return aparato
+      ? `${aparato.codigo_interno || 'Sin código'} · ${aparato.nombre || 'Aparato'}`
+      : `Aparato ${inventarioId}`;
   }
 
   get historial(): any[] {
@@ -296,6 +385,12 @@ export class HistorialFechasModalComponent implements OnInit {
   }
 
   cerrar(): void {
+    if (this.guardandoRecepciones) return;
+    if (this.cambiosPendientes.length) {
+      this.confirmarGuardadoVisible = false;
+      this.confirmarDescarteVisible = true;
+      return;
+    }
     this.dialogRef.close(this.huboCambioRecepcion);
   }
 }

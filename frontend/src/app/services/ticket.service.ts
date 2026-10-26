@@ -280,6 +280,22 @@ getValidationSummary(): Observable<TicketValidationSummary> {
     );
   }
 
+  guardarRecepcionesTapizado(
+    ticketId: number,
+    cambios: Array<{
+      inventario_id: number;
+      recibido: boolean;
+      estado_anterior: boolean;
+      motivo?: string;
+    }>,
+  ): Observable<DetalleRecepcionTapizado> {
+    return this.http.patch<DetalleRecepcionTapizado>(
+      `${this.apiUrl}/tapizado/${ticketId}/recepciones-lote`,
+      { cambios },
+      { headers: this.authJsonHeaders(), withCredentials: true },
+    );
+  }
+
   registrarRecepcionTapizado(
     ticketId: number,
     inventarioId: number,

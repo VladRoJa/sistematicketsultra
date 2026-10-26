@@ -10,6 +10,7 @@ on:
       - "backend/app/config.py"
       - "backend/migrations/versions/m23c10202623_tapizado_recepcion_parcial.py"
       - "backend/tests/services/test_ticket_tapizado_m4_recepcion.py"
+      - "backend/tests/services/test_ticket_tapizado_m41_lote.py"
       - "backend/tests/models/test_ticket_tapizado_m4_migration.py"
       - "frontend/src/app/services/ticket.service.ts"
       - "frontend/src/app/pantalla-ver-tickets/**"
@@ -51,6 +52,7 @@ jobs:
         run: |
           python -m pytest -q --tb=short -o addopts= \
             tests/services/test_ticket_tapizado_m4_recepcion.py \
+            tests/services/test_ticket_tapizado_m41_lote.py \
             tests/models/test_ticket_tapizado_m4_migration.py \
             tests/routes/test_ticket_tapizado_m3_historiales.py \
             tests/routes/test_ticket_tapizado_m2.py \

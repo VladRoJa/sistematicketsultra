@@ -48,6 +48,7 @@ from app.services.ticket_tapizado_service import (
 from app.services.ticket_tapizado_recepcion_service import (
     RecepcionTapizadoError,
     actualizar_recepcion_tapizado,
+    actualizar_recepciones_lote_tapizado,
     puede_editar_recepcion_tapizado,
     resumen_recepcion_tapizado,
     validar_recepcion_completa,
@@ -567,6 +568,55 @@ def cambiar_recepcion_aparato(ticket_id, inventario_id):
         "aparatos": ticket.to_dict()["aparatos"],
         "historial_fechas": ticket.to_dict()["historial_fechas"],
     }), 200
+
+
+@ticket_bp.route('/tapizado/<int:ticket_id>/recepciones-lote', methods=['PATCH'])
+@jwt_required()
+@bloquea_lectores_globales
+def cambiar_recepciones_lote_tapizado(ticket_id):
+    """Recepciones elegidas en UI se registran juntas o ninguna."""
+    user = UserORM.get_by_id(get_jwt_identity())
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado"}), 404
+    if not current_app.config.get("TICKETS_TAPIZADO_RECEPCION_ENABLED", False):
+        return jsonify({"mensaje": "La recepción de Tapizado aún no está habilitada."}), 409
+
+    # Igual a M4, lock del ticket para serializar historial y escrituras.
+    ticket = Ticket.query.filter(Ticket.id == ticket_id).with_for_update().first()
+    if not ticket or ticket.tipo_trabajo != TIPO_TRABAJO_TAPIZADO:
+        return jsonify({"mensaje": "Ticket de tapizado no encontrado"}), 404
+    if not filtrar_tickets_por_usuario(user).filter(Ticket.id == ticket_id).first():
+        return jsonify({"mensaje": "Ticket fuera de alcance"}), 404
+    if not puede_editar_recepcion_tapizado(
+        user, ticket,
+        es_coordinador=has_maintenance_coordination_permission(user),
+        es_jefe_regional=is_regional_maintenance_lead(user),
+    ):
+        return jsonify({"mensaje": "Sin permiso para registrar recepciones"}), 403
+
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"mensaje": "Se requiere JSON válido"}), 400
+    try:
+        avance = actualizar_recepciones_lote_tapizado(
+            ticket, cambios=payload.get("cambios"), actor=user.username
+        )
+        db.session.commit()
+        serializado = ticket.to_dict()
+        return jsonify({
+            "mensaje": "Recepciones confirmadas",
+            "ticket_id": ticket_id,
+            "avance": avance,
+            "aparatos": serializado["aparatos"],
+            "historial_fechas": serializado["historial_fechas"],
+        }), 200
+    except RecepcionTapizadoError as exc:
+        db.session.rollback()
+        return jsonify({"mensaje": str(exc)}), 409
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Error guardando lote de recepciones tapizado")
+        return jsonify({"mensaje": "No se pudieron guardar las recepciones"}), 500
 
 
 @ticket_bp.route('/create', methods=['POST'])
