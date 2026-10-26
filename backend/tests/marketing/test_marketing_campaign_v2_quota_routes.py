@@ -542,8 +542,6 @@ def test_d3_monitor_rejects_query_override(client, global_access):
     monitor.assert_not_called()
 
 
-
-
 @pytest.mark.parametrize(
     "operation,service_name,payload",
     [
