@@ -539,6 +539,7 @@ def test_e3_hallazgo_no_vincula_por_stock_sin_identidad(env):
         }
     }
     result = _post(env,91,payload)
-    assert result.status_code == 409, result.get_json()
+    assert result.status_code == 422, result.get_json()
+    assert result.get_json()["error"] == "physical_code_required"
     assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=502 AND sucursal_id=7") == 1
     assert _sql("SELECT count(*) FROM inventario_correccion_altas_auditoria") == 0
