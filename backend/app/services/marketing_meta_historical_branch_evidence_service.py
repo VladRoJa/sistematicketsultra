@@ -22,6 +22,7 @@ from sqlalchemy import select
 
 from app.extensions import db
 from app.models.sucursal_model import Sucursal
+from app.models.openings import OpeningORM, OpeningStatus
 from app.models.warehouse import (
     KpiDesempenoSnapshotORM,
     KpiDesempenoSnapshotRowORM,
@@ -39,6 +40,7 @@ NO_CANONICAL_SNAPSHOT = "NO_CANONICAL_SNAPSHOT"
 NO_CITY_IN_CATALOG = "NO_CITY_IN_CATALOG"
 NO_CITY_EVIDENCE = "NO_CITY_EVIDENCE"
 REQUIRES_REVIEW = "REQUIRES_REVIEW"
+PREOPENING_ONLY = "PREOPENING_ONLY"
 
 # KPI Desempeño explicitly treats BECA as out of scope.
 OUT_OF_SCOPE_RAW_BRANCHES = frozenset({"BECA"})
@@ -53,6 +55,9 @@ class HistoricalCityBranchEvidence:
     snapshot_ids: tuple[int, ...]
     observed_branch_names: tuple[str, ...]
     unresolved_branch_names: tuple[str, ...]
+    excluded_preopening_branch_ids: tuple[int, ...] = ()
+    opening_review_branch_ids: tuple[int, ...] = ()
+    opening_date_unrecorded_branch_ids: tuple[int, ...] = ()
 
 
 def _normalize(value: str) -> str:
@@ -104,12 +109,18 @@ def evaluate_historical_city_branch_evidence(
     raw_branch_names: Iterable[str],
     gasca_aliases: Iterable[tuple[str, int]],
     catalog_branches: Iterable[tuple[int, str, bool]],
+    opening_records: Iterable[tuple[int, date | None, str]] = (),
 ) -> HistoricalCityBranchEvidence:
     """Resolve only gyms witnessed in Warehouse during the requested month.
 
     All raw KPI branch names need unambiguous canonical aliases, regardless
     of city. Otherwise, incompleteness could silently reduce the denominator.
     An unresolved month is never treated as zero spend or zero gyms.
+    A real opening dated after this month excludes that branch even if the
+    historical KPI includes pre-sale activity. An opening inside this month
+    requires review because a monthly split cannot infer daily eligibility.
+    Missing opening records are exposed explicitly: Warehouse evidence alone
+    never certifies an actual operating date.
     """
     city = _validate_month_and_city(month_start, city_key)
     ids = tuple(sorted(set(snapshot_ids)))
@@ -117,7 +128,7 @@ def evaluate_historical_city_branch_evidence(
     if any(type(i) is not int or i <= 0 for i in ids):
         raise ValueError("Snapshot IDs inválidos.")
 
-    def result(status: str, *, eligible=(), unresolved=()):
+    def result(status: str, *, eligible=(), unresolved=(), preopening=(), opening_review=(), unrecorded=()):
         return HistoricalCityBranchEvidence(
             month_start=month_start,
             city_key=city,
@@ -126,6 +137,9 @@ def evaluate_historical_city_branch_evidence(
             snapshot_ids=ids,
             observed_branch_names=names,
             unresolved_branch_names=tuple(sorted(set(unresolved))),
+            excluded_preopening_branch_ids=tuple(sorted(preopening)),
+            opening_review_branch_ids=tuple(sorted(opening_review)),
+            opening_date_unrecorded_branch_ids=tuple(sorted(unrecorded)),
         )
 
     if not ids:
@@ -187,9 +201,56 @@ def evaluate_historical_city_branch_evidence(
         if name not in OUT_OF_SCOPE_RAW_BRANCHES
     }
     matches = observed_ids & eligible_city_ids
+    month_end = date(
+        month_start.year,
+        month_start.month,
+        monthrange(month_start.year, month_start.month)[1],
+    )
+    openings: dict[int, tuple[date | None, str]] = {}
+    duplicates: set[int] = set()
+    for branch_id, actual_date, opening_status in opening_records:
+        if type(branch_id) is not int or branch_id <= 0:
+            raise ValueError("ID inválido en el registro de aperturas.")
+        if actual_date is not None and type(actual_date) is not date:
+            raise ValueError("Fecha real de apertura inválida.")
+        if not isinstance(opening_status, str):
+            raise ValueError("Estado de apertura inválido.")
+        if branch_id in openings:
+            duplicates.add(branch_id)
+        openings[branch_id] = (actual_date, opening_status)
+
+    excluded_preopening = set()
+    opening_review = set()
+    for branch_id in matches:
+        if branch_id in duplicates:
+            opening_review.add(branch_id)
+            continue
+        record = openings.get(branch_id)
+        if record is None:
+            continue
+        opening_date, status = record
+        if status != OpeningStatus.OPENED or opening_date is None:
+            opening_review.add(branch_id)
+        elif opening_date > month_end:
+            excluded_preopening.add(branch_id)
+        elif opening_date >= month_start:
+            opening_review.add(branch_id)
+
+    if opening_review:
+        return result(
+            REQUIRES_REVIEW,
+            preopening=excluded_preopening,
+            opening_review=opening_review,
+        )
+
+    eligible = matches - excluded_preopening
     return result(
-        VERIFIED if matches else NO_CITY_EVIDENCE,
-        eligible=matches,
+        VERIFIED if eligible else (
+            PREOPENING_ONLY if excluded_preopening else NO_CITY_EVIDENCE
+        ),
+        eligible=eligible,
+        preopening=excluded_preopening,
+        unrecorded=eligible - set(openings),
     )
 
 
@@ -249,6 +310,14 @@ def read_historical_city_branch_evidence(
         select(Sucursal.sucursal_id, Sucursal.municipio, Sucursal.is_demo)
     ).all()
 
+    openings = session_value.execute(
+        select(
+            OpeningORM.sucursal_id,
+            OpeningORM.actual_opening_date,
+            OpeningORM.status,
+        )
+    ).all()
+
     return evaluate_historical_city_branch_evidence(
         month_start=month_start,
         city_key=city_key,
@@ -256,4 +325,5 @@ def read_historical_city_branch_evidence(
         raw_branch_names=raw_names,
         gasca_aliases=aliases,
         catalog_branches=branches,
+        opening_records=openings,
     )
