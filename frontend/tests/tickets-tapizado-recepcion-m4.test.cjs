@@ -28,7 +28,6 @@ test('check sólo cambia borrador local; nunca dispara escritura ni historial', 
   assert.match(modal, /this\.dialogRef\.disableClose = this\.cambiosPendientes\.length > 0/);
   assert.match(html, /Descartar selección/);
   assert.match(html, /Guardar cambios/);
-  assert.match(html, /Guardar cambios/);
   assert.match(html, /\(click\)="guardarCambios\(\)"/);
   assert.doesNotMatch(html, /Confirmar y registrar|Volver a revisar|confirmarGuardadoVisible/);
   assert.doesNotMatch(modal, /prepararGuardado\(|confirmarGuardadoVisible/);
