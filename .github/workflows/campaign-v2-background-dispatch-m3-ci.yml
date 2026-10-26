@@ -74,6 +74,23 @@ jobs:
         run: |
           python -m pip install -r backend/requirements.txt
           python -m pip install pytest==8.3.5
+      - name: Validate single Alembic head and M1a parent
+        working-directory: backend
+        run: |
+          python - <<'PY'
+          from alembic.config import Config
+          from alembic.script import ScriptDirectory
+
+          config = Config()
+          config.set_main_option("script_location", "migrations")
+          graph = ScriptDirectory.from_config(config)
+          heads = graph.get_heads()
+          assert heads == ["n26c10202626"], f"Unexpected Alembic heads: {heads}"
+          revision = graph.get_revision("n26c10202626")
+          assert revision.down_revision == "m23c10202623", revision.down_revision
+          assert graph.get_revision("m23c10202623") is not None
+          print("ALEMBIC_LINEAR_HEAD_OK", heads[0])
+          PY
       - name: Confirm zero real dispatch capability
         run: |
           test "$CAMPAIGN_V2_BACKGROUND_DISPATCH_ENABLED" = "false"
