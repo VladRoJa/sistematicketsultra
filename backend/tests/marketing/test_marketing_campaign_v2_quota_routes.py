@@ -1,5 +1,6 @@
 """Issue #856 D1: quota admin route permission and provider independence."""
 from importlib.metadata import version
+from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -957,3 +958,103 @@ def test_campaign_create_preserves_authorized_partial_branch_scope(
     assert freeze.call_args.kwargs["allowed_sucursal_keys"] == ("BRANCH A",)
     assert freeze.call_args.kwargs["marketing_access"] is partial_access
     provider.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "denied_reason",
+    ["missing_management", "empty_branch_scope"],
+)
+def test_excel_freeze_denies_before_service(
+    client, partial_access, denied_reason,
+):
+    """P26.7: la importacion Excel no esquiva gestion ni alcance regional."""
+    browser, headers = client
+    access = SimpleNamespace(**vars(partial_access))
+    if denied_reason == "missing_management":
+        access.can_manage_campaigns = False
+    data = {
+        "name": "Synthetic Excel campaign",
+        "purpose": "ACTIVE_MEMBERS",
+        "template_id": "2",
+        "expected_preview_fingerprint": "a" * 64,
+        "file": (BytesIO(b"phone_mx10,sucursal\\n6861234567,BRANCH A\\n"), "synthetic.csv"),
+    }
+    with auth(access), patch.object(
+        routes, "freeze_excel_campaign",
+    ) as freeze, patch.object(
+        routes, "marketing_branch_keys_by_sucursal_ids", return_value={},
+    ) as mapper, patch.object(
+        routes, "IVentasBroadcastProvider",
+    ) as provider, patch.object(
+        routes, "db",
+    ) as fake_db:
+        response = browser.post(
+            "/api/marketing/campaigns-v2/excel/freeze",
+            data=data, content_type="multipart/form-data", headers=headers,
+        )
+
+    assert response.status_code == 403, (denied_reason, response.json)
+    assert response.json["status"] == "error"
+    freeze.assert_not_called()
+    provider.assert_not_called()
+    fake_db.session.add.assert_not_called()
+    fake_db.session.delete.assert_not_called()
+    fake_db.session.flush.assert_not_called()
+    fake_db.session.commit.assert_not_called()
+    fake_db.session.execute.assert_not_called()
+    if denied_reason == "missing_management":
+        mapper.assert_not_called()
+        assert "gestionar" in response.json["message"]
+    else:
+        mapper.assert_called_once()
+        assert mapper.call_args.kwargs["sucursal_ids"] == partial_access.branch_ids
+        assert "sucursales" in response.json["message"]
+
+
+def test_excel_freeze_preserves_authorized_partial_scope_without_send(
+    client, partial_access,
+):
+    """P26.7: el Excel solo congela sucursales autorizadas y nunca envia."""
+    browser, headers = client
+    assert partial_access.is_global is False
+    assert partial_access.can_manage_campaigns is True
+    assert partial_access.can_send_campaigns is False
+    file_bytes = b"phone_mx10,sucursal\\n6861234567,BRANCH A\\n"
+    data = {
+        "name": "Synthetic Excel campaign",
+        "purpose": "ACTIVE_MEMBERS",
+        "template_id": "2",
+        "expected_preview_fingerprint": "b" * 64,
+        "file": (BytesIO(file_bytes), "synthetic.csv"),
+    }
+    with auth(partial_access), patch.object(
+        routes, "marketing_branch_keys_by_sucursal_ids",
+        return_value={11: "BRANCH A"},
+    ) as mapper, patch.object(
+        routes, "freeze_excel_campaign",
+        return_value={"campaign_id": 99, "recipient_count": 1},
+    ) as freeze, patch.object(
+        routes, "IVentasBroadcastProvider",
+    ) as provider, patch.object(
+        routes, "db",
+    ) as fake_db:
+        response = browser.post(
+            "/api/marketing/campaigns-v2/excel/freeze",
+            data=data, content_type="multipart/form-data", headers=headers,
+        )
+
+    assert response.status_code == 201
+    mapper.assert_called_once()
+    assert mapper.call_args.kwargs["sucursal_ids"] == partial_access.branch_ids
+    freeze.assert_called_once()
+    kwargs = freeze.call_args.kwargs
+    assert kwargs["created_by_user_id"] == 7
+    assert kwargs["file_bytes"] == file_bytes
+    assert kwargs["filename"] == "synthetic.csv"
+    assert kwargs["template_id"] == 2
+    assert kwargs["expected_preview_fingerprint"] == "b" * 64
+    assert kwargs["allowed_sucursal_keys"] == ("BRANCH A",)
+    assert kwargs["session"] is fake_db.session
+    provider.assert_not_called()
+    fake_db.session.add.assert_not_called()
+    fake_db.session.commit.assert_not_called()
