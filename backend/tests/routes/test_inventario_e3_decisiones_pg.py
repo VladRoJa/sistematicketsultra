@@ -146,9 +146,9 @@ def env():
                 """)
                 con.exec_driver_sql("""
                     INSERT INTO inventario_general
-                    (id,tipo,nombre,codigo_interno,familia_equipo_id)
-                    VALUES (501,'APARATOS','Caminadora','07CA01',1),
-                           (502,'APARATOS','Remo','07RE01',1)
+                    (id,tipo,nombre,codigo_interno,familia_equipo_id,factor_compra)
+                    VALUES (501,'APARATOS','Caminadora','07CA01',1,1),
+                           (502,'APARATOS','Remo','07RE01',1,1)
                 """)
                 con.exec_driver_sql("""
                     INSERT INTO inventario_sucursal
