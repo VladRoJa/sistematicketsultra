@@ -163,7 +163,8 @@ jobs:
         run: npm run build -- --configuration=production
 
   frontend-browser-qa:
-    runs-on: ubuntu-latest
+    # Playwright 1.56 Chromium runner supports Ubuntu 24.04, not 26.04.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
