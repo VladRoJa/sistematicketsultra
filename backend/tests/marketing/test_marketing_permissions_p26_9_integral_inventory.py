@@ -8,8 +8,10 @@ import ast
 from collections import Counter
 import inspect
 import textwrap
+from unittest.mock import patch
 
 from app import create_app
+from app.config import Config
 
 
 BLUEPRINTS = {
@@ -29,7 +31,10 @@ V2_REQUEST_GATES = {
 
 
 def _active_routes():
-    app = create_app()
+    # The route census initializes Flask without opening a database connection.
+    # CI has no production DATABASE_URI; an isolated SQLite URI is sufficient.
+    with patch.object(Config, "SQLALCHEMY_DATABASE_URI", "sqlite://"):
+        app = create_app()
     result = []
     for rule in app.url_map.iter_rules():
         if not rule.rule.startswith("/api/marketing/"):
