@@ -143,7 +143,7 @@
     <p class="tapizado-avance__borrador" *ngIf="cambiosPendientes.length > 0">
       <strong>{{ cambiosPendientes.length }} cambio(s) sin guardar</strong>
       · {{ cantidadAltas }} por recibir, {{ cantidadReversiones }} por revertir.
-      Los datos oficiales siguen iguales hasta confirmar.
+      Los datos oficiales siguen iguales hasta guardar.
     </p>
 
     <div class="tapizado-avance__lista">
@@ -173,40 +173,33 @@
           <label [for]="'motivo-reversion-' + aparato.id">Motivo para revertir esta recepción</label>
           <input [id]="'motivo-reversion-' + aparato.id" type="text"
                  maxlength="500" [(ngModel)]="motivosReversion[aparato.id]"
-                 (ngModelChange)="cancelarConfirmacion()"
                  placeholder="Obligatorio para corregir una recepción guardada" />
         </div>
       </div>
     </div>
 
-    <div class="tapizado-avance__acciones" *ngIf="puedeEditarRecepcion && cambiosPendientes.length">
-      <button mat-button type="button"
-              [disabled]="guardandoRecepciones"
-              (click)="descartarSeleccion()">Descartar selección</button>
-      <button mat-raised-button type="button"
-              [disabled]="!cambiosValidos || guardandoRecepciones"
-              (click)="prepararGuardado()">Guardar cambios ({{ cambiosPendientes.length }})</button>
-    </div>
-
-    <div class="tapizado-avance__confirmacion" *ngIf="confirmarGuardadoVisible">
-      <strong>¿Confirmar los cambios de recepción?</strong>
-      <p>Estos movimientos se registrarán en el historial del ticket #{{ data.id }}.</p>
-      <div class="tapizado-avance__confirmacion-lista">
-        <div *ngFor="let cambio of cambiosPendientes">
-          {{ cambio.recibido ? 'Recibir' : 'Revertir' }} · {{ getNombreCambio(cambio.inventario_id) }}
-        </div>
-      </div>
+    <div class="tapizado-avance__barra-acciones"
+         *ngIf="puedeEditarRecepcion && cambiosPendientes.length"
+         role="group" aria-label="Acciones de recepción de tapizado">
+      <span class="tapizado-avance__accion-resumen">
+        {{ cambiosPendientes.length }} cambio(s) pendiente(s)
+      </span>
       <div class="tapizado-avance__acciones">
-        <button mat-button type="button"
+        <button type="button" class="tapizado-avance__btn-descartar"
                 [disabled]="guardandoRecepciones"
-                (click)="cancelarConfirmacion()">Volver a revisar</button>
-        <button mat-raised-button type="button"
-                [disabled]="!cambiosValidos || guardandoRecepciones"
-                (click)="confirmarGuardado()">
-          {{ guardandoRecepciones ? 'Guardando…' : 'Confirmar y registrar' }}
+                (click)="descartarSeleccion()">
+          Descartar selección
+        </button>
+        <button type="button" class="tapizado-avance__btn-guardar"
+                [disabled]="!cambiosValidos || guardandoRecepciones || cargandoRecepcion"
+                [attr.aria-busy]="guardandoRecepciones"
+                (click)="guardarCambios()">
+          <mat-icon aria-hidden="true">{{ guardandoRecepciones ? 'hourglass_top' : 'save' }}</mat-icon>
+          {{ guardandoRecepciones ? 'Guardando…' : 'Guardar cambios (' + cambiosPendientes.length + ')' }}
         </button>
       </div>
     </div>
+
     <p class="tapizado-avance__nota" *ngIf="!puedeEditarRecepcion && !cargandoRecepcion">
       Consulta de solo lectura. El registro de recepciones requiere permisos de mantenimiento o gerencia.
     </p>
