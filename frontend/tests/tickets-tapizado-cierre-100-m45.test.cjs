@@ -43,7 +43,19 @@ test('M4.5 aplica misma regla a las tres acciones de Tickets, y protege apertura
   assert.match(tickets, /puedeMostrarBotonFinalizar\(ticket: Ticket\): boolean \{[^}]*tapizadoListoParaCierre\(ticket\)/s);
   assert.match(tickets, /async solicitarCierre\(ticket: Ticket\) \{[\s\S]*?tapizadoListoParaCierre\(ticket\)/);
   assert.match(ticketsHtml, /\*ngIf="puedeMostrarAvisoTapizadoPendiente\(ticket\)"/);
-  assert.match(ticketsHtml, /\{\{ mensajeTapizadoPendiente\(ticket\) \}\}/);
+  assert.match(ticketsHtml, /resumenAvisoCierreTapizado\(ticket\)/);
+  assert.match(ticketsHtml, /detalleAvisoCierreTapizado\(ticket\)/);
+});
+
+test('M4.6 muestra aviso en dos renglones sin alterar la regla de cierre', () => {
+  assert.match(ticketsHtml, /class="ticket-tapizado-cierre-pendiente__texto"/);
+  assert.match(ticketsHtml, /<span>\{\{ resumenAvisoCierreTapizado\(ticket\) \}\}<\/span>/);
+  assert.match(ticketsHtml, /<span>\{\{ detalleAvisoCierreTapizado\(ticket\) \}\}<\/span>/);
+  assert.match(tickets, /resumenAvisoCierreTapizado\(ticket: Ticket\): string/);
+  assert.match(tickets, /detalleAvisoCierreTapizado\(ticket: Ticket\): string/);
+  assert.match(ticketsHtml, /\[matTooltip\]="mensajeTapizadoPendiente\(ticket\)"/);
+  const css = read('pantalla-ver-tickets/pantalla-ver-tickets.component.css');
+  assert.match(css, /\.ticket-tapizado-cierre-pendiente__texto \{[\s\S]*?flex-direction: column/);
 });
 
 test('M4.5 Planner recibe avance del backend, oculta cierre y explica motivo', () => {
