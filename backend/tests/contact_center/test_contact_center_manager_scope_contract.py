@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -26,7 +27,10 @@ def test_manager_portfolio_is_own_cases_plus_no_show_recovery_inside_allowed_bra
 def test_manager_can_write_only_own_case_and_authorized_appointment_branch():
     routes = _read(ROUTES)
 
-    assert "def _assert_case_access(case: ContactCenterCaseORM, actor, access)" in routes
+    assert re.search(
+        r"def _assert_case_access\(\s*case:\s*ContactCenterCaseORM,\s*actor,\s*access[,)]",
+        routes,
+    )
     assert "El caso no pertenece a tu cartera." in routes
     assert "El caso no pertenece a una sucursal autorizada." in routes
     assert "def post_interaction(case_id: int):" in routes
