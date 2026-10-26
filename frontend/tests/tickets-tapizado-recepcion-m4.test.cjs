@@ -13,7 +13,7 @@ const service = read('services/ticket.service.ts');
 test('seis aparatos visibles con checks y barra de progreso independiente del estado de ticket', () => {
   assert.match(modal, /get esTapizado\(\)/);
   assert.match(html, /\*ngFor="let aparato of aparatosTapizado"/);
-  assert.match(html, /\[checked\]="aparato\.recibido"/);
+  assert.match(html, /\[checked\]="estaMarcado\(aparato\)"/);
   assert.match(html, /\[value\]="avanceTapizado\.porcentaje"/);
   assert.match(html, /Entrega parcial/);
   assert.match(html, /Recibido por/);
@@ -21,12 +21,23 @@ test('seis aparatos visibles con checks y barra de progreso independiente del es
   assert.match(modal, /consultarRecepcionTapizado\(this\.data\.id\)/);
 });
 
-test('reversión requiere motivo, no cambia check antes de confirmar servidor', () => {
-  assert.match(modal, /event\.source\.checked = aparato\.recibido/);
-  assert.match(modal, /this\.motivoReversion\.trim\(\)\.length === 0/);
-  assert.match(html, /Confirmar corrección/);
-  assert.match(html, /\[\(ngModel\)\]="motivoReversion"/);
-  assert.match(modal, /registrarRecepcionTapizado\(this\.data\.id, aparato\.id, recibido, motivo\)/);
+test('check sólo cambia borrador local; nunca dispara escritura ni historial', () => {
+  const change = modal.slice(modal.indexOf('  cambiarRecepcion('), modal.indexOf('  private recalcularCambios('));
+  assert.match(change, /this\.borradorRecepciones\.set\(aparato\.id, event\.checked\)/);
+  assert.doesNotMatch(change, /registrarRecepcionTapizado|guardarRecepcionesTapizado/);
+  assert.match(modal, /this\.dialogRef\.disableClose = this\.cambiosPendientes\.length > 0/);
+  assert.match(html, /Descartar selección/);
+  assert.match(html, /Guardar cambios/);
+  assert.match(html, /Confirmar y registrar/);
+  assert.match(html, /Volver a revisar/);
+  assert.match(modal, /this\.ticketService\.guardarRecepcionesTapizado\(this\.data\.id, cambios\)/);
+});
+
+test('reversión requiere motivo y nadie registra con solo un clic', () => {
+  assert.match(modal, /this\.motivosReversion\[cambio\.inventario_id\]/);
+  assert.match(modal, /cambio\.recibido \|\|/);
+  assert.match(html, /\[\(ngModel\)\]="motivosReversion\[aparato\.id\]"/);
+  assert.match(html, /Confirmar corrección|Confirmar y registrar/);
 });
 
 test('se muestra progreso en una fila de bandeja y se refresca al cerrar modal', () => {
