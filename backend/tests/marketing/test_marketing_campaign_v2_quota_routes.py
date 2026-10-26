@@ -143,6 +143,82 @@ def test_approval_needs_both_capabilities_and_global_scope(
     provider.assert_not_called()
 
 
+
+@pytest.mark.parametrize(
+    "operation,service_name,payload",
+    [
+        pytest.param(
+            "approval", "approve_dispatch_reservation",
+            {
+                "template_id": 2,
+                "expected_dispatch_fingerprint": "a" * 64,
+                "expected_quote_fingerprint": "b" * 64,
+                "expected_recipients": 12,
+                "expected_total_mxn": "3.60",
+            },
+            id="approval",
+        ),
+        pytest.param(
+            "authorize", "authorize_governed_dispatch",
+            {
+                "approval_id": 9,
+                "expected_manifest_digest": "a" * 64,
+                "expected_ready_recipients": 5,
+                "confirm_dispatch": True,
+            },
+            id="authorize",
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "denied_capability",
+    ["non_global", "missing_send", "missing_dispatch_config"],
+)
+def test_dispatch_approval_and_authorize_deny_before_side_effects(
+    client, global_access, operation, service_name, payload, denied_capability,
+):
+    """P26.2: nunca alcanza la escritura ni el proveedor ante falta de acceso.
+
+    JWT real y capacidades sinteticas. No consulta PostgreSQL ni ejecuta
+    operaciones de campañas: los servicios y la sesion DB son mocks.
+    """
+    browser, headers = client
+    access = SimpleNamespace(**vars(global_access))
+    if denied_capability == "non_global":
+        access.is_global = False
+        access.branch_ids = (11,)
+    elif denied_capability == "missing_send":
+        access.can_send_campaigns = False
+    else:
+        access.can_manage_dispatch_config = False
+
+    endpoint = f"/api/marketing/campaigns-v2/99/dispatch/{operation}"
+    with auth(access), patch.object(
+        routes, service_name,
+    ) as mutation, patch.object(
+        routes, "IVentasBroadcastProvider",
+    ) as provider, patch.object(
+        routes, "_parse_payload",
+    ) as parse_payload, patch.object(
+        routes, "_campaign_v2_allowed_sucursal_keys",
+    ) as branch_keys, patch.object(
+        routes, "db",
+    ) as fake_db:
+        response = browser.post(endpoint, json=payload, headers=headers)
+
+    assert response.status_code == 403, (operation, denied_capability, response.json)
+    assert response.json["status"] == "error"
+    mutation.assert_not_called()
+    provider.assert_not_called()
+    parse_payload.assert_not_called()
+    branch_keys.assert_not_called()
+    fake_db.session.add.assert_not_called()
+    fake_db.session.delete.assert_not_called()
+    fake_db.session.flush.assert_not_called()
+    fake_db.session.commit.assert_not_called()
+    fake_db.session.execute.assert_not_called()
+
+
 def test_approval_rejects_client_supplied_send_override(client, global_access):
     browser, headers = client
     with auth(global_access), patch.object(routes, "approve_dispatch_reservation") as approve:
