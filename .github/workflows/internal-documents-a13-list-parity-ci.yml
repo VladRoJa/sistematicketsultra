@@ -5,6 +5,8 @@ on:
     paths:
       - "backend/app/routes/internal_documents_routes.py"
       - "backend/tests/routes/test_internal_documents_a13_list_visibility.py"
+      - "backend/tests/routes/test_internal_documents_a12_a13_http_jwt_reconcile.py"
+      - "docs/security/internal_documents_a12_a13_reconciliation_20261026.md"
       - ".github/workflows/internal-documents-a13-list-parity-ci.yml"
 
 permissions:
@@ -38,6 +40,7 @@ jobs:
         run: |
           python -m pytest -q --tb=short -o addopts= \
             tests/routes/test_internal_documents_a13_list_visibility.py \
+            tests/routes/test_internal_documents_a12_a13_http_jwt_reconcile.py \
             tests/routes/test_internal_documents_a12_audit_visibility.py \
             tests/routes/test_internal_documents_agregadoras_visibility.py \
             tests/utils/test_internal_documents_agregadoras_access.py
