@@ -782,7 +782,10 @@
               role="status"
             >
               <mat-icon aria-hidden="true">schedule</mat-icon>
-              <span>{{ mensajeTapizadoPendiente(ticket) }}</span>
+              <span class="ticket-tapizado-cierre-pendiente__texto">
+                <span>{{ resumenAvisoCierreTapizado(ticket) }}</span>
+                <span>{{ detalleAvisoCierreTapizado(ticket) }}</span>
+              </span>
             </span>
 
             <!-- Botón: Cierre administrativo por gerente/admin -->

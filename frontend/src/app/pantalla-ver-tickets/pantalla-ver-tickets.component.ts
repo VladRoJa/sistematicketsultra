@@ -3048,6 +3048,19 @@ mensajeTapizadoPendiente(ticket: Ticket): string {
     + `Faltan ${avance.pendientes} por recibir para habilitar cierre.`;
 }
 
+resumenAvisoCierreTapizado(ticket: Ticket): string {
+  const avance = ticket.avance_tapizado;
+  return avance && avance.total > 0
+    ? `Tapizado: ${avance.recibidos}/${avance.total}`
+    : 'Tapizado pendiente';
+}
+
+detalleAvisoCierreTapizado(ticket: Ticket): string {
+  const avance = ticket.avance_tapizado;
+  if (!avance || avance.total < 1) return 'Verificar aparatos';
+  return `${avance.pendientes === 1 ? 'Falta' : 'Faltan'} ${avance.pendientes} para cierre`;
+}
+
 puedeMostrarAvisoTapizadoPendiente(ticket: Ticket): boolean {
   if (ticket?.tipo_trabajo !== 'TAPIZADO'
       || this.tapizadoListoParaCierre(ticket)
