@@ -351,7 +351,7 @@ test('E2 UX: segundo modal no aumenta altura de la lista ni agrega doble scroll'
   const barra = html.indexOf('solicitud-bandeja__acciones--fijas');
   const pie = html.indexOf('<footer class="solicitud-footer">');
   assert.ok(barra > 0 && pie > barra, 'Las acciones deben aparecer antes del pie fijo');
-  assert.ok(barra > html.indexOf('</section>\n      </section>'), 'Las acciones no deben estar en la lista');
+  assert.match(html, /<\/section>\s*<\/div>\s*<!-- Acciones E3 fuera del contenido desplazable/);
   assert.match(html, /\*ngIf="modo === 'seguimiento' && !cargandoListado && !errorListado"/);
   assert.match(html, /\*ngIf="detalleIdAbierto !== null && modo === 'seguimiento'"/);
   assert.match(html, /\[attr\.inert\]="detalleIdAbierto !== null \? '' : null"/);
