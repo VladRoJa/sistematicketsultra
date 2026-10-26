@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+from io import BytesIO
 from time import perf_counter
 
 from flask import Blueprint, jsonify, request, send_file
@@ -27,6 +29,11 @@ from app.services.marketing_sales_funnel_cutoff_detail_service import (
 )
 from app.services.marketing_sales_funnel_cutoff_service import (
     build_marketing_sales_funnel_at_cutoff,
+    list_available_funnel_cutoffs,
+)
+from app.services.marketing_sales_funnel_weekly_export_service import (
+    create_workbook,
+    find_weekly_cutoffs,
 )
 from app.services.marketing_sales_funnel_detail_service import (
     MarketingSalesFunnelDetailValidationError,
@@ -366,6 +373,64 @@ def get_marketing_sales_funnel_endpoint():
                 ),
             }
         ), 500
+
+
+@marketing_sales_funnel_bp.get("/sales-funnel/export/weekly")
+@jwt_required()
+def export_marketing_sales_funnel_weekly_endpoint():
+    """Mismo export del Original; corte diario + lunes históricos completos."""
+    try:
+        _, access = _resolve_scoped_access()
+        month = request.args.get("month", "")
+        parse_month(month)
+        current_build = build_marketing_sales_funnel_at_cutoff(
+            month=month,
+            access=access,
+            cutoff_date=request.args.get("cutoff_date"),
+            cutoff_policy="exact",
+            include_direct_purchases=False,
+        )
+        daily = current_build.payload
+        selected = date.fromisoformat(daily["selected_cutoff_date"])
+        dates = find_weekly_cutoffs(selected, list_available_funnel_cutoffs)
+        snapshots = []
+        for day in dates:
+            if day == selected:
+                snapshots.append(daily)
+                continue
+            built = build_marketing_sales_funnel_at_cutoff(
+                month=day.strftime("%Y-%m"),
+                access=access,
+                cutoff_date=day.isoformat(),
+                cutoff_policy="exact",
+                include_direct_purchases=False,
+            )
+            snapshots.append(built.payload)
+        content = create_workbook(
+            daily, snapshots, _load_scope_options(access),
+            is_global=access.is_global,
+        )
+        filename = (
+            f"funnel_original_{month}_corte_{selected.isoformat()}_semanal.xlsx"
+        )
+        return send_file(
+            BytesIO(content),
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name=filename,
+        )
+    except MarketingAuthorizationError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 403
+    except (MarketingInputValidationError,
+            MarketingSalesFunnelDetailValidationError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception:
+        from flask import current_app
+        current_app.logger.exception("Error al exportar Funnel Original semanal")
+        return jsonify({
+            "status": "error",
+            "message": "No se pudo generar el Excel histórico del Funnel.",
+        }), 500
 
 
 @marketing_sales_funnel_bp.get("/sales-funnel/detail")
