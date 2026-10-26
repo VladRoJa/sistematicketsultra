@@ -83,7 +83,7 @@ test('el dock vive en el layout y es recuperable tras navegar', () => {
   assert.match(html, /app-campaign-v2-background-dock/);
   assert.match(html, /router-outlet/);
   assert.match(dock, /jobId: job\.job_id/);
-  assert.match(modal, /job\.job_id === this\.data\.jobId/);
+  assert.match(modal, /item\.job_id === this\.data\.jobId/);
 });
 
 test('progreso tipado es aceptación, no entrega', () => {

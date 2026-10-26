@@ -18,6 +18,9 @@ from app.models.marketing import (
     MarketingCampaignV2RecipientORM as Recipient,
     MarketingCampaignV2BlacklistORM as Blacklist,
 )
+from app.models.marketing_campaign_v2_background_job import (
+    MarketingCampaignV2BackgroundJobORM as BackgroundJob,
+)
 from app.services import marketing_campaign_v2_governed_dispatch_service as svc
 
 NOW = datetime(2026, 10, 13, 18, tzinfo=timezone.utc)
@@ -52,8 +55,9 @@ def _tables():
     Blacklist.__table__.to_metadata(md)
     Child.__table__.to_metadata(md)
     Execution.__table__.to_metadata(md)
+    BackgroundJob.__table__.to_metadata(md)
     known = set(md.tables)
-    for model in (Campaign, Recipient, Blacklist, Child, Execution):
+    for model in (Campaign, Recipient, Blacklist, Child, Execution, BackgroundJob):
         for column in model.__table__.columns:
             for fk in column.foreign_keys:
                 parent = fk.column
