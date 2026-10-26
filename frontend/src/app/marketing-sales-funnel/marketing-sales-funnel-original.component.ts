@@ -25,7 +25,6 @@ import {
   switchMap,
 } from 'rxjs';
 
-import { MarketingDashboardResponse } from '../marketing-conversion/marketing.models';
 import {
   MarketingFunnelInvestmentSources,
   MarketingGoogleAdsBranchAttribution,
@@ -41,9 +40,6 @@ import {
   MarketingSalesFunnelOriginalStoryComponent,
 } from './marketing-sales-funnel-original-story.component';
 import { MarketingSalesFunnelOriginalService } from './marketing-sales-funnel-original.service';
-import {
-  exportMarketingSalesFunnelBranchTable,
-} from './marketing-sales-funnel-table-export';
 
 
 interface SummaryCard {
@@ -207,6 +203,8 @@ export class MarketingSalesFunnelOriginalComponent implements OnInit {
 
   loading = true;
   errorMessage = '';
+  exportingWorkbook = false;
+  exportErrorMessage = '';
 
   get selectedMonth(): string {
     return this.monthControl.value.trim();
@@ -367,28 +365,37 @@ export class MarketingSalesFunnelOriginalComponent implements OnInit {
   }
 
   exportBranchTable(): void {
-    if (!this.dashboard || !this.hasBranches) {
+    if (!this.dashboard || !this.hasBranches || this.exportingWorkbook) {
       return;
     }
 
-    const investmentDashboard = {
-      month: this.selectedMonth,
-      summary: {
-        investment: this.dashboard.summary.investment ?? null,
+    this.exportingWorkbook = true;
+    this.exportErrorMessage = '';
+    const cutoffDate = this.dashboard.selected_cutoff_date || this.selectedCutoff;
+    this.salesFunnelService.exportWeeklyWorkbook(
+      this.selectedMonth,
+      this.activeScopeBranchIds,
+      cutoffDate,
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const cutoff = cutoffDate || 'ultimo';
+        link.href = url;
+        link.download = `funnel_original_${this.selectedMonth}_corte_${cutoff}_semanal.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => window.URL.revokeObjectURL(url), 0);
       },
-      branches: this.dashboard.branches.map((branch) => ({
-        sucursal_id: branch.sucursal_id,
-        investment: branch.investment ?? null,
-      })),
-    } as unknown as MarketingDashboardResponse;
-
-    exportMarketingSalesFunnelBranchTable({
-      month: this.selectedMonth,
-      branches: this.dashboard.branches,
-      investmentDashboard,
-      scopeOptions: this.scopeOptions,
-      regionId: this.regionControl.value,
-      branchId: this.branchControl.value,
+      error: () => {
+        this.exportingWorkbook = false;
+        this.exportErrorMessage =
+          'No fue posible generar el Excel histórico. Verifica los cortes disponibles e inténtalo de nuevo.';
+      },
+      complete: () => {
+        this.exportingWorkbook = false;
+      },
     });
   }
 
