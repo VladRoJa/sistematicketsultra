@@ -28,7 +28,7 @@ def test_manager_can_write_only_own_case_and_authorized_appointment_branch():
     routes = _read(ROUTES)
 
     assert re.search(
-        r"def _assert_case_access\\(\\s*case:\\s*ContactCenterCaseORM,\\s*actor,\\s*access[,)]",
+        r"def _assert_case_access\(\s*case:\s*ContactCenterCaseORM,\s*actor,\s*access[,)]",
         routes,
     )
     assert "El caso no pertenece a tu cartera." in routes
