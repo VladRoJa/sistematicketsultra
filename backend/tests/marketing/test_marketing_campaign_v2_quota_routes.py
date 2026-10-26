@@ -829,3 +829,131 @@ def test_d3c2_freeze_requires_global_authority_and_refuses_send_override(
     assert result.json["send_authorized"] is False
     freeze.assert_called_once()
     provider.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "operation,service_name,payload,denied_reason",
+    [
+        pytest.param(
+            "create", "freeze_campaign_v2",
+            {
+                "name": "Synthetic creation",
+                "purpose": "ACTIVE_MEMBERS",
+                "source": "ACTIVE_MEMBERS",
+                "audience_families": ["DOMICILIADO"],
+                "expected_preview_fingerprint": "a" * 64,
+            },
+            "missing_management",
+            id="create-no-management",
+        ),
+        pytest.param(
+            "create", "freeze_campaign_v2",
+            {
+                "name": "Synthetic creation",
+                "purpose": "ACTIVE_MEMBERS",
+                "source": "ACTIVE_MEMBERS",
+                "audience_families": ["DOMICILIADO"],
+                "expected_preview_fingerprint": "a" * 64,
+            },
+            "empty_branch_scope",
+            id="create-empty-branch-scope",
+        ),
+        pytest.param(
+            "followup", "freeze_followup_campaign",
+            {
+                "name": "Synthetic followup",
+                "selected_statuses": ["VIEWED"],
+                "source_snapshot_id": 101,
+                "expected_preview_fingerprint": "b" * 64,
+                "expected_recipient_count": 3,
+            },
+            "empty_branch_scope",
+            id="followup-empty-branch-scope",
+        ),
+    ],
+)
+def test_campaign_freeze_rejects_unmanaged_or_empty_branch_scope(
+    client, partial_access, operation, service_name, payload, denied_reason,
+):
+    """P26.6: sin gestión o sucursales válidas no inicia una escritura."""
+    browser, headers = client
+    access = SimpleNamespace(**vars(partial_access))
+    if denied_reason == "missing_management":
+        access.can_manage_campaigns = False
+
+    url = (
+        "/api/marketing/campaigns-v2"
+        if operation == "create"
+        else "/api/marketing/campaigns-v2/77/followup/freeze"
+    )
+    with auth(access), patch.object(
+        routes, service_name,
+    ) as mutation, patch.object(
+        routes, "marketing_branch_keys_by_sucursal_ids",
+        return_value={},
+    ) as branch_mapper, patch.object(
+        routes, "_parse_payload", wraps=routes._parse_payload,
+    ) as parse_payload, patch.object(
+        routes, "IVentasBroadcastProvider",
+    ) as provider, patch.object(
+        routes, "db",
+    ) as fake_db:
+        response = browser.post(url, json=payload, headers=headers)
+
+    assert response.status_code == 403, (operation, denied_reason, response.json)
+    assert response.json["status"] == "error"
+    mutation.assert_not_called()
+    provider.assert_not_called()
+    fake_db.session.add.assert_not_called()
+    fake_db.session.delete.assert_not_called()
+    fake_db.session.flush.assert_not_called()
+    fake_db.session.commit.assert_not_called()
+    fake_db.session.execute.assert_not_called()
+    if denied_reason == "missing_management":
+        parse_payload.assert_not_called()
+        branch_mapper.assert_not_called()
+        assert "gestionar" in response.json["message"]
+    else:
+        parse_payload.assert_called_once()
+        branch_mapper.assert_called_once()
+        assert branch_mapper.call_args.kwargs["sucursal_ids"] == access.branch_ids
+        assert "sucursales" in response.json["message"]
+
+
+def test_campaign_create_preserves_authorized_partial_branch_scope(
+    client, partial_access,
+):
+    """P26.6: crear con alcance parcial no exige permiso de envío/global."""
+    browser, headers = client
+    assert partial_access.is_global is False
+    assert partial_access.can_manage_campaigns is True
+    assert partial_access.can_send_campaigns is False
+    payload = {
+        "name": "Synthetic scoped campaign",
+        "purpose": "ACTIVE_MEMBERS",
+        "source": "ACTIVE_MEMBERS",
+        "audience_families": ["DOMICILIADO"],
+        "expected_preview_fingerprint": "c" * 64,
+    }
+    with auth(partial_access), patch.object(
+        routes, "marketing_branch_keys_by_sucursal_ids",
+        return_value={11: "BRANCH A"},
+    ) as branch_mapper, patch.object(
+        routes, "freeze_campaign_v2",
+        return_value={"campaign_id": 99, "recipient_count": 1},
+    ) as freeze, patch.object(
+        routes, "IVentasBroadcastProvider",
+    ) as provider:
+        response = browser.post(
+            "/api/marketing/campaigns-v2",
+            json=payload, headers=headers,
+        )
+
+    assert response.status_code == 201
+    branch_mapper.assert_called_once()
+    assert branch_mapper.call_args.kwargs["sucursal_ids"] == partial_access.branch_ids
+    freeze.assert_called_once()
+    assert freeze.call_args.kwargs["created_by_user_id"] == 7
+    assert freeze.call_args.kwargs["allowed_sucursal_keys"] == ("BRANCH A",)
+    assert freeze.call_args.kwargs["marketing_access"] is partial_access
+    provider.assert_not_called()
