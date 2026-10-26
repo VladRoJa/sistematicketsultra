@@ -1,0 +1,45 @@
+name: Fase A P25 — Current Route Map Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/utils/permission_route_inventory.py"
+      - "backend/tests/routes/test_permissions_phase_a_live_map_reconcile_p25.py"
+      - "backend/tests/routes/test_permissions_phase_a_route_coverage.py"
+      - "backend/tests/routes/test_permissions_phase_a_unmapped_mutations_p22.py"
+      - "docs/security/permissions_phase_a_live_route_map_p25_20261026.md"
+      - ".github/workflows/permissions-phase-a-live-map-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  read-only-route-map:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+      SECRET_KEY: permissions-phase-a-tests-only
+      JWT_SECRET_KEY: permissions-phase-a-tests-only
+      SQLALCHEMY_DATABASE_URI: "sqlite:///:memory:"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend test dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: P25 live catalog comparison contract + P21/P22 historical regressions
+        run: |
+          python -m pytest -q --tb=short -o addopts= \
+            tests/routes/test_permissions_phase_a_live_map_reconcile_p25.py \
+            tests/routes/test_permissions_phase_a_route_coverage.py \
+            tests/routes/test_permissions_phase_a_unmapped_mutations_p22.py
