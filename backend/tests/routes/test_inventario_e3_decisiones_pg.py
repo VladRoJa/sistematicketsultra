@@ -70,7 +70,7 @@ def env():
                     )
                 """)
                 con.exec_driver_sql("""
-                    CREATE TABLE sucursales (sucursal_id INTEGER PRIMARY KEY)
+                    CREATE TABLE sucursales (sucursal_id INTEGER PRIMARY KEY, sucursal VARCHAR(100) NOT NULL)
                 """)
                 con.exec_driver_sql("""
                     CREATE TABLE usuario_sucursal (
@@ -139,7 +139,7 @@ def env():
                     (98,'GERENTE',2,7)
                 """)
                 con.exec_driver_sql("""
-                    INSERT INTO sucursales VALUES (7),(8),(14),(26),(1000)
+                    INSERT INTO sucursales VALUES (7,'Villas del Rey'),(8,'Verde'),(14,'Culiacán'),(26,'Serranía'),(1000,'Corporativo')
                 """)
                 con.exec_driver_sql("""
                     INSERT INTO usuario_sucursal VALUES
