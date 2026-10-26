@@ -1,8 +1,6 @@
 // src/app/pantalla-ver-tickets/modals/historial-fechas-modal.component.ts
 
 import { Component, Inject, OnInit } from '@angular/core';
-import { FormsModule } from '@angular/forms';
-import { MatCheckboxModule, MatCheckboxChange } from '@angular/material/checkbox';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { TicketService, AparatoTapizadoRecepcion, AvanceTapizado, DetalleRecepcionTapizado } from '../../services/ticket.service';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -26,8 +24,6 @@ import {
   styleUrls: ['./historial-fechas-modal.component.scss'],
   imports: [
     CommonModule,
-    FormsModule,
-    MatCheckboxModule,
     MatProgressBarModule,
     MatDialogModule,
     MatButtonModule,
@@ -42,41 +38,12 @@ export class HistorialFechasModalComponent implements OnInit {
   fmtDateTime = 'dd/MM/yyyy hh:mm a';
 
   cargandoRecepcion = false;
-  guardandoRecepciones = false;
-  puedeEditarRecepcion = false;
   errorRecepcion = '';
-  huboCambioRecepcion = false;
-
-  confirmarDescarteVisible = false;
-  motivosReversion: Record<number, string> = {};
   aparatosTapizado: AparatoTapizadoRecepcion[] = [];
   avanceTapizado: AvanceTapizado | null = null;
 
-  // El check es un borrador local; el servidor conserva los datos oficiales.
-  private borradorRecepciones = new Map<number, boolean>();
-  cambiosPendientes: Array<{
-    inventario_id: number;
-    recibido: boolean;
-    estado_anterior: boolean;
-    motivo?: string;
-  }> = [];
-
   get esTapizado(): boolean {
     return this.data?.tipo_trabajo === 'TAPIZADO';
-  }
-
-  get cantidadAltas(): number {
-    return this.cambiosPendientes.filter(cambio => cambio.recibido).length;
-  }
-
-  get cantidadReversiones(): number {
-    return this.cambiosPendientes.filter(cambio => !cambio.recibido).length;
-  }
-
-  get cambiosValidos(): boolean {
-    return this.cambiosPendientes.length > 0 && this.cambiosPendientes.every(cambio =>
-      cambio.recibido || (this.motivosReversion[cambio.inventario_id] || '').trim().length > 0
-    );
   }
 
   constructor(
@@ -97,119 +64,21 @@ export class HistorialFechasModalComponent implements OnInit {
       recibido_por: ap.recibido_por ?? null,
     }));
     this.avanceTapizado = this.data.avance_tapizado || null;
-    this.recargarRecepciones();
-  }
-
-  private recargarRecepciones(): void {
     this.cargandoRecepcion = true;
-    this.puedeEditarRecepcion = false;
     this.ticketService.consultarRecepcionTapizado(this.data.id).subscribe({
       next: result => {
-        this.actualizarDatosRecepcion(result);
-        this.puedeEditarRecepcion = result.puede_editar === true;
+        this.aparatosTapizado = result.aparatos || [];
+        this.avanceTapizado = result.avance || null;
+        if (result.historial_fechas) {
+          this.data.historial_fechas = result.historial_fechas as any;
+        }
         this.cargandoRecepcion = false;
-        this.errorRecepcion = '';
       },
       error: err => {
         this.cargandoRecepcion = false;
-        this.errorRecepcion = err?.error?.mensaje || 'No se pudo consultar las recepciones.';
+        this.errorRecepcion = err?.error?.mensaje || 'No fue posible actualizar la información de tapizado.';
       },
     });
-  }
-
-  private actualizarDatosRecepcion(result: DetalleRecepcionTapizado): void {
-    this.aparatosTapizado = result.aparatos || [];
-    this.avanceTapizado = result.avance || null;
-    this.data.aparatos = this.aparatosTapizado;
-    this.data.avance_tapizado = this.avanceTapizado;
-    if (result.historial_fechas) {
-      this.data.historial_fechas = result.historial_fechas as any;
-    }
-    this.restablecerBorrador();
-  }
-
-  private restablecerBorrador(): void {
-    this.borradorRecepciones = new Map(
-      this.aparatosTapizado.map(aparato => [aparato.id, aparato.recibido])
-    );
-    this.motivosReversion = {};
-    this.cambiosPendientes = [];
-
-    this.confirmarDescarteVisible = false;
-    this.dialogRef.disableClose = false;
-  }
-
-  estaMarcado(aparato: AparatoTapizadoRecepcion): boolean {
-    return this.borradorRecepciones.get(aparato.id) ?? aparato.recibido;
-  }
-
-  cambioPendiente(aparato: AparatoTapizadoRecepcion): boolean {
-    return this.estaMarcado(aparato) !== aparato.recibido;
-  }
-
-  cambiarRecepcion(aparato: AparatoTapizadoRecepcion, event: MatCheckboxChange): void {
-    if (!this.puedeEditarRecepcion || this.cargandoRecepcion || this.guardandoRecepciones) {
-      event.source.checked = this.estaMarcado(aparato);
-      return;
-    }
-    this.borradorRecepciones.set(aparato.id, event.checked);
-    this.recalcularCambios();
-  }
-
-  private recalcularCambios(): void {
-    this.cambiosPendientes = this.aparatosTapizado
-      .filter(aparato => this.cambioPendiente(aparato))
-      .map(aparato => ({
-        inventario_id: aparato.id,
-        estado_anterior: aparato.recibido,
-        recibido: this.estaMarcado(aparato),
-      }));
-
-    this.confirmarDescarteVisible = false;
-    this.dialogRef.disableClose = this.cambiosPendientes.length > 0;
-  }
-
-  descartarSeleccion(): void {
-    if (this.guardandoRecepciones) return;
-    this.restablecerBorrador();
-    this.errorRecepcion = '';
-  }
-
-  guardarCambios(): void {
-    // Único momento en que el borrador llega al backend.
-    if (!this.puedeEditarRecepcion || !this.cambiosPendientes.length ||
-        !this.cambiosValidos || this.cargandoRecepcion || this.guardandoRecepciones) return;
-    const cambios = this.cambiosPendientes.map(cambio => ({
-      ...cambio,
-      motivo: cambio.recibido
-        ? undefined
-        : this.motivosReversion[cambio.inventario_id]?.trim(),
-    }));
-    this.guardandoRecepciones = true;
-    this.errorRecepcion = '';
-    this.ticketService.guardarRecepcionesTapizado(this.data.id, cambios).subscribe({
-      next: result => {
-        this.guardandoRecepciones = false;
-        this.actualizarDatosRecepcion(result);
-        this.huboCambioRecepcion = true;
-      },
-      error: err => {
-        this.guardandoRecepciones = false;
-
-        this.errorRecepcion = err?.error?.mensaje || 'No se guardó ningún cambio. Revisa e intenta nuevamente.';
-        // Mantener la selección para que el usuario pueda revisar/reintentar.
-      },
-    });
-  }
-
-  cancelarDescarte(): void {
-    this.confirmarDescarteVisible = false;
-  }
-
-  descartarYCerrar(): void {
-    if (this.guardandoRecepciones) return;
-    this.descartarSeleccion();
-    this.dialogRef.close(this.huboCambioRecepcion);
   }
 
   get historial(): any[] {
@@ -367,12 +236,6 @@ export class HistorialFechasModalComponent implements OnInit {
   }
 
   cerrar(): void {
-    if (this.guardandoRecepciones) return;
-    if (this.cambiosPendientes.length) {
-
-      this.confirmarDescarteVisible = true;
-      return;
-    }
-    this.dialogRef.close(this.huboCambioRecepcion);
+    this.dialogRef.close();
   }
 }

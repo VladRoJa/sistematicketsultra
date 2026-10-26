@@ -1658,3 +1658,30 @@ td.col-descripcion {
 .ticket-responsable--externo {
   color: var(--ultra-orange, #e54525);
 }
+
+
+/* M4.3: acceso operativo directo a recepción, al lado del QR. */
+.btn-tapizado-recepcion {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0;
+  border-radius: 999px;
+  background: rgba(229, 69, 37, 0.12);
+  color: #d83b1d;
+  transition: background-color .15s ease, color .15s ease;
+}
+
+.btn-tapizado-recepcion:hover,
+.btn-tapizado-recepcion:focus-visible {
+  background: #d83b1d;
+  color: #fff;
+}
+
+.btn-tapizado-recepcion mat-icon {
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
+  line-height: 18px;
+}
