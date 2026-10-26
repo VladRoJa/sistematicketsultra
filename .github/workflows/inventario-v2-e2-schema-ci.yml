@@ -7,6 +7,9 @@ on:
       - "backend/app/models/__init__.py"
       - "backend/migrations/versions/v2e2a7c92623_inventory_v2_correction_requests.py"
       - "backend/tests/models/test_inventario_v2_e2_schema.py"
+      - "backend/app/models/inventario_correccion_decision.py"
+      - "backend/migrations/versions/v2e3p2102626_inventario_decision_audit.py"
+      - "backend/tests/models/test_inventario_v2_e3_schema.py"
       - "backend/app/routes/inventario_solicitudes_routes.py"
       - "backend/app/__init__.py"
       - "backend/tests/routes/test_inventario_solicitudes_e2_api_pg.py"
@@ -48,6 +51,9 @@ jobs:
         run: |
           python -m py_compile \
             app/models/inventario_solicitud_correccion.py \
+            app/models/inventario_correccion_decision.py \
+            migrations/versions/v2e3p2102626_inventario_decision_audit.py \
+            tests/models/test_inventario_v2_e3_schema.py \
             app/routes/inventario_solicitudes_routes.py \
             app/__init__.py \
             migrations/versions/v2e2a7c92623_inventory_v2_correction_requests.py \
@@ -65,4 +71,5 @@ jobs:
         run: |
           python -m pytest -q --tb=short -o addopts= \
             tests/models/test_inventario_v2_e2_schema.py \
+            tests/models/test_inventario_v2_e3_schema.py \
             tests/routes/test_inventario_solicitudes_e2_api_pg.py
