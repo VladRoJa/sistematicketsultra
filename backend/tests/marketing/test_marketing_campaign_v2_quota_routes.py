@@ -1,7 +1,7 @@
 """Issue #856 D1: quota admin route permission and provider independence."""
 from importlib.metadata import version
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 import werkzeug
@@ -213,6 +213,54 @@ def test_dispatch_execution_requires_global_permissions_and_both_switches(
         response = browser.post(url, json=payload, headers=headers)
     assert response.status_code == 423
     provider.assert_not_called()
+
+
+
+def test_dispatch_execute_wrong_password_blocks_before_provider_and_claim(
+    client,
+):
+    """P26: clave incorrecta rechaza antes de proveedor o claim de DB.
+
+    JWT real, identidad/rol sinteticos y banderas habilitadas SOLO en el
+    Flask app de esta prueba. No conecta servicios externos ni ejecuta envios.
+    """
+    browser, headers = client
+    browser.application.config.update(
+        CAMPAIGN_V2_PROVIDER_SEND_ENABLED=True,
+        CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED=True,
+    )
+    verify_password = Mock(return_value=False)
+    actor = SimpleNamespace(
+        id=7,
+        username="MARKETING_QA",
+        rol="MARKETING",
+        verify_password=verify_password,
+    )
+    payload = {
+        "execution_id": 41,
+        "child_id": 100,
+        "expected_manifest_digest": "a" * 64,
+        "operator_password": "clave-ficticia-incorrecta",
+    }
+
+    with patch.object(
+        routes.UserORM, "get_by_id", return_value=actor,
+    ) as load_actor, patch.object(
+        routes, "IVentasBroadcastProvider",
+    ) as provider, patch.object(
+        routes, "execute_governed_child",
+    ) as dispatch:
+        response = browser.post(
+            "/api/marketing/campaigns-v2/99/dispatch/execute",
+            json=payload, headers=headers,
+        )
+
+    assert response.status_code == 403
+    assert "Contraseña" in response.get_json()["message"]
+    load_actor.assert_called_once_with(7)
+    verify_password.assert_called_once_with("clave-ficticia-incorrecta")
+    provider.assert_not_called()
+    dispatch.assert_not_called()
 
 
 def test_dispatch_authorize_is_independent_and_does_not_instantiate_provider(
