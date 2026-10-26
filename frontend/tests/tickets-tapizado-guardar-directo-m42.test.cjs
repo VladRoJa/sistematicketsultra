@@ -4,9 +4,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const dir = path.join(__dirname, '..', 'src', 'app', 'pantalla-ver-tickets', 'modals');
-const ts = fs.readFileSync(path.join(dir, 'historial-fechas-modal.component.ts'), 'utf8');
-const html = fs.readFileSync(path.join(dir, 'historial-fechas-modal.component.html'), 'utf8');
-const scss = fs.readFileSync(path.join(dir, 'historial-fechas-modal.component.scss'), 'utf8');
+const ts = fs.readFileSync(path.join(dir, 'tapizado-recepcion-modal.component.ts'), 'utf8');
+const html = fs.readFileSync(path.join(dir, 'tapizado-recepcion-modal.component.html'), 'utf8');
+const scss = fs.readFileSync(path.join(dir, 'tapizado-recepcion-modal.component.scss'), 'utf8');
 
 test('M4.2 elimina segunda confirmación; Guardar cambios es acción definitiva', () => {
   assert.match(html, /\(click\)="guardarCambios\(\)"/);
