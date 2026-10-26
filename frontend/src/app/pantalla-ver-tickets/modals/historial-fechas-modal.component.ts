@@ -46,7 +46,7 @@ export class HistorialFechasModalComponent implements OnInit {
   puedeEditarRecepcion = false;
   errorRecepcion = '';
   huboCambioRecepcion = false;
-  confirmarGuardadoVisible = false;
+
   confirmarDescarteVisible = false;
   motivosReversion: Record<number, string> = {};
   aparatosTapizado: AparatoTapizadoRecepcion[] = [];
@@ -134,7 +134,7 @@ export class HistorialFechasModalComponent implements OnInit {
     );
     this.motivosReversion = {};
     this.cambiosPendientes = [];
-    this.confirmarGuardadoVisible = false;
+
     this.confirmarDescarteVisible = false;
     this.dialogRef.disableClose = false;
   }
@@ -164,7 +164,7 @@ export class HistorialFechasModalComponent implements OnInit {
         estado_anterior: aparato.recibido,
         recibido: this.estaMarcado(aparato),
       }));
-    this.confirmarGuardadoVisible = false;
+
     this.confirmarDescarteVisible = false;
     this.dialogRef.disableClose = this.cambiosPendientes.length > 0;
   }
@@ -175,21 +175,10 @@ export class HistorialFechasModalComponent implements OnInit {
     this.errorRecepcion = '';
   }
 
-  prepararGuardado(): void {
-    if (!this.cambiosValidos || this.guardandoRecepciones) {
-      this.errorRecepcion = 'Completa el motivo de cada recepción que vas a revertir.';
-      return;
-    }
-    this.errorRecepcion = '';
-    this.confirmarGuardadoVisible = true;
-  }
-
-  cancelarConfirmacion(): void {
-    this.confirmarGuardadoVisible = false;
-  }
-
-  confirmarGuardado(): void {
-    if (!this.confirmarGuardadoVisible || !this.cambiosValidos || this.guardandoRecepciones) return;
+  guardarCambios(): void {
+    // Único momento en que el borrador llega al backend.
+    if (!this.puedeEditarRecepcion || !this.cambiosPendientes.length ||
+        !this.cambiosValidos || this.cargandoRecepcion || this.guardandoRecepciones) return;
     const cambios = this.cambiosPendientes.map(cambio => ({
       ...cambio,
       motivo: cambio.recibido
@@ -206,7 +195,7 @@ export class HistorialFechasModalComponent implements OnInit {
       },
       error: err => {
         this.guardandoRecepciones = false;
-        this.confirmarGuardadoVisible = false;
+
         this.errorRecepcion = err?.error?.mensaje || 'No se guardó ningún cambio. Revisa e intenta nuevamente.';
         // Mantener la selección para que el usuario pueda revisar/reintentar.
       },
@@ -221,13 +210,6 @@ export class HistorialFechasModalComponent implements OnInit {
     if (this.guardandoRecepciones) return;
     this.descartarSeleccion();
     this.dialogRef.close(this.huboCambioRecepcion);
-  }
-
-  getNombreCambio(inventarioId: number): string {
-    const aparato = this.aparatosTapizado.find(item => item.id === inventarioId);
-    return aparato
-      ? `${aparato.codigo_interno || 'Sin código'} · ${aparato.nombre || 'Aparato'}`
-      : `Aparato ${inventarioId}`;
   }
 
   get historial(): any[] {
@@ -387,7 +369,7 @@ export class HistorialFechasModalComponent implements OnInit {
   cerrar(): void {
     if (this.guardandoRecepciones) return;
     if (this.cambiosPendientes.length) {
-      this.confirmarGuardadoVisible = false;
+
       this.confirmarDescarteVisible = true;
       return;
     }

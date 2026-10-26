@@ -733,32 +733,117 @@
   padding-left: 30px;
 }
 
+.tapizado-avance__barra-acciones {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 14px 16px;
+  margin: 12px -16px -13px;
+  border-top: 2px solid var(--ultra-orange, #e54525);
+  border-radius: 0 0 16px 16px;
+  background: var(--ultra-surface, #fff);
+  box-shadow: 0 -5px 18px rgb(0 0 0 / 10%);
+}
+
+.tapizado-avance__accion-resumen {
+  font-weight: 750;
+  color: var(--ultra-gray-700, #404852);
+  font-size: 13px;
+}
+
 .tapizado-avance__acciones {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
   flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.tapizado-avance__btn-descartar,
+.tapizado-avance__btn-guardar {
+  min-height: 46px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.3;
+  cursor: pointer;
+  transition: background-color .15s ease, box-shadow .15s ease;
+}
+
+.tapizado-avance__btn-descartar {
+  color: var(--ultra-gray-900, #24272d);
+  border: 1px solid var(--ultra-gray-300, #b8c0cc);
+  background: var(--ultra-surface, #fff);
+}
+
+.tapizado-avance__btn-descartar:hover:not(:disabled) {
+  background: var(--ultra-gray-50, #f3f5f7);
+}
+
+.tapizado-avance__btn-guardar {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
   gap: 8px;
-  margin-top: 10px;
+  color: #fff;
+  border: 1px solid var(--ultra-orange, #e54525);
+  background: var(--ultra-orange, #e54525);
+  box-shadow: 0 3px 9px rgb(229 69 37 / 22%);
 }
 
-.tapizado-avance__confirmacion {
-  padding: 12px;
-  margin-top: 10px;
-  border: 1px solid var(--ultra-gray-300, #c8cdd6);
-  border-radius: 12px;
-  background: var(--ultra-gray-50, #f7f8fa);
+.tapizado-avance__btn-guardar mat-icon {
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
 }
 
-.tapizado-avance__confirmacion p {
-  margin: 6px 0 8px;
-  font-size: 12px;
+.tapizado-avance__btn-guardar:hover:not(:disabled) {
+  background: #bb361c;
+  border-color: #bb361c;
+  box-shadow: 0 4px 12px rgb(229 69 37 / 28%);
 }
 
-.tapizado-avance__confirmacion-lista {
-  max-height: 150px;
-  overflow-y: auto;
-  font-size: 12px;
-  line-height: 1.7;
+.tapizado-avance__btn-guardar:focus-visible,
+.tapizado-avance__btn-descartar:focus-visible {
+  outline: 3px solid var(--ultra-gray-900, #24272d);
+  outline-offset: 3px;
+}
+
+.tapizado-avance__btn-guardar:disabled,
+.tapizado-avance__btn-descartar:disabled {
+  opacity: .55;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+@media (max-width: 620px) {
+  .tapizado-avance__barra-acciones {
+    padding: 12px;
+    margin-right: -16px;
+    margin-left: -16px;
+  }
+
+  .tapizado-avance__accion-resumen {
+    width: 100%;
+  }
+
+  .tapizado-avance__acciones {
+    width: 100%;
+    gap: 8px;
+  }
+
+  .tapizado-avance__acciones button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 10px;
+  }
 }
 
 .tapizado-avance__abandono {
