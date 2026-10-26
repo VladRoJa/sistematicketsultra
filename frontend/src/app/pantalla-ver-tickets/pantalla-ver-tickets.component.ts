@@ -37,6 +37,7 @@ import { aplicarFiltroPorRangoFechaCreacion, aplicarFiltroPorRangoFechaFinalizad
 import { MatDialog } from '@angular/material/dialog';
 import { asignarFechaSolucionYEnProgreso} from './helpers/pantalla-ver-tickets.fecha-solucion';
 import { HistorialFechasModalComponent } from './modals/historial-fechas-modal.component';
+import { TapizadoRecepcionModalComponent } from './modals/tapizado-recepcion-modal.component';
 import { refrescarDespuesDeCambioFiltro } from './helpers/refrescarDespuesDeCambioFiltro';
 import { AsignarFechaModalComponent } from './modals/asignar-fecha-modal.component';
 import { cambiarEstadoTicket } from './helpers/pantalla-ver-tickets.estado-ticket';
@@ -1184,6 +1185,21 @@ private normalizarTextoFiltro(value: any): string {
       }
     });
   }
+  abrirRecepcionTapizado(ticket: Ticket, event?: MouseEvent): void {
+    event?.stopPropagation();
+    if (ticket.tipo_trabajo !== 'TAPIZADO') return;
+    this.dialog.open(TapizadoRecepcionModalComponent, {
+      width: 'min(850px, 96vw)',
+      maxWidth: '96vw',
+      maxHeight: '90vh',
+      data: ticket,
+    }).afterClosed().subscribe((seActualizo: boolean) => {
+      if (seActualizo === true) {
+        this.refrescarTicketsPreservandoFiltros();
+      }
+    });
+  }
+
   inicializarCategoriaTemp() {
   this.inicializarTemporales('categoria');
 }
