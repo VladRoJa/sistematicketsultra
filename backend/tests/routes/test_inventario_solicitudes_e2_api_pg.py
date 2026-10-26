@@ -100,10 +100,13 @@ def api(monkeypatch):
                     "(5,'COORDINADOR_MANTENIMIENTO',7),"
                     "(6,'GERENTE_REGIONAL',7),"
                     "(7,'SISTEMAS',7),"
-                    "(8,'RECEPCIONISTA',7)"
+                    "(8,'RECEPCIONISTA',7),"
+                    "(9,'MANTENIMIENTO',7),"
+                    "(10,'TECNICO',7),"
+                    "(11,'MANTENIMIENTO',7)"
                 )
                 con.exec_driver_sql(
-                    "INSERT INTO usuario_sucursal VALUES (2,8),(3,8)"
+                    "INSERT INTO usuario_sucursal VALUES (2,8),(3,8),(7,8),(9,8),(10,8)"
                 )
                 con.exec_driver_sql(
                     "INSERT INTO inventario_general "
@@ -118,7 +121,7 @@ def api(monkeypatch):
                 )
             tokens = {
                 uid: {"Authorization": "Bearer " + create_access_token(identity=str(uid))}
-                for uid in (1, 2, 3, 4, 5, 6, 7, 8, 999)
+                for uid in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 999)
             }
             yield app.test_client(), tokens, app
 
@@ -342,3 +345,41 @@ def test_dos_propuestas_similares_independientes_generan_advertencia(api):
     assert second.status_code == 201
     assert second.get_json()["possible_pending_duplicate"] is True
     assert second.get_json()["solicitud"]["id"] != first.get_json()["solicitud"]["id"]
+
+
+def test_e2_mantenimiento_sistemas_tecnico_limitados_a_m2m_sin_primary_fallback(api):
+    client, tokens, _ = api
+    original = _snapshot(api)
+    corporate_request = _post(api, _payload())
+    assert corporate_request.status_code == 201, corporate_request.get_json()
+    corporate_id = corporate_request.get_json()["solicitud"]["id"]
+
+    for technical_user in (7, 9, 10):
+        # Los tres tienen sucursal primaria 7 pero solo M:N=8; nunca heredar 7.
+        assert _post(api, _payload(), user_id=technical_user).status_code == 403
+        assert client.get(
+            "/api/inventario/solicitudes?sucursal_id=7",
+            headers=tokens[technical_user],
+        ).status_code == 403
+        assert client.get(
+            f"/api/inventario/solicitudes/{corporate_id}",
+            headers=tokens[technical_user],
+        ).status_code == 404
+        query = client.get("/api/inventario/solicitudes",
+                           headers=tokens[technical_user])
+        assert query.status_code == 200, query.get_json()
+        assert all(item["sucursal_id"] == 8 for item in query.get_json()["items"])
+
+        assigned = _payload(branch=8, inventory=502)
+        assigned["valor_original"] = {"stock": 4}
+        assigned["valor_propuesto"] = {"cantidad_fisica": 2}
+        allowed = _post(api, assigned, user_id=technical_user)
+        assert allowed.status_code == 201, (technical_user, allowed.get_json())
+        assert allowed.get_json()["solicitud"]["sucursal_id"] == 8
+
+    # Sin ninguna asignación M:N, ni la sucursal primaria habilita lectura.
+    assert client.get(
+        "/api/inventario/solicitudes", headers=tokens[11],
+    ).status_code == 403
+    assert _post(api, _payload(), user_id=11).status_code == 403
+    assert _snapshot(api) == original
