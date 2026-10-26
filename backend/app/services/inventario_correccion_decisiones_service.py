@@ -222,6 +222,10 @@ def _apply_approved(row, decision, masters, stocks, actor_id, reason, resolution
         # Sin código físico, exigir el mismo nombre; con código, coincidencia exacta.
         provisional = row.hallazgo_provisional
         provisional_code = provisional.get("codigo_interno")
+        # Un aparato etiquetado necesita su código físico, no solo un nombre
+        # que pueden compartir muchos equipos.
+        if official.codigo_interno and not provisional_code:
+            raise DecisionError(422, "physical_code_required", "Se necesita el código físico para vincular este equipo.")
         if provisional_code:
             if str(provisional_code).strip().upper() != str(official.codigo_interno or "").strip().upper():
                 raise DecisionError(409, "identity_mismatch", "El código del hallazgo no coincide con el oficial.")
