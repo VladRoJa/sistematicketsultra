@@ -211,7 +211,10 @@ def create_workbook(
     calc.write("L1", "Ámbito seleccionado", navy)
     calc.write_formula(
         "M2",
-        '=IFERROR(VLOOKUP(Resumen!$K$6,
+        '=IFERROR(VLOOKUP(Resumen!$K$6,$' + catalog_name
+        + '$2:$' + catalog_key + '$' + str(len(scope_labels) + 1)
+        + ',2,FALSE),"ALL")',
+    )
     calc.write("R1", "Último mes", navy)
     calc.write_string("R2", last_month)
     calc.write("R3", "Desde efectivo", navy)
