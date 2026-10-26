@@ -256,7 +256,7 @@ def test_dispatch_execute_wrong_password_blocks_before_provider_and_claim(
         )
 
     assert response.status_code == 403
-    assert "Contraseña" in response.get_json()["error"]
+    assert "Contraseña" in response.get_json()["message"]
     load_actor.assert_called_once_with(7)
     verify_password.assert_called_once_with("clave-ficticia-incorrecta")
     provider.assert_not_called()
