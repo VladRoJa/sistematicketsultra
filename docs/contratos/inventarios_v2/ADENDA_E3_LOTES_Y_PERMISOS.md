@@ -64,14 +64,14 @@ El backend seguirá denegando por defecto mientras no existan y se validen tanto
 
 - **QUANTITY_DIFFERENCE:** ajuste oficial auditable con stock anterior/nuevo y delta firmada, sin registrar una `entrada/salida` falsa en V1.
 - **MASTER_FIELD:** corrección de maestro compartido con validación global, unicidad de código y auditoría antes/después. Si es código interno, también conservar el journal V1 existente.
-- **NOT_LOCATED:** no autorizar a cero sin `resolucion` expresa de baja/ajuste, facultad suficiente y evidencia; si no, dejar PENDING.
-- **UNREGISTERED_FIND:** autorizar solo alta canónica completa o vinculación a artículo existente, validando categoría, tipo, identidad, cantidad y sucursal. Nombre por sí solo no basta.
+- **NOT_LOCATED:** únicamente ajuste explícito a cero de stock esperado positivo, justificación, autorización por sucursal y bitácora atómica; sin evidencia dejar PENDING.
+- **UNREGISTERED_FIND:** en E3 solo vinculación documentada a artículo ya existente y asignado a la misma sucursal, con stock esperado y cantidad física superior; el alta canónica nueva queda bloqueada hasta acordar catálogo completo y política de aprobación global.
 
 ## 5. Gates antes de endpoints y rollout
 
 1. Documentar QA E2 completo: controles visuales ya verificados; completar prueba autenticada de rol/sucursal y comparar invariancia V1 contra registros de prueba.
 2. Verificar grants, alcance por usuario-sucursal, departamento y responsabilidad sin modificar cuentas productivas.
-3. Acordar criterios de `NOT_LOCATED`, `UNREGISTERED_FIND` y categorías maestros de impacto global.
+3. Ratificar operativamente los criterios restrictivos de `NOT_LOCATED` y la vinculación `UNREGISTERED_FIND`, además del flujo de alta nueva y categorías maestras de impacto global, antes del rollout.
 4. Ensayar DDL de PR draft #1134 en PostgreSQL efímero. No desplegar migración mientras los gates 1–3 estén abiertos.
 5. Implementar servicio transaccional (PR separado), luego endpoints/QA negativo y finalmente botones E3. `GERENTE_ROLLOUT=OFF` hasta E5.
 
@@ -82,15 +82,16 @@ El backend seguirá denegando por defecto mientras no existan y se validen tanto
 
 **PR draft #1134:** servicio `backend/app/services/inventario_correccion_decisiones_service.py::decidir_lote`, ruta `POST /api/inventario/solicitudes/decisiones/lote` en `backend/app/routes/inventario_solicitudes_routes.py::decidir_solicitudes_lote`.
 
-**Payload cerrado:** `{decision:"APPROVED"|"REJECTED", solicitud_ids:[1..10], motivo:"10..2000 caracteres", idempotency_key:"UUID"}`. No acepta claves extra, resoluciones ambiguas ni IDs duplicados. Respuesta 201 si decisión nueva; 200 con `replayed=true` si mismo actor, misma UUID y fingerprint del lote.
+**Payload cerrado:** `{decision:"APPROVED"|"REJECTED", solicitud_ids:[1..10], motivo:"10..2000 caracteres", idempotency_key:"UUID", resoluciones?:{"<solicitud_id>":{...}}}`. Para autorizar NOT_LOCATED/UNREGISTERED_FIND, `resoluciones` debe contener solo las decisiones necesarias, por ID, con el esquema de cada acción. Rechazo prohíbe resoluciones. No admite claves ajenas, resoluciones ambiguas ni IDs duplicados. Respuesta 201 si decisión nueva; 200 con `replayed=true` si mismo actor, misma UUID y fingerprint del lote.
 
 - **Aprobación `QUANTITY_DIFFERENCE`:** compara el baseline de stock bajo `FOR UPDATE`, escribe `InventarioSucursal.stock`, decisión, lote y `InventarioCorreccionAjusteORM` en un solo commit; no registra `entrada/salida` V1 falsos.
 - **Aprobación `MASTER_FIELD`:** solo autorización corporativa global explícita. Bloquea maestro, valida baseline, actualiza whitelist y audita valores; si es `codigo_interno`, usa advisory lock V1, verifica duplicados y escribe también `InventarioCodigoCorreccionORM`.
 - **Rechazo:** para los cuatro tipos, cierre `REJECTED` con actor/motivo/fecha, sin tocar stock ni maestro.
-- **`NOT_LOCATED` y `UNREGISTERED_FIND`:** rechazo admitido; aprobación devuelve **422 `resolution_required`**, rollback de todo el lote. No se asume baja a cero ni alta provisional.
+- **`NOT_LOCATED`:** no convierte una ausencia en pérdida sin decisión humana: solo admite aprobación con resolución explícita `AJUSTAR_A_CERO`, stock esperado positivo y justificación de 20–2000 caracteres. Revalida stock y baseline bajo lock, lleva existencias a cero con ajuste auditado en el mismo commit. Sin resolución: 422; un conflicto revierte el lote.
+- **`UNREGISTERED_FIND`:** solo admite `VINCULAR_EXISTENTE` a referencia canónica **ya asignada a la sucursal**, indicando `inventario_id`, stock esperado, cantidad física mayor al stock y justificación de 20–2000 caracteres. Bloquea la referencia, compara stock y código provisional cuando se proporcionó, modifica únicamente las existencias de la referencia ya existente y graba tanto vinculación auditada como ajuste, en la misma transacción. **No admite `CREAR_NUEVO`**: una alta oficial requiere un formulario de catálogo, código/familia y política corporativa separada; devolver 422 es más seguro que generar un inventario incompleto.
 - **Seguridad:** guard DB-backed de action `inventory.correction_approve`, nunca por JWT o nombre; autoaprobación siempre denegada; regionales no autorizados hasta E5.
 - **Concurrencia:** serialización por actor, lock de solicitudes y referencias ordenado, idempotencia por lote y UNIQUE por solicitud. Un conflicto devuelve 409 con rollback completo.
 
 **QA 26/10/2026:** workflow `Inventarios V2 E2 Solicitudes Schema CI` incluyendo E2 + E3 + pruebas integradas en PostgreSQL temporal: **35 PASS**. Incluye concurrencia de dos aprobadores, rollback de lote mixto, no autoaprobación, alcance por sucursal, historial de código, cambio maestro, rechazo sin efectos, replay, duplicados y 422 sin resolución.
 
-**Gate de entrega:** CI aprobado no significa validación funcional productiva. PR permanece draft; no hacer merge, no migrar DB productiva y no activar interfaz sin verificar permisos efectivos, QA E2 autenticado y resolución funcional de tipos faltantes.
+**Gate de entrega:** CI aprobado no significa validación funcional productiva. PR permanece draft; no hacer merge, no migrar DB productiva y no activar interfaz sin verificar permisos efectivos, QA E2 autenticado y ratificación operativa de los casos de ajuste a cero/vinculación. El alta de artículo maestro nuevo permanece fuera de E3 y requiere diseño separado.
