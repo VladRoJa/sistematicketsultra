@@ -1,5 +1,6 @@
 import { Component, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { A11yModule } from '@angular/cdk/a11y';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -37,7 +38,7 @@ type VistaSolicitud = 'solicitud' | 'hallazgo' | 'seguimiento';
 @Component({
   selector: 'app-solicitudes-correccion',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatProgressSpinnerModule],
+  imports: [CommonModule, FormsModule, MatIconModule, MatProgressSpinnerModule, A11yModule],
   templateUrl: './solicitudes-correccion.component.html',
   styleUrls: ['./solicitudes-correccion.component.css'],
 })
@@ -107,6 +108,7 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
   seleccionados = new Set<number>();
   private peticionListado?: Subscription;
   private peticionDetalle?: Subscription;
+  private disparadorDetalle: HTMLElement | null = null;
   private consultaVersion = 0;
 
   constructor(private readonly inventario: InventarioService) {}
@@ -217,11 +219,15 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
       this.campo === 'marca' ? 100 : 255;
   }
 
-  cerrarDetalle(): void {
+  cerrarDetalle(restaurarFoco = true): void {
     this.peticionDetalle?.unsubscribe();
     this.detalle = null;
     this.detalleIdAbierto = null;
     this.errorDetalle = '';
+    // Regresar al botón Detalles; no perder el contexto ni la selección.
+    const disparador = this.disparadorDetalle;
+    this.disparadorDetalle = null;
+    if (restaurarFoco) disparador?.focus();
   }
 
   // Solo se pueden seleccionar solicitudes pendientes de la página actual.
@@ -383,7 +389,7 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
 
   cargarSolicitudes(): void {
     this.peticionListado?.unsubscribe();
-    this.cerrarDetalle();
+    this.cerrarDetalle(false);
     this.seleccionados = new Set<number>();
     const version = ++this.consultaVersion;
     this.cargandoListado = true;
@@ -411,11 +417,13 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
     });
   }
 
-  toggleDetalle(id: number): void {
+  toggleDetalle(id: number, evento?: Event): void {
     if (this.detalleIdAbierto === id) {
       this.cerrarDetalle();
       return;
     }
+    // La referencia al botón solo se usa para restaurar el foco al cerrar.
+    this.disparadorDetalle = (evento?.currentTarget as HTMLElement | null) ?? null;
     this.consultarDetalle(id);
   }
 
