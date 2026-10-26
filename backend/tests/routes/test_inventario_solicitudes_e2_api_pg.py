@@ -103,7 +103,8 @@ def api(monkeypatch):
                     "(8,'RECEPCIONISTA',7),"
                     "(9,'MANTENIMIENTO',7),"
                     "(10,'TECNICO',7),"
-                    "(11,'MANTENIMIENTO',7)"
+                    "(11,'MANTENIMIENTO',7),"
+                    "(12,'AUX_MANTENIMIENTO',7)"
                 )
                 con.exec_driver_sql(
                     "INSERT INTO usuario_sucursal VALUES (2,8),(3,8),(7,8),(9,8),(10,8)"
@@ -121,7 +122,7 @@ def api(monkeypatch):
                 )
             tokens = {
                 uid: {"Authorization": "Bearer " + create_access_token(identity=str(uid))}
-                for uid in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 999)
+                for uid in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 999)
             }
             yield app.test_client(), tokens, app
 
@@ -383,3 +384,50 @@ def test_e2_mantenimiento_sistemas_tecnico_limitados_a_m2m_sin_primary_fallback(
     ).status_code == 403
     assert _post(api, _payload(), user_id=11).status_code == 403
     assert _snapshot(api) == original
+
+
+def test_e2_aux_sin_m2m_conserva_solo_su_principal_sin_expandir_acceso(api):
+    """Caso espejo de los 11 auxiliares productivos: primaria sí, M:N vacío."""
+    client, tokens, app = api
+    before = _snapshot(api)
+    with app.app_context():
+        assignments = db.session.execute(sa.text(
+            "SELECT count(*) FROM usuario_sucursal WHERE user_id = 12"
+        )).scalar_one()
+        assert assignments == 0
+
+    # Puede registrar propuesta exclusivamente en la sucursal primaria.
+    created = _post(api, _payload(), user_id=12)
+    assert created.status_code == 201, created.get_json()
+    allowed_id = created.get_json()["solicitud"]["id"]
+    assert created.get_json()["solicitud"]["sucursal_id"] == 7
+
+    # No puede operar sucursal 8 aunque exista un artículo allí.
+    outside = _payload(branch=8, inventory=502)
+    outside["valor_original"] = {"stock": 4}
+    outside["valor_propuesto"] = {"cantidad_fisica": 2}
+    assert _post(api, outside, user_id=12).status_code == 403
+    assert client.get(
+        "/api/inventario/solicitudes?sucursal_id=8",
+        headers=tokens[12],
+    ).status_code == 403
+
+    # Se filtra también el detalle: no basta esconder la sucursal en la UI.
+    foreign = _post(api, _payload("UNREGISTERED_FIND", branch=8, inventory=None))
+    assert foreign.status_code == 201
+    foreign_id = foreign.get_json()["solicitud"]["id"]
+    assert client.get(
+        f"/api/inventario/solicitudes/{foreign_id}",
+        headers=tokens[12],
+    ).status_code == 404
+    allowed_detail = client.get(
+        f"/api/inventario/solicitudes/{allowed_id}",
+        headers=tokens[12],
+    )
+    assert allowed_detail.status_code == 200
+    listed = client.get(
+        "/api/inventario/solicitudes", headers=tokens[12],
+    )
+    assert listed.status_code == 200
+    assert all(item["sucursal_id"] == 7 for item in listed.get_json()["items"])
+    assert _snapshot(api) == before
