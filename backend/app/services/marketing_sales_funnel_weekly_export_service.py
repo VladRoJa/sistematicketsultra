@@ -276,6 +276,18 @@ def create_workbook(
         panel.write_formula(
             col + "12", f'=IFERROR(LOOKUP(2,1/({condition}),{diffs})*100,"")', pp
         )
+    # La descripción sigue el último lunes del periodo seleccionado.
+    condition = f"'Tendencia - datos'!I11:I{last}=1"
+    date_source = f"'Tendencia - datos'!A11:A{last}"
+    panel.write_formula(
+        "A8",
+        '=IFERROR("Corte actual: "&TEXT(LOOKUP(2,1/(' + condition + '),'
+        + date_source + '),"dd mmm yyyy")&"  ·  Ámbito: "&$K$6'
+        + '&"  ·  "&COUNTIF(\'Tendencia - datos\'!I11:I'
+        + str(last) + ',1)&" cortes disponibles",'
+        + '"Sin lunes completos en el periodo seleccionado")',
+        small,
+    )
     if weekly:
         chart = book.add_chart({"type": "line"})
         for month, metric, col in series:
