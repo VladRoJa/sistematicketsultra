@@ -43,10 +43,21 @@ def durable():
     administrator = sa.create_engine(url)
     with administrator.begin() as conn:
         conn.exec_driver_sql(f"CREATE SCHEMA {schema}")
-    engine = sa.create_engine(url, pool_size=3, max_overflow=0,
-                              connect_args={"options": f"-c search_path={schema},public"})
+    engine = sa.create_engine(url, pool_size=3, max_overflow=0)
+
+    # Explicit synthetic schema, never a public-table fallback from SQLAlchemy
+    # create_all(checkfirst=True). Apply per connection, including pooled ones.
+    @sa.event.listens_for(engine, "connect")
+    def _isolate_connection(dbapi_connection, _connection_record):
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute(f"SET search_path TO {schema}")
+        finally:
+            cursor.close()
+        dbapi_connection.commit()
+
     try:
-        parents = sa.MetaData()
+        parents = sa.MetaData(schema=schema)
         sa.Table("users", parents, sa.Column("id", sa.Integer, primary_key=True))
         for name in (
             "marketing_campaign_v2_campaigns",
