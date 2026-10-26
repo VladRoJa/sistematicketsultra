@@ -94,7 +94,9 @@ def export_video(raw: Path, out: Path, scenes: list[dict], voice: str) -> Path:
             delay = round(float(scene["at"]) * 1000)
             filters.append(f"[{i + 1}:a]adelay={delay}|{delay}[a{i}]")
     mp4 = out / "capacitacion.mp4"
-    ff = ["ffmpeg", "-y", "-i", str(raw), *audio_args]
+    # Todos los -i ANTES de opciones de salida; FFmpeg no acepta -map
+    # delante de un input pendiente.
+    ff = ["ffmpeg", "-y", "-i", str(raw), *audio_args, "-i", str(srt)]
     if filters:
         joins = "".join(f"[a{i}]" for i in range(len(scenes)))
         graph = ";".join(filters + [f"{joins}amix=inputs={len(scenes)}:duration=longest:normalize=0[narracion]"])
@@ -102,7 +104,7 @@ def export_video(raw: Path, out: Path, scenes: list[dict], voice: str) -> Path:
     else:
         ff += ["-map", "0:v:0"]
     # MP4 con subtítulos embebidos activables + SRT independiente.
-    ff += ["-i", str(srt), "-map", f"{1 + len(scenes) if filters else 1}:s:0",
+    ff += ["-map", f"{1 + len(scenes) if filters else 1}:s:0",
            "-c:v", "libx264", "-crf", "22", "-preset", "veryfast",
            "-pix_fmt", "yuv420p", "-c:s", "mov_text",
            "-metadata:s:s:0", "language=spa", "-movflags", "+faststart"]
