@@ -254,13 +254,19 @@ test('E2 UX: bandeja con selección por página, detalles por fila y decisiones 
   assert.match(html, /\(change\)="alternarPagina\(\)"/);
   assert.match(html, /\(change\)="alternarSeleccion\(solicitud\.id\)"/);
   assert.match(html, /\[disabled\]="solicitud\.estado !== 'PENDING'"/);
-  assert.match(html, /\(click\)="toggleDetalle\(solicitud\.id\)"/);
-  assert.match(html, /\[attr\.aria-expanded\]="detalleIdAbierto === solicitud\.id"/);
+  assert.match(html, /\(click\)="toggleDetalle\(solicitud\.id, \$event\)"/);
+  assert.match(html, /aria-haspopup="dialog"/);
   assert.match(html, /Autorizar seleccionadas/);
   assert.match(html, /Rechazar seleccionadas/);
   assert.match(html, /class="solicitud-bandeja__autorizar" disabled/);
   assert.match(html, /class="solicitud-bandeja__rechazar" disabled/);
-  assert.match(css, /\.solicitud-bandeja__lista\s*\{[^}]*max-height:/s);
+  assert.match(css, /\.solicitud-bandeja__lista\s*\{[^}]*overflow:\s*visible;/s);
+  assert.doesNotMatch(html, /class="solicitud-bandeja__expandido"/);
+  assert.match(html, /class="solicitud-detalle-overlay"/);
+  assert.match(html, /class="solicitud-detalle-dialog" role="dialog" aria-modal="true"/);
+  assert.match(html, /cdkTrapFocus/);
+  assert.match(html, /\(keydown\.escape\)="cerrarDetalle\(\)"/);
+  assert.match(css, /\.solicitud-detalle-contenido\s*\{[^}]*overflow-y:\s*auto;/s);
   assert.match(css, /\.solicitud-filtros\s*\{[^}]*repeat\(3,/s);
   assert.doesNotMatch(html, /aprobarSolicitud\(|rechazarSolicitud\(|aplicarCorreccion\(/);
   assert.doesNotMatch(src, /\.(aprobarSolicitud|rechazarSolicitud|aplicarCorreccion)\(/);
@@ -299,7 +305,7 @@ test('E2: filtros y páginas limpian selección para evitar aprobar fuera del co
   assert.equal(calls.gets.at(-1).page, 2);
 });
 
-test('E2: detalles se expanden bajo demanda sin alterar la selección', () => {
+test('E2: detalles abren un segundo modal sin alterar la selección', () => {
   const { vm, calls } = fixture({ referencia: null, vistaInicial: 'seguimiento' });
   vm.alternarSeleccion(7);
   vm.toggleDetalle(7);
@@ -311,4 +317,41 @@ test('E2: detalles se expanden bajo demanda sin alterar la selección', () => {
   assert.equal(vm.detalle, null);
   assert.equal(vm.detalleIdAbierto, null);
   assert.equal(vm.totalSeleccionados, 1);
+});
+
+test('E2: detalle conserva checks y devuelve foco al botón al cerrarlo', async () => {
+  const { vm } = fixture({ referencia: null, vistaInicial: 'seguimiento' });
+  vm.alternarSeleccion(7);
+  let focusCount = 0;
+  const boton = { isConnected: true, focus() { focusCount++; } };
+  vm.toggleDetalle(7, { currentTarget: boton });
+  assert.equal(vm.detalleIdAbierto, 7);
+  assert.equal(vm.totalSeleccionados, 1);
+  vm.cerrarDetalle();
+  await Promise.resolve();
+  assert.equal(vm.detalleIdAbierto, null);
+  assert.equal(vm.totalSeleccionados, 1);
+  assert.equal(focusCount, 1);
+});
+
+test('E2: filtrar mientras detalle abierto cancela modal y limpia selección', () => {
+  const { vm } = fixture({ referencia: null, vistaInicial: 'seguimiento' });
+  vm.alternarSeleccion(7);
+  vm.toggleDetalle(7);
+  assert.equal(vm.detalleIdAbierto, 7);
+  vm.cambiarFiltros();
+  assert.equal(vm.detalleIdAbierto, null);
+  assert.equal(vm.totalSeleccionados, 0);
+});
+
+test('E2 UX: segundo modal no aumenta altura de la lista ni agrega doble scroll', () => {
+  assert.match(css, /\.solicitud-detalle-dialog\s*\{[^}]*max-height:\s*min\(82dvh,\s*720px\)/s);
+  assert.match(css, /\.solicitud-bandeja__lista\s*\{[^}]*overflow:\s*visible;/s);
+  assert.match(css, /\.solicitud-bandeja__acciones\s*\{[^}]*position:\s*sticky;/s);
+  assert.match(html, /\*ngIf="detalleIdAbierto !== null && modo === 'seguimiento'"/);
+  assert.match(html, /\[attr\.inert\]="detalleIdAbierto !== null \? '' : null"/);
+  assert.match(html, /\(click\)="cerrarDetalle\(\)"/);
+  assert.doesNotMatch(html, /\*ngIf="detalleIdAbierto === solicitud\.id"/);
+  assert.match(html, /class="solicitud-bandeja__autorizar" disabled/);
+  assert.match(html, /class="solicitud-bandeja__rechazar" disabled/);
 });
