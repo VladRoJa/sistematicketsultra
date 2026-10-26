@@ -65,12 +65,23 @@ La matriz distingue **qué mecanismo se debe auditar** de **autorización compro
 - **RPA SMS:** `create_gasca_sms_request_route` usa `_require_module_access`; evaluar sucursal y envío diferido.
 - **Warehouse / Track Alerts / Routine Control / aperturas / mantenimiento:** revisión de actor, sucursal, estado, canal de side effects y trazabilidad pendiente antes de tomar decisiones finales.
 
+
+## Hallazgo de seguridad P29-S1 — Track Alerts (remediación de backend)
+
+La suite estructural P29 detectó una **ausencia real de `@jwt_required()` en cinco POST** de `backend/app/track_alerts/routes/track_alert_routes.py`: `/test`, `/generate`, `/regional-test`, `/send-email` y `/send-regional-email`. Al revisar el Blueprint también aparecieron **dos GET de preview de correo** sin JWT: `/preview-email` y `/regional-preview-email`. En esos handlers originales no había un check alternativo de rol; `app.before_request` solo atiende preflight OPTIONS. **Por lectura de código eran rutas con riesgo de ejecución anónima**, incluidas generación de eventos y envíos SMTP. No se hicieron solicitudes a producción ni se enviaron correos reales para demostrar una explotación.
+
+**Corrección en este mismo PR:** se añade `@jwt_required()` y la comprobación de rol basada en usuario BD a esas siete rutas. Se reutilizan los guards existentes `_require_track_read_role()` para las 4 vistas/consultas y `_require_track_admin_role()` para los 3 efectos (generar eventos, enviar correo nacional, enviar correo regional). Se devuelve 403 ante rol insuficiente, antes de invocar servicios, y JWT ausente devuelve 401. Quedan intactas las otras dos rutas GET de detalle que ya estaban protegidas. Los roles de lectura del Track pueden consultar vistas previas, pero no generar ni enviar.
+
+**Otra excepción descubierta:** `POST /api/warehouse/internal/gasca-report-jobs` tampoco lleva JWT **porque es un endpoint máquina→máquina**, protegido por `X-Suite-Internal-Token` con comparación `hmac.compare_digest`, y rechaza si el secreto no está configurado. Exigir JWT de usuario allí rompería el contrato interno. Test sintético comprueba 403 antes del orquestador si falta el token o es incorrecto. No imprimir ni persistir el secreto en reportes.
+
+Las regresiones HTTP sintéticas de `backend/tests/test_track_alert_routes_p29_auth.py` validan siete respuestas 401 sin JWT, 403 por rol, cero invocaciones de servicios de envío/generación en rechazados y éxitos simulados por rol permitido. No se usó SMTP, proveedor externo ni base productiva. **Este hallazgo sí altera enforcement de Track Alerts** y exige desplegar backend tras revisión/merge por el flujo de producción. No hay cambios SQL ni migraciones. El alcance funcional necesita aceptación de política: solo roles administradores de Track pueden generar/enviar alertas.
+
 ## Qué garantizan las pruebas de P29 (y qué no)
 
 `backend/tests/routes/test_permissions_phase_a_p29_action_reconciliation.py`:
 1. Exige relación 1:1 de **112** filas con P28, sin alterar IDs de método/ruta/handler/familia/riesgo.
 2. Verifica que solo las **10 asociaciones provisionales explícitas** apunten a claves encontradas en los seeds históricos; las otras **102** no se rellenan por inferencia.
-3. Revisa la presencia estructural de `@jwt_required` en las rutas fuera de `auth` y conserva las tres excepciones del protocolo de sesión.
+3. Revisa la presencia estructural de `@jwt_required` en rutas de usuario, y reconoce **auth (credenciales/cookies)** y **Warehouse internal jobs (token compartido)** como excepciones con controles propios.
 4. Verifica señales puntuales en handlers sensibles de permisos, Track, SMS, Marketing dispatch, finanzas, Contact Center, Chequeo Diario y publicación de Google Ads.
 
 No se ejecutan endpoints ni servicios, no se consultan datos productivos, no se modifica ningún guard o grant y no se resuelve la precedencia de excepciones. Las pruebas estructurales pueden fallar por refactors seguros y deberán ajustarse solo tras revisar el nuevo contrato real.
@@ -83,4 +94,4 @@ No se ejecutan endpoints ni servicios, no se consultan datos productivos, no se 
 4. Inventariar los **247 GET sin catálogo**, particularmente exportaciones y datos sensibles. Determinar variación histórica 111→112 a partir de snapshots históricos completos; no atribuir a Tapizado u otra causa sin diff.
 5. Si procede incorporar mapeos o acciones, escribir **migración Alembic** explícita y revisable que **no active grants ni sustituya guards legacy**. Revalidar paridad después del despliegue autorizado.
 
-**P29 no cambia comportamiento; #1053 sigue OPEN.** Ni 112 ni 102 son permisos nuevos que haya que otorgar.
+**P29-S1 sí corrige enforcement en siete rutas Track Alerts.** Fuera de esa remediación no se modifican los 112 mapeos del catálogo, los grants, las acciones, otros guards ni BD. La Fase A #1053 sigue OPEN. Ni 112 ni 102 son permisos nuevos que haya que otorgar.
