@@ -5,6 +5,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.models.marketing_campaign_v2_background_job import (
+    MarketingCampaignV2BackgroundJobORM as BackgroundJob,
+)
 from app.services import marketing_campaign_v2_governed_dispatch_service as svc
 
 NOW = datetime(2026, 10, 13, 17, tzinfo=timezone.utc)
@@ -45,10 +48,22 @@ def review():
     return NS(id=9, expires_at=NOW+timedelta(minutes=9)), plan(), manifest(), children(), DIGEST
 
 
-def fake_authorized_session(exec_obj):
+def fake_authorized_session(exec_obj, *, background_job=None):
+    """D2c mock makes the new background-job query explicit.
+
+    Preserve the production guard: no mandate -> manual D2c permitted;
+    existing mandate -> D2c must reject before HTTP.
+    """
     session = MagicMock()
-    query = session.query.return_value
-    query.filter.return_value.with_for_update.return_value.one_or_none.return_value = exec_obj
+    execution_query = MagicMock()
+    execution_query.filter.return_value.with_for_update.return_value.one_or_none.return_value = exec_obj
+    background_query = MagicMock()
+    bg_result = background_query.filter.return_value.with_for_update.return_value
+    bg_result.one_or_none.return_value = background_job
+    bg_result.first.return_value = background_job
+    session.query.side_effect = (
+        lambda model: background_query if model is BackgroundJob else execution_query
+    )
     session.get.return_value = exec_obj
     return session
 
@@ -133,6 +148,26 @@ def test_execute_claims_one_child_before_network_and_completes():
     make_batch.assert_called_once()
     success.assert_called_once()
 
+
+
+
+def test_existing_background_mandate_blocks_manual_claim_and_network():
+    e = execution()
+    session = fake_authorized_session(e, background_job=NS(
+        id=88, execution_id=41, campaign_v2_id=99,
+        status="RUNNING",
+    ))
+    provider = MagicMock()
+    with patch.object(svc, "_locked_review", return_value=review()):
+        with pytest.raises(svc.GovernedDispatchConflict, match="mandato"):
+            svc.execute_governed_child(
+                campaign_id=99, execution_id=41, child_id=100,
+                expected_digest=DIGEST, actor_user_id=7, provider=provider,
+                send_enabled=True, governed_enabled=True,
+                allowed_sucursal_keys=None, session=session, now=NOW,
+            )
+    provider.create_campaign.assert_not_called()
+    session.commit.assert_not_called()
 
 def test_inflight_execution_blocks_replay_before_provider():
     e = execution("IN_FLIGHT")
