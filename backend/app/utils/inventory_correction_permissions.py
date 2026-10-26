@@ -156,3 +156,75 @@ def resolver_acceso_autorizacion_e3(
     if any(g["effect"] == "allow" for g in matching):
         return InventoryCorrectionApprovalAccess(True, "explicit_scoped_grant")
     return InventoryCorrectionApprovalAccess(False, "no_explicit_scoped_grant")
+
+
+def alcance_revision_e3(actor_usuario_id):
+    """Sucursales de revisión autorizadas en DB; sin JWT ni permisos E2.
+
+    Se devuelven únicamente sucursales efectivas. Para administración se exige
+    grant global personal; roles de mantenimiento intersecan usuario_sucursal.
+    Los deny vigentes prevalecen, sin exponer sucursales ajenas al cliente.
+    """
+    actor_id = _positive_int(actor_usuario_id)
+    if not actor_id:
+        return None
+    actor = db.session.execute(text(
+        "SELECT id, rol, department_id FROM users WHERE id=:id"
+    ), {"id": actor_id}).mappings().first()
+    if actor is None:
+        return None
+    role = str(actor["rol"] or "").strip().upper()
+    if role not in _GLOBAL_ADMIN_ROLES | _SCOPED_APPROVER_ROLES:
+        return None
+    grants = db.session.execute(text("""
+        SELECT g.principal_type, g.effect, g.scope_type,
+               g.scope_branch_id, g.scope_branch_ids, g.scope_department_id
+        FROM permission_grants g
+        JOIN permission_actions a ON a.id = g.action_id
+        JOIN permission_modules m ON m.id = a.module_id
+        WHERE a.full_key = :action AND a.is_active IS TRUE
+          AND m.key = 'inventory' AND m.is_active IS TRUE
+          AND g.is_active IS TRUE AND g.deleted_at IS NULL
+          AND (g.starts_at IS NULL OR g.starts_at <= now())
+          AND (g.expires_at IS NULL OR g.expires_at > now())
+          AND ((g.principal_type = 'user' AND g.principal_user_id = :id)
+               OR (g.principal_type = 'role'
+                   AND upper(btrim(g.principal_role_key)) = :role))
+    """), {"action": _ACTION, "id": actor_id, "role": role}).mappings().all()
+    corporate = role in _GLOBAL_ADMIN_ROLES
+    if corporate and not any(
+        g["principal_type"] == "user"
+        and g["scope_type"] == "global" and g["effect"] == "allow"
+        for g in grants
+    ):
+        return None
+
+    if corporate:
+        candidate = db.session.execute(text(
+            "SELECT sucursal_id FROM sucursales ORDER BY sucursal_id"
+        )).scalars().all()
+    else:
+        candidate = db.session.execute(text(
+            "SELECT sucursal_id FROM usuario_sucursal WHERE user_id=:id "
+            "ORDER BY sucursal_id"
+        ), {"id": actor_id}).scalars().all()
+
+    permitted = []
+    for raw in sorted(set(candidate)):
+        branch = _positive_int(raw)
+        if branch is None:
+            continue
+        if any(g["effect"] == "deny"
+               and _grant_covers_branch(g, branch, actor["department_id"])
+               for g in grants):
+            continue
+        if corporate or any(
+            g["effect"] == "allow"
+            and _grant_covers_branch(g, branch, actor["department_id"])
+            for g in grants
+        ):
+            permitted.append(branch)
+    if not permitted:
+        return None
+    return {"actor_id": actor_id, "sucursales": permitted,
+            "corporativo": corporate}
