@@ -46,6 +46,22 @@ export class MarketingSalesFunnelOriginalService {
     );
   }
 
+  exportWeeklyWorkbook(
+    month: string,
+    branchIds: number[] = [],
+    cutoffDate?: string | null,
+  ): Observable<Blob> {
+    let params = new HttpParams().set('month', month);
+    if (cutoffDate) {
+      params = params.set('cutoff_date', cutoffDate);
+    }
+    params = this.withBranchIds(params, branchIds);
+    return this.http.get(
+      `${this.apiUrl}/sales-funnel/export/weekly`,
+      { params, responseType: 'blob' },
+    );
+  }
+
   getDetail(
     month: string,
     metric: string,
