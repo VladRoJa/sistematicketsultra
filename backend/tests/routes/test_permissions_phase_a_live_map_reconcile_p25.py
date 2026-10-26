@@ -66,8 +66,6 @@ def test_p25_classifies_exact_alias_handler_drift_inactive_and_unmapped():
     assert report["by_family"]["demo"]["total"] == 5
 
 
-
-
 def test_p25_admin_handler_alias_does_not_inflate_family_mutations():
     # El alias del endpoint de sucursales existe en Suite Ultra; NO es
     # una mutacion fuera del catalogo y no debe sumar en la familia admin.
@@ -94,6 +92,7 @@ def test_p25_admin_handler_alias_does_not_inflate_family_mutations():
         sum(stats["mutation_unreviewed"] for stats in report["by_family"].values())
         == len(report["unreviewed_mutations"])
     )
+
 
 def test_p25_no_inferred_bypass_or_risk_from_missing_catalog_mapping():
     report = compare_route_maps(
