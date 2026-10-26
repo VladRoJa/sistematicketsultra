@@ -93,6 +93,7 @@ jobs:
             tests/marketing/test_background_dispatch_m1a_schema.py \
             tests/marketing/test_background_dispatch_m1b_contract.py \
             tests/marketing/test_background_dispatch_m1c_contract.py \
+            tests/marketing/test_background_dispatch_m3_routes.py \
             tests/marketing/test_issue_856_stage_e_gates.py \
             tests/marketing/test_marketing_campaign_v2_quota_dispatch_real_pg.py \
             tests/marketing/test_marketing_campaign_v2_started_continuation.py
