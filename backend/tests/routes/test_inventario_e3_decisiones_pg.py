@@ -371,3 +371,143 @@ def test_e3_segunda_aprobacion_concurrente_aplica_una_sola_vez(env):
     db.session.remove()
     assert _sql("SELECT count(*) FROM inventario_correccion_ajustes") == 1
     assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=501 AND sucursal_id=7") == 2
+
+
+def test_e3_no_localizado_aprueba_solo_resolucion_explicita_y_ajuste_trazable(env):
+    _grant(45)
+    req = _request("NOT_LOCATED")
+    payload = _payload([req])
+    payload["resoluciones"] = {
+        str(req): {
+            "accion": "AJUSTAR_A_CERO", "stock_esperado": 3,
+            "justificacion": "Inspección física y revisión de evidencia de faltante",
+        },
+    }
+    result = _post(env,45,payload)
+    assert result.status_code == 201, result.get_json()
+    assert result.get_json()["items"][0]["efecto"]["despues"] == 0
+    assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=501 AND sucursal_id=7") == 0
+    assert _sql("SELECT delta_firmada FROM inventario_correccion_ajustes") == -3
+    assert _sql("SELECT count(*) FROM inventario_correccion_decisiones WHERE resolucion->>'accion'='AJUSTAR_A_CERO'") == 1
+    assert _sql("SELECT count(*) FROM movimientos_inventario") == 0
+    replay = _post(env,45,payload)
+    assert replay.status_code == 200 and replay.get_json()["replayed"] is True
+    assert _sql("SELECT count(*) FROM inventario_correccion_ajustes") == 1
+
+
+def test_e3_hallazgo_vincula_solo_a_referencia_existente_con_ajuste_y_auditoria(env):
+    _grant(91)
+    req = _request("UNREGISTERED_FIND", inv=None)
+    payload = _payload([req])
+    payload["resoluciones"] = {
+        str(req): {
+            "accion": "VINCULAR_EXISTENTE", "inventario_id": 502,
+            "stock_esperado": 1, "cantidad_fisica": 2,
+            "justificacion": "La revisión cruzada y la etiqueta física identifican el mismo equipo",
+        },
+    }
+    result = _post(env,91,payload)
+    assert result.status_code == 201, result.get_json()
+    assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=502 AND sucursal_id=7") == 2
+    assert _sql("SELECT count(*) FROM inventario_correccion_altas_auditoria WHERE modalidad='VINCULACION'") == 1
+    assert _sql("SELECT count(*) FROM inventario_correccion_ajustes WHERE delta_firmada=1") == 1
+    assert _sql("SELECT count(*) FROM inventario_general") == 2
+    assert _sql("SELECT estado FROM inventario_correccion_solicitudes WHERE id=:id",{"id":req}) == "APPROVED"
+    assert _sql("SELECT count(*) FROM movimientos_inventario") == 0
+
+
+def test_e3_hallazgo_sin_ref_asignada_no_crea_articulo_automaticamente(env):
+    _grant(91)
+    req = _request("UNREGISTERED_FIND",inv=None)
+    payload = _payload([req])
+    payload["resoluciones"] = {
+        str(req): {
+            "accion": "VINCULAR_EXISTENTE", "inventario_id": 502,
+            "stock_esperado": 1, "cantidad_fisica": 2,
+            "justificacion": "Hallazgo con referencia oficial que no aparece asignada a la sucursal",
+        },
+    }
+    with db.engine.begin() as con:
+        con.exec_driver_sql("DELETE FROM inventario_sucursal WHERE inventario_id=502 AND sucursal_id=7")
+    result = _post(env,91,payload)
+    assert result.status_code == 409, result.get_json()
+    assert _sql("SELECT count(*) FROM inventario_correccion_decisiones") == 0
+
+
+def test_e3_no_localizado_stock_stale_revierte_lote_completo(env):
+    _grant(47)
+    first = _request("QUANTITY_DIFFERENCE")
+    second = _request("NOT_LOCATED",inv=502,original={"stock":1},
+                      baseline={"inventario_id":502,"sucursal_id":7,"stock":1})
+    payload = _payload([first, second])
+    payload["resoluciones"] = {
+        str(second): {
+            "accion": "AJUSTAR_A_CERO", "stock_esperado": 2,
+            "justificacion": "Faltante revisado pero el inventario cambió y quedó desfasado",
+        },
+    }
+    result = _post(env,47,payload)
+    assert result.status_code == 409, result.get_json()
+    assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=501 AND sucursal_id=7") == 3
+    assert _sql("SELECT count(*) FROM inventario_correccion_decisiones") == 0
+    assert _sql("SELECT count(*) FROM inventario_correccion_ajustes") == 0
+    assert _sql("SELECT count(*) FROM inventario_correccion_lotes") == 0
+
+
+def test_e3_hallazgo_identidad_de_codigo_debe_coincidir(env):
+    _grant(47)
+    req = _request("UNREGISTERED_FIND", inv=None)
+    db.session.execute(sa.text(
+        "UPDATE inventario_correccion_solicitudes "
+        "SET hallazgo_provisional = '{\"nombre\":\"Remo\",\"codigo_interno\":\"DIFERENTE\"}'::jsonb "
+        "WHERE id=:id"
+    ), {"id":req})
+    db.session.commit()
+    payload = _payload([req])
+    payload["resoluciones"] = {
+        str(req): {
+            "accion": "VINCULAR_EXISTENTE", "inventario_id":502,
+            "stock_esperado":1, "cantidad_fisica":2,
+            "justificacion":"Inspección de la identidad física del aparato encontrado",
+        },
+    }
+    result = _post(env,47,payload)
+    assert result.status_code == 409, result.get_json()
+    assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=502 AND sucursal_id=7") == 1
+    assert _sql("SELECT count(*) FROM inventario_correccion_altas_auditoria") == 0
+
+
+def test_e3_resolucion_no_autoriza_creacion_automatica_ni_ids_ajenos(env):
+    _grant(47)
+    req = _request("UNREGISTERED_FIND", inv=None)
+    payload = _payload([req])
+    payload["resoluciones"] = {
+        str(req): {
+            "accion": "CREAR_NUEVO", "inventario_id":502,
+            "stock_esperado":1,"cantidad_fisica":2,
+            "justificacion":"Solo una ficha provisional, sin identidad canónica completa",
+        },
+    }
+    response = _post(env,47,payload)
+    assert response.status_code == 422, response.get_json()
+    payload["resoluciones"] = {"99999": payload["resoluciones"][str(req)]}
+    assert _post(env,47,payload).status_code == 400
+    assert _sql("SELECT count(*) FROM inventario_general") == 2
+    assert _sql("SELECT count(*) FROM inventario_correccion_decisiones") == 0
+
+
+def test_e3_correcciones_distintas_misma_existencia_bloquean_lote(env):
+    _grant(47)
+    located = _request("NOT_LOCATED")
+    counted = _request("QUANTITY_DIFFERENCE")
+    payload = _payload([located, counted])
+    payload["resoluciones"] = {
+        str(located): {
+            "accion": "AJUSTAR_A_CERO", "stock_esperado":3,
+            "justificacion":"Faltante documentado, pero hay otra corrección sobre el mismo equipo",
+        },
+    }
+    resp = _post(env,47,payload)
+    assert resp.status_code == 409, resp.get_json()
+    assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=501 AND sucursal_id=7") == 3
+    assert _sql("SELECT count(*) FROM inventario_correccion_decisiones") == 0
