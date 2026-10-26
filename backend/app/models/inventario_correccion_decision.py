@@ -41,6 +41,7 @@ class InventarioCorreccionDecisionORM(db.Model):
 
     __table_args__ = (
         db.UniqueConstraint("solicitud_id", name="uq_inv_corr_decision_solicitud"),
+        db.UniqueConstraint("id", "solicitud_id", name="uq_inv_corr_decision_par"),
         db.UniqueConstraint(
             "actor_usuario_id", "idempotency_key",
             name="uq_inv_corr_decision_actor_key",
@@ -66,22 +67,8 @@ class InventarioCorreccionAjusteORM(db.Model):
     __tablename__ = "inventario_correccion_ajustes"
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
-    decision_id = db.Column(
-        db.BigInteger,
-        db.ForeignKey(
-            "inventario_correccion_decisiones.id",
-            name="fk_inv_corr_ajuste_decision", ondelete="RESTRICT",
-        ),
-        nullable=False,
-    )
-    solicitud_id = db.Column(
-        db.BigInteger,
-        db.ForeignKey(
-            "inventario_correccion_solicitudes.id",
-            name="fk_inv_corr_ajuste_solicitud", ondelete="RESTRICT",
-        ),
-        nullable=False,
-    )
+    decision_id = db.Column(db.BigInteger, nullable=False)
+    solicitud_id = db.Column(db.BigInteger, nullable=False)
     inventario_id = db.Column(db.Integer, nullable=False)
     sucursal_id = db.Column(db.Integer, nullable=False)
     stock_anterior = db.Column(db.Integer, nullable=False)
@@ -101,6 +88,11 @@ class InventarioCorreccionAjusteORM(db.Model):
 
     __table_args__ = (
         db.UniqueConstraint("decision_id", name="uq_inv_corr_ajuste_decision"),
+        db.ForeignKeyConstraint(
+            ["decision_id", "solicitud_id"],
+            ["inventario_correccion_decisiones.id", "inventario_correccion_decisiones.solicitud_id"],
+            name="fk_inv_corr_ajuste_decision_solicitud", ondelete="RESTRICT",
+        ),
         db.UniqueConstraint("solicitud_id", name="uq_inv_corr_ajuste_solicitud"),
         db.ForeignKeyConstraint(
             ["inventario_id", "sucursal_id"],
@@ -130,20 +122,8 @@ class InventarioCorreccionMaestroAuditORM(db.Model):
     __tablename__ = "inventario_correccion_maestro_auditoria"
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
-    decision_id = db.Column(
-        db.BigInteger,
-        db.ForeignKey(
-            "inventario_correccion_decisiones.id",
-            name="fk_inv_corr_maestro_decision", ondelete="RESTRICT",
-        ), nullable=False,
-    )
-    solicitud_id = db.Column(
-        db.BigInteger,
-        db.ForeignKey(
-            "inventario_correccion_solicitudes.id",
-            name="fk_inv_corr_maestro_solicitud", ondelete="RESTRICT",
-        ), nullable=False,
-    )
+    decision_id = db.Column(db.BigInteger, nullable=False)
+    solicitud_id = db.Column(db.BigInteger, nullable=False)
     inventario_id = db.Column(
         db.Integer,
         db.ForeignKey(
@@ -168,6 +148,11 @@ class InventarioCorreccionMaestroAuditORM(db.Model):
 
     __table_args__ = (
         db.UniqueConstraint("decision_id", name="uq_inv_corr_maestro_decision"),
+        db.ForeignKeyConstraint(
+            ["decision_id", "solicitud_id"],
+            ["inventario_correccion_decisiones.id", "inventario_correccion_decisiones.solicitud_id"],
+            name="fk_inv_corr_maestro_decision_solicitud", ondelete="RESTRICT",
+        ),
         db.UniqueConstraint("solicitud_id", name="uq_inv_corr_maestro_solicitud"),
         db.CheckConstraint(
             "campo IN ('nombre', 'marca', 'codigo_interno', 'no_equipo', "
@@ -190,20 +175,8 @@ class InventarioCorreccionAltaAuditORM(db.Model):
     __tablename__ = "inventario_correccion_altas_auditoria"
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
-    decision_id = db.Column(
-        db.BigInteger,
-        db.ForeignKey(
-            "inventario_correccion_decisiones.id",
-            name="fk_inv_corr_alta_decision", ondelete="RESTRICT",
-        ), nullable=False,
-    )
-    solicitud_id = db.Column(
-        db.BigInteger,
-        db.ForeignKey(
-            "inventario_correccion_solicitudes.id",
-            name="fk_inv_corr_alta_solicitud", ondelete="RESTRICT",
-        ), nullable=False,
-    )
+    decision_id = db.Column(db.BigInteger, nullable=False)
+    solicitud_id = db.Column(db.BigInteger, nullable=False)
     inventario_id_resultante = db.Column(
         db.Integer,
         db.ForeignKey(
@@ -229,6 +202,11 @@ class InventarioCorreccionAltaAuditORM(db.Model):
 
     __table_args__ = (
         db.UniqueConstraint("decision_id", name="uq_inv_corr_alta_decision"),
+        db.ForeignKeyConstraint(
+            ["decision_id", "solicitud_id"],
+            ["inventario_correccion_decisiones.id", "inventario_correccion_decisiones.solicitud_id"],
+            name="fk_inv_corr_alta_decision_solicitud", ondelete="RESTRICT",
+        ),
         db.UniqueConstraint("solicitud_id", name="uq_inv_corr_alta_solicitud"),
         db.ForeignKeyConstraint(
             ["inventario_id_resultante", "sucursal_id"],
