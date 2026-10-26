@@ -1,4 +1,5 @@
 import { Component, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { InventarioService } from '../../services/inventario.service';
 import { SessionService } from '../../core/auth/session.service';
 import { RouterModule } from '@angular/router';
@@ -10,6 +11,7 @@ import { MatIconModule } from '@angular/material/icon';
   templateUrl: './inventario-layout.component.html',
   styleUrls: ['./inventario-layout.component.css'],
   imports: [
+    CommonModule,
     RouterModule,
     MatIconModule,
   ],
