@@ -28,6 +28,15 @@
       <span *ngIf="avanceTapizado.recibidos === 0">Aún no se registran recepciones</span>
     </div>
 
+    <div class="tapizado-avance__aviso-estado" *ngIf="ticketAbierto && !cargandoRecepcion" role="status">
+      <mat-icon aria-hidden="true">info</mat-icon>
+      <div>
+        <strong>Primero inicia el trabajo de tapizado</strong>
+        <p>Este ticket sigue Abierto. Cuando los aparatos se envíen a tapizar,
+           utiliza la acción «En progreso» de la bandeja. Después podrás registrar las recepciones.</p>
+      </div>
+    </div>
+
     <p class="tapizado-avance__mensaje" *ngIf="cargandoRecepcion">
       Actualizando información de aparatos…
     </p>
@@ -93,8 +102,9 @@
       </div>
     </div>
 
-    <p class="tapizado-avance__nota" *ngIf="!puedeEditarRecepcion && !cargandoRecepcion">
-      Consulta de solo lectura. El registro de recepciones requiere permisos de mantenimiento o gerencia.
+    <p class="tapizado-avance__nota" *ngIf="!puedeEditarRecepcion && !cargandoRecepcion && !ticketAbierto">
+      Consulta de solo lectura. Para registrar recepciones, el ticket debe estar En progreso
+      y necesitas permisos de mantenimiento o gerencia.
     </p>
   </section>
 
