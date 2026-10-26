@@ -115,15 +115,23 @@ def resolver_acceso_autorizacion_e3(
         {"action": _ACTION, "user_id": actor_id, "role": role},
     ).mappings().all()
 
+    # Un deny explícito relevante prima sobre cualquier allow, incluso global.
+    if any(
+        g["effect"] == "deny"
+        and _grant_covers_branch(g, branch, actor["department_id"])
+        for g in grants
+    ):
+        return InventoryCorrectionApprovalAccess(False, "explicit_deny")
+
     # El alcance corporativo necesita grant individual global explícito.
+    # Un grant por rol ADMINISTRADOR no escala otras cuentas corporativas.
     if role in _GLOBAL_ADMIN_ROLES:
-        scoped = [
-            g for g in grants
-            if g["principal_type"] == "user" and g["scope_type"] == "global"
-        ]
-        if any(g["effect"] == "deny" for g in scoped):
-            return InventoryCorrectionApprovalAccess(False, "explicit_deny")
-        if any(g["effect"] == "allow" for g in scoped):
+        if any(
+            g["principal_type"] == "user"
+            and g["scope_type"] == "global"
+            and g["effect"] == "allow"
+            for g in grants
+        ):
             return InventoryCorrectionApprovalAccess(True, "explicit_global_grant", True)
         return InventoryCorrectionApprovalAccess(False, "no_explicit_global_grant")
 
@@ -145,8 +153,6 @@ def resolver_acceso_autorizacion_e3(
         g for g in grants
         if _grant_covers_branch(g, branch, actor["department_id"])
     ]
-    if any(g["effect"] == "deny" for g in matching):
-        return InventoryCorrectionApprovalAccess(False, "explicit_deny")
     if any(g["effect"] == "allow" for g in matching):
         return InventoryCorrectionApprovalAccess(True, "explicit_scoped_grant")
     return InventoryCorrectionApprovalAccess(False, "no_explicit_scoped_grant")
