@@ -1,0 +1,152 @@
+"""Política E3 de autorizaciones: lectura estricta de DB, sin efectos.
+
+No concede grants, no expone endpoints ni aplica propuestas.
+El servicio E3 futuro debe invocar esto con datos de la solicitud leídos
+dentro de su transacción y bajo bloqueo, nunca con sucursal/autor del cliente.
+"""
+from dataclasses import dataclass
+
+from sqlalchemy import text
+
+from app.extensions import db
+
+
+_ACTION = "inventory.correction_approve"
+_GLOBAL_ADMIN_ROLES = frozenset({"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN"})
+_SCOPED_APPROVER_ROLES = frozenset({
+    "MANTENIMIENTO", "COORDINADOR_MANTENIMIENTO",
+})
+_ALLOWED_TYPES = frozenset({
+    "MASTER_FIELD", "QUANTITY_DIFFERENCE",
+    "NOT_LOCATED", "UNREGISTERED_FIND",
+})
+
+
+@dataclass(frozen=True)
+class InventoryCorrectionApprovalAccess:
+    allowed: bool
+    reason: str
+    global_scope: bool = False
+
+
+def _positive_int(value):
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value if value > 0 else None
+
+
+def _grant_covers_branch(grant, branch, department):
+    """Una concesión no sustituye el scope de sucursales asignadas."""
+    kind = str(grant["scope_type"] or "").lower()
+    if kind == "global":
+        return True
+    if kind == "branch":
+        return grant["scope_branch_id"] == branch
+    if kind == "branch_list":
+        raw = grant["scope_branch_ids"]
+        return (
+            isinstance(raw, list)
+            and all(_positive_int(x) is not None for x in raw)
+            and branch in raw
+        )
+    if kind == "department":
+        return (
+            _positive_int(grant["scope_department_id"]) is not None
+            and department == grant["scope_department_id"]
+        )
+    # No interpretar grants 'module' o 'custom' como autorización crítica.
+    return False
+
+
+def resolver_acceso_autorizacion_e3(
+    *, actor_usuario_id, solicitud_sucursal_id, solicitud_creador_id, tipo
+):
+    """Decisión de elegibilidad; sin writes ni dependencia del JWT de rol.
+
+    Se exige acción activa y grant explícito vigente para autorizar.
+    Roles permitidos: administración (solo grant individual global)
+    y mantenimiento/coordinación (grant y usuario_sucursal asignada).
+    Gerentes/regionales quedan fuera hasta el gate E5.
+    """
+    actor_id = _positive_int(actor_usuario_id)
+    branch = _positive_int(solicitud_sucursal_id)
+    creator = _positive_int(solicitud_creador_id)
+    if not actor_id or not branch or not creator or tipo not in _ALLOWED_TYPES:
+        return InventoryCorrectionApprovalAccess(False, "invalid_request")
+    if actor_id == creator:
+        return InventoryCorrectionApprovalAccess(False, "self_approval_forbidden")
+
+    actor = db.session.execute(
+        text("""
+            SELECT id, rol, department_id
+            FROM users WHERE id = :user_id
+        """),
+        {"user_id": actor_id},
+    ).mappings().first()
+    if not actor:
+        return InventoryCorrectionApprovalAccess(False, "actor_not_found")
+
+    role = str(actor["rol"] or "").strip().upper()
+    if role not in _GLOBAL_ADMIN_ROLES | _SCOPED_APPROVER_ROLES:
+        return InventoryCorrectionApprovalAccess(False, "role_not_enabled")
+
+    grants = db.session.execute(
+        text("""
+            SELECT g.principal_type, g.effect, g.scope_type,
+                   g.scope_branch_id, g.scope_branch_ids,
+                   g.scope_department_id
+            FROM permission_grants g
+            JOIN permission_actions a ON a.id = g.action_id
+            JOIN permission_modules m ON m.id = a.module_id
+            WHERE a.full_key = :action
+              AND a.is_active IS TRUE
+              AND m.key = 'inventory'
+              AND m.is_active IS TRUE
+              AND g.is_active IS TRUE
+              AND g.deleted_at IS NULL
+              AND (g.starts_at IS NULL OR g.starts_at <= now())
+              AND (g.expires_at IS NULL OR g.expires_at > now())
+              AND (
+                    (g.principal_type = 'user' AND g.principal_user_id = :user_id)
+                 OR (g.principal_type = 'role' AND
+                     upper(btrim(g.principal_role_key)) = :role)
+              )
+        """),
+        {"action": _ACTION, "user_id": actor_id, "role": role},
+    ).mappings().all()
+
+    # El alcance corporativo necesita grant individual global explícito.
+    if role in _GLOBAL_ADMIN_ROLES:
+        scoped = [
+            g for g in grants
+            if g["principal_type"] == "user" and g["scope_type"] == "global"
+        ]
+        if any(g["effect"] == "deny" for g in scoped):
+            return InventoryCorrectionApprovalAccess(False, "explicit_deny")
+        if any(g["effect"] == "allow" for g in scoped):
+            return InventoryCorrectionApprovalAccess(True, "explicit_global_grant", True)
+        return InventoryCorrectionApprovalAccess(False, "no_explicit_global_grant")
+
+    # Correcciones al maestro afectan múltiples sucursales: competencia corporativa.
+    if tipo == "MASTER_FIELD":
+        return InventoryCorrectionApprovalAccess(False, "global_master_requires_corporate")
+
+    assigned = db.session.execute(
+        text("""
+            SELECT sucursal_id FROM usuario_sucursal
+            WHERE user_id = :user_id
+        """),
+        {"user_id": actor_id},
+    ).scalars().all()
+    if branch not in assigned:
+        return InventoryCorrectionApprovalAccess(False, "branch_not_assigned")
+
+    matching = [
+        g for g in grants
+        if _grant_covers_branch(g, branch, actor["department_id"])
+    ]
+    if any(g["effect"] == "deny" for g in matching):
+        return InventoryCorrectionApprovalAccess(False, "explicit_deny")
+    if any(g["effect"] == "allow" for g in matching):
+        return InventoryCorrectionApprovalAccess(True, "explicit_scoped_grant")
+    return InventoryCorrectionApprovalAccess(False, "no_explicit_scoped_grant")
