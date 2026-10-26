@@ -12,7 +12,9 @@ from zoneinfo import ZoneInfo
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
+from flask import current_app
+from app.services.inventario_correccion_decisiones_service import decidir_lote, DecisionError
 
 from app.extensions import db
 from app.models.inventario_solicitud_correccion import InventarioSolicitudCorreccionORM
@@ -458,3 +460,39 @@ def detalle_solicitud(solicitud_id):
     if row is None:
         return _error(404, "Solicitud inexistente o fuera de tu alcance.")
     return jsonify({"solicitud": _serialize(row)}), 200
+
+
+@inventario_solicitudes_bp.post("/decisiones/lote")
+@jwt_required()
+def decidir_solicitudes_lote():
+    """E3: backend es fuente de permisos; autorizaciones atomicas o rollback."""
+    identity = get_jwt_identity()
+    if isinstance(identity, bool):
+        return _error(401, "Sesión inválida.")
+    try:
+        actor_id = int(identity)
+    except (ValueError, TypeError, OverflowError):
+        return _error(401, "Sesión inválida.")
+    if actor_id <= 0:
+        return _error(401, "Sesión inválida.")
+    payload = request.get_json(silent=True)
+    if payload is None:
+        return _error(400, "Se requiere JSON válido.")
+    try:
+        if len(json.dumps(payload, ensure_ascii=False, allow_nan=False)) > 16000:
+            return _error(400, "Lote demasiado grande.")
+    except (ValueError, TypeError):
+        return _error(400, "JSON inválido.")
+    try:
+        result = decidir_lote(actor_id=actor_id, payload=payload)
+        return jsonify(result), 200 if result["replayed"] else 201
+    except DecisionError as exc:
+        db.session.rollback()
+        return jsonify({"error": exc.code, "detail": exc.detail}), exc.status
+    except (IntegrityError, OperationalError):
+        db.session.rollback()
+        return _error(409, "La operación entró en conflicto; revisa y reintenta con la misma llave.")
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("E3: error al decidir lote de inventario")
+        return _error(500, "No se pudo procesar la decisión.")
