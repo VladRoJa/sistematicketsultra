@@ -547,7 +547,7 @@ def test_e3_hallazgo_no_vincula_por_stock_sin_identidad(env):
 
 def _get_e3(env, user, endpoint):
     return env[0].test_client().get(
-        "/api/inventario/solicitudes/" + endpoint,
+        "/api/inventario/solicitudes" + ("/" + endpoint if endpoint else ""),
         headers=env[1][user],
     )
 
