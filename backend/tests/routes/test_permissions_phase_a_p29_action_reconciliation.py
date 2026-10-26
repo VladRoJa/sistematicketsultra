@@ -133,7 +133,13 @@ def test_p29_flask_methods_have_direct_jwt_except_the_three_session_protocol_rou
         if handler is None or handler.__name__ != row["handler"]:
             missing.append((key, "missing_or_renamed"))
             continue
-        if row["family"] != "auth" and not _jwt_present(_handler_ast(handler)):
+        if row["family"] == "auth":
+            continue  # login/refresh/logout: credential/cookie authentication
+        if key == ("POST", "/api/warehouse/internal/gasca-report-jobs"):
+            if "_require_internal_job_token" not in _direct_calls(_handler_ast(handler)):
+                missing.append((key, "internal_token_guard_absent"))
+            continue  # service-to-service token, not user JWT
+        if not _jwt_present(_handler_ast(handler)):
             missing.append((key, "jwt_decorator_absent"))
     assert missing == []
 
