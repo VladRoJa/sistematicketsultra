@@ -114,49 +114,32 @@
   </section>
 
 
-  <!-- M4: cada aparato puede recibirse por separado sin cerrar el ticket. -->
+  <!-- M4.3: historial consulta; la gestión operativa vive en el botón de recepción. -->
   <section *ngIf="esTapizado" class="tapizado-avance">
     <div class="tapizado-avance__encabezado">
       <div>
-        <h3>Recepción de tapizado</h3>
-        <p>Marca los aparatos que ya devolvió el tapicero. Los pendientes no se consideran terminados.</p>
+        <h3>Estado de tapizado</h3>
+        <p>Consulta de aparatos vinculados y recepciones registradas.</p>
       </div>
       <span class="tapizado-avance__contador" *ngIf="avanceTapizado">
         {{ avanceTapizado.recibidos }} de {{ avanceTapizado.total }} recibidos
       </span>
     </div>
-
     <mat-progress-bar *ngIf="avanceTapizado" mode="determinate"
                       [value]="avanceTapizado.porcentaje"></mat-progress-bar>
     <div class="tapizado-avance__estado" *ngIf="avanceTapizado">
       <strong>{{ avanceTapizado.porcentaje }}% recibido</strong>
-      <span *ngIf="avanceTapizado.parcial">Entrega parcial · ticket todavía en seguimiento</span>
-      <span *ngIf="avanceTapizado.completo">Todos recibidos · listo para solicitar cierre</span>
-      <span *ngIf="avanceTapizado.recibidos === 0">Aún no se registran recepciones</span>
+      <span *ngIf="avanceTapizado.parcial">Entrega parcial</span>
+      <span *ngIf="avanceTapizado.completo">Todos los aparatos recibidos</span>
     </div>
-
-    <p class="tapizado-avance__mensaje" *ngIf="cargandoRecepcion">
-      Actualizando información de aparatos…
-    </p>
+    <p class="tapizado-avance__mensaje" *ngIf="cargandoRecepcion">Actualizando información de aparatos…</p>
     <p class="tapizado-avance__error" role="alert" *ngIf="errorRecepcion">{{ errorRecepcion }}</p>
-
-    <p class="tapizado-avance__borrador" *ngIf="cambiosPendientes.length > 0">
-      <strong>{{ cambiosPendientes.length }} cambio(s) sin guardar</strong>
-      · {{ cantidadAltas }} por recibir, {{ cantidadReversiones }} por revertir.
-      Los datos oficiales siguen iguales hasta guardar.
-    </p>
-
     <div class="tapizado-avance__lista">
-      <div class="tapizado-avance__fila"
-           *ngFor="let aparato of aparatosTapizado"
-           [class.tapizado-avance__fila-pendiente]="cambioPendiente(aparato)">
-        <mat-checkbox
-          [checked]="estaMarcado(aparato)"
-          [disabled]="!puedeEditarRecepcion || guardandoRecepciones || cargandoRecepcion"
-          (change)="cambiarRecepcion(aparato, $event)">
+      <div class="tapizado-avance__fila" *ngFor="let aparato of aparatosTapizado">
+        <div>
           <span class="tapizado-avance__codigo">{{ aparato.codigo_interno || 'Sin código' }}</span>
           <span class="tapizado-avance__nombre">{{ aparato.nombre || 'Aparato' }}</span>
-        </mat-checkbox>
+        </div>
         <span class="tapizado-avance__meta" *ngIf="aparato.recibido">
           Recibido por {{ aparato.recibido_por || '—' }}
           <span *ngIf="aparato.recibido_en">
@@ -164,45 +147,8 @@
           </span>
         </span>
         <span class="tapizado-avance__meta" *ngIf="!aparato.recibido">Pendiente de recepción</span>
-        <span class="tapizado-avance__provisional" *ngIf="cambioPendiente(aparato)">
-          {{ estaMarcado(aparato) ? 'Por registrar como recibido' : 'Por revertir recepción' }}
-        </span>
-
-        <div class="tapizado-avance__reversion"
-             *ngIf="aparato.recibido && !estaMarcado(aparato)">
-          <label [for]="'motivo-reversion-' + aparato.id">Motivo para revertir esta recepción</label>
-          <input [id]="'motivo-reversion-' + aparato.id" type="text"
-                 maxlength="500" [(ngModel)]="motivosReversion[aparato.id]"
-                 placeholder="Obligatorio para corregir una recepción guardada" />
-        </div>
       </div>
     </div>
-
-    <div class="tapizado-avance__barra-acciones"
-         *ngIf="puedeEditarRecepcion && cambiosPendientes.length"
-         role="group" aria-label="Acciones de recepción de tapizado">
-      <span class="tapizado-avance__accion-resumen">
-        {{ cambiosPendientes.length }} cambio(s) pendiente(s)
-      </span>
-      <div class="tapizado-avance__acciones">
-        <button type="button" class="tapizado-avance__btn-descartar"
-                [disabled]="guardandoRecepciones"
-                (click)="descartarSeleccion()">
-          Descartar selección
-        </button>
-        <button type="button" class="tapizado-avance__btn-guardar"
-                [disabled]="!cambiosValidos || guardandoRecepciones || cargandoRecepcion"
-                [attr.aria-busy]="guardandoRecepciones"
-                (click)="guardarCambios()">
-          <mat-icon aria-hidden="true">{{ guardandoRecepciones ? 'hourglass_top' : 'save' }}</mat-icon>
-          {{ guardandoRecepciones ? 'Guardando…' : 'Guardar cambios (' + cambiosPendientes.length + ')' }}
-        </button>
-      </div>
-    </div>
-
-    <p class="tapizado-avance__nota" *ngIf="!puedeEditarRecepcion && !cargandoRecepcion">
-      Consulta de solo lectura. El registro de recepciones requiere permisos de mantenimiento o gerencia.
-    </p>
   </section>
 
   <!-- ───────────────────────────────────────────────────────────
@@ -338,17 +284,5 @@
      ACCIONES DEL MODAL
      ───────────────────────────────────────────────────────────── -->
 <mat-dialog-actions align="end" class="modal-actions">
-  <div *ngIf="confirmarDescarteVisible" class="tapizado-avance__abandono">
-    <span>Hay {{ cambiosPendientes.length }} cambio(s) sin guardar. ¿Descartarlos al cerrar?</span>
-    <button mat-button type="button" (click)="cancelarDescarte()">Seguir editando</button>
-    <button mat-button type="button" (click)="descartarYCerrar()">Descartar y cerrar</button>
-  </div>
-  <button
-    mat-button
-    class="btn-cerrar"
-    type="button"
-    [disabled]="guardandoRecepciones"
-    (click)="cerrar()">
-    Cerrar
-  </button>
+  <button mat-button class="btn-cerrar" type="button" (click)="cerrar()">Cerrar</button>
 </mat-dialog-actions>
