@@ -347,7 +347,12 @@ test('E2: filtrar mientras detalle abierto cancela modal y limpia selección', (
 test('E2 UX: segundo modal no aumenta altura de la lista ni agrega doble scroll', () => {
   assert.match(css, /\.solicitud-detalle-dialog\s*\{[^}]*max-height:\s*min\(82dvh,\s*720px\)/s);
   assert.match(css, /\.solicitud-bandeja__lista\s*\{[^}]*overflow:\s*visible;/s);
-  assert.match(css, /\.solicitud-bandeja__acciones\s*\{[^}]*position:\s*sticky;/s);
+  assert.match(css, /\.solicitud-bandeja__acciones--fijas\s*\{[^}]*flex:\s*0 0 auto;/s);
+  const barra = html.indexOf('solicitud-bandeja__acciones--fijas');
+  const pie = html.indexOf('<footer class="solicitud-footer">');
+  assert.ok(barra > 0 && pie > barra, 'Las acciones deben aparecer antes del pie fijo');
+  assert.ok(barra > html.indexOf('</section>\n      </section>'), 'Las acciones no deben estar en la lista');
+  assert.match(html, /\*ngIf="modo === 'seguimiento' && !cargandoListado && !errorListado"/);
   assert.match(html, /\*ngIf="detalleIdAbierto !== null && modo === 'seguimiento'"/);
   assert.match(html, /\[attr\.inert\]="detalleIdAbierto !== null \? '' : null"/);
   assert.match(html, /\(click\)="cerrarDetalle\(\)"/);
