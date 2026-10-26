@@ -5,8 +5,8 @@ const path = require('node:path');
 
 const app = path.join(__dirname, '..', 'src', 'app');
 const read = file => fs.readFileSync(path.join(app, file), 'utf8');
-const modal = read('pantalla-ver-tickets/modals/historial-fechas-modal.component.ts');
-const html = read('pantalla-ver-tickets/modals/historial-fechas-modal.component.html');
+const modal = read('pantalla-ver-tickets/modals/tapizado-recepcion-modal.component.ts');
+const html = read('pantalla-ver-tickets/modals/tapizado-recepcion-modal.component.html');
 const tickets = read('pantalla-ver-tickets/pantalla-ver-tickets.component.ts');
 const service = read('services/ticket.service.ts');
 
