@@ -432,6 +432,10 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
     this.consultarDetalle(id);
   }
 
+  reintentarDetalle(): void {
+    if (this.detalleIdAbierto !== null) this.consultarDetalle(this.detalleIdAbierto);
+  }
+
   consultarDetalle(id: number): void {
     this.peticionDetalle?.unsubscribe();
     this.detalle = null;
