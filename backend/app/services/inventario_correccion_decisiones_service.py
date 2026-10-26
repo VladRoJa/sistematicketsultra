@@ -218,12 +218,22 @@ def _apply_approved(row, decision, masters, stocks, actor_id, reason, resolution
         original = target.stock
         if type(original) is not int or original != resolution["stock_esperado"]:
             raise DecisionError(409, "stale_stock", "La referencia destino cambió de existencias.")
-        # Si el hallazgo tenía código visible, deberá coincidir con el código oficial.
-        provisional_code = row.hallazgo_provisional.get("codigo_interno")
-        if provisional_code is not None and (
-            str(provisional_code).strip().upper() != str(official.codigo_interno or "").strip().upper()
+        # Impedir el vinculo por mera coincidencia de sucursal/stock.
+        # Sin código físico, exigir el mismo nombre; con código, coincidencia exacta.
+        provisional = row.hallazgo_provisional
+        provisional_code = provisional.get("codigo_interno")
+        if provisional_code:
+            if str(provisional_code).strip().upper() != str(official.codigo_interno or "").strip().upper():
+                raise DecisionError(409, "identity_mismatch", "El código del hallazgo no coincide con el oficial.")
+        elif (
+            not isinstance(provisional.get("nombre"), str)
+            or provisional["nombre"].strip().casefold() != str(official.nombre or "").strip().casefold()
         ):
-            raise DecisionError(409, "identity_mismatch", "El código del hallazgo no coincide con el oficial.")
+            raise DecisionError(409, "identity_mismatch", "El nombre del hallazgo no coincide con el maestro.")
+        if provisional.get("tipo") is not None and (
+            str(provisional["tipo"]).strip().casefold() != str(official.tipo or "").strip().casefold()
+        ):
+            raise DecisionError(409, "identity_mismatch", "El tipo del hallazgo no coincide con el maestro.")
         final = resolution["cantidad_fisica"]
         target.stock = final
         db.session.add(InventarioCorreccionAltaAuditORM(
