@@ -1702,6 +1702,15 @@ td.col-descripcion {
   font-weight: 700;
 }
 
+.ticket-tapizado-cierre-pendiente__texto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+  white-space: nowrap;
+}
+
 .ticket-tapizado-cierre-pendiente mat-icon {
   flex: 0 0 auto;
   width: 15px;
