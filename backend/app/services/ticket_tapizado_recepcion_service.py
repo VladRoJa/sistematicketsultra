@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm.attributes import flag_modified
 
 TIPO_TRABAJO_TAPIZADO = "TAPIZADO"
-ESTADOS_EDITABLES = frozenset({"abierto", "en progreso"})
+ESTADOS_EDITABLES = frozenset({"en progreso"})
 
 
 class RecepcionTapizadoError(ValueError):
@@ -104,7 +104,7 @@ def actualizar_recepcion_tapizado(
         raise RecepcionTapizadoError("Este ticket no es de tapizado.")
 
     if str(getattr(ticket, "estado", "") or "").strip().lower() not in ESTADOS_EDITABLES:
-        raise RecepcionTapizadoError("Solo puede modificarse tapizado abierto o en progreso.")
+        raise RecepcionTapizadoError("Para registrar recepciones de tapizado, primero cambia el ticket a En progreso.")
 
     if not isinstance(recibido, bool):
         raise RecepcionTapizadoError("recibido debe ser booleano.")
@@ -170,7 +170,7 @@ def actualizar_recepciones_lote_tapizado(
     if getattr(ticket, "tipo_trabajo", None) != TIPO_TRABAJO_TAPIZADO:
         raise RecepcionTapizadoError("Este ticket no es de tapizado.")
     if str(getattr(ticket, "estado", "") or "").strip().lower() not in ESTADOS_EDITABLES:
-        raise RecepcionTapizadoError("Solo puede modificarse tapizado abierto o en progreso.")
+        raise RecepcionTapizadoError("Para registrar recepciones de tapizado, primero cambia el ticket a En progreso.")
     if not isinstance(cambios, list) or not 1 <= len(cambios) <= 50:
         raise RecepcionTapizadoError("Envía entre 1 y 50 cambios de recepción.")
 
