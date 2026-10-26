@@ -109,6 +109,7 @@ def create_workbook(
 
     stream = BytesIO()
     book = xlsxwriter.Workbook(stream, {"in_memory": True})
+    book.set_calc_mode("auto")
     book.set_properties({"title": "Funnel Original - Tendencia semanal",
                          "author": "Suite Ultra"})
     navy = book.add_format({"bg_color": "#1C2E55", "font_color": "white",
@@ -149,12 +150,14 @@ def create_workbook(
     panel.data_validation("A4", {"validate": "list", "source": list(PERIODS)})
     panel.data_validation("A6", {"validate": "list",
                                  "source": list(INDICATORS) + ["Comparar las tres"]})
-    panel.data_validation("K6", {"validate": "list",
-                                 "source": "='Tendencia - datos'!$AA$2:$AA$" + str(len(scope_labels) + 1)})
-    panel.data_validation("F4", {"validate": "list",
-                                 "source": "='Tendencia - datos'!$AC$2:$AC$" + str(max(2, len(months) + 1))})
-    panel.data_validation("K4", {"validate": "list",
-                                 "source": "='Tendencia - datos'!$AC$2:$AC$" + str(max(2, len(months) + 1))})
+    # Excel exige nombres definidos para listas ubicadas en otra hoja.
+    book.define_name("FunnelAmbitos", "='Tendencia - datos'!$AA$2:$AA$"
+                     + str(len(scope_labels) + 1))
+    book.define_name("FunnelMeses", "='Tendencia - datos'!$AC$2:$AC$"
+                     + str(max(2, len(months) + 1)))
+    panel.data_validation("K6", {"validate": "list", "source": "=FunnelAmbitos"})
+    panel.data_validation("F4", {"validate": "list", "source": "=FunnelMeses"})
+    panel.data_validation("K4", {"validate": "list", "source": "=FunnelMeses"})
     panel.merge_range("A7:U7", "Cortes acumulados mensuales (MTD) · Solo lunes completos · Sin unir meses", small)
     panel.merge_range("A8:U8", "", small)
     for area, text in (("A9:G9", "LEAD → VISITA"),
@@ -341,11 +344,12 @@ def create_workbook(
                     v = number(b.get(key))
                     if v is not None:
                         ws.write_number(row, c, v, currency)
-                for c, den in ((16, "B"), (17, "C"), (18, "(D" + str(row+1) + "+E" + str(row+1) + ")")):
-                    ws.write_formula(row, c,
-                                     f'=IFERROR(L{row+1}/{den}{"" if c != 18 else ""},"")'
-                                     if c == 18 else
-                                     f'=IFERROR(L{row+1}/{den}{row+1},"")', currency)
+                for c, formula in (
+                    (16, f'=IFERROR(L{row+1}/B{row+1},"")'),
+                    (17, f'=IFERROR(L{row+1}/C{row+1},"")'),
+                    (18, f'=IFERROR(L{row+1}/(D{row+1}+E{row+1}),"")'),
+                ):
+                    ws.write_formula(row, c, formula, currency)
                 row += 1
             subtotal = row + 1
             ws.write(row, 0, "SUBTOTAL REGIÓN", navy)
