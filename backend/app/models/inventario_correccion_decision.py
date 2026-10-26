@@ -8,10 +8,61 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from app.extensions import db
 
 
+class InventarioCorreccionLoteORM(db.Model):
+    """Una operación idempotente del usuario agrupa N decisiones en un commit."""
+    __tablename__ = "inventario_correccion_lotes"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    actor_usuario_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", name="fk_inv_corr_lote_actor", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    tipo_decision = db.Column(db.String(16), nullable=False)
+    creado_en_utc = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        server_default=db.func.now(),
+    )
+    motivo_lote = db.Column(db.Text, nullable=False)
+    idempotency_key = db.Column(UUID(as_uuid=True), nullable=False)
+    request_fingerprint = db.Column(db.String(64), nullable=False)
+    resultados = db.Column(JSONB(none_as_null=True), nullable=True)
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "actor_usuario_id", "idempotency_key",
+            name="uq_inv_corr_lote_actor_key",
+        ),
+        db.CheckConstraint(
+            "tipo_decision IN ('APPROVED', 'REJECTED')",
+            name="ck_inv_corr_lote_tipo",
+        ),
+        db.CheckConstraint(
+            "char_length(btrim(motivo_lote)) BETWEEN 10 AND 2000",
+            name="ck_inv_corr_lote_motivo",
+        ),
+        db.CheckConstraint(
+            "char_length(request_fingerprint) = 64",
+            name="ck_inv_corr_lote_fingerprint",
+        ),
+        db.Index("ix_inv_corr_lote_actor_fecha", "actor_usuario_id", "creado_en_utc"),
+    )
+
+
 class InventarioCorreccionDecisionORM(db.Model):
     __tablename__ = "inventario_correccion_decisiones"
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    lote_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey(
+            "inventario_correccion_lotes.id",
+            name="fk_inv_corr_decision_lote", ondelete="RESTRICT",
+        ),
+        nullable=False,
+    )
     solicitud_id = db.Column(
         db.BigInteger,
         db.ForeignKey(
@@ -36,16 +87,9 @@ class InventarioCorreccionDecisionORM(db.Model):
     resolucion = db.Column(JSONB(none_as_null=True), nullable=True)
     efecto_anterior = db.Column(JSONB(none_as_null=True), nullable=True)
     efecto_posterior = db.Column(JSONB(none_as_null=True), nullable=True)
-    idempotency_key = db.Column(UUID(as_uuid=True), nullable=False)
-    request_fingerprint = db.Column(db.String(64), nullable=False)
-
     __table_args__ = (
         db.UniqueConstraint("solicitud_id", name="uq_inv_corr_decision_solicitud"),
         db.UniqueConstraint("id", "solicitud_id", name="uq_inv_corr_decision_par"),
-        db.UniqueConstraint(
-            "actor_usuario_id", "idempotency_key",
-            name="uq_inv_corr_decision_actor_key",
-        ),
         db.CheckConstraint(
             "decision IN ('APPROVED', 'REJECTED')",
             name="ck_inv_corr_decision_tipo",
@@ -53,10 +97,6 @@ class InventarioCorreccionDecisionORM(db.Model):
         db.CheckConstraint(
             "char_length(btrim(motivo_decision)) BETWEEN 10 AND 2000",
             name="ck_inv_corr_decision_motivo",
-        ),
-        db.CheckConstraint(
-            "char_length(request_fingerprint) = 64",
-            name="ck_inv_corr_decision_fingerprint",
         ),
         db.Index("ix_inv_corr_decision_actor_fecha", "actor_usuario_id", "decidido_en_utc"),
     )
