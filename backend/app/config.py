@@ -22,6 +22,14 @@ def _require_env(name: str) -> str:
 
 
 class Config:
+    # Worker admission stays locked until M1c is integrated, reviewed and enabled.
+    CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY = False
+
+    # Issue 1129 M1b: no background jobs can be enqueued by default.
+    # Do not activate before the worker and PostgreSQL security gates are approved.
+    CAMPAIGN_V2_BACKGROUND_DISPATCH_ENABLED = (
+        os.getenv("CAMPAIGN_V2_BACKGROUND_DISPATCH_ENABLED", "false").strip().lower() == "true"
+    )
     # Seguridad
     SECRET_KEY = _require_env("SECRET_KEY")
     JWT_SECRET_KEY = _require_env("JWT_SECRET_KEY")
