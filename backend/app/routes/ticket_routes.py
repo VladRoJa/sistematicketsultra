@@ -533,6 +533,11 @@ def cambiar_recepcion_aparato(ticket_id, inventario_id):
     if not autorizado:
         return jsonify({"mensaje": "Ticket fuera de alcance"}), 404
 
+    if (ticket.estado or "").strip().lower() == "abierto":
+        return jsonify({
+            "mensaje": "Para registrar recepciones de tapizado, primero cambia el ticket a En progreso."
+        }), 409
+
     if not puede_editar_recepcion_tapizado(
         user, ticket,
         es_coordinador=has_maintenance_coordination_permission(user),
@@ -587,6 +592,10 @@ def cambiar_recepciones_lote_tapizado(ticket_id):
         return jsonify({"mensaje": "Ticket de tapizado no encontrado"}), 404
     if not filtrar_tickets_por_usuario(user).filter(Ticket.id == ticket_id).first():
         return jsonify({"mensaje": "Ticket fuera de alcance"}), 404
+    if (ticket.estado or "").strip().lower() == "abierto":
+        return jsonify({
+            "mensaje": "Para registrar recepciones de tapizado, primero cambia el ticket a En progreso."
+        }), 409
     if not puede_editar_recepcion_tapizado(
         user, ticket,
         es_coordinador=has_maintenance_coordination_permission(user),
