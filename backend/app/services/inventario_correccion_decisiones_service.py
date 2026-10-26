@@ -17,6 +17,7 @@ from app.models.inventario_solicitud_correccion import InventarioSolicitudCorrec
 from app.models.inventario_correccion_decision import (
     InventarioCorreccionLoteORM, InventarioCorreccionDecisionORM,
     InventarioCorreccionAjusteORM, InventarioCorreccionMaestroAuditORM,
+    InventarioCorreccionAltaAuditORM,
 )
 from app.utils.inventory_correction_permissions import resolver_acceso_autorizacion_e3
 
@@ -35,9 +36,10 @@ def _positive_id(value):
 
 def validar_lote(payload):
     """Contrato cerrado: IDs únicos, UUID, motivo y hasta diez solicitudes."""
-    if not isinstance(payload, dict) or set(payload) != {
-        "decision", "solicitud_ids", "motivo", "idempotency_key"
-    }:
+    required = {"decision", "solicitud_ids", "motivo", "idempotency_key"}
+    if not isinstance(payload, dict) or not (
+        required <= set(payload) <= required | {"resoluciones"}
+    ):
         raise DecisionError(400, "invalid_payload", "Campos de lote inválidos.")
     action = payload["decision"]
     if action not in ("APPROVED", "REJECTED"):
@@ -59,9 +61,20 @@ def validar_lote(payload):
             raise ValueError()
     except (TypeError, ValueError, AttributeError):
         raise DecisionError(400, "invalid_key", "idempotency_key debe ser UUID válido.")
+    raw = payload.get("resoluciones", {})
+    if not isinstance(raw, dict) or (
+        action == "REJECTED" and raw
+    ):
+        raise DecisionError(400, "invalid_resolution", "Resoluciones solo en aprobaciones.")
+    if any(not isinstance(k, str) or not k.isascii() or not k.isdecimal()
+           or str(int(k)) != k or int(k) not in ids or not isinstance(v, dict)
+           for k, v in raw.items()):
+        raise DecisionError(400, "invalid_resolution", "Resolución con ID o formato inválido.")
+    if len(json.dumps(raw, ensure_ascii=False)) > 9000:
+        raise DecisionError(400, "invalid_resolution", "Resoluciones demasiado extensas.")
     canonical = {
         "decision": action, "solicitud_ids": sorted(ids),
-        "motivo": motivo.strip(),
+        "motivo": motivo.strip(), "resoluciones": raw,
     }
     fingerprint = hashlib.sha256(json.dumps(
         canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
@@ -113,9 +126,49 @@ def _replay_if_exists(actor_id, key, fingerprint, ids, action):
     return {"lote_id": previous.id, "replayed": True, "items": previous.resultados["items"]}
 
 
-def _lock_official(rows):
+def _resolution_for(row, resolutions):
+    data = resolutions.get(str(row.id))
+    if row.tipo in ("QUANTITY_DIFFERENCE", "MASTER_FIELD"):
+        if data is not None:
+            raise DecisionError(400, "unneeded_resolution", "Esta solicitud no admite resolución extra.")
+        return None
+    if not isinstance(data, dict):
+        raise DecisionError(422, "resolution_required", "Indica resolución explícita por solicitud.")
+    if row.tipo == "NOT_LOCATED":
+        if set(data) != {"accion", "stock_esperado", "justificacion"} or data.get("accion") != "AJUSTAR_A_CERO":
+            raise DecisionError(422, "invalid_resolution", "Equipo no localizado exige AJUSTAR_A_CERO y stock esperado.")
+        if type(data["stock_esperado"]) is not int or data["stock_esperado"] <= 0:
+            raise DecisionError(422, "invalid_resolution", "Stock esperado debe ser positivo.")
+    elif row.tipo == "UNREGISTERED_FIND":
+        if set(data) != {"accion", "inventario_id", "stock_esperado", "cantidad_fisica", "justificacion"} or data.get("accion") != "VINCULAR_EXISTENTE":
+            raise DecisionError(422, "invalid_resolution", "El hallazgo requiere vinculación explícita a una referencia existente.")
+        if not _positive_id(data["inventario_id"]) or (type(data["stock_esperado"]) is not int or data["stock_esperado"] < 0):
+            raise DecisionError(422, "invalid_resolution", "Identidad o stock de referencia inválidos.")
+        if type(data["cantidad_fisica"]) is not int or not data["stock_esperado"] < data["cantidad_fisica"] <= 100000:
+            raise DecisionError(422, "invalid_resolution", "La cantidad física debe incrementar el stock existente.")
+    else:
+        raise DecisionError(422, "invalid_resolution", "Tipo de solicitud no admisible.")
+    justification = data.get("justificacion")
+    if not isinstance(justification, str) or not 20 <= len(justification.strip()) <= 2000:
+        raise DecisionError(422, "invalid_resolution", "La resolución necesita justificación de 20 a 2000 caracteres.")
+    return data
+
+
+def _resolution_targets(rows, resolutions):
+    # No introducir un destino sin que exista una solicitud de hallazgo real.
+    return {
+        (resolutions[str(row.id)]["inventario_id"], row.sucursal_id)
+        for row in rows
+        if row.tipo == "UNREGISTERED_FIND"
+    }
+
+def _lock_official(rows, extra_targets=None):
     """Bloqueo ordenado evita deadlocks por diferente orden de IDs del lote."""
-    inventory_ids = sorted({x.inventario_id for x in rows if x.inventario_id is not None})
+    extra_targets = extra_targets or set()
+    inventory_ids = sorted(
+        {x.inventario_id for x in rows if x.inventario_id is not None}
+        | {inventory_id for inventory_id, _ in extra_targets}
+    )
     masters = {}
     stocks = {}
     for inventory_id in inventory_ids:
@@ -128,7 +181,7 @@ def _lock_official(rows):
         masters[inventory_id] = master
     for inventory_id, branch in sorted({
         (x.inventario_id, x.sucursal_id) for x in rows if x.inventario_id is not None
-    }):
+    } | extra_targets):
         stock = db.session.execute(
             select(InventarioSucursal).where(
                 InventarioSucursal.inventario_id == inventory_id,
@@ -151,12 +204,50 @@ _MASTER_STR_LENGTHS = {
 }
 
 
-def _apply_approved(row, decision, masters, stocks, actor_id, reason):
-    if row.tipo not in ("QUANTITY_DIFFERENCE", "MASTER_FIELD"):
-        raise DecisionError(
-            422, "resolution_required",
-            "Esta clase exige resolución adicional; no puede autorizarse todavía.",
-        )
+def _apply_approved(row, decision, masters, stocks, actor_id, reason, resolution=None):
+    if row.tipo == "UNREGISTERED_FIND":
+        if row.inventario_id is not None or not isinstance(row.hallazgo_provisional, dict):
+            raise DecisionError(409, "invalid_find", "Hallazgo no coincide con su origen provisional.")
+        if row.baseline_canonico != {
+            "inventario_id": None, "sucursal_id": row.sucursal_id
+        }:
+            raise DecisionError(409, "invalid_baseline", "El baseline de hallazgo cambió.")
+        destination = resolution["inventario_id"]
+        official = masters[destination]
+        target = stocks[(destination, row.sucursal_id)]
+        original = target.stock
+        if type(original) is not int or original != resolution["stock_esperado"]:
+            raise DecisionError(409, "stale_stock", "La referencia destino cambió de existencias.")
+        # Si el hallazgo tenía código visible, deberá coincidir con el código oficial.
+        provisional_code = row.hallazgo_provisional.get("codigo_interno")
+        if provisional_code is not None and (
+            str(provisional_code).strip().upper() != str(official.codigo_interno or "").strip().upper()
+        ):
+            raise DecisionError(409, "identity_mismatch", "El código del hallazgo no coincide con el oficial.")
+        final = resolution["cantidad_fisica"]
+        target.stock = final
+        db.session.add(InventarioCorreccionAltaAuditORM(
+            decision_id=decision.id, solicitud_id=row.id,
+            inventario_id_resultante=destination, sucursal_id=row.sucursal_id,
+            modalidad="VINCULACION", stock_anterior=original, stock_nuevo=final,
+            actor_usuario_id=actor_id, motivo=reason,
+        ))
+        db.session.add(InventarioCorreccionAjusteORM(
+            decision_id=decision.id, solicitud_id=row.id,
+            inventario_id=destination, sucursal_id=row.sucursal_id,
+            stock_anterior=original, stock_nuevo=final,
+            delta_firmada=final-original, actor_usuario_id=actor_id,
+            motivo=reason,
+        ))
+        decision.resolucion = resolution
+        decision.efecto_anterior = {"inventario_id": destination, "stock": original}
+        decision.efecto_posterior = {"inventario_id": destination, "stock": final}
+        return {"tipo": row.tipo, "accion": "VINCULAR_EXISTENTE", "inventario_id": destination,
+                "antes": original, "despues": final}
+
+    if row.tipo not in ("QUANTITY_DIFFERENCE", "MASTER_FIELD", "NOT_LOCATED"):
+        raise DecisionError(422, "resolution_required", "Aprobación no admitida para esta resolución.")
+
     baseline = row.baseline_canonico
     if not isinstance(baseline, dict) or baseline.get("inventario_id") != row.inventario_id or baseline.get("sucursal_id") != row.sucursal_id:
         raise DecisionError(409, "baseline_invalid", "Baseline de solicitud inválido.")
@@ -166,6 +257,24 @@ def _apply_approved(row, decision, masters, stocks, actor_id, reason):
     expected_stock = baseline.get("stock")
     if type(current_stock) is not int or type(expected_stock) is not int or current_stock != expected_stock:
         raise DecisionError(409, "stale_stock", "Las existencias cambiaron; se requiere nueva solicitud.")
+
+    if row.tipo == "NOT_LOCATED":
+        if (row.valor_original != {"stock": current_stock}
+                or row.valor_propuesto != {"no_localizado": True}
+                or current_stock != resolution["stock_esperado"]):
+            raise DecisionError(409, "stale_not_located", "El conteo o evidencia original cambiaron.")
+        stock_row.stock = 0
+        db.session.add(InventarioCorreccionAjusteORM(
+            decision_id=decision.id, solicitud_id=row.id,
+            inventario_id=row.inventario_id, sucursal_id=row.sucursal_id,
+            stock_anterior=current_stock, stock_nuevo=0,
+            delta_firmada=-current_stock, actor_usuario_id=actor_id, motivo=reason,
+        ))
+        decision.resolucion = resolution
+        decision.efecto_anterior = {"stock": current_stock}
+        decision.efecto_posterior = {"stock": 0}
+        return {"tipo": row.tipo, "accion": "AJUSTAR_A_CERO",
+                "antes": current_stock, "despues": 0}
 
     if row.tipo == "QUANTITY_DIFFERENCE":
         proposed = row.valor_propuesto
@@ -252,6 +361,7 @@ def decidir_lote(*, actor_id, payload):
     ids = canonical["solicitud_ids"]
     action = canonical["decision"]
     reason = canonical["motivo"]
+    resolutions = canonical["resoluciones"]
 
     # Serializar reintentos del mismo actor, sin confiar en claims JWT.
     user_exists = db.session.execute(text(
@@ -270,6 +380,9 @@ def decidir_lote(*, actor_id, payload):
     if any(row.estado != "PENDING" for row in rows):
         raise DecisionError(409, "already_decided", "Una solicitud ya fue decidida.")
 
+    if action == "APPROVED":
+        for row in rows:
+            _resolution_for(row, resolutions)
     if action == "APPROVED" and any(row.tipo == "MASTER_FIELD" and row.campo == "codigo_interno" for row in rows):
         db.session.execute(
             text("SELECT pg_advisory_xact_lock(:domain, :operation)"),
@@ -280,15 +393,17 @@ def decidir_lote(*, actor_id, payload):
         for row in rows:
             item = (
                 ("quantity", row.inventario_id, row.sucursal_id)
-                if row.tipo == "QUANTITY_DIFFERENCE"
+                if row.tipo in ("QUANTITY_DIFFERENCE", "NOT_LOCATED")
+                else ("quantity", resolutions[str(row.id)]["inventario_id"], row.sucursal_id)
+                if row.tipo == "UNREGISTERED_FIND"
                 else ("master", row.inventario_id, row.campo)
-                if row.tipo == "MASTER_FIELD"
-                else ("unsupported", row.id)
             )
             if item in seen:
                 raise DecisionError(409, "duplicate_target", "Dos solicitudes modifican la misma referencia del lote.")
             seen.add(item)
-    masters, stocks = _lock_official(rows) if action == "APPROVED" else ({}, {})
+    masters, stocks = _lock_official(
+        rows, _resolution_targets(rows, resolutions)
+    ) if action == "APPROVED" else ({}, {})
 
     lote = InventarioCorreccionLoteORM(
         actor_usuario_id=actor_id, tipo_decision=action,
@@ -307,7 +422,10 @@ def decidir_lote(*, actor_id, payload):
         db.session.flush()
         effect = None
         if action == "APPROVED":
-            effect = _apply_approved(row, decision, masters, stocks, actor_id, reason)
+            effect = _apply_approved(
+                row, decision, masters, stocks, actor_id, reason,
+                resolutions.get(str(row.id)),
+            )
         row.estado = action
         results.append({"solicitud_id": row.id, "estado": action, "efecto": effect})
     lote.resultados = {"items": results}
