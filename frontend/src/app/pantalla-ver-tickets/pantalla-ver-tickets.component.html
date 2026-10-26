@@ -848,6 +848,19 @@
           </button>
 
           <button
+            *ngIf="ticket.tipo_trabajo === 'TAPIZADO'"
+            type="button"
+            mat-icon-button
+            class="btn-tapizado-recepcion"
+            matTooltip="Gestionar recepción de tapizado"
+            matTooltipShowDelay="400"
+            (click)="abrirRecepcionTapizado(ticket, $event)"
+            [attr.aria-label]="'Gestionar recepción de tapizado del ticket ' + ticket.id"
+          >
+            <mat-icon>fact_check</mat-icon>
+          </button>
+
+          <button
             *ngIf="ticket.has_attachment"
             type="button"
             mat-icon-button
