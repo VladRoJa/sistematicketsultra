@@ -143,7 +143,6 @@ def test_approval_needs_both_capabilities_and_global_scope(
     provider.assert_not_called()
 
 
-
 @pytest.mark.parametrize(
     "operation,service_name,payload",
     [
@@ -249,6 +248,113 @@ def test_governed_materialization_requires_global_dispatch_and_send(
     assert response.json["send_authorized"] is False
     assert m.call_args.kwargs["actor_user_id"] == 7
     provider.assert_not_called()
+
+
+
+
+
+@pytest.mark.parametrize(
+    "operation,service_name,payload",
+    [
+        pytest.param(
+            "reauthorize", "reauthorize_unattempted_dispatch",
+            {
+                "previous_approval_id": 9,
+                "expected_manifest_digest": "a" * 64,
+                "confirmation": "REAUTORIZAR 99",
+            },
+            id="reauthorize",
+        ),
+        pytest.param(
+            "materialize", "materialize_approved_manifest",
+            {},
+            id="materialize",
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "denied_capability",
+    ["non_global", "missing_send", "missing_dispatch_config"],
+)
+def test_reauthorize_and_materialize_deny_before_side_effects(
+    client, global_access, operation, service_name, payload, denied_capability,
+):
+    """P26.3: el guard corta antes de servicio y persistencia simulada.
+
+    JWT Flask real, acceso sintetico y sin conexion a datos de produccion.
+    """
+    browser, headers = client
+    access = SimpleNamespace(**vars(global_access))
+    if denied_capability == "non_global":
+        access.is_global = False
+        access.branch_ids = (11,)
+    elif denied_capability == "missing_send":
+        access.can_send_campaigns = False
+    else:
+        access.can_manage_dispatch_config = False
+
+    with auth(access), patch.object(
+        routes, service_name,
+    ) as mutation, patch.object(
+        routes, "IVentasBroadcastProvider",
+    ) as provider, patch.object(
+        routes, "_parse_payload",
+    ) as parse_payload, patch.object(
+        routes, "_campaign_v2_allowed_sucursal_keys",
+    ) as branch_keys, patch.object(
+        routes, "db",
+    ) as fake_db:
+        response = browser.post(
+            f"/api/marketing/campaigns-v2/99/dispatch/{operation}",
+            json=payload,
+            headers=headers,
+        )
+
+    assert response.status_code == 403, (operation, denied_capability, response.json)
+    assert response.json["status"] == "error"
+    mutation.assert_not_called()
+    provider.assert_not_called()
+    parse_payload.assert_not_called()
+    branch_keys.assert_not_called()
+    fake_db.session.add.assert_not_called()
+    fake_db.session.delete.assert_not_called()
+    fake_db.session.flush.assert_not_called()
+    fake_db.session.commit.assert_not_called()
+    fake_db.session.execute.assert_not_called()
+
+
+def test_reauthorize_requires_explicit_campaign_bound_confirmation(
+    client, global_access,
+):
+    """P26.3: un texto que confirma otra campaña no permite reautorizar."""
+    browser, headers = client
+    with auth(global_access), patch.object(
+        routes, "reauthorize_unattempted_dispatch",
+    ) as reauthorize, patch.object(
+        routes, "IVentasBroadcastProvider",
+    ) as provider, patch.object(
+        routes, "_campaign_v2_allowed_sucursal_keys",
+    ) as branch_keys, patch.object(
+        routes, "db",
+    ) as fake_db:
+        response = browser.post(
+            "/api/marketing/campaigns-v2/99/dispatch/reauthorize",
+            json={
+                "previous_approval_id": 9,
+                "expected_manifest_digest": "a" * 64,
+                "confirmation": "REAUTORIZAR 100",
+            },
+            headers=headers,
+        )
+
+    assert response.status_code == 400
+    assert "Confirmación explícita" in response.json["message"]
+    reauthorize.assert_not_called()
+    provider.assert_not_called()
+    branch_keys.assert_not_called()
+    fake_db.session.add.assert_not_called()
+    fake_db.session.commit.assert_not_called()
+    fake_db.session.execute.assert_not_called()
 
 
 def test_governed_materialization_rejects_provider_or_kill_switch_override(
