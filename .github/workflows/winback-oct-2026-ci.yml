@@ -51,6 +51,7 @@ jobs:
             tests/marketing/test_marketing_scheduler_worker.py \
             tests/marketing/test_marketing_campaign_v2_quota_service.py \
             tests/marketing/test_marketing_campaign_v2_quota_routes.py \
+            tests/marketing/test_marketing_permissions_p26_9_integral_inventory.py \
             tests/marketing/test_marketing_campaign_v2_preparation_service.py \
             tests/marketing/test_marketing_campaign_v2_budget_service.py \
             tests/marketing/test_marketing_campaign_v2_budget_migration.py \
