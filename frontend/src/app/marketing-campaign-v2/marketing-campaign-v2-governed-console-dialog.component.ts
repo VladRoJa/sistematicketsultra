@@ -10,7 +10,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
-import { firstValueFrom, forkJoin } from 'rxjs';
+import { firstValueFrom, forkJoin, interval } from 'rxjs';
 
 import {
   CampaignV2DispatchTemplate,
@@ -21,13 +21,17 @@ import {
 } from './marketing-campaign-v2.models';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
 import { pendingGovernedBatchIds } from './marketing-campaign-v2-bulk-dispatch.logic';
+import { BackgroundDispatchJob, BACKGROUND_DISPATCH_ACTIVE, backgroundDispatchLabel,
+  backgroundDispatchProgress, newBackgroundRequestKey } from './background-dispatch.model';
+import { BackgroundDispatchActivityService } from './background-dispatch-activity.service';
 
 export interface MarketingCampaignV2GovernedConsoleDialogData {
   campaignId: number;
   campaignName: string;
+  jobId?: number;
 }
 
-type Action = 'read' | 'preflight' | 'approve' | 'materialize' | 'authorize' | 'reauthorize' | 'execute' | 'bulk';
+type Action = 'read' | 'preflight' | 'approve' | 'materialize' | 'authorize' | 'reauthorize' | 'execute' | 'bulk' | 'background' | 'background-stop';
 type ExecutionReview =
   CampaignV2GovernedExecutionReview | CampaignV2GovernedExecutionReviewReady;
 
@@ -46,6 +50,7 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   private readonly api = inject(MarketingCampaignV2Service);
   private readonly destroyRef = inject(DestroyRef);
   private readonly dialogRef = inject(MatDialogRef<MarketingCampaignV2GovernedConsoleDialogComponent>);
+  private readonly backgroundActivity = inject(BackgroundDispatchActivityService);
 
   readonly templateId = new FormControl<number | null>(null);
   readonly approvalPhrase = new FormControl('', { nonNullable: true });
@@ -73,6 +78,11 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   bulkAccepted = 0;
   bulkCurrentChildId: number | null = null;
   bulkStopRequested = false;
+  backgroundAvailable = false;
+  backgroundJob: BackgroundDispatchJob | null = null;
+  stopConfirmationOpen = false;
+  readonly backgroundLabel = backgroundDispatchLabel;
+  readonly backgroundProgress = backgroundDispatchProgress;
   private destroyed = false;
 
   constructor(@Inject(MAT_DIALOG_DATA) readonly data: MarketingCampaignV2GovernedConsoleDialogData) {}
@@ -83,6 +93,9 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
     this.destroyRef.onDestroy(() => { this.destroyed = true; this.bulkStopRequested = true; });
     this.loadCatalog();
     this.refresh();
+    this.loadBackgroundJobs();
+    interval(10000).pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.refreshBackgroundJob());
   }
 
   get busy(): boolean { return this.working !== null; }
@@ -243,6 +256,8 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   }
   get workingLabel(): string {
     const labels: Record<Action, string> = {
+      background: 'Registrando ejecución independiente',
+      'background-stop': 'Solicitando detención',
       read: 'Consultando', preflight: 'Revisando destinatarios',
       approve: 'Aprobando costo', materialize: 'Preparando lotes', reauthorize: 'Reautorizando despacho',
       authorize: 'Autorizando', execute: 'Enviando un lote', bulk: 'Enviando lotes pendientes',
@@ -307,7 +322,7 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   }
   get canExecute(): boolean {
     const review = this.reviewReady;
-    return !this.busy && !this.uncertainResult && !!this.nextReadyChild &&
+    return !this.busy && !this.backgroundBlocksManual && !this.uncertainResult && !!this.nextReadyChild &&
       this.validApproval && !!review?.execution &&
       (this.monitor?.quota.all_current === true ||
         this.monitor?.status === 'CONTINUATION_REVIEW_REQUIRED') &&
@@ -321,7 +336,7 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
 
   get canBulkSend(): boolean {
     const ids = this.bulkPendingIds;
-    return !this.busy && !this.uncertainResult && this.validApproval &&
+    return !this.busy && !this.backgroundBlocksManual && !this.uncertainResult && this.validApproval &&
       ids.length > 0 && ids.length <= 30 &&
       this.nextReadyChild?.child_id === ids[0] &&
       this.bulkCheckbox.value === true &&
@@ -329,7 +344,127 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
       this.bulkPassword.value.length > 0 && this.bulkPassword.value.length <= 256;
   }
 
+  get backgroundBlocksManual(): boolean {
+    const job = this.backgroundJob;
+    return !!job && (
+      BACKGROUND_DISPATCH_ACTIVE.has(job.status) || job.status === 'REVIEW_REQUIRED' ||
+      job.execution_id === this.reviewReady?.execution?.execution_id
+    );
+  }
+  get canStartBackground(): boolean {
+    return this.backgroundAvailable && this.canBulkSend && !this.backgroundBlocksManual;
+  }
+  get canRequestBackgroundStop(): boolean {
+    return !this.busy && !!this.backgroundJob &&
+      (this.backgroundJob.status === 'RUNNING' || this.backgroundJob.status === 'QUEUED') &&
+      !this.backgroundJob.stop_requested;
+  }
+
+  /** A verified server-side job can continue after this component is destroyed. */
+  minimize(): void {
+    if (this.backgroundJob && !this.busy) { this.dialogRef.close(); }
+  }
+  /** Legacy 'bulk' remains bound to this dialog: cannot close during HTTP. */
   close(): void { if (!this.busy) { this.dialogRef.close(); } }
+
+  loadBackgroundJobs(): void {
+    this.api.listMyBackgroundJobs().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: response => {
+        this.backgroundAvailable = true;
+        const relevant = response.jobs.filter(job => job.campaign_id === this.data.campaignId);
+        const job = relevant.find(item => item.job_id === this.data.jobId)
+          ?? relevant.find(item => item.execution_id === this.reviewReady?.execution?.execution_id)
+          ?? relevant.find(item => BACKGROUND_DISPATCH_ACTIVE.has(item.status)
+                                || item.status === 'REVIEW_REQUIRED')
+          ?? relevant[0] ?? null;
+        if (job) { this.backgroundJob = job; }
+      },
+      error: () => { this.backgroundAvailable = false; },
+    });
+  }
+
+  refreshBackgroundJob(): void {
+    if (this.destroyed || !this.backgroundJob) return;
+    const job = this.backgroundJob;
+    this.api.getBackgroundJob(job.campaign_id, job.job_id)
+      .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: updated => {
+          this.backgroundJob = updated;
+          this.backgroundActivity.notifyChanged();
+        },
+        error: () => {
+          this.error = 'No se pudo consultar el progreso. Verifica el servidor antes de otra acción.';
+        },
+      });
+  }
+
+  /** User-initiated POST only; server queue handles all provider requests. */
+  startBackground(): void {
+    const review = this.reviewReady;
+    if (!this.canStartBackground || !review?.execution) return;
+    const ids = [...this.bulkPendingIds];
+    let requestKey: string;
+    try {
+      requestKey = newBackgroundRequestKey();
+    } catch {
+      this.error = 'No se pudo generar una clave segura para el envío.';
+      return;
+    }
+    const password = this.bulkPassword.value;
+    this.bulkPassword.setValue('');
+    this.bulkCheckbox.setValue(false);
+    this.bulkPhrase.setValue('');
+    this.working = 'background';
+    this.error = '';
+    this.notice = '';
+    this.api.startBackgroundJob(this.data.campaignId, {
+      approval_id: review.approval_id,
+      execution_id: review.execution.execution_id,
+      expected_manifest_digest: review.manifest_digest,
+      expected_pending_child_ids: ids,
+      request_key: requestKey,
+      confirmation: 'ENVIAR PENDIENTES ' + ids.length,
+      confirmed: true,
+      operator_password: password,
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: job => {
+        this.working = null;
+        this.backgroundJob = job;
+        this.notice = 'Trabajo registrado en el servidor. Puedes minimizar o cerrar.';
+        this.backgroundActivity.notifyChanged();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.working = null;
+        this.error = this.message(err, 'No se confirmó el registro; consulta el estado antes de reintentar.');
+        // A timed-out request may have succeeded. GET only, never automatic POST retry.
+        this.loadBackgroundJobs();
+      },
+    });
+  }
+
+  requestBackgroundStop(): void { this.stopConfirmationOpen = this.canRequestBackgroundStop; }
+  cancelBackgroundStop(): void { this.stopConfirmationOpen = false; }
+  confirmBackgroundStop(): void {
+    if (!this.stopConfirmationOpen || !this.canRequestBackgroundStop || !this.backgroundJob) return;
+    const {campaign_id, job_id} = this.backgroundJob;
+    this.stopConfirmationOpen = false;
+    this.working = 'background-stop';
+    this.api.stopBackgroundJob(campaign_id, job_id)
+      .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: job => {
+          this.working = null;
+          this.backgroundJob = job;
+          this.notice = 'Detención registrada. El lote en curso se resolverá primero.';
+          this.backgroundActivity.notifyChanged();
+        },
+        error: () => {
+          this.working = null;
+          this.error = 'Detención no confirmada. Consulta el estado antes de solicitarla de nuevo.';
+          this.refreshBackgroundJob();
+        },
+      });
+  }
+
 
   loadCatalog(): void {
     this.api.listDispatchTemplatesAdmin().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
