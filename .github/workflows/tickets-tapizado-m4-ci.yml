@@ -17,7 +17,7 @@ on:
       - "frontend/tests/tickets-tapizado-recepcion-m4.test.cjs"
       - "frontend/tests/tickets-tapizado-guardar-directo-m42.test.cjs"
       - "frontend/tests/tickets-tapizado-acceso-directo-m43.test.cjs"
-      - "frontend/tests/tickets-tapizado-guardar-directo-m42.test.cjs"
+      - "frontend/tests/tickets-tapizado-en-progreso-m44.test.cjs"
       - ".github/workflows/tickets-tapizado-m4-ci.yml"
   workflow_dispatch:
 
@@ -79,7 +79,7 @@ jobs:
         run: npm ci --legacy-peer-deps --no-audit --no-fund
       - name: M4/M3 interface contracts
         run: |
-          node --test tests/tickets-tapizado-recepcion-m4.test.cjs tests/tickets-tapizado-guardar-directo-m42.test.cjs tests/tickets-tapizado-acceso-directo-m43.test.cjs tests/tickets-tapizado-m3.test.cjs tests/tickets-tapizado-guardar-directo-m42.test.cjs tests/tickets-tapizado-selector-freeze-m31.test.cjs tests/tickets-tapizado-ui-m32.test.cjs
+          node --test tests/tickets-tapizado-recepcion-m4.test.cjs tests/tickets-tapizado-guardar-directo-m42.test.cjs tests/tickets-tapizado-acceso-directo-m43.test.cjs tests/tickets-tapizado-en-progreso-m44.test.cjs tests/tickets-tapizado-m3.test.cjs tests/tickets-tapizado-selector-freeze-m31.test.cjs tests/tickets-tapizado-ui-m32.test.cjs
       - name: Angular typecheck and templates
         run: npx ngc -p tsconfig.app.json
       - name: Production build
