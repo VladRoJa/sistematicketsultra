@@ -2684,6 +2684,10 @@ async solicitarCierre(ticket: Ticket) {
     mostrarAlertaToast('Ticket inválido.', 'error');
     return;
   }
+  if (!this.tapizadoListoParaCierre(ticket)) {
+    mostrarAlertaToast(this.mensajeTapizadoPendiente(ticket), 'error');
+    return;
+  }
 
   // 🔹 1. Abrir modal de cierre y esperar datos
   const dialogRef = this.dialog.open(ModalCierreTicketComponent, {
@@ -2742,7 +2746,7 @@ private ticketPerteneceASucursalDelGerente(ticket: Ticket): boolean {
 }
 
 puedeMostrarBotonCerrarDesdeCero(ticket: Ticket): boolean {
-  if (!ticket?.id) return false;
+  if (!ticket?.id || !this.tapizadoListoParaCierre(ticket)) return false;
 
   const estado = (ticket.estado || '').toString().trim().toLowerCase();
 
@@ -2942,6 +2946,7 @@ esJefeMantenimientoRegional(): boolean {
 
 puedeSolicitarCierreMantenimiento(ticket: Ticket): boolean {
   if (String(ticket.estado || '').trim().toLowerCase() !== 'en progreso') return false;
+  if (!this.tapizadoListoParaCierre(ticket)) return false;
   if (this.esJefeMantenimientoRegional()) {
     // El backend valida alcance regional y ausencia de delegación.
     return Number(ticket.departamento_id) === 1
@@ -3027,9 +3032,35 @@ devolverTrabajoMantenimiento(ticket: Ticket): void {
   });
 }
 
+tapizadoListoParaCierre(ticket: Ticket): boolean {
+  if (ticket?.tipo_trabajo !== 'TAPIZADO') return true;
+  const avance = ticket.avance_tapizado;
+  // Ante un avance ausente no ofrecer cierre; Flask valida la fuente oficial.
+  return !!avance && avance.total > 0 && avance.completo === true;
+}
+
+mensajeTapizadoPendiente(ticket: Ticket): string {
+  const avance = ticket.avance_tapizado;
+  if (!avance || avance.total < 1) {
+    return 'Registra los aparatos y sus recepciones antes de solicitar cierre.';
+  }
+  return `Tapizado: ${avance.recibidos}/${avance.total} recibidos. `
+    + `Faltan ${avance.pendientes} por recibir para habilitar cierre.`;
+}
+
+puedeMostrarAvisoTapizadoPendiente(ticket: Ticket): boolean {
+  if (ticket?.tipo_trabajo !== 'TAPIZADO'
+      || this.tapizadoListoParaCierre(ticket)
+      || String(ticket.estado || '').trim().toLowerCase() !== 'en progreso'
+      || !this.puedeEditarTickets) return false;
+  if (!this.esTicketMantenimiento(ticket)) return true;
+  return this.puedeCoordinarTicket(ticket) || this.esJefeMantenimientoRegional();
+}
+
 puedeMostrarBotonFinalizar(ticket: Ticket): boolean {
   const estado = (ticket?.estado || '').trim().toLowerCase();
-  return this.puedeEditarTickets &&
+  return this.tapizadoListoParaCierre(ticket) &&
+         this.puedeEditarTickets &&
          !this.esTicketMantenimiento(ticket) &&
          estado === 'en progreso' &&
          ticket?.estado_cierre !== 'pendiente_creador';
