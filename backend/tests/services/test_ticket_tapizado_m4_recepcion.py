@@ -80,6 +80,38 @@ class RecepcionTapizadoM4Test(unittest.TestCase):
         self.assertIsNone(validar_recepcion_completa(ticket(tipo=None)))
         self.assertIsNone(resumen_recepcion_tapizado(ticket(tipo=None)))
 
+    def test_abierto_no_permita_recepciones_ni_para_admin(self):
+        t = ticket(estado="abierto")
+        self.assertFalse(puede_editar_recepcion_tapizado(actor(), t))
+        with self.assertRaisesRegex(RecepcionTapizadoError, "En progreso"):
+            actualizar_recepcion_tapizado(
+                t, inventario_id=1, recibido=True, actor="ADMICORP",
+                marca_historial=lambda *_: None,
+            )
+        self.assertEqual(resumen_recepcion_tapizado(t)["recibidos"], 0)
+        self.assertEqual(t.historial_fechas, [])
+
+    def test_abierto_con_recepciones_previas_conserva_progreso_e_historial(self):
+        t = ticket(estado="abierto", recibidos=5)
+        avance = resumen_recepcion_tapizado(t)
+        self.assertEqual((avance["recibidos"], avance["pendientes"]), (5, 1))
+        self.assertFalse(puede_editar_recepcion_tapizado(actor(), t))
+        with self.assertRaisesRegex(RecepcionTapizadoError, "En progreso"):
+            actualizar_recepcion_tapizado(
+                t, inventario_id=6, recibido=True, actor="ADMICORP",
+                marca_historial=lambda *_: None,
+            )
+        self.assertEqual(resumen_recepcion_tapizado(t)["recibidos"], 5)
+
+    def test_en_progreso_si_autoriza_recepcion(self):
+        t = ticket(estado="en progreso")
+        self.assertTrue(puede_editar_recepcion_tapizado(actor(), t))
+        avance = actualizar_recepcion_tapizado(
+            t, inventario_id=1, recibido=True, actor="ADMICORP",
+            marca_historial=lambda *_: None,
+        )
+        self.assertEqual(avance["recibidos"], 1)
+
     def test_registro_individual_con_historial_y_usuario(self):
         t = ticket(recibidos=2)
         guardar_historial = Mock()
