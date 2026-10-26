@@ -157,3 +157,64 @@ def actualizar_recepcion_tapizado(
     ticket.historial_fechas = history
     marca_historial(ticket, "historial_fechas")
     return resumen_recepcion_tapizado(ticket)
+
+
+def actualizar_recepciones_lote_tapizado(
+    ticket, *, cambios, actor, marca_historial=flag_modified, momento=None
+):
+    """Valida todo el lote ANTES de modificar un equipo.
+
+    El caller mantiene el row lock de Ticket y hace un único commit/rollback.
+    estado_anterior protege contra pestañas que quedaron con datos obsoletos.
+    """
+    if getattr(ticket, "tipo_trabajo", None) != TIPO_TRABAJO_TAPIZADO:
+        raise RecepcionTapizadoError("Este ticket no es de tapizado.")
+    if str(getattr(ticket, "estado", "") or "").strip().lower() not in ESTADOS_EDITABLES:
+        raise RecepcionTapizadoError("Solo puede modificarse tapizado abierto o en progreso.")
+    if not isinstance(cambios, list) or not 1 <= len(cambios) <= 50:
+        raise RecepcionTapizadoError("Envía entre 1 y 50 cambios de recepción.")
+
+    vinculos = {v.inventario_id: v for v in _vinculos(ticket)}
+    vistos = set()
+    for cambio in cambios:
+        if not isinstance(cambio, dict):
+            raise RecepcionTapizadoError("Cada cambio debe ser un objeto.")
+        ident = cambio.get("inventario_id")
+        if not isinstance(ident, int) or isinstance(ident, bool) or ident <= 0:
+            raise RecepcionTapizadoError("Aparato inválido.")
+        if ident in vistos:
+            raise RecepcionTapizadoError("No repitas un aparato en el mismo lote.")
+        vistos.add(ident)
+        if ident not in vinculos:
+            raise RecepcionTapizadoError("Un aparato no pertenece al ticket.")
+        recibido = cambio.get("recibido")
+        anterior_esperado = cambio.get("estado_anterior")
+        if not isinstance(recibido, bool) or not isinstance(anterior_esperado, bool):
+            raise RecepcionTapizadoError("Los estados de recepción deben ser booleanos.")
+        actual = vinculos[ident].recibido_en_utc is not None
+        if anterior_esperado != actual:
+            raise RecepcionTapizadoError(
+                "La recepción cambió desde que abriste el ticket. "
+                "Actualiza el resumen antes de guardar."
+            )
+        if recibido == actual:
+            raise RecepcionTapizadoError("El lote contiene un cambio sin diferencia.")
+        motivo = cambio.get("motivo")
+        if motivo is not None and (
+            not isinstance(motivo, str) or len(motivo.strip()) > 500
+        ):
+            raise RecepcionTapizadoError("La observación debe tener hasta 500 caracteres.")
+        if not recibido and not (motivo or "").strip():
+            raise RecepcionTapizadoError(
+                "Cada recepción revertida requiere un motivo."
+            )
+
+    ahora = momento or datetime.now(timezone.utc)
+    for cambio in cambios:
+        actualizar_recepcion_tapizado(
+            ticket, inventario_id=cambio["inventario_id"],
+            recibido=cambio["recibido"], actor=actor,
+            motivo=cambio.get("motivo"),
+            marca_historial=marca_historial, momento=ahora,
+        )
+    return resumen_recepcion_tapizado(ticket)
