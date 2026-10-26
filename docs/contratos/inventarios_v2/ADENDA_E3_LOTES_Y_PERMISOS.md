@@ -36,6 +36,16 @@ Las reglas **decisión y efecto coexisten**, **lote aplicado atómicamente** y *
 
 Control de independencia: `decision.actor_usuario_id != solicitud.creado_por_usuario_id` incluso para administradores. Si la cuenta autora es ADMICORP, otro responsable con capacidad validada debe decidir.
 
+## 3.1. Alta de acción E3 — catálogo sin concesiones
+
+La consulta de producción del 26/10/2026 confirmó que el módulo `inventory` solo contiene `inventory.read`, `inventory.master_write` e `inventory.movement_write`. También se consultaron grants de Inventarios para cuentas corporativas, mantenimiento, coordinación y regionales: **0 filas**. Esto demuestra ausencia de grants explícitos dentro del alcance consultado, **no** denegación de todos los permisos legacy.
+
+Se agregó a este PR draft una migración Alembic **separada** `v2e3a1102626` (encadenada a `v2e3p2102626`) que registra solo `inventory.correction_approve` con riesgo `critical` y sin crear grants de usuario, rol o sucursal. `is_active` describe la disponibilidad de la **acción del catálogo**, no concede autorización de ejecución.
+
+El backend seguirá denegando por defecto mientras no existan y se validen tanto el guard efectivo como los grants explícitos aprobados. El permiso de rechazar solicitudes será evaluado en el contrato del endpoint E3; no se hereda automáticamente autorización de `inventory.master_write` ni de `inventory.movement_write`.
+
+**No ejecutar la migración en producción mientras el PR permanezca draft y los gates sigan abiertos.** El downgrade se bloquea si la acción ya tiene referencias en grants, ruta o configuración base del módulo.
+
 ## 4. Tratamiento por tipo
 
 - **QUANTITY_DIFFERENCE:** ajuste oficial auditable con stock anterior/nuevo y delta firmada, sin registrar una `entrada/salida` falsa en V1.
