@@ -405,6 +405,13 @@ def test_e3_no_localizado_aprueba_solo_resolucion_explicita_y_ajuste_trazable(en
 def test_e3_hallazgo_vincula_solo_a_referencia_existente_con_ajuste_y_auditoria(env):
     _grant(91)
     req = _request("UNREGISTERED_FIND", inv=None)
+    # Identidad física cotejada con el catálogo antes de aprobar.
+    db.session.execute(sa.text(
+        "UPDATE inventario_correccion_solicitudes "
+        "SET hallazgo_provisional = '{\"nombre\":\"Remo\",\"codigo_interno\":\"07RE01\",\"tipo\":\"APARATOS\"}'::jsonb "
+        "WHERE id=:id"
+    ), {"id": req})
+    db.session.commit()
     payload = _payload([req])
     payload["resoluciones"] = {
         str(req): {
@@ -518,3 +525,20 @@ def test_e3_correcciones_distintas_misma_existencia_bloquean_lote(env):
     assert resp.status_code == 409, resp.get_json()
     assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=501 AND sucursal_id=7") == 3
     assert _sql("SELECT count(*) FROM inventario_correccion_decisiones") == 0
+
+
+def test_e3_hallazgo_no_vincula_por_stock_sin_identidad(env):
+    _grant(91)
+    req = _request("UNREGISTERED_FIND", inv=None)  # Bicicleta, mientras maestro es Remo
+    payload = _payload([req])
+    payload["resoluciones"] = {
+        str(req): {
+            "accion": "VINCULAR_EXISTENTE", "inventario_id": 502,
+            "stock_esperado": 1, "cantidad_fisica": 2,
+            "justificacion": "La simple coincidencia de stock no verifica identidad",
+        }
+    }
+    result = _post(env,91,payload)
+    assert result.status_code == 409, result.get_json()
+    assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=502 AND sucursal_id=7") == 1
+    assert _sql("SELECT count(*) FROM inventario_correccion_altas_auditoria") == 0
