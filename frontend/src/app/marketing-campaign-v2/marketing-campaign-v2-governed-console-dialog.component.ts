@@ -370,7 +370,8 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   loadBackgroundJobs(): void {
     this.api.listMyBackgroundJobs().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: response => {
-        this.backgroundAvailable = true;
+        // Never advertise a send option while the backend gate is closed.
+        this.backgroundAvailable = response.background_dispatch_available === true;
         const relevant = response.jobs.filter(job => job.campaign_id === this.data.campaignId);
         const job = relevant.find(item => item.job_id === this.data.jobId)
           ?? relevant.find(item => item.execution_id === this.reviewReady?.execution?.execution_id)

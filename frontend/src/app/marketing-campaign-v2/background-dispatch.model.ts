@@ -32,7 +32,10 @@ export interface BackgroundDispatchStartRequest {
   operator_password: string;
 }
 
-export interface BackgroundDispatchJobsResponse { jobs: BackgroundDispatchJob[]; }
+export interface BackgroundDispatchJobsResponse {
+  jobs: BackgroundDispatchJob[];
+  background_dispatch_available: boolean;
+}
 
 export const BACKGROUND_DISPATCH_ACTIVE: ReadonlySet<BackgroundDispatchStatus> = new Set([
   'QUEUED', 'RUNNING', 'STOP_REQUESTED',

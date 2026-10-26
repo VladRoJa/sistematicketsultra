@@ -107,3 +107,16 @@ test('las plantillas son archivos propios y no inline', () => {
   assert.match(dock, /styleUrls: \['.\/background-dispatch-dock.component.css'\]/);
 });
 
+
+test('backend comunica disponibilidad de nuevo despacho sin ocultar trabajos ya registrados', () => {
+  const routes = fs.readFileSync(path.resolve(__dirname,
+    '../../backend/app/routes/marketing_campaign_v2_routes.py'), 'utf8');
+  const mine = routes.slice(routes.indexOf('def campaign_v2_background_mine_endpoint():'),
+    routes.indexOf('def campaign_v2_background_stop_endpoint('));
+  const model = read('background-dispatch.model.ts');
+  assert.match(mine, /"background_dispatch_available": _background_dispatch_enabled\(\)/);
+  assert.match(mine, /"jobs": list_background_jobs/);
+  assert.match(model, /background_dispatch_available: boolean/);
+  assert.match(modal, /this\.backgroundAvailable = response\.background_dispatch_available === true/);
+  assert.doesNotMatch(modal, /this\.backgroundAvailable = true;/);
+});

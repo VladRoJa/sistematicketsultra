@@ -2071,9 +2071,14 @@ def campaign_v2_background_mine_endpoint():
         user, access = _resolve_campaign_v2_dispatch_config_request()
         _require_campaign_v2_send(access)
         _validate_query_args(set())
-        return jsonify({"jobs": list_background_jobs(
-            operator_user_id=int(user.id), session=db.session,
-        )}), 200
+        return jsonify({
+            "jobs": list_background_jobs(
+                operator_user_id=int(user.id), session=db.session,
+            ),
+            # Read-only capability signal; never a security authorization.
+            # Creation still revalidates every switch, step-up and DB grant.
+            "background_dispatch_available": _background_dispatch_enabled(),
+        }), 200
     except MarketingAuthorizationError as exc:
         return _error(str(exc), 403)
     except (MarketingCampaignV2RouteValidationError, BackgroundJobValidation) as exc:
