@@ -1,6 +1,6 @@
 # Inventarios V2 · E3 — adenda de lotes y autorización efectiva
 
-**Estado:** preparación técnica, sin habilitar permisos ni cambios oficiales. **Fecha:** 2026-10-26.  
+**Estado:** servicio/backend E3 implementado en PR draft sin grants productivos ni despliegue. **Fecha:** 2026-10-26.  
 **Documentos relacionados:** contrato global §7 y PR draft #1119. Esquema aislado PR draft #1134.
 
 ## 1. Regla operativa ratificada
@@ -11,7 +11,7 @@ Un revisor **autoriza** una solicitud únicamente cuando el backend logra, en **
 3. Aplicar cambio oficial y el efecto auditable correspondiente (ajuste, maestro o alta/vinculación).
 4. Escribir evento de decisión, asociar al lote, marcar `APPROVED` y confirmar.
    
-Cualquier conflicto hace **ROLLBACK de todo el lote**; ninguna solicitud parcialmente aprobada. Rechazo: registrar motivo y decisor y cambiar solo estado a `REJECTED`. El esquema solo habilita persistencia, **no ejecuta estas acciones**.
+Cualquier conflicto hace **ROLLBACK de todo el lote**; ninguna solicitud parcialmente aprobada. Rechazo: registrar motivo y decisor y cambiar solo estado a `REJECTED`. La migración por sí sola no ejecuta estas acciones; el servicio E3 dentro de este PR implementa el procesamiento condicionado por grants, y continúa sin desplegarse.
 
 ## 2. Lote de revisión como unidad de idempotencia
 
@@ -19,7 +19,7 @@ La tabla propuesta `inventario_correccion_lotes` identifica una operación de 1 
 
 **Por qué no UUID por fila:** un mismo clic `Autorizar 10` necesita conservar identidad única y resultado único al reintentar, aunque haya timeout. Si un solo ID falla, todo el lote es rechazado con 409/422 y la operación no registra `APPROVED`. El servicio posterior deberá comprobar que no hay IDs repetidos ni dos solicitudes sobre la misma referencia/atributo capaces de pisarse.
 
-Las reglas **decisión y efecto coexisten**, **lote aplicado atómicamente** y **sin autoaprobación** requieren enforcement en servicio y pruebas; el esquema por sí solo no las ejecuta.
+Las reglas **decisión y efecto coexisten**, **lote aplicado atómicamente** y **sin autoaprobación** se validan en el servicio y sus pruebas PostgreSQL; el esquema por sí solo no las ejecuta.
 
 ## 3. Competencias: no equiparar acceso E2 con permiso E3
 
@@ -48,7 +48,7 @@ Los perfiles MANTENIMIENTO y COORDINADOR_MANTENIMIENTO podrán ser candidatos E3
 
 **Independencia:** incluso el autorizador corporativo no podrá decidir solicitudes creadas por su propia cuenta. Las solicitudes #1/#2 registradas por ADMICORP requerirán otro aprobador habilitado y competente, nunca un bypass administrativo.
 
-El guard aquí propuesto solo determinará elegibilidad; aprobar, rechazar y modificar maestro o existencias seguirán inactivos hasta implementar el servicio atómico y cerrar los QA de E2.
+El guard determina elegibilidad. El servicio transaccional y su ruta ya están implementados en el PR draft, pero permanecen inactivos para usuarios productivos sin grants y no deben desplegarse antes del gate.
 
 ## 3.1. Alta de acción E3 — catálogo sin concesiones
 
@@ -75,4 +75,22 @@ El backend seguirá denegando por defecto mientras no existan y se validen tanto
 4. Ensayar DDL de PR draft #1134 en PostgreSQL efímero. No desplegar migración mientras los gates 1–3 estén abiertos.
 5. Implementar servicio transaccional (PR separado), luego endpoints/QA negativo y finalmente botones E3. `GERENTE_ROLLOUT=OFF` hasta E5.
 
-**Estado actual:** PR #1134 no contiene endpoints, ajustes aplicados ni permisos. Solicitudes de ULTRA DEMO #1 y #2 permanecen `PENDING` hasta una decisión futura legítima.
+**Estado actual:** PR #1134 contiene endpoint y servicio aún no fusionados/desplegados. No crea grants ni aplica solicitudes automáticamente. Las solicitudes #1/#2 de ULTRA DEMO permanecen `PENDING` hasta una decisión futura legítima.
+
+
+## 6. Implementación inicial de servicio y endpoint E3
+
+**PR draft #1134:** servicio `backend/app/services/inventario_correccion_decisiones_service.py::decidir_lote`, ruta `POST /api/inventario/solicitudes/decisiones/lote` en `backend/app/routes/inventario_solicitudes_routes.py::decidir_solicitudes_lote`.
+
+**Payload cerrado:** `{decision:"APPROVED"|"REJECTED", solicitud_ids:[1..10], motivo:"10..2000 caracteres", idempotency_key:"UUID"}`. No acepta claves extra, resoluciones ambiguas ni IDs duplicados. Respuesta 201 si decisión nueva; 200 con `replayed=true` si mismo actor, misma UUID y fingerprint del lote.
+
+- **Aprobación `QUANTITY_DIFFERENCE`:** compara el baseline de stock bajo `FOR UPDATE`, escribe `InventarioSucursal.stock`, decisión, lote y `InventarioCorreccionAjusteORM` en un solo commit; no registra `entrada/salida` V1 falsos.
+- **Aprobación `MASTER_FIELD`:** solo autorización corporativa global explícita. Bloquea maestro, valida baseline, actualiza whitelist y audita valores; si es `codigo_interno`, usa advisory lock V1, verifica duplicados y escribe también `InventarioCodigoCorreccionORM`.
+- **Rechazo:** para los cuatro tipos, cierre `REJECTED` con actor/motivo/fecha, sin tocar stock ni maestro.
+- **`NOT_LOCATED` y `UNREGISTERED_FIND`:** rechazo admitido; aprobación devuelve **422 `resolution_required`**, rollback de todo el lote. No se asume baja a cero ni alta provisional.
+- **Seguridad:** guard DB-backed de action `inventory.correction_approve`, nunca por JWT o nombre; autoaprobación siempre denegada; regionales no autorizados hasta E5.
+- **Concurrencia:** serialización por actor, lock de solicitudes y referencias ordenado, idempotencia por lote y UNIQUE por solicitud. Un conflicto devuelve 409 con rollback completo.
+
+**QA 26/10/2026:** workflow `Inventarios V2 E2 Solicitudes Schema CI` incluyendo E2 + E3 + pruebas integradas en PostgreSQL temporal: **35 PASS**. Incluye concurrencia de dos aprobadores, rollback de lote mixto, no autoaprobación, alcance por sucursal, historial de código, cambio maestro, rechazo sin efectos, replay, duplicados y 422 sin resolución.
+
+**Gate de entrega:** CI aprobado no significa validación funcional productiva. PR permanece draft; no hacer merge, no migrar DB productiva y no activar interfaz sin verificar permisos efectivos, QA E2 autenticado y resolución funcional de tipos faltantes.
