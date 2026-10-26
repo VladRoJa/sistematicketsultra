@@ -28,8 +28,10 @@ test('check sólo cambia borrador local; nunca dispara escritura ni historial', 
   assert.match(modal, /this\.dialogRef\.disableClose = this\.cambiosPendientes\.length > 0/);
   assert.match(html, /Descartar selección/);
   assert.match(html, /Guardar cambios/);
-  assert.match(html, /Confirmar y registrar/);
-  assert.match(html, /Volver a revisar/);
+  assert.match(html, /Guardar cambios/);
+  assert.match(html, /\(click\)="guardarCambios\(\)"/);
+  assert.doesNotMatch(html, /Confirmar y registrar|Volver a revisar|confirmarGuardadoVisible/);
+  assert.doesNotMatch(modal, /prepararGuardado\(|confirmarGuardadoVisible/);
   assert.match(modal, /this\.ticketService\.guardarRecepcionesTapizado\(this\.data\.id, cambios\)/);
 });
 
@@ -37,7 +39,8 @@ test('reversión requiere motivo y nadie registra con solo un clic', () => {
   assert.match(modal, /this\.motivosReversion\[cambio\.inventario_id\]/);
   assert.match(modal, /cambio\.recibido \|\|/);
   assert.match(html, /\[\(ngModel\)\]="motivosReversion\[aparato\.id\]"/);
-  assert.match(html, /Confirmar corrección|Confirmar y registrar/);
+  assert.match(html, /Guardar cambios/);
+  assert.match(html, /\[disabled\]="!cambiosValidos \|\| guardandoRecepciones \|\| cargandoRecepcion"/);
 });
 
 test('se muestra progreso en una fila de bandeja y se refresca al cerrar modal', () => {
