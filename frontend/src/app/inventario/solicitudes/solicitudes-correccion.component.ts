@@ -227,7 +227,12 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
     // Regresar al botón Detalles; no perder el contexto ni la selección.
     const disparador = this.disparadorDetalle;
     this.disparadorDetalle = null;
-    if (restaurarFoco) disparador?.focus();
+    // Esperar a que Angular retire inert y el trap del dialogo al cerrar.
+    if (restaurarFoco && disparador) {
+      queueMicrotask(() => {
+        if (disparador.isConnected) disparador.focus();
+      });
+    }
   }
 
   // Solo se pueden seleccionar solicitudes pendientes de la página actual.
