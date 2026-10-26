@@ -241,8 +241,14 @@ def walkthrough(page, args, story: dict) -> list[dict]:
     scene("reversion")
     dlg.get_by_role("button", name="Cerrar", exact=True).click()
     row = find_ticket(page, args.ticket_id)
-    # Después de revertir, la acción no debe seguir disponible.
-    if row.get_by_role("button", name="Solicitar cierre").count():
+    # Esperar el refresco real de la bandeja antes de comprobar el bloqueo.
+    row.get_by_text(
+        f"Tapizado · {len(args.codes) - 1}/{len(args.codes)} recibidos"
+    ).wait_for(timeout=30_000)
+    # Ni cierre de mantenimiento ni cierre genérico deben estar disponibles.
+    if row.get_by_role(
+        "button", name=re.compile("Solicitar cierre|Revisar cierre|Finalizar|Cierre gerente")
+    ).count():
         raise RuntimeError("REGRESIÓN: se ofrece cierre con recepción incompleta.")
     row.get_by_role("button", name="Ver Historial").click()
     history = page.locator("mat-dialog-container").filter(has_text="Historial de solución")
