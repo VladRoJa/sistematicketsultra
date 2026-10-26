@@ -1058,3 +1058,125 @@ def test_excel_freeze_preserves_authorized_partial_scope_without_send(
     provider.assert_not_called()
     fake_db.session.add.assert_not_called()
     fake_db.session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "method,path_suffix,service_name,payload",
+    [
+        pytest.param(
+            "patch", "purpose", "update_campaign_v2_purpose",
+            {"purpose": "NEW_SALE"},
+            id="purpose",
+        ),
+        pytest.param(
+            "put", "provider-binding", "bind_campaign_v2_provider",
+            {"provider": "IVENTAS", "provider_campaign_id": "synthetic-123"},
+            id="provider-binding",
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "denied_reason",
+    ["missing_management", "empty_branch_scope"],
+)
+def test_campaign_metadata_mutations_deny_before_service(
+    client, partial_access, method, path_suffix, service_name, payload,
+    denied_reason,
+):
+    """P26.8: falta de gestion o alcance vacio bloquea cambios de metadata."""
+    browser, headers = client
+    access = SimpleNamespace(**vars(partial_access))
+    if denied_reason == "missing_management":
+        access.can_manage_campaigns = False
+
+    with auth(access), patch.object(
+        routes, service_name,
+    ) as mutation, patch.object(
+        routes, "marketing_branch_keys_by_sucursal_ids", return_value={},
+    ) as mapper, patch.object(
+        routes, "_parse_payload", wraps=routes._parse_payload,
+    ) as parse_payload, patch.object(
+        routes, "IVentasBroadcastProvider",
+    ) as provider, patch.object(
+        routes, "db",
+    ) as fake_db:
+        response = getattr(browser, method)(
+            f"/api/marketing/campaigns-v2/77/{path_suffix}",
+            json=payload, headers=headers,
+        )
+
+    assert response.status_code == 403, (path_suffix, denied_reason, response.json)
+    assert response.json["status"] == "error"
+    mutation.assert_not_called()
+    provider.assert_not_called()
+    fake_db.session.add.assert_not_called()
+    fake_db.session.delete.assert_not_called()
+    fake_db.session.flush.assert_not_called()
+    fake_db.session.commit.assert_not_called()
+    fake_db.session.execute.assert_not_called()
+
+    if denied_reason == "missing_management":
+        parse_payload.assert_not_called()
+        mapper.assert_not_called()
+        assert "gestionar" in response.json["message"]
+    else:
+        parse_payload.assert_called_once()
+        mapper.assert_called_once()
+        assert mapper.call_args.kwargs["sucursal_ids"] == partial_access.branch_ids
+        assert "sucursales" in response.json["message"]
+
+
+@pytest.mark.parametrize(
+    "method,path_suffix,service_name,payload,result",
+    [
+        pytest.param(
+            "patch", "purpose", "update_campaign_v2_purpose",
+            {"purpose": "NEW_SALE"},
+            {"id": 77, "purpose": "NEW_SALE"},
+            id="purpose",
+        ),
+        pytest.param(
+            "put", "provider-binding", "bind_campaign_v2_provider",
+            {"provider": "IVENTAS", "provider_campaign_id": "synthetic-123"},
+            {"campaign_id": 77, "provider": "IVENTAS", "created": True},
+            id="provider-binding",
+        ),
+    ],
+)
+def test_campaign_metadata_mutations_preserve_partial_scope(
+    client, partial_access, method, path_suffix, service_name, payload, result,
+):
+    """P26.8: el manager regional puede modificar solo con scope backend."""
+    browser, headers = client
+    assert partial_access.is_global is False
+    assert partial_access.can_manage_campaigns is True
+    assert partial_access.can_send_campaigns is False
+    with auth(partial_access), patch.object(
+        routes, "marketing_branch_keys_by_sucursal_ids",
+        return_value={11: "BRANCH A"},
+    ) as mapper, patch.object(
+        routes, service_name, return_value=result,
+    ) as mutation, patch.object(
+        routes, "IVentasBroadcastProvider",
+    ) as provider, patch.object(
+        routes, "db",
+    ) as fake_db:
+        response = getattr(browser, method)(
+            f"/api/marketing/campaigns-v2/77/{path_suffix}",
+            json=payload, headers=headers,
+        )
+
+    assert response.status_code == 200
+    assert response.json == result
+    mapper.assert_called_once()
+    assert mapper.call_args.kwargs["sucursal_ids"] == partial_access.branch_ids
+    mutation.assert_called_once()
+    kwargs = mutation.call_args.kwargs
+    assert kwargs["campaign_id"] == 77
+    assert kwargs["allowed_sucursal_keys"] == ("BRANCH A",)
+    assert kwargs["session"] is fake_db.session
+    for key, value in payload.items():
+        assert kwargs[key] == value
+    provider.assert_not_called()
+    fake_db.session.add.assert_not_called()
+    fake_db.session.commit.assert_not_called()
