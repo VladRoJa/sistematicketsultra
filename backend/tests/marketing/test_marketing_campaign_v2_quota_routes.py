@@ -542,6 +542,85 @@ def test_d3_monitor_rejects_query_override(client, global_access):
     monitor.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    "operation,service_name,payload",
+    [
+        pytest.param(
+            "escalate", "escalate_stale_governed_claim",
+            {
+                "child_id": 100,
+                "expected_manifest_digest": "a" * 64,
+                "source_reference": "synthetic evidence",
+                "evidence_note": "Manual investigation requested.",
+            },
+            id="escalate",
+        ),
+        pytest.param(
+            "resolve", "record_governed_provider_resolution",
+            {
+                "child_id": 100,
+                "expected_manifest_digest": "a" * 64,
+                "resolution": "PROVIDER_CAMPAIGN_FOUND",
+                "provider_campaign_id": "synthetic-id",
+                "source_reference": "synthetic evidence",
+                "evidence_note": "Manually verified outcome.",
+            },
+            id="resolve",
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "denied_capability",
+    ["non_global", "missing_send", "missing_dispatch_config"],
+)
+def test_escalate_and_resolve_deny_before_side_effects(
+    client, global_access, operation, service_name, payload, denied_capability,
+):
+    """P26.4: guards deniegan antes de parser, servicio y DB simulada.
+
+    Las rutas usan JWT Flask en entorno de prueba y acceso sintetico.
+    No hay ejecucion de envios ni conexion a datos de produccion.
+    """
+    browser, headers = client
+    access = SimpleNamespace(**vars(global_access))
+    if denied_capability == "non_global":
+        access.is_global = False
+        access.branch_ids = (11,)
+    elif denied_capability == "missing_send":
+        access.can_send_campaigns = False
+    else:
+        access.can_manage_dispatch_config = False
+
+    with auth(access), patch.object(
+        routes, service_name,
+    ) as mutation, patch.object(
+        routes, "IVentasBroadcastProvider",
+    ) as provider, patch.object(
+        routes, "_parse_payload",
+    ) as parse_payload, patch.object(
+        routes, "_campaign_v2_allowed_sucursal_keys",
+    ) as branch_keys, patch.object(
+        routes, "db",
+    ) as fake_db:
+        response = browser.post(
+            f"/api/marketing/campaigns-v2/77/dispatch/executions/41/{operation}",
+            json=payload,
+            headers=headers,
+        )
+
+    assert response.status_code == 403, (operation, denied_capability, response.json)
+    assert response.json["status"] == "error"
+    mutation.assert_not_called()
+    provider.assert_not_called()
+    parse_payload.assert_not_called()
+    branch_keys.assert_not_called()
+    fake_db.session.add.assert_not_called()
+    fake_db.session.delete.assert_not_called()
+    fake_db.session.flush.assert_not_called()
+    fake_db.session.commit.assert_not_called()
+    fake_db.session.execute.assert_not_called()
+
+
 def test_d3b_manual_escalation_is_global_and_never_calls_provider(
     client, global_access, partial_access,
 ):
