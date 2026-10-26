@@ -92,7 +92,7 @@ def run(base: str):
         assert "entregado" in dock.inner_text()
         assert dock.get_by_role("progressbar").get_attribute("aria-valuenow") == "7"
 
-        dock.get_by_role("button", name="Ver detalles").click()
+        dock.get_by_role("button", name=f"Ver envío de campaña {FAKE_CAMPAIGN}").click()
         dialog = page.locator("mat-dialog-container")
         dialog.wait_for(state="visible", timeout=15000)
         dialog.get_by_role("button", name="Minimizar").wait_for(
