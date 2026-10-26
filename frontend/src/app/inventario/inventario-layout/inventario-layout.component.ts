@@ -1,4 +1,6 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
+import { InventarioService } from '../../services/inventario.service';
+import { SessionService } from '../../core/auth/session.service';
 import { RouterModule } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 
@@ -12,4 +14,23 @@ import { MatIconModule } from '@angular/material/icon';
     MatIconModule,
   ],
 })
-export class InventarioLayoutComponent {}
+export class InventarioLayoutComponent implements OnInit {
+  puedeRevisarE3 = false;
+  esCoordinadorE3 = false;
+
+  constructor(
+    private readonly inventario: InventarioService,
+    private readonly sesion: SessionService,
+  ) {}
+
+  ngOnInit(): void {
+    this.esCoordinadorE3 = String(this.sesion.getUser()?.rol || '')
+      .trim().toUpperCase() === 'COORDINADOR_MANTENIMIENTO';
+    this.inventario.contextoRevisionCorrecciones().subscribe({
+      next: contexto => {
+        this.puedeRevisarE3 = contexto.can_review;
+      },
+      error: () => { this.puedeRevisarE3 = false; },
+    });
+  }
+}
