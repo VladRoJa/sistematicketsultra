@@ -22,7 +22,7 @@
       <div class="dispatch-dock__fill" [style.width.%]="progress(job)"></div>
     </div>
     <div class="dispatch-dock__line dispatch-dock__footer">
-      <small *ngIf="job.current_child_id && job.status === 'RUNNING'">Lote #{{ job.current_child_id }} en proceso</small>
+      <small *ngIf="job.current_child_id && job.status === 'RUNNING'">Lote #{{ job.current_child_id }} en proceso · Aceptado no equivale a entregado</small>
       <small *ngIf="job.status !== 'RUNNING'">Aceptado no equivale a entregado</small>
       <button mat-stroked-button type="button" (click)="open(job)"
         [attr.aria-label]="'Ver envío de campaña ' + job.campaign_id">Ver detalles</button>
