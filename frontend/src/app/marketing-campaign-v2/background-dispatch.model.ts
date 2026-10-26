@@ -61,7 +61,7 @@ export function backgroundDispatchProgress(job: BackgroundDispatchJob): number {
 
 export function visibleBackgroundJobs(jobs: BackgroundDispatchJob[], nowMs: number): BackgroundDispatchJob[] {
   const cutoff = nowMs - 24 * 60 * 60 * 1000;
-  return jobs.filter(job => BACKGROUND_DISPATCH_ACTIVE.has(job.status)
+  const visible = jobs.filter(job => BACKGROUND_DISPATCH_ACTIVE.has(job.status)
     || job.status === 'REVIEW_REQUIRED'
     || ((job.status === 'STOPPED' || job.status === 'COMPLETED')
       && !!job.updated_at && Number.isFinite(Date.parse(job.updated_at))
@@ -69,7 +69,15 @@ export function visibleBackgroundJobs(jobs: BackgroundDispatchJob[], nowMs: numb
     .sort((a, b) => Number(BACKGROUND_DISPATCH_ACTIVE.has(b.status) || b.status === 'REVIEW_REQUIRED')
       - Number(BACKGROUND_DISPATCH_ACTIVE.has(a.status) || a.status === 'REVIEW_REQUIRED')
       || (Date.parse(b.updated_at || '') || 0) - (Date.parse(a.updated_at || '') || 0))
-    .slice(0, 3);
+;
+  // Never hide an active or unresolved mandate behind three newer jobs.
+  // The dock itself is scrollable; include a small terminal history only
+  // when fewer than three urgent jobs need attention.
+  const urgent = visible.filter(job => BACKGROUND_DISPATCH_ACTIVE.has(job.status)
+    || job.status === 'REVIEW_REQUIRED');
+  const recent = visible.filter(job => !BACKGROUND_DISPATCH_ACTIVE.has(job.status)
+    && job.status !== 'REVIEW_REQUIRED');
+  return [...urgent, ...recent.slice(0, Math.max(0, 3 - urgent.length))].slice(0, 20);
 }
 
 /** Secure request deduplication id; never used as a credential. Fail closed without WebCrypto. */

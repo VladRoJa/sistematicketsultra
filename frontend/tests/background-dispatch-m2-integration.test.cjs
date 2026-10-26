@@ -120,3 +120,24 @@ test('backend comunica disponibilidad de nuevo despacho sin ocultar trabajos ya 
   assert.match(modal, /this\.backgroundAvailable = response\.background_dispatch_available === true/);
   assert.doesNotMatch(modal, /this\.backgroundAvailable = true;/);
 });
+
+
+test('el dock no oculta un mandato en revisión cuando hay más de tres activos', () => {
+  const ts = require('typescript');
+  const source = read('background-dispatch.model.ts');
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: {module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020}
+  }).outputText;
+  const module = {exports: {}};
+  vm.runInNewContext(compiled, {module, exports: module.exports, Date, Math, Set});
+  const now = Date.parse('2026-10-26T18:00:00Z');
+  const statuses = ['RUNNING', 'QUEUED', 'RUNNING', 'STOP_REQUESTED', 'REVIEW_REQUIRED', 'COMPLETED'];
+  const jobs = statuses.map((status, index) => ({
+    job_id: index + 1, campaign_id: 100 + index, execution_id: 200 + index,
+    status, updated_at: '2026-10-26T17:00:00Z',
+  }));
+  const visible = module.exports.visibleBackgroundJobs(jobs, now);
+  assert.equal(visible.length, 5);
+  assert.ok(visible.some(job => job.status === 'REVIEW_REQUIRED'));
+  assert.ok(visible.every(job => job.status !== 'COMPLETED'));
+});
