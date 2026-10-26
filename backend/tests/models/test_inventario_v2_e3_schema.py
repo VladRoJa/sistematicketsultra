@@ -13,7 +13,7 @@ from alembic.script import ScriptDirectory
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from app.models.inventario_correccion_decision import (
-    InventarioCorreccionDecisionORM, InventarioCorreccionAjusteORM,
+    InventarioCorreccionLoteORM, InventarioCorreccionDecisionORM, InventarioCorreccionAjusteORM,
     InventarioCorreccionMaestroAuditORM, InventarioCorreccionAltaAuditORM,
 )
 
@@ -37,15 +37,16 @@ def test_e3_extiende_cadena_unica_y_no_crea_rutas():
 
 def test_e3_orm_mapea_journal_y_prohibe_desajuste_de_pares():
     classes = (
-        InventarioCorreccionDecisionORM, InventarioCorreccionAjusteORM,
+        InventarioCorreccionLoteORM, InventarioCorreccionDecisionORM, InventarioCorreccionAjusteORM,
         InventarioCorreccionMaestroAuditORM, InventarioCorreccionAltaAuditORM,
     )
     names = (
-        "inventario_correccion_decisiones", "inventario_correccion_ajustes",
+        "inventario_correccion_lotes", "inventario_correccion_decisiones",
+        "inventario_correccion_ajustes",
         "inventario_correccion_maestro_auditoria", "inventario_correccion_altas_auditoria",
     )
     assert tuple(item.__table__.name for item in classes) == names
-    assert isinstance(InventarioCorreccionDecisionORM.__table__.c.idempotency_key.type, UUID)
+    assert isinstance(InventarioCorreccionLoteORM.__table__.c.idempotency_key.type, UUID)
     assert isinstance(InventarioCorreccionMaestroAuditORM.__table__.c.valor_anterior.type, JSONB)
     for klass in classes:
         assert klass.__table__.c.get("actor_usuario_id") is not None
@@ -53,7 +54,7 @@ def test_e3_orm_mapea_journal_y_prohibe_desajuste_de_pares():
             fk.ondelete == "RESTRICT"
             for fk in klass.__table__.foreign_key_constraints
         )
-    for klass in classes[1:]:
+    for klass in classes[2:]:
         assert any(
             fk.name.endswith("_decision_solicitud")
             and len(fk.elements) == 2
@@ -74,12 +75,13 @@ def test_e3_migration_crea_solo_cuatro_tablas_nuevas(monkeypatch):
     monkeypatch.setattr(module, "op", Recorder())
     module.upgrade()
     assert names == [
+        "inventario_correccion_lotes",
         "inventario_correccion_decisiones",
         "inventario_correccion_ajustes",
         "inventario_correccion_maestro_auditoria",
         "inventario_correccion_altas_auditoria",
     ]
-    assert len(indexes) == 4
+    assert len(indexes) == 5
 
 
 def test_e3_postgres_fk_decision_ajustes_idempotencia_y_downgrade(monkeypatch):
@@ -111,6 +113,7 @@ def test_e3_postgres_fk_decision_ajustes_idempotencia_y_downgrade(monkeypatch):
             module.upgrade()
             inspector = sa.inspect(con)
             for name in (
+                "inventario_correccion_lotes",
                 "inventario_correccion_decisiones", "inventario_correccion_ajustes",
                 "inventario_correccion_maestro_auditoria",
                 "inventario_correccion_altas_auditoria",
@@ -126,16 +129,23 @@ def test_e3_postgres_fk_decision_ajustes_idempotencia_y_downgrade(monkeypatch):
             con.exec_driver_sql(
                 "INSERT INTO inventario_correccion_solicitudes VALUES (1001), (1002)"
             )
-            insert_decision = sa.text(
-                "INSERT INTO inventario_correccion_decisiones "
-                "(solicitud_id,decision,actor_usuario_id,motivo_decision,"
-                "idempotency_key,request_fingerprint) VALUES "
-                "(:solicitud,:decision,7,'Validacion formal con evidencia',"
+            insert_lote = sa.text(
+                "INSERT INTO inventario_correccion_lotes "
+                "(actor_usuario_id,tipo_decision,motivo_lote,idempotency_key,request_fingerprint) "
+                "VALUES (7,'APPROVED','Autorizacion de lote con evidencia',"
                 "CAST(:key AS uuid),:fingerprint) RETURNING id"
             )
+            lote_id = con.execute(insert_lote, {
+                "key": "11111111-1111-4111-8111-111111111111",
+                "fingerprint": "a" * 64,
+            }).scalar_one()
+            insert_decision = sa.text(
+                "INSERT INTO inventario_correccion_decisiones "
+                "(solicitud_id,lote_id,decision,actor_usuario_id,motivo_decision) VALUES "
+                "(:solicitud,:lote,:decision,7,'Validacion formal con evidencia') RETURNING id"
+            )
             decision_id = con.execute(insert_decision, {
-                "solicitud": 1001, "decision": "APPROVED",
-                "key": "11111111-1111-4111-8111-111111111111", "fingerprint": "a" * 64,
+                "solicitud": 1001, "lote": lote_id, "decision": "APPROVED",
             }).scalar_one()
 
             insert_adjustment = sa.text(
@@ -166,18 +176,23 @@ def test_e3_postgres_fk_decision_ajustes_idempotencia_y_downgrade(monkeypatch):
 
             with pytest.raises(sa.exc.IntegrityError):
                 with con.begin_nested():
-                    con.execute(insert_decision, {
-                        "solicitud": 1002, "decision": "REJECTED",
+                    con.execute(insert_lote, {
                         "key": "11111111-1111-4111-8111-111111111111",
-                        "fingerprint": "b" * 64,  # misma llave actor
+                        "fingerprint": "b" * 64,
                     })
+            # El mismo lote agrupa 2 solicitudes, sin repetir el UUID.
+            con.execute(insert_decision, {
+                "solicitud": 1002, "lote": lote_id, "decision": "APPROVED",
+            })
 
             with pytest.raises(RuntimeError, match="existen decisiones"):
                 module.downgrade()
             con.exec_driver_sql("DELETE FROM inventario_correccion_ajustes")
             con.exec_driver_sql("DELETE FROM inventario_correccion_decisiones")
+            con.exec_driver_sql("DELETE FROM inventario_correccion_lotes")
             module.downgrade()
             assert not sa.inspect(con).has_table("inventario_correccion_decisiones")
+            assert not sa.inspect(con).has_table("inventario_correccion_lotes")
             assert con.exec_driver_sql(
                 "SELECT stock FROM inventario_sucursal WHERE inventario_id=501"
             ).scalar_one() == 3
