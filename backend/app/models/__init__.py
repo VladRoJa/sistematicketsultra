@@ -99,6 +99,10 @@ from .marketing import (
     MarketingMetaRawPageORM,
     MarketingMetaAdInsightORM,
 )
+from .marketing_campaign_v2_background_job import (
+    MarketingCampaignV2BackgroundJobORM,
+    MarketingCampaignV2BackgroundJobEventORM,
+)
 from .marketing_reactivation_outcome import (
     MarketingReactivationCampaignRecipientOutcomeORM,
 )
@@ -270,6 +274,8 @@ __all__ = [
     "MarketingCampaignV2TemplateORM",
     "MarketingCampaignV2ORM",
     "MarketingCampaignV2ProviderCampaignORM",
+    "MarketingCampaignV2BackgroundJobORM",
+    "MarketingCampaignV2BackgroundJobEventORM",
     "MarketingCampaignV2RecipientORM",
     "MarketingCampaignV2RecipientEvidenceORM",
     "MarketingCampaignV2ProviderStatsSnapshotORM",
