@@ -264,16 +264,20 @@
           </div>
         </div>
 
-        <div *ngIf="!cargandoListado && !errorListado" class="solicitud-bandeja__acciones">
-          <span>La autorización y el rechazo formal se habilitarán en E3, con permisos y auditoría.</span>
-          <div>
-            <button type="button" class="solicitud-bandeja__rechazar" disabled
-              title="Pendiente de backend transaccional E3">Rechazar seleccionadas</button>
-            <button type="button" class="solicitud-bandeja__autorizar" disabled
-              title="Pendiente de backend transaccional E3">Autorizar seleccionadas</button>
-          </div>
-        </div>
+
       </section>
+    </div>
+
+    <!-- Acciones E3 fuera del contenido desplazable: siempre visibles. -->
+    <div *ngIf="modo === 'seguimiento' && !cargandoListado && !errorListado"
+      class="solicitud-bandeja__acciones solicitud-bandeja__acciones--fijas">
+      <span>La autorización y el rechazo formal se habilitarán en E3, con permisos y auditoría.</span>
+      <div>
+        <button type="button" class="solicitud-bandeja__rechazar" disabled
+          title="Pendiente de backend transaccional E3">Rechazar seleccionadas</button>
+        <button type="button" class="solicitud-bandeja__autorizar" disabled
+          title="Pendiente de backend transaccional E3">Autorizar seleccionadas</button>
+      </div>
     </div>
 
     <footer class="solicitud-footer">
