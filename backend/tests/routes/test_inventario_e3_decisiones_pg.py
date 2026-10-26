@@ -153,7 +153,7 @@ def env():
                 con.exec_driver_sql("""
                     INSERT INTO inventario_sucursal
                     (inventario_id,sucursal_id,stock)
-                    VALUES (501,7,3),(502,7,1),(501,14,2)
+                    VALUES (501,7,3),(502,7,1),(501,14,2),(501,8,2)
                 """)
                 con.exec_driver_sql("""
                     INSERT INTO permission_modules VALUES (2,'inventory',true)
