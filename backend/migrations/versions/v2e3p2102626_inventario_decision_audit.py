@@ -47,10 +47,48 @@ def _effect_keys(label):
 
 
 def upgrade():
+    # La idempotencia pertenece a la operación completa, incluso en lotes de N solicitudes.
+    op.create_table(
+        "inventario_correccion_lotes",
+        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
+        sa.Column("actor_usuario_id", sa.Integer(), nullable=False),
+        sa.Column("tipo_decision", sa.String(length=16), nullable=False),
+        sa.Column(
+            "creado_en_utc", sa.DateTime(timezone=True),
+            server_default=sa.func.now(), nullable=False,
+        ),
+        sa.Column("motivo_lote", sa.Text(), nullable=False),
+        sa.Column("idempotency_key", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("request_fingerprint", sa.String(length=64), nullable=False),
+        sa.Column("resultados", postgresql.JSONB(), nullable=True),
+        sa.PrimaryKeyConstraint("id", name="pk_inv_corr_lote"),
+        _actor_fk("inventario_correccion_lotes", "fk_inv_corr_lote_actor"),
+        sa.UniqueConstraint(
+            "actor_usuario_id", "idempotency_key",
+            name="uq_inv_corr_lote_actor_key",
+        ),
+        sa.CheckConstraint(
+            "tipo_decision IN ('APPROVED', 'REJECTED')", name="ck_inv_corr_lote_tipo",
+        ),
+        sa.CheckConstraint(
+            "char_length(btrim(motivo_lote)) BETWEEN 10 AND 2000",
+            name="ck_inv_corr_lote_motivo",
+        ),
+        sa.CheckConstraint(
+            "char_length(request_fingerprint) = 64",
+            name="ck_inv_corr_lote_fingerprint",
+        ),
+    )
+    op.create_index(
+        "ix_inv_corr_lote_actor_fecha", "inventario_correccion_lotes",
+        ["actor_usuario_id", "creado_en_utc"],
+    )
+
     op.create_table(
         "inventario_correccion_decisiones",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column("solicitud_id", sa.BigInteger(), nullable=False),
+        sa.Column("lote_id", sa.BigInteger(), nullable=False),
         sa.Column("decision", sa.String(length=16), nullable=False),
         sa.Column("actor_usuario_id", sa.Integer(), nullable=False),
         sa.Column(
@@ -61,20 +99,18 @@ def upgrade():
         sa.Column("resolucion", postgresql.JSONB(), nullable=True),
         sa.Column("efecto_anterior", postgresql.JSONB(), nullable=True),
         sa.Column("efecto_posterior", postgresql.JSONB(), nullable=True),
-        sa.Column("idempotency_key", postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column("request_fingerprint", sa.String(length=64), nullable=False),
         sa.PrimaryKeyConstraint("id", name="pk_inv_corr_decision"),
         sa.ForeignKeyConstraint(
             ["solicitud_id"], ["inventario_correccion_solicitudes.id"],
             name="fk_inv_corr_decision_solicitud", ondelete="RESTRICT",
         ),
         _actor_fk("inventario_correccion_decisiones", "fk_inv_corr_decision_actor"),
+        sa.ForeignKeyConstraint(
+            ["lote_id"], ["inventario_correccion_lotes.id"],
+            name="fk_inv_corr_decision_lote", ondelete="RESTRICT",
+        ),
         sa.UniqueConstraint("solicitud_id", name="uq_inv_corr_decision_solicitud"),
         sa.UniqueConstraint("id", "solicitud_id", name="uq_inv_corr_decision_par"),
-        sa.UniqueConstraint(
-            "actor_usuario_id", "idempotency_key",
-            name="uq_inv_corr_decision_actor_key",
-        ),
         sa.CheckConstraint(
             "decision IN ('APPROVED', 'REJECTED')",
             name="ck_inv_corr_decision_tipo",
@@ -82,10 +118,6 @@ def upgrade():
         sa.CheckConstraint(
             "char_length(btrim(motivo_decision)) BETWEEN 10 AND 2000",
             name="ck_inv_corr_decision_motivo",
-        ),
-        sa.CheckConstraint(
-            "char_length(request_fingerprint) = 64",
-            name="ck_inv_corr_decision_fingerprint",
         ),
     )
     op.create_index(
@@ -223,6 +255,7 @@ def downgrade():
         "inventario_correccion_maestro_auditoria",
         "inventario_correccion_ajustes",
         "inventario_correccion_decisiones",
+        "inventario_correccion_lotes",
     ):
         count = bind.execute(sa.text(f"SELECT COUNT(*) FROM {table}")).scalar_one()
         if count:
@@ -238,3 +271,5 @@ def downgrade():
     op.drop_table("inventario_correccion_ajustes")
     op.drop_index("ix_inv_corr_decision_actor_fecha", table_name="inventario_correccion_decisiones")
     op.drop_table("inventario_correccion_decisiones")
+    op.drop_index("ix_inv_corr_lote_actor_fecha", table_name="inventario_correccion_lotes")
+    op.drop_table("inventario_correccion_lotes")
