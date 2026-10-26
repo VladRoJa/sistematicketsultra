@@ -710,3 +710,63 @@
   .tapizado-avance__fila { grid-template-columns: 1fr; }
   .tapizado-avance__meta { padding-left: 40px; text-align: left; }
 }
+
+/* Recepciones M4.1: selección sin efectos hasta confirmar el lote. */
+.tapizado-avance__borrador {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--ultra-orange-soft, #fff0ea);
+  color: var(--ultra-gray-900, #24272d);
+  font-size: 12px;
+}
+
+.tapizado-avance__fila-pendiente {
+  background: var(--ultra-orange-soft, #fff8f3);
+}
+
+.tapizado-avance__provisional {
+  grid-column: 1 / -1;
+  color: var(--ultra-orange, #e54525);
+  font-size: 11px;
+  font-weight: 750;
+  padding-left: 30px;
+}
+
+.tapizado-avance__acciones {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.tapizado-avance__confirmacion {
+  padding: 12px;
+  margin-top: 10px;
+  border: 1px solid var(--ultra-gray-300, #c8cdd6);
+  border-radius: 12px;
+  background: var(--ultra-gray-50, #f7f8fa);
+}
+
+.tapizado-avance__confirmacion p {
+  margin: 6px 0 8px;
+  font-size: 12px;
+}
+
+.tapizado-avance__confirmacion-lista {
+  max-height: 150px;
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.tapizado-avance__abandono {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-right: 14px;
+  font-size: 12px;
+}
