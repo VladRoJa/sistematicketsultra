@@ -31,7 +31,7 @@ def test_e3_extiende_cadena_unica_y_no_crea_rutas():
     cfg = AlembicConfig()
     cfg.set_main_option("script_location", str(BASE / "migrations"))
     graph = ScriptDirectory.from_config(cfg)
-    assert graph.get_heads() == ["v2e3p2102626"]
+    assert graph.get_heads() == ["v2e3a1102626"]
     assert len(list(graph.walk_revisions())) > 1
 
 
