@@ -88,7 +88,11 @@ def test_official_original_ads_is_read_only_and_keeps_existing_kpis():
 
     assert "this.dashboard?.summary.investment ?? null" in original
     assert "this.resolveBranchInvestment(branch.sucursal_id)" in original
-    assert "exportMarketingSalesFunnelBranchTable" in original
+    # Original ahora descarga el XLSX canónico desde Flask; Ajustado conserva ExcelJS.
+    assert "this.salesFunnelService.exportWeeklyWorkbook(" in original
+    assert "exportMarketingSalesFunnelBranchTable" not in original
+    original_service = _read("marketing-sales-funnel-original.service.ts")
+    assert "/sales-funnel/export/weekly" in original_service
     assert "google_ads_branch_attribution" not in export
     assert "evidence.account_reconciled === true" in original
     assert "accountValue: globallyReconciled" in original
