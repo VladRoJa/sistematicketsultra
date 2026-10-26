@@ -194,6 +194,10 @@
           Trabajo terminado
         </button>
 
+        <p *ngIf="mostrarAvisoTapizadoIncompleto" class="side-card__tapizado-notice" role="status">
+          {{ mensajeTapizadoIncompleto }}
+        </p>
+
         <button
           *ngIf="canFinalizeTicket"
           type="button"

@@ -1685,3 +1685,28 @@ td.col-descripcion {
   font-size: 18px;
   line-height: 18px;
 }
+
+/* M4.5: aviso de recepción pendiente, sin acción de cierre visible. */
+.ticket-tapizado-cierre-pendiente {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 5px;
+  max-width: 180px;
+  padding: 5px 7px;
+  margin-top: 4px;
+  border-radius: 6px;
+  background: var(--ultra-gray-100);
+  color: var(--ultra-gray-700);
+  font-size: 10px;
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+.ticket-tapizado-cierre-pendiente mat-icon {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  font-size: 15px;
+  line-height: 15px;
+  color: var(--ultra-orange);
+}

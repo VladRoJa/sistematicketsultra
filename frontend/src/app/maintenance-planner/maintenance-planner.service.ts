@@ -29,6 +29,15 @@ export interface MaintenancePlannerHistoryItem {
 export interface MaintenancePlannerTicket {
   ticket_id: number;
   estado: string;
+  tipo_trabajo: string | null;
+  avance_tapizado: {
+    total: number;
+    recibidos: number;
+    pendientes: number;
+    porcentaje: number;
+    completo: boolean;
+    parcial: boolean;
+  } | null;
   planner_status: 'VENCIDO' | 'HOY' | 'PROGRAMADO' | 'SIN_FECHA' | 'FINALIZADO';
   criticidad: number;
   descripcion: string;

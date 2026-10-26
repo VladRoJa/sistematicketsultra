@@ -665,3 +665,15 @@
     gap: 2px;
   }
 }
+
+/* M4.5: explicar por qué aún no aparece la solicitud de cierre. */
+.side-card__tapizado-notice {
+  margin: 10px 0;
+  padding: 9px 11px;
+  border-left: 3px solid var(--ultra-orange);
+  border-radius: 4px;
+  background: var(--ultra-gray-50);
+  color: var(--ultra-gray-700);
+  font-size: 12px;
+  line-height: 1.5;
+}

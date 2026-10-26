@@ -9,6 +9,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.sucursal_model import Sucursal
 from app.models.ticket_model import Ticket
+from app.services.ticket_tapizado_recepcion_service import resumen_recepcion_tapizado
 from app.utils.pm_permissions import can_pm_execute, can_pm_view
 from app.utils.tickets_maintenance_permissions import (
     ADMIN_ROLES,
@@ -173,6 +174,7 @@ def _serialize_ticket(ticket: Ticket, today: date) -> dict:
     family = ticket.familia_equipo
     failure = ticket.falla_mantenimiento
     branch = _ticket_branch(ticket)
+    avance_tapizado = resumen_recepcion_tapizado(ticket)
 
     history = [
         {**item}
@@ -183,6 +185,8 @@ def _serialize_ticket(ticket: Ticket, today: date) -> dict:
     return {
         "ticket_id": ticket.id,
         "estado": ticket.estado,
+        "tipo_trabajo": ticket.tipo_trabajo,
+        "avance_tapizado": avance_tapizado,
         "planner_status": _planner_status(ticket, today),
         "criticidad": ticket.criticidad,
         "descripcion": ticket.descripcion,
