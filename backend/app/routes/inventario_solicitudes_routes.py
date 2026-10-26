@@ -25,11 +25,12 @@ inventario_solicitudes_bp = Blueprint("inventario_solicitudes", __name__)
 
 # Acceso E2 independiente de inventory.read / inventory.movement_write.
 # No incluir GERENTE/GERENTE_REGIONAL/COORDINADOR antes de E5.
-_GLOBAL_ROLES = frozenset({
-    "ADMIN", "ADMINISTRADOR", "SUPER_ADMIN",
-    "MANTENIMIENTO", "SISTEMAS", "TECNICO",
+_GLOBAL_ROLES = frozenset({"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN"})
+# E2: personal técnico opera exclusivamente sus sucursales M:N asignadas.
+_M2M_SCOPED_ROLES = frozenset({
+    "SR_MANTENIMIENTO", "MANTENIMIENTO", "SISTEMAS", "TECNICO",
 })
-_SCOPED_ROLES = frozenset({"SR_MANTENIMIENTO", "AUX_MANTENIMIENTO"})
+_SCOPED_ROLES = _M2M_SCOPED_ROLES | frozenset({"AUX_MANTENIMIENTO"})
 _TYPES = frozenset({
     "MASTER_FIELD", "QUANTITY_DIFFERENCE", "NOT_LOCATED", "UNREGISTERED_FIND",
 })
@@ -107,7 +108,7 @@ def _actor():
     if role not in _SCOPED_ROLES:
         return None, _error(403, "Inventarios V2 E2 no habilitado para este rol.")
 
-    if role == "SR_MANTENIMIENTO":
+    if role in _M2M_SCOPED_ROLES:
         # Solo la asignación M:N real. Nunca sumar la sucursal primaria.
         ids = db.session.execute(
             text("SELECT sucursal_id FROM usuario_sucursal WHERE user_id = :id"),
