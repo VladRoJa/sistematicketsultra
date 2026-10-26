@@ -543,3 +543,79 @@ def test_e3_hallazgo_no_vincula_por_stock_sin_identidad(env):
     assert result.get_json()["error"] == "physical_code_required"
     assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=502 AND sucursal_id=7") == 1
     assert _sql("SELECT count(*) FROM inventario_correccion_altas_auditoria") == 0
+
+
+def _get_e3(env, user, endpoint):
+    return env[0].test_client().get(
+        "/api/inventario/solicitudes/" + endpoint,
+        headers=env[1][user],
+    )
+
+
+def test_e3_bandeja_revision_deny_por_defecto_y_sin_fuga_de_datos(env):
+    _request(creator=98)
+    assert _get_e3(env,91,"revision/contexto").status_code == 403
+    assert _get_e3(env,55,"revision").status_code == 403
+    assert _get_e3(env,47,"revision").status_code == 403
+    assert _get_e3(env,91,"").status_code == 403  # E2 sigue cerrado para coordinación.
+
+
+def test_e3_revision_coordinacion_aisla_sucursal_autor_tipo_y_detalle(env):
+    _grant(91, scope="global")
+    permitida = _request(inv=501, creator=98)
+    propia = _request(inv=502, creator=91, original={"stock": 1},
+                      proposed={"cantidad_fisica": 0},
+                      baseline={"inventario_id":502,"sucursal_id":7,"stock":1})
+    fuera = _request(inv=501, branch=14, creator=98,
+                     original={"stock":2},proposed={"cantidad_fisica":1},
+                     baseline={"inventario_id":501,"sucursal_id":14,"stock":2})
+    maestro = _request("MASTER_FIELD",inv=502,field="nombre",creator=98)
+    ctx = _get_e3(env,91,"revision/contexto")
+    assert ctx.status_code == 200, ctx.get_json()
+    assert ctx.get_json()["corporativo"] is False
+    assert {x["sucursal_id"] for x in ctx.get_json()["sucursales"]} == {7,8}
+    lista = _get_e3(env,91,"revision")
+    assert lista.status_code == 200, lista.get_json()
+    assert lista.get_json()["total"] == 1
+    assert [x["id"] for x in lista.get_json()["items"]] == [permitida]
+    assert _get_e3(env,91,f"revision/{permitida}").status_code == 200
+    assert _get_e3(env,91,f"revision/{propia}").status_code == 404
+    assert _get_e3(env,91,f"revision/{fuera}").status_code == 404
+    assert _get_e3(env,91,f"revision/{maestro}").status_code == 404
+    assert _get_e3(env,91,"revision?sucursal_id=14").status_code == 403
+    assert _get_e3(env,91,"revision?tipo=MASTER_FIELD").get_json()["total"] == 0
+    assert _get_e3(env,91,"").status_code == 403
+
+
+def test_e3_revision_admin_global_grants_y_deny_por_sucursal(env):
+    _grant(47,scope="global")
+    propio = _request(creator=47)
+    ajeno = _request(creator=98,inv=502,original={"stock":1},
+                     proposed={"cantidad_fisica":0},
+                     baseline={"inventario_id":502,"sucursal_id":7,"stock":1})
+    maestro = _request("MASTER_FIELD",inv=502,field="nombre",creator=98)
+    ctx = _get_e3(env,47,"revision/contexto")
+    assert ctx.status_code == 200
+    assert ctx.get_json()["corporativo"] is True
+    lista = _get_e3(env,47,"revision").get_json()
+    assert lista["total"] == 2
+    assert {x["id"] for x in lista["items"]} == {ajeno,maestro}
+    assert _get_e3(env,47,f"revision/{propio}").status_code == 404
+    _grant(47,scope="branch",branch=7,effect="deny")
+    assert _get_e3(env,47,"revision?sucursal_id=7").status_code == 403
+    assert _get_e3(env,47,"revision").get_json()["total"] == 0
+
+
+def test_e3_revision_scoped_grants_mas_restrictivos_y_paginacion(env):
+    _grant(45,scope="branch",branch=14)
+    _request(creator=98,branch=7)
+    expected = _request(creator=98,branch=14,original={"stock":2},
+                        baseline={"inventario_id":501,"sucursal_id":14,"stock":2})
+    ctx = _get_e3(env,45,"revision/contexto")
+    assert [x["sucursal_id"] for x in ctx.get_json()["sucursales"]] == [14]
+    assert _get_e3(env,45,"revision?page=1&per_page=1").get_json()["total"] == 1
+    assert _get_e3(env,45,"revision?page=1&per_page=1").get_json()["items"][0]["id"] == expected
+    assert _get_e3(env,45,"revision?page=0").status_code == 400
+    assert _get_e3(env,45,"revision?per_page=101").status_code == 400
+    assert _get_e3(env,45,"revision?estado=BAD").status_code == 400
+    assert _get_e3(env,45,"revision?sucursal_id=7").status_code == 403
