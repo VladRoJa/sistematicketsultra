@@ -66,6 +66,34 @@ def test_p25_classifies_exact_alias_handler_drift_inactive_and_unmapped():
     assert report["by_family"]["demo"]["total"] == 5
 
 
+def test_p25_admin_handler_alias_does_not_inflate_family_mutations():
+    # El alias del endpoint de sucursales existe en Suite Ultra; NO es
+    # una mutacion fuera del catalogo y no debe sumar en la familia admin.
+    route = "/api/admin/usuarios/<int:user_id>/sucursales"
+    flask = [
+        _flask(
+            "PUT", route,
+            "admin_put_sucursales_usuario",
+            "put_sucursales_usuario_admin",
+        ),
+        _flask("POST", "/api/marketing/submit", "send_campaign"),
+    ]
+    catalog = [
+        _catalog("PUT", route, "put_sucursales_usuario_admin"),
+    ]
+    report = compare_route_maps(flask, catalog)
+
+    assert report["by_classification"]["handler_alias"] == 1
+    assert report["by_family"]["admin"]["handler_alias"] == 1
+    assert report["by_family"]["admin"]["mutation_unreviewed"] == 0
+    assert report["by_family"]["marketing"]["mutation_unreviewed"] == 1
+    assert len(report["unreviewed_mutations"]) == 1
+    assert (
+        sum(stats["mutation_unreviewed"] for stats in report["by_family"].values())
+        == len(report["unreviewed_mutations"])
+    )
+
+
 def test_p25_no_inferred_bypass_or_risk_from_missing_catalog_mapping():
     report = compare_route_maps(
         [_flask("POST", "/api/demo/unknown")],

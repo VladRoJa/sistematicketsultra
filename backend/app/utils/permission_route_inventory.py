@@ -147,7 +147,7 @@ def compare_route_maps(
         counts = by_family[row["family"]]
         counts["total"] += 1
         counts[row["classification"]] += 1
-        if row["method"] in MUTATIONS and row["classification"] != "exact":
+        if row["method"] in MUTATIONS and row["classification"] not in {"exact", "handler_alias"}:
             counts["mutation_unreviewed"] += 1
 
     unreviewed_mutations = [
