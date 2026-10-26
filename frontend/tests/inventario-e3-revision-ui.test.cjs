@@ -74,7 +74,8 @@ test('E3 standalone, backend-first menu, ruta y dos modales confirmados',()=>{
   assert.match(html,/cdkTrapFocus/);
   assert.match(html,/Confirmar autorización/);
   assert.match(html,/Confirmar rechazo/);
-  assert.match(css,/\.revision-acciones\s*\{[^}]*position:\s*sticky/s);
+  assert.match(css,/\.revision-acciones\s*\{[^}]*flex:\s*0 0 auto/s);
+  assert.match(css,/\.revision-bandeja\s*\{[^}]*overflow-y:\s*auto/s);
   assert.match(service,/decidirCorreccionesLote\(payload: LoteDecisionesInventario\)/);
 });
 
