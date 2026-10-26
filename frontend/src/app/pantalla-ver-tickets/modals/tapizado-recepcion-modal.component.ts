@@ -29,6 +29,11 @@ export class TapizadoRecepcionModalComponent implements OnInit {
   motivosReversion: Record<number, string> = {};
   aparatosTapizado: AparatoTapizadoRecepcion[] = [];
   avanceTapizado: AvanceTapizado | null = null;
+  estadoRecepcion = '';
+
+  get ticketAbierto(): boolean {
+    return this.estadoRecepcion.trim().toLowerCase() === 'abierto';
+  }
 
   // El check es un borrador local; el servidor conserva los datos oficiales.
   private borradorRecepciones = new Map<number, boolean>();
@@ -75,6 +80,7 @@ export class TapizadoRecepcionModalComponent implements OnInit {
       recibido_por: ap.recibido_por ?? null,
     }));
     this.avanceTapizado = this.data.avance_tapizado || null;
+    this.estadoRecepcion = this.data.estado || '';
     this.recargarRecepciones();
   }
 
@@ -84,7 +90,8 @@ export class TapizadoRecepcionModalComponent implements OnInit {
     this.ticketService.consultarRecepcionTapizado(this.data.id).subscribe({
       next: result => {
         this.actualizarDatosRecepcion(result);
-        this.puedeEditarRecepcion = result.puede_editar === true;
+        this.estadoRecepcion = result.estado || '';
+        this.puedeEditarRecepcion = result.puede_editar === true && !this.ticketAbierto;
         this.cargandoRecepcion = false;
         this.errorRecepcion = '';
       },

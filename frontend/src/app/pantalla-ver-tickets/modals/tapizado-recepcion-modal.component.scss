@@ -335,3 +335,34 @@
   padding-right: 14px;
   font-size: 12px;
 }
+
+
+/* M4.4: guiar inicio formal antes de permitir recepción. */
+.tapizado-avance__aviso-estado {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  margin: 12px 0;
+  border: 1px solid var(--ultra-gray-300, #d2d7e0);
+  border-radius: 10px;
+  background: var(--ultra-gray-50, #f7f8fa);
+  color: var(--ultra-gray-900, #24272d);
+}
+
+.tapizado-avance__aviso-estado mat-icon {
+  flex: 0 0 auto;
+  color: var(--ultra-orange, #e54525);
+}
+
+.tapizado-avance__aviso-estado strong {
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.tapizado-avance__aviso-estado p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ultra-gray-600, #5b6473);
+}
