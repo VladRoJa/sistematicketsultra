@@ -36,6 +36,20 @@ Las reglas **decisión y efecto coexisten**, **lote aplicado atómicamente** y *
 
 Control de independencia: `decision.actor_usuario_id != solicitud.creado_por_usuario_id` incluso para administradores. Si la cuenta autora es ADMICORP, otro responsable con capacidad validada debe decidir.
 
+### Decisión de alcance ratificada (26/10/2026)
+
+**ADMICORP** tendrá competencia corporativa sobre todas las sucursales Ultra; **los demás autorizadores** solo podrán intervenir solicitudes de sus sucursales expresamente asignadas en `usuario_sucursal`, nunca por `sucursal_id` primaria ficticia (p. ej. 100). Esta regla no equivale a conceder permisos: el guard E3 necesita la acción explícita `inventory.correction_approve` vigente y no debe tomar privilegios `inventory.master_write` o `inventory.movement_write` como sustitutos.
+
+Para evitar privilegios corporativos accidentales a otros usuarios con rol ADMINISTRADOR, el alcance global se reconocerá exclusivamente mediante **grant explícito individual** de `inventory.correction_approve` con `scope_type=global`; jamás basta el rol ADMINISTRADOR, ni se programa una excepción por `username` o `id=47`. Si la acción no tiene grants, **todos quedan denegados**. En el momento autorizado se puede asignar a ADMICORP mediante procedimiento auditado; no forma parte del PR actual.
+
+Los perfiles MANTENIMIENTO y COORDINADOR_MANTENIMIENTO podrán ser candidatos E3 solo con grant explícito; además sus ramas efectivas son la intersección entre el alcance del grant y `usuario_sucursal` leído de DB por operación. Un grant `global` para esos roles **no amplía** más allá de sus asignaciones. A los gerentes y regionales **no se les permite E3 hasta E5**, aunque dispongan de asignaciones u otros permisos.
+
+**Maestro global:** corregir `inventario_general` impacta a todas las sucursales que usen ese registro, así que un permiso limitado a una sola sucursal **no autoriza** una corrección `MASTER_FIELD`; requerirá autorización corporativa explícita. La creación de un artículo maestro nuevo en `UNREGISTERED_FIND` tendrá la misma restricción; la vinculación con un artículo ya existente podrá evaluarse por sucursal en el servicio posterior.
+
+**Independencia:** incluso el autorizador corporativo no podrá decidir solicitudes creadas por su propia cuenta. Las solicitudes #1/#2 registradas por ADMICORP requerirán otro aprobador habilitado y competente, nunca un bypass administrativo.
+
+El guard aquí propuesto solo determinará elegibilidad; aprobar, rechazar y modificar maestro o existencias seguirán inactivos hasta implementar el servicio atómico y cerrar los QA de E2.
+
 ## 3.1. Alta de acción E3 — catálogo sin concesiones
 
 La consulta de producción del 26/10/2026 confirmó que el módulo `inventory` solo contiene `inventory.read`, `inventory.master_write` e `inventory.movement_write`. También se consultaron grants de Inventarios para cuentas corporativas, mantenimiento, coordinación y regionales: **0 filas**. Esto demuestra ausencia de grants explícitos dentro del alcance consultado, **no** denegación de todos los permisos legacy.
