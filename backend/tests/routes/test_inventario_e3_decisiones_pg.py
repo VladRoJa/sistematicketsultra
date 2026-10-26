@@ -91,6 +91,13 @@ def env():
                 InventarioGeneral.__table__.create(con)
                 InventarioSucursal.__table__.create(con)
                 InventarioCodigoCorreccionORM.__table__.create(con)
+                # V1 movimiento: stub exclusivo del schema de test, sin escrituras E3.
+                con.exec_driver_sql("""
+                    CREATE TABLE movimientos_inventario (
+                        id INTEGER PRIMARY KEY,
+                        tipo_movimiento VARCHAR(30) NOT NULL
+                    )
+                """)
                 con.exec_driver_sql("""
                     CREATE TABLE permission_modules (
                         id INTEGER PRIMARY KEY, key VARCHAR(120), is_active BOOLEAN
