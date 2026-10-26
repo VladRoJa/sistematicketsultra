@@ -1,0 +1,11 @@
+{
+  "inicio": "Bienvenido a Suite Ultra. Abrimos Tickets para consultar el seguimiento de mantenimiento. Esta capacitación utiliza información de demostración.",
+  "ticket": "En el resumen del ticket observamos los aparatos vinculados y su estado. Cada equipo tendrá una recepción individual; el ticket sigue siendo uno solo.",
+  "parcial": "Marcamos dos equipos que ya regresaron del tapicero. Los cambios son provisionales hasta presionar Guardar cambios. El porcentaje refleja la recepción parcial.",
+  "completo": "Ahora registramos los equipos restantes. Al llegar al cien por ciento el sistema permite solicitar el cierre, pero no cierra el ticket automáticamente.",
+  "cierre": "Registramos las notas de revisión y solicitamos conformidad. El ticket queda pendiente de validación por el usuario autorizado.",
+  "rechazo": "El usuario autorizado rechaza el cierre indicando un motivo. La solicitud se devuelve al trabajo en progreso sin perder la trazabilidad.",
+  "reversion": "Descubrimos un equipo que todavía no está listo. Desmarcamos su recepción, capturamos el motivo obligatorio y guardamos la corrección. El cierre vuelve a bloquearse.",
+  "historial": "Desde Ver Historial consultamos fechas, usuarios, motivos y cambios de estado. Las recepciones se vinculan al mismo ticket para conservar su seguimiento.",
+  "fin": "Terminamos el recorrido. Para repetir esta práctica es necesario restablecer primero los datos de demostración del entorno aislado."
+}
