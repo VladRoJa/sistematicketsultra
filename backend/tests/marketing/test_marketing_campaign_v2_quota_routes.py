@@ -684,6 +684,81 @@ def test_d3b_resolution_never_calls_provider(client, global_access):
     provider.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    "operation,service_name,payload",
+    [
+        pytest.param(
+            "release-intent", "request_held_release_intent",
+            {
+                "expected_candidate_fingerprint": "a" * 64,
+                "expected_recipient_count": 5,
+                "source_reference": "synthetic quota evidence",
+                "reason": "fresh capacity",
+            },
+            id="release-intent",
+        ),
+        pytest.param(
+            "freeze-derived", "freeze_derived_held_cohort",
+            {
+                "intent_id": 55,
+                "expected_candidate_fingerprint": "a" * 64,
+                "expected_recipient_count": 5,
+            },
+            id="freeze-derived",
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "denied_capability",
+    ["non_global", "missing_send", "missing_dispatch_config"],
+)
+def test_held_release_intent_and_freeze_derived_deny_before_side_effects(
+    client, global_access, operation, service_name, payload, denied_capability,
+):
+    """P26.5: guard 403 antes de servicios HELD o persistencia simulada.
+
+    JWT de Flask real y accesos sinteticos; sin proveedor ni datos reales.
+    """
+    browser, headers = client
+    access = SimpleNamespace(**vars(global_access))
+    if denied_capability == "non_global":
+        access.is_global = False
+        access.branch_ids = (11,)
+    elif denied_capability == "missing_send":
+        access.can_send_campaigns = False
+    else:
+        access.can_manage_dispatch_config = False
+
+    with auth(access), patch.object(
+        routes, service_name,
+    ) as mutation, patch.object(
+        routes, "IVentasBroadcastProvider",
+    ) as provider, patch.object(
+        routes, "_parse_payload",
+    ) as parse_payload, patch.object(
+        routes, "_campaign_v2_allowed_sucursal_keys",
+    ) as branch_keys, patch.object(
+        routes, "db",
+    ) as fake_db:
+        response = browser.post(
+            f"/api/marketing/campaigns-v2/77/dispatch/held/100/{operation}",
+            json=payload,
+            headers=headers,
+        )
+
+    assert response.status_code == 403, (operation, denied_capability, response.json)
+    assert response.json["status"] == "error"
+    mutation.assert_not_called()
+    provider.assert_not_called()
+    parse_payload.assert_not_called()
+    branch_keys.assert_not_called()
+    fake_db.session.add.assert_not_called()
+    fake_db.session.delete.assert_not_called()
+    fake_db.session.flush.assert_not_called()
+    fake_db.session.commit.assert_not_called()
+    fake_db.session.execute.assert_not_called()
+
+
 def test_d3c_held_release_preview_global_only_no_provider(client, global_access, partial_access):
     browser, headers = client
     url = "/api/marketing/campaigns-v2/77/dispatch/held/100/release-preview"
