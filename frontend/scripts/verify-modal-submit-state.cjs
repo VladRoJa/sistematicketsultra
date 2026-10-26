@@ -182,13 +182,18 @@ const jefeMethod = ticketsV1Ts.match(
 const cierreMethod = ticketsV1Ts.match(
   /^puedeSolicitarCierreMantenimiento\(ticket: Ticket\): boolean \{[\s\S]*?^\}/m
 );
+const recepcionMethod = ticketsV1Ts.match(
+  /^tapizadoListoParaCierre\(ticket: Ticket\): boolean \{[\s\S]*?^\}/m
+);
 assert.ok(jefeMethod, 'Identidad específica del jefe MANTENIMIENTO');
 assert.ok(cierreMethod, 'Regla de cierre legacy del jefe');
+assert.ok(recepcionMethod, 'Guardia M4.5 de cierre por recepción completa');
 const leadSource = [
   'class LegacyChiefTest {',
   '  user: any = null;',
   '  puedeCoordinarTicket(_ticket: any) { return false; }',
   jefeMethod[0],
+  recepcionMethod[0],
   cierreMethod[0],
   '}',
   'module.exports = { LegacyChiefTest };',
@@ -205,6 +210,13 @@ chief.user = { id: 45, username: 'MANTENIMIENTO', rol: 'MANTENIMIENTO', departme
 const ownTicket = { departamento_id: 1, estado: 'en progreso', asignado_a: null, tipo_atencion: null };
 assert.equal(chief.puedeSolicitarCierreMantenimiento(ownTicket), true,
   'Jefe solicita validación sin responsable');
+const partialTapizado = { ...ownTicket, tipo_trabajo: 'TAPIZADO',
+  avance_tapizado: { total: 6, recibidos: 5, pendientes: 1, completo: false } };
+assert.equal(chief.puedeSolicitarCierreMantenimiento(partialTapizado), false,
+  'Ni jefe legacy puede solicitar cierre con Tapizado 5/6');
+assert.equal(chief.puedeSolicitarCierreMantenimiento({ ...partialTapizado,
+  avance_tapizado: { total: 6, recibidos: 6, pendientes: 0, completo: true } }), true,
+  'Con Tapizado 6/6 recupera cierre según permisos');
 assert.equal(chief.puedeSolicitarCierreMantenimiento({ ...ownTicket, estado: 'por_validar' }), false);
 assert.equal(chief.puedeSolicitarCierreMantenimiento({ ...ownTicket, asignado_a: 'SR_MANT' }), false);
 assert.equal(chief.puedeSolicitarCierreMantenimiento({ ...ownTicket, tipo_atencion: 'EXTERNA' }), false);

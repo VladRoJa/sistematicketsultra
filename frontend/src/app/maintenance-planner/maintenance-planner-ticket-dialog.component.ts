@@ -125,9 +125,29 @@ export class MaintenancePlannerTicketDialogComponent {
     );
   }
 
+  get tapizadoBloqueaCierre(): boolean {
+    if (this.ticket.tipo_trabajo !== 'TAPIZADO') return false;
+    const avance = this.ticket.avance_tapizado;
+    return !avance || avance.total < 1 || avance.completo !== true;
+  }
+
+  get mostrarAvisoTapizadoIncompleto(): boolean {
+    return this.canRequestClosure
+      && this.normalizedState === 'en progreso'
+      && this.tapizadoBloqueaCierre;
+  }
+
+  get mensajeTapizadoIncompleto(): string {
+    const avance = this.ticket.avance_tapizado;
+    return avance && avance.total > 0
+      ? `Tapizado: ${avance.recibidos}/${avance.total} recibidos. Faltan ${avance.pendientes} por recibir para habilitar el cierre.`
+      : 'Registra los aparatos y sus recepciones antes de solicitar el cierre.';
+  }
+
   get canFinalizeTicket(): boolean {
     return Boolean(
-      this.canRequestClosure
+      !this.tapizadoBloqueaCierre
+      && this.canRequestClosure
       && this.normalizedState === 'en progreso'
       && (
         this.ticket.tipo_atencion === 'EXTERNA'

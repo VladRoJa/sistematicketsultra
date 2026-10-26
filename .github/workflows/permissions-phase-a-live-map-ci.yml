@@ -1,9 +1,42 @@
-name: Fase A P25 — Current Route Map Reconciliation
+name: Fase A P25–P29 — Route Map, Guards & Action Parity
 
 on:
   pull_request:
     paths:
       - "backend/app/utils/permission_route_inventory.py"
+      - "backend/app/__init__.py"
+      - "backend/app/routes/contact_center_routes.py"
+      - "backend/app/routes/purchase_requisition_routes.py"
+      - "backend/app/routes/system_daily_check_routes.py"
+      - "backend/app/routes/system_daily_check_bi_routes.py"
+      - "backend/app/routes/automation_control_routes.py"
+      - "backend/app/utils/contact_center_access.py"
+      - "backend/app/utils/system_daily_check_access.py"
+      - "backend/app/services/contact_center*.py"
+      - "backend/app/services/purchase_requisition*.py"
+      - "backend/app/services/system_daily_check*.py"
+      - "backend/tests/routes/test_permissions_phase_a_cross_family_p27.py"
+      - "backend/tests/routes/test_permissions_phase_a_p28_snapshot_contract.py"
+      - "backend/tests/routes/test_permissions_phase_a_p29_action_reconciliation.py"
+      - "backend/app/track_alerts/routes/track_alert_routes.py"
+      - "backend/app/routes/warehouse_internal_jobs.py"
+      - "backend/tests/test_track_alert_routes_p29_auth.py"
+      - "backend/tests/test_track_alert_routes.py"
+      - "docs/security/permissions_phase_a_p29_action_reconciliation_20261026.csv"
+      - "docs/security/permissions_phase_a_p29_action_parity_20261026.md"
+      - "backend/migrations/versions/3d4f6a8b9c10_seed_global_permissions_catalog.py"
+      - "backend/migrations/versions/7b8c9d0e1f2a_seed_permission_route_map_high_risk.py"
+      - "backend/migrations/versions/8f1e2d3c4b5a_add_permission_module_assignable_metadata.py"
+      - "docs/security/permissions_phase_a_p28_live_mutations_20261026.csv"
+      - "docs/security/permissions_phase_a_p28_live_gaps_20261026.md"
+      - "backend/app/routes/**"
+      - "backend/tests/contact_center/test_contact_center_access.py"
+      - "backend/tests/contact_center/test_contact_center_manager_scope_contract.py"
+      - "backend/tests/purchase_requisitions/test_permissions_phase_a_finance_approval_p23.py"
+      - "backend/tests/purchase_requisitions/test_permissions_phase_a_finance_rejection_p24.py"
+      - "backend/tests/system_daily_check/test_system_daily_check_access.py"
+      - "backend/tests/automation_control/test_read_api.py"
+      - "docs/security/permissions_phase_a_p27_cross_family_20261026.md"
       - "backend/tests/routes/test_permissions_phase_a_live_map_reconcile_p25.py"
       - "backend/tests/routes/test_permissions_phase_a_route_coverage.py"
       - "backend/tests/routes/test_permissions_phase_a_unmapped_mutations_p22.py"
@@ -37,9 +70,20 @@ jobs:
         run: |
           python -m pip install -r requirements.txt
           python -m pip install pytest==8.3.5
-      - name: P25 live catalog comparison contract + P21/P22 historical regressions
+      - name: P25–P29 live map, guard, snapshot, action parity and regressions
         run: |
           python -m pytest -q --tb=short -o addopts= \
             tests/routes/test_permissions_phase_a_live_map_reconcile_p25.py \
             tests/routes/test_permissions_phase_a_route_coverage.py \
-            tests/routes/test_permissions_phase_a_unmapped_mutations_p22.py
+            tests/routes/test_permissions_phase_a_unmapped_mutations_p22.py \
+            tests/routes/test_permissions_phase_a_cross_family_p27.py \
+            tests/routes/test_permissions_phase_a_p28_snapshot_contract.py \
+            tests/routes/test_permissions_phase_a_p29_action_reconciliation.py \
+            tests/test_track_alert_routes_p29_auth.py \
+            tests/test_track_alert_routes.py \
+            tests/contact_center/test_contact_center_access.py \
+            tests/contact_center/test_contact_center_manager_scope_contract.py \
+            tests/purchase_requisitions/test_permissions_phase_a_finance_approval_p23.py \
+            tests/purchase_requisitions/test_permissions_phase_a_finance_rejection_p24.py \
+            tests/system_daily_check/test_system_daily_check_access.py \
+            tests/automation_control/test_read_api.py

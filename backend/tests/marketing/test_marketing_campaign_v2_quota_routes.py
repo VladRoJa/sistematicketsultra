@@ -1180,3 +1180,88 @@ def test_campaign_metadata_mutations_preserve_partial_scope(
     provider.assert_not_called()
     fake_db.session.add.assert_not_called()
     fake_db.session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "method,path,service_name",
+    [
+        pytest.param(
+            "get", "/api/marketing/campaigns-v2/77/export-package",
+            "export_campaign_v2_delivery_package", id="manual-export",
+        ),
+        pytest.param(
+            "get", "/api/marketing/campaigns-v2/77/sendable-export-package",
+            "export_campaign_v2_sendable_package", id="sendable-export",
+        ),
+        pytest.param(
+            "get", "/api/marketing/campaigns-v2/77/recipients",
+            "list_campaign_v2_recipients", id="recipients-list",
+        ),
+        pytest.param(
+            "get", "/api/marketing/campaigns-v2/77/recipients/15",
+            "get_campaign_v2_recipient", id="recipient-detail",
+        ),
+        pytest.param(
+            "post", "/api/marketing/campaigns-v2/77/provider-stats/snapshots",
+            "capture_campaign_v2_provider_stats_snapshot", id="provider-stats-capture",
+        ),
+    ],
+)
+def test_p26_9_empty_regional_scope_blocks_sensitive_reads_and_capture(
+    client, partial_access, method, path, service_name,
+):
+    """A managed account without resolved branches must fail before the service."""
+    browser, headers = client
+    assert partial_access.can_manage_campaigns is True
+    assert partial_access.is_global is False
+    with auth(partial_access), patch.object(
+        routes, "marketing_branch_keys_by_sucursal_ids", return_value={},
+    ) as mapper, patch.object(
+        routes, service_name,
+    ) as operation, patch.object(
+        routes, "IVentasBroadcastProvider",
+    ) as provider, patch.object(routes, "db") as fake_db:
+        response = getattr(browser, method)(path, headers=headers)
+
+    assert response.status_code == 403, (method, path, response.json)
+    mapper.assert_called_once()
+    assert mapper.call_args.kwargs["sucursal_ids"] == partial_access.branch_ids
+    operation.assert_not_called()
+    provider.assert_not_called()
+    fake_db.session.add.assert_not_called()
+    fake_db.session.commit.assert_not_called()
+    fake_db.session.execute.assert_not_called()
+
+
+def test_p26_9_regional_stats_capture_forwards_only_authorized_branches(
+    client, partial_access,
+):
+    """Positive HTTP handler contract; no real provider request or DB write."""
+    browser, headers = client
+    expected = {"id": 8, "campaign_id": 77, "created": True}
+    with auth(partial_access), patch.object(
+        routes, "marketing_branch_keys_by_sucursal_ids",
+        return_value={11: "BRANCH A"},
+    ) as mapper, patch.object(
+        routes, "capture_campaign_v2_provider_stats_snapshot",
+        return_value=expected,
+    ) as capture, patch.object(
+        routes, "IVentasBroadcastProvider",
+    ) as provider, patch.object(routes, "db") as fake_db:
+        response = browser.post(
+            "/api/marketing/campaigns-v2/77/provider-stats/snapshots",
+            headers=headers,
+        )
+
+    assert response.status_code == 200, response.json
+    assert response.json == expected
+    mapper.assert_called_once()
+    capture.assert_called_once()
+    assert capture.call_args.kwargs == {
+        "campaign_id": 77,
+        "allowed_sucursal_keys": ("BRANCH A",),
+        "session": fake_db.session,
+    }
+    provider.assert_not_called()
+    fake_db.session.add.assert_not_called()
+    fake_db.session.commit.assert_not_called()

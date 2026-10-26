@@ -41,7 +41,7 @@ from app.track_alerts.services.track_branch_operational_detail_service import (
     TrackBranchOperationalDetailDataError,
     get_track_branch_operational_detail,
 )
-from app.routes.track_routes import _require_track_read_role
+from app.routes.track_routes import _require_track_admin_role, _require_track_read_role
 from app.warehouse.services.track_forecast_center_service import (
     ForecastCenterAuthorizationError,
     ForecastCenterNotFoundError,
@@ -72,8 +72,26 @@ def _get_current_track_alert_user():
     return user
 
 
+
+def _require_track_alert_access(*, write: bool):
+    """Use DB-resolved Track roles, not client JWT claims, before side effects."""
+    try:
+        if write:
+            _require_track_admin_role()
+        else:
+            _require_track_read_role()
+    except PermissionError as exc:
+        return jsonify({"error": str(exc)}), 403
+    return None
+
+
 @track_alert_bp.route("/test", methods=["POST"])
+@jwt_required()
 def test_track_alerts():
+    denied = _require_track_alert_access(write=False)
+    if denied is not None:
+        return denied
+
     payload = request.get_json(silent=True) or {}
 
     track_date_raw = payload.get("track_date")
@@ -116,7 +134,12 @@ def test_track_alerts():
     )
     
 @track_alert_bp.route("/generate", methods=["POST"])
+@jwt_required()
 def generate_track_alerts():
+    denied = _require_track_alert_access(write=True)
+    if denied is not None:
+        return denied
+
     payload = request.get_json(silent=True) or {}
 
     track_date_raw = payload.get("track_date")
@@ -151,7 +174,12 @@ def generate_track_alerts():
     return jsonify(result)
 
 @track_alert_bp.route("/preview-email", methods=["GET"])
+@jwt_required()
 def preview_track_alert_email():
+    denied = _require_track_alert_access(write=False)
+    if denied is not None:
+        return denied
+
     track_date_raw = request.args.get("track_date")
     generation_mode = request.args.get(
         "generation_mode",
@@ -201,7 +229,12 @@ def preview_track_alert_email():
     return rendered["html"]
 
 @track_alert_bp.route("/send-email", methods=["POST"])
+@jwt_required()
 def send_track_alert_email():
+    denied = _require_track_alert_access(write=True)
+    if denied is not None:
+        return denied
+
     payload = request.get_json(silent=True) or {}
 
     track_date_raw = payload.get("track_date")
@@ -270,7 +303,12 @@ def send_track_alert_email():
     return jsonify(result)
 
 @track_alert_bp.route("/send-regional-email", methods=["POST"])
+@jwt_required()
 def send_regional_track_alert_email():
+    denied = _require_track_alert_access(write=True)
+    if denied is not None:
+        return denied
+
     payload = request.get_json(silent=True) or {}
 
     track_date_raw = payload.get("track_date")
@@ -337,7 +375,12 @@ def send_regional_track_alert_email():
     return jsonify(result)
 
 @track_alert_bp.route("/regional-test", methods=["POST"])
+@jwt_required()
 def test_regional_track_alerts():
+    denied = _require_track_alert_access(write=False)
+    if denied is not None:
+        return denied
+
     payload = request.get_json(silent=True) or {}
 
     track_date_raw = payload.get("track_date")
@@ -387,7 +430,12 @@ def test_regional_track_alerts():
     )
     
 @track_alert_bp.route("/regional-preview-email", methods=["GET"])
+@jwt_required()
 def preview_regional_track_alert_email():
+    denied = _require_track_alert_access(write=False)
+    if denied is not None:
+        return denied
+
     track_date_raw = request.args.get("track_date")
     generation_mode = request.args.get(
         "generation_mode",

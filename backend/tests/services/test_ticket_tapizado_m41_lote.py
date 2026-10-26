@@ -35,6 +35,27 @@ class LoteTapizadoM41Test(unittest.TestCase):
         self.assertTrue(all(x["cambiadoPor"] == "ADMICORP" for x in t.historial_fechas))
         self.assertEqual(flag.call_count, 3)
 
+    def test_abierto_bloquea_lote_completo_aunque_haya_5_de_6(self):
+        t = ticket(estado="abierto", recibidos=5)
+        flag = Mock()
+        with self.assertRaisesRegex(RecepcionTapizadoError, "En progreso"):
+            actualizar_recepciones_lote_tapizado(
+                t, cambios=[cambio(6, True)],
+                actor="ADMICORP", marca_historial=flag,
+            )
+        self.assertEqual(resumen_recepcion_tapizado(t)["recibidos"], 5)
+        self.assertEqual(t.historial_fechas, [])
+        flag.assert_not_called()
+
+    def test_abierto_no_puede_revertir_recepcion_anterior(self):
+        t = ticket(estado="abierto", recibidos=2)
+        with self.assertRaisesRegex(RecepcionTapizadoError, "En progreso"):
+            actualizar_recepciones_lote_tapizado(
+                t, cambios=[cambio(2, False, anterior=True, motivo="Error de registro")],
+                actor="ADMICORP", marca_historial=lambda *_: None,
+            )
+        self.assertEqual(resumen_recepcion_tapizado(t)["recibidos"], 2)
+
     def test_un_cambio_invalido_no_altera_ningun_aparato(self):
         t = ticket()
         flag = Mock()

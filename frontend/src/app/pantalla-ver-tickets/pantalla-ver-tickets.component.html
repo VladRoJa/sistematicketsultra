@@ -774,6 +774,20 @@
               </button>
             </div>
 
+            <!-- Tapizado: explicar el bloqueo sin ofrecer una acción inválida. -->
+            <span
+              *ngIf="puedeMostrarAvisoTapizadoPendiente(ticket)"
+              class="ticket-tapizado-cierre-pendiente"
+              [matTooltip]="mensajeTapizadoPendiente(ticket)"
+              role="status"
+            >
+              <mat-icon aria-hidden="true">schedule</mat-icon>
+              <span class="ticket-tapizado-cierre-pendiente__texto">
+                <span>{{ resumenAvisoCierreTapizado(ticket) }}</span>
+                <span>{{ detalleAvisoCierreTapizado(ticket) }}</span>
+              </span>
+            </span>
+
             <!-- Botón: Cierre administrativo por gerente/admin -->
             <button
               *ngIf="puedeMostrarBotonCerrarDesdeCero(ticket)"

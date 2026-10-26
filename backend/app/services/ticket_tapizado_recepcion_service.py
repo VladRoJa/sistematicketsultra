@@ -4,11 +4,24 @@ from datetime import datetime, timezone
 from sqlalchemy.orm.attributes import flag_modified
 
 TIPO_TRABAJO_TAPIZADO = "TAPIZADO"
-ESTADOS_EDITABLES = frozenset({"abierto", "en progreso"})
+ESTADOS_EDITABLES = frozenset({"en progreso"})
 
 
 class RecepcionTapizadoError(ValueError):
     pass
+
+
+def validar_estado_para_recepcion(ticket):
+    """La recepción solo es editable una vez iniciado formalmente el trabajo."""
+    estado = str(getattr(ticket, "estado", "") or "").strip().lower()
+    if estado == "abierto":
+        raise RecepcionTapizadoError(
+            "Para registrar recepciones de tapizado, primero cambia el ticket a En progreso."
+        )
+    if estado not in ESTADOS_EDITABLES:
+        raise RecepcionTapizadoError(
+            "Las recepciones solo pueden modificarse mientras el ticket está en progreso."
+        )
 
 
 def _vinculos(ticket):
@@ -103,8 +116,7 @@ def actualizar_recepcion_tapizado(
     if getattr(ticket, "tipo_trabajo", None) != TIPO_TRABAJO_TAPIZADO:
         raise RecepcionTapizadoError("Este ticket no es de tapizado.")
 
-    if str(getattr(ticket, "estado", "") or "").strip().lower() not in ESTADOS_EDITABLES:
-        raise RecepcionTapizadoError("Solo puede modificarse tapizado abierto o en progreso.")
+    validar_estado_para_recepcion(ticket)
 
     if not isinstance(recibido, bool):
         raise RecepcionTapizadoError("recibido debe ser booleano.")
@@ -169,8 +181,7 @@ def actualizar_recepciones_lote_tapizado(
     """
     if getattr(ticket, "tipo_trabajo", None) != TIPO_TRABAJO_TAPIZADO:
         raise RecepcionTapizadoError("Este ticket no es de tapizado.")
-    if str(getattr(ticket, "estado", "") or "").strip().lower() not in ESTADOS_EDITABLES:
-        raise RecepcionTapizadoError("Solo puede modificarse tapizado abierto o en progreso.")
+    validar_estado_para_recepcion(ticket)
     if not isinstance(cambios, list) or not 1 <= len(cambios) <= 50:
         raise RecepcionTapizadoError("Envía entre 1 y 50 cambios de recepción.")
 

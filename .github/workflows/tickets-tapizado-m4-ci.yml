@@ -7,17 +7,21 @@ on:
       - "backend/app/models/ticket_model.py"
       - "backend/app/services/ticket_tapizado_recepcion_service.py"
       - "backend/app/routes/ticket_routes.py"
+      - "backend/app/maintenance_planner/service.py"
       - "backend/app/config.py"
       - "backend/migrations/versions/m23c10202623_tapizado_recepcion_parcial.py"
       - "backend/tests/services/test_ticket_tapizado_m4_recepcion.py"
       - "backend/tests/services/test_ticket_tapizado_m41_lote.py"
+      - "backend/tests/services/test_ticket_tapizado_m45_planner.py"
       - "backend/tests/models/test_ticket_tapizado_m4_migration.py"
       - "frontend/src/app/services/ticket.service.ts"
       - "frontend/src/app/pantalla-ver-tickets/**"
+      - "frontend/src/app/maintenance-planner/**"
       - "frontend/tests/tickets-tapizado-recepcion-m4.test.cjs"
       - "frontend/tests/tickets-tapizado-guardar-directo-m42.test.cjs"
       - "frontend/tests/tickets-tapizado-acceso-directo-m43.test.cjs"
-      - "frontend/tests/tickets-tapizado-guardar-directo-m42.test.cjs"
+      - "frontend/tests/tickets-tapizado-en-progreso-m44.test.cjs"
+      - "frontend/tests/tickets-tapizado-cierre-100-m45.test.cjs"
       - ".github/workflows/tickets-tapizado-m4-ci.yml"
   workflow_dispatch:
 
@@ -50,12 +54,13 @@ jobs:
           python -m pip install pytest==8.3.5
       - name: Compile affected files
         run: |
-          python -m py_compile app/models/ticket_aparato.py app/models/ticket_model.py app/services/ticket_tapizado_recepcion_service.py app/routes/ticket_routes.py migrations/versions/m23c10202623_tapizado_recepcion_parcial.py
+          python -m py_compile app/models/ticket_aparato.py app/models/ticket_model.py app/services/ticket_tapizado_recepcion_service.py app/routes/ticket_routes.py app/maintenance_planner/service.py tests/services/test_ticket_tapizado_m45_planner.py migrations/versions/m23c10202623_tapizado_recepcion_parcial.py
       - name: M4, M3, M2, migration and close-flow regression
         run: |
           python -m pytest -q --tb=short -o addopts= \
             tests/services/test_ticket_tapizado_m4_recepcion.py \
             tests/services/test_ticket_tapizado_m41_lote.py \
+            tests/services/test_ticket_tapizado_m45_planner.py \
             tests/models/test_ticket_tapizado_m4_migration.py \
             tests/routes/test_ticket_tapizado_m3_historiales.py \
             tests/routes/test_ticket_tapizado_m2.py \
@@ -79,7 +84,7 @@ jobs:
         run: npm ci --legacy-peer-deps --no-audit --no-fund
       - name: M4/M3 interface contracts
         run: |
-          node --test tests/tickets-tapizado-recepcion-m4.test.cjs tests/tickets-tapizado-guardar-directo-m42.test.cjs tests/tickets-tapizado-acceso-directo-m43.test.cjs tests/tickets-tapizado-m3.test.cjs tests/tickets-tapizado-guardar-directo-m42.test.cjs tests/tickets-tapizado-selector-freeze-m31.test.cjs tests/tickets-tapizado-ui-m32.test.cjs
+          node --test tests/tickets-tapizado-recepcion-m4.test.cjs tests/tickets-tapizado-guardar-directo-m42.test.cjs tests/tickets-tapizado-acceso-directo-m43.test.cjs tests/tickets-tapizado-en-progreso-m44.test.cjs tests/tickets-tapizado-cierre-100-m45.test.cjs tests/tickets-tapizado-m3.test.cjs tests/tickets-tapizado-selector-freeze-m31.test.cjs tests/tickets-tapizado-ui-m32.test.cjs
       - name: Angular typecheck and templates
         run: npx ngc -p tsconfig.app.json
       - name: Production build
