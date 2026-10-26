@@ -15,6 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, OperationalError
 from flask import current_app
 from app.services.inventario_correccion_decisiones_service import decidir_lote, DecisionError
+from app.utils.inventory_correction_permissions import alcance_revision_e3
 
 from app.extensions import db
 from app.models.inventario_solicitud_correccion import InventarioSolicitudCorreccionORM
@@ -461,6 +462,107 @@ def detalle_solicitud(solicitud_id):
         return _error(404, "Solicitud inexistente o fuera de tu alcance.")
     return jsonify({"solicitud": _serialize(row)}), 200
 
+
+
+
+def _actor_revision():
+    identity = get_jwt_identity()
+    if isinstance(identity, bool):
+        return None, _error(401, "Sesión inválida.")
+    try:
+        actor_id = int(identity)
+    except (TypeError, ValueError, OverflowError):
+        return None, _error(401, "Sesión inválida.")
+    access = alcance_revision_e3(actor_id)
+    if access is None:
+        return None, _error(403, "No tienes permiso para revisar correcciones.")
+    return access, None
+
+
+def _query_revision(access):
+    # No filtrar en frontend: el límite real se aplica en SQL ANTES de paginar.
+    query = InventarioSolicitudCorreccionORM.query.filter(
+        InventarioSolicitudCorreccionORM.sucursal_id.in_(access["sucursales"]),
+        InventarioSolicitudCorreccionORM.creado_por_usuario_id != access["actor_id"],
+    )
+    if not access["corporativo"]:
+        query = query.filter(InventarioSolicitudCorreccionORM.tipo != "MASTER_FIELD")
+    return query
+
+
+@inventario_solicitudes_bp.get("/revision/contexto")
+@jwt_required()
+def contexto_revision_e3():
+    access, denied = _actor_revision()
+    if denied:
+        return denied
+    names = db.session.execute(text(
+        "SELECT sucursal_id, sucursal FROM sucursales "
+        "WHERE sucursal_id IN :ids ORDER BY sucursal"
+    ).bindparams(__import__("sqlalchemy").bindparam(
+        "ids", expanding=True
+    )), {"ids": access["sucursales"]}).mappings().all()
+    return jsonify({
+        "can_review": True, "corporativo": access["corporativo"],
+        "sucursales": [
+            {"sucursal_id": row["sucursal_id"], "sucursal": row["sucursal"]}
+            for row in names
+        ],
+    }), 200
+
+
+@inventario_solicitudes_bp.get("/revision")
+@jwt_required()
+def listar_revision_e3():
+    access, denied = _actor_revision()
+    if denied:
+        return denied
+    raw_branch = request.args.get("sucursal_id")
+    branch = None if raw_branch is None else _query_positive(raw_branch)
+    if raw_branch is not None and branch is None:
+        return _error(400, "Sucursal inválida.")
+    if branch is not None and branch not in access["sucursales"]:
+        return _error(403, "Sucursal fuera de tu alcance.")
+    kind = request.args.get("tipo")
+    status = request.args.get("estado", "PENDING")
+    if kind is not None and kind not in _TYPES:
+        return _error(400, "Tipo inválido.")
+    if status not in _STATUSES:
+        return _error(400, "Estado inválido.")
+    page = _query_positive(request.args.get("page", "1"))
+    per_page = _query_positive(request.args.get("per_page", "10"))
+    if page is None or page > 100000 or per_page is None or per_page > 100:
+        return _error(400, "Paginación inválida.")
+    query = _query_revision(access).filter(
+        InventarioSolicitudCorreccionORM.estado == status
+    )
+    if branch is not None:
+        query = query.filter(InventarioSolicitudCorreccionORM.sucursal_id == branch)
+    if kind:
+        query = query.filter(InventarioSolicitudCorreccionORM.tipo == kind)
+    total = query.count()
+    rows = (query.order_by(
+        InventarioSolicitudCorreccionORM.creado_en_utc.desc(),
+        InventarioSolicitudCorreccionORM.id.desc(),
+    ).offset((page - 1) * per_page).limit(per_page).all())
+    return jsonify({
+        "items": [_serialize(row) for row in rows], "total": total,
+        "page": page, "per_page": per_page,
+    }), 200
+
+
+@inventario_solicitudes_bp.get("/revision/<int:solicitud_id>")
+@jwt_required()
+def detalle_revision_e3(solicitud_id):
+    access, denied = _actor_revision()
+    if denied:
+        return denied
+    row = _query_revision(access).filter(
+        InventarioSolicitudCorreccionORM.id == solicitud_id
+    ).first()
+    if row is None:
+        return _error(404, "Solicitud inexistente o fuera de tu alcance.")
+    return jsonify({"solicitud": _serialize(row)}), 200
 
 @inventario_solicitudes_bp.post("/decisiones/lote")
 @jwt_required()
