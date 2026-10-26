@@ -118,7 +118,8 @@ jobs:
         working-directory: backend
         run: |
           python -m pytest -q --tb=short \
-            tests/marketing/test_background_dispatch_m3_postgres.py
+            tests/marketing/test_background_dispatch_m3_postgres.py \
+            tests/marketing/test_background_dispatch_gate_a_pg.py
 
   angular-m3:
     runs-on: ubuntu-latest
