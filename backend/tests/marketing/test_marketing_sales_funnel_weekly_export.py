@@ -6,12 +6,23 @@ from zipfile import ZipFile
 
 import pytest
 
-from app.services.marketing_sales_funnel_weekly_export_service import (
-    closed_business_date,
-    create_workbook,
-    find_weekly_cutoffs,
-    scopes_from_access,
+# Cargar el generador puro sin ejecutar app/__init__.py (factory Flask/DB).
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
+
+SERVICE_FILE = (
+    Path(__file__).resolve().parents[2]
+    / "app/services/marketing_sales_funnel_weekly_export_service.py"
 )
+spec = spec_from_file_location("funnel_weekly_export", SERVICE_FILE)
+assert spec is not None and spec.loader is not None
+module = module_from_spec(spec)
+spec.loader.exec_module(module)
+
+closed_business_date = module.closed_business_date
+create_workbook = module.create_workbook
+find_weekly_cutoffs = module.find_weekly_cutoffs
+scopes_from_access = module.scopes_from_access
 
 
 def test_monday_becomes_available_only_on_tuesday_if_canonical():
