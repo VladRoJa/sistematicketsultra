@@ -90,6 +90,8 @@ def resolver_acceso_autorizacion_e3(
     """Decisión de elegibilidad; sin writes ni dependencia del JWT de rol.
 
     Se exige acción activa y grant explícito vigente para autorizar.
+    Administración con grant personal global puede aprobar solicitudes propias,
+    con la misma transacción, justificación y auditoría que las ajenas.
     Roles permitidos: administración (solo grant individual global),
     Mantenimiento (dept 1, aparatos) y Sistemas (dept 7, dispositivos),
     siempre sujetos a grant y usuario_sucursal asignada.
@@ -100,9 +102,6 @@ def resolver_acceso_autorizacion_e3(
     creator = _positive_int(solicitud_creador_id)
     if not actor_id or not branch or not creator or tipo not in _ALLOWED_TYPES:
         return InventoryCorrectionApprovalAccess(False, "invalid_request")
-    if actor_id == creator:
-        return InventoryCorrectionApprovalAccess(False, "self_approval_forbidden")
-
     actor = db.session.execute(
         text("""
             SELECT id, rol, department_id
@@ -116,6 +115,10 @@ def resolver_acceso_autorizacion_e3(
     role = str(actor["rol"] or "").strip().upper()
     if role not in _GLOBAL_ADMIN_ROLES | _SCOPED_APPROVER_ROLES:
         return InventoryCorrectionApprovalAccess(False, "role_not_enabled")
+    # Excepción controlada: solo corporativo con grant PERSONAL global
+    # puede decidir una solicitud propia. Operativos conservan doble control.
+    if actor_id == creator and role not in _GLOBAL_ADMIN_ROLES:
+        return InventoryCorrectionApprovalAccess(False, "self_approval_forbidden")
     if (role in _SCOPED_APPROVER_ROLES
             and actor["department_id"] != _ROLE_COMPETENCE[role][0]):
         return InventoryCorrectionApprovalAccess(False, "department_not_enabled")
