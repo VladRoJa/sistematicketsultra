@@ -1,0 +1,70 @@
+name: Contact Center — Regional Pilot EDMUNDO Scope
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/utils/contact_center_access.py"
+      - "backend/tests/contact_center/test_contact_center_access.py"
+      - "backend/tests/contact_center/test_contact_center_manager_scope_contract.py"
+      - "backend/tests/frontend/test_contact_center_frontend_contract.py"
+      - "frontend/src/app/contact-center/contact-center-access.guard.ts"
+      - "docs/security/contact_center_edmundo_regional_pilot_20261027.md"
+      - ".github/workflows/contact-center-regional-pilot-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  backend-scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+      SECRET_KEY: contact-center-regional-pilot
+      JWT_SECRET_KEY: contact-center-regional-pilot
+      SQLALCHEMY_DATABASE_URI: "sqlite:///:memory:"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Compile scope and access tests
+        run: |
+          python -m py_compile app/utils/contact_center_access.py \
+            tests/contact_center/test_contact_center_access.py \
+            tests/frontend/test_contact_center_frontend_contract.py
+      - name: Verify pilot identity, branch scope and UI contracts
+        run: |
+          python -m pytest -q --tb=short -o addopts= \
+            tests/contact_center/test_contact_center_access.py \
+            tests/contact_center/test_contact_center_manager_scope_contract.py \
+            tests/frontend/test_contact_center_frontend_contract.py \
+            tests/contact_center/test_contact_center_shared_visibility_contract.py
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install Angular dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build production UI
+        run: npm run build -- --configuration production
