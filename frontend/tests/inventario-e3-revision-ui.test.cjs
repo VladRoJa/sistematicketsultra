@@ -34,9 +34,14 @@ function make({ fail=false }={}) {
     {id:1,tipo:'QUANTITY_DIFFERENCE',sucursal_id:7,estado:'PENDING',
       creado_por_usuario_id:98,baseline_canonico:{stock:3}},
     {id:2,tipo:'NOT_LOCATED',sucursal_id:7,estado:'PENDING',
-      creado_por_usuario_id:98,baseline_canonico:{stock:3}},
+      creado_por_usuario_id:98,baseline_canonico:{stock:3},
+      fecha_observacion_local:'2026-10-26',
+      evidencia_descriptiva:'Búsqueda física total de referencia en almacén y piso'},
     {id:3,tipo:'UNREGISTERED_FIND',sucursal_id:7,estado:'PENDING',
-      creado_por_usuario_id:98,baseline_canonico:{sucursal_id:7}},
+      creado_por_usuario_id:98,baseline_canonico:{sucursal_id:7},
+      hallazgo_provisional:{nombre:'Remo',tipo:'APARATOS',codigo_interno:'07RE01'},
+      fecha_observacion_local:'2026-10-26',
+      evidencia_descriptiva:'Cotejo de etiqueta física y conteo total del almacén'},
   ];
   const calls={lists:[],details:[],posts:[]};
   const api={
@@ -127,6 +132,37 @@ test('E3 hallazgo requiere vínculo y cantidad física validada',()=>{
   assert.equal(vm.puedeConfirmar,true);
   vm.ejecutar();
   assert.equal(calls.posts[0].resoluciones['3'].inventario_id,502);
+});
+
+test('E3 bloquea aprobar un PENDING incompleto, pero deja rechazar',()=>{
+  const {vm,calls}=make();
+  vm.marcar(2);vm.preparar('APPROVED');
+  vm.motivo='Inspección incompleta que requiere nueva evidencia';
+  vm.confirmo=true;
+  vm.resoluciones[2].justificacion='El conteo requiere un registro documentado completo';
+  const selected=vm.seleccionadas[0];
+  selected.evidencia_descriptiva=null;
+  assert.equal(vm.puedeConfirmar,false);
+  selected.evidencia_descriptiva='Inspección física de todas las áreas de la sucursal';
+  selected.fecha_observacion_local=null;
+  assert.equal(vm.puedeConfirmar,false);
+  vm.cerrarDecision();vm.preparar('REJECTED');
+  vm.motivo='Rechazada por carecer de evidencia física fechada';vm.confirmo=true;
+  assert.equal(vm.puedeConfirmar,true);
+  vm.ejecutar();
+  assert.equal(calls.posts[0].decision,'REJECTED');
+});
+
+test('E3 hallazgo sin código físico no permite autorizar',()=>{
+  const {vm}=make();
+  vm.marcar(3);vm.preparar('APPROVED');
+  vm.motivo='Hallazgo cotejado con documentación';vm.confirmo=true;
+  vm.resoluciones[3]={
+    accion:'VINCULAR_EXISTENTE',inventario_id:502,stock_esperado:1,
+    cantidad_fisica:2,justificacion:'Identidad física declarada y comprobada',
+  };
+  vm.seleccionadas[0].hallazgo_provisional.codigo_interno='';
+  assert.equal(vm.puedeConfirmar,false);
 });
 
 test('E3 rechazo no adjunta resoluciones y reintento mantiene idempotencia',()=>{
