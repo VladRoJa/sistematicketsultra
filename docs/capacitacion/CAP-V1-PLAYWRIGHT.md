@@ -116,6 +116,57 @@ crear otro guion y otro recorrido manteniendo el exportador común.
 Antes de nueva grabación **restaurar el dataset aislado**: el recorrido termina
 con N-1 aparatos recibidos, y el usuario debe repetirlo desde 0/N.
 
+
+### Captura de producción: GitHub Actions en solo lectura
+
+El workflow `.github/workflows/cap-v1-prod-readonly.yml` se activa **manualmente**
+con `workflow_dispatch` desde `main` una vez integrada y revisada la PR.
+No se activa automáticamente por push o pull request.
+
+Antes de habilitarlo, configurar el entorno de GitHub
+`cap-prod-readonly` (idealmente con aprobación de un revisor) y estos
+**Secrets** del entorno: `CAP_PROD_DEMO_USER` y
+`CAP_PROD_DEMO_PASSWORD`. Son para un usuario **exclusivo de ULTRA DEMO**,
+con `sucursal_id` de esa sucursal y rol GERENTE, USUARIO o RECEPCIONISTA.
+No usar cuentas corporativas/ADMINISTRADOR ni credenciales personales. La
+cuenta debe visualizar el ticket de prueba y ninguna sucursal real.
+Evitar almacenar secretos como variables no protegidas o en parámetros del run.
+
+Preparar o identificar dentro de ULTRA DEMO un ticket de Tapizado de **3+
+aparatos** (sin datos reales), y anotar su ID; la preparación del ticket
+no forma parte del workflow y necesita supervisión normal de la Suite.
+
+Ejecución manual en **Actions > CAP-V1 Production DEMO Read-only Video >
+Run workflow**, seleccionar `main`, introducir el `demo_ticket_id` y
+autorizar el entorno protegido si así está configurado.
+
+Controles obligatorios del script `scripts/training/production_readonly.py`:
+
+- URL fija **https://suiteultragym.com**, sin redirección arbitraria a hosts
+  externos. El proxy API es el mismo origen.
+- Login separado, no grabado: las contraseñas no aparecen en la captura;
+  el estado autenticado vive únicamente en RAM del runner.
+- Verificación mediante `GET /api/sucursales/listar?audience=operational`
+  del flag real `is_demo=true`, coincidencia de sucursal con el usuario y
+  verificación de ticket TAPIZADO multiaparato en esa sucursal.
+- Recorrido y auditoría de **toda** la bandeja del usuario (máximo 200
+  tickets); si ve una sola sucursal real, falla antes de grabar.
+- Después de autenticar, bloqueo de métodos HTTP de escritura a nivel de
+  Playwright, incluso si se activara accidentalmente un botón de Guardar.
+- Solo **consulta** de lista, historial y recepción por aparato; no marca
+  checkboxes, no solicita ni rechaza cierres, y no altera estados.
+- Si se completa, guarda en Artifacts de GitHub `capacitacion.mp4`,
+  `subtitulos.srt` y `manifiesto.json`, con retención de **7 días**.
+  No sube automáticamente videos a Nube.
+
+**Limitación y verificación:** los bloqueos de solicitudes son una defensa en
+el navegador, no una garantía de aislamiento de datos de producción;
+los endpoints GET deben ser realmente de lectura. El login puede crear
+trazas/sesiones normales de autenticación. El material debe revisarse antes de
+compartirlo. La primera grabación real necesita un ticket DEMO disponible y
+credenciales Secrets configuradas. El flujo de cierre completo sigue pendiente
+de la revisión de exclusión de KPI en todos los consumidores de Tickets.
+
 ### Publicación en Nube corporativa — bloqueada en CAP-V1
 
 No publicar ni cambiar la allowlist mediante un parche rápido. Abrir un cambio
