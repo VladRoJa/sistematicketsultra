@@ -15,6 +15,9 @@ const CONTACT_CENTER_INITIAL_ROLES = new Set([
   'CANDY',
 ]);
 
+// Opt-in de piloto regional. El backend verifica también el ID y sucursales.
+const CONTACT_CENTER_REGIONAL_PILOT_USERS = new Set(['EDMUNDO']);
+
 const CONTACT_CENTER_MANAGER_ALLOWED_BRANCH_IDS = new Set([
   1,
   7,
@@ -52,7 +55,9 @@ export function canAccessContactCenter(user: unknown): boolean {
   }
 
   const managerPilotAccess = (
-    role === 'GERENTE'
+    (role === 'GERENTE'
+      || (role === 'GERENTE_REGIONAL'
+        && CONTACT_CENTER_REGIONAL_PILOT_USERS.has(username)))
     && [...branchIds].some(
       (branchId) => CONTACT_CENTER_MANAGER_ALLOWED_BRANCH_IDS.has(branchId),
     )
