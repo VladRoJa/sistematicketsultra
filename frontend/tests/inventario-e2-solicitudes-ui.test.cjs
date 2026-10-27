@@ -180,11 +180,32 @@ test('E2: hallazgo no registrado no inventa inventario_id', () => {
   vm.hallazgoNombre = 'Remo sin etiqueta';
   vm.hallazgoTipo = 'APARATOS';
   vm.motivo = 'Hallado en almacén sin registro en sistema';
+  assert.equal(vm.puedeEnviar, false);
+  vm.fechaObservacion = '2026-10-26';
+  vm.evidencia = 'Revisión del almacén y ubicación física con conteo de equipos';
+  assert.equal(vm.puedeEnviar, true);
   vm.enviar();
   assert.equal(calls.posts[0].tipo, 'UNREGISTERED_FIND');
   assert.equal('inventario_id' in calls.posts[0], false);
   assert.deepEqual(calls.posts[0].hallazgo_provisional,
     { nombre: 'Remo sin etiqueta', tipo: 'APARATOS' });
+});
+
+test('E2: no localizado requiere fecha y evidencia sin mutar inventario', () => {
+  const { vm, calls } = fixture();
+  vm.seleccionarTipo('NOT_LOCATED');
+  vm.motivo = 'Inspección de referencia ausente en toda la sucursal';
+  assert.equal(vm.puedeEnviar, false);
+  vm.fechaObservacion = '2026-10-26';
+  assert.equal(vm.puedeEnviar, false);
+  vm.evidencia = 'Revisados almacén, gimnasio y movimiento físico de equipos';
+  assert.equal(vm.puedeEnviar, true);
+  vm.enviar();
+  assert.equal(calls.posts.length, 1);
+  assert.equal(calls.posts[0].tipo, 'NOT_LOCATED');
+  assert.equal(calls.posts[0].fecha_observacion_local, '2026-10-26');
+  assert.equal(calls.posts[0].evidencia_descriptiva, vm.evidencia);
+  assert.deepEqual(calls.posts[0].valor_propuesto, { no_localizado: true });
 });
 
 test('E2: impide enviar formulario incompleto, stock igual y fecha no válida sin servidor', () => {
