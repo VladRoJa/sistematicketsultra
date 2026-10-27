@@ -386,11 +386,44 @@ def create_workbook(
         if weekly else "Sin lunes completos en el periodo seleccionado",
     )
     if weekly:
+        # Fuente gráfica en la MISMA hoja visible que el gráfico.
+        # Evita que clientes de Excel omitan series por estar en una hoja oculta.
+        # Ubicarla lejos del tablero (AZ+) sin ocultar las columnas fuente.
+        plot_first_row = 49  # Excel fila 50
+        plot_date_col = 51  # AZ
+        plot_series_col = 52  # BA
+        panel.set_column(plot_date_col, plot_date_col, 15)
+        panel.set_column(plot_series_col, plot_series_col + len(series) - 1, 16)
+        panel.write(47, plot_date_col, "FUENTE GRÁFICA · NO EDITAR", small)
+        panel.write(48, plot_date_col, "Corte", header)
+        for n, (month, metric, _) in enumerate(series):
+            panel.write(48, plot_series_col + n,
+                        INDICATORS[metric] + " · " + month, header)
+        for i, snapshot in enumerate(weekly):
+            day = date.fromisoformat(str(snapshot["selected_cutoff_date"]))
+            excel_date = (day - date(1899, 12, 30)).days
+            panel.write_formula(
+                plot_first_row + i, plot_date_col,
+                "='Tendencia - datos'!A" + str(11 + i),
+                day_fmt, excel_date,
+            )
+            for n, (month, metric, col) in enumerate(series):
+                point = initial_rates[i][metric]
+                cached = (
+                    point if str(snapshot["selected_cutoff_date"])[:7] == month
+                    and metric == 0 and point is not None else "#N/A"
+                )
+                panel.write_formula(
+                    plot_first_row + i, plot_series_col + n,
+                    "='Tendencia - datos'!" + xl_col_to_name(col)
+                    + str(11 + i),
+                    percent, cached,
+                )
+
         chart = book.add_chart({"type": "line"})
-        for month, metric, col in series:
-            # XlsxWriter cachea por defecto NA() y celdas ausentes como 0.
-            # Darle el cache explícito con None deja huecos reales en el gráfico.
-            # La fórmula sigue viva para filtrar Periodo, Ámbito e Indicador.
+        for n, (month, metric, col) in enumerate(series):
+            # Dato visible a Excel, lejos del panel. La fórmula auxiliar
+            # mantiene la interactividad y la caché evita puntos 0% ficticios.
             visible_points = [
                 initial_rates[index][metric]
                 if str(snapshot["selected_cutoff_date"])[:7] == month
@@ -400,8 +433,14 @@ def create_workbook(
             ]
             chart.add_series({
                 "name": INDICATORS[metric] + " · " + month,
-                "categories": ["Tendencia - datos", 10, 0, last - 1, 0],
-                "values": ["Tendencia - datos", 10, col, last - 1, col],
+                "categories": [
+                    "Resumen", plot_first_row, plot_date_col,
+                    plot_first_row + len(weekly) - 1, plot_date_col,
+                ],
+                "values": [
+                    "Resumen", plot_first_row, plot_series_col + n,
+                    plot_first_row + len(weekly) - 1, plot_series_col + n,
+                ],
                 "values_data": visible_points,
                 "line": {"color": COLORS[metric], "width": 2.5},
                 "marker": {"type": "circle", "size": 3},
@@ -412,7 +451,6 @@ def create_workbook(
         chart.set_x_axis({"date_axis": True, "num_format": "dd mmm"})
         chart.set_legend({"none": True})
         chart.show_blanks_as("gap")
-        chart.show_hidden_data()
         chart.set_size({"width": 1190, "height": 490})
         panel.insert_chart("A14", chart)
         for cell, metric, color in (("B40", INDICATORS[0], COLORS[0]),
