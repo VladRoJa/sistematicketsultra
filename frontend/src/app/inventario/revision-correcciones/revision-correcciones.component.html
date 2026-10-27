@@ -69,30 +69,33 @@
           </label>
           <div class="revision-fila__cuerpo">
             <div class="revision-fila__encabezado">
-              <div class="revision-fila__texto">
-                <strong>#{{ solicitud.id }} · {{ resumen(solicitud) }}</strong>
-                <span>{{ sucursalNombre(solicitud.sucursal_id) }} · {{ tipos[solicitud.tipo] }}
-                  <ng-container *ngIf="solicitud.inventario_id">· Referencia #{{ solicitud.inventario_id }}</ng-container>
-                </span>
-                <small>Registró usuario #{{ solicitud.creado_por_usuario_id }} · {{ solicitud.creado_en_utc | date:'dd/MM/yyyy HH:mm' }}</small>
+              <div class="revision-fila__identidad">
+                <div class="revision-fila__nombre">
+                  <strong>{{ nombreReferencia(solicitud) }}</strong>
+                  <span class="revision-fila__codigo">{{ codigoReferencia(solicitud) }}</span>
+                </div>
+                <small>#{{ solicitud.id }} · {{ sucursalNombre(solicitud.sucursal_id) }}
+                  <ng-container *ngIf="solicitud.inventario_id"> · Inventario #{{ solicitud.inventario_id }}</ng-container>
+                  · Registró #{{ solicitud.creado_por_usuario_id }}
+                </small>
               </div>
               <span class="revision-estado">{{ solicitud.estado }}</span>
             </div>
             <div class="revision-fila__cambio">
-              <span>Cambio solicitado</span>
+              <span>{{ tipos[solicitud.tipo] }}</span>
               <strong>{{ cambioPropuesto(solicitud) }}</strong>
             </div>
             <div class="revision-fila__datos">
               <div class="revision-fila__dato">
-                <span>Motivo del reporte</span>
+                <span>Motivo</span>
                 <p>{{ solicitud.motivo }}</p>
               </div>
               <div class="revision-fila__dato">
-                <span>Evidencia física</span>
+                <span>Evidencia</span>
                 <p>{{ solicitud.evidencia_descriptiva || 'Sin evidencia registrada' }}</p>
               </div>
               <div class="revision-fila__dato revision-fila__dato--fecha">
-                <span>Fecha de observación</span>
+                <span>Observación</span>
                 <p>{{ solicitud.fecha_observacion_local || 'Sin fecha registrada' }}</p>
               </div>
             </div>
