@@ -166,6 +166,25 @@ def _replay_if_exists(actor_id, key, fingerprint, ids, action, resolutions):
     return {"lote_id": previous.id, "replayed": True, "items": previous.resultados["items"]}
 
 
+def _require_physical_evidence(row):
+    """No aprobar bajas/vinculaciones sin observación fechada en E2.
+
+    Fecha y evidencia pertenecen al registro persistido, no al payload E3.
+    Rechazos conservan su comportamiento para pendientes históricos.
+    """
+    if row.tipo not in ("NOT_LOCATED", "UNREGISTERED_FIND"):
+        return
+    evidence = row.evidencia_descriptiva
+    if (row.fecha_observacion_local is None
+            or not isinstance(evidence, str)
+            or not 20 <= len(evidence.strip()) <= 2000):
+        raise DecisionError(
+            422, "evidence_required",
+            "La solicitud necesita fecha de observación y evidencia física "
+            "descriptiva (20 a 2000 caracteres); no puede aprobarse.",
+        )
+
+
 def _resolution_for(row, resolutions):
     data = resolutions.get(str(row.id))
     if row.tipo in ("QUANTITY_DIFFERENCE", "MASTER_FIELD"):
@@ -275,22 +294,20 @@ def _apply_approved(row, decision, masters, stocks, actor_id, reason, resolution
         original = target.stock
         if type(original) is not int or original != resolution["stock_esperado"]:
             raise DecisionError(409, "stale_stock", "La referencia destino cambió de existencias.")
-        # Impedir el vinculo por mera coincidencia de sucursal/stock.
-        # Sin código físico, exigir el mismo nombre; con código, coincidencia exacta.
+        # El nombre/stock nunca prueban identidad de una referencia por sí solos.
+        # Sin código oficial o sin etiqueta observada, queda pendiente de un
+        # flujo adicional de identificación (no implementado en E3).
         provisional = row.hallazgo_provisional
         provisional_code = provisional.get("codigo_interno")
-        # Un aparato etiquetado necesita su código físico, no solo un nombre
-        # que pueden compartir muchos equipos.
-        if official.codigo_interno and not provisional_code:
-            raise DecisionError(422, "physical_code_required", "Se necesita el código físico para vincular este equipo.")
-        if provisional_code:
-            if str(provisional_code).strip().upper() != str(official.codigo_interno or "").strip().upper():
-                raise DecisionError(409, "identity_mismatch", "El código del hallazgo no coincide con el oficial.")
-        elif (
-            not isinstance(provisional.get("nombre"), str)
-            or provisional["nombre"].strip().casefold() != str(official.nombre or "").strip().casefold()
-        ):
-            raise DecisionError(409, "identity_mismatch", "El nombre del hallazgo no coincide con el maestro.")
+        official_code = str(official.codigo_interno or "").strip().upper()
+        if not official_code or not isinstance(provisional_code, str) or not provisional_code.strip():
+            raise DecisionError(
+                422, "physical_code_required",
+                "La vinculación exige un código oficial y la misma etiqueta física; "
+                "sin identidad verificable se requiere revisión separada.",
+            )
+        if provisional_code.strip().upper() != official_code:
+            raise DecisionError(409, "identity_mismatch", "El código del hallazgo no coincide con el oficial.")
         # Los aliases reconocidos ya se cotejaron como clases; para tipos
         # desconocidos corporativos conservar la exigencia de texto exacto.
         if (provisional.get("tipo") is not None and provisional_type is None
@@ -460,6 +477,7 @@ def decidir_lote(*, actor_id, payload):
 
     if action == "APPROVED":
         for row in rows:
+            _require_physical_evidence(row)
             _resolution_for(row, resolutions)
     if action == "APPROVED" and any(row.tipo == "MASTER_FIELD" and row.campo == "codigo_interno" for row in rows):
         db.session.execute(
