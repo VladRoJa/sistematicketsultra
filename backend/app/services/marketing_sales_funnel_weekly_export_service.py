@@ -388,10 +388,21 @@ def create_workbook(
     if weekly:
         chart = book.add_chart({"type": "line"})
         for month, metric, col in series:
+            # XlsxWriter cachea por defecto NA() y celdas ausentes como 0.
+            # Darle el cache explícito con None deja huecos reales en el gráfico.
+            # La fórmula sigue viva para filtrar Periodo, Ámbito e Indicador.
+            visible_points = [
+                initial_rates[index][metric]
+                if str(snapshot["selected_cutoff_date"])[:7] == month
+                and metric == 0
+                else None
+                for index, snapshot in enumerate(weekly)
+            ]
             chart.add_series({
                 "name": INDICATORS[metric] + " · " + month,
                 "categories": ["Tendencia - datos", 10, 0, last - 1, 0],
                 "values": ["Tendencia - datos", 10, col, last - 1, col],
+                "values_data": visible_points,
                 "line": {"color": COLORS[metric], "width": 2.5},
                 "marker": {"type": "circle", "size": 3},
             })
