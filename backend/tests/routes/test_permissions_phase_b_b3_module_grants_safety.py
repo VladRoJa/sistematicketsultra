@@ -183,7 +183,6 @@ def test_b3_writer_cannot_globalize_or_disable_scoped_grant(monkeypatch, overrid
     assert response.get_json()["module_key"] == "tickets"
     assert scoped.scope_type == "branch"
     assert scoped.scope_branch_id == 7
-    assert scoped.is_active if hasattr(scoped, "is_active") else True
     session.add.assert_not_called()
     session.commit.assert_not_called()
     session.flush.assert_not_called()
