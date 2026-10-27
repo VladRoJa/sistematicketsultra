@@ -100,6 +100,17 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
     return !this.cargando && !this.procesando && this.seleccionadas.length > 0;
   }
 
+  faltaEvidenciaFisica(s: SolicitudCorreccionInventario): boolean {
+    if (s.tipo !== 'NOT_LOCATED' && s.tipo !== 'UNREGISTERED_FIND') return false;
+    const evidencia = String(s.evidencia_descriptiva || '').trim();
+    return !s.fecha_observacion_local || evidencia.length < 20 || evidencia.length > 2000;
+  }
+
+  faltaCodigoHallazgo(s: SolicitudCorreccionInventario): boolean {
+    return s.tipo === 'UNREGISTERED_FIND' &&
+      !String(s.hallazgo_provisional?.['codigo_interno'] || '').trim();
+  }
+
   get puedeConfirmar(): boolean {
     if (!this.decision || this.procesando || !this.confirmo ||
         this.motivo.trim().length < 10 || this.motivo.trim().length > 2000 ||
@@ -108,12 +119,7 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
     return this.seleccionadas.every(s => {
       if (s.tipo === 'MASTER_FIELD' && !this.contexto?.corporativo) return false;
       if (s.tipo === 'QUANTITY_DIFFERENCE' || s.tipo === 'MASTER_FIELD') return true;
-      if (!s.fecha_observacion_local ||
-          (s.evidencia_descriptiva || '').trim().length < 20 ||
-          (s.evidencia_descriptiva || '').trim().length > 2000) return false;
-      // Una vinculación E3 nunca debe basarse exclusivamente en el nombre.
-      if (s.tipo === 'UNREGISTERED_FIND' &&
-          !String(s.hallazgo_provisional?.['codigo_interno'] || '').trim()) return false;
+      if (this.faltaEvidenciaFisica(s) || this.faltaCodigoHallazgo(s)) return false;
       const r = this.resoluciones[s.id];
       if (!r || r.justificacion.trim().length < 20 || r.justificacion.trim().length > 2000) return false;
       if (s.tipo === 'NOT_LOCATED') {
