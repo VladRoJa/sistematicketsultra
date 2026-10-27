@@ -83,6 +83,8 @@ def write_original_operational_sheet(
         scope = "Todo Ultra"
     elif len(by_id) == 1:
         scope = str(next(iter(by_id.values())).get("sucursal") or "Sucursal")
+    elif len({str(x.get("region_id")) for x in scope_options}) == 1:
+        scope = str(scope_options[0].get("region") or "Región")
     else:
         scope = "Sucursales autorizadas"
 
