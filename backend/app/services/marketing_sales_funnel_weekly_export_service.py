@@ -375,6 +375,15 @@ def create_workbook(
         + str(last) + ',1)&" cortes disponibles",'
         + '"Sin lunes completos en el periodo seleccionado")',
         small,
+        ("Corte actual: " + str(weekly[-1]["selected_cutoff_date"])
+         + " · Ámbito: " + scope_labels[0][0] + " · "
+         + str(sum(
+             1 for snap in weekly
+             if str(snap["selected_cutoff_date"])[:7] >=
+             f"{int(last_month[:4]) - (int(last_month[5:]) <= 2)}-"
+             f"{((int(last_month[5:]) - 3) % 12) + 1:02d}"
+         )) + " cortes disponibles")
+        if weekly else "Sin lunes completos en el periodo seleccionado",
     )
     if weekly:
         chart = book.add_chart({"type": "line"})
