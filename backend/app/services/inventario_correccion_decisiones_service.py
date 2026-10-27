@@ -20,7 +20,8 @@ from app.models.inventario_correccion_decision import (
     InventarioCorreccionAltaAuditORM,
 )
 from app.utils.inventory_correction_permissions import (
-    alcance_revision_e3, resolver_acceso_autorizacion_e3,
+    alcance_revision_e3, normalizar_clase_inventario_e3,
+    resolver_acceso_autorizacion_e3,
 )
 
 
@@ -99,11 +100,24 @@ def _lock_requests(ids):
 
 def _permitir_todas(actor_id, rows):
     for row in rows:
+        # Clase oficial consultada en DB, no JWT ni metadata suministrada por UI.
+        # Un hallazgo sin referencia solo dispone del tipo provisional hasta
+        # que la aprobación bloquee y valide también el destino oficial.
+        if row.tipo == "UNREGISTERED_FIND":
+            provisional = row.hallazgo_provisional
+            asset_type = provisional.get("tipo") if isinstance(provisional, dict) else None
+        else:
+            asset_type = db.session.execute(
+                select(InventarioGeneral.tipo).where(
+                    InventarioGeneral.id == row.inventario_id
+                )
+            ).scalar_one_or_none()
         access = resolver_acceso_autorizacion_e3(
             actor_usuario_id=actor_id,
             solicitud_sucursal_id=row.sucursal_id,
             solicitud_creador_id=row.creado_por_usuario_id,
             tipo=row.tipo,
+            clase_activo=asset_type,
         )
         if not access.allowed:
             # Solo el propio autor conoce legítimamente su solicitud.
@@ -220,6 +234,23 @@ def _apply_approved(row, decision, masters, stocks, actor_id, reason, resolution
             raise DecisionError(409, "invalid_baseline", "El baseline de hallazgo cambió.")
         destination = resolution["inventario_id"]
         official = masters[destination]
+        # Además de la identidad física, el destino debe pertenecer a la
+        # competencia efectiva del autorizador (aparato vs dispositivo).
+        destination_access = resolver_acceso_autorizacion_e3(
+            actor_usuario_id=actor_id,
+            solicitud_sucursal_id=row.sucursal_id,
+            solicitud_creador_id=row.creado_por_usuario_id,
+            tipo=row.tipo,
+            clase_activo=official.tipo,
+        )
+        if not destination_access.allowed:
+            raise DecisionError(404, "not_found", "Solicitud inexistente o fuera de alcance.")
+        provisional_type = normalizar_clase_inventario_e3(
+            row.hallazgo_provisional.get("tipo")
+        )
+        official_type = normalizar_clase_inventario_e3(official.tipo)
+        if provisional_type is not None and provisional_type != official_type:
+            raise DecisionError(409, "identity_mismatch", "El tipo del hallazgo no coincide con su destino oficial.")
         target = stocks[(destination, row.sucursal_id)]
         original = target.stock
         if type(original) is not int or original != resolution["stock_esperado"]:
@@ -429,6 +460,10 @@ def decidir_lote(*, actor_id, payload):
     masters, stocks = _lock_official(
         rows, _resolution_targets(rows, resolutions)
     ) if action == "APPROVED" else ({}, {})
+    if action == "APPROVED":
+        # Revalidar después de bloquear maestros oficiales: no aceptar que
+        # cambie la clase entre una primera lectura y el FOR UPDATE.
+        _permitir_todas(actor_id, rows)
 
     lote = InventarioCorreccionLoteORM(
         actor_usuario_id=actor_id, tipo_decision=action,
