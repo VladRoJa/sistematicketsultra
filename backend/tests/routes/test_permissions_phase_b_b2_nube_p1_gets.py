@@ -257,3 +257,38 @@ def test_b2_list_and_by_link_keep_visibility_filters_before_response():
     assert "can_view_internal_document(document, context)" in linked
     assert "visible_documents" in linked
     assert "query.count()" in listing
+
+
+@pytest.mark.parametrize("path,kind,serializer,model_name", [
+    ("/900/versions", "versions", "_serialize_version", "InternalDocumentVersionORM"),
+    ("/900/links", "links", "_serialize_document_link", "InternalDocumentLinkORM"),
+    ("/900/external-resources", "external", "_serialize_external_resource", "InternalDocumentExternalResourceORM"),
+])
+def test_b2_authorized_related_read_uses_parent_document_guard(
+    site, monkeypatch, path, kind, serializer, model_name,
+):
+    app, client = site
+    seen = Mock(return_value=_document())
+    monkeypatch.setattr(routes, "_get_document_or_404", seen)
+    row = SimpleNamespace(id=990, version_number=1)
+    query = _Query(row=row)
+    attrs = {"query": query}
+    if kind == "versions":
+        attrs.update(warehouse_upload=object(), version_number=_Sort())
+        monkeypatch.setattr(routes, "joinedload", lambda *_args: object())
+    elif kind == "links":
+        attrs.update(
+            entity_type=_Sort(), entity_key=_Sort(), link_role=_Sort(),
+            is_primary=_Sort(), created_at=_Sort(),
+        )
+    else:
+        attrs.update(is_primary=_Sort(), created_at=_Sort())
+    monkeypatch.setattr(routes, model_name, SimpleNamespace(**attrs))
+    render = Mock(return_value={"id": 990, "note": "synthetic"})
+    monkeypatch.setattr(routes, serializer, render)
+    result = client.get(BASE + path, headers=_auth(app, 88))
+    assert result.status_code == 200
+    assert result.get_json()["items"] == [{"id": 990, "note": "synthetic"}]
+    assert query.filter_args["document_id"] == 900
+    seen.assert_called_once_with(900)
+    render.assert_called_once()
