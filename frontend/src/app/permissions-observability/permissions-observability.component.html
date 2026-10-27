@@ -555,7 +555,7 @@
                 <strong>{{ getGrantScopeSummary(grant) }}</strong>
                 <small>Tipo: {{ grant.scope_type }}</small>
                 <small *ngIf="grant.scope_type === 'custom'">
-                  Payload personalizado no evaluado: {{ (grant.scope_payload | json) }}
+                  Regla personalizada presente; no implica permiso efectivo.
                 </small>
               </td>
               <td>
@@ -670,9 +670,11 @@
                   <details>
                     <summary>Antes y después</summary>
                     <strong>Antes</strong>
-                    <pre>{{ auditLog.before_payload | json }}</pre>
+                    <p>{{ getGrantAuditSafeSummary(auditLog.before_payload) }}</p>
                     <strong>Después</strong>
-                    <pre>{{ auditLog.after_payload | json }}</pre>
+                    <p>{{ getGrantAuditSafeSummary(auditLog.after_payload) }}</p>
+                    <small>Por seguridad, los campos libres y payloads personalizados
+                    no se presentan en esta vista.</small>
                   </details>
                 </td>
               </tr>
