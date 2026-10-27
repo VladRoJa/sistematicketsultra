@@ -48,7 +48,8 @@ jobs:
           python -m pytest -q --tb=short -o addopts= \
             tests/contact_center/test_contact_center_access.py \
             tests/contact_center/test_contact_center_manager_scope_contract.py \
-            tests/frontend/test_contact_center_frontend_contract.py \
+            tests/frontend/test_contact_center_frontend_contract.py::test_contact_center_frontend_access_covers_villas_and_costa_bc_managers \
+            tests/frontend/test_contact_center_frontend_contract.py::test_contact_center_menu_waits_for_backend_access_confirmation \
             tests/contact_center/test_contact_center_shared_visibility_contract.py
 
   frontend-build:
