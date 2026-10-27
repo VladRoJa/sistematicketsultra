@@ -19,7 +19,9 @@ from app.models.inventario_correccion_decision import (
     InventarioCorreccionAjusteORM, InventarioCorreccionMaestroAuditORM,
     InventarioCorreccionAltaAuditORM,
 )
-from app.utils.inventory_correction_permissions import resolver_acceso_autorizacion_e3
+from app.utils.inventory_correction_permissions import (
+    alcance_revision_e3, resolver_acceso_autorizacion_e3,
+)
 
 
 class DecisionError(Exception):
@@ -104,7 +106,11 @@ def _permitir_todas(actor_id, rows):
             tipo=row.tipo,
         )
         if not access.allowed:
-            raise DecisionError(403, "forbidden", "Sin facultad para esta solicitud.")
+            # Solo el propio autor conoce legítimamente su solicitud.
+            if access.reason == "self_approval_forbidden":
+                raise DecisionError(403, "forbidden", "No puedes decidir tu propia solicitud.")
+            # Los demás rechazos no revelan si existe un ID fuera del alcance.
+            raise DecisionError(404, "not_found", "Solicitud inexistente o fuera de alcance.")
 
 
 def _replay_if_exists(actor_id, key, fingerprint, ids, action):
@@ -383,6 +389,11 @@ def decidir_lote(*, actor_id, payload):
     ), {"id": actor_id}).scalar_one_or_none()
     if user_exists is None:
         raise DecisionError(401, "unknown_actor", "Sesión inválida.")
+
+    # Preflight independiente de los IDs: un actor sin capacidad E3 siempre
+    # recibe 403, exista o no la solicitud consultada.
+    if alcance_revision_e3(actor_id) is None:
+        raise DecisionError(403, "forbidden", "Sin facultad para revisar correcciones.")
 
     replay = _replay_if_exists(actor_id, key, fingerprint, ids, action)
     if replay is not None:
