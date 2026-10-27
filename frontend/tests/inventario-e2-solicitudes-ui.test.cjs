@@ -217,6 +217,8 @@ test('E2: impide enviar formulario incompleto, stock igual y fecha no válida si
   assert.equal(calls.posts.length, 0);
   vm.motivo = 'Motivo del conteo físico revisado';
   assert.equal(vm.puedeEnviar, false);
+  vm.cantidadFisica = 0;
+  assert.equal(vm.puedeEnviar, false); // Requiere NOT_LOCATED.
   vm.cantidadFisica = 2;
   assert.equal(vm.puedeEnviar, true);
   vm.enviar();
