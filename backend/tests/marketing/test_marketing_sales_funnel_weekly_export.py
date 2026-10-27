@@ -171,6 +171,8 @@ def test_generates_xlsx_with_two_disconnected_monthly_series_and_selectors():
             assert column in z.read("xl/sharedStrings.xml").decode()
         assert "SUM(D" in original
         assert "RESUMEN COMERCIAL" in z.read("xl/sharedStrings.xml").decode()
+        assert "Visitas registradas" in z.read("xl/sharedStrings.xml").decode()
+        assert "Corte: 2026-10-19" in z.read("xl/sharedStrings.xml").decode()
         assert 'H' in original
         # Cached numerical values, not every formula left at zero.
         from xml.etree import ElementTree as ET
@@ -179,6 +181,10 @@ def test_generates_xlsx_with_two_disconnected_monthly_series_and_selectors():
         cached_visit_total = xml.find(".//x:c[@r='C8']/x:v", ns)
         assert cached_visit_total is not None
         assert float(cached_visit_total.text) == 40.0
+        # El detalle Original conserva los contadores que devolvió Flask,
+        # sin modificar sus visitas según ventas ni otros campos.
+        assert float(xml.find(".//x:c[@r='C6']/x:v", ns).text) == 10.0
+        assert float(xml.find(".//x:c[@r='C7']/x:v", ns).text) == 30.0
 
 
 
