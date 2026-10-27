@@ -163,6 +163,28 @@ def _resolve_request_access():
     return resolve_marketing_access(user)
 
 
+
+def _require_weekly_original_admicorp() -> None:
+    """Piloto: sólo la cuenta ADMICORP puede generar el histórico semanal.
+
+    Se valida con el usuario persistido (no claims ni rol administrador),
+    antes de ejecutar el pipeline o generar archivos.
+    """
+    try:
+        user_id = int(get_jwt_identity())
+    except (TypeError, ValueError) as exc:
+        raise MarketingAuthorizationError(
+            "Identidad de usuario inválida."
+        ) from exc
+
+    user = UserORM.get_by_id(user_id)
+    username = str(getattr(user, "username", "") or "").strip().upper()
+    if username != "ADMICORP":
+        raise MarketingAuthorizationError(
+            "La descarga histórica del Funnel está habilitada sólo para ADMICORP."
+        )
+
+
 def _parse_requested_branch_ids(raw_value: str | None) -> tuple[int, ...] | None:
     raw = str(raw_value or "").strip()
     if not raw:
@@ -378,8 +400,9 @@ def get_marketing_sales_funnel_endpoint():
 @marketing_sales_funnel_bp.get("/sales-funnel/export/weekly")
 @jwt_required()
 def export_marketing_sales_funnel_weekly_endpoint():
-    """Mismo export del Original; corte diario + lunes históricos completos."""
+    """Piloto ADMICORP: corte diario + lunes históricos completos."""
     try:
+        _require_weekly_original_admicorp()
         _, access = _resolve_scoped_access()
         month = request.args.get("month", "")
         parse_month(month)
