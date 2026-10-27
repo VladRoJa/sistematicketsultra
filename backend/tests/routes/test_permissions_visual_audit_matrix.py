@@ -208,6 +208,47 @@ def test_http_admin_gate_is_enforced_before_fetching_records(app):
         assert admin.status_code == 400  # admin pasa guard; le falta user_id
 
 
+def test_missing_document_id_returns_404_without_loading_dynamic_relationships(
+    app, monkeypatch,
+):
+    """Regresión QA-B.4: antes era 500 por selectinload sobre lazy='dynamic'."""
+    from app.models.internal_documents import InternalDocumentORM
+
+    assert InternalDocumentORM.links.property.lazy == "dynamic"
+    assert InternalDocumentORM.visibility_rules.property.lazy == "dynamic"
+
+    class MissingDocumentQuery:
+        def filter_by(self, **criteria):
+            assert criteria == {"id": 2147483647}
+            return self
+
+        def options(self, *_args):
+            pytest.fail("Las relaciones dynamic no admiten carga selectinload")
+
+        def first(self):
+            return None
+
+    monkeypatch.setattr(
+        visual, "InternalDocumentORM",
+        SimpleNamespace(query=MissingDocumentQuery()),
+    )
+    monkeypatch.setattr(
+        catalog, "_current_admin_user_or_error",
+        lambda: (SimpleNamespace(id=1, rol="ADMINISTRADOR"), None),
+    )
+
+    with app.app_context():
+        token = create_access_token(identity="1")
+        response = app.test_client().get(
+            "/api/permissions/catalog/audit/matrix"
+            "?view=user&user_id=47&action_key=internal_documents.view"
+            "&document_id=2147483647",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert response.status_code == 404
+    assert response.get_json() == {"error": "Documento no encontrado"}
+
+
 def test_route_is_only_get_and_no_mutating_permission_endpoints(app):
     methods = {
         rule.rule: rule.methods for rule in app.url_map.iter_rules()
