@@ -113,6 +113,7 @@ class FakeQuery:
 class FakeGrantModel:
     is_active = deleted_at = principal_type = principal_user_id = action_id = FakeColumn()
     principal_role_key = scope_type = starts_at = expires_at = FakeColumn()
+    updated_at = id = FakeColumn()
 
     def __init__(self, query):
         self.query = query
