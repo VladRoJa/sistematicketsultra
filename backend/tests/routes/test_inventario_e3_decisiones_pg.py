@@ -217,7 +217,7 @@ def _request(kind="QUANTITY_DIFFERENCE", inv=501, branch=7, creator=98,
         campo=field if kind == "MASTER_FIELD" else None,
         valor_original=original if kind != "UNREGISTERED_FIND" else None,
         valor_propuesto=proposed if kind != "UNREGISTERED_FIND" else None,
-        hallazgo_provisional={"nombre":"Bicicleta"} if kind == "UNREGISTERED_FIND" else None,
+        hallazgo_provisional={"nombre":"Bicicleta","tipo":"APARATOS"} if kind == "UNREGISTERED_FIND" else None,
         baseline_canonico=baseline,
         motivo="Conteo auditado con evidencia real",
         creado_por_usuario_id=creator,
@@ -229,6 +229,20 @@ def _request(kind="QUANTITY_DIFFERENCE", inv=501, branch=7, creator=98,
     db.session.add(row)
     db.session.commit()
     return row.id
+
+
+def _device():
+    """Referencia sintética de Sistemas SIN familia, nunca en producción."""
+    db.session.execute(sa.text("""
+        INSERT INTO inventario_general
+            (id,tipo,nombre,codigo_interno,factor_compra,familia_equipo_id)
+        VALUES (503,'dispositivos','Router','07DI01',1,NULL)
+    """))
+    db.session.execute(sa.text("""
+        INSERT INTO inventario_sucursal (inventario_id,sucursal_id,stock)
+        VALUES (503,7,4)
+    """))
+    db.session.commit()
 
 
 def _payload(ids, decision="APPROVED", key=None, reason="Revisión oficial con evidencia"):
@@ -666,7 +680,7 @@ def test_e3_403_para_todos_los_roles_que_no_pueden_autorizar_aunque_haya_grant(e
     """Grant accidental nunca sustituye los roles válidos ni amplía E3."""
     request_id = _request(creator=98)
     baseline = _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=501 AND sucursal_id=7")
-    for user_id in (68, 70, 90, 92, 55, 99):
+    for user_id in (68, 70, 92, 55, 99):
         _grant(user_id)
         assert _get_e3(env,user_id,"revision/contexto").status_code == 403, user_id
         assert _get_e3(env,user_id,"revision").status_code == 403, user_id
@@ -726,6 +740,125 @@ def test_e3_post_no_revela_existencia_de_solicitudes_ajenas(env):
     assert _sql("SELECT count(*) FROM inventario_correccion_decisiones") == 0
 
 
+
+
+def test_e3_bandeja_por_tipo_real_aparatos_vs_dispositivos(env):
+    _device()
+    aparatos = _request(creator=98, inv=501)
+    dispositivo = _request(creator=98, inv=503,
+                           original={"stock":4}, proposed={"cantidad_fisica":5},
+                           baseline={"inventario_id":503,"sucursal_id":7,"stock":4})
+    hallazgo_aparato = _request("UNREGISTERED_FIND",inv=None,creator=98)
+    hallazgo_dispositivo = _request("UNREGISTERED_FIND",inv=None,creator=98)
+    hallazgo_sin_tipo = _request("UNREGISTERED_FIND",inv=None,creator=98)
+    db.session.execute(sa.text(
+        "UPDATE inventario_correccion_solicitudes SET hallazgo_provisional = "
+        "CAST(:p AS jsonb) WHERE id=:id"
+    ), {"p": json.dumps({"nombre":"Router","tipo":"DISPOSITIVOS"}), "id":hallazgo_dispositivo})
+    db.session.execute(sa.text(
+        "UPDATE inventario_correccion_solicitudes SET hallazgo_provisional = "
+        "CAST(:p AS jsonb) WHERE id=:id"
+    ), {"p": json.dumps({"nombre":"Sin tipo"}), "id":hallazgo_sin_tipo})
+    db.session.commit()
+    _grant(91, scope="branch", branch=7)
+    _grant(90, scope="branch", branch=7)
+    _grant(47)
+    mantenimiento = _get_e3(env,91,"revision")
+    sistemas = _get_e3(env,90,"revision")
+    corporate = _get_e3(env,47,"revision")
+    assert mantenimiento.status_code == sistemas.status_code == corporate.status_code == 200
+    assert {x["id"] for x in mantenimiento.get_json()["items"]} == {aparatos,hallazgo_aparato}
+    assert mantenimiento.get_json()["total"] == 2
+    assert {x["id"] for x in sistemas.get_json()["items"]} == {dispositivo,hallazgo_dispositivo}
+    assert sistemas.get_json()["total"] == 2
+    assert {x["id"] for x in corporate.get_json()["items"]} == {
+        aparatos,dispositivo,hallazgo_aparato,hallazgo_dispositivo,hallazgo_sin_tipo
+    }
+    assert _get_e3(env,90,f"revision/{aparatos}").status_code == 404
+    assert _get_e3(env,91,f"revision/{dispositivo}").status_code == 404
+    assert _get_e3(env,90,f"revision/{hallazgo_sin_tipo}").status_code == 404
+    assert _get_e3(env,91,f"revision/{hallazgo_dispositivo}").status_code == 404
+    assert _get_e3(env,47,f"revision/{hallazgo_sin_tipo}").status_code == 200
+
+
+def test_e3_sistemas_ajuste_dispositivo_pero_no_aparato_y_lote_rollback(env):
+    _device()
+    _grant(90, scope="branch", branch=7)
+    _grant(91, scope="branch", branch=7)
+    device_req = _request(inv=503, original={"stock":4},
+        proposed={"cantidad_fisica":5},
+        baseline={"inventario_id":503,"sucursal_id":7,"stock":4})
+    apparatus_req = _request(inv=501)
+    mixed = _post(env,90,_payload([device_req,apparatus_req]))
+    assert mixed.status_code == 404, mixed.get_json()
+    assert _sql("SELECT count(*) FROM inventario_correccion_lotes") == 0
+    assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=503 AND sucursal_id=7") == 4
+    assert _post(env,91,_payload([device_req])).status_code == 404
+    assert _post(env,90,_payload([apparatus_req])).status_code == 404
+    done = _post(env,90,_payload([device_req]))
+    assert done.status_code == 201, done.get_json()
+    assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=503 AND sucursal_id=7") == 5
+    assert _sql("SELECT count(*) FROM inventario_correccion_ajustes") == 1
+
+
+def test_e3_sistemas_no_localizado_y_vinculacion_dispositivo_sin_familia(env):
+    _device()
+    _grant(90, scope="branch", branch=7)
+    no_loc = _request("NOT_LOCATED", inv=503,
+        original={"stock":4}, baseline={"inventario_id":503,"sucursal_id":7,"stock":4})
+    payload = _payload([no_loc])
+    payload["resoluciones"] = {str(no_loc):{
+        "accion":"AJUSTAR_A_CERO","stock_esperado":4,
+        "justificacion":"Equipo de Sistemas no localizado tras revisión física"
+    }}
+    zero = _post(env,90,payload)
+    assert zero.status_code == 201, zero.get_json()
+    assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=503 AND sucursal_id=7") == 0
+    found = _request("UNREGISTERED_FIND",inv=None)
+    db.session.execute(sa.text(
+        "UPDATE inventario_correccion_solicitudes SET hallazgo_provisional = "
+        "CAST(:p AS jsonb) WHERE id=:id"
+    ), {"p":json.dumps({"nombre":"Router","codigo_interno":"07DI01","tipo":"DISPOSITIVOS"}),"id":found})
+    db.session.commit()
+    link = _payload([found])
+    link["resoluciones"] = {str(found):{
+        "accion":"VINCULAR_EXISTENTE","inventario_id":503,
+        "stock_esperado":0,"cantidad_fisica":1,
+        "justificacion":"Dispositivo identificado físicamente por su etiqueta original"
+    }}
+    response = _post(env,90,link)
+    assert response.status_code == 201, response.get_json()
+    assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=503 AND sucursal_id=7") == 1
+    assert _sql("SELECT count(*) FROM inventario_correccion_altas_auditoria") == 1
+    assert _sql("SELECT familia_equipo_id IS NULL FROM inventario_general WHERE id=503") is True
+
+
+def test_e3_hallazgo_de_dispositivo_no_vincula_aparato_y_sin_tipo_es_corporativo(env):
+    _device()
+    _grant(90,scope="branch",branch=7)
+    mismatch = _request("UNREGISTERED_FIND",inv=None)
+    db.session.execute(sa.text(
+        "UPDATE inventario_correccion_solicitudes SET hallazgo_provisional = "
+        "CAST(:p AS jsonb) WHERE id=:id"
+    ), {"p":json.dumps({"nombre":"Router","codigo_interno":"07DI01","tipo":"DISPOSITIVOS"}),"id":mismatch})
+    untyped = _request("UNREGISTERED_FIND",inv=None)
+    db.session.execute(sa.text(
+        "UPDATE inventario_correccion_solicitudes SET hallazgo_provisional = "
+        "CAST(:p AS jsonb) WHERE id=:id"
+    ), {"p":json.dumps({"nombre":"Router"}),"id":untyped})
+    db.session.commit()
+    payload = _payload([mismatch])
+    payload["resoluciones"] = {str(mismatch):{
+        "accion":"VINCULAR_EXISTENTE","inventario_id":502,
+        "stock_esperado":1,"cantidad_fisica":2,
+        "justificacion":"Revisión de referencia oficial de tipo incorrecto"
+    }}
+    res = _post(env,90,payload)
+    assert res.status_code == 404, res.get_json()
+    assert _post(env,90,_payload([untyped],decision="REJECTED")).status_code == 404
+    assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=502 AND sucursal_id=7") == 1
+    assert _sql("SELECT count(*) FROM inventario_correccion_decisiones") == 0
+
 def test_e3_no_auth_y_claims_jwt_falsos_no_sustituyen_rol_de_db(env):
     """Firma JWT de test con rol falso para verificar guard real de base de datos."""
     req = _request(creator=98)
@@ -735,7 +868,9 @@ def test_e3_no_auth_y_claims_jwt_falsos_no_sustituyen_rol_de_db(env):
     assert client.get(base + "/revision/contexto").status_code == 401
     assert client.get(base + f"/revision/{req}").status_code == 401
     assert client.post(base + "/decisiones/lote",json=_payload([req])).status_code == 401
-    _grant(90)
+    # El JWT dice "ADMINISTRADOR", pero el usuario real SISTEMAS no tiene
+    # grant que cubra su única sucursal asignada (7).
+    _grant(90, scope="branch", branch=8)
     with env[0].app_context():
         fake_admin = create_access_token(
             identity="90",
