@@ -818,7 +818,7 @@ def test_e3_sistemas_no_localizado_y_vinculacion_dispositivo_sin_familia(env):
     db.session.execute(sa.text(
         "UPDATE inventario_correccion_solicitudes SET hallazgo_provisional = "
         "CAST(:p AS jsonb) WHERE id=:id"
-    ), {"p":json.dumps({"nombre":"Router","codigo_interno":"07DI01","tipo":"DISPOSITIVOS"}),"id":found})
+    ), {"p":json.dumps({"nombre":"Router","codigo_interno":"07DI01","tipo":"DISPOSITIVO"}),"id":found})
     db.session.commit()
     link = _payload([found])
     link["resoluciones"] = {str(found):{
