@@ -32,9 +32,13 @@ function make({ fail=false }={}) {
   );
   const items=[
     {id:1,tipo:'QUANTITY_DIFFERENCE',sucursal_id:7,estado:'PENDING',
-      creado_por_usuario_id:98,baseline_canonico:{stock:3}},
+      creado_por_usuario_id:98,baseline_canonico:{stock:3},
+      valor_original:{stock:3},valor_propuesto:{cantidad_fisica:2},
+      motivo:'Diferencia comprobada con conteo físico'},
     {id:2,tipo:'NOT_LOCATED',sucursal_id:7,estado:'PENDING',
       creado_por_usuario_id:98,baseline_canonico:{stock:3},
+      valor_original:{stock:3},valor_propuesto:{no_localizado:true},
+      motivo:'Equipo ausente tras revisión física',
       fecha_observacion_local:'2026-10-26',
       evidencia_descriptiva:'Búsqueda física total de referencia en almacén y piso'},
     {id:3,tipo:'UNREGISTERED_FIND',sucursal_id:7,estado:'PENDING',
@@ -69,7 +73,7 @@ function make({ fail=false }={}) {
   return {vm,calls};
 }
 
-test('E3 standalone, backend-first menu, ruta y dos modales confirmados',()=>{
+test('E3 muestra contexto en tarjetas y conserva solo el modal de decisión',()=>{
   assert.match(src,/standalone: true/);
   assert.match(src,/templateUrl: '.\/revision-correcciones.component.html'/);
   assert.match(src,/styleUrls: \['.\/revision-correcciones.component.css'\]/);
@@ -77,6 +81,12 @@ test('E3 standalone, backend-first menu, ruta y dos modales confirmados',()=>{
   assert.match(layout,/inventario\/solicitudes\/revision\/contexto/);
   assert.match(layout,/if \(!response\?\.can_review\) return;/);
   assert.match(html,/cdkTrapFocus/);
+  assert.equal((html.match(/class="revision-modal-overlay"/g) || []).length, 1);
+  assert.doesNotMatch(html,/e3DetalleTitulo|consultarDetalle\(/);
+  assert.match(html,/\{\{ solicitud\.motivo \}\}/);
+  assert.match(html,/\{\{ solicitud\.evidencia_descriptiva/);
+  assert.match(html,/\{\{ solicitud\.fecha_observacion_local/);
+  assert.match(html,/\{\{ cambioPropuesto\(solicitud\) \}\}/);
   assert.match(html,/Confirmar autorización/);
   assert.match(html,/Confirmar rechazo/);
   assert.match(css,/\.revision-acciones\s*\{[^}]*flex:\s*0 0 auto/s);
@@ -84,13 +94,17 @@ test('E3 standalone, backend-first menu, ruta y dos modales confirmados',()=>{
   assert.match(service,/decidirCorreccionesLote\(payload: LoteDecisionesInventario\)/);
 });
 
-test('E3 consulta contextual, seleccionar y filtrar reinicia checks',()=>{
+test('E3 consulta contextual, muestra cambios legibles y filtrar reinicia checks',()=>{
   const {vm,calls}=make();
   assert.equal(vm.contexto.can_review,true);
   assert.equal(calls.lists.length,1);
+  assert.equal(vm.cambioPropuesto(vm.solicitudes[0]),
+    'Stock oficial: 3 → 2 · Conteo físico');
+  assert.equal(vm.cambioPropuesto(vm.solicitudes[1]),
+    'Stock oficial: 3 → 0 · Ajuste solicitado');
+  assert.match(vm.cambioPropuesto(vm.solicitudes[2]),/Código físico: 07RE01/);
+  assert.equal(calls.details.length,0); // No se consulta otro endpoint para leer.
   vm.marcar(1); assert.equal(vm.seleccionadas.length,1);
-  vm.consultarDetalle(1); assert.equal(vm.detalle.id,1);
-  vm.cerrarDetalle(); assert.equal(vm.seleccionadas.length,1);
   vm.cambiarFiltros(); assert.equal(vm.seleccionadas.length,0);
 });
 
