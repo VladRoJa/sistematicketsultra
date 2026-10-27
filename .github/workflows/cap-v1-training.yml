@@ -20,7 +20,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Instalar FFmpeg, FFprobe y narrador offline
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg espeak-ng
+          ffmpeg -version | head -1
+          ffprobe -version | head -1
+          espeak-ng --version
       - name: Instalar dependencia mínima
         run: python -m pip install playwright==1.54.0
-      - name: QA sin credenciales ni servidor Suite
+      - name: QA obligatorio de MP4, audio y subtítulos sin Suite
         run: python -m unittest discover -s scripts/training/tests -v
