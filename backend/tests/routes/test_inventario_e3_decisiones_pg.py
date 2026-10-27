@@ -6,6 +6,7 @@ import importlib.util
 import json
 import os
 import secrets
+from datetime import date
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from uuid import uuid4
@@ -220,6 +221,14 @@ def _request(kind="QUANTITY_DIFFERENCE", inv=501, branch=7, creator=98,
         hallazgo_provisional={"nombre":"Bicicleta","tipo":"APARATOS"} if kind == "UNREGISTERED_FIND" else None,
         baseline_canonico=baseline,
         motivo="Conteo auditado con evidencia real",
+        evidencia_descriptiva=(
+            "Revisión física de ubicaciones, código y conteo total"
+            if kind in ("NOT_LOCATED", "UNREGISTERED_FIND") else None
+        ),
+        fecha_observacion_local=(
+            date(2026, 10, 26)
+            if kind in ("NOT_LOCATED", "UNREGISTERED_FIND") else None
+        ),
         creado_por_usuario_id=creator,
         idempotency_key=uuid4(), request_fingerprint="a" * 64,
     )
@@ -884,6 +893,79 @@ def test_e3_hallazgo_de_dispositivo_no_vincula_aparato_y_sin_tipo_es_corporativo
     assert _post(env,90,_payload([untyped],decision="REJECTED")).status_code == 404
     assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=502 AND sucursal_id=7") == 1
     assert _sql("SELECT count(*) FROM inventario_correccion_decisiones") == 0
+
+
+def test_e3_legacy_pendiente_sin_evidencia_no_se_aprueba_pero_se_rechaza(env):
+    _grant(47)
+    rid = _request("NOT_LOCATED")
+    db.session.execute(sa.text(
+        "UPDATE inventario_correccion_solicitudes "
+        "SET evidencia_descriptiva=NULL, fecha_observacion_local=NULL WHERE id=:id"
+    ), {"id":rid})
+    db.session.commit()
+    approved = _payload([rid])
+    approved["resoluciones"] = {str(rid):{
+        "accion":"AJUSTAR_A_CERO", "stock_esperado":3,
+        "justificacion":"Revisión documental incompleta que exige nueva solicitud"
+    }}
+    result = _post(env,47,approved)
+    assert result.status_code == 422, result.get_json()
+    assert result.get_json()["error"] == "evidence_required"
+    assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=501 AND sucursal_id=7") == 3
+    assert _sql("SELECT count(*) FROM inventario_correccion_lotes") == 0
+    rejected = _post(env,47,_payload([rid],decision="REJECTED"))
+    assert rejected.status_code == 201, rejected.get_json()
+    assert _sql("SELECT estado FROM inventario_correccion_solicitudes WHERE id=:id",{"id":rid}) == "REJECTED"
+    assert _sql("SELECT count(*) FROM inventario_correccion_ajustes") == 0
+
+
+def test_e3_hallazgo_legacy_evidencia_incompleta_bloquea_lote_mixto(env):
+    _grant(47)
+    valid = _request("QUANTITY_DIFFERENCE",inv=501)
+    incomplete = _request("UNREGISTERED_FIND",inv=None)
+    db.session.execute(sa.text(
+        "UPDATE inventario_correccion_solicitudes SET fecha_observacion_local=NULL "
+        "WHERE id=:id"
+    ), {"id":incomplete})
+    db.session.commit()
+    payload = _payload([valid,incomplete])
+    payload["resoluciones"] = {str(incomplete):{
+        "accion":"VINCULAR_EXISTENTE", "inventario_id":502,
+        "stock_esperado":1, "cantidad_fisica":2,
+        "justificacion":"Cotejo de código pendiente de evidencia histórica suficiente",
+    }}
+    result = _post(env,47,payload)
+    assert result.status_code == 422, result.get_json()
+    assert result.get_json()["error"] == "evidence_required"
+    assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=501 AND sucursal_id=7") == 3
+    assert _sql("SELECT count(*) FROM inventario_correccion_decisiones") == 0
+    assert _sql("SELECT count(*) FROM inventario_correccion_lotes") == 0
+
+
+def test_e3_hallazgo_sin_codigo_oficial_no_se_vincula_por_nombre(env):
+    _grant(47)
+    db.session.execute(sa.text(
+        "UPDATE inventario_general SET codigo_interno=NULL WHERE id=502"
+    ))
+    db.session.commit()
+    rid = _request("UNREGISTERED_FIND",inv=None)
+    db.session.execute(sa.text(
+        "UPDATE inventario_correccion_solicitudes "
+        "SET hallazgo_provisional=CAST(:p AS jsonb) WHERE id=:id"
+    ), {"p":json.dumps({"nombre":"Remo","tipo":"APARATOS"}),"id":rid})
+    db.session.commit()
+    payload = _payload([rid])
+    payload["resoluciones"] = {str(rid):{
+        "accion":"VINCULAR_EXISTENTE","inventario_id":502,
+        "stock_esperado":1,"cantidad_fisica":2,
+        "justificacion":"Coincidencia nominal sin código físico verificable",
+    }}
+    denied = _post(env,47,payload)
+    assert denied.status_code == 422, denied.get_json()
+    assert denied.get_json()["error"] == "physical_code_required"
+    assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=502 AND sucursal_id=7") == 1
+    assert _sql("SELECT count(*) FROM inventario_correccion_altas_auditoria") == 0
+
 
 def test_e3_no_auth_y_claims_jwt_falsos_no_sustituyen_rol_de_db(env):
     """Firma JWT de test con rol falso para verificar guard real de base de datos."""
