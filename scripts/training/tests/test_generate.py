@@ -54,7 +54,7 @@ class TrainingV1Tests(unittest.TestCase):
 
     def test_local_fixture_fails_closed_before_touching_postgres(self):
         # Pruebas negativas vía proceso separado: nunca abrir conexión ni llamar Flask.
-        backend = ROOT.parents[2] / "backend"
+        backend = ROOT.parents[1] / "backend"
         base = {
             "APP_ENV": "local",
             "SUITE_QA_SEED_ALLOWED": "YES_CREATE_LOCAL_SYNTHETIC_TICKETS",
