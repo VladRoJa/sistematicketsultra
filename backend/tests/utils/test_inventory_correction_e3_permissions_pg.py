@@ -88,12 +88,14 @@ def env():
                     (55, 'GERENTE_REGIONAL', 1000),
                     (68, 'SR_MANTENIMIENTO', 1),
                     (94, 'MANTENIMIENTO', 7),
-                    (95, 'COORDINADOR_MANTENIMIENTO', 7)
+                    (95, 'COORDINADOR_MANTENIMIENTO', 7),
+                    (90, 'SISTEMAS', 7),
+                    (96, 'SISTEMAS', 1)
                 """)
                 con.exec_driver_sql("""
                     INSERT INTO usuario_sucursal(user_id, sucursal_id) VALUES
                     (47,1000), (45,1), (45,14), (91,7), (91,8), (91,9),
-                    (55,7), (68,7), (94,1), (95,7)
+                    (55,7), (68,7), (94,1), (95,7), (90,7), (96,7)
                 """)
                 con.exec_driver_sql("""
                     INSERT INTO permission_modules VALUES (2, 'inventory', true)
@@ -133,11 +135,12 @@ def _grant(actor=None, role=None, effect="allow", scope="global",
         })
 
 
-def _check(actor, branch=7, creator=501, kind="QUANTITY_DIFFERENCE"):
+def _check(actor, branch=7, creator=501, kind="QUANTITY_DIFFERENCE",
+           asset="aparatos"):
     return resolver_acceso_autorizacion_e3(
         actor_usuario_id=actor,
         solicitud_sucursal_id=branch,
-        solicitud_creador_id=creator, tipo=kind,
+        solicitud_creador_id=creator, tipo=kind, clase_activo=asset,
     )
 
 
@@ -220,3 +223,27 @@ def test_e3_rol_mantenimiento_no_suplanta_departamento_efectivo(env):
     assert alcance_revision_e3(95) is None
     assert alcance_revision_e3(45)["sucursales"] == [1, 14]
     assert alcance_revision_e3(91)["sucursales"] == [7]
+
+
+def test_e3_sistemas_solo_dispositivos_con_grant_depto_y_sucursal(env):
+    _grant(actor=90, scope="global")
+    assert _check(90, branch=7, asset="dispositivos").allowed
+    assert _check(90, branch=7, asset="DISPOSITIVO").allowed
+    assert _check(90, branch=7, asset="sistemas").allowed
+    assert _check(90, branch=7, asset="aparatos").reason == "asset_class_not_enabled"
+    assert _check(90, branch=7, kind="MASTER_FIELD",
+                  asset="dispositivos").reason == "global_master_requires_corporate"
+    assert _check(90, branch=8, asset="dispositivos").reason == "branch_not_assigned"
+    assert _check(45, branch=1, asset="dispositivos").reason == "asset_class_not_enabled"
+    assert alcance_revision_e3(90)["sucursales"] == [7]
+    assert alcance_revision_e3(90)["clase_activo"] == "dispositivos"
+
+
+def test_e3_sistemas_grant_sin_departamento_correcto_no_autoriza(env):
+    _grant(actor=96, scope="branch", branch=7)
+    assert _check(96, branch=7, asset="dispositivos").reason == "department_not_enabled"
+    assert alcance_revision_e3(96) is None
+    _grant(actor=90, scope="branch", branch=7)
+    assert _check(90, branch=7, asset=None).reason == "asset_class_not_enabled"
+    assert _check(90, branch=7, asset="producto").reason == "asset_class_not_enabled"
+    assert alcance_revision_e3(90)["sucursales"] == [7]
