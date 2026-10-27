@@ -315,6 +315,16 @@ def create_workbook(
             "error_title": "Mes no disponible",
             "error_message": "Elige un mes del catálogo.",
         })
+    # Un control calculado no debe permitir sobrescribir su fórmula.
+    for cell in ("F4", "K4"):
+        panel.data_validation(cell, {
+            "validate": "custom", "value": "=FALSE",
+            "error_type": "stop",
+            "error_title": "Fecha calculada",
+            "error_message": "Usa Periodo o los campos de Personalizado.",
+            "input_title": "Rango automático",
+            "input_message": "Periodo determina esta fecha; edita las fechas manuales al elegir Personalizado.",
+        })
     # Eliminar nota redundante A7; no desplazar las referencias de celdas.
     panel.set_row(6, 6)
     panel.merge_range("A8:U8", "", small)
