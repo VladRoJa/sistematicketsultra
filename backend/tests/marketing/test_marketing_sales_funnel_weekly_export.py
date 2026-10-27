@@ -317,3 +317,108 @@ def test_monthly_cards_with_only_one_month_do_not_invent_comparisons():
         assert float(_cached_cell(summary, "G11")[0]) == pytest.approx(0.2)
         assert _cached_cell(summary, "A12")[0] == ""
         assert _cached_cell(summary, "A13")[0] == "Sin comparación mensual"
+
+
+def test_resumen_visual_uses_real_month_dates_and_compact_scope_dropdown():
+    from xml.etree import ElementTree as ET
+
+    workbook = create_workbook(
+        _snapshot("2026-10-19"),
+        [
+            _snapshot("2026-08-31"), _snapshot("2026-09-21"),
+            _snapshot("2026-10-19"),
+        ],
+        OPTIONS, is_global=True,
+    )
+    with ZipFile(BytesIO(workbook)) as archive:
+        ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        summary = ET.fromstring(archive.read("xl/worksheets/sheet1.xml"))
+        calc = ET.fromstring(archive.read("xl/worksheets/sheet3.xml"))
+        styles = ET.fromstring(archive.read("xl/styles.xml"))
+        shared = archive.read("xl/sharedStrings.xml").decode()
+        book_xml = archive.read("xl/workbook.xml").decode()
+
+        def cell(root, reference):
+            entry = root.find(f".//x:sheetData/x:row/x:c[@r='{reference}']", ns)
+            assert entry is not None, reference
+            return entry
+
+        def cell_cached(root, reference):
+            entry = cell(root, reference)
+            data = entry.find("x:v", ns)
+            assert data is not None, reference
+            return data.text
+
+        first = str((date(2026, 8, 1) - date(1899, 12, 30)).days)
+        latest = str((date(2026, 10, 1) - date(1899, 12, 30)).days)
+        assert cell_cached(summary, "F4") == first
+        assert cell_cached(summary, "K4") == latest
+        assert cell(summary, "F4").attrib.get("t", "n") == "n"
+        assert cell(summary, "K4").attrib.get("t", "n") == "n"
+        num_formats = [
+            el.get("formatCode", "")
+            for el in styles.findall(".//x:numFmts/x:numFmt", ns)
+        ]
+        assert any("mmmm-yy" in val and "es-MX" in val for val in num_formats)
+        assert "FunnelMeses" in book_xml
+
+        # S3 y S4 conservan claves YYYY-MM para comparaciones y filtros;
+        # leen la FECHA de los desplegables, nunca el texto mostrado.
+        for address, date_ref in (("S3", "Resumen!$F$4"),
+                                  ("S4", "Resumen!$K$4")):
+            formula = cell(calc, address).find("x:f", ns).text
+            assert "YEAR(" + date_ref + ")" in formula
+            assert "MONTH(" + date_ref + ")" in formula
+
+        merged = {
+            item.attrib["ref"]
+            for item in summary.findall(".//x:mergeCells/x:mergeCell", ns)
+        }
+        assert "K5:O5" in merged
+        assert "K6:O6" in merged
+        assert "K6:U6" not in merged
+        assert "REGIÓN / SUCURSAL" in shared
+        assert "Cortes acumulados mensuales (MTD)" not in shared
+        assert cell(summary, "A7").find("x:v", ns) is None if summary.find(
+            ".//x:c[@r='A7']", ns
+        ) is not None else True
+
+
+def test_resumen_visual_three_cards_have_distinct_fills_and_medium_outline():
+    from xml.etree import ElementTree as ET
+
+    workbook = create_workbook(
+        _snapshot("2026-10-19"),
+        [
+            _snapshot("2026-08-31"), _snapshot("2026-09-21"),
+            _snapshot("2026-10-19"),
+        ],
+        OPTIONS, is_global=True,
+    )
+    with ZipFile(BytesIO(workbook)) as archive:
+        ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        summary = ET.fromstring(archive.read("xl/worksheets/sheet1.xml"))
+        styles = ET.fromstring(archive.read("xl/styles.xml"))
+        formats = styles.find("x:cellXfs", ns)
+        borders = styles.find("x:borders", ns)
+        fills = styles.find("x:fills", ns)
+
+        def style_of(cell):
+            entry = summary.find(f".//x:c[@r='{cell}']", ns)
+            assert entry is not None, cell
+            return formats[int(entry.attrib["s"])]
+
+        fill_ids = {style_of(x).get("fillId") for x in ("A11", "H11", "O11")}
+        assert len(fill_ids) == 3
+        for idx in fill_ids:
+            entry = fills[int(idx)]
+            assert entry.find(".//x:fgColor", ns) is not None
+
+        for cell in ("A10", "H10", "O10"):
+            border = borders[int(style_of(cell).get("borderId"))]
+            assert border.find("x:top", ns).get("style") == "medium"
+            assert border.find("x:left", ns).get("style") == "medium"
+        for cell in ("G11", "N11", "U11"):
+            border = borders[int(style_of(cell).get("borderId"))]
+            assert border.find("x:bottom", ns).get("style") == "medium"
+            assert border.find("x:right", ns).get("style") == "medium"
