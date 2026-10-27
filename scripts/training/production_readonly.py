@@ -106,6 +106,7 @@ def retrieve_json(context, url: str, token: str):
     response = context.request.get(
         url, headers={"Authorization": "Bearer " + token},
         timeout=15000,
+        max_redirects=0,  # nunca reenviar un JWT a otro host por HTTP 302
     )
     if response.status != 200:
         raise RuntimeError("Preflight: lectura API denegada (HTTP " + str(response.status) + ").")
@@ -132,8 +133,8 @@ def locate_demo_ticket(context, token: str, ticket_id: int) -> list:
             break
     if not any(ticket.get("id") == ticket_id for ticket in seen):
         raise ValueError("El ticket DEMO no figura en la bandeja completa del usuario.")
-    if len(seen) != total:
-        raise ValueError("Preflight: no se pudo revisar toda la bandeja visible.")
+    if len(seen) != total or len({t.get("id") for t in seen}) != total:
+        raise ValueError("Preflight: bandeja incompleta o paginación duplicada.")
     return seen
 
 
