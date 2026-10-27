@@ -158,7 +158,32 @@ def test_generates_xlsx_with_two_disconnected_monthly_series_and_selectors():
         ]
         assert cached[0][0] == pytest.approx(40 / 200)
         assert cached[3][1] == pytest.approx(40 / 200)
-        assert plot.find(".//c:plotVisOnly", chart_ns) is None
+        # El gráfico apunta a celdas de la propia hoja Resumen (visible),
+        # no al catálogo de tendencias en una pestaña oculta.
+        formulas = [
+            ref.text for ref in plot.findall(
+                ".//c:lineChart/c:ser/c:val/c:numRef/c:f", chart_ns
+            )
+        ]
+        categories = [
+            ref.text for ref in plot.findall(
+                ".//c:lineChart/c:ser/c:cat/c:numRef/c:f", chart_ns
+            )
+        ]
+        assert formulas[0] == "Resumen!$BA$50:$BA$52"
+        assert formulas[3] == "Resumen!$BD$50:$BD$52"
+        assert all(ref == "Resumen!$AZ$50:$AZ$52" for ref in categories)
+        visible_only = plot.find(".//c:plotVisOnly", chart_ns)
+        assert visible_only is not None and visible_only.get("val") == "1"
+        resumen = ET.fromstring(z.read("xl/worksheets/sheet1.xml"))
+        ss = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        assert resumen.find(".//x:c[@r='AZ50']/x:f", ss) is not None
+        assert float(resumen.find(".//x:c[@r='BA50']/x:v", ss).text) == pytest.approx(0.2)
+        # La columna gráfica AZ está fuera del tablero pero NO oculta.
+        assert all(
+            item.get("hidden") != "1"
+            for item in resumen.findall(".//x:cols/x:col", ss)
+        )
         trend = z.read("xl/worksheets/sheet3.xml").decode()
         assert "SUMIFS" in trend
         assert "2026-09" in trend
