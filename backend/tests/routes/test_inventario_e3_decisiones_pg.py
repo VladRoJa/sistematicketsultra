@@ -742,6 +742,25 @@ def test_e3_post_no_revela_existencia_de_solicitudes_ajenas(env):
 
 
 
+def test_e3_mantenimiento_aparato_legado_sin_familia_es_autorizable(env):
+    # Los dos aparatos sin familia observados en producción no deben bloquear E3.
+    db.session.execute(sa.text("""
+        INSERT INTO inventario_general
+          (id,tipo,nombre,codigo_interno,factor_compra,familia_equipo_id)
+        VALUES (504,'aparatos','Elíptica legado','07EL99',1,NULL)
+    """))
+    db.session.execute(sa.text("""
+        INSERT INTO inventario_sucursal (inventario_id,sucursal_id,stock)
+        VALUES (504,7,1)
+    """))
+    db.session.commit()
+    _grant(91,scope="branch",branch=7)
+    req = _request(inv=504)  # baseline=1, cantidad final=2
+    assert _get_e3(env,91,f"revision/{req}").status_code == 200
+    assert _post(env,91,_payload([req])).status_code == 201
+    assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=504 AND sucursal_id=7") == 2
+
+
 def test_e3_bandeja_por_tipo_real_aparatos_vs_dispositivos(env):
     _device()
     aparatos = _request(creator=98, inv=501)
