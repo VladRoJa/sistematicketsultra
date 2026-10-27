@@ -154,7 +154,12 @@ def test_generates_xlsx_with_two_disconnected_monthly_series_and_selectors():
         assert "RESUMEN COMERCIAL" in z.read("xl/sharedStrings.xml").decode()
         assert 'H' in original
         # Cached numerical values, not every formula left at zero.
-        assert ">40<" in original  # 10+30 visitas del corte usado por mock
+        from xml.etree import ElementTree as ET
+        xml = ET.fromstring(original)
+        ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        cached_visit_total = xml.find(".//x:c[@r='C8']/x:v", ns)
+        assert cached_visit_total is not None
+        assert float(cached_visit_total.text) == 40.0
 
 
 
