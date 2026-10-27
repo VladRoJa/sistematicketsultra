@@ -221,9 +221,10 @@ def create_workbook(
     # a la vez, por eso Personalizado usa P4 y S4 como entradas independientes.
     # Los campos manuales se resaltan únicamente cuando corresponde usarlos.
     last_ym_date = date(int(last_month[:4]), int(last_month[5:7]), 1)
-    first_custom_date = date(int(first_month[:4]), int(first_month[5:7]), 1)
     month_number = last_ym_date.year * 12 + last_ym_date.month - 3
     first_preset_date = date(month_number // 12, month_number % 12 + 1, 1)
+    # Personalizado inicia con el mismo rango que el periodo predeterminado.
+    first_custom_date = first_preset_date
     def serial(day: date) -> int:
         return (day - date(1899, 12, 30)).days
 
