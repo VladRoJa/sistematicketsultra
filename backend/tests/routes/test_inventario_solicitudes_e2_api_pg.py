@@ -158,6 +158,11 @@ def _payload(kind="QUANTITY_DIFFERENCE", branch=7, inventory=501):
         data.update(hallazgo_provisional={
             "nombre": "Bicicleta sin etiqueta", "tipo": "APARATOS"
         })
+    if kind in ("NOT_LOCATED", "UNREGISTERED_FIND"):
+        data["fecha_observacion_local"] = "2026-10-26"
+        data["evidencia_descriptiva"] = (
+            "Recorrido físico de sucursal y revisión de referencias y ubicaciones"
+        )
     return data
 
 
@@ -245,6 +250,31 @@ def test_no_localizado_y_hallazgo_provisional_sin_altas(api):
     assert row["hallazgo_provisional"]["nombre"] == "Bicicleta sin etiqueta"
     assert row["baseline_canonico"]["sucursal_id"] == 8
     assert _snapshot(api) == before
+
+
+
+def test_e2_exige_fecha_y_evidencia_en_solicitudes_especiales(api):
+    original = _snapshot(api)
+    for kind in ("NOT_LOCATED", "UNREGISTERED_FIND"):
+        for missing in ("fecha_observacion_local", "evidencia_descriptiva"):
+            request_data = _payload(kind)
+            request_data.pop(missing)
+            bad = _post(api, request_data)
+            assert bad.status_code == 400, (kind, missing, bad.get_json())
+        empty = _payload(kind)
+        empty["evidencia_descriptiva"] = "  Sin revisar  "
+        assert _post(api, empty).status_code == 400
+        future = _payload(kind)
+        future["fecha_observacion_local"] = "2099-01-01"
+        assert _post(api, future).status_code == 400
+        valid = _payload(kind)
+        good = _post(api, valid)
+        assert good.status_code == 201, (kind, good.get_json())
+        row = good.get_json()["solicitud"]
+        assert row["estado"] == "PENDING"
+        assert row["fecha_observacion_local"] == valid["fecha_observacion_local"]
+        assert row["evidencia_descriptiva"] == valid["evidencia_descriptiva"]
+    assert _snapshot(api) == original
 
 
 def test_sr_m2m_no_hereda_primaria_ni_ve_otra_sucursal(api):
