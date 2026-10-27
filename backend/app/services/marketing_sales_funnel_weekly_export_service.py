@@ -103,6 +103,7 @@ def create_workbook(
     catalog_name = xl_col_to_name(catalog_col)
     catalog_key = xl_col_to_name(catalog_col + 1)
     catalog_month = xl_col_to_name(catalog_col + 2)
+    catalog_date = xl_col_to_name(catalog_col + 3)
     all_rows = []
     initial_counters = []
     for snapshot in weekly:
@@ -145,17 +146,40 @@ def create_workbook(
                             "align": "center", "valign": "vcenter"})
     choice = book.add_format({"bg_color": "#D8F8E9", "font_color": "#145C4A",
                               "bold": True, "align": "center"})
-    monthly_pct = book.add_format({"num_format": "0.0%", "font_size": 13,
-                                   "bold": True, "align": "center",
-                                   "bg_color": "#EDF2FE",
-                                   "font_color": "#172C58"})
-    monthly_label = book.add_format({"font_size": 9, "align": "center",
-                                     "bg_color": "#EDF2FE",
-                                     "font_color": "#566C95"})
-    monthly_arrow = book.add_format({"font_size": 15, "bold": True,
-                                     "align": "center",
-                                     "bg_color": "#EDF2FE",
-                                     "font_color": "#344C78"})
+    # Excel almacena fecha real (primer día del mes); solo la presentación
+    # cambia a "agosto-26". yy evita la máscara de fórmula yyyy/aaaa.
+    month_choice = book.add_format({
+        "bg_color": "#D8F8E9", "font_color": "#145C4A", "bold": True,
+        "align": "center", "num_format": "[$-es-MX]mmmm-yy",
+    })
+    card_backgrounds = ("#E8F0FC", "#F9DEDF", "#EAF3DF")
+    card_text_colors = ("#204A91", "#A84149", "#416E29")
+    def monthly_card_format(metric: int, kind: str, *, top=False,
+                            bottom=False, left=False, right=False):
+        """Contorno de cada tarjeta separado por indicador (filas 10-11)."""
+        opts = {
+            "bg_color": card_backgrounds[metric],
+            "font_color": card_text_colors[metric],
+            "align": "center", "valign": "vcenter",
+            "border_color": "#34455E",
+        }
+        if kind == "rate":
+            opts.update({"bold": True, "font_size": 13,
+                         "num_format": "0.0%"})
+        elif kind == "month":
+            opts.update({"font_size": 9})
+        elif kind == "arrow":
+            opts.update({"font_size": 15, "bold": True})
+        if top:
+            opts["top"] = 2
+        if bottom:
+            opts["bottom"] = 2
+        if left:
+            opts["left"] = 2
+        if right:
+            opts["right"] = 2
+        return book.add_format(opts)
+
     monthly_caption = book.add_format({"font_size": 8, "align": "center",
                                        "font_color": "#627492"})
     pp = book.add_format({"num_format": '+0.0" pp";-0.0" pp";0.0" pp"',
@@ -176,12 +200,21 @@ def create_workbook(
     panel.merge_range("A1:U1", "TENDENCIAS DEL FUNNEL  |  Histórico de lunes", navy)
     for merged, title in (("A3:E3", "PERIODO"), ("F3:J3", "DESDE"),
                           ("K3:O3", "HASTA"), ("A5:E5", "INDICADOR"),
-                          ("K5:O5", "ÁMBITO")):
+                          ("K5:O5", "REGIÓN / SUCURSAL")):
         panel.merge_range(merged, title, navy)
-    for area, value in (("A4:E4", PERIODS[0]), ("F4:J4", first_month),
-                        ("K4:O4", last_month), ("A6:E6", INDICATORS[0]),
-                        ("K6:U6", scope_labels[0][0])):
+    for area, value in (("A4:E4", PERIODS[0]),
+                        ("A6:E6", INDICATORS[0]),
+                        ("K6:O6", scope_labels[0][0])):
         panel.merge_range(area, value, choice)
+    # Las listas siguen siendo fechas editables con su número de serie Excel.
+    # La etiqueta española de mes/año se aplica sin transformar el valor.
+    for cell, span, value in (("F4", "F4:J4", first_month),
+                              ("K4", "K4:O4", last_month)):
+        panel.merge_range(span, "", month_choice)
+        panel.write_datetime(
+            cell, datetime(int(value[:4]), int(value[5:7]), 1),
+            month_choice,
+        )
     panel.data_validation("A4", {"validate": "list", "source": list(PERIODS)})
     panel.data_validation("A6", {"validate": "list",
                                  "source": list(INDICATORS) + ["Comparar las tres"]})
@@ -193,13 +226,14 @@ def create_workbook(
     )
     book.define_name(
         "FunnelMeses",
-        "='Tendencia - datos'!$" + catalog_month + "$2:$"
-        + catalog_month + "$" + str(max(2, len(months) + 1)),
+        "='Tendencia - datos'!$" + catalog_date + "$2:$"
+        + catalog_date + "$" + str(max(2, len(months) + 1)),
     )
     panel.data_validation("K6", {"validate": "list", "source": "=FunnelAmbitos"})
     panel.data_validation("F4", {"validate": "list", "source": "=FunnelMeses"})
     panel.data_validation("K4", {"validate": "list", "source": "=FunnelMeses"})
-    panel.merge_range("A7:U7", "Cortes acumulados mensuales (MTD) · Solo lunes completos · Sin unir meses", small)
+    # Eliminar nota redundante A7; no desplazar las referencias de celdas.
+    panel.set_row(6, 6)
     panel.merge_range("A8:U8", "", small)
     for area, text in (("A9:G9", "LEAD → VISITA"),
                        ("H9:N9", "VISITA → VENTA DIGITAL"), ("O9:U9", "LEAD → VENTA")):
@@ -210,21 +244,45 @@ def create_workbook(
     panel.set_row(10, 25)
     panel.set_row(11, 18)
     panel.set_row(12, 17)
-    for first, middle, latest, arrows, span in (
+    for metric, (first, middle, latest, arrows, span) in enumerate((
         ("A", "D", "G", ("C", "F"), ("A", "G")),
         ("H", "K", "N", ("J", "M"), ("H", "N")),
         ("O", "R", "U", ("Q", "T"), ("O", "U")),
-    ):
-        for left, right in ((first, xl_col_to_name(ord(first) - 64)),
-                            (middle, xl_col_to_name(ord(middle) - 64))):
-            panel.merge_range(f"{left}10:{right}10", "", monthly_label)
-            panel.merge_range(f"{left}11:{right}11", "", monthly_pct)
-        panel.write_blank(f"{latest}10", None, monthly_label)
-        panel.write_blank(f"{latest}11", None, monthly_pct)
+    )):
+        first_end = xl_col_to_name(ord(first) - 64)
+        middle_end = xl_col_to_name(ord(middle) - 64)
+        for col, end_col, is_first in (
+            (first, first_end, True), (middle, middle_end, False)
+        ):
+            panel.merge_range(
+                f"{col}10:{end_col}10", "",
+                monthly_card_format(metric, "month", top=True, left=is_first)
+            )
+            panel.merge_range(
+                f"{col}11:{end_col}11", "",
+                monthly_card_format(metric, "rate", bottom=True, left=is_first)
+            )
+        panel.write_blank(
+            f"{latest}10", None,
+            monthly_card_format(metric, "month", top=True, right=True)
+        )
+        panel.write_blank(
+            f"{latest}11", None,
+            monthly_card_format(metric, "rate", bottom=True, right=True)
+        )
         for arrow in arrows:
-            panel.write_blank(f"{arrow}11", None, monthly_arrow)
+            panel.write_blank(
+                f"{arrow}10", None,
+                monthly_card_format(metric, "empty", top=True)
+            )
+            panel.write_blank(
+                f"{arrow}11", None,
+                monthly_card_format(metric, "arrow", bottom=True)
+            )
         panel.merge_range(f"{span[0]}12:{span[1]}12", "", pp)
-        panel.merge_range(f"{span[0]}13:{span[1]}13", "", monthly_caption)
+        panel.merge_range(
+            f"{span[0]}13:{span[1]}13", "", monthly_caption
+        )
 
     data = book.add_worksheet("Base semanal")
     data.hide_gridlines(2)
@@ -249,13 +307,18 @@ def create_workbook(
     calc.set_column("B:B", 13)
     calc.set_column("C:Z", 17)
     calc.set_column(
-        catalog_name + ":" + catalog_month, 30, None, {"hidden": True}
+        catalog_name + ":" + catalog_date, 30, None, {"hidden": True}
     )
     for i, (text, key) in enumerate(scope_labels, 1):
         calc.write_string(i, catalog_col, text)
         calc.write_string(i, catalog_col + 1, key)
     for i, month in enumerate(months or [last_month], 1):
         calc.write_string(i, catalog_col + 2, month)
+        calc.write_datetime(
+            i, catalog_col + 3,
+            datetime(int(month[:4]), int(month[5:7]), 1),
+            month_choice,
+        )
     calc.write("L1", "Ámbito seleccionado", navy)
     calc.write_formula(
         "M2",
@@ -278,7 +341,8 @@ def create_workbook(
         + month_shift + ')'
     )
     first_month_formula = (
-        '=IF(Resumen!$A$4="Personalizado",Resumen!$F$4,'
+        '=IF(Resumen!$A$4="Personalizado",'
+        'YEAR(Resumen!$F$4)&"-"&RIGHT("0"&MONTH(Resumen!$F$4),2),'
         'IF(Resumen!$A$4="Todo el histórico","0000-00",'
         'YEAR(' + first_date + ')&"-"&'
         'RIGHT("0"&MONTH(' + first_date + '),2)))'
@@ -289,8 +353,12 @@ def create_workbook(
                f"{((int(last_month[5:]) - 3) % 12) + 1:02d}"),
     )
     calc.write("R4", "Hasta efectivo", navy)
-    calc.write_formula("S4", '=IF(Resumen!$A$4="Personalizado",Resumen!$K$4,$R$2)',
-                       None, last_month)
+    calc.write_formula(
+        "S4",
+        '=IF(Resumen!$A$4="Personalizado",'
+        'YEAR(Resumen!$K$4)&"-"&RIGHT("0"&MONTH(Resumen!$K$4),2),$R$2)',
+        None, last_month,
+    )
     # Tres últimos meses CON CORTES disponibles dentro del periodo elegido.
     # T2/U2/V2 responden al selector; admiten periodos con menos de 3 meses.
     year, month = int(last_month[:4]), int(last_month[5:])
@@ -443,7 +511,11 @@ def create_workbook(
                 if month_value else ""
             )
             panel.write_formula(
-                f"{card_col}10", label_formula, monthly_label, label_cache
+                f"{card_col}10", label_formula,
+                monthly_card_format(metric, "month", top=True,
+                                    left=(card_col == month_cells[0]),
+                                    right=(card_col == month_cells[2])),
+                label_cache
             )
             value_formula = (
                 f'=IF({selected_key}="","",IFERROR(LOOKUP(2,1/'
@@ -457,7 +529,10 @@ def create_workbook(
                 None,
             ) if month_value else None
             panel.write_formula(
-                f"{card_col}11", value_formula, monthly_pct,
+                f"{card_col}11", value_formula,
+                monthly_card_format(metric, "rate", bottom=True,
+                                    left=(card_col == month_cells[0]),
+                                    right=(card_col == month_cells[2])),
                 value_cache if value_cache is not None else ""
             )
             last_values.append(value_cache)
@@ -470,7 +545,7 @@ def create_workbook(
             panel.write_formula(
                 f"{arrow_cell}11",
                 f'=IF(AND({older_ref}<>"",{newer_ref}<>""),"→","")',
-                monthly_arrow,
+                monthly_card_format(metric, "arrow", bottom=True),
                 "→" if initial_month_keys[("T", "U", "V").index(older)]
                 and initial_month_keys[("T", "U", "V").index(newer)] else "",
             )
