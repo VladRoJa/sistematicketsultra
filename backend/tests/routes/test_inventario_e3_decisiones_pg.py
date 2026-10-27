@@ -919,6 +919,20 @@ def test_e3_legacy_pendiente_sin_evidencia_no_se_aprueba_pero_se_rechaza(env):
     assert _sql("SELECT count(*) FROM inventario_correccion_ajustes") == 0
 
 
+def test_e3_diferencia_cero_historica_no_evita_ajuste_a_cero(env):
+    _grant(47)
+    old = _request("QUANTITY_DIFFERENCE", proposed={"cantidad_fisica":0})
+    denied = _post(env,47,_payload([old]))
+    assert denied.status_code == 422, denied.get_json()
+    assert denied.get_json()["error"] == "zero_requires_not_located"
+    assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=501 AND sucursal_id=7") == 3
+    assert _sql("SELECT count(*) FROM inventario_correccion_decisiones") == 0
+    assert _sql("SELECT count(*) FROM inventario_correccion_lotes") == 0
+    # El rechazo documental sigue disponible, sin mutación de inventario.
+    assert _post(env,47,_payload([old],decision="REJECTED")).status_code == 201
+    assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=501 AND sucursal_id=7") == 3
+
+
 def test_e3_hallazgo_legacy_evidencia_incompleta_bloquea_lote_mixto(env):
     _grant(47)
     valid = _request("QUANTITY_DIFFERENCE",inv=501)
