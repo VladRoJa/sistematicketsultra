@@ -1,6 +1,6 @@
 :host { display: block; min-width: 0; color: #203956; }
 .revision-page { padding: 16px; }
-.revision-shell { max-width: 1180px; margin: 0 auto; background: #fff; border: 1px solid #dbe6f2; border-radius: 16px; box-shadow: 0 8px 26px rgba(23, 52, 90, .06); overflow: hidden; display: flex; flex-direction: column; height: min(760px, calc(100dvh - 148px)); min-height: 360px; }
+.revision-shell { max-width: 1180px; margin: 0 auto; background: #fff; border: 1px solid #dbe6f2; border-radius: 16px; box-shadow: 0 8px 26px rgba(23, 52, 90, .06); overflow: hidden; display: flex; flex-direction: column; max-height: min(760px, calc(100dvh - 148px)); min-height: 0; }
 .revision-encabezado { display: flex; align-items: start; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding: 24px 26px 18px; border-bottom: 1px solid #e6edf6; }
 .revision-encabezado h1 { margin: 5px 0; color: #21486e; font-size: 23px; }
 .revision-encabezado p { margin: 0; color: #647b93; font-size: 13px; line-height: 1.5; }
@@ -14,45 +14,54 @@
 .revision-marcar { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 650; }
 .revision-marcar input { width: 17px; height: 17px; accent-color: #2e75b1; }
 .revision-fila {
-  display: flex; align-items: flex-start; gap: 13px;
-  margin: 12px 20px; padding: 16px 18px;
-  border: 1px solid #dbe6f2; border-radius: 12px;
-  background: #fff; box-shadow: 0 2px 9px rgba(34, 72, 110, .035);
+  display: flex; align-items: flex-start; gap: 9px;
+  margin: 7px 16px; padding: 10px 12px;
+  border: 1px solid #dbe6f2; border-radius: 10px; background: #fff;
 }
 .revision-fila:hover { border-color: #b8cee4; background: #fcfdff; }
 .revision-fila--seleccionada { border-color: #82b1d7; background: #f6fbff; }
 .revision-fila__check { margin-top: 4px; flex: 0 0 auto; }
 .revision-fila__cuerpo { flex: 1; min-width: 0; }
-.revision-fila__encabezado { display: flex; gap: 14px; align-items: flex-start; justify-content: space-between; }
-.revision-fila__texto { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 5px; }
-.revision-fila__texto strong { font-size: 14px; color: #244a70; overflow-wrap: anywhere; }
-.revision-fila__texto span { font-size: 11px; color: #567590; }
-.revision-fila__texto small { font-size: 10px; color: #8296aa; }
+.revision-fila__encabezado {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+}
+.revision-fila__identidad { min-width: 0; }
+.revision-fila__nombre {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 9px;
+}
+.revision-fila__nombre strong { font-size: 13px; color: #244a70; overflow-wrap: anywhere; }
+.revision-fila__codigo {
+  border: 1px solid #d9e7f3; border-radius: 5px; padding: 2px 6px;
+  font-size: 11px; font-weight: 750; color: #285c83; background: #f3f8fc;
+}
+.revision-fila__identidad small {
+  display: block; margin-top: 3px; font-size: 10px; color: #8296aa;
+}
 .revision-estado {
   flex: 0 0 auto; font-size: 10px; font-weight: 800; background: #eaf2f9;
-  color: #39648b; border-radius: 30px; padding: 6px 10px;
+  color: #39648b; border-radius: 24px; padding: 4px 8px;
 }
 .revision-fila__cambio {
-  display: flex; flex-direction: column; gap: 5px; margin-top: 13px;
-  border: 1px solid #dce9f7; background: #f3f8fd; border-radius: 9px;
-  padding: 11px 13px;
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px;
+  margin-top: 7px; border-radius: 6px; padding: 6px 9px;
+  background: #f2f7fc;
 }
 .revision-fila__cambio > span, .revision-fila__dato > span {
-  font-size: 10px; font-weight: 800; color: #637e98;
+  font-size: 10px; font-weight: 750; color: #637e98;
 }
 .revision-fila__cambio > strong {
-  color: #244d73; font-size: 13px; font-weight: 800; overflow-wrap: anywhere;
+  color: #244d73; font-size: 12px; font-weight: 800; overflow-wrap: anywhere;
 }
 .revision-fila__datos {
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 13px 20px; margin-top: 14px;
+  display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto;
+  gap: 10px 16px; margin-top: 8px;
 }
 .revision-fila__dato { min-width: 0; }
 .revision-fila__dato p {
-  margin: 5px 0 0; color: #344d67; font-size: 12px;
-  line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere;
+  margin: 2px 0 0; color: #344d67; font-size: 11px;
+  line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere;
 }
-.revision-fila__dato--fecha { grid-column: 1 / -1; }
+.revision-fila__dato--fecha { min-width: 105px; }
 .revision-secondary, .revision-autorizar, .revision-rechazar { font-family: inherit; font-size: 12px; font-weight: 800; padding: 10px 13px; border-radius: 8px; cursor: pointer; border: 1px solid #cbd9e8; background: white; color: #2b567c; }
 .revision-autorizar { border-color: #ba5d17; color: white; background: #bb5d13; }
 .revision-rechazar { color: #a34242; border-color: #e6bcbd; background: #fff7f7; }
@@ -93,12 +102,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .revision-confirmar input { width: 18px; height: 18px; flex: 0 0 auto; accent-color: #2e75b1; }
 @media (max-width: 680px) {
   .revision-page { padding: 6px; }
-  .revision-shell { height: calc(100dvh - 100px); min-height: 0; }
+  .revision-shell { max-height: calc(100dvh - 100px); min-height: 0; }
   .revision-encabezado, .revision-filtros, .revision-bandeja__cabecera, .revision-fila, .revision-acciones { padding-left: 13px; padding-right: 13px; }
-  .revision-fila { margin: 9px 8px; padding: 12px; gap: 10px; }
-  .revision-fila__encabezado { flex-wrap: wrap; gap: 9px; }
-  .revision-fila__datos { grid-template-columns: 1fr; gap: 12px; }
-  .revision-fila__dato--fecha { grid-column: auto; }
+  .revision-fila { margin: 6px 8px; padding: 10px; gap: 9px; }
+  .revision-fila__encabezado { flex-wrap: wrap; gap: 6px; }
+  .revision-fila__datos { grid-template-columns: 1fr; gap: 8px; }
+  .revision-fila__dato--fecha { min-width: 0; }
   .revision-acciones > div { width: 100%; }
   .revision-acciones button { flex: 1; }
   .revision-resolucion__numeros { grid-template-columns: 1fr; }
