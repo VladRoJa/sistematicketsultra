@@ -393,12 +393,14 @@
           <p class="permissions-kicker">GRANTS BETA</p>
           <h2>Permission grants</h2>
           <p>
-            Vista solo lectura. Esta pestaña no crea, edita, borra ni aplica permisos reales.
+            Configuración de excepciones (solo lectura). Un grant registrado
+            NO certifica acceso HTTP ni reemplaza el guard del módulo.
           </p>
         </div>
 
         <div class="permissions-effective-summary">
-          <span>Total: <strong>{{ grants.length }}</strong></span>
+          <span>Total en backend: <strong>{{ grantTotal }}</strong></span>
+          <span>Página: <strong>{{ grants.length }}</strong></span>
           <span>Activos: <strong>{{ activeGrantsCount }}</strong></span>
           <span>Inactivos: <strong>{{ inactiveGrantsCount }}</strong></span>
           <span>Allow: <strong>{{ allowGrantsCount }}</strong></span>
@@ -408,7 +410,7 @@
 
       <div class="permissions-effective-filters">
         <label>
-          Buscar
+          Buscar en esta página
           <input
             type="text"
             [(ngModel)]="grantSearchTerm"
@@ -451,10 +453,49 @@
           </select>
         </label>
 
+        <label>
+          Principal
+          <select [(ngModel)]="grantPrincipalTypeFilter">
+            <option value="">Todos</option>
+            <option value="user">Usuario</option>
+            <option value="role">Rol</option>
+          </select>
+        </label>
+
+        <label>
+          Usuario ID
+          <input type="number" min="1" [(ngModel)]="grantPrincipalUserIdFilter"
+                 placeholder="ID del usuario" />
+        </label>
+
+        <label>
+          Rol
+          <input type="text" [(ngModel)]="grantPrincipalRoleKeyFilter"
+                 placeholder="Ej. GERENTE" />
+        </label>
+
+        <label>
+          Módulo
+          <select [(ngModel)]="grantModuleKeyFilter">
+            <option value="">Todos</option>
+            <option *ngFor="let module of modules; trackBy: trackByModuleKey"
+                    [value]="module.key">{{ module.name }}</option>
+          </select>
+        </label>
+
+        <label>
+          Acción
+          <select [(ngModel)]="grantActionFullKeyFilter">
+            <option value="">Todas</option>
+            <option *ngFor="let action of actions; trackBy: trackByActionFullKey"
+                    [value]="action.full_key">{{ actionLabel(action.full_key, action.name) }}</option>
+          </select>
+        </label>
+
         <button
           type="button"
           class="permissions-export-button"
-          (click)="loadGrants()"
+          (click)="applyGrantFilters()"
           [disabled]="isLoadingGrants"
         >
           {{ isLoadingGrants ? 'Consultando...' : 'Aplicar filtros' }}
@@ -462,7 +503,8 @@
       </div>
 
       <div class="permissions-effective-filter-summary">
-        <span>Filtrados: <strong>{{ filteredGrants.length }}</strong></span>
+        <span>Mostrados en esta página: <strong>{{ filteredGrants.length }}</strong></span>
+        <span>Registros {{ grantFirstRow }}–{{ grantLastRow }} de {{ grantTotal }}</span>
         <span>Fuente: <strong>permission_grants_readonly_v1</strong></span>
       </div>
 
@@ -470,7 +512,8 @@
         class="permissions-empty-filter-state"
         *ngIf="filteredGrants.length === 0"
       >
-        No hay grants que coincidan con los filtros actuales. Esto es normal si todavía no se han creado grants beta.
+        No hay grants en esta página con los filtros actuales. La búsqueda de texto
+        se aplica únicamente a la página cargada.
       </div>
 
       <div
@@ -509,20 +552,23 @@
                 </span>
               </td>
               <td>
-                <strong>{{ grant.scope_type }}</strong>
-                <small>
-                  Sucursal: {{ grant.scope_branch_id || 'N/A' }}
-                  · Depto: {{ grant.scope_department_id || 'N/A' }}
+                <strong>{{ getGrantScopeSummary(grant) }}</strong>
+                <small>Tipo: {{ grant.scope_type }}</small>
+                <small *ngIf="grant.scope_type === 'custom'">
+                  Payload personalizado no evaluado: {{ (grant.scope_payload | json) }}
                 </small>
               </td>
               <td>
                 <span [class]="getGrantStatusBadgeClass(grant)">
-                  {{ grant.is_active ? 'Activo' : 'Inactivo' }}
+                  {{ getGrantRecordStatus(grant) }}
                 </span>
+                <small>Inicio: {{ grant.starts_at || 'Sin fecha' }}</small>
+                <small>Fin: {{ grant.expires_at || 'Sin fecha' }}</small>
               </td>
               <td>
                 <span>{{ grant.reason }}</span>
                 <small>Creado: {{ grant.created_at || 'N/A' }}</small>
+                <small>Actualizó: {{ grant.updated_by_user?.username || 'Sin dato' }}</small>
               </td>
               <td>
                 <button
@@ -539,6 +585,19 @@
         </table>
       </div>
 
+      <nav class="permissions-grant-pagination" aria-label="Paginación de grants">
+        <button type="button" class="permissions-export-button"
+                (click)="previousGrants()" [disabled]="isLoadingGrants || grantOffset === 0">
+          Anterior
+        </button>
+        <span>Registros {{ grantFirstRow }}–{{ grantLastRow }} de {{ grantTotal }}</span>
+        <button type="button" class="permissions-export-button"
+                (click)="nextGrants()"
+                [disabled]="isLoadingGrants || grantOffset + grantPageSize >= grantTotal">
+          Siguiente
+        </button>
+      </nav>
+
       <section
         class="permissions-grant-audit-panel"
         *ngIf="selectedGrantForAudit"
@@ -550,6 +609,7 @@
             <p>
               {{ selectedGrantForAudit.action_full_key || selectedGrantForAudit.module_key }}
             </p>
+            <p>Auditoría: {{ grantAuditTotal }} eventos; página {{ grantAuditFirstRow }}–{{ grantAuditLastRow }}.</p>
           </div>
 
           <button
@@ -587,6 +647,7 @@
                 <th>Usuario</th>
                 <th>Motivo</th>
                 <th>Fecha</th>
+                <th>Cambio registrado</th>
               </tr>
             </thead>
             <tbody>
@@ -605,10 +666,32 @@
                 </td>
                 <td>{{ auditLog.reason || 'Sin motivo' }}</td>
                 <td>{{ auditLog.created_at || 'N/A' }}</td>
+                <td>
+                  <details>
+                    <summary>Antes y después</summary>
+                    <strong>Antes</strong>
+                    <pre>{{ auditLog.before_payload | json }}</pre>
+                    <strong>Después</strong>
+                    <pre>{{ auditLog.after_payload | json }}</pre>
+                  </details>
+                </td>
               </tr>
             </tbody>
           </table>
         </div>
+        <nav class="permissions-grant-pagination" aria-label="Paginación de auditoría">
+          <button type="button" class="permissions-export-button"
+                  (click)="previousGrantAudit()"
+                  [disabled]="isLoadingGrantAudit || grantAuditOffset === 0">
+            Anterior
+          </button>
+          <span>Eventos {{ grantAuditFirstRow }}–{{ grantAuditLastRow }} de {{ grantAuditTotal }}</span>
+          <button type="button" class="permissions-export-button"
+                  (click)="nextGrantAudit()"
+                  [disabled]="isLoadingGrantAudit || grantAuditOffset + grantAuditPageSize >= grantAuditTotal">
+            Siguiente
+          </button>
+        </nav>
       </section>
     </div>
 
