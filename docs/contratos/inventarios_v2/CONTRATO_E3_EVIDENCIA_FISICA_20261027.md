@@ -40,6 +40,12 @@ Para **aprobar** uno de estos casos, y también para nuevas solicitudes E2 de es
 
 **Ejemplo:** sistema registra 3 caminadoras de la misma referencia. Una está presente y faltan dos → `QUANTITY_DIFFERENCE` de 3 a 1, **NO** `AJUSTAR_A_CERO`. Si faltan las tres tras búsqueda trazable, puede solicitarse `NOT_LOCATED` con stock esperado 3 y ajuste a cero autorizado.
 
+### Protección contra elusión del ajuste a cero (implementada en PR DRAFT)
+
+La operación `QUANTITY_DIFFERENCE` **exige `cantidad_fisica > 0`**: una diferencia que pretenda establecer cantidad cero se rechaza en E2 (HTTP 400) y también en aprobación E3 de una solicitud histórica (HTTP 422 `zero_requires_not_located`). El camino legítimo es `NOT_LOCATED`, con fecha, evidencia y `AJUSTAR_A_CERO` explícito.
+
+`NOT_LOCATED` se acepta en E2 únicamente con **stock oficial positivo**; no se crea un pendiente imposible de conciliar para una referencia ya en cero. El frontend refleja ambos límites; Flask es la fuente autoritativa. Rechazar un registro histórico inválido sigue permitido y no modifica existencias.
+
 ## 4. UNREGISTERED_FIND — hallazgo FÍSICO con registro oficial EXISTENTE
 
 **Condición de uso:** se observó una unidad o conjunto de unidades físicas **no contabilizadas** en existencias de la sucursal, pero sí pertenecientes a una **referencia maestra canónica existente**, con fila de stock ya asignada a la misma sucursal. No genera ficha de aparato/dispositivo nueva; `CREAR_NUEVO` permanece 422.
