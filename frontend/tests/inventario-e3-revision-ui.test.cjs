@@ -34,16 +34,19 @@ function make({ fail=false }={}) {
     {id:1,tipo:'QUANTITY_DIFFERENCE',sucursal_id:7,estado:'PENDING',
       creado_por_usuario_id:98,baseline_canonico:{stock:3},
       valor_original:{stock:3},valor_propuesto:{cantidad_fisica:2},
+      referencia_oficial:{nombre:'Caminadora',codigo_interno:'07CA01'},
       motivo:'Diferencia comprobada con conteo físico'},
     {id:2,tipo:'NOT_LOCATED',sucursal_id:7,estado:'PENDING',
       creado_por_usuario_id:98,baseline_canonico:{stock:3},
       valor_original:{stock:3},valor_propuesto:{no_localizado:true},
+      referencia_oficial:{nombre:'Caminadora',codigo_interno:'07CA01'},
       motivo:'Equipo ausente tras revisión física',
       fecha_observacion_local:'2026-10-26',
       evidencia_descriptiva:'Búsqueda física total de referencia en almacén y piso'},
     {id:3,tipo:'UNREGISTERED_FIND',sucursal_id:7,estado:'PENDING',
       creado_por_usuario_id:98,baseline_canonico:{sucursal_id:7},
       hallazgo_provisional:{nombre:'Remo',tipo:'APARATOS',codigo_interno:'07RE01'},
+      referencia_oficial:null,
       fecha_observacion_local:'2026-10-26',
       evidencia_descriptiva:'Cotejo de etiqueta física y conteo total del almacén'},
   ];
@@ -87,6 +90,9 @@ test('E3 muestra contexto en tarjetas y conserva solo el modal de decisión',()=
   assert.match(html,/\{\{ solicitud\.evidencia_descriptiva/);
   assert.match(html,/\{\{ solicitud\.fecha_observacion_local/);
   assert.match(html,/\{\{ cambioPropuesto\(solicitud\) \}\}/);
+  assert.match(html,/\{\{ nombreReferencia\(solicitud\) \}\}/);
+  assert.match(html,/\{\{ codigoReferencia\(solicitud\) \}\}/);
+  assert.match(css,/\.revision-fila__datos\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1\.3fr\)/s);
   assert.match(html,/Confirmar autorización/);
   assert.match(html,/Confirmar rechazo/);
   assert.match(css,/\.revision-acciones\s*\{[^}]*flex:\s*0 0 auto/s);
@@ -103,6 +109,13 @@ test('E3 consulta contextual, muestra cambios legibles y filtrar reinicia checks
   assert.equal(vm.cambioPropuesto(vm.solicitudes[1]),
     'Stock oficial: 3 → 0 · Ajuste solicitado');
   assert.match(vm.cambioPropuesto(vm.solicitudes[2]),/Código físico: 07RE01/);
+  assert.equal(vm.nombreReferencia(vm.solicitudes[0]),'Caminadora');
+  assert.equal(vm.codigoReferencia(vm.solicitudes[1]),'07CA01');
+  assert.equal(vm.nombreReferencia(vm.solicitudes[2]),'Remo');
+  assert.equal(vm.codigoReferencia(vm.solicitudes[2]),'07RE01');
+  vm.solicitudes[0].referencia_oficial=null;
+  assert.equal(vm.nombreReferencia(vm.solicitudes[0]),'Nombre no disponible');
+  assert.equal(vm.codigoReferencia(vm.solicitudes[0]),'Sin código interno');
   assert.equal(calls.details.length,0); // No se consulta otro endpoint para leer.
   vm.marcar(1); assert.equal(vm.seleccionadas.length,1);
   vm.cambiarFiltros(); assert.equal(vm.seleccionadas.length,0);
