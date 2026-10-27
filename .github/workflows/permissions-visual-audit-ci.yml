@@ -4,6 +4,11 @@ on:
   pull_request:
     paths:
       - "backend/app/routes/permissions_visual_audit_routes.py"
+      - "backend/app/routes/permissions_catalog_routes.py"
+      - "backend/tests/routes/test_permissions_phase_b_b1_nube_compare_only.py"
+      - "backend/tests/routes/test_permissions_phase_a_p34_closure.py"
+      - "backend/tests/utils/test_permissions_phase_a_document_object_parity.py"
+      - "docs/security/permissions_phase_b_b1_nube_compare_only_20261027.md"
       - "backend/app/__init__.py"
       - "backend/tests/routes/test_permissions_visual_audit_matrix.py"
       - "backend/tests/routes/test_permissions_legacy_coverage_inventory_pm_tickets.py"
@@ -51,6 +56,10 @@ jobs:
             tests/routes/test_permissions_action_alias_contract.py \
             tests/routes/test_permissions_phase_a_bidirectional_projection.py \
             tests/routes/test_permissions_phase_a_bidirectional_classification.py \
+            tests/routes/test_permissions_phase_a_p34_closure.py \
+            tests/utils/test_permissions_phase_a_document_object_parity.py \
+            tests/routes/test_permissions_phase_b_b1_nube_compare_only.py \
+            tests/routes/test_internal_documents_a12_a13_http_jwt_reconcile.py \
             tests/routes/test_permissions_phase_a_track_parity.py \
             tests/routes/test_permissions_phase_a_inventory_parity.py
 

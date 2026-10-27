@@ -23,6 +23,8 @@ on:
       - "backend/tests/routes/test_permissions_phase_a_p32_capability_groups.py"
       - "backend/tests/routes/test_permissions_phase_a_p33_read_surfaces.py"
       - "backend/tests/routes/test_permissions_phase_a_p34_closure.py"
+      - "backend/tests/routes/test_permissions_phase_b_b1_nube_compare_only.py"
+      - "docs/security/permissions_phase_b_b1_nube_compare_only_20261027.md"
       - "docs/security/permissions_phase_a_p34_compatibility_master_20261027.csv"
       - "docs/security/permissions_phase_a_p34_nube_pilot_p1_reads_20261027.csv"
       - "docs/security/permissions_phase_a_p34_closure_20261027.md"
@@ -118,6 +120,10 @@ jobs:
             tests/routes/test_permissions_phase_a_p32_capability_groups.py \
             tests/routes/test_permissions_phase_a_p33_read_surfaces.py \
             tests/routes/test_permissions_phase_a_p34_closure.py \
+            tests/routes/test_permissions_phase_b_b1_nube_compare_only.py \
+            tests/routes/test_permissions_phase_a_bidirectional_projection.py \
+            tests/routes/test_permissions_phase_a_bidirectional_classification.py \
+            tests/utils/test_permissions_phase_a_document_object_parity.py \
             tests/marketing/test_marketing_campaign_v2_dispatch_config_service.py \
             tests/marketing/test_marketing_campaign_v2_scoped_dispatch_exclusions.py \
             tests/google_ads/test_google_ads_m6_authenticated_approval.py \

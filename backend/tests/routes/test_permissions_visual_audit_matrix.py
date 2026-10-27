@@ -85,14 +85,14 @@ def test_warehouse_denial_and_planning_inactive_operator():
     assert row["legacy_allowed"] is False
 
 
-def test_internal_documents_manager_difference_from_real_pure_guard():
+def test_internal_documents_manager_matches_real_pure_guard():
     user = make_user("SISTEMAS", username="SISTEMAS_QA")
     row = visual.evaluate_pair(
         user, make_action("internal_documents.manage"), make_context(user),
     )
     assert row["legacy_allowed"] is True
-    assert row["catalog_allowed"] is False
-    assert row["comparison"] == "diferencia"
+    assert row["catalog_allowed"] is True
+    assert row["comparison"] == "coincide"
 
 
 def test_document_scope_without_object_unknown_then_guard_evaluated(monkeypatch):
@@ -101,6 +101,8 @@ def test_document_scope_without_object_unknown_then_guard_evaluated(monkeypatch)
     context = make_context(user)
     unknown = visual.evaluate_pair(user, action, context)
     assert unknown["legacy_allowed"] is None
+    assert unknown["catalog_allowed"] is None
+    assert unknown["catalog_reason"] == "document_id_required_for_comparison"
     assert unknown["comparison"] == "no_concluyente"
     calls = []
     monkeypatch.setattr(visual, "can_view_internal_document",

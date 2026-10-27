@@ -174,7 +174,8 @@ def test_p20_module_projection_preserves_all_distinct_actions(module_key):
     ("SISTEMAS", "warehouse.view", True),
     ("GERENTE", "warehouse.view", False),
     ("SISTEMAS", "planning.read", True),
-    ("ADMINISTRADOR", "internal_documents.manage", True),
+    ("ADMINISTRADOR", "internal_documents.manage", False),
+    ("SISTEMAS", "internal_documents.manage", True),
     ("GERENTE", "internal_documents.manage", False),
 ])
 def test_p20_inversion_preserves_diagnostic_decisions(

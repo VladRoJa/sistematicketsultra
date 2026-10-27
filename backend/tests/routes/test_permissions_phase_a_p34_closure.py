@@ -56,8 +56,8 @@ def test_p34_master_contract_is_eleven_modules_and_no_grants_or_enforcement():
 @pytest.mark.parametrize(
     "role,username,real,diagnostic",
     [
-        ("SISTEMAS", "SISTEMAS_DEMO", True, False),
-        ("ADMINISTRADOR", "ADMIN_DEMO", False, True),
+        ("SISTEMAS", "SISTEMAS_DEMO", True, True),
+        ("ADMINISTRADOR", "ADMIN_DEMO", False, False),
         ("ADMINISTRADOR", "ADMICORP", True, True),
         ("GERENTE", "GERENTE_DEMO", False, False),
     ],
@@ -75,9 +75,10 @@ def test_p34_nube_guard_vs_observability_baseline(role, username, real, diagnost
         "warehouse_operator": None,
         "planning_operator": None,
     }
-    # El catálogo es diagnóstico; esto NO certifica acceso HTTP ni lo corrige.
-    projection = _effective_action_decision(action, None, context)
+    # B1 resuelve identidad del usuario objetivo, no un rol aislado.
+    projection = _effective_action_decision(action, actor, context)
     assert projection["allowed"] is diagnostic
+    assert projection["details"]["mode"] == "compare_only"
 
 
 def test_p34_p1_document_get_endpoints_exist_and_require_jwt():

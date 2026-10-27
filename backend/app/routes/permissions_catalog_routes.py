@@ -16,6 +16,10 @@ from app.models.permissions import (
 from app.models.sucursal_model import Sucursal
 from app.models.user_model import UserORM
 from app.models.warehouse import WarehouseOperatorORM
+from app.utils.internal_documents_access import (
+    InternalDocumentUserContext,
+    can_manage_internal_documents,
+)
 
 
 permissions_catalog_bp = Blueprint("permissions_catalog", __name__)
@@ -473,26 +477,44 @@ def _effective_action_decision(action, user, context: dict) -> dict:
 
     # Nube corporativa
     if full_key == "internal_documents.view":
+        # Solo entrada al módulo. La autorización de cada documento se
+        # resuelve por can_view_internal_document(document, context).
         return _decision(
             allowed=True,
             source="authenticated_user",
             reason="internal_documents_visibility_still_evaluated_per_document",
             scope_type="document_visibility",
+            details={"object_access_certified": False, "requires_document_id": True},
         )
 
     if full_key == "internal_documents.manage":
+        # B1 compare-only: mismo predicado puro que require_internal_document_manager.
+        # No consulta el JWT, no reemplaza el guard HTTP ni interpreta grants.
+        # Requiere identidad del usuario objetivo desde DB; un rol contextual
+        # sin usuario no es prueba suficiente para la matriz.
+        if user is None:
+            manager_allowed = False
+            reason = "missing_user_identity_for_manager_comparison"
+        else:
+            document_context = InternalDocumentUserContext(
+                user_id=getattr(user, "id", 0) or 0,
+                username=getattr(user, "username", None),
+                role=role,
+                sucursal_id=getattr(user, "sucursal_id", None),
+                sucursales_ids=tuple(sucursal_ids or ()),
+                department_id=getattr(user, "department_id", None),
+            )
+            manager_allowed = can_manage_internal_documents(document_context)
+            reason = (
+                "matches_internal_document_manager_guard"
+                if manager_allowed else "requires_internal_document_manager"
+            )
         return _decision(
-            allowed=is_admin,
+            allowed=manager_allowed,
             source="legacy_internal_documents_manager",
-            reason=(
-                "admin_role_treated_as_manager_in_observability_v1"
-                if is_admin
-                else "requires_internal_document_manager"
-            ),
-            scope_type="global" if is_admin else "none",
-            details={
-                "note": "Observability v1. Manager helper remains real authority."
-            },
+            reason=reason,
+            scope_type="global" if manager_allowed else "none",
+            details={"mode": "compare_only", "guard": "can_manage_internal_documents"},
         )
 
     # Aperturas
