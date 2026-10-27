@@ -314,7 +314,7 @@ def test_e3_maestro_solo_corporativo_y_auditoria_doble(env):
     _grant(45)
     _grant(47)
     q = _request("MASTER_FIELD",inv=502,field="nombre")
-    assert _post(env,45,_payload([q])).status_code == 403
+    assert _post(env,45,_payload([q])).status_code == 404
     res = _post(env,47,_payload([q]))
     assert res.status_code == 201,res.get_json()
     assert _sql("SELECT nombre FROM inventario_general WHERE id=502") == "Remo nuevo"
