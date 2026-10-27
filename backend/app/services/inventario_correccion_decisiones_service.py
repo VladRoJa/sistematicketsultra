@@ -98,7 +98,7 @@ def _lock_requests(ids):
     return rows
 
 
-def _permitir_todas(actor_id, rows):
+def _permitir_todas(actor_id, rows, resolutions=None):
     for row in rows:
         # Clase oficial consultada en DB, no JWT ni metadata suministrada por UI.
         # Un hallazgo sin referencia solo dispone del tipo provisional hasta
@@ -125,9 +125,29 @@ def _permitir_todas(actor_id, rows):
                 raise DecisionError(403, "forbidden", "No puedes decidir tu propia solicitud.")
             # Los demás rechazos no revelan si existe un ID fuera del alcance.
             raise DecisionError(404, "not_found", "Solicitud inexistente o fuera de alcance.")
+        # Replays y aprobaciones de hallazgos deben conservar el scope
+        # también sobre la referencia DESTINO; el tipo provisional no basta.
+        resolution = resolutions.get(str(row.id)) if isinstance(resolutions, dict) else None
+        if row.tipo == "UNREGISTERED_FIND" and isinstance(resolution, dict):
+            destination_id = resolution.get("inventario_id")
+            if _positive_id(destination_id):
+                destination_type = db.session.execute(
+                    select(InventarioGeneral.tipo).where(
+                        InventarioGeneral.id == destination_id
+                    )
+                ).scalar_one_or_none()
+                destination_access = resolver_acceso_autorizacion_e3(
+                    actor_usuario_id=actor_id,
+                    solicitud_sucursal_id=row.sucursal_id,
+                    solicitud_creador_id=row.creado_por_usuario_id,
+                    tipo=row.tipo,
+                    clase_activo=destination_type,
+                )
+                if not destination_access.allowed:
+                    raise DecisionError(404, "not_found", "Solicitud inexistente o fuera de alcance.")
 
 
-def _replay_if_exists(actor_id, key, fingerprint, ids, action):
+def _replay_if_exists(actor_id, key, fingerprint, ids, action, resolutions):
     previous = db.session.execute(
         select(InventarioCorreccionLoteORM).where(
             InventarioCorreccionLoteORM.actor_usuario_id == actor_id,
@@ -140,7 +160,7 @@ def _replay_if_exists(actor_id, key, fingerprint, ids, action):
         raise DecisionError(409, "idempotency_conflict", "La llave corresponde a otro lote.")
     # Tampoco exponer resultados de lotes históricos si se revocó el acceso.
     rows = _lock_requests(ids)
-    _permitir_todas(actor_id, rows)
+    _permitir_todas(actor_id, rows, resolutions if action == "APPROVED" else None)
     if not isinstance(previous.resultados, dict):
         raise DecisionError(409, "incomplete_replay", "Lote histórico incompleto; revisar auditoría.")
     return {"lote_id": previous.id, "replayed": True, "items": previous.resultados["items"]}
@@ -428,13 +448,13 @@ def decidir_lote(*, actor_id, payload):
     if alcance_revision_e3(actor_id) is None:
         raise DecisionError(403, "forbidden", "Sin facultad para revisar correcciones.")
 
-    replay = _replay_if_exists(actor_id, key, fingerprint, ids, action)
+    replay = _replay_if_exists(actor_id, key, fingerprint, ids, action, resolutions)
     if replay is not None:
         db.session.rollback()  # solo lecturas y locks
         return replay
 
     rows = _lock_requests(ids)
-    _permitir_todas(actor_id, rows)
+    _permitir_todas(actor_id, rows, resolutions if action == "APPROVED" else None)
     if any(row.estado != "PENDING" for row in rows):
         raise DecisionError(409, "already_decided", "Una solicitud ya fue decidida.")
 
@@ -465,7 +485,7 @@ def decidir_lote(*, actor_id, payload):
     if action == "APPROVED":
         # Revalidar después de bloquear maestros oficiales: no aceptar que
         # cambie la clase entre una primera lectura y el FOR UPDATE.
-        _permitir_todas(actor_id, rows)
+        _permitir_todas(actor_id, rows, resolutions)
 
     lote = InventarioCorreccionLoteORM(
         actor_usuario_id=actor_id, tipo_decision=action,
