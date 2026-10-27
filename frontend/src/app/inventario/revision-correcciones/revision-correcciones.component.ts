@@ -111,6 +111,12 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
       !String(s.hallazgo_provisional?.['codigo_interno'] || '').trim();
   }
 
+  cantidadCeroRequiereNoLocalizado(s: SolicitudCorreccionInventario): boolean {
+    if (s.tipo !== 'QUANTITY_DIFFERENCE') return false;
+    const proposal = s.valor_propuesto as { cantidad_fisica?: unknown } | null;
+    return proposal?.cantidad_fisica === 0;
+  }
+
   get puedeConfirmar(): boolean {
     if (!this.decision || this.procesando || !this.confirmo ||
         this.motivo.trim().length < 10 || this.motivo.trim().length > 2000 ||
@@ -118,6 +124,7 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
     if (this.decision === 'REJECTED') return true;
     return this.seleccionadas.every(s => {
       if (s.tipo === 'MASTER_FIELD' && !this.contexto?.corporativo) return false;
+      if (this.cantidadCeroRequiereNoLocalizado(s)) return false;
       if (s.tipo === 'QUANTITY_DIFFERENCE' || s.tipo === 'MASTER_FIELD') return true;
       if (this.faltaEvidenciaFisica(s) || this.faltaCodigoHallazgo(s)) return false;
       const r = this.resoluciones[s.id];
