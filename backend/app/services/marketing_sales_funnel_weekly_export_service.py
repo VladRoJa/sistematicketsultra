@@ -145,9 +145,19 @@ def create_workbook(
                             "align": "center", "valign": "vcenter"})
     choice = book.add_format({"bg_color": "#D8F8E9", "font_color": "#145C4A",
                               "bold": True, "align": "center"})
-    big_pct = book.add_format({"num_format": "0.0%", "font_size": 19,
-                               "bold": True, "align": "center",
-                               "bg_color": "#EDF2FE", "font_color": "#172C58"})
+    monthly_pct = book.add_format({"num_format": "0.0%", "font_size": 13,
+                                   "bold": True, "align": "center",
+                                   "bg_color": "#EDF2FE",
+                                   "font_color": "#172C58"})
+    monthly_label = book.add_format({"font_size": 9, "align": "center",
+                                     "bg_color": "#EDF2FE",
+                                     "font_color": "#566C95"})
+    monthly_arrow = book.add_format({"font_size": 15, "bold": True,
+                                     "align": "center",
+                                     "bg_color": "#EDF2FE",
+                                     "font_color": "#344C78"})
+    monthly_caption = book.add_format({"font_size": 8, "align": "center",
+                                       "font_color": "#627492"})
     pp = book.add_format({"num_format": '+0.0" pp";-0.0" pp";0.0" pp"',
                           "align": "center", "font_color": "#70819B"})
     small = book.add_format({"font_size": 9, "font_color": "#445575"})
@@ -194,9 +204,27 @@ def create_workbook(
     for area, text in (("A9:G9", "LEAD → VISITA"),
                        ("H9:N9", "VISITA → VENTA DIGITAL"), ("O9:U9", "LEAD → VENTA")):
         panel.merge_range(area, text, purple)
-    for prefix, last in (("A", "G"), ("H", "N"), ("O", "U")):
-        panel.merge_range(f"{prefix}10:{last}11", "", big_pct)
-        panel.merge_range(f"{prefix}12:{last}12", "", pp)
+    # Tres cortes mensuales por indicador: etiquetas en fila 10,
+    # tasas en 11, variación intermensual en 12 y comparación en 13.
+    panel.set_row(9, 18)
+    panel.set_row(10, 25)
+    panel.set_row(11, 18)
+    panel.set_row(12, 17)
+    for first, middle, latest, arrows, span in (
+        ("A", "D", "G", ("C", "F"), ("A", "G")),
+        ("H", "K", "N", ("J", "M"), ("H", "N")),
+        ("O", "R", "U", ("Q", "T"), ("O", "U")),
+    ):
+        for left, right in ((first, xl_col_to_name(ord(first) - 64)),
+                            (middle, xl_col_to_name(ord(middle) - 64))):
+            panel.merge_range(f"{left}10:{right}10", "", monthly_label)
+            panel.merge_range(f"{left}11:{right}11", "", monthly_pct)
+        panel.write_blank(f"{latest}10", None, monthly_label)
+        panel.write_blank(f"{latest}11", None, monthly_pct)
+        for arrow in arrows:
+            panel.write_blank(f"{arrow}11", None, monthly_arrow)
+        panel.merge_range(f"{span[0]}12:{span[1]}12", "", pp)
+        panel.merge_range(f"{span[0]}13:{span[1]}13", "", monthly_caption)
 
     data = book.add_worksheet("Base semanal")
     data.hide_gridlines(2)
@@ -263,6 +291,35 @@ def create_workbook(
     calc.write("R4", "Hasta efectivo", navy)
     calc.write_formula("S4", '=IF(Resumen!$A$4="Personalizado",Resumen!$K$4,$R$2)',
                        None, last_month)
+    # Tres últimos meses CON CORTES disponibles dentro del periodo elegido.
+    # T2/U2/V2 responden al selector; admiten periodos con menos de 3 meses.
+    year, month = int(last_month[:4]), int(last_month[5:])
+    start_month_index = year * 12 + month - 1 - 2
+    default_start = f"{start_month_index // 12:04d}-{start_month_index % 12 + 1:02d}"
+    visible_months = [ym for ym in months if default_start <= ym <= last_month]
+    initial_month_keys = ([""] * 3 + visible_months[-3:])[-3:]
+    month_col_range = (
+        f"${catalog_month}$2:${catalog_month}${max(2, len(months) + 1)}"
+    )
+    calc.write("T1", "Mes anterior 2", small)
+    calc.write("U1", "Mes anterior", small)
+    calc.write("V1", "Último mes", small)
+    for target, prior, cache in (
+        ("V2", "$S$4", initial_month_keys[2]),
+        ("U2", "$V$2", initial_month_keys[1]),
+        ("T2", "$U$2", initial_month_keys[0]),
+    ):
+        condition = (
+            f"({month_col_range}<={prior})" if target == "V2"
+            else f"({month_col_range}<{prior})"
+        )
+        month_formula = (
+            '=IFERROR(LOOKUP(2,1/(('
+            + month_col_range + '>=$S$3)*' + condition
+            + '),' + month_col_range + '),"")'
+        ) if weekly else '=""'
+        calc.write_formula(target, month_formula, None, cache)
+
     for c, title in enumerate(("Corte", "Mes", "Leads", "Visitas", "Venta digital",
                                *INDICATORS, "Incluido", "Δ L/V", "Δ V/V",
                                "Δ L/Venta")):
@@ -349,31 +406,107 @@ def create_workbook(
                 percent, cached,
             )
 
+    # Tarjetas: último corte DISPONIBLE de cada uno de los tres meses
+    # seleccionados, sobre las sumas de las sucursales autorizadas.
+    # Nunca se promedian tasas de sucursales ni de semanas.
     last = max(11, len(weekly) + 10)
-    for col, data_col, diff_col in (("A", "F", "J"), ("H", "G", "K"),
-                                    ("O", "H", "L")):
-        source = f"'Tendencia - datos'!{data_col}11:{data_col}{last}"
-        diffs = f"'Tendencia - datos'!{diff_col}11:{diff_col}{last}"
-        condition = f"'Tendencia - datos'!I11:I{last}=1"
-        metric = {"A": 0, "H": 1, "O": 2}[col]
-        current = initial_rates[-1][metric] if initial_rates else None
-        previous = initial_rates[-2][metric] if len(initial_rates) > 1 else None
-        same_month = (
-            len(weekly) > 1
-            and str(weekly[-1]["selected_cutoff_date"])[:7]
-            == str(weekly[-2]["selected_cutoff_date"])[:7]
+    month_names = ("Ene", "Feb", "Mar", "Abr", "May", "Jun",
+                   "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
+    month_excel_names = ",".join(f'"{name}"' for name in month_names)
+    month_data_range = f"'Tendencia - datos'!$B$11:$B${last}"
+    included_range = f"'Tendencia - datos'!$I$11:$I${last}"
+    for (month_cells, arrow_cells, middle_cell, recent_cell,
+         card_span, metric) in (
+        (("A", "D", "G"), ("C", "F"), "D", "G", ("A", "G"), 0),
+        (("H", "K", "N"), ("J", "M"), "K", "N", ("H", "N"), 1),
+        (("O", "R", "U"), ("Q", "T"), "R", "U", ("O", "U"), 2),
+    ):
+        metric_col = ("F", "G", "H")[metric]
+        rates_range = (
+            f"'Tendencia - datos'!${metric_col}$11:"
+            f"${metric_col}${last}"
+        )
+        last_values = []
+        for key, card_col in zip(("T", "U", "V"), month_cells):
+            selected_key = f"'Tendencia - datos'!${key}$2"
+            month_label = (
+                f"CHOOSE(VALUE(RIGHT({selected_key},2)),{month_excel_names})"
+            )
+            label_formula = (
+                f'=IF({selected_key}="","",'
+                f'{month_label}&" "&LEFT({selected_key},4))'
+            )
+            slot = ("T", "U", "V").index(key)
+            month_value = initial_month_keys[slot]
+            label_cache = (
+                f"{month_names[int(month_value[5:7]) - 1]} {month_value[:4]}"
+                if month_value else ""
+            )
+            panel.write_formula(
+                f"{card_col}10", label_formula, monthly_label, label_cache
+            )
+            value_formula = (
+                f'=IF({selected_key}="","",IFERROR(LOOKUP(2,1/'
+                f'(({month_data_range}={selected_key})*'
+                f'({included_range}=1)),{rates_range}),""))'
+            )
+            value_cache = next(
+                (initial_rates[i][metric]
+                 for i in range(len(weekly) - 1, -1, -1)
+                 if str(weekly[i]["selected_cutoff_date"])[:7] == month_value),
+                None,
+            ) if month_value else None
+            panel.write_formula(
+                f"{card_col}11", value_formula, monthly_pct,
+                value_cache if value_cache is not None else ""
+            )
+            last_values.append(value_cache)
+        for arrow_cell, older, newer in (
+            (arrow_cells[0], "T", "U"),
+            (arrow_cells[1], "U", "V"),
+        ):
+            older_ref = f"'Tendencia - datos'!${older}$2"
+            newer_ref = f"'Tendencia - datos'!${newer}$2"
+            panel.write_formula(
+                f"{arrow_cell}11",
+                f'=IF(AND({older_ref}<>"",{newer_ref}<>""),"→","")',
+                monthly_arrow,
+                "→" if initial_month_keys[("T", "U", "V").index(older)]
+                and initial_month_keys[("T", "U", "V").index(newer)] else "",
+            )
+
+        earlier_ref = "'Tendencia - datos'!$U$2"
+        recent_ref = "'Tendencia - datos'!$V$2"
+        delta_formula = (
+            f'=IF(OR({earlier_ref}="",{recent_ref}=""),"",'
+            f'IFERROR(({recent_cell}11-{middle_cell}11)*100,""))'
         )
         delta_cache = (
-            100 * (current - previous)
-            if same_month and current is not None and previous is not None else ""
+            100 * (last_values[2] - last_values[1])
+            if initial_month_keys[1] and initial_month_keys[2]
+            and last_values[1] is not None and last_values[2] is not None
+            else ""
         )
         panel.write_formula(
-            col + "10", f'=IFERROR(LOOKUP(2,1/({condition}),{source}),"")',
-            big_pct, current if current is not None else ""
+            f"{card_span[0]}12", delta_formula, pp, delta_cache
+        )
+        prev_name = f"CHOOSE(VALUE(RIGHT({earlier_ref},2)),{month_excel_names})"
+        latest_name = f"CHOOSE(VALUE(RIGHT({recent_ref},2)),{month_excel_names})"
+        caption_formula = (
+            f'=IF(OR({earlier_ref}="",{recent_ref}=""),'
+            f'"Sin comparación mensual",'
+            f'{prev_name}&" → "&{latest_name}&" · último corte de cada mes")'
+        )
+        caption_cache = (
+            f"{month_names[int(initial_month_keys[1][5:7]) - 1]} → "
+            f"{month_names[int(initial_month_keys[2][5:7]) - 1]}"
+            " · último corte de cada mes"
+            if initial_month_keys[1] and initial_month_keys[2]
+            else "Sin comparación mensual"
         )
         panel.write_formula(
-            col + "12", f'=IFERROR(LOOKUP(2,1/({condition}),{diffs})*100,"")',
-            pp, delta_cache
+            f"{card_span[0]}13", caption_formula,
+            monthly_caption, caption_cache
         )
     # La descripción sigue el último lunes del periodo seleccionado.
     condition = f"'Tendencia - datos'!I11:I{last}=1"
@@ -424,6 +557,10 @@ def create_workbook(
                 "values_data": visible_points,
                 "line": {"color": COLORS[metric], "width": 2.5},
                 "marker": {"type": "circle", "size": 3},
+                "data_labels": {
+                    "value": True, "num_format": "0.0%",
+                    "position": "above", "font": {"size": 8},
+                },
             })
         chart.set_title({"name": "Evolución de conversiones (%)"})
         chart.set_y_axis({"num_format": "0%", "min": 0,
@@ -433,10 +570,10 @@ def create_workbook(
         chart.show_blanks_as("gap")
         chart.show_hidden_data()
         chart.set_size({"width": 1190, "height": 490})
-        panel.insert_chart("A14", chart)
-        for cell, metric, color in (("B40", INDICATORS[0], COLORS[0]),
-                                    ("I40", INDICATORS[1], COLORS[1]),
-                                    ("P40", INDICATORS[2], COLORS[2])):
+        panel.insert_chart("A16", chart)
+        for cell, metric, color in (("B44", INDICATORS[0], COLORS[0]),
+                                    ("I44", INDICATORS[1], COLORS[1]),
+                                    ("P44", INDICATORS[2], COLORS[2])):
             fmt = book.add_format({"font_color": color, "bold": True})
             panel.write_string(cell, "● " + metric, fmt)
     else:

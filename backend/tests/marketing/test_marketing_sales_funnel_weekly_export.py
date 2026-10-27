@@ -158,6 +158,13 @@ def test_generates_xlsx_with_two_disconnected_monthly_series_and_selectors():
         ]
         assert cached[0][0] == pytest.approx(40 / 200)
         assert cached[3][1] == pytest.approx(40 / 200)
+        # Etiquetas de porcentaje activadas de fábrica en todas las series.
+        labels = plot.findall(".//c:lineChart/c:ser/c:dLbls", chart_ns)
+        assert len(labels) == 6
+        for element in labels:
+            assert element.find("c:showVal", chart_ns).get("val") == "1"
+            assert element.find("c:numFmt", chart_ns).get("formatCode") == "0.0%"
+
         assert plot.find(".//c:plotVisOnly", chart_ns) is None
         trend = z.read("xl/worksheets/sheet3.xml").decode()
         assert "SUMIFS" in trend
@@ -230,3 +237,83 @@ def test_empty_history_still_preserves_daily_export():
 def test_scopes_expose_correct_general_label(is_global, label):
     options, _ = scopes_from_access(OPTIONS, is_global)
     assert options[0] == (label, "ALL")
+
+
+def _cached_cell(sheet_xml, address):
+    from xml.etree import ElementTree as ET
+    root = ET.fromstring(sheet_xml)
+    ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    cell = root.find(f".//x:c[@r='{address}']", ns)
+    assert cell is not None, f"No existe {address}"
+    value = cell.find("x:v", ns)
+    formula = cell.find("x:f", ns)
+    # XlsxWriter guarda resultados "" como <v/> (Element.text = None).
+    return ((value.text or "") if value is not None else None,
+            formula.text if formula is not None else None)
+
+
+def test_monthly_cards_use_last_cutoff_of_each_month_and_month_to_month_delta():
+    # Agosto 15%, septiembre 30% y octubre 20% lead->visita.
+    # El cambio de la última SEMANA de octubre sería -25 pp (45% -> 20%);
+    # la tarjeta debe mostrar el cambio MENSUAL septiembre -> octubre = -10 pp.
+    examples = [
+        _snapshot("2026-08-31", (100, 10, 5), (100, 20, 5)),
+        _snapshot("2026-09-21", (100, 30, 5), (100, 30, 5)),
+        _snapshot("2026-10-12", (100, 50, 5), (100, 40, 5)),
+        _snapshot("2026-10-19", (100, 15, 8), (100, 25, 8)),
+    ]
+    workbook = create_workbook(
+        examples[-1], examples, OPTIONS, is_global=True
+    )
+    with ZipFile(BytesIO(workbook)) as archive:
+        summary = archive.read("xl/worksheets/sheet1.xml")
+        trend = archive.read("xl/worksheets/sheet3.xml")
+        for cell, month in (("T2", "2026-08"),
+                            ("U2", "2026-09"), ("V2", "2026-10")):
+            cached, formula = _cached_cell(trend, cell)
+            assert cached == month
+            assert "LOOKUP" in formula
+            assert "$S$3" in formula
+        for cell, expected in (
+            ("A11", 0.15), ("D11", 0.30), ("G11", 0.20),
+            ("H11", 10 / 30), ("K11", 10 / 60), ("N11", 16 / 40),
+            ("O11", 10 / 200), ("R11", 10 / 200), ("U11", 16 / 200),
+        ):
+            cached, formula = _cached_cell(summary, cell)
+            assert float(cached) == pytest.approx(expected)
+            assert "LOOKUP" in formula
+        for cell, expected in (
+            ("A12", -10), ("H12", (16/40 - 10/60) * 100),
+            ("O12", (16/200 - 10/200) * 100),
+        ):
+            cached, formula = _cached_cell(summary, cell)
+            assert float(cached) == pytest.approx(expected)
+            assert "11" in formula
+        for cell, month in (("A10", "Ago 2026"),
+                            ("D10", "Sep 2026"), ("G10", "Oct 2026")):
+            cached, formula = _cached_cell(summary, cell)
+            assert cached == month
+            assert "CHOOSE" in formula
+        caption, formula = _cached_cell(summary, "A13")
+        assert "Sep → Oct" in caption
+        assert "Sin comparación mensual" in formula
+        assert "Tendencia - datos" in _cached_cell(summary, "A11")[1]
+        assert "Tendencia - datos" in _cached_cell(summary, "G11")[1]
+
+
+def test_monthly_cards_with_only_one_month_do_not_invent_comparisons():
+    data = create_workbook(
+        _snapshot("2026-10-19"), [_snapshot("2026-10-19")],
+        OPTIONS, is_global=True,
+    )
+    with ZipFile(BytesIO(data)) as archive:
+        summary = archive.read("xl/worksheets/sheet1.xml")
+        trend = archive.read("xl/worksheets/sheet3.xml")
+        assert _cached_cell(trend, "T2")[0] == ""
+        assert _cached_cell(trend, "U2")[0] == ""
+        assert _cached_cell(trend, "V2")[0] == "2026-10"
+        assert _cached_cell(summary, "A11")[0] == ""
+        assert _cached_cell(summary, "D11")[0] == ""
+        assert float(_cached_cell(summary, "G11")[0]) == pytest.approx(0.2)
+        assert _cached_cell(summary, "A12")[0] == ""
+        assert _cached_cell(summary, "A13")[0] == "Sin comparación mensual"
