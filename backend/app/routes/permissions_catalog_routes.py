@@ -505,11 +505,16 @@ def _effective_action_decision(action, user, context: dict) -> dict:
         )
 
     if full_key == "openings.manage":
+        # Observabilidad de la misma allowlist que aplica el guard operativo.
+        # No es un permiso nuevo y no interviene en la autorización HTTP.
+        from app.routes.openings_routes import OPENINGS_ADMIN_ROLES
+
+        openings_admin = role in OPENINGS_ADMIN_ROLES
         return _decision(
-            allowed=is_admin,
+            allowed=openings_admin,
             source="legacy_role",
             reason="openings_admin_required",
-            scope_type="global" if is_admin else "none",
+            scope_type="global" if openings_admin else "none",
         )
 
     if full_key == "openings.comment":
