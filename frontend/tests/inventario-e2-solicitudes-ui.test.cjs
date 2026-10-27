@@ -200,6 +200,11 @@ test('E2: no localizado requiere fecha y evidencia sin mutar inventario', () => 
   assert.equal(vm.puedeEnviar, false);
   vm.evidencia = 'Revisados almacén, gimnasio y movimiento físico de equipos';
   assert.equal(vm.puedeEnviar, true);
+  const stockOriginal = vm.referencia.stock;
+  vm.referencia.stock = 0;
+  assert.equal(vm.puedeEnviar, false);
+  vm.referencia.stock = stockOriginal;
+  assert.equal(vm.puedeEnviar, true);
   vm.enviar();
   assert.equal(calls.posts.length, 1);
   assert.equal(calls.posts[0].tipo, 'NOT_LOCATED');
