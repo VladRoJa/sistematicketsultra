@@ -28,7 +28,8 @@ Las reglas **decisión y efecto coexisten**, **lote aplicado atómicamente** y *
 | Administración corporativa autorizada | Según guard E2 | **Candidato, no concedido** | Grant efectivo en DB y responsabilidad por tipo |
 | MANTENIMIENTO | Acceso piloto E2 | **Candidato, no concedido** | Alcance efectivo, departamento y clase de activo |
 | COORDINADOR_MANTENIMIENTO (Yuliana) | E2 denegado actualmente | **Pendiente, no concedido** | Reconciliar contrato §7, rol, departamento, sucursales y separación funcional; ninguna excepción por usuario |
-| SR_MANTENIMIENTO / AUX_MANTENIMIENTO / TECNICO / SISTEMAS | Alcance piloto según rol | **Denegado por defecto** | Un rol técnico o capacidad de reportar no autoriza cambios oficiales |
+| SISTEMAS (departamento 7) | Acceso E2 por sucursal asignada | **Candidato E3 para DISPOSITIVOS, no concedido** | Grant E3 explícito + departamento 7 + sucursal M:N; nunca permiso para APARATOS ni MASTER_FIELD |
+| SR_MANTENIMIENTO / AUX_MANTENIMIENTO / TECNICO | Alcance piloto según rol | **Denegado por defecto** | Un rol técnico o capacidad de reportar no autoriza cambios oficiales |
 | GERENTE y GERENTE_REGIONAL | **No liberados hasta E5** | **Denegado hasta E5** | No introducir una ruta E3 que evada el gate |
 | LECTOR_GLOBAL y otros roles | No liberado | **Denegado** | No se admiten inferencias por sucursal primaria |
 
@@ -42,13 +43,20 @@ Control de independencia: `decision.actor_usuario_id != solicitud.creado_por_usu
 
 Para evitar privilegios corporativos accidentales a otros usuarios con rol ADMINISTRADOR, el alcance global se reconocerá exclusivamente mediante **grant explícito individual** de `inventory.correction_approve` con `scope_type=global`; jamás basta el rol ADMINISTRADOR, ni se programa una excepción por `username` o `id=47`. Si la acción no tiene grants, **todos quedan denegados**. En el momento autorizado se puede asignar a ADMICORP mediante procedimiento auditado; no forma parte del PR actual.
 
-Los perfiles MANTENIMIENTO y COORDINADOR_MANTENIMIENTO podrán ser candidatos E3 solo con grant explícito; además sus ramas efectivas son la intersección entre el alcance del grant y `usuario_sucursal` leído de DB por operación. Un grant `global` para esos roles **no amplía** más allá de sus asignaciones. A los gerentes y regionales **no se les permite E3 hasta E5**, aunque dispongan de asignaciones u otros permisos.
+Los perfiles MANTENIMIENTO y COORDINADOR_MANTENIMIENTO (**departamento 1, solo APARATOS**) y SISTEMAS (**departamento 7, solo DISPOSITIVOS**) son candidatos E3 exclusivamente con grant explícito; sus sucursales efectivas son la intersección del grant con `usuario_sucursal` leído de DB por operación. Un grant `global` para estos roles **no amplía** sus sucursales ni su clase de activo. No se concede MASTER_FIELD fuera de corporativo. Gerentes/regionales no acceden a E3 hasta E5.
 
 **Maestro global:** corregir `inventario_general` impacta a todas las sucursales que usen ese registro, así que un permiso limitado a una sola sucursal **no autoriza** una corrección `MASTER_FIELD`; requerirá autorización corporativa explícita. La creación de un artículo maestro nuevo en `UNREGISTERED_FIND` tendrá la misma restricción; la vinculación con un artículo ya existente podrá evaluarse por sucursal en el servicio posterior.
 
 **Independencia:** incluso el autorizador corporativo no podrá decidir solicitudes creadas por su propia cuenta. Las solicitudes #1/#2 registradas por ADMICORP requerirán otro aprobador habilitado y competente, nunca un bypass administrativo.
 
 El guard determina elegibilidad. El servicio transaccional y su ruta ya están implementados en el PR draft, pero permanecen inactivos para usuarios productivos sin grants y no deben desplegarse antes del gate.
+
+
+### Ratificación adicional de clase de activo (27/10/2026)
+
+Se confirmó la distribución productiva por consulta de lectura: **3,477 APARATOS (2 sin familia)** y **475 DISPOSITIVOS (475 sin familia)**. La competencia E3 se divide así: ADMICORP con grant global individual → ambas clases; MANTENIMIENTO/COORDINADOR con grant + departamento 1 + M:N → solo aparatos; SISTEMAS con grant + departamento 7 + M:N → solo dispositivos. La familia no participa en el guard de autorización; el campo autoritativo es `inventario_general.tipo`. Tipos ambiguos y hallazgos sin `tipo` son solo corporativos.
+
+La misma política debe regir listado, detalle, rechazo, aprobación, destino de hallazgos y replay, sin exponer IDs fuera de competencia. **Candidato no significa grant otorgado:** la implementación está en PR draft sin autorizaciones productivas. Matriz detallada: `MATRIZ_COMPETENCIAS_E3_20261027.md`.
 
 ## 3.1. Alta de acción E3 — catálogo sin concesiones
 
