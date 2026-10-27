@@ -1,4 +1,4 @@
-name: Fase A P25–P33 — Route Map, Guards & Action Parity
+name: Fase A P25–P34 — Route Map, Guards & Action Parity
 
 on:
   pull_request:
@@ -22,6 +22,13 @@ on:
       - "backend/tests/routes/test_permissions_phase_a_p31_effective_guard_parity.py"
       - "backend/tests/routes/test_permissions_phase_a_p32_capability_groups.py"
       - "backend/tests/routes/test_permissions_phase_a_p33_read_surfaces.py"
+      - "backend/tests/routes/test_permissions_phase_a_p34_closure.py"
+      - "docs/security/permissions_phase_a_p34_compatibility_master_20261027.csv"
+      - "docs/security/permissions_phase_a_p34_nube_pilot_p1_reads_20261027.csv"
+      - "docs/security/permissions_phase_a_p34_closure_20261027.md"
+      - "backend/app/utils/internal_documents_access.py"
+      - "backend/app/routes/internal_documents_routes.py"
+      - "backend/app/routes/permissions_catalog_routes.py"
       - "backend/app/utils/permission_get_surface_audit.py"
       - "docs/security/permissions_phase_a_p33_102_source_closure_20261027.csv"
       - "docs/security/permissions_phase_a_p33_remaining20_get_review_20261027.md"
@@ -97,7 +104,7 @@ jobs:
         run: |
           python -m pip install -r requirements.txt
           python -m pip install pytest==8.3.5
-      - name: P25–P33 live map, guard, snapshot, action parity and regressions
+      - name: P25–P34 live map, guard, snapshot, action parity and regressions
         run: |
           python -m pytest -q --tb=short -o addopts= \
             tests/routes/test_permissions_phase_a_live_map_reconcile_p25.py \
@@ -110,6 +117,7 @@ jobs:
             tests/routes/test_permissions_phase_a_p31_effective_guard_parity.py \
             tests/routes/test_permissions_phase_a_p32_capability_groups.py \
             tests/routes/test_permissions_phase_a_p33_read_surfaces.py \
+            tests/routes/test_permissions_phase_a_p34_closure.py \
             tests/marketing/test_marketing_campaign_v2_dispatch_config_service.py \
             tests/marketing/test_marketing_campaign_v2_scoped_dispatch_exclusions.py \
             tests/google_ads/test_google_ads_m6_authenticated_approval.py \
