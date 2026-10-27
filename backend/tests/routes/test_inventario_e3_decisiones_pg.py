@@ -136,14 +136,20 @@ def env():
                     (45,'MANTENIMIENTO',1,100),
                     (91,'COORDINADOR_MANTENIMIENTO',1,100),
                     (55,'GERENTE_REGIONAL',1000,1000),
-                    (98,'GERENTE',2,7)
+                    (68,'SR_MANTENIMIENTO',1,8),
+                    (70,'AUX_MANTENIMIENTO',1,8),
+                    (90,'SISTEMAS',7,8),
+                    (92,'TECNICO',7,8),
+                    (98,'GERENTE',2,7),
+                    (99,'RECEPCIONISTA',2,7)
                 """)
                 con.exec_driver_sql("""
                     INSERT INTO sucursales VALUES (7,'Villas del Rey'),(8,'Verde'),(14,'Culiacán'),(26,'Serranía'),(1000,'Corporativo')
                 """)
                 con.exec_driver_sql("""
                     INSERT INTO usuario_sucursal VALUES
-                    (47,1000),(48,1000),(45,7),(45,14),(91,7),(91,8),(55,7)
+                    (47,1000),(48,1000),(45,7),(45,14),(91,7),(91,8),(55,7),
+                    (68,7),(90,7),(92,7)
                 """)
                 con.exec_driver_sql("""
                     INSERT INTO catalogo_categoria_inventario VALUES (1,true),(2,false)
@@ -171,7 +177,7 @@ def env():
                 """)
             headers = {
                 i: {"Authorization": "Bearer " + create_access_token(identity=str(i))}
-                for i in (47,48,45,91,55,98)
+                for i in (47,48,45,91,55,68,70,90,92,98,99)
             }
             yield app, headers
             db.session.remove()
@@ -619,3 +625,100 @@ def test_e3_revision_scoped_grants_mas_restrictivos_y_paginacion(env):
     assert _get_e3(env,45,"revision?per_page=101").status_code == 400
     assert _get_e3(env,45,"revision?estado=BAD").status_code == 400
     assert _get_e3(env,45,"revision?sucursal_id=7").status_code == 403
+
+
+def test_e2_roles_reales_en_jwt_aislados_sin_alterar_stock(env):
+    """No usa cuentas productivas: casos de scope DB con tokens firmados de test."""
+    allowed = _request(creator=98, branch=7)
+    outside = _request(creator=98, branch=14, original={"stock": 2},
+                       baseline={"inventario_id":501,"sucursal_id":14,"stock":2})
+    before = _sql("SELECT SUM(stock) FROM inventario_sucursal")
+
+    # SR, SISTEMAS y TECNICO tienen primaria 8 pero asignación M:N únicamente 7.
+    for user_id in (68, 90, 92):
+        own = _get_e3(env, user_id, "?sucursal_id=7")
+        assert own.status_code == 200, (user_id, own.get_json())
+        assert any(row["id"] == allowed for row in own.get_json()["items"])
+        denied = _get_e3(env, user_id, "?sucursal_id=8")
+        assert denied.status_code == 403, user_id
+        assert _get_e3(env, user_id, f"{outside}").status_code == 404
+
+    # AUX usa exclusivamente primaria 8: no adquiere la sucursal 7 ni 14.
+    aux = _get_e3(env, 70, "?sucursal_id=8")
+    assert aux.status_code == 200, aux.get_json()
+    assert _get_e3(env, 70, "?sucursal_id=7").status_code == 403
+    assert _get_e3(env, 70, f"{allowed}").status_code == 404
+
+    # Coordinación y gerencia no heredan el permiso de crear propuestas E2.
+    for user_id in (91, 55, 98, 99):
+        assert _get_e3(env, user_id, "").status_code == 403, user_id
+
+    assert _sql("SELECT SUM(stock) FROM inventario_sucursal") == before
+    assert _sql("SELECT count(*) FROM inventario_correccion_decisiones") == 0
+
+
+def test_e3_403_para_todos_los_roles_que_no_pueden_autorizar_aunque_haya_grant(env):
+    """Grant accidental nunca sustituye los roles válidos ni amplía E3."""
+    request_id = _request(creator=98)
+    baseline = _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=501 AND sucursal_id=7")
+    for user_id in (68, 70, 90, 92, 55, 99):
+        _grant(user_id)
+        assert _get_e3(env,user_id,"revision/contexto").status_code == 403, user_id
+        assert _get_e3(env,user_id,"revision").status_code == 403, user_id
+        assert _get_e3(env,user_id,f"revision/{request_id}").status_code == 403, user_id
+        assert _post(env,user_id,_payload([request_id])).status_code == 403, user_id
+    assert _sql("SELECT count(*) FROM inventario_correccion_lotes") == 0
+    assert _sql("SELECT count(*) FROM inventario_correccion_decisiones") == 0
+    assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=501 AND sucursal_id=7") == baseline
+
+
+def test_e3_mantenimiento_y_yuliana_requieren_grant_scope_y_creador_ajeno(env):
+    """Mantenimiento y coordinación solo operan ramas asignadas y nunca propias."""
+    inside = _request(inv=501, branch=7, creator=98)
+    outside = _request(inv=501, branch=14, creator=98, original={"stock":2},
+                       proposed={"cantidad_fisica":1},
+                       baseline={"inventario_id":501,"sucursal_id":14,"stock":2})
+    own = _request(inv=502, branch=7, creator=91,
+                   original={"stock":1}, proposed={"cantidad_fisica":0},
+                   baseline={"inventario_id":502,"sucursal_id":7,"stock":1})
+    before = _sql("SELECT SUM(stock) FROM inventario_sucursal")
+
+    for user_id in (45,91):
+        assert _get_e3(env,user_id,"revision/contexto").status_code == 403
+        assert _post(env,user_id,_payload([inside])).status_code == 403
+
+    _grant(45,scope="branch",branch=14)
+    _grant(91,scope="branch",branch=7)
+    assert _get_e3(env,45,"revision?sucursal_id=7").status_code == 403
+    assert _get_e3(env,45,"revision?sucursal_id=14").status_code == 200
+    assert _get_e3(env,91,"revision?sucursal_id=7").status_code == 200
+    assert _get_e3(env,91,"revision?sucursal_id=14").status_code == 403
+
+    assert _post(env,45,_payload([inside])).status_code == 403
+    assert _post(env,91,_payload([outside])).status_code == 403
+    assert _post(env,91,_payload([own])).status_code == 403
+    assert _get_e3(env,91,f"revision/{own}").status_code == 404
+    assert _get_e3(env,45,f"revision/{outside}").status_code == 200
+    assert _sql("SELECT count(*) FROM inventario_correccion_decisiones") == 0
+    assert _sql("SELECT SUM(stock) FROM inventario_sucursal") == before
+
+
+def test_e3_no_auth_y_claims_jwt_falsos_no_sustituyen_rol_de_db(env):
+    """Firma JWT de test con rol falso para verificar guard real de base de datos."""
+    req = _request(creator=98)
+    client = env[0].test_client()
+    base = "/api/inventario/solicitudes"
+    assert client.get(base + "/revision").status_code == 401
+    assert client.get(base + "/revision/contexto").status_code == 401
+    assert client.get(base + f"/revision/{req}").status_code == 401
+    assert client.post(base + "/decisiones/lote",json=_payload([req])).status_code == 401
+    _grant(90)
+    with env[0].app_context():
+        fake_admin = create_access_token(
+            identity="90",
+            additional_claims={"rol":"ADMINISTRADOR","sucursales_ids":[7,8,14],"sucursal_id":1000},
+        )
+    headers = {"Authorization": f"Bearer {fake_admin}"}
+    assert client.get(base + "/revision/contexto",headers=headers).status_code == 403
+    assert client.post(base + "/decisiones/lote",headers=headers,json=_payload([req])).status_code == 403
+    assert _sql("SELECT count(*) FROM inventario_correccion_decisiones") == 0
