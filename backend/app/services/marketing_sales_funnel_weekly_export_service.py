@@ -10,6 +10,10 @@ from zoneinfo import ZoneInfo
 import xlsxwriter
 from xlsxwriter.utility import xl_col_to_name
 
+from app.services.marketing_sales_funnel_original_sheet_service import (
+    write_original_operational_sheet,
+)
+
 FIRST_MONTH = date(2026, 7, 1)
 METRICS = (
     ("Leads", "leads_meta"), ("Visitantes totales", "visits_total"),
@@ -100,6 +104,22 @@ def create_workbook(
     catalog_key = xl_col_to_name(catalog_col + 1)
     catalog_month = xl_col_to_name(catalog_col + 2)
     all_rows = []
+    initial_counters = []
+    for snapshot in weekly:
+        authorized_branches = [
+            branch for branch in snapshot.get("branches", [])
+            if int(branch["sucursal_id"]) in authorized
+        ]
+        initial_counters.append(tuple(
+            sum(number(b.get(metric)) or 0 for b in authorized_branches)
+            for metric in ("leads_meta", "visits_total", "sales_digital")
+        ))
+    initial_rates = [
+        (visits / leads if leads else None,
+         digital / visits if visits else None,
+         digital / leads if leads else None)
+        for leads, visits, digital in initial_counters
+    ]
     for snapshot in weekly:
         day = date.fromisoformat(str(snapshot["selected_cutoff_date"]))
         for branch in snapshot.get("branches", []):
@@ -214,6 +234,7 @@ def create_workbook(
         '=IFERROR(VLOOKUP(Resumen!$K$6,$' + catalog_name
         + '$2:$' + catalog_key + '$' + str(len(scope_labels) + 1)
         + ',2,FALSE),"ALL")',
+        None, "ALL",
     )
     calc.write("R1", "Último mes", navy)
     calc.write_string("R2", last_month)
@@ -225,9 +246,12 @@ def create_workbook(
         'TEXT(EDATE(DATE(VALUE(LEFT($R$2,4)),VALUE(RIGHT($R$2,2)),1),'
         '-IF(Resumen!$A$4="Últimos 3 meses",2,'
         'IF(Resumen!$A$4="Últimos 6 meses",5,11))),"yyyy-mm")))',
+        None, (f"{int(last_month[:4]) - (int(last_month[5:]) <= 2)}-"
+               f"{((int(last_month[5:]) - 3) % 12) + 1:02d}"),
     )
     calc.write("R4", "Hasta efectivo", navy)
-    calc.write_formula("S4", '=IF(Resumen!$A$4="Personalizado",Resumen!$K$4,$R$2)')
+    calc.write_formula("S4", '=IF(Resumen!$A$4="Personalizado",Resumen!$K$4,$R$2)',
+                       None, last_month)
     for c, title in enumerate(("Corte", "Mes", "Leads", "Visitas", "Venta digital",
                                *INDICATORS, "Incluido", "Δ L/V", "Δ V/V",
                                "Δ L/Venta")):
@@ -252,33 +276,66 @@ def create_workbook(
             f'{branches},$M$2)))'
         )
 
+    # Valores almacenados para visualizar la gráfica antes del primer recálculo.
+    # Las fórmulas permanecen y responden a filtros al cambiar las selecciones.
     for idx, snapshot in enumerate(weekly, start=10):
+        si = idx - 10
         r = idx + 1
         day = date.fromisoformat(str(snapshot["selected_cutoff_date"]))
+        month = day.strftime("%Y-%m")
         calc.write_datetime(idx, 0, datetime.combine(day, datetime.min.time()), day_fmt)
-        calc.write_string(idx, 1, day.strftime("%Y-%m"))
-        for col, base_col in ((2, "E"), (3, "F"), (4, "G")):
-            calc.write_formula(idx, col, count_formula(base_col, r), integer)
-        for col, numerator, denominator in ((5, "D", "C"), (6, "E", "D"),
-                                            (7, "E", "C")):
-            calc.write_formula(idx, col,
-                               f'=IFERROR(IF({denominator}{r}=0,NA(),'
-                               f'{numerator}{r}/{denominator}{r}),NA())',
-                               percent)
-        calc.write_formula(idx, 8, f'=IF(AND(B{r}>=$S$3,B{r}<=$S$4),1,"")')
-        for col, pct_col in ((9, "F"), (10, "G"), (11, "H")):
-            calc.write_formula(idx, col, (f'=IF(B{r}=B{r-1},'
-                                          f'{pct_col}{r}-{pct_col}{r-1},NA())'
-                                          if idx > 10 else "=NA()"), pp)
-        for month, metric, col in series:
-            metric_col = ("F", "G", "H")[metric]
+        calc.write_string(idx, 1, month)
+        for col, base_col, cache in (
+            (2, "E", initial_counters[si][0]),
+            (3, "F", initial_counters[si][1]),
+            (4, "G", initial_counters[si][2]),
+        ):
+            calc.write_formula(idx, col, count_formula(base_col, r), integer, cache)
+        for metric, col, numerator, denominator in (
+            (0, 5, "D", "C"),
+            (1, 6, "E", "D"),
+            (2, 7, "E", "C"),
+        ):
+            cached = initial_rates[si][metric]
             calc.write_formula(
                 idx, col,
-                f'=IF(AND($B{r}="{month}",$I{r}=1,'
+                f'=IFERROR(IF({denominator}{r}=0,NA(),'
+                f'{numerator}{r}/{denominator}{r}),NA())',
+                percent, cached if cached is not None else "#N/A",
+            )
+        calc.write_formula(idx, 8, f'=IF(AND(B{r}>=$S$3,B{r}<=$S$4),1,"")',
+                           None, 1)
+        for metric, col, pct_col in ((0, 9, "F"), (1, 10, "G"), (2, 11, "H")):
+            previous = initial_rates[si - 1][metric] if si else None
+            current = initial_rates[si][metric]
+            same_month = (
+                si > 0
+                and str(weekly[si - 1]["selected_cutoff_date"])[:7] == month
+            )
+            cache = (
+                current - previous if same_month and current is not None
+                and previous is not None else "#N/A"
+            )
+            calc.write_formula(
+                idx, col,
+                f'=IF(B{r}=B{r-1},{pct_col}{r}-{pct_col}{r-1},NA())'
+                if si else "=NA()",
+                pp, cache,
+            )
+        for month_of_series, metric, col in series:
+            metric_col = ("F", "G", "H")[metric]
+            cached = (
+                initial_rates[si][metric] if month_of_series == month
+                and metric == 0 and initial_rates[si][metric] is not None
+                else "#N/A"
+            )
+            calc.write_formula(
+                idx, col,
+                f'=IF(AND($B{r}="{month_of_series}",$I{r}=1,'
                 f'OR(Resumen!$A$6="Comparar las tres",'
                 f'Resumen!$A$6="{INDICATORS[metric]}")),'
                 f'IFERROR({metric_col}{r},NA()),NA())',
-                percent,
+                percent, cached,
             )
 
     last = max(11, len(weekly) + 10)
@@ -287,11 +344,25 @@ def create_workbook(
         source = f"'Tendencia - datos'!{data_col}11:{data_col}{last}"
         diffs = f"'Tendencia - datos'!{diff_col}11:{diff_col}{last}"
         condition = f"'Tendencia - datos'!I11:I{last}=1"
-        panel.write_formula(
-            col + "10", f'=IFERROR(LOOKUP(2,1/({condition}),{source}),"")', big_pct
+        metric = {"A": 0, "H": 1, "O": 2}[col]
+        current = initial_rates[-1][metric] if initial_rates else None
+        previous = initial_rates[-2][metric] if len(initial_rates) > 1 else None
+        same_month = (
+            len(weekly) > 1
+            and str(weekly[-1]["selected_cutoff_date"])[:7]
+            == str(weekly[-2]["selected_cutoff_date"])[:7]
+        )
+        delta_cache = (
+            100 * (current - previous)
+            if same_month and current is not None and previous is not None else ""
         )
         panel.write_formula(
-            col + "12", f'=IFERROR(LOOKUP(2,1/({condition}),{diffs})*100,"")', pp
+            col + "10", f'=IFERROR(LOOKUP(2,1/({condition}),{source}),"")',
+            big_pct, current if current is not None else ""
+        )
+        panel.write_formula(
+            col + "12", f'=IFERROR(LOOKUP(2,1/({condition}),{diffs})*100,"")',
+            pp, delta_cache
         )
     # La descripción sigue el último lunes del periodo seleccionado.
     condition = f"'Tendencia - datos'!I11:I{last}=1"
@@ -304,6 +375,15 @@ def create_workbook(
         + str(last) + ',1)&" cortes disponibles",'
         + '"Sin lunes completos en el periodo seleccionado")',
         small,
+        ("Corte actual: " + str(weekly[-1]["selected_cutoff_date"])
+         + " · Ámbito: " + scope_labels[0][0] + " · "
+         + str(sum(
+             1 for snap in weekly
+             if str(snap["selected_cutoff_date"])[:7] >=
+             f"{int(last_month[:4]) - (int(last_month[5:]) <= 2)}-"
+             f"{((int(last_month[5:]) - 3) % 12) + 1:02d}"
+         )) + " cortes disponibles")
+        if weekly else "Sin lunes completos en el periodo seleccionado",
     )
     if weekly:
         chart = book.add_chart({"type": "line"})
@@ -321,6 +401,7 @@ def create_workbook(
         chart.set_x_axis({"date_axis": True, "num_format": "dd mmm"})
         chart.set_legend({"none": True})
         chart.show_blanks_as("gap")
+        chart.show_hidden_data()
         chart.set_size({"width": 1190, "height": 490})
         panel.insert_chart("A14", chart)
         for cell, metric, color in (("B40", INDICATORS[0], COLORS[0]),
@@ -331,76 +412,11 @@ def create_workbook(
     else:
         panel.merge_range("A15:U17", "Sin lunes completos disponibles.", soft)
 
-    def make_detail(name: str, snapshot: Mapping[str, Any]) -> None:
-        ws = book.add_worksheet(name[:31])
-        ws.hide_gridlines(2)
-        ws.freeze_panes(4, 1)
-        ws.set_column("A:A", 29)
-        ws.set_column("B:K", 16)
-        ws.set_column("L:S", 19)
-        ws.merge_range("A1:S1", "FUNNEL VENTA NUEVA · ORIGINAL", navy)
-        ws.merge_range("A2:S2", "Corte " + str(snapshot["selected_cutoff_date"])
-                       + " · visitas registradas", soft)
-        headings = (
-            "Sucursal", *(x[0] for x in METRICS[:7]),
-            *INDICATORS, *(x[0] for x in METRICS[7:]), "CPL", "CPT", "CAC"
-        )
-        for c, title in enumerate(headings):
-            ws.write(3, c, title, header)
-        region_names = {int(x["sucursal_id"]): str(x.get("region") or "Sin región")
-                        for x in scope_options}
-        groups: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
-        for b in snapshot.get("branches", []):
-            bid = int(b["sucursal_id"])
-            if bid in authorized:
-                groups[region_names.get(bid, "Sin región")].append(b)
-        row, subtotals = 4, []
-        for region, branches in sorted(groups.items()):
-            ws.merge_range(row, 0, row, 18, "REGIÓN " + region.upper(), soft)
-            row += 1
-            first = row
-            for b in sorted(branches, key=lambda item: str(item["sucursal"])):
-                ws.write_string(row, 0, str(b["sucursal"]))
-                for c, (_, key) in enumerate(METRICS[:7], start=1):
-                    v = number(b.get(key))
-                    if v is not None:
-                        ws.write_number(row, c, v, integer)
-                for c, f in ((8, f'=IFERROR(C{row+1}/B{row+1},"")'),
-                             (9, f'=IFERROR(D{row+1}/C{row+1},"")'),
-                             (10, f'=IFERROR(D{row+1}/B{row+1},"")')):
-                    ws.write_formula(row, c, f, percent)
-                for c, (_, key) in enumerate(METRICS[7:], start=11):
-                    v = number(b.get(key))
-                    if v is not None:
-                        ws.write_number(row, c, v, currency)
-                for c, formula in (
-                    (16, f'=IFERROR(L{row+1}/B{row+1},"")'),
-                    (17, f'=IFERROR(L{row+1}/C{row+1},"")'),
-                    (18, f'=IFERROR(L{row+1}/(D{row+1}+E{row+1}),"")'),
-                ):
-                    ws.write_formula(row, c, formula, currency)
-                row += 1
-            subtotal = row + 1
-            ws.write(row, 0, "SUBTOTAL REGIÓN", navy)
-            for c in list(range(1, 8)) + list(range(11, 16)):
-                x = xl_col_to_name(c)
-                ws.write_formula(row, c, f"=SUM({x}{first+1}:{x}{row})",
-                                 currency if c >= 11 else integer)
-            for c, num, den in ((8, "C", "B"), (9, "D", "C"), (10, "D", "B")):
-                ws.write_formula(row, c, f'=IFERROR({num}{subtotal}/{den}{subtotal},"")', percent)
-            subtotals.append(subtotal)
-            row += 2
-        ws.write(row, 0, "TOTAL", navy)
-        for c in list(range(1, 8)) + list(range(11, 16)):
-            x = xl_col_to_name(c)
-            formula = "=" + "+".join(f"{x}{r}" for r in subtotals) if subtotals else "=0"
-            ws.write_formula(row, c, formula, currency if c >= 11 else integer)
-        for c, num, den in ((8, "C", "B"), (9, "D", "C"), (10, "D", "B")):
-            ws.write_formula(row, c, f'=IFERROR({num}{row+1}/{den}{row+1},"")', percent)
-        ws.autofilter(3, 0, 3, 18)
+    # Dos pestañas visibles: Resumen y reporte operativo Original.
+    write_original_operational_sheet(book, daily, scope_options, is_global=is_global)
+    data.hide()
+    calc.hide()
+    panel.activate()
 
-    make_detail("Detalle diario", daily)
-    for snapshot in weekly:
-        make_detail("Lun " + str(snapshot["selected_cutoff_date"]), snapshot)
     book.close()
     return stream.getvalue()

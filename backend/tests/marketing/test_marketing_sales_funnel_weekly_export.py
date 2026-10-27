@@ -9,6 +9,18 @@ import pytest
 # Cargar el generador puro sin ejecutar app/__init__.py (factory Flask/DB).
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
+import sys
+
+# Importación aislada: no ejecutar app factory, migraciones ni BD en QA puro.
+original_file = (
+    Path(__file__).resolve().parents[2]
+    / "app/services/marketing_sales_funnel_original_sheet_service.py"
+)
+original_spec = spec_from_file_location("funnel_original_sheet", original_file)
+assert original_spec is not None and original_spec.loader is not None
+original_module = module_from_spec(original_spec)
+original_spec.loader.exec_module(original_module)
+sys.modules["app.services.marketing_sales_funnel_original_sheet_service"] = original_module
 
 SERVICE_FILE = (
     Path(__file__).resolve().parents[2]
@@ -118,9 +130,11 @@ def test_generates_xlsx_with_two_disconnected_monthly_series_and_selectors():
         assert "xl/charts/chart1.xml" in parts
         workbook = z.read("xl/workbook.xml").decode()
         assert "Resumen" in workbook
-        assert "Detalle diario" in workbook
-        assert "Lun 2026-09-21" in workbook
-        assert "Lun 2026-10-19" in workbook
+        assert 'name="Octubre 2026"' in workbook
+        assert "Detalle diario" not in workbook
+        assert "Lun 2026-09-21" not in workbook
+        assert workbook.count('state="hidden"') == 2
+        assert 'name="Resumen"' in workbook
         assert "FunnelAmbitos" in workbook
         assert "FunnelMeses" in workbook
         chart = z.read("xl/charts/chart1.xml").decode()
@@ -131,6 +145,22 @@ def test_generates_xlsx_with_two_disconnected_monthly_series_and_selectors():
         assert "2026-09" in trend
         assert "2026-10" in trend
         assert "Comparar las tres" in trend
+        assert "0.1" in trend or "0.2" in trend
+        original = z.read("xl/worksheets/sheet4.xml").decode()
+        for column in ("Sucursal", "Leads", "Ventas digitales",
+                       "Costo por venta (CAC)"):
+            assert column in z.read("xl/sharedStrings.xml").decode()
+        assert "SUM(D" in original
+        assert "RESUMEN COMERCIAL" in z.read("xl/sharedStrings.xml").decode()
+        assert 'H' in original
+        # Cached numerical values, not every formula left at zero.
+        from xml.etree import ElementTree as ET
+        xml = ET.fromstring(original)
+        ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        cached_visit_total = xml.find(".//x:c[@r='C8']/x:v", ns)
+        assert cached_visit_total is not None
+        assert float(cached_visit_total.text) == 40.0
+
 
 
 def test_empty_history_still_preserves_daily_export():
@@ -142,6 +172,8 @@ def test_empty_history_still_preserves_daily_export():
         text = z.read("xl/sharedStrings.xml").decode()
         assert "Sin lunes completos" in text
         assert "Todas las autorizadas" in text
+        assert "RESUMEN COMERCIAL" in text
+        assert 'name="Octubre 2026"' in z.read("xl/workbook.xml").decode()
 
 
 @pytest.mark.parametrize("is_global,label", [
