@@ -138,3 +138,15 @@ def test_ads_copy_acknowledges_historical_mapping_without_changing_meta_basis():
         assert "Google Ads no está distribuido por sucursal" not in ts
         assert "this.dashboard?.summary.investment ?? null" in ts
         assert "this.buildGoogleBranchAttributionView(data)" in ts
+
+
+def test_navigation_promotes_original_only_without_removing_legacy_route():
+    layout = (ROOT / "frontend/src/app/layout/layout.component.ts").read_text(encoding="utf-8")
+    routes = (ROOT / "frontend/src/app/app.routes.ts").read_text(encoding="utf-8")
+
+    assert "label: 'Funnel Venta Nueva · Original'" in layout
+    assert "path: '/marketing-conversion/venta-total-original'" in layout
+    assert "label: 'Funnel Venta Nueva · Ajustado'" not in layout
+    # Retirar el acceso del menú no elimina el componente/ruta histórica.
+    assert "path: 'marketing-conversion/venta-total'" in routes
+    assert "path: 'marketing-conversion/venta-total-original'" in routes
