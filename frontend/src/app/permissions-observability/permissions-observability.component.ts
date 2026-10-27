@@ -279,6 +279,32 @@ export class PermissionsObservabilityComponent implements OnInit {
     }
   }
 
+  // Los payloads de auditoría pueden incluir datos arbitrarios: mostrar solo
+  // metadatos estructurados; el registro íntegro permanece en backend.
+  getGrantAuditSafeSummary(payload: Record<string, unknown> | null | undefined): string {
+    if (!payload) { return 'No registrado'; }
+    const fields = [
+      'principal_type', 'principal_user_id', 'principal_role_key',
+      'action_full_key', 'effect', 'scope_type', 'scope_branch_id',
+      'scope_branch_ids', 'scope_department_id', 'starts_at',
+      'expires_at', 'is_active', 'deleted_at',
+    ];
+    const values = fields.flatMap(key => {
+      const value = payload[key];
+      if (value === null || value === undefined) { return []; }
+      if (Array.isArray(value)) {
+        return [key + ': ' + value.filter(item =>
+          typeof item === 'string' || typeof item === 'number').join(', ')];
+      }
+      if (typeof value === 'string' || typeof value === 'boolean' ||
+          typeof value === 'number') {
+        return [key + ': ' + String(value)];
+      }
+      return [];
+    });
+    return values.join(' · ') || 'Sin metadatos de cambio estructurados';
+  }
+
   getGrantRecordStatus(grant: PermissionGrant): string {
     if (grant.deleted_at) { return 'Eliminado lógicamente'; }
     if (!grant.is_active) { return 'Registro inactivo'; }
@@ -756,9 +782,8 @@ export class PermissionsObservabilityComponent implements OnInit {
   }
 
   getGrantStatusBadgeClass(grant: PermissionGrant): string {
-    return grant.is_active
-      ? 'permissions-badge permissions-badge--success'
-      : 'permissions-badge permissions-badge--warning';
+    // Ningún grant beta debe parecer autorización operativa confirmada.
+    return 'permissions-badge permissions-badge--warning';
   }
 
   getGrantPrincipalLabel(grant: PermissionGrant): string {
