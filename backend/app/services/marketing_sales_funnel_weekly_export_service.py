@@ -145,9 +145,19 @@ def create_workbook(
                             "align": "center", "valign": "vcenter"})
     choice = book.add_format({"bg_color": "#D8F8E9", "font_color": "#145C4A",
                               "bold": True, "align": "center"})
-    big_pct = book.add_format({"num_format": "0.0%", "font_size": 19,
-                               "bold": True, "align": "center",
-                               "bg_color": "#EDF2FE", "font_color": "#172C58"})
+    monthly_pct = book.add_format({"num_format": "0.0%", "font_size": 13,
+                                   "bold": True, "align": "center",
+                                   "bg_color": "#EDF2FE",
+                                   "font_color": "#172C58"})
+    monthly_label = book.add_format({"font_size": 9, "align": "center",
+                                     "bg_color": "#EDF2FE",
+                                     "font_color": "#566C95"})
+    monthly_arrow = book.add_format({"font_size": 15, "bold": True,
+                                     "align": "center",
+                                     "bg_color": "#EDF2FE",
+                                     "font_color": "#344C78"})
+    monthly_caption = book.add_format({"font_size": 8, "align": "center",
+                                       "font_color": "#627492"})
     pp = book.add_format({"num_format": '+0.0" pp";-0.0" pp";0.0" pp"',
                           "align": "center", "font_color": "#70819B"})
     small = book.add_format({"font_size": 9, "font_color": "#445575"})
@@ -194,9 +204,27 @@ def create_workbook(
     for area, text in (("A9:G9", "LEAD → VISITA"),
                        ("H9:N9", "VISITA → VENTA DIGITAL"), ("O9:U9", "LEAD → VENTA")):
         panel.merge_range(area, text, purple)
-    for prefix, last in (("A", "G"), ("H", "N"), ("O", "U")):
-        panel.merge_range(f"{prefix}10:{last}11", "", big_pct)
-        panel.merge_range(f"{prefix}12:{last}12", "", pp)
+    # Tres cortes mensuales por indicador: etiquetas en fila 10,
+    # tasas en 11, variación intermensual en 12 y comparación en 13.
+    panel.set_row(9, 18)
+    panel.set_row(10, 25)
+    panel.set_row(11, 18)
+    panel.set_row(12, 17)
+    for first, middle, latest, arrows, span in (
+        ("A", "D", "G", ("C", "F"), ("A", "G")),
+        ("H", "K", "N", ("J", "M"), ("H", "N")),
+        ("O", "R", "U", ("Q", "T"), ("O", "U")),
+    ):
+        for left, right in ((first, xl_col_to_name(ord(first) - 64)),
+                            (middle, xl_col_to_name(ord(middle) - 64))):
+            panel.merge_range(f"{left}10:{right}10", "", monthly_label)
+            panel.merge_range(f"{left}11:{right}11", "", monthly_pct)
+        panel.write_blank(f"{latest}10", None, monthly_label)
+        panel.write_blank(f"{latest}11", None, monthly_pct)
+        for arrow in arrows:
+            panel.write_blank(f"{arrow}11", None, monthly_arrow)
+        panel.merge_range(f"{span[0]}12:{span[1]}12", "", pp)
+        panel.merge_range(f"{span[0]}13:{span[1]}13", "", monthly_caption)
 
     data = book.add_worksheet("Base semanal")
     data.hide_gridlines(2)
