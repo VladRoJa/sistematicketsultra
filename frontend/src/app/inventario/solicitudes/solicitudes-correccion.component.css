@@ -90,7 +90,6 @@
 .solicitud-seguimiento-layout--detalle .solicitud-item { gap: 6px; padding: 10px; }
 .solicitud-seguimiento-layout--detalle .solicitud-item > mat-icon { display: none; }
 .solicitud-seguimiento-layout--detalle .solicitud-item__primary strong { font-size: 11px; }
-.solicitud-item--seleccionada { border-color: #7eafd8; background: #edf5fd; }
 .solicitud-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .solicitud-field--wide { grid-column: 1 / -1; }
 .solicitud-field > span { color: #49627e; font-size: 11px; font-weight: 800; }
@@ -155,20 +154,16 @@
 .solicitud-detail dd { overflow-wrap: anywhere; font-size: 12px; color: #365472; margin: 0; }
 .solicitud-detail p { font-size: 10px; margin: 10px 0 0; color: #7890a8; }
 
-/* E2: bandeja de revisión; acciones E3 mostradas pero inhabilitadas. */
+/* E2: seguimiento de solicitudes de solo consulta; decisiones en E3. */
 .solicitud-bandeja { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .solicitud-bandeja__barra {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; justify-content: flex-end;
   flex-wrap: wrap; gap: 8px; padding: 4px 2px;
 }
-.solicitud-bandeja__seleccion { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 800; color: #335977; cursor: pointer; }
-.solicitud-bandeja__seleccion input, .solicitud-bandeja__check input { width: 16px; height: 16px; margin: 0; accent-color: #1f6ea5; cursor: pointer; }
-.solicitud-bandeja__check input:disabled { cursor: not-allowed; opacity: .45; }
 .solicitud-bandeja__conteo { color: #718ba4; font-size: 11px; }
 .solicitud-bandeja__lista { display: flex; flex-direction: column; gap: 7px; overflow: visible; }
 .solicitud-bandeja__fila { border: 1px solid #dce6f1; background: #fff; border-radius: 10px; }
 .solicitud-bandeja__resumen { display: flex; align-items: center; gap: 12px; padding: 10px 12px; min-width: 0; }
-.solicitud-bandeja__check { display: flex; flex: none; align-items: center; }
 .solicitud-bandeja__descripcion { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 4px; }
 .solicitud-bandeja__descripcion strong { font-size: 12px; color: #254e73; overflow-wrap: anywhere; }
 .solicitud-bandeja__descripcion span, .solicitud-bandeja__descripcion small { font-size: 10px; color: #6b859c; }
@@ -196,7 +191,7 @@
 }
 
 
-/* Detalle E2: dialogo independiente. No expande filas ni modifica seleccion. */
+/* Detalle E2: diálogo independiente; no expande filas. */
 .solicitud-detalle-overlay {
   position: fixed;
   inset: 0;

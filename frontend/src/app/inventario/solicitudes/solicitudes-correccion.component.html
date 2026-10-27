@@ -215,16 +215,8 @@
 
       <section class="solicitud-bandeja" aria-label="Bandeja de solicitudes">
         <div class="solicitud-bandeja__barra" *ngIf="!cargandoListado && !errorListado && solicitudes.length">
-          <label class="solicitud-bandeja__seleccion">
-            <input type="checkbox"
-              [checked]="todosSeleccionadosPagina"
-              [indeterminate]="algunosSeleccionadosPagina"
-              [disabled]="!pendientesPagina.length"
-              (change)="alternarPagina()" />
-            <span>Seleccionar pendientes de esta página</span>
-          </label>
           <span class="solicitud-bandeja__conteo">
-            {{ totalSeleccionados }} seleccionadas · {{ totalSolicitudes }} resultados
+            {{ totalSolicitudes }} resultados
           </span>
         </div>
 
@@ -237,12 +229,6 @@
         <div class="solicitud-bandeja__lista" *ngIf="!cargandoListado && !errorListado && solicitudes.length">
           <div class="solicitud-bandeja__fila" *ngFor="let solicitud of solicitudes">
             <div class="solicitud-bandeja__resumen">
-              <label class="solicitud-bandeja__check">
-                <input type="checkbox" [checked]="estaSeleccionada(solicitud.id)"
-                  [disabled]="solicitud.estado !== 'PENDING'"
-                  [attr.aria-label]="'Seleccionar solicitud ' + solicitud.id"
-                  (change)="alternarSeleccion(solicitud.id)" />
-              </label>
               <div class="solicitud-bandeja__descripcion">
                 <strong>#{{ solicitud.id }} · {{ resumenSolicitud(solicitud) }}</strong>
                 <span>{{ nombreSucursal(solicitud.sucursal_id) }} · {{ etiquetasTipo[solicitud.tipo] }}</span>
@@ -294,7 +280,7 @@
     </footer>
   </section>
 
-  <!-- Modal secundario: la bandeja mantiene tamaño, scroll y checkboxes. -->
+  <!-- Modal secundario: la bandeja mantiene tamaño y scroll independientes. -->
   <div *ngIf="detalleIdAbierto !== null && modo === 'seguimiento'"
     class="solicitud-detalle-overlay" role="presentation">
     <section class="solicitud-detalle-dialog" role="dialog" aria-modal="true"

@@ -1,5 +1,5 @@
 <div class="revision-page">
-  <main class="revision-shell" [attr.inert]="decision || detalle || detalleCargando || errorDetalle ? '' : null">
+  <main class="revision-shell" [attr.inert]="decision ? '' : null">
     <header class="revision-encabezado">
       <div>
         <span class="revision-etiqueta">INVENTARIOS V2 · E3</span>
@@ -59,22 +59,44 @@
           <p>La lista solo incluye registros dentro de tu ámbito autorizado.</p>
         </div>
 
-        <div *ngFor="let solicitud of solicitudes" class="revision-fila">
-          <label class="revision-marcar">
+        <div *ngFor="let solicitud of solicitudes" class="revision-fila"
+          [class.revision-fila--seleccionada]="seleccion.has(solicitud.id)">
+          <label class="revision-marcar revision-fila__check">
             <input type="checkbox" [checked]="seleccion.has(solicitud.id)"
               [disabled]="solicitud.estado !== 'PENDING' || procesando"
               [attr.aria-label]="'Seleccionar solicitud ' + solicitud.id"
               (change)="marcar(solicitud.id)" />
           </label>
-          <div class="revision-fila__texto">
-            <strong>#{{ solicitud.id }} · {{ resumen(solicitud) }}</strong>
-            <span>{{ sucursalNombre(solicitud.sucursal_id) }} · {{ tipos[solicitud.tipo] }}</span>
-            <small>Registró usuario #{{ solicitud.creado_por_usuario_id }} · {{ solicitud.creado_en_utc | date:'dd/MM/yyyy HH:mm' }}</small>
+          <div class="revision-fila__cuerpo">
+            <div class="revision-fila__encabezado">
+              <div class="revision-fila__texto">
+                <strong>#{{ solicitud.id }} · {{ resumen(solicitud) }}</strong>
+                <span>{{ sucursalNombre(solicitud.sucursal_id) }} · {{ tipos[solicitud.tipo] }}
+                  <ng-container *ngIf="solicitud.inventario_id">· Referencia #{{ solicitud.inventario_id }}</ng-container>
+                </span>
+                <small>Registró usuario #{{ solicitud.creado_por_usuario_id }} · {{ solicitud.creado_en_utc | date:'dd/MM/yyyy HH:mm' }}</small>
+              </div>
+              <span class="revision-estado">{{ solicitud.estado }}</span>
+            </div>
+            <div class="revision-fila__cambio">
+              <span>Cambio solicitado</span>
+              <strong>{{ cambioPropuesto(solicitud) }}</strong>
+            </div>
+            <div class="revision-fila__datos">
+              <div class="revision-fila__dato">
+                <span>Motivo del reporte</span>
+                <p>{{ solicitud.motivo }}</p>
+              </div>
+              <div class="revision-fila__dato">
+                <span>Evidencia física</span>
+                <p>{{ solicitud.evidencia_descriptiva || 'Sin evidencia registrada' }}</p>
+              </div>
+              <div class="revision-fila__dato revision-fila__dato--fecha">
+                <span>Fecha de observación</span>
+                <p>{{ solicitud.fecha_observacion_local || 'Sin fecha registrada' }}</p>
+              </div>
+            </div>
           </div>
-          <span class="revision-estado">{{ solicitud.estado }}</span>
-          <button type="button" class="revision-secondary" (click)="consultarDetalle(solicitud.id)">
-            Detalles
-          </button>
         </div>
         <div *ngIf="total > porPagina" class="revision-paginacion">
           <span>Página {{ pagina }} de {{ paginas }}</span>
@@ -94,33 +116,6 @@
       </footer>
     </ng-container>
   </main>
-
-  <div *ngIf="detalle || detalleCargando || errorDetalle" class="revision-modal-overlay" role="presentation">
-    <section class="revision-modal" role="dialog" aria-modal="true" aria-labelledby="e3DetalleTitulo"
-      cdkTrapFocus [cdkTrapFocusAutoCapture]="true" (keydown.escape)="cerrarDetalle()">
-      <header>
-        <h2 id="e3DetalleTitulo">Detalle de solicitud #{{ detalle?.id }}</h2>
-        <button type="button" aria-label="Cerrar detalle" (click)="cerrarDetalle()">×</button>
-      </header>
-      <div class="revision-modal__contenido">
-        <p *ngIf="detalleCargando" role="status">Consultando detalle...</p>
-        <p *ngIf="errorDetalle" role="alert" class="revision-error">{{ errorDetalle }}</p>
-        <dl *ngIf="detalle" class="revision-detalle">
-          <div><dt>Tipo</dt><dd>{{ tipos[detalle.tipo] }}</dd></div>
-          <div><dt>Estado</dt><dd>{{ detalle.estado }}</dd></div>
-          <div><dt>Sucursal</dt><dd>{{ sucursalNombre(detalle.sucursal_id) }}</dd></div>
-          <div><dt>Inventario</dt><dd>{{ detalle.inventario_id ?? 'Hallazgo provisional' }}</dd></div>
-          <div><dt>Valor anterior</dt><dd>{{ textoValor(detalle.valor_original) }}</dd></div>
-          <div><dt>Propuesta</dt><dd>{{ textoValor(detalle.valor_propuesto || detalle.hallazgo_provisional) }}</dd></div>
-          <div><dt>Motivo</dt><dd>{{ detalle.motivo }}</dd></div>
-          <div><dt>Fecha de observación física</dt><dd>{{ detalle.fecha_observacion_local || 'Sin fecha' }}</dd></div>
-          <div><dt>Evidencia</dt><dd>{{ detalle.evidencia_descriptiva || 'Sin descripción' }}</dd></div>
-          <div><dt>Baseline oficial</dt><dd>{{ textoValor(detalle.baseline_canonico) }}</dd></div>
-        </dl>
-      </div>
-      <footer><button class="revision-secondary" type="button" (click)="cerrarDetalle()">Volver a bandeja</button></footer>
-    </section>
-  </div>
 
   <div *ngIf="decision" class="revision-modal-overlay" role="presentation">
     <section class="revision-modal revision-modal--decision" role="dialog" aria-modal="true"
