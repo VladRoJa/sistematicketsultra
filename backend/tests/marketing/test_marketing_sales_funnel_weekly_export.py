@@ -470,8 +470,11 @@ def test_linked_period_filters_show_effective_dates_and_custom_inputs():
             item.attrib["sqref"]: item
             for item in panel.findall(".//x:dataValidations/x:dataValidation", ns)
         }
-        assert "F4" not in validations
-        assert "K4" not in validations
+        for field in ("F4", "K4"):
+            assert field in validations
+            assert validations[field].get("type") == "custom"
+            assert validations[field].get("errorStyle") == "stop"
+            assert validations[field].find("x:formula1", ns).text == "FALSE"
         for field in ("P4", "S4"):
             assert field in validations
             assert validations[field].find("x:formula1", ns).text == "FunnelMeses"
