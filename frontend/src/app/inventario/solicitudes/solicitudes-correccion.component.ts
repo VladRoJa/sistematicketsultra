@@ -318,7 +318,7 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
     if (!this.referencia || this.referencia.stock === null) return false;
     if (this.tipo === 'QUANTITY_DIFFERENCE') {
       return this.cantidadFisica !== null && Number.isInteger(this.cantidadFisica) &&
-        this.cantidadFisica >= 0 && this.cantidadFisica !== this.referencia.stock;
+        this.cantidadFisica > 0 && this.cantidadFisica !== this.referencia.stock;
     }
     if (this.tipo === 'NOT_LOCATED') return true;
     if (this.tipo === 'MASTER_FIELD') {
