@@ -422,3 +422,102 @@ def test_resumen_visual_three_cards_have_distinct_fills_and_medium_outline():
             border = borders[int(style_of(cell).get("borderId"))]
             assert border.find("x:bottom", ns).get("style") == "medium"
             assert border.find("x:right", ns).get("style") == "medium"
+
+
+def test_linked_period_filters_show_effective_dates_and_custom_inputs():
+    """Presets control effective dates; customized months are separate inputs."""
+    from xml.etree import ElementTree as ET
+
+    workbook = create_workbook(
+        _snapshot("2026-10-19"),
+        [
+            _snapshot("2026-08-31"), _snapshot("2026-09-21"),
+            _snapshot("2026-10-19"),
+        ],
+        OPTIONS, is_global=True,
+    )
+    with ZipFile(BytesIO(workbook)) as archive:
+        ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        panel = ET.fromstring(archive.read("xl/worksheets/sheet1.xml"))
+        trend = ET.fromstring(archive.read("xl/worksheets/sheet3.xml"))
+
+        start_serial = str((date(2026, 8, 1) - date(1899, 12, 30)).days)
+        end_serial = str((date(2026, 10, 1) - date(1899, 12, 30)).days)
+        for target, cached in (("F4", start_serial), ("K4", end_serial),
+                               ("P4", start_serial), ("S4", end_serial)):
+            value, formula = _cached_cell(archive.read(
+                "xl/worksheets/sheet1.xml"), target)
+            assert value == cached
+
+        start_formula = _cached_cell(
+            archive.read("xl/worksheets/sheet1.xml"), "F4"
+        )[1]
+        end_formula = _cached_cell(
+            archive.read("xl/worksheets/sheet1.xml"), "K4"
+        )[1]
+        assert start_formula.startswith('IF($A$4="Personalizado",$P$4,')
+        assert 'Todo el histórico' in start_formula
+        assert 'MIN(' in start_formula
+        assert 'EDATE(' in start_formula
+        assert 'Últimos 3 meses' in start_formula
+        assert 'Últimos 6 meses' in start_formula
+        assert end_formula.startswith('IF($A$4="Personalizado",$S$4,')
+        assert "DATE(" in end_formula
+
+        # F4/K4 son visualizaciones calculadas y ya NO tienen desplegable
+        # manual. P4/S4 son los únicos campos editables del rango.
+        validations = {
+            item.attrib["sqref"]: item
+            for item in panel.findall(".//x:dataValidations/x:dataValidation", ns)
+        }
+        for field in ("F4", "K4"):
+            assert field in validations
+            assert validations[field].get("type") == "custom"
+            assert validations[field].get("errorStyle") == "stop"
+            assert validations[field].find("x:formula1", ns).text == "FALSE"
+        for field in ("P4", "S4"):
+            assert field in validations
+            assert validations[field].find("x:formula1", ns).text == "FunnelMeses"
+        assert "A4" in validations
+
+        # Las fórmulas de filtrado ya no contienen un IF separado por
+        # Periodo: usan exclusivamente las dos fechas efectivas.
+        for address, selector in (("S3", "Resumen!$F$4"),
+                                  ("S4", "Resumen!$K$4")):
+            cell = trend.find(f".//x:c[@r='{address}']/x:f", ns)
+            assert cell is not None
+            assert "YEAR(" + selector + ")" in cell.text
+            assert "MONTH(" + selector + ")" in cell.text
+            assert "Personalizado" not in cell.text
+        assert _cached_cell(archive.read("xl/worksheets/sheet3.xml"), "S3")[0] == "2026-08"
+        assert _cached_cell(archive.read("xl/worksheets/sheet3.xml"), "S4")[0] == "2026-10"
+
+        # Entradas de personalizado se resaltan únicamente al seleccionarlo.
+        conditions = {
+            item.attrib["sqref"]: item
+            for item in panel.findall(".//x:conditionalFormatting", ns)
+        }
+        for span in ("P4:R4", "S4:U4", "P3:R3", "S3:U3"):
+            assert span in conditions
+        assert "Desde debe ser anterior o igual a Hasta" in (
+            _cached_cell(archive.read("xl/worksheets/sheet1.xml"), "P5")[1]
+        )
+
+
+def test_month_start_preset_crosses_year_without_locale_mask():
+    # En enero, "Últimos 3 meses" empieza en noviembre anterior.
+    workbook = create_workbook(
+        _snapshot("2027-01-18"),
+        [_snapshot("2026-11-30"), _snapshot("2026-12-28"),
+         _snapshot("2027-01-18")],
+        OPTIONS, is_global=True,
+    )
+    with ZipFile(BytesIO(workbook)) as archive:
+        panel = archive.read("xl/worksheets/sheet1.xml")
+        calc = archive.read("xl/worksheets/sheet3.xml")
+        expected = str((date(2026, 11, 1) - date(1899, 12, 30)).days)
+        assert _cached_cell(panel, "F4")[0] == expected
+        assert _cached_cell(calc, "S3")[0] == "2026-11"
+        assert _cached_cell(calc, "S4")[0] == "2027-01"
+        assert "EDATE" in _cached_cell(panel, "F4")[1]
+        assert '"yyyy-mm"' not in _cached_cell(panel, "F4")[1]

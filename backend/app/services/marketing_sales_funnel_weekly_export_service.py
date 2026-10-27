@@ -152,6 +152,16 @@ def create_workbook(
         "bg_color": "#D8F8E9", "font_color": "#145C4A", "bold": True,
         "align": "center", "num_format": "[$-es-MX]mmmm-yy",
     })
+    manual_inactive = book.add_format({
+        "bg_color": "#FFFFFF", "font_color": "#FFFFFF",
+        "num_format": "[$-es-MX]mmmm-yy",
+    })
+    manual_heading_inactive = book.add_format({
+        "bg_color": "#FFFFFF", "font_color": "#FFFFFF",
+    })
+    manual_warning = book.add_format({
+        "font_size": 9, "font_color": "#A33139",
+    })
     card_backgrounds = ("#E8F0FC", "#F9DEDF", "#EAF3DF")
     card_text_colors = ("#204A91", "#A84149", "#416E29")
     def monthly_card_format(metric: int, kind: str, *, top=False,
@@ -206,15 +216,82 @@ def create_workbook(
                         ("A6:E6", INDICATORS[0]),
                         ("K6:O6", scope_labels[0][0])):
         panel.merge_range(area, value, choice)
-    # Las listas siguen siendo fechas editables con su número de serie Excel.
-    # La etiqueta española de mes/año se aplica sin transformar el valor.
-    for cell, span, value in (("F4", "F4:J4", first_month),
-                              ("K4", "K4:O4", last_month)):
+    # Dos salidas calculadas: Desde/Hasta siempre son el rango EFECTIVO.
+    # En XLSX sin macros una celda no puede ser fórmula y desplegable editable
+    # a la vez, por eso Personalizado usa P4 y S4 como entradas independientes.
+    # Los campos manuales se resaltan únicamente cuando corresponde usarlos.
+    last_ym_date = date(int(last_month[:4]), int(last_month[5:7]), 1)
+    month_number = last_ym_date.year * 12 + last_ym_date.month - 3
+    first_preset_date = date(month_number // 12, month_number % 12 + 1, 1)
+    # Personalizado inicia con el mismo rango que el periodo predeterminado.
+    first_custom_date = first_preset_date
+    def serial(day: date) -> int:
+        return (day - date(1899, 12, 30)).days
+
+    panel.merge_range("P3:R3", "", manual_heading_inactive)
+    panel.merge_range("S3:U3", "", manual_heading_inactive)
+    panel.write_formula(
+        "P3", '=IF($A$4="Personalizado","DESDE MANUAL","")',
+        manual_heading_inactive, "",
+    )
+    panel.write_formula(
+        "S3", '=IF($A$4="Personalizado","HASTA MANUAL","")',
+        manual_heading_inactive, "",
+    )
+    for cell, span, value in (
+        ("P4", "P4:R4", first_custom_date),
+        ("S4", "S4:U4", last_ym_date),
+    ):
         panel.merge_range(span, "", month_choice)
         panel.write_datetime(
-            cell, datetime(int(value[:4]), int(value[5:7]), 1),
-            month_choice,
+            cell, datetime(value.year, value.month, 1), month_choice
         )
+    # Fuera de Personalizado, las entradas no muestran valores ni encabezados.
+    for manual_range in ("P4:R4", "S4:U4"):
+        panel.conditional_format(manual_range, {
+            "type": "formula", "criteria": '=$A$4<>"Personalizado"',
+            "format": manual_inactive,
+        })
+    for manual_range in ("P3:R3", "S3:U3"):
+        panel.conditional_format(manual_range, {
+            "type": "formula", "criteria": '=$A$4="Personalizado"',
+            "format": navy,
+        })
+    panel.merge_range("P5:U5", "", manual_warning)
+    panel.write_formula(
+        "P5",
+        '=IF(AND($A$4="Personalizado",$P$4>$S$4),'
+        '"Desde debe ser anterior o igual a Hasta","")',
+        manual_warning, "",
+    )
+    for cell, span in (("F4", "F4:J4"), ("K4", "K4:O4")):
+        panel.merge_range(span, "", month_choice)
+
+    latest_year_month = "'Tendencia - datos'!$R$2"
+    last_date_formula = (
+        'DATE(VALUE(LEFT(' + latest_year_month + ',4)),'
+        'VALUE(RIGHT(' + latest_year_month + ',2)),1)'
+    )
+    month_date_range = (
+        f"'Tendencia - datos'!${catalog_date}$2:"
+        f"${catalog_date}${max(2, len(months) + 1)}"
+    )
+    first_preset_formula = (
+        '=IF($A$4="Personalizado",$P$4,'
+        'IF($A$4="Todo el histórico",MIN(' + month_date_range + '),'
+        'EDATE(' + last_date_formula + ',-'
+        'IF($A$4="Últimos 3 meses",2,'
+        'IF($A$4="Últimos 6 meses",5,11)))))'
+    )
+    last_preset_formula = (
+        '=IF($A$4="Personalizado",$S$4,' + last_date_formula + ')'
+    )
+    panel.write_formula(
+        "F4", first_preset_formula, month_choice, serial(first_preset_date)
+    )
+    panel.write_formula(
+        "K4", last_preset_formula, month_choice, serial(last_ym_date)
+    )
     panel.data_validation("A4", {"validate": "list", "source": list(PERIODS)})
     panel.data_validation("A6", {"validate": "list",
                                  "source": list(INDICATORS) + ["Comparar las tres"]})
@@ -230,8 +307,24 @@ def create_workbook(
         + catalog_date + "$" + str(max(2, len(months) + 1)),
     )
     panel.data_validation("K6", {"validate": "list", "source": "=FunnelAmbitos"})
-    panel.data_validation("F4", {"validate": "list", "source": "=FunnelMeses"})
-    panel.data_validation("K4", {"validate": "list", "source": "=FunnelMeses"})
+    for cell in ("P4", "S4"):
+        panel.data_validation(cell, {
+            "validate": "list", "source": "=FunnelMeses",
+            "input_title": "Rango personalizado",
+            "input_message": "Se utiliza cuando Periodo es Personalizado.",
+            "error_title": "Mes no disponible",
+            "error_message": "Elige un mes del catálogo.",
+        })
+    # Un control calculado no debe permitir sobrescribir su fórmula.
+    for cell in ("F4", "K4"):
+        panel.data_validation(cell, {
+            "validate": "custom", "value": "=FALSE",
+            "error_type": "stop",
+            "error_title": "Fecha calculada",
+            "error_message": "Usa Periodo o los campos de Personalizado.",
+            "input_title": "Rango automático",
+            "input_message": "Periodo determina esta fecha; edita las fechas manuales al elegir Personalizado.",
+        })
     # Eliminar nota redundante A7; no desplazar las referencias de celdas.
     panel.set_row(6, 6)
     panel.merge_range("A8:U8", "", small)
@@ -330,35 +423,20 @@ def create_workbook(
     calc.write("R1", "Último mes", navy)
     calc.write_string("R2", last_month)
     calc.write("R3", "Desde efectivo", navy)
-    # No usar TEXT(..., "yyyy-mm"): yyyy es literal en algunas
-    # configuraciones de Excel en español. Año/mes numéricos son invariantes.
-    month_shift = (
-        'IF(Resumen!$A$4="Últimos 3 meses",2,'
-        'IF(Resumen!$A$4="Últimos 6 meses",5,11))'
-    )
-    first_date = (
-        'EDATE(DATE(VALUE(LEFT($R$2,4)),VALUE(RIGHT($R$2,2)),1),-'
-        + month_shift + ')'
-    )
-    first_month_formula = (
-        '=IF(Resumen!$A$4="Personalizado",'
-        'YEAR(Resumen!$F$4)&"-"&RIGHT("0"&MONTH(Resumen!$F$4),2),'
-        'IF(Resumen!$A$4="Todo el histórico","0000-00",'
-        'YEAR(' + first_date + ')&"-"&'
-        'RIGHT("0"&MONTH(' + first_date + '),2)))'
-    )
-    calc.write_formula(
-        "S3", first_month_formula,
-        None, (f"{int(last_month[:4]) - (int(last_month[5:]) <= 2)}-"
-               f"{((int(last_month[5:]) - 3) % 12) + 1:02d}"),
-    )
+    # Fechas efectivas visibles en Resumen (F4/K4) son la única verdad.
+    # Convertir fechas Excel a claves YYYY-MM sin máscaras dependientes
+    # del idioma: la selección de periodo, mes y ámbito permanece cruzada.
+    for target, address, initial in (
+        ("S3", "F4", first_preset_date.strftime("%Y-%m")),
+        ("S4", "K4", last_month),
+    ):
+        field = "Resumen!$" + address[0] + "$4"
+        formula = (
+            '=IFERROR(YEAR(' + field + ')&"-"&'
+            'RIGHT("0"&MONTH(' + field + '),2),"")'
+        )
+        calc.write_formula(target, formula, None, initial)
     calc.write("R4", "Hasta efectivo", navy)
-    calc.write_formula(
-        "S4",
-        '=IF(Resumen!$A$4="Personalizado",'
-        'YEAR(Resumen!$K$4)&"-"&RIGHT("0"&MONTH(Resumen!$K$4),2),$R$2)',
-        None, last_month,
-    )
     # Tres últimos meses CON CORTES disponibles dentro del periodo elegido.
     # T2/U2/V2 responden al selector; admiten periodos con menos de 3 meses.
     year, month = int(last_month[:4]), int(last_month[5:])
