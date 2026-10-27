@@ -1,36 +1,38 @@
 # Inventarios V2 — E3 · Matriz propuesta de competencias por clase de activo
 
 **Fecha:** 2026-10-27  
-**Estado:** PROPUESTA PARA RATIFICACIÓN, **NO IMPLEMENTADA / NO AUTORIZA GRANTS NI ROLLOUT**.  
+**Estado:** COMPETENCIA FUNCIONAL RATIFICADA EN CONVERSACIÓN; **AÚN SIN GRANTS NI ROLLOUT**.  
 **PR:** #1134 (DRAFT). **Gate:** §7 de `CONTRATO_INVENTARIOS_V2_AUDITORIA_GLOBAL.md`.  
 **Objetivo:** no equiparar permiso de aprobar una corrección en una sucursal con competencia sobre *cualquier* clase de inventario.
 
 ## 1. Fuente de verdad e identificación de activos
 
 - El modelo real `InventarioGeneral` tiene `tipo` como texto libre (no enum ni FK), además de `categoria_inventario_id`, `familia_equipo_id` y el texto legado `categoria`.
-- El backend de Inventarios V1 diferencia departamentos: Mantenimiento (1) trabaja con **aparatos**, Sistemas (7) con **dispositivos**. El alta V1 reconoce `aparato/aparatos`, `sistema/sistemas`, `dispositivo/dispositivos` y, como valor por defecto, `producto`. **No se ha verificado el conjunto ni el volumen de valores presentes en la DB productiva.**
+- El backend de Inventarios V1 diferencia departamentos: Mantenimiento (1) trabaja con **aparatos**, Sistemas (7) con **dispositivos**. El alta V1 reconoce `aparato/aparatos`, `sistema/sistemas`, `dispositivo/dispositivos` y, como valor por defecto, `producto`. **Consulta productiva de solo lectura comunicada el 27/10/2026:** `aparatos = 3,477` (2 sin familia), `dispositivos = 475` (475 sin familia); 3,952 referencias totales, sin otros tipos en el resultado recibido.
 - Para una referencia existente se usará **exclusivamente `inventario_general.tipo` leído desde DB**, nunca el tipo/categoría enviados por el navegador, ni claims JWT. Comparar `trim + casefold/lower` con aliases explícitos.
-- Para la primera fase de E3, la clase `APARATO` comprende solamente `aparato` y `aparatos` normalizados. El resto se considera **NO HABILITADO PARA REVISORES DE MANTENIMIENTO** hasta clasificación verificada. `sistema/sistemas/dispositivo/dispositivos` se tratan como dispositivos; `producto/productos` como productos; otros/sin tipo como **sin clasificar**.
+- En E3, la clase `APARATO` comprende `aparato/aparatos` normalizados y corresponde a MANTENIMIENTO/COORDINADOR_MANTENIMIENTO (departamento 1). La clase `DISPOSITIVO` comprende `dispositivo/dispositivos/sistema/sistemas` normalizados y corresponde a SISTEMAS (departamento 7). Otro valor o tipo desconocido queda **sin competencia delegada** (solo corporativo). Cada rol operativo requiere grant explícito E3 y sucursal `usuario_sucursal` asignada; un grant `global` no amplía sus sucursales.
 - `familia_equipo_id` y `categoria_inventario_id` sirven para clasificación y diagnóstico, **no** otorgan acceso por sí mismos; los aparatos legados sin familia deben continuar siendo aparatos si `tipo` es válido. Una categoría de catálogo no debe convertir implícitamente un dispositivo en aparato.
 - Registro con `tipo` ambiguo, nuevo o inconsistente: **fail closed** para el revisor limitado, revisión corporativa con grant y corrección de clasificación por proceso oficial.
 
-## 2. Matriz funcional propuesta
+## 2. Matriz funcional ratificada (grants aún no habilitados)
 
-| Clase real / tipo de solicitud | Administración corporativa con grant personal global | MANTENIMIENTO (dept 1) / COORDINADOR_MANTENIMIENTO (dept 1) con grant y sucursal M:N | Otros perfiles |
+| Clase real / tipo de solicitud | ADMICORP / administración con grant personal global | MANTENIMIENTO / COORDINADOR (depto. 1, grant + M:N) | SISTEMAS (depto. 7, grant + M:N) |
 |---|---|---|---|
 | APARATO · `QUANTITY_DIFFERENCE` | Sí | Sí, solo sucursal asignada | No |
-| APARATO · `NOT_LOCATED` | Sí; `AJUSTAR_A_CERO` explícito | Sí, solo sucursal y `AJUSTAR_A_CERO` explícito | No |
-| APARATO · `UNREGISTERED_FIND` | Sí; únicamente `VINCULAR_EXISTENTE` | Condicionado: provisional identifica clase aparato; destino oficial es aparato, con coincidencia física y sucursal asignada | No |
-| Cualquier clase · `MASTER_FIELD` | Sí; competencia corporativa sobre maestro compartido | No, aun si el activo es aparato | No |
-| DISPOSITIVO / SISTEMA · solicitudes de cantidad, ausencia o hallazgo | Sí | No; competencia ajena al departamento | No |
-| PRODUCTO / otra clase / clase desconocida · solicitudes de cantidad, ausencia o hallazgo | Sí | No hasta política explícita | No |
-| Cualquier clase · `REJECTED` | Según capacidad sobre esa solicitud y sin autoevaluarse | Solo si la **clase** corresponde a su competencia; rechazar tampoco da acceso general | No |
+| APARATO · `NOT_LOCATED` | Sí, con resolución explícita | Sí, con `AJUSTAR_A_CERO` y sucursal | No |
+| APARATO · `UNREGISTERED_FIND` | Sí, con vinculación verificable | Sí, si provisional y destino oficial son aparatos | No |
+| DISPOSITIVO · `QUANTITY_DIFFERENCE` | Sí | No | Sí, solo sucursal asignada |
+| DISPOSITIVO · `NOT_LOCATED` | Sí, con resolución explícita | No | Sí, con `AJUSTAR_A_CERO` y sucursal |
+| DISPOSITIVO · `UNREGISTERED_FIND` | Sí, con vinculación verificable | No | Sí, si provisional y destino oficial son dispositivos |
+| Cualquier clase · `MASTER_FIELD` | Sí (maestro compartido) | No | No |
+| Otra clase / tipo ausente o ambiguo | Sí (salvo solicitud propia) | No | No |
+| Rechazo `REJECTED` de una solicitud | Misma competencia que aprobar, sin cambiar stock | Solo aparatos de su alcance | Solo dispositivos de su alcance |
 
-**Controles acumulativos**, incluso en celdas «Sí»: JWT firmado, usuario/rol/departamento leídos de DB, acción `inventory.correction_approve` y grant explícito vigente, deny prevalente, sucursal efectiva, autor distinto del decisor, límites de lote, baseline/identidad, locks y auditoría. `GERENTE`, `GERENTE_REGIONAL`, `SR_MANTENIMIENTO`, `AUX_MANTENIMIENTO`, `SISTEMAS`, `TECNICO` y otros roles **siguen sin aprobar E3** hasta contrato posterior. No crear grants automáticos por rol.
+**Controles acumulativos:** JWT firmado, rol y `department_id` leídos de DB, `inventory.correction_approve` con grant explícito vigente, deny prevalente, intersección con `usuario_sucursal` para todos los perfiles operativos, creador distinto del decisor, lote atómico, baseline/identidad física y auditoría. **SISTEMAS es autorizador candidato E3**, a diferencia de `TECNICO`, `SR_MANTENIMIENTO`, `AUX_MANTENIMIENTO`, `GERENTE` y `GERENTE_REGIONAL`, que permanecen denegados. No crear grants automáticos ni deducir facultades por poder escribir en V1.
 
 ## 3. Casos delicados
 
-1. **Hallazgo sin registro (`UNREGISTERED_FIND`).** No existe `inventario_id` al presentar E2. Para incluirlo en la bandeja limitada, el campo provisional `tipo` debe declarar inequívocamente aparato. Si falta o es ambiguo, queda **solo en bandeja corporativa**. Declarar aparato no basta para aprobar: el `inventario_id` destino de `VINCULAR_EXISTENTE` se verifica bajo lock contra `inventario_general.tipo` y la coincidencia física/documental, en la misma sucursal. Nunca `CREAR_NUEVO`.
+1. **Hallazgo sin registro (`UNREGISTERED_FIND`).** No existe `inventario_id` al presentar E2. Para incluirlo en la bandeja limitada, el campo provisional `tipo` debe declarar inequívocamente `aparatos` (Mantenimiento) o `dispositivos` (Sistemas). Si falta o es ambiguo, queda **solo en bandeja corporativa**. La etiqueta provisional no basta para aprobar: el `inventario_id` destino de `VINCULAR_EXISTENTE` se verifica bajo lock contra `inventario_general.tipo`, la coincidencia de clase y la identidad física/documental, en la misma sucursal. Nunca `CREAR_NUEVO`.
 2. **Valor de maestro.** `MASTER_FIELD` permanece reservado a administración corporativa con grant personal global, sin importar sucursal, categoría ni tipo; no se filtra solo visualmente.
 3. **Dos clases en un mismo lote.** Si alguna fila no es elegible, denegar/rollback **todo el lote**, sin efectos parciales. El tipo oficial se revalida dentro de la transacción, no solo en el listado.
 4. **Cambio de clasificación posterior.** Reconsultar el tipo oficial al decidir y al replay sensible; un cambio de clase no puede servir para eludir la política. Error de clasificación se corrige con una nueva solicitud autorizada, nunca reescribiendo la clase silenciosamente.
@@ -42,7 +44,7 @@
 - `backend/app/utils/inventory_correction_permissions.py`: ampliar política DB-backed para verificar clase del activo por solicitud, sin recibir «tipo de activo» arbitrario del cliente; conservar el comportamiento corporativo.
 - `backend/app/routes/inventario_solicitudes_routes.py`: ampliar `_query_revision()` para aplicar la misma política de clase en SQL **antes** de paginar/contar. Para hallazgos provisionales, utilizar una expresión explícita sobre `hallazgo_provisional->>'tipo'` con fail closed.
 - `backend/app/services/inventario_correccion_decisiones_service.py`: después de bloquear solicitudes y referencias, revalidar la clase del maestro original y destino vinculado, para `APPROVED` y `REJECTED`, incluidos los replays. Mantener transacción íntegra.
-- `backend/tests/routes/test_inventario_e3_decisiones_pg.py` y `backend/tests/utils/test_inventory_correction_e3_permissions_pg.py`: fixture con APARATOS, DISPOSITIVOS, PRODUCTOS, tipo ambiguo, aparato sin familia, cambio posterior de clase, hallazgo declarado/indefinido, mezcla de lote e IDOR. Pruebas positivas y negativas en PostgreSQL temporal.
+- `backend/tests/routes/test_inventario_e3_decisiones_pg.py` y `backend/tests/utils/test_inventory_correction_e3_permissions_pg.py`: fixture con APARATOS, DISPOSITIVOS, tipo ambiguo, aparato sin familia, dispositivos sin familia, SISTEMAS depto. 7 y suplantación de departamento, hallazgo declarado/indefinido, mezcla de lote e IDOR. Pruebas positivas y negativas en PostgreSQL temporal.
 - No modificar HTML para lógica de permisos; no se requiere migración para esta **propuesta**, salvo que luego se ratifique modelar competencias como grants nuevos o catálogo formal.
 
 ## 5. Verificación de datos previa a ratificación (solo lectura, producción)
@@ -76,12 +78,14 @@ ORDER BY 1, 2;
 COMMIT;
 ```
 
-La consulta debe informar cuántas referencias activas reales serían excluidas por ambigüedad (no asumir valores basándose solo en fixtures). No subir datos sensibles, nombres o códigos de equipos al comentario si no hacen falta.
+Resultado real comunicado: **3,477 aparatos (2 sin familia), 475 dispositivos (475 sin familia)**. No hay otros tipos en la distribución compartida; verificar de nuevo si cambia el catálogo. La segunda consulta de solicitudes PENDING por clase sigue siendo una verificación adicional opcional antes de habilitar grants. No subir datos sensibles, nombres o códigos de equipos al comentario si no hacen falta.
 
-## 6. Ratificación requerida antes de escribir guard de clase
+## 6. Ratificación y gate de implementación
 
-**Propuesta operativa para decidir:**
-1. Mantenimiento y coordinación solo aprueban/rechazan ajustes de **aparatos** en sus sucursales; no autorizan dispositivos ni productos.
-2. Hallazgos con tipo provisional ausente/ambiguo van a revisión corporativa; aparatos identificados requieren destino físico canónico también de tipo aparato.
-3. ADMICORP puede revisar cualquier clase con grant personal global, salvo solicitudes propias; la revisión `MASTER_FIELD` es exclusivamente corporativa.
-4. Reconfirmar que esta política describe las competencias reales con responsables de Mantenimiento y Sistemas. Hasta esa ratificación, **no habilitar grants, no hacer merge, no desplegar E3 y mantener PR DRAFT**.
+**Competencia funcional confirmada el 27/10/2026:** aparatos → Mantenimiento/Coordinación; dispositivos → Sistemas; ambos → administración corporativa, siempre con grants E3 y sin autoaprobación.
+
+**Política conservadora para la implementación:**
+1. Mantenimiento/Coordinación (depto. 1) y Sistemas (depto. 7) requieren `usuario_sucursal` M:N, grant válido E3 y validación del tipo oficial en el backend.
+2. El hallazgo provisional sin tipo o ambiguo es solo corporativo; vinculación permitida únicamente entre el tipo provisional y la clase oficial de destino (aparato con aparato, dispositivo con dispositivo).
+3. Las correcciones `MASTER_FIELD` afectan el maestro global y siguen siendo corporativas; no se elevan por departamento ni por un grant global de un rol scoped.
+4. Conservar PR DRAFT y sin grants productivos hasta QA PostgreSQL, auditoría final, ratificación de ajustes a cero y vinculación, y autorización explícita de rollout.
