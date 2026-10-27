@@ -20,6 +20,11 @@ const CONTACT_CENTER_REGIONAL_PILOT_USERS = new Set(['EDMUNDO']);
 
 const CONTACT_CENTER_MANAGER_ALLOWED_BRANCH_IDS = new Set([
   1,
+  2,
+  3,
+  4,
+  5,
+  6,
   7,
   8,
   9,
