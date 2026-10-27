@@ -1,7 +1,7 @@
 # Inventarios V2 · E3 — Contrato operativo de evidencia para faltantes y hallazgos
 
 **Corte:** 2026-10-27 · **PR:** #1134 DRAFT  
-**Estado:** POLÍTICA PROPUESTA PARA RATIFICACIÓN OPERATIVA. No significa que el backend ya la aplique ni que existan grants.  
+**Estado:** POLÍTICA RATIFICADA E IMPLEMENTADA EN PR DRAFT. CI del nuevo corte pendiente de comprobación; sin grants, merge ni despliegue.  
 **Ámbito:** `NOT_LOCATED` → `AJUSTAR_A_CERO` y `UNREGISTERED_FIND` → `VINCULAR_EXISTENTE`. Las reglas generales de aprobación E3 y la matriz por tipo de activo se conservan.
 
 ## 1. Hallazgo de la auditoría del código
@@ -54,7 +54,7 @@ Para **aprobar** uno de estos casos, y también para nuevas solicitudes E2 de es
 **Invariantes técnicas:**
 - `VINCULAR_EXISTENTE` explícito, `inventario_id` destino realmente presente en `inventario_sucursal` de la sucursal, clase compatible con rol/observación, identidad verificable.
 - `stock_esperado == stock_actual`; `cantidad_fisica > stock_esperado` y no más de 100000 según contrato vigente. Auditar delta en un commit, no duplicar como entrada V1.
-- Si el maestro tiene código, debe aportarse código físico exacto; si no tiene código, el backend actual compara nombre normalizado, lo cual **NO prueba por sí solo identidad física en casos ambiguos**. Recomendación operativa: en ausencia de identificador único, reservar la aprobación a revisión corporativa específica o exigir una identidad adicional trazable antes de liberar este flujo, sujetas a decisión de negocio.
+- Se exige código oficial y etiqueta física del hallazgo coincidentes. **Sin código verificable E3 deniega la vinculación, también a administración corporativa**. Estos casos requieren un procedimiento de identificación adicional distinto, aún no implementado; el nombre por sí solo no autoriza efectos.
 - Si no existe referencia maestra adecuada o no está asignada a la sucursal, NO crearla ni vincular a otra clase: PENDING/rechazo con motivo y apertura posterior de flujo maestro gobernado.
 
 **Ejemplo:** referencia oficial de router en la sucursal: stock 1. Conteo físico total comprueba 2 routers del mismo código. La resolución es `stock_esperado=1`, `cantidad_fisica=2` (efecto +1), **NO** cantidad física 1 para que el backend sume uno.
@@ -66,7 +66,7 @@ Para **aprobar** uno de estos casos, y también para nuevas solicitudes E2 de es
 - **Faltan verificaciones materiales que no deben fingirse:** actualmente el servicio no consulta movimientos/tickets/PM para confirmar ausencias ni guarda fotos; la captura libre y la revisión humana son evidencia declarativa. Si se desea prueba documental fuerte, E4 debe integrar adjuntos/hash/ubicaciones e inspección trazable, con política de retención.
 - **Cualquier incertidumbre** de identidad, stock o procedencia debe impedir una aprobación automática. Se puede rechazar con fundamento, sin tocar el inventario oficial.
 
-## 6. Diseño de implementación que queda sujeto a ratificación
+## 6. Implementación realizada en PR DRAFT — pendiente de validación final
 
 Archivos y puntos, en el orden indicado:
 1. `backend/app/services/inventario_correccion_decisiones_service.py::decidir_lote`: antes de crear lote y **tras autorización E3**, en `APPROVED` para esos dos tipos, exigir fecha/evidencia de la solicitud real; error 422 uniforme, rollback. Los datos siguen inmutables en E2; REJECTED permitido.
@@ -75,15 +75,15 @@ Archivos y puntos, en el orden indicado:
 4. `frontend/src/app/inventario/revision-correcciones/revision-correcciones.component.ts::puedeConfirmar`: mostrar bloqueo por evidencia incompleta antes de confirmar, sin sustituir guard Flask; el detalle E3 mostrará fecha.
 5. QA con PostgreSQL temporal: E2 sin fecha/evidencia 400; E3 sobre un PENDING histórico incompleto 422 sin efecto; aprobación completa de ambos casos 201, idempotencia 200; rechazo de uno incompleto 201 sin efecto; lote mixto con uno incompleto rollback total; autoaprobación/IDOR no filtrados por mensaje de evidencia.
 
-**No implementar de forma automática por el mero hecho de documentarlo**: primero ratificar umbral mínimo, obligación para E2 nuevos y el tratamiento de referencias sin identificador único. Estos cambios son el alcance del siguiente corte técnico, sin alterar grants, datos reales o producción.
+La ratificación operativa fue confirmada. Validación Flask y Angular, más QA sintético, incorporados en PR #1134. Los resultados CI sobre el HEAD final, la auditoría independiente y el rollout siguen pendientes.
 
-## 7. Preguntas de negocio para ratificación
+## 7. Criterios ratificados
 
-**Recomendación por defecto (propuesta):**
+**Reglas aprobadas:**
 - Fecha local obligatoria + evidencia descriptiva ≥20 caracteres para nuevas solicitudes y aprobaciones especiales.
 - Ajuste a cero solo por ausencia **total**, tras verificar ubicaciones y posibles movimientos.
 - Vincular solo a referencia oficial preexistente con identidad física, sin alta automática ni doble conteo; cantidad informada es el total final.
-- Casos sin código/identidad única no se aprueban por un mero nombre: elevar a ADMICORP para investigación, sin bypass silencioso de Sistemas/Mantenimiento.
+- Casos sin código/identidad única no se aprueban en E3: revisión e identificación por procedimiento independiente pendiente, sin bypass corporativo.
 - Foto/documento adjunto recomendable como evolución E4; no obligatorio ni falsamente «verificado» por E3 actual.
 
-**Estado gate:** estos criterios quedan formalizados como *propuesta*. Aún requieren aceptación expresa del responsable operativo y posteriores cambios/test QA. La fase E3 conserva PR DRAFT.
+**Estado gate:** política ratificada, implementación en PR DRAFT. CI, revisión independiente, QA autenticado no destructivo y autorización explícita de despliegue continúan abiertos.
