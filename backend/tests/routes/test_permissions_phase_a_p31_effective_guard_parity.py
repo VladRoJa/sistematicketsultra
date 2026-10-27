@@ -209,9 +209,10 @@ def test_maintenance_completion_and_return_are_distinct_policies_before_lookup(
     handler, role
 ):
     user = SimpleNamespace(id=881, rol=role, department_id=1, username="USUARIO_QA")
+    lookup = Mock()
     with patch.object(maintenance, "has_maintenance_coordination_permission",
                       return_value=False), \
-         patch.object(maintenance.Ticket, "query") as lookup:
+         patch.object(maintenance, "Ticket", SimpleNamespace(query=lookup)):
         with pytest.raises(maintenance.TicketCoordinationForbidden):
             getattr(maintenance, handler)(42, user, {})
     lookup.filter.assert_not_called()
