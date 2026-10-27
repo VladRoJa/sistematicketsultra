@@ -140,6 +140,25 @@ def test_generates_xlsx_with_two_disconnected_monthly_series_and_selectors():
         chart = z.read("xl/charts/chart1.xml").decode()
         # 3 indicadores * 2 meses: no existe una serie que abarque ambos meses.
         assert chart.count("<c:ser>") == 6
+        # No aceptar 0% artificial en meses ajenos ni en métricas ocultas.
+        # Las fechas conservan posiciones: septiembre=0; octubre=1,2.
+        from xml.etree import ElementTree as ET
+        plot = ET.fromstring(chart)
+        chart_ns = {"c": "http://schemas.openxmlformats.org/drawingml/2006/chart"}
+        series = plot.findall(".//c:lineChart/c:ser", chart_ns)
+        cached = [
+            {
+                int(pt.attrib["idx"]): float(pt.find("c:v", chart_ns).text)
+                for pt in ser.findall("c:val/c:numRef/c:numCache/c:pt", chart_ns)
+            }
+            for ser in series
+        ]
+        assert [set(item) for item in cached] == [
+            {0}, set(), set(), {1, 2}, set(), set(),
+        ]
+        assert cached[0][0] == pytest.approx(40 / 200)
+        assert cached[3][1] == pytest.approx(40 / 200)
+        assert plot.find(".//c:plotVisOnly", chart_ns) is None
         trend = z.read("xl/worksheets/sheet3.xml").decode()
         assert "SUMIFS" in trend
         assert "2026-09" in trend
