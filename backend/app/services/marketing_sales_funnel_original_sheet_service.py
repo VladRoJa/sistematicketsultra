@@ -161,7 +161,12 @@ def write_original_operational_sheet(
     sheet.set_row(2, 8)
     sheet.set_row(3, 31)
     sheet.merge_range("A1:S1", "FUNNEL DE VENTA NUEVA · DETALLE POR SUCURSAL", title_fmt)
-    sheet.merge_range("A2:S2", f"{title} · Alcance: {scope}", subtitle_fmt)
+    sheet.merge_range(
+        "A2:S2",
+        f"{title} · Corte: {cutoff.isoformat()} · Alcance: {scope}"
+        " · Visitas registradas (sin compras directas ajustadas)",
+        subtitle_fmt,
+    )
     for col, value in enumerate(HEADERS):
         sheet.write(3, col, value, header_fmt)
 
