@@ -3,6 +3,7 @@
 import os
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
+from sqlalchemy import func, or_
 
 from app.extensions import db
 from app.models.planning_targets import PlanningOperatorORM
@@ -586,23 +587,64 @@ def _serialize_effective_action(action, user, context: dict) -> dict:
     }
 
 
+def _is_simple_global_module_grant(grant) -> bool:
+    """Solo overrides globales indefinidos; el editor no modela scopes ni fechas."""
+    return (
+        grant.scope_type == "global"
+        and getattr(grant, "scope_branch_id", None) is None
+        and not getattr(grant, "scope_branch_ids", None)
+        and getattr(grant, "scope_department_id", None) is None
+        and not getattr(grant, "scope_payload", None)
+        and getattr(grant, "starts_at", None) is None
+        and getattr(grant, "expires_at", None) is None
+        and grant.effect in {"allow", "deny"}
+    )
+
+
+def _has_complex_module_grant(grants) -> bool:
+    """Un grant limitado o temporal requiere editor especializado, nunca globalizarlo."""
+    return any(not _is_simple_global_module_grant(grant) for grant in grants)
+
+
+def _best_module_grants_by_action(rows) -> dict:
+    """Dentro del mismo principal/acción, DENY gana a ALLOW duplicado.
+
+    El orden de entrada ya es updated_at DESC, id DESC para desempates.
+    El nivel 'user' se compara antes que el nivel 'role' en el preview
+    existente; NUNCA se usa como enforcement de rutas.
+    """
+    result = {}
+    for grant in rows:
+        if not _is_simple_global_module_grant(grant):
+            continue
+        current = result.get(grant.action_id)
+        if current is None or (grant.effect == "deny" and current.effect != "deny"):
+            result[grant.action_id] = grant
+    return result
+
+
 def _get_latest_active_grants_by_action(*, user, action_ids: list[int]) -> dict:
     if not action_ids:
-        return {
-            "user": {},
-            "role": {},
-        }
+        return {"user": {}, "role": {}}
 
-    role = _normalize_role(user)
-
+    # Esta pantalla representa exclusivamente el permiso BASE/global del módulo.
+    # Grants por sucursal, documento o vigencia temporal no son casillas globales.
+    # Se seleccionan únicamente los globales sin fecha para no confundir
+    # un grant temporal con la configuración indefinida de esta pantalla.
+    common = (
+        PermissionGrantORM.is_active.is_(True),
+        PermissionGrantORM.deleted_at.is_(None),
+        PermissionGrantORM.scope_type == "global",
+        PermissionGrantORM.starts_at.is_(None),
+        PermissionGrantORM.expires_at.is_(None),
+        PermissionGrantORM.action_id.in_(action_ids),
+    )
     user_grants = (
         PermissionGrantORM.query
         .filter(
-            PermissionGrantORM.is_active.is_(True),
-            PermissionGrantORM.deleted_at.is_(None),
+            *common,
             PermissionGrantORM.principal_type == "user",
             PermissionGrantORM.principal_user_id == user.id,
-            PermissionGrantORM.action_id.in_(action_ids),
         )
         .order_by(
             PermissionGrantORM.updated_at.desc(),
@@ -612,15 +654,14 @@ def _get_latest_active_grants_by_action(*, user, action_ids: list[int]) -> dict:
     )
 
     role_grants = []
+    role = _normalize_role(user)
     if role:
         role_grants = (
             PermissionGrantORM.query
             .filter(
-                PermissionGrantORM.is_active.is_(True),
-                PermissionGrantORM.deleted_at.is_(None),
+                *common,
                 PermissionGrantORM.principal_type == "role",
                 PermissionGrantORM.principal_role_key == role,
-                PermissionGrantORM.action_id.in_(action_ids),
             )
             .order_by(
                 PermissionGrantORM.updated_at.desc(),
@@ -629,19 +670,10 @@ def _get_latest_active_grants_by_action(*, user, action_ids: list[int]) -> dict:
             .all()
         )
 
-    grants_by_action = {
-        "user": {},
-        "role": {},
+    return {
+        "user": _best_module_grants_by_action(user_grants),
+        "role": _best_module_grants_by_action(role_grants),
     }
-
-    for grant in user_grants:
-        grants_by_action["user"].setdefault(grant.action_id, grant)
-
-    for grant in role_grants:
-        grants_by_action["role"].setdefault(grant.action_id, grant)
-
-    return grants_by_action
-
 
 def _apply_module_access_override(*, legacy_decision: dict, user_grant, role_grant) -> dict:
     if user_grant:
@@ -1094,9 +1126,13 @@ def get_user_module_access(user_id: int):
 
     return jsonify({
         "mode": "module_access_readonly_v1",
+        "grants_enforced": False,
+        "hard_stops_evaluated": False,
         "note": (
             "Endpoint de lectura para pantalla de checks. "
-            "No crea, edita, borra ni aplica grants."
+            "No crea, edita, borra ni aplica grants. "
+            "effective_allowed es una proyección de configuración, "
+            "no una autorización efectiva HTTP."
         ),
         "user": {
             "id": target_user.id,
@@ -1149,6 +1185,7 @@ def update_user_module_access(user_id: int):
 
     valid_overrides = {"allow", "deny", "inherit"}
     validated_changes = []
+    seen_module_keys = set()
 
     for index, change in enumerate(changes):
         if not isinstance(change, dict):
@@ -1166,6 +1203,13 @@ def update_user_module_access(user_id: int):
                 "error": "Bad request",
                 "detail": f"El cambio #{index + 1} no tiene module_key.",
             }), 400
+
+        if module_key in seen_module_keys:
+            return jsonify({
+                "error": "Bad request",
+                "detail": "Módulo duplicado en el mismo lote.",
+            }), 400
+        seen_module_keys.add(module_key)
 
         if override not in valid_overrides:
             return jsonify({
@@ -1211,6 +1255,36 @@ def update_user_module_access(user_id: int):
             "reason": reason,
         })
 
+    # Preflight de TODO el lote antes de alterar grants o crear auditoría:
+    # no reescribir un permiso de sucursal/tiempo/custom como GLOBAL.
+    # Un editor de scopes separado resolverá estos casos.
+    for item in validated_changes:
+        active_grants = (
+            PermissionGrantORM.query
+            .filter(
+                PermissionGrantORM.is_active.is_(True),
+                PermissionGrantORM.deleted_at.is_(None),
+                PermissionGrantORM.principal_type == "user",
+                PermissionGrantORM.principal_user_id == target_user.id,
+                PermissionGrantORM.action_id == item["action"].id,
+            )
+            .order_by(
+                PermissionGrantORM.updated_at.desc(),
+                PermissionGrantORM.id.desc(),
+            )
+            .all()
+        )
+        if _has_complex_module_grant(active_grants):
+            return jsonify({
+                "error": "Conflict",
+                "detail": (
+                    "Existe un grant de alcance restringido o temporal. "
+                    "No se puede modificar desde la casilla global."
+                ),
+                "module_key": item["module"].key,
+            }), 409
+        item["active_grants"] = active_grants
+
     results = []
     created_count = 0
     updated_count = 0
@@ -1225,21 +1299,7 @@ def update_user_module_access(user_id: int):
         override = item["override"]
         reason = item["reason"]
 
-        active_grants = (
-            PermissionGrantORM.query
-            .filter(
-                PermissionGrantORM.is_active.is_(True),
-                PermissionGrantORM.deleted_at.is_(None),
-                PermissionGrantORM.principal_type == "user",
-                PermissionGrantORM.principal_user_id == target_user.id,
-                PermissionGrantORM.action_id == action.id,
-            )
-            .order_by(
-                PermissionGrantORM.updated_at.desc(),
-                PermissionGrantORM.id.desc(),
-            )
-            .all()
-        )
+        active_grants = item["active_grants"]
 
         result = {
             "module_key": module.key,
