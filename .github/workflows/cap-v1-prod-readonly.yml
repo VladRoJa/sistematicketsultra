@@ -1,0 +1,67 @@
+name: CAP-V1 Production DEMO Read-only Video
+
+on:
+  workflow_dispatch:
+    inputs:
+      demo_ticket_id:
+        description: 'ID validado de ticket TAPIZADO en ULTRA DEMO (is_demo=true)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cap-v1-production-demo-readonly
+  cancel-in-progress: false
+
+jobs:
+  video-readonly:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: cap-prod-readonly
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Instalar motor de video y voz
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg espeak-ng
+          python -m pip install playwright==1.54.0
+          python -m playwright install --with-deps chromium
+      - name: Validar configuración sin mostrar secretos
+        env:
+          CAP_PROD_DEMO_USER: ${{ secrets.CAP_PROD_DEMO_USER }}
+          CAP_PROD_DEMO_PASSWORD: ${{ secrets.CAP_PROD_DEMO_PASSWORD }}
+          DEMO_TICKET_ID: ${{ inputs.demo_ticket_id }}
+        run: |
+          test -n "$CAP_PROD_DEMO_USER" || { echo 'Falta CAP_PROD_DEMO_USER'; exit 1; }
+          test -n "$CAP_PROD_DEMO_PASSWORD" || { echo 'Falta CAP_PROD_DEMO_PASSWORD'; exit 1; }
+          case "$DEMO_TICKET_ID" in
+            ''|*[!0-9]*) echo 'ID de ticket inválido'; exit 1;;
+          esac
+          test "$DEMO_TICKET_ID" -gt 0
+      - name: Grabar recorrido solo lectura contra producción
+        env:
+          CAP_PROD_DEMO_USER: ${{ secrets.CAP_PROD_DEMO_USER }}
+          CAP_PROD_DEMO_PASSWORD: ${{ secrets.CAP_PROD_DEMO_PASSWORD }}
+          DEMO_TICKET_ID: ${{ inputs.demo_ticket_id }}
+        run: |
+          python -m scripts.training.production_readonly \
+            --readonly-ack SOLO_LECTURA_PRODUCCION_CAP_V1 \
+            --ticket-id "$DEMO_TICKET_ID" \
+            --voice espeak \
+            --output artifacts/capacitacion/prod-readonly
+      - name: Adjuntar video solo si la verificación y la grabación finalizaron bien
+        uses: actions/upload-artifact@v4
+        with:
+          name: CAP-V1-ULTRA-DEMO-READONLY-${{ github.run_number }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            artifacts/capacitacion/prod-readonly/capacitacion.mp4
+            artifacts/capacitacion/prod-readonly/subtitulos.srt
+            artifacts/capacitacion/prod-readonly/manifiesto.json
