@@ -291,6 +291,35 @@ def create_workbook(
     calc.write("R4", "Hasta efectivo", navy)
     calc.write_formula("S4", '=IF(Resumen!$A$4="Personalizado",Resumen!$K$4,$R$2)',
                        None, last_month)
+    # Tres últimos meses CON CORTES disponibles dentro del periodo elegido.
+    # T2/U2/V2 responden al selector; admiten periodos con menos de 3 meses.
+    year, month = int(last_month[:4]), int(last_month[5:])
+    start_month_index = year * 12 + month - 1 - 2
+    default_start = f"{start_month_index // 12:04d}-{start_month_index % 12 + 1:02d}"
+    visible_months = [ym for ym in months if default_start <= ym <= last_month]
+    initial_month_keys = ([""] * 3 + visible_months[-3:])[-3:]
+    month_col_range = (
+        f"${catalog_month}$2:${catalog_month}${max(2, len(months) + 1)}"
+    )
+    calc.write("T1", "Mes anterior 2", small)
+    calc.write("U1", "Mes anterior", small)
+    calc.write("V1", "Último mes", small)
+    for target, prior, cache in (
+        ("V2", "$S$4", initial_month_keys[2]),
+        ("U2", "$V$2", initial_month_keys[1]),
+        ("T2", "$U$2", initial_month_keys[0]),
+    ):
+        condition = (
+            f"({month_col_range}<={prior})" if target == "V2"
+            else f"({month_col_range}<{prior})"
+        )
+        month_formula = (
+            '=IFERROR(LOOKUP(2,1/(('
+            + month_col_range + '>=$S$3)*' + condition
+            + '),' + month_col_range + '),"")'
+        ) if weekly else '=""'
+        calc.write_formula(target, month_formula, None, cache)
+
     for c, title in enumerate(("Corte", "Mes", "Leads", "Visitas", "Venta digital",
                                *INDICATORS, "Incluido", "Δ L/V", "Δ V/V",
                                "Δ L/Venta")):
