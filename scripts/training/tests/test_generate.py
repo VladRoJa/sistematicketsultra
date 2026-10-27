@@ -52,8 +52,10 @@ class TrainingV1Tests(unittest.TestCase):
 
     def test_export_mp4_without_mutating_suite(self):
         import shutil
-        if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
-            self.skipTest("FFmpeg no disponible")
+        self.assertTrue(shutil.which("ffmpeg"), "Se requiere ffmpeg: QA no puede omitir MP4")
+        self.assertTrue(shutil.which("ffprobe"), "Se requiere ffprobe: QA no puede omitir MP4")
+        self.assertTrue(shutil.which("espeak-ng") or shutil.which("espeak"),
+                        "Se requiere narrador offline: QA no puede omitir audio")
         with tempfile.TemporaryDirectory() as temp:
             base = Path(temp)
             raw = base / "navegacion.webm"
@@ -64,7 +66,7 @@ class TrainingV1Tests(unittest.TestCase):
                            stderr=subprocess.DEVNULL, check=True)
             scenes = [{"at": 0.0, "text": "Hola, Suite Ultra"}]
             make_srt(scenes, 2.0, base / "subtitulos.srt")
-            output = export_video(raw, base, scenes, voice="none")
+            output = export_video(raw, base, scenes, voice="espeak")
             self.assertTrue(output.is_file())
             probe = subprocess.run(
                 ["ffprobe", "-v", "error", "-show_entries",
@@ -73,6 +75,7 @@ class TrainingV1Tests(unittest.TestCase):
             )
             codecs = [x["codec_name"] for x in json.loads(probe.stdout)["streams"]]
             self.assertIn("h264", codecs)
+            self.assertIn("aac", codecs)
             self.assertIn("mov_text", codecs)
 
 
