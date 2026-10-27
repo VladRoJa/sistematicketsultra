@@ -371,8 +371,14 @@ def _apply_approved(row, decision, masters, stocks, actor_id, reason, resolution
         if not isinstance(proposed, dict) or set(proposed) != {"cantidad_fisica"}:
             raise DecisionError(422, "invalid_quantity", "Propuesta de cantidad inválida.")
         final = proposed["cantidad_fisica"]
-        if type(final) is not int or final < 0 or current_stock == final:
-            raise DecisionError(409, "stale_quantity", "Cantidad física inválida u obsoleta.")
+        if type(final) is not int or final <= 0:
+            raise DecisionError(
+                422, "zero_requires_not_located",
+                "Una existencia física de cero requiere NOT_LOCATED con "
+                "evidencia y resolución explícita AJUSTAR_A_CERO.",
+            )
+        if current_stock == final:
+            raise DecisionError(409, "stale_quantity", "Cantidad física obsoleta.")
         if row.valor_original != {"stock": current_stock}:
             raise DecisionError(409, "stale_original", "Original de solicitud no coincide.")
         stock_row.stock = final
