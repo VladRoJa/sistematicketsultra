@@ -326,6 +326,11 @@ def _official_snapshot(data):
     if data["tipo"] == "QUANTITY_DIFFERENCE":
         if stock == data["valor_propuesto"]["cantidad_fisica"]:
             return None, _error(400, "La cantidad física es igual al stock oficial.")
+    if data["tipo"] == "NOT_LOCATED" and stock <= 0:
+        return None, _error(
+            400, "No localizado requiere stock oficial positivo; "
+            "la referencia ya está en cero.",
+        )
     return {"baseline": snapshot, "original": {"stock": stock}}, None
 
 
