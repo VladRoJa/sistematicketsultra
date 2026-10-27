@@ -16,6 +16,8 @@ _GLOBAL_ADMIN_ROLES = frozenset({"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN"})
 _SCOPED_APPROVER_ROLES = frozenset({
     "MANTENIMIENTO", "COORDINADOR_MANTENIMIENTO",
 })
+# Los revisores operativos E3 deben pertenecer efectivamente a Mantenimiento.
+_MAINTENANCE_DEPARTMENT_ID = 1
 _ALLOWED_TYPES = frozenset({
     "MASTER_FIELD", "QUANTITY_DIFFERENCE",
     "NOT_LOCATED", "UNREGISTERED_FIND",
@@ -89,6 +91,9 @@ def resolver_acceso_autorizacion_e3(
     role = str(actor["rol"] or "").strip().upper()
     if role not in _GLOBAL_ADMIN_ROLES | _SCOPED_APPROVER_ROLES:
         return InventoryCorrectionApprovalAccess(False, "role_not_enabled")
+    if (role in _SCOPED_APPROVER_ROLES
+            and actor["department_id"] != _MAINTENANCE_DEPARTMENT_ID):
+        return InventoryCorrectionApprovalAccess(False, "department_not_enabled")
 
     grants = db.session.execute(
         text("""
@@ -175,6 +180,9 @@ def alcance_revision_e3(actor_usuario_id):
         return None
     role = str(actor["rol"] or "").strip().upper()
     if role not in _GLOBAL_ADMIN_ROLES | _SCOPED_APPROVER_ROLES:
+        return None
+    if (role in _SCOPED_APPROVER_ROLES
+            and actor["department_id"] != _MAINTENANCE_DEPARTMENT_ID):
         return None
     grants = db.session.execute(text("""
         SELECT g.principal_type, g.effect, g.scope_type,
