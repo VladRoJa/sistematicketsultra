@@ -260,8 +260,11 @@ def _validate_payload(payload):
                 if not isinstance(proposed, dict) or set(proposed) != {"cantidad_fisica"}:
                     return None, _error(400, "Se requiere cantidad_fisica.")
                 qty = proposed["cantidad_fisica"]
-                if isinstance(qty, bool) or not isinstance(qty, int) or qty < 0:
-                    return None, _error(400, "cantidad_fisica debe ser entero no negativo.")
+                if isinstance(qty, bool) or not isinstance(qty, int) or qty <= 0:
+                    return None, _error(
+                        400, "Diferencia de cantidad requiere al menos una unidad física. "
+                        "Si no se encontró ninguna, registra NOT_LOCATED con evidencia.",
+                    )
             else:
                 if proposed != {"no_localizado": True}:
                     return None, _error(400, "NOT_LOCATED necesita no_localizado=true.")
