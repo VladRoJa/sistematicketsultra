@@ -33,7 +33,11 @@ def test_e2_revision_continua_cadena_y_no_crea_heads_paralelos():
     cfg = AlembicConfig()
     cfg.set_main_option("script_location", str(BASE / "migrations"))
     graph = ScriptDirectory.from_config(cfg)
-    assert graph.get_heads() == ["v2e2a7c92623"]
+    # E2 debe seguir en la cadena, aunque E3 y futuros hitos agreguen revisiones.
+    revisions = {item.revision for item in graph.walk_revisions()}
+    assert "v2e2a7c92623" in revisions
+    assert "m23c10202623" in revisions
+    assert len(graph.get_heads()) == 1
 
 
 def test_e2_modela_solo_solicitudes_con_fk_compuesta_e_idempotencia():

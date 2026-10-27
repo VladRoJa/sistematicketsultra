@@ -7,6 +7,11 @@ on:
       - "frontend/src/app/inventario/solicitudes/**"
       - "frontend/src/app/services/inventario.service.ts"
       - "frontend/tests/inventario-e2-solicitudes-ui.test.cjs"
+      - "frontend/tests/inventario-e3-revision-ui.test.cjs"
+      - "frontend/src/app/inventario/revision-correcciones/**"
+      - "frontend/src/app/inventario/inventario.routes.ts"
+      - "frontend/src/app/inventario/inventario-layout/**"
+      - "frontend/src/app/layout/layout.component.ts"
       - "frontend/tests/inventario-existencias-spinner-qa10.test.cjs"
       - ".github/workflows/inventario-existencias-spinner-ci.yml"
   workflow_dispatch:
@@ -31,7 +36,7 @@ jobs:
       - name: Install locked dependencies
         run: npm ci --legacy-peer-deps --no-audit --no-fund
       - name: QA-10C Existencias loading spinner
-        run: node --test tests/inventario-existencias-spinner-qa10.test.cjs tests/inventario-e2-solicitudes-ui.test.cjs
+        run: node --test tests/inventario-existencias-spinner-qa10.test.cjs tests/inventario-e2-solicitudes-ui.test.cjs tests/inventario-e3-revision-ui.test.cjs
       - name: Type-check Angular
         run: npx tsc --noEmit --project tsconfig.app.json
       - name: Production build

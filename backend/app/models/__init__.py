@@ -35,6 +35,13 @@ from .inventario import (
 )
 from .inventario_codigo_correccion import InventarioCodigoCorreccionORM
 from .inventario_solicitud_correccion import InventarioSolicitudCorreccionORM
+from .inventario_correccion_decision import (
+    InventarioCorreccionLoteORM,
+    InventarioCorreccionDecisionORM,
+    InventarioCorreccionAjusteORM,
+    InventarioCorreccionMaestroAuditORM,
+    InventarioCorreccionAltaAuditORM,
+)
 from .mantenimiento_equipo import FamiliaEquipoORM, FallaMantenimientoORM
 from .departamento_model import Departamento
 from .formulario_ticket import FormularioTicket, CampoFormulario
@@ -226,6 +233,11 @@ __all__ = [
     "InventarioGeneral",
     "InventarioSucursal",
     "InventarioSolicitudCorreccionORM",
+    "InventarioCorreccionLoteORM",
+    "InventarioCorreccionDecisionORM",
+    "InventarioCorreccionAjusteORM",
+    "InventarioCorreccionMaestroAuditORM",
+    "InventarioCorreccionAltaAuditORM",
     "MovimientoInventario",
     "DetalleMovimiento",
     "FamiliaEquipoORM",

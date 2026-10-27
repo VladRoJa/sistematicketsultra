@@ -7,6 +7,15 @@ on:
       - "backend/app/models/__init__.py"
       - "backend/migrations/versions/v2e2a7c92623_inventory_v2_correction_requests.py"
       - "backend/tests/models/test_inventario_v2_e2_schema.py"
+      - "backend/app/models/inventario_correccion_decision.py"
+      - "backend/migrations/versions/v2e3p2102626_inventario_decision_audit.py"
+      - "backend/tests/models/test_inventario_v2_e3_schema.py"
+      - "backend/migrations/versions/v2e3a1102626_inventory_correction_approve_action.py"
+      - "backend/tests/models/test_inventario_v2_e3_catalog_action.py"
+      - "backend/app/utils/inventory_correction_permissions.py"
+      - "backend/tests/utils/test_inventory_correction_e3_permissions_pg.py"
+      - "backend/app/services/inventario_correccion_decisiones_service.py"
+      - "backend/tests/routes/test_inventario_e3_decisiones_pg.py"
       - "backend/app/routes/inventario_solicitudes_routes.py"
       - "backend/app/__init__.py"
       - "backend/tests/routes/test_inventario_solicitudes_e2_api_pg.py"
@@ -48,6 +57,15 @@ jobs:
         run: |
           python -m py_compile \
             app/models/inventario_solicitud_correccion.py \
+            app/models/inventario_correccion_decision.py \
+            app/utils/inventory_correction_permissions.py \
+            app/services/inventario_correccion_decisiones_service.py \
+            tests/routes/test_inventario_e3_decisiones_pg.py \
+            tests/utils/test_inventory_correction_e3_permissions_pg.py \
+            migrations/versions/v2e3p2102626_inventario_decision_audit.py \
+            migrations/versions/v2e3a1102626_inventory_correction_approve_action.py \
+            tests/models/test_inventario_v2_e3_schema.py \
+            tests/models/test_inventario_v2_e3_catalog_action.py \
             app/routes/inventario_solicitudes_routes.py \
             app/__init__.py \
             migrations/versions/v2e2a7c92623_inventory_v2_correction_requests.py \
@@ -65,4 +83,8 @@ jobs:
         run: |
           python -m pytest -q --tb=short -o addopts= \
             tests/models/test_inventario_v2_e2_schema.py \
-            tests/routes/test_inventario_solicitudes_e2_api_pg.py
+            tests/models/test_inventario_v2_e3_schema.py \
+            tests/models/test_inventario_v2_e3_catalog_action.py \
+            tests/routes/test_inventario_solicitudes_e2_api_pg.py \
+            tests/utils/test_inventory_correction_e3_permissions_pg.py \
+            tests/routes/test_inventario_e3_decisiones_pg.py

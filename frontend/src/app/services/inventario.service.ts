@@ -46,6 +46,40 @@ export interface ListaSolicitudesInventario {
   per_page: number;
 }
 
+export interface RevisionCorreccionesContexto {
+  can_review: boolean;
+  corporativo: boolean;
+  sucursales: { sucursal_id: number; sucursal: string }[];
+}
+
+export interface ResolucionNoLocalizado {
+  accion: 'AJUSTAR_A_CERO';
+  stock_esperado: number;
+  justificacion: string;
+}
+
+export interface ResolucionHallazgo {
+  accion: 'VINCULAR_EXISTENTE';
+  inventario_id: number;
+  stock_esperado: number;
+  cantidad_fisica: number;
+  justificacion: string;
+}
+
+export interface LoteDecisionesInventario {
+  decision: 'APPROVED' | 'REJECTED';
+  solicitud_ids: number[];
+  motivo: string;
+  idempotency_key: string;
+  resoluciones?: Record<string, ResolucionNoLocalizado | ResolucionHallazgo>;
+}
+
+export interface ResultadoLoteDecisiones {
+  lote_id: number;
+  replayed: boolean;
+  items: { solicitud_id: number; estado: 'APPROVED' | 'REJECTED'; efecto: unknown }[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class InventarioService {
   private url = `${environment.apiUrl}/inventario`;
@@ -147,6 +181,36 @@ obtenerInventario(opts?: { sucursal_id?: number }): Observable<any[]> {
 
   obtenerSolicitudCorreccion(id: number): Observable<{ solicitud: SolicitudCorreccionInventario }> {
     return this.http.get<{ solicitud: SolicitudCorreccionInventario }>(`${this.url}/solicitudes/${id}`);
+  }
+
+  // E3 independiente: el backend concede capacidad y filtra el universo autorizado.
+  contextoRevisionCorrecciones(): Observable<RevisionCorreccionesContexto> {
+    return this.http.get<RevisionCorreccionesContexto>(`${this.url}/solicitudes/revision/contexto`);
+  }
+
+  listarRevisionCorrecciones(params: {
+    sucursal_id?: number; tipo?: TipoSolicitudInventario;
+    estado?: 'PENDING' | 'APPROVED' | 'REJECTED'; page?: number; per_page?: number;
+  }): Observable<ListaSolicitudesInventario> {
+    let httpParams = new HttpParams();
+    if (params.sucursal_id != null) httpParams = httpParams.set('sucursal_id', String(params.sucursal_id));
+    if (params.tipo) httpParams = httpParams.set('tipo', params.tipo);
+    if (params.estado) httpParams = httpParams.set('estado', params.estado);
+    if (params.page != null) httpParams = httpParams.set('page', String(params.page));
+    if (params.per_page != null) httpParams = httpParams.set('per_page', String(params.per_page));
+    return this.http.get<ListaSolicitudesInventario>(`${this.url}/solicitudes/revision`, { params: httpParams });
+  }
+
+  detalleRevisionCorreccion(id: number): Observable<{ solicitud: SolicitudCorreccionInventario }> {
+    return this.http.get<{ solicitud: SolicitudCorreccionInventario }>(
+      `${this.url}/solicitudes/revision/${id}`
+    );
+  }
+
+  decidirCorreccionesLote(payload: LoteDecisionesInventario): Observable<ResultadoLoteDecisiones> {
+    return this.http.post<ResultadoLoteDecisiones>(
+      `${this.url}/solicitudes/decisiones/lote`, payload
+    );
   }
 
   registrarMovimiento(data: any): Observable<any> {

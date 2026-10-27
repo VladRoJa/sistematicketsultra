@@ -11,22 +11,29 @@ from zoneinfo import ZoneInfo
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
-from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import text, bindparam, and_, or_, func
+from sqlalchemy.exc import IntegrityError, OperationalError
+from flask import current_app
+from app.services.inventario_correccion_decisiones_service import decidir_lote, DecisionError
+from app.utils.inventory_correction_permissions import (
+    alcance_revision_e3, aliases_clase_inventario_e3,
+)
 
 from app.extensions import db
 from app.models.inventario_solicitud_correccion import InventarioSolicitudCorreccionORM
+from app.models.inventario import InventarioGeneral
 
 
 inventario_solicitudes_bp = Blueprint("inventario_solicitudes", __name__)
 
 # Acceso E2 independiente de inventory.read / inventory.movement_write.
 # No incluir GERENTE/GERENTE_REGIONAL/COORDINADOR antes de E5.
-_GLOBAL_ROLES = frozenset({
-    "ADMIN", "ADMINISTRADOR", "SUPER_ADMIN",
-    "MANTENIMIENTO", "SISTEMAS", "TECNICO",
+_GLOBAL_ROLES = frozenset({"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN"})
+# E2: personal técnico opera exclusivamente sus sucursales M:N asignadas.
+_M2M_SCOPED_ROLES = frozenset({
+    "SR_MANTENIMIENTO", "MANTENIMIENTO", "SISTEMAS", "TECNICO",
 })
-_SCOPED_ROLES = frozenset({"SR_MANTENIMIENTO", "AUX_MANTENIMIENTO"})
+_SCOPED_ROLES = _M2M_SCOPED_ROLES | frozenset({"AUX_MANTENIMIENTO"})
 _TYPES = frozenset({
     "MASTER_FIELD", "QUANTITY_DIFFERENCE", "NOT_LOCATED", "UNREGISTERED_FIND",
 })
@@ -104,7 +111,7 @@ def _actor():
     if role not in _SCOPED_ROLES:
         return None, _error(403, "Inventarios V2 E2 no habilitado para este rol.")
 
-    if role == "SR_MANTENIMIENTO":
+    if role in _M2M_SCOPED_ROLES:
         # Solo la asignación M:N real. Nunca sumar la sucursal primaria.
         ids = db.session.execute(
             text("SELECT sucursal_id FROM usuario_sucursal WHERE user_id = :id"),
@@ -199,6 +206,15 @@ def _validate_payload(payload):
             return None, _error(400, "La observación no puede ser futura.")
 
     kind = payload["tipo"]
+    # Para estos dos ajustes con efecto patrimonial se exige evidencia
+    # de observación desde E2; E3 no puede aportarla a posteriori en silencio.
+    if kind in ("NOT_LOCATED", "UNREGISTERED_FIND"):
+        if observed is None or not isinstance(evidence, str) or not 20 <= len(evidence.strip()) <= 2000:
+            return None, _error(
+                400,
+                "No localizado y hallazgo requieren fecha de observación "
+                "y evidencia física descriptiva de 20 a 2000 caracteres.",
+            )
     inventory = payload.get("inventario_id")
     field = payload.get("campo")
     proposed = payload.get("valor_propuesto")
@@ -244,8 +260,11 @@ def _validate_payload(payload):
                 if not isinstance(proposed, dict) or set(proposed) != {"cantidad_fisica"}:
                     return None, _error(400, "Se requiere cantidad_fisica.")
                 qty = proposed["cantidad_fisica"]
-                if isinstance(qty, bool) or not isinstance(qty, int) or qty < 0:
-                    return None, _error(400, "cantidad_fisica debe ser entero no negativo.")
+                if isinstance(qty, bool) or not isinstance(qty, int) or qty <= 0:
+                    return None, _error(
+                        400, "Diferencia de cantidad requiere al menos una unidad física. "
+                        "Si no se encontró ninguna, registra NOT_LOCATED con evidencia.",
+                    )
             else:
                 if proposed != {"no_localizado": True}:
                     return None, _error(400, "NOT_LOCATED necesita no_localizado=true.")
@@ -307,6 +326,11 @@ def _official_snapshot(data):
     if data["tipo"] == "QUANTITY_DIFFERENCE":
         if stock == data["valor_propuesto"]["cantidad_fisica"]:
             return None, _error(400, "La cantidad física es igual al stock oficial.")
+    if data["tipo"] == "NOT_LOCATED" and stock <= 0:
+        return None, _error(
+            400, "No localizado requiere stock oficial positivo; "
+            "la referencia ya está en cero.",
+        )
     return {"baseline": snapshot, "original": {"stock": stock}}, None
 
 
@@ -458,3 +482,163 @@ def detalle_solicitud(solicitud_id):
     if row is None:
         return _error(404, "Solicitud inexistente o fuera de tu alcance.")
     return jsonify({"solicitud": _serialize(row)}), 200
+
+
+
+
+def _actor_revision():
+    identity = get_jwt_identity()
+    if isinstance(identity, bool):
+        return None, _error(401, "Sesión inválida.")
+    try:
+        actor_id = int(identity)
+    except (TypeError, ValueError, OverflowError):
+        return None, _error(401, "Sesión inválida.")
+    access = alcance_revision_e3(actor_id)
+    if access is None:
+        return None, _error(403, "No tienes permiso para revisar correcciones.")
+    return access, None
+
+
+def _query_revision(access):
+    # No filtrar en frontend: el límite real se aplica en SQL ANTES de paginar.
+    query = InventarioSolicitudCorreccionORM.query.filter(
+        InventarioSolicitudCorreccionORM.sucursal_id.in_(access["sucursales"]),
+        InventarioSolicitudCorreccionORM.creado_por_usuario_id != access["actor_id"],
+    )
+    if not access["corporativo"]:
+        # Competencia por clase REAL en SQL antes de contar/paginar/detallar:
+        # Mantenimiento: aparatos. Sistemas: dispositivos. Familia no participa.
+        aliases = aliases_clase_inventario_e3(access["clase_activo"])
+        if not aliases:
+            return query.filter(False)
+        actual_type = func.lower(func.btrim(InventarioGeneral.tipo))
+        provisional_type = func.lower(func.btrim(
+            InventarioSolicitudCorreccionORM.hallazgo_provisional.op("->>")("tipo")
+        ))
+        query = query.outerjoin(
+            InventarioGeneral,
+            InventarioGeneral.id == InventarioSolicitudCorreccionORM.inventario_id,
+        ).filter(or_(
+            and_(
+                InventarioSolicitudCorreccionORM.tipo == "UNREGISTERED_FIND",
+                provisional_type.in_(aliases),
+            ),
+            and_(
+                InventarioSolicitudCorreccionORM.tipo.in_(
+                    ("QUANTITY_DIFFERENCE", "NOT_LOCATED")
+                ),
+                actual_type.in_(aliases),
+            ),
+        ))
+    return query
+
+
+@inventario_solicitudes_bp.get("/revision/contexto")
+@jwt_required()
+def contexto_revision_e3():
+    access, denied = _actor_revision()
+    if denied:
+        return denied
+    names = db.session.execute(text(
+        "SELECT sucursal_id, sucursal FROM sucursales "
+        "WHERE sucursal_id IN :ids ORDER BY sucursal"
+    ).bindparams(bindparam(
+        "ids", expanding=True
+    )), {"ids": access["sucursales"]}).mappings().all()
+    return jsonify({
+        "can_review": True, "corporativo": access["corporativo"],
+        "sucursales": [
+            {"sucursal_id": row["sucursal_id"], "sucursal": row["sucursal"]}
+            for row in names
+        ],
+    }), 200
+
+
+@inventario_solicitudes_bp.get("/revision")
+@jwt_required()
+def listar_revision_e3():
+    access, denied = _actor_revision()
+    if denied:
+        return denied
+    raw_branch = request.args.get("sucursal_id")
+    branch = None if raw_branch is None else _query_positive(raw_branch)
+    if raw_branch is not None and branch is None:
+        return _error(400, "Sucursal inválida.")
+    if branch is not None and branch not in access["sucursales"]:
+        return _error(403, "Sucursal fuera de tu alcance.")
+    kind = request.args.get("tipo")
+    status = request.args.get("estado", "PENDING")
+    if kind is not None and kind not in _TYPES:
+        return _error(400, "Tipo inválido.")
+    if status not in _STATUSES:
+        return _error(400, "Estado inválido.")
+    page = _query_positive(request.args.get("page", "1"))
+    per_page = _query_positive(request.args.get("per_page", "10"))
+    if page is None or page > 100000 or per_page is None or per_page > 100:
+        return _error(400, "Paginación inválida.")
+    query = _query_revision(access).filter(
+        InventarioSolicitudCorreccionORM.estado == status
+    )
+    if branch is not None:
+        query = query.filter(InventarioSolicitudCorreccionORM.sucursal_id == branch)
+    if kind:
+        query = query.filter(InventarioSolicitudCorreccionORM.tipo == kind)
+    total = query.count()
+    rows = (query.order_by(
+        InventarioSolicitudCorreccionORM.creado_en_utc.desc(),
+        InventarioSolicitudCorreccionORM.id.desc(),
+    ).offset((page - 1) * per_page).limit(per_page).all())
+    return jsonify({
+        "items": [_serialize(row) for row in rows], "total": total,
+        "page": page, "per_page": per_page,
+    }), 200
+
+
+@inventario_solicitudes_bp.get("/revision/<int:solicitud_id>")
+@jwt_required()
+def detalle_revision_e3(solicitud_id):
+    access, denied = _actor_revision()
+    if denied:
+        return denied
+    row = _query_revision(access).filter(
+        InventarioSolicitudCorreccionORM.id == solicitud_id
+    ).first()
+    if row is None:
+        return _error(404, "Solicitud inexistente o fuera de tu alcance.")
+    return jsonify({"solicitud": _serialize(row)}), 200
+
+@inventario_solicitudes_bp.post("/decisiones/lote")
+@jwt_required()
+def decidir_solicitudes_lote():
+    """E3: backend es fuente de permisos; autorizaciones atomicas o rollback."""
+    identity = get_jwt_identity()
+    if isinstance(identity, bool):
+        return _error(401, "Sesión inválida.")
+    try:
+        actor_id = int(identity)
+    except (ValueError, TypeError, OverflowError):
+        return _error(401, "Sesión inválida.")
+    if actor_id <= 0:
+        return _error(401, "Sesión inválida.")
+    payload = request.get_json(silent=True)
+    if payload is None:
+        return _error(400, "Se requiere JSON válido.")
+    try:
+        if len(json.dumps(payload, ensure_ascii=False, allow_nan=False)) > 16000:
+            return _error(400, "Lote demasiado grande.")
+    except (ValueError, TypeError):
+        return _error(400, "JSON inválido.")
+    try:
+        result = decidir_lote(actor_id=actor_id, payload=payload)
+        return jsonify(result), 200 if result["replayed"] else 201
+    except DecisionError as exc:
+        db.session.rollback()
+        return jsonify({"error": exc.code, "detail": exc.detail}), exc.status
+    except (IntegrityError, OperationalError):
+        db.session.rollback()
+        return _error(409, "La operación entró en conflicto; revisa y reintenta con la misma llave.")
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("E3: error al decidir lote de inventario")
+        return _error(500, "No se pudo procesar la decisión.")
