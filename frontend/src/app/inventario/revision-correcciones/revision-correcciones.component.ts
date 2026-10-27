@@ -41,9 +41,6 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
   error = '';
   aviso = '';
   solicitudes: SolicitudCorreccionInventario[] = [];
-  detalle: SolicitudCorreccionInventario | null = null;
-  detalleCargando = false;
-  errorDetalle = '';
   total = 0;
   pagina = 1;
   readonly porPagina = 10;
@@ -60,7 +57,6 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
   private fingerprint = '';
   private subContexto?: Subscription;
   private subListado?: Subscription;
-  private subDetalle?: Subscription;
   private subDecision?: Subscription;
   private consulta = 0;
 
@@ -83,7 +79,6 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.subContexto?.unsubscribe();
     this.subListado?.unsubscribe();
-    this.subDetalle?.unsubscribe();
     this.subDecision?.unsubscribe();
     ++this.consulta;
   }
@@ -147,7 +142,6 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
   cargar(): void {
     if (!this.contexto || this.procesando) return;
     this.subListado?.unsubscribe();
-    this.cerrarDetalle();
     this.cerrarDecision();
     this.seleccion = new Set<number>();
     const version = ++this.consulta;
@@ -200,30 +194,6 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
     const pending = this.solicitudes.filter(s => s.estado === 'PENDING');
     this.seleccion = pending.every(s => this.seleccion.has(s.id))
       ? new Set<number>() : new Set(pending.slice(0, 10).map(s => s.id));
-  }
-
-  consultarDetalle(id: number): void {
-    this.subDetalle?.unsubscribe();
-    this.detalleCargando = true;
-    this.errorDetalle = '';
-    this.detalle = null;
-    this.subDetalle = this.inventario.detalleRevisionCorreccion(id).subscribe({
-      next: ({ solicitud }) => {
-        this.detalle = solicitud;
-        this.detalleCargando = false;
-      },
-      error: () => {
-        this.errorDetalle = 'No es posible consultar este detalle con tu permiso actual.';
-        this.detalleCargando = false;
-      },
-    });
-  }
-
-  cerrarDetalle(): void {
-    this.subDetalle?.unsubscribe();
-    this.detalle = null;
-    this.detalleCargando = false;
-    this.errorDetalle = '';
   }
 
   preparar(decision: Decision): void {
@@ -327,6 +297,24 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
 
   sucursalNombre(id: number): string {
     return this.contexto?.sucursales.find(s => s.sucursal_id === id)?.sucursal || `Sucursal #${id}`;
+  }
+
+  cambioPropuesto(s: SolicitudCorreccionInventario): string {
+    if (s.tipo === 'NOT_LOCATED') {
+      const anterior = s.valor_original as { stock?: number } | null;
+      const stock = anterior?.stock ?? s.baseline_canonico?.['stock'];
+      return `Stock oficial: ${this.textoValor(stock)} → 0 · Ajuste solicitado`;
+    }
+    if (s.tipo === 'QUANTITY_DIFFERENCE') {
+      const anterior = s.valor_original as { stock?: number } | null;
+      const propuesta = s.valor_propuesto as { cantidad_fisica?: number } | null;
+      return `Stock oficial: ${this.textoValor(anterior?.stock ?? s.baseline_canonico?.['stock'])} → ${this.textoValor(propuesta?.cantidad_fisica)} · Conteo físico`;
+    }
+    if (s.tipo === 'MASTER_FIELD') {
+      return `${s.campo || 'Dato maestro'}: ${this.textoValor(s.valor_original)} → ${this.textoValor(s.valor_propuesto)}`;
+    }
+    const hallazgo = s.hallazgo_provisional;
+    return `Hallazgo: ${hallazgo?.['nombre'] || 'Sin nombre'} · Código físico: ${hallazgo?.['codigo_interno'] || 'Sin código'}`;
   }
 
   resumen(s: SolicitudCorreccionInventario): string {
