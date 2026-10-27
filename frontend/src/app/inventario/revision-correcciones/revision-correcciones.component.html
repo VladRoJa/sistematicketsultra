@@ -152,6 +152,10 @@
 
         <ng-container *ngIf="decision === 'APPROVED'">
           <div *ngFor="let solicitud of seleccionadas" class="revision-resolucion">
+            <p class="revision-error" *ngIf="cantidadCeroRequiereNoLocalizado(solicitud)">
+              Una diferencia con cantidad física cero debe registrarse como No localizado,
+              con fecha, evidencia y resolución de ajuste a cero.
+            </p>
             <p class="revision-error" *ngIf="faltaEvidenciaFisica(solicitud)">
               Falta fecha de observación o evidencia física suficiente. No se puede autorizar esta solicitud;
               sí puede rechazarse con motivo y registrarse una nueva con evidencia completa.
