@@ -113,22 +113,28 @@ def retrieve_json(context, url: str, token: str):
 
 
 def locate_demo_ticket(context, token: str, ticket_id: int) -> list:
-    # GET paginado; jamás solicitar todo el catálogo de Tickets de una vez.
+    # Leer TODA la bandeja visible de esa cuenta (tope estricto); un solo
+    # ticket fuera de ULTRA DEMO cancela la captura antes de grabar.
     seen = []
-    for offset in range(0, 1000, 50):
+    for offset in range(0, 200, 50):
         payload = retrieve_json(
             context, PROD_ORIGIN + f"/api/tickets/all?limit=50&offset={offset}",
             token,
         )
+        total = payload.get("total_tickets")
+        if not isinstance(total, int) or total > 200 or total < 1:
+            raise ValueError("Preflight: cuenta con alcance amplio o vacío; máximo 200 tickets DEMO.")
         batch = payload.get("tickets")
         if not isinstance(batch, list):
             raise RuntimeError("Preflight: formato de bandeja inesperado.")
         seen.extend(batch)
-        if any(ticket.get("id") == ticket_id for ticket in batch):
-            return seen
-        if len(batch) < 50:
+        if len(seen) >= total:
             break
-    raise ValueError("El ticket DEMO no figura entre los primeros 1000 visibles.")
+    if not any(ticket.get("id") == ticket_id for ticket in seen):
+        raise ValueError("El ticket DEMO no figura en la bandeja completa del usuario.")
+    if len(seen) != total:
+        raise ValueError("Preflight: no se pudo revisar toda la bandeja visible.")
+    return seen
 
 
 def capture(args) -> None:
