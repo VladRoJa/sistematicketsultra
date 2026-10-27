@@ -26,7 +26,7 @@ on:
       - "backend/app/routes/marketing_campaign_v2_routes.py"
       - "backend/app/routes/google_ads_m6_continuity_routes.py"
       - "backend/app/routes/google_ads_oauth_routes.py"
-      - "backend/services/marketing_access.py"
+      - "backend/app/services/marketing_access.py"
       - "backend/app/utils/purchase_requisition_permissions.py"
       - "docs/security/permissions_phase_a_p31_effective_guard_parity_20261027.md"
       - "docs/security/permissions_phase_a_p31_effective_guards_20261027.csv"
