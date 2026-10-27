@@ -140,6 +140,25 @@ def test_generates_xlsx_with_two_disconnected_monthly_series_and_selectors():
         chart = z.read("xl/charts/chart1.xml").decode()
         # 3 indicadores * 2 meses: no existe una serie que abarque ambos meses.
         assert chart.count("<c:ser>") == 6
+        # No aceptar 0% artificial en meses ajenos ni en métricas ocultas.
+        # Las fechas conservan posiciones: septiembre=0; octubre=1,2.
+        from xml.etree import ElementTree as ET
+        plot = ET.fromstring(chart)
+        chart_ns = {"c": "http://schemas.openxmlformats.org/drawingml/2006/chart"}
+        series = plot.findall(".//c:lineChart/c:ser", chart_ns)
+        cached = [
+            {
+                int(pt.attrib["idx"]): float(pt.find("c:v", chart_ns).text)
+                for pt in ser.findall("c:val/c:numRef/c:numCache/c:pt", chart_ns)
+            }
+            for ser in series
+        ]
+        assert [set(item) for item in cached] == [
+            {0}, set(), set(), {1, 2}, set(), set(),
+        ]
+        assert cached[0][0] == pytest.approx(40 / 200)
+        assert cached[3][1] == pytest.approx(40 / 200)
+        assert plot.find(".//c:plotVisOnly", chart_ns) is None
         trend = z.read("xl/worksheets/sheet3.xml").decode()
         assert "SUMIFS" in trend
         assert "2026-09" in trend
@@ -152,6 +171,8 @@ def test_generates_xlsx_with_two_disconnected_monthly_series_and_selectors():
             assert column in z.read("xl/sharedStrings.xml").decode()
         assert "SUM(D" in original
         assert "RESUMEN COMERCIAL" in z.read("xl/sharedStrings.xml").decode()
+        assert "Visitas registradas" in z.read("xl/sharedStrings.xml").decode()
+        assert "Corte: 2026-10-19" in z.read("xl/sharedStrings.xml").decode()
         assert 'H' in original
         # Cached numerical values, not every formula left at zero.
         from xml.etree import ElementTree as ET
@@ -160,6 +181,10 @@ def test_generates_xlsx_with_two_disconnected_monthly_series_and_selectors():
         cached_visit_total = xml.find(".//x:c[@r='C8']/x:v", ns)
         assert cached_visit_total is not None
         assert float(cached_visit_total.text) == 40.0
+        # El detalle Original conserva los contadores que devolvió Flask,
+        # sin modificar sus visitas según ventas ni otros campos.
+        assert float(xml.find(".//x:c[@r='C6']/x:v", ns).text) == 10.0
+        assert float(xml.find(".//x:c[@r='C7']/x:v", ns).text) == 30.0
 
 
 
