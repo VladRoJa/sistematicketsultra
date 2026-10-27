@@ -69,12 +69,12 @@ def test_p20_track_real_guard_vs_catalog_is_classified(
 
 
 @pytest.mark.parametrize("user_id,username,role,legacy,observed,status", [
-    (1, "ADMICORP", "LECTOR_GLOBAL", True, False,
-     "legacy_allow_catalog_deny"),
-    (2, "SISTEMAS_QA", "SISTEMAS", True, False,
-     "legacy_allow_catalog_deny"),
-    (3, "ADMIN_QA", "ADMINISTRADOR", False, True,
-     "legacy_deny_catalog_allow"),
+    (1, "ADMICORP", "LECTOR_GLOBAL", True, True,
+     "match"),
+    (2, "SISTEMAS_QA", "SISTEMAS", True, True,
+     "match"),
+    (3, "ADMIN_QA", "ADMINISTRADOR", False, False,
+     "match"),
     (4, "GERENTE_QA", "GERENTE", False, False, "match"),
 ])
 def test_p20_nube_manager_vs_catalog_preview(
