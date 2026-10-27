@@ -75,6 +75,14 @@ El backend seguirá denegando por defecto mientras no existan y se validen tanto
 - **NOT_LOCATED:** únicamente ajuste explícito a cero de stock esperado positivo, justificación, autorización por sucursal y bitácora atómica; sin evidencia dejar PENDING.
 - **UNREGISTERED_FIND:** en E3 solo vinculación documentada a artículo ya existente y asignado a la misma sucursal, con stock esperado y cantidad física superior; el alta canónica nueva queda bloqueada hasta acordar catálogo completo y política de aprobación global.
 
+### Análisis de evidencia física para E3 (27/10/2026)
+
+El documento `CONTRATO_E3_EVIDENCIA_FISICA_20261027.md` propone el mínimo documental antes de aprobar dos resoluciones que cambian existencias: fecha local de observación + evidencia descriptiva específica en E2, justificación por solicitud en E3, contraste de ubicación/identidad/movimientos mediante revisión humana, y auditoría de actor/baseline/stock anterior y posterior. **No confundir propuesta con validación activa**: a la fecha el backend permite aprobar con evidencia original vacía, siempre que existan resolución/justificación; esta brecha debe cerrarse antes de rollout.
+
+Política operativa propuesta: `NOT_LOCATED` significa ausencia **total** de las unidades de la referencia y llevar su stock a cero (faltante parcial → `QUANTITY_DIFFERENCE`); `UNREGISTERED_FIND` solo vincula a referencia oficial de la misma sucursal y clase y usa **cantidad física final**, no delta a sumar. En registros sin código único, coincidencia de nombre por sí sola no es garantía suficiente de identidad; definir revisión de excepciones. No se ha incorporado todavía evidencia multimedia ni conciliación automática de tickets/movimientos.
+
+**Gate pendiente de ratificación:** confirmar fecha/evidencia obligatorias para nuevos E2 y aprobaciones E3, tratamiento de PENDINGS legados incompletos y excepción de identidades sin código; después implementar backend/UI/QA según el nuevo contrato, sin grants ni merge hasta validación.
+
 ## 5. Gates antes de endpoints y rollout
 
 1. Documentar QA E2 completo: controles visuales ya verificados; completar prueba autenticada de rol/sucursal y comparar invariancia V1 contra registros de prueba.
