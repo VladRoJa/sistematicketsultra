@@ -363,6 +363,12 @@ def test_falsificacion_validacion_y_concurrencia_detectable(api):
     malformed = _payload()
     malformed["valor_propuesto"] = {"cantidad_fisica": True}
     assert _post(api, malformed).status_code == 400
+    # Ausencia física total no debe saltarse el gate de evidencia NOT_LOCATED.
+    zero = _payload()
+    zero["valor_propuesto"] = {"cantidad_fisica": 0}
+    denied = _post(api, zero)
+    assert denied.status_code == 400, denied.get_json()
+    assert "NOT_LOCATED" in denied.get_json()["detail"]
     untrusted = _payload()
     untrusted["tipo"] = []
     assert _post(api, untrusted).status_code == 400
