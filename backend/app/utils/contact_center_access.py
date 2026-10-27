@@ -34,6 +34,11 @@ CONTACT_CENTER_REGIONAL_PILOT_USER_IDS = frozenset({55})
 #   13 Papalote Tijuana
 CONTACT_CENTER_MANAGER_ALLOWED_BRANCH_IDS = frozenset({
     1,
+    2,
+    3,
+    4,
+    5,
+    6,
     7,
     8,
     9,
