@@ -7,6 +7,7 @@ on:
       - 'backend/scripts/seed_training_tapizado_qa.py'
       - 'docs/capacitacion/**'
       - '.github/workflows/cap-v1-training.yml'
+      - '.github/workflows/cap-v1-prod-readonly.yml'
   workflow_dispatch:
 
 permissions:
