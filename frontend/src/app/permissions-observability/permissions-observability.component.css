@@ -604,3 +604,38 @@
 .permissions-decision-card details summary{cursor:pointer;color:#1d4ed8;font-weight:600}
 .permissions-decision-card details small{display:block;overflow-wrap:anywhere;margin-top:5px}
 .permissions-decision-card strong{overflow-wrap:anywhere}
+
+
+/* B4: paginación y lectura segura de metadatos de grants. */
+.permissions-grant-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 14px 0;
+  color: #475569;
+  font-size: 13px;
+}
+
+.permissions-grant-audit-panel pre {
+  max-width: 32rem;
+  max-height: 14rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border-radius: 8px;
+  padding: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  font-size: 12px;
+}
+
+.permissions-grant-audit-panel details summary {
+  cursor: pointer;
+  color: #1d4ed8;
+}
+
+.permissions-grant-pagination button {
+  min-width: 90px;
+}
