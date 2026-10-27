@@ -165,6 +165,15 @@ test('E3 hallazgo sin código físico no permite autorizar',()=>{
   assert.equal(vm.puedeConfirmar,false);
 });
 
+test('E3 diferencia cero histórica exige no localizado',()=>{
+  const {vm}=make();
+  vm.marcar(1);vm.preparar('APPROVED');
+  vm.motivo='Conteo físico total con ausencia de unidades';vm.confirmo=true;
+  vm.seleccionadas[0].valor_propuesto={cantidad_fisica:0};
+  assert.equal(vm.cantidadCeroRequiereNoLocalizado(vm.seleccionadas[0]),true);
+  assert.equal(vm.puedeConfirmar,false);
+});
+
 test('E3 rechazo no adjunta resoluciones y reintento mantiene idempotencia',()=>{
   const {vm,calls}=make({fail:true});
   vm.marcar(3);vm.preparar('REJECTED');
