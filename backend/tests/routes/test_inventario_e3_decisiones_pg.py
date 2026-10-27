@@ -353,7 +353,7 @@ def test_e3_sucursal_ajena_denegada_a_mantenimiento(env):
     assert _post(env,45,_payload([req])).status_code == 201
     outside = _request(inv=501,branch=8,baseline={"inventario_id":501,"sucursal_id":8,"stock":2},
                        original={"stock":2},proposed={"cantidad_fisica":1})
-    assert _post(env,45,_payload([outside])).status_code == 403
+    assert _post(env,45,_payload([outside])).status_code == 404
 
 
 def test_e3_entrada_invalida_y_doble_decision(env):
@@ -699,13 +699,31 @@ def test_e3_mantenimiento_y_yuliana_requieren_grant_scope_y_creador_ajeno(env):
     assert _get_e3(env,91,"revision?sucursal_id=7").status_code == 200
     assert _get_e3(env,91,"revision?sucursal_id=14").status_code == 403
 
-    assert _post(env,45,_payload([inside])).status_code == 403
-    assert _post(env,91,_payload([outside])).status_code == 403
+    assert _post(env,45,_payload([inside])).status_code == 404
+    assert _post(env,91,_payload([outside])).status_code == 404
     assert _post(env,91,_payload([own])).status_code == 403
     assert _get_e3(env,91,f"revision/{own}").status_code == 404
     assert _get_e3(env,45,f"revision/{outside}").status_code == 200
     assert _sql("SELECT count(*) FROM inventario_correccion_decisiones") == 0
     assert _sql("SELECT SUM(stock) FROM inventario_sucursal") == before
+
+
+def test_e3_post_no_revela_existencia_de_solicitudes_ajenas(env):
+    """Mismo status para ID inexistente o existente fuera del scope E3."""
+    allowed = _request(creator=98, branch=7)
+    outside = _request(
+        creator=98, branch=14, original={"stock":2},
+        baseline={"inventario_id":501,"sucursal_id":14,"stock":2},
+    )
+    missing = 99999999
+    # Sin capacidad E3, incluso las consultas de IDs inexistentes son 403.
+    assert _post(env,55,_payload([outside])).status_code == 403
+    assert _post(env,55,_payload([missing])).status_code == 403
+    _grant(91,scope="branch",branch=7)
+    assert _get_e3(env,91,f"revision/{allowed}").status_code == 200
+    assert _post(env,91,_payload([outside])).status_code == 404
+    assert _post(env,91,_payload([missing])).status_code == 404
+    assert _sql("SELECT count(*) FROM inventario_correccion_decisiones") == 0
 
 
 def test_e3_no_auth_y_claims_jwt_falsos_no_sustituyen_rol_de_db(env):
