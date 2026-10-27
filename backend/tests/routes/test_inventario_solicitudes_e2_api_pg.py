@@ -274,6 +274,11 @@ def test_e2_exige_fecha_y_evidencia_en_solicitudes_especiales(api):
         assert row["estado"] == "PENDING"
         assert row["fecha_observacion_local"] == valid["fecha_observacion_local"]
         assert row["evidencia_descriptiva"] == valid["evidencia_descriptiva"]
+    zero_stock = _payload("NOT_LOCATED", inventory=503)
+    zero_stock["valor_original"] = {"stock":0}
+    denied = _post(api,zero_stock)
+    assert denied.status_code == 400, denied.get_json()
+    assert "stock oficial positivo" in denied.get_json()["detail"]
     assert _snapshot(api) == original
 
 
