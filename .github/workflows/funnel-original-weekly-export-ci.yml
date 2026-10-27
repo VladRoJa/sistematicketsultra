@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'backend/app/services/marketing_sales_funnel_weekly_export_service.py'
+      - 'backend/app/services/marketing_sales_funnel_original_sheet_service.py'
       - 'backend/app/routes/marketing_sales_funnel_routes.py'
       - 'backend/tests/marketing/test_marketing_sales_funnel_weekly_export.py'
       - 'backend/tests/marketing/test_marketing_sales_funnel_routes.py'
@@ -23,7 +24,7 @@ jobs:
       - name: Install pure workbook test dependencies
         run: python -m pip install 'pytest>=8,<9' 'XlsxWriter==3.2.2'
       - name: Compile Python service and route
-        run: python -m py_compile backend/app/services/marketing_sales_funnel_weekly_export_service.py backend/app/routes/marketing_sales_funnel_routes.py
+        run: python -m py_compile backend/app/services/marketing_sales_funnel_weekly_export_service.py backend/app/services/marketing_sales_funnel_original_sheet_service.py backend/app/routes/marketing_sales_funnel_routes.py
       - name: Validate weekly cutoffs, workbook and monthly charts
         env:
           PYTHONPATH: backend
