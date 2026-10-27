@@ -272,16 +272,11 @@
       </section>
     </div>
 
-    <!-- Acciones E3 fuera del contenido desplazable: siempre visibles. -->
+    <!-- E2 es seguimiento: las decisiones reales pertenecen a la bandeja E3. -->
     <div *ngIf="modo === 'seguimiento' && !cargandoListado && !errorListado"
       class="solicitud-bandeja__acciones solicitud-bandeja__acciones--fijas">
-      <span>La autorización y el rechazo formal se habilitarán en E3, con permisos y auditoría.</span>
-      <div>
-        <button type="button" class="solicitud-bandeja__rechazar" disabled
-          title="Pendiente de backend transaccional E3">Rechazar seleccionadas</button>
-        <button type="button" class="solicitud-bandeja__autorizar" disabled
-          title="Pendiente de backend transaccional E3">Autorizar seleccionadas</button>
-      </div>
+      <span>Para autorizar o rechazar, entra a Inventario → Revisión de correcciones (E3).
+        La decisión requiere permiso vigente y queda auditada.</span>
     </div>
 
     <footer class="solicitud-footer">
