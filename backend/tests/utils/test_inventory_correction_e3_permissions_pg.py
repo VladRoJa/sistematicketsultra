@@ -7,7 +7,9 @@ import pytest
 import sqlalchemy as sa
 from flask import Flask
 from app.extensions import db
-from app.utils.inventory_correction_permissions import resolver_acceso_autorizacion_e3
+from app.utils.inventory_correction_permissions import (
+    alcance_revision_e3, resolver_acceso_autorizacion_e3,
+)
 
 
 @pytest.fixture
@@ -84,12 +86,14 @@ def env():
                     (45, 'MANTENIMIENTO', 1),
                     (91, 'COORDINADOR_MANTENIMIENTO', 1),
                     (55, 'GERENTE_REGIONAL', 1000),
-                    (68, 'SR_MANTENIMIENTO', 1)
+                    (68, 'SR_MANTENIMIENTO', 1),
+                    (94, 'MANTENIMIENTO', 7),
+                    (95, 'COORDINADOR_MANTENIMIENTO', 7)
                 """)
                 con.exec_driver_sql("""
                     INSERT INTO usuario_sucursal(user_id, sucursal_id) VALUES
                     (47,1000), (45,1), (45,14), (91,7), (91,8), (91,9),
-                    (55,7), (68,7)
+                    (55,7), (68,7), (94,1), (95,7)
                 """)
                 con.exec_driver_sql("""
                     INSERT INTO permission_modules VALUES (2, 'inventory', true)
@@ -200,3 +204,19 @@ def test_e3_grants_inactivos_expirados_y_catalogo_inactivo(env):
     with db.engine.begin() as con:
         con.exec_driver_sql("UPDATE permission_actions SET is_active = false WHERE id = 9")
     assert _check(91, 7).reason == "no_explicit_scoped_grant"
+
+
+def test_e3_rol_mantenimiento_no_suplanta_departamento_efectivo(env):
+    """Un rol operativo y un grant no autorizan a cuentas de otro departamento."""
+    _grant(role="MANTENIMIENTO", scope="global")
+    _grant(actor=91, scope="branch", branch=7)
+    _grant(actor=95, scope="branch", branch=7)
+
+    assert _check(45, branch=1).allowed
+    assert _check(91, branch=7).allowed
+    assert _check(94, branch=1).reason == "department_not_enabled"
+    assert _check(95, branch=7).reason == "department_not_enabled"
+    assert alcance_revision_e3(94) is None
+    assert alcance_revision_e3(95) is None
+    assert alcance_revision_e3(45)["sucursales"] == [1, 14]
+    assert alcance_revision_e3(91)["sucursales"] == [7]
