@@ -1,4 +1,4 @@
-# Inventarios V2 — E3 · Matriz propuesta de competencias por clase de activo
+# Inventarios V2 — E3 · Matriz de competencias por clase de activo
 
 **Fecha:** 2026-10-27  
 **Estado:** COMPETENCIA FUNCIONAL RATIFICADA EN CONVERSACIÓN; **AÚN SIN GRANTS NI ROLLOUT**.  
@@ -39,15 +39,15 @@
 5. **Bandeja E3.** `GET /revision`, `GET /revision/<id>` y totales paginados deben filtrar la **misma capacidad efectiva en SQL**, incluyendo clase de activo: una tarjeta no debe mostrar dispositivos a un revisor de Mantenimiento y luego fallar en POST. En `POST /decisiones/lote`, los IDs fuera de clase/alcance no deben poder enumerarse (404 uniforme frente a inexistente); 403 para actor sin capacidad E3 y autoaprobación propia según contrato.
 6. **Identidad dudosa.** `codigo_interno`, familia y nombre no conceden una competencia aunque coincidan. El revisor no puede corregir el campo maestro `tipo` mediante una solicitud de cantidad.
 
-## 4. Implementación prevista — aún NO autorizada
+## 4. Implementación preparada en PR DRAFT — SIN despliegue ni grants
 
-- `backend/app/utils/inventory_correction_permissions.py`: ampliar política DB-backed para verificar clase del activo por solicitud, sin recibir «tipo de activo» arbitrario del cliente; conservar el comportamiento corporativo.
-- `backend/app/routes/inventario_solicitudes_routes.py`: ampliar `_query_revision()` para aplicar la misma política de clase en SQL **antes** de paginar/contar. Para hallazgos provisionales, utilizar una expresión explícita sobre `hallazgo_provisional->>'tipo'` con fail closed.
-- `backend/app/services/inventario_correccion_decisiones_service.py`: después de bloquear solicitudes y referencias, revalidar la clase del maestro original y destino vinculado, para `APPROVED` y `REJECTED`, incluidos los replays. Mantener transacción íntegra.
-- `backend/tests/routes/test_inventario_e3_decisiones_pg.py` y `backend/tests/utils/test_inventory_correction_e3_permissions_pg.py`: fixture con APARATOS, DISPOSITIVOS, tipo ambiguo, aparato sin familia, dispositivos sin familia, SISTEMAS depto. 7 y suplantación de departamento, hallazgo declarado/indefinido, mezcla de lote e IDOR. Pruebas positivas y negativas en PostgreSQL temporal.
-- No modificar HTML para lógica de permisos; no se requiere migración para esta **propuesta**, salvo que luego se ratifique modelar competencias como grants nuevos o catálogo formal.
+- `backend/app/utils/inventory_correction_permissions.py`: política DB-backed por rol, departamento, sucursal M:N, clase del activo y grant, sin confiar en el JWT para competencia ni recibir una clase arbitraria del cliente.
+- `backend/app/routes/inventario_solicitudes_routes.py`: `_query_revision()` filtra por clase del maestro o tipo provisional en SQL **antes** de paginar/contar/detallar; hallazgo sin tipo o ambiguo queda fuera de bandejas delegadas.
+- `backend/app/services/inventario_correccion_decisiones_service.py`: decisión transaccional revalida clase de la referencia oficial (y del destino de vinculación) al autorizar/rechazar, antes y después de locks pertinentes; replay idempotente vuelve a verificar competencias y destino, sin doble aplicación.
+- `backend/tests/routes/test_inventario_e3_decisiones_pg.py` y `backend/tests/utils/test_inventory_correction_e3_permissions_pg.py`: pruebas PostgreSQL temporal de aparatos y dispositivos sin familia, SISTEMAS depto. 7, grants/scope negativos, hallazgos declarados/sin tipo, clase cruzada, replay, lote mixto y filtrado de bandeja/detalle. Validar CI del último HEAD antes de concluir gate.
+- Sin lógica de autorización en HTML; el esquema actual ya permite verificar rol/departamento, clase y grants, por lo que estos cambios no requieren migración nueva. **Ningún grant productivo concedido.**
 
-## 5. Verificación de datos previa a ratificación (solo lectura, producción)
+## 5. Distribución productiva verificada y consulta adicional (solo lectura)
 
 Ejecutar mediante una sesión PostgreSQL autorizada, sin alterar registros:
 
