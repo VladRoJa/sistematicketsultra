@@ -11,14 +11,17 @@ from zoneinfo import ZoneInfo
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
-from sqlalchemy import text, bindparam
+from sqlalchemy import text, bindparam, and_, or_, func
 from sqlalchemy.exc import IntegrityError, OperationalError
 from flask import current_app
 from app.services.inventario_correccion_decisiones_service import decidir_lote, DecisionError
-from app.utils.inventory_correction_permissions import alcance_revision_e3
+from app.utils.inventory_correction_permissions import (
+    alcance_revision_e3, aliases_clase_inventario_e3,
+)
 
 from app.extensions import db
 from app.models.inventario_solicitud_correccion import InventarioSolicitudCorreccionORM
+from app.models.inventario import InventarioGeneral
 
 
 inventario_solicitudes_bp = Blueprint("inventario_solicitudes", __name__)
@@ -487,7 +490,30 @@ def _query_revision(access):
         InventarioSolicitudCorreccionORM.creado_por_usuario_id != access["actor_id"],
     )
     if not access["corporativo"]:
-        query = query.filter(InventarioSolicitudCorreccionORM.tipo != "MASTER_FIELD")
+        # Competencia por clase REAL en SQL antes de contar/paginar/detallar:
+        # Mantenimiento: aparatos. Sistemas: dispositivos. Familia no participa.
+        aliases = aliases_clase_inventario_e3(access["clase_activo"])
+        if not aliases:
+            return query.filter(False)
+        actual_type = func.lower(func.btrim(InventarioGeneral.tipo))
+        provisional_type = func.lower(func.btrim(
+            InventarioSolicitudCorreccionORM.hallazgo_provisional.op("->>")("tipo")
+        ))
+        query = query.outerjoin(
+            InventarioGeneral,
+            InventarioGeneral.id == InventarioSolicitudCorreccionORM.inventario_id,
+        ).filter(or_(
+            and_(
+                InventarioSolicitudCorreccionORM.tipo == "UNREGISTERED_FIND",
+                provisional_type.in_(aliases),
+            ),
+            and_(
+                InventarioSolicitudCorreccionORM.tipo.in_(
+                    ("QUANTITY_DIFFERENCE", "NOT_LOCATED")
+                ),
+                actual_type.in_(aliases),
+            ),
+        ))
     return query
 
 
