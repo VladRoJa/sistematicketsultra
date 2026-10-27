@@ -1,10 +1,11 @@
 """QA local sin acceso a credenciales, APIs ni producción."""
 import json
+import os
+import sys
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import patch
 
 from scripts.training.generate import (
     EXPECTED_ACK, export_video, load_storyboard, make_srt,
@@ -49,6 +50,43 @@ class TrainingV1Tests(unittest.TestCase):
             data = p.read_text(encoding="utf-8")
             self.assertIn("00:00:00,000 --> 00:00:03,000", data)
             self.assertIn("00:00:03,000 --> 00:00:05,000", data)
+
+
+    def test_local_fixture_fails_closed_before_touching_postgres(self):
+        # Pruebas negativas vía proceso separado: nunca abrir conexión ni llamar Flask.
+        backend = ROOT.parents[2] / "backend"
+        base = {
+            "APP_ENV": "local",
+            "SUITE_QA_SEED_ALLOWED": "YES_CREATE_LOCAL_SYNTHETIC_TICKETS",
+            "SUITE_QA_TEST_PASSWORD": "only-local-example-secret",
+            "TICKETS_TAPIZADO_MULTI_ENABLED": "true",
+            "TICKETS_TAPIZADO_RECEPCION_ENABLED": "true",
+        }
+        cases = (
+            ({}, "Falta autorización explícita"),
+            ({**base, "SQLALCHEMY_DATABASE_URI":
+                "postgresql+psycopg2://user:pass@production.example/suite_ultra_tickets_qa"},
+             "Seed prohibido"),
+            ({**base, "SQLALCHEMY_DATABASE_URI":
+                "postgresql+psycopg2://user:pass@127.0.0.1:5432/suite_ultra_tickets_qa",
+              "TICKETS_TAPIZADO_RECEPCION_ENABLED": "false"},
+             "TICKETS_TAPIZADO_RECEPCION_ENABLED=true"),
+        )
+        for settings, expected in cases:
+            with self.subTest(expected=expected):
+                env = dict(os.environ)
+                for key in ("APP_ENV", "SUITE_QA_SEED_ALLOWED", "SUITE_QA_TEST_PASSWORD",
+                            "SQLALCHEMY_DATABASE_URI", "TICKETS_TAPIZADO_MULTI_ENABLED",
+                            "TICKETS_TAPIZADO_RECEPCION_ENABLED"):
+                    env.pop(key, None)
+                env.update(settings)
+                result = subprocess.run(
+                    [sys.executable, "-m", "scripts.seed_training_tapizado_qa"],
+                    cwd=backend, env=env, text=True, capture_output=True,
+                    timeout=15,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(expected, result.stderr)
 
     def test_export_mp4_without_mutating_suite(self):
         import shutil
