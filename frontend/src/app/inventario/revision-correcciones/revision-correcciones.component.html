@@ -77,6 +77,7 @@
                 <small>#{{ solicitud.id }} · {{ sucursalNombre(solicitud.sucursal_id) }}
                   <ng-container *ngIf="solicitud.inventario_id"> · Inventario #{{ solicitud.inventario_id }}</ng-container>
                   · Registró #{{ solicitud.creado_por_usuario_id }}
+                  · {{ solicitud.creado_en_utc | date:'dd/MM/yyyy HH:mm' }}
                 </small>
               </div>
               <span class="revision-estado">{{ solicitud.estado }}</span>
