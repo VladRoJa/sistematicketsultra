@@ -25,6 +25,11 @@ import {
   switchMap,
 } from 'rxjs';
 
+import { AuthService } from '../services/auth.service';
+import { MarketingDashboardResponse } from '../marketing-conversion/marketing.models';
+import {
+  exportMarketingSalesFunnelBranchTable,
+} from './marketing-sales-funnel-table-export';
 import {
   MarketingFunnelInvestmentSources,
   MarketingGoogleAdsBranchAttribution,
@@ -172,6 +177,7 @@ type DashboardRequestResult =
 export class MarketingSalesFunnelOriginalComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly salesFunnelService = inject(MarketingSalesFunnelOriginalService);
+  private readonly authService = inject(AuthService);
   private readonly dialog = inject(MatDialog);
   private readonly dashboardRequests = new Subject<DashboardRequest>();
   private dashboardRequestId = 0;
@@ -366,6 +372,31 @@ export class MarketingSalesFunnelOriginalComponent implements OnInit {
 
   exportBranchTable(): void {
     if (!this.dashboard || !this.hasBranches || this.exportingWorkbook) {
+      return;
+    }
+
+    // Piloto exclusivo ADMICORP: el resto conserva la exportación Original previa.
+    const username = String(this.authService.getUser()?.username ?? '').trim().toUpperCase();
+    if (username !== 'ADMICORP') {
+      const investmentDashboard = {
+        month: this.selectedMonth,
+        summary: {
+          investment: this.dashboard.summary.investment ?? null,
+        },
+        branches: this.dashboard.branches.map((branch) => ({
+          sucursal_id: branch.sucursal_id,
+          investment: branch.investment ?? null,
+        })),
+      } as unknown as MarketingDashboardResponse;
+
+      exportMarketingSalesFunnelBranchTable({
+        month: this.selectedMonth,
+        branches: this.dashboard.branches,
+        investmentDashboard,
+        scopeOptions: this.scopeOptions,
+        regionId: this.regionControl.value,
+        branchId: this.branchControl.value,
+      });
       return;
     }
 
