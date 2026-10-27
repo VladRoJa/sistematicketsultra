@@ -271,9 +271,11 @@ def _apply_approved(row, decision, masters, stocks, actor_id, reason, resolution
             or provisional["nombre"].strip().casefold() != str(official.nombre or "").strip().casefold()
         ):
             raise DecisionError(409, "identity_mismatch", "El nombre del hallazgo no coincide con el maestro.")
-        if provisional.get("tipo") is not None and (
-            str(provisional["tipo"]).strip().casefold() != str(official.tipo or "").strip().casefold()
-        ):
+        # Los aliases reconocidos ya se cotejaron como clases; para tipos
+        # desconocidos corporativos conservar la exigencia de texto exacto.
+        if (provisional.get("tipo") is not None and provisional_type is None
+                and str(provisional["tipo"]).strip().casefold()
+                != str(official.tipo or "").strip().casefold()):
             raise DecisionError(409, "identity_mismatch", "El tipo del hallazgo no coincide con el maestro.")
         final = resolution["cantidad_fisica"]
         target.stock = final
