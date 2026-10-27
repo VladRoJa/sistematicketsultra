@@ -209,6 +209,10 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
     return this.tipo === 'UNREGISTERED_FIND';
   }
 
+  get requiereEvidenciaFisica(): boolean {
+    return this.tipo === 'NOT_LOCATED' || this.tipo === 'UNREGISTERED_FIND';
+  }
+
   get campoNumerico(): boolean {
     return !!this.campos.find(c => c.valor === this.campo)?.numerico;
   }
@@ -302,6 +306,11 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
   get puedeEnviar(): boolean {
     if (this.guardando || this.guardado || !this.sucursalId || this.motivo.trim().length < 10 ||
         this.motivo.trim().length > 2000 || this.evidencia.length > 2000) return false;
+    if (this.requiereEvidenciaFisica && (
+        !this.fechaObservacion ||
+        this.evidencia.trim().length < 20 ||
+        this.evidencia.trim().length > 2000
+    )) return false;
     if (this.esHallazgo) return !!this.hallazgoNombre.trim() && this.hallazgoNombre.length <= 255 &&
       (!this.hallazgoTipo || this.hallazgoTipo.length <= 40) &&
       (!this.hallazgoMarca || this.hallazgoMarca.length <= 100) &&
