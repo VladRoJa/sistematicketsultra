@@ -164,6 +164,28 @@ def test_generates_xlsx_with_two_disconnected_monthly_series_and_selectors():
         assert "2026-09" in trend
         assert "2026-10" in trend
         assert "Comparar las tres" in trend
+        # Regresión Excel es-MX: S3 jamás debe depender de
+        # TEXT(...,"yyyy-mm"), que puede devolver "yyyy-08".
+        trend_xml = ET.fromstring(trend)
+        cells_ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        start_month_formula = trend_xml.find(".//x:c[@r='S3']/x:f", cells_ns)
+        start_month_cached = trend_xml.find(".//x:c[@r='S3']/x:v", cells_ns)
+        assert start_month_formula is not None
+        assert "YEAR(" in start_month_formula.text
+        assert "MONTH(" in start_month_formula.text
+        assert "RIGHT(" in start_month_formula.text
+        assert '"yyyy-mm"' not in start_month_formula.text
+        assert '"aaaa-mm"' not in start_month_formula.text
+        assert start_month_cached.text == "2026-08"
+
+        summary_xml = ET.fromstring(z.read("xl/worksheets/sheet1.xml"))
+        cutoff_text_formula = summary_xml.find(".//x:c[@r='A8']/x:f", cells_ns)
+        cutoff_text_cached = summary_xml.find(".//x:c[@r='A8']/x:v", cells_ns)
+        assert "DAY(" in cutoff_text_formula.text
+        assert "MONTH(" in cutoff_text_formula.text
+        assert "YEAR(" in cutoff_text_formula.text
+        assert '"dd mmm yyyy"' not in cutoff_text_formula.text
+        assert "19/10/2026" in cutoff_text_cached.text
         assert "0.1" in trend or "0.2" in trend
         original = z.read("xl/worksheets/sheet4.xml").decode()
         for column in ("Sucursal", "Leads", "Ventas digitales",

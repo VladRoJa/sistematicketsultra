@@ -239,13 +239,24 @@ def create_workbook(
     calc.write("R1", "Último mes", navy)
     calc.write_string("R2", last_month)
     calc.write("R3", "Desde efectivo", navy)
-    calc.write_formula(
-        "S3",
+    # No usar TEXT(..., "yyyy-mm"): yyyy es literal en algunas
+    # configuraciones de Excel en español. Año/mes numéricos son invariantes.
+    month_shift = (
+        'IF(Resumen!$A$4="Últimos 3 meses",2,'
+        'IF(Resumen!$A$4="Últimos 6 meses",5,11))'
+    )
+    first_date = (
+        'EDATE(DATE(VALUE(LEFT($R$2,4)),VALUE(RIGHT($R$2,2)),1),-'
+        + month_shift + ')'
+    )
+    first_month_formula = (
         '=IF(Resumen!$A$4="Personalizado",Resumen!$F$4,'
         'IF(Resumen!$A$4="Todo el histórico","0000-00",'
-        'TEXT(EDATE(DATE(VALUE(LEFT($R$2,4)),VALUE(RIGHT($R$2,2)),1),'
-        '-IF(Resumen!$A$4="Últimos 3 meses",2,'
-        'IF(Resumen!$A$4="Últimos 6 meses",5,11))),"yyyy-mm")))',
+        'YEAR(' + first_date + ')&"-"&'
+        'RIGHT("0"&MONTH(' + first_date + '),2)))'
+    )
+    calc.write_formula(
+        "S3", first_month_formula,
         None, (f"{int(last_month[:4]) - (int(last_month[5:]) <= 2)}-"
                f"{((int(last_month[5:]) - 3) % 12) + 1:02d}"),
     )
@@ -367,15 +378,23 @@ def create_workbook(
     # La descripción sigue el último lunes del periodo seleccionado.
     condition = f"'Tendencia - datos'!I11:I{last}=1"
     date_source = f"'Tendencia - datos'!A11:A{last}"
+    cutoff_formula = 'LOOKUP(2,1/(' + condition + '),' + date_source + ')'
+    cutoff_label = (
+        'DAY(' + cutoff_formula + ')&"/"&'
+        'RIGHT("0"&MONTH(' + cutoff_formula + '),2)&"/"&'
+        'YEAR(' + cutoff_formula + ')'
+    )
     panel.write_formula(
         "A8",
-        '=IFERROR("Corte actual: "&TEXT(LOOKUP(2,1/(' + condition + '),'
-        + date_source + '),"dd mmm yyyy")&"  ·  Ámbito: "&$K$6'
+        '=IFERROR("Corte actual: "&' + cutoff_label
+        + '&"  ·  Ámbito: "&$K$6'
         + '&"  ·  "&COUNTIF(\'Tendencia - datos\'!I11:I'
         + str(last) + ',1)&" cortes disponibles",'
         + '"Sin lunes completos en el periodo seleccionado")',
         small,
-        ("Corte actual: " + str(weekly[-1]["selected_cutoff_date"])
+        ("Corte actual: " + date.fromisoformat(
+            str(weekly[-1]["selected_cutoff_date"])
+        ).strftime("%d/%m/%Y")
          + " · Ámbito: " + scope_labels[0][0] + " · "
          + str(sum(
              1 for snap in weekly
