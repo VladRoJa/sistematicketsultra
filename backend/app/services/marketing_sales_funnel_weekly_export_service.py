@@ -272,33 +272,66 @@ def create_workbook(
             f'{branches},$M$2)))'
         )
 
+    # Valores almacenados para visualizar la gráfica antes del primer recálculo.
+    # Las fórmulas permanecen y responden a filtros al cambiar las selecciones.
     for idx, snapshot in enumerate(weekly, start=10):
+        si = idx - 10
         r = idx + 1
         day = date.fromisoformat(str(snapshot["selected_cutoff_date"]))
+        month = day.strftime("%Y-%m")
         calc.write_datetime(idx, 0, datetime.combine(day, datetime.min.time()), day_fmt)
-        calc.write_string(idx, 1, day.strftime("%Y-%m"))
-        for col, base_col in ((2, "E"), (3, "F"), (4, "G")):
-            calc.write_formula(idx, col, count_formula(base_col, r), integer)
-        for col, numerator, denominator in ((5, "D", "C"), (6, "E", "D"),
-                                            (7, "E", "C")):
-            calc.write_formula(idx, col,
-                               f'=IFERROR(IF({denominator}{r}=0,NA(),'
-                               f'{numerator}{r}/{denominator}{r}),NA())',
-                               percent)
-        calc.write_formula(idx, 8, f'=IF(AND(B{r}>=$S$3,B{r}<=$S$4),1,"")')
-        for col, pct_col in ((9, "F"), (10, "G"), (11, "H")):
-            calc.write_formula(idx, col, (f'=IF(B{r}=B{r-1},'
-                                          f'{pct_col}{r}-{pct_col}{r-1},NA())'
-                                          if idx > 10 else "=NA()"), pp)
-        for month, metric, col in series:
-            metric_col = ("F", "G", "H")[metric]
+        calc.write_string(idx, 1, month)
+        for col, base_col, cache in (
+            (2, "E", initial_counters[si][0]),
+            (3, "F", initial_counters[si][1]),
+            (4, "G", initial_counters[si][2]),
+        ):
+            calc.write_formula(idx, col, count_formula(base_col, r), integer, cache)
+        for metric, col, numerator, denominator in (
+            (0, 5, "D", "C"),
+            (1, 6, "E", "D"),
+            (2, 7, "E", "C"),
+        ):
+            cached = initial_rates[si][metric]
             calc.write_formula(
                 idx, col,
-                f'=IF(AND($B{r}="{month}",$I{r}=1,'
+                f'=IFERROR(IF({denominator}{r}=0,NA(),'
+                f'{numerator}{r}/{denominator}{r}),NA())',
+                percent, cached if cached is not None else "#N/A",
+            )
+        calc.write_formula(idx, 8, f'=IF(AND(B{r}>=$S$3,B{r}<=$S$4),1,"")',
+                           None, 1)
+        for metric, col, pct_col in ((0, 9, "F"), (1, 10, "G"), (2, 11, "H")):
+            previous = initial_rates[si - 1][metric] if si else None
+            current = initial_rates[si][metric]
+            same_month = (
+                si > 0
+                and str(weekly[si - 1]["selected_cutoff_date"])[:7] == month
+            )
+            cache = (
+                current - previous if same_month and current is not None
+                and previous is not None else "#N/A"
+            )
+            calc.write_formula(
+                idx, col,
+                f'=IF(B{r}=B{r-1},{pct_col}{r}-{pct_col}{r-1},NA())'
+                if si else "=NA()",
+                pp, cache,
+            )
+        for month_of_series, metric, col in series:
+            metric_col = ("F", "G", "H")[metric]
+            cached = (
+                initial_rates[si][metric] if month_of_series == month
+                and metric == 0 and initial_rates[si][metric] is not None
+                else "#N/A"
+            )
+            calc.write_formula(
+                idx, col,
+                f'=IF(AND($B{r}="{month_of_series}",$I{r}=1,'
                 f'OR(Resumen!$A$6="Comparar las tres",'
                 f'Resumen!$A$6="{INDICATORS[metric]}")),'
                 f'IFERROR({metric_col}{r},NA()),NA())',
-                percent,
+                percent, cached,
             )
 
     last = max(11, len(weekly) + 10)
@@ -307,11 +340,25 @@ def create_workbook(
         source = f"'Tendencia - datos'!{data_col}11:{data_col}{last}"
         diffs = f"'Tendencia - datos'!{diff_col}11:{diff_col}{last}"
         condition = f"'Tendencia - datos'!I11:I{last}=1"
-        panel.write_formula(
-            col + "10", f'=IFERROR(LOOKUP(2,1/({condition}),{source}),"")', big_pct
+        metric = {"A": 0, "H": 1, "O": 2}[col]
+        current = initial_rates[-1][metric] if initial_rates else None
+        previous = initial_rates[-2][metric] if len(initial_rates) > 1 else None
+        same_month = (
+            len(weekly) > 1
+            and str(weekly[-1]["selected_cutoff_date"])[:7]
+            == str(weekly[-2]["selected_cutoff_date"])[:7]
+        )
+        delta_cache = (
+            100 * (current - previous)
+            if same_month and current is not None and previous is not None else ""
         )
         panel.write_formula(
-            col + "12", f'=IFERROR(LOOKUP(2,1/({condition}),{diffs})*100,"")', pp
+            col + "10", f'=IFERROR(LOOKUP(2,1/({condition}),{source}),"")',
+            big_pct, current if current is not None else ""
+        )
+        panel.write_formula(
+            col + "12", f'=IFERROR(LOOKUP(2,1/({condition}),{diffs})*100,"")',
+            pp, delta_cache
         )
     # La descripción sigue el último lunes del periodo seleccionado.
     condition = f"'Tendencia - datos'!I11:I{last}=1"
