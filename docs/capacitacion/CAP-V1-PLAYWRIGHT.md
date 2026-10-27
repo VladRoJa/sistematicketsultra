@@ -37,6 +37,36 @@ Archivos inspeccionados:
 6. Instalar FFmpeg, Python Playwright (el backend usa 1.54.0),
    Chromium de Playwright y `espeak-ng` opcional para narración.
 
+
+### Preparación automática del ticket sintético CAP-V1
+
+El repositorio incluye `backend/scripts/seed_training_tapizado_qa.py`, que reutiliza
+`seed_maintenance_closure_qa.py`. Ambos scripts verifican, antes de abrir Flask,
+que su destino es la base PostgreSQL local `suite_ultra_tickets_qa` y que existe
+autorización explícita de QA. No utilizar la sucursal `ULTRA DEMO` de producción.
+
+Una vez creada y migrada esa base aislada y habilitados los flags M3/M4 locales,
+ejecutar desde `backend/`:
+
+```bash
+python -m scripts.seed_training_tapizado_qa
+```
+
+Se requieren las mismas variables locales que `seed_maintenance_closure_qa.py`,
+incluida `APP_ENV=local`, la URI PostgreSQL de QA, la autorización de seed y
+una contraseña sintética de al menos 12 caracteres. También deben estar activados
+`TICKETS_TAPIZADO_MULTI_ENABLED` y `TICKETS_TAPIZADO_RECEPCION_ENABLED`.
+No colocar contraseñas en archivos versionados ni usar valores de producción.
+
+El seed entrega un ID de ticket y los códigos
+`CAPV1-TPZ-01`, `CAPV1-TPZ-02`, `CAPV1-TPZ-03`.
+Genera un ticket EXTERNA, En progreso, 0/3 y dos cuentas:
+`QA_COORD_CIERRE` (operador) y `QA_GERENTE_CIERRE` (revisor).
+Sustituir el ID/códigos de ejemplo del comando del generador por los reales.
+La cuenta del revisor es además la creadora del ticket. Antes de grabar,
+verificar sus permisos en Angular y Flask. Una vez usado, restaurar la BD
+sintética a su estado inicial: el seed no revierte historias ni recepciones.
+
 ### Ejecutar
 
 Desde la raíz del repositorio (Linux, WSL o entorno Python local):
