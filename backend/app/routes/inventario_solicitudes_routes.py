@@ -504,9 +504,13 @@ def _query_revision(access):
     # No filtrar en frontend: el límite real se aplica en SQL ANTES de paginar.
     query = InventarioSolicitudCorreccionORM.query.filter(
         InventarioSolicitudCorreccionORM.sucursal_id.in_(access["sucursales"]),
-        InventarioSolicitudCorreccionORM.creado_por_usuario_id != access["actor_id"],
     )
     if not access["corporativo"]:
+        # Los operativos no revisan solicitudes propias. La excepción
+        # corporativa depende del grant individual global verificado en backend.
+        query = query.filter(
+            InventarioSolicitudCorreccionORM.creado_por_usuario_id != access["actor_id"]
+        )
         # Competencia por clase REAL en SQL antes de contar/paginar/detallar:
         # Mantenimiento: aparatos. Sistemas: dispositivos. Familia no participa.
         aliases = aliases_clase_inventario_e3(access["clase_activo"])

@@ -274,16 +274,29 @@ def _sql(query,params=None):
     return db.session.execute(sa.text(query),params or {}).scalar_one()
 
 
-def test_e3_denegacion_por_defecto_regionales_y_autoaprobacion(env):
+def test_e3_denegacion_por_defecto_y_autoaprobacion_admin_auditada(env):
     req = _request()
+    own = _request(creator=47, inv=502, proposed={"cantidad_fisica":2},
+                   original={"stock":1},
+                   baseline={"inventario_id":502,"sucursal_id":7,"stock":1})
     payload = _payload([req])
     assert _post(env,47,payload).status_code == 403
+    assert _post(env,47,_payload([own])).status_code == 403
     assert _post(env,55,payload).status_code == 403
     _grant(47)
     assert _post(env,47,payload).status_code == 201
-    own = _request(creator=47, inv=502, proposed={"cantidad_fisica":0})
-    assert _post(env,47,_payload([own])).status_code == 403
-    assert _sql("SELECT count(*) FROM inventario_correccion_decisiones") == 1
+    decision = _payload([own])
+    approved = _post(env,47,decision)
+    assert approved.status_code == 201, approved.get_json()
+    assert _sql("SELECT stock FROM inventario_sucursal "
+                "WHERE inventario_id=502 AND sucursal_id=7") == 2
+    assert _sql("SELECT count(*) FROM inventario_correccion_decisiones d "
+                "JOIN inventario_correccion_solicitudes s ON s.id=d.solicitud_id "
+                "WHERE d.solicitud_id=:id AND d.actor_usuario_id=47 "
+                "AND s.creado_por_usuario_id=47", {"id":own}) == 1
+    assert _sql("SELECT count(*) FROM inventario_correccion_ajustes") == 2
+    assert _post(env,47,decision).status_code == 200  # Idempotencia propia.
+    assert _sql("SELECT count(*) FROM inventario_correccion_decisiones") == 2
 
 
 def test_e3_cantidad_commit_auditoria_replay_y_no_entrada_falsa(env):
@@ -632,9 +645,9 @@ def test_e3_revision_admin_global_grants_y_deny_por_sucursal(env):
     assert ctx.status_code == 200
     assert ctx.get_json()["corporativo"] is True
     lista = _get_e3(env,47,"revision").get_json()
-    assert lista["total"] == 2
-    assert {x["id"] for x in lista["items"]} == {ajeno,maestro}
-    assert _get_e3(env,47,f"revision/{propio}").status_code == 404
+    assert lista["total"] == 3
+    assert {x["id"] for x in lista["items"]} == {propio,ajeno,maestro}
+    assert _get_e3(env,47,f"revision/{propio}").status_code == 200
     _grant(47,scope="branch",branch=7,effect="deny")
     assert _get_e3(env,47,"revision?sucursal_id=7").status_code == 403
     assert _get_e3(env,47,"revision").get_json()["total"] == 0

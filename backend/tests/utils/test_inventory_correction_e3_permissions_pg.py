@@ -154,18 +154,23 @@ def test_e3_denegado_sin_grants_y_roles_no_liberados(env):
     assert _check(True).reason == "invalid_request"
 
 
-def test_e3_corporativo_solo_grant_individual_y_sin_autoaprobacion(env):
+def test_e3_corporativo_autoaprobacion_solo_con_grant_individual(env):
     _grant(role="ADMINISTRADOR")
     assert not _check(47).allowed
     assert not _check(48).allowed
+    assert _check(47, creator=47).reason == "no_explicit_global_grant"
+    _grant(actor=47, active=False)
+    assert _check(47, creator=47).reason == "no_explicit_global_grant"
     _grant(actor=47)
     assert _check(47, branch=7).allowed
     assert _check(47, branch=26, kind="MASTER_FIELD").global_scope
-    assert _check(47, branch=7, creator=47).reason == "self_approval_forbidden"
-    assert not _check(48).allowed  # Otro administrador no hereda grant de rol.
+    assert _check(47, branch=7, creator=47).allowed
+    assert _check(47, branch=26, creator=47, kind="MASTER_FIELD").allowed
+    assert not _check(48, creator=48).allowed  # Otro admin no hereda el grant de rol.
     _grant(actor=47, effect="deny", scope="branch", branch=7)
     assert _check(47, branch=7).reason == "explicit_deny"
-    assert _check(47, branch=26).allowed
+    assert _check(47, branch=7, creator=47).reason == "explicit_deny"
+    assert _check(47, branch=26, creator=47).allowed
 
 
 def test_e3_mantenimiento_interseccion_con_asignadas_y_maestro_global(env):
