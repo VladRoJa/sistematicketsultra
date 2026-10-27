@@ -276,20 +276,17 @@ test('E2 UX: modal centrado y compacto conserva scroll accesible en pantallas ba
   assert.match(html, /\(click\)="abrirSeguimiento\(\)"/);
 });
 
-test('E2 UX: bandeja con selección por página, detalles y decisiones derivadas a E3', () => {
+test('E2 UX: seguimiento de solo consulta conserva resultados, filtros y detalle', () => {
   assert.match(html, /class="solicitud-grid solicitud-filtros"/);
   assert.match(html, /class="solicitud-bandeja__barra"/);
-  assert.match(html, /\[checked\]="todosSeleccionadosPagina"/);
-  assert.match(html, /\[indeterminate\]="algunosSeleccionadosPagina"/);
-  assert.match(html, /\(change\)="alternarPagina\(\)"/);
-  assert.match(html, /\(change\)="alternarSeleccion\(solicitud\.id\)"/);
-  assert.match(html, /\[disabled\]="solicitud\.estado !== 'PENDING'"/);
+  assert.ok(html.includes('{{ totalSolicitudes }} resultados'));
+  assert.doesNotMatch(html, /type="checkbox"/);
+  assert.doesNotMatch(html, /Seleccionar pendientes de esta página/);
+  assert.doesNotMatch(src, /seleccionados|alternarSeleccion|alternarPagina|pendientesPagina/);
   assert.match(html, /\(click\)="toggleDetalle\(solicitud\.id, \$event\)"/);
   assert.match(html, /aria-haspopup="dialog"/);
   assert.match(html, /Revisión de correcciones \(E3\)/);
   assert.doesNotMatch(html, /Pendiente de backend transaccional E3/);
-  assert.doesNotMatch(html, /class="solicitud-bandeja__autorizar" disabled/);
-  assert.doesNotMatch(html, /class="solicitud-bandeja__rechazar" disabled/);
   assert.match(css, /\.solicitud-bandeja__lista\s*\{[^}]*overflow:\s*visible;/s);
   assert.doesNotMatch(html, /class="solicitud-bandeja__expandido"/);
   assert.match(html, /class="solicitud-detalle-overlay"/);
@@ -302,76 +299,44 @@ test('E2 UX: bandeja con selección por página, detalles y decisiones derivadas
   assert.doesNotMatch(src, /\.(aprobarSolicitud|rechazarSolicitud|aplicarCorreccion)\(/);
 });
 
-test('E2: solo PENDING se seleccionan y seleccionar página nunca incluye otras páginas', () => {
-  const { vm } = fixture({ referencia: null, vistaInicial: 'seguimiento' });
-  vm.solicitudes = [
-    { id: 11, estado: 'PENDING', tipo: 'MASTER_FIELD', sucursal_id: 7 },
-    { id: 12, estado: 'REJECTED', tipo: 'NOT_LOCATED', sucursal_id: 7 },
-    { id: 13, estado: 'PENDING', tipo: 'QUANTITY_DIFFERENCE', sucursal_id: 8 },
-  ];
-  vm.totalSolicitudes = 200;
-  vm.alternarSeleccion(12);
-  assert.equal(vm.totalSeleccionados, 0);
-  vm.alternarPagina();
-  assert.equal(vm.totalSeleccionados, 2);
-  assert.equal(vm.estaSeleccionada(11), true);
-  assert.equal(vm.estaSeleccionada(13), true);
-  assert.equal(vm.estaSeleccionada(12), false);
-  assert.equal(vm.todosSeleccionadosPagina, true);
-  vm.alternarPagina();
-  assert.equal(vm.totalSeleccionados, 0);
-});
-
-test('E2: filtros y páginas limpian selección para evitar aprobar fuera del contexto visible', () => {
+test('E2: filtros y paginación conservan navegación sin seleccionar solicitudes', () => {
   const { vm, calls } = fixture({ referencia: null, vistaInicial: 'seguimiento' });
-  vm.alternarSeleccion(7);
-  assert.equal(vm.totalSeleccionados, 1);
   vm.cambiarFiltros();
-  assert.equal(vm.totalSeleccionados, 0);
-  vm.alternarSeleccion(7);
+  assert.equal(calls.gets.at(-1).page, 1);
   vm.totalSolicitudes = 26;
   vm.cambiarPagina(1);
-  assert.equal(vm.totalSeleccionados, 0);
   assert.equal(calls.gets.at(-1).page, 2);
 });
 
-test('E2: detalles abren un segundo modal sin alterar la selección', () => {
+test('E2: detalles abren y cierran un segundo modal de consulta', () => {
   const { vm, calls } = fixture({ referencia: null, vistaInicial: 'seguimiento' });
-  vm.alternarSeleccion(7);
   vm.toggleDetalle(7);
   assert.deepEqual(calls.details, [7]);
   assert.equal(vm.detalleIdAbierto, 7);
   assert.equal(vm.detalle.id, 7);
-  assert.equal(vm.totalSeleccionados, 1);
   vm.toggleDetalle(7);
   assert.equal(vm.detalle, null);
   assert.equal(vm.detalleIdAbierto, null);
-  assert.equal(vm.totalSeleccionados, 1);
 });
 
-test('E2: detalle conserva checks y devuelve foco al botón al cerrarlo', async () => {
+test('E2: detalle devuelve foco al botón al cerrarlo', async () => {
   const { vm } = fixture({ referencia: null, vistaInicial: 'seguimiento' });
-  vm.alternarSeleccion(7);
   let focusCount = 0;
   const boton = { isConnected: true, focus() { focusCount++; } };
   vm.toggleDetalle(7, { currentTarget: boton });
   assert.equal(vm.detalleIdAbierto, 7);
-  assert.equal(vm.totalSeleccionados, 1);
   vm.cerrarDetalle();
   await Promise.resolve();
   assert.equal(vm.detalleIdAbierto, null);
-  assert.equal(vm.totalSeleccionados, 1);
   assert.equal(focusCount, 1);
 });
 
-test('E2: filtrar mientras detalle abierto cancela modal y limpia selección', () => {
+test('E2: filtrar mientras detalle abierto cancela el modal', () => {
   const { vm } = fixture({ referencia: null, vistaInicial: 'seguimiento' });
-  vm.alternarSeleccion(7);
   vm.toggleDetalle(7);
   assert.equal(vm.detalleIdAbierto, 7);
   vm.cambiarFiltros();
   assert.equal(vm.detalleIdAbierto, null);
-  assert.equal(vm.totalSeleccionados, 0);
 });
 
 test('E2 UX: segundo modal no aumenta altura de la lista ni agrega doble scroll', () => {
