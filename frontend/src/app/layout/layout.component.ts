@@ -366,16 +366,10 @@ ngOnInit(): void {
   }
 
   if (this.puedeVerMarketingSalesFunnelPorRol()) {
-    marketingConversionSubmenu.push(
-      {
-        label: 'Funnel Venta Nueva · Original',
-        path: '/marketing-conversion/venta-total-original',
-      },
-      {
-        label: 'Funnel Venta Nueva · Ajustado',
-        path: '/marketing-conversion/venta-total',
-      },
-    );
+    marketingConversionSubmenu.push({
+      label: 'Funnel Venta Nueva · Original',
+      path: '/marketing-conversion/venta-total-original',
+    });
   }
 
   if (this.esAdmin) {
