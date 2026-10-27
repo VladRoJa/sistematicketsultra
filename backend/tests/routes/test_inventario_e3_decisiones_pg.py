@@ -831,6 +831,13 @@ def test_e3_sistemas_no_localizado_y_vinculacion_dispositivo_sin_familia(env):
     assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=503 AND sucursal_id=7") == 1
     assert _sql("SELECT count(*) FROM inventario_correccion_altas_auditoria") == 1
     assert _sql("SELECT familia_equipo_id IS NULL FROM inventario_general WHERE id=503") is True
+    assert _post(env,90,link).status_code == 200  # replay idempotente
+    db.session.execute(sa.text(
+        "UPDATE inventario_general SET tipo='aparatos' WHERE id=503"
+    ))
+    db.session.commit()  # Cambio externo simulado exclusivamente en PG temporal.
+    assert _post(env,90,link).status_code == 404  # Replay ya no revela referencia ajena.
+    assert _sql("SELECT count(*) FROM inventario_correccion_ajustes") == 2
 
 
 def test_e3_hallazgo_de_dispositivo_no_vincula_aparato_y_sin_tipo_es_corporativo(env):
