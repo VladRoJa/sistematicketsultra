@@ -1,0 +1,55 @@
+name: Permissions Phase B B2 — Nube P1 GET, JWT and IDOR
+
+on:
+  pull_request:
+    paths:
+      - "backend/tests/routes/test_permissions_phase_b_b2_nube_p1_gets.py"
+      - "backend/app/routes/internal_documents_routes.py"
+      - "backend/app/utils/internal_documents_access.py"
+      - "backend/tests/routes/test_internal_documents_a12_a13_http_jwt_reconcile.py"
+      - "backend/tests/routes/test_internal_documents_a13_list_visibility.py"
+      - "backend/tests/routes/test_internal_documents_agregadoras_visibility.py"
+      - "docs/security/permissions_phase_b_b2_nube_p1_get_parity_20261027.md"
+      - "docs/security/permissions_phase_a_p34_nube_pilot_p1_reads_20261027.csv"
+      - ".github/workflows/permissions-nube-b2-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  nube-get-p1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+      SECRET_KEY: permissions-nube-b2-fixtures
+      JWT_SECRET_KEY: permissions-nube-b2-fixtures
+      SQLALCHEMY_DATABASE_URI: "sqlite:///:memory:"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Compile B2 regression
+        run: python -m py_compile tests/routes/test_permissions_phase_b_b2_nube_p1_gets.py
+      - name: Run B2 and A12-A13 Nube guards
+        run: |
+          python -m pytest -q --tb=short -o addopts= \
+            tests/routes/test_permissions_phase_b_b2_nube_p1_gets.py \
+            tests/routes/test_internal_documents_a12_a13_http_jwt_reconcile.py \
+            tests/routes/test_internal_documents_a12_audit_visibility.py \
+            tests/routes/test_internal_documents_a13_list_visibility.py \
+            tests/routes/test_internal_documents_agregadoras_visibility.py \
+            tests/utils/test_internal_documents_agregadoras_access.py \
+            tests/utils/test_permissions_phase_a_document_object_parity.py \
+            tests/routes/test_permissions_phase_a_p34_closure.py
