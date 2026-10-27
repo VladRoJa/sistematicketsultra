@@ -247,7 +247,8 @@ def _cached_cell(sheet_xml, address):
     assert cell is not None, f"No existe {address}"
     value = cell.find("x:v", ns)
     formula = cell.find("x:f", ns)
-    return (value.text if value is not None else None,
+    # XlsxWriter guarda resultados "" como <v/> (Element.text = None).
+    return ((value.text or "") if value is not None else None,
             formula.text if formula is not None else None)
 
 
