@@ -276,7 +276,7 @@ test('E2 UX: modal centrado y compacto conserva scroll accesible en pantallas ba
   assert.match(html, /\(click\)="abrirSeguimiento\(\)"/);
 });
 
-test('E2 UX: bandeja con selección por página, detalles por fila y decisiones E3 bloqueadas', () => {
+test('E2 UX: bandeja con selección por página, detalles y decisiones derivadas a E3', () => {
   assert.match(html, /class="solicitud-grid solicitud-filtros"/);
   assert.match(html, /class="solicitud-bandeja__barra"/);
   assert.match(html, /\[checked\]="todosSeleccionadosPagina"/);
@@ -286,10 +286,10 @@ test('E2 UX: bandeja con selección por página, detalles por fila y decisiones 
   assert.match(html, /\[disabled\]="solicitud\.estado !== 'PENDING'"/);
   assert.match(html, /\(click\)="toggleDetalle\(solicitud\.id, \$event\)"/);
   assert.match(html, /aria-haspopup="dialog"/);
-  assert.match(html, /Autorizar seleccionadas/);
-  assert.match(html, /Rechazar seleccionadas/);
-  assert.match(html, /class="solicitud-bandeja__autorizar" disabled/);
-  assert.match(html, /class="solicitud-bandeja__rechazar" disabled/);
+  assert.match(html, /Revisión de correcciones \(E3\)/);
+  assert.doesNotMatch(html, /Pendiente de backend transaccional E3/);
+  assert.doesNotMatch(html, /class="solicitud-bandeja__autorizar" disabled/);
+  assert.doesNotMatch(html, /class="solicitud-bandeja__rechazar" disabled/);
   assert.match(css, /\.solicitud-bandeja__lista\s*\{[^}]*overflow:\s*visible;/s);
   assert.doesNotMatch(html, /class="solicitud-bandeja__expandido"/);
   assert.match(html, /class="solicitud-detalle-overlay"/);
@@ -381,12 +381,12 @@ test('E2 UX: segundo modal no aumenta altura de la lista ni agrega doble scroll'
   const barra = html.indexOf('solicitud-bandeja__acciones--fijas');
   const pie = html.indexOf('<footer class="solicitud-footer">');
   assert.ok(barra > 0 && pie > barra, 'Las acciones deben aparecer antes del pie fijo');
-  assert.match(html, /<\/section>\s*<\/div>\s*<!-- Acciones E3 fuera del contenido desplazable/);
+  assert.match(html, /<\/section>\s*<\/div>\s*<!-- E2 es seguimiento: las decisiones reales pertenecen a la bandeja E3/);
   assert.match(html, /\*ngIf="modo === 'seguimiento' && !cargandoListado && !errorListado"/);
   assert.match(html, /\*ngIf="detalleIdAbierto !== null && modo === 'seguimiento'"/);
   assert.match(html, /\[attr\.inert\]="detalleIdAbierto !== null \? '' : null"/);
   assert.match(html, /\(click\)="cerrarDetalle\(\)"/);
   assert.doesNotMatch(html, /\*ngIf="detalleIdAbierto === solicitud\.id"/);
-  assert.match(html, /class="solicitud-bandeja__autorizar" disabled/);
-  assert.match(html, /class="solicitud-bandeja__rechazar" disabled/);
+  assert.doesNotMatch(html, /class="solicitud-bandeja__autorizar" disabled/);
+  assert.doesNotMatch(html, /class="solicitud-bandeja__rechazar" disabled/);
 });
