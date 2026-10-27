@@ -14,10 +14,18 @@ from app.extensions import db
 _ACTION = "inventory.correction_approve"
 _GLOBAL_ADMIN_ROLES = frozenset({"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN"})
 _SCOPED_APPROVER_ROLES = frozenset({
-    "MANTENIMIENTO", "COORDINADOR_MANTENIMIENTO",
+    "MANTENIMIENTO", "COORDINADOR_MANTENIMIENTO", "SISTEMAS",
 })
-# Los revisores operativos E3 deben pertenecer efectivamente a Mantenimiento.
-_MAINTENANCE_DEPARTMENT_ID = 1
+# Ningún rol operativo hereda ámbito global del inventario V1.
+_ROLE_COMPETENCE = {
+    "MANTENIMIENTO": (1, "aparatos"),
+    "COORDINADOR_MANTENIMIENTO": (1, "aparatos"),
+    "SISTEMAS": (7, "dispositivos"),
+}
+_ASSET_CLASS_ALIASES = {
+    "aparatos": frozenset({"aparato", "aparatos"}),
+    "dispositivos": frozenset({"dispositivo", "dispositivos", "sistema", "sistemas"}),
+}
 _ALLOWED_TYPES = frozenset({
     "MASTER_FIELD", "QUANTITY_DIFFERENCE",
     "NOT_LOCATED", "UNREGISTERED_FIND",
@@ -29,6 +37,21 @@ class InventoryCorrectionApprovalAccess:
     allowed: bool
     reason: str
     global_scope: bool = False
+
+
+def normalizar_clase_inventario_e3(value):
+    """Clase efectiva E3; sin inferirla de familia/categoría, fail closed."""
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().casefold()
+    for class_name, aliases in _ASSET_CLASS_ALIASES.items():
+        if normalized in aliases:
+            return class_name
+    return None
+
+
+def aliases_clase_inventario_e3(class_name):
+    return tuple(sorted(_ASSET_CLASS_ALIASES.get(class_name, ())))
 
 
 def _positive_int(value):
@@ -61,13 +84,15 @@ def _grant_covers_branch(grant, branch, department):
 
 
 def resolver_acceso_autorizacion_e3(
-    *, actor_usuario_id, solicitud_sucursal_id, solicitud_creador_id, tipo
+    *, actor_usuario_id, solicitud_sucursal_id, solicitud_creador_id, tipo,
+    clase_activo=None,
 ):
     """Decisión de elegibilidad; sin writes ni dependencia del JWT de rol.
 
     Se exige acción activa y grant explícito vigente para autorizar.
-    Roles permitidos: administración (solo grant individual global)
-    y mantenimiento/coordinación (grant y usuario_sucursal asignada).
+    Roles permitidos: administración (solo grant individual global),
+    Mantenimiento (dept 1, aparatos) y Sistemas (dept 7, dispositivos),
+    siempre sujetos a grant y usuario_sucursal asignada.
     Gerentes/regionales quedan fuera hasta el gate E5.
     """
     actor_id = _positive_int(actor_usuario_id)
@@ -92,7 +117,7 @@ def resolver_acceso_autorizacion_e3(
     if role not in _GLOBAL_ADMIN_ROLES | _SCOPED_APPROVER_ROLES:
         return InventoryCorrectionApprovalAccess(False, "role_not_enabled")
     if (role in _SCOPED_APPROVER_ROLES
-            and actor["department_id"] != _MAINTENANCE_DEPARTMENT_ID):
+            and actor["department_id"] != _ROLE_COMPETENCE[role][0]):
         return InventoryCorrectionApprovalAccess(False, "department_not_enabled")
 
     grants = db.session.execute(
@@ -143,6 +168,8 @@ def resolver_acceso_autorizacion_e3(
     # Correcciones al maestro afectan múltiples sucursales: competencia corporativa.
     if tipo == "MASTER_FIELD":
         return InventoryCorrectionApprovalAccess(False, "global_master_requires_corporate")
+    if normalizar_clase_inventario_e3(clase_activo) != _ROLE_COMPETENCE[role][1]:
+        return InventoryCorrectionApprovalAccess(False, "asset_class_not_enabled")
 
     assigned = db.session.execute(
         text("""
@@ -182,7 +209,7 @@ def alcance_revision_e3(actor_usuario_id):
     if role not in _GLOBAL_ADMIN_ROLES | _SCOPED_APPROVER_ROLES:
         return None
     if (role in _SCOPED_APPROVER_ROLES
-            and actor["department_id"] != _MAINTENANCE_DEPARTMENT_ID):
+            and actor["department_id"] != _ROLE_COMPETENCE[role][0]):
         return None
     grants = db.session.execute(text("""
         SELECT g.principal_type, g.effect, g.scope_type,
@@ -235,4 +262,5 @@ def alcance_revision_e3(actor_usuario_id):
     if not permitted:
         return None
     return {"actor_id": actor_id, "sucursales": permitted,
-            "corporativo": corporate}
+            "corporativo": corporate,
+            "clase_activo": None if corporate else _ROLE_COMPETENCE[role][1]}
