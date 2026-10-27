@@ -206,6 +206,15 @@ def _validate_payload(payload):
             return None, _error(400, "La observación no puede ser futura.")
 
     kind = payload["tipo"]
+    # Para estos dos ajustes con efecto patrimonial se exige evidencia
+    # de observación desde E2; E3 no puede aportarla a posteriori en silencio.
+    if kind in ("NOT_LOCATED", "UNREGISTERED_FIND"):
+        if observed is None or not isinstance(evidence, str) or not 20 <= len(evidence.strip()) <= 2000:
+            return None, _error(
+                400,
+                "No localizado y hallazgo requieren fecha de observación "
+                "y evidencia física descriptiva de 20 a 2000 caracteres.",
+            )
     inventory = payload.get("inventario_id")
     field = payload.get("campo")
     proposed = payload.get("valor_propuesto")
