@@ -320,7 +320,7 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
       return this.cantidadFisica !== null && Number.isInteger(this.cantidadFisica) &&
         this.cantidadFisica > 0 && this.cantidadFisica !== this.referencia.stock;
     }
-    if (this.tipo === 'NOT_LOCATED') return true;
+    if (this.tipo === 'NOT_LOCATED') return this.referencia.stock > 0;
     if (this.tipo === 'MASTER_FIELD') {
       if (this.campoNumerico) return this.nuevoId !== null && Number.isInteger(this.nuevoId) &&
         this.nuevoId > 0 && this.nuevoId !== this.valorOficial;
