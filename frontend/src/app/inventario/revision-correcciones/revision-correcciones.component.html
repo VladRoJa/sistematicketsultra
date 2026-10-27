@@ -113,6 +113,7 @@
           <div><dt>Valor anterior</dt><dd>{{ textoValor(detalle.valor_original) }}</dd></div>
           <div><dt>Propuesta</dt><dd>{{ textoValor(detalle.valor_propuesto || detalle.hallazgo_provisional) }}</dd></div>
           <div><dt>Motivo</dt><dd>{{ detalle.motivo }}</dd></div>
+          <div><dt>Fecha de observación física</dt><dd>{{ detalle.fecha_observacion_local || 'Sin fecha' }}</dd></div>
           <div><dt>Evidencia</dt><dd>{{ detalle.evidencia_descriptiva || 'Sin descripción' }}</dd></div>
           <div><dt>Baseline oficial</dt><dd>{{ textoValor(detalle.baseline_canonico) }}</dd></div>
         </dl>
@@ -151,6 +152,13 @@
 
         <ng-container *ngIf="decision === 'APPROVED'">
           <div *ngFor="let solicitud of seleccionadas" class="revision-resolucion">
+            <p class="revision-error" *ngIf="
+              (solicitud.tipo === 'NOT_LOCATED' || solicitud.tipo === 'UNREGISTERED_FIND') &&
+              (!solicitud.fecha_observacion_local || !solicitud.evidencia_descriptiva ||
+               solicitud.evidencia_descriptiva.trim().length < 20)">
+              Falta fecha de observación o evidencia física suficiente. No se puede autorizar esta solicitud;
+              sí puede rechazarse con motivo y registrarse una nueva con evidencia completa.
+            </p>
             <ng-container *ngIf="solicitud.tipo === 'NOT_LOCATED'">
               <h3>#{{ solicitud.id }} · Confirmar ajuste a cero</h3>
               <p>Stock esperado: {{ resoluciones[solicitud.id].stock_esperado }}.
@@ -165,7 +173,12 @@
               <h3>#{{ solicitud.id }} · Vincular a una referencia existente</h3>
               <p>Hallazgo: {{ textoValor(solicitud.hallazgo_provisional) }}.
                 Debe coincidir con el equipo oficial, incluido el código físico si lo tiene.
-                No se crearán artículos nuevos.</p>
+                No se crearán artículos nuevos; la cantidad física es el total final, no un incremento.
+                La vinculación exige código oficial y etiqueta física coincidentes.</p>
+              <p class="revision-error" *ngIf="!solicitud.hallazgo_provisional?.['codigo_interno']">
+                No hay código físico declarado. Requiere un procedimiento de identificación adicional:
+                no puede autorizarse la vinculación en E3.
+              </p>
               <div class="revision-resolucion__numeros">
                 <label>ID del inventario oficial
                   <input type="number" min="1" step="1" name="e3Inventario{{ solicitud.id }}"
