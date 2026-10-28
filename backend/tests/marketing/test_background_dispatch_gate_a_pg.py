@@ -131,6 +131,7 @@ class FakeChildrenSession(Session):
     ("all", 26, "COMPLETED"),
     ("stop_after_7", 7, "STOPPED"),
     ("ambiguous_after_4", 4, "REVIEW_REQUIRED"),
+    ("worker_shutdown_after_1", 1, "REVIEW_REQUIRED"),
 ])
 def test_durable_26_child_pipeline_with_mock_provider(
     durable, scenario, expected_count, expected_status,
@@ -189,18 +190,21 @@ def test_durable_26_child_pipeline_with_mock_provider(
         with FakeChildrenSession(engine, children=children) as session:
             worker.process_claimed_job(
                 session=session, job_id=50, worker_id="worker-A",
-                generation=1, config=FLAGS, provider_factory=fake_provider_factory)
+                generation=1, config=FLAGS, provider_factory=fake_provider_factory,
+                should_terminate=(lambda: scenario == "worker_shutdown_after_1" and len(calls) >= 1),)
 
         assert calls == list(range(1, expected_count + 1))
         assert len(provider_factory_calls) == expected_count
 
         with engine.connect() as conn:
             row = conn.execute(sa.text("""
-                SELECT status, worker_claim_generation, last_accepted_child_id
+                SELECT status, worker_claim_generation, last_accepted_child_id, stop_reason_code
                   FROM marketing_campaign_v2_background_jobs WHERE id=50
             """)).one()
             assert row.status == expected_status
             assert row.worker_claim_generation == 1
+            if scenario == "worker_shutdown_after_1":
+                assert row.stop_reason_code == "WORKER_SHUTDOWN"
             assert row.last_accepted_child_id == (
                 expected_count if scenario != "ambiguous_after_4" else 3)
             n_accepted = conn.scalar(sa.text("""
