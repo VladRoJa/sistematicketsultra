@@ -238,7 +238,8 @@ def _validate_existing(grant_id, data, *, lock=False):
         return None, _error("Grant inexistente.", 404)
     if (grant.principal_type != "user" or grant.principal_user_id != data["user_id"]
             or not grant.action or grant.action.full_key != B5_ACTION_KEY
-            or grant.deleted_at is not None or not grant.is_active):
+            or grant.deleted_at is not None or not grant.is_active
+            or _record_branches(grant) is None):
         return None, _error("Este grant no puede modificarse en B5.", 409)
     previous = grant.updated_at
     expected = data["expected_updated_at"]
@@ -293,6 +294,11 @@ def preview():
         data = _normalize_input(request.get_json(silent=True))
     except ValueError as exc:
         return _error(str(exc), 400)
+    # Preview de edición: no se puede usar un ID ficticio para saltar solapes.
+    if data["grant_id"]:
+        _, check_error = _validate_existing(data["grant_id"], data)
+        if check_error:
+            return check_error
     _, error = _evaluate(data)
     if error:
         return error
@@ -315,6 +321,8 @@ def create_beta_grant():
         data = _normalize_input(request.get_json(silent=True))
     except ValueError as exc:
         return _error(str(exc), 400)
+    if data["grant_id"] is not None or data["expected_updated_at"] is not None:
+        return _error("Crear no admite grant_id ni expected_updated_at.", 400)
     try:
         resolved, error = _evaluate(data, lock=True)
         if error:
