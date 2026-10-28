@@ -7,6 +7,7 @@ on:
       - "backend/scripts/audit_permission_endpoints.py"
       - "backend/app/routes/track_routes.py"
       - "backend/tests/routes/test_permissions_live_track_read_check.py"
+      - "backend/tests/utils/test_permissions_endpoint_review_report.py"
       - "backend/app/routes/permissions_catalog_routes.py"
       - "backend/app/routes/permissions_b5_beta_routes.py"
       - "backend/tests/routes/test_permissions_phase_b_b5_scoped_beta.py"
@@ -72,6 +73,7 @@ jobs:
             tests/routes/test_internal_documents_a12_a13_http_jwt_reconcile.py \
             tests/routes/test_permissions_phase_a_track_parity.py \
             tests/routes/test_permissions_live_track_read_check.py \
+            tests/utils/test_permissions_endpoint_review_report.py \
             tests/routes/test_permissions_phase_a_inventory_parity.py
 
       - name: Inventory all Flask endpoints against high-risk catalog (read-only)
