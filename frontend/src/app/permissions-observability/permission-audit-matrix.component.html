@@ -2,9 +2,9 @@
   <header class="audit-head">
     <div>
       <h2>Matriz de acceso</h2>
-      <p>Los checks de Track · Consultar ya controlan el permiso real; los demás siguen en diagnóstico.</p>
+      <p>Solo los permisos certificados pueden editarse. Track · Consultar requiere activación explícita del backend.</p>
     </div>
-    <span class="audit-pill">Track lectura · check real</span>
+    <span class="audit-pill">{{ result?.track_read_grants_enabled ? 'Track lectura · check real' : 'Solo consulta · controles bloqueados' }}</span>
   </header>
 
   <nav class="audit-perspectives" aria-label="Perspectiva de auditoría">
@@ -61,7 +61,7 @@
     </div>
   </section>
 
-  <div class="audit-notice">El check habilitado de Track controla únicamente su lectura general: no concede ejecución de pipelines ni sustituye los guards particulares de KPI Desempeño o Tienda. Los demás checks siguen siendo diagnóstico. «Sin comprobar» no equivale a denegado.</div>
+  <div class="audit-notice">Track · Consultar solo podrá editarse cuando el backend lo active tras revisar grants anteriores. No concede ejecución de pipelines ni sustituye los guards de KPI Desempeño o Tienda. El resto sigue en diagnóstico. «Sin comprobar» no equivale a denegado.</div>
   <p class="audit-error" role="alert" *ngIf="error">{{ error }}</p>
   <p class="audit-error" role="alert" *ngIf="saveError">{{ saveError }}</p>
   <p class="audit-loading" role="status" *ngIf="loading">Evaluando página de resultados…</p>
