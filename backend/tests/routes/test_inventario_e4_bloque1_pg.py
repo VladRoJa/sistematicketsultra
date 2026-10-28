@@ -108,7 +108,7 @@ def test_plantilla_rechaza_codigo_diferente_duplicados_y_sucursal_falsa():
 
 
 def test_inicial_no_equivale_a_conciliado_sin_referencias():
-    report = parse_xlsx_v01(workbook(initial=True), 8, [], "INICIAL")
+    report = parse_xlsx_v01(workbook(branch=8, initial=True), 8, [], "INICIAL")
     assert report["resultado"] == "INCOMPLETE"
     assert report["resumen"]["requiere_revision_inicial"] is True
     assert report["resumen"]["hallazgos"] == 1
