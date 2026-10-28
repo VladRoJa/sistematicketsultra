@@ -151,6 +151,12 @@
 
         <ng-container *ngIf="decision === 'APPROVED'">
           <div *ngFor="let solicitud of seleccionadas" class="revision-resolucion">
+            <div *ngIf="aprobacionEspecialIndividual" class="revision-origen">
+              <strong>Motivo original de la solicitud</strong>
+              <p>{{ solicitud.motivo }}</p>
+              <strong>Evidencia registrada</strong>
+              <p>{{ solicitud.evidencia_descriptiva || 'Sin evidencia registrada' }}</p>
+            </div>
             <p class="revision-error" *ngIf="cantidadCeroRequiereNoLocalizado(solicitud)">
               Una diferencia con cantidad física cero debe registrarse como No localizado,
               con fecha, evidencia y resolución de ajuste a cero.
@@ -163,7 +169,7 @@
               <h3>#{{ solicitud.id }} · Confirmar ajuste a cero</h3>
               <p>Stock esperado: {{ resoluciones[solicitud.id].stock_esperado }}.
                 Revisa la evidencia física antes de continuar.</p>
-              <label>Justificación específica (mínimo 20 caracteres)
+              <label *ngIf="!aprobacionEspecialIndividual">Justificación específica (mínimo 20 caracteres)
                 <textarea rows="2" maxlength="2000" name="e3MotivoNoLocalizado{{ solicitud.id }}"
                   [(ngModel)]="resoluciones[solicitud.id].justificacion"
                   (ngModelChange)="actualizado()"></textarea>
@@ -196,7 +202,7 @@
                     (ngModelChange)="actualizado()" />
                 </label>
               </div>
-              <label>Justificación de identidad y conteo (mínimo 20 caracteres)
+              <label *ngIf="!aprobacionEspecialIndividual">Justificación de identidad y conteo (mínimo 20 caracteres)
                 <textarea rows="2" maxlength="2000" name="e3Identidad{{ solicitud.id }}"
                   [(ngModel)]="resoluciones[solicitud.id].justificacion"
                   (ngModelChange)="actualizado()"></textarea>
@@ -207,11 +213,15 @@
           </div>
         </ng-container>
 
-        <label class="revision-motivo">Motivo de la decisión (10–2000 caracteres)
+        <label class="revision-motivo">
+          {{ aprobacionEspecialIndividual ? 'Fundamento de autorización (mínimo 20 caracteres)' : 'Motivo de la decisión (10–2000 caracteres)' }}
           <textarea rows="3" maxlength="2000" [(ngModel)]="motivo" name="e3MotivoLote"
             (ngModelChange)="actualizado()"
             placeholder="Explica el fundamento de esta decisión formal"></textarea>
         </label>
+        <p *ngIf="aprobacionEspecialIndividual" class="revision-motivo-ayuda">
+          Una sola explicación: quedará registrada como motivo de la decisión y justificación del ajuste.
+        </p>
         <label class="revision-confirmar">
           <input type="checkbox" [(ngModel)]="confirmo" name="e3Confirmo" />
           He revisado las solicitudes y confirmo esta decisión sobre el lote completo.
