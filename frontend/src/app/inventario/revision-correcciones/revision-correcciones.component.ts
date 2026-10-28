@@ -95,6 +95,12 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
     return !this.cargando && !this.procesando && this.seleccionadas.length > 0;
   }
 
+  get aprobacionEspecialIndividual(): boolean {
+    if (this.decision !== 'APPROVED' || this.seleccionadas.length !== 1) return false;
+    const tipo = this.seleccionadas[0].tipo;
+    return tipo === 'NOT_LOCATED' || tipo === 'UNREGISTERED_FIND';
+  }
+
   faltaEvidenciaFisica(s: SolicitudCorreccionInventario): boolean {
     if (s.tipo !== 'NOT_LOCATED' && s.tipo !== 'UNREGISTERED_FIND') return false;
     const evidencia = String(s.evidencia_descriptiva || '').trim();
@@ -113,8 +119,9 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
   }
 
   get puedeConfirmar(): boolean {
+    const longitudMinima = this.aprobacionEspecialIndividual ? 20 : 10;
     if (!this.decision || this.procesando || !this.confirmo ||
-        this.motivo.trim().length < 10 || this.motivo.trim().length > 2000 ||
+        this.motivo.trim().length < longitudMinima || this.motivo.trim().length > 2000 ||
         !this.seleccionadas.length) return false;
     if (this.decision === 'REJECTED') return true;
     return this.seleccionadas.every(s => {
@@ -123,7 +130,10 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
       if (s.tipo === 'QUANTITY_DIFFERENCE' || s.tipo === 'MASTER_FIELD') return true;
       if (this.faltaEvidenciaFisica(s) || this.faltaCodigoHallazgo(s)) return false;
       const r = this.resoluciones[s.id];
-      if (!r || r.justificacion.trim().length < 20 || r.justificacion.trim().length > 2000) return false;
+      if (!r) return false;
+      const fundamento = this.aprobacionEspecialIndividual
+        ? this.motivo.trim() : r.justificacion.trim();
+      if (fundamento.length < 20 || fundamento.length > 2000) return false;
       if (s.tipo === 'NOT_LOCATED') {
         return r.accion === 'AJUSTAR_A_CERO' &&
           Number.isInteger(r.stock_esperado) && (r.stock_esperado ?? 0) > 0;
@@ -252,13 +262,15 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
         if (s.tipo === 'NOT_LOCATED' && r) {
           resoluciones[String(s.id)] = {
             accion: 'AJUSTAR_A_CERO', stock_esperado: r.stock_esperado!,
-            justificacion: r.justificacion.trim(),
+            justificacion: this.aprobacionEspecialIndividual
+              ? this.motivo.trim() : r.justificacion.trim(),
           } as ResolucionNoLocalizado;
         } else if (s.tipo === 'UNREGISTERED_FIND' && r) {
           resoluciones[String(s.id)] = {
             accion: 'VINCULAR_EXISTENTE', inventario_id: r.inventario_id!,
             stock_esperado: r.stock_esperado!, cantidad_fisica: r.cantidad_fisica!,
-            justificacion: r.justificacion.trim(),
+            justificacion: this.aprobacionEspecialIndividual
+              ? this.motivo.trim() : r.justificacion.trim(),
           } as ResolucionHallazgo;
         }
       }
