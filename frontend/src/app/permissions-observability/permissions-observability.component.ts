@@ -58,6 +58,7 @@ export class PermissionsObservabilityComponent implements OnInit {
   grants: PermissionGrant[] = [];
   selectedGrantForAudit: PermissionGrant | null = null;
   selectedGrantForB5: PermissionGrant | null = null;
+  showB5Editor = false;
   selectedGrantAuditLogs: PermissionGrantAuditLog[] = [];
   readonly grantPageSize = 50;
   readonly grantAuditPageSize = 50;
@@ -319,9 +320,16 @@ export class PermissionsObservabilityComponent implements OnInit {
 
   openGrantB5(grant: PermissionGrant): void {
     this.selectedGrantForB5 = grant;
+    this.showB5Editor = true;
   }
 
   resetGrantB5(): void {
+    this.selectedGrantForB5 = null;
+    this.showB5Editor = true;
+  }
+
+  closeGrantB5(): void {
+    this.showB5Editor = false;
     this.selectedGrantForB5 = null;
   }
 
