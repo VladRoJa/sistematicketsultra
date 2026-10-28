@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "backend/app/routes/permissions_visual_audit_routes.py"
+      - "backend/scripts/audit_permission_endpoints.py"
       - "backend/app/routes/permissions_catalog_routes.py"
       - "backend/app/routes/permissions_b5_beta_routes.py"
       - "backend/tests/routes/test_permissions_phase_b_b5_scoped_beta.py"
@@ -69,6 +70,15 @@ jobs:
             tests/routes/test_internal_documents_a12_a13_http_jwt_reconcile.py \
             tests/routes/test_permissions_phase_a_track_parity.py \
             tests/routes/test_permissions_phase_a_inventory_parity.py
+
+      - name: Inventory all Flask endpoints against high-risk catalog (read-only)
+        run: python scripts/audit_permission_endpoints.py --output-dir ../permissions-audit-output
+      - name: Upload endpoint inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: permissions-endpoint-inventory
+          path: permissions-audit-output/
+          if-no-files-found: error
 
   angular-build:
     runs-on: ubuntu-latest
