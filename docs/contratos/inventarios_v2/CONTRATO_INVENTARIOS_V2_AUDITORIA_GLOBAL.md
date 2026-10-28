@@ -135,7 +135,7 @@ Matriz funcional a implementar (no es descripción de permisos ya existentes):
 | Regional autorizado | Solo sucursales a cargo y operaciones que su permiso permita. |
 
 Invariantes:
-- **Nadie aprueba su propia solicitud.**
+- **Autoaprobación prohibida por defecto:** la excepción corporativa autorizada requiere grant individual explícito y global de `inventory.correction_approve`, comprobado por backend y auditado. Ningún otro rol hereda esa excepción.
 - Backend decide rol/capacidad, sucursal, categoría y elegibilidad **en cada lectura y transición**.
 - Aprobar/rechazar es transaccional, idempotente y registra actor, motivo y timestamp.
 - Propuesta obsoleta ante cambio de inventario → conflicto/revisión, **no sobrescribir** valor canónico nuevo.
@@ -201,7 +201,7 @@ Verificar antes de activar:
 No aceptar el milestone por un PR verde aislado. Se requiere evidencia conjunta de:
 - E1: cifras dashboard/listado consistentes por sucursal, filtros, responsive, estados vacíos, errores, QA visual y compilación.
 - E2: creación de propuestas inmutables sin efecto en inventario canónico, cobertura de valores y hallazgos, auditoría.
-- E3: aprobación/rechazo autorizados; stock y maestro actualizados exclusivamente cuando corresponda, de forma transaccional; regresión, autoaprobación prohibida, IDOR y concurrencia.
+- E3: aprobación/rechazo autorizados; actualización transaccional y auditada de stock/maestro cuando corresponda; QA de autoaprobación denegada salvo excepción corporativa expresa, IDOR y concurrencia.
 - E4: captura física real, indicadores de avance basados en evidencia, diferencias/corte histórico íntegros y trazables.
 - E5: pruebas negativas/positivas reales con GERENTE, GERENTE_REGIONAL y aprobadores según política; sin acceso indebido por menú/ruta/API/exportación, y autorización explícita de apertura.
 
@@ -219,10 +219,10 @@ Estas decisiones **no se deben inventar ni bloquear E1 si todavía no le afectan
 
 ## 14. Bitácora viva y siguiente paso
 
-| Entregable | Estado al 2026-10-23 | Evidencia / siguiente acción |
+| Entregable | Estado actualizado | Evidencia / siguiente acción |
 |---|---|---|
 | E1 — Dashboard Existencias + listado | **ACEPTADO — QA visual por sucursal** | Último PR E1 **#1086**, merge **`9781cbee`**. QA-E1 Villas del Rey: tarjetas, categorías, familias y listado conciliados. CI verdes reportados. |
-| E2 — Solicitudes de corrección | **IMPLEMENTADO TÉCNICAMENTE — QA VISUAL PENDIENTE** | Modelo y Alembic #1104; API de crear/listar/detalle #1105; frontend formulario/seguimiento #1108. Validaciones automáticas en CI aprobadas, sin actualización del maestro/stock; falta desplegar frontend y QA autenticado por sucursal. |
+| E2 — Solicitudes de corrección | **OPERATIVO — QA documental de roles por consolidar** | Solicitudes persistidas e integradas a E3, sin modificar stock al crearse. Mantener validaciones positivas y negativas por rol/sucursal para E5. |
 | E3 — Validaciones | **OPERATIVO; QA de ajuste oficial en producción confirmado** | Autorización transaccional, ajuste y auditoría comprobados; PRs #1134, #1168, #1170, #1171 y #1173. |
 | E4 — Levantamiento/corte | **PENDIENTE** | [Contrato funcional E4](CONTRATO_FUNCIONAL_E4_LEVANTAMIENTO_FISICO.md) acordado; siguiente: importación y validación sin cambiar stock oficial. |
 | E5 — GERENTES | **BLOQUEADO por E1–E4 y autorización explícita** | `GERENTE_ROLLOUT = OFF / NO AUTORIZADO`; no agregar menú, permisos V2 ni habilitar mediante URL directa. |
@@ -245,7 +245,9 @@ Estas decisiones **no se deben inventar ni bloquear E1 si todavía no le afectan
 - Reportes/dashboard V1: PRs **#1059**, **#1060**, **#1061**, layout **#1064**, corrección de scroll **#1066**. No confundir Reportes con E1 de Existencias.
 - E1 de Existencias: dashboard, categorías oficiales, familias, filtros inteligentes y listado conservado; último PR **#1086**, commit merge **`9781cbee`**.
 
-### Registro de implementación E2 (2026-10-23)
+### Registro histórico de implementación E2 (2026-10-23)
+
+> Las acciones y estados de este apartado describen el corte histórico. La tabla anterior refleja el avance posterior; E3 ya no está bloqueado.
 
 - **Seguridad piloto:** PR **#1103**, endpoint `/api/inventario/v2/existencias` protegido por rol y sucursal, sin alterar V1. El gate `GERENTE_ROLLOUT = OFF` permanece vigente.
 - **Persistencia aislada:** PR **#1104**, modelo `InventarioSolicitudCorreccionORM` y migración Alembic `v2e2a7c92623`. Se verificó PostgreSQL 16 temporal, constraints de sucursal e idempotencia, rollback protegido; ninguna modificación a maestro ni stock. El responsable confirmó posteriormente que el despliegue del esquema levantó correctamente.
@@ -253,7 +255,9 @@ Estas decisiones **no se deben inventar ni bloquear E1 si todavía no le afectan
 - **Interfaz:** PR **#1108**, acciones por referencia, hallazgo no registrado, formulario aislado, seguimiento con filtros, mensajes de éxito/error, estados PENDING, reintento idempotente y prohibición de abrir modal para GERENTE; QA y type-check Angular, build de producción y regresión QA-13 en CI aprobados. **Aún no hay confirmación de despliegue frontend ni QA visual real.**
 - **No incluido en E2:** aprobación/rechazo, modificación de códigos oficiales, movimientos, ajustes de existencias, revisión transaccional de E3, levantamiento/corte E4, apertura GERENTE E5. No confundir estado `PENDING` con corrección aplicada.
 
-### Próximo control para aceptar E2
+### Controles de E2 originalmente pendientes (registro histórico)
+
+> Conservar como evidencia de planificación histórica; no interpretarlos como órdenes vigentes de redespliegue ni como bloqueo actual de E3.
 
 1. Desplegar **frontend** desde `main` por el flujo Docker establecido. No ejecutar migración adicional para el PR #1108.
 2. En `/#/inventario/existencias` hacer QA visual por sucursal piloto (por ejemplo, Villas del Rey): formulario por fila y hallazgo provisional, obligatorio motivo, stock/maestro oficiales en solo lectura, guardado `PENDING` y filtro de seguimiento, sin modificar KPI/listado E1.
