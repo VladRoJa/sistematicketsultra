@@ -2,8 +2,8 @@
 
 **Proyecto:** Suite Ultra (Angular + Flask + PostgreSQL).
 **Fecha de acuerdo:** 2026-10-23.
-**Versión del contrato:** 1.0.
-**Estado:** E1 ACEPTADO (2026-10-23) / E2 IMPLEMENTACIÓN TÉCNICA INTEGRADA, PENDIENTE DE DESPLIEGUE FRONTEND Y QA VISUAL / E5 GERENTES NO AUTORIZADO.
+**Versión del contrato:** 1.1.
+**Estado:** E1 aceptado; E2 operativo (QA documental de roles por consolidar); E3 operativo, con ajuste oficial verificado en PostgreSQL; E4 pendiente de implementación; E5 GERENTES NO AUTORIZADO.
 **Organización:** UN milestone lógico con CINCO entregables secuenciales (E1–E5). No equivale a cinco milestones distintos de GitHub.
 **Decisión irrevocable sin nueva autorización explícita:** NO abrir Inventarios V2 a GERENTE antes de terminar y aprobar E1–E4 y el gate de E5.
 
@@ -149,6 +149,8 @@ Invariantes:
 
 **Objetivo:** auditar de forma trazable el inventario existente, sin confundirlo con su modificación.
 
+**Contrato funcional vigente:** [E4 — Levantamiento físico, validación y conciliación](CONTRATO_FUNCIONAL_E4_LEVANTAMIENTO_FISICO.md). Sus reglas son permanentes y no dependen de la cantidad de sucursales ni de archivos entregados. Alcance inicial: APARATOS.
+
 - Crear ciclo/levantamiento por sucursal, con fecha, responsable, baseline/identidad de referencias y estado.
 - Capturar confirmación física por referencia y, cuando corresponda, **cantidad realmente encontrada**; distingue “no revisado”, “coincide”, “diferencia”, “no localizado” y “hallazgo no registrado”.
 - Mostrar progreso auténtico calculado sobre el universo definido por el corte, no extrapolado del stock vivo.
@@ -221,8 +223,8 @@ Estas decisiones **no se deben inventar ni bloquear E1 si todavía no le afectan
 |---|---|---|
 | E1 — Dashboard Existencias + listado | **ACEPTADO — QA visual por sucursal** | Último PR E1 **#1086**, merge **`9781cbee`**. QA-E1 Villas del Rey: tarjetas, categorías, familias y listado conciliados. CI verdes reportados. |
 | E2 — Solicitudes de corrección | **IMPLEMENTADO TÉCNICAMENTE — QA VISUAL PENDIENTE** | Modelo y Alembic #1104; API de crear/listar/detalle #1105; frontend formulario/seguimiento #1108. Validaciones automáticas en CI aprobadas, sin actualización del maestro/stock; falta desplegar frontend y QA autenticado por sucursal. |
-| E3 — Validaciones | **BLOQUEADO por E2** | No implementado. |
-| E4 — Levantamiento/corte | **BLOQUEADO por E3** | No implementado. |
+| E3 — Validaciones | **OPERATIVO; QA de ajuste oficial en producción confirmado** | Autorización transaccional, ajuste y auditoría comprobados; PRs #1134, #1168, #1170, #1171 y #1173. |
+| E4 — Levantamiento/corte | **PENDIENTE** | [Contrato funcional E4](CONTRATO_FUNCIONAL_E4_LEVANTAMIENTO_FISICO.md) acordado; siguiente: importación y validación sin cambiar stock oficial. |
 | E5 — GERENTES | **BLOQUEADO por E1–E4 y autorización explícita** | `GERENTE_ROLLOUT = OFF / NO AUTORIZADO`; no agregar menú, permisos V2 ni habilitar mediante URL directa. |
 
 ### Evidencia de aceptación E1 — Villas del Rey (2026-10-23)
