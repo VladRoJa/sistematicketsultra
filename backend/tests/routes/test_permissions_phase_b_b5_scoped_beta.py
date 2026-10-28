@@ -283,3 +283,12 @@ def test_b5_v1_nube_writer_is_blocked_when_gate_enabled(monkeypatch):
     )
     assert response.status_code == 409
     assert response.json["module_key"] == "internal_documents"
+
+
+def test_b5_module_only_grant_blocks_scoped_exception():
+    grant = SimpleNamespace(
+        id=17, action_id=None, principal_type="user", scope_type="branch",
+        scope_branch_id=1, scope_branch_ids=[], starts_at=None, expires_at=None,
+    )
+    data = beta._normalize_input(payload(starts_at=None, expires_at=None))
+    assert "módulo" in beta._conflict_with_rows(data, [grant])
