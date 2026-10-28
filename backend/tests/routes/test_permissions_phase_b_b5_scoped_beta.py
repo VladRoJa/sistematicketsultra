@@ -292,3 +292,31 @@ def test_b5_module_only_grant_blocks_scoped_exception():
     )
     data = beta._normalize_input(payload(starts_at=None, expires_at=None))
     assert "módulo" in beta._conflict_with_rows(data, [grant])
+
+
+@pytest.mark.parametrize("extra", [
+    {"scope_branch_ids": [7]},
+    {"scope_department_id": 1},
+    {"scope_payload": {"resource": "hidden"}},
+])
+def test_b5_hybrid_legacy_branch_scope_cannot_be_edited(extra):
+    existing = dict(
+        scope_type="branch", scope_branch_id=7, scope_branch_ids=[],
+        scope_department_id=None, scope_payload=None,
+    )
+    existing.update(extra)
+    assert beta._record_branches(SimpleNamespace(**existing)) is None
+
+
+@pytest.mark.parametrize("extra", [
+    {"scope_branch_id": 7},
+    {"scope_department_id": 1},
+    {"scope_payload": {"region": "costa"}},
+])
+def test_b5_hybrid_legacy_branch_list_scope_cannot_be_edited(extra):
+    existing = dict(
+        scope_type="branch_list", scope_branch_id=None,
+        scope_branch_ids=[7, 8], scope_department_id=None, scope_payload=None,
+    )
+    existing.update(extra)
+    assert beta._record_branches(SimpleNamespace(**existing)) is None
