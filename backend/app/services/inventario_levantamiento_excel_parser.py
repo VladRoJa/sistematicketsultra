@@ -121,7 +121,7 @@ def _control(sheet, diag):
         "folio / corte e4": "folio_declarado", "version de entrega": "version_formato",
     }
     result = {}
-    for cells in sheet.iter_rows(min_row=1, max_row=min(sheet.max_row, 50), max_col=6):
+    for cells in sheet.iter_rows(min_row=1, max_row=50, max_col=6):
         for i, c in enumerate(cells[:3]):
             key = fields.get(norm(c.value))
             if key:
@@ -133,7 +133,7 @@ def _control(sheet, diag):
 
 
 def _headers(sheet, definitions):
-    for cells in sheet.iter_rows(min_row=1, max_row=min(sheet.max_row, 30), max_col=10):
+    for cells in sheet.iter_rows(min_row=1, max_row=30, max_col=10):
         values = [norm(c.value) for c in cells]
         # La plantilla v0.1 usa títulos sobre la fila de encabezados.
         if all(any(marker in v for v in values) for marker in definitions.values()):
@@ -183,12 +183,16 @@ def parse_xlsx_v01(raw, sucursal_id, expected, modalidad):
         apparatus = defaultdict(list)
         for sheet_name, header, mapping in (("APARATOS", aheader, amap), ("HALLAZGOS", hheader, hmap)):
             sheet = book[sheet_name]
-            if sheet.max_row > MAX_ROWS + header:
+            # Los XLSX distribuidos pueden omitir <dimension>; en lectura
+            # read_only openpyxl reporta max_row=None en ese caso.
+            if sheet.max_row is not None and sheet.max_row > MAX_ROWS + header:
                 raise ArchivoE4Error(f"{sheet_name}: demasiadas filas")
             for fila_excel, cells in enumerate(
                 sheet.iter_rows(min_row=header + 1, max_col=max(mapping.values()) + 1),
                 start=header + 1,
             ):
+                if fila_excel > MAX_ROWS + header:
+                    raise ArchivoE4Error(f"{sheet_name}: demasiadas filas")
                 item = {key: _cell(cells[index], diagnostics, sheet_name, fila_excel, key)
                         for key, index in mapping.items()}
                 if not any(item.values()):
