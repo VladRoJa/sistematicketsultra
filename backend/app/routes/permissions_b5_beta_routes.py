@@ -200,6 +200,11 @@ def _check_conflicts(data, action, user):
              == str(user.rol or "").strip().upper()),
         ),
     ).all()
+    return _conflict_with_rows(data, rows)
+
+
+def _conflict_with_rows(data, rows):
+    """Política pura: grants activos previamente filtrados por principal/acción."""
     for existing in rows:
         if existing.id == data["grant_id"]:
             continue
