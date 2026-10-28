@@ -142,7 +142,7 @@
                   <ng-container *ngIf="canEditTrackRead(row); else diagnosticCheck">
                     <input #trackCheck type="checkbox"
                       [checked]="row.legacy_allowed === true"
-                      [disabled]="isSavingTrackRead(row) || loading"
+                      [disabled]="savingTrackUserId !== null || loading"
                       (change)="toggleTrackRead(row, trackCheck.checked)"
                       [attr.aria-label]="'Habilitar lectura Track a ' + row.username">
                   </ng-container>
