@@ -17,7 +17,7 @@ from app.config import Config
 BLUEPRINTS = {
     "marketing": (7, 1),
     "marketing_campaign_v2": (76, 43),
-    "marketing_sales_funnel": (3, 0),
+    "marketing_sales_funnel": (4, 0),
 }
 HTTP = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 MUTATIONS = HTTP - {"GET"}
@@ -92,11 +92,12 @@ def test_p26_9_active_blueprints_have_exact_reviewed_route_counts():
     for blueprint, (expected_total, expected_mutations) in BLUEPRINTS.items():
         assert counts[blueprint] == expected_total, blueprint
         assert mutations[blueprint] == expected_mutations, blueprint
-    assert len(routes) == 86
+    assert len(routes) == 87
     assert sum(mutations.values()) == 44
     # Every new endpoint is explicitly accounted for in this reviewed census.
     route_methods = {(method, path) for _, method, path, _ in routes}
     assert {
+        ("GET", "/api/marketing/sales-funnel/export/weekly"),
         ("POST", "/api/marketing/campaigns-v2/<int:campaign_id>/dispatch/jobs"),
         ("GET", "/api/marketing/campaigns-v2/<int:campaign_id>/dispatch/jobs/<int:job_id>"),
         ("GET", "/api/marketing/campaigns-v2/dispatch/jobs/mine"),
