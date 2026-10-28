@@ -299,7 +299,7 @@ export class PermissionsObservabilityComponent implements OnInit {
 
   getGrantAuditEventLabel(eventType: string): string {
     const labels: Record<string, string> = {
-      created: 'Permiso registrado',
+      created: 'Configuración registrada',
       updated: 'Configuración modificada',
       enabled: 'Registro habilitado',
       disabled: 'Registro deshabilitado',
