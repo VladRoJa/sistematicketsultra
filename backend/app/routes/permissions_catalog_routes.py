@@ -1210,6 +1210,16 @@ def update_user_module_access(user_id: int):
             }), 400
         seen_module_keys.add(module_key)
 
+        # Sin revisión del stock de grants no activar Track desde el editor V1.
+        if module_key == "track":
+            from app.routes.track_routes import track_read_grants_enabled
+            if not track_read_grants_enabled():
+                return jsonify({
+                    "error": "Conflict",
+                    "detail": "El control de lectura Track no está habilitado en backend.",
+                    "module_key": module_key,
+                }), 409
+
         # B5: si el editor scoped está habilitado, la casilla global V1 NO
         # puede crear o modificar la acción base de Nube por un camino paralelo.
         if module_key == "internal_documents":
