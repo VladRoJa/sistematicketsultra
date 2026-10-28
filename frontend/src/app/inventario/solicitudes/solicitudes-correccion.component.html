@@ -98,7 +98,7 @@
             </div>
             <label class="solicitud-field">
               <span>Cantidad física encontrada *</span>
-              <input type="number" name="e2Cantidad" min="0" step="1"
+              <input type="number" name="e2Cantidad" min="1" step="1"
                 [(ngModel)]="cantidadFisica" (ngModelChange)="modificado()"
                 placeholder="Cantidad contada"/>
             </label>
@@ -106,7 +106,9 @@
         </ng-container>
 
         <div *ngIf="tipo === 'NOT_LOCATED' && referencia" class="solicitud-note">
-          Se registrará que no fue localizado físicamente. <strong>El stock oficial no se pondrá en cero.</strong>
+          Selecciona «No localizado» únicamente si no se encontró ninguna unidad de esta referencia.
+          Si hay unidades presentes, registra una diferencia de cantidad.
+          <strong>La solicitud no modifica el stock oficial hasta su autorización.</strong>
         </div>
 
         <ng-container *ngIf="esHallazgo">
@@ -133,12 +135,14 @@
                 [(ngModel)]="hallazgoCodigo" (ngModelChange)="modificado()" />
             </label>
           </div>
-          <p class="solicitud-note">El hallazgo es provisional: no crea artículos ni asigna existencias.</p>
+          <p class="solicitud-note">El hallazgo es provisional: no crea artículos ni asigna existencias.
+            Registra el código o etiqueta física para que pueda vincularse a una referencia existente.
+            La cantidad a confirmar en E3 será el stock físico final total, no las unidades a sumar.</p>
         </ng-container>
 
         <div class="solicitud-grid solicitud-grid--details">
           <label class="solicitud-field">
-            <span>Fecha de observación (opcional)</span>
+            <span>Fecha de observación {{ requiereEvidenciaFisica ? '*' : '(opcional)' }}</span>
             <input type="date" name="e2Fecha"
               [(ngModel)]="fechaObservacion" (ngModelChange)="modificado()" />
           </label>
@@ -149,10 +153,10 @@
               placeholder="Describe qué encontraste y por qué requiere revisión"></textarea>
           </label>
           <label class="solicitud-field solicitud-field--wide">
-            <span>Evidencia descriptiva (opcional)</span>
+            <span>Evidencia descriptiva {{ requiereEvidenciaFisica ? '* (mín. 20 caracteres)' : '(opcional)' }}</span>
             <textarea name="e2Evidencia" rows="2" maxlength="2000"
               [(ngModel)]="evidencia" (ngModelChange)="modificado()"
-              placeholder="Ubicación física, serie o comentario adicional"></textarea>
+              placeholder="Ubicaciones verificadas, código físico, conteo y posibles traslados revisados"></textarea>
           </label>
         </div>
 
@@ -211,16 +215,8 @@
 
       <section class="solicitud-bandeja" aria-label="Bandeja de solicitudes">
         <div class="solicitud-bandeja__barra" *ngIf="!cargandoListado && !errorListado && solicitudes.length">
-          <label class="solicitud-bandeja__seleccion">
-            <input type="checkbox"
-              [checked]="todosSeleccionadosPagina"
-              [indeterminate]="algunosSeleccionadosPagina"
-              [disabled]="!pendientesPagina.length"
-              (change)="alternarPagina()" />
-            <span>Seleccionar pendientes de esta página</span>
-          </label>
           <span class="solicitud-bandeja__conteo">
-            {{ totalSeleccionados }} seleccionadas · {{ totalSolicitudes }} resultados
+            {{ totalSolicitudes }} resultados
           </span>
         </div>
 
@@ -233,12 +229,6 @@
         <div class="solicitud-bandeja__lista" *ngIf="!cargandoListado && !errorListado && solicitudes.length">
           <div class="solicitud-bandeja__fila" *ngFor="let solicitud of solicitudes">
             <div class="solicitud-bandeja__resumen">
-              <label class="solicitud-bandeja__check">
-                <input type="checkbox" [checked]="estaSeleccionada(solicitud.id)"
-                  [disabled]="solicitud.estado !== 'PENDING'"
-                  [attr.aria-label]="'Seleccionar solicitud ' + solicitud.id"
-                  (change)="alternarSeleccion(solicitud.id)" />
-              </label>
               <div class="solicitud-bandeja__descripcion">
                 <strong>#{{ solicitud.id }} · {{ resumenSolicitud(solicitud) }}</strong>
                 <span>{{ nombreSucursal(solicitud.sucursal_id) }} · {{ etiquetasTipo[solicitud.tipo] }}</span>
@@ -268,16 +258,11 @@
       </section>
     </div>
 
-    <!-- Acciones E3 fuera del contenido desplazable: siempre visibles. -->
+    <!-- E2 es seguimiento: las decisiones reales pertenecen a la bandeja E3. -->
     <div *ngIf="modo === 'seguimiento' && !cargandoListado && !errorListado"
       class="solicitud-bandeja__acciones solicitud-bandeja__acciones--fijas">
-      <span>La autorización y el rechazo formal se habilitarán en E3, con permisos y auditoría.</span>
-      <div>
-        <button type="button" class="solicitud-bandeja__rechazar" disabled
-          title="Pendiente de backend transaccional E3">Rechazar seleccionadas</button>
-        <button type="button" class="solicitud-bandeja__autorizar" disabled
-          title="Pendiente de backend transaccional E3">Autorizar seleccionadas</button>
-      </div>
+      <span>Para autorizar o rechazar, entra a Inventario → Revisión de correcciones (E3).
+        La decisión requiere permiso vigente y queda auditada.</span>
     </div>
 
     <footer class="solicitud-footer">
@@ -295,7 +280,7 @@
     </footer>
   </section>
 
-  <!-- Modal secundario: la bandeja mantiene tamaño, scroll y checkboxes. -->
+  <!-- Modal secundario: la bandeja mantiene tamaño y scroll independientes. -->
   <div *ngIf="detalleIdAbierto !== null && modo === 'seguimiento'"
     class="solicitud-detalle-overlay" role="presentation">
     <section class="solicitud-detalle-dialog" role="dialog" aria-modal="true"

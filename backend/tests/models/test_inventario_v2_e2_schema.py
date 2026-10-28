@@ -33,12 +33,11 @@ def test_e2_revision_continua_cadena_y_no_crea_heads_paralelos():
     cfg = AlembicConfig()
     cfg.set_main_option("script_location", str(BASE / "migrations"))
     graph = ScriptDirectory.from_config(cfg)
-    # E2 must remain in the single linear Alembic history, not be the
-    # current head after newer migrations (Tapizado / Campaign V2).
-    heads = graph.get_heads()
-    assert len(heads) == 1, f"Parallel Alembic heads: {heads}"
-    revisions = {rev.revision for rev in graph.iterate_revisions(heads[0], "base")}
-    assert migration.revision in revisions, "Inventory E2 revision detached from head"
+    # E2 debe seguir en la cadena, aunque E3 y futuros hitos agreguen revisiones.
+    revisions = {item.revision for item in graph.walk_revisions()}
+    assert "v2e2a7c92623" in revisions
+    assert "m23c10202623" in revisions
+    assert len(graph.get_heads()) == 1
 
 
 def test_e2_modela_solo_solicitudes_con_fk_compuesta_e_idempotencia():

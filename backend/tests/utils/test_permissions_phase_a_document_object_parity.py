@@ -268,7 +268,10 @@ def test_p19_custom_acl_types_active_flag_and_download_require_view(
 
 
 def _catalog_decision(context, full_key):
-    user = SimpleNamespace(id=context.user_id, rol=context.role)
+    user = SimpleNamespace(
+        id=context.user_id, username=context.username, rol=context.role,
+        sucursal_id=context.sucursal_id, department_id=context.department_id,
+    )
     return catalog._effective_action_decision(
         SimpleNamespace(full_key=full_key),
         user,
@@ -283,12 +286,12 @@ def _catalog_decision(context, full_key):
 
 
 @pytest.mark.parametrize("user_key,legacy,catalog_allowed", [
-    ("admicorp", True, False),
-    ("sistemas", True, False),
-    ("administrador", False, True),
+    ("admicorp", True, True),
+    ("sistemas", True, True),
+    ("administrador", False, False),
     ("gerente", False, False),
 ])
-def test_p19_manager_action_disagrees_with_observability_where_expected(
+def test_p19_manager_action_matches_observability_after_b1(
     user_key, legacy, catalog_allowed
 ):
     context = _ctx(user_key)

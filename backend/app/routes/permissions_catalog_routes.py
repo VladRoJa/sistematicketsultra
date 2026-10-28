@@ -16,6 +16,10 @@ from app.models.permissions import (
 from app.models.sucursal_model import Sucursal
 from app.models.user_model import UserORM
 from app.models.warehouse import WarehouseOperatorORM
+from app.utils.internal_documents_access import (
+    InternalDocumentUserContext,
+    can_manage_internal_documents,
+)
 
 
 permissions_catalog_bp = Blueprint("permissions_catalog", __name__)
@@ -473,26 +477,44 @@ def _effective_action_decision(action, user, context: dict) -> dict:
 
     # Nube corporativa
     if full_key == "internal_documents.view":
+        # Solo entrada al módulo. La autorización de cada documento se
+        # resuelve por can_view_internal_document(document, context).
         return _decision(
             allowed=True,
             source="authenticated_user",
             reason="internal_documents_visibility_still_evaluated_per_document",
             scope_type="document_visibility",
+            details={"object_access_certified": False, "requires_document_id": True},
         )
 
     if full_key == "internal_documents.manage":
+        # B1 compare-only: mismo predicado puro que require_internal_document_manager.
+        # No consulta el JWT, no reemplaza el guard HTTP ni interpreta grants.
+        # Requiere identidad del usuario objetivo desde DB; un rol contextual
+        # sin usuario no es prueba suficiente para la matriz.
+        if user is None:
+            manager_allowed = False
+            reason = "missing_user_identity_for_manager_comparison"
+        else:
+            document_context = InternalDocumentUserContext(
+                user_id=getattr(user, "id", 0) or 0,
+                username=getattr(user, "username", None),
+                role=role,
+                sucursal_id=getattr(user, "sucursal_id", None),
+                sucursales_ids=tuple(sucursal_ids or ()),
+                department_id=getattr(user, "department_id", None),
+            )
+            manager_allowed = can_manage_internal_documents(document_context)
+            reason = (
+                "matches_internal_document_manager_guard"
+                if manager_allowed else "requires_internal_document_manager"
+            )
         return _decision(
-            allowed=is_admin,
+            allowed=manager_allowed,
             source="legacy_internal_documents_manager",
-            reason=(
-                "admin_role_treated_as_manager_in_observability_v1"
-                if is_admin
-                else "requires_internal_document_manager"
-            ),
-            scope_type="global" if is_admin else "none",
-            details={
-                "note": "Observability v1. Manager helper remains real authority."
-            },
+            reason=reason,
+            scope_type="global" if manager_allowed else "none",
+            details={"mode": "compare_only", "guard": "can_manage_internal_documents"},
         )
 
     # Aperturas
@@ -505,11 +527,16 @@ def _effective_action_decision(action, user, context: dict) -> dict:
         )
 
     if full_key == "openings.manage":
+        # Observabilidad de la misma allowlist que aplica el guard operativo.
+        # No es un permiso nuevo y no interviene en la autorización HTTP.
+        from app.routes.openings_routes import OPENINGS_ADMIN_ROLES
+
+        openings_admin = role in OPENINGS_ADMIN_ROLES
         return _decision(
-            allowed=is_admin,
+            allowed=openings_admin,
             source="legacy_role",
             reason="openings_admin_required",
-            scope_type="global" if is_admin else "none",
+            scope_type="global" if openings_admin else "none",
         )
 
     if full_key == "openings.comment":
@@ -559,23 +586,64 @@ def _serialize_effective_action(action, user, context: dict) -> dict:
     }
 
 
+def _is_simple_global_module_grant(grant) -> bool:
+    """Solo overrides globales indefinidos; el editor no modela scopes ni fechas."""
+    return (
+        grant.scope_type == "global"
+        and getattr(grant, "scope_branch_id", None) is None
+        and not getattr(grant, "scope_branch_ids", None)
+        and getattr(grant, "scope_department_id", None) is None
+        and not getattr(grant, "scope_payload", None)
+        and getattr(grant, "starts_at", None) is None
+        and getattr(grant, "expires_at", None) is None
+        and grant.effect in {"allow", "deny"}
+    )
+
+
+def _has_complex_module_grant(grants) -> bool:
+    """Un grant limitado o temporal requiere editor especializado, nunca globalizarlo."""
+    return any(not _is_simple_global_module_grant(grant) for grant in grants)
+
+
+def _best_module_grants_by_action(rows) -> dict:
+    """Dentro del mismo principal/acción, DENY gana a ALLOW duplicado.
+
+    El orden de entrada ya es updated_at DESC, id DESC para desempates.
+    El nivel 'user' se compara antes que el nivel 'role' en el preview
+    existente; NUNCA se usa como enforcement de rutas.
+    """
+    result = {}
+    for grant in rows:
+        if not _is_simple_global_module_grant(grant):
+            continue
+        current = result.get(grant.action_id)
+        if current is None or (grant.effect == "deny" and current.effect != "deny"):
+            result[grant.action_id] = grant
+    return result
+
+
 def _get_latest_active_grants_by_action(*, user, action_ids: list[int]) -> dict:
     if not action_ids:
-        return {
-            "user": {},
-            "role": {},
-        }
+        return {"user": {}, "role": {}}
 
-    role = _normalize_role(user)
-
+    # Esta pantalla representa exclusivamente el permiso BASE/global del módulo.
+    # Grants por sucursal, documento o vigencia temporal no son casillas globales.
+    # Se seleccionan únicamente los globales sin fecha para no confundir
+    # un grant temporal con la configuración indefinida de esta pantalla.
+    common = (
+        PermissionGrantORM.is_active.is_(True),
+        PermissionGrantORM.deleted_at.is_(None),
+        PermissionGrantORM.scope_type == "global",
+        PermissionGrantORM.starts_at.is_(None),
+        PermissionGrantORM.expires_at.is_(None),
+        PermissionGrantORM.action_id.in_(action_ids),
+    )
     user_grants = (
         PermissionGrantORM.query
         .filter(
-            PermissionGrantORM.is_active.is_(True),
-            PermissionGrantORM.deleted_at.is_(None),
+            *common,
             PermissionGrantORM.principal_type == "user",
             PermissionGrantORM.principal_user_id == user.id,
-            PermissionGrantORM.action_id.in_(action_ids),
         )
         .order_by(
             PermissionGrantORM.updated_at.desc(),
@@ -585,15 +653,14 @@ def _get_latest_active_grants_by_action(*, user, action_ids: list[int]) -> dict:
     )
 
     role_grants = []
+    role = _normalize_role(user)
     if role:
         role_grants = (
             PermissionGrantORM.query
             .filter(
-                PermissionGrantORM.is_active.is_(True),
-                PermissionGrantORM.deleted_at.is_(None),
+                *common,
                 PermissionGrantORM.principal_type == "role",
                 PermissionGrantORM.principal_role_key == role,
-                PermissionGrantORM.action_id.in_(action_ids),
             )
             .order_by(
                 PermissionGrantORM.updated_at.desc(),
@@ -602,19 +669,10 @@ def _get_latest_active_grants_by_action(*, user, action_ids: list[int]) -> dict:
             .all()
         )
 
-    grants_by_action = {
-        "user": {},
-        "role": {},
+    return {
+        "user": _best_module_grants_by_action(user_grants),
+        "role": _best_module_grants_by_action(role_grants),
     }
-
-    for grant in user_grants:
-        grants_by_action["user"].setdefault(grant.action_id, grant)
-
-    for grant in role_grants:
-        grants_by_action["role"].setdefault(grant.action_id, grant)
-
-    return grants_by_action
-
 
 def _apply_module_access_override(*, legacy_decision: dict, user_grant, role_grant) -> dict:
     if user_grant:
@@ -1067,9 +1125,13 @@ def get_user_module_access(user_id: int):
 
     return jsonify({
         "mode": "module_access_readonly_v1",
+        "grants_enforced": False,
+        "hard_stops_evaluated": False,
         "note": (
             "Endpoint de lectura para pantalla de checks. "
-            "No crea, edita, borra ni aplica grants."
+            "No crea, edita, borra ni aplica grants. "
+            "effective_allowed es una proyección de configuración, "
+            "no una autorización efectiva HTTP."
         ),
         "user": {
             "id": target_user.id,
@@ -1122,6 +1184,7 @@ def update_user_module_access(user_id: int):
 
     valid_overrides = {"allow", "deny", "inherit"}
     validated_changes = []
+    seen_module_keys = set()
 
     for index, change in enumerate(changes):
         if not isinstance(change, dict):
@@ -1139,6 +1202,24 @@ def update_user_module_access(user_id: int):
                 "error": "Bad request",
                 "detail": f"El cambio #{index + 1} no tiene module_key.",
             }), 400
+
+        if module_key in seen_module_keys:
+            return jsonify({
+                "error": "Bad request",
+                "detail": "Módulo duplicado en el mismo lote.",
+            }), 400
+        seen_module_keys.add(module_key)
+
+        # B5: si el editor scoped está habilitado, la casilla global V1 NO
+        # puede crear o modificar la acción base de Nube por un camino paralelo.
+        if module_key == "internal_documents":
+            from app.routes.permissions_b5_beta_routes import b5_editor_enabled
+            if b5_editor_enabled():
+                return jsonify({
+                    "error": "Conflict",
+                    "detail": "Nube se configura exclusivamente en el editor B5 por alcance.",
+                    "module_key": module_key,
+                }), 409
 
         if override not in valid_overrides:
             return jsonify({
@@ -1184,6 +1265,36 @@ def update_user_module_access(user_id: int):
             "reason": reason,
         })
 
+    # Preflight de TODO el lote antes de alterar grants o crear auditoría:
+    # no reescribir un permiso de sucursal/tiempo/custom como GLOBAL.
+    # Un editor de scopes separado resolverá estos casos.
+    for item in validated_changes:
+        active_grants = (
+            PermissionGrantORM.query
+            .filter(
+                PermissionGrantORM.is_active.is_(True),
+                PermissionGrantORM.deleted_at.is_(None),
+                PermissionGrantORM.principal_type == "user",
+                PermissionGrantORM.principal_user_id == target_user.id,
+                PermissionGrantORM.action_id == item["action"].id,
+            )
+            .order_by(
+                PermissionGrantORM.updated_at.desc(),
+                PermissionGrantORM.id.desc(),
+            )
+            .all()
+        )
+        if _has_complex_module_grant(active_grants):
+            return jsonify({
+                "error": "Conflict",
+                "detail": (
+                    "Existe un grant de alcance restringido o temporal. "
+                    "No se puede modificar desde la casilla global."
+                ),
+                "module_key": item["module"].key,
+            }), 409
+        item["active_grants"] = active_grants
+
     results = []
     created_count = 0
     updated_count = 0
@@ -1198,21 +1309,7 @@ def update_user_module_access(user_id: int):
         override = item["override"]
         reason = item["reason"]
 
-        active_grants = (
-            PermissionGrantORM.query
-            .filter(
-                PermissionGrantORM.is_active.is_(True),
-                PermissionGrantORM.deleted_at.is_(None),
-                PermissionGrantORM.principal_type == "user",
-                PermissionGrantORM.principal_user_id == target_user.id,
-                PermissionGrantORM.action_id == action.id,
-            )
-            .order_by(
-                PermissionGrantORM.updated_at.desc(),
-                PermissionGrantORM.id.desc(),
-            )
-            .all()
-        )
+        active_grants = item["active_grants"]
 
         result = {
             "module_key": module.key,

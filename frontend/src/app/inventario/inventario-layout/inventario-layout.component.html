@@ -1,6 +1,6 @@
 <section class="inventory-shell">
   <nav class="inventory-nav" aria-label="Navegación de inventario">
-    <a
+    <a *ngIf="!esCoordinadorE3"
       class="inventory-nav__item"
       routerLink="/inventario"
       routerLinkActive="inventory-nav__item--active"
@@ -10,7 +10,7 @@
       <span>Inventario maestro</span>
     </a>
 
-    <a
+    <a *ngIf="!esCoordinadorE3"
       class="inventory-nav__item"
       routerLink="/inventario/movimientos"
       routerLinkActive="inventory-nav__item--active"
@@ -19,7 +19,7 @@
       <span>Movimientos</span>
     </a>
 
-    <a
+    <a *ngIf="!esCoordinadorE3"
       class="inventory-nav__item"
       routerLink="/inventario/existencias"
       routerLinkActive="inventory-nav__item--active"
@@ -28,13 +28,20 @@
       <span>Existencias</span>
     </a>
 
-    <a
+    <a *ngIf="!esCoordinadorE3"
       class="inventory-nav__item"
       routerLink="/inventario/reportes"
       routerLinkActive="inventory-nav__item--active"
     >
       <mat-icon>assessment</mat-icon>
       <span>Reportes</span>
+    </a>
+    <a *ngIf="puedeRevisarE3"
+      class="inventory-nav__item"
+      routerLink="/inventario/revision-correcciones"
+      routerLinkActive="inventory-nav__item--active">
+      <mat-icon>fact_check</mat-icon>
+      <span>Revisión de correcciones</span>
     </a>
   </nav>
 

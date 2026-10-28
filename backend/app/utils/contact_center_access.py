@@ -18,6 +18,10 @@ CONTACT_CENTER_INITIAL_ROLES = frozenset({
     "CANDY",
 })
 
+# Piloto regional explícito: ningún otro GERENTE_REGIONAL hereda acceso.
+# Edmundo continúa sujeto a la intersección de sucursales autorizadas.
+CONTACT_CENTER_REGIONAL_PILOT_USER_IDS = frozenset({55})
+
 # Rollout gerencial inicial:
 # - Villas del Rey se conserva como sucursal piloto validada.
 # - Región Costa BC (antes Tijuana / Rosarito / Ensenada):
@@ -30,6 +34,11 @@ CONTACT_CENTER_INITIAL_ROLES = frozenset({
 #   13 Papalote Tijuana
 CONTACT_CENTER_MANAGER_ALLOWED_BRANCH_IDS = frozenset({
     1,
+    2,
+    3,
+    4,
+    5,
+    6,
     7,
     8,
     9,
@@ -77,8 +86,22 @@ def _user_branch_ids(user: UserORM) -> tuple[int, ...]:
     return tuple(sorted(value for value in values if value > 0))
 
 
+def _is_contact_center_manager(user: UserORM) -> bool:
+    role = _normalize(getattr(user, "rol", None))
+    if role == "GERENTE":
+        return True
+    if role != "GERENTE_REGIONAL":
+        return False
+    # El id real, rol y username deben coincidir para evitar habilitar
+    # un rol completo o una cuenta distinta que reutilice un alias.
+    return (
+        getattr(user, "id", None) in CONTACT_CENTER_REGIONAL_PILOT_USER_IDS
+        and _normalize(getattr(user, "username", None)) == "EDMUNDO"
+    )
+
+
 def _manager_allowed_branch_ids(user: UserORM) -> tuple[int, ...]:
-    if _normalize(getattr(user, "rol", None)) != "GERENTE":
+    if not _is_contact_center_manager(user):
         return tuple()
 
     return tuple(
@@ -123,7 +146,7 @@ def resolve_contact_center_access(user: UserORM | None) -> ContactCenterAccess:
     username = _normalize(user.username)
     role = _normalize(user.rol)
     is_supervisor = username == "ADMICORP"
-    is_manager = role == "GERENTE" and not is_supervisor
+    is_manager = _is_contact_center_manager(user) and not is_supervisor
     allowed_branch_ids = (
         _manager_allowed_branch_ids(user)
         if is_manager

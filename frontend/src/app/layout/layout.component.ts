@@ -368,16 +368,10 @@ ngOnInit(): void {
   }
 
   if (this.puedeVerMarketingSalesFunnelPorRol()) {
-    marketingConversionSubmenu.push(
-      {
-        label: 'Funnel Venta Nueva · Original',
-        path: '/marketing-conversion/venta-total-original',
-      },
-      {
-        label: 'Funnel Venta Nueva · Ajustado',
-        path: '/marketing-conversion/venta-total',
-      },
-    );
+    marketingConversionSubmenu.push({
+      label: 'Funnel Venta Nueva · Original',
+      path: '/marketing-conversion/venta-total-original',
+    });
   }
 
   if (this.esAdmin) {
@@ -625,6 +619,7 @@ this.habilitarWarehouseEnMenuSiAplica(menuWarehouse);
   this.habilitarPermisosObservabilidadEnMenuSiAplica();
   this.habilitarAdminUsuariosEnMenuSiAplica();
 }
+  this.habilitarRevisionInventariosE3SiAplica();
   this.sincronizarMenuConRutaActual();
 
   if (this.puedeVerAccionesFlotantesGlobales) {
@@ -649,6 +644,34 @@ this.habilitarWarehouseEnMenuSiAplica(menuWarehouse);
     );
   }
   }
+
+private habilitarRevisionInventariosE3SiAplica(): void {
+  // El menú refleja exclusivamente capacidad concedida por backend.
+  // El rol o JWT no son permiso de acceso a E3.
+  this.http
+    .get<{ can_review: boolean }>(`${environment.apiUrl}/inventario/solicitudes/revision/contexto`)
+    .subscribe({
+      next: response => {
+        if (!response?.can_review) return;
+        const item = { label: 'Revisión de correcciones', path: '/inventario/revision-correcciones' };
+        const existente = this.menuItems.find(x => x.label === 'Inventario');
+        if (existente) {
+          if (existente.submenu?.some((x: any) => x.path === item.path)) return;
+          this.menuItems = this.menuItems.map(x => x === existente
+            ? { ...x, submenu: [...(x.submenu || []), item] }
+            : x);
+        } else {
+          this.menuItems = [...this.menuItems, {
+            label: 'Inventario', path: item.path, submenu: [item],
+          }];
+        }
+        this.sincronizarMenuConRutaActual();
+      },
+      error: () => {
+        // 401/403: no se anuncia acceso de revisión.
+      },
+    });
+}
 
 private habilitarControlEnMenuSiAplica(menuControl: any): void {
   if (this.menuItems.some((item) => item.label === 'Control')) {

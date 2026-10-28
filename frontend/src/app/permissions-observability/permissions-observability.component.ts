@@ -7,6 +7,7 @@ import { finalize, forkJoin } from 'rxjs';
 
 import { SessionService } from '../core/auth/session.service';
 import { PermissionAuditMatrixComponent } from './permission-audit-matrix.component';
+import { PermissionB5BetaEditorComponent } from './permission-b5-beta-editor.component';
 import {
   permissionActionExplanation, permissionActionLabel, permissionActionPurpose,
 } from './permission-action-labels';
@@ -39,6 +40,7 @@ interface SummaryCard {
     CommonModule,
     FormsModule,
     PermissionAuditMatrixComponent,
+    PermissionB5BetaEditorComponent,
   ],
   templateUrl: './permissions-observability.component.html',
   styleUrls: ['./permissions-observability.component.css'],
@@ -55,7 +57,17 @@ export class PermissionsObservabilityComponent implements OnInit {
   routes: PermissionRouteMap[] = [];
   grants: PermissionGrant[] = [];
   selectedGrantForAudit: PermissionGrant | null = null;
+  selectedGrantForB5: PermissionGrant | null = null;
+  showB5Editor = false;
   selectedGrantAuditLogs: PermissionGrantAuditLog[] = [];
+  readonly grantPageSize = 50;
+  readonly grantAuditPageSize = 50;
+  grantTotal = 0;
+  grantOffset = 0;
+  grantAuditTotal = 0;
+  grantAuditOffset = 0;
+  private grantRequestVersion = 0;
+  private grantAuditRequestVersion = 0;
 
   selectedModuleKey = '';
   selectedRiskLevel = '';
@@ -179,76 +191,226 @@ export class PermissionsObservabilityComponent implements OnInit {
     this.loadEffectivePermissions();
   }
 
+  // B4 es una vista de CONFIGURACIÓN. No calcula autorización HTTP.
   loadGrants(): void {
     this.errorMessage = '';
     this.isLoadingGrants = true;
-
+    const requestVersion = ++this.grantRequestVersion;
     const principalUserId = Number(this.grantPrincipalUserIdFilter);
 
-    this.permissionsService
-      .getGrants({
-        active: this.grantActiveFilter,
-        principal_type: this.grantPrincipalTypeFilter,
-        principal_user_id: Number.isInteger(principalUserId) && principalUserId > 0
-          ? principalUserId
-          : null,
-        principal_role_key: this.grantPrincipalRoleKeyFilter.trim(),
-        module_key: this.grantModuleKeyFilter.trim(),
-        action_full_key: this.grantActionFullKeyFilter.trim(),
-        effect: this.grantEffectFilter,
-        scope_type: this.grantScopeTypeFilter,
-        limit: 200,
-        offset: 0,
-      })
-      .pipe(finalize(() => {
+    this.permissionsService.getGrants({
+      active: this.grantActiveFilter,
+      principal_type: this.grantPrincipalTypeFilter,
+      principal_user_id: Number.isInteger(principalUserId) && principalUserId > 0
+        ? principalUserId : null,
+      principal_role_key: this.grantPrincipalRoleKeyFilter.trim(),
+      module_key: this.grantModuleKeyFilter.trim(),
+      action_full_key: this.grantActionFullKeyFilter.trim(),
+      effect: this.grantEffectFilter,
+      scope_type: this.grantScopeTypeFilter,
+      limit: this.grantPageSize,
+      offset: this.grantOffset,
+    }).pipe(finalize(() => {
+      if (requestVersion === this.grantRequestVersion) {
         this.isLoadingGrants = false;
-      }))
-      .subscribe({
-        next: (response) => {
-          this.grants = response.grants || [];
+      }
+    })).subscribe({
+      next: response => {
+        if (requestVersion !== this.grantRequestVersion) { return; }
+        this.grants = response.grants || [];
+        this.grantTotal = response.summary?.total ?? 0;
+        if (this.selectedGrantForAudit &&
+            !this.grants.some(grant => grant.id === this.selectedGrantForAudit?.id)) {
+          this.clearGrantAudit();
+        }
+      },
+      error: () => {
+        if (requestVersion !== this.grantRequestVersion) { return; }
+        this.grants = [];
+        this.grantTotal = 0;
+        this.errorMessage = 'No se pudieron consultar los grants.';
+      },
+    });
+  }
 
-          if (
-            this.selectedGrantForAudit &&
-            !this.grants.some((grant) => grant.id === this.selectedGrantForAudit?.id)
-          ) {
-            this.clearGrantAudit();
-          }
-        },
-        error: () => {
-          this.errorMessage = 'No se pudieron consultar los grants.';
-        },
-      });
+  applyGrantFilters(): void {
+    this.grantOffset = 0;
+    this.loadGrants();
+  }
+
+  get grantFirstRow(): number {
+    return this.grantTotal ? this.grantOffset + 1 : 0;
+  }
+
+  get grantLastRow(): number {
+    return Math.min(this.grantTotal, this.grantOffset + this.grants.length);
+  }
+
+  previousGrants(): void {
+    if (this.isLoadingGrants || this.grantOffset === 0) { return; }
+    this.grantOffset = Math.max(0, this.grantOffset - this.grantPageSize);
+    this.loadGrants();
+  }
+
+  nextGrants(): void {
+    if (this.isLoadingGrants || this.grantOffset + this.grantPageSize >= this.grantTotal) {
+      return;
+    }
+    this.grantOffset += this.grantPageSize;
+    this.loadGrants();
+  }
+
+  getGrantScopeSummary(grant: PermissionGrant): string {
+    switch (grant.scope_type) {
+      case 'global':
+        return 'Global (configuración)';
+      case 'branch':
+        return grant.scope_branch_id ? 'Sucursal #' + grant.scope_branch_id
+          : 'Sucursal no especificada';
+      case 'branch_list':
+        return grant.scope_branch_ids?.length
+          ? 'Sucursales: ' + grant.scope_branch_ids.join(', ')
+          : 'Lista de sucursales vacía';
+      case 'department':
+        return grant.scope_department_id ? 'Departamento #' + grant.scope_department_id
+          : 'Departamento no especificado';
+      case 'module':
+        return 'Módulo · semántica no certificada';
+      case 'custom':
+        return 'Personalizado · revisar alcance';
+      default:
+        return 'Alcance no reconocido';
+    }
+  }
+
+  // Los payloads de auditoría pueden incluir datos arbitrarios: mostrar solo
+  // metadatos estructurados; el registro íntegro permanece en backend.
+  getGrantAuditSafeSummary(payload: Record<string, unknown> | null | undefined): string {
+    if (!payload) { return 'No registrado'; }
+    const fields = [
+      'principal_type', 'principal_user_id', 'principal_role_key',
+      'action_full_key', 'effect', 'scope_type', 'scope_branch_id',
+      'scope_branch_ids', 'scope_department_id', 'starts_at',
+      'expires_at', 'is_active', 'deleted_at',
+    ];
+    const values = fields.flatMap(key => {
+      const value = payload[key];
+      if (value === null || value === undefined) { return []; }
+      if (Array.isArray(value)) {
+        return [key + ': ' + value.filter(item =>
+          typeof item === 'string' || typeof item === 'number').join(', ')];
+      }
+      if (typeof value === 'string' || typeof value === 'boolean' ||
+          typeof value === 'number') {
+        return [key + ': ' + String(value)];
+      }
+      return [];
+    });
+    return values.join(' · ') || 'Sin metadatos de cambio estructurados';
+  }
+
+  getGrantRecordStatus(grant: PermissionGrant): string {
+    if (grant.deleted_at) { return 'Eliminado lógicamente'; }
+    if (!grant.is_active) { return 'Registro inactivo'; }
+    if (grant.starts_at || grant.expires_at) {
+      return 'Registro activo · ventana temporal sin evaluar';
+    }
+    return 'Registro activo · sin fechas de vigencia';
+  }
+
+  openGrantB5(grant: PermissionGrant): void {
+    this.selectedGrantForB5 = grant;
+    this.showB5Editor = true;
+  }
+
+  resetGrantB5(): void {
+    this.selectedGrantForB5 = null;
+    this.showB5Editor = true;
+  }
+
+  closeGrantB5(): void {
+    this.showB5Editor = false;
+    this.selectedGrantForB5 = null;
+  }
+
+  onB5GrantChanged(): void {
+    this.loadGrants();
+    this.clearGrantAudit();
   }
 
   loadGrantAudit(grant: PermissionGrant): void {
-    this.errorMessage = '';
     this.selectedGrantForAudit = grant;
     this.selectedGrantAuditLogs = [];
-    this.isLoadingGrantAudit = true;
+    this.grantAuditOffset = 0;
+    this.grantAuditTotal = 0;
+    this.fetchGrantAudit();
+  }
 
-    this.permissionsService
-      .getGrantAudit(grant.id, {
-        limit: 100,
-        offset: 0,
-      })
-      .pipe(finalize(() => {
+  private fetchGrantAudit(): void {
+    const grantId = this.selectedGrantForAudit?.id;
+    if (!grantId) { return; }
+    this.errorMessage = '';
+    this.isLoadingGrantAudit = true;
+    const requestVersion = ++this.grantAuditRequestVersion;
+
+    this.permissionsService.getGrantAudit(grantId, {
+      limit: this.grantAuditPageSize,
+      offset: this.grantAuditOffset,
+    }).pipe(finalize(() => {
+      if (requestVersion === this.grantAuditRequestVersion) {
         this.isLoadingGrantAudit = false;
-      }))
-      .subscribe({
-        next: (response) => {
-          this.selectedGrantForAudit = response.grant;
-          this.selectedGrantAuditLogs = response.audit_logs || [];
-        },
-        error: () => {
-          this.errorMessage = 'No se pudo consultar la auditoría del grant.';
-        },
-      });
+      }
+    })).subscribe({
+      next: response => {
+        if (requestVersion !== this.grantAuditRequestVersion ||
+            this.selectedGrantForAudit?.id !== grantId) { return; }
+        this.selectedGrantForAudit = response.grant;
+        this.selectedGrantAuditLogs = response.audit_logs || [];
+        this.grantAuditTotal = response.summary?.total ?? 0;
+      },
+      error: () => {
+        if (requestVersion !== this.grantAuditRequestVersion) { return; }
+        this.selectedGrantAuditLogs = [];
+        this.grantAuditTotal = 0;
+        this.errorMessage = 'No se pudo consultar la auditoría del grant.';
+      },
+    });
+  }
+
+  get grantAuditFirstRow(): number {
+    return this.grantAuditTotal ? this.grantAuditOffset + 1 : 0;
+  }
+
+  get grantAuditLastRow(): number {
+    return Math.min(this.grantAuditTotal,
+      this.grantAuditOffset + this.selectedGrantAuditLogs.length);
+  }
+
+  previousGrantAudit(): void {
+    if (this.isLoadingGrantAudit || this.grantAuditOffset === 0) { return; }
+    this.grantAuditOffset = Math.max(0,
+      this.grantAuditOffset - this.grantAuditPageSize);
+    this.fetchGrantAudit();
+  }
+
+  nextGrantAudit(): void {
+    if (this.isLoadingGrantAudit ||
+        this.grantAuditOffset + this.grantAuditPageSize >= this.grantAuditTotal) {
+      return;
+    }
+    this.grantAuditOffset += this.grantAuditPageSize;
+    this.fetchGrantAudit();
   }
 
   clearGrantAudit(): void {
+    ++this.grantAuditRequestVersion;
     this.selectedGrantForAudit = null;
     this.selectedGrantAuditLogs = [];
+    this.grantAuditTotal = 0;
+    this.grantAuditOffset = 0;
+    this.isLoadingGrantAudit = false;
   }
+
   loadEffectivePermissions(): void {
     const userId = Number(this.userIdInput);
 
@@ -644,9 +806,8 @@ export class PermissionsObservabilityComponent implements OnInit {
   }
 
   getGrantStatusBadgeClass(grant: PermissionGrant): string {
-    return grant.is_active
-      ? 'permissions-badge permissions-badge--success'
-      : 'permissions-badge permissions-badge--warning';
+    // Ningún grant beta debe parecer autorización operativa confirmada.
+    return 'permissions-badge permissions-badge--warning';
   }
 
   getGrantPrincipalLabel(grant: PermissionGrant): string {

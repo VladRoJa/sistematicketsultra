@@ -114,8 +114,10 @@ test('E2: estructura Angular separada y botones disponibles sin editar inventari
   assert.match(parent, /cerrarSolicitudes\(\)/);
   assert.match(css, /\.solicitud-panel\s*\{/);
   assert.match(html, /no se modifica/);
-  assert.match(html, /class="solicitud-bandeja__autorizar" disabled/);
-  assert.match(html, /class="solicitud-bandeja__rechazar" disabled/);
+  assert.match(html, /Revisión de correcciones/);
+  assert.doesNotMatch(html, /Pendiente de backend transaccional E3/);
+  assert.doesNotMatch(html, /class="solicitud-bandeja__autorizar" disabled/);
+  assert.doesNotMatch(html, /class="solicitud-bandeja__rechazar" disabled/);
   assert.doesNotMatch(html, /\(click\)="aprobar/);
   assert.doesNotMatch(html, /\(click\)="rechazar/);
   assert.match(service, /crearSolicitudCorreccion/);
@@ -180,11 +182,37 @@ test('E2: hallazgo no registrado no inventa inventario_id', () => {
   vm.hallazgoNombre = 'Remo sin etiqueta';
   vm.hallazgoTipo = 'APARATOS';
   vm.motivo = 'Hallado en almacén sin registro en sistema';
+  assert.equal(vm.puedeEnviar, false);
+  vm.fechaObservacion = '2026-10-26';
+  vm.evidencia = 'Revisión del almacén y ubicación física con conteo de equipos';
+  assert.equal(vm.puedeEnviar, true);
   vm.enviar();
   assert.equal(calls.posts[0].tipo, 'UNREGISTERED_FIND');
   assert.equal('inventario_id' in calls.posts[0], false);
   assert.deepEqual(calls.posts[0].hallazgo_provisional,
     { nombre: 'Remo sin etiqueta', tipo: 'APARATOS' });
+});
+
+test('E2: no localizado requiere fecha y evidencia sin mutar inventario', () => {
+  const { vm, calls } = fixture();
+  vm.seleccionarTipo('NOT_LOCATED');
+  vm.motivo = 'Inspección de referencia ausente en toda la sucursal';
+  assert.equal(vm.puedeEnviar, false);
+  vm.fechaObservacion = '2026-10-26';
+  assert.equal(vm.puedeEnviar, false);
+  vm.evidencia = 'Revisados almacén, gimnasio y movimiento físico de equipos';
+  assert.equal(vm.puedeEnviar, true);
+  const stockOriginal = vm.referencia.stock;
+  vm.referencia.stock = 0;
+  assert.equal(vm.puedeEnviar, false);
+  vm.referencia.stock = stockOriginal;
+  assert.equal(vm.puedeEnviar, true);
+  vm.enviar();
+  assert.equal(calls.posts.length, 1);
+  assert.equal(calls.posts[0].tipo, 'NOT_LOCATED');
+  assert.equal(calls.posts[0].fecha_observacion_local, '2026-10-26');
+  assert.equal(calls.posts[0].evidencia_descriptiva, vm.evidencia);
+  assert.deepEqual(calls.posts[0].valor_propuesto, { no_localizado: true });
 });
 
 test('E2: impide enviar formulario incompleto, stock igual y fecha no válida sin servidor', () => {
@@ -196,6 +224,8 @@ test('E2: impide enviar formulario incompleto, stock igual y fecha no válida si
   assert.equal(calls.posts.length, 0);
   vm.motivo = 'Motivo del conteo físico revisado';
   assert.equal(vm.puedeEnviar, false);
+  vm.cantidadFisica = 0;
+  assert.equal(vm.puedeEnviar, false); // Requiere NOT_LOCATED.
   vm.cantidadFisica = 2;
   assert.equal(vm.puedeEnviar, true);
   vm.enviar();
@@ -246,20 +276,17 @@ test('E2 UX: modal centrado y compacto conserva scroll accesible en pantallas ba
   assert.match(html, /\(click\)="abrirSeguimiento\(\)"/);
 });
 
-test('E2 UX: bandeja con selección por página, detalles por fila y decisiones E3 bloqueadas', () => {
+test('E2 UX: seguimiento de solo consulta conserva resultados, filtros y detalle', () => {
   assert.match(html, /class="solicitud-grid solicitud-filtros"/);
   assert.match(html, /class="solicitud-bandeja__barra"/);
-  assert.match(html, /\[checked\]="todosSeleccionadosPagina"/);
-  assert.match(html, /\[indeterminate\]="algunosSeleccionadosPagina"/);
-  assert.match(html, /\(change\)="alternarPagina\(\)"/);
-  assert.match(html, /\(change\)="alternarSeleccion\(solicitud\.id\)"/);
-  assert.match(html, /\[disabled\]="solicitud\.estado !== 'PENDING'"/);
+  assert.ok(html.includes('{{ totalSolicitudes }} resultados'));
+  assert.doesNotMatch(html, /type="checkbox"/);
+  assert.doesNotMatch(html, /Seleccionar pendientes de esta página/);
+  assert.doesNotMatch(src, /seleccionados|alternarSeleccion|alternarPagina|pendientesPagina/);
   assert.match(html, /\(click\)="toggleDetalle\(solicitud\.id, \$event\)"/);
   assert.match(html, /aria-haspopup="dialog"/);
-  assert.match(html, /Autorizar seleccionadas/);
-  assert.match(html, /Rechazar seleccionadas/);
-  assert.match(html, /class="solicitud-bandeja__autorizar" disabled/);
-  assert.match(html, /class="solicitud-bandeja__rechazar" disabled/);
+  assert.match(html, /Revisión de correcciones \(E3\)/);
+  assert.doesNotMatch(html, /Pendiente de backend transaccional E3/);
   assert.match(css, /\.solicitud-bandeja__lista\s*\{[^}]*overflow:\s*visible;/s);
   assert.doesNotMatch(html, /class="solicitud-bandeja__expandido"/);
   assert.match(html, /class="solicitud-detalle-overlay"/);
@@ -272,76 +299,44 @@ test('E2 UX: bandeja con selección por página, detalles por fila y decisiones 
   assert.doesNotMatch(src, /\.(aprobarSolicitud|rechazarSolicitud|aplicarCorreccion)\(/);
 });
 
-test('E2: solo PENDING se seleccionan y seleccionar página nunca incluye otras páginas', () => {
-  const { vm } = fixture({ referencia: null, vistaInicial: 'seguimiento' });
-  vm.solicitudes = [
-    { id: 11, estado: 'PENDING', tipo: 'MASTER_FIELD', sucursal_id: 7 },
-    { id: 12, estado: 'REJECTED', tipo: 'NOT_LOCATED', sucursal_id: 7 },
-    { id: 13, estado: 'PENDING', tipo: 'QUANTITY_DIFFERENCE', sucursal_id: 8 },
-  ];
-  vm.totalSolicitudes = 200;
-  vm.alternarSeleccion(12);
-  assert.equal(vm.totalSeleccionados, 0);
-  vm.alternarPagina();
-  assert.equal(vm.totalSeleccionados, 2);
-  assert.equal(vm.estaSeleccionada(11), true);
-  assert.equal(vm.estaSeleccionada(13), true);
-  assert.equal(vm.estaSeleccionada(12), false);
-  assert.equal(vm.todosSeleccionadosPagina, true);
-  vm.alternarPagina();
-  assert.equal(vm.totalSeleccionados, 0);
-});
-
-test('E2: filtros y páginas limpian selección para evitar aprobar fuera del contexto visible', () => {
+test('E2: filtros y paginación conservan navegación sin seleccionar solicitudes', () => {
   const { vm, calls } = fixture({ referencia: null, vistaInicial: 'seguimiento' });
-  vm.alternarSeleccion(7);
-  assert.equal(vm.totalSeleccionados, 1);
   vm.cambiarFiltros();
-  assert.equal(vm.totalSeleccionados, 0);
-  vm.alternarSeleccion(7);
+  assert.equal(calls.gets.at(-1).page, 1);
   vm.totalSolicitudes = 26;
   vm.cambiarPagina(1);
-  assert.equal(vm.totalSeleccionados, 0);
   assert.equal(calls.gets.at(-1).page, 2);
 });
 
-test('E2: detalles abren un segundo modal sin alterar la selección', () => {
+test('E2: detalles abren y cierran un segundo modal de consulta', () => {
   const { vm, calls } = fixture({ referencia: null, vistaInicial: 'seguimiento' });
-  vm.alternarSeleccion(7);
   vm.toggleDetalle(7);
   assert.deepEqual(calls.details, [7]);
   assert.equal(vm.detalleIdAbierto, 7);
   assert.equal(vm.detalle.id, 7);
-  assert.equal(vm.totalSeleccionados, 1);
   vm.toggleDetalle(7);
   assert.equal(vm.detalle, null);
   assert.equal(vm.detalleIdAbierto, null);
-  assert.equal(vm.totalSeleccionados, 1);
 });
 
-test('E2: detalle conserva checks y devuelve foco al botón al cerrarlo', async () => {
+test('E2: detalle devuelve foco al botón al cerrarlo', async () => {
   const { vm } = fixture({ referencia: null, vistaInicial: 'seguimiento' });
-  vm.alternarSeleccion(7);
   let focusCount = 0;
   const boton = { isConnected: true, focus() { focusCount++; } };
   vm.toggleDetalle(7, { currentTarget: boton });
   assert.equal(vm.detalleIdAbierto, 7);
-  assert.equal(vm.totalSeleccionados, 1);
   vm.cerrarDetalle();
   await Promise.resolve();
   assert.equal(vm.detalleIdAbierto, null);
-  assert.equal(vm.totalSeleccionados, 1);
   assert.equal(focusCount, 1);
 });
 
-test('E2: filtrar mientras detalle abierto cancela modal y limpia selección', () => {
+test('E2: filtrar mientras detalle abierto cancela el modal', () => {
   const { vm } = fixture({ referencia: null, vistaInicial: 'seguimiento' });
-  vm.alternarSeleccion(7);
   vm.toggleDetalle(7);
   assert.equal(vm.detalleIdAbierto, 7);
   vm.cambiarFiltros();
   assert.equal(vm.detalleIdAbierto, null);
-  assert.equal(vm.totalSeleccionados, 0);
 });
 
 test('E2 UX: segundo modal no aumenta altura de la lista ni agrega doble scroll', () => {
@@ -351,12 +346,12 @@ test('E2 UX: segundo modal no aumenta altura de la lista ni agrega doble scroll'
   const barra = html.indexOf('solicitud-bandeja__acciones--fijas');
   const pie = html.indexOf('<footer class="solicitud-footer">');
   assert.ok(barra > 0 && pie > barra, 'Las acciones deben aparecer antes del pie fijo');
-  assert.match(html, /<\/section>\s*<\/div>\s*<!-- Acciones E3 fuera del contenido desplazable/);
+  assert.match(html, /<\/section>\s*<\/div>\s*<!-- E2 es seguimiento: las decisiones reales pertenecen a la bandeja E3/);
   assert.match(html, /\*ngIf="modo === 'seguimiento' && !cargandoListado && !errorListado"/);
   assert.match(html, /\*ngIf="detalleIdAbierto !== null && modo === 'seguimiento'"/);
   assert.match(html, /\[attr\.inert\]="detalleIdAbierto !== null \? '' : null"/);
   assert.match(html, /\(click\)="cerrarDetalle\(\)"/);
   assert.doesNotMatch(html, /\*ngIf="detalleIdAbierto === solicitud\.id"/);
-  assert.match(html, /class="solicitud-bandeja__autorizar" disabled/);
-  assert.match(html, /class="solicitud-bandeja__rechazar" disabled/);
+  assert.doesNotMatch(html, /class="solicitud-bandeja__autorizar" disabled/);
+  assert.doesNotMatch(html, /class="solicitud-bandeja__rechazar" disabled/);
 });

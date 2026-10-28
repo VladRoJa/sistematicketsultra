@@ -69,7 +69,7 @@ def _insert(conn, **overrides):
 def test_revision_is_linear():
     migration = _migration()
     assert migration.revision == "n26c10202626"
-    assert migration.down_revision == "m23c10202623"
+    assert migration.down_revision == "v2e3a1102626"
 
 
 def test_schema_has_no_secrets(schema):

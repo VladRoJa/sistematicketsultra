@@ -145,12 +145,15 @@
           mat-stroked-button
           class="branch-export-action"
           type="button"
-          [disabled]="!hasBranches"
+          [disabled]="!hasBranches || exportingWorkbook"
           (click)="exportBranchTable()"
         >
           <mat-icon>download</mat-icon>
-          Exportar Excel
+          {{ exportingWorkbook ? 'Generando Excel…' : 'Exportar Excel' }}
         </button>
+        <span *ngIf="exportErrorMessage" class="export-error" role="alert">
+          {{ exportErrorMessage }}
+        </span>
       </div>
 
       <p *ngIf="!hasBranches" class="empty-message">

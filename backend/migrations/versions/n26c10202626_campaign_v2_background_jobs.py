@@ -1,14 +1,14 @@
 """Issue #1129 M1a: add durable governed background jobs; never send.
 
 Revision ID: n26c10202626
-Revises: m23c10202623
+Revises: v2e3a1102626
 Create Date: 2026-10-26
 """
 from alembic import op
 import sqlalchemy as sa
 
 revision = "n26c10202626"
-down_revision = "m23c10202623"
+down_revision = "v2e3a1102626"
 branch_labels = None
 depends_on = None
 

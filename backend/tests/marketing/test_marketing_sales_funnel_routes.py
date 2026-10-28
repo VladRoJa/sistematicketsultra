@@ -90,3 +90,39 @@ def test_dependent_meta_rates_reconcile_after_reclassification():
     assert payload["branches"][0]["meta_visit_to_sale_rate"] is None
     assert payload["branches"][1]["meta_lead_to_visit_rate"] == 0.5
     assert payload["branches"][1]["meta_visit_to_sale_rate"] == 0.5
+
+
+def test_weekly_original_preview_is_restricted_to_admicorp(monkeypatch):
+    from types import SimpleNamespace
+    import pytest
+    from app.routes import marketing_sales_funnel_routes as routes
+
+    monkeypatch.setattr(routes, "get_jwt_identity", lambda: "17")
+    for username in ("ADMICORP", " admicorp "):
+        monkeypatch.setattr(
+            routes.UserORM, "get_by_id",
+            classmethod(lambda cls, user_id, username=username: SimpleNamespace(username=username)),
+        )
+        routes._require_weekly_original_admicorp()
+
+    for username in ("ADMINISTRADOR", "GERENTE", "ADMICORP_QA", ""):
+        monkeypatch.setattr(
+            routes.UserORM, "get_by_id",
+            classmethod(lambda cls, user_id, username=username: SimpleNamespace(username=username)),
+        )
+        with pytest.raises(routes.MarketingAuthorizationError):
+            routes._require_weekly_original_admicorp()
+
+
+def test_weekly_original_preview_rejects_unknown_or_invalid_identity(monkeypatch):
+    import pytest
+    from app.routes import marketing_sales_funnel_routes as routes
+
+    monkeypatch.setattr(routes, "get_jwt_identity", lambda: "17")
+    monkeypatch.setattr(routes.UserORM, "get_by_id", classmethod(lambda cls, user_id: None))
+    with pytest.raises(routes.MarketingAuthorizationError):
+        routes._require_weekly_original_admicorp()
+
+    monkeypatch.setattr(routes, "get_jwt_identity", lambda: "invalid")
+    with pytest.raises(routes.MarketingAuthorizationError):
+        routes._require_weekly_original_admicorp()

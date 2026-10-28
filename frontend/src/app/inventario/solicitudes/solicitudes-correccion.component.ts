@@ -105,7 +105,6 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
   detalle: SolicitudCorreccionInventario | null = null;
   detalleIdAbierto: number | null = null;
   errorDetalle = '';
-  seleccionados = new Set<number>();
   private peticionListado?: Subscription;
   private peticionDetalle?: Subscription;
   private disparadorDetalle: HTMLElement | null = null;
@@ -163,7 +162,6 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
     this.detalle = null;
     this.detalleIdAbierto = null;
     this.errorDetalle = '';
-    this.seleccionados = new Set<number>();
     if (this.modo === 'seguimiento') this.cargarSolicitudes();
   }
 
@@ -178,7 +176,6 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
     this.modo = 'seguimiento';
     this.detalle = null;
     this.detalleIdAbierto = null;
-    this.seleccionados = new Set<number>();
     this.pagina = 1;
     this.cargarSolicitudes();
   }
@@ -209,6 +206,10 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
     return this.tipo === 'UNREGISTERED_FIND';
   }
 
+  get requiereEvidenciaFisica(): boolean {
+    return this.tipo === 'NOT_LOCATED' || this.tipo === 'UNREGISTERED_FIND';
+  }
+
   get campoNumerico(): boolean {
     return !!this.campos.find(c => c.valor === this.campo)?.numerico;
   }
@@ -224,7 +225,7 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
     this.detalle = null;
     this.detalleIdAbierto = null;
     this.errorDetalle = '';
-    // Regresar al botón Detalles; no perder el contexto ni la selección.
+    // Regresar al botón Detalles sin perder el contexto de la consulta.
     const disparador = this.disparadorDetalle;
     this.disparadorDetalle = null;
     // Esperar a que Angular retire inert y el trap del dialogo al cerrar.
@@ -233,48 +234,6 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
         if (disparador.isConnected) disparador.focus();
       });
     }
-  }
-
-  // Solo se pueden seleccionar solicitudes pendientes de la página actual.
-  // La selección se reinicia en cada búsqueda o cambio de página: no alcanza
-  // silenciosamente otras sucursales, filtros o páginas.
-  get pendientesPagina(): SolicitudCorreccionInventario[] {
-    return this.solicitudes.filter(solicitud => solicitud.estado === 'PENDING');
-  }
-
-  get totalSeleccionados(): number {
-    return this.seleccionados.size;
-  }
-
-  get todosSeleccionadosPagina(): boolean {
-    return this.pendientesPagina.length > 0 &&
-      this.pendientesPagina.every(solicitud => this.seleccionados.has(solicitud.id));
-  }
-
-  get algunosSeleccionadosPagina(): boolean {
-    return this.pendientesPagina.some(solicitud => this.seleccionados.has(solicitud.id)) &&
-      !this.todosSeleccionadosPagina;
-  }
-
-  estaSeleccionada(id: number): boolean {
-    return this.seleccionados.has(id);
-  }
-
-  alternarSeleccion(id: number): void {
-    const solicitud = this.pendientesPagina.find(item => item.id === id);
-    if (!solicitud) return;
-    const nuevaSeleccion = new Set(this.seleccionados);
-    if (nuevaSeleccion.has(id)) nuevaSeleccion.delete(id);
-    else nuevaSeleccion.add(id);
-    this.seleccionados = nuevaSeleccion;
-  }
-
-  alternarPagina(): void {
-    const nuevaSeleccion = new Set<number>();
-    if (!this.todosSeleccionadosPagina) {
-      for (const solicitud of this.pendientesPagina) nuevaSeleccion.add(solicitud.id);
-    }
-    this.seleccionados = nuevaSeleccion;
   }
 
   resumenSolicitud(solicitud: SolicitudCorreccionInventario): string {
@@ -302,6 +261,11 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
   get puedeEnviar(): boolean {
     if (this.guardando || this.guardado || !this.sucursalId || this.motivo.trim().length < 10 ||
         this.motivo.trim().length > 2000 || this.evidencia.length > 2000) return false;
+    if (this.requiereEvidenciaFisica && (
+        !this.fechaObservacion ||
+        this.evidencia.trim().length < 20 ||
+        this.evidencia.trim().length > 2000
+    )) return false;
     if (this.esHallazgo) return !!this.hallazgoNombre.trim() && this.hallazgoNombre.length <= 255 &&
       (!this.hallazgoTipo || this.hallazgoTipo.length <= 40) &&
       (!this.hallazgoMarca || this.hallazgoMarca.length <= 100) &&
@@ -309,9 +273,9 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
     if (!this.referencia || this.referencia.stock === null) return false;
     if (this.tipo === 'QUANTITY_DIFFERENCE') {
       return this.cantidadFisica !== null && Number.isInteger(this.cantidadFisica) &&
-        this.cantidadFisica >= 0 && this.cantidadFisica !== this.referencia.stock;
+        this.cantidadFisica > 0 && this.cantidadFisica !== this.referencia.stock;
     }
-    if (this.tipo === 'NOT_LOCATED') return true;
+    if (this.tipo === 'NOT_LOCATED') return this.referencia.stock > 0;
     if (this.tipo === 'MASTER_FIELD') {
       if (this.campoNumerico) return this.nuevoId !== null && Number.isInteger(this.nuevoId) &&
         this.nuevoId > 0 && this.nuevoId !== this.valorOficial;
@@ -395,7 +359,6 @@ export class SolicitudesCorreccionComponent implements OnChanges, OnDestroy {
   cargarSolicitudes(): void {
     this.peticionListado?.unsubscribe();
     this.cerrarDetalle(false);
-    this.seleccionados = new Set<number>();
     const version = ++this.consultaVersion;
     this.cargandoListado = true;
     this.errorListado = '';

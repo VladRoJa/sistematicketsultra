@@ -60,7 +60,7 @@ def test_contact_center_route_is_guarded_and_lazy_loaded():
     assert "import('./contact-center/contact-center.component')" in routes
 
 
-def test_contact_center_frontend_access_covers_villas_and_costa_bc_managers():
+def test_contact_center_frontend_access_covers_all_thirteen_pilot_branches():
     guard = _read(ACCESS_GUARD)
 
     assert "'ADMICORP'" in guard
@@ -70,13 +70,16 @@ def test_contact_center_frontend_access_covers_villas_and_costa_bc_managers():
     assert "CONTACT_CENTER_INITIAL_USERS" in guard
     assert "CONTACT_CENTER_MANAGER_ALLOWED_BRANCH_IDS" in guard
     assert "role === 'GERENTE'" in guard
+    assert "role === 'GERENTE_REGIONAL'" in guard
+    assert "CONTACT_CENTER_REGIONAL_PILOT_USERS.has(username)" in guard
+    assert "new Set(['EDMUNDO'])" in guard
     assert "CONTACT_CENTER_MANAGER_ALLOWED_BRANCH_IDS.has(branchId)" in guard
 
     # No abrir el rollout por roles administrativos/globales genéricos.
     assert "'ADMINISTRADOR'" not in guard
     assert "'LECTOR_GLOBAL'" not in guard
 
-    for branch_id in (1, 7, 8, 9, 10, 11, 12, 13):
+    for branch_id in range(1, 14):
         assert f"  {branch_id}," in guard
 
 

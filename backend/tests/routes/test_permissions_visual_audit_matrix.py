@@ -85,14 +85,14 @@ def test_warehouse_denial_and_planning_inactive_operator():
     assert row["legacy_allowed"] is False
 
 
-def test_internal_documents_manager_difference_from_real_pure_guard():
+def test_internal_documents_manager_matches_real_pure_guard():
     user = make_user("SISTEMAS", username="SISTEMAS_QA")
     row = visual.evaluate_pair(
         user, make_action("internal_documents.manage"), make_context(user),
     )
     assert row["legacy_allowed"] is True
-    assert row["catalog_allowed"] is False
-    assert row["comparison"] == "diferencia"
+    assert row["catalog_allowed"] is True
+    assert row["comparison"] == "coincide"
 
 
 def test_document_scope_without_object_unknown_then_guard_evaluated(monkeypatch):
@@ -101,6 +101,8 @@ def test_document_scope_without_object_unknown_then_guard_evaluated(monkeypatch)
     context = make_context(user)
     unknown = visual.evaluate_pair(user, action, context)
     assert unknown["legacy_allowed"] is None
+    assert unknown["catalog_allowed"] is None
+    assert unknown["catalog_reason"] == "document_id_required_for_comparison"
     assert unknown["comparison"] == "no_concluyente"
     calls = []
     monkeypatch.setattr(visual, "can_view_internal_document",
@@ -204,6 +206,47 @@ def test_http_admin_gate_is_enforced_before_fetching_records(app):
         assert ordinary.status_code == 403
         admin = client.get(path, headers={"Authorization": f"Bearer {admin_token}"})
         assert admin.status_code == 400  # admin pasa guard; le falta user_id
+
+
+def test_missing_document_id_returns_404_without_loading_dynamic_relationships(
+    app, monkeypatch,
+):
+    """Regresión QA-B.4: antes era 500 por selectinload sobre lazy='dynamic'."""
+    from app.models.internal_documents import InternalDocumentORM
+
+    assert InternalDocumentORM.links.property.lazy == "dynamic"
+    assert InternalDocumentORM.visibility_rules.property.lazy == "dynamic"
+
+    class MissingDocumentQuery:
+        def filter_by(self, **criteria):
+            assert criteria == {"id": 2147483647}
+            return self
+
+        def options(self, *_args):
+            pytest.fail("Las relaciones dynamic no admiten carga selectinload")
+
+        def first(self):
+            return None
+
+    monkeypatch.setattr(
+        visual, "InternalDocumentORM",
+        SimpleNamespace(query=MissingDocumentQuery()),
+    )
+    monkeypatch.setattr(
+        catalog, "_current_admin_user_or_error",
+        lambda: (SimpleNamespace(id=1, rol="ADMINISTRADOR"), None),
+    )
+
+    with app.app_context():
+        token = create_access_token(identity="1")
+        response = app.test_client().get(
+            "/api/permissions/catalog/audit/matrix"
+            "?view=user&user_id=47&action_key=internal_documents.view"
+            "&document_id=2147483647",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert response.status_code == 404
+    assert response.get_json() == {"error": "Documento no encontrado"}
 
 
 def test_route_is_only_get_and_no_mutating_permission_endpoints(app):

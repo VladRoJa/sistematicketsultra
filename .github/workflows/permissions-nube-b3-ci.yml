@@ -1,0 +1,51 @@
+name: Permissions Phase B B3 — Global Grant Safety
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/routes/permissions_catalog_routes.py"
+      - "backend/tests/routes/test_permissions_phase_b_b3_module_grants_safety.py"
+      - "backend/tests/routes/test_permissions_phase_b_b1_nube_compare_only.py"
+      - "docs/security/permissions_phase_b_b3_module_grant_safety_20261027.md"
+      - ".github/workflows/permissions-nube-b3-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  grant-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+      SECRET_KEY: permissions-b3-fixtures
+      JWT_SECRET_KEY: permissions-b3-fixtures
+      SQLALCHEMY_DATABASE_URI: "sqlite:///:memory:"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Compile authorization preview
+        run: |
+          python -m py_compile app/routes/permissions_catalog_routes.py \
+            tests/routes/test_permissions_phase_b_b3_module_grants_safety.py
+      - name: Run B3 / B1 / P20 / P34 regressions
+        run: |
+          python -m pytest -q --tb=short -o addopts= \
+            tests/routes/test_permissions_phase_b_b3_module_grants_safety.py \
+            tests/routes/test_permissions_phase_b_b1_nube_compare_only.py \
+            tests/routes/test_permissions_phase_a_bidirectional_classification.py \
+            tests/routes/test_permissions_phase_a_p34_closure.py \
+            tests/routes/test_permissions_visual_audit_matrix.py \
+            tests/routes/test_permissions_phase_a_p31_effective_guard_parity.py

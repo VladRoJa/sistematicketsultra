@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
 from sqlalchemy import and_, or_
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import joinedload
 
 from app.extensions import db
 from app.models.user_model import UserORM, usuario_sucursal
@@ -383,11 +383,15 @@ def evaluate_pair(user, action, context, grants=None, branch_id=None, document=N
     legacy, legacy_source, legacy_reason = _legacy_guard_result(
         context["user"], action.full_key, context, document, branch_id=branch_id,
     )
-    if document is not None and action.full_key == "internal_documents.view":
-        # El catálogo no estima el acceso sobre este objeto documental.
-        # No comparar su True genérico contra el guard por documento.
+    if action.full_key == "internal_documents.view":
+        # Ni la proyección genérica True ni un grant de entrada equivalen
+        # a permiso sobre un documento concreto. Sin objeto también es
+        # no concluyente; con objeto el guard legacy decide por documento.
         catalog_allowed = None
-        catalog_reason = "catalogo_no_modela_visibilidad_de_este_documento"
+        catalog_reason = (
+            "catalogo_no_modela_visibilidad_de_este_documento"
+            if document is not None else "document_id_required_for_comparison"
+        )
     if branch_id is not None:
         # La decisión base no certifica autorización sobre un registro/sucursal.
         # Solo Track/operadores globales no tienen el filtro de sucursal en sus guards base.
@@ -467,10 +471,10 @@ def visual_audit_matrix():
     action_key = (request.args.get("action_key") or "").strip()[:240]
     document = None
     if document_id:
-        document = InternalDocumentORM.query.options(
-            selectinload(InternalDocumentORM.links),
-            selectinload(InternalDocumentORM.visibility_rules),
-        ).filter_by(id=document_id).first()
+        # links y visibility_rules son lazy="dynamic"; selectinload no admite
+        # estas relaciones y provocaba InvalidRequestError / HTTP 500.
+        # El guard de Nube consulta visibilidad por su predicado legacy.
+        document = InternalDocumentORM.query.filter_by(id=document_id).first()
         if document is None:
             return jsonify({"error": "Documento no encontrado"}), 404
     module = None

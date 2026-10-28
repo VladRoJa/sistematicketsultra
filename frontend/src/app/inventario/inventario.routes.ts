@@ -17,6 +17,11 @@ export const INVENTARIO_ROUTES: Routes = [
       { path: 'movimientos', component: MovimientosComponent },
       { path: 'reportes', component: ReportesComponent },
       { path: 'existencias', component: ExistenciasComponent },
+      {
+        path: 'revision-correcciones',
+        loadComponent: () => import('./revision-correcciones/revision-correcciones.component')
+          .then(m => m.RevisionCorreccionesComponent),
+      },
     ]
   }
 ];

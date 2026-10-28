@@ -100,10 +100,14 @@ def api(monkeypatch):
                     "(5,'COORDINADOR_MANTENIMIENTO',7),"
                     "(6,'GERENTE_REGIONAL',7),"
                     "(7,'SISTEMAS',7),"
-                    "(8,'RECEPCIONISTA',7)"
+                    "(8,'RECEPCIONISTA',7),"
+                    "(9,'MANTENIMIENTO',7),"
+                    "(10,'TECNICO',7),"
+                    "(11,'MANTENIMIENTO',7),"
+                    "(12,'AUX_MANTENIMIENTO',7)"
                 )
                 con.exec_driver_sql(
-                    "INSERT INTO usuario_sucursal VALUES (2,8),(3,8)"
+                    "INSERT INTO usuario_sucursal VALUES (2,8),(3,8),(7,8),(9,8),(10,8)"
                 )
                 con.exec_driver_sql(
                     "INSERT INTO inventario_general "
@@ -118,7 +122,7 @@ def api(monkeypatch):
                 )
             tokens = {
                 uid: {"Authorization": "Bearer " + create_access_token(identity=str(uid))}
-                for uid in (1, 2, 3, 4, 5, 6, 7, 8, 999)
+                for uid in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 999)
             }
             yield app.test_client(), tokens, app
 
@@ -154,6 +158,11 @@ def _payload(kind="QUANTITY_DIFFERENCE", branch=7, inventory=501):
         data.update(hallazgo_provisional={
             "nombre": "Bicicleta sin etiqueta", "tipo": "APARATOS"
         })
+    if kind in ("NOT_LOCATED", "UNREGISTERED_FIND"):
+        data["fecha_observacion_local"] = "2026-10-26"
+        data["evidencia_descriptiva"] = (
+            "Recorrido físico de sucursal y revisión de referencias y ubicaciones"
+        )
     return data
 
 
@@ -243,6 +252,36 @@ def test_no_localizado_y_hallazgo_provisional_sin_altas(api):
     assert _snapshot(api) == before
 
 
+
+def test_e2_exige_fecha_y_evidencia_en_solicitudes_especiales(api):
+    original = _snapshot(api)
+    for kind in ("NOT_LOCATED", "UNREGISTERED_FIND"):
+        for missing in ("fecha_observacion_local", "evidencia_descriptiva"):
+            request_data = _payload(kind)
+            request_data.pop(missing)
+            bad = _post(api, request_data)
+            assert bad.status_code == 400, (kind, missing, bad.get_json())
+        empty = _payload(kind)
+        empty["evidencia_descriptiva"] = "  Sin revisar  "
+        assert _post(api, empty).status_code == 400
+        future = _payload(kind)
+        future["fecha_observacion_local"] = "2099-01-01"
+        assert _post(api, future).status_code == 400
+        valid = _payload(kind)
+        good = _post(api, valid)
+        assert good.status_code == 201, (kind, good.get_json())
+        row = good.get_json()["solicitud"]
+        assert row["estado"] == "PENDING"
+        assert row["fecha_observacion_local"] == valid["fecha_observacion_local"]
+        assert row["evidencia_descriptiva"] == valid["evidencia_descriptiva"]
+    zero_stock = _payload("NOT_LOCATED", inventory=503)
+    zero_stock["valor_original"] = {"stock":0}
+    denied = _post(api,zero_stock)
+    assert denied.status_code == 400, denied.get_json()
+    assert "stock oficial positivo" in denied.get_json()["detail"]
+    assert _snapshot(api) == original
+
+
 def test_sr_m2m_no_hereda_primaria_ni_ve_otra_sucursal(api):
     client, tokens, _ = api
     created = _post(api, _payload())
@@ -329,6 +368,12 @@ def test_falsificacion_validacion_y_concurrencia_detectable(api):
     malformed = _payload()
     malformed["valor_propuesto"] = {"cantidad_fisica": True}
     assert _post(api, malformed).status_code == 400
+    # Ausencia física total no debe saltarse el gate de evidencia NOT_LOCATED.
+    zero = _payload()
+    zero["valor_propuesto"] = {"cantidad_fisica": 0}
+    denied = _post(api, zero)
+    assert denied.status_code == 400, denied.get_json()
+    assert "NOT_LOCATED" in denied.get_json()["detail"]
     untrusted = _payload()
     untrusted["tipo"] = []
     assert _post(api, untrusted).status_code == 400
@@ -342,3 +387,88 @@ def test_dos_propuestas_similares_independientes_generan_advertencia(api):
     assert second.status_code == 201
     assert second.get_json()["possible_pending_duplicate"] is True
     assert second.get_json()["solicitud"]["id"] != first.get_json()["solicitud"]["id"]
+
+
+def test_e2_mantenimiento_sistemas_tecnico_limitados_a_m2m_sin_primary_fallback(api):
+    client, tokens, _ = api
+    original = _snapshot(api)
+    corporate_request = _post(api, _payload())
+    assert corporate_request.status_code == 201, corporate_request.get_json()
+    corporate_id = corporate_request.get_json()["solicitud"]["id"]
+
+    for technical_user in (7, 9, 10):
+        # Los tres tienen sucursal primaria 7 pero solo M:N=8; nunca heredar 7.
+        assert _post(api, _payload(), user_id=technical_user).status_code == 403
+        assert client.get(
+            "/api/inventario/solicitudes?sucursal_id=7",
+            headers=tokens[technical_user],
+        ).status_code == 403
+        assert client.get(
+            f"/api/inventario/solicitudes/{corporate_id}",
+            headers=tokens[technical_user],
+        ).status_code == 404
+        query = client.get("/api/inventario/solicitudes",
+                           headers=tokens[technical_user])
+        assert query.status_code == 200, query.get_json()
+        assert all(item["sucursal_id"] == 8 for item in query.get_json()["items"])
+
+        assigned = _payload(branch=8, inventory=502)
+        assigned["valor_original"] = {"stock": 4}
+        assigned["valor_propuesto"] = {"cantidad_fisica": 2}
+        allowed = _post(api, assigned, user_id=technical_user)
+        assert allowed.status_code == 201, (technical_user, allowed.get_json())
+        assert allowed.get_json()["solicitud"]["sucursal_id"] == 8
+
+    # Sin ninguna asignación M:N, ni la sucursal primaria habilita lectura.
+    assert client.get(
+        "/api/inventario/solicitudes", headers=tokens[11],
+    ).status_code == 403
+    assert _post(api, _payload(), user_id=11).status_code == 403
+    assert _snapshot(api) == original
+
+
+def test_e2_aux_sin_m2m_conserva_solo_su_principal_sin_expandir_acceso(api):
+    """Caso espejo de los 11 auxiliares productivos: primaria sí, M:N vacío."""
+    client, tokens, app = api
+    before = _snapshot(api)
+    with app.app_context():
+        assignments = db.session.execute(sa.text(
+            "SELECT count(*) FROM usuario_sucursal WHERE user_id = 12"
+        )).scalar_one()
+        assert assignments == 0
+
+    # Puede registrar propuesta exclusivamente en la sucursal primaria.
+    created = _post(api, _payload(), user_id=12)
+    assert created.status_code == 201, created.get_json()
+    allowed_id = created.get_json()["solicitud"]["id"]
+    assert created.get_json()["solicitud"]["sucursal_id"] == 7
+
+    # No puede operar sucursal 8 aunque exista un artículo allí.
+    outside = _payload(branch=8, inventory=502)
+    outside["valor_original"] = {"stock": 4}
+    outside["valor_propuesto"] = {"cantidad_fisica": 2}
+    assert _post(api, outside, user_id=12).status_code == 403
+    assert client.get(
+        "/api/inventario/solicitudes?sucursal_id=8",
+        headers=tokens[12],
+    ).status_code == 403
+
+    # Se filtra también el detalle: no basta esconder la sucursal en la UI.
+    foreign = _post(api, _payload("UNREGISTERED_FIND", branch=8, inventory=None))
+    assert foreign.status_code == 201
+    foreign_id = foreign.get_json()["solicitud"]["id"]
+    assert client.get(
+        f"/api/inventario/solicitudes/{foreign_id}",
+        headers=tokens[12],
+    ).status_code == 404
+    allowed_detail = client.get(
+        f"/api/inventario/solicitudes/{allowed_id}",
+        headers=tokens[12],
+    )
+    assert allowed_detail.status_code == 200
+    listed = client.get(
+        "/api/inventario/solicitudes", headers=tokens[12],
+    )
+    assert listed.status_code == 200
+    assert all(item["sucursal_id"] == 7 for item in listed.get_json()["items"])
+    assert _snapshot(api) == before

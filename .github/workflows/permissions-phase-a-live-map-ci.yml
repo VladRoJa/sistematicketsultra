@@ -1,4 +1,4 @@
-name: Fase A P25–P29 — Route Map, Guards & Action Parity
+name: Fase A P25–P34 — Route Map, Guards & Action Parity
 
 on:
   pull_request:
@@ -18,6 +18,42 @@ on:
       - "backend/tests/routes/test_permissions_phase_a_cross_family_p27.py"
       - "backend/tests/routes/test_permissions_phase_a_p28_snapshot_contract.py"
       - "backend/tests/routes/test_permissions_phase_a_p29_action_reconciliation.py"
+      - "backend/tests/routes/test_permissions_phase_a_p30_live_action_parity.py"
+      - "backend/tests/routes/test_permissions_phase_a_p31_effective_guard_parity.py"
+      - "backend/tests/routes/test_permissions_phase_a_p32_capability_groups.py"
+      - "backend/tests/routes/test_permissions_phase_a_p33_read_surfaces.py"
+      - "backend/tests/routes/test_permissions_phase_a_p34_closure.py"
+      - "backend/tests/routes/test_permissions_phase_b_b1_nube_compare_only.py"
+      - "docs/security/permissions_phase_b_b1_nube_compare_only_20261027.md"
+      - "docs/security/permissions_phase_a_p34_compatibility_master_20261027.csv"
+      - "docs/security/permissions_phase_a_p34_nube_pilot_p1_reads_20261027.csv"
+      - "docs/security/permissions_phase_a_p34_closure_20261027.md"
+      - "backend/app/utils/internal_documents_access.py"
+      - "backend/app/routes/internal_documents_routes.py"
+      - "backend/app/routes/permissions_catalog_routes.py"
+      - "backend/app/utils/permission_get_surface_audit.py"
+      - "docs/security/permissions_phase_a_p33_102_source_closure_20261027.csv"
+      - "docs/security/permissions_phase_a_p33_remaining20_get_review_20261027.md"
+      - "docs/security/permissions_phase_a_p32_102_capability_contract_20261027.csv"
+      - "docs/security/permissions_phase_a_p32_capability_audit_20261027.md"
+      - "backend/app/routes/marketing_campaign_v2_routes.py"
+      - "backend/app/routes/google_ads_m6_continuity_routes.py"
+      - "backend/app/routes/google_ads_oauth_routes.py"
+      - "backend/app/services/marketing_access.py"
+      - "backend/app/utils/purchase_requisition_permissions.py"
+      - "docs/security/permissions_phase_a_p31_effective_guard_parity_20261027.md"
+      - "docs/security/permissions_phase_a_p31_effective_guards_20261027.csv"
+      - "backend/app/routes/permissions_catalog_routes.py"
+      - "backend/app/routes/openings_routes.py"
+      - "backend/app/routes/openings_lifecycle_routes.py"
+      - "backend/app/routes/inventarios.py"
+      - "backend/app/routes/ticket_routes.py"
+      - "backend/app/services/ticket_tapizado_recepcion_service.py"
+      - "backend/app/utils/permission_live_action_snapshot.py"
+      - "backend/app/utils/tickets_maintenance_permissions.py"
+      - "backend/app/services/ticket_maintenance_coordination_service.py"
+      - "docs/security/permissions_phase_a_p30_live_catalog_20261026.md"
+      - "docs/security/permissions_phase_a_p30_live_action_reconciliation_20261026.csv"
       - "backend/app/track_alerts/routes/track_alert_routes.py"
       - "backend/app/routes/warehouse_internal_jobs.py"
       - "backend/tests/test_track_alert_routes_p29_auth.py"
@@ -70,7 +106,7 @@ jobs:
         run: |
           python -m pip install -r requirements.txt
           python -m pip install pytest==8.3.5
-      - name: P25–P29 live map, guard, snapshot, action parity and regressions
+      - name: P25–P34 live map, guard, snapshot, action parity and regressions
         run: |
           python -m pytest -q --tb=short -o addopts= \
             tests/routes/test_permissions_phase_a_live_map_reconcile_p25.py \
@@ -79,6 +115,27 @@ jobs:
             tests/routes/test_permissions_phase_a_cross_family_p27.py \
             tests/routes/test_permissions_phase_a_p28_snapshot_contract.py \
             tests/routes/test_permissions_phase_a_p29_action_reconciliation.py \
+            tests/routes/test_permissions_phase_a_p30_live_action_parity.py \
+            tests/routes/test_permissions_phase_a_p31_effective_guard_parity.py \
+            tests/routes/test_permissions_phase_a_p32_capability_groups.py \
+            tests/routes/test_permissions_phase_a_p33_read_surfaces.py \
+            tests/routes/test_permissions_phase_a_p34_closure.py \
+            tests/routes/test_permissions_phase_b_b1_nube_compare_only.py \
+            tests/routes/test_permissions_phase_a_bidirectional_projection.py \
+            tests/routes/test_permissions_phase_a_bidirectional_classification.py \
+            tests/utils/test_permissions_phase_a_document_object_parity.py \
+            tests/marketing/test_marketing_campaign_v2_dispatch_config_service.py \
+            tests/marketing/test_marketing_campaign_v2_scoped_dispatch_exclusions.py \
+            tests/google_ads/test_google_ads_m6_authenticated_approval.py \
+            tests/purchase_requisitions/test_purchase_requisition_permissions.py \
+            tests/purchase_requisitions/test_purchase_requisition_finance_approvers.py \
+            tests/services/test_ticket_maintenance_coordination_service.py \
+            tests/utils/test_tickets_maintenance_permissions.py \
+            tests/services/test_ticket_tapizado_m4_recepcion.py \
+            tests/services/test_ticket_tapizado_m41_lote.py \
+            tests/routes/test_inventario_correccion_codigo_auditada_qa13.py \
+            tests/routes/test_inventario_eliminar_movimiento_qa.py \
+            tests/routes/test_openings_lifecycle_routes.py \
             tests/test_track_alert_routes_p29_auth.py \
             tests/test_track_alert_routes.py \
             tests/contact_center/test_contact_center_access.py \

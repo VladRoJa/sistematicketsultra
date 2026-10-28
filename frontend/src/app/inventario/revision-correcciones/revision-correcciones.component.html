@@ -1,0 +1,242 @@
+<div class="revision-page">
+  <main class="revision-shell" [attr.inert]="decision ? '' : null">
+    <header class="revision-encabezado">
+      <div>
+        <span class="revision-etiqueta">INVENTARIOS V2 · E3</span>
+        <h1>Revisión de correcciones</h1>
+        <p>Decisiones auditadas por sucursal. Autorizar modifica el inventario oficial.</p>
+      </div>
+      <button type="button" class="revision-secondary" (click)="cargar()"
+        [disabled]="!contexto || cargando || procesando">Actualizar bandeja</button>
+    </header>
+
+    <div *ngIf="iniciando" role="status" class="revision-aviso">Comprobando permisos de revisión...</div>
+    <div *ngIf="error" role="alert" class="revision-error">{{ error }}</div>
+    <div *ngIf="aviso" role="status" class="revision-exito">{{ aviso }}</div>
+
+    <ng-container *ngIf="contexto">
+      <section class="revision-filtros" aria-label="Filtros de revisión">
+        <label>Sucursal
+          <select [(ngModel)]="filtroSucursal" (ngModelChange)="cambiarFiltros()" name="e3Sucursal">
+            <option value="todas">Todas mis sucursales</option>
+            <option *ngFor="let sucursal of contexto.sucursales" [ngValue]="sucursal.sucursal_id">
+              {{ sucursal.sucursal }}
+            </option>
+          </select>
+        </label>
+        <label>Estado
+          <select [(ngModel)]="filtroEstado" (ngModelChange)="cambiarFiltros()" name="e3Estado">
+            <option value="PENDING">Pendientes</option>
+            <option value="APPROVED">Autorizadas</option>
+            <option value="REJECTED">Rechazadas</option>
+          </select>
+        </label>
+        <label>Tipo
+          <select [(ngModel)]="filtroTipo" (ngModelChange)="cambiarFiltros()" name="e3Tipo">
+            <option value="todos">Todos</option>
+            <option value="QUANTITY_DIFFERENCE">Diferencia de cantidad</option>
+            <option value="NOT_LOCATED">No localizado</option>
+            <option value="UNREGISTERED_FIND">Hallazgo sin registro</option>
+            <option *ngIf="contexto.corporativo" value="MASTER_FIELD">Dato maestro</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="revision-bandeja" aria-label="Solicitudes autorizadas para revisión">
+        <div class="revision-bandeja__cabecera">
+          <label class="revision-marcar">
+            <input type="checkbox" [checked]="seleccionadas.length > 0 && seleccionadas.length === solicitudes.length"
+              (change)="marcarPagina()" [disabled]="filtroEstado !== 'PENDING' || cargando || !solicitudes.length || procesando" />
+            Seleccionar pendientes de esta página
+          </label>
+          <span>{{ seleccionadas.length }} seleccionadas · {{ total }} resultados</span>
+        </div>
+
+        <p *ngIf="cargando" class="revision-aviso" role="status">Consultando solicitudes...</p>
+        <div *ngIf="!cargando && !solicitudes.length" class="revision-vacio">
+          <mat-icon aria-hidden="true">fact_check</mat-icon>
+          <strong>Sin solicitudes en este filtro</strong>
+          <p>La lista solo incluye registros dentro de tu ámbito autorizado.</p>
+        </div>
+
+        <div *ngFor="let solicitud of solicitudes" class="revision-fila"
+          [class.revision-fila--seleccionada]="seleccion.has(solicitud.id)">
+          <label class="revision-marcar revision-fila__check">
+            <input type="checkbox" [checked]="seleccion.has(solicitud.id)"
+              [disabled]="solicitud.estado !== 'PENDING' || procesando"
+              [attr.aria-label]="'Seleccionar solicitud ' + solicitud.id"
+              (change)="marcar(solicitud.id)" />
+          </label>
+          <div class="revision-fila__cuerpo">
+            <div class="revision-fila__encabezado">
+              <div class="revision-fila__identidad">
+                <div class="revision-fila__nombre">
+                  <strong>{{ nombreReferencia(solicitud) }}</strong>
+                  <span class="revision-fila__codigo">{{ codigoReferencia(solicitud) }}</span>
+                </div>
+                <small>#{{ solicitud.id }} · {{ sucursalNombre(solicitud.sucursal_id) }}
+                  <ng-container *ngIf="solicitud.inventario_id"> · Inventario #{{ solicitud.inventario_id }}</ng-container>
+                  · Registró #{{ solicitud.creado_por_usuario_id }}
+                  · {{ solicitud.creado_en_utc | date:'dd/MM/yyyy HH:mm' }}
+                </small>
+              </div>
+              <span class="revision-estado">{{ solicitud.estado }}</span>
+            </div>
+            <div class="revision-fila__cambio">
+              <span>{{ tipos[solicitud.tipo] }}</span>
+              <strong>{{ cambioPropuesto(solicitud) }}</strong>
+            </div>
+            <div class="revision-fila__datos">
+              <div class="revision-fila__dato">
+                <span>Motivo</span>
+                <p>{{ solicitud.motivo }}</p>
+              </div>
+              <div class="revision-fila__dato">
+                <span>Evidencia</span>
+                <p>{{ solicitud.evidencia_descriptiva || 'Sin evidencia registrada' }}</p>
+              </div>
+              <div class="revision-fila__dato revision-fila__dato--fecha">
+                <span>Observación</span>
+                <p>{{ solicitud.fecha_observacion_local || 'Sin fecha registrada' }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div *ngIf="total > porPagina" class="revision-paginacion">
+          <span>Página {{ pagina }} de {{ paginas }}</span>
+          <button type="button" (click)="cambiarPagina(-1)" [disabled]="pagina <= 1 || cargando">Anterior</button>
+          <button type="button" (click)="cambiarPagina(1)" [disabled]="pagina >= paginas || cargando">Siguiente</button>
+        </div>
+      </section>
+
+      <footer class="revision-acciones">
+        <span>Solo se procesan solicitudes seleccionadas y dentro de tu permiso vigente.</span>
+        <div>
+          <button type="button" class="revision-rechazar" [disabled]="!puedePreparar"
+            (click)="preparar('REJECTED')">Rechazar seleccionadas</button>
+          <button type="button" class="revision-autorizar" [disabled]="!puedePreparar"
+            (click)="preparar('APPROVED')">Autorizar seleccionadas</button>
+        </div>
+      </footer>
+    </ng-container>
+  </main>
+
+  <div *ngIf="decision" class="revision-modal-overlay" role="presentation">
+    <section class="revision-modal revision-modal--decision" role="dialog" aria-modal="true"
+      aria-labelledby="e3DecisionTitulo" cdkTrapFocus [cdkTrapFocusAutoCapture]="true"
+      (keydown.escape)="cerrarDecision()">
+      <header>
+        <div>
+          <span class="revision-etiqueta">CONFIRMACIÓN FORMAL E3</span>
+          <h2 id="e3DecisionTitulo">{{ decision === 'APPROVED' ? 'Autorizar' : 'Rechazar' }}
+            {{ seleccionadas.length }} solicitudes</h2>
+        </div>
+        <button type="button" aria-label="Cerrar confirmación" [disabled]="procesando"
+          (click)="cerrarDecision()">×</button>
+      </header>
+      <div class="revision-modal__contenido">
+        <p class="revision-advertencia" *ngIf="decision === 'APPROVED'">
+          Esta acción aplicará las correcciones al inventario oficial y registrará su auditoría
+          en una sola transacción. Si una falla, ninguna se aplicará.
+        </p>
+        <p *ngIf="decision === 'REJECTED'">
+          Rechazar registra tu decisión y el motivo, sin modificar existencias ni maestro.
+        </p>
+        <ul class="revision-seleccion">
+          <li *ngFor="let solicitud of seleccionadas">
+            <strong>#{{ solicitud.id }}</strong> · {{ sucursalNombre(solicitud.sucursal_id) }}
+            <span>{{ tipos[solicitud.tipo] }}</span>
+          </li>
+        </ul>
+
+        <ng-container *ngIf="decision === 'APPROVED'">
+          <div *ngFor="let solicitud of seleccionadas" class="revision-resolucion">
+            <div *ngIf="aprobacionEspecialIndividual" class="revision-origen">
+              <strong>Motivo original de la solicitud</strong>
+              <p>{{ solicitud.motivo }}</p>
+              <strong>Evidencia registrada</strong>
+              <p>{{ solicitud.evidencia_descriptiva || 'Sin evidencia registrada' }}</p>
+            </div>
+            <p class="revision-error" *ngIf="cantidadCeroRequiereNoLocalizado(solicitud)">
+              Una diferencia con cantidad física cero debe registrarse como No localizado,
+              con fecha, evidencia y resolución de ajuste a cero.
+            </p>
+            <p class="revision-error" *ngIf="faltaEvidenciaFisica(solicitud)">
+              Falta fecha de observación o evidencia física suficiente. No se puede autorizar esta solicitud;
+              sí puede rechazarse con motivo y registrarse una nueva con evidencia completa.
+            </p>
+            <ng-container *ngIf="solicitud.tipo === 'NOT_LOCATED'">
+              <h3>#{{ solicitud.id }} · Confirmar ajuste a cero</h3>
+              <p>Stock esperado: {{ resoluciones[solicitud.id].stock_esperado }}.
+                Revisa la evidencia física antes de continuar.</p>
+              <label *ngIf="!aprobacionEspecialIndividual">Justificación específica (mínimo 20 caracteres)
+                <textarea rows="2" maxlength="2000" name="e3MotivoNoLocalizado{{ solicitud.id }}"
+                  [(ngModel)]="resoluciones[solicitud.id].justificacion"
+                  (ngModelChange)="actualizado()"></textarea>
+              </label>
+            </ng-container>
+            <ng-container *ngIf="solicitud.tipo === 'UNREGISTERED_FIND'">
+              <h3>#{{ solicitud.id }} · Vincular a una referencia existente</h3>
+              <p>Hallazgo: {{ textoValor(solicitud.hallazgo_provisional) }}.
+                Debe coincidir con el equipo oficial, incluido el código físico si lo tiene.
+                No se crearán artículos nuevos; la cantidad física es el total final, no un incremento.
+                La vinculación exige código oficial y etiqueta física coincidentes.</p>
+              <p class="revision-error" *ngIf="faltaCodigoHallazgo(solicitud)">
+                No hay código físico declarado. Requiere un procedimiento de identificación adicional:
+                no puede autorizarse la vinculación en E3.
+              </p>
+              <div class="revision-resolucion__numeros">
+                <label>ID del inventario oficial
+                  <input type="number" min="1" step="1" name="e3Inventario{{ solicitud.id }}"
+                    [(ngModel)]="resoluciones[solicitud.id].inventario_id"
+                    (ngModelChange)="actualizado()" />
+                </label>
+                <label>Stock oficial esperado
+                  <input type="number" min="0" step="1" name="e3Stock{{ solicitud.id }}"
+                    [(ngModel)]="resoluciones[solicitud.id].stock_esperado"
+                    (ngModelChange)="actualizado()" />
+                </label>
+                <label>Cantidad física verificada
+                  <input type="number" min="1" step="1" name="e3Cantidad{{ solicitud.id }}"
+                    [(ngModel)]="resoluciones[solicitud.id].cantidad_fisica"
+                    (ngModelChange)="actualizado()" />
+                </label>
+              </div>
+              <label *ngIf="!aprobacionEspecialIndividual">Justificación de identidad y conteo (mínimo 20 caracteres)
+                <textarea rows="2" maxlength="2000" name="e3Identidad{{ solicitud.id }}"
+                  [(ngModel)]="resoluciones[solicitud.id].justificacion"
+                  (ngModelChange)="actualizado()"></textarea>
+              </label>
+            </ng-container>
+            <p *ngIf="solicitud.tipo === 'MASTER_FIELD' && !contexto?.corporativo"
+              class="revision-error">Un cambio maestro requiere facultad corporativa.</p>
+          </div>
+        </ng-container>
+
+        <label class="revision-motivo">
+          {{ aprobacionEspecialIndividual ? 'Fundamento de autorización (mínimo 20 caracteres)' : 'Motivo de la decisión (10–2000 caracteres)' }}
+          <textarea rows="3" maxlength="2000" [(ngModel)]="motivo" name="e3MotivoLote"
+            (ngModelChange)="actualizado()"
+            placeholder="Explica el fundamento de esta decisión formal"></textarea>
+        </label>
+        <p *ngIf="aprobacionEspecialIndividual" class="revision-motivo-ayuda">
+          Una sola explicación: quedará registrada como motivo de la decisión y justificación del ajuste.
+        </p>
+        <label class="revision-confirmar">
+          <input type="checkbox" [(ngModel)]="confirmo" name="e3Confirmo" />
+          He revisado las solicitudes y confirmo esta decisión sobre el lote completo.
+        </label>
+        <div *ngIf="errorDecision" class="revision-error" role="alert">{{ errorDecision }}</div>
+      </div>
+      <footer>
+        <button type="button" class="revision-secondary" [disabled]="procesando"
+          (click)="cerrarDecision()">Cancelar</button>
+        <button type="button" [class.revision-rechazar]="decision === 'REJECTED'"
+          [class.revision-autorizar]="decision === 'APPROVED'"
+          [disabled]="!puedeConfirmar" (click)="ejecutar()">
+          {{ procesando ? 'Procesando...' : decision === 'APPROVED' ? 'Confirmar autorización' : 'Confirmar rechazo' }}
+        </button>
+      </footer>
+    </section>
+  </div>
+</div>
