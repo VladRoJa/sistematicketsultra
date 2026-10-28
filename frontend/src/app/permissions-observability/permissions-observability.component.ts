@@ -7,6 +7,7 @@ import { finalize, forkJoin } from 'rxjs';
 
 import { SessionService } from '../core/auth/session.service';
 import { PermissionAuditMatrixComponent } from './permission-audit-matrix.component';
+import { PermissionB5BetaEditorComponent } from './permission-b5-beta-editor.component';
 import {
   permissionActionExplanation, permissionActionLabel, permissionActionPurpose,
 } from './permission-action-labels';
@@ -39,6 +40,7 @@ interface SummaryCard {
     CommonModule,
     FormsModule,
     PermissionAuditMatrixComponent,
+    PermissionB5BetaEditorComponent,
   ],
   templateUrl: './permissions-observability.component.html',
   styleUrls: ['./permissions-observability.component.css'],
@@ -55,6 +57,7 @@ export class PermissionsObservabilityComponent implements OnInit {
   routes: PermissionRouteMap[] = [];
   grants: PermissionGrant[] = [];
   selectedGrantForAudit: PermissionGrant | null = null;
+  selectedGrantForB5: PermissionGrant | null = null;
   selectedGrantAuditLogs: PermissionGrantAuditLog[] = [];
   readonly grantPageSize = 50;
   readonly grantAuditPageSize = 50;
@@ -312,6 +315,19 @@ export class PermissionsObservabilityComponent implements OnInit {
       return 'Registro activo · ventana temporal sin evaluar';
     }
     return 'Registro activo · sin fechas de vigencia';
+  }
+
+  openGrantB5(grant: PermissionGrant): void {
+    this.selectedGrantForB5 = grant;
+  }
+
+  resetGrantB5(): void {
+    this.selectedGrantForB5 = null;
+  }
+
+  onB5GrantChanged(): void {
+    this.loadGrants();
+    this.clearGrantAudit();
   }
 
   loadGrantAudit(grant: PermissionGrant): void {
