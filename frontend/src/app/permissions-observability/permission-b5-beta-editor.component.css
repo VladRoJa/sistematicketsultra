@@ -1,0 +1,29 @@
+.b5-panel {
+  border: 1px solid #c7d2fe;
+  border-radius: 14px;
+  padding: 16px;
+  margin: 16px 0;
+  background: #f8faff;
+  color: #1e293b;
+}
+.b5-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.b5-heading h3 { margin: 4px 0; font-size: 18px; }
+.b5-heading p, .b5-description { font-size: 13px; color: #475569; }
+.b5-kicker { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; }
+.b5-status { padding: 6px 10px; background: #e2e8f0; border-radius: 8px; font-size: 12px; font-weight: 700; }
+.b5-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 12px 0; }
+.b5-fields label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 700; }
+.b5-fields input, .b5-fields select, .b5-fields textarea {
+  min-height: 36px; border: 1px solid #cbd5e1; border-radius: 8px;
+  background: #fff; padding: 7px 10px; width: 100%; font: inherit;
+}
+.b5-reason { grid-column: 1 / -1; }
+.b5-controls { display: flex; gap: 10px; flex-wrap: wrap; }
+.b5-controls button { border: 1px solid #93c5fd; color: #1d4ed8; background: white; border-radius: 10px; padding: 9px 12px; cursor: pointer; font-weight: 700; }
+.b5-controls button:disabled { cursor: not-allowed; opacity: 0.45; }
+.b5-controls .b5-danger { color: #991b1b; border-color: #fca5a5; }
+.b5-error { color: #991b1b; font-weight: 700; }
+.b5-success { color: #166534; }
+.b5-preview { padding: 12px; margin-top: 12px; border: 1px solid #cbd5e1; border-radius: 10px; }
+.b5-preview p { margin: 5px 0; font-size: 13px; }
+@media (max-width: 760px) { .b5-panel { padding: 12px; } .b5-fields { grid-template-columns: minmax(0, 1fr); } }

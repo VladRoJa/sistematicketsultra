@@ -36,6 +36,7 @@ from app.routes.openings_routes import openings_bp
 from app.routes.openings_lifecycle_routes import openings_lifecycle_bp
 from app.routes.permissions_catalog_routes import permissions_catalog_bp
 from app.routes.permissions_visual_audit_routes import permissions_visual_audit_bp
+from app.routes.permissions_b5_beta_routes import permissions_b5_beta_bp
 from app.routes.rpa_gasca_sms_routes import rpa_gasca_sms_bp
 from app.routes.routine_control_routes import routine_control_bp
 from app.routes.sports_analysis_routes import sports_analysis_bp
@@ -145,6 +146,7 @@ def create_app():
     app.register_blueprint(openings_lifecycle_bp, url_prefix="/api/openings")
     app.register_blueprint(permissions_catalog_bp, url_prefix="/api/permissions/catalog")
     app.register_blueprint(permissions_visual_audit_bp, url_prefix="/api/permissions/catalog/audit")
+    app.register_blueprint(permissions_b5_beta_bp, url_prefix="/api/permissions/catalog")
     app.register_blueprint(rpa_gasca_sms_bp, url_prefix="/api/rpa/gasca-sms")
     app.register_blueprint(routine_control_bp, url_prefix="/api/routine-control")
     app.register_blueprint(sports_analysis_bp, url_prefix="/api/sports-analysis")

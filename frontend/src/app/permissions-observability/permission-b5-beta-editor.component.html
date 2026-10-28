@@ -1,0 +1,78 @@
+<section class="b5-panel" aria-label="Editor beta de excepciones">
+  <div class="b5-heading">
+    <div>
+      <p class="b5-kicker">B5 · NUBE CORPORATIVA</p>
+      <h3>{{ isEditing ? 'Editar excepción #' + grant?.id : 'Preparar excepción diagnóstica' }}</h3>
+      <p>Únicamente <code>internal_documents.view</code>. Esta configuración no concede
+         acceso a documentos, descarga ni permisos de administración.</p>
+    </div>
+    <span class="b5-status">{{ enabled ? 'Escritura habilitada por backend' : 'Escritura deshabilitada por backend' }}</span>
+  </div>
+
+  <p *ngIf="statusError" class="b5-error" role="alert">{{ statusError }}</p>
+  <p class="b5-description">
+    La consulta preliminar funciona sin crear registros. Cualquier acceso real sigue
+    sujeto a los guards de Nube. No se admiten grants globales ni por rol.
+  </p>
+
+  <div class="b5-fields">
+    <label>Usuario ID
+      <input type="number" min="1" [(ngModel)]="userIdInput"
+             (ngModelChange)="invalidate()" [disabled]="isEditing || busy" />
+    </label>
+    <label>Efecto
+      <select [(ngModel)]="effect" (ngModelChange)="invalidate()" [disabled]="busy">
+        <option value="allow">allow (diagnóstico)</option>
+        <option value="deny">deny (diagnóstico)</option>
+      </select>
+    </label>
+    <label>Alcance
+      <select [(ngModel)]="scopeType" (ngModelChange)="invalidate()" [disabled]="busy">
+        <option value="branch">Una sucursal</option>
+        <option value="branch_list">Lista de sucursales</option>
+      </select>
+    </label>
+    <label *ngIf="scopeType === 'branch'">ID sucursal
+      <input type="number" min="1" [(ngModel)]="branchIdInput"
+             (ngModelChange)="invalidate()" [disabled]="busy" />
+    </label>
+    <label *ngIf="scopeType === 'branch_list'">IDs sucursales (separadas por coma)
+      <input type="text" [(ngModel)]="branchListInput"
+             (ngModelChange)="invalidate()" placeholder="1, 2, 3" [disabled]="busy" />
+    </label>
+    <label>Inicio (ISO con zona horaria, opcional)
+      <input type="text" [(ngModel)]="startsAtInput" (ngModelChange)="invalidate()"
+             placeholder="2026-11-01T09:00:00-08:00" [disabled]="busy" />
+    </label>
+    <label>Fin (ISO con zona horaria, opcional)
+      <input type="text" [(ngModel)]="expiresAtInput" (ngModelChange)="invalidate()"
+             placeholder="2026-11-30T09:00:00-08:00" [disabled]="busy" />
+    </label>
+    <label class="b5-reason">Motivo (obligatorio)
+      <textarea rows="2" [(ngModel)]="reason" (ngModelChange)="invalidate()"
+                placeholder="Justificación operativa de la excepción" [disabled]="busy"></textarea>
+    </label>
+  </div>
+
+  <div class="b5-controls">
+    <button type="button" (click)="runPreview()" [disabled]="busy || !!statusError">
+      {{ busy ? 'Validando...' : 'Validar configuración sin guardar' }}
+    </button>
+    <button type="button" (click)="save()" [disabled]="!canSave">
+      {{ isEditing ? 'Guardar cambios de configuración' : 'Crear grant beta' }}
+    </button>
+    <button *ngIf="isEditing" type="button" class="b5-danger"
+            (click)="disable()" [disabled]="!enabled || busy || reason.trim().length < 8">
+      Desactivar únicamente este grant
+    </button>
+  </div>
+
+  <div *ngIf="preview" class="b5-preview">
+    <strong>Validación de configuración: {{ preview.status }}</strong>
+    <p>Sucursales: {{ preview.branches.join(', ') }}</p>
+    <p><strong>Autorización HTTP: no evaluada.</strong> El catálogo no certifica
+       la visibilidad de un documento concreto.</p>
+  </div>
+  <p *ngIf="errorMessage" class="b5-error" role="alert">{{ errorMessage }}</p>
+  <p *ngIf="successMessage" class="b5-success" role="status">{{ successMessage }}</p>
+</section>
