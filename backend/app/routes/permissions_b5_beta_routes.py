@@ -135,10 +135,19 @@ def _overlap_dates(a_start, a_end, b_start, b_end):
 
 
 def _record_branches(grant):
+    """Solo scopes canónicos: nunca simplificar una excepción híbrida heredada."""
+    if (getattr(grant, "scope_department_id", None) is not None
+            or getattr(grant, "scope_payload", None)):
+        return None
     if grant.scope_type == "branch":
+        # Campos de otro scope presentes hacen ambiguo el registro.
+        if getattr(grant, "scope_branch_ids", None) not in (None, []):
+            return None
         value = _positive_id(grant.scope_branch_id)
         return {value} if value else None
     if grant.scope_type == "branch_list":
+        if getattr(grant, "scope_branch_id", None) is not None:
+            return None
         values = grant.scope_branch_ids
         if (not isinstance(values, list) or not values
                 or any(_positive_id(value) is None for value in values)
