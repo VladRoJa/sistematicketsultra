@@ -16,6 +16,8 @@ from alembic.operations import Operations
 from flask import Flask
 from flask_jwt_extended import JWTManager, create_access_token
 from openpyxl import Workbook, load_workbook
+from zipfile import ZipFile
+import re
 
 from app.extensions import db
 from app.routes.inventario_levantamientos_routes import inventario_levantamientos_bp
@@ -125,6 +127,34 @@ def test_v02_real_distribuida_vacia_se_mantiene_pendiente_y_versiones_desconocid
     assert unsupported["resultado"] == "INVALID"
     assert any(d["codigo"] == "VERSION_FORMATO_NO_RECONOCIDA"
                for d in unsupported["diagnosticos"])
+
+
+def test_xlsx_sin_dimensiones_como_el_distribuido_real():
+    """Los libros distribuidos de E4 carecen de XML <dimension>: max_row=None."""
+    original = workbook(
+        first="", second="", found=False, version="v0.2 · base CSV 2026-10-28"
+    )
+    output = BytesIO()
+    hojas = 0
+    with ZipFile(BytesIO(original)) as z_in, ZipFile(output, "w") as z_out:
+        for info in z_in.infolist():
+            content = z_in.read(info.filename)
+            if re.fullmatch(r"xl/worksheets/sheet[0-9]+\.xml", info.filename):
+                content, n = re.subn(rb"<dimension\\b[^>]*/>", b"", content, count=1)
+                assert n == 1
+                hojas += 1
+            z_out.writestr(info, content)
+    assert hojas == 3
+    raw = output.getvalue()
+    with load_workbook(BytesIO(raw), read_only=True, data_only=False) as book:
+        assert all(book[sheet].max_row is None for sheet in ("CONTROL", "APARATOS", "HALLAZGOS"))
+    expected, _ = parse_historical_csv(original_csv(), 7)
+    report = parse_xlsx_v01(raw, 7, expected, "VERIFICACION")
+    assert report["resultado"] == "INCOMPLETE"
+    assert report["resumen"]["sin_revisar"] == 2
+    assert report["resumen"]["si"] == 0
+    assert report["resumen"]["no"] == 0
+    assert not report["diagnosticos"]
 
 
 def test_plantilla_rechaza_codigo_diferente_duplicados_y_sucursal_falsa():
