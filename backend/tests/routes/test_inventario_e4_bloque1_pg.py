@@ -1,4 +1,4 @@
-"""E4 Bloque 1: compatibilidad v0.1, evidencia histórica y no mutación V1."""
+"""E4 Bloque 1: compatibilidad v0.1/v0.2, evidencia histórica y no mutación V1."""
 import csv
 from io import BytesIO, StringIO
 from uuid import uuid4
@@ -39,7 +39,7 @@ def original_csv():
 
 
 def workbook(branch=7, second="", first="SI", code="07EL01", duplicate=False,
-             initial=False, found=True):
+             initial=False, found=True, version="v0.1 · formato"):
     """Reconstruye las posiciones A5/C6, encabezado fila 7 de la plantilla oficial v0.1."""
     wb = Workbook()
     ctl = wb.active
@@ -50,7 +50,7 @@ def workbook(branch=7, second="", first="SI", code="07EL01", duplicate=False,
         (7, "Gerente responsable", "Responsable QA"),
         (8, "Fecha del recorrido", "2026-10-28"),
         (9, "Folio / corte E4", "PENDIENTE - GENERADOR E4"),
-        (10, "Versión de entrega", "v0.1 · formato"),
+        (10, "Versión de entrega", version),
     ):
         ctl.cell(r, 1, name)
         ctl.cell(r, 3, val)
@@ -98,6 +98,33 @@ def test_plantilla_v01_parser_y_sin_revisar_por_id():
     assert report["resumen"]["pendientes"][0]["fila_excel"] == 9
     assert report["resumen"]["hallazgos"] == 1
     assert report["control"]["sucursal_id"] == "7"
+
+
+def test_v02_real_distribuida_vacia_se_mantiene_pendiente_y_versiones_desconocidas_invalidas():
+    # v0.2 es la etiqueta real del XLSX distribuido el 28/10/2026;
+    # el fixture no contiene datos reales ni archivos de gerentes.
+    expected, _ = parse_historical_csv(original_csv(), 7)
+    received = parse_xlsx_v01(
+        workbook(first="", second="", found=False,
+                 version="v0.2 · base CSV 2026-10-28"),
+        7, expected, "VERIFICACION",
+    )
+    assert received["resultado"] == "INCOMPLETE"
+    assert received["control"]["version_formato"] == "v0.2 · base CSV 2026-10-28"
+    assert received["resumen"]["referencias_esperadas"] == 2
+    assert received["resumen"]["si"] == 0
+    assert received["resumen"]["no"] == 0
+    assert received["resumen"]["sin_revisar"] == 2
+    assert not received["diagnosticos"]
+
+    unsupported = parse_xlsx_v01(
+        workbook(first="", second="", found=False,
+                 version="v0.3 · formato no certificado"),
+        7, expected, "VERIFICACION",
+    )
+    assert unsupported["resultado"] == "INVALID"
+    assert any(d["codigo"] == "VERSION_FORMATO_NO_RECONOCIDA"
+               for d in unsupported["diagnosticos"])
 
 
 def test_plantilla_rechaza_codigo_diferente_duplicados_y_sucursal_falsa():
