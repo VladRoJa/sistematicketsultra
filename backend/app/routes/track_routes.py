@@ -11,7 +11,7 @@ from app.extensions import db
 from app.models.user_model import UserORM
 from io import BytesIO
 
-from flask import Blueprint, jsonify, request, send_file
+from flask import Blueprint, has_request_context, jsonify, request, send_file
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.models.warehouse import TrackDailyMartORM, TrackDailyVersionORM
@@ -106,9 +106,47 @@ def _require_track_admin_role() -> None:
         raise PermissionError("No autorizado para ejecutar procesos del Track.")
 
 
-def _require_track_read_role() -> None:
-    role = _get_current_role()
+def _track_read_user_override() -> bool | None:
+    """Permiso real de lectura Track desde el grant global del catálogo V1.
 
+    None conserva el guard legacy. Solo son aplicables grants globales sin
+    vigencia ni scope adicional; la edición de módulos ya rechaza scopes
+    complejos. No altera el guard admin de procesos/scheduler.
+    """
+    if not has_request_context():
+        # Los diagnósticos de roles ejecutados sin request mantienen paridad.
+        return None
+
+    try:
+        user_id = int(get_jwt_identity())
+    except (TypeError, ValueError):
+        return None
+
+    user = UserORM.get_by_id(user_id)
+    if user is None:
+        return False
+
+    from app.models.permissions import PermissionActionORM
+    from app.routes.permissions_catalog_routes import _get_latest_active_grants_by_action
+
+    action = PermissionActionORM.query.filter_by(
+        full_key="track.read", is_active=True,
+    ).first()
+    if action is None:
+        return None
+    active = _get_latest_active_grants_by_action(user=user, action_ids=[action.id])
+    grant = active["user"].get(action.id) or active["role"].get(action.id)
+    return (grant.effect == "allow") if grant is not None else None
+
+
+def _require_track_read_role() -> None:
+    override = _track_read_user_override()
+    if override is True:
+        return
+    if override is False:
+        raise PermissionError("No autorizado para consultar el Track.")
+
+    role = _get_current_role()
     if role not in {
         "ADMIN",
         "ADMINISTRADOR",
