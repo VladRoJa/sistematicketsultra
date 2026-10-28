@@ -186,7 +186,10 @@ def parse_xlsx_v01(raw, sucursal_id, expected, modalidad):
                 response = norm(item.get("respuesta")) if sheet_name == "APARATOS" else None
                 answer = "SI" if response == "si" else "NO" if response == "no" else "SIN_REVISAR" if sheet_name == "APARATOS" else None
                 if sheet_name == "APARATOS":
-                    if inv is None or inv not in expected_by_id:
+                    if modalidad == "INICIAL" and inv is None and item.get("aparato"):
+                        # Equipo sin ID oficial: evidencia provisional, nunca alta canónica.
+                        pass
+                    elif inv is None or inv not in expected_by_id:
                         issues.append("REFERENCIA_NO_ESPERADA")
                     else:
                         if norm(item["codigo"]) != norm(expected_by_id[inv]["codigo_interno_original"]):
@@ -233,6 +236,9 @@ def parse_xlsx_v01(raw, sucursal_id, expected, modalidad):
             "referencias_esperadas": len(expected_by_id), "si": yes, "no": no,
             "sin_revisar": len(pending), "pendientes": pending,
             "hallazgos": sum(x["hoja"] == "HALLAZGOS" for x in rows),
+            "provisionales_aparatos": sum(
+                x["hoja"] == "APARATOS" and x["inventario_id_declarado"] is None
+                for x in rows) if modalidad == "INICIAL" else 0,
             "errores": sum(x["severidad"] == "ERROR" for x in diagnostics),
             "avisos": sum(x["severidad"] == "AVISO" for x in diagnostics),
             "requiere_revision_inicial": modalidad == "INICIAL",

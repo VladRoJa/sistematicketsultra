@@ -65,6 +65,8 @@ def workbook(branch=7, second="", first="SI", code="07EL01", duplicate=False,
         a.append([502, code, "Cardio", "Eliptica", "Precor", second, ""])
         if duplicate:
             a.append([501, "07CA01", "Cardio", "Caminadora", "Star Trac", "NO", ""])
+    else:
+        a.append([None, "SIN CÓDIGO", "Cardio", "Caminadora", "Star Trac", "SI", "Alta inicial sin ID"])
     h = wb.create_sheet("HALLAZGOS")
     for r in range(1, 7):
         h.cell(r, 1, "HALLAZGOS · APARATOS NO INCLUIDOS" if r == 1 else None)
@@ -112,6 +114,8 @@ def test_inicial_no_equivale_a_conciliado_sin_referencias():
     assert report["resultado"] == "INCOMPLETE"
     assert report["resumen"]["requiere_revision_inicial"] is True
     assert report["resumen"]["hallazgos"] == 1
+    assert report["resumen"]["provisionales_aparatos"] == 1
+    assert report["filas"][0]["inventario_id_declarado"] is None
 
 
 @pytest.fixture()
