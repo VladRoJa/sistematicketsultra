@@ -95,6 +95,9 @@ test('E3 muestra contexto en tarjetas y conserva solo el modal de decisión',()=
   assert.match(css,/\.revision-fila__datos\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1\.3fr\)/s);
   assert.match(html,/Confirmar autorización/);
   assert.match(html,/Confirmar rechazo/);
+  assert.match(html,/aprobacionEspecialIndividual/);
+  assert.match(html,/Motivo original de la solicitud/);
+  assert.match(html,/\*ngIf="!aprobacionEspecialIndividual"/);
   assert.match(css,/\.revision-acciones\s*\{[^}]*flex:\s*0 0 auto/s);
   assert.match(css,/\.revision-bandeja\s*\{[^}]*overflow-y:\s*auto/s);
   assert.match(service,/decidirCorreccionesLote\(payload: LoteDecisionesInventario\)/);
@@ -136,16 +139,19 @@ test('E3 aprobación requiere confirmación y motivo con UUID de lote',()=>{
   assert.equal(vm.seleccionadas.length,0);
 });
 
-test('E3 no localizado exige justificación para ajustar a cero',()=>{
+test('E3 no localizado individual exige un fundamento y lo registra en ambos campos',()=>{
   const {vm,calls}=make();
   vm.marcar(2); vm.preparar('APPROVED');
-  vm.motivo='Inspección documentada'; vm.confirmo=true;
+  assert.equal(vm.aprobacionEspecialIndividual,true);
+  vm.motivo='Insuficiente'; vm.confirmo=true;
   assert.equal(vm.puedeConfirmar,false);
-  vm.resoluciones[2].justificacion='Revisión física y evidencia cruzada suficientes';
+  vm.motivo='Autorizo ajuste a cero tras verificar el reporte físico';
+  assert.equal(vm.resoluciones[2].justificacion,''); // Sin segundo textarea.
   assert.equal(vm.puedeConfirmar,true);
   vm.ejecutar();
   assert.equal(calls.posts[0].resoluciones['2'].accion,'AJUSTAR_A_CERO');
   assert.equal(calls.posts[0].resoluciones['2'].stock_esperado,3);
+  assert.equal(calls.posts[0].resoluciones['2'].justificacion,calls.posts[0].motivo);
 });
 
 test('E3 hallazgo requiere vínculo y cantidad física validada',()=>{
@@ -156,9 +162,32 @@ test('E3 hallazgo requiere vínculo y cantidad física validada',()=>{
     accion:'VINCULAR_EXISTENTE',inventario_id:502,stock_esperado:1,
     cantidad_fisica:2,justificacion:'Código físico cotejado con el maestro oficial',
   };
+  assert.equal(vm.aprobacionEspecialIndividual,true);
   assert.equal(vm.puedeConfirmar,true);
   vm.ejecutar();
   assert.equal(calls.posts[0].resoluciones['3'].inventario_id,502);
+  assert.equal(calls.posts[0].resoluciones['3'].justificacion,calls.posts[0].motivo);
+});
+
+test('E3 lotes de varias solicitudes conservan motivo general y justificaciones por registro',()=>{
+  const {vm,calls}=make();
+  vm.marcar(2);
+  vm.marcar(3);
+  vm.preparar('APPROVED');
+  vm.confirmo=true;
+  vm.motivo='Revisión formal de ambos casos';
+  assert.equal(vm.aprobacionEspecialIndividual,false);
+  assert.equal(vm.puedeConfirmar,false);
+  vm.resoluciones[2].justificacion='Ausencia constatada y stock confirmado';
+  vm.resoluciones[3]={
+    accion:'VINCULAR_EXISTENTE', inventario_id:502, stock_esperado:1,
+    cantidad_fisica:2, justificacion:'Identidad física del equipo verificada',
+  };
+  assert.equal(vm.puedeConfirmar,true);
+  vm.ejecutar();
+  assert.equal(calls.posts[0].motivo,'Revisión formal de ambos casos');
+  assert.equal(calls.posts[0].resoluciones['2'].justificacion,'Ausencia constatada y stock confirmado');
+  assert.equal(calls.posts[0].resoluciones['3'].justificacion,'Identidad física del equipo verificada');
 });
 
 test('E3 bloquea aprobar un PENDING incompleto, pero deja rechazar',()=>{
