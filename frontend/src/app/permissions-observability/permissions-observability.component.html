@@ -657,7 +657,7 @@
                 <td>#{{ auditLog.id }}</td>
                 <td>
                   <span class="permissions-badge permissions-badge--warning">
-                    {{ auditLog.event_type }}
+                    {{ getGrantAuditEventLabel(auditLog.event_type) }}
                   </span>
                 </td>
                 <td>
@@ -667,14 +667,35 @@
                 <td>{{ auditLog.reason || 'Sin motivo' }}</td>
                 <td>{{ auditLog.created_at || 'N/A' }}</td>
                 <td>
-                  <details>
-                    <summary>Antes y después</summary>
-                    <strong>Antes</strong>
-                    <p>{{ getGrantAuditSafeSummary(auditLog.before_payload) }}</p>
-                    <strong>Después</strong>
-                    <p>{{ getGrantAuditSafeSummary(auditLog.after_payload) }}</p>
-                    <small>Por seguridad, los campos libres y payloads personalizados
-                    no se presentan en esta vista.</small>
+                  <details class="permissions-grant-audit-detail">
+                    <summary>Ver cambios</summary>
+                    <div class="permissions-grant-audit-detail-body">
+                      <p class="permissions-grant-audit-intro"
+                         *ngIf="auditLog.event_type === 'created'">
+                        Se registró una nueva excepción. Antes no existía este registro.
+                      </p>
+                      <div class="permissions-grant-audit-empty"
+                           *ngIf="getGrantAuditChangeRows(auditLog).length === 0">
+                        No hay cambios de campos estructurados para mostrar.
+                      </div>
+                      <dl class="permissions-grant-audit-fields">
+                        <div class="permissions-grant-audit-field"
+                             *ngFor="let change of getGrantAuditChangeRows(auditLog)">
+                          <dt>{{ change.label }}</dt>
+                          <dd>
+                            <ng-container *ngIf="auditLog.event_type !== 'created'">
+                              <span class="permissions-grant-audit-before">{{ change.before }}</span>
+                              <span class="permissions-grant-audit-arrow">→</span>
+                            </ng-container>
+                            <strong>{{ change.after }}</strong>
+                          </dd>
+                        </div>
+                      </dl>
+                      <p class="permissions-grant-audit-note">
+                        Este es un cambio de configuración. No confirma acceso efectivo.
+                        Se omiten los campos libres y personalizados.
+                      </p>
+                    </div>
                   </details>
                 </td>
               </tr>
