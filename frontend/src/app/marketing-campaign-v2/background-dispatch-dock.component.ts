@@ -39,10 +39,10 @@ export class BackgroundDispatchDockComponent implements OnInit {
 
   ngOnInit(): void {
     const account = this.auth.getUser();
-    const role = String(account?.rol || '').trim().toUpperCase();
     this.initialIdentity = String(account?.username || '').trim().toUpperCase();
-    if (!this.initialIdentity ||
-        !['MARKETING', 'ADMINISTRADOR', 'SUPER_ADMIN', 'SUPERADMIN'].includes(role)) return;
+    // The backend GET is the authority for dispatch permissions. Avoid
+    // duplicating role allowlists that can hide an authorized operator's job.
+    if (!this.initialIdentity) return;
     this.refresh();
     interval(10000).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refresh());
     this.activity.changes$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refresh());
