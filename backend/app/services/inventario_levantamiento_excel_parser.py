@@ -176,8 +176,11 @@ def parse_xlsx_v01(raw, sucursal_id, expected, modalidad):
             sheet = book[sheet_name]
             if sheet.max_row > MAX_ROWS + header:
                 raise ArchivoE4Error(f"{sheet_name}: demasiadas filas")
-            for cells in sheet.iter_rows(min_row=header + 1, max_col=max(mapping.values()) + 1):
-                item = {key: _cell(cells[index], diagnostics, sheet_name, cells[0].row, key)
+            for fila_excel, cells in enumerate(
+                sheet.iter_rows(min_row=header + 1, max_col=max(mapping.values()) + 1),
+                start=header + 1,
+            ):
+                item = {key: _cell(cells[index], diagnostics, sheet_name, fila_excel, key)
                         for key, index in mapping.items()}
                 if not any(item.values()):
                     continue
@@ -194,15 +197,15 @@ def parse_xlsx_v01(raw, sucursal_id, expected, modalidad):
                     else:
                         if norm(item["codigo"]) != norm(expected_by_id[inv]["codigo_interno_original"]):
                             issues.append("CODIGO_DIFIERE_DEL_CORTE")
-                        apparatus[inv].append((cells[0].row, answer, issues))
+                        apparatus[inv].append((fila_excel, answer, issues))
                     if response not in ("si", "no", ""):
                         issues.append("RESPUESTA_INVALIDA")
                 elif not item.get("aparato"):
                     issues.append("HALLAZGO_SIN_NOMBRE")
                 for code in issues:
                     diagnostics.append({"severidad": "ERROR", "codigo": code,
-                                        "hoja": sheet_name, "fila": cells[0].row, "inventario_id": inv})
-                rows.append({"hoja": sheet_name, "fila_excel": cells[0].row,
+                                        "hoja": sheet_name, "fila": fila_excel, "inventario_id": inv})
+                rows.append({"hoja": sheet_name, "fila_excel": fila_excel,
                              "inventario_id_declarado": inv, "codigo_declarado": item.get("codigo"),
                              "respuesta": answer, "datos_crudos": item, "diagnosticos": issues})
         pending = []
