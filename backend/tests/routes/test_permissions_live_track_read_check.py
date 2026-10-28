@@ -95,3 +95,39 @@ def test_track_read_missing_jwt_still_401_even_if_grant_would_allow(monkeypatch)
     monkeypatch.setattr(track, "_track_read_user_override", lambda: True)
     response = client.get("/api/track/daily-mart?track_date=2026-10-28")
     assert response.status_code == 401
+
+
+@pytest.mark.parametrize("role,effect,expected", [
+    ("GERENTE", "deny", False),
+    ("RECEPCIONISTA", "allow", True),
+])
+def test_track_matrix_matches_real_global_grant(role, effect, expected):
+    from app.routes import permissions_visual_audit_routes as visual
+
+    user = SimpleNamespace(
+        id=47, username="QA", rol=role,
+        sucursal_id=1, sucursales_ids=[1], department_id=1,
+    )
+    action = SimpleNamespace(
+        id=10, full_key="track.read", name="Consultar Track", is_active=True,
+        module=SimpleNamespace(id=3, key="track", name="Track", base_action_id=10),
+    )
+    grant = SimpleNamespace(
+        id=39, action_id=10, effect=effect, scope_type="global",
+        scope_branch_id=None, scope_branch_ids=[],
+        scope_department_id=None, scope_payload=None,
+        starts_at=None, expires_at=None,
+        reason="QA de lectura Track",
+    )
+    context = {
+        "user": user, "role": role, "sucursal_ids": [1],
+        "warehouse_operator": None, "planning_operator": None,
+        "allow_ticket_delete_all": False, "pm_scoped_read": False,
+    }
+    row = visual.evaluate_pair(
+        user, action, context, {(10, "user", 47): grant},
+    )
+    assert row["legacy_allowed"] is expected
+    assert row["catalog_allowed"] is expected
+    assert row["comparison"] == "coincide"
+    assert row["legacy_source"] == "track._require_track_read_role+grant"
