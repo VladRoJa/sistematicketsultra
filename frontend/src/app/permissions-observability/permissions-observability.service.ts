@@ -363,6 +363,21 @@ export class PermissionsObservabilityService {
       { params },
     );
   }
+  setTrackReadAccess(userId: number, enabled: boolean): Observable<unknown> {
+    return this.http.put(
+      `${this.apiUrl}/users/${userId}/module-access`,
+      {
+        changes: [{
+          module_key: 'track',
+          override: enabled ? 'allow' : 'deny',
+          reason: enabled
+            ? 'Habilitado desde matriz de permisos Track'
+            : 'Deshabilitado desde matriz de permisos Track',
+        }],
+      },
+    );
+  }
+
   getB5Status(): Observable<PermissionB5BetaStatus> {
     return this.http.get<PermissionB5BetaStatus>(`${this.apiUrl}/grants/beta/status`);
   }
