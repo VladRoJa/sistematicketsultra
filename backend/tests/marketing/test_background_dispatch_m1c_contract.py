@@ -111,3 +111,20 @@ def test_graceful_shutdown_quarantines_without_sending_another_child():
     assert 'should_terminate is not None and should_terminate()' in worker
     assert '"WORKER_SHUTDOWN"' in worker
     assert 'should_terminate=lambda: STOP' in runner
+
+def test_compose_background_worker_is_opt_in_and_send_disabled():
+    """Worker is not part of the default or scheduler Compose deployments."""
+    compose = (ROOT.parent / "docker-compose.yml").read_text(encoding="utf-8")
+    assert compose.count("\n  campaign-v2-dispatch-worker:\n") == 1
+    service = compose.split("\n  campaign-v2-dispatch-worker:\n", 1)[1].split(
+        "\n  frontend:\n", 1
+    )[0]
+    assert "profiles:\n      - campaign-dispatch" in service
+    assert "command: python -m app.services.marketing_campaign_v2_background_worker" in service
+    assert 'CAMPAIGN_V2_BACKGROUND_DISPATCH_ENABLED: "false"' in service
+    assert 'CAMPAIGN_V2_PROVIDER_SEND_ENABLED: "false"' in service
+    assert 'CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED: "false"' in service
+    assert "stop_grace_period: 90s" in service
+    assert "ports:" not in service
+    # Even manually enabling a Compose profile must not bypass the app gate.
+    assert "CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY = False" in _src(CONFIG)
