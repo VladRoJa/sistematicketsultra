@@ -16,6 +16,7 @@ on:
       - "frontend/src/app/marketing-campaign-v2/**"
       - "frontend/src/app/layout/**"
       - "frontend/tests/background-dispatch-m2-integration.test.cjs"
+      - "docker-compose.yml"
       - ".github/workflows/campaign-v2-background-dispatch-m3-ci.yml"
   pull_request:
     paths:
@@ -30,6 +31,7 @@ on:
       - "frontend/src/app/marketing-campaign-v2/**"
       - "frontend/src/app/layout/**"
       - "frontend/tests/background-dispatch-m2-integration.test.cjs"
+      - "docker-compose.yml"
       - ".github/workflows/campaign-v2-background-dispatch-m3-ci.yml"
 
 permissions:
@@ -120,6 +122,67 @@ jobs:
           python -m pytest -q --tb=short \
             tests/marketing/test_background_dispatch_m3_postgres.py \
             tests/marketing/test_background_dispatch_gate_a_pg.py
+
+
+  compose-config-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate opt-in Docker Compose worker without starting containers
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap 'rm -f .env.docker' EXIT
+          # Synthetic file lives only on the disposable CI runner.
+          # Deliberately set source flags true to verify service-level OFF overrides.
+          cat > .env.docker <<'ENV'
+          SECRET_KEY=synthetic-compose-only
+          JWT_SECRET_KEY=synthetic-compose-only
+          CAMPAIGN_V2_BACKGROUND_DISPATCH_ENABLED=true
+          CAMPAIGN_V2_PROVIDER_SEND_ENABLED=true
+          CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED=true
+          ENV
+          docker compose config --quiet
+          docker compose --profile scheduler config --quiet
+          docker compose --profile campaign-dispatch config --quiet
+          python - <<'PY'
+          import json
+          import subprocess
+
+          def compose(*args):
+              return subprocess.run(
+                  ("docker", "compose", *args),
+                  check=True, capture_output=True, text=True,
+              ).stdout
+
+          worker_name = "campaign-v2-dispatch-worker"
+          default_services = set(compose("config", "--services").splitlines())
+          scheduler_services = set(
+              compose("--profile", "scheduler", "config", "--services").splitlines()
+          )
+          rendered = json.loads(
+              compose("--profile", "campaign-dispatch", "config", "--format", "json")
+          )
+          worker = rendered["services"][worker_name]
+          assert worker_name not in default_services
+          assert worker_name not in scheduler_services
+          assert worker["profiles"] == ["campaign-dispatch"]
+          assert "db" in worker["depends_on"]
+          assert "ports" not in worker
+          assert worker["restart"] == "unless-stopped"
+          command = worker["command"]
+          assert "app.services.marketing_campaign_v2_background_worker" in (
+              command if isinstance(command, str) else " ".join(command)
+          )
+          for key in (
+              "CAMPAIGN_V2_BACKGROUND_DISPATCH_ENABLED",
+              "CAMPAIGN_V2_PROVIDER_SEND_ENABLED",
+              "CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED",
+          ):
+              assert worker["environment"][key] == "false", key
+          print("CAMPAIGN_V2_COMPOSE_OPT_IN_DISABLED_OK")
+          PY
 
   angular-m3:
     runs-on: ubuntu-latest
