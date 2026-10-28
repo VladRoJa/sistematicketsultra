@@ -1,9 +1,8 @@
-"""Inventario READ-ONLY de endpoints Flask para la matriz existente.
+"""Exportador CI de cobertura de permisos. Reutiliza permission_route_inventory.
 
-Compara las rutas realmente registradas por create_app con el seed de rutas
-high-risk. Un match NO certifica que un checkbox conceda/revoque acceso:
-el guard sigue siendo la fuente de autorización hasta su integración probada.
-No toca BD, grants, permisos ni ejecuta peticiones HTTP.
+Solo inspección: nunca ejecuta handlers, accede a PostgreSQL ni muta grants.
+Un mapeo no certifica autorización HTTP. El catálogo productivo puede
+contener más entradas que el seed inicial high-risk utilizado por CI.
 """
 from __future__ import annotations
 
@@ -18,29 +17,49 @@ from collections import Counter
 from pathlib import Path
 
 from app import create_app
+from app.utils.permission_route_inventory import compare_route_maps, flask_registry
+
+ROOT = Path(__file__).resolve().parents[1]
+SEED = ROOT / "migrations/versions/7b8c9d0e1f2a_seed_permission_route_map_high_risk.py"
 
 
-BACKEND_ROOT = Path(__file__).resolve().parents[1]
-SEED = BACKEND_ROOT / "migrations" / "versions" / (
-    "7b8c9d0e1f2a_seed_permission_route_map_high_risk.py"
-)
-METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
+def initial_catalog():
+    spec = importlib.util.spec_from_file_location("permissions_high_risk_seed", SEED)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"No es posible cargar {SEED}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return [
+        {
+            "method": row["method"], "route": row["route"],
+            "endpoint_function": row["endpoint_function"],
+            "is_active": row["is_active"],
+            "current_guard": row.get("current_guard"),
+            "current_scope": row.get("current_scope"),
+            "review_status": row.get("review_status"),
+            "action_id": None,
+            "module_id": None,
+            "action_full_key": row.get("action_full_key"),
+        }
+        for row in module.ROUTE_MAP_ROWS
+    ]
 
 
-def static_guard_hints(func) -> tuple[bool, str]:
-    """Heurística AST: solo pistas de revisión, NO certificación de permisos."""
+def static_guard_hints(func):
+    """Heurística de fuente para auditoría; no ejecuta ni certifica guards."""
+    original = inspect.unwrap(func)
     try:
-        tree = ast.parse(textwrap.dedent(inspect.getsource(func)))
+        source = textwrap.dedent(inspect.getsource(original))
+        tree = ast.parse(source)
     except (OSError, TypeError, SyntaxError):
-        return False, ""
+        return False, "", ""
     outer = next(
-        (node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))),
+        (item for item in tree.body if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))),
         None,
     )
     if outer is None:
-        return False, ""
-    decorators = [ast.unparse(node) for node in outer.decorator_list]
-    has_jwt = any("jwt_required" in name for name in decorators)
+        return False, "", ""
+    has_jwt = any("jwt_required" in ast.unparse(d) for d in outer.decorator_list)
     hints = set()
     for node in ast.walk(outer):
         if not isinstance(node, ast.Call):
@@ -56,136 +75,80 @@ def static_guard_hints(func) -> tuple[bool, str]:
             "check_", "_check_", "assert_", "_get_current_user_admin",
         )):
             hints.add(name)
-    return has_jwt, ";".join(sorted(hints))
+    source_file = inspect.getsourcefile(original) or ""
+    try:
+        source_file = str(Path(source_file).resolve().relative_to(ROOT.parent))
+    except (ValueError, OSError):
+        source_file = str(source_file)
+    return has_jwt, ";".join(sorted(hints)), source_file
 
 
-def load_initial_high_risk_map() -> list[dict]:
-    """Carga las entradas declarativas del seed sin ejecutar upgrade()."""
-    spec = importlib.util.spec_from_file_location("permissions_high_risk_seed", SEED)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"No se puede leer {SEED}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return list(module.ROUTE_MAP_ROWS)
-
-
-def registered_routes(app) -> list[dict]:
-    rows = []
+def generate_report(output_dir=None):
+    app = create_app()
+    current = flask_registry(app)
+    seed = initial_catalog()
+    comparison = compare_route_maps(current, seed)
+    # Extiende el inventario existente con pistas de fuente sin cambiar
+    # su clasificación ni usar el resultado como permiso efectivo.
+    functions = {}
     for rule in app.url_map.iter_rules():
-        if rule.endpoint == "static" or not rule.rule.startswith("/api/"):
+        if not rule.rule.startswith("/api/"):
             continue
-        view = app.view_functions[rule.endpoint]
-        original = inspect.unwrap(view)
-        source = inspect.getsourcefile(original) or inspect.getsourcefile(view) or ""
-        try:
-            source = str(Path(source).resolve().relative_to(BACKEND_ROOT.parent))
-        except (ValueError, OSError):
-            source = str(source)
-        has_jwt, guard_hints = static_guard_hints(original)
-        for method in sorted(set(rule.methods) & METHODS):
-            rows.append({
-                "method": method,
-                "route": rule.rule,
-                "endpoint_function": original.__name__,
-                "blueprint": rule.endpoint.split(".")[0] if "." in rule.endpoint else "",
-                "source_file": source,
-                "flask_endpoint": rule.endpoint,
-                "jwt_decorator_visible": has_jwt,
-                "guard_call_hints": guard_hints,
-            })
-    return sorted(rows, key=lambda row: (row["route"], row["method"], row["flask_endpoint"]))
-
-
-def classify(rows: list[dict], seed: list[dict]) -> list[dict]:
-    by_route_method = {}
-    by_exact = {}
-    for item in seed:
-        key = (item["method"].upper(), item["route"])
-        by_route_method.setdefault(key, []).append(item)
-        by_exact[(key, item["endpoint_function"])] = item
+        functions[(rule.rule, rule.endpoint.rsplit(".", 1)[-1])] = (
+            app.view_functions[rule.endpoint]
+        )
 
     output = []
-    for row in rows:
-        key = (row["method"], row["route"])
-        matched = by_exact.get((key, row["endpoint_function"]))
-        candidates = by_route_method.get(key, [])
-        if matched is not None:
-            coverage = "seed_exact_match_not_enforcement"
-        elif candidates:
-            # Route exists, but endpoint was renamed or declaration is out of date.
-            coverage = "seed_route_method_function_mismatch"
-        else:
-            coverage = "not_in_initial_high_risk_map"
+    for row in comparison["route_rows"]:
+        func = functions.get((row["route"], row["endpoint"]))
+        jwt, hints, source = static_guard_hints(func) if func else (False, "", "")
         output.append({
-            **row,
-            "coverage": coverage,
-            "catalog_action": matched.get("action_full_key", "") if matched else "",
-            "documented_guard": matched.get("current_guard", "") if matched else "",
-            "review_status": matched.get("review_status", "") if matched else "",
+            "method": row["method"],
+            "route": row["route"],
+            "endpoint": row["endpoint"],
+            "family": row["family"],
+            "source_file": source,
+            "classification": row["classification"],
+            "seed_guard_annotation": ";".join(row["catalog_guard_annotations"]),
+            "jwt_decorator_visible": jwt,
+            "guard_call_hints": hints,
             "enforcement_certified": False,
         })
-    return output
 
-
-def generate_report(output_dir: Path | None = None) -> dict:
-    # El inventario no requiere una conexión a PostgreSQL ni schema migrado.
-    app = create_app()
-    live = registered_routes(app)
-    seed = load_initial_high_risk_map()
-    rows = classify(live, seed)
-    coverage = Counter(row["coverage"] for row in rows)
-    modules = Counter(row["blueprint"] for row in rows)
-    live_exact = {(r["method"], r["route"], r["endpoint_function"]) for r in live}
-    seed_unmatched = [
-        {
-            "method": r["method"], "route": r["route"],
-            "endpoint_function": r["endpoint_function"],
-            "action_full_key": r.get("action_full_key"),
-        }
-        for r in seed
-        if (r["method"], r["route"], r["endpoint_function"]) not in live_exact
-    ]
     report = {
         "mode": "read_only_route_inventory",
-        "runtime_route_method_count": len(rows),
-        "initial_high_risk_seed_entries": len(seed),
-        "initial_seed_rows_not_exact_in_flask": seed_unmatched,
-        "jwt_decorator_visible_count": sum(row["jwt_decorator_visible"] for row in rows),
-        "guard_call_hints_count": sum(bool(row["guard_call_hints"]) for row in rows),
-        "classification": dict(sorted(coverage.items())),
-        "blueprints": dict(sorted(modules.items())),
-        "warning": (
-            "Los mappings son parciales; rutas no mapeadas requieren análisis "
-            "de guard. Mapeado != permiso HTTP certificado. "
-            "No habilitar checks editables a partir de este inventario."
-        ),
+        "basis": "Flask url_map vs initial high-risk seed (not live DB catalog)",
+        "flask_route_methods": comparison["flask_method_handlers"],
+        "seed_total": comparison["catalog_rows_all"],
+        "seed_active": comparison["catalog_rows_active"],
+        "classification": comparison["by_classification"],
+        "methods": comparison["by_method"],
+        "uncataloged_mutations": len(comparison["unreviewed_mutations"]),
+        "jwt_decorator_visible": sum(bool(x["jwt_decorator_visible"]) for x in output),
+        "guard_call_hints": sum(bool(x["guard_call_hints"]) for x in output),
+        "seed_only": comparison["catalog_only_method_routes"],
+        "families": comparison["by_family"],
+        "caution": "Mapeado NO significa guard evaluado; el escáner no activa permisos.",
     }
     if output_dir is not None:
         output_dir.mkdir(parents=True, exist_ok=True)
         with (output_dir / "permissions_endpoint_inventory.csv").open(
             "w", encoding="utf-8", newline=""
         ) as handle:
-            fields = [
-                "method", "route", "flask_endpoint", "endpoint_function",
-                "blueprint", "source_file", "jwt_decorator_visible",
-                "guard_call_hints", "coverage", "catalog_action",
-                "documented_guard", "review_status", "enforcement_certified",
-            ]
-            writer = csv.DictWriter(handle, fieldnames=fields)
+            writer = csv.DictWriter(handle, fieldnames=list(output[0]) if output else [])
             writer.writeheader()
-            writer.writerows(rows)
+            writer.writerows(output)
         (output_dir / "permissions_endpoint_summary.json").write_text(
-            json.dumps(report, indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
+            json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
     return report
 
 
-def main() -> None:
+def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path)
     args = parser.parse_args()
-    print(json.dumps(generate_report(args.output_dir), indent=2, ensure_ascii=False))
+    print(json.dumps(generate_report(args.output_dir), ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
