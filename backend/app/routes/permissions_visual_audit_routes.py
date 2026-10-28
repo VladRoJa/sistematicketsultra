@@ -227,7 +227,7 @@ def _batch_context(users):
 
 
 def _bulk_grants(users, actions):
-    """Solo proyección de grants; nunca se usan para enforcement."""
+    """Proyecta grants; track.read comparte selección con su guard operativo."""
     ids, action_ids = [u.id for u in users], [a.id for a in actions]
     if not ids or not action_ids:
         return {}
@@ -244,12 +244,25 @@ def _bulk_grants(users, actions):
         ),
     ).order_by(PermissionGrantORM.updated_at.desc(), PermissionGrantORM.id.desc())
     latest = {}
+    track_ids = {action.id for action in actions if action.full_key == "track.read"}
     for grant in query.all():
         principal = (
             ("user", grant.principal_user_id) if grant.principal_type == "user"
             else ("role", grant.principal_role_key)
         )
-        latest.setdefault((grant.action_id, *principal), grant)
+        key = (grant.action_id, *principal)
+        if grant.action_id in track_ids:
+            # El guard Track solo interpreta globales indefinidos; deny gana
+            # dentro del mismo principal aunque haya duplicados antiguos.
+            if not catalog._is_simple_global_module_grant(grant):
+                continue
+            previous = latest.get(key)
+            if previous is None or (
+                previous.effect != "deny" and grant.effect == "deny"
+            ):
+                latest[key] = grant
+        else:
+            latest.setdefault(key, grant)
     return latest
 
 
@@ -383,6 +396,16 @@ def evaluate_pair(user, action, context, grants=None, branch_id=None, document=N
     legacy, legacy_source, legacy_reason = _legacy_guard_result(
         context["user"], action.full_key, context, document, branch_id=branch_id,
     )
+    if action.full_key == "track.read":
+        # Track aplica estos grants globales al guard HTTP real. La matriz
+        # muestra su misma decisión efectiva y no solo el rol base.
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            legacy = candidate.effect == "allow"
+            legacy_source = "track._require_track_read_role+grant"
+            legacy_reason = "grant_global_track_aplicado_al_guard_real"
+            catalog_allowed = legacy
+            catalog_source = "track_grant_operativo"
+            catalog_reason = "check_track_refleja_autorizacion_real"
     if action.full_key == "internal_documents.view":
         # Ni la proyección genérica True ni un grant de entrada equivalen
         # a permiso sobre un documento concreto. Sin objeto también es
