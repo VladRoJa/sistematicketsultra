@@ -196,3 +196,96 @@ def test_b5_code_references_existing_doc_guard_only_in_separate_module():
     assert "permission_grants" not in getsource(access.can_view_internal_document)
     assert "PermissionGrantORM" not in getsource(access.can_manage_internal_documents)
     assert beta.B5_ACTION_KEY == "internal_documents.view"
+
+
+class _GrantRows:
+    def __init__(self, rows):
+        self.rows = rows
+    def filter(self, *_args):
+        return self
+    def all(self):
+        return self.rows
+
+
+@pytest.mark.parametrize("existing,expect_conflict", [
+    ({"scope_type": "branch", "scope_branch_id": 1,
+      "scope_branch_ids": [], "effect": "allow"}, True),
+    ({"scope_type": "branch_list", "scope_branch_id": None,
+      "scope_branch_ids": [1, 4], "effect": "deny"}, True),
+    ({"scope_type": "branch", "scope_branch_id": 15,
+      "scope_branch_ids": [], "effect": "deny"}, False),
+    ({"scope_type": "global", "scope_branch_id": None,
+      "scope_branch_ids": [], "effect": "allow"}, True),
+])
+def test_b5_scope_collision_and_nonoverlap(monkeypatch, existing, expect_conflict):
+    grant = SimpleNamespace(
+        id=12, principal_type="user",
+        starts_at=None, expires_at=None, **existing,
+    )
+    monkeypatch.setattr(beta.PermissionGrantORM, "query", _GrantRows([grant]), raising=False)
+    data = beta._normalize_input(payload(starts_at=None, expires_at=None))
+    result = beta._check_conflicts(
+        data, SimpleNamespace(id=3), SimpleNamespace(id=89, rol="GERENTE"),
+    )
+    assert bool(result) is expect_conflict
+
+
+def test_b5_role_grant_for_same_action_blocks(monkeypatch):
+    grant = SimpleNamespace(
+        id=12, principal_type="role", scope_type="branch",
+        scope_branch_id=1, scope_branch_ids=[], starts_at=None, expires_at=None,
+    )
+    monkeypatch.setattr(beta.PermissionGrantORM, "query", _GrantRows([grant]), raising=False)
+    data = beta._normalize_input(payload(starts_at=None, expires_at=None))
+    assert "rol" in beta._check_conflicts(
+        data, SimpleNamespace(id=3), SimpleNamespace(id=89, rol="GERENTE")
+    )
+
+
+def test_b5_preview_keeps_catalog_unknown(monkeypatch):
+    c, headers = client()
+    monkeypatch.setattr(beta, "_current_admin_user_or_error",
+                        lambda: (SimpleNamespace(id=47), None))
+    monkeypatch.setattr(beta, "_evaluate",
+                        lambda data, **kwargs: (
+                            (SimpleNamespace(id=89), SimpleNamespace(id=9)), None
+                        ))
+    response = c.post("/api/permissions/catalog/grants/beta/preview",
+                      headers=headers, json=payload())
+    assert response.status_code == 200
+    assert response.json["catalog_allowed"] is None
+    assert response.json["object_access_certified"] is False
+    assert response.json["http_authorization"] == "not_evaluated"
+
+
+def test_b5_v1_nube_writer_is_blocked_when_gate_enabled(monkeypatch):
+    from app.routes import permissions_catalog_routes as catalog
+    app = Flask(__name__)
+    app.config.update(
+        TESTING=True, JWT_SECRET_KEY="b5-fixture-jwt",
+        PERMISSIONS_B5_EDITOR_ENABLED=True,
+    )
+    JWTManager(app)
+    app.register_blueprint(
+        catalog.permissions_catalog_bp, url_prefix="/api/permissions/catalog",
+    )
+    with app.app_context():
+        token = create_access_token(identity="47")
+    monkeypatch.setattr(catalog, "_current_admin_user_or_error",
+                        lambda: (SimpleNamespace(id=47), None))
+    class TargetUsers:
+        @staticmethod
+        def get(_id):
+            return SimpleNamespace(id=99)
+    monkeypatch.setattr(catalog, "UserORM",
+                        SimpleNamespace(query=TargetUsers()))
+    response = app.test_client().put(
+        "/api/permissions/catalog/users/99/module-access",
+        headers={"Authorization": "Bearer " + token},
+        json={"changes": [{
+            "module_key": "internal_documents", "override": "allow",
+            "reason": "Intento global bloqueado por B5",
+        }]},
+    )
+    assert response.status_code == 409
+    assert response.json["module_key"] == "internal_documents"
