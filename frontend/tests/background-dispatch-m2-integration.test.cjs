@@ -43,6 +43,14 @@ test('el indicador global solo consulta, nunca envía ni detiene', () => {
   assert.doesNotMatch(dockHtml, /contraseña|teléfono|destinatarios|operator_password/);
 });
 
+test('el dock consulta permiso backend sin lista estática de roles', () => {
+  assert.doesNotMatch(dock, /account\?\.rol|includes\(role\)/);
+  assert.match(dock, /if \(!this\.initialIdentity\) return;/);
+  assert.match(dock, /this\.api\.listMyBackgroundJobs\(\)/);
+  assert.match(dock, /\[401, 403, 404\]/);
+  assert.match(dock, /this\.pollingForbidden = true/);
+});
+
 test('estado durable desde backend, sin secretos en navegador', () => {
   assert.doesNotMatch(dock, /localStorage|sessionStorage|setItem/);
   assert.match(dock, /currentIdentity\(\) !== this\.initialIdentity/);
