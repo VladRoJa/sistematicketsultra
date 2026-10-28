@@ -98,6 +98,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .revision-resolucion p { margin: 0 0 12px; color: #647e97; font-size: 12px; }
 .revision-resolucion__numeros { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
 .revision-motivo { margin-top: 15px; }
+.revision-origen { padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid #e2ecf5; }
+.revision-origen strong { font-size: 11px; color: #4b6b87; }
+.revision-origen p { margin: 3px 0 9px; font-size: 12px; color: #304f6b; white-space: pre-wrap; overflow-wrap: anywhere; }
+.revision-motivo-ayuda { margin: 4px 0 0; color: #607b95; font-size: 11px; }
 .revision-confirmar { display: flex !important; flex-direction: row !important; align-items: start; gap: 10px !important; margin-top: 14px; font-weight: 700; }
 .revision-confirmar input { width: 18px; height: 18px; flex: 0 0 auto; accent-color: #2e75b1; }
 @media (max-width: 680px) {
