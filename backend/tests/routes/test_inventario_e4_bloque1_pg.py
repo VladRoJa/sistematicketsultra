@@ -1,5 +1,6 @@
 """E4 Bloque 1: compatibilidad v0.1/v0.2, evidencia histórica y no mutación V1."""
 import csv
+from hashlib import sha256
 from io import BytesIO, StringIO
 from uuid import uuid4
 import importlib.util
@@ -311,3 +312,106 @@ def test_inicial_restringido_y_evidencia_persistente(api):
     assert result.get_json()["importacion"]["resultado"] == "INCOMPLETE"
     assert result.get_json()["importacion"]["resumen"]["requiere_revision_inicial"]
     assert _snapshot(app)["mov"] == 0
+
+
+def test_api_real_xlsx_http_aislado_con_historico_sin_mutaciones(api):
+    """Gate opt-in: bytes EXACTOS del archivo distribuido, API real y PostgreSQL efímero.
+
+    Requiere E4_REAL_XLSX_PATH y E4_REAL_BASELINE_CSV_PATH. Los originales
+    permanecen fuera del repo, no se envían a CI, y solo se leen.
+    """
+    path_xlsx = os.getenv("E4_REAL_XLSX_PATH")
+    path_csv = os.getenv("E4_REAL_BASELINE_CSV_PATH")
+    if not path_xlsx and not path_csv:
+        pytest.skip("Gate real no configurado: requiere rutas locales XLSX y CSV")
+    assert path_xlsx and path_csv, "Se requieren ambos archivos históricos locales"
+    xlsx = Path(path_xlsx).read_bytes()
+    baseline = Path(path_csv).read_bytes()
+    expected_sha = os.getenv(
+        "E4_REAL_XLSX_SHA256",
+        "c3f86c1f2a1aa6ede646451c81d5b35306757fec417dad7e45d89e17c4896dd3",
+    )
+    assert sha256(xlsx).hexdigest() == expected_sha, (
+        "El XLSX no coincide con el original de Pabellón Rosarito 2026-10-28"
+    )
+    references, excluded = parse_historical_csv(baseline, 7)
+    assert len(references) == 150, "El CSV no coincide con el corte distribuido de esta sucursal"
+    assert len({r["inventario_id_original"] for r in references}) == len(references)
+
+    client, tokens, app = api
+    # La BD efímera conserva los 3 aparatos de ejemplo de CI, pero agregamos
+    # el universo REAL únicamente como datos temporales de QA: no hay servidor productivo.
+    with app.app_context():
+        with db.engine.begin() as con:
+            for ref in references:
+                inv_id = ref["inventario_id_original"]
+                codigo = ref["codigo_interno_original"]
+                stock = ref["stock_original"]
+                assert con.execute(
+                    sa.text("SELECT 1 FROM inventario_general WHERE id=:id"), {"id": inv_id}
+                ).scalar() is None, f"Colisión con aparato sintético: {inv_id}"
+                con.execute(sa.text(
+                    "INSERT INTO inventario_general (id,codigo_interno,tipo,nombre) "
+                    "VALUES (:id,:codigo,'APARATOS','Referencia histórica E4 QA')"
+                ), {"id": inv_id, "codigo": codigo})
+                con.execute(sa.text(
+                    "INSERT INTO inventario_sucursal (inventario_id,sucursal_id,stock) "
+                    "VALUES (:id,7,:stock)"
+                ), {"id": inv_id, "stock": stock})
+        db.session.remove()
+    before = _snapshot(app)
+    root = "/api/inventario/levantamientos"
+    created = client.post(root, headers=tokens[1], data={
+        "sucursal_id": "7", "origen_corte": "CSV_HISTORICO",
+        "cycle_key": str(uuid4()), "fecha_corte_local": "2026-10-28",
+        "responsable": "QA E4 binario privado",
+        "baseline_csv": (BytesIO(baseline), "inventarios_corte_distribucion.csv"),
+    })
+    assert created.status_code == 201, created.get_json()
+    lev = created.get_json()["levantamiento"]
+    assert lev["baseline_resumen"]["referencias_esperadas"] == 150
+    assert lev["origen_corte"] == "CSV_HISTORICO"
+    assert lev["estado"] == "IN_PROGRESS"
+    endpoint = f"{root}/{lev['id']}/importaciones"
+    first = client.post(endpoint, headers=tokens[1], data={
+        "idempotency_key": str(uuid4()),
+        "file": (BytesIO(xlsx), Path(path_xlsx).name),
+    })
+    assert first.status_code == 201, first.get_json()
+    imp = first.get_json()["importacion"]
+    summary = imp["resumen"]
+    assert imp["resultado"] == "INCOMPLETE", imp
+    assert imp["file_sha256"] == expected_sha
+    assert summary["referencias_esperadas"] == 150
+    assert (summary["si"], summary["no"], summary["sin_revisar"]) == (0, 0, 150)
+    assert summary["hallazgos"] == 0
+    assert summary["errores"] == 0, imp["diagnosticos"]
+    assert summary["avisos"] == 0, imp["diagnosticos"]
+    assert len(summary["pendientes"]) == 150
+    assert {p["inventario_id"] for p in summary["pendientes"]} == {
+        r["inventario_id_original"] for r in references
+    }
+    detail = client.get(
+        f"{endpoint}/{imp['id']}", headers=tokens[1]
+    )
+    assert detail.status_code == 200, detail.get_json()
+    filas = detail.get_json()["filas"]
+    assert len(filas) == 150
+    assert all(r["hoja"] == "APARATOS" and r["respuesta"] == "SIN_REVISAR" for r in filas)
+
+    downloaded = client.get(
+        f"{endpoint}/{imp['id']}/archivo", headers=tokens[1]
+    )
+    assert downloaded.status_code == 200
+    assert downloaded.data == xlsx, "El original privado no coincide byte a byte"
+    replay = client.post(endpoint, headers=tokens[1], data={
+        "idempotency_key": str(uuid4()),
+        "file": (BytesIO(xlsx), "segunda_entrega_igual.xlsx"),
+    })
+    assert replay.status_code == 200
+    assert replay.get_json()["replayed"] is True
+    assert replay.get_json()["importacion"]["id"] == imp["id"]
+    listed = client.get(f"{root}/{lev['id']}", headers=tokens[1])
+    assert listed.status_code == 200
+    assert len(listed.get_json()["versiones"]) == 1
+    assert _snapshot(app) == before, "La evidencia NO debe cambiar inventario V1/E2"
