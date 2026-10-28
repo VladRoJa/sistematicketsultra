@@ -618,22 +618,93 @@
   font-size: 13px;
 }
 
-.permissions-grant-audit-panel pre {
-  max-width: 32rem;
-  max-height: 14rem;
-  overflow: auto;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  border-radius: 8px;
-  padding: 8px;
+.permissions-grant-audit-detail {
+  min-width: 250px;
+  max-width: 470px;
+}
+
+.permissions-grant-audit-detail summary {
+  cursor: pointer;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.permissions-grant-audit-detail-body {
+  margin-top: 9px;
+  padding: 11px;
+  border: 1px solid #dbe2ea;
+  border-radius: 10px;
   background: #f8fafc;
-  border: 1px solid #e2e8f0;
+}
+
+.permissions-grant-audit-intro {
+  margin: 0 0 10px;
+  color: #475569;
   font-size: 12px;
 }
 
-.permissions-grant-audit-panel details summary {
-  cursor: pointer;
-  color: #1d4ed8;
+.permissions-grant-audit-fields {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.permissions-grant-audit-field {
+  display: grid;
+  grid-template-columns: minmax(112px, 38%) minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.permissions-grant-audit-field:last-child {
+  border-bottom: none;
+}
+
+.permissions-grant-audit-field dt {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.permissions-grant-audit-field dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.permissions-grant-audit-field dd strong {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.permissions-grant-audit-before {
+  color: #64748b;
+  text-decoration: line-through;
+}
+
+.permissions-grant-audit-arrow {
+  color: #64748b;
+}
+
+.permissions-grant-audit-note,
+.permissions-grant-audit-empty {
+  margin: 9px 0 0;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+@media (max-width: 700px) {
+  .permissions-grant-audit-field {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
 }
 
 .permissions-grant-pagination button {
