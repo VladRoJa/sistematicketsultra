@@ -222,11 +222,8 @@ def test_b5_scope_collision_and_nonoverlap(monkeypatch, existing, expect_conflic
         id=12, principal_type="user",
         starts_at=None, expires_at=None, **existing,
     )
-    monkeypatch.setattr(beta.PermissionGrantORM, "query", _GrantRows([grant]), raising=False)
     data = beta._normalize_input(payload(starts_at=None, expires_at=None))
-    result = beta._check_conflicts(
-        data, SimpleNamespace(id=3), SimpleNamespace(id=89, rol="GERENTE"),
-    )
+    result = beta._conflict_with_rows(data, [grant])
     assert bool(result) is expect_conflict
 
 
@@ -235,11 +232,8 @@ def test_b5_role_grant_for_same_action_blocks(monkeypatch):
         id=12, principal_type="role", scope_type="branch",
         scope_branch_id=1, scope_branch_ids=[], starts_at=None, expires_at=None,
     )
-    monkeypatch.setattr(beta.PermissionGrantORM, "query", _GrantRows([grant]), raising=False)
     data = beta._normalize_input(payload(starts_at=None, expires_at=None))
-    assert "rol" in beta._check_conflicts(
-        data, SimpleNamespace(id=3), SimpleNamespace(id=89, rol="GERENTE")
-    )
+    assert "rol" in beta._conflict_with_rows(data, [grant])
 
 
 def test_b5_preview_keeps_catalog_unknown(monkeypatch):
