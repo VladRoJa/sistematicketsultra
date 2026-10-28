@@ -189,3 +189,38 @@ def test_track_matrix_does_not_claim_http_grant_when_flag_off():
     assert row["catalog_allowed"] is False
     assert row["comparison"] == "diferencia"
     assert row["catalog_source"] == "grant_diagnostico_no_enforcement"
+
+
+def test_track_module_writer_rejects_when_flag_off(monkeypatch):
+    from app.routes import permissions_catalog_routes as catalog
+
+    app = Flask(__name__)
+    app.config.update(
+        TESTING=True, JWT_SECRET_KEY="qa-track-global-writer",
+        PERMISSIONS_TRACK_READ_GRANTS_ENABLED=False,
+    )
+    JWTManager(app)
+    app.register_blueprint(catalog.permissions_catalog_bp,
+                           url_prefix="/api/permissions/catalog")
+    with app.app_context():
+        token = create_access_token(identity="47")
+    monkeypatch.setattr(
+        catalog, "_current_admin_user_or_error",
+        lambda: (SimpleNamespace(id=47), None),
+    )
+    class TargetQuery:
+        def get(self, user_id):
+            return SimpleNamespace(id=user_id)
+    monkeypatch.setattr(
+        catalog, "UserORM", SimpleNamespace(query=TargetQuery()),
+    )
+    result = app.test_client().put(
+        "/api/permissions/catalog/users/99/module-access",
+        headers={"Authorization": "Bearer " + token},
+        json={"changes": [
+            {"module_key": "track", "override": "allow",
+             "reason": "QA guard no escritor sin activar"},
+        ]},
+    )
+    assert result.status_code == 409
+    assert result.json["module_key"] == "track"
