@@ -194,6 +194,39 @@ export interface PermissionGrantAuditFilters {
   offset?: number;
 }
 
+export interface PermissionB5BetaStatus {
+  mode: string;
+  enabled: boolean;
+  action_full_key: string;
+  allowed_scopes: string[];
+  grants_enforced: boolean;
+  object_access_certified: boolean;
+}
+
+export interface PermissionB5BetaPayload {
+  principal_user_id: number;
+  action_full_key: 'internal_documents.view';
+  effect: 'allow' | 'deny';
+  scope_type: 'branch' | 'branch_list';
+  scope_branch_id: number | null;
+  scope_branch_ids: number[];
+  starts_at: string | null;
+  expires_at: string | null;
+  reason: string;
+  grant_id?: number;
+  expected_updated_at?: string;
+}
+
+export interface PermissionB5BetaPreview {
+  status: string;
+  mode: string;
+  catalog_allowed: null;
+  object_access_certified: false;
+  http_authorization: string;
+  branches: number[];
+  note: string;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -266,7 +299,7 @@ export class PermissionsObservabilityService {
       `${this.apiUrl}/users/${userId}/effective`,
       { params },
     );
-  }
+  }
 
   getGrants(filters?: PermissionGrantFilters): Observable<PermissionGrantsResponse> {
     let params = new HttpParams()
@@ -330,6 +363,35 @@ export class PermissionsObservabilityService {
       { params },
     );
   }
+  getB5Status(): Observable<PermissionB5BetaStatus> {
+    return this.http.get<PermissionB5BetaStatus>(`${this.apiUrl}/grants/beta/status`);
+  }
+
+  previewB5Grant(payload: PermissionB5BetaPayload): Observable<PermissionB5BetaPreview> {
+    return this.http.post<PermissionB5BetaPreview>(
+      `${this.apiUrl}/grants/beta/preview`, payload,
+    );
+  }
+
+  createB5Grant(payload: PermissionB5BetaPayload): Observable<{ status: string; grant: PermissionGrant }> {
+    return this.http.post<{ status: string; grant: PermissionGrant }>(
+      `${this.apiUrl}/grants/beta`, payload,
+    );
+  }
+
+  updateB5Grant(grantId: number, payload: PermissionB5BetaPayload): Observable<{ status: string; grant: PermissionGrant }> {
+    return this.http.patch<{ status: string; grant: PermissionGrant }>(
+      `${this.apiUrl}/grants/beta/${grantId}`, payload,
+    );
+  }
+
+  disableB5Grant(grantId: number, reason: string, expected_updated_at: string): Observable<{ status: string; grant_id: number }> {
+    return this.http.post<{ status: string; grant_id: number }>(
+      `${this.apiUrl}/grants/beta/${grantId}/disable`,
+      { reason, expected_updated_at },
+    );
+  }
+
 }
 
 
