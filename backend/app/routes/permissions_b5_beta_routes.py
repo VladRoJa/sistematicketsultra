@@ -189,7 +189,11 @@ def _check_branches(user, wanted):
 
 def _check_conflicts(data, action, user):
     rows = PermissionGrantORM.query.filter(
-        PermissionGrantORM.action_id == action.id,
+        or_(
+            PermissionGrantORM.action_id == action.id,
+            (PermissionGrantORM.action_id.is_(None)) &
+            (PermissionGrantORM.module_id == action.module_id),
+        ),
         PermissionGrantORM.is_active.is_(True),
         PermissionGrantORM.deleted_at.is_(None),
         or_(
@@ -208,6 +212,8 @@ def _conflict_with_rows(data, rows):
     for existing in rows:
         if existing.id == data["grant_id"]:
             continue
+        if getattr(existing, "action_id", 1) is None:
+            return "Existe un grant por módulo que requiere revisión independiente."
         if existing.principal_type != "user":
             return "Existe un grant por rol que requiere revisión independiente."
         previous_branches = _record_branches(existing)
