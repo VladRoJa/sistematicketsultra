@@ -12,9 +12,10 @@ from flask_jwt_extended import JWTManager, create_access_token
 from app.routes import track_routes as track
 
 
-def _client():
+def _client(*, enabled=True):
     app = Flask(__name__)
-    app.config.update(TESTING=True, JWT_SECRET_KEY="qa-track-action-checkbox")
+    app.config.update(TESTING=True, JWT_SECRET_KEY="qa-track-action-checkbox",
+                      PERMISSIONS_TRACK_READ_GRANTS_ENABLED=enabled)
     JWTManager(app)
     app.register_blueprint(track.track_bp, url_prefix="/api/track")
     with app.app_context():
@@ -124,10 +125,67 @@ def test_track_matrix_matches_real_global_grant(role, effect, expected):
         "warehouse_operator": None, "planning_operator": None,
         "allow_ticket_delete_all": False, "pm_scoped_read": False,
     }
-    row = visual.evaluate_pair(
-        user, action, context, {(10, "user", 47): grant},
-    )
+    # La matriz no califica un grant como operativo con el flag apagado.
+    app = Flask(__name__)
+    app.config["PERMISSIONS_TRACK_READ_GRANTS_ENABLED"] = True
+    with app.app_context():
+        row = visual.evaluate_pair(
+            user, action, context, {(10, "user", 47): grant},
+        )
     assert row["legacy_allowed"] is expected
     assert row["catalog_allowed"] is expected
     assert row["comparison"] == "coincide"
     assert row["legacy_source"] == "track._require_track_read_role+grant"
+
+
+def test_track_read_gate_off_preserves_legacy_no_extra_db(monkeypatch):
+    client, headers = _client(enabled=False)
+    monkeypatch.setattr(track, "_get_current_role", lambda: "GERENTE")
+    monkeypatch.setattr(
+        track.UserORM, "get_by_id",
+        lambda _id: pytest.fail("No debe consultar Usuario/ORM si flag OFF"),
+    )
+    with patch.object(track, "resolve_effective_track_daily_version", return_value=None):
+        response = client.get(
+            "/api/track/daily-mart?track_date=2026-10-28",
+            headers=headers,
+        )
+    assert response.status_code == 200
+    assert response.json["status"] == "ok"
+
+
+def test_track_read_gate_default_is_off_without_setting():
+    app = Flask(__name__)
+    with app.app_context():
+        assert track.track_read_grants_enabled() is False
+
+
+def test_track_matrix_does_not_claim_http_grant_when_flag_off():
+    from app.routes import permissions_visual_audit_routes as visual
+    app = Flask(__name__)
+    app.config["PERMISSIONS_TRACK_READ_GRANTS_ENABLED"] = False
+    user = SimpleNamespace(
+        id=47, username="QA", rol="GERENTE",
+        sucursal_id=1, sucursales_ids=[1], department_id=1,
+    )
+    action = SimpleNamespace(
+        id=10, full_key="track.read", name="Consultar Track", is_active=True,
+        module=SimpleNamespace(id=3, key="track", name="Track", base_action_id=10),
+    )
+    grant = SimpleNamespace(
+        id=20, action_id=10, effect="deny", reason="configuracion anterior",
+        scope_type="global", scope_branch_id=None, scope_branch_ids=[],
+        scope_department_id=None, scope_payload=None,
+        starts_at=None, expires_at=None,
+    )
+    context = {
+        "user": user, "role": "GERENTE", "sucursal_ids": [1],
+        "warehouse_operator": None, "planning_operator": None,
+        "allow_ticket_delete_all": False, "pm_scoped_read": False,
+    }
+    with app.app_context():
+        row = visual.evaluate_pair(user, action, context, {(10, "user", 47): grant})
+    assert row["legacy_allowed"] is True
+    assert row["catalog_allowed"] is False
+    assert row["comparison"] == "diferencia"
+    assert row["catalog_source"] == "grant_diagnostico_no_enforcement"
