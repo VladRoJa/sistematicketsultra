@@ -414,7 +414,13 @@
         </button>
         <span>Editor B5: solo diagnóstico, escrituras deshabilitadas por defecto.</span>
       </div>
+      <div class="permissions-export-bar" *ngIf="showB5Editor">
+        <button type="button" class="permissions-export-button" (click)="closeGrantB5()">
+          Cerrar editor B5
+        </button>
+      </div>
       <app-permission-b5-beta-editor
+        *ngIf="showB5Editor"
         [grant]="selectedGrantForB5"
         (grantsChanged)="onB5GrantChanged()">
       </app-permission-b5-beta-editor>
