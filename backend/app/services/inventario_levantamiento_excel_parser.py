@@ -155,6 +155,15 @@ def parse_xlsx_v01(raw, sucursal_id, expected, modalidad):
         if not {"CONTROL", "APARATOS", "HALLAZGOS"}.issubset(book.sheetnames):
             raise ArchivoE4Error("Faltan hojas CONTROL, APARATOS o HALLAZGOS")
         ctl = _control(book["CONTROL"], diagnostics)
+        # v0.1: plantilla original; v0.2: archivo efectivamente distribuido.
+        # No aceptar por accidente versiones futuras con semánticas desconocidas.
+        declared_version = norm(ctl.get("version_formato"))
+        if not re.fullmatch(r"v0\.(?:1|2)(?:\s+.*)?", declared_version):
+            diagnostics.append({
+                "severidad": "ERROR", "codigo": "VERSION_FORMATO_NO_RECONOCIDA",
+                "hoja": "CONTROL", "declarado": ctl.get("version_formato"),
+                "versiones_admitidas": ["v0.1", "v0.2"],
+            })
         declared = positive_int(ctl.get("sucursal_id"))
         if declared is None or declared != sucursal_id:
             diagnostics.append({"severidad": "ERROR", "codigo": "SUCURSAL_NO_COINCIDE",
