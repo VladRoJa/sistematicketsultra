@@ -8,10 +8,12 @@ No toca BD, grants, permisos ni ejecuta peticiones HTTP.
 from __future__ import annotations
 
 import argparse
+import ast
 import csv
 import importlib.util
 import inspect
 import json
+import textwrap
 from collections import Counter
 from pathlib import Path
 
@@ -23,6 +25,38 @@ SEED = BACKEND_ROOT / "migrations" / "versions" / (
     "7b8c9d0e1f2a_seed_permission_route_map_high_risk.py"
 )
 METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
+
+
+def static_guard_hints(func) -> tuple[bool, str]:
+    """Heurística AST: solo pistas de revisión, NO certificación de permisos."""
+    try:
+        tree = ast.parse(textwrap.dedent(inspect.getsource(func)))
+    except (OSError, TypeError, SyntaxError):
+        return False, ""
+    outer = next(
+        (node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))),
+        None,
+    )
+    if outer is None:
+        return False, ""
+    decorators = [ast.unparse(node) for node in outer.decorator_list]
+    has_jwt = any("jwt_required" in name for name in decorators)
+    hints = set()
+    for node in ast.walk(outer):
+        if not isinstance(node, ast.Call):
+            continue
+        callee = node.func
+        name = (
+            callee.id if isinstance(callee, ast.Name)
+            else callee.attr if isinstance(callee, ast.Attribute)
+            else ""
+        )
+        if name.startswith((
+            "require_", "_require_", "_validar_", "can_", "has_",
+            "check_", "_check_", "assert_", "_get_current_user_admin",
+        )):
+            hints.add(name)
+    return has_jwt, ";".join(sorted(hints))
 
 
 def load_initial_high_risk_map() -> list[dict]:
@@ -47,6 +81,7 @@ def registered_routes(app) -> list[dict]:
             source = str(Path(source).resolve().relative_to(BACKEND_ROOT.parent))
         except (ValueError, OSError):
             source = str(source)
+        has_jwt, guard_hints = static_guard_hints(original)
         for method in sorted(set(rule.methods) & METHODS):
             rows.append({
                 "method": method,
@@ -55,6 +90,8 @@ def registered_routes(app) -> list[dict]:
                 "blueprint": rule.endpoint.split(".")[0] if "." in rule.endpoint else "",
                 "source_file": source,
                 "flask_endpoint": rule.endpoint,
+                "jwt_decorator_visible": has_jwt,
+                "guard_call_hints": guard_hints,
             })
     return sorted(rows, key=lambda row: (row["route"], row["method"], row["flask_endpoint"]))
 
@@ -98,10 +135,23 @@ def generate_report(output_dir: Path | None = None) -> dict:
     rows = classify(live, seed)
     coverage = Counter(row["coverage"] for row in rows)
     modules = Counter(row["blueprint"] for row in rows)
+    live_exact = {(r["method"], r["route"], r["endpoint_function"]) for r in live}
+    seed_unmatched = [
+        {
+            "method": r["method"], "route": r["route"],
+            "endpoint_function": r["endpoint_function"],
+            "action_full_key": r.get("action_full_key"),
+        }
+        for r in seed
+        if (r["method"], r["route"], r["endpoint_function"]) not in live_exact
+    ]
     report = {
         "mode": "read_only_route_inventory",
         "runtime_route_method_count": len(rows),
         "initial_high_risk_seed_entries": len(seed),
+        "initial_seed_rows_not_exact_in_flask": seed_unmatched,
+        "jwt_decorator_visible_count": sum(row["jwt_decorator_visible"] for row in rows),
+        "guard_call_hints_count": sum(bool(row["guard_call_hints"]) for row in rows),
         "classification": dict(sorted(coverage.items())),
         "blueprints": dict(sorted(modules.items())),
         "warning": (
@@ -117,7 +167,8 @@ def generate_report(output_dir: Path | None = None) -> dict:
         ) as handle:
             fields = [
                 "method", "route", "flask_endpoint", "endpoint_function",
-                "blueprint", "source_file", "coverage", "catalog_action",
+                "blueprint", "source_file", "jwt_decorator_visible",
+                "guard_call_hints", "coverage", "catalog_action",
                 "documented_guard", "review_status", "enforcement_certified",
             ]
             writer = csv.DictWriter(handle, fieldnames=fields)
