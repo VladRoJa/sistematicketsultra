@@ -24,6 +24,13 @@ import sys
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format="%(levelname)s:%(message)s")
 from app.services import marketing_campaign_v2_background_worker as worker
 
+# The Flask import may reconfigure the root logger in CI. Capture only the
+# worker logger explicitly, so lifecycle assertions observe its INFO events.
+worker_handler = logging.StreamHandler(sys.stdout)
+worker_handler.setFormatter(logging.Formatter("%(levelname)s:%(message)s"))
+worker.LOG.addHandler(worker_handler)
+worker.LOG.setLevel(logging.INFO)
+
 original_create_app = worker.create_app
 def safe_app():
     app = original_create_app()
