@@ -11,7 +11,7 @@ from app.extensions import db
 from app.models.user_model import UserORM
 from io import BytesIO
 
-from flask import Blueprint, has_request_context, jsonify, request, send_file
+from flask import Blueprint, current_app, has_app_context, has_request_context, jsonify, request, send_file
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.models.warehouse import TrackDailyMartORM, TrackDailyVersionORM
@@ -106,6 +106,17 @@ def _require_track_admin_role() -> None:
         raise PermissionError("No autorizado para ejecutar procesos del Track.")
 
 
+def track_read_grants_enabled() -> bool:
+    """Despliegue seguro: no activar grants diagnósticos históricos por merge."""
+    if not has_app_context():
+        return False
+    value = current_app.config.get(
+        "PERMISSIONS_TRACK_READ_GRANTS_ENABLED",
+        "false",
+    )
+    return str(value).strip().lower() == "true"
+
+
 def _track_read_user_override() -> bool | None:
     """Permiso real de lectura Track desde el grant global del catálogo V1.
 
@@ -113,8 +124,8 @@ def _track_read_user_override() -> bool | None:
     vigencia ni scope adicional; la edición de módulos ya rechaza scopes
     complejos. No altera el guard admin de procesos/scheduler.
     """
-    if not has_request_context():
-        # Los diagnósticos de roles ejecutados sin request mantienen paridad.
+    if not track_read_grants_enabled() or not has_request_context():
+        # Sin activar: guard legacy exacto y sin consultas adicionales a DB.
         return None
 
     try:
