@@ -140,14 +140,17 @@ def test_xlsx_sin_dimensiones_como_el_distribuido_real():
         for info in z_in.infolist():
             content = z_in.read(info.filename)
             if re.fullmatch(r"xl/worksheets/sheet[0-9]+\.xml", info.filename):
-                content, n = re.subn(rb"<dimension\\b[^>]*/>", b"", content, count=1)
+                content, n = re.subn(rb"<dimension\b[^>]*/>", b"", content, count=1)
                 assert n == 1
                 hojas += 1
             z_out.writestr(info, content)
     assert hojas == 3
     raw = output.getvalue()
-    with load_workbook(BytesIO(raw), read_only=True, data_only=False) as book:
+    book = load_workbook(BytesIO(raw), read_only=True, data_only=False)
+    try:
         assert all(book[sheet].max_row is None for sheet in ("CONTROL", "APARATOS", "HALLAZGOS"))
+    finally:
+        book.close()
     expected, _ = parse_historical_csv(original_csv(), 7)
     report = parse_xlsx_v01(raw, 7, expected, "VERIFICACION")
     assert report["resultado"] == "INCOMPLETE"
