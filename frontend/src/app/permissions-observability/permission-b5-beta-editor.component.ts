@@ -25,6 +25,7 @@ export class PermissionB5BetaEditorComponent implements OnInit, OnChanges {
   successMessage = '';
   preview: PermissionB5BetaPreview | null = null;
   busy = false;
+  private previewRevision = 0;
   userIdInput = '';
   effect: 'allow' | 'deny' = 'allow';
   scopeType: 'branch' | 'branch_list' = 'branch';
@@ -74,6 +75,7 @@ export class PermissionB5BetaEditorComponent implements OnInit, OnChanges {
   }
 
   invalidate(): void {
+    ++this.previewRevision;
     this.preview = null;
     this.errorMessage = '';
     this.successMessage = '';
@@ -107,12 +109,19 @@ export class PermissionB5BetaEditorComponent implements OnInit, OnChanges {
   runPreview(): void {
     if (this.busy) { return; }
     this.invalidate();
+    const revision = this.previewRevision;
     this.busy = true;
     this.service.previewB5Grant(this.payload())
       .pipe(finalize(() => { this.busy = false; }))
       .subscribe({
-        next: result => { this.preview = result; },
-        error: error => { this.errorMessage = this.message(error); },
+        next: result => {
+          if (revision === this.previewRevision) { this.preview = result; }
+        },
+        error: error => {
+          if (revision === this.previewRevision) {
+            this.errorMessage = this.message(error);
+          }
+        },
       });
   }
 
