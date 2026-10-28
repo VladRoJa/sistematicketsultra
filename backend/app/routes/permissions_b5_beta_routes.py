@@ -411,6 +411,10 @@ def disable_beta_grant(grant_id):
         if not user:
             return _error("Usuario objetivo no encontrado.", 404)
         grant = PermissionGrantORM.query.filter_by(id=grant_id).first()
+        # La búsqueda previa al FOR UPDATE puede haber poblado identity-map.
+        # Recargar bajo lock para que el token de concurrencia no sea obsoleto.
+        if grant:
+            db.session.refresh(grant)
         if (not grant or not grant.action or grant.action.full_key != B5_ACTION_KEY
                 or not grant.is_active or grant.deleted_at is not None
                 or _record_branches(grant) is None):
