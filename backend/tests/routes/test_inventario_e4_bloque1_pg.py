@@ -182,8 +182,16 @@ def test_inicial_no_equivale_a_conciliado_sin_referencias():
 @pytest.fixture()
 def api(monkeypatch, tmp_path):
     url = os.getenv("INVENTARIO_E2_TEST_POSTGRES_URL")
+    using_real_binary = bool(os.getenv("E4_REAL_XLSX_PATH") or os.getenv("E4_REAL_BASELINE_CSV_PATH"))
     if not url:
+        if using_real_binary:
+            pytest.fail("Gate real requiere INVENTARIO_E2_TEST_POSTGRES_URL aislado")
         pytest.skip("PostgreSQL efímero requerido para la API E4")
+    if using_real_binary:
+        parsed_url = sa.engine.make_url(url)
+        if (parsed_url.host not in {"127.0.0.1", "localhost", "::1"}
+                or not re.fullmatch(r"inventario_e4_(?:ci|qa)(?:_[a-z0-9_]+)?", parsed_url.database or "")):
+            pytest.fail("Gate real SOLO permite PostgreSQL local y BD inventario_e4_qa/ci")
     schema = "inv_e4_" + secrets.token_hex(5)
     admin = sa.create_engine(url, future=True)
     with admin.begin() as con:
