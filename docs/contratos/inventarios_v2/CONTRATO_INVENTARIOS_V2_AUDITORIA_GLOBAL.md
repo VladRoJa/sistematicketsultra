@@ -13,8 +13,8 @@ Este documento es el **punto de reanudación** del trabajo de Inventarios V2. Es
 
 Antes de proponer un cambio:
 
-1. Leer íntegramente este contrato y su bitácora de progreso (`14).
-2. Consultar `3 (evidencia real del repositorio) y volver a inspeccionar `main`, porque el código y el despliegue pueden haber cambiado.
+1. Leer íntegramente este contrato, la bitácora (§14) y, al trabajar en E4, el [contrato funcional E4](CONTRATO_FUNCIONAL_E4_LEVANTAMIENTO_FISICO.md).
+2. Consultar §3 como fotografía técnica histórica y volver a inspeccionar `main`, porque el código y el despliegue pueden haber cambiado.
 3. Identificar el **primer entregable NO ACEPTADO**, sus dependencias y criterios de salida.
 4. Explicar **archivo, función/método, objetivo y motivo** antes de modificar código.
 5. Ejecutar **un cambio/prueba cada vez**, con QA dirigido; si cambia el síntoma, analizar antes de continuar.
