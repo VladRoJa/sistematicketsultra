@@ -61,7 +61,7 @@
     </div>
   </section>
 
-  <div class="audit-notice">Auditoría de guards base, no autorización para operar sobre un ticket, bitácora, equipo o sucursal. El catálogo es parcial; una acción no mapeada no significa acceso denegado. «Sin comprobar» no equivale a denegado.</div>
+  <div class="audit-notice">El check habilitado de Track controla únicamente su lectura general: no concede ejecución de pipelines ni sustituye los guards particulares de KPI Desempeño o Tienda. Los demás checks siguen siendo diagnóstico. «Sin comprobar» no equivale a denegado.</div>
   <p class="audit-error" role="alert" *ngIf="error">{{ error }}</p>
   <p class="audit-error" role="alert" *ngIf="saveError">{{ saveError }}</p>
   <p class="audit-loading" role="status" *ngIf="loading">Evaluando página de resultados…</p>
