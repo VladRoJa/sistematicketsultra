@@ -223,3 +223,74 @@ def test_durable_26_child_pipeline_with_mock_provider(
                 session=session, job_id=50, worker_id="worker-A",
                 generation=1, config=FLAGS, provider_factory=fake_provider_factory)
         assert len(calls) == expected_count
+
+def test_unexpected_worker_boundary_failure_never_replays(durable):
+    """An unexpected D2c boundary exception quarantines the mandate without retry.
+
+    This is a synthetic worker-boundary test, not a real 502/iVentas test.
+    """
+    engine = durable
+    children = {
+        ident: SimpleNamespace(
+            id=ident, campaign_v2_id=1, status="READY",
+            submit_started_at=None, provider_campaign_id=None, submitted_at=None,
+        )
+        for ident in range(1, TOTAL + 1)
+    }
+    provider_factory_calls = []
+    d2c_calls = []
+
+    def failed_d2c(**kwargs):
+        d2c_calls.append(kwargs["child_id"])
+        raise RuntimeError("SYNTHETIC_PROVIDER_BOUNDARY_FAILURE")
+
+    def provider_factory():
+        provider_factory_calls.append(True)
+        return object()
+
+    with patch.object(worker, "_actor"), patch.object(
+        worker, "execute_governed_child", side_effect=failed_d2c,
+    ):
+        with Session(engine) as session:
+            assert worker.claim_next_queued(
+                session=session, worker_id="worker-A", config=FLAGS,
+            ) == (50, 1)
+
+        with FakeChildrenSession(engine, children=children) as session:
+            with pytest.raises(RuntimeError, match="SYNTHETIC_PROVIDER_BOUNDARY_FAILURE"):
+                worker.process_claimed_job(
+                    session=session, job_id=50, worker_id="worker-A",
+                    generation=1, config=FLAGS, provider_factory=provider_factory,
+                )
+
+        with engine.connect() as conn:
+            job = conn.execute(sa.text("""
+                SELECT status, current_child_id, last_accepted_child_id,
+                       worker_lease_until, stop_reason_code
+                  FROM marketing_campaign_v2_background_jobs WHERE id=50
+            """)).one()
+            assert job.status == "REVIEW_REQUIRED"
+            assert job.current_child_id == 1  # retain reconciliation evidence
+            assert job.last_accepted_child_id is None
+            assert job.worker_lease_until is None
+            assert job.stop_reason_code == "UNEXPECTED_WORKER_FAILURE"
+            events = [row[0] for row in conn.execute(sa.text("""
+                SELECT event_kind FROM marketing_campaign_v2_background_job_events
+                 WHERE job_id=50 ORDER BY event_no
+            """))]
+            assert events == ["ENQUEUED", "STARTED", "REVIEW_REQUIRED"]
+
+        # A different worker cannot claim the quarantined job.
+        with Session(engine) as session:
+            assert worker.claim_next_queued(
+                session=session, worker_id="worker-B", config=FLAGS,
+            ) is None
+
+        # Neither the original worker nor the new one may trigger a second D2c call.
+        with FakeChildrenSession(engine, children=children) as session:
+            worker.process_claimed_job(
+                session=session, job_id=50, worker_id="worker-A",
+                generation=1, config=FLAGS, provider_factory=provider_factory,
+            )
+        assert d2c_calls == [1]
+        assert len(provider_factory_calls) == 1
