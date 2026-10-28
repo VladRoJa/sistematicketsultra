@@ -1210,6 +1210,17 @@ def update_user_module_access(user_id: int):
             }), 400
         seen_module_keys.add(module_key)
 
+        # B5: si el editor scoped está habilitado, la casilla global V1 NO
+        # puede crear o modificar la acción base de Nube por un camino paralelo.
+        if module_key == "internal_documents":
+            from app.routes.permissions_b5_beta_routes import b5_editor_enabled
+            if b5_editor_enabled():
+                return jsonify({
+                    "error": "Conflict",
+                    "detail": "Nube se configura exclusivamente en el editor B5 por alcance.",
+                    "module_key": module_key,
+                }), 409
+
         if override not in valid_overrides:
             return jsonify({
                 "error": "Bad request",
