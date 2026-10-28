@@ -41,6 +41,7 @@ export interface VisualAuditRow {
 
 export interface VisualAuditResponse {
   mode: string;
+  track_read_grants_enabled: boolean;
   note: string;
   view: AuditPerspective;
   rows: VisualAuditRow[];
