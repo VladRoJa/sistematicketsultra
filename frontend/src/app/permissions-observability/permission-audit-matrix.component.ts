@@ -211,7 +211,8 @@ export class PermissionAuditMatrixComponent implements OnInit {
 
   canEditTrackRead(row: VisualAuditRow): boolean {
     // Solo la acción con autorización HTTP conectada y sin filtro de objeto.
-    return row.action_key === 'track.read' &&
+    return this.result?.track_read_grants_enabled === true &&
+      row.action_key === 'track.read' &&
       row.module_key === 'track' && row.action_id !== null &&
       !row.context?.branch_id && !row.context?.document_id;
   }
