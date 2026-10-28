@@ -61,6 +61,8 @@ export class PermissionAuditMatrixComponent implements OnInit {
   loadingCatalog = false;
   loadingUsers = false;
   error = '';
+  saveError = '';
+  savingTrackUserId: number | null = null;
   private requestVersion = 0;
 
   constructor(
@@ -203,6 +205,35 @@ export class PermissionAuditMatrixComponent implements OnInit {
           if (version !== this.requestVersion) { return; }
           this.result = null;
           this.error = response?.error?.error || 'No se pudo consultar la matriz.';
+        },
+      });
+  }
+
+  canEditTrackRead(row: VisualAuditRow): boolean {
+    // Solo la acción con autorización HTTP conectada y sin filtro de objeto.
+    return row.action_key === 'track.read' &&
+      row.module_key === 'track' && row.action_id !== null &&
+      !row.context?.branch_id && !row.context?.document_id;
+  }
+
+  isSavingTrackRead(row: VisualAuditRow): boolean {
+    return this.savingTrackUserId === row.user_id;
+  }
+
+  toggleTrackRead(row: VisualAuditRow, checked: boolean): void {
+    if (!this.canEditTrackRead(row) || this.savingTrackUserId !== null) {
+      return;
+    }
+    this.saveError = '';
+    this.savingTrackUserId = row.user_id;
+    this.catalog.setTrackReadAccess(row.user_id, checked)
+      .pipe(finalize(() => { this.savingTrackUserId = null; }))
+      .subscribe({
+        next: () => { this.load(); },
+        error: response => {
+          this.saveError = response?.error?.detail ||
+            'No se pudo guardar el permiso Track. No se aplicó el cambio.';
+          this.load(); // relectura obligatoria: no conservar el estado del click
         },
       });
   }
