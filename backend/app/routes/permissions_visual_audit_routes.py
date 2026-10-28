@@ -19,6 +19,7 @@ from app.models.planning_targets import PlanningOperatorORM
 from app.models.internal_documents import InternalDocumentORM
 from app.models.permiso_model import Permiso
 from app.routes import permissions_catalog_routes as catalog
+from app.routes.track_routes import track_read_grants_enabled
 from app.utils.pm_permissions import (
     PM_VIEW_ROLES, PM_EXECUTE_ROLES, PM_VALIDATE_ROLES,
     PM_CONFIGURE_ROLES, SCOPED_MAINTENANCE_READER_ROLES,
@@ -396,8 +397,8 @@ def evaluate_pair(user, action, context, grants=None, branch_id=None, document=N
     legacy, legacy_source, legacy_reason = _legacy_guard_result(
         context["user"], action.full_key, context, document, branch_id=branch_id,
     )
-    if action.full_key == "track.read":
-        # Track aplica estos grants globales al guard HTTP real. La matriz
+    if action.full_key == "track.read" and track_read_grants_enabled():
+        # Track aplica estos grants globales al guard HTTP real solo con flag ON. La matriz
         # muestra su misma decisión efectiva y no solo el rol base.
         if candidate is not None and catalog._is_simple_global_module_grant(candidate):
             legacy = candidate.effect == "allow"
@@ -576,6 +577,7 @@ def visual_audit_matrix():
     page = filtered[offset:offset + limit]
     return jsonify({
         "status": "ok", "mode": "visual_audit_readonly_v1",
+        "track_read_grants_enabled": track_read_grants_enabled(),
         "note": "Solo consulta. Legacy comprobado únicamente en predicados declarados; no reemplaza enforcement.",
         "view": perspective, "rows": page, "group_counts": group_counts,
         "sorting": {"sort_by": sort_by, "sort_dir": sort_dir, "group_by": group_by, "decision": decision},
