@@ -163,6 +163,32 @@ def _serialize(row):
     }
 
 
+def _serialize_revision_rows(rows):
+    """Identidad oficial visible solo de solicitudes ya autorizadas en E3.
+
+    Resuelve nombres y códigos en una sola consulta por página: sin joins que
+    alteren el conteo, ni consultas por cada tarjeta.
+    """
+    ids = {row.inventario_id for row in rows if row.inventario_id is not None}
+    maestros = {}
+    if ids:
+        maestros = {
+            item.id: {
+                "nombre": item.nombre,
+                "codigo_interno": item.codigo_interno,
+            }
+            for item in InventarioGeneral.query.with_entities(
+                InventarioGeneral.id, InventarioGeneral.nombre,
+                InventarioGeneral.codigo_interno,
+            ).filter(InventarioGeneral.id.in_(ids)).all()
+        }
+    return [
+        {**_serialize(row),
+         "referencia_oficial": maestros.get(row.inventario_id)}
+        for row in rows
+    ]
+
+
 def _validate_payload(payload):
     """Validar forma sin leer DB. Idempotencia puede evaluarse antes de baseline."""
     if not isinstance(payload, dict):
@@ -594,7 +620,7 @@ def listar_revision_e3():
         InventarioSolicitudCorreccionORM.id.desc(),
     ).offset((page - 1) * per_page).limit(per_page).all())
     return jsonify({
-        "items": [_serialize(row) for row in rows], "total": total,
+        "items": _serialize_revision_rows(rows), "total": total,
         "page": page, "per_page": per_page,
     }), 200
 
@@ -610,7 +636,7 @@ def detalle_revision_e3(solicitud_id):
     ).first()
     if row is None:
         return _error(404, "Solicitud inexistente o fuera de tu alcance.")
-    return jsonify({"solicitud": _serialize(row)}), 200
+    return jsonify({"solicitud": _serialize_revision_rows([row])[0]}), 200
 
 @inventario_solicitudes_bp.post("/decisiones/lote")
 @jwt_required()

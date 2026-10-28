@@ -299,6 +299,20 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
     return this.contexto?.sucursales.find(s => s.sucursal_id === id)?.sucursal || `Sucursal #${id}`;
   }
 
+  nombreReferencia(s: SolicitudCorreccionInventario): string {
+    if (s.tipo === 'UNREGISTERED_FIND') {
+      return s.hallazgo_provisional?.['nombre'] || 'Hallazgo sin nombre';
+    }
+    return s.referencia_oficial?.nombre || 'Nombre no disponible';
+  }
+
+  codigoReferencia(s: SolicitudCorreccionInventario): string {
+    if (s.tipo === 'UNREGISTERED_FIND') {
+      return s.hallazgo_provisional?.['codigo_interno'] || 'Sin código físico';
+    }
+    return s.referencia_oficial?.codigo_interno || 'Sin código interno';
+  }
+
   cambioPropuesto(s: SolicitudCorreccionInventario): string {
     if (s.tipo === 'NOT_LOCATED') {
       const anterior = s.valor_original as { stock?: number } | null;

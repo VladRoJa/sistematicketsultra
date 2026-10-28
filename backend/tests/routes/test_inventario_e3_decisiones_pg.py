@@ -647,10 +647,31 @@ def test_e3_revision_admin_global_grants_y_deny_por_sucursal(env):
     lista = _get_e3(env,47,"revision").get_json()
     assert lista["total"] == 3
     assert {x["id"] for x in lista["items"]} == {propio,ajeno,maestro}
-    assert _get_e3(env,47,f"revision/{propio}").status_code == 200
+    by_id = {item["id"]: item for item in lista["items"]}
+    assert by_id[propio]["referencia_oficial"] == {
+        "nombre": "Caminadora", "codigo_interno": "07CA01",
+    }
+    assert by_id[ajeno]["referencia_oficial"] == {
+        "nombre": "Remo", "codigo_interno": "07RE01",
+    }
+    detalle = _get_e3(env,47,f"revision/{propio}")
+    assert detalle.status_code == 200
+    assert detalle.get_json()["solicitud"]["referencia_oficial"] == by_id[propio]["referencia_oficial"]
     _grant(47,scope="branch",branch=7,effect="deny")
     assert _get_e3(env,47,"revision?sucursal_id=7").status_code == 403
     assert _get_e3(env,47,"revision").get_json()["total"] == 0
+
+
+def test_e3_hallazgo_provisional_no_inventa_maestro_ni_codigo(env):
+    _grant(47, scope="global")
+    provisional = _request("UNREGISTERED_FIND", inv=None, creator=98)
+    response = _get_e3(env, 47, "revision?tipo=UNREGISTERED_FIND")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["total"] == 1
+    assert data["items"][0]["id"] == provisional
+    assert data["items"][0]["referencia_oficial"] is None
+    assert data["items"][0]["hallazgo_provisional"]["nombre"] == "Bicicleta"
 
 
 def test_e3_revision_scoped_grants_mas_restrictivos_y_paginacion(env):

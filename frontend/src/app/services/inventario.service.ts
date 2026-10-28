@@ -27,6 +27,7 @@ export interface SolicitudCorreccionInventario {
   estado: 'PENDING' | 'APPROVED' | 'REJECTED';
   sucursal_id: number;
   inventario_id: number | null;
+  referencia_oficial?: { nombre: string; codigo_interno: string | null } | null;
   campo: string | null;
   valor_original: unknown;
   valor_propuesto: unknown;
