@@ -15,7 +15,7 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from flask import Flask
 from flask_jwt_extended import JWTManager, create_access_token
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 
 from app.extensions import db
 from app.routes.inventario_levantamientos_routes import inventario_levantamientos_bp
@@ -219,9 +219,21 @@ def test_api_historico_versionado_idempotente_sin_cambios_oficiales(api):
     assert second.status_code == 201, second.get_json()
     assert second.get_json()["importacion"]["version"] == 2
     assert second.get_json()["importacion"]["resultado"] == "VALIDATED"
+    # Archivo estructuralmente incompatible: archivar, diagnosticar y NO promover.
+    malformed = load_workbook(BytesIO(workbook(second="NO")))
+    del malformed["HALLAZGOS"]
+    damaged = BytesIO()
+    malformed.save(damaged)
+    third = client.post(endpoint, headers=tokens[1], data={
+        "idempotency_key": str(uuid4()), "file": (BytesIO(damaged.getvalue()), "faltan_hojas.xlsx"),
+    })
+    assert third.status_code == 201, third.get_json()
+    assert third.get_json()["importacion"]["resultado"] == "INVALID"
+    assert third.get_json()["importacion"]["diagnosticos"][0]["codigo"] == "ESTRUCTURA_EXCEL"
     listed = client.get(f"{url}/{lev}", headers=tokens[1])
     assert listed.status_code == 200
-    assert len(listed.get_json()["versiones"]) == 2
+    assert len(listed.get_json()["versiones"]) == 3
+    assert listed.get_json()["levantamiento"]["ultima_importacion_id"] == second.get_json()["importacion"]["id"]
     assert _snapshot(app) == original
     assert client.get(f"{url}/{lev}", headers=tokens[2]).status_code == 403
 

@@ -255,7 +255,30 @@ def recibir_excel(actor_id, levantamiento_id, key, filename, raw):
     try:
         parsed = parse_xlsx_v01(raw, lev.sucursal_id, refs, lev.modalidad)
     except ArchivoE4Error as exc:
-        raise E4Error(422, "ARCHIVO_ESTRUCTURAL_INVALIDO", str(exc)) from exc
+        # Un XLSX válido, pero incompatible con la plantilla, sí debe
+        # archivarse como versión INVALID. Binarios corruptos, macros,
+        # ZIP bombs y archivos ilegibles se rechazan ANTES de persistir.
+        detail = str(exc)
+        if not (detail.startswith("Faltan hojas ") or detail.startswith("Encabezados ")):
+            raise E4Error(422, "ARCHIVO_ESTRUCTURAL_INVALIDO", detail) from exc
+        parsed = {
+            "resultado": "INVALID", "control": {},
+            "filas": [],
+            "diagnosticos": [{"severidad": "ERROR", "codigo": "ESTRUCTURA_EXCEL",
+                             "detail": detail}],
+            "resumen": {
+                "referencias_esperadas": len(refs), "si": 0, "no": 0,
+                "sin_revisar": len(refs),
+                "pendientes": [
+                    {"inventario_id": r["inventario_id_original"],
+                     "codigo_original": r["codigo_interno_original"],
+                     "fila_excel": None, "motivo": "ESTRUCTURA_EXCEL"}
+                    for r in refs
+                ],
+                "hallazgos": 0, "provisionales_aparatos": 0, "errores": 1,
+                "avisos": 0, "requiere_revision_inicial": lev.modalidad == "INICIAL",
+            },
+        }
 
     drift = _official_drift(lev, refs)
     parsed["diagnosticos"].extend(drift)
