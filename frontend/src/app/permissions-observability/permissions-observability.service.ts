@@ -363,6 +363,27 @@ export class PermissionsObservabilityService {
       { params },
     );
   }
+  setBasicReadAccess(
+    userId: number, moduleKey: 'track' | 'openings', enabled: boolean,
+  ): Observable<unknown> {
+    return this.http.put(
+      `${this.apiUrl}/users/${userId}/module-access`,
+      {
+        changes: [{
+          module_key: moduleKey,
+          override: enabled ? 'allow' : 'deny',
+          reason: enabled
+            ? 'Habilitado desde matriz de permisos'
+            : 'Deshabilitado desde matriz de permisos',
+        }],
+      },
+    );
+  }
+
+  setTrackReadAccess(userId: number, enabled: boolean): Observable<unknown> {
+    return this.setBasicReadAccess(userId, 'track', enabled);
+  }
+
   getB5Status(): Observable<PermissionB5BetaStatus> {
     return this.http.get<PermissionB5BetaStatus>(`${this.apiUrl}/grants/beta/status`);
   }

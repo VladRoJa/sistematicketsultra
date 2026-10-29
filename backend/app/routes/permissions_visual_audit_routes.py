@@ -19,6 +19,8 @@ from app.models.planning_targets import PlanningOperatorORM
 from app.models.internal_documents import InternalDocumentORM
 from app.models.permiso_model import Permiso
 from app.routes import permissions_catalog_routes as catalog
+from app.routes.track_routes import track_read_grants_enabled
+from app.routes.openings_routes import OPENINGS_READ_ROLES, openings_read_grants_enabled
 from app.utils.pm_permissions import (
     PM_VIEW_ROLES, PM_EXECUTE_ROLES, PM_VALIDATE_ROLES,
     PM_CONFIGURE_ROLES, SCOPED_MAINTENANCE_READER_ROLES,
@@ -227,7 +229,7 @@ def _batch_context(users):
 
 
 def _bulk_grants(users, actions):
-    """Solo proyección de grants; nunca se usan para enforcement."""
+    """Proyecta grants; track.read comparte selección con su guard operativo."""
     ids, action_ids = [u.id for u in users], [a.id for a in actions]
     if not ids or not action_ids:
         return {}
@@ -244,12 +246,28 @@ def _bulk_grants(users, actions):
         ),
     ).order_by(PermissionGrantORM.updated_at.desc(), PermissionGrantORM.id.desc())
     latest = {}
+    runtime_read_ids = {
+        action.id for action in actions
+        if action.full_key in {"track.read", "openings.read"}
+    }
     for grant in query.all():
         principal = (
             ("user", grant.principal_user_id) if grant.principal_type == "user"
             else ("role", grant.principal_role_key)
         )
-        latest.setdefault((grant.action_id, *principal), grant)
+        key = (grant.action_id, *principal)
+        if grant.action_id in runtime_read_ids:
+            # El guard Track solo interpreta globales indefinidos; deny gana
+            # dentro del mismo principal aunque haya duplicados antiguos.
+            if not catalog._is_simple_global_module_grant(grant):
+                continue
+            previous = latest.get(key)
+            if previous is None or (
+                previous.effect != "deny" and grant.effect == "deny"
+            ):
+                latest[key] = grant
+        else:
+            latest.setdefault(key, grant)
     return latest
 
 
@@ -258,6 +276,10 @@ def _legacy_guard_result(user, action_key, context, document, branch_id=None):
     role = context["role"]
     if action_key == "track.read":
         return role in TRACK_READ, "track._require_track_read_role", "guard_de_rol_track"
+    if action_key == "openings.read":
+        return role in OPENINGS_READ_ROLES, "openings._require_openings_read", "guard_de_rol_aperturas"
+    if action_key == "openings.comment":
+        return role in OPENINGS_READ_ROLES, "openings._require_openings_comment", "guard_de_comentarios_aperturas"
     if action_key in {"track.run_daily_pipeline", "track.run_agregadoras"}:
         return role in TRACK_ADMIN, "track._require_track_admin_role", "guard_admin_track"
     if action_key in WAREHOUSE_FLAGS or action_key == "warehouse.catalogs":
@@ -383,6 +405,24 @@ def evaluate_pair(user, action, context, grants=None, branch_id=None, document=N
     legacy, legacy_source, legacy_reason = _legacy_guard_result(
         context["user"], action.full_key, context, document, branch_id=branch_id,
     )
+    if action.full_key == "track.read" and track_read_grants_enabled():
+        # Track aplica estos grants globales al guard HTTP real solo con flag ON. La matriz
+        # muestra su misma decisión efectiva y no solo el rol base.
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            legacy = candidate.effect == "allow"
+            legacy_source = "track._require_track_read_role+grant"
+            legacy_reason = "grant_global_track_aplicado_al_guard_real"
+            catalog_allowed = legacy
+            catalog_source = "track_grant_operativo"
+            catalog_reason = "check_track_refleja_autorizacion_real"
+    if action.full_key == "openings.read" and openings_read_grants_enabled():
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            legacy = candidate.effect == "allow"
+            legacy_source = "openings._require_openings_read+grant"
+            legacy_reason = "grant_global_aperturas_aplicado_al_guard_real"
+            catalog_allowed = legacy
+            catalog_source = "openings_grant_operativo"
+            catalog_reason = "check_openings_refleja_autorizacion_real"
     if action.full_key == "internal_documents.view":
         # Ni la proyección genérica True ni un grant de entrada equivalen
         # a permiso sobre un documento concreto. Sin objeto también es
@@ -553,6 +593,8 @@ def visual_audit_matrix():
     page = filtered[offset:offset + limit]
     return jsonify({
         "status": "ok", "mode": "visual_audit_readonly_v1",
+        "track_read_grants_enabled": track_read_grants_enabled(),
+        "openings_read_grants_enabled": openings_read_grants_enabled(),
         "note": "Solo consulta. Legacy comprobado únicamente en predicados declarados; no reemplaza enforcement.",
         "view": perspective, "rows": page, "group_counts": group_counts,
         "sorting": {"sort_by": sort_by, "sort_dir": sort_dir, "group_by": group_by, "decision": decision},

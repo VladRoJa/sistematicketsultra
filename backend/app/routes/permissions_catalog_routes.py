@@ -519,11 +519,13 @@ def _effective_action_decision(action, user, context: dict) -> dict:
 
     # Aperturas
     if full_key == "openings.read":
+        from app.routes.openings_routes import OPENINGS_READ_ROLES
+        openings_reader = role in OPENINGS_READ_ROLES
         return _decision(
-            allowed=is_admin,
-            source="legacy_openings_access",
-            reason="openings_read_observability_v1_admin_only",
-            scope_type="global" if is_admin else "none",
+            allowed=openings_reader,
+            source="legacy_openings_read_role",
+            reason="openings_read_guard_real",
+            scope_type="global" if openings_reader else "none",
         )
 
     if full_key == "openings.manage":
@@ -540,11 +542,13 @@ def _effective_action_decision(action, user, context: dict) -> dict:
         )
 
     if full_key == "openings.comment":
+        from app.routes.openings_routes import OPENINGS_READ_ROLES
+        commenter = role in OPENINGS_READ_ROLES
         return _decision(
-            allowed=is_admin,
-            source="legacy_openings_access",
-            reason="comment_uses_openings_read_in_current_guard_review",
-            scope_type="global" if is_admin else "none",
+            allowed=commenter,
+            source="legacy_openings_comment_role",
+            reason="separate_comment_guard_real",
+            scope_type="global" if commenter else "none",
         )
 
     # Reportes
@@ -673,6 +677,22 @@ def _get_latest_active_grants_by_action(*, user, action_ids: list[int]) -> dict:
         "user": _best_module_grants_by_action(user_grants),
         "role": _best_module_grants_by_action(role_grants),
     }
+
+def _simple_global_action_grant_override(*, user, action_full_key: str) -> bool | None:
+    """Consulta el grant V1 existente; no crea otro motor ni altera otros guards.
+
+    Usuario prevalece sobre rol; deny precede a allow del mismo principal.
+    None conserva la autorización legacy cuando no hay grant global simple.
+    """
+    action = PermissionActionORM.query.filter_by(
+        full_key=action_full_key, is_active=True,
+    ).first()
+    if action is None:
+        return None
+    active = _get_latest_active_grants_by_action(user=user, action_ids=[action.id])
+    grant = active["user"].get(action.id) or active["role"].get(action.id)
+    return (grant.effect == "allow") if grant is not None else None
+
 
 def _apply_module_access_override(*, legacy_decision: dict, user_grant, role_grant) -> dict:
     if user_grant:
@@ -1209,6 +1229,27 @@ def update_user_module_access(user_id: int):
                 "detail": "Módulo duplicado en el mismo lote.",
             }), 400
         seen_module_keys.add(module_key)
+
+        # Sin revisión del stock de grants no activar Track desde el editor V1.
+        if module_key == "track":
+            from app.routes.track_routes import track_read_grants_enabled
+            if not track_read_grants_enabled():
+                return jsonify({
+                    "error": "Conflict",
+                    "detail": "El control de lectura Track no está habilitado en backend.",
+                    "module_key": module_key,
+                }), 409
+
+        # Aperturas no admite escribir 'read' hasta activar exactamente su
+        # mismo guard HTTP. No afecta el guard distinto de comentarios/admin.
+        if module_key == "openings":
+            from app.routes.openings_routes import openings_read_grants_enabled
+            if not openings_read_grants_enabled():
+                return jsonify({
+                    "error": "Conflict",
+                    "detail": "El control de consulta Aperturas no está habilitado en backend.",
+                    "module_key": module_key,
+                }), 409
 
         # B5: si el editor scoped está habilitado, la casilla global V1 NO
         # puede crear o modificar la acción base de Nube por un camino paralelo.

@@ -22,30 +22,15 @@ CONTACT_CENTER_INITIAL_ROLES = frozenset({
 # Edmundo continúa sujeto a la intersección de sucursales autorizadas.
 CONTACT_CENTER_REGIONAL_PILOT_USER_IDS = frozenset({55})
 
-# Rollout gerencial inicial:
-# - Villas del Rey se conserva como sucursal piloto validada.
-# - Región Costa BC (antes Tijuana / Rosarito / Ensenada):
-#   7 Pabellón Rosarito
-#   8 Misión Ensenada
-#   9 Paseo 2000
-#   10 Loma Bonita
-#   11 Santa Fe
-#   12 Carrousel Tijuana
-#   13 Papalote Tijuana
+# Piloto gerencial por sucursal: se intersecta con las asignaciones del usuario.
+# - 1-6: Mexicali y San Luis.
+# - 7-13: Región Costa BC.
+# - 19, 21, 22, 23 y 25: Región Centro.
+# Los IDs restantes permanecen fuera del piloto.
 CONTACT_CENTER_MANAGER_ALLOWED_BRANCH_IDS = frozenset({
-    1,
-    2,
-    3,
-    4,
-    5,
-    6,
-    7,
-    8,
-    9,
-    10,
-    11,
-    12,
-    13,
+    1, 2, 3, 4, 5, 6,
+    7, 8, 9, 10, 11, 12, 13,
+    19, 21, 22, 23, 25,
 })
 
 

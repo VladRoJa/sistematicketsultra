@@ -314,3 +314,102 @@ def test_mexicali_san_luis_manager_guard_denies_other_branch_cases(branch_id):
         routes._assert_case_access(other_case, actor, access)
     with pytest.raises(ContactCenterAuthorizationError, match="operadores"):
         routes._assert_operator_access(access)
+
+
+CENTRO_BRANCH_IDS = (19, 21, 22, 23, 25)
+
+
+@pytest.mark.parametrize("branch_id", CENTRO_BRANCH_IDS)
+def test_centro_managers_enter_pilot_only_for_own_branch(branch_id):
+    user = _user(
+        user_id=1000 + branch_id,
+        username=f"GERE_CENTRO_{branch_id}",
+        role="GERENTE",
+        sucursal_id=branch_id,
+        sucursales_ids=[branch_id],
+    )
+    assert has_contact_center_access(user) is True
+    assert has_contact_center_operator_access(user) is False
+    access = resolve_contact_center_access(user)
+    assert access.is_manager is True
+    assert access.is_supervisor is False
+    assert access.allowed_branch_ids == (branch_id,)
+
+
+@pytest.mark.parametrize("branch_id", CENTRO_BRANCH_IDS)
+def test_centro_manager_case_and_appointment_stay_within_own_branch(branch_id):
+    from app.routes import contact_center_routes as routes
+
+    actor = _user(
+        user_id=1200 + branch_id,
+        username=f"GERE_CENTRO_{branch_id}",
+        role="GERENTE",
+        sucursal_id=branch_id,
+    )
+    access = resolve_contact_center_access(actor)
+
+    own_case = SimpleNamespace(sucursal_id=branch_id, assigned_user_id=actor.id)
+    foreign_branch_id = next(value for value in CENTRO_BRANCH_IDS if value != branch_id)
+    foreign_case = SimpleNamespace(
+        sucursal_id=foreign_branch_id, assigned_user_id=actor.id,
+    )
+    routes._assert_case_access(own_case, actor, access)
+    with pytest.raises(ContactCenterAuthorizationError, match="sucursal autorizada"):
+        routes._assert_case_access(foreign_case, actor, access)
+
+    routes._assert_appointment_access(
+        SimpleNamespace(sucursal_id=branch_id), actor, access,
+    )
+    with pytest.raises(ContactCenterAuthorizationError, match="sucursal autorizada"):
+        routes._assert_appointment_access(
+            SimpleNamespace(sucursal_id=foreign_branch_id), actor, access,
+        )
+    with pytest.raises(ContactCenterAuthorizationError, match="operadores"):
+        routes._assert_operator_access(access)
+
+
+def test_centro_manager_mixed_scope_intersects_pilot_and_assignments():
+    user = _user(
+        user_id=1300,
+        username="GERE_CENTRO_MIXED",
+        role="GERENTE",
+        sucursal_id=19,
+        sucursales_ids=[21, 25, 14, 20, 24, 26, 1000],
+    )
+    access = resolve_contact_center_access(user)
+    assert access.allowed_branch_ids == (19, 21, 25)
+
+
+@pytest.mark.parametrize("branch_id", [14, 15, 16, 17, 18, 20, 24, 26])
+def test_branches_outside_rollout_remain_denied(branch_id):
+    user = _user(username=f"GERE_OUTSIDE_{branch_id}", role="GERENTE", sucursal_id=branch_id)
+    assert has_contact_center_access(user) is False
+    with pytest.raises(ContactCenterAuthorizationError):
+        resolve_contact_center_access(user)
+
+
+def test_roberto_regional_is_not_automatically_authorized_for_centro():
+    user = _user(
+        user_id=777,
+        username="ROBERTO",
+        role="GERENTE_REGIONAL",
+        sucursal_id=1000,
+        sucursales_ids=list(CENTRO_BRANCH_IDS),
+    )
+    assert has_contact_center_access(user) is False
+    assert has_contact_center_operator_access(user) is False
+    with pytest.raises(ContactCenterAuthorizationError):
+        resolve_contact_center_access(user)
+
+
+def test_edmundo_scope_is_not_expanded_without_branch_assignment():
+    user = _user(
+        user_id=55,
+        username="EDMUNDO",
+        role="GERENTE_REGIONAL",
+        sucursal_id=1000,
+        sucursales_ids=list(range(1, 14)),
+    )
+    access = resolve_contact_center_access(user)
+    assert access.allowed_branch_ids == tuple(range(1, 14))
+    assert set(access.allowed_branch_ids).isdisjoint(CENTRO_BRANCH_IDS)

@@ -61,6 +61,8 @@ export class PermissionAuditMatrixComponent implements OnInit {
   loadingCatalog = false;
   loadingUsers = false;
   error = '';
+  saveError = '';
+  savingReadUserId: number | null = null;
   private requestVersion = 0;
 
   constructor(
@@ -203,6 +205,41 @@ export class PermissionAuditMatrixComponent implements OnInit {
           if (version !== this.requestVersion) { return; }
           this.result = null;
           this.error = response?.error?.error || 'No se pudo consultar la matriz.';
+        },
+      });
+  }
+
+  canEditBasicRead(row: VisualAuditRow): boolean {
+    // Solo la acción cuyo guard HTTP esté enlazado, nunca por objeto.
+    if (row.action_id === null || row.context?.branch_id || row.context?.document_id) {
+      return false;
+    }
+    return (
+      row.action_key === 'track.read' &&
+      row.module_key === 'track' &&
+      this.result?.track_read_grants_enabled === true
+    ) || (
+      row.action_key === 'openings.read' &&
+      row.module_key === 'openings' &&
+      this.result?.openings_read_grants_enabled === true
+    );
+  }
+
+  toggleBasicRead(row: VisualAuditRow, checked: boolean): void {
+    if (!this.canEditBasicRead(row) || this.savingReadUserId !== null) {
+      return;
+    }
+    const moduleKey = row.action_key === 'track.read' ? 'track' : 'openings';
+    this.saveError = '';
+    this.savingReadUserId = row.user_id;
+    this.catalog.setBasicReadAccess(row.user_id, moduleKey, checked)
+      .pipe(finalize(() => { this.savingReadUserId = null; }))
+      .subscribe({
+        next: () => { this.load(); },
+        error: response => {
+          this.saveError = response?.error?.detail ||
+            'No se pudo guardar el permiso. No se aplicó el cambio.';
+          this.load();
         },
       });
   }
