@@ -1,10 +1,10 @@
 <div class="audit-root">
   <header class="audit-head">
     <div>
-      <h2>Matriz de acceso · solo consulta</h2>
-      <p>Legacy comprobado frente a estimación del catálogo. Los checks no conceden permisos.</p>
+      <h2>Matriz de acceso</h2>
+      <p>Solo los permisos certificados pueden editarse. Track y Aperturas · Consultar requieren activación explícita del backend.</p>
     </div>
-    <span class="audit-pill">Enforcement legacy sin cambios</span>
+    <span class="audit-pill">{{ result?.track_read_grants_enabled || result?.openings_read_grants_enabled ? 'Checks de lectura disponibles' : 'Solo consulta · controles bloqueados' }}</span>
   </header>
 
   <nav class="audit-perspectives" aria-label="Perspectiva de auditoría">
@@ -61,8 +61,9 @@
     </div>
   </section>
 
-  <div class="audit-notice">Auditoría de guards base, no autorización para operar sobre un ticket, bitácora, equipo o sucursal. El catálogo es parcial; una acción no mapeada no significa acceso denegado. «Sin comprobar» no equivale a denegado.</div>
+  <div class="audit-notice">Los checks de lectura de Track y Aperturas solo podrán editarse cuando cada guard esté habilitado. No permiten procesos Track, gestionar Aperturas ni crear comentarios. El resto sigue en diagnóstico. «Sin comprobar» no equivale a denegado.</div>
   <p class="audit-error" role="alert" *ngIf="error">{{ error }}</p>
+  <p class="audit-error" role="alert" *ngIf="saveError">{{ saveError }}</p>
   <p class="audit-loading" role="status" *ngIf="loading">Evaluando página de resultados…</p>
 
   <ng-container *ngIf="result as data">
@@ -108,7 +109,7 @@
             <button type="button" class="audit-sort" [attr.aria-pressed]="sortBy === 'action'" (click)="setSort('action')">Acción {{ sortArrow('action') }}</button>
           </th>
           <th><button type="button" class="audit-sort" [attr.aria-pressed]="sortBy === 'legacy'" (click)="setSort('legacy')">Legacy (guard base) {{ sortArrow('legacy') }}</button></th>
-          <th><button type="button" class="audit-sort" [attr.aria-pressed]="sortBy === 'catalog'" (click)="setSort('catalog')">Catálogo estimado {{ sortArrow('catalog') }}</button></th>
+          <th><button type="button" class="audit-sort" [attr.aria-pressed]="sortBy === 'catalog'" (click)="setSort('catalog')">Permiso / catálogo {{ sortArrow('catalog') }}</button></th>
           <th><button type="button" class="audit-sort" [attr.aria-pressed]="sortBy === 'comparison'" (click)="setSort('comparison')">Comparación {{ sortArrow('comparison') }}</button></th>
           <th>Alcance y razón</th>
           <th>Explorar</th>
@@ -138,10 +139,19 @@
               </td>
               <td>
                 <label class="audit-check" [class.unknown]="row.catalog_allowed === null">
-                  <input type="checkbox" disabled [checked]="row.catalog_allowed === true">
-                  {{ getBooleanLabel(row.catalog_allowed) }}
+                  <ng-container *ngIf="canEditBasicRead(row); else diagnosticCheck">
+                    <input #trackCheck type="checkbox"
+                      [checked]="row.legacy_allowed === true"
+                      [disabled]="savingReadUserId !== null || loading"
+                      (change)="toggleBasicRead(row, trackCheck.checked)"
+                      [attr.aria-label]="'Habilitar consulta del módulo a ' + row.username">
+                  </ng-container>
+                  <ng-template #diagnosticCheck>
+                    <input type="checkbox" disabled [checked]="row.catalog_allowed === true">
+                  </ng-template>
+                  {{ getBooleanLabel(canEditBasicRead(row) ? row.legacy_allowed : row.catalog_allowed) }}
                 </label>
-                <small>Solo diagnóstico</small>
+                <small>{{ canEditBasicRead(row) ? 'Check conectado al guard real' : 'Solo diagnóstico' }}</small>
               </td>
               <td><span class="audit-result" [class.diff]="row.comparison === 'diferencia'" [class.match]="row.comparison === 'coincide'">{{ row.comparison === 'coincide' ? 'Coincide' : row.comparison === 'diferencia' ? 'Diferencia' : 'No concluyente' }}</span></td>
               <td class="audit-reason">
