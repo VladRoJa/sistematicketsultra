@@ -519,11 +519,13 @@ def _effective_action_decision(action, user, context: dict) -> dict:
 
     # Aperturas
     if full_key == "openings.read":
+        from app.routes.openings_routes import OPENINGS_READ_ROLES
+        openings_reader = role in OPENINGS_READ_ROLES
         return _decision(
-            allowed=is_admin,
-            source="legacy_openings_access",
-            reason="openings_read_observability_v1_admin_only",
-            scope_type="global" if is_admin else "none",
+            allowed=openings_reader,
+            source="legacy_openings_read_role",
+            reason="openings_read_guard_real",
+            scope_type="global" if openings_reader else "none",
         )
 
     if full_key == "openings.manage":
@@ -540,11 +542,13 @@ def _effective_action_decision(action, user, context: dict) -> dict:
         )
 
     if full_key == "openings.comment":
+        from app.routes.openings_routes import OPENINGS_READ_ROLES
+        commenter = role in OPENINGS_READ_ROLES
         return _decision(
-            allowed=is_admin,
-            source="legacy_openings_access",
-            reason="comment_uses_openings_read_in_current_guard_review",
-            scope_type="global" if is_admin else "none",
+            allowed=commenter,
+            source="legacy_openings_comment_role",
+            reason="separate_comment_guard_real",
+            scope_type="global" if commenter else "none",
         )
 
     # Reportes
