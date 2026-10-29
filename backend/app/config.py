@@ -57,6 +57,11 @@ class Config:
         "PERMISSIONS_TRACK_READ_GRANTS_ENABLED", "false"
     ).strip().lower() == "true"
 
+    # Aperturas: mismo modelo de checks; comentario/admin son independientes.
+    PERMISSIONS_OPENINGS_READ_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_OPENINGS_READ_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
     # Base de datos
     SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
