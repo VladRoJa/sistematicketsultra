@@ -7,7 +7,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, jsonify, request, current_app, has_app_context, has_request_context
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy.exc import IntegrityError
 
@@ -86,7 +86,37 @@ def _current_user_id() -> int | None:
         return None
 
 
+def openings_read_grants_enabled() -> bool:
+    """Check global solo tras revisión. OFF mantiene acceso legacy."""
+    if not has_app_context():
+        return False
+    return bool(current_app.config.get("PERMISSIONS_OPENINGS_READ_GRANTS_ENABLED", False))
+
+
+def _openings_read_override() -> bool | None:
+    if not openings_read_grants_enabled() or not has_request_context():
+        return None
+    user_id = _current_user_id()
+    if user_id is None:
+        return False
+    user = UserORM.get_by_id(user_id)
+    if user is None:
+        return False
+    from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
+    return _simple_global_action_grant_override(
+        user=user, action_full_key="openings.read",
+    )
+
+
 def _require_openings_read() -> tuple[dict[str, Any], int] | None:
+    override = _openings_read_override()
+    if override is True:
+        return None
+    if override is False:
+        return jsonify({
+            "error": "Forbidden",
+            "detail": "No autorizado para consultar Aperturas.",
+        }), 403
     role = _current_role()
 
     if role not in OPENINGS_READ_ROLES:
