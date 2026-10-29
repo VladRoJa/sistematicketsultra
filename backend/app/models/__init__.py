@@ -35,6 +35,10 @@ from .inventario import (
 )
 from .inventario_codigo_correccion import InventarioCodigoCorreccionORM
 from .inventario_solicitud_correccion import InventarioSolicitudCorreccionORM
+from .inventario_levantamiento import (
+    InventarioLevantamientoORM, InventarioLevantamientoReferenciaORM,
+    InventarioLevantamientoImportacionORM, InventarioLevantamientoFilaORM,
+)
 from .inventario_correccion_decision import (
     InventarioCorreccionLoteORM,
     InventarioCorreccionDecisionORM,

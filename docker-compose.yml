@@ -30,6 +30,7 @@ services:
       APP_ENV: "prod"
       ROUTINE_CONTROL_ARTIFACT_DIR: "/app/runtime/routine-control/artifacts"
       TICKET_ATTACHMENT_DIR: "/app/runtime/ticket-attachments"
+      E4_UPLOAD_DIR: "/app/runtime/inventario-e4"
 
       DISPLAY: ":99"
       GOOGLE_MESSAGES_HEADLESS: "0"
@@ -49,6 +50,7 @@ services:
     volumes:
       - /home/adminrdp/sistematicketsultra/uploads:/uploads
       - /home/adminrdp/sistematicketsultra/private/ticket-attachments:/app/runtime/ticket-attachments
+      - /home/adminrdp/sistematicketsultra/private/inventario-e4:/app/runtime/inventario-e4
       - ./backend/.playwright:/app/.playwright
       - routine_control_runtime:/app/runtime/routine-control
 

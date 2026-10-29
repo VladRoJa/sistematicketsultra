@@ -89,8 +89,9 @@ jobs:
           heads = graph.get_heads()
           assert heads == ["n26c10202626"], f"Unexpected Alembic heads: {heads}"
           revision = graph.get_revision("n26c10202626")
-          assert revision.down_revision == "v2e3a1102626", revision.down_revision
-          assert graph.get_revision("v2e3a1102626") is not None
+          assert revision.down_revision == "v2e4b1102826", revision.down_revision
+          assert graph.get_revision("v2e4b1102826") is not None
+          assert graph.get_revision("v2e4b1102826").down_revision == "v2e3a1102626"
           print("ALEMBIC_LINEAR_HEAD_OK", heads[0])
           PY
       - name: Confirm zero real dispatch capability

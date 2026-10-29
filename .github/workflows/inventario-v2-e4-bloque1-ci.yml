@@ -1,0 +1,58 @@
+name: Inventarios V2 E4 Bloque 1 · QA PostgreSQL y Excel
+on:
+  pull_request:
+    paths:
+      - "backend/app/models/inventario_levantamiento.py"
+      - "backend/app/models/__init__.py"
+      - "backend/migrations/versions/v2e4b1102826_inventario_levantamiento_recepcion.py"
+      - "backend/app/services/inventario_levantamiento_excel_parser.py"
+      - "backend/app/services/inventario_levantamientos_service.py"
+      - "backend/app/routes/inventario_levantamientos_routes.py"
+      - "backend/app/__init__.py"
+      - "backend/tests/routes/test_inventario_e4_bloque1_pg.py"
+      - ".github/workflows/inventario-v2-e4-bloque1-ci.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  e4-postgresql-xlsx:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: inventario_e4_ci
+          POSTGRES_PASSWORD: inventario_e4_ci_only
+          POSTGRES_DB: inventario_e4_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U inventario_e4_ci -d inventario_e4_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Dependencias
+        run: |
+          python -m pip install -r backend/requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Compilar código E4
+        working-directory: backend
+        run: |
+          python -m compileall -q app/models/inventario_levantamiento.py app/services/inventario_levantamiento_excel_parser.py app/services/inventario_levantamientos_service.py app/routes/inventario_levantamientos_routes.py migrations/versions/v2e4b1102826_inventario_levantamiento_recepcion.py tests/routes/test_inventario_e4_bloque1_pg.py
+      - name: QA E4 con PostgreSQL temporal
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+          SECRET_KEY: e4-test-only
+          JWT_SECRET_KEY: e4-test-only
+          SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://inventario_e4_ci:inventario_e4_ci_only@127.0.0.1:5432/inventario_e4_ci
+          INVENTARIO_E2_TEST_POSTGRES_URL: postgresql+psycopg2://inventario_e4_ci:inventario_e4_ci_only@127.0.0.1:5432/inventario_e4_ci
+        run: |
+          python -m pytest -q --tb=short -o addopts= tests/routes/test_inventario_e4_bloque1_pg.py
