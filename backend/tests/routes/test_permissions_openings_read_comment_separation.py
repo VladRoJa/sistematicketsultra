@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 from flask import Flask
-from flask_jwt_extended import JWTManager, create_access_token
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required
 
 from app.routes import openings_routes as openings
 
@@ -79,7 +79,9 @@ def test_openings_read_check_changes_actual_http_guard(role, override, expected_
     @jwt_required()
     def protected():
         denied = openings._require_openings_read()
-        return denied if denied is not None else {"ok": True}, 200
+        if denied is not None:
+            return denied
+        return {"ok": True}, 200
 
     with app.app_context():
         token = create_access_token(identity="77")
