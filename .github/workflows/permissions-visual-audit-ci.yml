@@ -6,6 +6,8 @@ on:
       - "backend/app/routes/permissions_visual_audit_routes.py"
       - "backend/scripts/audit_permission_endpoints.py"
       - "backend/app/routes/track_routes.py"
+      - "backend/app/routes/openings_routes.py"
+      - "backend/tests/routes/test_permissions_openings_read_comment_separation.py"
       - "backend/tests/routes/test_permissions_live_track_read_check.py"
       - "backend/tests/utils/test_permissions_endpoint_review_report.py"
       - "backend/app/routes/permissions_catalog_routes.py"
@@ -73,6 +75,7 @@ jobs:
             tests/routes/test_internal_documents_a12_a13_http_jwt_reconcile.py \
             tests/routes/test_permissions_phase_a_track_parity.py \
             tests/routes/test_permissions_live_track_read_check.py \
+            tests/routes/test_permissions_openings_read_comment_separation.py \
             tests/utils/test_permissions_endpoint_review_report.py \
             tests/routes/test_permissions_phase_a_inventory_parity.py
 
