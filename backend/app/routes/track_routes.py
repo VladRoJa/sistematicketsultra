@@ -137,17 +137,11 @@ def _track_read_user_override() -> bool | None:
     if user is None:
         return False
 
-    from app.models.permissions import PermissionActionORM
-    from app.routes.permissions_catalog_routes import _get_latest_active_grants_by_action
+    from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
 
-    action = PermissionActionORM.query.filter_by(
-        full_key="track.read", is_active=True,
-    ).first()
-    if action is None:
-        return None
-    active = _get_latest_active_grants_by_action(user=user, action_ids=[action.id])
-    grant = active["user"].get(action.id) or active["role"].get(action.id)
-    return (grant.effect == "allow") if grant is not None else None
+    return _simple_global_action_grant_override(
+        user=user, action_full_key="track.read",
+    )
 
 
 def _require_track_read_role() -> None:
