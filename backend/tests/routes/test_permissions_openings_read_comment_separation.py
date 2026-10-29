@@ -19,7 +19,8 @@ from app.routes import openings_routes as openings
     ("RECEPCIONISTA", False),
 ])
 def test_comment_guard_preserves_legacy_read_role_access(role, allowed):
-    with patch.object(openings, "_current_role", return_value=role):
+    app = Flask(__name__)
+    with app.app_context(), patch.object(openings, "_current_role", return_value=role):
         result = openings._require_openings_comment()
     assert (result is None) is allowed
     if result is not None:
