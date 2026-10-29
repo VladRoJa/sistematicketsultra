@@ -62,7 +62,7 @@ export class PermissionAuditMatrixComponent implements OnInit {
   loadingUsers = false;
   error = '';
   saveError = '';
-  savingTrackUserId: number | null = null;
+  savingReadUserId: number | null = null;
   private requestVersion = 0;
 
   constructor(
@@ -209,32 +209,37 @@ export class PermissionAuditMatrixComponent implements OnInit {
       });
   }
 
-  canEditTrackRead(row: VisualAuditRow): boolean {
-    // Solo la acción con autorización HTTP conectada y sin filtro de objeto.
-    return this.result?.track_read_grants_enabled === true &&
+  canEditBasicRead(row: VisualAuditRow): boolean {
+    // Solo la acción cuyo guard HTTP esté enlazado, nunca por objeto.
+    if (row.action_id === null || row.context?.branch_id || row.context?.document_id) {
+      return false;
+    }
+    return (
       row.action_key === 'track.read' &&
-      row.module_key === 'track' && row.action_id !== null &&
-      !row.context?.branch_id && !row.context?.document_id;
+      row.module_key === 'track' &&
+      this.result?.track_read_grants_enabled === true
+    ) || (
+      row.action_key === 'openings.read' &&
+      row.module_key === 'openings' &&
+      this.result?.openings_read_grants_enabled === true
+    );
   }
 
-  isSavingTrackRead(row: VisualAuditRow): boolean {
-    return this.savingTrackUserId === row.user_id;
-  }
-
-  toggleTrackRead(row: VisualAuditRow, checked: boolean): void {
-    if (!this.canEditTrackRead(row) || this.savingTrackUserId !== null) {
+  toggleBasicRead(row: VisualAuditRow, checked: boolean): void {
+    if (!this.canEditBasicRead(row) || this.savingReadUserId !== null) {
       return;
     }
+    const moduleKey = row.action_key === 'track.read' ? 'track' : 'openings';
     this.saveError = '';
-    this.savingTrackUserId = row.user_id;
-    this.catalog.setTrackReadAccess(row.user_id, checked)
-      .pipe(finalize(() => { this.savingTrackUserId = null; }))
+    this.savingReadUserId = row.user_id;
+    this.catalog.setBasicReadAccess(row.user_id, moduleKey, checked)
+      .pipe(finalize(() => { this.savingReadUserId = null; }))
       .subscribe({
         next: () => { this.load(); },
         error: response => {
           this.saveError = response?.error?.detail ||
-            'No se pudo guardar el permiso Track. No se aplicó el cambio.';
-          this.load(); // relectura obligatoria: no conservar el estado del click
+            'No se pudo guardar el permiso. No se aplicó el cambio.';
+          this.load();
         },
       });
   }
