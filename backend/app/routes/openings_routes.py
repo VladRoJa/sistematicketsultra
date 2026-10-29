@@ -98,6 +98,20 @@ def _require_openings_read() -> tuple[dict[str, Any], int] | None:
     return None
 
 
+def _require_openings_comment() -> tuple[dict[str, Any], int] | None:
+    """Acción de escritura independiente del check openings.read.
+
+    Compatibilidad: hoy se permite comentar a los mismos roles de lectura.
+    Una futura excepción de consulta NO puede conceder comentarios.
+    """
+    if _current_role() not in OPENINGS_READ_ROLES:
+        return jsonify({
+            "error": "Forbidden",
+            "detail": "No autorizado para comentar en Aperturas.",
+        }), 403
+    return None
+
+
 def _require_openings_admin() -> tuple[dict[str, Any], int] | None:
     role = _current_role()
 
@@ -2215,7 +2229,7 @@ def list_task_comments(opening_id: int, task_id: int):
 @openings_bp.route("/<int:opening_id>/tasks/<int:task_id>/comments", methods=["POST"])
 @jwt_required()
 def create_task_comment(opening_id: int, task_id: int):
-    denied = _require_openings_read()
+    denied = _require_openings_comment()
     if denied:
         return denied
 
