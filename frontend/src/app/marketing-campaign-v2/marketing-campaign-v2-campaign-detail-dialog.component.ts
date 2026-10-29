@@ -488,7 +488,7 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
     if (!this.data.canManageDispatchConfig || !this.campaign) { return; }
     const ref = this.dialog.open(MarketingCampaignV2GovernedConsoleDialogComponent, {
       width: 'min(1200px, 96vw)', maxWidth: '96vw',
-      maxHeight: '95vh', autoFocus: false,
+      maxHeight: '95vh', autoFocus: false, disableClose: true,
       panelClass: 'campaign-v2-admin-dialog',
       data: { campaignId: this.data.campaignId, campaignName: this.campaign.name },
     });

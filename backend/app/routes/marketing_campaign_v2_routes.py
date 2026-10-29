@@ -108,6 +108,12 @@ from app.services.marketing_campaign_v2_governed_monitor_service import (
     GovernedMonitorValidation,
     read_governed_dispatch_monitor,
 )
+from app.services.marketing_campaign_v2_background_job_service import (
+    BackgroundJobConflict, BackgroundJobDisabled, BackgroundJobNotFound,
+    BackgroundJobValidation, enqueue_background_job, get_background_job,
+    list_background_jobs, stop_background_job,
+)
+
 from app.services.marketing_campaign_v2_governed_dispatch_service import (
     GovernedDispatchConflict,
     GovernedDispatchDisabled,
@@ -1978,6 +1984,133 @@ def campaign_v2_governed_execute_endpoint(campaign_id: int):
     except Exception:
         db.session.rollback()
         return _error("Error en despacho gobernado; revisar estado antes de reintentar.", 500)
+
+
+def _background_dispatch_enabled():
+    # All three switches must be explicitly enabled; default is OFF.
+    return (
+        current_app.config.get("CAMPAIGN_V2_BACKGROUND_DISPATCH_ENABLED") is True
+        # Not configurable until M1c worker/fencing has passed safety review.
+        and current_app.config.get("CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY") is True
+        and current_app.config.get("CAMPAIGN_V2_PROVIDER_SEND_ENABLED") is True
+        and current_app.config.get("CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED") is True
+    )
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/<int:campaign_id>/dispatch/jobs")
+@jwt_required()
+def campaign_v2_background_enqueue_endpoint(campaign_id: int):
+    """M1b: register a job; no sending, provider construction or worker."""
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        if not _background_dispatch_enabled():
+            raise BackgroundJobDisabled("Despacho en segundo plano deshabilitado.")
+        payload = _parse_payload({
+            "approval_id", "execution_id", "expected_manifest_digest",
+            "expected_pending_child_ids", "request_key", "confirmation",
+            "confirmed", "operator_password",
+        })
+        password = payload.pop("operator_password", None)
+        if not _valid_governed_dispatch_password(user, password):
+            return _error("Contraseña incorrecta o ausente.", 403)
+        snapshot, created = enqueue_background_job(
+            campaign_id=campaign_id, approval_id=payload.get("approval_id"),
+            execution_id=payload.get("execution_id"),
+            expected_manifest_digest=payload.get("expected_manifest_digest"),
+            expected_pending_child_ids=payload.get("expected_pending_child_ids"),
+            request_key=payload.get("request_key"),
+            confirmation=payload.get("confirmation"),
+            confirmed=payload.get("confirmed"), actor_user_id=int(user.id),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(snapshot), 202 if created else 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except BackgroundJobDisabled as exc:
+        return _error(str(exc), 423)
+    except (MarketingCampaignV2RouteValidationError, BackgroundJobValidation) as exc:
+        return _error(str(exc), 400)
+    except BackgroundJobNotFound as exc:
+        return _error(str(exc), 404)
+    except BackgroundJobConflict as exc:
+        db.session.rollback()
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("No se pudo registrar la ejecución.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/<int:campaign_id>/dispatch/jobs/<int:job_id>")
+@jwt_required()
+def campaign_v2_background_get_endpoint(campaign_id: int, job_id: int):
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        _validate_query_args(set())
+        return jsonify(get_background_job(
+            campaign_id=campaign_id, job_id=job_id, actor_user_id=int(user.id),
+            session=db.session,
+        )), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (MarketingCampaignV2RouteValidationError, BackgroundJobValidation) as exc:
+        return _error(str(exc), 400)
+    except BackgroundJobNotFound as exc:
+        return _error(str(exc), 404)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible consultar la ejecución.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/jobs/mine")
+@jwt_required()
+def campaign_v2_background_mine_endpoint():
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        _validate_query_args(set())
+        return jsonify({
+            "jobs": list_background_jobs(
+                operator_user_id=int(user.id), session=db.session,
+            ),
+            # Read-only capability signal; never a security authorization.
+            # Creation still revalidates every switch, step-up and DB grant.
+            "background_dispatch_available": _background_dispatch_enabled(),
+        }), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (MarketingCampaignV2RouteValidationError, BackgroundJobValidation) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible consultar los trabajos.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/<int:campaign_id>/dispatch/jobs/<int:job_id>/stop")
+@jwt_required()
+def campaign_v2_background_stop_endpoint(campaign_id: int, job_id: int):
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        _parse_payload(set())
+        return jsonify(stop_background_job(
+            campaign_id=campaign_id, job_id=job_id, actor_user_id=int(user.id),
+            session=db.session,
+        )), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (MarketingCampaignV2RouteValidationError, BackgroundJobValidation) as exc:
+        return _error(str(exc), 400)
+    except BackgroundJobNotFound as exc:
+        return _error(str(exc), 404)
+    except BackgroundJobConflict as exc:
+        db.session.rollback()
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible detener el trabajo.", 500)
 
 
 @marketing_campaign_v2_bp.post("/campaigns-v2/qa-manual/preview")

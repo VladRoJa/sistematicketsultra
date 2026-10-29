@@ -10,6 +10,32 @@
       {{ working === 'read' ? 'Consultando…' : 'Actualizar estado' }}
     </button>
   </header>
+  <section *ngIf="backgroundJob as job" class="background-job" aria-label="Ejecución independiente">
+    <div class="background-job__heading">
+      <strong>Envío en segundo plano · {{ backgroundLabel(job) }}</strong>
+      <button mat-stroked-button type="button" (click)="refreshBackgroundJob()" [disabled]="busy">Actualizar</button>
+    </div>
+    <p><strong>{{ job.accepted_by_provider }} / {{ job.total_pending_at_start }}</strong> lotes aceptados por iVentas.
+      <span *ngIf="job.current_child_id && job.status === 'RUNNING'"> Lote #{{ job.current_child_id }} en proceso.</span>
+      <span> No significa entregado ni visualizado.</span>
+    </p>
+    <div class="background-job__track" role="progressbar"
+      aria-label="Lotes aceptados por iVentas" [attr.aria-valuemin]="0"
+      [attr.aria-valuemax]="job.total_pending_at_start"
+      [attr.aria-valuenow]="job.accepted_by_provider">
+      <div [style.width.%]="backgroundProgress(job)"></div>
+    </div>
+    <p *ngIf="job.status === 'REVIEW_REQUIRED'" role="alert" class="error">
+      Revisar el resultado en iVentas. No habrá un reintento automático.
+    </p>
+    <button *ngIf="canRequestBackgroundStop && !stopConfirmationOpen"
+      mat-stroked-button type="button" (click)="requestBackgroundStop()">Detener después del lote actual</button>
+    <div *ngIf="stopConfirmationOpen" class="background-job__stop">
+      <strong>¿Confirmas detener después del lote actual?</strong>
+      <button mat-stroked-button type="button" (click)="cancelBackgroundStop()">Cancelar</button>
+      <button mat-flat-button color="warn" type="button" (click)="confirmBackgroundStop()">Confirmar detención</button>
+    </div>
+  </section>
   <div class="dispatch-overview" *ngIf="monitor as state" aria-label="Resumen del envío">
     <div><small>Aceptados por iVentas</small><strong>{{ sentLotCount }} / {{ actionableLotCount }} lotes</strong><span>{{ acceptedContactCount | number }} contactos</span></div>
     <div><small>Pendientes</small><strong>{{ pendingLotCount }} lotes</strong></div>
@@ -154,7 +180,7 @@
         </tbody>
       </table></div>
       </details>
-      <div class="send-panel bulk-execution" *ngIf="bulkPendingIds.length > 1 && !uncertainResult">
+      <div class="send-panel bulk-execution" *ngIf="bulkPendingIds.length > 1 && !uncertainResult && !backgroundBlocksManual">
         <h4>Enviar todos los lotes pendientes · UNA SOLA CONFIRMACIÓN</h4>
         <p><strong>{{ bulkPendingIds.length }} lotes</strong> autorizados aún sin enviar.
           Los lotes ya aceptados por iVentas se excluyen. La Suite enviará solo los pendientes en el orden del manifiesto,
@@ -177,9 +203,14 @@
             <mat-progress-spinner *ngIf="working === 'bulk'" mode="indeterminate" [diameter]="16" aria-label="Enviando lotes pendientes"></mat-progress-spinner>
             {{ working === 'bulk' ? 'Enviando lotes… ' + bulkAccepted + '/' + bulkTotal : 'Enviar ' + bulkPendingIds.length + ' lotes pendientes' }}
           </button>
+          <button *ngIf="backgroundAvailable" mat-flat-button color="primary" type="button"
+            (click)="startBackground()" [disabled]="!canStartBackground">
+            {{ working === 'background' ? 'Registrando…' : 'Enviar en segundo plano' }}
+          </button>
         </div>
+        <p *ngIf="backgroundAvailable" class="hint">El trabajo continuará en el servidor cuando esté habilitado. Solo puedes minimizar después de confirmar su registro.</p>
       </div>
-      <details class="single-send" *ngIf="nextReadyChild as child" [open]="expandSingleSend">
+      <details class="single-send" *ngIf="!backgroundBlocksManual && nextReadyChild as child" [open]="expandSingleSend">
         <summary>Enviar solo el siguiente lote (alternativa)</summary>
         <h4>Envío real por iVentas · UN SOLO LOTE</h4>
         <p>#{{ child.child_id }} · {{ child.sucursal_canon }} · {{ child.recipient_count }} destinatarios. Si el resultado es incierto, NO vuelvas a enviar: primero comprueba si iVentas lo aceptó.</p>
@@ -208,4 +239,8 @@
     </ng-container>
   </section>
 </mat-dialog-content>
-<mat-dialog-actions align="end"><button mat-button type="button" (click)="close()" [disabled]="busy">Cerrar</button></mat-dialog-actions>
+<mat-dialog-actions align="end">
+  <button *ngIf="backgroundJob" mat-stroked-button type="button"
+    (click)="minimize()" [disabled]="busy">Minimizar</button>
+  <button mat-button type="button" (click)="close()" [disabled]="busy">Cerrar</button>
+</mat-dialog-actions>

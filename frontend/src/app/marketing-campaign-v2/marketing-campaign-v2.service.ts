@@ -78,6 +78,7 @@ import {
   CampaignV2TariffClassificationResult,
   CampaignV2UnclassifiedTariffsResponse,
 } from './marketing-campaign-v2.models';
+import { BackgroundDispatchJob, BackgroundDispatchJobsResponse, BackgroundDispatchStartRequest } from './background-dispatch.model';
 
 @Injectable({
   providedIn: 'root',
@@ -399,6 +400,24 @@ export class MarketingCampaignV2Service {
   ): Observable<CampaignV2GovernedExecuteResult> {
     return this.http.post<CampaignV2GovernedExecuteResult>(
       `${this.apiUrl}/${campaignId}/dispatch/execute`, payload,
+    );
+  }
+
+  startBackgroundJob(campaignId: number, payload: BackgroundDispatchStartRequest): Observable<BackgroundDispatchJob> {
+    return this.http.post<BackgroundDispatchJob>(`${this.apiUrl}/${campaignId}/dispatch/jobs`, payload);
+  }
+
+  getBackgroundJob(campaignId: number, jobId: number): Observable<BackgroundDispatchJob> {
+    return this.http.get<BackgroundDispatchJob>(`${this.apiUrl}/${campaignId}/dispatch/jobs/${jobId}`);
+  }
+
+  listMyBackgroundJobs(): Observable<BackgroundDispatchJobsResponse> {
+    return this.http.get<BackgroundDispatchJobsResponse>(`${this.apiUrl}/dispatch/jobs/mine`);
+  }
+
+  stopBackgroundJob(campaignId: number, jobId: number): Observable<BackgroundDispatchJob> {
+    return this.http.post<BackgroundDispatchJob>(
+      `${this.apiUrl}/${campaignId}/dispatch/jobs/${jobId}/stop`, {},
     );
   }
 

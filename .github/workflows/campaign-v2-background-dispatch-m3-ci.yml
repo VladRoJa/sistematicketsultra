@@ -1,0 +1,207 @@
+name: Campaign V2 Background Dispatch M3 QA
+
+on:
+  push:
+    branches:
+      - "feat/1129-background-dispatch-m3-integration"
+    paths:
+      - "backend/app/models/marketing_campaign_v2_background_job.py"
+      - "backend/app/models/__init__.py"
+      - "backend/app/config.py"
+      - "backend/app/routes/marketing_campaign_v2_routes.py"
+      - "backend/app/services/marketing_campaign_v2_background_*"
+      - "backend/app/services/marketing_campaign_v2_governed_dispatch_service.py"
+      - "backend/migrations/versions/n26c10202626_campaign_v2_background_jobs.py"
+      - "backend/tests/marketing/test_background_dispatch_*"
+      - "frontend/src/app/marketing-campaign-v2/**"
+      - "frontend/src/app/layout/**"
+      - "frontend/tests/background-dispatch-m2-integration.test.cjs"
+      - "docker-compose.yml"
+      - ".github/workflows/campaign-v2-background-dispatch-m3-ci.yml"
+  pull_request:
+    paths:
+      - "backend/app/models/marketing_campaign_v2_background_job.py"
+      - "backend/app/models/__init__.py"
+      - "backend/app/config.py"
+      - "backend/app/routes/marketing_campaign_v2_routes.py"
+      - "backend/app/services/marketing_campaign_v2_background_*"
+      - "backend/app/services/marketing_campaign_v2_governed_dispatch_service.py"
+      - "backend/migrations/versions/n26c10202626_campaign_v2_background_jobs.py"
+      - "backend/tests/marketing/test_background_dispatch_*"
+      - "frontend/src/app/marketing-campaign-v2/**"
+      - "frontend/src/app/layout/**"
+      - "frontend/tests/background-dispatch-m2-integration.test.cjs"
+      - "docker-compose.yml"
+      - ".github/workflows/campaign-v2-background-dispatch-m3-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  backend-m3-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: quota_ci
+          POSTGRES_PASSWORD: synthetic-quota-only
+          POSTGRES_DB: quota_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U quota_ci -d quota_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      SECRET_KEY: synthetic-issue1129-ci
+      JWT_SECRET_KEY: synthetic-issue1129-jwt
+      APP_ENV: testing
+      QUOTA_TEST_POSTGRES_URL: postgresql://quota_ci:synthetic-quota-only@127.0.0.1:5432/quota_ci
+      CAMPAIGN_V2_BG_M1A_TEST_PG_URL: postgresql://quota_ci:synthetic-quota-only@127.0.0.1:5432/quota_ci
+      CAMPAIGN_V2_BACKGROUND_DISPATCH_ENABLED: "false"
+      CAMPAIGN_V2_PROVIDER_SEND_ENABLED: "false"
+      CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED: "false"
+      IVENTAS_CAMPAIGN_SEND_API_KEY: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend dependencies
+        run: |
+          python -m pip install -r backend/requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Validate single Alembic head and M1a parent
+        working-directory: backend
+        run: |
+          python - <<'PY'
+          from alembic.config import Config
+          from alembic.script import ScriptDirectory
+
+          config = Config()
+          config.set_main_option("script_location", "migrations")
+          graph = ScriptDirectory.from_config(config)
+          heads = graph.get_heads()
+          assert heads == ["n26c10202626"], f"Unexpected Alembic heads: {heads}"
+          revision = graph.get_revision("n26c10202626")
+          assert revision.down_revision == "v2e4b1102826", revision.down_revision
+          assert graph.get_revision("v2e4b1102826") is not None
+          assert graph.get_revision("v2e4b1102826").down_revision == "v2e3a1102626"
+          print("ALEMBIC_LINEAR_HEAD_OK", heads[0])
+          PY
+      - name: Confirm zero real dispatch capability
+        run: |
+          test "$CAMPAIGN_V2_BACKGROUND_DISPATCH_ENABLED" = "false"
+          test "$CAMPAIGN_V2_PROVIDER_SEND_ENABLED" = "false"
+          test "$CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED" = "false"
+          python -m compileall -q backend/app/services/marketing_campaign_v2_background_job_service.py \
+            backend/app/services/marketing_campaign_v2_background_worker_service.py \
+            backend/app/services/marketing_campaign_v2_background_worker.py \
+            backend/app/services/marketing_campaign_v2_governed_dispatch_service.py \
+            backend/app/routes/marketing_campaign_v2_routes.py \
+            backend/app/models/marketing_campaign_v2_background_job.py \
+            backend/migrations/versions/n26c10202626_campaign_v2_background_jobs.py
+      - name: New M1a-M1c tests and existing D2c regression
+        working-directory: backend
+        run: |
+          python -m pytest -q --tb=short \
+            tests/marketing/test_background_dispatch_m1a_schema.py \
+            tests/marketing/test_background_dispatch_m1b_contract.py \
+            tests/marketing/test_background_dispatch_m1c_contract.py \
+            tests/marketing/test_background_dispatch_runner_lifecycle.py \
+            tests/marketing/test_background_dispatch_m3_routes.py \
+            tests/marketing/test_issue_856_stage_e_gates.py \
+            tests/marketing/test_marketing_campaign_v2_quota_dispatch_real_pg.py \
+            tests/marketing/test_marketing_campaign_v2_started_continuation.py
+      - name: PostgreSQL 16 isolation, locks and review uniqueness
+        working-directory: backend
+        run: |
+          python -m pytest -q --tb=short \
+            tests/marketing/test_background_dispatch_m3_postgres.py \
+            tests/marketing/test_background_dispatch_gate_a_pg.py
+
+
+  compose-config-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate opt-in Docker Compose worker without starting containers
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap 'rm -f .env.docker' EXIT
+          # Synthetic file lives only on the disposable CI runner.
+          # Deliberately set source flags true to verify service-level OFF overrides.
+          cat > .env.docker <<'ENV'
+          SECRET_KEY=synthetic-compose-only
+          JWT_SECRET_KEY=synthetic-compose-only
+          CAMPAIGN_V2_BACKGROUND_DISPATCH_ENABLED=true
+          CAMPAIGN_V2_PROVIDER_SEND_ENABLED=true
+          CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED=true
+          ENV
+          docker compose config --quiet
+          docker compose --profile scheduler config --quiet
+          docker compose --profile campaign-dispatch config --quiet
+          python - <<'PY'
+          import json
+          import subprocess
+
+          def compose(*args):
+              return subprocess.run(
+                  ("docker", "compose", *args),
+                  check=True, capture_output=True, text=True,
+              ).stdout
+
+          worker_name = "campaign-v2-dispatch-worker"
+          default_services = set(compose("config", "--services").splitlines())
+          scheduler_services = set(
+              compose("--profile", "scheduler", "config", "--services").splitlines()
+          )
+          rendered = json.loads(
+              compose("--profile", "campaign-dispatch", "config", "--format", "json")
+          )
+          worker = rendered["services"][worker_name]
+          assert worker_name not in default_services
+          assert worker_name not in scheduler_services
+          assert worker["profiles"] == ["campaign-dispatch"]
+          assert "db" in worker["depends_on"]
+          assert "ports" not in worker
+          assert worker["restart"] == "unless-stopped"
+          command = worker["command"]
+          assert "app.services.marketing_campaign_v2_background_worker" in (
+              command if isinstance(command, str) else " ".join(command)
+          )
+          for key in (
+              "CAMPAIGN_V2_BACKGROUND_DISPATCH_ENABLED",
+              "CAMPAIGN_V2_PROVIDER_SEND_ENABLED",
+              "CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED",
+          ):
+              assert worker["environment"][key] == "false", key
+          print("CAMPAIGN_V2_COMPOSE_OPT_IN_DISABLED_OK")
+          PY
+
+  angular-m3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install Angular dependencies
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: Test M2 UI integration
+        working-directory: frontend
+        run: node --test tests/background-dispatch-m2-integration.test.cjs
+      - name: Compile Angular production
+        working-directory: frontend
+        run: npm run build -- --configuration production

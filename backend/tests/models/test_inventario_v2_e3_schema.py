@@ -31,7 +31,11 @@ def test_e3_extiende_cadena_unica_y_no_crea_rutas():
     cfg = AlembicConfig()
     cfg.set_main_option("script_location", str(BASE / "migrations"))
     graph = ScriptDirectory.from_config(cfg)
-    assert graph.get_heads() == ["v2e4b1102826"]
+    heads = graph.get_heads()
+    assert len(heads) == 1, f"Parallel Alembic heads: {heads}"
+    lineage = {rev.revision for rev in graph.iterate_revisions(heads[0], "base")}
+    assert module.revision in lineage
+    assert "v2e3a1102626" in lineage
     assert len(list(graph.walk_revisions())) > 1
 
 

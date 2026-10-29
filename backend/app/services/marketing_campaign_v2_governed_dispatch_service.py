@@ -8,9 +8,14 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Any
+
+from flask import current_app, has_app_context
+from app.models.user_model import UserORM
+from app.services.marketing_access import MarketingAuthorizationError, resolve_marketing_access
+from app.models.marketing_campaign_v2_background_job import MarketingCampaignV2BackgroundJobORM
 
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -56,6 +61,87 @@ class GovernedDispatchConflict(RuntimeError):
 
 class GovernedDispatchDisabled(RuntimeError):
     pass
+
+
+class BackgroundDispatchStoppedBeforeClaim(GovernedDispatchConflict):
+    """STOP won before D2c's durable SUBMITTING claim; no provider HTTP occurred."""
+
+
+@dataclass(frozen=True)
+class BackgroundDispatchClaim:
+    job_id: int
+    worker_instance_id: str
+    worker_claim_generation: int
+
+
+def _guard_background_execution(
+    *, session: Any, execution_id: int, approval_id: int,
+    campaign_id: int, child_id: int, digest: str, actor_user_id: int,
+    claim: BackgroundDispatchClaim | None, now: datetime,
+) -> None:
+    """Fail closed for manual/worker contention under the D2c campaign lock.
+
+    A previously persisted mandate remains authoritative even when flags
+    are turned OFF. Do not use a browser-supplied grant or simulated JWT.
+    """
+    job = session.query(MarketingCampaignV2BackgroundJobORM).filter(
+        MarketingCampaignV2BackgroundJobORM.execution_id == execution_id,
+    ).with_for_update().one_or_none()
+    if claim is None:
+        if job is not None:
+            raise GovernedDispatchConflict(
+                "La ejecución tiene un mandato independiente; no usar envío manual.")
+        other = session.query(MarketingCampaignV2BackgroundJobORM).filter(
+            MarketingCampaignV2BackgroundJobORM.campaign_v2_id == campaign_id,
+            MarketingCampaignV2BackgroundJobORM.status.in_(
+                ("QUEUED", "RUNNING", "STOP_REQUESTED", "REVIEW_REQUIRED")),
+        ).with_for_update().first()
+        if other is not None:
+            raise GovernedDispatchConflict(
+                "La campaña tiene una ejecución independiente pendiente o en revisión.")
+        return
+
+    if not isinstance(claim, BackgroundDispatchClaim) or job is None:
+        raise GovernedDispatchConflict("Mandato independiente inválido.")
+    if (not has_app_context() or
+            any(current_app.config.get(flag) is not True for flag in (
+                "CAMPAIGN_V2_BACKGROUND_DISPATCH_ENABLED",
+                "CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY",
+                "CAMPAIGN_V2_PROVIDER_SEND_ENABLED",
+                "CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED",
+            ))):
+        raise GovernedDispatchDisabled("Despacho independiente deshabilitado.")
+
+    exact_identity = (
+        job.id == claim.job_id
+        and job.execution_id == execution_id
+        and job.approval_id == approval_id
+        and job.campaign_v2_id == campaign_id
+        and job.operator_user_id == actor_user_id
+        and job.manifest_digest == digest
+        and job.current_child_id == child_id
+        and job.worker_instance_id == claim.worker_instance_id
+        and job.worker_claim_generation == claim.worker_claim_generation
+    )
+    if not exact_identity:
+        raise GovernedDispatchConflict("Mandato no coincide con la ejecución.")
+
+    if job.status == "STOP_REQUESTED":
+        # Worker must re-read READY/no submit_started_at before marking STOPPED.
+        raise BackgroundDispatchStoppedBeforeClaim("Detenido antes de SUBMITTING.")
+    if (job.status != "RUNNING" or job.worker_lease_until is None or
+            _database_date(job.worker_lease_until) <= now or
+            child_id not in (job.pending_child_ids or [])):
+        raise GovernedDispatchConflict("Mandato vencido o perdió ownership.")
+
+    user = session.get(UserORM, actor_user_id)
+    try:
+        access = resolve_marketing_access(user)
+    except MarketingAuthorizationError as exc:
+        raise GovernedDispatchConflict("El operador perdió autorización.") from exc
+    if not (access.is_global and access.can_manage_dispatch_config and
+            access.can_send_campaigns):
+        raise GovernedDispatchConflict("El operador perdió autorización.")
 
 
 def _utc(now: datetime | None) -> datetime:
@@ -369,6 +455,7 @@ def execute_governed_child(
     send_enabled: bool, governed_enabled: bool,
     allowed_sucursal_keys: Any, session: Any | None = None,
     now: datetime | None = None,
+    background_claim: BackgroundDispatchClaim | None = None,
 ) -> dict:
     """Dispatch exactly the next READY child. Never auto-resume failed attempts."""
     if send_enabled is not True or governed_enabled is not True:
@@ -397,6 +484,12 @@ def execute_governed_child(
         if (execution is None or execution.status != "AUTHORIZED" or
                 digest != execution.manifest_digest or digest != expected_digest):
             raise GovernedDispatchConflict("Autorización de despacho inexistente o usada.")
+        _guard_background_execution(
+            session=active, execution_id=execution_id,
+            approval_id=int(approval.id), campaign_id=campaign_id,
+            child_id=child_id, digest=digest, actor_user_id=actor_user_id,
+            claim=background_claim, now=claim_time,
+        )
         if _database_date(execution.expires_at) <= claim_time:
             if not any(c.status == "SUBMITTED" for c in children):
                 raise GovernedDispatchConflict("Autorización de despacho vencida sin inicio confirmado.")

@@ -1,0 +1,31 @@
+<aside *ngIf="jobs.length" class="dispatch-dock" aria-label="Seguimiento de envíos en segundo plano">
+  <header class="dispatch-dock__heading">
+    <mat-icon aria-hidden="true">outgoing_mail</mat-icon>
+    <strong>Envíos de campañas</strong>
+    <small *ngIf="stale" role="status">Sin actualización reciente</small>
+  </header>
+  <article *ngFor="let job of jobs" class="dispatch-dock__job">
+    <div class="dispatch-dock__line">
+      <strong>Campaña #{{ job.campaign_id }}</strong>
+      <span [class.dispatch-dock__review]="job.status === 'REVIEW_REQUIRED'">
+        {{ stale ? 'Último estado: ' + label(job) : label(job) }}
+      </span>
+    </div>
+    <div class="dispatch-dock__line dispatch-dock__small">
+      <span>{{ job.accepted_by_provider }}/{{ job.total_pending_at_start }} lotes aceptados por iVentas</span>
+      <span>{{ progress(job) }}%</span>
+    </div>
+    <div class="dispatch-dock__track" role="progressbar"
+      [attr.aria-label]="'Aceptaciones de campaña ' + job.campaign_id"
+      [attr.aria-valuenow]="job.accepted_by_provider"
+      [attr.aria-valuemin]="0" [attr.aria-valuemax]="job.total_pending_at_start">
+      <div class="dispatch-dock__fill" [style.width.%]="progress(job)"></div>
+    </div>
+    <div class="dispatch-dock__line dispatch-dock__footer">
+      <small *ngIf="job.current_child_id && job.status === 'RUNNING'">Lote #{{ job.current_child_id }} en proceso · Aceptado no equivale a entregado</small>
+      <small *ngIf="job.status !== 'RUNNING'">Aceptado no equivale a entregado</small>
+      <button mat-stroked-button type="button" (click)="open(job)"
+        [attr.aria-label]="'Ver envío de campaña ' + job.campaign_id">Ver detalles</button>
+    </div>
+  </article>
+</aside>

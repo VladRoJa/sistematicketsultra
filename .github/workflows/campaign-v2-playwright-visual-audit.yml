@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'scripts/qa/campaign_v2_visual_audit.py'
+      - 'scripts/qa/campaign_v2_background_gate_a_browser.py'
       - '.github/workflows/campaign-v2-playwright-visual-audit.yml'
       - 'frontend/src/app/marketing-campaign-v2/**'
       - 'frontend/src/styles.compact*.scss'
@@ -14,7 +15,8 @@ permissions:
 
 jobs:
   anonymous-ui-smoke:
-    runs-on: ubuntu-latest
+    # Playwright 1.55 does not provide Chromium for Ubuntu 26.04.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -60,6 +62,11 @@ jobs:
             --mode anonymous \
             --base-url http://127.0.0.1:4173 \
             --out artifacts/campaign-v2-visual
+
+      - name: Gate A - authenticated synthetic background dock journey
+        run: |
+          python scripts/qa/campaign_v2_background_gate_a_browser.py \
+            --base-url http://127.0.0.1:4173
 
       - name: Upload synthetic-safe anonymous evidence
         if: always()

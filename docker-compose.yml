@@ -89,6 +89,31 @@ services:
       - scheduler
 
 
+  # Issue #1129: isolated opt-in worker, not started by the scheduler profile.
+  # Deployment gate: this service remains hard-disabled until separate release approval.
+  campaign-v2-dispatch-worker:
+    build:
+      context: ./backend
+    depends_on:
+      - db
+    env_file:
+      - .env.docker
+    environment:
+      APP_ENV: "prod"
+      CAMPAIGN_V2_BACKGROUND_DISPATCH_ENABLED: "false"
+      CAMPAIGN_V2_PROVIDER_SEND_ENABLED: "false"
+      CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED: "false"
+      CAMPAIGN_V2_BG_POLL_SECONDS: "5"
+    command: python -m app.services.marketing_campaign_v2_background_worker
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 90s
+    networks:
+      - backend-net
+    profiles:
+      - campaign-dispatch
+
+
   frontend:
     build: ./frontend
     restart: unless-stopped

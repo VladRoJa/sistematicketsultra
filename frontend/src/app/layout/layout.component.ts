@@ -29,6 +29,7 @@ import { canAccessContactCenter } from '../contact-center/contact-center-access.
 import { withCampaignV2MenuItem } from '../marketing-campaign-v2/marketing-campaign-v2-menu';
 import { withPurchaseRequisitionMenuItem } from '../purchase-requisitions/purchase-requisition-menu';
 import { SystemDailyCheckGateComponent } from '../system-daily-check/system-daily-check-gate.component';
+import { BackgroundDispatchDockComponent } from '../marketing-campaign-v2/background-dispatch-dock.component';
 
 @Component({
   selector: 'app-layout',
@@ -44,7 +45,8 @@ import { SystemDailyCheckGateComponent } from '../system-daily-check/system-dail
     MatButtonModule,
     MatDialogModule,
     DragDropModule,
-    SystemDailyCheckGateComponent
+    SystemDailyCheckGateComponent,
+    BackgroundDispatchDockComponent
   ]
 })
 export class LayoutComponent implements OnInit, AfterViewInit, OnDestroy {

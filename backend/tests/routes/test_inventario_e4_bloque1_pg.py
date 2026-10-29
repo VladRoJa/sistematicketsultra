@@ -86,7 +86,9 @@ def workbook(branch=7, second="", first="SI", code="07EL01", duplicate=False,
 def test_e4_cadena_alembic_no_abre_rama_paralela():
     cfg = AlembicConfig()
     cfg.set_main_option("script_location", str(BASE / "migrations"))
-    assert ScriptDirectory.from_config(cfg).get_heads() == ["v2e4b1102826"]
+    script = ScriptDirectory.from_config(cfg)
+    assert script.get_heads() == ["n26c10202626"]
+    assert script.get_revision("n26c10202626").down_revision == "v2e4b1102826"
 
 
 def test_plantilla_v01_parser_y_sin_revisar_por_id():

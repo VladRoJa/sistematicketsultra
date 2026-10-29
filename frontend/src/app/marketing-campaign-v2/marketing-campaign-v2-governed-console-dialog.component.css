@@ -154,3 +154,14 @@ button mat-progress-spinner { display: inline-block; vertical-align: middle; mar
   .dispatch-overview strong { font-size: 17px; }
   .dispatch-overview > div { padding-right: 7px; }
 }
+
+/* #1129 M2: persisted background-job state, not browser-owned send progress. */
+.background-job { margin: 10px 0; padding: 12px; border: 1px solid #a8bed7;
+  border-radius: 6px; background: var(--ultra-surface, #fff); }
+.background-job__heading, .background-job__stop { display: flex; align-items: center;
+  justify-content: space-between; gap: 9px; flex-wrap: wrap; }
+.background-job p { font-size: 12px; }
+.background-job__track { height: 7px; background: #dce7f6; border-radius: 3px; overflow: hidden; }
+.background-job__track > div { background: #3861af; height: 100%; }
+.background-job__stop { margin-top: 9px; padding-top: 8px; border-top: 1px solid #b5c7df; }
+.background-job__stop strong { flex-basis: 100%; }
