@@ -1236,6 +1236,17 @@ def update_user_module_access(user_id: int):
                     "module_key": module_key,
                 }), 409
 
+        # Aperturas no admite escribir 'read' hasta activar exactamente su
+        # mismo guard HTTP. No afecta el guard distinto de comentarios/admin.
+        if module_key == "openings":
+            from app.routes.openings_routes import openings_read_grants_enabled
+            if not openings_read_grants_enabled():
+                return jsonify({
+                    "error": "Conflict",
+                    "detail": "El control de consulta Aperturas no está habilitado en backend.",
+                    "module_key": module_key,
+                }), 409
+
         # B5: si el editor scoped está habilitado, la casilla global V1 NO
         # puede crear o modificar la acción base de Nube por un camino paralelo.
         if module_key == "internal_documents":
