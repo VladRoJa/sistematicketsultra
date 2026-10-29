@@ -674,6 +674,22 @@ def _get_latest_active_grants_by_action(*, user, action_ids: list[int]) -> dict:
         "role": _best_module_grants_by_action(role_grants),
     }
 
+def _simple_global_action_grant_override(*, user, action_full_key: str) -> bool | None:
+    """Consulta el grant V1 existente; no crea otro motor ni altera otros guards.
+
+    Usuario prevalece sobre rol; deny precede a allow del mismo principal.
+    None conserva la autorización legacy cuando no hay grant global simple.
+    """
+    action = PermissionActionORM.query.filter_by(
+        full_key=action_full_key, is_active=True,
+    ).first()
+    if action is None:
+        return None
+    active = _get_latest_active_grants_by_action(user=user, action_ids=[action.id])
+    grant = active["user"].get(action.id) or active["role"].get(action.id)
+    return (grant.effect == "allow") if grant is not None else None
+
+
 def _apply_module_access_override(*, legacy_decision: dict, user_grant, role_grant) -> dict:
     if user_grant:
         allowed = user_grant.effect == "allow"
