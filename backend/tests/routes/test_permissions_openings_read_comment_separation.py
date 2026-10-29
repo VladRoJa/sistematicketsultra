@@ -167,3 +167,63 @@ def test_openings_module_writer_rejects_while_flag_off(monkeypatch):
     )
     assert result.status_code == 409
     assert result.json["module_key"] == "openings"
+
+
+@pytest.mark.parametrize("role,override,flag,expected", [
+    ("APERTURAS_COLABORADOR", None, False, True),
+    ("RECEPCIONISTA", None, False, False),
+    ("APERTURAS_COLABORADOR", "deny", True, False),
+    ("RECEPCIONISTA", "allow", True, True),
+])
+def test_openings_matrix_matches_guard_when_flag_on(role, override, flag, expected):
+    from types import SimpleNamespace
+    from app.routes import permissions_visual_audit_routes as visual
+
+    user = SimpleNamespace(
+        id=77, username="QA_APERTURAS", rol=role,
+        sucursal_id=1, sucursales_ids=[1], department_id=1,
+    )
+    action = SimpleNamespace(
+        id=12, full_key="openings.read", name="Consultar Aperturas",
+        is_active=True,
+        module=SimpleNamespace(
+            id=5, key="openings", name="Aperturas", base_action_id=12,
+        ),
+    )
+    context = {
+        "user": user, "role": role, "sucursal_ids": [1],
+        "warehouse_operator": None, "planning_operator": None,
+        "allow_ticket_delete_all": False, "pm_scoped_read": False,
+    }
+    grant = SimpleNamespace(
+        id=100, action_id=12, effect=override,
+        scope_type="global", scope_branch_id=None, scope_branch_ids=[],
+        scope_department_id=None, scope_payload=None,
+        starts_at=None, expires_at=None, reason="QA opens read",
+    )
+    app = Flask(__name__)
+    app.config["PERMISSIONS_OPENINGS_READ_GRANTS_ENABLED"] = flag
+    with app.app_context():
+        row = visual.evaluate_pair(
+            user, action, context,
+            {(12, "user", 77): grant} if override else {},
+        )
+    assert row["legacy_allowed"] is expected
+    if flag and override:
+        assert row["catalog_allowed"] is expected
+        assert row["comparison"] == "coincide"
+        assert row["catalog_source"] == "openings_grant_operativo"
+    else:
+        assert row["legacy_source"] == "openings._require_openings_read"
+
+
+def test_openings_comment_projection_matches_same_legacy_read_roles():
+    from types import SimpleNamespace
+    from app.routes import permissions_catalog_routes as catalog
+    # El catálogo no debe mostrar a APERTURAS_COLABORADOR como denegado
+    # si su guard independiente de comentarios sí lo deja comentar.
+    user = SimpleNamespace(id=77, rol="APERTURAS_COLABORADOR")
+    action = SimpleNamespace(full_key="openings.comment")
+    context = {"role": "APERTURAS_COLABORADOR"}
+    decision = catalog._effective_action_decision(action, user, context)
+    assert decision["allowed"] is True
