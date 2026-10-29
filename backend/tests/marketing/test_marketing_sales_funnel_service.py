@@ -342,6 +342,43 @@ def test_drilldown_sale_filters_follow_same_attribution_hierarchy():
     )
 
 
+def test_funnel_original_includes_pase_1_dias_gratis_without_inflating_visitors():
+    def venta_total_row(order, phone, description, *, total=0, estatus="ACTIVO"):
+        return SimpleNamespace(
+            id_orden=order,
+            folio=None,
+            sucursal="Villas del Rey",
+            fecha=date(2026, 10, 10),
+            telefono=phone,
+            descripcion=description,
+            total=total,
+            estatus=estatus,
+        )
+
+    rows = [
+        venta_total_row("1", "6861111111", "PASE 1 DIAS GRATIS"),
+        venta_total_row("2", "6861111111", "PASE 1 DIAS GRATIS"),
+        venta_total_row("3", "6862222222", "PASE RECORRIDO"),
+        venta_total_row("4", "6863333333", "PASE 1 DIAS GRATIS", total=10),
+        venta_total_row("5", "6864444444", "PASE 1 DIAS GRATIS", estatus="CANCELADO"),
+        venta_total_row("6", "6865555555", "CORTESIA DIARIA"),
+    ]
+
+    visits = marketing_sales_funnel_service._load_visits(
+        rows=rows,
+        month_start=date(2026, 10, 1),
+        branch_ids=(4,),
+        alias_map={"VILLAS DEL REY": 4},
+    )
+
+    assert len(visits) == 2
+    assert {visit.phone for visit in visits} == {"6861111111", "6862222222"}
+    assert all(
+        visit.kind == marketing_sales_funnel_service.VISIT_KIND_REGISTERED
+        for visit in visits
+    )
+
+
 def test_direct_purchase_visit_is_added_once_without_duplicating_registered_visit():
     registered = [
         marketing_sales_funnel_service._CommercialVisit(
