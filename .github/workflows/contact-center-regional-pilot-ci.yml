@@ -10,6 +10,7 @@ on:
       - "frontend/src/app/contact-center/contact-center-access.guard.ts"
       - "docs/security/contact_center_edmundo_regional_pilot_20261027.md"
       - "docs/security/contact_center_manager_pilot_mexicali_san_luis_20261027.md"
+      - "docs/security/contact_center_manager_pilot_region_centro_20261029.md"
       - ".github/workflows/contact-center-regional-pilot-ci.yml"
 
 permissions:
@@ -49,7 +50,7 @@ jobs:
           python -m pytest -q --tb=short -o addopts= \
             tests/contact_center/test_contact_center_access.py \
             tests/contact_center/test_contact_center_manager_scope_contract.py \
-            tests/frontend/test_contact_center_frontend_contract.py::test_contact_center_frontend_access_covers_all_thirteen_pilot_branches \
+            tests/frontend/test_contact_center_frontend_contract.py::test_contact_center_frontend_access_covers_all_eighteen_pilot_branches \
             tests/frontend/test_contact_center_frontend_contract.py::test_contact_center_menu_waits_for_backend_access_confirmation \
             tests/contact_center/test_contact_center_shared_visibility_contract.py
 
