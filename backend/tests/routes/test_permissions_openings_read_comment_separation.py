@@ -224,6 +224,9 @@ def test_openings_comment_projection_matches_same_legacy_read_roles():
     # si su guard independiente de comentarios sí lo deja comentar.
     user = SimpleNamespace(id=77, rol="APERTURAS_COLABORADOR")
     action = SimpleNamespace(full_key="openings.comment")
-    context = {"role": "APERTURAS_COLABORADOR"}
+    context = {
+        "role": "APERTURAS_COLABORADOR", "sucursal_ids": [],
+        "warehouse_operator": None, "planning_operator": None,
+    }
     decision = catalog._effective_action_decision(action, user, context)
     assert decision["allowed"] is True
