@@ -102,5 +102,5 @@ def test_repo_m1a_migration_and_model_are_already_registered():
     model = ROOT / "app/models/marketing_campaign_v2_background_job.py"
     migration = ROOT / "migrations/versions/n26c10202626_campaign_v2_background_jobs.py"
     assert model.is_file() and migration.is_file()
-    assert 'down_revision = "v2e3a1102626"' in migration.read_text()
+    assert 'down_revision = "v2e4b1102826"' in migration.read_text()
     assert "uq_mkt_v2_bg_jobs_campaign_active" in model.read_text()
