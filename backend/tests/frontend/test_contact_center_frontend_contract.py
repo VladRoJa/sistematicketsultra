@@ -60,7 +60,7 @@ def test_contact_center_route_is_guarded_and_lazy_loaded():
     assert "import('./contact-center/contact-center.component')" in routes
 
 
-def test_contact_center_frontend_access_covers_all_thirteen_pilot_branches():
+def test_contact_center_frontend_access_covers_all_eighteen_pilot_branches():
     guard = _read(ACCESS_GUARD)
 
     assert "'ADMICORP'" in guard
@@ -79,8 +79,10 @@ def test_contact_center_frontend_access_covers_all_thirteen_pilot_branches():
     assert "'ADMINISTRADOR'" not in guard
     assert "'LECTOR_GLOBAL'" not in guard
 
-    for branch_id in range(1, 14):
+    for branch_id in (*range(1, 14), 19, 21, 22, 23, 25):
         assert f"  {branch_id}," in guard
+    for excluded_branch_id in (14, 15, 16, 17, 18, 20, 24, 26):
+        assert f"  {excluded_branch_id}," not in guard
 
 
 def test_contact_center_menu_waits_for_backend_access_confirmation():

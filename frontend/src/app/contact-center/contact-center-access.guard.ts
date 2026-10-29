@@ -32,6 +32,12 @@ const CONTACT_CENTER_MANAGER_ALLOWED_BRANCH_IDS = new Set([
   11,
   12,
   13,
+  // Región Centro: Sendero Chihuahua, Ixtapaluca, Insurgentes, Tlalnepantla y Metepec.
+  19,
+  21,
+  22,
+  23,
+  25,
 ]);
 
 
