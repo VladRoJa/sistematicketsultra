@@ -90,7 +90,8 @@ def openings_read_grants_enabled() -> bool:
     """Check global solo tras revisión. OFF mantiene acceso legacy."""
     if not has_app_context():
         return False
-    return bool(current_app.config.get("PERMISSIONS_OPENINGS_READ_GRANTS_ENABLED", False))
+    value = current_app.config.get("PERMISSIONS_OPENINGS_READ_GRANTS_ENABLED", False)
+    return str(value).strip().lower() == "true"
 
 
 def _openings_read_override() -> bool | None:
