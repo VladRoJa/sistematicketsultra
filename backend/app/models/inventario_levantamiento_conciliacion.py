@@ -21,6 +21,8 @@ class InventarioLevantamientoResolucionORM(db.Model):
         "inventario_correccion_solicitudes.id", ondelete="RESTRICT"), nullable=True)
     inventario_id_resultante = db.Column(db.Integer, db.ForeignKey(
         "inventario_general.id", ondelete="RESTRICT"), nullable=True)
+    movimiento_id = db.Column(db.Integer, db.ForeignKey(
+        "movimientos_inventario.id", ondelete="RESTRICT"), nullable=True)
     motivo = db.Column(db.Text, nullable=False)
     idempotency_key = db.Column(UUID(as_uuid=True), nullable=False)
     actor_usuario_id = db.Column(db.Integer, db.ForeignKey(
@@ -29,7 +31,7 @@ class InventarioLevantamientoResolucionORM(db.Model):
     __table_args__ = (
         db.UniqueConstraint("actor_usuario_id", "idempotency_key",
                             name="uq_inv_e4_resolucion_idempotencia"),
-        db.CheckConstraint("accion IN ('E2_APROBADA','REGISTRADO_OFICIAL')",
+        db.CheckConstraint("accion IN ('E2_APROBADA','REGISTRADO_OFICIAL','BAJA_PREVIA')",
                            name="ck_inv_e4_resolucion_accion"),
         db.CheckConstraint("char_length(btrim(motivo)) BETWEEN 20 AND 2000",
                            name="ck_inv_e4_resolucion_motivo"),
