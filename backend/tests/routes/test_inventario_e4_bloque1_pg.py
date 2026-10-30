@@ -29,6 +29,7 @@ from app.services.inventario_levantamiento_excel_parser import (
 BASE = Path(__file__).resolve().parents[2]
 MIGRATION = BASE / "migrations/versions/v2e4b1102826_inventario_levantamiento_recepcion.py"
 MIGRATION_B2 = BASE / "migrations/versions/v2e4b2103026_levantamiento_conciliacion.py"
+MIGRATION_B3 = BASE / "migrations/versions/v2e4b3103026_revisiones_automaticas.py"
 
 
 def original_csv():
@@ -88,9 +89,10 @@ def test_e4_cadena_alembic_no_abre_rama_paralela():
     cfg = AlembicConfig()
     cfg.set_main_option("script_location", str(BASE / "migrations"))
     script = ScriptDirectory.from_config(cfg)
-    assert script.get_heads() == ["v2e4b2103026"]
+    assert script.get_heads() == ["v2e4b3103026"]
     assert script.get_revision("n26c10202626").down_revision == "v2e4b1102826"
     assert script.get_revision("v2e4b2103026").down_revision == "n26c10202626"
+    assert script.get_revision("v2e4b3103026").down_revision == "v2e4b2103026"
 
 
 def test_plantilla_v01_parser_y_sin_revisar_por_id():
@@ -298,6 +300,12 @@ def api(monkeypatch, tmp_path):
                 spec_b2.loader.exec_module(migration_b2)
                 monkeypatch.setattr(migration_b2, "op", Operations(MigrationContext.configure(con)))
                 migration_b2.upgrade()
+                spec_b3 = importlib.util.spec_from_file_location("inv_e4_b3_migration", MIGRATION_B3)
+                migration_b3 = importlib.util.module_from_spec(spec_b3)
+                assert spec_b3 and spec_b3.loader
+                spec_b3.loader.exec_module(migration_b3)
+                monkeypatch.setattr(migration_b3, "op", Operations(MigrationContext.configure(con)))
+                migration_b3.upgrade()
                 con.exec_driver_sql("INSERT INTO sucursales VALUES (6),(7),(8)")
                 con.exec_driver_sql("INSERT INTO users VALUES (1,'ADMINISTRADOR'),(2,'GERENTE'),(3,'GERENTE_REGIONAL')")
                 con.exec_driver_sql("INSERT INTO inventario_general (id,codigo_interno,tipo,nombre,marca) VALUES (501,'07CA01','APARATOS','Caminadora','Star Trac'),(502,'07EL01','APARATOS','Eliptica','Precor'),(503,'07RE00','APARATOS','Remo','Concept2')")
