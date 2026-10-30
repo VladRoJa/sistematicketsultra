@@ -17,7 +17,7 @@ from app.services.inventario_levantamientos_service import (
 )
 
 from app.services.inventario_levantamiento_conciliacion_service import (
-    tablero_e4, registrar_resolucion, cerrar_e4,
+    tablero_e4, cerrar_e4,
 )
 
 from app.services.inventario_levantamiento_revision_service import listado_revisiones
@@ -229,19 +229,6 @@ def consultar_revisiones_automaticas(levantamiento_id):
 def consultar_conciliacion_e4(levantamiento_id):
     _actor()
     return jsonify(tablero_e4(levantamiento_id)), 200
-
-
-@inventario_levantamientos_bp.post("/<int:levantamiento_id>/resoluciones")
-@jwt_required()
-def resolver_conciliacion_e4(levantamiento_id):
-    uid = _actor()
-    try:
-        resolucion, replay = registrar_resolucion(
-            levantamiento_id, uid, request.get_json(silent=True))
-    except IntegrityError:
-        db.session.rollback()
-        raise E4Error(409, "CONFLICTO_CONCURRENTE", "Resolución simultánea; actualiza los casos")
-    return jsonify({"resolucion": resolucion, "replayed": replay}), 200 if replay else 201
 
 
 @inventario_levantamientos_bp.post("/<int:levantamiento_id>/cerrar")
