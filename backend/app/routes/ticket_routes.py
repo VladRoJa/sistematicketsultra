@@ -628,6 +628,25 @@ def cambiar_recepciones_lote_tapizado(ticket_id):
         return jsonify({"mensaje": "No se pudieron guardar las recepciones"}), 500
 
 
+def tickets_create_grants_enabled() -> bool:
+    """El check afecta la entrada a creación, nunca su alcance por sucursal."""
+    from flask import has_app_context
+    if not has_app_context():
+        return False
+    value = current_app.config.get("PERMISSIONS_TICKETS_CREATE_GRANTS_ENABLED", False)
+    return str(value).strip().lower() == "true"
+
+
+def _ticket_create_grant_denied(user) -> bool:
+    """Solo un DENY efectivo bloquea; allow NO evita validaciones existentes."""
+    if not tickets_create_grants_enabled():
+        return False
+    from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
+    return _simple_global_action_grant_override(
+        user=user, action_full_key="tickets.create",
+    ) is False
+
+
 @ticket_bp.route('/create', methods=['POST'])
 @jwt_required()
 def create_ticket():
@@ -636,6 +655,11 @@ def create_ticket():
         user = UserORM.get_by_id(usuario_actual)
         if not user:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
+
+        # Entrada por acción. Un allow NO amplía sucursales, aparatos o flujos
+        # de negocio y un deny detiene antes de cualquier escritura.
+        if _ticket_create_grant_denied(user):
+            return jsonify({"mensaje": "No autorizado para crear tickets."}), 403
 
         try:
             data, image_file = _parse_create_ticket_request()
