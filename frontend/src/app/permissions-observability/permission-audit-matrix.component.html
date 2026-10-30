@@ -2,9 +2,9 @@
   <header class="audit-head">
     <div>
       <h2>Matriz de acceso</h2>
-      <p>Solo los permisos certificados pueden editarse. Track y Aperturas · Consultar requieren activación explícita del backend.</p>
+      <p>Solo los permisos certificados pueden editarse. Cada acción editable requiere su guard y activación explícita del backend.</p>
     </div>
-    <span class="audit-pill">{{ result?.track_read_grants_enabled || result?.openings_read_grants_enabled ? 'Checks de lectura disponibles' : 'Solo consulta · controles bloqueados' }}</span>
+    <span class="audit-pill">{{ result?.track_read_grants_enabled || result?.openings_read_grants_enabled || result?.openings_comment_grants_enabled ? 'Checks de lectura disponibles' : 'Solo consulta · controles bloqueados' }}</span>
   </header>
 
   <nav class="audit-perspectives" aria-label="Perspectiva de auditoría">
@@ -61,7 +61,7 @@
     </div>
   </section>
 
-  <div class="audit-notice">Los checks de lectura de Track y Aperturas solo podrán editarse cuando cada guard esté habilitado. No permiten procesos Track, gestionar Aperturas ni crear comentarios. El resto sigue en diagnóstico. «Sin comprobar» no equivale a denegado.</div>
+  <div class="audit-notice">Cada check requiere su propio guard activo. Consultar Aperturas NO concede comentarios, y comentar NO concede gestión ni lectura por sí mismo. El resto sigue en diagnóstico. «Sin comprobar» no equivale a denegado.</div>
   <p class="audit-error" role="alert" *ngIf="error">{{ error }}</p>
   <p class="audit-error" role="alert" *ngIf="saveError">{{ saveError }}</p>
   <p class="audit-loading" role="status" *ngIf="loading">Evaluando página de resultados…</p>
