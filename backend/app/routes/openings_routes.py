@@ -129,13 +129,39 @@ def _require_openings_read() -> tuple[dict[str, Any], int] | None:
     return None
 
 
-def _require_openings_comment() -> tuple[dict[str, Any], int] | None:
-    """Acción de escritura independiente del check openings.read.
+def openings_comment_grants_enabled() -> bool:
+    """Opt-in independiente de lectura y administración de Aperturas."""
+    if not has_app_context():
+        return False
+    value = current_app.config.get("PERMISSIONS_OPENINGS_COMMENT_GRANTS_ENABLED", False)
+    return str(value).strip().lower() == "true"
 
-    Compatibilidad: hoy se permite comentar a los mismos roles de lectura.
-    Una futura excepción de consulta NO puede conceder comentarios.
+
+def _openings_comment_override() -> bool | None:
+    if not openings_comment_grants_enabled() or not has_request_context():
+        return None
+    user_id = _current_user_id()
+    if user_id is None:
+        return False
+    user = UserORM.get_by_id(user_id)
+    if user is None:
+        return False
+    from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
+    return _simple_global_action_grant_override(
+        user=user, action_full_key="openings.comment",
+    )
+
+
+def _require_openings_comment() -> tuple[dict[str, Any], int] | None:
+    """Un check de lectura NO habilita crear comentarios.
+
+    El grant de comentarios puede habilitar/denegar esta única acción.
+    El endpoint mantiene JWT, existencia de apertura/tarea y validaciones.
     """
-    if _current_role() not in OPENINGS_READ_ROLES:
+    override = _openings_comment_override()
+    if override is True:
+        return None
+    if override is False or _current_role() not in OPENINGS_READ_ROLES:
         return jsonify({
             "error": "Forbidden",
             "detail": "No autorizado para comentar en Aperturas.",
