@@ -230,3 +230,112 @@ def test_openings_comment_projection_matches_same_legacy_read_roles():
     }
     decision = catalog._effective_action_decision(action, user, context)
     assert decision["allowed"] is True
+
+
+@pytest.mark.parametrize("role,override,expected_status", [
+    ("APERTURAS_COLABORADOR", None, 200),
+    ("RECEPCIONISTA", None, 403),
+    ("APERTURAS_ADMIN", False, 403),
+    ("RECEPCIONISTA", True, 200),
+])
+def test_comment_action_real_post_guard(role, override, expected_status):
+    """POST real, aborta antes de DB, sin crear comentarios sintéticos."""
+    app = Flask(__name__)
+    app.config.update(
+        TESTING=True, JWT_SECRET_KEY="synthetic-openings-comment",
+        PERMISSIONS_OPENINGS_COMMENT_GRANTS_ENABLED=True,
+        PERMISSIONS_OPENINGS_READ_GRANTS_ENABLED=False,
+    )
+    JWTManager(app)
+    app.register_blueprint(openings.openings_bp, url_prefix="/api/openings")
+    with app.app_context():
+        token = create_access_token(identity="77")
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    db_mock = SimpleNamespace(session=Mock())
+    db_mock.session.get.return_value = None
+    with patch.object(openings, "_current_role", return_value=role), \
+         patch.object(openings, "_openings_comment_override", return_value=override), \
+         patch.object(openings, "db", db_mock):
+        result = app.test_client().post(
+            "/api/openings/1/tasks/2/comments",
+            headers={"Authorization": "Bearer " + token},
+            json={"comment": "QA sin escritura"},
+        )
+    if expected_status == 200:
+        # Un permiso para comentar llega hasta la búsqueda del recurso.
+        # En ausencia de apertura de QA la respuesta correcta es 404.
+        assert result.status_code == 404
+        db_mock.session.get.assert_called_once()
+    else:
+        assert result.status_code == 403
+        db_mock.session.get.assert_not_called()
+    db_mock.session.add.assert_not_called()
+    db_mock.session.commit.assert_not_called()
+
+
+def test_comment_allow_does_not_grant_read_or_manage():
+    app = Flask(__name__)
+    app.config.update(
+        TESTING=True, JWT_SECRET_KEY="synthetic-comment-isolation",
+        PERMISSIONS_OPENINGS_COMMENT_GRANTS_ENABLED=True,
+        PERMISSIONS_OPENINGS_READ_GRANTS_ENABLED=False,
+    )
+    with app.app_context():
+        with patch.object(openings, "_current_role", return_value="RECEPCIONISTA"), \
+             patch.object(openings, "_openings_comment_override", return_value=True):
+            assert openings._require_openings_comment() is None
+            assert openings._require_openings_read()[1] == 403
+            assert openings._require_openings_admin()[1] == 403
+
+
+def test_comment_flag_off_does_not_hit_user_orm():
+    app = Flask(__name__)
+    app.config.update(PERMISSIONS_OPENINGS_COMMENT_GRANTS_ENABLED=False)
+    with app.test_request_context("/api/openings/1/tasks/2/comments", method="POST"):
+        with patch.object(openings.UserORM, "get_by_id") as lookup:
+            assert openings._openings_comment_override() is None
+            lookup.assert_not_called()
+
+
+@pytest.mark.parametrize("flag,role,effect,expected", [
+    (False, "RECEPCIONISTA", "allow", False),
+    (True, "RECEPCIONISTA", "allow", True),
+    (True, "APERTURAS_ADMIN", "deny", False),
+])
+def test_comment_matrix_matches_flag_and_real_guard(flag, role, effect, expected):
+    from types import SimpleNamespace
+    from app.routes import permissions_visual_audit_routes as visual
+
+    user = SimpleNamespace(
+        id=77, username="QA", rol=role, sucursal_id=1,
+        sucursales_ids=[1], department_id=1,
+    )
+    action = SimpleNamespace(
+        id=29, full_key="openings.comment", name="Comentar",
+        is_active=True,
+        module=SimpleNamespace(id=5, key="openings", name="Aperturas", base_action_id=12),
+    )
+    context = {
+        "user": user, "role": role, "sucursal_ids": [1],
+        "warehouse_operator": None, "planning_operator": None,
+        "allow_ticket_delete_all": False, "pm_scoped_read": False,
+    }
+    grant = SimpleNamespace(
+        id=200, action_id=29, effect=effect, scope_type="global",
+        scope_branch_id=None, scope_branch_ids=[], scope_department_id=None,
+        scope_payload=None, starts_at=None, expires_at=None, reason="QA",
+    )
+    app = Flask(__name__)
+    app.config["PERMISSIONS_OPENINGS_COMMENT_GRANTS_ENABLED"] = flag
+    with app.app_context():
+        row = visual.evaluate_pair(
+            user, action, context, {(29, "user", 77): grant},
+        )
+    assert row["legacy_allowed"] is expected
+    if flag:
+        assert row["catalog_allowed"] is expected
+        assert row["catalog_source"] == "openings_comment_grant_operativo"
+        assert row["comparison"] == "coincide"
+    else:
+        assert row["legacy_source"] == "openings._require_openings_comment"
