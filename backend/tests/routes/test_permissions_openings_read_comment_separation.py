@@ -339,3 +339,38 @@ def test_comment_matrix_matches_flag_and_real_guard(flag, role, effect, expected
         assert row["comparison"] == "coincide"
     else:
         assert row["legacy_source"] == "openings._require_openings_comment"
+
+
+def test_comment_real_override_resolves_exact_action_from_authenticated_user():
+    from types import SimpleNamespace
+    from app.routes import permissions_catalog_routes as catalog
+
+    app = Flask(__name__)
+    app.config.update(
+        JWT_SECRET_KEY="synthetic-comment-source",
+        PERMISSIONS_OPENINGS_COMMENT_GRANTS_ENABLED=True,
+    )
+    JWTManager(app)
+    with app.app_context():
+        token = create_access_token(identity="77")
+    seen = {}
+    def fake_decision(*, user, action_full_key):
+        seen["id"] = user.id
+        seen["action"] = action_full_key
+        return False
+    with app.test_request_context(
+        "/api/openings/1/tasks/2/comments",
+        headers={"Authorization": "Bearer " + token},
+        method="POST",
+    ):
+        from flask_jwt_extended import verify_jwt_in_request
+        verify_jwt_in_request()
+        with patch.object(
+            openings.UserORM, "get_by_id",
+            return_value=SimpleNamespace(id=77, rol="APERTURAS_ADMIN"),
+        ), patch.object(
+            catalog, "_simple_global_action_grant_override",
+            side_effect=fake_decision,
+        ):
+            assert openings._openings_comment_override() is False
+    assert seen == {"id": 77, "action": "openings.comment"}
