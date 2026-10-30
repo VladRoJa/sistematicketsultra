@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
+import { RouterModule } from '@angular/router';
 import { InventarioService } from '../../services/inventario.service';
 import {
   CasoConciliacionE4, TableroConciliacionE4,
@@ -15,7 +16,7 @@ type FiltroFilas = 'TODAS' | 'NO' | 'SIN_REVISAR' | 'HALLAZGOS' | 'OBSERVACIONES
 @Component({
   selector: 'app-inventario-levantamientos',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule],
+  imports: [CommonModule, FormsModule, MatIconModule, RouterModule],
   templateUrl: './levantamientos.component.html',
   styleUrls: ['./levantamientos.component.css'],
 })
@@ -412,7 +413,10 @@ export class LevantamientosComponent implements OnInit {
   }
 
   get puedeCerrar(): boolean {
-    return !!this.tablero?.puede_cerrar && !this.procesando &&
+    const r = this.revisionesAutomaticas?.resumen;
+    return !!this.tablero?.puede_cerrar && !!r &&
+      r.bloqueadas === 0 && r.por_autorizar === 0 && r.rechazadas === 0 &&
+      !this.procesando &&
       this.confirmoCierre && this.motivoCierre.trim().length >= 20 &&
       this.motivoCierre.trim().length <= 2000;
   }
