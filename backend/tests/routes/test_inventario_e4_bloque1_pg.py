@@ -585,8 +585,8 @@ def test_api_real_xlsx_http_aislado_con_historico_sin_mutaciones(api):
     assert _snapshot(app) == before, "La evidencia NO debe cambiar inventario V1/E2"
 
 
-def test_api_conciliacion_cierre_no_modifica_inventario_y_exige_e3(api):
-    """Un NO y un hallazgo deben tener resolución autorizada antes del cierre."""
+def test_e3_aprobada_con_efecto_real_habilita_cierre_sin_movimiento_e4(api):
+    """E4 nunca escribe stock; solo valida la decisión E3 ya aplicada."""
     client, tokens, app = api
     root = "/api/inventario/levantamientos"
     created = client.post(root, headers=tokens[1], data={
@@ -595,224 +595,101 @@ def test_api_conciliacion_cierre_no_modifica_inventario_y_exige_e3(api):
     })
     assert created.status_code == 201, created.get_json()
     lev = created.get_json()["levantamiento"]["id"]
-    book = load_workbook(BytesIO(workbook(first="SI", second="NO", found=True)))
-    book["HALLAZGOS"]["A8"] = "07AD99"
-    original = BytesIO()
-    book.save(original)
-    imp_resp = client.post(f"{root}/{lev}/importaciones", headers=tokens[1], data={
-        "idempotency_key": str(uuid4()), "file": (BytesIO(original.getvalue()), "devuelto.xlsx"),
+    book = load_workbook(BytesIO(workbook(first="SI", second="NO", found=False)))
+    book["APARATOS"]["G9"] = "Verificado físicamente, no localizado tras segunda inspección"
+    buf = BytesIO()
+    book.save(buf)
+    loaded = client.post(f"{root}/recepciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()), "file": (BytesIO(buf.getvalue()), "recibido.xlsx"),
     })
-    assert imp_resp.status_code == 201, imp_resp.get_json()
-    imp = imp_resp.get_json()["importacion"]
-    assert imp["resultado"] == "VALIDATED"
-    endpoint = f"{root}/{lev}/conciliacion"
-    assert client.get(endpoint, headers=tokens[2]).status_code == 403
-    board = client.get(endpoint, headers=tokens[1])
-    assert board.status_code == 200, board.get_json()
-    casos = {x["caso"] for x in board.get_json()["casos"]}
-    assert casos == {"NO:502", "HALLAZGO:8"}
-    assert board.get_json()["puede_cerrar"] is False
+    assert loaded.status_code == 201, loaded.get_json()
+    board = client.get(f"{root}/{lev}/conciliacion", headers=tokens[1]).get_json()
+    assert board["puede_cerrar"] is False
+    assert board["bloqueos"] == ["REVISIONES_SIN_AUTORIZACION"]
     assert client.post(f"{root}/{lev}/cerrar", headers=tokens[1], json={
-        "idempotency_key": str(uuid4()), "motivo": "Cierre antes de autorizar hallazgos",
+        "motivo": "Intento sin autorización E3 suficiente",
+        "idempotency_key": str(uuid4()),
     }).status_code == 409
-
-    # Simular únicamente la decisión E3 ya aplicada, no a través de la ruta E4.
+    items = client.get(f"{root}/{lev}/revisiones", headers=tokens[1]).get_json()["items"]
+    assert len(items) == 1 and items[0]["solicitud_e2_id"]
+    solicitud_id = items[0]["solicitud_e2_id"]
+    # La aceptación E3 real se prueba en test_inventario_e3_decisiones_pg.py.
+    # Aquí se simula su efecto ya aplicado y se comprueba que E4 NO reescribe V1.
     with app.app_context():
         with db.engine.begin() as con:
-            con.exec_driver_sql("""
-                INSERT INTO inventario_correccion_solicitudes
-                    (id,tipo,estado,sucursal_id,inventario_id,creado_por_usuario_id)
-                VALUES (900,'NOT_LOCATED','APPROVED',7,502,2)
-            """)
+            con.execute(sa.text(
+                "UPDATE inventario_correccion_solicitudes SET estado='APPROVED' WHERE id=:id"
+            ), {"id": solicitud_id})
             con.exec_driver_sql("UPDATE inventario_sucursal SET stock=0 WHERE inventario_id=502")
-            con.exec_driver_sql("""
-                INSERT INTO inventario_general (id,codigo_interno,tipo,nombre)
-                VALUES (504,'07AD99','APARATOS','Banco hallado')
-            """)
-            con.exec_driver_sql("INSERT INTO inventario_sucursal VALUES (504,7,1)")
-        db.session.remove()
-    snapshot = _snapshot(app)
-    reason = "Conciliado con evidencia y autorización corporativa verificada"
-    no_key = str(uuid4())
-    no = client.post(f"{root}/{lev}/resoluciones", headers=tokens[1], json={
-        "caso": "NO:502", "accion": "E2_APROBADA",
-        "solicitud_id": 900, "motivo": reason, "idempotency_key": no_key,
-    })
-    assert no.status_code == 201, no.get_json()
-    replay = client.post(f"{root}/{lev}/resoluciones", headers=tokens[1], json={
-        "caso": "NO:502", "accion": "E2_APROBADA",
-        "solicitud_id": 900, "motivo": reason, "idempotency_key": no_key,
-    })
-    assert replay.status_code == 200 and replay.get_json()["replayed"]
-    assert client.post(f"{root}/{lev}/cerrar", headers=tokens[1], json={
-        "idempotency_key": str(uuid4()), "motivo": reason,
-    }).status_code == 409
-    found = client.post(f"{root}/{lev}/resoluciones", headers=tokens[1], json={
-        "caso": "HALLAZGO:8", "accion": "REGISTRADO_OFICIAL",
-        "inventario_id_resultante": 504, "motivo": reason,
-        "idempotency_key": str(uuid4()),
-    })
-    assert found.status_code == 201, found.get_json()
-    board = client.get(endpoint, headers=tokens[1]).get_json()
-    assert board["puede_cerrar"] is True and not board["bloqueos"]
-    close_key = str(uuid4())
-    cierre = client.post(f"{root}/{lev}/cerrar", headers=tokens[1], json={
-        "idempotency_key": close_key, "motivo": reason,
-    })
-    assert cierre.status_code == 201, cierre.get_json()
-    assert cierre.get_json()["cierre"]["estado"] == "CLOSED"
-    close_replay = client.post(f"{root}/{lev}/cerrar", headers=tokens[1], json={
-        "idempotency_key": close_key, "motivo": reason,
-    })
-    assert close_replay.status_code == 200
-    assert close_replay.get_json()["replayed"]
-    assert client.post(f"{root}/{lev}/importaciones", headers=tokens[1], data={
-        "idempotency_key": str(uuid4()),
-        "file": (BytesIO(original.getvalue()), "intento_post_cierre.xlsx"),
-    }).status_code == 409
-    assert _snapshot(app) == snapshot, "E4 solo resuelve/cierra: no muta V1 ni E2"
-
-
-def test_baja_previa_exige_movimiento_salida_valido_sin_duplicarlo(api):
-    client, tokens, app = api
-    root = "/api/inventario/levantamientos"
-    response = client.post(root, headers=tokens[1], data={
-        "sucursal_id": "7", "origen_corte": "CSV_HISTORICO",
-        "cycle_key": str(uuid4()), "baseline_csv": (BytesIO(original_csv()), "corte.csv"),
-    })
-    assert response.status_code == 201, response.get_json()
-    lev = response.get_json()["levantamiento"]["id"]
-    upload = client.post(f"{root}/{lev}/importaciones", headers=tokens[1], data={
-        "idempotency_key": str(uuid4()),
-        "file": (BytesIO(workbook(first="SI", second="NO", found=False)), "entrega.xlsx"),
-    })
-    assert upload.status_code == 201, upload.get_json()
-    assert upload.get_json()["importacion"]["resultado"] == "VALIDATED"
-    base = {
-        "caso": "NO:502", "accion": "BAJA_PREVIA", "movimiento_id": 77,
-        "motivo": "Baja con salida oficial autorizada anteriormente",
-        "idempotency_key": str(uuid4()),
-    }
-    assert client.post(f"{root}/{lev}/resoluciones", headers=tokens[1],
-                       json=base).status_code == 409
-    with app.app_context():
-        with db.engine.begin() as con:
-            con.exec_driver_sql("UPDATE inventario_sucursal SET stock=0 WHERE inventario_id=502")
-            con.exec_driver_sql(
-                "INSERT INTO movimientos_inventario VALUES (77,'salida',7,true)")
-            con.exec_driver_sql(
-                "INSERT INTO detalle_movimiento VALUES (88,77,502,1)")
-        db.session.remove()
-    assert client.post(f"{root}/{lev}/resoluciones", headers=tokens[1],
-                       json=base).status_code == 409
-    with app.app_context():
-        with db.engine.begin() as con:
-            con.exec_driver_sql("UPDATE movimientos_inventario SET anulado=false WHERE id=77")
         db.session.remove()
     before = _snapshot(app)
-    r = client.post(f"{root}/{lev}/resoluciones", headers=tokens[1], json=base)
-    assert r.status_code == 201, r.get_json()
     board = client.get(f"{root}/{lev}/conciliacion", headers=tokens[1]).get_json()
-    assert board["puede_cerrar"] and len(board["casos"]) == 1
+    assert board["puede_cerrar"] and board["casos"][0]["resuelto"]
+    key = str(uuid4())
     closed = client.post(f"{root}/{lev}/cerrar", headers=tokens[1], json={
-        "motivo": "Inventario conciliado con registro de baja V1 confirmado",
-        "idempotency_key": str(uuid4()),
+        "motivo": "Aprobación E3 y ausencia física conciliadas con evidencia",
+        "idempotency_key": key,
     })
     assert closed.status_code == 201, closed.get_json()
+    assert client.post(f"{root}/{lev}/cerrar", headers=tokens[1], json={
+        "motivo": "Aprobación E3 y ausencia física conciliadas con evidencia",
+        "idempotency_key": key,
+    }).status_code == 200
     assert _snapshot(app) == before
+    assert client.post(f"{root}/recepciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()), "file": (BytesIO(buf.getvalue()), "nueva.xlsx"),
+    }).status_code == 409
 
 
-def test_prefijo_exige_correccion_e2_aprobada_y_no_reescribe_el_corte(api):
+def test_rechazo_e3_y_baja_v1_no_burlan_revisiones_automaticas(api):
     client, tokens, app = api
     root = "/api/inventario/levantamientos"
-    historico = original_csv().replace(b"07EL01", b"05EL01")
     created = client.post(root, headers=tokens[1], data={
         "sucursal_id": "7", "origen_corte": "CSV_HISTORICO",
-        "cycle_key": str(uuid4()), "baseline_csv": (BytesIO(historico), "historico.csv"),
+        "cycle_key": str(uuid4()), "baseline_csv": (BytesIO(original_csv()), "corte.csv"),
     })
-    assert created.status_code == 201, created.get_json()
     lev = created.get_json()["levantamiento"]["id"]
-    report = client.post(f"{root}/{lev}/importaciones", headers=tokens[1], data={
-        "idempotency_key": str(uuid4()),
-        "file": (BytesIO(workbook(first="SI",second="SI",code="05EL01",found=False)), "devuelto.xlsx"),
+    b = load_workbook(BytesIO(workbook(first="SI", second="NO", found=False)))
+    b["APARATOS"]["G9"] = "Gerente confirmó ausencia de equipo y solicitó revisión física"
+    raw = BytesIO()
+    b.save(raw)
+    loaded = client.post(f"{root}/recepciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()), "file": (BytesIO(raw.getvalue()), "reporte.xlsx"),
     })
-    assert report.status_code == 201, report.get_json()
-    assert report.get_json()["importacion"]["resultado"] == "VALIDATED"
-    panel = client.get(f"{root}/{lev}/conciliacion", headers=tokens[1]).get_json()
-    assert {c["caso"] for c in panel["casos"]} == {"PREFIJO:502"}
-    assert not panel["puede_cerrar"]
-    motivo = "Reetiquetado y corrección de prefijo aprobados por corporativo"
-    resolver = {
-        "caso": "PREFIJO:502", "accion": "E2_APROBADA", "solicitud_id": 901,
-        "motivo": motivo, "idempotency_key": str(uuid4()),
-    }
-    assert client.post(f"{root}/{lev}/resoluciones", headers=tokens[1], json=resolver).status_code == 409
+    assert loaded.status_code == 201, loaded.get_json()
+    revisions = client.get(f"{root}/{lev}/revisiones", headers=tokens[1]).get_json()
+    sid = revisions["items"][0]["solicitud_e2_id"]
+    assert sid
     with app.app_context():
         with db.engine.begin() as con:
-            con.exec_driver_sql("""
-                INSERT INTO inventario_correccion_solicitudes
-                   (id,tipo,estado,sucursal_id,inventario_id,campo,valor_propuesto)
-                VALUES (901,'MASTER_FIELD','APPROVED',7,502,'codigo_interno','"07EL01"'::jsonb)
-            """)
+            con.execute(sa.text(
+                "UPDATE inventario_correccion_solicitudes SET estado='REJECTED' WHERE id=:id"
+            ), {"id": sid})
         db.session.remove()
-    before = _snapshot(app)
-    assert client.post(f"{root}/{lev}/resoluciones", headers=tokens[1], json=resolver).status_code == 201
-    assert client.get(f"{root}/{lev}/conciliacion", headers=tokens[1]).get_json()["puede_cerrar"]
-    close = client.post(f"{root}/{lev}/cerrar", headers=tokens[1], json={
-        "motivo": "Todas las etiquetas fueron validadas y corregidas",
-        "idempotency_key": str(uuid4()),
-    })
-    assert close.status_code == 201, close.get_json()
-    assert _snapshot(app) == before
+    board = client.get(f"{root}/{lev}/conciliacion", headers=tokens[1]).get_json()
+    assert board["puede_cerrar"] is False
+    assert "REVISIONES_SIN_AUTORIZACION" in board["bloqueos"]
 
 
-def test_levantamiento_inicial_requiere_alta_identificada_antes_de_cierre(api):
+def test_inicial_hallazgo_sin_identidad_bloquea_y_no_da_alta(api):
     client, tokens, app = api
     root = "/api/inventario/levantamientos"
     created = client.post(root, headers=tokens[1], data={
         "sucursal_id": "8", "origen_corte": "INICIAL", "cycle_key": str(uuid4()),
     })
-    assert created.status_code == 201
     lev = created.get_json()["levantamiento"]["id"]
-    libro = load_workbook(BytesIO(workbook(branch=8, initial=True, found=False)))
-    libro["APARATOS"]["B8"] = "08CA0001"
-    buf = BytesIO()
-    libro.save(buf)
-    uploaded = client.post(f"{root}/{lev}/importaciones", headers=tokens[1], data={
-        "idempotency_key": str(uuid4()),
-        "file": (BytesIO(buf.getvalue()), "inventario_inicial.xlsx"),
-    })
-    assert uploaded.status_code == 201, uploaded.get_json()
-    assert uploaded.get_json()["importacion"]["resultado"] == "INCOMPLETE"
-    board = client.get(f"{root}/{lev}/conciliacion", headers=tokens[1]).get_json()
-    assert {row["caso"] for row in board["casos"]} == {"INICIAL:8"}
-    assert not board["puede_cerrar"]
-    motivo = "Alta oficial comprobada contra equipo y etiqueta física"
-    input_res = {
-        "caso": "INICIAL:8", "accion": "REGISTRADO_OFICIAL",
-        "inventario_id_resultante": 505, "motivo": motivo,
-        "idempotency_key": str(uuid4()),
-    }
-    assert client.post(f"{root}/{lev}/resoluciones", headers=tokens[1], json=input_res).status_code == 409
-    with app.app_context():
-        with db.engine.begin() as con:
-            con.exec_driver_sql("""
-                INSERT INTO inventario_general (id,codigo_interno,tipo,nombre)
-                VALUES (505,'08CA0001','APARATOS','Caminadora')
-            """)
-            con.exec_driver_sql("INSERT INTO inventario_sucursal VALUES (505,8,1)")
-        db.session.remove()
     before = _snapshot(app)
-    assert client.post(f"{root}/{lev}/resoluciones", headers=tokens[1], json=input_res).status_code == 201
-    assert client.get(f"{root}/{lev}/conciliacion", headers=tokens[1]).get_json()["puede_cerrar"]
-    assert client.post(f"{root}/{lev}/cerrar", headers=tokens[2], json={
-        "motivo": motivo, "idempotency_key": str(uuid4()),
-    }).status_code == 403
-    assert client.post(f"{root}/{lev}/cerrar", headers=tokens[1], json={
-        "motivo": motivo, "idempotency_key": str(uuid4()),
-    }).status_code == 201
+    loaded = client.post(f"{root}/recepciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()),
+        "file": (BytesIO(workbook(branch=8, initial=True, found=False)), "inicial.xlsx"),
+    })
+    assert loaded.status_code == 201, loaded.get_json()
+    lista = client.get(f"{root}/{lev}/revisiones", headers=tokens[1]).get_json()
+    assert lista["total"] == 1
+    assert lista["items"][0]["estado"] == "BLOCKED"
+    assert lista["items"][0]["solicitud_e2_id"] is None
+    assert client.get(f"{root}/{lev}/conciliacion", headers=tokens[1]).get_json()["puede_cerrar"] is False
     assert _snapshot(app) == before
-
 
 
 def test_api_san_luis_real_http_recepcion_y_bloqueo_por_codigo_duplicado(api):
