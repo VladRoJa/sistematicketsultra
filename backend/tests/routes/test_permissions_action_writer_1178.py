@@ -1,0 +1,175 @@
+"""#1178: un check solo puede guardar una acción con guard HTTP conectado.
+
+Pruebas exclusivamente sintéticas; nunca acceden a BD de producción.
+"""
+from types import SimpleNamespace
+from unittest.mock import Mock
+
+import pytest
+from flask import Flask
+from flask_jwt_extended import JWTManager, create_access_token
+
+from app.routes import permissions_catalog_routes as catalog
+
+
+class FakeColumn:
+    def is_(self, *_): return self
+    def in_(self, *_): return self
+    def desc(self): return self
+    def __eq__(self, _): return self
+
+
+class FakeQuery:
+    def __init__(self, *, first=None, rows=None):
+        self.one = first
+        self.rows = [] if rows is None else rows
+        self.kwargs = None
+
+    def filter(self, *_): return self
+    def filter_by(self, **kwargs):
+        self.kwargs = kwargs
+        return self
+    def order_by(self, *_): return self
+    def first(self): return self.one
+    def all(self): return list(self.rows)
+
+
+def client():
+    app = Flask(__name__)
+    app.config.update(
+        TESTING=True, JWT_SECRET_KEY="synthetic-action-check",
+        PERMISSIONS_TRACK_READ_GRANTS_ENABLED=True,
+        PERMISSIONS_OPENINGS_READ_GRANTS_ENABLED=True,
+    )
+    JWTManager(app)
+    app.register_blueprint(catalog.permissions_catalog_bp, url_prefix="/api/permissions/catalog")
+    with app.app_context():
+        token = create_access_token(identity="47")
+    return app.test_client(), {"Authorization": "Bearer " + token}
+
+
+def admin_and_target(monkeypatch):
+    monkeypatch.setattr(
+        catalog, "_current_admin_user_or_error",
+        lambda: (SimpleNamespace(id=47), None),
+    )
+    monkeypatch.setattr(
+        catalog, "UserORM",
+        SimpleNamespace(query=SimpleNamespace(get=lambda uid: SimpleNamespace(
+            id=uid, username="QA", rol="GERENTE",
+        ))),
+    )
+
+
+@pytest.mark.parametrize("full_key", [
+    "tickets.close", "pm.validate", "track.run_daily_pipeline",
+    "openings.manage", "internal_documents.view",
+])
+def test_uncertified_action_fails_before_db_mutation(monkeypatch, full_key):
+    api, headers = client()
+    admin_and_target(monkeypatch)
+    session = Mock()
+    monkeypatch.setattr(catalog, "db", SimpleNamespace(session=session))
+    response = api.put(
+        "/api/permissions/catalog/users/12/module-access",
+        headers=headers,
+        json={"changes": [{
+            "module_key": full_key.split(".")[0],
+            "action_full_key": full_key,
+            "override": "allow",
+        }]},
+    )
+    assert response.status_code == 409
+    assert response.json["action_full_key"] == full_key
+    session.add.assert_not_called()
+    session.commit.assert_not_called()
+
+
+def test_wrong_module_for_certified_action_rejected_without_mutation(monkeypatch):
+    api, headers = client()
+    admin_and_target(monkeypatch)
+    session = Mock()
+    monkeypatch.setattr(catalog, "db", SimpleNamespace(session=session))
+    response = api.put(
+        "/api/permissions/catalog/users/12/module-access",
+        headers=headers,
+        json={"changes": [{
+            "module_key": "openings",
+            "action_full_key": "track.read",
+            "override": "allow",
+        }]},
+    )
+    assert response.status_code == 400
+    session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize("module_key,full_key", [
+    ("track", "track.read"), ("openings", "openings.read"),
+])
+def test_certified_action_writes_exact_action_through_existing_endpoint(
+    monkeypatch, module_key, full_key,
+):
+    api, headers = client()
+    admin_and_target(monkeypatch)
+    action = SimpleNamespace(id=61, full_key=full_key, module_id=7)
+    module = SimpleNamespace(
+        id=7, name="QA", key=module_key, base_action=action,
+    )
+    module_query = FakeQuery(first=module)
+    action_query = FakeQuery(first=action)
+    grant_query = FakeQuery(rows=[])
+
+    class FakeModule:
+        query = module_query
+        key = is_active = is_assignable = FakeColumn()
+
+    class FakeAction:
+        query = action_query
+
+    class FakeGrant:
+        query = grant_query
+        is_active = deleted_at = principal_type = principal_user_id = action_id = FakeColumn()
+        updated_at = id = FakeColumn()
+
+    monkeypatch.setattr(catalog, "PermissionModuleORM", FakeModule)
+    monkeypatch.setattr(catalog, "PermissionActionORM", FakeAction)
+    monkeypatch.setattr(catalog, "PermissionGrantORM", FakeGrant)
+    session = Mock()
+    monkeypatch.setattr(catalog, "db", SimpleNamespace(session=session))
+
+    # inherit con 0 grants verifica la resolución sin crear datos falsos.
+    response = api.put(
+        "/api/permissions/catalog/users/12/module-access",
+        headers=headers,
+        json={"changes": [{
+            "module_key": module_key,
+            "action_full_key": full_key,
+            "override": "inherit",
+            "reason": "QA no mutation",
+        }]},
+    )
+    assert response.status_code == 200, response.get_json()
+    assert response.json["results"][0]["action_full_key"] == full_key
+    assert action_query.kwargs == {
+        "full_key": full_key, "module_id": 7, "is_active": True,
+    }
+    session.commit.assert_called_once()
+    session.add.assert_not_called()
+
+
+def test_duplicate_explicit_action_does_not_mutate(monkeypatch):
+    api, headers = client()
+    admin_and_target(monkeypatch)
+    session = Mock()
+    monkeypatch.setattr(catalog, "db", SimpleNamespace(session=session))
+    response = api.put(
+        "/api/permissions/catalog/users/12/module-access",
+        headers=headers,
+        json={"changes": [
+            {"module_key": "track", "action_full_key": "track.read", "override": "allow"},
+            {"module_key": "track", "action_full_key": "track.read", "override": "deny"},
+        ]},
+    )
+    assert response.status_code == 400
+    assert "duplicada" in response.json["detail"].lower()
+    session.commit.assert_not_called()
