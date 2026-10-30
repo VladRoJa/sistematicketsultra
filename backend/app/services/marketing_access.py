@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from flask import has_request_context, request
+from app.services.funnel_provider_access import is_funnel_provider
 
 from app.utils.scope_utils import (
     ROOT_ADMIN_ROLES,
@@ -132,6 +133,14 @@ def resolve_marketing_access(user) -> MarketingAccess:
         )
 
     role = normalize_role(getattr(user, "rol", None))
+    if is_funnel_provider(user):
+        branch_ids = get_user_assigned_branch_ids(user)
+        if not branch_ids or _request_targets_reactivation():
+            raise MarketingAuthorizationError("El proveedor no tiene acceso autorizado.")
+        return MarketingAccess(
+            type="ASSIGNED_BRANCHES", is_global=False, branch_ids=branch_ids,
+            role=role, can_edit_inputs=False, can_view_reactivation=False,
+        )
     if role not in MARKETING_READ_ROLES:
         raise MarketingAuthorizationError(
             "No autorizado para consultar Marketing y Conversión."

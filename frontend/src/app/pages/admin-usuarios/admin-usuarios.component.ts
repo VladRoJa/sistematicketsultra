@@ -79,6 +79,7 @@ export class AdminUsuariosComponent implements OnInit {
     'LECTOR_GLOBAL',
     'MANTENIMIENTO',
     'MARKETING',
+    'PROVEEDOR_FUNNEL_ORIGINAL',
     'RECEPCIONISTA',
     'RECURSOS HUMANOS',
     'SISTEMAS',

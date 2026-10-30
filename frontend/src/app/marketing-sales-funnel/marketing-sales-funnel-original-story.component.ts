@@ -112,6 +112,7 @@ export class MarketingSalesFunnelOriginalStoryComponent {
   @Input({ required: true }) summary: MarketingSalesFunnelMetrics | null | undefined = null;
   @Input() reconciliationLabel = '';
   @Input() branchIds: number[] = [];
+  @Input() canViewIndividualDetails = true;
   @Input() executiveSummary: FunnelExecutiveSummaryView | null = null;
 
   get narrative(): string {
@@ -789,7 +790,7 @@ export class MarketingSalesFunnelOriginalStoryComponent {
   }
 
   private openDetail(metric: string, origin?: string): void {
-    if (!this.month || !metric) {
+    if (!this.month || !metric || !this.canViewIndividualDetails) {
       return;
     }
 

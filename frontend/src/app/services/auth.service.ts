@@ -8,6 +8,7 @@ import { tap, shareReplay, finalize } from 'rxjs/operators';
 import { NoAuthHttpClient } from './no-auth-http-client.service';
 import { environment } from '../../environments/environment';
 import { SessionService } from '../core/auth/session.service';
+import { FUNNEL_ORIGINAL_PATH, isFunnelProvider } from '../core/auth/funnel-provider-access';
 import { AuthActivityService } from '../core/auth/auth-activity.service';
 import { SessionRefreshService } from '../core/auth/session-refresh.service';
 
@@ -72,6 +73,10 @@ export class AuthService {
     console.log("🔍 Usuario después de guardar:", storedUser);
 
     if (!redirigir) return;
+    if (isFunnelProvider(user)) {
+      this.router.navigate([FUNNEL_ORIGINAL_PATH]);
+      return;
+    }
 
     // 📌 Redirigir según el área del usuario
     const area = user?.sucursal_id;

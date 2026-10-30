@@ -128,6 +128,7 @@
       [reconciliationLabel]="reconciliationLabel"
       [branchIds]="activeScopeBranchIds"
       [executiveSummary]="branchTotals"
+      [canViewIndividualDetails]="canViewIndividualDetails"
     ></app-marketing-sales-funnel-original-story>
 
     <section class="branch-panel" aria-labelledby="branch-table-title">
@@ -294,6 +295,7 @@
                 <button
                   class="table-detail-link table-detail-link--strong"
                   type="button"
+                  [disabled]="!canViewIndividualDetails"
                   (click)="openBranchDetail('leads_meta', row)"
                 >
                   {{ row.leads_meta_display }}
@@ -304,6 +306,7 @@
                 <button
                   class="table-detail-link table-detail-link--strong"
                   type="button"
+                  [disabled]="!canViewIndividualDetails"
                   (click)="openBranchDetail('visits_total', row)"
                 >
                   {{ row.visits_total_display }}
@@ -314,6 +317,7 @@
                 <button
                   class="table-detail-link table-detail-link--strong"
                   type="button"
+                  [disabled]="!canViewIndividualDetails"
                   (click)="openBranchDetail('sales_iventas', row)"
                 >
                   {{ row.sales_digital_display }}
@@ -324,6 +328,7 @@
                 <button
                   class="table-detail-link"
                   type="button"
+                  [disabled]="!canViewIndividualDetails"
                   (click)="openDetail('sales_not_iventas', row.sucursal_id, 'SOCIAL_UNTRACED')"
                 >
                   {{ row.sales_digital_organic_display }}
@@ -342,6 +347,7 @@
                 <button
                   class="table-detail-link table-detail-link--strong"
                   type="button"
+                  [disabled]="!canViewIndividualDetails"
                   (click)="openBranchDetail('sales_total', row)"
                 >
                   {{ row.sales_total_display }}
@@ -364,6 +370,7 @@
                 <button
                   class="table-detail-link table-detail-link--money"
                   type="button"
+                  [disabled]="!canViewIndividualDetails"
                   (click)="openBranchDetail('revenue_total', row)"
                 >
                   {{ row.revenue_total_display }}
