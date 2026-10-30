@@ -87,7 +87,10 @@ def test_e4_cadena_alembic_no_abre_rama_paralela():
     cfg = AlembicConfig()
     cfg.set_main_option("script_location", str(BASE / "migrations"))
     script = ScriptDirectory.from_config(cfg)
-    assert script.get_heads() == ["n26c10202626"]
+    assert len(script.get_heads()) == 1
+    assert "n26c10202626" in {
+        rev.revision for rev in script.walk_revisions()
+    }
     assert script.get_revision("n26c10202626").down_revision == "v2e4b1102826"
 
 
