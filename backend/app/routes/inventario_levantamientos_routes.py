@@ -83,6 +83,61 @@ def crear_e4():
     return jsonify({"levantamiento": result, "replayed": replay}), 200 if replay else 201
 
 
+@inventario_levantamientos_bp.get("")
+@jwt_required()
+def listar_e4():
+    """Bandeja de recepciones: permisos corporativos y paginación en servidor."""
+    _actor()
+    raw_page = request.args.get("page", "1")
+    raw_size = request.args.get("per_page", "20")
+    if (not raw_page.isascii() or not raw_page.isdecimal() or int(raw_page) < 1
+            or not raw_size.isascii() or not raw_size.isdecimal()
+            or not 1 <= int(raw_size) <= 100):
+        raise E4Error(400, "PAGINACION_INVALIDA", "Paginación inválida")
+    page, size = int(raw_page), int(raw_size)
+    query = db.session.query(Lev, Imp).outerjoin(Imp, Lev.ultima_importacion_id == Imp.id)
+    branch_raw = request.args.get("sucursal_id")
+    if branch_raw is not None:
+        query = query.filter(Lev.sucursal_id == _id(branch_raw))
+    estado = request.args.get("estado")
+    if estado:
+        if estado not in {"PREPARATION", "IN_PROGRESS"}:
+            raise E4Error(400, "ESTADO_INVALIDO", "Estado no permitido")
+        query = query.filter(Lev.estado == estado)
+    total = query.count()
+    resultados = (query.order_by(Lev.creado_en_utc.desc(), Lev.id.desc())
+                  .offset((page - 1) * size).limit(size).all())
+    items = []
+    for lev, imp in resultados:
+        item = _serialize_lev_resumen(lev)
+        if imp is not None:
+            resumen = imp.resumen or {}
+            item["importacion_actual"] = {
+                "id": imp.id, "version": imp.version, "resultado": imp.resultado,
+                "si": resumen.get("si", 0), "no": resumen.get("no", 0),
+                "sin_revisar": resumen.get("sin_revisar", 0),
+                "hallazgos": resumen.get("hallazgos", 0),
+                "errores": resumen.get("errores", 0), "avisos": resumen.get("avisos", 0),
+            }
+        else:
+            item["importacion_actual"] = None
+        items.append(item)
+    return jsonify({"items": items, "total": total, "page": page, "per_page": size}), 200
+
+
+def _serialize_lev_resumen(lev):
+    """Proyección liviana para no enviar el JSON de 12 mil filas a la bandeja."""
+    return {
+        "id": lev.id, "cycle_key": str(lev.cycle_key),
+        "sucursal_id": lev.sucursal_id, "estado": lev.estado,
+        "origen_corte": lev.origen_corte, "modalidad": lev.modalidad,
+        "responsable": lev.responsable,
+        "fecha_corte_local": lev.fecha_corte_local.isoformat() if lev.fecha_corte_local else None,
+        "referencias_esperadas": (lev.baseline_resumen or {}).get("referencias_esperadas", 0),
+        "ultima_importacion_id": lev.ultima_importacion_id,
+    }
+
+
 @inventario_levantamientos_bp.get("/<int:levantamiento_id>")
 @jwt_required()
 def detalle_e4(levantamiento_id):
