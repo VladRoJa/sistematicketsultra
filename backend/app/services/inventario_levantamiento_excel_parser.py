@@ -235,7 +235,11 @@ def parse_xlsx_v01(raw, sucursal_id, expected, modalidad):
                 elif not item.get("aparato"):
                     issues.append("HALLAZGO_SIN_NOMBRE")
                 for code in issues:
-                    diagnostics.append({"severidad": "ERROR", "codigo": code,
+                    # Un código físico discrepante es una diferencia de identidad
+                    # a revisar, no una razón para perder las otras respuestas.
+                    # La fila NO cuenta como verificada mientras esté sin aclarar.
+                    severity = "AVISO" if code == "CODIGO_DIFIERE_DEL_CORTE" else "ERROR"
+                    diagnostics.append({"severidad": severity, "codigo": code,
                                         "hoja": sheet_name, "fila": fila_excel, "inventario_id": inv})
                 rows.append({"hoja": sheet_name, "fila_excel": fila_excel,
                              "inventario_id_declarado": inv, "codigo_declarado": item.get("codigo"),
