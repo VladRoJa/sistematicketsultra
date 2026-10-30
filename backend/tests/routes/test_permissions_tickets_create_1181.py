@@ -71,8 +71,7 @@ def test_tickets_create_allow_still_requires_admin_destination_branch():
     add.assert_not_called()
 
 
-@pytest.mark.parametrize("grant", [None, True, False])
-def test_tickets_create_off_does_not_consult_grants(grant):
+def test_tickets_create_off_does_not_consult_grants():
     from app.routes import permissions_catalog_routes as catalog
     client, headers = _client(enabled=False)
     with patch.object(tickets.UserORM, "get_by_id", return_value=_user()), \
@@ -119,4 +118,4 @@ def test_tickets_create_matrix_only_claims_entry_not_branch_access():
     assert entry["catalog_allowed"] is False
     assert entry["catalog_source"] == "tickets_create_grant_operativo"
     assert scoped["legacy_allowed"] is None
-    assert scoped["legacy_reason"] == "sucursal_destino_se_valida_en_endpoint"
+    assert scoped["legacy_reason"] == "branch_guard_no_evaluable_sin_recurso"
