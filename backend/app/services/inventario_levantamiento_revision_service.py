@@ -42,6 +42,16 @@ def _casos(lev, parsed, referencias):
         inv_id = row["inventario_id_declarado"]
         hoja = row["hoja"]
         if hoja == "APARATOS" and inv_id in ref_by_id:
+            if "CODIGO_DIFIERE_DEL_CORTE" in row["diagnosticos"]:
+                k = f"REF:{inv_id}:IDENTITY_MISMATCH"
+                casos[k] = {
+                    "clave": k, "tipo": "IDENTITY_MISMATCH",
+                    "inventario_id": inv_id, "campo": "codigo_interno",
+                    "codigo": codigo, "hoja": hoja, "fila": row["fila_excel"],
+                    "datos": data, "base": ref_by_id[inv_id],
+                    "bloqueo": "CODIGO_FISICO_NO_COINCIDE_CORTE",
+                }
+                continue
             if row["respuesta"] != "NO" or row["diagnosticos"]:
                 continue
             k = f"REF:{inv_id}:NOT_LOCATED"
