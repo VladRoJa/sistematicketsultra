@@ -46,7 +46,7 @@ def test_service_keeps_safe_public_operations():
 def test_flags_default_off_until_worker_is_integrated():
     config = CONFIG.read_text(encoding="utf-8")
     routes = ROUTES.read_text(encoding="utf-8")
-    assert "CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY = False" in config
+    assert 'os.getenv("CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY", "false")' in config
     assert 'os.getenv("CAMPAIGN_V2_BACKGROUND_DISPATCH_ENABLED", "false")' in config
     fn = routes[routes.index("def _background_dispatch_enabled():"):
                 routes.index("@marketing_campaign_v2_bp.post(\"/campaigns-v2/<int:campaign_id>/dispatch/jobs\")")]
@@ -104,3 +104,32 @@ def test_repo_m1a_migration_and_model_are_already_registered():
     assert model.is_file() and migration.is_file()
     assert 'down_revision = "v2e4b1102826"' in migration.read_text()
     assert "uq_mkt_v2_bg_jobs_campaign_active" in model.read_text()
+
+
+def test_worker_ready_requires_explicit_environment_opt_in(monkeypatch):
+    """Evaluate the real Config expression without importing app secrets or services."""
+    import os
+
+    tree = ast.parse(CONFIG.read_text(encoding="utf-8"))
+    config_class = next(
+        node for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "Config"
+    )
+    assignment = next(
+        node for node in config_class.body
+        if isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name)
+                and target.id == "CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY"
+                for target in node.targets)
+    )
+    code = compile(ast.Expression(assignment.value), str(CONFIG), "eval")
+    flag = "CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY"
+
+    monkeypatch.delenv(flag, raising=False)
+    assert eval(code, {"os": os}) is False
+    for value in ("false", "1", "yes", "", "TRUE-ish"):
+        monkeypatch.setenv(flag, value)
+        assert eval(code, {"os": os}) is False
+    for value in ("true", "TRUE", " True "):
+        monkeypatch.setenv(flag, value)
+        assert eval(code, {"os": os}) is True
