@@ -231,7 +231,7 @@ def test_inicial_no_equivale_a_conciliado_sin_referencias():
 @pytest.fixture()
 def api(monkeypatch, tmp_path):
     url = os.getenv("INVENTARIO_E2_TEST_POSTGRES_URL")
-    using_real_binary = bool(os.getenv("E4_REAL_XLSX_PATH") or os.getenv("E4_REAL_BASELINE_CSV_PATH"))
+    using_real_binary = bool(os.getenv("E4_REAL_XLSX_PATH") or os.getenv("E4_REAL_BASELINE_CSV_PATH") or os.getenv("E4_REAL_SAN_LUIS_XLSX_PATH"))
     if not url:
         if using_real_binary:
             pytest.fail("Gate real requiere INVENTARIO_E2_TEST_POSTGRES_URL aislado")
@@ -298,7 +298,7 @@ def api(monkeypatch, tmp_path):
                 spec_b2.loader.exec_module(migration_b2)
                 monkeypatch.setattr(migration_b2, "op", Operations(MigrationContext.configure(con)))
                 migration_b2.upgrade()
-                con.exec_driver_sql("INSERT INTO sucursales VALUES (7),(8)")
+                con.exec_driver_sql("INSERT INTO sucursales VALUES (6),(7),(8)")
                 con.exec_driver_sql("INSERT INTO users VALUES (1,'ADMINISTRADOR'),(2,'GERENTE'),(3,'GERENTE_REGIONAL')")
                 con.exec_driver_sql("INSERT INTO inventario_general (id,codigo_interno,tipo,nombre,marca) VALUES (501,'07CA01','APARATOS','Caminadora','Star Trac'),(502,'07EL01','APARATOS','Eliptica','Precor'),(503,'07RE00','APARATOS','Remo','Concept2')")
                 con.exec_driver_sql("INSERT INTO inventario_sucursal VALUES (501,7,3),(502,7,1),(503,7,0)")
@@ -747,4 +747,89 @@ def test_levantamiento_inicial_requiere_alta_identificada_antes_de_cierre(api):
     assert client.post(f"{root}/{lev}/cerrar", headers=tokens[1], json={
         "motivo": motivo, "idempotency_key": str(uuid4()),
     }).status_code == 201
+    assert _snapshot(app) == before
+
+
+
+def test_api_san_luis_real_http_recepcion_y_bloqueo_por_codigo_duplicado(api):
+    """Opt-in local: XLSX devuelto + CSV real del corte; sin compartir privados con CI.
+
+    El archivo del gerente tiene un código 06PLJW54 reutilizado como hallazgo.
+    Es evidencia, no autorización para crear un segundo equipo con esa etiqueta.
+    """
+    xlsx_path = os.getenv("E4_REAL_SAN_LUIS_XLSX_PATH")
+    baseline_path = os.getenv("E4_REAL_BASELINE_CSV_PATH")
+    if not xlsx_path:
+        pytest.skip("Archivo real de San Luis no configurado (opt-in)")
+    assert baseline_path, "Se requiere el CSV histórico real junto con San Luis"
+    raw_xlsx = Path(xlsx_path).read_bytes()
+    baseline = Path(baseline_path).read_bytes()
+    refs, _ = parse_historical_csv(baseline, 6)
+    assert len(refs) == 139, "El corte histórico no corresponde a las 139 referencias de San Luis"
+
+    client, tokens, app = api
+    with app.app_context():
+        with db.engine.begin() as connection:
+            for ref in refs:
+                identity = ref["inventario_id_original"]
+                assert connection.execute(sa.text(
+                    "SELECT 1 FROM inventario_general WHERE id=:identidad"
+                ), {"identidad": identity}).scalar() is None
+                connection.execute(sa.text(
+                    "INSERT INTO inventario_general (id,codigo_interno,tipo,nombre) "
+                    "VALUES (:id,:codigo,'APARATOS','Histórico temporal de San Luis')"
+                ), {"id": identity, "codigo": ref["codigo_interno_original"]})
+                connection.execute(sa.text(
+                    "INSERT INTO inventario_sucursal (inventario_id,sucursal_id,stock) "
+                    "VALUES (:id,6,:stock)"
+                ), {"id": identity, "stock": ref["stock_original"]})
+        db.session.remove()
+    before = _snapshot(app)
+    root = "/api/inventario/levantamientos"
+    created = client.post(root, headers=tokens[1], data={
+        "sucursal_id": "6", "origen_corte": "CSV_HISTORICO",
+        "cycle_key": str(uuid4()), "fecha_corte_local": "2026-10-28",
+        "responsable": "QA privado San Luis",
+        "baseline_csv": (BytesIO(baseline), "corte_original.csv"),
+    })
+    assert created.status_code == 201, created.get_json()
+    lev = created.get_json()["levantamiento"]["id"]
+    assert created.get_json()["levantamiento"]["baseline_resumen"]["referencias_esperadas"] == 139
+    endpoint = f"{root}/{lev}/importaciones"
+    received = client.post(endpoint, headers=tokens[1], data={
+        "idempotency_key": str(uuid4()),
+        "file": (BytesIO(raw_xlsx), Path(xlsx_path).name),
+    })
+    assert received.status_code == 201, received.get_json()
+    imported = received.get_json()["importacion"]
+    summary = imported["resumen"]
+    assert summary["referencias_esperadas"] == 139
+    assert (summary["si"], summary["no"], summary["sin_revisar"]) == (137, 2, 0)
+    assert summary["hallazgos"] == 7
+    assert imported["resultado"] == "INVALID"
+    codes = [d["codigo"] for d in imported["diagnosticos"]]
+    assert codes.count("PREFIJO_SUCURSAL_INCONSISTENTE") == 4
+    assert "CODIGO_HALLAZGO_EN_CORTE" in codes
+    duplicated = [d for d in imported["diagnosticos"]
+                  if d["codigo"] == "CODIGO_HALLAZGO_EN_CORTE"]
+    assert any(d["codigo_declarado"].strip().upper() == "06PLJW54"
+               and 2587 in d["inventario_ids_existentes"] for d in duplicated)
+
+    recovered = client.get(
+        f"{endpoint}/{imported['id']}/archivo", headers=tokens[1]
+    )
+    assert recovered.status_code == 200
+    assert recovered.data == raw_xlsx
+    repeat = client.post(endpoint, headers=tokens[1], data={
+        "idempotency_key": str(uuid4()),
+        "file": (BytesIO(raw_xlsx), "misma_entrega.xlsx"),
+    })
+    assert repeat.status_code == 200 and repeat.get_json()["replayed"]
+    board = client.get(f"{root}/{lev}/conciliacion", headers=tokens[1])
+    assert board.status_code == 200
+    assert board.get_json()["puede_cerrar"] is False
+    assert client.post(f"{root}/{lev}/cerrar", headers=tokens[1], json={
+        "idempotency_key": str(uuid4()),
+        "motivo": "Intento prohibido de cerrar archivo con identidad ambigua",
+    }).status_code == 409
     assert _snapshot(app) == before
