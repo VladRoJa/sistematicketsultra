@@ -113,6 +113,30 @@ export interface TableroConciliacionE4 {
   puede_cerrar: boolean;
 }
 
+export interface RevisionAutomaticaE4 {
+  id: number;
+  logical_key: string;
+  tipo: string;
+  inventario_id: number | null;
+  codigo_observado: string | null;
+  campo: string | null;
+  estado: 'BLOCKED' | 'PENDING' | 'AWAITING_E3' | 'APPROVED' | 'REJECTED' | 'SUPERSEDED';
+  motivo_bloqueo: string | null;
+  solicitud_e2_id: number | null;
+  primera_importacion_id: number;
+  ultima_importacion_id: number;
+  ultimo_valor: Record<string, unknown>;
+}
+
+export interface ListaRevisionesE4 {
+  items: RevisionAutomaticaE4[];
+  total: number;
+  page: number;
+  per_page: number;
+  resumen: { total: number; bloqueadas: number; por_autorizar: number;
+    aprobadas: number; rechazadas: number; superadas: number };
+}
+
 @Injectable({ providedIn: 'root' })
 export class LevantamientosE4Service {
   private readonly base = environment.apiUrl + '/inventario/levantamientos';
@@ -180,6 +204,12 @@ export class LevantamientosE4Service {
     return this.http.get(this.base + '/' + levantamientoId +
       '/importaciones/' + importacionId + '/archivo', { responseType: 'blob' });
   }
+  listarRevisiones(id: number, page = 1): Observable<ListaRevisionesE4> {
+    const params = new HttpParams().set('page', String(page)).set('per_page', '20');
+    return this.http.get<ListaRevisionesE4>(
+      this.base + '/' + id + '/revisiones', { params });
+  }
+
   tablero(id: number): Observable<TableroConciliacionE4> {
     return this.http.get<TableroConciliacionE4>(this.base + '/' + id + '/conciliacion');
   }
