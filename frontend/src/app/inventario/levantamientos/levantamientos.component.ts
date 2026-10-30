@@ -5,6 +5,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { InventarioService } from '../../services/inventario.service';
 import {
   CasoConciliacionE4, TableroConciliacionE4,
+  ListaRevisionesE4,
   DiagnosticoE4, FilaE4, ImportacionE4, LevantamientoE4,
   LevantamientoResumenE4, LevantamientosE4Service, OrigenCorteE4,
 } from './levantamientos.service';
@@ -48,6 +49,8 @@ export class LevantamientosComponent implements OnInit {
   excelRecibido: File | null = null;
   private claveRecepcion: string | null = null;
   tablero: TableroConciliacionE4 | null = null;
+  revisionesAutomaticas: ListaRevisionesE4 | null = null;
+  paginaRevisiones = 1;
   casoActivo: CasoConciliacionE4 | null = null;
   idResolucion: number | null = null;
   viaNo: 'E2_APROBADA' | 'BAJA_PREVIA' = 'E2_APROBADA';
@@ -212,6 +215,8 @@ export class LevantamientosComponent implements OnInit {
     this.filas = [];
     this.xlsx = null;
     this.tablero = null;
+    this.revisionesAutomaticas = null;
+    this.paginaRevisiones = 1;
     this.casoActivo = null;
     this.motivoCierre = '';
     this.confirmoCierre = false;
@@ -219,6 +224,7 @@ export class LevantamientosComponent implements OnInit {
       next: data => {
         this.seleccionado = data.levantamiento;
         this.versiones = data.versiones;
+        this.cargarRevisiones();
         this.cargarTablero();
         const vigente = data.versiones.find(v => v.id === data.levantamiento.ultima_importacion_id);
         if (vigente) this.abrirVersion(vigente.id);
@@ -301,6 +307,29 @@ export class LevantamientosComponent implements OnInit {
       },
       error: err => { this.error = this.errorHttp(err, 'No fue posible descargar el original.'); },
     });
+  }
+
+  cargarRevisiones(): void {
+    if (!this.seleccionado) return;
+    const id = this.seleccionado.id;
+    this.e4.listarRevisiones(id, this.paginaRevisiones).subscribe({
+      next: data => {
+        if (this.seleccionado?.id !== id) return;
+        this.revisionesAutomaticas = data;
+      },
+      error: err => {
+        this.error = this.errorHttp(err, 'No fue posible consultar las revisiones automáticas.');
+      },
+    });
+  }
+
+  cambiarPaginaRevisiones(delta: number): void {
+    const nueva = this.paginaRevisiones + delta;
+    if (nueva < 1 || nueva > Math.max(
+      1, Math.ceil((this.revisionesAutomaticas?.total || 0) / 20)
+    )) return;
+    this.paginaRevisiones = nueva;
+    this.cargarRevisiones();
   }
 
   cargarTablero(): void {
