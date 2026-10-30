@@ -341,3 +341,24 @@ def test_tickets_create_writer_flag_off_without_db_mutation(monkeypatch):
     assert result.json["action_full_key"] == "tickets.create"
     session.commit.assert_not_called()
     session.add.assert_not_called()
+
+
+def test_tickets_update_status_writer_flag_off_without_db_mutation(monkeypatch):
+    api, headers = client()
+    api.application.config["PERMISSIONS_TICKETS_UPDATE_STATUS_GRANTS_ENABLED"] = False
+    admin_and_target(monkeypatch)
+    session = Mock()
+    monkeypatch.setattr(catalog, "db", SimpleNamespace(session=session))
+    result = api.put(
+        "/api/permissions/catalog/users/12/module-access",
+        headers=headers,
+        json={"changes": [{
+            "module_key": "tickets",
+            "action_full_key": "tickets.update_status",
+            "override": "deny",
+        }]},
+    )
+    assert result.status_code == 409
+    assert result.json["action_full_key"] == "tickets.update_status"
+    session.add.assert_not_called()
+    session.commit.assert_not_called()
