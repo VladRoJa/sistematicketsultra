@@ -233,6 +233,18 @@ def _effective_action_decision(action, user, context: dict) -> dict:
             details={"object_access_certified": False},
         )
 
+    if full_key == "tickets.update_status":
+        # Solo puerta de entrada, nunca capacidad de cambiar un ticket
+        # fuera del alcance de filtrar_tickets_por_usuario.
+        role_allowed = user is not None and role != "LECTOR_GLOBAL"
+        return _decision(
+            allowed=role_allowed,
+            source="ticket_update_status_entry",
+            reason="entry_role_scope_and_double_check_still_required",
+            scope_type="entry_only",
+            details={"object_access_certified": False},
+        )
+
     if full_key == "tickets.delete_all":
         allowed = bool(is_admin and context["allow_ticket_delete_all"])
         return _decision(
