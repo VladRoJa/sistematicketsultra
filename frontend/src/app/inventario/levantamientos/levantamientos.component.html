@@ -66,7 +66,7 @@
       <button type="button" class="recepcion" *ngFor="let row of items"
         [class.selected]="seleccionado?.id === row.id" (click)="abrir(row.id)">
         <strong>{{ nombreSucursal(row.sucursal_id) }} · Corte #{{ row.id }}</strong>
-        <span>{{ row.origen_corte === 'INICIAL' ? 'Desde cero' : 'Verificación' }} · {{ row.referencias_esperadas }} referencias</span>
+        <span>{{ tipoCorte(row.origen_corte) }} · {{ row.referencias_esperadas }} referencias</span>
         <span *ngIf="row.importacion_actual as actual">
           Versión {{ actual.version }} · {{ actual.resultado }} · SI {{ actual.si }} / NO {{ actual.no }} / Pendientes {{ actual.sin_revisar }}
         </span>
@@ -119,9 +119,7 @@
             </button>
           </div>
           <p class="alert" [class.error]="v.resultado === 'INVALID'">
-            {{ v.resultado === 'VALIDATED' ? 'Archivo completo a nivel de respuestas. Aún NO significa conciliado.' :
-               v.resultado === 'INCOMPLETE' ? 'Hay referencias pendientes de revisar o un inventario inicial pendiente de conciliar.' :
-               'Archivo con errores de validación. Se conservó la evidencia, pero no es apta para cierre.' }}
+            {{ mensajeResultado(v.resultado) }}
           </p>
           <div class="metrics">
             <div><strong>{{ v.resumen.si }}</strong><span>SÍ</span></div>
@@ -196,7 +194,7 @@
                 </p>
               </div>
               <div class="caso-actions">
-                <span [class.resuelto]="caso.resuelto">{{ caso.resuelto ? 'Resuelto' : 'Pendiente' }}</span>
+                <span [class.resuelto]="caso.resuelto">{{ etiquetaCaso(caso.resuelto) }}</span>
                 <button type="button" class="quiet" *ngIf="lev.estado !== 'CLOSED'"
                   (click)="elegirCaso(caso)" [disabled]="procesando">Conciliar</button>
               </div>
