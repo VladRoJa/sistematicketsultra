@@ -985,3 +985,41 @@ def test_piloto_cinco_aparatos_cinco_escenarios_en_mismo_xlsx(api, monkeypatch):
     board = client.get(f"{root}/{lev}/conciliacion", headers=tokens[1]).get_json()
     assert board["puede_cerrar"] is False
     assert "SIN_REVISAR" in board["bloqueos"]
+
+
+def test_dos_hallazgos_distintos_generan_dos_e2_pendientes_sin_colision(api, monkeypatch):
+    """Escalabilidad: inventario_id NULL no colapsa hallazgos diferentes."""
+    monkeypatch.setenv("INVENTARIO_E4_AUTO_REVIEW_DEMO_ENABLED", "true")
+    client, tokens, app = api
+    base = "/api/inventario/levantamientos"
+    created = client.post(base, headers=tokens[1], data={
+        "sucursal_id": "7", "origen_corte": "CSV_HISTORICO",
+        "cycle_key": str(uuid4()), "baseline_csv": (BytesIO(original_csv()), "corte.csv"),
+    })
+    assert created.status_code == 201, created.get_json()
+    lev = created.get_json()["levantamiento"]["id"]
+    libro = load_workbook(BytesIO(workbook(first="SI", second="SI", found=True)))
+    libro["HALLAZGOS"]["A8"] = "07AD99"
+    libro["HALLAZGOS"].append([
+        "07AD98", "Banco diferente", "Peso libre", "Desconocida",
+        "Zona funcional", "Segundo aparato no registrado, encontrado al revisar zona funcional",
+    ])
+    buf = BytesIO()
+    libro.save(buf)
+    before = _snapshot(app)
+    response = client.post(base + "/recepciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()), "file": (BytesIO(buf.getvalue()), "dos_hallazgos.xlsx"),
+    })
+    assert response.status_code == 201, response.get_json()
+    assert response.get_json()["importacion"]["resultado"] == "VALIDATED"
+    assert response.get_json()["importacion"]["resumen"]["revisiones_auto"]["e2_creadas"] == 2
+    board = client.get(f"{base}/{lev}/revisiones", headers=tokens[1]).get_json()
+    assert board["total"] == 2
+    assert {i["codigo_observado"] for i in board["items"]} == {"07AD99", "07AD98"}
+    solicitudes = [i["solicitud_e2_id"] for i in board["items"]]
+    assert all(solicitudes) and len(set(solicitudes)) == 2
+    assert {i["estado"] for i in board["items"]} == {"AWAITING_E3"}
+    assert _snapshot(app)["e2"] == before["e2"] + 2
+    assert _snapshot(app)["stock"] == before["stock"]
+    assert _snapshot(app)["master"] == before["master"]
+    assert _snapshot(app)["mov"] == before["mov"]
