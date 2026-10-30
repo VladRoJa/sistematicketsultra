@@ -11,6 +11,7 @@ from app.models.inventario_levantamiento_conciliacion import (
     InventarioLevantamientoResolucionORM as Rev, InventarioLevantamientoCierreORM as Cierre,
 )
 from app.models.inventario_solicitud_correccion import InventarioSolicitudCorreccionORM as Solicitud
+from app.models.inventario_levantamiento_revision import InventarioLevantamientoRevisionORM as RevisionAuto
 from app.services.inventario_levantamientos_service import E4Error, parse_uuid
 
 
@@ -168,6 +169,48 @@ def _evidencia_aprobada(lev, caso, row):
     return False
 
 
+def _efecto_e3_confirmado(lev, revision, solicitud):
+    """La aprobación NO basta: cotejar que E3 aplicó el efecto correcto."""
+    if not solicitud or solicitud.estado != "APPROVED":
+        return False
+    if solicitud.sucursal_id != lev.sucursal_id or solicitud.tipo != revision.tipo:
+        return False
+    if revision.inventario_id != solicitud.inventario_id:
+        return False
+    if revision.tipo == "NOT_LOCATED":
+        return db.session.execute(sql_text("""
+            SELECT 1 FROM inventario_sucursal
+            WHERE inventario_id=:id AND sucursal_id=:branch AND stock=0
+        """), {"id": revision.inventario_id, "branch": lev.sucursal_id}).scalar_one_or_none() is not None
+    if revision.tipo == "MASTER_FIELD":
+        if solicitud.campo != "codigo_interno" or revision.campo != "codigo_interno":
+            return False
+        codigo = db.session.execute(sql_text("""
+            SELECT codigo_interno FROM inventario_general WHERE id=:id
+        """), {"id": revision.inventario_id}).scalar_one_or_none()
+        return (codigo is not None and
+                str(codigo).strip().upper() == str(solicitud.valor_propuesto).strip().upper())
+    if revision.tipo == "UNREGISTERED_FIND":
+        # Solo vale la vinculación formal auditada de E3, nunca un ID escrito
+        # por el operador en E4.
+        codigo = str(revision.codigo_observado or "").strip().upper()
+        if not codigo:
+            return False
+        evidencia = db.session.execute(sql_text("""
+            SELECT 1 FROM inventario_correccion_altas_auditoria a
+            JOIN inventario_general i ON i.id=a.inventario_id_resultante
+            JOIN inventario_sucursal s
+              ON s.inventario_id=i.id AND s.sucursal_id=a.sucursal_id
+            WHERE a.solicitud_id=:solicitud AND a.sucursal_id=:branch
+              AND a.modalidad='VINCULACION' AND s.stock>0
+              AND upper(btrim(i.codigo_interno))=:codigo
+            LIMIT 1
+        """), {"solicitud": solicitud.id, "branch": lev.sucursal_id,
+               "codigo": codigo}).scalar_one_or_none()
+        return evidencia is not None
+    return False
+
+
 def tablero_e4(lev_id):
     lev = _levantar(lev_id)
     if not lev.ultima_importacion_id:
@@ -176,32 +219,38 @@ def tablero_e4(lev_id):
                 "pendientes_respuesta": [], "bloqueos": ["SIN_ENTREGA"],
                 "puede_cerrar": False}
     imp = _version_actual(lev)
-    casos = casos_e4(lev, imp)
-    ultimas = _ultima_resolucion(imp.id)
-    items = []
-    for clave, caso in casos.items():
-        resolucion = ultimas.get(clave)
-        aprobado = bool(resolucion and _evidencia_aprobada(lev, caso, resolucion))
-        items.append({**caso, "resuelto": aprobado,
-                      "resolucion": _resumen_resolucion(resolucion) if resolucion else None})
+    revisiones = RevisionAuto.query.filter_by(levantamiento_id=lev.id).order_by(RevisionAuto.id).all()
+    casos = []
+    for revision in revisiones:
+        if revision.estado == "SUPERSEDED":
+            continue
+        solicitud = db.session.get(Solicitud, revision.solicitud_e2_id) if revision.solicitud_e2_id else None
+        aprobado = _efecto_e3_confirmado(lev, revision, solicitud)
+        casos.append({
+            "caso": revision.logical_key, "tipo": revision.tipo,
+            "inventario_id": revision.inventario_id,
+            "codigo": revision.codigo_observado,
+            "resuelto": aprobado, "estado_e2": solicitud.estado if solicitud else None,
+            "solicitud_e2_id": revision.solicitud_e2_id,
+            "motivo_bloqueo": revision.motivo_bloqueo,
+        })
     pendientes = (imp.resumen or {}).get("pendientes", [])
     bloqueos = []
     if imp.resultado == "INVALID" or (imp.resumen or {}).get("errores", 0):
         bloqueos.append("ENTREGA_INVALIDA")
     if pendientes:
         bloqueos.append("SIN_REVISAR")
-    if any(not x["resuelto"] for x in items):
-        bloqueos.append("CASOS_SIN_RESOLVER")
-    if not (imp.resumen or {}).get("referencias_esperadas", 0) and not items:
+    if any(not x["resuelto"] for x in casos):
+        bloqueos.append("REVISIONES_SIN_AUTORIZACION")
+    if not (imp.resumen or {}).get("referencias_esperadas", 0) and not casos:
         bloqueos.append("SIN_EVIDENCIA_FISICA")
     return {
         "levantamiento_id": lev_id, "estado": lev.estado,
         "importacion_id": imp.id, "version": imp.version,
-        "resultado": imp.resultado, "casos": items,
+        "resultado": imp.resultado, "casos": casos,
         "pendientes_respuesta": pendientes, "bloqueos": bloqueos,
         "puede_cerrar": not bloqueos and lev.estado != "CLOSED",
     }
-
 
 def registrar_resolucion(lev_id, actor, data):
     if not isinstance(data, dict):
