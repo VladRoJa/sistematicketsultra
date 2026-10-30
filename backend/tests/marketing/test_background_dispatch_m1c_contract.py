@@ -44,7 +44,7 @@ def test_worker_requires_all_four_flags():
         "CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED",
         "CAMPAIGN_V2_PROVIDER_SEND_ENABLED",
     ))
-    assert "CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY = False" in _src(CONFIG)
+    assert 'os.getenv("CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY", "false")' in _src(CONFIG)
 
 
 def test_worker_claims_queued_once_and_expired_never_reclaimed():
@@ -127,4 +127,4 @@ def test_compose_background_worker_is_opt_in_and_send_disabled():
     assert "stop_grace_period: 90s" in service
     assert "ports:" not in service
     # Even manually enabling a Compose profile must not bypass the app gate.
-    assert "CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY = False" in _src(CONFIG)
+    assert 'os.getenv("CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY", "false")' in _src(CONFIG)
