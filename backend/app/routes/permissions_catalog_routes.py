@@ -1205,6 +1205,7 @@ def update_user_module_access(user_id: int):
     valid_overrides = {"allow", "deny", "inherit"}
     validated_changes = []
     seen_module_keys = set()
+    seen_action_keys = set()
 
     for index, change in enumerate(changes):
         if not isinstance(change, dict):
@@ -1214,6 +1215,7 @@ def update_user_module_access(user_id: int):
             }), 400
 
         module_key = str(change.get("module_key", "") or "").strip()
+        action_full_key = str(change.get("action_full_key", "") or "").strip()
         override = str(change.get("override", "") or "").strip().lower()
         reason = str(change.get("reason", "") or "").strip()
 
@@ -1223,12 +1225,36 @@ def update_user_module_access(user_id: int):
                 "detail": f"El cambio #{index + 1} no tiene module_key.",
             }), 400
 
-        if module_key in seen_module_keys:
-            return jsonify({
-                "error": "Bad request",
-                "detail": "Módulo duplicado en el mismo lote.",
-            }), 400
-        seen_module_keys.add(module_key)
+        if action_full_key:
+            # No aceptar un check que sólo escriba un grant diagnóstico.
+            # Ampliar este conjunto únicamente al certificar su guard HTTP.
+            if action_full_key not in {"track.read", "openings.read"}:
+                return jsonify({
+                    "error": "Conflict",
+                    "detail": "Esta acción todavía no tiene un check con autorización HTTP certificada.",
+                    "action_full_key": action_full_key,
+                }), 409
+            if not action_full_key.startswith(module_key + "."):
+                return jsonify({
+                    "error": "Bad request",
+                    "detail": "La acción no pertenece al módulo seleccionado.",
+                    "module_key": module_key,
+                    "action_full_key": action_full_key,
+                }), 400
+            if action_full_key in seen_action_keys:
+                return jsonify({
+                    "error": "Bad request",
+                    "detail": "Acción duplicada en el mismo lote.",
+                }), 400
+            seen_action_keys.add(action_full_key)
+        else:
+            # Compatibilidad con todos los clientes legacy del endpoint.
+            if module_key in seen_module_keys:
+                return jsonify({
+                    "error": "Bad request",
+                    "detail": "Módulo duplicado en el mismo lote.",
+                }), 400
+            seen_module_keys.add(module_key)
 
         # Sin revisión del stock de grants no activar Track desde el editor V1.
         if module_key == "track":
@@ -1293,6 +1319,28 @@ def update_user_module_access(user_id: int):
                 "detail": f"El módulo {module_key} no tiene acción base configurada.",
             }), 400
 
+        action = module.base_action
+        if action_full_key:
+            # Consulta concreta; nunca asumir que el primer action_id del
+            # módulo representa todas sus operaciones.
+            action = PermissionActionORM.query.filter_by(
+                full_key=action_full_key,
+                module_id=module.id,
+                is_active=True,
+            ).first()
+            if action is None:
+                return jsonify({
+                    "error": "Bad request",
+                    "detail": "Acción inactiva o ajena al módulo.",
+                    "action_full_key": action_full_key,
+                }), 400
+
+        if any(item["action"].id == action.id for item in validated_changes):
+            return jsonify({
+                "error": "Bad request",
+                "detail": "Acción duplicada en el mismo lote.",
+            }), 400
+
         if not reason:
             if override == "inherit":
                 reason = "Override removido desde Permisos V1"
@@ -1301,7 +1349,7 @@ def update_user_module_access(user_id: int):
 
         validated_changes.append({
             "module": module,
-            "action": module.base_action,
+            "action": action,
             "override": override,
             "reason": reason,
         })
