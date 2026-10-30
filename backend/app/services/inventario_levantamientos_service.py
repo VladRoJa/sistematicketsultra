@@ -19,6 +19,7 @@ from app.models.inventario_levantamiento import (
 )
 from app.services.inventario_levantamiento_excel_parser import (
     ArchivoE4Error, parse_historical_csv, parse_xlsx_v01, MAX_XLSX_BYTES,
+    leer_identidad_entrega, positive_int,
 )
 
 
@@ -231,6 +232,62 @@ def _official_drift(lev, refs):
                                  "inventario_id": ref["inventario_id_original"],
                                  "stock_del_corte": ref["stock_original"], "stock_actual": now["stock"]})
     return warnings
+
+
+def identificar_corte_de_entrega(raw):
+    """Identifica el corte existente sin pedir IDs ni CSV al operador.
+
+    Nunca utiliza el inventario vivo como fallback. En las primeras plantillas
+    el folio quedó PENDIENTE; se acepta solo si hay un único ciclo abierto
+    para la sucursal. Si son varios, solicitar una nueva plantilla con folio.
+    """
+    try:
+        control = leer_identidad_entrega(raw)
+    except ArchivoE4Error as exc:
+        raise E4Error(422, "CONTROL_INVALIDO", str(exc)) from exc
+    sucursal = positive_int(control.get("sucursal_id"))
+    if sucursal is None:
+        raise E4Error(422, "SUCURSAL_NO_IDENTIFICADA",
+                      "El Excel no declara un ID de sucursal válido en CONTROL")
+    ensure_branch(sucursal)
+    folio = str(control.get("folio_declarado") or "").strip()
+    ciclo = None
+    try:
+        ciclo = UUID(folio)
+    except (ValueError, AttributeError):
+        pass
+    if ciclo is not None:
+        lev = Lev.query.filter_by(cycle_key=ciclo, sucursal_id=sucursal).first()
+        if lev is None:
+            raise E4Error(409, "CORTE_NO_REGISTRADO",
+                          "No existe un corte congelado con el folio del archivo")
+        if lev.estado == "CLOSED":
+            raise E4Error(409, "CORTE_CERRADO", "El ciclo del Excel ya está cerrado")
+        return lev
+    if folio and "PENDIENTE" not in folio.upper():
+        raise E4Error(422, "FOLIO_NO_RECONOCIDO",
+                      "El folio del Excel no es válido; no se puede asumir otro corte")
+    candidatos = (Lev.query.filter(
+        Lev.sucursal_id == sucursal,
+        Lev.estado.in_(("IN_PROGRESS", "IN_REVIEW", "PREPARATION")),
+    ).order_by(Lev.id).limit(2).all())
+    if not candidatos:
+        raise E4Error(409, "CORTE_NO_REGISTRADO",
+                      "No existe un corte histórico registrado para esta sucursal; "
+                      "se requiere registrar una vez el corte original de distribución")
+    if len(candidatos) != 1:
+        raise E4Error(409, "CORTE_AMBIGUO",
+                      "Existen varios ciclos de la sucursal; utiliza una plantilla "
+                      "con folio E4 para identificar el levantamiento")
+    return candidatos[0]
+
+
+def recibir_excel_por_control(actor_id, key, filename, raw):
+    """Punto de entrada universal; usa el receptor y su seguridad transaccional."""
+    lev = identificar_corte_de_entrega(raw)
+    resultado, replay = recibir_excel(actor_id, lev.id, key, filename, raw)
+    return {"levantamiento_id": lev.id, "importacion": resultado,
+            "replayed": replay}
 
 
 def recibir_excel(actor_id, levantamiento_id, key, filename, raw):
