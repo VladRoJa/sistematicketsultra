@@ -29,7 +29,7 @@ class InventarioLevantamientoORM(db.Model):
     __table_args__ = (
         db.CheckConstraint("origen_corte IN ('CSV_HISTORICO','DB_ACTUAL','INICIAL')", name="ck_inv_e4_origen"),
         db.CheckConstraint("modalidad IN ('VERIFICACION','INICIAL')", name="ck_inv_e4_modalidad"),
-        db.CheckConstraint("estado IN ('PREPARATION','IN_PROGRESS')", name="ck_inv_e4_estado_b1"),
+        db.CheckConstraint("estado IN ('PREPARATION','IN_PROGRESS','IN_REVIEW','CLOSED')", name="ck_inv_e4_estado"),
         db.Index("ix_inv_e4_levantamientos_sucursal_fecha", "sucursal_id", "creado_en_utc"),
     )
 
