@@ -1228,7 +1228,7 @@ def update_user_module_access(user_id: int):
         if action_full_key:
             # No aceptar un check que sólo escriba un grant diagnóstico.
             # Ampliar este conjunto únicamente al certificar su guard HTTP.
-            if action_full_key not in {"track.read", "openings.read", "openings.comment"}:
+            if action_full_key not in {"track.read", "openings.read", "openings.comment", "openings.manage"}:
                 return jsonify({
                     "error": "Conflict",
                     "detail": "Esta acción todavía no tiene un check con autorización HTTP certificada.",
@@ -1272,9 +1272,12 @@ def update_user_module_access(user_id: int):
             from app.routes.openings_routes import (
                 openings_read_grants_enabled,
                 openings_comment_grants_enabled,
+                openings_manage_grants_enabled,
             )
             if action_full_key == "openings.comment":
                 permitted = openings_comment_grants_enabled()
+            elif action_full_key == "openings.manage":
+                permitted = openings_manage_grants_enabled()
             else:
                 permitted = openings_read_grants_enabled()
             if not permitted:
