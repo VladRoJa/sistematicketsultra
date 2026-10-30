@@ -163,3 +163,23 @@ def test_matrix_manage_matches_flag_and_guard(role, effect, enabled, expected):
         assert row["comparison"] == "coincide"
     else:
         assert row["legacy_source"] == "openings._require_openings_admin"
+
+
+def test_manage_allow_reaches_real_patch_resource_validation_without_mutation():
+    api, auth = client(manage=True, read=False, comment=False)
+    with patch.object(openings, "_openings_manage_override", return_value=True), \
+         patch.object(openings, "_current_role", return_value="RECEPCIONISTA"), \
+         patch.object(openings.db.session, "get", return_value=None) as read_db, \
+         patch.object(openings.db.session, "add") as write_db, \
+         patch.object(openings.db.session, "commit") as commit_db:
+        response = api.patch(
+            "/api/openings/1",
+            headers=auth,
+            json={"name": "QA no resource"},
+        )
+    # Grant de gestión permite llegar hasta las reglas de existencia del
+    # objeto, NO crea ni edita una apertura inexistente.
+    assert response.status_code == 404
+    read_db.assert_called_once()
+    write_db.assert_not_called()
+    commit_db.assert_not_called()
