@@ -264,7 +264,7 @@ def api(monkeypatch, tmp_path):
     try:
         with app.app_context():
             with db.engine.begin() as con:
-                con.exec_driver_sql("CREATE TABLE sucursales (sucursal_id INTEGER PRIMARY KEY)")
+                con.exec_driver_sql("CREATE TABLE sucursales (sucursal_id INTEGER PRIMARY KEY, is_demo BOOLEAN NOT NULL DEFAULT FALSE)")
                 con.exec_driver_sql("CREATE TABLE users (id INTEGER PRIMARY KEY, rol VARCHAR(50))")
                 con.exec_driver_sql("CREATE TABLE inventario_general (id INTEGER PRIMARY KEY, codigo_interno VARCHAR(100), tipo VARCHAR(20), nombre VARCHAR(255), marca VARCHAR(100), categoria VARCHAR(100))")
                 con.exec_driver_sql("CREATE TABLE inventario_sucursal (inventario_id INTEGER, sucursal_id INTEGER, stock INTEGER, PRIMARY KEY(inventario_id,sucursal_id))")
@@ -306,7 +306,9 @@ def api(monkeypatch, tmp_path):
                 spec_b3.loader.exec_module(migration_b3)
                 monkeypatch.setattr(migration_b3, "op", Operations(MigrationContext.configure(con)))
                 migration_b3.upgrade()
-                con.exec_driver_sql("INSERT INTO sucursales VALUES (6),(7),(8)")
+                # Los ID 7 y 8 son DEMO solo dentro del esquema PostgreSQL efímero.
+                # No reflejan la semántica de esas sucursales reales en producción.
+                con.exec_driver_sql("INSERT INTO sucursales(sucursal_id,is_demo) VALUES (6,false),(7,true),(8,true)")
                 con.exec_driver_sql("INSERT INTO users VALUES (1,'ADMINISTRADOR'),(2,'GERENTE'),(3,'GERENTE_REGIONAL')")
                 con.exec_driver_sql("INSERT INTO inventario_general (id,codigo_interno,tipo,nombre,marca) VALUES (501,'07CA01','APARATOS','Caminadora','Star Trac'),(502,'07EL01','APARATOS','Eliptica','Precor'),(503,'07RE00','APARATOS','Remo','Concept2')")
                 con.exec_driver_sql("INSERT INTO inventario_sucursal VALUES (501,7,3),(502,7,1),(503,7,0)")
@@ -585,7 +587,8 @@ def test_api_real_xlsx_http_aislado_con_historico_sin_mutaciones(api):
     assert _snapshot(app) == before, "La evidencia NO debe cambiar inventario V1/E2"
 
 
-def test_e3_aprobada_con_efecto_real_habilita_cierre_sin_movimiento_e4(api):
+def test_e3_aprobada_con_efecto_real_habilita_cierre_sin_movimiento_e4(api, monkeypatch):
+    monkeypatch.setenv("INVENTARIO_E4_AUTO_REVIEW_DEMO_ENABLED", "true")
     """E4 nunca escribe stock; solo valida la decisión E3 ya aplicada."""
     client, tokens, app = api
     root = "/api/inventario/levantamientos"
@@ -641,7 +644,8 @@ def test_e3_aprobada_con_efecto_real_habilita_cierre_sin_movimiento_e4(api):
     }).status_code == 409
 
 
-def test_rechazo_e3_y_baja_v1_no_burlan_revisiones_automaticas(api):
+def test_rechazo_e3_y_baja_v1_no_burlan_revisiones_automaticas(api, monkeypatch):
+    monkeypatch.setenv("INVENTARIO_E4_AUTO_REVIEW_DEMO_ENABLED", "true")
     client, tokens, app = api
     root = "/api/inventario/levantamientos"
     created = client.post(root, headers=tokens[1], data={
@@ -671,7 +675,8 @@ def test_rechazo_e3_y_baja_v1_no_burlan_revisiones_automaticas(api):
     assert "REVISIONES_SIN_AUTORIZACION" in board["bloqueos"]
 
 
-def test_inicial_hallazgo_sin_identidad_bloquea_y_no_da_alta(api):
+def test_inicial_hallazgo_sin_identidad_bloquea_y_no_da_alta(api, monkeypatch):
+    monkeypatch.setenv("INVENTARIO_E4_AUTO_REVIEW_DEMO_ENABLED", "true")
     client, tokens, app = api
     root = "/api/inventario/levantamientos"
     created = client.post(root, headers=tokens[1], data={
@@ -776,7 +781,8 @@ def test_api_san_luis_real_http_recepcion_y_bloqueo_por_codigo_duplicado(api):
     assert _snapshot(app) == before
 
 
-def test_auto_revisiones_e2_unica_por_ciclo_y_nueva_evidencia(api):
+def test_auto_revisiones_e2_unica_por_ciclo_y_nueva_evidencia(api, monkeypatch):
+    monkeypatch.setenv("INVENTARIO_E4_AUTO_REVIEW_DEMO_ENABLED", "true")
     """Una diferencia física con evidencia E2 completa abre una sola solicitud."""
     client, tokens, app = api
     root = "/api/inventario/levantamientos"
@@ -837,7 +843,8 @@ def test_auto_revisiones_e2_unica_por_ciclo_y_nueva_evidencia(api):
         assert len(ids) == 2 and len(set(ids)) == 2
 
 
-def test_auto_revisiones_sin_evidencia_se_bloquean_sin_e2(api):
+def test_auto_revisiones_sin_evidencia_se_bloquean_sin_e2(api, monkeypatch):
+    monkeypatch.setenv("INVENTARIO_E4_AUTO_REVIEW_DEMO_ENABLED", "true")
     client, tokens, app = api
     root = "/api/inventario/levantamientos"
     created = client.post(root, headers=tokens[1], data={
