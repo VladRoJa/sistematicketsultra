@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { InventarioService } from '../../services/inventario.service';
 import {
+  CasoConciliacionE4, TableroConciliacionE4,
   DiagnosticoE4, FilaE4, ImportacionE4, LevantamientoE4,
   LevantamientoResumenE4, LevantamientosE4Service, OrigenCorteE4,
 } from './levantamientos.service';
@@ -44,6 +45,14 @@ export class LevantamientosComponent implements OnInit {
   filtroFilas: FiltroFilas = 'TODAS';
   xlsx: File | null = null;
   private importKey: string | null = null;
+  tablero: TableroConciliacionE4 | null = null;
+  casoActivo: CasoConciliacionE4 | null = null;
+  idResolucion: number | null = null;
+  motivoResolucion = '';
+  motivoCierre = '';
+  confirmoCierre = false;
+  private resolucionKey: string | null = null;
+  private cierreKey: string | null = null;
 
   constructor(
     private readonly e4: LevantamientosE4Service,
@@ -152,10 +161,15 @@ export class LevantamientosComponent implements OnInit {
     this.importacion = null;
     this.filas = [];
     this.xlsx = null;
+    this.tablero = null;
+    this.casoActivo = null;
+    this.motivoCierre = '';
+    this.confirmoCierre = false;
     this.e4.detalle(id).subscribe({
       next: data => {
         this.seleccionado = data.levantamiento;
         this.versiones = data.versiones;
+        this.cargarTablero();
         const vigente = data.versiones.find(v => v.id === data.levantamiento.ultima_importacion_id);
         if (vigente) this.abrirVersion(vigente.id);
       },
@@ -236,6 +250,108 @@ export class LevantamientosComponent implements OnInit {
         URL.revokeObjectURL(url);
       },
       error: err => { this.error = this.errorHttp(err, 'No fue posible descargar el original.'); },
+    });
+  }
+
+  cargarTablero(): void {
+    if (!this.seleccionado) return;
+    const id = this.seleccionado.id;
+    this.e4.tablero(id).subscribe({
+      next: data => {
+        if (this.seleccionado?.id !== id) return;
+        this.tablero = data;
+      },
+      error: err => {
+        this.error = this.errorHttp(err, 'No fue posible consultar la conciliación.');
+      },
+    });
+  }
+
+  elegirCaso(caso: CasoConciliacionE4): void {
+    if (this.procesando || this.seleccionado?.estado === 'CLOSED') return;
+    this.casoActivo = caso;
+    this.idResolucion = null;
+    this.motivoResolucion = '';
+    this.resolucionKey = null;
+  }
+
+  cambioResolucion(): void {
+    this.resolucionKey = null;
+  }
+
+  get puedeResolver(): boolean {
+    return !this.procesando && !!this.casoActivo && !!this.idResolucion &&
+      Number.isInteger(this.idResolucion) && this.idResolucion > 0 &&
+      this.motivoResolucion.trim().length >= 20 &&
+      this.motivoResolucion.trim().length <= 2000;
+  }
+
+  resolverCaso(): void {
+    if (!this.seleccionado || !this.casoActivo || !this.puedeResolver) return;
+    const lev = this.seleccionado.id;
+    const caso = this.casoActivo;
+    const esSolicitud = caso.tipo === 'NO' || caso.tipo === 'PREFIJO';
+    const key = this.resolucionKey || crypto.randomUUID();
+    this.resolucionKey = key;
+    const data: {
+      caso: string; accion: 'E2_APROBADA' | 'REGISTRADO_OFICIAL';
+      solicitud_id?: number; inventario_id_resultante?: number;
+      motivo: string; idempotency_key: string;
+    } = {
+      caso: caso.caso,
+      accion: esSolicitud ? 'E2_APROBADA' : 'REGISTRADO_OFICIAL',
+      motivo: this.motivoResolucion.trim(), idempotency_key: key,
+    };
+    if (esSolicitud) data.solicitud_id = this.idResolucion!;
+    else data.inventario_id_resultante = this.idResolucion!;
+    this.procesando = true;
+    this.error = '';
+    this.e4.resolver(lev, data).subscribe({
+      next: () => {
+        this.procesando = false;
+        this.aviso = 'Resolución registrada y verificada. No se modificó inventario oficial desde E4.';
+        this.casoActivo = null;
+        this.resolucionKey = null;
+        this.cargarTablero();
+        this.cargar();
+      },
+      error: err => {
+        this.procesando = false;
+        this.error = this.errorHttp(err, 'No se pudo registrar la resolución.');
+      },
+    });
+  }
+
+  cambioCierre(): void {
+    this.cierreKey = null;
+  }
+
+  get puedeCerrar(): boolean {
+    return !!this.tablero?.puede_cerrar && !this.procesando &&
+      this.confirmoCierre && this.motivoCierre.trim().length >= 20 &&
+      this.motivoCierre.trim().length <= 2000;
+  }
+
+  cerrarExpediente(): void {
+    if (!this.seleccionado || !this.puedeCerrar) return;
+    const lev = this.seleccionado.id;
+    const key = this.cierreKey || crypto.randomUUID();
+    this.cierreKey = key;
+    this.procesando = true;
+    this.error = '';
+    this.e4.cerrar(lev, this.motivoCierre.trim(), key).subscribe({
+      next: () => {
+        this.procesando = false;
+        this.cierreKey = null;
+        this.aviso = 'Levantamiento cerrado con trazabilidad. La conciliación E4 no creó movimientos de inventario.';
+        this.abrir(lev);
+        this.cargar();
+      },
+      error: err => {
+        this.procesando = false;
+        this.error = this.errorHttp(err, 'El backend rechazó el cierre.');
+        this.cargarTablero();
+      },
     });
   }
 
