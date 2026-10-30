@@ -13,6 +13,23 @@
   <p *ngIf="error" class="alert error" role="alert">{{ error }}</p>
   <p *ngIf="aviso" class="alert success" role="status">{{ aviso }}</p>
 
+  <section class="panel recepcion-unica" aria-label="Recibir archivo de inventario">
+    <div>
+      <h2>Recibir inventario de sucursal</h2>
+      <p class="help">Selecciona el Excel que envió el gerente. El sistema identificará la sucursal, buscará su corte original y mostrará las diferencias. No necesitas indicar IDs ni volver a subir la base histórica.</p>
+    </div>
+    <label>Excel recibido
+      <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        (change)="seleccionarRecibido($event)" [disabled]="procesando">
+    </label>
+    <button type="button" class="primary" (click)="recibirExcel()"
+      [disabled]="!excelRecibido || procesando">
+      {{ procesando ? 'Validando…' : 'Procesar inventario' }}
+    </button>
+  </section>
+
+  <p class="help">El botón «Nuevo corte» es solo para preparación administrativa cuando el corte de distribución todavía no está registrado. No se usa en cada recepción.</p>
+
   <section *ngIf="creando" class="panel" aria-label="Registrar corte">
     <div class="panel-header">
       <h2>Registrar levantamiento</h2>
