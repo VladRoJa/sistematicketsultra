@@ -864,3 +864,51 @@ def test_auto_revisiones_sin_evidencia_se_bloquean_sin_e2(api, monkeypatch):
     assert revisiones["items"][0]["motivo_bloqueo"] == "EVIDENCIA_O_PROPUESTA_INCOMPLETA"
     assert revisiones["items"][0]["solicitud_e2_id"] is None
     assert _snapshot(app) == before
+
+
+def test_auto_e2_jamas_se_activa_fuera_is_demo_ni_sin_flag(api, monkeypatch):
+    """Aunque el flag esté ON, una sucursal operativa real nunca crea E2."""
+    client, tokens, app = api
+    root = "/api/inventario/levantamientos"
+    monkeypatch.setenv("INVENTARIO_E4_AUTO_REVIEW_DEMO_ENABLED", "true")
+    # En este esquema QA la sucursal 6 es NO demo.
+    created = client.post(root, headers=tokens[1], data={
+        "sucursal_id": "6", "origen_corte": "INICIAL",
+        "cycle_key": str(uuid4()),
+    })
+    assert created.status_code == 201, created.get_json()
+    lev = created.get_json()["levantamiento"]["id"]
+    before = _snapshot(app)
+    received = client.post(root + "/recepciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()),
+        "file": (BytesIO(workbook(branch=6, initial=True)), "no_demo.xlsx"),
+    })
+    assert received.status_code == 201, received.get_json()
+    assert received.get_json()["importacion"]["resumen"]["revisiones_auto"]["auto_revisiones_habilitadas"] is False
+    lista = client.get(f"{root}/{lev}/revisiones", headers=tokens[1]).get_json()
+    assert lista["total"] == 0
+    assert _snapshot(app) == before
+    cierre = client.post(f"{root}/{lev}/cerrar", headers=tokens[1], json={
+        "idempotency_key": str(uuid4()),
+        "motivo": "Intento de cierre de sucursal que no es demo",
+    })
+    assert cierre.status_code == 409
+    assert cierre.get_json()["error"] == "PILOTO_DEMO_NO_HABILITADO"
+
+    # Y sin el flag ni siquiera la sucursal demo puede generar revisiones.
+    monkeypatch.delenv("INVENTARIO_E4_AUTO_REVIEW_DEMO_ENABLED", raising=False)
+    created_demo = client.post(root, headers=tokens[1], data={
+        "sucursal_id": "7", "origen_corte": "CSV_HISTORICO",
+        "cycle_key": str(uuid4()),
+        "baseline_csv": (BytesIO(original_csv()), "corte.csv"),
+    })
+    assert created_demo.status_code == 201, created_demo.get_json()
+    demo_id = created_demo.get_json()["levantamiento"]["id"]
+    raw = workbook(first="SI", second="NO", found=False)
+    no_flag = client.post(root + "/recepciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()), "file": (BytesIO(raw), "sin_flag.xlsx"),
+    })
+    assert no_flag.status_code == 201, no_flag.get_json()
+    assert no_flag.get_json()["importacion"]["resumen"]["revisiones_auto"]["auto_revisiones_habilitadas"] is False
+    assert client.get(f"{root}/{demo_id}/revisiones", headers=tokens[1]).get_json()["total"] == 0
+    assert _snapshot(app) == before
