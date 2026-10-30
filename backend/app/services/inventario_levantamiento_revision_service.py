@@ -290,3 +290,64 @@ def reconciliar_importacion(lev, imp, parsed, actor):
         row.ultima_importacion_id = imp.id
     return {"nuevas": nuevos, "reutilizadas": reutilizados,
             "bloqueadas": bloqueados, "e2_creadas": e2_creadas}
+
+
+def _estado_efectivo(row):
+    if row.solicitud_e2_id is None:
+        return row.estado
+    solicitud = db.session.get(Solicitud, row.solicitud_e2_id)
+    if solicitud is None:
+        return "BLOCKED"
+    return {
+        "PENDING": "AWAITING_E3",
+        "APPROVED": "APPROVED",
+        "REJECTED": "REJECTED",
+    }.get(solicitud.estado, "BLOCKED")
+
+
+def listado_revisiones(levantamiento_id, page=1, size=20):
+    from app.models.inventario_levantamiento import InventarioLevantamientoORM as Lev
+
+    lev = db.session.get(Lev, levantamiento_id)
+    if lev is None:
+        from app.services.inventario_levantamientos_service import E4Error
+        raise E4Error(404, "LEVANTAMIENTO_DESCONOCIDO", "Levantamiento inexistente")
+    query = Revision.query.filter_by(levantamiento_id=lev.id)
+    total = query.count()
+    rows = query.order_by(Revision.id).offset((page - 1) * size).limit(size).all()
+    items = [
+        {
+            "id": r.id, "logical_key": r.logical_key,
+            "tipo": r.tipo, "inventario_id": r.inventario_id,
+            "codigo_observado": r.codigo_observado, "campo": r.campo,
+            "estado": _estado_efectivo(r),
+            "motivo_bloqueo": r.motivo_bloqueo,
+            "solicitud_e2_id": r.solicitud_e2_id,
+            "primera_importacion_id": r.primera_importacion_id,
+            "ultima_importacion_id": r.ultima_importacion_id,
+            "ultimo_valor": r.ultimo_valor,
+        }
+        for r in rows
+    ]
+    resumen = {"total": total, "bloqueadas": 0, "por_autorizar": 0,
+               "aprobadas": 0, "rechazadas": 0, "superadas": 0}
+    # Iterador por lotes, sin cargar filas/evidencias JSONB en memoria.
+    for row in query.with_entities(Revision.estado, Revision.solicitud_e2_id).yield_per(200):
+        estado = row.estado
+        if row.solicitud_e2_id:
+            solicitud = db.session.get(Solicitud, row.solicitud_e2_id)
+            estado = {
+                "PENDING": "AWAITING_E3", "APPROVED": "APPROVED", "REJECTED": "REJECTED",
+            }.get(solicitud.estado if solicitud else "", "BLOCKED")
+        if estado == "BLOCKED":
+            resumen["bloqueadas"] += 1
+        elif estado in ("PENDING", "AWAITING_E3"):
+            resumen["por_autorizar"] += 1
+        elif estado == "APPROVED":
+            resumen["aprobadas"] += 1
+        elif estado == "REJECTED":
+            resumen["rechazadas"] += 1
+        elif estado == "SUPERSEDED":
+            resumen["superadas"] += 1
+    return {"levantamiento_id": lev.id, "resumen": resumen, "items": items,
+            "page": page, "per_page": size, "total": total}
