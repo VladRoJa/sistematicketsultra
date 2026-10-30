@@ -187,10 +187,22 @@ def _solicitud_e2(lev, imp, caso, actor):
     parsed, invalid = _validate_payload(payload)
     if invalid is not None:
         return None, "EVIDENCIA_O_PROPUESTA_INCOMPLETA"
-    related = Solicitud.query.filter_by(
-        sucursal_id=lev.sucursal_id, tipo=caso["tipo"],
-        inventario_id=caso["inventario_id"], campo=caso["campo"], estado="PENDING",
-    ).first()
+    if caso["tipo"] == "UNREGISTERED_FIND":
+        # Distintos hallazgos no tienen inventario_id: usar la identidad
+        # física provisional, no comparar NULL == NULL para todo el club.
+        codigo_fisico = norm(caso["codigo"])
+        related = db.session.execute(sql_text("""
+            SELECT id FROM inventario_correccion_solicitudes
+            WHERE sucursal_id=:branch AND tipo='UNREGISTERED_FIND'
+              AND estado='PENDING'
+              AND lower(btrim(hallazgo_provisional ->> 'codigo_interno'))=:codigo
+            LIMIT 1
+        """), {"branch": lev.sucursal_id, "codigo": codigo_fisico}).scalar_one_or_none()
+    else:
+        related = Solicitud.query.filter_by(
+            sucursal_id=lev.sucursal_id, tipo=caso["tipo"],
+            inventario_id=caso["inventario_id"], campo=caso["campo"], estado="PENDING",
+        ).first()
     if related is not None:
         return None, "SOLICITUD_E2_PREEXISTENTE_REQUIERE_REVISION"
     official, conflict = _official_snapshot(parsed)
