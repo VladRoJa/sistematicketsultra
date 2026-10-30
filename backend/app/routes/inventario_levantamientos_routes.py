@@ -20,6 +20,8 @@ from app.services.inventario_levantamiento_conciliacion_service import (
     tablero_e4, registrar_resolucion, cerrar_e4,
 )
 
+from app.services.inventario_levantamiento_revision_service import listado_revisiones
+
 inventario_levantamientos_bp = Blueprint("inventario_levantamientos", __name__)
 
 
@@ -206,6 +208,20 @@ def archivo_e4(levantamiento_id, importacion_id):
         raise E4Error(409, "ARCHIVO_NO_DISPONIBLE", "El original archivado no está disponible")
     return send_file(path, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                      as_attachment=True, download_name=imp.original_filename)
+
+
+@inventario_levantamientos_bp.get("/<int:levantamiento_id>/revisiones")
+@jwt_required()
+def consultar_revisiones_automaticas(levantamiento_id):
+    _actor()
+    raw_page = request.args.get("page", "1")
+    raw_size = request.args.get("per_page", "20")
+    if (not raw_page.isascii() or not raw_page.isdecimal()
+            or not 1 <= int(raw_page) <= 100000
+            or not raw_size.isascii() or not raw_size.isdecimal()
+            or not 1 <= int(raw_size) <= 100):
+        raise E4Error(400, "PAGINACION_INVALIDA", "Paginación inválida")
+    return jsonify(listado_revisiones(levantamiento_id, int(raw_page), int(raw_size))), 200
 
 
 @inventario_levantamientos_bp.get("/<int:levantamiento_id>/conciliacion")
