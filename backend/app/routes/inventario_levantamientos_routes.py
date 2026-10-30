@@ -16,6 +16,10 @@ from app.services.inventario_levantamientos_service import (
     detalle_levantamiento, detalle_importacion, _private_path,
 )
 
+from app.services.inventario_levantamiento_conciliacion_service import (
+    tablero_e4, registrar_resolucion, cerrar_e4,
+)
+
 inventario_levantamientos_bp = Blueprint("inventario_levantamientos", __name__)
 
 
@@ -181,3 +185,36 @@ def archivo_e4(levantamiento_id, importacion_id):
         raise E4Error(409, "ARCHIVO_NO_DISPONIBLE", "El original archivado no está disponible")
     return send_file(path, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                      as_attachment=True, download_name=imp.original_filename)
+
+
+@inventario_levantamientos_bp.get("/<int:levantamiento_id>/conciliacion")
+@jwt_required()
+def consultar_conciliacion_e4(levantamiento_id):
+    _actor()
+    return jsonify(tablero_e4(levantamiento_id)), 200
+
+
+@inventario_levantamientos_bp.post("/<int:levantamiento_id>/resoluciones")
+@jwt_required()
+def resolver_conciliacion_e4(levantamiento_id):
+    uid = _actor()
+    try:
+        resolucion, replay = registrar_resolucion(
+            levantamiento_id, uid, request.get_json(silent=True))
+    except IntegrityError:
+        db.session.rollback()
+        raise E4Error(409, "CONFLICTO_CONCURRENTE", "Resolución simultánea; actualiza los casos")
+    return jsonify({"resolucion": resolucion, "replayed": replay}), 200 if replay else 201
+
+
+@inventario_levantamientos_bp.post("/<int:levantamiento_id>/cerrar")
+@jwt_required()
+def cerrar_levantamiento_e4(levantamiento_id):
+    uid = _actor()
+    try:
+        resultado, replay = cerrar_e4(
+            levantamiento_id, uid, request.get_json(silent=True))
+    except IntegrityError:
+        db.session.rollback()
+        raise E4Error(409, "CONFLICTO_CONCURRENTE", "Cierre simultáneo; actualiza el expediente")
+    return jsonify({"cierre": resultado, "replayed": replay}), 200 if replay else 201
