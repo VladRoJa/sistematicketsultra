@@ -22,8 +22,10 @@ def _require_env(name: str) -> str:
 
 
 class Config:
-    # Worker admission stays locked until M1c is integrated, reviewed and enabled.
-    CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY = False
+    # Explicit rollout gate; OFF by default even when background dispatch is configured.
+    CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY = (
+        os.getenv("CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY", "false").strip().lower() == "true"
+    )
 
     # Issue 1129 M1b: no background jobs can be enqueued by default.
     # Do not activate before the worker and PostgreSQL security gates are approved.
