@@ -251,7 +251,18 @@ def api(monkeypatch, tmp_path):
                 con.exec_driver_sql("CREATE TABLE users (id INTEGER PRIMARY KEY, rol VARCHAR(50))")
                 con.exec_driver_sql("CREATE TABLE inventario_general (id INTEGER PRIMARY KEY, codigo_interno VARCHAR(100), tipo VARCHAR(20), nombre VARCHAR(255), marca VARCHAR(100), categoria VARCHAR(100))")
                 con.exec_driver_sql("CREATE TABLE inventario_sucursal (inventario_id INTEGER, sucursal_id INTEGER, stock INTEGER, PRIMARY KEY(inventario_id,sucursal_id))")
-                con.exec_driver_sql("CREATE TABLE movimientos_inventario (id INTEGER PRIMARY KEY)")
+                con.exec_driver_sql("""
+                    CREATE TABLE movimientos_inventario (
+                      id INTEGER PRIMARY KEY, tipo_movimiento VARCHAR(16),
+                      sucursal_id INTEGER, anulado BOOLEAN DEFAULT FALSE
+                    )
+                """)
+                con.exec_driver_sql("""
+                    CREATE TABLE detalle_movimiento (
+                      id INTEGER PRIMARY KEY, movimiento_id INTEGER,
+                      inventario_id INTEGER, cantidad INTEGER
+                    )
+                """)
                 con.exec_driver_sql("""
                     CREATE TABLE inventario_correccion_solicitudes (
                       id BIGINT PRIMARY KEY, tipo VARCHAR(40), estado VARCHAR(24),
@@ -581,3 +592,52 @@ def test_api_conciliacion_cierre_no_modifica_inventario_y_exige_e3(api):
         "file": (BytesIO(original.getvalue()), "intento_post_cierre.xlsx"),
     }).status_code == 409
     assert _snapshot(app) == snapshot, "E4 solo resuelve/cierra: no muta V1 ni E2"
+
+
+def test_baja_previa_exige_movimiento_salida_valido_sin_duplicarlo(api):
+    client, tokens, app = api
+    root = "/api/inventario/levantamientos"
+    response = client.post(root, headers=tokens[1], data={
+        "sucursal_id": "7", "origen_corte": "CSV_HISTORICO",
+        "cycle_key": str(uuid4()), "baseline_csv": (BytesIO(original_csv()), "corte.csv"),
+    })
+    assert response.status_code == 201, response.get_json()
+    lev = response.get_json()["levantamiento"]["id"]
+    upload = client.post(f"{root}/{lev}/importaciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()),
+        "file": (BytesIO(workbook(first="SI", second="NO", found=False)), "entrega.xlsx"),
+    })
+    assert upload.status_code == 201, upload.get_json()
+    assert upload.get_json()["importacion"]["resultado"] == "VALIDATED"
+    base = {
+        "caso": "NO:502", "accion": "BAJA_PREVIA", "movimiento_id": 77,
+        "motivo": "Baja con salida oficial autorizada anteriormente",
+        "idempotency_key": str(uuid4()),
+    }
+    assert client.post(f"{root}/{lev}/resoluciones", headers=tokens[1],
+                       json=base).status_code == 409
+    with app.app_context():
+        with db.engine.begin() as con:
+            con.exec_driver_sql("UPDATE inventario_sucursal SET stock=0 WHERE inventario_id=502")
+            con.exec_driver_sql(
+                "INSERT INTO movimientos_inventario VALUES (77,'salida',7,true)")
+            con.exec_driver_sql(
+                "INSERT INTO detalle_movimiento VALUES (88,77,502,1)")
+        db.session.remove()
+    assert client.post(f"{root}/{lev}/resoluciones", headers=tokens[1],
+                       json=base).status_code == 409
+    with app.app_context():
+        with db.engine.begin() as con:
+            con.exec_driver_sql("UPDATE movimientos_inventario SET anulado=false WHERE id=77")
+        db.session.remove()
+    before = _snapshot(app)
+    r = client.post(f"{root}/{lev}/resoluciones", headers=tokens[1], json=base)
+    assert r.status_code == 201, r.get_json()
+    board = client.get(f"{root}/{lev}/conciliacion", headers=tokens[1]).get_json()
+    assert board["puede_cerrar"] and len(board["casos"]) == 1
+    closed = client.post(f"{root}/{lev}/cerrar", headers=tokens[1], json={
+        "motivo": "Inventario conciliado con registro de baja V1 confirmado",
+        "idempotency_key": str(uuid4()),
+    })
+    assert closed.status_code == 201, closed.get_json()
+    assert _snapshot(app) == before
