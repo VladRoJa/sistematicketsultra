@@ -145,6 +145,25 @@ def _headers(sheet, definitions):
     return None, None
 
 
+def leer_identidad_entrega(raw):
+    """CONTROL de un XLSX sin asumir que el contenido concede identidad oficial.
+
+    Solo devuelve datos declarados. La identidad efectiva exige contrastar
+    sucursal/ciclo contra E4 persistido; la BD actual nunca sustituye el corte.
+    """
+    book = _safe_book(raw)
+    try:
+        if "CONTROL" not in book.sheetnames:
+            raise ArchivoE4Error("Falta hoja CONTROL")
+        diagnostics = []
+        control = _control(book["CONTROL"], diagnostics)
+        if diagnostics:
+            raise ArchivoE4Error("CONTROL contiene fórmulas en campos críticos")
+        return control
+    finally:
+        book.close()
+
+
 def parse_xlsx_v01(raw, sucursal_id, expected, modalidad):
     """Devuelve evidencia de la entrega y pendientes por ID original, sin escrituras."""
     book = _safe_book(raw)
