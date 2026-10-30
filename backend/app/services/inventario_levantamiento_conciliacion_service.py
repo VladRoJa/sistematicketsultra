@@ -91,6 +91,7 @@ def _resumen_resolucion(row):
     return {
         "id": row.id, "caso": row.caso, "accion": row.accion,
         "solicitud_id": row.solicitud_id,
+        "movimiento_id": row.movimiento_id,
         "inventario_id_resultante": row.inventario_id_resultante,
         "motivo": row.motivo, "actor_usuario_id": row.actor_usuario_id,
         "creado_en_utc": row.creado_en_utc.isoformat() if row.creado_en_utc else None,
@@ -98,6 +99,18 @@ def _resumen_resolucion(row):
 
 
 def _evidencia_aprobada(lev, caso, row):
+    if caso["tipo"] == "NO" and row.accion == "BAJA_PREVIA" and row.movimiento_id:
+        salida = db.session.execute(sql_text("""
+            SELECT 1 FROM movimientos_inventario m
+            JOIN detalle_movimiento d ON d.movimiento_id=m.id
+            JOIN inventario_sucursal s
+              ON s.inventario_id=d.inventario_id AND s.sucursal_id=m.sucursal_id
+            WHERE m.id=:mov AND m.sucursal_id=:sucursal
+              AND m.tipo_movimiento='salida' AND m.anulado=false
+              AND d.inventario_id=:inventario AND d.cantidad>0 AND s.stock=0
+        """), {"mov": row.movimiento_id, "sucursal": lev.sucursal_id,
+               "inventario": caso["inventario_id"]}).scalar_one_or_none()
+        return salida is not None
     if caso["tipo"] in {"NO", "PREFIJO"}:
         solicitud = db.session.get(Solicitud, row.solicitud_id) if row.solicitud_id else None
         tipo = "NOT_LOCATED" if caso["tipo"] == "NO" else "MASTER_FIELD"
@@ -210,6 +223,7 @@ def registrar_resolucion(lev_id, actor, data):
                 existente.caso != clave or existente.accion != accion
                 or existente.motivo != motivo.strip()
                 or existente.solicitud_id != data.get("solicitud_id")
+                or existente.movimiento_id != data.get("movimiento_id")
                 or existente.inventario_id_resultante != data.get("inventario_id_resultante")):
             raise E4Error(409, "IDEMPOTENCIA_CONFLICTO", "La llave pertenece a otra resolución")
         return _resumen_resolucion(existente), True
@@ -217,18 +231,28 @@ def registrar_resolucion(lev_id, actor, data):
     caso = casos.get(clave)
     if not caso:
         raise E4Error(404, "CASO_DESCONOCIDO", "El caso no pertenece a esta entrega")
-    if caso["tipo"] in {"NO", "PREFIJO"}:
-        if accion != "E2_APROBADA" or type(data.get("solicitud_id")) is not int or data["solicitud_id"] <= 0 or data.get("inventario_id_resultante") is not None:
+    movimiento = None
+    if caso["tipo"] == "NO" and accion == "BAJA_PREVIA":
+        if (type(data.get("movimiento_id")) is not int or data["movimiento_id"] <= 0
+                or data.get("solicitud_id") is not None
+                or data.get("inventario_id_resultante") is not None):
+            raise E4Error(422, "RESOLUCION_INVALIDA", "Se requiere movimiento V1 de baja no anulado")
+        movimiento = data["movimiento_id"]
+        solicitud_id = destino = None
+    elif caso["tipo"] in {"NO", "PREFIJO"}:
+        if (accion != "E2_APROBADA" or type(data.get("solicitud_id")) is not int
+                or data["solicitud_id"] <= 0 or data.get("movimiento_id") is not None
+                or data.get("inventario_id_resultante") is not None):
             raise E4Error(422, "RESOLUCION_INVALIDA", "Se requiere solicitud E2 aprobada de esta referencia")
         solicitud_id = data["solicitud_id"]
         destino = None
     else:
-        if accion != "REGISTRADO_OFICIAL" or type(data.get("inventario_id_resultante")) is not int or data["inventario_id_resultante"] <= 0 or data.get("solicitud_id") is not None:
+        if accion != "REGISTRADO_OFICIAL" or type(data.get("inventario_id_resultante")) is not int or data["inventario_id_resultante"] <= 0 or data.get("solicitud_id") is not None or data.get("movimiento_id") is not None:
             raise E4Error(422, "RESOLUCION_INVALIDA", "Se requiere referencia oficial vinculada a la sucursal")
         solicitud_id = None
         destino = data["inventario_id_resultante"]
     resolucion = Rev(levantamiento_id=lev.id, importacion_id=imp.id, caso=clave,
-                     accion=accion, solicitud_id=solicitud_id,
+                     accion=accion, solicitud_id=solicitud_id, movimiento_id=movimiento,
                      inventario_id_resultante=destino, motivo=motivo.strip(),
                      actor_usuario_id=actor, idempotency_key=key)
     if not _evidencia_aprobada(lev, caso, resolucion):
