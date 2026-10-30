@@ -46,6 +46,7 @@ export interface VisualAuditResponse {
   openings_comment_grants_enabled: boolean;
   openings_manage_grants_enabled: boolean;
   tickets_create_grants_enabled: boolean;
+  tickets_update_status_grants_enabled: boolean;
   note: string;
   view: AuditPerspective;
   rows: VisualAuditRow[];
