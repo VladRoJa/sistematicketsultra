@@ -64,6 +64,7 @@ const http = require('node:http');
     await page.getByRole('button', { name: 'Exportar Excel' }).waitFor();
     assert.equal(await page.locator('.suite-main-nav__item').count(), 1);
     assert.equal(await page.locator('app-system-daily-check-gate').count(), 0);
+    assert.equal(await page.locator('app-campaign-v2-background-dock').count(), 0);
     assert.equal(await page.locator('.suite-floating-layer').count(), 0);
     assert.equal(await page.locator('.table-detail-link:not([disabled])').count(), 0);
     await page.getByLabel('Sucursal del Funnel de Venta Nueva', { exact: true }).click();
@@ -82,7 +83,7 @@ const http = require('node:http');
     assert(cells.includes('Club Siete QA'));
     assert(!cells.includes('Club Dos QA'));
     for (const url of ['/main/ver-tickets', '/inventario', '/pm/calendario', '/warehouse',
-      '/warehouse/track', '/marketing-conversion/venta-total', '/marketing/campaigns', '/admin/usuarios', '/admin']) {
+      '/warehouse/track', '/marketing-conversion/venta-total', '/marketing/campaigns-v2', '/admin/usuarios', '/admin']) {
       await page.goto(base + '/#' + url);
       await page.waitForURL('**/#/marketing-conversion/venta-total-original');
       await page.getByRole('button', { name: 'Exportar Excel' }).waitFor();
