@@ -108,6 +108,7 @@ def _evidencia_aprobada(lev, caso, row):
             WHERE m.id=:mov AND m.sucursal_id=:sucursal
               AND m.tipo_movimiento='salida' AND m.anulado=false
               AND d.inventario_id=:inventario AND d.cantidad>0 AND s.stock=0
+            LIMIT 1
         """), {"mov": row.movimiento_id, "sucursal": lev.sucursal_id,
                "inventario": caso["inventario_id"]}).scalar_one_or_none()
         return salida is not None
