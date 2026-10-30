@@ -70,6 +70,24 @@ export class LevantamientosComponent implements OnInit {
     this.cargar();
   }
 
+  mensajeResultado(resultado: 'VALIDATED' | 'INCOMPLETE' | 'INVALID'): string {
+    if (resultado === 'VALIDATED') {
+      return 'Archivo completo a nivel de respuestas. Aún NO significa conciliado.';
+    }
+    if (resultado === 'INCOMPLETE') {
+      return 'Hay referencias pendientes de revisar o un inventario inicial pendiente de conciliar.';
+    }
+    return 'Archivo con errores de validación. Se conservó la evidencia, pero no es apta para cierre.';
+  }
+
+  tipoCorte(origen: OrigenCorteE4): string {
+    return origen === 'INICIAL' ? 'Desde cero' : 'Verificación';
+  }
+
+  etiquetaCaso(resuelto: boolean): string {
+    return resuelto ? 'Resuelto' : 'Pendiente';
+  }
+
   nombreSucursal(id: number): string {
     const encontrada = this.sucursales.find(s => s.sucursal_id === id);
     return encontrada ? encontrada.sucursal : 'Sucursal ' + id;
