@@ -897,3 +897,86 @@ def test_api_san_luis_real_http_recepcion_y_bloqueo_por_codigo_duplicado(api):
         "motivo": "Intento prohibido de cerrar archivo con identidad ambigua",
     }).status_code == 409
     assert _snapshot(app) == before
+
+
+def test_auto_revisiones_e2_unica_por_ciclo_y_nueva_evidencia(api):
+    """Una diferencia física con evidencia E2 completa abre una sola solicitud."""
+    client, tokens, app = api
+    root = "/api/inventario/levantamientos"
+    created = client.post(root, headers=tokens[1], data={
+        "sucursal_id": "7", "origen_corte": "CSV_HISTORICO",
+        "cycle_key": str(uuid4()), "baseline_csv": (BytesIO(original_csv()), "corte.csv"),
+    })
+    assert created.status_code == 201, created.get_json()
+    lev = created.get_json()["levantamiento"]["id"]
+    book = load_workbook(BytesIO(workbook(first="SI", second="NO", found=False)))
+    book["APARATOS"]["G9"] = "No fue localizado tras inspeccionar todo el club"
+    payload = BytesIO()
+    book.save(payload)
+    before = _snapshot(app)
+    received = client.post(f"{root}/recepciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()), "file": (BytesIO(payload.getvalue()), "devuelto.xlsx"),
+    })
+    assert received.status_code == 201, received.get_json()
+    summary = received.get_json()["importacion"]["resumen"]["revisiones_auto"]
+    assert summary == {"nuevas": 1, "reutilizadas": 0, "bloqueadas": 0, "e2_creadas": 1}
+    state = client.get(f"{root}/{lev}/revisiones", headers=tokens[1])
+    assert state.status_code == 200, state.get_json()
+    items = state.get_json()["items"]
+    assert len(items) == 1 and items[0]["tipo"] == "NOT_LOCATED"
+    assert items[0]["estado"] == "AWAITING_E3"
+    first_e2 = items[0]["solicitud_e2_id"]
+    assert first_e2
+    assert _snapshot(app)["stock"] == before["stock"]
+    assert _snapshot(app)["master"] == before["master"]
+    assert _snapshot(app)["mov"] == before["mov"]
+    assert _snapshot(app)["e2"] == before["e2"] + 1
+
+    # El mismo binario no crea otra versión/caso/solicitud.
+    retry = client.post(f"{root}/recepciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()), "file": (BytesIO(payload.getvalue()), "retry.xlsx"),
+    })
+    assert retry.status_code == 200 and retry.get_json()["replayed"]
+    assert _snapshot(app)["e2"] == before["e2"] + 1
+    # Nueva versión, misma identidad: evidencia nueva, la E2 original se conserva.
+    book["APARATOS"]["G9"] = "No fue localizado tras una segunda revisión completa"
+    payload2 = BytesIO()
+    book.save(payload2)
+    second = client.post(f"{root}/recepciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()), "file": (BytesIO(payload2.getvalue()), "v2.xlsx"),
+    })
+    assert second.status_code == 201, second.get_json()
+    assert second.get_json()["importacion"]["resumen"]["revisiones_auto"] == {
+        "nuevas": 0, "reutilizadas": 1, "bloqueadas": 0, "e2_creadas": 0,
+    }
+    after = client.get(f"{root}/{lev}/revisiones", headers=tokens[1]).get_json()
+    assert after["total"] == 1 and after["items"][0]["solicitud_e2_id"] == first_e2
+    assert _snapshot(app)["e2"] == before["e2"] + 1
+    with app.app_context():
+        ids = db.session.execute(sa.text(
+            "SELECT importacion_id FROM inventario_levantamiento_revision_evidencias"
+            " ORDER BY importacion_id"
+        )).scalars().all()
+        assert len(ids) == 2 and len(set(ids)) == 2
+
+
+def test_auto_revisiones_sin_evidencia_se_bloquean_sin_e2(api):
+    client, tokens, app = api
+    root = "/api/inventario/levantamientos"
+    created = client.post(root, headers=tokens[1], data={
+        "sucursal_id": "7", "origen_corte": "CSV_HISTORICO",
+        "cycle_key": str(uuid4()), "baseline_csv": (BytesIO(original_csv()), "corte.csv"),
+    })
+    lev = created.get_json()["levantamiento"]["id"]
+    before = _snapshot(app)
+    uploaded = client.post(f"{root}/recepciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()),
+        "file": (BytesIO(workbook(first="SI", second="NO", found=False)), "devuelto.xlsx"),
+    })
+    assert uploaded.status_code == 201, uploaded.get_json()
+    revisiones = client.get(f"{root}/{lev}/revisiones", headers=tokens[1]).get_json()
+    assert revisiones["total"] == 1
+    assert revisiones["items"][0]["estado"] == "BLOCKED"
+    assert revisiones["items"][0]["motivo_bloqueo"] == "EVIDENCIA_O_PROPUESTA_INCOMPLETA"
+    assert revisiones["items"][0]["solicitud_e2_id"] is None
+    assert _snapshot(app) == before
