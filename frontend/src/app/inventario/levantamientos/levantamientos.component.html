@@ -222,7 +222,7 @@
             <button type="button" class="primary" (click)="resolverCaso()" [disabled]="!puedeResolver">
               Validar y registrar resolución
             </button>
-            <button type="button" class="quiet" (click)="casoActivo = null" [disabled]="procesando">Cancelar</button>
+            <button type="button" class="quiet" (click)="cancelarCaso()" [disabled]="procesando">Cancelar</button>
           </div>
           <div class="cerrar-form" *ngIf="lev.estado !== 'CLOSED'">
             <h3>Cierre oficial del levantamiento</h3>
