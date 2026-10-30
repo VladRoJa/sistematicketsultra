@@ -12,7 +12,7 @@ from app.models.inventario_levantamiento import (
     InventarioLevantamientoImportacionORM as Imp,
 )
 from app.services.inventario_levantamientos_service import (
-    E4Error, parse_uuid, crear_levantamiento, recibir_excel,
+    E4Error, parse_uuid, crear_levantamiento, recibir_excel, recibir_excel_por_control,
     detalle_levantamiento, detalle_importacion, _private_path,
 )
 
@@ -63,6 +63,27 @@ def _bytes(file, limit):
 def _failure(error):
     db.session.rollback()
     return jsonify({"error": error.code, "detail": str(error)}), error.status
+
+
+@inventario_levantamientos_bp.post("/recepciones")
+@jwt_required()
+def recibir_entrega_universal_e4():
+    """Un input XLSX; backend identifica el ciclo sin IDs ni CSV del operador."""
+    uid = _actor()
+    if request.content_length and request.content_length > 12 * 1024 * 1024:
+        raise E4Error(413, "ARCHIVO_GRANDE", "Solicitud demasiado grande")
+    key = parse_uuid(request.form.get("idempotency_key"))
+    file = request.files.get("file")
+    raw = _bytes(file, 10 * 1024 * 1024)
+    if not file.filename.lower().endswith(".xlsx"):
+        raise E4Error(400, "EXTENSION_INVALIDA", "Se requiere archivo XLSX")
+    try:
+        resultado = recibir_excel_por_control(uid, key, file.filename, raw)
+    except IntegrityError:
+        db.session.rollback()
+        raise E4Error(409, "CONFLICTO_CONCURRENTE",
+                      "Recepción concurrente; actualiza la bandeja")
+    return jsonify(resultado), 200 if resultado["replayed"] else 201
 
 
 @inventario_levantamientos_bp.post("")
