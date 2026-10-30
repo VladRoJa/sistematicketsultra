@@ -89,8 +89,9 @@ services:
       - scheduler
 
 
-  # Issue #1129: isolated opt-in worker, not started by the scheduler profile.
-  # Deployment gate: this service remains hard-disabled until separate release approval.
+  # Issue #1129: isolated opt-in worker. The profile never starts by default.
+  # All four gates are OFF unless Compose is explicitly given rollout variables.
+  # env_file alone does not interpolate Compose defaults; use --env-file for opt-in.
   campaign-v2-dispatch-worker:
     build:
       context: ./backend
@@ -100,9 +101,10 @@ services:
       - .env.docker
     environment:
       APP_ENV: "prod"
-      CAMPAIGN_V2_BACKGROUND_DISPATCH_ENABLED: "false"
-      CAMPAIGN_V2_PROVIDER_SEND_ENABLED: "false"
-      CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED: "false"
+      CAMPAIGN_V2_BACKGROUND_DISPATCH_ENABLED: "${CAMPAIGN_V2_BACKGROUND_DISPATCH_ENABLED:-false}"
+      CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY: "${CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY:-false}"
+      CAMPAIGN_V2_PROVIDER_SEND_ENABLED: "${CAMPAIGN_V2_PROVIDER_SEND_ENABLED:-false}"
+      CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED: "${CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED:-false}"
       CAMPAIGN_V2_BG_POLL_SECONDS: "5"
     command: python -m app.services.marketing_campaign_v2_background_worker
     restart: unless-stopped
