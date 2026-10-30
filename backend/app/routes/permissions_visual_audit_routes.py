@@ -20,7 +20,11 @@ from app.models.internal_documents import InternalDocumentORM
 from app.models.permiso_model import Permiso
 from app.routes import permissions_catalog_routes as catalog
 from app.routes.track_routes import track_read_grants_enabled
-from app.routes.openings_routes import OPENINGS_READ_ROLES, openings_read_grants_enabled
+from app.routes.openings_routes import (
+    OPENINGS_READ_ROLES,
+    openings_read_grants_enabled,
+    openings_comment_grants_enabled,
+)
 from app.utils.pm_permissions import (
     PM_VIEW_ROLES, PM_EXECUTE_ROLES, PM_VALIDATE_ROLES,
     PM_CONFIGURE_ROLES, SCOPED_MAINTENANCE_READER_ROLES,
@@ -248,7 +252,7 @@ def _bulk_grants(users, actions):
     latest = {}
     runtime_read_ids = {
         action.id for action in actions
-        if action.full_key in {"track.read", "openings.read"}
+        if action.full_key in {"track.read", "openings.read", "openings.comment"}
     }
     for grant in query.all():
         principal = (
@@ -423,6 +427,14 @@ def evaluate_pair(user, action, context, grants=None, branch_id=None, document=N
             catalog_allowed = legacy
             catalog_source = "openings_grant_operativo"
             catalog_reason = "check_openings_refleja_autorizacion_real"
+    if action.full_key == "openings.comment" and openings_comment_grants_enabled():
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            legacy = candidate.effect == "allow"
+            legacy_source = "openings._require_openings_comment+grant"
+            legacy_reason = "grant_global_comentarios_aperturas_guard_real"
+            catalog_allowed = legacy
+            catalog_source = "openings_comment_grant_operativo"
+            catalog_reason = "check_comentarios_autorizacion_real"
     if action.full_key == "internal_documents.view":
         # Ni la proyección genérica True ni un grant de entrada equivalen
         # a permiso sobre un documento concreto. Sin objeto también es
@@ -595,6 +607,7 @@ def visual_audit_matrix():
         "status": "ok", "mode": "visual_audit_readonly_v1",
         "track_read_grants_enabled": track_read_grants_enabled(),
         "openings_read_grants_enabled": openings_read_grants_enabled(),
+        "openings_comment_grants_enabled": openings_comment_grants_enabled(),
         "note": "Solo consulta. Legacy comprobado únicamente en predicados declarados; no reemplaza enforcement.",
         "view": perspective, "rows": page, "group_counts": group_counts,
         "sorting": {"sort_by": sort_by, "sort_dir": sort_dir, "group_by": group_by, "decision": decision},
