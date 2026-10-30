@@ -493,3 +493,91 @@ def test_api_real_xlsx_http_aislado_con_historico_sin_mutaciones(api):
     assert listed.status_code == 200
     assert len(listed.get_json()["versiones"]) == 1
     assert _snapshot(app) == before, "La evidencia NO debe cambiar inventario V1/E2"
+
+
+def test_api_conciliacion_cierre_no_modifica_inventario_y_exige_e3(api):
+    """Un NO y un hallazgo deben tener resolución autorizada antes del cierre."""
+    client, tokens, app = api
+    root = "/api/inventario/levantamientos"
+    created = client.post(root, headers=tokens[1], data={
+        "sucursal_id": "7", "origen_corte": "CSV_HISTORICO",
+        "cycle_key": str(uuid4()), "baseline_csv": (BytesIO(original_csv()), "corte.csv"),
+    })
+    assert created.status_code == 201, created.get_json()
+    lev = created.get_json()["levantamiento"]["id"]
+    book = load_workbook(BytesIO(workbook(first="SI", second="NO", found=True)))
+    book["HALLAZGOS"]["A8"] = "07AD99"
+    original = BytesIO()
+    book.save(original)
+    imp_resp = client.post(f"{root}/{lev}/importaciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()), "file": (BytesIO(original.getvalue()), "devuelto.xlsx"),
+    })
+    assert imp_resp.status_code == 201, imp_resp.get_json()
+    imp = imp_resp.get_json()["importacion"]
+    assert imp["resultado"] == "VALIDATED"
+    endpoint = f"{root}/{lev}/conciliacion"
+    assert client.get(endpoint, headers=tokens[2]).status_code == 403
+    board = client.get(endpoint, headers=tokens[1])
+    assert board.status_code == 200, board.get_json()
+    casos = {x["caso"] for x in board.get_json()["casos"]}
+    assert casos == {"NO:502", "HALLAZGO:8"}
+    assert board.get_json()["puede_cerrar"] is False
+    assert client.post(f"{root}/{lev}/cerrar", headers=tokens[1], json={
+        "idempotency_key": str(uuid4()), "motivo": "Cierre antes de autorizar hallazgos",
+    }).status_code == 409
+
+    # Simular únicamente la decisión E3 ya aplicada, no a través de la ruta E4.
+    with app.app_context():
+        with db.engine.begin() as con:
+            con.exec_driver_sql("""
+                INSERT INTO inventario_correccion_solicitudes
+                    (id,tipo,estado,sucursal_id,inventario_id,creado_por_usuario_id)
+                VALUES (900,'NOT_LOCATED','APPROVED',7,502,2)
+            """)
+            con.exec_driver_sql("UPDATE inventario_sucursal SET stock=0 WHERE inventario_id=502")
+            con.exec_driver_sql("""
+                INSERT INTO inventario_general (id,codigo_interno,tipo,nombre)
+                VALUES (504,'07AD99','APARATOS','Banco hallado')
+            """)
+            con.exec_driver_sql("INSERT INTO inventario_sucursal VALUES (504,7,1)")
+        db.session.remove()
+    snapshot = _snapshot(app)
+    reason = "Conciliado con evidencia y autorización corporativa verificada"
+    no_key = str(uuid4())
+    no = client.post(f"{root}/{lev}/resoluciones", headers=tokens[1], json={
+        "caso": "NO:502", "accion": "E2_APROBADA",
+        "solicitud_id": 900, "motivo": reason, "idempotency_key": no_key,
+    })
+    assert no.status_code == 201, no.get_json()
+    replay = client.post(f"{root}/{lev}/resoluciones", headers=tokens[1], json={
+        "caso": "NO:502", "accion": "E2_APROBADA",
+        "solicitud_id": 900, "motivo": reason, "idempotency_key": no_key,
+    })
+    assert replay.status_code == 200 and replay.get_json()["replayed"]
+    assert client.post(f"{root}/{lev}/cerrar", headers=tokens[1], json={
+        "idempotency_key": str(uuid4()), "motivo": reason,
+    }).status_code == 409
+    found = client.post(f"{root}/{lev}/resoluciones", headers=tokens[1], json={
+        "caso": "HALLAZGO:8", "accion": "REGISTRADO_OFICIAL",
+        "inventario_id_resultante": 504, "motivo": reason,
+        "idempotency_key": str(uuid4()),
+    })
+    assert found.status_code == 201, found.get_json()
+    board = client.get(endpoint, headers=tokens[1]).get_json()
+    assert board["puede_cerrar"] is True and not board["bloqueos"]
+    close_key = str(uuid4())
+    cierre = client.post(f"{root}/{lev}/cerrar", headers=tokens[1], json={
+        "idempotency_key": close_key, "motivo": reason,
+    })
+    assert cierre.status_code == 201, cierre.get_json()
+    assert cierre.get_json()["cierre"]["estado"] == "CLOSED"
+    close_replay = client.post(f"{root}/{lev}/cerrar", headers=tokens[1], json={
+        "idempotency_key": close_key, "motivo": reason,
+    })
+    assert close_replay.status_code == 200
+    assert close_replay.get_json()["replayed"]
+    assert client.post(f"{root}/{lev}/importaciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()),
+        "file": (BytesIO(original.getvalue()), "intento_post_cierre.xlsx"),
+    }).status_code == 409
+    assert _snapshot(app) == snapshot, "E4 solo resuelve/cierra: no muta V1 ni E2"
