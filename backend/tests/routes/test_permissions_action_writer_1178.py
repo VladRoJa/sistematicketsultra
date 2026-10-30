@@ -160,6 +160,18 @@ def test_certified_action_writes_exact_action_through_existing_endpoint(
 def test_duplicate_explicit_action_does_not_mutate(monkeypatch):
     api, headers = client()
     admin_and_target(monkeypatch)
+    action = SimpleNamespace(id=61, full_key="track.read", module_id=7)
+    module = SimpleNamespace(id=7, name="Track", key="track", base_action=action)
+
+    class FakeModule:
+        query = FakeQuery(first=module)
+        key = is_active = is_assignable = FakeColumn()
+
+    class FakeAction:
+        query = FakeQuery(first=action)
+
+    monkeypatch.setattr(catalog, "PermissionModuleORM", FakeModule)
+    monkeypatch.setattr(catalog, "PermissionActionORM", FakeAction)
     session = Mock()
     monkeypatch.setattr(catalog, "db", SimpleNamespace(session=session))
     response = api.put(
