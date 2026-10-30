@@ -656,3 +656,95 @@ def test_baja_previa_exige_movimiento_salida_valido_sin_duplicarlo(api):
     })
     assert closed.status_code == 201, closed.get_json()
     assert _snapshot(app) == before
+
+
+def test_prefijo_exige_correccion_e2_aprobada_y_no_reescribe_el_corte(api):
+    client, tokens, app = api
+    root = "/api/inventario/levantamientos"
+    historico = original_csv().replace(b"07EL01", b"05EL01")
+    created = client.post(root, headers=tokens[1], data={
+        "sucursal_id": "7", "origen_corte": "CSV_HISTORICO",
+        "cycle_key": str(uuid4()), "baseline_csv": (BytesIO(historico), "historico.csv"),
+    })
+    assert created.status_code == 201, created.get_json()
+    lev = created.get_json()["levantamiento"]["id"]
+    report = client.post(f"{root}/{lev}/importaciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()),
+        "file": (BytesIO(workbook(first="SI",second="SI",code="05EL01",found=False)), "devuelto.xlsx"),
+    })
+    assert report.status_code == 201, report.get_json()
+    assert report.get_json()["importacion"]["resultado"] == "VALIDATED"
+    panel = client.get(f"{root}/{lev}/conciliacion", headers=tokens[1]).get_json()
+    assert {c["caso"] for c in panel["casos"]} == {"PREFIJO:502"}
+    assert not panel["puede_cerrar"]
+    motivo = "Reetiquetado y corrección de prefijo aprobados por corporativo"
+    resolver = {
+        "caso": "PREFIJO:502", "accion": "E2_APROBADA", "solicitud_id": 901,
+        "motivo": motivo, "idempotency_key": str(uuid4()),
+    }
+    assert client.post(f"{root}/{lev}/resoluciones", headers=tokens[1], json=resolver).status_code == 409
+    with app.app_context():
+        with db.engine.begin() as con:
+            con.exec_driver_sql("""
+                INSERT INTO inventario_correccion_solicitudes
+                   (id,tipo,estado,sucursal_id,inventario_id,campo,valor_propuesto)
+                VALUES (901,'MASTER_FIELD','APPROVED',7,502,'codigo_interno','"07EL01"'::jsonb)
+            """)
+        db.session.remove()
+    before = _snapshot(app)
+    assert client.post(f"{root}/{lev}/resoluciones", headers=tokens[1], json=resolver).status_code == 201
+    assert client.get(f"{root}/{lev}/conciliacion", headers=tokens[1]).get_json()["puede_cerrar"]
+    close = client.post(f"{root}/{lev}/cerrar", headers=tokens[1], json={
+        "motivo": "Todas las etiquetas fueron validadas y corregidas",
+        "idempotency_key": str(uuid4()),
+    })
+    assert close.status_code == 201, close.get_json()
+    assert _snapshot(app) == before
+
+
+def test_levantamiento_inicial_requiere_alta_identificada_antes_de_cierre(api):
+    client, tokens, app = api
+    root = "/api/inventario/levantamientos"
+    created = client.post(root, headers=tokens[1], data={
+        "sucursal_id": "8", "origen_corte": "INICIAL", "cycle_key": str(uuid4()),
+    })
+    assert created.status_code == 201
+    lev = created.get_json()["levantamiento"]["id"]
+    libro = load_workbook(BytesIO(workbook(branch=8, initial=True, found=False)))
+    libro["APARATOS"]["B8"] = "08CA0001"
+    buf = BytesIO()
+    libro.save(buf)
+    uploaded = client.post(f"{root}/{lev}/importaciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()),
+        "file": (BytesIO(buf.getvalue()), "inventario_inicial.xlsx"),
+    })
+    assert uploaded.status_code == 201, uploaded.get_json()
+    assert uploaded.get_json()["importacion"]["resultado"] == "INCOMPLETE"
+    board = client.get(f"{root}/{lev}/conciliacion", headers=tokens[1]).get_json()
+    assert {row["caso"] for row in board["casos"]} == {"INICIAL:8"}
+    assert not board["puede_cerrar"]
+    motivo = "Alta oficial comprobada contra equipo y etiqueta física"
+    input_res = {
+        "caso": "INICIAL:8", "accion": "REGISTRADO_OFICIAL",
+        "inventario_id_resultante": 505, "motivo": motivo,
+        "idempotency_key": str(uuid4()),
+    }
+    assert client.post(f"{root}/{lev}/resoluciones", headers=tokens[1], json=input_res).status_code == 409
+    with app.app_context():
+        with db.engine.begin() as con:
+            con.exec_driver_sql("""
+                INSERT INTO inventario_general (id,codigo_interno,tipo,nombre)
+                VALUES (505,'08CA0001','APARATOS','Caminadora')
+            """)
+            con.exec_driver_sql("INSERT INTO inventario_sucursal VALUES (505,8,1)")
+        db.session.remove()
+    before = _snapshot(app)
+    assert client.post(f"{root}/{lev}/resoluciones", headers=tokens[1], json=input_res).status_code == 201
+    assert client.get(f"{root}/{lev}/conciliacion", headers=tokens[1]).get_json()["puede_cerrar"]
+    assert client.post(f"{root}/{lev}/cerrar", headers=tokens[2], json={
+        "motivo": motivo, "idempotency_key": str(uuid4()),
+    }).status_code == 403
+    assert client.post(f"{root}/{lev}/cerrar", headers=tokens[1], json={
+        "motivo": motivo, "idempotency_key": str(uuid4()),
+    }).status_code == 201
+    assert _snapshot(app) == before
