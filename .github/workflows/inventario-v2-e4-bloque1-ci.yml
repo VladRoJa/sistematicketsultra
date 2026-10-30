@@ -5,6 +5,9 @@ on:
       - "frontend/src/app/inventario/levantamientos/**"
       - "frontend/src/app/inventario/inventario.routes.ts"
       - "frontend/src/app/inventario/inventario-layout/**"
+      - "backend/app/models/inventario_levantamiento_conciliacion.py"
+      - "backend/app/services/inventario_levantamiento_conciliacion_service.py"
+      - "backend/migrations/versions/v2e4b2103026_levantamiento_conciliacion.py"
       - "backend/app/models/inventario_levantamiento.py"
       - "backend/app/models/__init__.py"
       - "backend/migrations/versions/v2e4b1102826_inventario_levantamiento_recepcion.py"
@@ -48,6 +51,7 @@ jobs:
         working-directory: backend
         run: |
           python -m compileall -q app/models/inventario_levantamiento.py app/services/inventario_levantamiento_excel_parser.py app/services/inventario_levantamientos_service.py app/routes/inventario_levantamientos_routes.py migrations/versions/v2e4b1102826_inventario_levantamiento_recepcion.py tests/routes/test_inventario_e4_bloque1_pg.py
+          python -m compileall -q app/models/inventario_levantamiento_conciliacion.py app/services/inventario_levantamiento_conciliacion_service.py migrations/versions/v2e4b2103026_levantamiento_conciliacion.py
       - name: QA E4 con PostgreSQL temporal
         working-directory: backend
         env:
