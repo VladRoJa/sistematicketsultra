@@ -248,7 +248,7 @@ export class PermissionAuditMatrixComponent implements OnInit {
     }
     const moduleKey: 'track' | 'openings' | 'tickets' =
       row.action_key === 'track.read' ? 'track' :
-      row.action_key === 'tickets.create' ? 'tickets' : 'openings';
+      row.module_key === 'tickets' ? 'tickets' : 'openings';
     this.saveError = '';
     this.savingActionUserId = row.user_id;
     this.catalog.setActionAccess(row.user_id, moduleKey, row.action_key, checked)
