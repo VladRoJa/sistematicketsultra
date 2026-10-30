@@ -2,9 +2,9 @@
   <header class="audit-head">
     <div>
       <h2>Matriz de acceso</h2>
-      <p>Solo los permisos certificados pueden editarse. Track y Aperturas · Consultar requieren activación explícita del backend.</p>
+      <p>Solo los permisos certificados pueden editarse. Cada acción editable requiere su guard y activación explícita del backend.</p>
     </div>
-    <span class="audit-pill">{{ result?.track_read_grants_enabled || result?.openings_read_grants_enabled ? 'Checks de lectura disponibles' : 'Solo consulta · controles bloqueados' }}</span>
+    <span class="audit-pill">{{ result?.track_read_grants_enabled || result?.openings_read_grants_enabled || result?.openings_comment_grants_enabled || result?.openings_manage_grants_enabled || result?.tickets_create_grants_enabled || result?.tickets_update_status_grants_enabled ? 'Checks de permisos disponibles' : 'Solo consulta · controles bloqueados' }}</span>
   </header>
 
   <nav class="audit-perspectives" aria-label="Perspectiva de auditoría">
@@ -61,7 +61,7 @@
     </div>
   </section>
 
-  <div class="audit-notice">Los checks de lectura de Track y Aperturas solo podrán editarse cuando cada guard esté habilitado. No permiten procesos Track, gestionar Aperturas ni crear comentarios. El resto sigue en diagnóstico. «Sin comprobar» no equivale a denegado.</div>
+  <div class="audit-notice">Cada check requiere su guard activo. Los permisos de Aperturas son independientes; Crear ticket controla solo la entrada y conserva validaciones de sucursal y aparato. El resto sigue en diagnóstico. «Sin comprobar» no equivale a denegado.</div>
   <p class="audit-error" role="alert" *ngIf="error">{{ error }}</p>
   <p class="audit-error" role="alert" *ngIf="saveError">{{ saveError }}</p>
   <p class="audit-loading" role="status" *ngIf="loading">Evaluando página de resultados…</p>
@@ -139,19 +139,19 @@
               </td>
               <td>
                 <label class="audit-check" [class.unknown]="row.catalog_allowed === null">
-                  <ng-container *ngIf="canEditBasicRead(row); else diagnosticCheck">
+                  <ng-container *ngIf="canEditAction(row); else diagnosticCheck">
                     <input #trackCheck type="checkbox"
                       [checked]="row.legacy_allowed === true"
-                      [disabled]="savingReadUserId !== null || loading"
-                      (change)="toggleBasicRead(row, trackCheck.checked)"
-                      [attr.aria-label]="'Habilitar consulta del módulo a ' + row.username">
+                      [disabled]="savingActionUserId !== null || loading"
+                      (change)="toggleAction(row, trackCheck.checked)"
+                      [attr.aria-label]="'Cambiar permiso ' + row.action_key + ' para ' + row.username">
                   </ng-container>
                   <ng-template #diagnosticCheck>
                     <input type="checkbox" disabled [checked]="row.catalog_allowed === true">
                   </ng-template>
-                  {{ getBooleanLabel(canEditBasicRead(row) ? row.legacy_allowed : row.catalog_allowed) }}
+                  {{ getBooleanLabel(canEditAction(row) ? row.legacy_allowed : row.catalog_allowed) }}
                 </label>
-                <small>{{ canEditBasicRead(row) ? 'Check conectado al guard real' : 'Solo diagnóstico' }}</small>
+                <small>{{ canEditAction(row) ? 'Check conectado al guard real' : 'Solo diagnóstico' }}</small>
               </td>
               <td><span class="audit-result" [class.diff]="row.comparison === 'diferencia'" [class.match]="row.comparison === 'coincide'">{{ row.comparison === 'coincide' ? 'Coincide' : row.comparison === 'diferencia' ? 'Diferencia' : 'No concluyente' }}</span></td>
               <td class="audit-reason">

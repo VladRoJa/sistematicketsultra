@@ -62,7 +62,7 @@ export class PermissionAuditMatrixComponent implements OnInit {
   loadingUsers = false;
   error = '';
   saveError = '';
-  savingReadUserId: number | null = null;
+  savingActionUserId: number | null = null;
   private requestVersion = 0;
 
   constructor(
@@ -209,7 +209,7 @@ export class PermissionAuditMatrixComponent implements OnInit {
       });
   }
 
-  canEditBasicRead(row: VisualAuditRow): boolean {
+  canEditAction(row: VisualAuditRow): boolean {
     // Solo la acción cuyo guard HTTP esté enlazado, nunca por objeto.
     if (row.action_id === null || row.context?.branch_id || row.context?.document_id) {
       return false;
@@ -222,18 +222,37 @@ export class PermissionAuditMatrixComponent implements OnInit {
       row.action_key === 'openings.read' &&
       row.module_key === 'openings' &&
       this.result?.openings_read_grants_enabled === true
+    ) || (
+      row.action_key === 'openings.comment' &&
+      row.module_key === 'openings' &&
+      this.result?.openings_comment_grants_enabled === true
+    ) || (
+      row.action_key === 'openings.manage' &&
+      row.module_key === 'openings' &&
+      this.result?.openings_manage_grants_enabled === true
+    ) || (
+      row.action_key === 'tickets.create' &&
+      row.module_key === 'tickets' &&
+      this.result?.tickets_create_grants_enabled === true
+    ) || (
+      row.action_key === 'tickets.update_status' &&
+      row.module_key === 'tickets' &&
+      row.role !== 'LECTOR_GLOBAL' &&
+      this.result?.tickets_update_status_grants_enabled === true
     );
   }
 
-  toggleBasicRead(row: VisualAuditRow, checked: boolean): void {
-    if (!this.canEditBasicRead(row) || this.savingReadUserId !== null) {
+  toggleAction(row: VisualAuditRow, checked: boolean): void {
+    if (!this.canEditAction(row) || this.savingActionUserId !== null) {
       return;
     }
-    const moduleKey = row.action_key === 'track.read' ? 'track' : 'openings';
+    const moduleKey: 'track' | 'openings' | 'tickets' =
+      row.action_key === 'track.read' ? 'track' :
+      row.module_key === 'tickets' ? 'tickets' : 'openings';
     this.saveError = '';
-    this.savingReadUserId = row.user_id;
-    this.catalog.setBasicReadAccess(row.user_id, moduleKey, checked)
-      .pipe(finalize(() => { this.savingReadUserId = null; }))
+    this.savingActionUserId = row.user_id;
+    this.catalog.setActionAccess(row.user_id, moduleKey, row.action_key, checked)
+      .pipe(finalize(() => { this.savingActionUserId = null; }))
       .subscribe({
         next: () => { this.load(); },
         error: response => {

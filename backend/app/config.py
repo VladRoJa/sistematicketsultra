@@ -72,6 +72,26 @@ class Config:
         "PERMISSIONS_OPENINGS_READ_GRANTS_ENABLED", "false"
     ).strip().lower() == "true"
 
+    # Comentarios de Aperturas: acción de escritura, independiente de lectura.
+    PERMISSIONS_OPENINGS_COMMENT_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_OPENINGS_COMMENT_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
+    # Gestión de Aperturas: control independiente de lectura y comentarios.
+    PERMISSIONS_OPENINGS_MANAGE_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_OPENINGS_MANAGE_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
+    # Tickets: veto opcional de creación, jamás bypass de sucursal/flujo.
+    PERMISSIONS_TICKETS_CREATE_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_TICKETS_CREATE_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
+    # Cambio de estado Tickets: flag seguro OFF, no evita validaciones del recurso.
+    PERMISSIONS_TICKETS_UPDATE_STATUS_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_TICKETS_UPDATE_STATUS_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
     # Base de datos
     SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")
     SQLALCHEMY_TRACK_MODIFICATIONS = False

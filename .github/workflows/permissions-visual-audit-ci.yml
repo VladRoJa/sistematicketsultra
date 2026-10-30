@@ -8,7 +8,14 @@ on:
       - "backend/app/routes/track_routes.py"
       - "backend/app/routes/openings_routes.py"
       - "backend/tests/routes/test_permissions_openings_read_comment_separation.py"
+      - "backend/tests/routes/test_permissions_openings_manage_1181.py"
+      - "backend/app/routes/ticket_routes.py"
+      - "backend/tests/routes/test_permissions_tickets_create_1181.py"
+      - "backend/tests/routes/test_permissions_tickets_update_status_1181.py"
       - "backend/tests/routes/test_permissions_live_track_read_check.py"
+      - "backend/tests/routes/test_permissions_action_writer_1178.py"
+      - "backend/tests/routes/test_permissions_comment_metadata_migration_1181.py"
+      - "backend/migrations/versions/p1181c102030_openings_comment_guard_metadata.py"
       - "backend/tests/utils/test_permissions_endpoint_review_report.py"
       - "backend/app/routes/permissions_catalog_routes.py"
       - "backend/app/routes/permissions_b5_beta_routes.py"
@@ -75,7 +82,12 @@ jobs:
             tests/routes/test_internal_documents_a12_a13_http_jwt_reconcile.py \
             tests/routes/test_permissions_phase_a_track_parity.py \
             tests/routes/test_permissions_live_track_read_check.py \
+            tests/routes/test_permissions_action_writer_1178.py \
+            tests/routes/test_permissions_comment_metadata_migration_1181.py \
             tests/routes/test_permissions_openings_read_comment_separation.py \
+            tests/routes/test_permissions_openings_manage_1181.py \
+            tests/routes/test_permissions_tickets_create_1181.py \
+            tests/routes/test_permissions_tickets_update_status_1181.py \
             tests/utils/test_permissions_endpoint_review_report.py \
             tests/routes/test_permissions_phase_a_inventory_parity.py
 

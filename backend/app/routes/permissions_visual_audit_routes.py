@@ -20,7 +20,17 @@ from app.models.internal_documents import InternalDocumentORM
 from app.models.permiso_model import Permiso
 from app.routes import permissions_catalog_routes as catalog
 from app.routes.track_routes import track_read_grants_enabled
-from app.routes.openings_routes import OPENINGS_READ_ROLES, openings_read_grants_enabled
+from app.routes.ticket_routes import (
+    tickets_create_grants_enabled,
+    tickets_update_status_grants_enabled,
+)
+from app.routes.openings_routes import (
+    OPENINGS_READ_ROLES,
+    openings_read_grants_enabled,
+    openings_comment_grants_enabled,
+    openings_manage_grants_enabled,
+    OPENINGS_ADMIN_ROLES,
+)
 from app.utils.pm_permissions import (
     PM_VIEW_ROLES, PM_EXECUTE_ROLES, PM_VALIDATE_ROLES,
     PM_CONFIGURE_ROLES, SCOPED_MAINTENANCE_READER_ROLES,
@@ -248,7 +258,7 @@ def _bulk_grants(users, actions):
     latest = {}
     runtime_read_ids = {
         action.id for action in actions
-        if action.full_key in {"track.read", "openings.read"}
+        if action.full_key in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status"}
     }
     for grant in query.all():
         principal = (
@@ -280,6 +290,17 @@ def _legacy_guard_result(user, action_key, context, document, branch_id=None):
         return role in OPENINGS_READ_ROLES, "openings._require_openings_read", "guard_de_rol_aperturas"
     if action_key == "openings.comment":
         return role in OPENINGS_READ_ROLES, "openings._require_openings_comment", "guard_de_comentarios_aperturas"
+    if action_key == "openings.manage":
+        return role in OPENINGS_ADMIN_ROLES, "openings._require_openings_admin", "guard_administrativo_aperturas"
+    if action_key == "tickets.create":
+        if branch_id is not None:
+            return None, "tickets.create_ticket", "sucursal_destino_se_valida_en_endpoint"
+        return user is not None, "tickets.create_ticket+jwt", "entrada_autenticada_sin_omitir_validaciones"
+    if action_key == "tickets.update_status":
+        if branch_id is not None:
+            return None, "tickets.update_ticket_status", "alcance_de_ticket_requiere_recurso"
+        allowed_entry = user is not None and role != "LECTOR_GLOBAL"
+        return allowed_entry, "tickets.update_ticket_status+role", "entrada_sin_bypass_alcance_ni_doble_check"
     if action_key in {"track.run_daily_pipeline", "track.run_agregadoras"}:
         return role in TRACK_ADMIN, "track._require_track_admin_role", "guard_admin_track"
     if action_key in WAREHOUSE_FLAGS or action_key == "warehouse.catalogs":
@@ -423,6 +444,43 @@ def evaluate_pair(user, action, context, grants=None, branch_id=None, document=N
             catalog_allowed = legacy
             catalog_source = "openings_grant_operativo"
             catalog_reason = "check_openings_refleja_autorizacion_real"
+    if action.full_key == "openings.comment" and openings_comment_grants_enabled():
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            legacy = candidate.effect == "allow"
+            legacy_source = "openings._require_openings_comment+grant"
+            legacy_reason = "grant_global_comentarios_aperturas_guard_real"
+            catalog_allowed = legacy
+            catalog_source = "openings_comment_grant_operativo"
+            catalog_reason = "check_comentarios_autorizacion_real"
+    if action.full_key == "openings.manage" and openings_manage_grants_enabled():
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            legacy = candidate.effect == "allow"
+            legacy_source = "openings._require_openings_admin+grant"
+            legacy_reason = "grant_global_gestion_aperturas_guard_real"
+            catalog_allowed = legacy
+            catalog_source = "openings_manage_grant_operativo"
+            catalog_reason = "check_gestion_autorizacion_real"
+    if action.full_key == "tickets.create" and tickets_create_grants_enabled():
+        # Solo entrada autenticada; un allow no evita sucursal, clasificación,
+        # inventario, aprobaciones o validaciones de tapizado posteriores.
+        if branch_id is None and candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            legacy = candidate.effect == "allow"
+            legacy_source = "tickets.create_ticket+grant_entry"
+            legacy_reason = "grant_crear_ticket_no_evita_validaciones_de_negocio"
+            catalog_allowed = legacy
+            catalog_source = "tickets_create_grant_operativo"
+            catalog_reason = "check_crear_ticket_controla_entrada_http"
+    if action.full_key == "tickets.update_status" and tickets_update_status_grants_enabled():
+        # El grant puede vetar entrada; un allow NUNCA evade decorador
+        # LECTOR_GLOBAL ni el filtro de sucursal/flujo y cierre.
+        if branch_id is None and candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            if candidate.effect == "deny":
+                legacy = False
+            legacy_source = "tickets.update_ticket_status+grant_entry"
+            legacy_reason = "accion_veto_y_validaciones_de_ticket_inalteradas"
+            catalog_allowed = legacy
+            catalog_source = "tickets_update_status_grant_operativo"
+            catalog_reason = "check_estado_controla_entrada_sin_bypass"
     if action.full_key == "internal_documents.view":
         # Ni la proyección genérica True ni un grant de entrada equivalen
         # a permiso sobre un documento concreto. Sin objeto también es
@@ -595,6 +653,10 @@ def visual_audit_matrix():
         "status": "ok", "mode": "visual_audit_readonly_v1",
         "track_read_grants_enabled": track_read_grants_enabled(),
         "openings_read_grants_enabled": openings_read_grants_enabled(),
+        "openings_comment_grants_enabled": openings_comment_grants_enabled(),
+        "openings_manage_grants_enabled": openings_manage_grants_enabled(),
+        "tickets_create_grants_enabled": tickets_create_grants_enabled(),
+        "tickets_update_status_grants_enabled": tickets_update_status_grants_enabled(),
         "note": "Solo consulta. Legacy comprobado únicamente en predicados declarados; no reemplaza enforcement.",
         "view": perspective, "rows": page, "group_counts": group_counts,
         "sorting": {"sort_by": sort_by, "sort_dir": sort_dir, "group_by": group_by, "decision": decision},
