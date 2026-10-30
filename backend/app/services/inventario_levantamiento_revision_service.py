@@ -5,6 +5,7 @@ El bloqueo FOR UPDATE del levantamiento ocurre en el caller y serializa los
 uploads del mismo ciclo; las UNIQUE en PostgreSQL refuerzan idempotencia.
 """
 from datetime import date, datetime, timezone
+import os
 from hashlib import sha256
 from uuid import uuid5, NAMESPACE_URL
 import json
@@ -214,8 +215,33 @@ def _solicitud_e2(lev, imp, caso, actor):
     return solicitud, None
 
 
+def e4_auto_demo_enabled(sucursal_id):
+    """Gate de producción: auto-E2 solo con activación explícita en sucursal DEMO.
+
+    No fiarse de claims JWT ni de un ID especial. La semántica es is_demo
+    persistida en sucursales y el flag es OFF por defecto.
+    """
+    enabled = os.getenv("INVENTARIO_E4_AUTO_REVIEW_DEMO_ENABLED", "false").strip().lower()
+    if enabled not in {"1", "true", "yes", "on"}:
+        return False
+    return db.session.execute(sql_text("""
+        SELECT COALESCE(is_demo, false) FROM sucursales
+        WHERE sucursal_id=:sucursal
+    """), {"sucursal": sucursal_id}).scalar_one_or_none() is True
+
+
 def reconciliar_importacion(lev, imp, parsed, actor):
     """Idempotencia por ciclo + clave, evidencias por versión. No aplica E3."""
+    if not e4_auto_demo_enabled(lev.sucursal_id):
+        return {
+            "nuevas": 0, "reutilizadas": 0, "bloqueadas": 0, "e2_creadas": 0,
+            "auto_revisiones_habilitadas": False,
+        }
+    if not e4_auto_demo_enabled(lev.sucursal_id):
+        return {
+            "nuevas": 0, "reutilizadas": 0, "bloqueadas": 0, "e2_creadas": 0,
+            "auto_revisiones_habilitadas": False,
+        }
     if imp.resultado == "INVALID":
         return {"nuevas": 0, "reutilizadas": 0, "bloqueadas": 0, "e2_creadas": 0}
     from app.models.inventario_levantamiento import InventarioLevantamientoReferenciaORM as Ref
