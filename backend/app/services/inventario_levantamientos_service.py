@@ -243,6 +243,8 @@ def recibir_excel(actor_id, levantamiento_id, key, filename, raw):
     lev = Lev.query.filter_by(id=levantamiento_id).with_for_update().first()
     if lev is None:
         raise E4Error(404, "LEVANTAMIENTO_DESCONOCIDO", "Levantamiento inexistente")
+    if lev.estado == "CLOSED":
+        raise E4Error(409, "LEVANTAMIENTO_CERRADO", "El expediente cerrado no admite nuevas entregas")
     reused = Imp.query.filter_by(levantamiento_id=lev.id, idempotency_key=key).first()
     if reused:
         if reused.file_sha256 != digest:
