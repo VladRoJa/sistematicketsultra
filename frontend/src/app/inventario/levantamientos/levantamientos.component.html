@@ -169,6 +169,80 @@
             </div>
           </section>
         </ng-container>
+
+        <section *ngIf="tablero as board" class="conciliacion">
+          <div class="panel-header">
+            <div>
+              <h3>Conciliación y cierre</h3>
+              <p class="help">Se revisa exclusivamente la última versión válida. Un SI no equivale a una aprobación de diferencias.</p>
+            </div>
+            <button type="button" class="quiet" (click)="cargarTablero()">Revalidar</button>
+          </div>
+          <p class="alert error" *ngIf="board.bloqueos.length">
+            Cierre bloqueado:
+            <span *ngFor="let bloqueo of board.bloqueos">{{ bloqueo }} · </span>
+          </p>
+          <p class="help" *ngIf="board.pendientes_respuesta.length">
+            {{ board.pendientes_respuesta.length }} referencias todavía SIN REVISAR. El gerente debe completar y reenviar su Excel.
+          </p>
+          <div class="casos" *ngIf="board.casos.length">
+            <article *ngFor="let caso of board.casos" class="caso">
+              <div>
+                <strong>{{ caso.tipo }} · {{ caso.codigo || 'Sin código' }}</strong>
+                <p>{{ caso.aparato || 'Aparato sin nombre' }} · {{ caso.caso }}</p>
+                <small>{{ caso.observacion || 'Sin observaciones' }}</small>
+                <p *ngIf="caso.resolucion" class="help">
+                  Evidencia #{{ caso.resolucion.id }} · {{ caso.resolucion.accion }}
+                </p>
+              </div>
+              <div class="caso-actions">
+                <span [class.resuelto]="caso.resuelto">{{ caso.resuelto ? 'Resuelto' : 'Pendiente' }}</span>
+                <button type="button" class="quiet" *ngIf="lev.estado !== 'CLOSED'"
+                  (click)="elegirCaso(caso)" [disabled]="procesando">Conciliar</button>
+              </div>
+            </article>
+          </div>
+          <div class="resolucion-form" *ngIf="casoActivo as caso">
+            <h3>Resolver {{ caso.caso }}</h3>
+            <p class="help" *ngIf="caso.tipo === 'NO' || caso.tipo === 'PREFIJO'">
+              Registra primero la corrección E2 y su aprobación E3. Aquí se vincula el ID de la solicitud autorizada; E4 no modifica existencias.
+            </p>
+            <p class="help" *ngIf="caso.tipo === 'HALLAZGO' || caso.tipo === 'INICIAL'">
+              Verifica antes que el aparato tenga identidad y existencia oficial autorizadas. Ingresa el ID del artículo resultante, no uno provisional.
+            </p>
+            <div class="fields">
+              <label>ID solicitud E2 aprobada o ID del aparato oficial
+                <input type="number" min="1" [(ngModel)]="idResolucion" (ngModelChange)="cambioResolucion()">
+              </label>
+              <label>Justificación y referencia de evidencia
+                <textarea rows="3" maxlength="2000" [(ngModel)]="motivoResolucion"
+                  (ngModelChange)="cambioResolucion()" placeholder="Mínimo 20 caracteres"></textarea>
+              </label>
+            </div>
+            <button type="button" class="primary" (click)="resolverCaso()" [disabled]="!puedeResolver">
+              Validar y registrar resolución
+            </button>
+            <button type="button" class="quiet" (click)="casoActivo = null" [disabled]="procesando">Cancelar</button>
+          </div>
+          <div class="cerrar-form" *ngIf="lev.estado !== 'CLOSED'">
+            <h3>Cierre oficial del levantamiento</h3>
+            <p class="help">Solo se habilita si todas las respuestas son válidas y cada caso tiene evidencia vigente comprobada por backend.</p>
+            <label>Motivo / acta del cierre
+              <textarea rows="2" maxlength="2000" [(ngModel)]="motivoCierre"
+                (ngModelChange)="cambioCierre()" placeholder="Mínimo 20 caracteres"></textarea>
+            </label>
+            <label class="confirmacion">
+              <input type="checkbox" [(ngModel)]="confirmoCierre" (ngModelChange)="cambioCierre()">
+              Confirmo que las diferencias han sido revisadas y que existe evidencia autorizada.
+            </label>
+            <button type="button" class="primary" (click)="cerrarExpediente()" [disabled]="!puedeCerrar">
+              Cerrar levantamiento
+            </button>
+          </div>
+          <p class="alert success" *ngIf="lev.estado === 'CLOSED'">
+            Este levantamiento está cerrado. Sus versiones y resoluciones son evidencia histórica.
+          </p>
+        </section>
       </ng-container>
       <ng-template #sinSeleccion>
         <h2>Selecciona un levantamiento</h2>
