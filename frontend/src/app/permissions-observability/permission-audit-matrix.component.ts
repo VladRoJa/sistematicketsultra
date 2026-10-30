@@ -230,6 +230,10 @@ export class PermissionAuditMatrixComponent implements OnInit {
       row.action_key === 'openings.manage' &&
       row.module_key === 'openings' &&
       this.result?.openings_manage_grants_enabled === true
+    ) || (
+      row.action_key === 'tickets.create' &&
+      row.module_key === 'tickets' &&
+      this.result?.tickets_create_grants_enabled === true
     );
   }
 
@@ -237,7 +241,9 @@ export class PermissionAuditMatrixComponent implements OnInit {
     if (!this.canEditAction(row) || this.savingActionUserId !== null) {
       return;
     }
-    const moduleKey = row.action_key === 'track.read' ? 'track' : 'openings';
+    const moduleKey: 'track' | 'openings' | 'tickets' =
+      row.action_key === 'track.read' ? 'track' :
+      row.action_key === 'tickets.create' ? 'tickets' : 'openings';
     this.saveError = '';
     this.savingActionUserId = row.user_id;
     this.catalog.setActionAccess(row.user_id, moduleKey, row.action_key, checked)
