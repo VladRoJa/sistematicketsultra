@@ -188,6 +188,21 @@ def test_hallazgo_no_puede_reciclar_codigo_de_aparato_oficial():
                for d in resultado["diagnosticos"])
 
 
+def test_dos_hallazgos_no_pueden_compartir_codigo_fisico():
+    refs, _ = parse_historical_csv(original_csv(), 7)
+    libro = load_workbook(BytesIO(workbook(second="SI", found=True)))
+    hallazgos = libro["HALLAZGOS"]
+    hallazgos["A8"] = "07AD99"
+    hallazgos.append(["07AD99", "Otro banco", "Peso libre",
+                      "Sin marca", "Zona funcional", "Otra referencia física"])
+    buf = BytesIO()
+    libro.save(buf)
+    reporte = parse_xlsx_v01(buf.getvalue(), 7, refs, "VERIFICACION")
+    assert reporte["resultado"] == "INVALID"
+    assert any(d["codigo"] == "ETIQUETA_NUEVA_DUPLICADA"
+               for d in reporte["diagnosticos"])
+
+
 def test_prefijo_sucursal_ajeno_es_aviso_no_mutacion_de_codigo():
     historical = original_csv().replace(b"07EL01", b"05EL01")
     refs, _ = parse_historical_csv(historical, 7)
