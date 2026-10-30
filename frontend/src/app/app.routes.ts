@@ -1,6 +1,7 @@
 // src/app/app.routes.ts
 
 import { Routes } from '@angular/router';
+import { funnelProviderRouteGuard } from './core/auth/funnel-provider-access';
 import { LoginComponent } from './pantalla-login/pantalla-login.component';
 import { MainComponent } from './main/main.component';
 import { PantallaVerTicketsComponent } from './pantalla-ver-tickets/pantalla-ver-tickets.component';
@@ -35,7 +36,7 @@ import { automationControlAccessGuard } from './automation-control/automation-co
 
 
 
-export const routes: Routes = [
+const applicationRoutes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
   { path: 'login', component: LoginComponent },
   {
@@ -319,3 +320,9 @@ export const routes: Routes = [
 
   { path: '**', redirectTo: 'login', pathMatch: 'full' },
 ];
+
+export const routes: Routes = [{
+  path: '',
+  canActivateChild: [funnelProviderRouteGuard],
+  children: applicationRoutes,
+}];

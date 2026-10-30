@@ -26,6 +26,7 @@ import {
 } from 'rxjs';
 
 import { AuthService } from '../services/auth.service';
+import { isFunnelProvider } from '../core/auth/funnel-provider-access';
 import { MarketingDashboardResponse } from '../marketing-conversion/marketing.models';
 import {
   exportMarketingSalesFunnelBranchTable,
@@ -175,6 +176,9 @@ type DashboardRequestResult =
   ],
 })
 export class MarketingSalesFunnelOriginalComponent implements OnInit {
+  get canViewIndividualDetails(): boolean {
+    return !isFunnelProvider(this.authService.getUser());
+  }
   private readonly destroyRef = inject(DestroyRef);
   private readonly salesFunnelService = inject(MarketingSalesFunnelOriginalService);
   private readonly authService = inject(AuthService);
@@ -377,7 +381,7 @@ export class MarketingSalesFunnelOriginalComponent implements OnInit {
 
     // Piloto exclusivo ADMICORP: el resto conserva la exportación Original previa.
     const username = String(this.authService.getUser()?.username ?? '').trim().toUpperCase();
-    if (username !== 'ADMICORP') {
+    if (isFunnelProvider(this.authService.getUser()) || username !== 'ADMICORP') {
       const investmentDashboard = {
         month: this.selectedMonth,
         summary: {
@@ -435,7 +439,7 @@ export class MarketingSalesFunnelOriginalComponent implements OnInit {
     branchId?: number,
     origin?: string,
   ): void {
-    if (!metric) {
+    if (!metric || !this.canViewIndividualDetails) {
       return;
     }
 

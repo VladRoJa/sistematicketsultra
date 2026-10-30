@@ -14,7 +14,7 @@
     <button
       type="button"
       class="suite-brand"
-      (click)="navegarConCambio('/ver-tickets', 'Tickets')"
+      (click)="irAlInicio()"
       aria-label="Ir al inicio de Suite Ultra"
     >
       <span class="suite-brand__mark">U</span>
@@ -132,15 +132,15 @@
   <router-outlet></router-outlet>
 </main>
 
-<app-system-daily-check-gate></app-system-daily-check-gate>
-<app-campaign-v2-background-dock></app-campaign-v2-background-dock>
+<app-system-daily-check-gate *ngIf="!esProveedorFunnel"></app-system-daily-check-gate>
+<app-campaign-v2-background-dock *ngIf="!esProveedorFunnel"></app-campaign-v2-background-dock>
 
 
 <!-- ==========================================================================
      Suite Ultra UI v1 - Alerta flotante de tickets por validar
      ========================================================================== -->
 
-<div class="suite-floating-layer">
+<div class="suite-floating-layer" *ngIf="!esProveedorFunnel">
   <div
     *ngIf="shouldShowValidationAlert"
     class="validation-floating-alert"
