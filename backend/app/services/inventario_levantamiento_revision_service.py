@@ -237,11 +237,6 @@ def reconciliar_importacion(lev, imp, parsed, actor):
             "nuevas": 0, "reutilizadas": 0, "bloqueadas": 0, "e2_creadas": 0,
             "auto_revisiones_habilitadas": False,
         }
-    if not e4_auto_demo_enabled(lev.sucursal_id):
-        return {
-            "nuevas": 0, "reutilizadas": 0, "bloqueadas": 0, "e2_creadas": 0,
-            "auto_revisiones_habilitadas": False,
-        }
     if imp.resultado == "INVALID":
         return {"nuevas": 0, "reutilizadas": 0, "bloqueadas": 0, "e2_creadas": 0}
     from app.models.inventario_levantamiento import InventarioLevantamientoReferenciaORM as Ref
