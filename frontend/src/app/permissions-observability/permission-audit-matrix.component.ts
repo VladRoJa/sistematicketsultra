@@ -222,6 +222,10 @@ export class PermissionAuditMatrixComponent implements OnInit {
       row.action_key === 'openings.read' &&
       row.module_key === 'openings' &&
       this.result?.openings_read_grants_enabled === true
+    ) || (
+      row.action_key === 'openings.comment' &&
+      row.module_key === 'openings' &&
+      this.result?.openings_comment_grants_enabled === true
     );
   }
 
@@ -232,7 +236,7 @@ export class PermissionAuditMatrixComponent implements OnInit {
     const moduleKey = row.action_key === 'track.read' ? 'track' : 'openings';
     this.saveError = '';
     this.savingReadUserId = row.user_id;
-    this.catalog.setBasicReadAccess(row.user_id, moduleKey, checked)
+    this.catalog.setActionAccess(row.user_id, moduleKey, row.action_key, checked)
       .pipe(finalize(() => { this.savingReadUserId = null; }))
       .subscribe({
         next: () => { this.load(); },
