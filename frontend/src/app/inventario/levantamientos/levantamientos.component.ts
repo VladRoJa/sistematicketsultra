@@ -45,6 +45,8 @@ export class LevantamientosComponent implements OnInit {
   filtroFilas: FiltroFilas = 'TODAS';
   xlsx: File | null = null;
   private importKey: string | null = null;
+  excelRecibido: File | null = null;
+  private claveRecepcion: string | null = null;
   tablero: TableroConciliacionE4 | null = null;
   casoActivo: CasoConciliacionE4 | null = null;
   idResolucion: number | null = null;
@@ -120,6 +122,35 @@ export class LevantamientosComponent implements OnInit {
     if (nueva < 1 || nueva > Math.max(1, Math.ceil(this.total / this.porPagina))) return;
     this.pagina = nueva;
     this.cargar();
+  }
+
+  seleccionarRecibido(event: Event): void {
+    this.excelRecibido = (event.target as HTMLInputElement).files?.[0] || null;
+    this.claveRecepcion = null;
+  }
+
+  recibirExcel(): void {
+    if (!this.excelRecibido || this.procesando) return;
+    const key = this.claveRecepcion || crypto.randomUUID();
+    this.claveRecepcion = key;
+    this.error = '';
+    this.procesando = true;
+    this.e4.recibirExcel(this.excelRecibido, key).subscribe({
+      next: recibido => {
+        this.procesando = false;
+        this.claveRecepcion = null;
+        this.excelRecibido = null;
+        this.aviso = recibido.replayed
+          ? 'Esta entrega ya estaba archivada; se recuperó su versión.'
+          : 'Archivo recibido y validado contra su corte registrado.';
+        this.abrir(recibido.levantamiento_id);
+        this.cargar();
+      },
+      error: err => {
+        this.procesando = false;
+        this.error = this.errorHttp(err, 'No se pudo identificar el corte del Excel.');
+      },
+    });
   }
 
   abrirNuevo(): void {
