@@ -144,7 +144,7 @@
                       [checked]="row.legacy_allowed === true"
                       [disabled]="savingActionUserId !== null || loading"
                       (change)="toggleAction(row, trackCheck.checked)"
-                      [attr.aria-label]="'Habilitar consulta del módulo a ' + row.username">
+                      [attr.aria-label]="'Cambiar permiso ' + row.action_key + ' para ' + row.username">
                   </ng-container>
                   <ng-template #diagnosticCheck>
                     <input type="checkbox" disabled [checked]="row.catalog_allowed === true">
