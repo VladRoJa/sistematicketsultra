@@ -1,0 +1,261 @@
+<section class="e4">
+  <header class="e4-head">
+    <div>
+      <p class="kicker">Inventarios V2 · E4</p>
+      <h1>Levantamientos físicos</h1>
+      <p class="help">Recepción y validación de un archivo consolidado por sucursal. La carga no modifica existencias ni maestros.</p>
+    </div>
+    <button type="button" class="primary" (click)="abrirNuevo()" [disabled]="procesando">
+      <mat-icon>add</mat-icon> Nuevo corte
+    </button>
+  </header>
+
+  <p *ngIf="error" class="alert error" role="alert">{{ error }}</p>
+  <p *ngIf="aviso" class="alert success" role="status">{{ aviso }}</p>
+
+  <section class="panel recepcion-unica" aria-label="Recibir archivo de inventario">
+    <div>
+      <h2>Recibir inventario de sucursal</h2>
+      <p class="help">Selecciona el Excel que envió el gerente. El sistema identificará la sucursal, buscará su corte original y mostrará las diferencias. No necesitas indicar IDs ni volver a subir la base histórica.</p>
+    </div>
+    <label>Excel recibido
+      <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        (change)="seleccionarRecibido($event)" [disabled]="procesando">
+    </label>
+    <button type="button" class="primary" (click)="recibirExcel()"
+      [disabled]="!excelRecibido || procesando">
+      {{ procesando ? 'Validando…' : 'Procesar inventario' }}
+    </button>
+  </section>
+
+  <p class="help">El botón «Nuevo corte» es solo para preparación administrativa cuando el corte de distribución todavía no está registrado. No se usa en cada recepción.</p>
+
+  <section *ngIf="creando" class="panel" aria-label="Registrar corte">
+    <div class="panel-header">
+      <h2>Registrar levantamiento</h2>
+      <button type="button" class="quiet" (click)="cancelarNuevo()">Cancelar</button>
+    </div>
+    <p class="help">Para los Excel distribuidos el 28/10/2026 utiliza CSV histórico y adjunta el archivo original de distribución. No reemplazar el corte por el inventario de hoy.</p>
+    <div class="fields">
+      <label>Sucursal
+        <select [(ngModel)]="nuevaSucursal" (ngModelChange)="cambioCreacion()">
+          <option [ngValue]="null">Seleccionar sucursal</option>
+          <option *ngFor="let s of sucursales" [ngValue]="s.sucursal_id">{{ s.sucursal_id }} · {{ s.sucursal }}</option>
+        </select>
+      </label>
+      <label>Origen del corte
+        <select [(ngModel)]="nuevoOrigen" (ngModelChange)="cambioCreacion()">
+          <option value="CSV_HISTORICO">CSV histórico distribuido</option>
+          <option value="DB_ACTUAL">Inventario actual</option>
+          <option value="INICIAL">Inventario desde cero</option>
+        </select>
+      </label>
+      <label>Fecha del corte
+        <input type="date" [(ngModel)]="nuevaFecha" (ngModelChange)="cambioCreacion()">
+      </label>
+      <label>Gerente responsable
+        <input type="text" maxlength="200" placeholder="Nombre del gerente" [(ngModel)]="nuevoResponsable" (ngModelChange)="cambioCreacion()">
+      </label>
+      <label *ngIf="nuevoOrigen === 'CSV_HISTORICO'" class="file-field">CSV histórico original
+        <input type="file" accept=".csv,text/csv" (change)="seleccionarCsv($event)">
+        <small *ngIf="csv">{{ csv.name }}</small>
+      </label>
+    </div>
+    <button type="button" class="primary" (click)="crear()" [disabled]="!puedeCrear">
+      {{ procesando ? 'Registrando…' : 'Registrar corte' }}
+    </button>
+  </section>
+
+  <div class="workspace">
+    <section class="panel bandeja">
+      <div class="panel-header">
+        <h2>Recepciones</h2>
+        <button type="button" class="quiet" (click)="cargar()" [disabled]="cargando">Actualizar</button>
+      </div>
+      <label class="filter">Sucursal
+        <select [(ngModel)]="filtroSucursal" (ngModelChange)="cambiarFiltro()">
+          <option [ngValue]="null">Todas</option>
+          <option *ngFor="let s of sucursales" [ngValue]="s.sucursal_id">{{ s.sucursal }}</option>
+        </select>
+      </label>
+      <p class="help" *ngIf="cargando">Consultando levantamientos…</p>
+      <p class="help" *ngIf="!cargando && !items.length">Todavía no hay levantamientos registrados para este filtro.</p>
+      <button type="button" class="recepcion" *ngFor="let row of items"
+        [class.selected]="seleccionado?.id === row.id" (click)="abrir(row.id)">
+        <strong>{{ nombreSucursal(row.sucursal_id) }} · Corte #{{ row.id }}</strong>
+        <span>{{ tipoCorte(row.origen_corte) }} · {{ row.referencias_esperadas }} referencias</span>
+        <span *ngIf="row.importacion_actual as actual">
+          Versión {{ actual.version }} · {{ actual.resultado }} · SI {{ actual.si }} / NO {{ actual.no }} / Pendientes {{ actual.sin_revisar }}
+        </span>
+        <span *ngIf="!row.importacion_actual">Aún sin Excel recibido</span>
+      </button>
+      <div class="pagination">
+        <button type="button" (click)="cambiarPagina(-1)" [disabled]="pagina === 1 || cargando">Anterior</button>
+        <span>Página {{ pagina }} · {{ total }} levantamientos</span>
+        <button type="button" (click)="cambiarPagina(1)" [disabled]="pagina * porPagina >= total || cargando">Siguiente</button>
+      </div>
+    </section>
+
+    <section class="panel detalle">
+      <ng-container *ngIf="seleccionado as lev; else sinSeleccion">
+        <div class="panel-header">
+          <div>
+            <h2>{{ nombreSucursal(lev.sucursal_id) }} · #{{ lev.id }}</h2>
+            <p class="help">Responsable: {{ lev.responsable || 'No declarado' }} · Corte: {{ lev.fecha_corte_local || 'Sin fecha' }}</p>
+          </div>
+          <span class="estado">{{ lev.estado }}</span>
+        </div>
+        <div class="facts">
+          <span>Origen: <strong>{{ lev.origen_corte }}</strong></span>
+          <span>Referencias: <strong>{{ lev.baseline_resumen.referencias_esperadas }}</strong></span>
+          <span>Versiones: <strong>{{ versiones.length }}</strong></span>
+        </div>
+
+        <div class="upload">
+          <label>Excel devuelto por el gerente
+            <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" (change)="seleccionarExcel($event)">
+          </label>
+          <button type="button" class="primary" (click)="importar()" [disabled]="!xlsx || procesando">
+            {{ procesando ? 'Validando…' : 'Recibir Excel' }}
+          </button>
+        </div>
+
+        <section *ngIf="versiones.length" class="versions">
+          <h3>Historial de entregas</h3>
+          <button type="button" class="version" *ngFor="let v of versiones"
+            [class.selected]="importacion?.id === v.id" (click)="abrirVersion(v.id)">
+            v{{ v.version }} · {{ v.resultado }} · {{ v.filename }}
+          </button>
+        </section>
+
+        <ng-container *ngIf="importacion as v">
+          <div class="panel-header report-head">
+            <h3>Resultado de la versión {{ v.version }}</h3>
+            <button type="button" class="quiet" (click)="descargar()">
+              <mat-icon>download</mat-icon> Original
+            </button>
+          </div>
+          <p class="alert" [class.error]="v.resultado === 'INVALID'">
+            {{ mensajeResultado(v.resultado) }}
+          </p>
+          <div class="metrics">
+            <div><strong>{{ v.resumen.si }}</strong><span>SÍ</span></div>
+            <div><strong>{{ v.resumen.no }}</strong><span>NO</span></div>
+            <div><strong>{{ v.resumen.sin_revisar }}</strong><span>Sin revisar</span></div>
+            <div><strong>{{ v.resumen.hallazgos }}</strong><span>Hallazgos</span></div>
+            <div><strong>{{ v.resumen.errores }}</strong><span>Errores</span></div>
+            <div><strong>{{ v.resumen.avisos }}</strong><span>Avisos</span></div>
+          </div>
+          <section *ngIf="problemasImportacion().length" class="diagnosticos">
+            <h3>Diagnósticos ({{ problemasImportacion().length }})</h3>
+            <div class="diagnostico" *ngFor="let d of problemasImportacion()">
+              <strong>{{ d.severidad }} · {{ d.codigo }}</strong>
+              <span>{{ d.hoja || '' }} {{ d.fila ? '· Fila ' + d.fila : '' }} {{ d.inventario_id ? '· ID ' + d.inventario_id : '' }} {{ d.detail || '' }}</span>
+            </div>
+          </section>
+          <section class="filas">
+            <div class="panel-header">
+              <h3>Detalle de aparatos y hallazgos</h3>
+              <label>Ver
+                <select [(ngModel)]="filtroFilas">
+                  <option value="TODAS">Todas las filas</option>
+                  <option value="NO">No encontrados</option>
+                  <option value="SIN_REVISAR">Sin revisar</option>
+                  <option value="HALLAZGOS">Hallazgos</option>
+                  <option value="OBSERVACIONES">Con observaciones</option>
+                </select>
+              </label>
+            </div>
+            <div class="tabla-scroll">
+              <table>
+                <thead><tr><th>Hoja / Fila</th><th>ID</th><th>Código</th><th>Aparato</th><th>Respuesta</th><th>Observaciones</th></tr></thead>
+                <tbody>
+                  <tr *ngFor="let f of filasVisibles">
+                    <td>{{ f.hoja }} · {{ f.fila_excel }}</td>
+                    <td>{{ f.inventario_id_declarado ?? '—' }}</td>
+                    <td>{{ f.codigo_declarado || '—' }}</td>
+                    <td>{{ f.datos_crudos['aparato'] || '—' }}</td>
+                    <td>{{ f.respuesta || 'Hallazgo' }}</td>
+                    <td>{{ f.datos_crudos['observaciones'] || f.datos_crudos['descripcion'] || '—' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p *ngIf="!filasVisibles.length" class="help">No hay filas para este filtro.</p>
+            </div>
+          </section>
+        </ng-container>
+
+        <section *ngIf="revisionesAutomaticas as auto" class="conciliacion">
+          <div class="panel-header">
+            <div>
+              <h3>Revisiones generadas automáticamente</h3>
+              <p class="help">Una revisión única por discrepancia. Las elegibles se envían a E2 y esperan aprobación en E3; las incompletas quedan bloqueadas para aclaración.</p>
+            </div>
+            <button type="button" class="quiet" (click)="cargarRevisiones()">Actualizar estados</button>
+          </div>
+          <div class="metrics">
+            <div><strong>{{ auto.resumen.total }}</strong><span>Revisiones</span></div>
+            <div><strong>{{ auto.resumen.por_autorizar }}</strong><span>Por autorizar</span></div>
+            <div><strong>{{ auto.resumen.bloqueadas }}</strong><span>Bloqueadas</span></div>
+            <div><strong>{{ auto.resumen.aprobadas }}</strong><span>Aprobadas</span></div>
+            <div><strong>{{ auto.resumen.rechazadas }}</strong><span>Rechazadas</span></div>
+            <div><strong>{{ auto.resumen.superadas }}</strong><span>Superadas</span></div>
+          </div>
+          <a class="quiet" routerLink="/inventario/revision-correcciones">
+            Abrir bandeja de autorización E3
+          </a>
+          <p class="help" *ngIf="!auto.total">No se detectaron discrepancias elegibles. Revisa los bloqueos de cobertura o estructura antes de cerrar.</p>
+          <div class="tabla-scroll" *ngIf="auto.items.length">
+            <table>
+              <thead>
+                <tr><th>Tipo</th><th>Aparato / código</th><th>Estado</th><th>Solicitud E2</th><th>Diagnóstico</th></tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let r of auto.items">
+                  <td>{{ r.tipo }}</td>
+                  <td>{{ r.inventario_id ?? 'Hallazgo' }} · {{ r.codigo_observado || 'Sin etiqueta' }}</td>
+                  <td>{{ r.estado }}</td>
+                  <td>{{ r.solicitud_e2_id ?? '—' }}</td>
+                  <td>{{ r.motivo_bloqueo || '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination" *ngIf="auto.total > 20">
+            <button type="button" (click)="cambiarPaginaRevisiones(-1)" [disabled]="paginaRevisiones === 1">Anterior</button>
+            <span>Página {{ paginaRevisiones }} · {{ auto.total }} revisiones</span>
+            <button type="button" (click)="cambiarPaginaRevisiones(1)" [disabled]="paginaRevisiones * 20 >= auto.total">Siguiente</button>
+          </div>
+          <ng-container *ngIf="tablero as board">
+            <p class="alert error" *ngIf="board.bloqueos.length">
+              El cierre permanece bloqueado:
+              <span *ngFor="let bloqueo of board.bloqueos">{{ bloqueo }} · </span>
+            </p>
+            <div class="cerrar-form" *ngIf="lev.estado !== 'CLOSED'">
+              <h3>Cierre auditado</h3>
+              <p class="help">Se habilita únicamente cuando el backend confirma todas las respuestas y revisiones resueltas.</p>
+              <label>Motivo del cierre
+                <textarea rows="2" maxlength="2000" [(ngModel)]="motivoCierre"
+                  (ngModelChange)="cambioCierre()"></textarea>
+              </label>
+              <label class="confirmacion">
+                <input type="checkbox" [(ngModel)]="confirmoCierre" (ngModelChange)="cambioCierre()">
+                Confirmo que todas las diferencias cuentan con autorización.
+              </label>
+              <button type="button" class="primary" (click)="cerrarExpediente()" [disabled]="!puedeCerrar">
+                Cerrar levantamiento
+              </button>
+            </div>
+            <p class="alert success" *ngIf="lev.estado === 'CLOSED'">
+              Levantamiento cerrado: las evidencias y decisiones permanecen archivadas.
+            </p>
+          </ng-container>
+        </section>
+      </ng-container>
+      <ng-template #sinSeleccion>
+        <h2>Selecciona un levantamiento</h2>
+        <p class="help">Aquí podrás recibir el archivo devuelto, verificar las respuestas y consultar los errores sin alterar el inventario oficial.</p>
+      </ng-template>
+    </section>
+  </div>
+</section>

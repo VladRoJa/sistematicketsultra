@@ -18,6 +18,11 @@ export const INVENTARIO_ROUTES: Routes = [
       { path: 'reportes', component: ReportesComponent },
       { path: 'existencias', component: ExistenciasComponent },
       {
+        path: 'levantamientos',
+        loadComponent: () => import('./levantamientos/levantamientos.component')
+          .then(m => m.LevantamientosComponent),
+      },
+      {
         path: 'revision-correcciones',
         loadComponent: () => import('./revision-correcciones/revision-correcciones.component')
           .then(m => m.RevisionCorreccionesComponent),

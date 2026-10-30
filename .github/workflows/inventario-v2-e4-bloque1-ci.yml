@@ -2,6 +2,15 @@ name: Inventarios V2 E4 Bloque 1 · QA PostgreSQL y Excel
 on:
   pull_request:
     paths:
+      - "frontend/src/app/inventario/levantamientos/**"
+      - "frontend/src/app/inventario/inventario.routes.ts"
+      - "frontend/src/app/inventario/inventario-layout/**"
+      - "backend/app/models/inventario_levantamiento_revision.py"
+      - "backend/app/services/inventario_levantamiento_revision_service.py"
+      - "backend/migrations/versions/v2e4b3103026_revisiones_automaticas.py"
+      - "backend/app/models/inventario_levantamiento_conciliacion.py"
+      - "backend/app/services/inventario_levantamiento_conciliacion_service.py"
+      - "backend/migrations/versions/v2e4b2103026_levantamiento_conciliacion.py"
       - "backend/app/models/inventario_levantamiento.py"
       - "backend/app/models/__init__.py"
       - "backend/migrations/versions/v2e4b1102826_inventario_levantamiento_recepcion.py"
@@ -45,6 +54,8 @@ jobs:
         working-directory: backend
         run: |
           python -m compileall -q app/models/inventario_levantamiento.py app/services/inventario_levantamiento_excel_parser.py app/services/inventario_levantamientos_service.py app/routes/inventario_levantamientos_routes.py migrations/versions/v2e4b1102826_inventario_levantamiento_recepcion.py tests/routes/test_inventario_e4_bloque1_pg.py
+          python -m compileall -q app/models/inventario_levantamiento_conciliacion.py app/services/inventario_levantamiento_conciliacion_service.py migrations/versions/v2e4b2103026_levantamiento_conciliacion.py
+          python -m compileall -q app/models/inventario_levantamiento_revision.py app/services/inventario_levantamiento_revision_service.py migrations/versions/v2e4b3103026_revisiones_automaticas.py
       - name: QA E4 con PostgreSQL temporal
         working-directory: backend
         env:
@@ -56,3 +67,20 @@ jobs:
           INVENTARIO_E2_TEST_POSTGRES_URL: postgresql+psycopg2://inventario_e4_ci:inventario_e4_ci_only@127.0.0.1:5432/inventario_e4_ci
         run: |
           python -m pytest -q --tb=short -o addopts= tests/routes/test_inventario_e4_bloque1_pg.py
+
+  e4-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Dependencias Angular
+        working-directory: frontend
+        run: npm ci
+      - name: Compilar Angular y plantillas E4
+        working-directory: frontend
+        run: npm run build

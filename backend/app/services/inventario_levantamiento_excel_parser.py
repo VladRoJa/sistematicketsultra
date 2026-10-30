@@ -145,6 +145,25 @@ def _headers(sheet, definitions):
     return None, None
 
 
+def leer_identidad_entrega(raw):
+    """CONTROL de un XLSX sin asumir que el contenido concede identidad oficial.
+
+    Solo devuelve datos declarados. La identidad efectiva exige contrastar
+    sucursal/ciclo contra E4 persistido; la BD actual nunca sustituye el corte.
+    """
+    book = _safe_book(raw)
+    try:
+        if "CONTROL" not in book.sheetnames:
+            raise ArchivoE4Error("Falta hoja CONTROL")
+        diagnostics = []
+        control = _control(book["CONTROL"], diagnostics)
+        if diagnostics:
+            raise ArchivoE4Error("CONTROL contiene fórmulas en campos críticos")
+        return control
+    finally:
+        book.close()
+
+
 def parse_xlsx_v01(raw, sucursal_id, expected, modalidad):
     """Devuelve evidencia de la entrega y pendientes por ID original, sin escrituras."""
     book = _safe_book(raw)
@@ -216,11 +235,71 @@ def parse_xlsx_v01(raw, sucursal_id, expected, modalidad):
                 elif not item.get("aparato"):
                     issues.append("HALLAZGO_SIN_NOMBRE")
                 for code in issues:
-                    diagnostics.append({"severidad": "ERROR", "codigo": code,
+                    # Un código físico discrepante es una diferencia de identidad
+                    # a revisar, no una razón para perder las otras respuestas.
+                    # La fila NO cuenta como verificada mientras esté sin aclarar.
+                    severity = "AVISO" if code == "CODIGO_DIFIERE_DEL_CORTE" else "ERROR"
+                    diagnostics.append({"severidad": severity, "codigo": code,
                                         "hoja": sheet_name, "fila": fila_excel, "inventario_id": inv})
                 rows.append({"hoja": sheet_name, "fila_excel": fila_excel,
                              "inventario_id_declarado": inv, "codigo_declarado": item.get("codigo"),
                              "respuesta": answer, "datos_crudos": item, "diagnosticos": issues})
+        # Los códigos de la etiqueta declarada no son altas automáticas.
+        # Un hallazgo que reutiliza el código de un aparato oficial requiere
+        # resolver la identidad; no se puede conciliar como equipo nuevo.
+        codigos_base = defaultdict(list)
+        for identificador, referencia in expected_by_id.items():
+            codigo = norm(referencia.get("codigo_interno_original"))
+            if codigo:
+                codigos_base[codigo].append(identificador)
+            original = text(referencia.get("codigo_interno_original"))
+            if re.match(r"^[0-9]{2}", original) and original[:2] != f"{sucursal_id:02d}":
+                diagnostics.append({
+                    "severidad": "AVISO", "codigo": "PREFIJO_SUCURSAL_INCONSISTENTE",
+                    "hoja": "APARATOS", "inventario_id": identificador,
+                    "codigo_de_corte": original, "prefijo_esperado": f"{sucursal_id:02d}",
+                })
+        ignorar_etiquetas = {"", "sin codigo", "pendiente", "s/c", "n/a", "na"}
+        for fila in rows:
+            if fila["hoja"] != "HALLAZGOS":
+                continue
+            codigo_hallazgo = norm(fila["codigo_declarado"])
+            if codigo_hallazgo in ignorar_etiquetas or codigo_hallazgo not in codigos_base:
+                continue
+            diagnostics.append({
+                "severidad": "ERROR", "codigo": "CODIGO_HALLAZGO_EN_CORTE",
+                "hoja": "HALLAZGOS", "fila": fila["fila_excel"],
+                "codigo_declarado": fila["codigo_declarado"],
+                "inventario_ids_existentes": codigos_base[codigo_hallazgo],
+            })
+            fila["diagnosticos"].append("CODIGO_HALLAZGO_EN_CORTE")
+
+        # Una etiqueta nueva no puede identificar dos hallazgos ni dos
+        # referencias provisionales de alta inicial.
+        etiquetas_nuevas = defaultdict(list)
+        for fila in rows:
+            provisional = (fila["hoja"] == "HALLAZGOS" or (
+                modalidad == "INICIAL" and fila["hoja"] == "APARATOS"
+                and fila["inventario_id_declarado"] is None))
+            if not provisional:
+                continue
+            etiqueta = norm(fila["codigo_declarado"])
+            if etiqueta not in ignorar_etiquetas:
+                etiquetas_nuevas[etiqueta].append(fila)
+        for etiqueta, filas_repetidas in etiquetas_nuevas.items():
+            if len(filas_repetidas) < 2:
+                continue
+            diagnostics.append({
+                "severidad": "ERROR", "codigo": "ETIQUETA_NUEVA_DUPLICADA",
+                "codigo_declarado": etiqueta,
+                "ubicaciones": [
+                    {"hoja": row["hoja"], "fila": row["fila_excel"]}
+                    for row in filas_repetidas
+                ],
+            })
+            for row in filas_repetidas:
+                row["diagnosticos"].append("ETIQUETA_NUEVA_DUPLICADA")
+
         pending = []
         yes = no = 0
         for inv, expected_row in expected_by_id.items():
