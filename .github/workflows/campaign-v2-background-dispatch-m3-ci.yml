@@ -12,6 +12,7 @@ on:
       - "backend/app/services/marketing_campaign_v2_background_*"
       - "backend/app/services/marketing_campaign_v2_governed_dispatch_service.py"
       - "backend/migrations/versions/n26c10202626_campaign_v2_background_jobs.py"
+      - "backend/migrations/versions/p1181c102030_openings_comment_guard_metadata.py"
       - "backend/tests/marketing/test_background_dispatch_*"
       - "frontend/src/app/marketing-campaign-v2/**"
       - "frontend/src/app/layout/**"
@@ -27,6 +28,7 @@ on:
       - "backend/app/services/marketing_campaign_v2_background_*"
       - "backend/app/services/marketing_campaign_v2_governed_dispatch_service.py"
       - "backend/migrations/versions/n26c10202626_campaign_v2_background_jobs.py"
+      - "backend/migrations/versions/p1181c102030_openings_comment_guard_metadata.py"
       - "backend/tests/marketing/test_background_dispatch_*"
       - "frontend/src/app/marketing-campaign-v2/**"
       - "frontend/src/app/layout/**"
@@ -87,7 +89,10 @@ jobs:
           config.set_main_option("script_location", "migrations")
           graph = ScriptDirectory.from_config(config)
           heads = graph.get_heads()
-          assert heads == ["n26c10202626"], f"Unexpected Alembic heads: {heads}"
+          assert len(heads) == 1, f"Multiple Alembic heads: {heads}"
+          assert "n26c10202626" in {
+              node.revision for node in graph.walk_revisions()
+          }, "M1a no longer belongs to migration graph"
           revision = graph.get_revision("n26c10202626")
           assert revision.down_revision == "v2e4b1102826", revision.down_revision
           assert graph.get_revision("v2e4b1102826") is not None
