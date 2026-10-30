@@ -144,9 +144,12 @@ export class LevantamientosComponent implements OnInit {
         this.procesando = false;
         this.claveRecepcion = null;
         this.excelRecibido = null;
-        this.aviso = recibido.replayed
-          ? 'Esta entrega ya estaba archivada; se recuperó su versión.'
-          : 'Archivo recibido y validado contra su corte registrado.';
+        const habilitada = recibido.importacion.resumen.revisiones_auto?.auto_revisiones_habilitadas;
+        this.aviso = habilitada === false
+          ? 'Excel archivado. La generación automática de revisiones no está habilitada para esta sucursal.'
+          : recibido.replayed
+            ? 'Esta entrega ya estaba archivada; se recuperó su versión.'
+            : 'Archivo recibido y conciliación automática ejecutada. Revisa sus solicitudes y bloqueos.';
         this.abrir(recibido.levantamiento_id);
         this.cargar();
       },
