@@ -119,6 +119,17 @@ export class LevantamientosE4Service {
 
   constructor(private readonly http: HttpClient) {}
 
+  recibirExcel(archivo: File, llave: string): Observable<{
+    levantamiento_id: number; importacion: ImportacionE4; replayed: boolean;
+  }> {
+    const form = new FormData();
+    form.append('file', archivo, archivo.name);
+    form.append('idempotency_key', llave);
+    return this.http.post<{
+      levantamiento_id: number; importacion: ImportacionE4; replayed: boolean;
+    }>(this.base + '/recepciones', form);
+  }
+
   listar(page: number, sucursalId: number | null): Observable<{
     items: LevantamientoResumenE4[]; total: number; page: number; per_page: number;
   }> {
