@@ -75,6 +75,11 @@ class Config:
         "PERMISSIONS_OPENINGS_COMMENT_GRANTS_ENABLED", "false"
     ).strip().lower() == "true"
 
+    # Gestión de Aperturas: control independiente de lectura y comentarios.
+    PERMISSIONS_OPENINGS_MANAGE_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_OPENINGS_MANAGE_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
     # Base de datos
     SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
