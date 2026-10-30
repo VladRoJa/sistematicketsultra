@@ -364,7 +364,7 @@ export class PermissionsObservabilityService {
     );
   }
   setActionAccess(
-    userId: number, moduleKey: 'track' | 'openings',
+    userId: number, moduleKey: 'track' | 'openings' | 'tickets',
     actionFullKey: string, enabled: boolean,
   ): Observable<unknown> {
     return this.http.put(
