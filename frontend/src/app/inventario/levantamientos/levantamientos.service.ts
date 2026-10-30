@@ -174,8 +174,8 @@ export class LevantamientosE4Service {
   }
 
   resolver(id: number, data: {
-    caso: string; accion: 'E2_APROBADA' | 'REGISTRADO_OFICIAL';
-    solicitud_id?: number; inventario_id_resultante?: number;
+    caso: string; accion: 'E2_APROBADA' | 'REGISTRADO_OFICIAL' | 'BAJA_PREVIA';
+    solicitud_id?: number; inventario_id_resultante?: number; movimiento_id?: number;
     motivo: string; idempotency_key: string;
   }): Observable<{ resolucion: { id: number }; replayed: boolean }> {
     return this.http.post<{ resolucion: { id: number }; replayed: boolean }>(
