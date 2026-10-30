@@ -36,6 +36,13 @@
       <mat-icon>assessment</mat-icon>
       <span>Reportes</span>
     </a>
+    <a *ngIf="puedeGestionarE4"
+      class="inventory-nav__item"
+      routerLink="/inventario/levantamientos"
+      routerLinkActive="inventory-nav__item--active">
+      <mat-icon>fact_check</mat-icon>
+      <span>Levantamientos E4</span>
+    </a>
     <a *ngIf="puedeRevisarE3"
       class="inventory-nav__item"
       routerLink="/inventario/revision-correcciones"
