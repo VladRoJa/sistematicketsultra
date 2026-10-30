@@ -403,6 +403,62 @@ def test_api_historico_versionado_idempotente_sin_cambios_oficiales(api):
     assert client.get(f"{url}/{lev}", headers=tokens[2]).status_code == 403
 
 
+def test_recepcion_unica_resuelve_sucursal_y_corte_sin_ids_ni_csv_por_carga(api):
+    client, tokens, app = api
+    root = "/api/inventario/levantamientos"
+    endpoint = root + "/recepciones"
+    raw = workbook(first="SI", second="NO", found=False)
+    assert client.post(endpoint, data={
+        "idempotency_key": str(uuid4()),
+        "file": (BytesIO(raw), "entrega.xlsx"),
+    }).status_code == 401
+    assert client.post(endpoint, headers=tokens[2], data={
+        "idempotency_key": str(uuid4()),
+        "file": (BytesIO(raw), "entrega.xlsx"),
+    }).status_code == 403
+    sin_corte = client.post(endpoint, headers=tokens[1], data={
+        "idempotency_key": str(uuid4()),
+        "file": (BytesIO(raw), "entrega.xlsx"),
+    })
+    assert sin_corte.status_code == 409
+    assert sin_corte.get_json()["error"] == "CORTE_NO_REGISTRADO"
+
+    created = client.post(root, headers=tokens[1], data={
+        "sucursal_id": "7", "origen_corte": "CSV_HISTORICO",
+        "cycle_key": str(uuid4()),
+        "baseline_csv": (BytesIO(original_csv()), "distribucion.csv"),
+    })
+    assert created.status_code == 201, created.get_json()
+    lev = created.get_json()["levantamiento"]["id"]
+    before = _snapshot(app)
+    first = client.post(endpoint, headers=tokens[1], data={
+        "idempotency_key": str(uuid4()),
+        "file": (BytesIO(raw), "devuelto.xlsx"),
+    })
+    assert first.status_code == 201, first.get_json()
+    assert first.get_json()["levantamiento_id"] == lev
+    assert first.get_json()["importacion"]["resumen"]["no"] == 1
+    second = client.post(endpoint, headers=tokens[1], data={
+        "idempotency_key": str(uuid4()),
+        "file": (BytesIO(raw), "devuelto_otro_nombre.xlsx"),
+    })
+    assert second.status_code == 200 and second.get_json()["replayed"] is True
+    assert second.get_json()["importacion"]["id"] == first.get_json()["importacion"]["id"]
+    assert _snapshot(app) == before
+
+    otro_ciclo = client.post(root, headers=tokens[1], data={
+        "sucursal_id": "7", "origen_corte": "CSV_HISTORICO",
+        "cycle_key": str(uuid4()),
+        "baseline_csv": (BytesIO(original_csv()), "corte2.csv"),
+    })
+    assert otro_ciclo.status_code == 201
+    ambiguo = client.post(endpoint, headers=tokens[1], data={
+        "idempotency_key": str(uuid4()), "file": (BytesIO(workbook(first="NO")), "ambiguo.xlsx"),
+    })
+    assert ambiguo.status_code == 409
+    assert ambiguo.get_json()["error"] == "CORTE_AMBIGUO"
+
+
 def test_inicial_restringido_y_evidencia_persistente(api):
     client, tokens, app = api
     root = "/api/inventario/levantamientos"
