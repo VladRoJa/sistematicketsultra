@@ -32,6 +32,8 @@ def upgrade():
             "inventario_correccion_solicitudes.id", ondelete="RESTRICT"), nullable=True),
         sa.Column("inventario_id_resultante", sa.Integer(), sa.ForeignKey(
             "inventario_general.id", ondelete="RESTRICT"), nullable=True),
+        sa.Column("movimiento_id", sa.Integer(), sa.ForeignKey(
+            "movimientos_inventario.id", ondelete="RESTRICT"), nullable=True),
         sa.Column("motivo", sa.Text(), nullable=False),
         sa.Column("idempotency_key", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("actor_usuario_id", sa.Integer(), sa.ForeignKey(
@@ -40,7 +42,7 @@ def upgrade():
                   server_default=sa.func.now()),
         sa.UniqueConstraint("actor_usuario_id", "idempotency_key",
                             name="uq_inv_e4_resolucion_idempotencia"),
-        sa.CheckConstraint("accion IN ('E2_APROBADA','REGISTRADO_OFICIAL')",
+        sa.CheckConstraint("accion IN ('E2_APROBADA','REGISTRADO_OFICIAL','BAJA_PREVIA')",
                            name="ck_inv_e4_resolucion_accion"),
         sa.CheckConstraint("char_length(btrim(motivo)) BETWEEN 20 AND 2000",
                            name="ck_inv_e4_resolucion_motivo"),
