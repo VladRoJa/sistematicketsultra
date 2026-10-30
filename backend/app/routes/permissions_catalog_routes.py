@@ -1228,7 +1228,7 @@ def update_user_module_access(user_id: int):
         if action_full_key:
             # No aceptar un check que sólo escriba un grant diagnóstico.
             # Ampliar este conjunto únicamente al certificar su guard HTTP.
-            if action_full_key not in {"track.read", "openings.read"}:
+            if action_full_key not in {"track.read", "openings.read", "openings.comment"}:
                 return jsonify({
                     "error": "Conflict",
                     "detail": "Esta acción todavía no tiene un check con autorización HTTP certificada.",
@@ -1266,15 +1266,23 @@ def update_user_module_access(user_id: int):
                     "module_key": module_key,
                 }), 409
 
-        # Aperturas no admite escribir 'read' hasta activar exactamente su
-        # mismo guard HTTP. No afecta el guard distinto de comentarios/admin.
+        # Los checks Aperturas son POR ACCIÓN: read y comment pueden tener
+        # flags distintos. Sin action_full_key se conserva la acción base/read.
         if module_key == "openings":
-            from app.routes.openings_routes import openings_read_grants_enabled
-            if not openings_read_grants_enabled():
+            from app.routes.openings_routes import (
+                openings_read_grants_enabled,
+                openings_comment_grants_enabled,
+            )
+            if action_full_key == "openings.comment":
+                permitted = openings_comment_grants_enabled()
+            else:
+                permitted = openings_read_grants_enabled()
+            if not permitted:
                 return jsonify({
                     "error": "Conflict",
-                    "detail": "El control de consulta Aperturas no está habilitado en backend.",
+                    "detail": "El control de esta acción Aperturas no está habilitado en backend.",
                     "module_key": module_key,
+                    "action_full_key": action_full_key or "openings.read",
                 }), 409
 
         # B5: si el editor scoped está habilitado, la casilla global V1 NO
