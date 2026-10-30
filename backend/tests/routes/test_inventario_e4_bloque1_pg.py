@@ -28,6 +28,7 @@ from app.services.inventario_levantamiento_excel_parser import (
 
 BASE = Path(__file__).resolve().parents[2]
 MIGRATION = BASE / "migrations/versions/v2e4b1102826_inventario_levantamiento_recepcion.py"
+MIGRATION_B2 = BASE / "migrations/versions/v2e4b2103026_levantamiento_conciliacion.py"
 
 
 def original_csv():
@@ -87,8 +88,9 @@ def test_e4_cadena_alembic_no_abre_rama_paralela():
     cfg = AlembicConfig()
     cfg.set_main_option("script_location", str(BASE / "migrations"))
     script = ScriptDirectory.from_config(cfg)
-    assert script.get_heads() == ["n26c10202626"]
+    assert script.get_heads() == ["v2e4b2103026"]
     assert script.get_revision("n26c10202626").down_revision == "v2e4b1102826"
+    assert script.get_revision("v2e4b2103026").down_revision == "n26c10202626"
 
 
 def test_plantilla_v01_parser_y_sin_revisar_por_id():
@@ -250,9 +252,26 @@ def api(monkeypatch, tmp_path):
                 con.exec_driver_sql("CREATE TABLE inventario_general (id INTEGER PRIMARY KEY, codigo_interno VARCHAR(100), tipo VARCHAR(20), nombre VARCHAR(255), marca VARCHAR(100), categoria VARCHAR(100))")
                 con.exec_driver_sql("CREATE TABLE inventario_sucursal (inventario_id INTEGER, sucursal_id INTEGER, stock INTEGER, PRIMARY KEY(inventario_id,sucursal_id))")
                 con.exec_driver_sql("CREATE TABLE movimientos_inventario (id INTEGER PRIMARY KEY)")
-                con.exec_driver_sql("CREATE TABLE inventario_correccion_solicitudes (id INTEGER PRIMARY KEY)")
+                con.exec_driver_sql("""
+                    CREATE TABLE inventario_correccion_solicitudes (
+                      id BIGINT PRIMARY KEY, tipo VARCHAR(40), estado VARCHAR(24),
+                      sucursal_id INTEGER, inventario_id INTEGER, campo VARCHAR(64),
+                      valor_original JSONB, valor_propuesto JSONB,
+                      hallazgo_provisional JSONB, baseline_canonico JSONB,
+                      fecha_observacion_local DATE, motivo TEXT,
+                      evidencia_descriptiva TEXT, creado_por_usuario_id INTEGER,
+                      creado_en_utc TIMESTAMPTZ, idempotency_key UUID,
+                      request_fingerprint VARCHAR(64)
+                    )
+                """)
                 monkeypatch.setattr(migration, "op", Operations(MigrationContext.configure(con)))
                 migration.upgrade()
+                spec_b2 = importlib.util.spec_from_file_location("inv_e4_b2_migration", MIGRATION_B2)
+                migration_b2 = importlib.util.module_from_spec(spec_b2)
+                assert spec_b2 and spec_b2.loader
+                spec_b2.loader.exec_module(migration_b2)
+                monkeypatch.setattr(migration_b2, "op", Operations(MigrationContext.configure(con)))
+                migration_b2.upgrade()
                 con.exec_driver_sql("INSERT INTO sucursales VALUES (7),(8)")
                 con.exec_driver_sql("INSERT INTO users VALUES (1,'ADMINISTRADOR'),(2,'GERENTE'),(3,'GERENTE_REGIONAL')")
                 con.exec_driver_sql("INSERT INTO inventario_general (id,codigo_interno,tipo,nombre,marca) VALUES (501,'07CA01','APARATOS','Caminadora','Star Trac'),(502,'07EL01','APARATOS','Eliptica','Precor'),(503,'07RE00','APARATOS','Remo','Concept2')")
