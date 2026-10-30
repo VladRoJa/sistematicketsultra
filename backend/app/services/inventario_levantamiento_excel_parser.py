@@ -251,6 +251,32 @@ def parse_xlsx_v01(raw, sucursal_id, expected, modalidad):
             })
             fila["diagnosticos"].append("CODIGO_HALLAZGO_EN_CORTE")
 
+        # Una etiqueta nueva no puede identificar dos hallazgos ni dos
+        # referencias provisionales de alta inicial.
+        etiquetas_nuevas = defaultdict(list)
+        for fila in rows:
+            provisional = (fila["hoja"] == "HALLAZGOS" or (
+                modalidad == "INICIAL" and fila["hoja"] == "APARATOS"
+                and fila["inventario_id_declarado"] is None))
+            if not provisional:
+                continue
+            etiqueta = norm(fila["codigo_declarado"])
+            if etiqueta not in ignorar_etiquetas:
+                etiquetas_nuevas[etiqueta].append(fila)
+        for etiqueta, filas_repetidas in etiquetas_nuevas.items():
+            if len(filas_repetidas) < 2:
+                continue
+            diagnostics.append({
+                "severidad": "ERROR", "codigo": "ETIQUETA_NUEVA_DUPLICADA",
+                "codigo_declarado": etiqueta,
+                "ubicaciones": [
+                    {"hoja": row["hoja"], "fila": row["fila_excel"]}
+                    for row in filas_repetidas
+                ],
+            })
+            for row in filas_repetidas:
+                row["diagnosticos"].append("ETIQUETA_NUEVA_DUPLICADA")
+
         pending = []
         yes = no = 0
         for inv, expected_row in expected_by_id.items():
