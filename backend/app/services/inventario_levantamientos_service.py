@@ -357,6 +357,12 @@ def recibir_excel(actor_id, levantamiento_id, key, filename, raw):
         db.session.add(imp)
         db.session.flush()
         db.session.add_all([Fila(importacion_id=imp.id, **row) for row in parsed["filas"]])
+        # Misma transacción que el archivo: no dejar propuestas huérfanas ni
+        # revisiones sin evidencia. El bloqueo del levantamiento serializa
+        # cargas concurrentes de este ciclo.
+        from app.services.inventario_levantamiento_revision_service import reconciliar_importacion
+        parsed["resumen"]["revisiones_auto"] = reconciliar_importacion(lev, imp, parsed, actor_id)
+        imp.resumen = parsed["resumen"]
         if parsed["resultado"] != "INVALID":
             lev.ultima_importacion_id = imp.id
         db.session.commit()
