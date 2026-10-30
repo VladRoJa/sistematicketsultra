@@ -48,3 +48,16 @@ th, td { text-align: left; border-bottom: 1px solid #e2e8ee; padding: 9px 7px; v
 th { color: #46576b; position: sticky; top: 0; background: #eef3f7; }
 @media (max-width: 1100px) { .workspace { grid-template-columns: 1fr; } .metrics { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 640px) { .e4 { padding: 12px; } .e4-head { flex-direction: column; } .fields { grid-template-columns: 1fr; } .metrics { grid-template-columns: repeat(2, 1fr); } }
+
+.conciliacion { margin: 25px 0 0; padding-top: 18px; border-top: 1px solid #dce6ef; }
+.casos { display: grid; gap: 8px; }
+.caso { display: flex; justify-content: space-between; gap: 15px; padding: 12px; border: 1px solid #dce5ee; border-radius: 8px; }
+.caso p { margin: 5px 0; font-size: 12px; }
+.caso small { color: #6a7987; }
+.caso-actions { text-align: right; display: flex; align-items: flex-end; flex-direction: column; gap: 8px; min-width: 100px; font-size: 12px; }
+.caso-actions .resuelto { color: #28804a; font-weight: 700; }
+.resolucion-form, .cerrar-form { padding: 14px; border-radius: 8px; background: #f3f7fa; margin-top: 18px; }
+.resolucion-form button { margin-right: 8px; }
+.resolucion-form textarea, .cerrar-form textarea { min-height: 68px; border: 1px solid #bfcbd8; border-radius: 6px; padding: 9px; width: 100%; box-sizing: border-box; font: inherit; resize: vertical; }
+.confirmacion { flex-direction: row; align-items: center; gap: 10px; margin: 15px 0; }
+.confirmacion input { width: auto; }
