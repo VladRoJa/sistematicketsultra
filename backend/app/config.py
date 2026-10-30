@@ -85,6 +85,11 @@ class Config:
         "PERMISSIONS_TICKETS_CREATE_GRANTS_ENABLED", "false"
     ).strip().lower() == "true"
 
+    # Cambio de estado Tickets: flag seguro OFF, no evita validaciones del recurso.
+    PERMISSIONS_TICKETS_UPDATE_STATUS_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_TICKETS_UPDATE_STATUS_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
     # Base de datos
     SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
