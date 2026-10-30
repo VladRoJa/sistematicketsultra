@@ -137,11 +137,12 @@ jobs:
           set -euo pipefail
           trap 'rm -f .env.docker' EXIT
           # Synthetic file lives only on the disposable CI runner.
-          # Deliberately set source flags true to verify service-level OFF overrides.
+          # Deliberately set source flags true; default Compose stays OFF without --env-file.
           cat > .env.docker <<'ENV'
           SECRET_KEY=synthetic-compose-only
           JWT_SECRET_KEY=synthetic-compose-only
           CAMPAIGN_V2_BACKGROUND_DISPATCH_ENABLED=true
+          CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY=true
           CAMPAIGN_V2_PROVIDER_SEND_ENABLED=true
           CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED=true
           ENV
@@ -177,13 +178,25 @@ jobs:
           assert "app.services.marketing_campaign_v2_background_worker" in (
               command if isinstance(command, str) else " ".join(command)
           )
-          for key in (
+          gates = (
               "CAMPAIGN_V2_BACKGROUND_DISPATCH_ENABLED",
+              "CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY",
               "CAMPAIGN_V2_PROVIDER_SEND_ENABLED",
               "CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED",
-          ):
+          )
+          for key in gates:
               assert worker["environment"][key] == "false", key
-          print("CAMPAIGN_V2_COMPOSE_OPT_IN_DISABLED_OK")
+
+          # Exercise only Compose interpolation, not a live worker or provider.
+          opt_in = json.loads(
+              compose("--env-file", ".env.docker", "--profile",
+                      "campaign-dispatch", "config", "--format", "json")
+          )
+          opted_worker = opt_in["services"][worker_name]
+          for key in gates:
+              assert opted_worker["environment"][key] == "true", key
+          assert "ports" not in opted_worker
+          print("CAMPAIGN_V2_COMPOSE_OPT_IN_DEFAULT_OFF_EXPLICIT_ON_OK")
           PY
 
   angular-m3:
