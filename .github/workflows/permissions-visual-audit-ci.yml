@@ -9,6 +9,8 @@ on:
       - "backend/app/routes/openings_routes.py"
       - "backend/tests/routes/test_permissions_openings_read_comment_separation.py"
       - "backend/tests/routes/test_permissions_openings_manage_1181.py"
+      - "backend/app/routes/ticket_routes.py"
+      - "backend/tests/routes/test_permissions_tickets_create_1181.py"
       - "backend/tests/routes/test_permissions_live_track_read_check.py"
       - "backend/tests/routes/test_permissions_action_writer_1178.py"
       - "backend/tests/routes/test_permissions_comment_metadata_migration_1181.py"
@@ -83,6 +85,7 @@ jobs:
             tests/routes/test_permissions_comment_metadata_migration_1181.py \
             tests/routes/test_permissions_openings_read_comment_separation.py \
             tests/routes/test_permissions_openings_manage_1181.py \
+            tests/routes/test_permissions_tickets_create_1181.py \
             tests/utils/test_permissions_endpoint_review_report.py \
             tests/routes/test_permissions_phase_a_inventory_parity.py
 
