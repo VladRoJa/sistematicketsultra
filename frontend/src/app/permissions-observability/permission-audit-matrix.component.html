@@ -4,7 +4,7 @@
       <h2>Matriz de acceso</h2>
       <p>Solo los permisos certificados pueden editarse. Cada acción editable requiere su guard y activación explícita del backend.</p>
     </div>
-    <span class="audit-pill">{{ result?.track_read_grants_enabled || result?.openings_read_grants_enabled || result?.openings_comment_grants_enabled || result?.openings_manage_grants_enabled || result?.tickets_create_grants_enabled ? 'Checks de permisos disponibles' : 'Solo consulta · controles bloqueados' }}</span>
+    <span class="audit-pill">{{ result?.track_read_grants_enabled || result?.openings_read_grants_enabled || result?.openings_comment_grants_enabled || result?.openings_manage_grants_enabled || result?.tickets_create_grants_enabled || result?.tickets_update_status_grants_enabled ? 'Checks de permisos disponibles' : 'Solo consulta · controles bloqueados' }}</span>
   </header>
 
   <nav class="audit-perspectives" aria-label="Perspectiva de auditoría">
