@@ -53,6 +53,8 @@ Las plantillas existentes usan las hojas **CONTROL**, **APARATOS** y **HALLAZGOS
 
 Los archivos distribuidos válidamente deben ser importables conforme a su versión. Cualquier cambio futuro al formato exige compatibilidad documentada o migración explícita, nunca la pérdida silenciosa de respuestas.
 
+**Experiencia operativa:** la recepción normal inicia con un único control para cargar el Excel devuelto. El backend identifica sucursal, corte/ciclo y plantilla; localiza el universo de referencias que ya debió congelarse al preparar/distribuir la plantilla. Si no existe correspondencia única y verificable, bloquea la conciliación y comunica el requisito de registro del corte, sin comparar contra el inventario actual como sustituto silencioso. No requiere que el operador vuelva a proporcionar manualmente un CSV por cada devolución; los cortes históricos previamente distribuidos se incorporan una sola vez con trazabilidad de origen.
+
 ## 6. Recepción y validación
 
 Al recibir una entrega, el backend debe:
@@ -65,7 +67,7 @@ Al recibir una entrega, el backend debe:
 6. Recalcular cobertura y resultados sin confiar en fórmulas, porcentajes ni totales provenientes del archivo.
 7. Devolver un reporte detallado, accionable y trazable por referencia y por entrega.
 
-**Importar o validar un archivo no modifica stock, maestro, asignaciones, ni genera automáticamente solicitudes o decisiones E2/E3.**
+**Importar y validar no modifica stock, maestro, asignaciones ni autoriza decisiones E3.** Si el archivo es válido para procesarse y el corte está identificado inequívocamente, la misma operación de recepción y conciliación debe **crear o recuperar automáticamente las revisiones pendientes únicas de las diferencias detectadas**, con origen al levantamiento y archivo/versiones correspondientes. Errores estructurales o identidad ambigua producen bloqueos diagnósticos, nunca mutaciones oficiales ni aprobaciones automáticas.
 
 ## 7. Modalidades de levantamiento
 
@@ -79,11 +81,17 @@ No debe considerarse terminado un levantamiento inicial por el mero hecho de ten
 
 El sistema debe distinguir entre localizado, no localizado, sin revisar, hallazgo no registrado, error de identidad y conflicto con el inventario oficial actual.
 
-Las discrepancias se revisan antes de generar propuestas. Las solicitudes compatibles siguen el flujo de **E2** y las decisiones autorizadas siguen **E3**, conservando vínculos al levantamiento y evidencia original.
+El backend calcula las diferencias a partir del corte congelado y de las respuestas del archivo, y registra una **revisión por discrepancia lógica**, sin que el operador tenga que introducir IDs ni crear solicitudes individualmente. Los registros coincidentes se consideran verificados, sin revisión. Los SIN REVISAR generan pendiente de captura y bloquean el cierre; no se convierten en bajas. Cada revisión conserva referencia física, tipo/campo afectado, valor del corte, valor observado, versión/es de evidencia, sucursal, estado, autor y resolución.
 
-Una reimportación no debe duplicar solicitudes ni efectos, ni reemplazar una decisión autorizada. Crear un artículo maestro nuevo requiere un procedimiento de alta autorizado; **E3 no habilita por sí solo altas maestras automáticas**.
+La **identidad estable de una revisión** se basa en el ciclo de levantamiento, la identidad canónica del aparato cuando existe y la clase/campo de discrepancia. Para hallazgos sin ID, se requiere una clave de hallazgo inequívoca y persistente en el levantamiento, no el número de fila ni solo un nombre/código potencialmente duplicado; los casos ambiguos quedan bloqueados para aclaración. Se impone unicidad en la base de datos y se protege con transacciones/idempotencia frente a cargas y solicitudes concurrentes.
 
-La conciliación no debe convertir un faltante físico en una salida/consumo V1 ficticia ni modificar existencias sin autorización.
+Al reenviar una versión, el sistema vuelve a comparar y **reutiliza la revisión lógica existente**, anexa evidencia, detecta si la diferencia cambió o desapareció y conserva el historial. Puede actualizar propuestas todavía pendientes con trazabilidad, pero **nunca sobrescribe una decisión E3 ya autorizada**, ni vuelve a ejecutar un efecto oficial. Si aparece una nueva discrepancia sustantiva después de una decisión firme, requiere un nuevo episodio de revisión auditable, vinculado al anterior.
+
+Las diferencias compatibles con **E2** crean una solicitud gobernada en su flujo existente; las diferencias que E2 todavía no representa (como identidad ambigua, código duplicado o alta inicial sin identificación) permanecen como revisiones E4 bloqueadas o pendientes de clasificación, **sin inventar un tipo de solicitud E2**. Solo un autorizador competente resuelve en **E3** o en el procedimiento formal aplicable, nunca el upload. Una revisión de hallazgo puede culminar en vinculación a un activo existente o en un alta maestra autorizada por su procedimiento específico: **E3 no habilita por sí solo altas maestras automáticas**.
+
+La aprobación debe validar la versión y el estado oficial vigentes antes de aplicar efectos, registrar quién decidió y evitar autoaprobación según las reglas E3. La conciliación no convierte un faltante físico en una salida/consumo V1 ficticia, no duplica una baja previamente autorizada ni modifica existencias sin autorización.
+
+La interfaz debe mostrar, al terminar la carga, una respuesta resumida: referencias verificadas, pendientes de captura, **revisiones nuevas**, revisiones recuperadas y discrepancias bloqueadas; después, una sola bandeja de autorizaciones por sucursal/ciclo con su evidencia y estado. No solicitar al operador el ID de una solicitud que el propio backend puede vincular.
 
 ## 9. Versiones y trazabilidad
 
@@ -103,7 +111,8 @@ El backend solo permitirá un **cierre oficial** cuando:
 2. No queden inconsistencias de identidad sin resolver.
 3. Las discrepancias estén resueltas o expresamente documentadas como excepciones autorizadas según una política de cierre definida y auditable.
 4. La entrega final, su versión y la evidencia histórica estén conservadas.
-5. El usuario que solicita el cierre posea facultades efectivas para esa sucursal y operación.
+5. Todas las revisiones generadas por la conciliación estén resueltas con decisión válida o excepción explícita autorizada; las pendientes y bloqueadas impiden cerrar.
+6. El usuario que solicita el cierre posea facultades efectivas para esa sucursal y operación.
 
 La cobertura física del 100 % **no equivale** a conciliación del 100 %. Una entrega incompleta puede conservarse y revisarse, pero nunca mostrarse como inventario conciliado/cerrado. Reapertura o cancelación, si se habilitan, deben ser trazables.
 
