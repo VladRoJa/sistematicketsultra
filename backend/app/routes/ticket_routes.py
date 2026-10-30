@@ -637,14 +637,29 @@ def tickets_create_grants_enabled() -> bool:
     return str(value).strip().lower() == "true"
 
 
-def _ticket_create_grant_denied(user) -> bool:
-    """Solo un DENY efectivo bloquea; allow NO evita validaciones existentes."""
-    if not tickets_create_grants_enabled():
+def tickets_update_status_grants_enabled() -> bool:
+    """Acción estado: OFF conserva guard legacy y bloqueo LECTOR_GLOBAL."""
+    from flask import has_app_context
+    if not has_app_context():
         return False
+    value = current_app.config.get("PERMISSIONS_TICKETS_UPDATE_STATUS_GRANTS_ENABLED", False)
+    return str(value).strip().lower() == "true"
+
+
+def _ticket_action_grant_denied(user, action_full_key: str) -> bool:
+    """Veto, no autorización: las validaciones de objeto siguen siendo fuente real."""
     from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
     return _simple_global_action_grant_override(
-        user=user, action_full_key="tickets.create",
+        user=user, action_full_key=action_full_key,
     ) is False
+
+
+def _ticket_create_grant_denied(user) -> bool:
+    """Solo un DENY efectivo bloquea; allow NO evita validaciones existentes."""
+    return (
+        tickets_create_grants_enabled()
+        and _ticket_action_grant_denied(user, "tickets.create")
+    )
 
 
 @ticket_bp.route('/create', methods=['POST'])
@@ -1381,6 +1396,13 @@ def update_ticket_status(id):
         actor = UserORM.get_by_id(get_jwt_identity())
         if not actor:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
+
+        # Check por acción de entrada. DENY bloquea; ALLOW no omite
+        # bloquea_lectores_globales, alcance de ticket ni doble check.
+        if tickets_update_status_grants_enabled() and _ticket_action_grant_denied(
+            actor, "tickets.update_status",
+        ):
+            return jsonify({"mensaje": "No autorizado para cambiar estado de tickets."}), 403
 
         ticket = Ticket.query.get(id)
         if not ticket:
