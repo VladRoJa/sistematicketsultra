@@ -222,6 +222,17 @@ def _effective_action_decision(action, user, context: dict) -> dict:
         )
 
     # Tickets
+    if full_key == "tickets.create":
+        # Solo entrada al endpoint: las reglas sobre destino/aparatos y
+        # departamento quedan en create_ticket y no se pueden sobreescribir.
+        return _decision(
+            allowed=user is not None,
+            source="authenticated_ticket_creation",
+            reason="authenticated_entry_branch_and_equipment_still_checked",
+            scope_type="entry_only",
+            details={"object_access_certified": False},
+        )
+
     if full_key == "tickets.delete_all":
         allowed = bool(is_admin and context["allow_ticket_delete_all"])
         return _decision(
