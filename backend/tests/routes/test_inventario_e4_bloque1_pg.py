@@ -912,3 +912,76 @@ def test_auto_e2_jamas_se_activa_fuera_is_demo_ni_sin_flag(api, monkeypatch):
     assert no_flag.get_json()["importacion"]["resumen"]["revisiones_auto"]["auto_revisiones_habilitadas"] is False
     assert client.get(f"{root}/{demo_id}/revisiones", headers=tokens[1]).get_json()["total"] == 0
     assert _snapshot(app) == before
+
+
+def test_piloto_cinco_aparatos_cinco_escenarios_en_mismo_xlsx(api, monkeypatch):
+    """5 casos independientes: SI, NO válido, NO sin evidencia, código diferente, blanco."""
+    monkeypatch.setenv("INVENTARIO_E4_AUTO_REVIEW_DEMO_ENABLED", "true")
+    client, tokens, app = api
+    root = "/api/inventario/levantamientos"
+    # En este esquema efímero, sucursal 7 es DEMO; los IDs no se reutilizan
+    # ni se deducen para el sistema productivo.
+    with app.app_context():
+        with db.engine.begin() as con:
+            con.exec_driver_sql("UPDATE inventario_sucursal SET stock=1 WHERE inventario_id=503")
+            con.exec_driver_sql("""
+                INSERT INTO inventario_general (id,codigo_interno,tipo,nombre,marca)
+                VALUES (504,'07BI01','APARATOS','Bicicleta','Star Trac'),
+                       (505,'07ES01','APARATOS','Escaladora','Precor')
+            """)
+            con.exec_driver_sql(
+                "INSERT INTO inventario_sucursal VALUES (504,7,1),(505,7,1)")
+        db.session.remove()
+    corte = original_csv().replace(
+        b"503,07RE00,Cardio,Remo,Concept2,0",
+        b"503,07RE00,Cardio,Remo,Concept2,1",
+    )
+    corte += (
+        b"7,Pabellon rosarito,504,07BI01,Cardio,Bicicleta,Star Trac,1\n"
+        b"7,Pabellon rosarito,505,07ES01,Cardio,Escaladora,Precor,1\n"
+    )
+    created = client.post(root, headers=tokens[1], data={
+        "sucursal_id": "7", "origen_corte": "CSV_HISTORICO",
+        "cycle_key": str(uuid4()), "baseline_csv": (BytesIO(corte), "cinco.csv"),
+    })
+    assert created.status_code == 201, created.get_json()
+    lev = created.get_json()["levantamiento"]["id"]
+    wb = load_workbook(BytesIO(workbook(first="SI", second="NO", found=False)))
+    aparatos = wb["APARATOS"]
+    aparatos["G9"] = "Inspeccionado completo: el aparato no se encontró en el club"
+    aparatos.append([503, "07RE00", "Cardio", "Remo", "Concept2", "NO", ""])
+    aparatos.append([504, "07BI99", "Cardio", "Bicicleta", "Star Trac", "SI",
+                      "La etiqueta física difiere del código distribuido"])
+    aparatos.append([505, "07ES01", "Cardio", "Escaladora", "Precor", "", ""])
+    archivo = BytesIO()
+    wb.save(archivo)
+    antes = _snapshot(app)
+    received = client.post(root + "/recepciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()), "file": (BytesIO(archivo.getvalue()), "cinco.xlsx"),
+    })
+    assert received.status_code == 201, received.get_json()
+    res = received.get_json()["importacion"]
+    assert res["resultado"] == "INCOMPLETE"
+    assert res["resumen"]["referencias_esperadas"] == 5
+    assert (res["resumen"]["si"], res["resumen"]["no"],
+            res["resumen"]["sin_revisar"]) == (1, 2, 2)
+    assert res["resumen"]["revisiones_auto"] == {
+        "nuevas": 3, "reutilizadas": 0, "bloqueadas": 2, "e2_creadas": 1,
+    }
+    review = client.get(f"{root}/{lev}/revisiones", headers=tokens[1]).get_json()
+    assert review["total"] == 3
+    por_id = {i["inventario_id"]: i for i in review["items"]}
+    assert por_id[502]["estado"] == "AWAITING_E3"
+    assert por_id[502]["solicitud_e2_id"]
+    assert por_id[503]["estado"] == "BLOCKED"
+    assert por_id[503]["solicitud_e2_id"] is None
+    assert por_id[504]["tipo"] == "IDENTITY_MISMATCH"
+    assert por_id[504]["estado"] == "BLOCKED"
+    assert 501 not in por_id and 505 not in por_id
+    assert _snapshot(app)["stock"] == antes["stock"]
+    assert _snapshot(app)["master"] == antes["master"]
+    assert _snapshot(app)["mov"] == antes["mov"]
+    assert _snapshot(app)["e2"] == antes["e2"] + 1
+    board = client.get(f"{root}/{lev}/conciliacion", headers=tokens[1]).get_json()
+    assert board["puede_cerrar"] is False
+    assert "SIN_REVISAR" in board["bloqueos"]
