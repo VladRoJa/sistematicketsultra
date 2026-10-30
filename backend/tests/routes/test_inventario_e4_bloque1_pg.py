@@ -254,6 +254,15 @@ def test_api_historico_versionado_idempotente_sin_cambios_oficiales(api):
     assert client.post(url, headers=tokens[2], data={"sucursal_id":"7"}).status_code == 403
     assert client.post(url, headers=tokens[3], data={"sucursal_id":"7"}).status_code == 403
     assert client.post(url, data={"sucursal_id":"7"}).status_code == 401
+    # Bandeja corporativa: acceso, paginación estricta y filtros.
+    assert client.get(url).status_code == 401
+    assert client.get(url, headers=tokens[2]).status_code == 403
+    assert client.get(url, headers=tokens[3]).status_code == 403
+    assert client.get(url + "?per_page=101", headers=tokens[1]).status_code == 400
+    assert client.get(url + "?page=0", headers=tokens[1]).status_code == 400
+    assert client.get(url + "?sucursal_id=abc", headers=tokens[1]).status_code == 400
+    empty = client.get(url, headers=tokens[1])
+    assert empty.status_code == 200 and empty.get_json()["total"] == 0
     original = _snapshot(app)
     basekey = str(uuid4())
     created = client.post(url, headers=tokens[1], data={
@@ -264,6 +273,12 @@ def test_api_historico_versionado_idempotente_sin_cambios_oficiales(api):
     assert created.status_code == 201, created.get_json()
     lev = created.get_json()["levantamiento"]["id"]
     assert created.get_json()["levantamiento"]["baseline_resumen"]["excluidas_stock_cero"] == 1
+    listing = client.get(url + "?sucursal_id=7", headers=tokens[1])
+    assert listing.status_code == 200, listing.get_json()
+    assert listing.get_json()["total"] == 1
+    assert listing.get_json()["items"][0]["id"] == lev
+    assert listing.get_json()["items"][0]["importacion_actual"] is None
+    assert client.get(url + "?sucursal_id=8", headers=tokens[1]).get_json()["total"] == 0
     first_bytes = workbook()
     endpoint = f"{url}/{lev}/importaciones"
     key = str(uuid4())
@@ -290,6 +305,10 @@ def test_api_historico_versionado_idempotente_sin_cambios_oficiales(api):
     assert second.status_code == 201, second.get_json()
     assert second.get_json()["importacion"]["version"] == 2
     assert second.get_json()["importacion"]["resultado"] == "VALIDATED"
+    summary_list = client.get(url, headers=tokens[1]).get_json()["items"][0]
+    assert summary_list["importacion_actual"]["resultado"] == "VALIDATED"
+    assert (summary_list["importacion_actual"]["si"], summary_list["importacion_actual"]["no"],
+            summary_list["importacion_actual"]["sin_revisar"]) == (1, 1, 0)
     # Archivo estructuralmente incompatible: archivar, diagnosticar y NO promover.
     malformed = load_workbook(BytesIO(workbook(second="NO")))
     del malformed["HALLAZGOS"]
