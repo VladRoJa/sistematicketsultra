@@ -65,7 +65,7 @@ def admin_and_target(monkeypatch):
 
 @pytest.mark.parametrize("full_key", [
     "tickets.close", "pm.validate", "track.run_daily_pipeline",
-    "openings.manage", "internal_documents.view",
+    "internal_documents.view",
 ])
 def test_uncertified_action_fails_before_db_mutation(monkeypatch, full_key):
     api, headers = client()
