@@ -80,6 +80,11 @@ class Config:
         "PERMISSIONS_OPENINGS_MANAGE_GRANTS_ENABLED", "false"
     ).strip().lower() == "true"
 
+    # Tickets: veto opcional de creación, jamás bypass de sucursal/flujo.
+    PERMISSIONS_TICKETS_CREATE_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_TICKETS_CREATE_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
     # Base de datos
     SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
