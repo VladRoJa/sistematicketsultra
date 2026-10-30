@@ -41,6 +41,7 @@ def client():
         PERMISSIONS_TRACK_READ_GRANTS_ENABLED=True,
         PERMISSIONS_OPENINGS_READ_GRANTS_ENABLED=True,
         PERMISSIONS_OPENINGS_COMMENT_GRANTS_ENABLED=True,
+        PERMISSIONS_OPENINGS_MANAGE_GRANTS_ENABLED=True,
     )
     JWTManager(app)
     app.register_blueprint(catalog.permissions_catalog_bp, url_prefix="/api/permissions/catalog")
@@ -107,6 +108,7 @@ def test_wrong_module_for_certified_action_rejected_without_mutation(monkeypatch
 @pytest.mark.parametrize("module_key,full_key", [
     ("track", "track.read"), ("openings", "openings.read"),
     ("openings", "openings.comment"),
+    ("openings", "openings.manage"),
 ])
 def test_certified_action_writes_exact_action_through_existing_endpoint(
     monkeypatch, module_key, full_key,
@@ -250,3 +252,67 @@ def test_comment_writer_flag_off_even_when_read_enabled(monkeypatch):
     assert result.json["action_full_key"] == "openings.comment"
     session.add.assert_not_called()
     session.commit.assert_not_called()
+
+
+def test_manage_writer_flag_off_even_if_read_and_comment_on(monkeypatch):
+    api, headers = client()
+    api.application.config["PERMISSIONS_OPENINGS_MANAGE_GRANTS_ENABLED"] = False
+    admin_and_target(monkeypatch)
+    session = Mock()
+    monkeypatch.setattr(catalog, "db", SimpleNamespace(session=session))
+    result = api.put(
+        "/api/permissions/catalog/users/12/module-access",
+        headers=headers,
+        json={"changes": [{
+            "module_key": "openings",
+            "action_full_key": "openings.manage",
+            "override": "allow",
+        }]},
+    )
+    assert result.status_code == 409
+    assert result.json["action_full_key"] == "openings.manage"
+    session.add.assert_not_called()
+    session.commit.assert_not_called()
+
+
+def test_manage_can_target_its_own_action_with_read_and_comment_off(monkeypatch):
+    api, headers = client()
+    api.application.config["PERMISSIONS_OPENINGS_READ_GRANTS_ENABLED"] = False
+    api.application.config["PERMISSIONS_OPENINGS_COMMENT_GRANTS_ENABLED"] = False
+    admin_and_target(monkeypatch)
+    manage_action = SimpleNamespace(id=88, full_key="openings.manage", module_id=7)
+    read_action = SimpleNamespace(id=77, full_key="openings.read", module_id=7)
+    module = SimpleNamespace(id=7, name="Aperturas", key="openings", base_action=read_action)
+
+    class FakeModule:
+        query = FakeQuery(first=module)
+        key = is_active = is_assignable = FakeColumn()
+
+    class FakeAction:
+        query = FakeQuery(first=manage_action)
+
+    class FakeGrant:
+        query = FakeQuery(rows=[])
+        is_active = deleted_at = principal_type = principal_user_id = action_id = FakeColumn()
+        updated_at = id = FakeColumn()
+
+    monkeypatch.setattr(catalog, "PermissionModuleORM", FakeModule)
+    monkeypatch.setattr(catalog, "PermissionActionORM", FakeAction)
+    monkeypatch.setattr(catalog, "PermissionGrantORM", FakeGrant)
+    session = Mock()
+    monkeypatch.setattr(catalog, "db", SimpleNamespace(session=session))
+    result = api.put(
+        "/api/permissions/catalog/users/12/module-access",
+        headers=headers,
+        json={"changes": [{
+            "module_key": "openings",
+            "action_full_key": "openings.manage",
+            "override": "inherit",
+            "reason": "QA isolated manage",
+        }]},
+    )
+    assert result.status_code == 200, result.get_json()
+    assert result.json["results"][0]["action_id"] == 88
+    assert result.json["results"][0]["action_full_key"] == "openings.manage"
+    session.commit.assert_called_once()
+    session.add.assert_not_called()
