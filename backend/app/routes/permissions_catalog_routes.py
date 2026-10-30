@@ -1228,7 +1228,7 @@ def update_user_module_access(user_id: int):
         if action_full_key:
             # No aceptar un check que sólo escriba un grant diagnóstico.
             # Ampliar este conjunto únicamente al certificar su guard HTTP.
-            if action_full_key not in {"track.read", "openings.read", "openings.comment", "openings.manage"}:
+            if action_full_key not in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create"}:
                 return jsonify({
                     "error": "Conflict",
                     "detail": "Esta acción todavía no tiene un check con autorización HTTP certificada.",
@@ -1286,6 +1286,16 @@ def update_user_module_access(user_id: int):
                     "detail": "El control de esta acción Aperturas no está habilitado en backend.",
                     "module_key": module_key,
                     "action_full_key": action_full_key or "openings.read",
+                }), 409
+
+        if module_key == "tickets" and action_full_key == "tickets.create":
+            from app.routes.ticket_routes import tickets_create_grants_enabled
+            if not tickets_create_grants_enabled():
+                return jsonify({
+                    "error": "Conflict",
+                    "detail": "El control de creación de Tickets no está habilitado en backend.",
+                    "module_key": module_key,
+                    "action_full_key": action_full_key,
                 }), 409
 
         # B5: si el editor scoped está habilitado, la casilla global V1 NO
