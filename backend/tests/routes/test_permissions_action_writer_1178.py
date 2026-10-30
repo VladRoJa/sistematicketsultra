@@ -42,6 +42,7 @@ def client():
         PERMISSIONS_OPENINGS_READ_GRANTS_ENABLED=True,
         PERMISSIONS_OPENINGS_COMMENT_GRANTS_ENABLED=True,
         PERMISSIONS_OPENINGS_MANAGE_GRANTS_ENABLED=True,
+        PERMISSIONS_TICKETS_CREATE_GRANTS_ENABLED=True,
     )
     JWTManager(app)
     app.register_blueprint(catalog.permissions_catalog_bp, url_prefix="/api/permissions/catalog")
@@ -109,6 +110,7 @@ def test_wrong_module_for_certified_action_rejected_without_mutation(monkeypatch
     ("track", "track.read"), ("openings", "openings.read"),
     ("openings", "openings.comment"),
     ("openings", "openings.manage"),
+    ("tickets", "tickets.create"),
 ])
 def test_certified_action_writes_exact_action_through_existing_endpoint(
     monkeypatch, module_key, full_key,
@@ -315,4 +317,25 @@ def test_manage_can_target_its_own_action_with_read_and_comment_off(monkeypatch)
     assert result.json["results"][0]["action_id"] == 88
     assert result.json["results"][0]["action_full_key"] == "openings.manage"
     session.commit.assert_called_once()
+    session.add.assert_not_called()
+
+
+def test_tickets_create_writer_flag_off_without_db_mutation(monkeypatch):
+    api, headers = client()
+    api.application.config["PERMISSIONS_TICKETS_CREATE_GRANTS_ENABLED"] = False
+    admin_and_target(monkeypatch)
+    session = Mock()
+    monkeypatch.setattr(catalog, "db", SimpleNamespace(session=session))
+    result = api.put(
+        "/api/permissions/catalog/users/12/module-access",
+        headers=headers,
+        json={"changes": [{
+            "module_key": "tickets",
+            "action_full_key": "tickets.create",
+            "override": "deny",
+        }]},
+    )
+    assert result.status_code == 409
+    assert result.json["action_full_key"] == "tickets.create"
+    session.commit.assert_not_called()
     session.add.assert_not_called()
