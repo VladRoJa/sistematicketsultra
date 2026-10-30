@@ -172,6 +172,36 @@ def test_plantilla_rechaza_codigo_diferente_duplicados_y_sucursal_falsa():
     assert report["resumen"]["sin_revisar"] == 2
 
 
+def test_hallazgo_no_puede_reciclar_codigo_de_aparato_oficial():
+    refs, _ = parse_historical_csv(original_csv(), 7)
+    book = load_workbook(BytesIO(workbook(second="SI", found=True)))
+    book["HALLAZGOS"]["A8"] = "07CA01"
+    raw = BytesIO()
+    book.save(raw)
+    resultado = parse_xlsx_v01(raw.getvalue(), 7, refs, "VERIFICACION")
+    assert resultado["resultado"] == "INVALID"
+    assert resultado["resumen"]["errores"] == 1
+    assert any(d["codigo"] == "CODIGO_HALLAZGO_EN_CORTE"
+               and d["inventario_ids_existentes"] == [501]
+               for d in resultado["diagnosticos"])
+
+
+def test_prefijo_sucursal_ajeno_es_aviso_no_mutacion_de_codigo():
+    historical = original_csv().replace(b"07EL01", b"05EL01")
+    refs, _ = parse_historical_csv(historical, 7)
+    book = load_workbook(BytesIO(workbook(second="SI", found=False)))
+    book["APARATOS"]["B9"] = "05EL01"
+    raw = BytesIO()
+    book.save(raw)
+    resultado = parse_xlsx_v01(raw.getvalue(), 7, refs, "VERIFICACION")
+    assert resultado["resultado"] == "VALIDATED"
+    assert resultado["resumen"]["avisos"] == 1
+    assert any(d["codigo"] == "PREFIJO_SUCURSAL_INCONSISTENTE"
+               and d["inventario_id"] == 502 and d["prefijo_esperado"] == "07"
+               for d in resultado["diagnosticos"])
+    assert resultado["resumen"]["si"] == 2
+
+
 def test_inicial_no_equivale_a_conciliado_sin_referencias():
     report = parse_xlsx_v01(workbook(branch=8, initial=True), 8, [], "INICIAL")
     assert report["resultado"] == "INCOMPLETE"
