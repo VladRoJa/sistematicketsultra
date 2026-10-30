@@ -205,13 +205,19 @@
           <div class="resolucion-form" *ngIf="casoActivo as caso">
             <h3>Resolver {{ caso.caso }}</h3>
             <p class="help" *ngIf="caso.tipo === 'NO' || caso.tipo === 'PREFIJO'">
-              Registra primero la corrección E2 y su aprobación E3. Aquí se vincula el ID de la solicitud autorizada; E4 no modifica existencias.
+              Si falta realizar la baja/corrección, solicita E2 y autoriza en E3. Para un NO previamente dado de baja en V1, vincula el movimiento de salida autorizado y no anulado. E4 no modifica existencias.
             </p>
+            <label *ngIf="caso.tipo === 'NO'">Vía de conciliación
+              <select [(ngModel)]="viaNo" (ngModelChange)="cambioResolucion()">
+                <option value="E2_APROBADA">Solicitud E2 aprobada por E3</option>
+                <option value="BAJA_PREVIA">Movimiento de salida V1 ya registrado</option>
+              </select>
+            </label>
             <p class="help" *ngIf="caso.tipo === 'HALLAZGO' || caso.tipo === 'INICIAL'">
               Verifica antes que el aparato tenga identidad y existencia oficial autorizadas. Ingresa el ID del artículo resultante, no uno provisional.
             </p>
             <div class="fields">
-              <label>ID solicitud E2 aprobada o ID del aparato oficial
+              <label>ID de solicitud E2, movimiento V1 o aparato oficial, según la vía seleccionada
                 <input type="number" min="1" [(ngModel)]="idResolucion" (ngModelChange)="cambioResolucion()">
               </label>
               <label>Justificación y referencia de evidencia
