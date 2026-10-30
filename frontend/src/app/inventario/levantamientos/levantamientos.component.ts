@@ -48,6 +48,7 @@ export class LevantamientosComponent implements OnInit {
   tablero: TableroConciliacionE4 | null = null;
   casoActivo: CasoConciliacionE4 | null = null;
   idResolucion: number | null = null;
+  viaNo: 'E2_APROBADA' | 'BAJA_PREVIA' = 'E2_APROBADA';
   motivoResolucion = '';
   motivoCierre = '';
   confirmoCierre = false;
@@ -271,6 +272,7 @@ export class LevantamientosComponent implements OnInit {
     if (this.procesando || this.seleccionado?.estado === 'CLOSED') return;
     this.casoActivo = caso;
     this.idResolucion = null;
+    this.viaNo = 'E2_APROBADA';
     this.motivoResolucion = '';
     this.resolucionKey = null;
   }
@@ -298,15 +300,16 @@ export class LevantamientosComponent implements OnInit {
     const key = this.resolucionKey || crypto.randomUUID();
     this.resolucionKey = key;
     const data: {
-      caso: string; accion: 'E2_APROBADA' | 'REGISTRADO_OFICIAL';
-      solicitud_id?: number; inventario_id_resultante?: number;
+      caso: string; accion: 'E2_APROBADA' | 'REGISTRADO_OFICIAL' | 'BAJA_PREVIA';
+      solicitud_id?: number; inventario_id_resultante?: number; movimiento_id?: number;
       motivo: string; idempotency_key: string;
     } = {
       caso: caso.caso,
-      accion: esSolicitud ? 'E2_APROBADA' : 'REGISTRADO_OFICIAL',
+      accion: esSolicitud ? (caso.tipo === 'NO' ? this.viaNo : 'E2_APROBADA') : 'REGISTRADO_OFICIAL',
       motivo: this.motivoResolucion.trim(), idempotency_key: key,
     };
-    if (esSolicitud) data.solicitud_id = this.idResolucion!;
+    if (caso.tipo === 'NO' && this.viaNo === 'BAJA_PREVIA') data.movimiento_id = this.idResolucion!;
+    else if (esSolicitud) data.solicitud_id = this.idResolucion!;
     else data.inventario_id_resultante = this.idResolucion!;
     this.procesando = true;
     this.error = '';
