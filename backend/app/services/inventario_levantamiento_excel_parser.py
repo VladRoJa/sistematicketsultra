@@ -221,6 +221,36 @@ def parse_xlsx_v01(raw, sucursal_id, expected, modalidad):
                 rows.append({"hoja": sheet_name, "fila_excel": fila_excel,
                              "inventario_id_declarado": inv, "codigo_declarado": item.get("codigo"),
                              "respuesta": answer, "datos_crudos": item, "diagnosticos": issues})
+        # Los códigos de la etiqueta declarada no son altas automáticas.
+        # Un hallazgo que reutiliza el código de un aparato oficial requiere
+        # resolver la identidad; no se puede conciliar como equipo nuevo.
+        codigos_base = defaultdict(list)
+        for identificador, referencia in expected_by_id.items():
+            codigo = norm(referencia.get("codigo_interno_original"))
+            if codigo:
+                codigos_base[codigo].append(identificador)
+            original = text(referencia.get("codigo_interno_original"))
+            if re.match(r"^[0-9]{2}", original) and original[:2] != f"{sucursal_id:02d}":
+                diagnostics.append({
+                    "severidad": "AVISO", "codigo": "PREFIJO_SUCURSAL_INCONSISTENTE",
+                    "hoja": "APARATOS", "inventario_id": identificador,
+                    "codigo_de_corte": original, "prefijo_esperado": f"{sucursal_id:02d}",
+                })
+        ignorar_etiquetas = {"", "sin codigo", "pendiente", "s/c", "n/a", "na"}
+        for fila in rows:
+            if fila["hoja"] != "HALLAZGOS":
+                continue
+            codigo_hallazgo = norm(fila["codigo_declarado"])
+            if codigo_hallazgo in ignorar_etiquetas or codigo_hallazgo not in codigos_base:
+                continue
+            diagnostics.append({
+                "severidad": "ERROR", "codigo": "CODIGO_HALLAZGO_EN_CORTE",
+                "hoja": "HALLAZGOS", "fila": fila["fila_excel"],
+                "codigo_declarado": fila["codigo_declarado"],
+                "inventario_ids_existentes": codigos_base[codigo_hallazgo],
+            })
+            fila["diagnosticos"].append("CODIGO_HALLAZGO_EN_CORTE")
+
         pending = []
         yes = no = 0
         for inv, expected_row in expected_by_id.items():
