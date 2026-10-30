@@ -371,6 +371,7 @@ export class PermissionsObservabilityService {
       {
         changes: [{
           module_key: moduleKey,
+          action_full_key: `${moduleKey}.read`,
           override: enabled ? 'allow' : 'deny',
           reason: enabled
             ? 'Habilitado desde matriz de permisos'
