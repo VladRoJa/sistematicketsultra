@@ -70,6 +70,10 @@ export interface ImportacionE4 {
     referencias_esperadas: number; si: number; no: number;
     sin_revisar: number; hallazgos: number; provisionales_aparatos: number;
     errores: number; avisos: number;
+    revisiones_auto?: {
+      nuevas: number; reutilizadas: number; bloqueadas: number;
+      e2_creadas: number; auto_revisiones_habilitadas?: boolean;
+    };
     pendientes: { inventario_id: number; codigo_original: string; fila_excel: number | null; motivo: string }[];
   };
   diagnosticos: DiagnosticoE4[];
