@@ -331,14 +331,16 @@ def listado_revisiones(levantamiento_id, page=1, size=20):
     ]
     resumen = {"total": total, "bloqueadas": 0, "por_autorizar": 0,
                "aprobadas": 0, "rechazadas": 0, "superadas": 0}
-    # Iterador por lotes, sin cargar filas/evidencias JSONB en memoria.
-    for row in query.with_entities(Revision.estado, Revision.solicitud_e2_id).yield_per(200):
-        estado = row.estado
-        if row.solicitud_e2_id:
-            solicitud = db.session.get(Solicitud, row.solicitud_e2_id)
+    # Un solo join para el conteo; evitar N+1 incluso con miles de aparatos.
+    estados = (db.session.query(Revision.estado, Revision.solicitud_e2_id, Solicitud.estado)
+               .outerjoin(Solicitud, Revision.solicitud_e2_id == Solicitud.id)
+               .filter(Revision.levantamiento_id == lev.id).all())
+    for estado_guardado, solicitud_id, estado_e2 in estados:
+        estado = estado_guardado
+        if solicitud_id is not None:
             estado = {
                 "PENDING": "AWAITING_E3", "APPROVED": "APPROVED", "REJECTED": "REJECTED",
-            }.get(solicitud.estado if solicitud else "", "BLOCKED")
+            }.get(estado_e2, "BLOCKED")
         if estado == "BLOCKED":
             resumen["bloqueadas"] += 1
         elif estado in ("PENDING", "AWAITING_E3"):
