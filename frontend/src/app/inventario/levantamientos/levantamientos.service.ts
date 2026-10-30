@@ -85,6 +85,34 @@ export interface FilaE4 {
   diagnosticos: string[];
 }
 
+export interface CasoConciliacionE4 {
+  caso: string;
+  tipo: 'NO' | 'PREFIJO' | 'HALLAZGO' | 'INICIAL';
+  inventario_id: number | null;
+  fila_excel: number | null;
+  codigo: string | null;
+  aparato: string | null;
+  observacion: string | null;
+  resuelto: boolean;
+  resolucion: {
+    id: number; accion: string; motivo: string;
+    solicitud_id: number | null; inventario_id_resultante: number | null;
+    actor_usuario_id: number; creado_en_utc: string;
+  } | null;
+}
+
+export interface TableroConciliacionE4 {
+  levantamiento_id: number;
+  importacion_id: number | null;
+  estado: string;
+  version?: number;
+  resultado?: ResultadoImportacionE4;
+  casos: CasoConciliacionE4[];
+  pendientes_respuesta: { inventario_id: number; codigo_original: string; motivo: string }[];
+  bloqueos: string[];
+  puede_cerrar: boolean;
+}
+
 @Injectable({ providedIn: 'root' })
 export class LevantamientosE4Service {
   private readonly base = environment.apiUrl + '/inventario/levantamientos';
@@ -141,4 +169,24 @@ export class LevantamientosE4Service {
     return this.http.get(this.base + '/' + levantamientoId +
       '/importaciones/' + importacionId + '/archivo', { responseType: 'blob' });
   }
+  tablero(id: number): Observable<TableroConciliacionE4> {
+    return this.http.get<TableroConciliacionE4>(this.base + '/' + id + '/conciliacion');
+  }
+
+  resolver(id: number, data: {
+    caso: string; accion: 'E2_APROBADA' | 'REGISTRADO_OFICIAL';
+    solicitud_id?: number; inventario_id_resultante?: number;
+    motivo: string; idempotency_key: string;
+  }): Observable<{ resolucion: { id: number }; replayed: boolean }> {
+    return this.http.post<{ resolucion: { id: number }; replayed: boolean }>(
+      this.base + '/' + id + '/resoluciones', data);
+  }
+
+  cerrar(id: number, motivo: string, key: string): Observable<{
+    cierre: { cierre_id: number; estado: string }; replayed: boolean;
+  }> {
+    return this.http.post<{ cierre: { cierre_id: number; estado: string }; replayed: boolean }>(
+      this.base + '/' + id + '/cerrar', { motivo, idempotency_key: key });
+  }
+
 }
