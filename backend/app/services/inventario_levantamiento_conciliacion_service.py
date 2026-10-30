@@ -322,6 +322,10 @@ def cerrar_e4(lev_id, actor, data):
     if not isinstance(motivo, str) or not 20 <= len(motivo.strip()) <= 2000:
         raise E4Error(400, "MOTIVO_INVALIDO", "El motivo requiere 20 a 2000 caracteres")
     lev = _levantar(lev_id, lock=True)
+    from app.services.inventario_levantamiento_revision_service import e4_auto_demo_enabled
+    if not e4_auto_demo_enabled(lev.sucursal_id):
+        raise E4Error(409, "PILOTO_DEMO_NO_HABILITADO",
+                      "El cierre E4 automático solo está habilitado para el piloto DEMO autorizado")
     anterior = Cierre.query.filter_by(levantamiento_id=lev.id).first()
     if anterior:
         if anterior.actor_usuario_id == actor and anterior.idempotency_key == key and anterior.motivo == motivo.strip():
