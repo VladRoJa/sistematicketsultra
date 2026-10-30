@@ -275,6 +275,10 @@ export class LevantamientosComponent implements OnInit {
     this.resolucionKey = null;
   }
 
+  cancelarCaso(): void {
+    if (!this.procesando) this.casoActivo = null;
+  }
+
   cambioResolucion(): void {
     this.resolucionKey = null;
   }
