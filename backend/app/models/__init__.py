@@ -39,6 +39,12 @@ from .inventario_levantamiento import (
     InventarioLevantamientoORM, InventarioLevantamientoReferenciaORM,
     InventarioLevantamientoImportacionORM, InventarioLevantamientoFilaORM,
 )
+from .inventario_levantamiento_revision import (
+    InventarioLevantamientoRevisionORM, InventarioLevantamientoRevisionEvidenciaORM,
+)
+from .inventario_levantamiento_conciliacion import (
+    InventarioLevantamientoResolucionORM, InventarioLevantamientoCierreORM,
+)
 from .inventario_correccion_decision import (
     InventarioCorreccionLoteORM,
     InventarioCorreccionDecisionORM,
