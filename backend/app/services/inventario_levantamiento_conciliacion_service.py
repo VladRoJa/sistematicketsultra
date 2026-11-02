@@ -238,6 +238,10 @@ def tablero_e4(lev_id):
     bloqueos = []
     if imp.resultado == "INVALID" or (imp.resumen or {}).get("errores", 0):
         bloqueos.append("ENTREGA_INVALIDA")
+    if (imp.resumen or {}).get("revisiones_auto", {}).get("auto_revisiones_habilitadas") is False:
+        # Una entrega solo archivada nunca puede aparentar conciliación completa.
+        # Activar E4 después no reconstruye revisiones que no se generaron.
+        bloqueos.append("REVISIONES_AUTOMATICAS_NO_HABILITADAS")
     if pendientes:
         bloqueos.append("SIN_REVISAR")
     if any(not x["resuelto"] for x in casos):
