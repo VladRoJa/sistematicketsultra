@@ -21,7 +21,7 @@ from app.services.inventario_levantamiento_conciliacion_service import (
 )
 
 from app.services.inventario_levantamiento_revision_service import (
-    listado_revisiones, sustituir_propuesta_maestra,
+    listado_revisiones, sustituir_propuesta_maestra, corregir_codigo_hallazgo,
 )
 
 inventario_levantamientos_bp = Blueprint("inventario_levantamientos", __name__)
@@ -240,6 +240,33 @@ def sustituir_propuesta_e4(levantamiento_id, revision_id):
         raise E4Error(409, "CONFLICTO_CONCURRENTE",
                       "La solicitud cambió durante la sustitución; actualiza la revisión")
     return jsonify({"sustitucion": resultado, "replayed": replay}), 200 if replay else 201
+
+
+@inventario_levantamientos_bp.post("/<int:levantamiento_id>/revisiones/<int:revision_id>/corregir-hallazgo")
+@jwt_required()
+def corregir_codigo_hallazgo_e4(levantamiento_id, revision_id):
+    actor = _actor()
+    try:
+        resultado, replay = corregir_codigo_hallazgo(
+            levantamiento_id, revision_id, actor, request.get_json(silent=True)
+        )
+    except IntegrityError:
+        db.session.rollback()
+        raise E4Error(409, "CONFLICTO_CONCURRENTE", "Revisión en conflicto; actualiza la bandeja")
+    return jsonify({"correccion": resultado, "replayed": replay}), 200 if replay else 201
+
+
+@inventario_levantamientos_bp.get("/<int:levantamiento_id>/reportes/<string:tipo>")
+@jwt_required()
+def descargar_reportes_e4(levantamiento_id, tipo):
+    _actor()
+    from app.services.inventario_levantamiento_reportes_service import generar_reporte_e4
+    from io import BytesIO
+    raw, filename = generar_reporte_e4(levantamiento_id, tipo)
+    return send_file(
+        BytesIO(raw), as_attachment=True, download_name=filename,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
 
 @inventario_levantamientos_bp.get("/<int:levantamiento_id>/conciliacion")
