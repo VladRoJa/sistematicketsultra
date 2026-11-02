@@ -67,12 +67,21 @@ export interface ResolucionHallazgo {
   justificacion: string;
 }
 
+export interface ResolucionAltaHallazgo {
+  accion: 'CREAR_NUEVO';
+  categoria: string;
+  marca: string;
+  descripcion: string;
+  familia_equipo_id: number | null;
+  justificacion: string;
+}
+
 export interface LoteDecisionesInventario {
   decision: 'APPROVED' | 'REJECTED';
   solicitud_ids: number[];
   motivo: string;
   idempotency_key: string;
-  resoluciones?: Record<string, ResolucionNoLocalizado | ResolucionHallazgo>;
+  resoluciones?: Record<string, ResolucionNoLocalizado | ResolucionHallazgo | ResolucionAltaHallazgo>;
 }
 
 export interface ResultadoLoteDecisiones {
