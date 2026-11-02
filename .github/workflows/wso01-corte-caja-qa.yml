@@ -10,6 +10,7 @@ on:
       - 'backend/migrations/versions/wso01caja110226_retire_corte_caja.py'
       - 'backend/scripts/ops/wso01_corte_caja_files.py'
       - 'backend/tests/warehouse/test_wso01_corte_caja_*.py'
+      - 'backend/tests/warehouse/test_wso01_retirement_migration_pg.py'
       - '.github/workflows/wso01-corte-caja-qa.yml'
 
 permissions:
@@ -77,4 +78,5 @@ jobs:
             tests/warehouse/test_warehouse_upload_snapshot_ids.py \
             tests/warehouse/test_warehouse_upload_retention_route.py \
             tests/warehouse/test_gasca_script_runner.py \
-            tests/warehouse/test_gasca_job_orchestrator_venta_total_staging.py
+            tests/warehouse/test_gasca_job_orchestrator_venta_total_staging.py \
+            tests/warehouse/test_wso01_retirement_migration_pg.py
