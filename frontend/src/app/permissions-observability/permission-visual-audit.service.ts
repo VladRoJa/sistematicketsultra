@@ -61,6 +61,7 @@ export interface VisualAuditResponse {
   warehouse_view_grants_enabled: boolean;
   warehouse_upload_grants_enabled: boolean;
   warehouse_catalogs_grants_enabled: boolean;
+  planning_grants_enabled: Record<string, boolean>;
   note: string;
   view: AuditPerspective;
   rows: VisualAuditRow[];
