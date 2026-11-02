@@ -127,7 +127,16 @@ def _control(sheet, diag):
             if key:
                 values = [x for x in cells[i + 1:]]
                 nonempty = [x for x in values if x.value is not None and text(x.value)]
-                result[key] = _cell(nonempty[-1], diag, "CONTROL", c.row, key) if nonempty else ""
+                if nonempty:
+                    cell = nonempty[-1]
+                    valor = _cell(cell, diag, "CONTROL", c.row, key)
+                    # Excel almacena fechas como celdas DATE/DATETIME. E2
+                    # exige AAAA-MM-DD, sin hora; no alterar los demás campos.
+                    if key == "fecha_recorrido" and isinstance(cell.value, datetime):
+                        valor = cell.value.date().isoformat()
+                    result[key] = valor
+                else:
+                    result[key] = ""
                 break
     return result
 
