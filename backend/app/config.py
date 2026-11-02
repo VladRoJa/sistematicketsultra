@@ -97,6 +97,11 @@ class Config:
         "PERMISSIONS_TICKETS_NOTIFY_GRANTS_ENABLED", "false"
     ).strip().lower() == "true"
 
+    # Edición de metadatos/compromiso Tickets, independiente del estado.
+    PERMISSIONS_TICKETS_UPDATE_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_TICKETS_UPDATE_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
     # Base de datos
     SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
