@@ -271,6 +271,11 @@ export class PermissionAuditMatrixComponent implements OnInit {
       row.action_key === 'pm.read' &&
       row.module_key === 'pm' &&
       this.result?.pm_read_grants_enabled === true
+    ) || (
+      row.action_key === 'pm.execute' &&
+      row.module_key === 'pm' &&
+      ['ADMINISTRADOR', 'SUPER_ADMIN', 'ADMIN', 'MANTENIMIENTO', 'SR_MANTENIMIENTO', 'AUX_MANTENIMIENTO', 'SISTEMAS', 'TECNICO'].includes(row.role.trim().toUpperCase()) &&
+      this.result?.pm_execute_grants_enabled === true
     );
   }
 
@@ -280,7 +285,7 @@ export class PermissionAuditMatrixComponent implements OnInit {
     }
     // Sin contexto de ticket, tickets.update sólo certifica el veto global;
     // no inventar un allow de objeto para pintar el check.
-    return ['tickets.update', 'tickets.close', 'inventory.master_write', 'inventory.movement_write', 'inventory.read', 'pm.read'].includes(row.action_key)
+    return ['tickets.update', 'tickets.close', 'inventory.master_write', 'inventory.movement_write', 'inventory.read', 'pm.read', 'pm.execute'].includes(row.action_key)
       ? row.catalog_allowed : row.legacy_allowed;
   }
 
@@ -288,8 +293,10 @@ export class PermissionAuditMatrixComponent implements OnInit {
     if (!this.canEditAction(row)) {
       return 'Solo diagnóstico';
     }
-    return ['tickets.update', 'tickets.close', 'inventory.master_write', 'inventory.movement_write', 'inventory.read', 'pm.read'].includes(row.action_key)
-      ? (row.action_key === 'pm.read'
+    return ['tickets.update', 'tickets.close', 'inventory.master_write', 'inventory.movement_write', 'inventory.read', 'pm.read', 'pm.execute'].includes(row.action_key)
+      ? (row.action_key === 'pm.execute'
+          ? 'Veto global: un ALLOW no autoriza ejecución fuera de sucursal ni evita validaciones'
+          : row.action_key === 'pm.read'
           ? 'Veto global: un ALLOW no autoriza bitácoras ni sucursales fuera del alcance'
           : row.action_key === 'inventory.read'
           ? 'Veto global: un ALLOW no autoriza sucursales ni amplía consultas'
