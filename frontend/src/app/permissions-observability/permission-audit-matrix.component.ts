@@ -243,7 +243,30 @@ export class PermissionAuditMatrixComponent implements OnInit {
       row.action_key === 'tickets.notify' &&
       row.module_key === 'tickets' &&
       this.result?.tickets_notify_grants_enabled === true
+    ) || (
+      row.action_key === 'tickets.update' &&
+      row.module_key === 'tickets' &&
+      row.role !== 'LECTOR_GLOBAL' &&
+      this.result?.tickets_update_grants_enabled === true
     );
+  }
+
+  getCatalogCheckDecision(row: VisualAuditRow): boolean | null {
+    if (!this.canEditAction(row)) {
+      return row.catalog_allowed;
+    }
+    // Sin contexto de ticket, tickets.update sólo certifica el veto global;
+    // no inventar un allow de objeto para pintar el check.
+    return row.action_key === 'tickets.update' ? row.catalog_allowed : row.legacy_allowed;
+  }
+
+  getCatalogCheckNote(row: VisualAuditRow): string {
+    if (!this.canEditAction(row)) {
+      return 'Solo diagnóstico';
+    }
+    return row.action_key === 'tickets.update'
+      ? 'Control de veto: no otorga acceso a tickets ajenos'
+      : 'Check conectado al guard real';
   }
 
   toggleAction(row: VisualAuditRow, checked: boolean): void {
