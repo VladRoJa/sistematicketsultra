@@ -98,11 +98,11 @@ def test_inventory_master_write_exact_guard_role(monkeypatch, role, allowed):
     monkeypatch.setattr(inventarios, "_get_current_inventory_user", lambda: user)
     with Flask(__name__).app_context():
         actual = inventarios._require_inventory_global_write() is None
-    row = _row(user, "inventory.master_write")
-    assert actual is allowed
-    assert row["legacy_allowed"] is actual
-    assert row["scope"] == "global"
-    assert _row(user, "inventory.master_write", branch_id=9)["legacy_allowed"] is actual
+        row = _row(user, "inventory.master_write")
+        assert actual is allowed
+        assert row["legacy_allowed"] is actual
+        assert row["scope"] == "global"
+        assert _row(user, "inventory.master_write", branch_id=9)["legacy_allowed"] is actual
 
 
 @pytest.mark.parametrize("role,branches,primary,branch,allowed", [
