@@ -3,6 +3,7 @@
   if (window.__capV1FocusRecorder) return;
   const interactions = [];
   let previewCounter = 0;
+  const previewMoments = [];
   const W = window;
   let spotlight, targetBox, pointer, pulse, cue, dismissTimer, watchTimer, selectedElement;
   const now = () => Math.round(performance.now());
@@ -129,6 +130,8 @@
     cue.classList.toggle('cap-v1-cue-below', below);
     cue.classList.add('cap-v1-visible');
     previewCounter += 1;
+    previewMoments.push(now());
+    if (previewMoments.length > 500) previewMoments.shift();
     return true;
   };
   window.__capV1FocusRecorder = {
@@ -137,6 +140,7 @@
     preview,
     cueVisible: () => !!cue?.classList.contains('cap-v1-visible'),
     previewCount: () => previewCounter,
+    previewMoments: () => previewMoments.slice(),
   };
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init, {once: true});
