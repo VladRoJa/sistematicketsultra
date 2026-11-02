@@ -19,8 +19,19 @@ const componentCss = fs.readFileSync(
 );
 const parentTs = fs.readFileSync(path.join(base, 'movimientos.component.ts'), 'utf8');
 
+const helperTs = fs.readFileSync(path.join(base, 'tipos-inventario.helper.ts'), 'utf8');
+const helperCompiled = ts.transpileModule(helperTs, {
+  compilerOptions: {
+    target: ts.ScriptTarget.ES2020,
+    module: ts.ModuleKind.CommonJS,
+  },
+}).outputText;
+const helperModule = { exports: {} };
+new Function('module', 'exports', helperCompiled)(helperModule, helperModule.exports);
+
 const toasts = [];
 const fakeRequire = name => {
+  if (name === '../tipos-inventario.helper') return helperModule.exports;
   if (name === '@angular/core') return {
     Component: () => ctor => ctor,
     Inject: () => () => {},
@@ -220,6 +231,19 @@ test('cinco caminadoras → una sola entrada a Santa Fe sin alteración de canti
   assert.deepEqual(requests[0].body.inventarios.map(p => p.cantidad), [1,1,1,1,1]);
   assert.deepEqual(requests[0].body.inventarios.map(p => p.unidad_medida), ['pieza','pieza','pieza','pieza','pieza']);
   assert.deepEqual(calls, ['ok']);
+});
+
+test('filtro Aparatos reúne tipos singular y plural históricos', async () => {
+  const { vm } = crearVm();
+  vm.inventariosDisponibles = [
+    { id: 9100, nombre: 'Banco demo', tipo: 'Aparato', codigo_interno: 'CAPV1-TPZ01' },
+    { id: 9101, nombre: 'Prensa demo', tipo: 'Aparatos', codigo_interno: 'DEMOE4-005' },
+    { id: 9102, nombre: 'Router demo', tipo: 'Dispositivos', codigo_interno: 'DEMO-D01' },
+  ];
+  vm.cambiarTipoFiltro('Aparato');
+  const resultados = await rx.firstValueFrom(vm.filteredInventarios(0));
+  assert.deepEqual(resultados.map(item => item.id), [9100, 9101]);
+  assert.equal(vm.tipoFiltro, 'aparatos');
 });
 
 test('filtro de tipo no borra equipo ya seleccionado', () => {

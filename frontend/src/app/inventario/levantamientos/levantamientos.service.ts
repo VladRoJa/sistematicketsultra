@@ -214,6 +214,23 @@ export class LevantamientosE4Service {
       this.base + '/' + id + '/revisiones', { params });
   }
 
+  sustituirPropuesta(id: number, revisionId: number, data: {
+    nuevo_codigo: string; motivo: string; idempotency_key: string;
+  }): Observable<{
+    sustitucion: { revision_id: number; solicitud_anterior_id: number;
+      solicitud_nueva_id: number; codigo_nuevo: string };
+    replayed: boolean;
+  }> {
+    return this.http.post<{
+      sustitucion: { revision_id: number; solicitud_anterior_id: number;
+        solicitud_nueva_id: number; codigo_nuevo: string };
+      replayed: boolean;
+    }>(
+      this.base + '/' + id + '/revisiones/' + revisionId + '/sustituir-e2',
+      data,
+    );
+  }
+
   tablero(id: number): Observable<TableroConciliacionE4> {
     return this.http.get<TableroConciliacionE4>(this.base + '/' + id + '/conciliacion');
   }

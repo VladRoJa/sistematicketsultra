@@ -16,7 +16,6 @@ SUPPORTED_REPORT_TYPES = frozenset(
         "reporte_direccion",
         "kpi_desempeno",
         "kpi_ventas_nuevos_socios",
-        "corte_caja",
         "cargos_recurrentes",
         "venta_total",
         "socios_vencidos",
@@ -50,17 +49,12 @@ RUN_MODE_COMPATIBILITY: dict[str, set[str]] = {
         "manual_backfill",
         "manual_retry",
     },
-        "corte_caja": {
+    "cargos_recurrentes": {
         "scheduled_daily",
         "manual_backfill",
         "manual_retry",
     },
-        "cargos_recurrentes": {
-        "scheduled_daily",
-        "manual_backfill",
-        "manual_retry",
-    },
-        "venta_total": {
+    "venta_total": {
         "scheduled_daily",
         "manual_backfill",
         "manual_retry",
@@ -384,7 +378,6 @@ def _should_dispatch_ingestion(
         "reporte_direccion",
         "kpi_desempeno",
         "kpi_ventas_nuevos_socios",
-        "corte_caja",
         "cargos_recurrentes",
         "venta_total",
         "socios_vencidos",
@@ -505,36 +498,6 @@ def _dispatch_ingestion_if_applicable(
         except Exception as exc:
             raise GascaIngestionError(
                 "Falló la ingesta estructurada de 'kpi_ventas_nuevos_socios'."
-            ) from exc
-
-        ingestion_result = _normalize_ingestion_result(result)
-
-        current_app.logger.info(
-            "Structured ingestion dispatched: warehouse_upload_id=%s report_type_key=%s status=%s snapshot_id=%s",
-            upload_ref.warehouse_upload_id,
-            command.report_type_key,
-            ingestion_result.ingestion_status,
-            ingestion_result.snapshot_id,
-        )
-
-        return ingestion_result
-    
-    if command.report_type_key == "corte_caja":
-        ingestor = _get_required_callable(
-            "WAREHOUSE_CORTE_CAJA_INGESTOR",
-            description="ingerir estructuradamente corte_caja",
-        )
-
-        try:
-            result = ingestor(
-                warehouse_upload_id=upload_ref.warehouse_upload_id,
-                snapshot_kind=command.snapshot_kind,
-                requested_by=command.requested_by,
-                ingestion_source=command.trigger_source,
-            )
-        except Exception as exc:
-            raise GascaIngestionError(
-                "Falló la ingesta estructurada de 'corte_caja'."
             ) from exc
 
         ingestion_result = _normalize_ingestion_result(result)

@@ -74,7 +74,7 @@ def _read(conn):
 def test_migration_preserves_linear_graph_and_prior_head():
     graph = ScriptDirectory(str(ROOT / "migrations"))
     assert len(graph.get_heads()) == 1
-    assert graph.get_revision("p1181c102030").down_revision == "v2e4b3103026"
+    assert graph.get_revision("p1181c102030").down_revision == "wso02ivnt110226"
     assert graph.get_revision("n26c10202626") is not None
 
 

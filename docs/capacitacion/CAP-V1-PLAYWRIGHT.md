@@ -101,6 +101,45 @@ Los botones y las escrituras son los reales; no hay inyección de estados
 ni rutas API falsas. Se **detiene con error** si el ticket no está en 0/N,
 faltan botones, la API niega la acción o el resultado no coincide.
 
+### Indicadores visuales de interacción (CAP-V1)
+
+Las grabaciones Playwright activan un **overlay únicamente en la captura**.
+Los archivos `scripts/training/recording_focus.{py,js,css}` muestran un
+puntero blanco de borde oscuro, pulso amarillo al presionar, contorno del
+botón y foco temporal en la zona activa. El efecto dura aproximadamente
+1.45 segundos y no bloquea la aplicación (`pointer-events: none`).
+Se aplica después de iniciar sesión y superar los controles de seguridad
+en el flujo de producción de solo lectura; **no se despliega en Angular**,
+no cambia selectores de UI ni hace peticiones nuevas.
+
+Este cambio no amplía la pantalla durante una acción: un zoom CSS sobre
+el DOM podría mover botones mientras Playwright interactúa. Si se necesita
+más aumento, debe añadirse como edición POSTERIOR del MP4 usando
+marcas de tiempo de los clics, nunca transformando el DOM real.
+
+QA focal separado: `.github/workflows/cap-v1-click-focus-qa.yml` genera
+un video de una pantalla completamente sintética y comprueba cuatro clics,
+resaltados visibles, funcionamiento de botones y ausencia de interceptación.
+No necesita Secrets, entorno productivo ni autorización para escribir.
+
+### CAP-V1: anticipación de clics (guía visual V2)
+
+En los recorridos de capacitación, `recording_focus.py::guided_click` hace:
+1. desplaza a la vista el elemento real de Playwright y coloca el cursor en su centro;
+2. muestra una flecha amarilla «HAZ CLIC AQUÍ», contorno y foco **900 ms antes**;
+3. ejecuta el clic verdadero mediante el locator existente; el overlay dibuja
+   el pulso y retira la flecha inmediatamente;
+4. conserva **700 ms después** para que se vea el cambio.
+
+No se transforma la escala del DOM ni se modifica la aplicación. La capa de
+captura sigue sin interceptar el puntero y no guarda texto de campos, sesiones
+o información del ticket. El login de producción no es grabado y la captura
+continúa en modo solo lectura; no se añaden operaciones de escritura.
+
+El QA sintético valida cuatro clics, la secuencia temporal (flecha antes,
+pulso después), el funcionamiento del modal y una captura `flecha-antes-del-clic.png`.
+Una nueva grabación real exige acción manual del propietario en GitHub Actions.
+
 ### Productos y regeneración
 
 - `navegacion.webm`: captura original Playwright, resolución 1920x1080.

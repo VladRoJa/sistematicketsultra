@@ -80,6 +80,11 @@ def _casos(lev, parsed, referencias):
                 "descripcion": norm(data.get("descripcion") or data.get("observaciones")),
             })
             blocked = "IDENTIDAD_FISICA_INSUFICIENTE"
+        if "CODIGO_HALLAZGO_EN_CORTE" in row["diagnosticos"]:
+            # La etiqueta pertenece a un aparato oficial del corte.
+            # Conservar el hallazgo como discrepancia accionable sin E2,
+            # aunque otra fila del mismo Excel sí pueda crear su solicitud.
+            blocked = "CODIGO_HALLAZGO_EN_CORTE"
         if k in usados:
             # Se conserva un incidente bloqueado para todo el grupo; no
             # se fusionan supuestos aparatos bajo una identidad oficial.
@@ -180,7 +185,7 @@ def _preparar_solicitud(lev, imp, caso):
     return payload, None
 
 
-def _solicitud_e2(lev, imp, caso, actor):
+def _solicitud_e2(lev, imp, caso, actor, *, reemplazo_key=None, motivo_reemplazo=None):
     """Crea E2 en la transacción de recepción; no llama un endpoint propio."""
     from app.routes.inventario_solicitudes_routes import (
         _validate_payload, _official_snapshot, _canonical_fingerprint,
@@ -189,6 +194,12 @@ def _solicitud_e2(lev, imp, caso, actor):
     payload, blocked = _preparar_solicitud(lev, imp, caso)
     if blocked:
         return None, blocked
+    if reemplazo_key is not None:
+        payload["idempotency_key"] = str(reemplazo_key)
+        payload["motivo"] = (
+            f"E4 levantamiento {lev.id}, sustitución auditada de "
+            f"{caso['clave']}: {motivo_reemplazo}"
+        )
     parsed, invalid = _validate_payload(payload)
     if invalid is not None:
         return None, "EVIDENCIA_O_PROPUESTA_INCOMPLETA"
@@ -242,24 +253,154 @@ def _solicitud_e2(lev, imp, caso, actor):
     return solicitud, None
 
 
-def e4_auto_demo_enabled(sucursal_id):
-    """Gate de producción: auto-E2 solo con activación explícita en sucursal DEMO.
+def e4_auto_enabled(sucursal_id):
+    """Activación independiente para DEMO y sucursales reales, OFF por defecto.
 
-    No fiarse de claims JWT ni de un ID especial. La semántica es is_demo
-    persistida en sucursales y el flag es OFF por defecto.
+    El origen de verdad del ámbito es sucursales.is_demo en PostgreSQL.
+    Activar producción no habilita E4 a gerentes ni autoriza solicitudes E3.
     """
-    enabled = os.getenv("INVENTARIO_E4_AUTO_REVIEW_DEMO_ENABLED", "false").strip().lower()
-    if enabled not in {"1", "true", "yes", "on"}:
-        return False
-    return db.session.execute(sql_text("""
+    es_demo = db.session.execute(sql_text("""
         SELECT COALESCE(is_demo, false) FROM sucursales
         WHERE sucursal_id=:sucursal
-    """), {"sucursal": sucursal_id}).scalar_one_or_none() is True
+    """), {"sucursal": sucursal_id}).scalar_one_or_none()
+    if es_demo is None:
+        return False
+    flag = ("INVENTARIO_E4_AUTO_REVIEW_DEMO_ENABLED" if es_demo
+            else "INVENTARIO_E4_AUTO_REVIEW_PRODUCTION_ENABLED")
+    return os.getenv(flag, "false").strip().lower() in {"1", "true", "yes", "on"}
+
+
+
+def sustituir_propuesta_maestra(levantamiento_id, revision_id, actor_id, data):
+    """Sustituye E2 rechazada sin mutar maestro; registra evento E4 inmutable.
+
+    El rechazo anterior requiere E3, nunca lo ejecuta E4. La llave de ciclo
+    serializa reemplazos y las reejecuciones no duplican solicitudes.
+    """
+    from app.models.inventario_levantamiento import (
+        InventarioLevantamientoORM as Lev,
+        InventarioLevantamientoImportacionORM as Imp,
+        InventarioLevantamientoReferenciaORM as Ref,
+    )
+    from app.services.inventario_levantamientos_service import E4Error, parse_uuid
+
+    if not isinstance(data, dict) or set(data) != {
+        "nuevo_codigo", "motivo", "idempotency_key"
+    }:
+        raise E4Error(400, "DATOS_INVALIDOS", "Indica nuevo código, motivo y llave de idempotencia")
+    codigo = data["nuevo_codigo"]
+    motivo = data["motivo"]
+    key = parse_uuid(data["idempotency_key"])
+    if (not isinstance(codigo, str) or len(codigo) > 50
+            or not re.fullmatch(r"[A-Z0-9][A-Z0-9-]*", codigo)):
+        raise E4Error(422, "CODIGO_INVALIDO", "Se requiere código físico normalizado y no vacío")
+    if not isinstance(motivo, str) or not 20 <= len(motivo.strip()) <= 1000:
+        raise E4Error(422, "MOTIVO_INVALIDO", "Justifica la sustitución en 20 a 1000 caracteres")
+    motivo = motivo.strip()
+
+    lev = Lev.query.filter_by(id=levantamiento_id).with_for_update().first()
+    if lev is None:
+        raise E4Error(404, "LEVANTAMIENTO_DESCONOCIDO", "Levantamiento inexistente")
+    if lev.estado == "CLOSED" or not lev.ultima_importacion_id:
+        raise E4Error(409, "EXPEDIENTE_NO_EDITABLE", "El levantamiento no tiene entrega abierta")
+    if not e4_auto_enabled(lev.sucursal_id):
+        raise E4Error(409, "E4_NO_HABILITADO", "Revisiones automáticas deshabilitadas")
+    if 1 <= lev.sucursal_id <= 99 and not codigo.startswith(f"{lev.sucursal_id:02d}"):
+        raise E4Error(422, "PREFIJO_INVALIDO", "El código debe corresponder a la sucursal del corte")
+
+    # Se verifica primero la llave histórica, incluso si E4 ya apunta a E2 nueva.
+    replay = db.session.execute(sql_text("""
+        SELECT e.revision_id, e.valor_observado
+        FROM inventario_levantamiento_revision_evidencias e
+        JOIN inventario_levantamiento_revisiones r ON r.id=e.revision_id
+        WHERE r.levantamiento_id=:lev
+          AND e.valor_observado ->> 'evento' = 'SUSTITUCION_E2'
+          AND e.valor_observado ->> 'actor_usuario_id' = :actor
+          AND e.valor_observado ->> 'idempotency_key' = :key
+        LIMIT 1
+    """), {"lev": lev.id, "actor": str(actor_id), "key": str(key)}).mappings().first()
+    if replay:
+        evento = replay["valor_observado"]
+        if (replay["revision_id"] != revision_id
+                or evento["codigo_nuevo"] != codigo or evento["motivo"] != motivo):
+            raise E4Error(409, "IDEMPOTENCIA_CONFLICTO", "La llave ya corresponde a otra sustitución")
+        return {
+            "revision_id": revision_id, "solicitud_anterior_id": evento["solicitud_anterior_id"],
+            "solicitud_nueva_id": evento["solicitud_nueva_id"], "codigo_nuevo": codigo,
+        }, True
+
+    revision = Revision.query.filter_by(
+        id=revision_id, levantamiento_id=lev.id,
+    ).first()
+    if (revision is None or revision.tipo != "MASTER_FIELD"
+            or revision.campo != "codigo_interno"
+            or revision.logical_key != f"REF:{revision.inventario_id}:PREFIX"
+            or revision.estado == "SUPERSEDED"
+            or revision.ultima_importacion_id != lev.ultima_importacion_id):
+        raise E4Error(409, "REVISION_NO_SUSTITUIBLE", "Revisión maestra fuera del corte vigente")
+    anterior = db.session.get(Solicitud, revision.solicitud_e2_id) if revision.solicitud_e2_id else None
+    if (anterior is None or anterior.estado != "REJECTED"
+            or anterior.tipo != "MASTER_FIELD"
+            or anterior.sucursal_id != lev.sucursal_id
+            or anterior.inventario_id != revision.inventario_id
+            or anterior.campo != "codigo_interno"):
+        raise E4Error(409, "RECHAZO_E3_REQUERIDO",
+                      "Primero rechaza formalmente en E3 la propuesta incorrecta")
+    if codigo == anterior.valor_propuesto:
+        raise E4Error(422, "MISMA_PROPUESTA", "La sustitución debe proponer un código diferente")
+    ref = Ref.query.filter_by(
+        levantamiento_id=lev.id, inventario_id_original=revision.inventario_id,
+    ).first()
+    if ref is None or norm(ref.codigo_interno_original) != norm(revision.codigo_observado):
+        raise E4Error(409, "CORTE_INCONSISTENTE", "La identidad histórica no coincide")
+    imp = db.session.get(Imp, lev.ultima_importacion_id)
+    if imp is None or imp.resultado == "INVALID":
+        raise E4Error(409, "ENTREGA_INVALIDA", "La versión actual no permite sustituciones")
+
+    caso = {
+        "clave": revision.logical_key, "tipo": "MASTER_FIELD",
+        "inventario_id": revision.inventario_id, "campo": "codigo_interno",
+        "codigo": ref.codigo_interno_original, "propuesto": codigo,
+        "datos": ref.datos_originales, "base": ref,
+    }
+    e2_key = uuid5(NAMESPACE_URL, f"suite-ultra-e4:reemplazo:{revision.id}:{anterior.id}:{key}")
+    nueva, bloqueo = _solicitud_e2(
+        lev, imp, caso, actor_id, reemplazo_key=e2_key, motivo_reemplazo=motivo,
+    )
+    if bloqueo:
+        raise E4Error(409, "PROPUESTA_NO_ADMISIBLE",
+                      f"No se pudo generar la nueva solicitud: {bloqueo}")
+    if nueva.id == anterior.id:
+        raise E4Error(409, "SOLICITUD_ANTERIOR", "No puede reutilizarse la propuesta rechazada")
+
+    evento = {
+        "evento": "SUSTITUCION_E2",
+        "idempotency_key": str(key),
+        "actor_usuario_id": str(actor_id),
+        "solicitud_anterior_id": anterior.id,
+        "solicitud_nueva_id": nueva.id,
+        "codigo_anterior": anterior.valor_propuesto,
+        "codigo_nuevo": codigo,
+        "motivo": motivo,
+    }
+    db.session.add(Evidencia(
+        revision_id=revision.id, importacion_id=imp.id,
+        hoja=None, fila_excel=None, valor_observado=evento,
+    ))
+    revision.solicitud_e2_id = nueva.id
+    revision.estado = "AWAITING_E3"
+    revision.motivo_bloqueo = None
+    revision.actualizado_en_utc = datetime.now(timezone.utc)
+    db.session.commit()
+    return {
+        "revision_id": revision.id, "solicitud_anterior_id": anterior.id,
+        "solicitud_nueva_id": nueva.id, "codigo_nuevo": codigo,
+    }, False
 
 
 def reconciliar_importacion(lev, imp, parsed, actor):
     """Idempotencia por ciclo + clave, evidencias por versión. No aplica E3."""
-    if not e4_auto_demo_enabled(lev.sucursal_id):
+    if not e4_auto_enabled(lev.sucursal_id):
         return {
             "nuevas": 0, "reutilizadas": 0, "bloqueadas": 0, "e2_creadas": 0,
             "auto_revisiones_habilitadas": False,

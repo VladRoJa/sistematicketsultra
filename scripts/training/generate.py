@@ -20,6 +20,8 @@ from datetime import datetime, timezone
 
 from playwright.sync_api import sync_playwright
 
+from scripts.training.recording_focus import install_focus_context, install_focus_page, guided_click
+
 ROOT = Path(__file__).resolve().parent
 LOOPBACK = {"localhost", "127.0.0.1", "::1"}
 EXPECTED_ACK = "BD_DE_CAPACITACION_AISLADA"
@@ -129,13 +131,13 @@ def find_ticket(page, ticket_id: int, max_pages: int = 20):
         nxt = page.get_by_role("button", name="Siguiente", exact=True)
         if not nxt.count() or not nxt.is_enabled():
             break
-        nxt.click()
+        guided_click(page, nxt)
     raise RuntimeError(f"No se encontró el ticket DEMO #{ticket_id} en la bandeja.")
 
 
 def open_receipt(page, ticket_id: int):
     row = find_ticket(page, ticket_id)
-    row.get_by_role("button", name=f"Gestionar recepción de tapizado del ticket {ticket_id}").click()
+    guided_click(page, row.get_by_role("button", name=f"Gestionar recepción de tapizado del ticket {ticket_id}"))
     dlg = page.locator("mat-dialog-container").filter(has_text="Recepción de tapizado")
     dlg.wait_for()
     dlg.get_by_text("Actualizando información de aparatos").wait_for(state="hidden", timeout=20_000) if dlg.get_by_text("Actualizando información de aparatos", exact=False).count() else None
@@ -146,7 +148,7 @@ def ensure_progress(dialog, received: int, total: int) -> None:
     dialog.get_by_text(f"{received} de {total} recibidos").wait_for(timeout=20_000)
 
 
-def batch_receive(dialog, codes: list[str], received: bool, reason: str = "") -> None:
+def batch_receive(page, dialog, codes: list[str], received: bool, reason: str = "") -> None:
     for code in codes:
         item = dialog.locator(".tapizado-avance__fila").filter(has_text=code)
         if item.count() != 1:
@@ -157,7 +159,7 @@ def batch_receive(dialog, codes: list[str], received: bool, reason: str = "") ->
         else:
             check.uncheck()
             item.get_by_placeholder("Obligatorio para corregir una recepción guardada").fill(reason)
-    dialog.get_by_role("button", name=re.compile("Guardar cambios")).click()
+    guided_click(page, dialog.get_by_role("button", name=re.compile("Guardar cambios")))
     dialog.get_by_role("button", name=re.compile("Guardar cambios")).wait_for(state="hidden", timeout=30_000)
 
 
@@ -180,6 +182,7 @@ def switch_account(page, url: str, username: str, password: str):
 def ticket_page(page, url: str):
     page.goto(url + "/#/main/ver-tickets")
     page.get_by_role("heading", name="Ver Tickets").wait_for(timeout=30_000)
+    install_focus_page(page)
 
 
 def walkthrough(page, args, story: dict) -> list[dict]:
@@ -199,47 +202,47 @@ def walkthrough(page, args, story: dict) -> list[dict]:
     row = find_ticket(page, args.ticket_id)
     if "Tapizado" not in row.inner_text():
         raise RuntimeError("El ticket seleccionado no es de tapizado.")
-    row.get_by_role("button", name="Ver Historial").click()
+    guided_click(page, row.get_by_role("button", name="Ver Historial"))
     page.locator("mat-dialog-container").filter(has_text=f"#{args.ticket_id}").wait_for()
     scene("ticket")
-    page.locator("mat-dialog-container").get_by_role("button", name="Cerrar").last.click()
+    guided_click(page, page.locator("mat-dialog-container").get_by_role("button", name="Cerrar").last)
     dlg = open_receipt(page, args.ticket_id)
     ensure_progress(dlg, 0, len(args.codes))
-    batch_receive(dlg, args.codes[:2], True)
+    batch_receive(page, dlg, args.codes[:2], True)
     ensure_progress(dlg, 2, len(args.codes))
     scene("parcial")
-    batch_receive(dlg, args.codes[2:], True)
+    batch_receive(page, dlg, args.codes[2:], True)
     ensure_progress(dlg, len(args.codes), len(args.codes))
     scene("completo")
-    dlg.get_by_role("button", name="Cerrar", exact=True).click()
+    guided_click(page, dlg.get_by_role("button", name="Cerrar", exact=True))
 
     row = find_ticket(page, args.ticket_id)
     button = row.get_by_role("button", name=re.compile("Solicitar cierre|Revisar cierre"))
     button.wait_for(timeout=20_000)
-    button.click()
+    guided_click(page, button)
     finish = page.locator("mat-dialog-container").filter(has_text="Solicitud de conformidad")
     finish.get_by_role("textbox", name="Notas de revisión (obligatorias)").fill(
         "Recepción de todos los aparatos verificada en capacitación.")
-    finish.get_by_role("button", name="Solicitar conformidad").click()
+    guided_click(page, finish.get_by_role("button", name="Solicitar conformidad"))
     scene("cierre")
 
     switch_account(page, args.base_url, reviewer, reviewer_pass)
     ticket_page(page, args.base_url)
     row = find_ticket(page, args.ticket_id)
-    row.get_by_role("button", name="Rechazar cierre").click()
+    guided_click(page, row.get_by_role("button", name="Rechazar cierre"))
     page.locator(".swal2-textarea").fill("Se detectó un equipo que requiere corregir su recepción.")
-    page.locator(".swal2-confirm").click()
-    page.locator("mat-dialog-container").filter(has_text="Rechazar cierre").get_by_role("button", name="Aceptar").click()
+    guided_click(page, page.locator(".swal2-confirm"))
+    guided_click(page, page.locator("mat-dialog-container").filter(has_text="Rechazar cierre").get_by_role("button", name="Aceptar"))
     scene("rechazo")
 
     switch_account(page, args.base_url, username, password)
     ticket_page(page, args.base_url)
     dlg = open_receipt(page, args.ticket_id)
     ensure_progress(dlg, len(args.codes), len(args.codes))
-    batch_receive(dlg, [args.codes[-1]], False, "Corrección didáctica: equipo no listo.")
+    batch_receive(page, dlg, [args.codes[-1]], False, "Corrección didáctica: equipo no listo.")
     ensure_progress(dlg, len(args.codes) - 1, len(args.codes))
     scene("reversion")
-    dlg.get_by_role("button", name="Cerrar", exact=True).click()
+    guided_click(page, dlg.get_by_role("button", name="Cerrar", exact=True))
     row = find_ticket(page, args.ticket_id)
     # Esperar el refresco real de la bandeja antes de comprobar el bloqueo.
     row.get_by_text(
@@ -250,7 +253,7 @@ def walkthrough(page, args, story: dict) -> list[dict]:
         "button", name=re.compile("Solicitar cierre|Revisar cierre|Finalizar|Cierre gerente")
     ).count():
         raise RuntimeError("REGRESIÓN: se ofrece cierre con recepción incompleta.")
-    row.get_by_role("button", name="Ver Historial").click()
+    guided_click(page, row.get_by_role("button", name="Ver Historial"))
     history = page.locator("mat-dialog-container").filter(has_text="Historial de solución")
     history.get_by_text("Historial de solución").wait_for()
     scene("historial")
@@ -296,6 +299,7 @@ def main(argv=None):
             else:
                 route.continue_()
         context.route("**/*", guard)
+        install_focus_context(context)
         page = context.new_page()
         video = page.video
         try:

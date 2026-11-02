@@ -11,6 +11,7 @@ on:
       - "frontend/src/app/inventario/**"
       - "frontend/src/app/services/inventario.service.ts"
       - "frontend/tests/inventario-correccion-auditada-qa13.test.cjs"
+      - "frontend/tests/inventario-e3-seleccion-paginada.test.cjs"
       - ".github/workflows/inventario-correccion-auditada-ci.yml"
   workflow_dispatch:
 
@@ -65,6 +66,8 @@ jobs:
         run: node --test tests/inventario-correccion-auditada-qa13.test.cjs
       - name: QA-12 Duplicate codes and filters
         run: node --test tests/inventario-auditoria-codigos.test.cjs tests/inventario-filtros-qa09.test.cjs
+      - name: E3 cross-page batch selection
+        run: node --test tests/inventario-e3-seleccion-paginada.test.cjs
       - name: Angular typecheck
         run: npx tsc --noEmit --project tsconfig.app.json
       - name: Angular production build

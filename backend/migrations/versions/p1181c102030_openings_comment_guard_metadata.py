@@ -1,7 +1,7 @@
 """Align openings.comment route metadata with its independent HTTP guard.
 
 Revision ID: p1181c102030
-Revises: v2e4b3103026
+Revises: wso02ivnt110226
 Create Date: 2026-10-30
 
 Metadata only. No grants, roles, action enablement or product table changes.
@@ -10,7 +10,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "p1181c102030"
-down_revision = "v2e4b3103026"
+down_revision = "wso02ivnt110226"
 branch_labels = None
 depends_on = None
 

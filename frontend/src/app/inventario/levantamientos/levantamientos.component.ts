@@ -6,7 +6,7 @@ import { RouterModule } from '@angular/router';
 import { InventarioService } from '../../services/inventario.service';
 import {
   CasoConciliacionE4, TableroConciliacionE4,
-  ListaRevisionesE4,
+  ListaRevisionesE4, RevisionAutomaticaE4,
   DiagnosticoE4, FilaE4, ImportacionE4, LevantamientoE4,
   LevantamientoResumenE4, LevantamientosE4Service, OrigenCorteE4,
 } from './levantamientos.service';
@@ -52,6 +52,11 @@ export class LevantamientosComponent implements OnInit {
   tablero: TableroConciliacionE4 | null = null;
   revisionesAutomaticas: ListaRevisionesE4 | null = null;
   paginaRevisiones = 1;
+  sustitucionActiva: RevisionAutomaticaE4 | null = null;
+  codigoSustituto = '';
+  motivoSustitucion = '';
+  private sustitucionKey: string | null = null;
+
   casoActivo: CasoConciliacionE4 | null = null;
   idResolucion: number | null = null;
   viaNo: 'E2_APROBADA' | 'BAJA_PREVIA' = 'E2_APROBADA';
@@ -323,6 +328,65 @@ export class LevantamientosComponent implements OnInit {
       },
       error: err => {
         this.error = this.errorHttp(err, 'No fue posible consultar las revisiones automáticas.');
+      },
+    });
+  }
+
+  abrirSustitucion(row: RevisionAutomaticaE4): void {
+    if (this.procesando || this.seleccionado?.estado === 'CLOSED'
+        || row.tipo !== 'MASTER_FIELD' || row.campo !== 'codigo_interno'
+        || row.estado !== 'REJECTED') return;
+    this.sustitucionActiva = row;
+    this.codigoSustituto = '';
+    this.motivoSustitucion = '';
+    this.sustitucionKey = null;
+  }
+
+  cancelarSustitucion(): void {
+    if (this.procesando) return;
+    this.sustitucionActiva = null;
+    this.sustitucionKey = null;
+  }
+
+  cambioSustitucion(): void {
+    this.sustitucionKey = null;
+  }
+
+  get puedeSustituir(): boolean {
+    return !this.procesando && !!this.seleccionado &&
+      this.seleccionado.estado !== 'CLOSED' && !!this.sustitucionActiva &&
+      this.sustitucionActiva.estado === 'REJECTED' &&
+      /^[A-Z0-9][A-Z0-9-]{0,49}$/.test(this.codigoSustituto.trim()) &&
+      this.motivoSustitucion.trim().length >= 20 &&
+      this.motivoSustitucion.trim().length <= 1000;
+  }
+
+  sustituirPropuesta(): void {
+    if (!this.puedeSustituir || !this.seleccionado || !this.sustitucionActiva) return;
+    const levantamientoId = this.seleccionado.id;
+    const revisionId = this.sustitucionActiva.id;
+    const key = this.sustitucionKey || crypto.randomUUID();
+    this.sustitucionKey = key;
+    this.procesando = true;
+    this.error = '';
+    this.e4.sustituirPropuesta(levantamientoId, revisionId, {
+      nuevo_codigo: this.codigoSustituto.trim(),
+      motivo: this.motivoSustitucion.trim(),
+      idempotency_key: key,
+    }).subscribe({
+      next: data => {
+        this.procesando = false;
+        this.aviso = 'Propuesta sustituida. Nueva solicitud E2 #' +
+          data.sustitucion.solicitud_nueva_id +
+          ' pendiente de E3. No se modificó el inventario oficial.';
+        this.sustitucionActiva = null;
+        this.sustitucionKey = null;
+        this.cargarRevisiones();
+        this.cargarTablero();
+      },
+      error: err => {
+        this.procesando = false;
+        this.error = this.errorHttp(err, 'No fue posible sustituir la propuesta E2.');
       },
     });
   }

@@ -1,0 +1,43 @@
+name: CAP-V1 Visual Click Focus QA
+
+on:
+  pull_request:
+    paths:
+      - "scripts/training/recording_focus.*"
+      - "scripts/training/generate.py"
+      - "scripts/training/production_readonly.py"
+      - "scripts/training/visual_tests/**"
+      - ".github/workflows/cap-v1-click-focus-qa.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  click-focus-synthetic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install isolated browser and video tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          python -m pip install playwright==1.54.0
+          python -m playwright install --with-deps chromium
+      - name: Confirm Python syntax
+        run: python -m compileall -q scripts/training
+      - name: Synthetic click visibility, click-through and video QA
+        run: python -m scripts.training.visual_tests.check_focus_recording
+      - name: Attach synthetic demonstration (no production or credentials)
+        uses: actions/upload-artifact@v4
+        with:
+          name: CAP-V1-Visible-Clicks-FOCUS-QA
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            artifacts/capacitacion/click-focus-qa/clicks-y-foco-sintetico.mp4
+            artifacts/capacitacion/click-focus-qa/flecha-antes-del-clic.png
+            artifacts/capacitacion/click-focus-qa/qa.json

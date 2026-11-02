@@ -14,6 +14,7 @@ import { ModalAlertaCamposRequeridosComponent } from 'src/app/shared/modal-alert
 import { CatalogoService, CatalogoElemento } from '../../services/catalogo.service';
 import { MantenimientoEquiposService } from '../../services/mantenimiento-equipos.service';
 import { FamiliaEquipoDTO } from '../../types/ticket';
+import { normalizarTipoInventario } from '../movimientos/tipos-inventario.helper';
 
 @Component({
   selector: 'app-dialogo-inventario',
@@ -33,6 +34,7 @@ import { FamiliaEquipoDTO } from '../../types/ticket';
 export class DialogoInventarioComponent implements OnInit {
   form: FormGroup;
   modo: 'crear' | 'editar';
+  guardando = false;
   sucursales: any[] = [];
 
   // Catálogos completos
@@ -73,11 +75,15 @@ export class DialogoInventarioComponent implements OnInit {
     this.form = this.fb.group({
       nombre: [data?.item?.nombre || '', Validators.required],
       descripcion: [data?.item?.descripcion || ''],
-      tipo: [data?.item?.tipo || '', Validators.required],
+      tipo: [this.tipoParaSelector(data?.item?.tipo), Validators.required],
       familia_equipo_id: [data?.item?.familia_equipo_id ?? null],
       marca: [data?.item?.marca || '', Validators.required],
       proveedor: [data?.item?.proveedor || ''],
       categoria: [data?.item?.categoria || '', Validators.required],
+      categoria_inventario_id: [
+        data?.item?.categoria_inventario_id ?? null,
+        this.modo === 'crear' ? [Validators.required] : [],
+      ],
       // Se mapea a unidad_medida al guardar
       unidad: [data?.item?.unidad || '', Validators.required],
 
@@ -85,10 +91,9 @@ export class DialogoInventarioComponent implements OnInit {
       unidad_compra: [data?.item?.unidad_compra || ''],                // p.ej. "caja" (opcional)
       factor_compra: [
         data?.item?.factor_compra ?? 1,
-        [Validators.required, Validators.min(1)]
+        [Validators.required, Validators.min(1), Validators.pattern(/^[1-9]\d*$/)]
       ],
 
-      stock_actual: [data?.item?.stock_actual ?? 0, [Validators.required, Validators.min(0)]],
       codigo_interno: [data?.item?.codigo_interno || ''],
       grupo_muscular: [data?.item?.grupo_muscular || ''],
       no_equipo: [data?.item?.no_equipo || ''],
@@ -96,9 +101,13 @@ export class DialogoInventarioComponent implements OnInit {
       gasto_mes: [data?.item?.gasto_mes || 0],
       pedido_mes: [data?.item?.pedido_mes || 0],
       semana_pedido: [data?.item?.semana_pedido || ''],
-      fecha_inventario: [data?.item?.fecha_inventario || ''],
       subcategoria: [data?.item?.subcategoria || '']
     });
+  }
+
+  private tipoParaSelector(tipo: unknown): string {
+    const canonico = normalizarTipoInventario(tipo);
+    return canonico ? canonico.charAt(0).toUpperCase() + canonico.slice(1) : '';
   }
 
   // 1) Helper para aplicar validadores según tipo
@@ -121,17 +130,22 @@ export class DialogoInventarioComponent implements OnInit {
     }
     codigoCtrl?.updateValueAndValidity({ emitEvent: false });
 
-    // grupo_muscular: requerido solo para aparatos
-    const gmCtrl = this.form.get('grupo_muscular');
-    if (esAparato) {
-      gmCtrl?.setValidators([Validators.required]);
+    // Grupo muscular es descriptivo: no todos los aparatos tienen uno
+    // (racks, bancas, equipo aeróbico). La familia sí alimenta Tickets.
+    const familiaCtrl = this.form.get('familia_equipo_id');
+    if (esAparato && this.modo === 'crear') {
+      familiaCtrl?.setValidators([Validators.required]);
     } else {
-      gmCtrl?.clearValidators();
+      familiaCtrl?.clearValidators();
     }
-    gmCtrl?.updateValueAndValidity({ emitEvent: false });
+    familiaCtrl?.updateValueAndValidity({ emitEvent: false });
 
     if (!esAparato) {
-      this.form.get('familia_equipo_id')?.setValue(null, { emitEvent: false });
+      familiaCtrl?.setValue(null, { emitEvent: false });
+      this.form.get('grupo_muscular')?.setValue('', { emitEvent: false });
+    }
+    if (!esAparato && !esSistemaODispositivo) {
+      this.form.get('no_equipo')?.setValue('', { emitEvent: false });
     }
   }
 
@@ -167,14 +181,33 @@ export class DialogoInventarioComponent implements OnInit {
     this.catalogoService.getCategoriasInventario().subscribe(res => {
       this.categorias = res;
       this.categoriasFiltradas = res;
+      // Al editar registros legacy sin ID, preseleccionar si su nombre
+      // coincide inequívocamente con una categoría del catálogo oficial.
+      if (this.modo === 'editar' && !this.form.get('categoria_inventario_id')?.value) {
+        const nombre = String(this.form.get('categoria')?.value || '').trim().toLowerCase();
+        const coincidencias = res.filter(item => item.nombre.trim().toLowerCase() === nombre);
+        if (coincidencias.length === 1) {
+          this.form.get('categoria_inventario_id')?.setValue(coincidencias[0].id);
+        }
+      }
     });
     this.catalogoService.getUnidades().subscribe(res => {
       this.unidades = res;
       this.unidadesFiltradas = res;
     });
     this.catalogoService.getTiposInventario().subscribe(res => {
-      this.tiposInventario = res;
-      this.tiposFiltrados = res;
+      // Presentar una opción por clase, sin modificar el catálogo legado.
+      const opciones = new Map<string, CatalogoElemento>();
+      for (const tipo of res) {
+        const nombre = normalizarTipoInventario(tipo.nombre);
+        if (!nombre || opciones.has(nombre)) continue;
+        opciones.set(nombre, {
+          ...tipo,
+          nombre: nombre.charAt(0).toUpperCase() + nombre.slice(1),
+        });
+      }
+      this.tiposInventario = [...opciones.values()];
+      this.tiposFiltrados = this.tiposInventario;
     });
     this.catalogoService.getGrupoMuscular().subscribe(res => {
       this.gruposMusculares = res;
@@ -222,6 +255,16 @@ export class DialogoInventarioComponent implements OnInit {
     this.form.get('tipo')?.valueChanges.subscribe(val => {
       this.aplicarValidadoresPorTipo(val);
     });
+    // ID oficial como fuente única de la categoría visible y persistida.
+    this.form.get('categoria_inventario_id')?.valueChanges.subscribe(id => {
+      const categoria = this.categorias.find(item => item.id === Number(id));
+      this.form.get('categoria')?.setValue(categoria?.nombre || '', { emitEvent: false });
+    });
+  }
+
+  get categoriaOficialSeleccionada(): CatalogoElemento | undefined {
+    const value = Number(this.form.get('categoria_inventario_id')?.value);
+    return this.categorias.find(item => item.id === value);
   }
 
   private _toNumberOrNull(v: any): number | null {
@@ -231,6 +274,7 @@ export class DialogoInventarioComponent implements OnInit {
   }
 
   guardar() {
+    if (this.guardando) return;
     if (this.form.invalid) {
       // Encuentra los campos requeridos que faltan
       const camposFaltantes: string[] = [];
@@ -241,10 +285,11 @@ export class DialogoInventarioComponent implements OnInit {
         marca: 'Marca',
         proveedor: 'Proveedor',
         categoria: 'Categoría',
+        categoria_inventario_id: 'Categoría oficial',
+        familia_equipo_id: 'Familia de equipo',
         unidad: 'Unidad',
         unidad_compra: 'Unidad de compra',
         factor_compra: 'Factor de compra',
-        stock_actual: 'Stock Actual',
         codigo_interno: 'Código Interno',
         grupo_muscular: 'Grupo Muscular',
         no_equipo: 'No. de Equipo',
@@ -252,7 +297,6 @@ export class DialogoInventarioComponent implements OnInit {
         gasto_mes: 'Gasto Mensual',
         pedido_mes: 'Pedido Mensual',
         semana_pedido: 'Semana de Pedido',
-        fecha_inventario: 'Fecha de Inventario'
       };
 
       Object.keys(this.form.controls).forEach(key => {
@@ -271,6 +315,11 @@ export class DialogoInventarioComponent implements OnInit {
     }
 
     const f = this.form.value;
+    const categoriaOficial = this.categoriaOficialSeleccionada;
+    if (f.categoria_inventario_id != null && !categoriaOficial) {
+      mostrarAlertaToast('Selecciona una categoría del catálogo oficial.', 'error');
+      return;
+    }
 
     // Payload limpio y compatible con backend (unidad_medida, compra↔base, trims, números)
     const body: any = {
@@ -279,7 +328,8 @@ export class DialogoInventarioComponent implements OnInit {
       tipo: (f.tipo || '').trim(),
       marca: (f.marca || '').trim(),
       proveedor: (f.proveedor || '').trim(),
-      categoria: (f.categoria || '').trim(),
+      categoria: categoriaOficial?.nombre || (f.categoria || '').trim(),
+      categoria_inventario_id: categoriaOficial?.id ?? null,
       familia_equipo_id: this.esTipoAparato
         ? this._toNumberOrNull(f.familia_equipo_id)
         : null,
@@ -288,11 +338,7 @@ export class DialogoInventarioComponent implements OnInit {
 
       // Compra ↔ base
       unidad_compra: (f.unidad_compra || '').trim(),
-      factor_compra: (() => {
-        const n = this._toNumberOrNull(f.factor_compra);
-        // Si viene inválido o <1, que vaya 1 (el backend también refuerza)
-        return n && n >= 1 ? n : 1;
-      })(),
+      factor_compra: Number(f.factor_compra),
 
       // Otros campos
       subcategoria: (f.subcategoria || '').trim(),
@@ -308,72 +354,37 @@ export class DialogoInventarioComponent implements OnInit {
       // No enviamos stock_actual ni fecha_inventario (los maneja backend)
     };
 
+    this.guardando = true;
     if (this.modo === 'crear') {
       this.inventarioService.crearInventario(body).subscribe({
         next: () => {
+          this.guardando = false;
           mostrarAlertaToast('Inventario creado correctamente.');
           this.dialogRef.close({ status: 'creado' });
         },
-        error: () => {
-          mostrarAlertaToast('Error al crear inventario', 'error');
-        }
+        error: (error) => this.mostrarErrorGuardado(error),
       });
     } else {
       this.inventarioService.editarInventario(this.data.item.id, body).subscribe({
         next: () => {
+          this.guardando = false;
           mostrarAlertaToast('Inventario actualizado correctamente.');
           this.dialogRef.close({ status: 'actualizado' });
         },
-        error: () => {
-          mostrarAlertaToast('Error al actualizar inventario', 'error');
-        }
+        error: (error) => this.mostrarErrorGuardado(error),
       });
     }
   }
 
-  cancelar() {
-    this.dialogRef.close(null);
+  private mostrarErrorGuardado(error: any): void {
+    this.guardando = false;
+    const detalle = error?.error?.detail || error?.error?.error
+      || 'No se pudo guardar el artículo.';
+    mostrarAlertaToast(String(detalle), 'error');
   }
 
-  // Normaliza con la misma regla del backend (capitaliza y recorta)
-private _normalizarCategoria(nombre: string): string {
-  const n = (nombre || '').trim();
-  if (!n) return '';
-  // Capitaliza por palabra
-  return n.toLowerCase().split(' ')
-    .filter(Boolean)
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
-}
-
-// Normaliza a minúsculas y sin espacios sobrantes
-private _lc(v: any): string {
-  return ((v ?? '') as string).toLowerCase().trim();
-}
-
-// ¿El texto escrito en el buscador NO existe aún en la lista de categorías?
-categoriaEsNueva(): boolean {
-  const val = this._lc(this.categoriaFiltroControl.value);
-  if (!val) return false;
-  return !this.categorias.some(c => this._lc(c.nombre) === val);
-}
-
-// Usar el valor del buscador como nueva categoría
-usarCategoriaNuevaDesdeFiltro(): void {
-  const texto = (this.categoriaFiltroControl.value || '').toString().trim();
-  if (!texto) return;
-
-  // Inserta la nueva categoría en memoria para que aparezca en el dropdown
-  this.categorias = [...this.categorias, { id: Date.now(), nombre: texto }];
-  this.categoriasFiltradas = [...this.categorias];
-
-  // Asigna la categoría al formulario y limpia el buscador
-  this.form.get('categoria')?.setValue(texto);
-  this.categoriaFiltroControl.setValue('');
-
-  // Opcional: feedback
-  mostrarAlertaToast(`Categoría agregada: ${texto}`);
-}
-
+  cancelar() {
+    if (!this.guardando) this.dialogRef.close(null);
+  }
 
 }

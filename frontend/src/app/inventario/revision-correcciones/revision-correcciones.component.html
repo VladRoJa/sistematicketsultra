@@ -45,11 +45,17 @@
       <section class="revision-bandeja" aria-label="Solicitudes autorizadas para revisión">
         <div class="revision-bandeja__cabecera">
           <label class="revision-marcar">
-            <input type="checkbox" [checked]="seleccionadas.length > 0 && seleccionadas.length === solicitudes.length"
-              (change)="marcarPagina()" [disabled]="filtroEstado !== 'PENDING' || cargando || !solicitudes.length || procesando" />
+            <input type="checkbox" [checked]="todasPaginaSeleccionadas"
+              (change)="marcarPagina()" [disabled]="filtroEstado !== 'PENDING' || cargando || !pendientesEnPagina || procesando ||
+                (seleccionadas.length >= maxLote && !todasPaginaSeleccionadas)" />
             Seleccionar pendientes de esta página
           </label>
-          <span>{{ seleccionadas.length }} seleccionadas · {{ total }} resultados</span>
+          <span>{{ seleccionadas.length }} / {{ maxLote }} seleccionadas entre páginas · {{ total }} resultados
+            <button *ngIf="seleccionadas.length" type="button" class="revision-secondary"
+              (click)="limpiarSeleccion()" [disabled]="procesando || cargando">
+              Limpiar selección
+            </button>
+          </span>
         </div>
 
         <p *ngIf="cargando" class="revision-aviso" role="status">Consultando solicitudes...</p>
@@ -63,7 +69,8 @@
           [class.revision-fila--seleccionada]="seleccion.has(solicitud.id)">
           <label class="revision-marcar revision-fila__check">
             <input type="checkbox" [checked]="seleccion.has(solicitud.id)"
-              [disabled]="solicitud.estado !== 'PENDING' || procesando"
+              [disabled]="solicitud.estado !== 'PENDING' || procesando || cargando ||
+                (!seleccion.has(solicitud.id) && seleccionadas.length >= maxLote)"
               [attr.aria-label]="'Seleccionar solicitud ' + solicitud.id"
               (change)="marcar(solicitud.id)" />
           </label>

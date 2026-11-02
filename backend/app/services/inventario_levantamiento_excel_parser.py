@@ -127,7 +127,16 @@ def _control(sheet, diag):
             if key:
                 values = [x for x in cells[i + 1:]]
                 nonempty = [x for x in values if x.value is not None and text(x.value)]
-                result[key] = _cell(nonempty[-1], diag, "CONTROL", c.row, key) if nonempty else ""
+                if nonempty:
+                    cell = nonempty[-1]
+                    valor = _cell(cell, diag, "CONTROL", c.row, key)
+                    # Excel almacena fechas como celdas DATE/DATETIME. E2
+                    # exige AAAA-MM-DD, sin hora; no alterar los demás campos.
+                    if key == "fecha_recorrido" and isinstance(cell.value, datetime):
+                        valor = cell.value.date().isoformat()
+                    result[key] = valor
+                else:
+                    result[key] = ""
                 break
     return result
 
@@ -269,8 +278,11 @@ def parse_xlsx_v01(raw, sucursal_id, expected, modalidad):
             codigo_hallazgo = norm(fila["codigo_declarado"])
             if codigo_hallazgo in ignorar_etiquetas or codigo_hallazgo not in codigos_base:
                 continue
+            # Es un bloqueo de identidad de este hallazgo, no un error
+            # estructural que deba descartar revisiones de otros aparatos.
+            # _casos() mantiene este hallazgo BLOCKED, sin solicitar alta E2.
             diagnostics.append({
-                "severidad": "ERROR", "codigo": "CODIGO_HALLAZGO_EN_CORTE",
+                "severidad": "AVISO", "codigo": "CODIGO_HALLAZGO_EN_CORTE",
                 "hoja": "HALLAZGOS", "fila": fila["fila_excel"],
                 "codigo_declarado": fila["codigo_declarado"],
                 "inventario_ids_existentes": codigos_base[codigo_hallazgo],

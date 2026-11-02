@@ -401,6 +401,40 @@ def _parse_int_nonneg(val, field_name):
         raise ValueError(f"{field_name} debe ser un entero no negativo")
 
 
+def _validar_categoria_inventario_activa(value):
+    """El maestro usa el ID canónico del catálogo, no una etiqueta libre."""
+    if value is None or value == "":
+        return None, None
+
+    if isinstance(value, bool) or not (
+        isinstance(value, int) or
+        (isinstance(value, str) and value.strip().isascii() and value.strip().isdecimal())
+    ):
+        return None, error_response('categoria_inventario_id debe ser un entero positivo')
+
+    categoria_id = int(value)
+    if categoria_id <= 0:
+        return None, error_response('categoria_inventario_id debe ser un entero positivo')
+
+    categoria = CategoriaInventario.query.filter_by(
+        id=categoria_id, activo=True,
+    ).first()
+    if not categoria:
+        return None, error_response('Categoría oficial de inventario activa no encontrada')
+
+    return categoria, None
+
+
+def _tipos_equipo_compatibles(tipo):
+    """Mantiene visibles los equipos históricos sin cambiar su tipo almacenado."""
+    tipo_normalizado = str(tipo or '').strip().casefold()
+    if tipo_normalizado in {'aparato', 'aparatos'}:
+        return ('aparato', 'aparatos')
+    if tipo_normalizado in {'sistema', 'sistemas', 'dispositivo', 'dispositivos'}:
+        return ('sistema', 'sistemas', 'dispositivo', 'dispositivos')
+    return ()
+
+
 def _validar_familia_equipo_activa(value, tipo_inventario):
     if value is None or (isinstance(value, str) and not value.strip()):
         return None, None
@@ -453,6 +487,12 @@ def crear_inventario():
         codigo = normalizar_campo(data.get('codigo_interno')).upper()
         tipo_inventario = normalizar_campo(data.get('tipo', 'producto'))
         tipo_normalizado = tipo_inventario.casefold()
+        # La API conserva la compatibilidad de lectura, pero las nuevas altas
+        # guardan un único nombre de tipo para no perpetuar duplicados.
+        if tipo_normalizado in {'aparato', 'aparatos'}:
+            tipo_inventario = 'Aparatos'
+        elif tipo_normalizado in {'dispositivo', 'dispositivos', 'sistema', 'sistemas'}:
+            tipo_inventario = 'Dispositivos'
         requiere_codigo = tipo_normalizado in {
             'aparato', 'aparatos', 'sistema', 'sistemas',
             'dispositivo', 'dispositivos',
@@ -488,12 +528,29 @@ def crear_inventario():
         except ValueError as ve:
             return error_response(str(ve))
 
+        categoria_oficial, categoria_error = _validar_categoria_inventario_activa(
+            data.get('categoria_inventario_id'),
+        )
+        if categoria_error:
+            return categoria_error
+
         familia_equipo_id, familia_error = _validar_familia_equipo_activa(
             data.get('familia_equipo_id'),
             tipo_inventario,
         )
         if familia_error:
             return familia_error
+
+        # El backend conserva clientes legacy que sólo mandan categoria (texto).
+        # Si viene un ID oficial, su nombre es la única etiqueta persistida.
+        categoria_nombre = (
+            categoria_oficial.nombre if categoria_oficial else normalizar_campo(data['categoria'])
+        )
+        factor_compra = _parse_positive_movement_quantity(
+            data.get('factor_compra', 1),
+        )
+        if factor_compra is None:
+            return error_response('factor_compra debe ser un entero positivo')
         
         
         nuevo = InventarioGeneral(
@@ -502,10 +559,13 @@ def crear_inventario():
             descripcion=normalizar_campo(data.get('descripcion')),
             marca=normalizar_campo(data.get('marca')),
             proveedor=normalizar_campo(data.get('proveedor')),
-            categoria=normalizar_campo(data.get('categoria')),
+            categoria=normalizar_campo(categoria_nombre),
+            categoria_inventario_id=(categoria_oficial.id if categoria_oficial else None),
             unidad_medida=normalizar_campo(data.get('unidad_medida')),
+            unidad_compra=normalizar_campo(data.get('unidad_compra')),
+            factor_compra=factor_compra,
             codigo_interno=codigo,
-            no_equipo=normalizar_campo(data.get('no_equipo')),
+            no_equipo=normalizar_campo(data.get('no_equipo')).upper(),
             gasto_sem=gasto_sem,
             gasto_mes=gasto_mes,
             pedido_mes=pedido_mes,
@@ -1103,6 +1163,17 @@ def editar_inventario(inventario_id):
                     409,
                 )
 
+        categoria_oficial = None
+        if 'categoria_inventario_id' in data:
+            categoria_oficial, categoria_error = _validar_categoria_inventario_activa(
+                data.get('categoria_inventario_id'),
+            )
+            if categoria_error:
+                return categoria_error
+            inventario.categoria_inventario_id = (
+                categoria_oficial.id if categoria_oficial else None
+            )
+
         if 'familia_equipo_id' in data:
             tipo_inventario = data.get('tipo', inventario.tipo)
             familia_equipo_id, familia_error = _validar_familia_equipo_activa(
@@ -1116,8 +1187,8 @@ def editar_inventario(inventario_id):
         campos = [
             'tipo', 'nombre', 'descripcion', 'marca', 'proveedor',
             'categoria', 'unidad_medida',
-            'no_equipo', 'gasto_sem', 'gasto_mes',
-            'pedido_mes', 'semana_pedido', 'subcategoria','unidad_compra', 'factor_compra'
+            'no_equipo', 'grupo_muscular', 'gasto_sem', 'gasto_mes',
+            'pedido_mes', 'semana_pedido', 'subcategoria', 'unidad_compra', 'factor_compra'
         ]
         for campo in campos:
             if campo in data:
@@ -1125,7 +1196,7 @@ def editar_inventario(inventario_id):
                 # Normaliza strings
                 if isinstance(valor, str):
                     valor = normalizar_campo(valor)
-                    if campo == 'codigo_interno' and valor:
+                    if campo in ('codigo_interno', 'no_equipo') and valor:
                         valor = valor.upper()
 
                 # Valida numéricos no negativos
@@ -1136,15 +1207,14 @@ def editar_inventario(inventario_id):
                         return error_response(str(ve))
                     
                 if campo == 'factor_compra':
-                    try:
-                        valor = _parse_int_nonneg(valor, campo)
-                    except ValueError as ve:
-                        return error_response(str(ve))
-                    if not valor or valor < 1:
-                        valor = 1
+                    valor = _parse_positive_movement_quantity(valor)
+                    if valor is None:
+                        return error_response('factor_compra debe ser un entero positivo')
 
                 setattr(inventario, campo, valor)
 
+        if categoria_oficial is not None:
+            inventario.categoria = normalizar_campo(categoria_oficial.nombre)
 
         inventario.fecha_inventario = datetime.now(tz)
         db.session.commit()
@@ -1542,7 +1612,13 @@ def listar_equipos():
         query = query.filter(InventarioGeneral.codigo_interno.isnot(None))
 
         if tipo:
-            query = query.filter(db.func.lower(InventarioGeneral.tipo) == tipo)
+            # Los valores históricos singulares y plurales representan la
+            # misma clase: Tickets no debe perder equipos por esa variante.
+            tipos_compatibles = _tipos_equipo_compatibles(tipo)
+            query = query.filter(
+                db.func.lower(db.func.trim(InventarioGeneral.tipo))
+                .in_(tipos_compatibles)
+            )
 
         # ----------------------------
         # Filtro sucursal

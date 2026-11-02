@@ -204,11 +204,14 @@
           <a class="quiet" routerLink="/inventario/revision-correcciones">
             Abrir bandeja de autorización E3
           </a>
+          <p class="help">¿La propuesta de código es incorrecta? Primero recházala formalmente
+            en E3 indicando el motivo. Después aparecerá la opción de sustituirla aquí.
+            La propuesta original y su decisión permanecen auditadas.</p>
           <p class="help" *ngIf="!auto.total">No se detectaron discrepancias elegibles. Revisa los bloqueos de cobertura o estructura antes de cerrar.</p>
           <div class="tabla-scroll" *ngIf="auto.items.length">
             <table>
               <thead>
-                <tr><th>Tipo</th><th>Aparato / código</th><th>Estado</th><th>Solicitud E2</th><th>Diagnóstico</th></tr>
+                <tr><th>Tipo</th><th>Aparato / código</th><th>Estado</th><th>Solicitud E2</th><th>Diagnóstico</th><th>Acción</th></tr>
               </thead>
               <tbody>
                 <tr *ngFor="let r of auto.items">
@@ -217,10 +220,37 @@
                   <td>{{ r.estado }}</td>
                   <td>{{ r.solicitud_e2_id ?? '—' }}</td>
                   <td>{{ r.motivo_bloqueo || '—' }}</td>
+                  <td>
+                    <button type="button" class="quiet"
+                      *ngIf="r.tipo === 'MASTER_FIELD' && r.campo === 'codigo_interno' && r.estado === 'REJECTED'"
+                      [disabled]="procesando" (click)="abrirSustitucion(r)">
+                      Sustituir propuesta
+                    </button>
+                  </td>
                 </tr>
               </tbody>
             </table>
           </div>
+          <section class="panel" *ngIf="sustitucionActiva as rev" aria-label="Sustituir propuesta E2">
+            <div class="panel-header">
+              <h4>Sustituir propuesta rechazada · Aparato #{{ rev.inventario_id }}</h4>
+              <button type="button" class="quiet" (click)="cancelarSustitucion()" [disabled]="procesando">Cancelar</button>
+            </div>
+            <p class="help">Solicitud E2 anterior #{{ rev.solicitud_e2_id }} rechazada en E3.
+              El código oficial no cambiará hasta que se autorice la nueva solicitud.</p>
+            <div class="fields">
+              <label>Código físico confirmado
+                <input type="text" maxlength="50" placeholder="Ej. 06PIALF04"
+                  [(ngModel)]="codigoSustituto" (ngModelChange)="cambioSustitucion()">
+              </label>
+              <label>Motivo y evidencia de la corrección
+                <textarea rows="3" maxlength="1000"
+                  [(ngModel)]="motivoSustitucion" (ngModelChange)="cambioSustitucion()"></textarea>
+              </label>
+            </div>
+            <button type="button" class="primary" (click)="sustituirPropuesta()"
+              [disabled]="!puedeSustituir">Crear nueva solicitud E2 pendiente</button>
+          </section>
           <div class="pagination" *ngIf="auto.total > 20">
             <button type="button" (click)="cambiarPaginaRevisiones(-1)" [disabled]="paginaRevisiones === 1">Anterior</button>
             <span>Página {{ paginaRevisiones }} · {{ auto.total }} revisiones</span>
