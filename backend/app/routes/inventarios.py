@@ -221,6 +221,30 @@ def _require_inventory_global_write():
     return None
 
 
+def inventory_movement_write_grants_enabled():
+    """Veto de movimiento independiente del inventario maestro (OFF por defecto)."""
+    return current_app.config.get(
+        "PERMISSIONS_INVENTORY_MOVEMENT_WRITE_GRANTS_ENABLED", False
+    ) is True
+
+
+def _inventory_movement_grant_veto(user):
+    # Ejecutar SOLO tras validar rol y sucursal: ALLOW nunca da acceso nuevo.
+    if not inventory_movement_write_grants_enabled():
+        return None
+
+    from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
+    decision = _simple_global_action_grant_override(
+        user=user, action_full_key="inventory.movement_write"
+    )
+    if decision is False:
+        return jsonify({
+            "error": "Forbidden",
+            "detail": "No tienes habilitado el registro de movimientos de inventario.",
+        }), 403
+    return None
+
+
 def _require_inventory_movement_write(sucursal_id):
     user = _get_current_inventory_user()
     target_sucursal_id = _coerce_int_or_none(sucursal_id)
@@ -240,12 +264,12 @@ def _require_inventory_movement_write(sucursal_id):
     rol = str(getattr(user, "rol", "") or "").strip().upper()
 
     if rol in INVENTORY_GLOBAL_WRITE_ROLES:
-        return None
+        return _inventory_movement_grant_veto(user)
 
     if rol == "AUX_MANTENIMIENTO":
         user_sucursal_id = _coerce_int_or_none(getattr(user, "sucursal_id", None))
         if user_sucursal_id is not None and target_sucursal_id == user_sucursal_id:
-            return None
+            return _inventory_movement_grant_veto(user)
 
         return jsonify({
             "error": "Forbidden",
@@ -261,7 +285,7 @@ def _require_inventory_movement_write(sucursal_id):
             allowed_sucursales = _get_user_sucursales_scope_from_db(user.id)
 
         if target_sucursal_id in allowed_sucursales:
-            return None
+            return _inventory_movement_grant_veto(user)
 
         return jsonify({
             "error": "Forbidden",
