@@ -232,3 +232,42 @@ def test_migration_adds_marker_and_downgrade_refuses_data_loss(pg):
         with pg.begin() as conn:
             with Operations.context(MigrationContext.configure(conn)):
                 migration.downgrade()
+
+
+def test_bounded_batches_resume_without_reprocessing_prior_runs(monkeypatch, tmp_path):
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+
+    class Engine:
+        @contextmanager
+        def begin(self):
+            yield object()
+
+    states = {1: False, 2: False, 3: False}
+    seen = []
+
+    def fake_prune(_conn, item):
+        run_id = item["id"]
+        seen.append(run_id)
+        if states[run_id]:
+            return "already_pruned"
+        states[run_id] = True
+        return "pruned"
+
+    monkeypatch.setattr(prune, "_prune_one", fake_prune)
+    monkeypatch.setattr(
+        prune.shutil, "disk_usage",
+        lambda _path: SimpleNamespace(free=50 * 1024 ** 3),
+    )
+    items = [{"id": i} for i in (1, 2, 3)]
+    results = [
+        prune._apply_items(
+            engine=Engine(), items=items,
+            manifest_parent=tmp_path, max_runs=1, min_free_gb=30,
+        )
+        for _ in range(3)
+    ]
+    assert [r["runs_pruned"] for r in results] == [1, 1, 1]
+    assert [r["runs_remaining_in_manifest"] for r in results] == [2, 1, 0]
+    assert states == {1: True, 2: True, 3: True}
+    assert seen == [1, 1, 2, 1, 2, 3]
