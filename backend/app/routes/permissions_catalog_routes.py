@@ -1251,7 +1251,7 @@ def update_user_module_access(user_id: int):
         if action_full_key:
             # No aceptar un check que sólo escriba un grant diagnóstico.
             # Ampliar este conjunto únicamente al certificar su guard HTTP.
-            if action_full_key not in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status", "tickets.notify", "tickets.update", "tickets.close", "inventory.master_write", "inventory.movement_write", "inventory.read"}:
+            if action_full_key not in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status", "tickets.notify", "tickets.update", "tickets.close", "inventory.master_write", "inventory.movement_write", "inventory.read", "pm.read"}:
                 return jsonify({
                     "error": "Conflict",
                     "detail": "Esta acción todavía no tiene un check con autorización HTTP certificada.",
@@ -1360,6 +1360,16 @@ def update_user_module_access(user_id: int):
                 return jsonify({
                     "error": "Conflict",
                     "detail": "El check de consulta de inventario no está habilitado en backend.",
+                    "module_key": module_key,
+                    "action_full_key": action_full_key,
+                }), 409
+
+        if module_key == "pm" and action_full_key == "pm.read":
+            from app.routes.pm_routes import pm_read_grants_enabled
+            if not pm_read_grants_enabled():
+                return jsonify({
+                    "error": "Conflict",
+                    "detail": "El check de consulta de PM no está habilitado en backend.",
                     "module_key": module_key,
                     "action_full_key": action_full_key,
                 }), 409
