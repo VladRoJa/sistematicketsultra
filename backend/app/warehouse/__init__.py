@@ -22,9 +22,6 @@ from app.warehouse.services.kpi_desempeno_repository import (register_kpi_desemp
 from app.warehouse.services.kpi_ventas_nuevos_socios_ingestion_service import (register_kpi_ventas_nuevos_socios_ingestor,)
 from app.warehouse.services.kpi_ventas_nuevos_socios_repository import (register_kpi_ventas_nuevos_socios_repository,)
 
-from app.warehouse.services.corte_caja_parser import (register_corte_caja_parser,)
-from app.warehouse.services.corte_caja_repository import (register_corte_caja_repository,)
-from app.warehouse.services.corte_caja_ingestion_service import (register_corte_caja_ingestor,)
 
 from app.warehouse.services.cargos_recurrentes_parser import (register_cargos_recurrentes_parser,)
 from app.warehouse.services.cargos_recurrentes_repository import (register_cargos_recurrentes_repository,)
@@ -106,9 +103,6 @@ def _mark_runtime_hooks_registered(app: Flask) -> None:
         "kpi_ventas_nuevos_socios_ingestor": True,
         "kpi_ventas_nuevos_socios_repository": True,
         "kpi_daily_canonicality_resolvers": True,
-        "corte_caja_parser": True,
-        "corte_caja_repository": True,
-        "corte_caja_ingestor": True,
         "gasca_single_report_runner_impl": True,
         "cargos_recurrentes_parser": True,
         "cargos_recurrentes_repository": True,
@@ -181,9 +175,6 @@ def register_warehouse_runtime_hooks(app: Flask) -> None:
     register_kpi_ventas_nuevos_socios_ingestor(app)
     register_kpi_ventas_nuevos_socios_repository(app)
     
-    register_corte_caja_parser(app)
-    register_corte_caja_repository(app)
-    register_corte_caja_ingestor(app)
     
     register_cargos_recurrentes_parser(app)
     register_cargos_recurrentes_repository(app)

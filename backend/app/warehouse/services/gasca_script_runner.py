@@ -18,7 +18,6 @@ SUPPORTED_REPORT_TYPES = frozenset(
         "reporte_direccion",
         "kpi_desempeno",
         "kpi_ventas_nuevos_socios",
-        "corte_caja",
         "cargos_recurrentes",
         "venta_total",
         "socios_vencidos",
@@ -247,7 +246,6 @@ def _select_strategy_callable(
     legacy_runner = _resolve_legacy_main_runner()
 
     single_report_types = {
-        "corte_caja",
         "cargos_recurrentes",
         "venta_total",
         "socios_vencidos",

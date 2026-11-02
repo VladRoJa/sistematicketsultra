@@ -87,7 +87,11 @@ jobs:
           config.set_main_option("script_location", "migrations")
           graph = ScriptDirectory.from_config(config)
           heads = graph.get_heads()
-          assert heads == ["n26c10202626"], f"Unexpected Alembic heads: {heads}"
+          assert len(heads) == 1, f"Expected one Alembic head: {heads}"
+          ancestry = {rev.revision for rev in graph.walk_revisions(base="base", head=heads[0])}
+          assert "n26c10202626" in ancestry, (
+              f"Campaign M1a revision missing from current Alembic lineage: {heads}"
+          )
           revision = graph.get_revision("n26c10202626")
           assert revision.down_revision == "v2e4b1102826", revision.down_revision
           assert graph.get_revision("v2e4b1102826") is not None

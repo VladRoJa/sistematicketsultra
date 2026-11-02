@@ -47,3 +47,6 @@ graphify-out/
 /artifacts/
 /backend/.pytest_tmp*/
 /suite_prod.dump
+
+# WSO-01: private manifests/quarantine must never be committed
+/private/wso01/

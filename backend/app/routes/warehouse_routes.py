@@ -17,7 +17,6 @@ from app.models.warehouse import (
     KpiDesempenoSnapshotORM,
     KpiVentasNuevosSociosSnapshotORM,
     VentaTotalSnapshotORM,
-    CorteCajaSnapshotORM,
     CargosRecurrentesSnapshotORM,
     SociosVencidosSnapshotORM,
     VentasNuevosSociosDetalleSnapshotORM,
@@ -210,6 +209,13 @@ def warehouse_create_upload():
         }), 401
 
     report_type_key = (request.form.get('report_type_key') or '').strip()
+
+    # WSO-01: esta fuente fue retirada; no aceptar nuevos archivos Corte de Caja.
+    if report_type_key == 'corte_caja':
+        return jsonify({
+            "code": "WAREHOUSE_REPORT_RETIRED",
+            "detail": "Corte de Caja ya no se recibe en Suite Ultra.",
+        }), 410
 
     # M6 Google Ads requires paired XLSX preflight, signed RAW provenance and
     # an explicit canonical publication. The generic one-file dispatcher can
@@ -422,7 +428,6 @@ WAREHOUSE_UPLOAD_SNAPSHOT_MODELS = (
     KpiDesempenoSnapshotORM,
     KpiVentasNuevosSociosSnapshotORM,
     VentaTotalSnapshotORM,
-    CorteCajaSnapshotORM,
     CargosRecurrentesSnapshotORM,
     SociosVencidosSnapshotORM,
     VentasNuevosSociosDetalleSnapshotORM,
