@@ -18,6 +18,7 @@ on:
       - "backend/app/routes/inventarios.py"
       - "backend/tests/routes/test_permissions_inventory_master_write_1181.py"
       - "backend/tests/routes/test_permissions_inventory_movement_write_1181.py"
+      - "backend/tests/routes/test_permissions_inventory_read_1181.py"
       - "backend/app/config.py"
       - "backend/tests/routes/test_permissions_live_track_read_check.py"
       - "backend/tests/routes/test_permissions_action_writer_1178.py"
@@ -100,6 +101,7 @@ jobs:
             tests/routes/test_permissions_tickets_close_1181.py \
             tests/routes/test_permissions_inventory_master_write_1181.py \
             tests/routes/test_permissions_inventory_movement_write_1181.py \
+            tests/routes/test_permissions_inventory_read_1181.py \
             tests/utils/test_permissions_endpoint_review_report.py \
             tests/routes/test_permissions_phase_a_inventory_parity.py
 
