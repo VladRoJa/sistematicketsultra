@@ -46,7 +46,8 @@
         <div class="revision-bandeja__cabecera">
           <label class="revision-marcar">
             <input type="checkbox" [checked]="todasPaginaSeleccionadas"
-              (change)="marcarPagina()" [disabled]="filtroEstado !== 'PENDING' || cargando || !pendientesEnPagina || procesando" />
+              (change)="marcarPagina()" [disabled]="filtroEstado !== 'PENDING' || cargando || !pendientesEnPagina || procesando ||
+                (seleccionadas.length >= maxLote && !todasPaginaSeleccionadas)" />
             Seleccionar pendientes de esta página
           </label>
           <span>{{ seleccionadas.length }} / {{ maxLote }} seleccionadas entre páginas · {{ total }} resultados
