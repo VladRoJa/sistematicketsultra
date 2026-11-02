@@ -1,126 +1,74 @@
 # Contrato — Warehouse Storage Optimization V1
 
-Fecha: 2026-11-02. Estado: autorizado para trabajo en rama, sin despliegue ni migraciones productivas.
+**Fecha:** 2026-11-02 · **Estado:** WSO-01 en PR DRAFT, sin merge ni eliminación productiva.
+**PR:** https://github.com/VladRoJa/sistematicketsultra/pull/1195
 
-## Objetivo
-Reducir crecimiento histórico de Warehouse sin afectar Track, Funnel, Contact Center o auditoría. Mantener PostgreSQL y Alembic.
+## 1. Objetivo y alcance
 
-## Evidencia en producción
-- Venta Total: 31 GB; 236 snapshots canónicos (16,014,599 filas reportadas) y 142 no canónicos (14,096,579).
-- iVentas: 12 GB; 5 corridas canónicas (414,104 contactos) y 359 no canónicas (16,676,371).
-- Corte de Caja: 7.4 GB; 1,037 snapshots canónicos, 1,033 en fechas con varios canónicos; 33,797,716 filas reportadas.
-- Archivos originales Corte de Caja: 2,061 registros en `warehouse_uploads`, suma de `file_size_bytes` = 5,961,032,253 bytes (~5.96 GB decimales); primer upload 2026-05-08, último 2026-09-05. Los 2,061 presentan `source_file_deleted_at IS NULL` (no equivale a verificar existencia física). La cantidad de bytes puede sumar referencias repetidas al mismo archivo; comprobar rutas únicas antes de estimar liberación.
-- **Alcance ampliado WSO-01:** además de eliminar las tablas estructuradas, retirar los archivos físicos, los metadatos `warehouse_uploads` y su tipo de reporte una vez demostrada ausencia de referencias relevantes. Los `warehouse_audit_logs` que dependan de esos uploads requieren decisión explícita y migración consistente. Eliminar únicamente IDs comprobados de `corte_caja`, nunca datos generales de Warehouse.
+Eliminar almacenamiento innecesario en Warehouse sin modificar los cálculos de Track, Funnel ni Contact Center.
 
-## WSO-01 — Retiro de Corte de Caja
-Decisión: si no existen consumidores actuales, retirar por completo esta fuente obsoleta, sin mantener una base histórica innecesaria.
-1. Investigar referencias en repo, tareas automatizadas y consumidores externos de DB.
-2. Desconectar generación y persistencia, manteniendo intactas otras fuentes.
-3. Validar dependencias y respaldo recuperable de producción antes de retirar tablas.
-4. Preparar migración Alembic controlada con comprobaciones previas.
-5. Antes de limpiar archivos físicos: consultar todas las referencias a `warehouse_uploads.id`, confirmar archivos reales y rutas únicas, generar manifiesto exacto de los 2,061 candidatos, verificar rutas restringidas a `uploads/warehouse/*/corte_caja/` y verificar SHA-256. No borrar rutas compartidas ni referencias activas.
-6. Ejecutar eliminación de archivos y metadatos exclusivamente mediante procedimiento controlado y reversible hasta el punto de confirmación, con respaldos probados; no efectuar `rm -rf` ni `DELETE` sin filtro.
-7. Ejecutar únicamente tras revisión, CI, autorización de migración y respaldo probado.
-8. Medir funcionamiento y espacio real recuperado. Los respaldos de seguridad temporales no equivalen a almacenamiento permanente.
+- **WSO-01: retiro total de Corte de Caja** (código, ORM, tablas, uploads, auditoría vinculada, archivos XLSX y tipo de reporte). Decisión del propietario: **sin cuarentena y sin respaldo nuevo**. Gasca conserva la fuente de información; esto **no garantiza** la restauración exacta del histórico de Suite Ultra.
+- **WSO-02: optimización de contactos iVentas.** Preservar cortes de Funnel y la semántica histórica de corridas, tags y canonicalidad.
+- **WSO-03: optimización de Venta Total.** Los reportes mes-a-fecha repiten ventas, pero Track y Contact Center consumen filas/IDs; demostrar identidad, cambios retroactivos y paridad antes de compactar.
 
-Hallazgo: `corte_caja_repository.py::persist_corte_caja_snapshot` inserta un nuevo canónico antes de buscar otro canónico por ID descendente; puede dejar varios canónicos por fecha.
+No alterar permisos ni otros reportes; cambios de esquema siempre con Alembic.
 
-## WSO-02 — iVentas
-Las filas representan snapshots inmutables por corrida. Los lectores del funnel pueden requerir cortes exactos diferentes a la canónica mensual. Compactar con paridad histórica antes de retirar versiones redundantes.
+## 2. Datos observados en producción
 
-## WSO-03 — Venta Total
-El reporte es acumulado del primer día del mes hasta la fecha solicitada; los snapshots pueden repetir ventas. Track y Contact Center consumen filas e IDs históricos. Validar identidad de operación, cambios retroactivos y resultados antes de usar deltas/checkpoints.
+| Fuente | Espacio aproximado | Evidencia |
+|---|---:|---|
+| Corte de Caja estructurado | 7.4 GB | 1,037 snapshots, 33,797,716 filas reportadas |
+| Corte de Caja RAW | 5.96 GB | **2,061 archivos**; **5,961,032,253 bytes** |
+| Contactos iVentas | 12 GB | 5 corridas canónicas y 359 no canónicas |
+| Venta Total | 31 GB | 236 snapshots canónicos, 142 no canónicos |
 
-## Reglas
-No modificar datos de producción sin autorización; no cambiar permisos, reglas de negocio ni cálculos. Trabajar paso a paso, probar cada cambio, usar rama aislada y migraciones Alembic para schema. No interpretar porcentajes de filas como porcentaje de GB recuperables.
+**Integridad Corte de Caja:** `REGISTROS=2061`, `HASHES_CORRECTOS=2061`, `ERRORES=0` comprobados en servidor; 2,061 rutas únicas y exactamente 5,961,032,253 bytes físicos.
 
-## Gates pendientes
-Inventario final de consumidores, estado de jobs productivos, dependencias externas, respaldo restaurable y aceptación de la migración irreversible.
+**Dependencias:** 23 FKs entrantes a `warehouse_uploads`; las 21 ajenas a Corte de Caja arrojaron **cero referencias**. Las dos restantes tienen 1,037 snapshots propios y 2,084 eventos de auditoría. Otros 1,100 uploads tienen FK **saliente** hacia versiones Track; al borrar el upload no se borra la versión Track. El pipeline actual consume Venta Total, no Corte de Caja, en el tramo de reportes individuales.
 
-## Evidencia de dependencias de uploads (2026-11-02)
+**Canon:** el repositorio antiguo de Corte de Caja insertaba el canónico nuevo antes de buscar el previo con ID descendente; puede explicar la multiplicidad de canónicos. Se retira en vez de corregir una fuente obsoleta.
 
-Consulta de solo lectura sobre los 2,061 uploads Corte de Caja:
+## 3. Decisión de riesgo irreversible
 
-- 2,061 rutas únicas `(stored_path, stored_filename)` dentro de este tipo; verificar posibles colisiones con OTROS tipos y existencia física antes de borrar.
-- 0 registros en `internal_document_versions`, 0 en `opening_task_document_links`, 0 en `routine_control_provider_runs`.
-- 1,100 uploads tienen `track_daily_version_id IS NOT NULL`: es una **FK saliente** del upload hacia `track_daily_versions.id`. Su eliminación no borra versiones Track; no hay prueba de que Corte de Caja alimente cálculos vigentes. El pipeline Track actual consume `venta_total` en el tramo de reportes individuales.
-- 2,084 registros en `warehouse_audit_logs` hacen referencia a estos IDs; **FK entrante**, deben tratarse expresamente. La decisión de retirar también auditoría histórica individual requiere una evidencia resumida de la baja, sin conservar todo el histórico obsoleto.
-- La consulta anterior sobre FKs/vistas de `corte_caja_snapshots` y `corte_caja_snapshot_rows` regresó vacía, pero NO cubre las FKs entrantes de `warehouse_uploads`.
-- El campo `source_file_deleted_at IS NULL` para todos ellos no verifica presencia física. El espacio real recuperable debe medirse en el volumen de archivos.
+El propietario **rechaza cuarentena y respaldo completo nuevo**, y ordena eliminación permanente de Corte de Caja. No se crearán copias extra de los RAW. El inventario JSON es pequeño, no un respaldo de archivos.
 
-**Próxima puerta de salida:** la lista de claves foráneas entrantes quedó comprobada (23 restricciones; 2026-11-02). Ejecutar el diagnóstico de solo lectura `backend/scripts/ops/wso01_corte_caja_upload_fk_diagnostic.sql` y exigir cero referencias en las dependencias marcadas `BLOCKER`. El script incluye por separado auditoría (2,084 esperadas) y `corte_caja_snapshots` (1,037 esperadas antes de migración). No confundir el listado de FKs con recuentos de filas. Después comprobar rutas/archivos físicos, colisiones entre tipos, hash y respaldo/restore antes del borrado seguro de `corte_caja`.
+El respaldo PostgreSQL existente falla por espacio: registros más recientes locales 2026-09-24/23/22; ejecuciones 2026-11-01 y 2026-11-02 detenidas porque el script exige 122 GB libres y había aproximadamente 70 GB (tamaño lógico PostgreSQL ~56 GB). **No hay restauración reciente verificada**. La eliminación de 7.4 GB estructurados, 2,061 uploads, 2,084 auditorías y 2,061 archivos RAW es irreversible en Suite Ultra; no se presenta Gasca como respaldo técnicamente probado.
 
-## Gate C1 / referencias completas — verificado 2026-11-02
+La decisión autoriza **preparar el procedimiento sin backup ni cuarentena**, pero no significa que ya se haya ejecutado contra el servidor. El propietario ejecuta el despliegue y la migración según el flujo Git.
 
-Resultado real de `backend/scripts/ops/wso01_corte_caja_upload_fk_diagnostic.sql`:
-- **21 relaciones BLOCKER: 0 filas en todas** (incluidos Google Ads, metas comerciales, documentos, aperturas, rutina, snapshots ajenos).
-- `corte_caja_snapshots.warehouse_upload_id`: 1,037 referencias esperadas.
-- `warehouse_audit_logs.upload_id`: 2,084 referencias esperadas.
-- Solo los 2,061 uploads del tipo `corte_caja` son candidatos de borrado; 1,100 tienen una FK **saliente** a versiones Track, lo que no elimina las versiones al borrar el upload.
-- Los conteos de dependencias se tomaron antes de la migración; la migración debe preservar restricciones existentes y abortar ante dependencias nuevas.
+## 4. Implementación
 
-## Procedimiento de retiro (aún no ejecutado)
+- Extracción, ingesta, despacho, configuración y carga directa/manual de Corte de Caja retiradas. Otros reportes Gasca permanecen habilitados.
+- Migración Alembic `wso01caja110226`: borra solo `corte_caja_snapshot_rows`, `corte_caja_snapshots`, la auditoría asociada, los metadatos `warehouse_uploads` de ese tipo y el catálogo `corte_caja`; no usa `CASCADE` sobre otras tablas y aborta con dependencias nuevas.
+- `backend/scripts/ops/wso01_corte_caja_files.py`: únicamente `inspect` y `delete`, sin cuarentena. El manifiesto privado asocia cada ID/ruta/tamaño/SHA-256. `delete` exige comprobar primero que la migración retiró los objetos en BD; verifica otra vez los archivos y solamente elimina los listados en manifiesto con `--apply --ack-irreversible`. El script nunca modifica PostgreSQL.
+- Diagnóstico de 23 FKs: `backend/scripts/ops/wso01_corte_caja_upload_fk_diagnostic.sql`.
+- Pruebas sintéticas de migración sobre PostgreSQL 16 y regresiones Warehouse/Gasca.
 
-1. Exigir respaldo PostgreSQL verificado mediante restauración y respaldo operativo temporal de archivos. Verificar disponibilidad real de archivos, permisos y espacio en el volumen; confirmar que `--root` apunte al directorio que realmente contiene `uploads/warehouse`. **No suponer que la ruta del contenedor coincide con la del host.**
-2. Ejecutar `python -m scripts.ops.wso01_corte_caja_files inspect` desde el runtime backend con `--root`, `--manifest` y `--quarantine-dir` absolutos. El script coteja la identidad exacta del conjunto (2,061/5,961,032,253 bytes), paths exclusivos, tamaño y SHA-256; genera un manifiesto privado. Cualquier archivo ausente o distinto bloquea el procedimiento.
-3. Tras autorizar la operación, ejecutar modo `quarantine --apply` desde el mismo root: tras verificar nuevamente todo, mueve los 2,061 archivos a una zona privada separada del directorio público de uploads. `restore --apply` los devuelve si se cancela.
-4. Desplegar código de retiro y, en ventana controlada, aplicar la migración Alembic `wso01caja110226`. El `upgrade` borra en la misma transacción tablas propias, auditorías, metadatos y catálogo del reporte, sin cambiar otras fuentes; verifica nuevas referencias `ON DELETE SET NULL` y rutas compartidas. **No aplicar la migración antes de la cuarentena.**
-5. Verificar rutas API, Track, catálogos, estado Alembic y conteos residuales. Únicamente después usar `purge --apply --ack-irreversible` para eliminar los archivos ya puestos en cuarentena. Este paso comprueba que no exista metadata restante antes de borrar los ficheros.
-6. Medir tamaño liberado en PostgreSQL y disco. Si falla cualquier gate: NO avanzar y usar el mecanismo de recuperación correspondiente. El downgrade no recrea datos; requiere restaurar el respaldo.
+## 5. Orden de operación — sin cuarentena
 
-**Estado al 2026-11-02:** contrato y cambios de código versionados en rama. Sin pruebas de pytest/CI ejecutadas, sin cuarentena, migración, purge ni cambios productivos.
+1. Revisión y CI de PR #1195. Merge y despliegue mediante Git, no edición manual del código en producción.
+2. Antes de aplicar Alembic: ejecutar `inspect` dentro del runtime backend con `--root` apuntando a los uploads físicos y `--manifest` fuera de `uploads`. Comprobar 2,061 archivos, 5,961,032,253 bytes y SHA-256 sin errores. Se genera solo un JSON privado con nombres/hashes.
+3. Ejecutar **una sola vez** la migración Alembic en una ventana controlada. Verificar que Corte de Caja ya no exista en catálogos/tablas/metadata y que Track y Venta Total sigan funcionando.
+4. Ejecutar `delete --apply --ack-irreversible` utilizando el mismo root/manifiesto: revalida cada archivo y comprueba que la migración se haya aplicado. Borrado directo mediante `unlink`; sin movimientos ni duplicaciones.
+5. Medir almacenamiento realmente recuperado, validar que no queden archivos de `corte_caja`, y que Warehouse/Track/Marketing mantengan sus endpoints.
 
-### Ejecución operativa de la inspección (no autorizada aún)
+**Regla de corte:** si `inspect` encuentra rutas, archivos o hashes distintos, NO ejecutar migración. Si la migración falla, NO ejecutar eliminación física. Si la eliminación de archivos es parcial, el modo `delete` permite reintentar con el mismo manifiesto, sin tocar archivos ajenos. El `downgrade` no recupera datos eliminados.
 
-El `Dockerfile` usa `/app`; los uploads físicos se montan en `/uploads`, según `docker-compose.yml`. Para que el chequeo y la cuarentena estén en **un mismo bind mount** (y puedan moverse archivos sin cruces de filesystem), ejecutar desde la raíz del repositorio en el host, una vez desplegada la rama, con un montaje adicional del propio repositorio a `/workspace`:
+### Comando de inspección (cuando la rama haya sido fusionada y desplegada)
 
 ```bash
-# Paso exclusivamente de inspección: nunca mueve ni elimina archivos RAW.
-docker compose run --rm --no-deps \\
-  -v "$PWD:/workspace" backend \\
-  python -m scripts.ops.wso01_corte_caja_files inspect \\
-    --root /workspace \\
-    --manifest /workspace/private/wso01/manifest.json \\
-    --quarantine-dir /workspace/private/wso01/quarantine
+cd ~/sistematicketsultra
+docker compose run --rm --no-deps -v "$PWD:/workspace" backend \
+  python -m scripts.ops.wso01_corte_caja_files inspect \
+  --root /workspace \
+  --manifest /workspace/private/wso01/manifest.json
 ```
 
-La ruta `private/wso01/` debe estar protegida del acceso público y excluida de Git. Revisar el resultado antes de usar `quarantine --apply`. Ejecutar preflight con root equivocado o archivos ausentes debe fallar; no cambiar el script para saltarse esa comprobación. La limpieza final `purge --apply --ack-irreversible` solo va **después** de la migración, las pruebas de recuperación y la aprobación explícita.
+**No ejecutar aún la migración ni el borrado físico sin haber revisado el resultado de `inspect`.** El manifiesto está en `private/wso01/`, ignorado por Git, y no es una copia de los XLSX.
 
-## Gate físico — conteo y volumen confirmados (2026-11-02)
+## 6. Validación y estado
 
-Evidencia reportada desde el host productivo mediante `find uploads/warehouse -type f -path '*/corte_caja/*' -printf '%s\\n'` y suma de bytes:
-
-- **ARCHIVOS=2061**
-- **BYTES=5961032253**
-- **GB decimales=5.96**
-
-Coinciden exactamente con los registros y suma de `file_size_bytes` para `warehouse_uploads` con `report_type_key='corte_caja'`.
-
-Este conteo **no** prueba correspondencia individual entre cada ID y ruta, SHA-256, ausencia de hardlinks/colisiones entre tipos ni restaurabilidad del respaldo. Mantener bloqueada cuarentena/migración/purga hasta verificar esos gates.
-
-## Gate de integridad física SHA-256 — PASS (2026-11-02)
-
-Prueba ejecutada en servidor mediante backend Flask y lectura de `warehouse_uploads`: cada upload de `corte_caja` se contrastó con su archivo físico, `file_size_bytes` y `file_hash_sha256` de PostgreSQL.
-
-```text
-REGISTROS: 2061
-HASHES_CORRECTOS: 2061
-ERRORES: 0
-DETALLE: []
-```
-
-**Dictamen:** correspondencia individual de los 2,061 archivos registrada, íntegra según los SHA-256 de Warehouse. Sin cambios de datos ni movimientos de archivos. Este PASS no sustituye la verificación de respaldo, restauración ni la inspección del entorno de ejecución para cuarentena.
-
-## Decisión operativa del propietario — sin respaldo completo nuevo (2026-11-02)
-
-El propietario informó que **no ejecutará un nuevo respaldo completo de PostgreSQL**, por costo de tiempo. No reintentar automáticamente `pg_basebackup` ni sustituirlo por otro backup sin pedirlo.
-
-**Evidencia de estado real del respaldo existente:**
-- `cron` root: `15 2 * * * /usr/local/bin/backup_postgres.sh`.
-- Backups locales más recientes listados: 2026-09-24, 2026-09-23 y 2026-09-22; no hay copia reciente confirmada.
-- Log 2026-11-01 y 2026-11-02: servidor PostgreSQL 15, tamaño lógico de todas las BD ~56 GB, espacio libre ~70 GB; `backup_postgres.sh` exige ~122 GB y falla antes de crear la copia.
-- La existencia de backups antiguos no acredita posibilidad de recuperar datos modificados desde septiembre.
-
-**Consecuencia:** el retiro de archivos por *cuarentena* sigue siendo reversible sin duplicar los 5.96 GB. En cambio, el `upgrade` Alembic borra definitivamente los 7.4 GB estructurados, 2,061 metadatos y 2,084 auditorías; no hay recuperación completa reciente demostrada. La validación 2061/2061 SHA-256 y CI no reemplazan respaldo de base de datos.
-
-**Control de ejecución:** la negativa a hacer respaldo no equivale a afirmar que la operación es reversible. Mantener **sin ejecutar la migración destructiva ni `purge`** hasta registrar autorización expresa para asumir pérdida irreversible del histórico de Corte de Caja *sin copia recuperable actual*. No alterar ni deshabilitar el cron de backup como parte de WSO-01; su fallo recurrente merece seguimiento operativo separado.
+- Datos y SHA-256 en producción: **PASS**.
+- Primer CI de la implementación anterior: **11/11 workflows SUCCESS**.
+- Nuevo procedimiento de borrado directo: pendiente de CI sobre el HEAD actualizado.
+- **NOT_RUN:** migración productiva, borrado físico, liberación de almacenamiento, recuperación de datos.
