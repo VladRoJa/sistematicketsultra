@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 
 from sqlalchemy import text
@@ -162,9 +163,11 @@ def main() -> None:
         payload = {"report_key": REPORT_KEY, "items": items}
         print(json.dumps({"mode": "inspect", "files_verified": len(items), "bytes": sum(x["size"] for x in items)}))
         # Creation of a private manifest is the only write in inspection mode.
-        manifest.parent.mkdir(parents=True, exist_ok=True)
-        manifest.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-        manifest.chmod(0o600)
+        manifest.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        manifest.parent.chmod(0o700)
+        fd = os.open(manifest, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as output:
+            output.write(json.dumps(payload, indent=2) + "\n")
         return
 
     items = _read_manifest(manifest)
