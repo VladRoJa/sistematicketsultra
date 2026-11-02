@@ -13,8 +13,12 @@ import {
 
 type Decision = 'APPROVED' | 'REJECTED';
 type EdicionResolucion = {
-  accion: 'AJUSTAR_A_CERO' | 'VINCULAR_EXISTENTE';
+  accion: 'AJUSTAR_A_CERO' | 'VINCULAR_EXISTENTE' | 'CREAR_NUEVO';
   inventario_id: number | null;
+  categoria: string;
+  marca: string;
+  descripcion: string;
+  familia_equipo_id: number | null;
   stock_esperado: number | null;
   cantidad_fisica: number | null;
   justificacion: string;
@@ -163,6 +167,13 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
           Number.isInteger(r.stock_esperado) && (r.stock_esperado ?? 0) > 0;
       }
       if (s.tipo === 'UNREGISTERED_FIND') {
+        if (r.accion === 'CREAR_NUEVO') {
+          return !!this.contexto?.corporativo &&
+            r.categoria.trim().length > 0 && r.categoria.trim().length <= 100 &&
+            r.marca.trim().length <= 100 && r.descripcion.trim().length <= 2000 &&
+            (r.familia_equipo_id == null ||
+              (Number.isInteger(r.familia_equipo_id) && r.familia_equipo_id > 0));
+        }
         return r.accion === 'VINCULAR_EXISTENTE' &&
           Number.isInteger(r.inventario_id) && (r.inventario_id ?? 0) > 0 &&
           Number.isInteger(r.stock_esperado) && (r.stock_esperado ?? -1) >= 0 &&
@@ -270,13 +281,17 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
           const esperado = s.baseline_canonico['stock'];
           this.resoluciones[s.id] = {
             accion: 'AJUSTAR_A_CERO', inventario_id: null,
+            categoria: '', marca: '', descripcion: '', familia_equipo_id: null,
             stock_esperado: typeof esperado === 'number' ? esperado : null,
             cantidad_fisica: null, justificacion: '',
           };
         } else if (s.tipo === 'UNREGISTERED_FIND') {
           this.resoluciones[s.id] = {
-            accion: 'VINCULAR_EXISTENTE', inventario_id: null,
-            stock_esperado: null, cantidad_fisica: null, justificacion: '',
+            accion: this.contexto?.corporativo ? 'CREAR_NUEVO' : 'VINCULAR_EXISTENTE',
+            inventario_id: null, stock_esperado: null, cantidad_fisica: null,
+            categoria: '', marca: s.hallazgo_provisional?.['marca'] || '',
+            descripcion: s.evidencia_descriptiva || '',
+            familia_equipo_id: null, justificacion: '',
           };
         }
       }
@@ -315,12 +330,22 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
               ? this.motivo.trim() : r.justificacion.trim(),
           } as ResolucionNoLocalizado;
         } else if (s.tipo === 'UNREGISTERED_FIND' && r) {
-          resoluciones[String(s.id)] = {
-            accion: 'VINCULAR_EXISTENTE', inventario_id: r.inventario_id!,
-            stock_esperado: r.stock_esperado!, cantidad_fisica: r.cantidad_fisica!,
-            justificacion: this.aprobacionEspecialIndividual
-              ? this.motivo.trim() : r.justificacion.trim(),
-          } as ResolucionHallazgo;
+          const fundamento = this.aprobacionEspecialIndividual
+            ? this.motivo.trim() : r.justificacion.trim();
+          if (r.accion === 'CREAR_NUEVO') {
+            resoluciones[String(s.id)] = {
+              accion: 'CREAR_NUEVO', categoria: r.categoria.trim(),
+              marca: r.marca.trim(), descripcion: r.descripcion.trim(),
+              familia_equipo_id: r.familia_equipo_id,
+              justificacion: fundamento,
+            };
+          } else {
+            resoluciones[String(s.id)] = {
+              accion: 'VINCULAR_EXISTENTE', inventario_id: r.inventario_id!,
+              stock_esperado: r.stock_esperado!, cantidad_fisica: r.cantidad_fisica!,
+              justificacion: fundamento,
+            } as ResolucionHallazgo;
+          }
         }
       }
       if (Object.keys(resoluciones).length) payload.resoluciones = resoluciones;
