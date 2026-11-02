@@ -75,7 +75,7 @@ export class DialogoInventarioComponent implements OnInit {
     this.form = this.fb.group({
       nombre: [data?.item?.nombre || '', Validators.required],
       descripcion: [data?.item?.descripcion || ''],
-      tipo: [data?.item?.tipo || '', Validators.required],
+      tipo: [this.tipoParaSelector(data?.item?.tipo), Validators.required],
       familia_equipo_id: [data?.item?.familia_equipo_id ?? null],
       marca: [data?.item?.marca || '', Validators.required],
       proveedor: [data?.item?.proveedor || ''],
@@ -103,6 +103,11 @@ export class DialogoInventarioComponent implements OnInit {
       semana_pedido: [data?.item?.semana_pedido || ''],
       subcategoria: [data?.item?.subcategoria || '']
     });
+  }
+
+  private tipoParaSelector(tipo: unknown): string {
+    const canonico = normalizarTipoInventario(tipo);
+    return canonico ? canonico.charAt(0).toUpperCase() + canonico.slice(1) : '';
   }
 
   // 1) Helper para aplicar validadores según tipo
