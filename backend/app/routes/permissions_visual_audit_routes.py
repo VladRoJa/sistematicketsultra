@@ -20,7 +20,10 @@ from app.models.internal_documents import InternalDocumentORM
 from app.models.permiso_model import Permiso
 from app.routes import permissions_catalog_routes as catalog
 from app.routes.track_routes import track_read_grants_enabled
-from app.routes.inventarios import inventory_master_write_grants_enabled
+from app.routes.inventarios import (
+    inventory_master_write_grants_enabled,
+    inventory_movement_write_grants_enabled,
+)
 from app.routes.ticket_routes import (
     tickets_create_grants_enabled,
     tickets_update_status_grants_enabled,
@@ -262,7 +265,7 @@ def _bulk_grants(users, actions):
     latest = {}
     runtime_read_ids = {
         action.id for action in actions
-        if action.full_key in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status", "tickets.notify", "tickets.update", "tickets.close", "inventory.master_write"}
+        if action.full_key in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status", "tickets.notify", "tickets.update", "tickets.close", "inventory.master_write", "inventory.movement_write"}
     }
     for grant in query.all():
         principal = (
@@ -538,6 +541,21 @@ def evaluate_pair(user, action, context, grants=None, branch_id=None, document=N
             legacy_reason = "veto_inventario_maestro_preserva_rol_legacy"
             catalog_source = "inventory_master_write_grant_operativo"
             catalog_reason = "check_global_no_eleva_roles_ni_evade_validaciones"
+    if action.full_key == "inventory.movement_write" and inventory_movement_write_grants_enabled():
+        # Sin sucursal solo DENY permite afirmar denegación HTTP universal.
+        # ALLOW no certifica permisos sobre ninguna sucursal o movimiento.
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            if candidate.effect == "deny":
+                legacy = False
+                catalog_allowed = False
+            else:
+                # Sin contexto de sucursal, el check representa exclusivamente
+                # el ALLOW global, nunca un permiso final de movimiento.
+                catalog_allowed = legacy if branch_id is not None else True
+            legacy_source = "inventarios._require_inventory_movement_write+grant"
+            legacy_reason = "veto_movimiento_sin_bypass_de_sucursal"
+            catalog_source = "inventory_movement_write_grant_operativo"
+            catalog_reason = "check_global_no_certifica_sucursal_ni_reversion"
     if action.full_key == "internal_documents.view":
         # Ni la proyección genérica True ni un grant de entrada equivalen
         # a permiso sobre un documento concreto. Sin objeto también es
@@ -718,6 +736,7 @@ def visual_audit_matrix():
         "tickets_update_grants_enabled": tickets_update_grants_enabled(),
         "tickets_close_grants_enabled": tickets_close_grants_enabled(),
         "inventory_master_write_grants_enabled": inventory_master_write_grants_enabled(),
+        "inventory_movement_write_grants_enabled": inventory_movement_write_grants_enabled(),
         "note": "Solo consulta. Legacy comprobado únicamente en predicados declarados; no reemplaza enforcement.",
         "view": perspective, "rows": page, "group_counts": group_counts,
         "sorting": {"sort_by": sort_by, "sort_dir": sort_dir, "group_by": group_by, "decision": decision},
