@@ -410,3 +410,24 @@ def test_tickets_update_metadata_writer_off_does_not_mutate_grants(monkeypatch):
     assert response.json["action_full_key"] == "tickets.update"
     session.add.assert_not_called()
     session.commit.assert_not_called()
+
+
+def test_tickets_close_writer_flag_off_without_mutation(monkeypatch):
+    api, headers = client()
+    api.application.config["PERMISSIONS_TICKETS_CLOSE_GRANTS_ENABLED"] = False
+    admin_and_target(monkeypatch)
+    session = Mock()
+    monkeypatch.setattr(catalog, "db", SimpleNamespace(session=session))
+    response = api.put(
+        "/api/permissions/catalog/users/12/module-access",
+        headers=headers,
+        json={"changes": [{
+            "module_key": "tickets",
+            "action_full_key": "tickets.close",
+            "override": "deny",
+        }]},
+    )
+    assert response.status_code == 409
+    assert response.json["action_full_key"] == "tickets.close"
+    session.add.assert_not_called()
+    session.commit.assert_not_called()
