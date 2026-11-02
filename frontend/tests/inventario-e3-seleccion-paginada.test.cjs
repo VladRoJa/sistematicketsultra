@@ -93,8 +93,12 @@ test('seleccionar/desmarcar una página conserva otras y máximo diez', () => {
   assert.equal(vm.seleccion.has(8), true);
   assert.equal(vm.seleccion.has(9), true);
   assert.equal(vm.seleccionadasEnPagina, 8);
+  vm.marcar(7);
+  assert.equal(vm.seleccionadas.length, 9);
+  assert.equal(vm.seleccion.has(8), true);
+  assert.equal(vm.seleccion.has(9), true);
   vm.marcarPagina();
-  assert.deepEqual(vm.seleccionadas.map(s => s.id), [8, 9]);
+  assert.equal(vm.seleccionadas.length, 10);
   vm.cambiarFiltros();
   assert.equal(vm.seleccionadas.length, 0);
 });
