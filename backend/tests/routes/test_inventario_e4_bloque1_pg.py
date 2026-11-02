@@ -221,6 +221,27 @@ def test_prefijo_sucursal_ajeno_es_aviso_no_mutacion_de_codigo():
     assert resultado["resumen"]["si"] == 2
 
 
+def test_id_sucursal_extenso_no_infiere_correccion_de_prefijo():
+    """IDs como los de sucursales DEMO no implican prefijo oficial de 4 dígitos."""
+    from types import SimpleNamespace
+    from app.services.inventario_levantamiento_revision_service import _casos
+
+    original = original_csv().replace(b"7,Pabellon rosarito", b"1001,Ultra demo")
+    refs, _ = parse_historical_csv(original, 1001)
+    assert len(refs) == 2
+    parsed = parse_xlsx_v01(
+        workbook(branch=1001, first="SI", second="SI", found=False),
+        1001, refs, "VERIFICACION",
+    )
+    assert parsed["resultado"] == "VALIDATED"
+    assert not any(d["codigo"] == "PREFIJO_SUCURSAL_INCONSISTENTE"
+                   for d in parsed["diagnosticos"])
+    assert _casos(
+        SimpleNamespace(sucursal_id=1001, modalidad="VERIFICACION"),
+        parsed, [SimpleNamespace(**row) for row in refs],
+    ) == {}
+
+
 def test_inicial_no_equivale_a_conciliado_sin_referencias():
     report = parse_xlsx_v01(workbook(branch=8, initial=True), 8, [], "INICIAL")
     assert report["resultado"] == "INCOMPLETE"
