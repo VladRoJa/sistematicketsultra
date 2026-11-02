@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 
 from playwright.sync_api import sync_playwright
 
-from scripts.training.recording_focus import install_focus_context, install_focus_page, guided_click
+from scripts.training.recording_focus import install_focus_context, install_focus_page, guided_click, guided_action
 
 ROOT = Path(__file__).resolve().parent
 LOOPBACK = {"localhost", "127.0.0.1", "::1"}
@@ -155,26 +155,54 @@ def batch_receive(page, dialog, codes: list[str], received: bool, reason: str = 
             raise RuntimeError(f"Código de demo ambiguo o ausente: {code}")
         check = item.get_by_role("checkbox")
         if received:
-            check.check()
+            guided_action(page, check, "check")
         else:
-            check.uncheck()
+            guided_action(page, check, "uncheck")
             item.get_by_placeholder("Obligatorio para corregir una recepción guardada").fill(reason)
     guided_click(page, dialog.get_by_role("button", name=re.compile("Guardar cambios")))
     dialog.get_by_role("button", name=re.compile("Guardar cambios")).wait_for(state="hidden", timeout=30_000)
 
 
 def login(page, url: str, username: str, password: str):
-    page.goto(url + "/#/login")
-    # Nunca grabar tokens ni guardar storageState; limpieza al alternar cuentas.
-    page.locator("#usuario-login").fill(username)
-    page.locator("#password-login").fill(password)
-    page.get_by_role("button", name="Iniciar sesión").click()
-    page.wait_for_url(re.compile(r"/#/((?!login).)+"), timeout=30_000)
+    """Autenticar fuera del formulario grabado. Solo credenciales sintéticas CI.
+
+    El video jamás muestra campos ni tecleo de contraseñas. El usuario/rol/branch
+    se valida por la respuesta real del backend; no se inventan JWT ni guards.
+    """
+    if username not in ("QA_COORD_CIERRE", "QA_GERENTE_CIERRE"):
+        raise ValueError("CAP-V1: solamente cuentas de capacitación sintética")
+    response = page.context.request.post(
+        url + "/api/auth/login",
+        data={"username": username, "password": password},
+        timeout=20000, max_redirects=0,
+    )
+    if response.status != 200:
+        raise RuntimeError("CAP-V1: login sintético rechazado (HTTP %s)" % response.status)
+    payload = response.json()
+    user = payload.get("user") or {}
+    expected_role = "COMPRAS" if username == "QA_COORD_CIERRE" else "GERENTE"
+    if (user.get("sucursal_id") != 990101
+            or user.get("rol") != expected_role
+            or user.get("username", "").upper() != username
+            or not payload.get("token")):
+        raise RuntimeError("CAP-V1: cuenta/rol/sucursal no corresponden a QA")
+    # El primer documento no graba tecleo alguno; cambios posteriores de
+    # cuenta sustituyen el estado local sin entrar a la pantalla de login.
+    if page.url == "about:blank":
+        page.goto(url + "/", wait_until="domcontentloaded")
+    page.evaluate(
+        """(auth) => {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            localStorage.setItem('token', auth.token);
+            localStorage.setItem('user', JSON.stringify(auth.user));
+            sessionStorage.clear();
+        }""",
+        {"token": payload["token"], "user": user},
+    )
 
 
 def switch_account(page, url: str, username: str, password: str):
-    page.goto(url + "/#/login")
-    page.evaluate("() => { localStorage.clear(); sessionStorage.clear(); }")
     page.context.clear_cookies()
     login(page, url, username, password)
 
