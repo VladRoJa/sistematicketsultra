@@ -21,6 +21,14 @@ INPUT = Path("artifacts/capacitacion/full-source")
 OUTPUT = Path("artifacts/capacitacion/full-neural-preview")
 MARGIN = 0.22
 MAX_TEMPO = 1.30
+# Las frases originales siguen verificadas contra el storyboard. Una locución
+# editorial puede ser más corta si la toma de pantalla dura menos.
+VOICE_TEXT_OVERRIDES = {
+    "historial": (
+        "En Ver Historial consultamos fechas, responsables y motivos. "
+        "Todos los cambios quedan vinculados al mismo ticket."
+    ),
+}
 
 
 def main() -> None:
@@ -75,7 +83,7 @@ def main() -> None:
         available = next_at - start - MARGIN
         if available <= 1.0:
             raise ValueError(f"CAP-V1: escena sin tiempo para hablar: {key}")
-        text = storyboard[key]
+        text = VOICE_TEXT_OVERRIDES.get(key, storyboard[key])
         spoken = text
         for official, pronunciation in ALIAS_PRONUNCIACION.items():
             spoken = spoken.replace(official, pronunciation)
