@@ -74,3 +74,24 @@ Los 216 `SUPERSEDED_COMPLETED_REVIEW` son **candidatos de análisis**, no todav�
 ### Espacio físico: advertencia operativa
 
 Eliminar filas de PostgreSQL por `DELETE` **no equivale a liberar inmediatamente bytes a `df -h`**. `VACUUM` normal recupera espacio *internamente* para reutilizar; reducir archivos físicos de la tabla y sus índices requiere una estrategia adicional como reescritura controlada (`VACUUM FULL` con bloqueo fuerte) u otra opción respaldada por extensiones. No programar estas acciones sin medición, plan de bloqueo, espacio temporal y compatibilidad. WSO-02 no debe prometer recuperar 12 GB solo por eliminar 216 corridas.
+
+## Gate WSO-02 / diagnóstico exacto — confirmado 2026-11-02
+
+Consulta de solo lectura `wso02_iventas_retention_preview.sql` entregada desde PostgreSQL productivo:
+
+| Bucket | Corridas | Contactos reales | Etiquetas | Páginas RAW | Links Contact Center |
+|---|---:|---:|---:|---:|---:|
+| NON_COMPLETED_REVIEW | 75 | 2,213,736 | 258,806 | 23,022 | 0 |
+| PROTECTED_CANONICAL | 5 | 414,324 | 56,674 | 4,219 | 4 |
+| PROTECTED_CONTACT_CENTER | 36 | 1,369,751 | 294,383 | 14,187 | 116 |
+| PROTECTED_EXACT_CUTOFF | 62 | 3,087,353 | 421,718 | 31,718 | 0 |
+| **SUPERSEDED_COMPLETED_REVIEW** | **187** | **10,005,728** | **1,302,495** | **102,664** | **0** |
+
+Total físico de contactos enumerados: **17,090,892**. Diferencia frente a `pg_class.reltuples` previo (~16,948,868) por estadísticas aproximadas, no error en este conteo exacto. Los 187 runs abarcan ~58.5% de contactos, pero el ahorro físico real no se deriva linealmente debido a índices y espacio libre interno.
+
+**Índices en contactos:** 4,855 MB en total; `uq_marketing_iventas_contacts_run_branch_contact` ~1,955 MB y `uq_marketing_iventas_contacts_row_identity` ~1,271 MB. Estos no son índices "sin usar": el primero participa en integridad única y el segundo soporta identidad compuesta usada por FKs de tags. No retirarlos por lectura superficial de `idx_scan`. El índice por `row_hash` (~280 MB) muestra cero scans desde reset de estadísticas, pero esto NO basta para retirarlo; revisar escrituras/consultas antes.
+
+### Contrato de ejecución propuesto
+Eliminar únicamente los **hijos de corridas completas reemplazadas**, **no sus metadatos de `sync_runs`**. Preservar contadores históricos y marcar la reducción para que diagnóstico de Automatización no confunda carga eliminada con un fallo de ingestión. Revalidar en la misma transacción: sigue COMPLETED/no canónica/no último corte, sin `source_row_id` de Contact Center. Ejecutar corrida por corrida con límite de tiempo y checkpoint, y en producción únicamente tras aceptación explícita del borrado.
+
+**Liberación del espacio:** luego de limpieza, `VACUUM (ANALYZE)` permite reuso interno pero no necesariamente libera 12 GB al sistema operativo; la compactación física necesita un plan de mantenimiento independiente con comprobación de disponibilidad, bloqueo y espacio.
