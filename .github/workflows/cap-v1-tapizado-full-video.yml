@@ -77,7 +77,7 @@ jobs:
           (cd backend && gunicorn -w 1 -b 127.0.0.1:5000 --timeout 120 app.wsgi:app > ../cap-backend.log 2>&1) &
           (cd frontend && npm start -- --host 127.0.0.1 --port 4200 > ../cap-angular.log 2>&1) &
           python - <<'PY'
-          import time, urllib.request
+          import time, urllib.request, urllib.error
           for name, url in (
               ("Flask", "http://127.0.0.1:5000/"),
               ("Angular", "http://127.0.0.1:4200/"),
@@ -89,6 +89,12 @@ jobs:
                               raise RuntimeError("Angular status unexpectedly non-200")
                       print(name + " ready")
                       break
+                  except urllib.error.HTTPError as e:
+                      # Flask devuelve 404 normal en /; eso prueba que responde.
+                      if name == "Flask" and e.code == 404:
+                          print("Flask ready (404 expected on root)")
+                          break
+                      time.sleep(2)
                   except Exception:
                       time.sleep(2)
               else:
