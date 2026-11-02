@@ -235,6 +235,11 @@ export class DialogoInventarioComponent implements OnInit {
     this.form.get('tipo')?.valueChanges.subscribe(val => {
       this.aplicarValidadoresPorTipo(val);
     });
+    // ID oficial como fuente única de la categoría visible y persistida.
+    this.form.get('categoria_inventario_id')?.valueChanges.subscribe(id => {
+      const categoria = this.categorias.find(item => item.id === Number(id));
+      this.form.get('categoria')?.setValue(categoria?.nombre || '', { emitEvent: false });
+    });
   }
 
   get categoriaOficialSeleccionada(): CatalogoElemento | undefined {
