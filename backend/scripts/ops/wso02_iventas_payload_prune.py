@@ -12,6 +12,7 @@ import argparse
 from datetime import date, datetime, timezone
 import json
 import os
+import shutil
 from pathlib import Path
 
 from sqlalchemy import text
@@ -199,6 +200,8 @@ def main() -> None:
     p.add_argument("--ack-irreversible", action="store_true")
     p.add_argument("--max-runs", type=int, default=0,
                    help="Mandatory upper bound of runs per execution when applying")
+    p.add_argument("--min-free-gb", type=int, default=30,
+                   help="Abort if manifest filesystem has less than this many GiB free")
     args = p.parse_args()
     manifest = _manifest_path(args.manifest)
     app = create_app()
@@ -207,7 +210,7 @@ def main() -> None:
             if manifest.exists():
                 raise RuntimeError("WSO-02 blocked: manifest already exists")
             with db.engine.connect() as conn:
-                conn.exec_driver_sql("SET statement_timeout = '180s'")
+                conn.exec_driver_sql("SET LOCAL statement_timeout = '180s'")
                 items = _manifest_rows(conn)
                 conn.rollback()
             if not items:
@@ -241,10 +244,18 @@ def main() -> None:
                 "WSO-02 blocked: --apply --ack-irreversible and "
                 "--max-runs N required"
             )
+        if args.min_free_gb < 20:
+            raise RuntimeError("WSO-02 blocked: minimum free space must be at least 20 GiB")
         items = _read_manifest(manifest)
         completed = 0
         already = 0
         for item in items[:args.max_runs]:
+            free = shutil.disk_usage(manifest.parent).free
+            if free < args.min_free_gb * 1024 ** 3:
+                raise RuntimeError(
+                    "WSO-02 blocked: disk headroom below the configured "
+                    f"{args.min_free_gb} GiB threshold"
+                )
             with db.engine.begin() as conn:
                 state = _prune_one(conn, item)
             if state == "pruned":
