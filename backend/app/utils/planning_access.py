@@ -174,7 +174,7 @@ def get_current_planning_access_payload() -> dict:
             "can_configure_model": False,
         }
 
-    return {
+    payload = {
         "status": "ok",
         "has_access": bool(operator.is_active and operator.can_view),
         "can_view": bool(operator.is_active and operator.can_view),
@@ -186,3 +186,19 @@ def get_current_planning_access_payload() -> dict:
             operator.is_active and operator.can_configure_model
         ),
     }
+    # La respuesta de capacidades de la UI no debe anunciar acciones que
+    # el veto HTTP ya prohibe. El operador y sus flags siguen siendo la base.
+    for action_key, capability in (
+        ("planning.read", "can_view"),
+        ("planning.edit", "can_edit"),
+        ("planning.submit", "can_submit"),
+        ("planning.approve", "can_approve"),
+        ("planning.publish", "can_publish"),
+        ("planning.configure_model", "can_configure_model"),
+    ):
+        if payload[capability] and planning_action_grants_enabled(action_key):
+            payload[capability] = _planning_action_veto(
+                action_key, "Acceso a Planeación restringido."
+            ) is None
+    payload["has_access"] = payload["can_view"]
+    return payload
