@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
-import { CanActivate, Router } from '@angular/router';
+import { ActivatedRouteSnapshot, CanActivate, Router, RouterStateSnapshot } from '@angular/router';
+import { FUNNEL_ORIGINAL_PATH, isFunnelProvider } from '../core/auth/funnel-provider-access';
 
 import { SessionService } from '../core/auth/session.service';
 
@@ -12,7 +13,7 @@ export class MarketingSalesFunnelAccessGuard implements CanActivate {
     private readonly router: Router,
   ) {}
 
-  canActivate(): boolean {
+  canActivate(_route: ActivatedRouteSnapshot, state: RouterStateSnapshot): boolean {
     const user = this.session.getUser();
 
     if (!user) {
@@ -22,6 +23,9 @@ export class MarketingSalesFunnelAccessGuard implements CanActivate {
 
     const username = String(user.username || '').trim().toUpperCase();
     const role = String(user.rol ?? user.role ?? '').trim().toUpperCase();
+    if (isFunnelProvider(user)) {
+      return state.url.split(/[?#]/)[0] === FUNNEL_ORIGINAL_PATH;
+    }
 
     if (
       username === 'ADMICORP'

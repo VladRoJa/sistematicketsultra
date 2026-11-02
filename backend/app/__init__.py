@@ -81,6 +81,8 @@ def create_app():
     # Legacy JWTs without a session ID retain their existing 45-minute expiry.
     from app.services.auth_refresh_service import is_access_revoked
     jwt_manager.token_in_blocklist_loader(is_access_revoked)
+    from app.services.funnel_provider_access import register_funnel_provider_guard
+    register_funnel_provider_guard(app)
     register_maintenance_ticket_update_guard(app)
 
     # ──────────────────────────────────────

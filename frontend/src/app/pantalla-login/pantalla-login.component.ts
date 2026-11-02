@@ -4,6 +4,7 @@ import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../services/auth.service';
+import { FUNNEL_ORIGINAL_PATH, isFunnelProvider } from '../core/auth/funnel-provider-access';
 import { Router } from '@angular/router';
 import { LoaderComponent } from '../shared/loader/loader.component'; 
 
@@ -45,6 +46,10 @@ private handleLoginSuccess(response: any): void {
 
     this.cargando = true; // 🔹 Activar loader SOLO si es login correcto
     this.authService.setSession(response.token, response.user);
+    if (isFunnelProvider(response.user)) {
+      this.router.navigate([FUNNEL_ORIGINAL_PATH]);
+      return;
+    }
 
     const username = String(
       response.user?.username || ''

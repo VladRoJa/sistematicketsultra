@@ -85,7 +85,7 @@
       </g>
     </svg>
 
-    <button *ngIf="leadsNode as node" type="button" class="flow-card flow-card--leads" (click)="openNode(node)">
+    <button *ngIf="leadsNode as node" type="button" class="flow-card flow-card--leads" [disabled]="!canViewIndividualDetails" (click)="openNode(node)">
       <mat-icon>{{ node.icon }}</mat-icon>
       <span class="flow-card__label">{{ node.label }}</span>
       <strong>{{ node.value }}</strong>
@@ -97,7 +97,7 @@
       <button
         type="button"
         class="flow-card__visits-total"
-        (click)="openNode(visitsTotal)"
+        [disabled]="!canViewIndividualDetails" (click)="openNode(visitsTotal)"
       >
         <mat-icon>{{ visitsTotal.icon }}</mat-icon>
         <span class="flow-card__label">{{ visitsTotal.label }}</span>
@@ -118,7 +118,7 @@
           <button
             type="button"
             class="flow-card__visit-branch-main"
-            (click)="openMetric(branch.metric)"
+            [disabled]="!canViewIndividualDetails" (click)="openMetric(branch.metric)"
           >
             <mat-icon>{{ branch.icon }}</mat-icon>
             <span>{{ branch.label }}</span>
@@ -136,7 +136,7 @@
             <button
               type="button"
               class="flow-card__visit-result flow-card__visit-result--bought"
-              (click)="openMetric(branch.boughtMetric)"
+              [disabled]="!canViewIndividualDetails" (click)="openMetric(branch.boughtMetric)"
             >
               <mat-icon>shopping_cart</mat-icon>
               <small>Compraron</small>
@@ -153,7 +153,7 @@
             <button
               type="button"
               class="flow-card__visit-result flow-card__visit-result--not-bought"
-              (click)="openMetric(branch.notBoughtMetric)"
+              [disabled]="!canViewIndividualDetails" (click)="openMetric(branch.notBoughtMetric)"
             >
               <mat-icon>remove_shopping_cart</mat-icon>
               <small>No compraron</small>
@@ -190,7 +190,7 @@
     <button
       type="button"
       class="flow-origin-card sale-composition__group sale-composition__group--digital"
-      (click)="openMetric(composition.digitalMetric)"
+      [disabled]="!canViewIndividualDetails" (click)="openMetric(composition.digitalMetric)"
     >
       <span class="flow-origin-card__icon">
         <mat-icon>campaign</mat-icon>
@@ -214,7 +214,7 @@
         *ngFor="let row of composition.digitalChildren"
         type="button"
         class="sale-composition__child sale-composition__child--digital"
-        (click)="openMetric(row.metric)"
+        [disabled]="!canViewIndividualDetails" (click)="openMetric(row.metric)"
       >
         <span class="sale-composition__child-icon">
           <mat-icon>{{ row.icon }}</mat-icon>
@@ -234,7 +234,7 @@
     <button
       type="button"
       class="flow-origin-card sale-composition__group sale-composition__group--web"
-      (click)="openMetric(composition.webMetric)"
+      [disabled]="!canViewIndividualDetails" (click)="openMetric(composition.webMetric)"
     >
       <span class="flow-origin-card__icon">
         <mat-icon>language</mat-icon>
@@ -257,7 +257,7 @@
     <button
       type="button"
       class="flow-origin-card sale-composition__group sale-composition__group--btl"
-      (click)="openMetric(composition.btlMetric)"
+      [disabled]="!canViewIndividualDetails" (click)="openMetric(composition.btlMetric)"
     >
       <span class="flow-origin-card__icon">
         <mat-icon>storefront</mat-icon>
@@ -281,7 +281,7 @@
         *ngFor="let row of composition.btlOrigins"
         type="button"
         class="sale-composition__child sale-composition__child--btl"
-        (click)="openBtlOrigin(row)"
+        [disabled]="!canViewIndividualDetails" (click)="openBtlOrigin(row)"
       >
         <span class="sale-composition__child-icon">
           <mat-icon>{{ row.icon }}</mat-icon>

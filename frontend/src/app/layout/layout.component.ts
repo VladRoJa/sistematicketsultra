@@ -16,6 +16,7 @@ import { AuthService } from '../services/auth.service';
 import { ReauthModalComponent } from '../reauth-modal/reauth-modal.component';
 import { InactividadService } from '../services/inactividad.service';
 import { SessionService } from '../core/auth/session.service';
+import { FUNNEL_ORIGINAL_PATH, isFunnelProvider } from '../core/auth/funnel-provider-access';
 import { AuthActivityService } from '../core/auth/auth-activity.service';
 import { SessionRefreshService } from '../core/auth/session-refresh.service';
 import { CdkDragEnd, DragDropModule } from '@angular/cdk/drag-drop';
@@ -53,6 +54,16 @@ export class LayoutComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('indicator', { static: true }) indicator!: ElementRef;
 
   esAdmin = false;
+  get esProveedorFunnel(): boolean {
+    return isFunnelProvider(this.session.getUser());
+  }
+
+  irAlInicio(): void {
+    this.navegarConCambio(
+      this.esProveedorFunnel ? FUNNEL_ORIGINAL_PATH : '/ver-tickets',
+      this.esProveedorFunnel ? 'Funnel Venta Nueva · Original' : 'Tickets',
+    );
+  }
   esSoloLectura = false;
   currentSubmenu: string = 'Tickets';
   submenuVisible = false;
@@ -115,7 +126,7 @@ get puedeVerAccionesFlotantesGlobales(): boolean {
     user?.username ?? ''
   ).trim().toUpperCase();
 
-  return username !== 'ADMICORP';
+  return !this.esProveedorFunnel && username !== 'ADMICORP';
 }
 
 isMoreMenuActive(): boolean {
@@ -211,6 +222,15 @@ ngOnInit(): void {
   this.usuarioLabel = (u?.username || '').toString();
   this.iniciarTimerInactividad();
   this.inactividadService.registrarCallback(() => this.reiniciarTimerInactividad());
+  if (this.esProveedorFunnel) {
+    this.menuItems = [{
+      label: 'Funnel Venta Nueva · Original',
+      path: FUNNEL_ORIGINAL_PATH,
+      submenu: [],
+    }];
+    this.currentSubmenu = 'Funnel Venta Nueva · Original';
+    return;
+  }
   const menuControl = {
     label: 'Control',
     path: '/control',

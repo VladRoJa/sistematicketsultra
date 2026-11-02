@@ -12,9 +12,15 @@ from app.models.inventario_levantamiento import (
     InventarioLevantamientoImportacionORM as Imp,
 )
 from app.services.inventario_levantamientos_service import (
-    E4Error, parse_uuid, crear_levantamiento, recibir_excel,
+    E4Error, parse_uuid, crear_levantamiento, recibir_excel, recibir_excel_por_control,
     detalle_levantamiento, detalle_importacion, _private_path,
 )
+
+from app.services.inventario_levantamiento_conciliacion_service import (
+    tablero_e4, cerrar_e4,
+)
+
+from app.services.inventario_levantamiento_revision_service import listado_revisiones
 
 inventario_levantamientos_bp = Blueprint("inventario_levantamientos", __name__)
 
@@ -61,6 +67,27 @@ def _failure(error):
     return jsonify({"error": error.code, "detail": str(error)}), error.status
 
 
+@inventario_levantamientos_bp.post("/recepciones")
+@jwt_required()
+def recibir_entrega_universal_e4():
+    """Un input XLSX; backend identifica el ciclo sin IDs ni CSV del operador."""
+    uid = _actor()
+    if request.content_length and request.content_length > 12 * 1024 * 1024:
+        raise E4Error(413, "ARCHIVO_GRANDE", "Solicitud demasiado grande")
+    key = parse_uuid(request.form.get("idempotency_key"))
+    file = request.files.get("file")
+    raw = _bytes(file, 10 * 1024 * 1024)
+    if not file.filename.lower().endswith(".xlsx"):
+        raise E4Error(400, "EXTENSION_INVALIDA", "Se requiere archivo XLSX")
+    try:
+        resultado = recibir_excel_por_control(uid, key, file.filename, raw)
+    except IntegrityError:
+        db.session.rollback()
+        raise E4Error(409, "CONFLICTO_CONCURRENTE",
+                      "Recepción concurrente; actualiza la bandeja")
+    return jsonify(resultado), 200 if resultado["replayed"] else 201
+
+
 @inventario_levantamientos_bp.post("")
 @jwt_required()
 def crear_e4():
@@ -81,6 +108,61 @@ def crear_e4():
         request.form.get("responsable"), baseline,
     )
     return jsonify({"levantamiento": result, "replayed": replay}), 200 if replay else 201
+
+
+@inventario_levantamientos_bp.get("")
+@jwt_required()
+def listar_e4():
+    """Bandeja de recepciones: permisos corporativos y paginación en servidor."""
+    _actor()
+    raw_page = request.args.get("page", "1")
+    raw_size = request.args.get("per_page", "20")
+    if (not raw_page.isascii() or not raw_page.isdecimal() or int(raw_page) < 1
+            or not raw_size.isascii() or not raw_size.isdecimal()
+            or not 1 <= int(raw_size) <= 100):
+        raise E4Error(400, "PAGINACION_INVALIDA", "Paginación inválida")
+    page, size = int(raw_page), int(raw_size)
+    query = db.session.query(Lev, Imp).outerjoin(Imp, Lev.ultima_importacion_id == Imp.id)
+    branch_raw = request.args.get("sucursal_id")
+    if branch_raw is not None:
+        query = query.filter(Lev.sucursal_id == _id(branch_raw))
+    estado = request.args.get("estado")
+    if estado:
+        if estado not in {"PREPARATION", "IN_PROGRESS"}:
+            raise E4Error(400, "ESTADO_INVALIDO", "Estado no permitido")
+        query = query.filter(Lev.estado == estado)
+    total = query.count()
+    resultados = (query.order_by(Lev.creado_en_utc.desc(), Lev.id.desc())
+                  .offset((page - 1) * size).limit(size).all())
+    items = []
+    for lev, imp in resultados:
+        item = _serialize_lev_resumen(lev)
+        if imp is not None:
+            resumen = imp.resumen or {}
+            item["importacion_actual"] = {
+                "id": imp.id, "version": imp.version, "resultado": imp.resultado,
+                "si": resumen.get("si", 0), "no": resumen.get("no", 0),
+                "sin_revisar": resumen.get("sin_revisar", 0),
+                "hallazgos": resumen.get("hallazgos", 0),
+                "errores": resumen.get("errores", 0), "avisos": resumen.get("avisos", 0),
+            }
+        else:
+            item["importacion_actual"] = None
+        items.append(item)
+    return jsonify({"items": items, "total": total, "page": page, "per_page": size}), 200
+
+
+def _serialize_lev_resumen(lev):
+    """Proyección liviana para no enviar el JSON de 12 mil filas a la bandeja."""
+    return {
+        "id": lev.id, "cycle_key": str(lev.cycle_key),
+        "sucursal_id": lev.sucursal_id, "estado": lev.estado,
+        "origen_corte": lev.origen_corte, "modalidad": lev.modalidad,
+        "responsable": lev.responsable,
+        "fecha_corte_local": lev.fecha_corte_local.isoformat() if lev.fecha_corte_local else None,
+        "referencias_esperadas": (lev.baseline_resumen or {}).get("referencias_esperadas", 0),
+        "ultima_importacion_id": lev.ultima_importacion_id,
+    }
 
 
 @inventario_levantamientos_bp.get("/<int:levantamiento_id>")
@@ -126,3 +208,37 @@ def archivo_e4(levantamiento_id, importacion_id):
         raise E4Error(409, "ARCHIVO_NO_DISPONIBLE", "El original archivado no está disponible")
     return send_file(path, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                      as_attachment=True, download_name=imp.original_filename)
+
+
+@inventario_levantamientos_bp.get("/<int:levantamiento_id>/revisiones")
+@jwt_required()
+def consultar_revisiones_automaticas(levantamiento_id):
+    _actor()
+    raw_page = request.args.get("page", "1")
+    raw_size = request.args.get("per_page", "20")
+    if (not raw_page.isascii() or not raw_page.isdecimal()
+            or not 1 <= int(raw_page) <= 100000
+            or not raw_size.isascii() or not raw_size.isdecimal()
+            or not 1 <= int(raw_size) <= 100):
+        raise E4Error(400, "PAGINACION_INVALIDA", "Paginación inválida")
+    return jsonify(listado_revisiones(levantamiento_id, int(raw_page), int(raw_size))), 200
+
+
+@inventario_levantamientos_bp.get("/<int:levantamiento_id>/conciliacion")
+@jwt_required()
+def consultar_conciliacion_e4(levantamiento_id):
+    _actor()
+    return jsonify(tablero_e4(levantamiento_id)), 200
+
+
+@inventario_levantamientos_bp.post("/<int:levantamiento_id>/cerrar")
+@jwt_required()
+def cerrar_levantamiento_e4(levantamiento_id):
+    uid = _actor()
+    try:
+        resultado, replay = cerrar_e4(
+            levantamiento_id, uid, request.get_json(silent=True))
+    except IntegrityError:
+        db.session.rollback()
+        raise E4Error(409, "CONFLICTO_CONCURRENTE", "Cierre simultáneo; actualiza el expediente")
+    return jsonify({"cierre": resultado, "replayed": replay}), 200 if replay else 201

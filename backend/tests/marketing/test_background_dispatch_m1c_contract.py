@@ -44,7 +44,7 @@ def test_worker_requires_all_four_flags():
         "CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED",
         "CAMPAIGN_V2_PROVIDER_SEND_ENABLED",
     ))
-    assert "CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY = False" in _src(CONFIG)
+    assert 'os.getenv("CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY", "false")' in _src(CONFIG)
 
 
 def test_worker_claims_queued_once_and_expired_never_reclaimed():
@@ -121,10 +121,15 @@ def test_compose_background_worker_is_opt_in_and_send_disabled():
     )[0]
     assert "profiles:\n      - campaign-dispatch" in service
     assert "command: python -m app.services.marketing_campaign_v2_background_worker" in service
-    assert 'CAMPAIGN_V2_BACKGROUND_DISPATCH_ENABLED: "false"' in service
-    assert 'CAMPAIGN_V2_PROVIDER_SEND_ENABLED: "false"' in service
-    assert 'CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED: "false"' in service
+    for key in (
+        "CAMPAIGN_V2_BACKGROUND_DISPATCH_ENABLED",
+        "CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY",
+        "CAMPAIGN_V2_PROVIDER_SEND_ENABLED",
+        "CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED",
+    ):
+        assert f'${{{key}:-false}}' in service
+    assert 'CAMPAIGN_V2_BG_POLL_SECONDS: "5"' in service
     assert "stop_grace_period: 90s" in service
     assert "ports:" not in service
     # Even manually enabling a Compose profile must not bypass the app gate.
-    assert "CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY = False" in _src(CONFIG)
+    assert 'os.getenv("CAMPAIGN_V2_BACKGROUND_DISPATCH_WORKER_READY", "false")' in _src(CONFIG)

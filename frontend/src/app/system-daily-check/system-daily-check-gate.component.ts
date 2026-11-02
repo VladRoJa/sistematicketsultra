@@ -500,6 +500,15 @@ export class SystemDailyCheckGateComponent
           ));
         this.initializeAnswerStates();
 
+        // Backend ya excluye sucursales DEMO del checklist operativo.
+        // Si no hay una sucursal elegible, nunca bloquear la navegación.
+        if (this.branches.length === 0) {
+          this.selectedBranchId = null;
+          this.status = null;
+          this.setVisible(false);
+          return;
+        }
+
         const preferredBranchId = Number(
           branches.preferred_branch_id || 0,
         );
