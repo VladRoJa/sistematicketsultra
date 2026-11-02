@@ -253,6 +253,12 @@ def create_warehouse_document_upload(
             "Debes enviar 'report_type_key'."
         )
 
+    # WSO-01: prevent direct callers from resurrecting retired report uploads.
+    if report_type_key == "corte_caja":
+        raise WarehouseDocumentValidationError(
+            "Corte de Caja fue retirado de Suite Ultra."
+        )
+
     safe_original_filename, extension = _validate_filename_and_extension(
         original_filename
     )
